@@ -103,8 +103,12 @@ func initDB(path string) {
 
 	// For file-based databases, start fresh on every server restart
 	// so we always get a clean slate with seeded data.
+	// Only delete if GOPHER_RESET_DB=1 is set — prevents accidental
+	// destruction of a production database.
 	if path != ":memory:" {
-		os.Remove(path)
+		if os.Getenv("GOPHER_RESET_DB") == "1" {
+			os.Remove(path)
+		}
 	}
 
 	DB, err = sql.Open("sqlite", path)

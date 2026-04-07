@@ -91,6 +91,9 @@ func buildMux() *http.ServeMux {
 }
 
 func main() {
+	// Development mode: reset the DB on every restart.
+	// Remove this when we switch to persistent storage.
+	os.Setenv("GOPHER_RESET_DB", "1")
 	initDB("angry_gopher.db")
 
 	auth.DB = DB

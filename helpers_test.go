@@ -31,6 +31,7 @@ import (
 // all package-level DB references. Each call gives us a brand new
 // database with empty tables, so tests are fully isolated.
 func resetDB() {
+	// Always use in-memory DB for tests — never touch a file.
 	initDB(":memory:")
 	auth.DB = DB
 	users.DB = DB
