@@ -5,8 +5,6 @@ import (
 	"database/sql"
 	"log"
 	"net/http"
-	"strconv"
-	"strings"
 
 	"angry-gopher/auth"
 	"angry-gopher/events"
@@ -59,12 +57,7 @@ func HandleSubscriptions(w http.ResponseWriter, r *http.Request) {
 
 // HandleUpdateChannel handles PATCH /api/v1/streams/{id}.
 func HandleUpdateChannel(w http.ResponseWriter, r *http.Request) {
-	parts := strings.Split(r.URL.Path, "/")
-	if len(parts) < 5 {
-		respond.Error(w, "Invalid URL")
-		return
-	}
-	channelID, _ := strconv.Atoi(parts[4])
+	channelID := respond.PathSegmentInt(r.URL.Path, 4)
 	if channelID == 0 {
 		respond.Error(w, "Invalid channel ID")
 		return

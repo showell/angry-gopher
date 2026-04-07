@@ -5,8 +5,6 @@ import (
 	"database/sql"
 	"log"
 	"net/http"
-	"strconv"
-	"strings"
 
 	"angry-gopher/auth"
 	"angry-gopher/events"
@@ -24,24 +22,13 @@ func HandleReaction(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Extract message ID from URL: /api/v1/messages/{id}/reactions
-	parts := strings.Split(r.URL.Path, "/")
-	if len(parts) < 6 {
-		respond.Error(w, "Invalid URL")
-		return
-	}
-	messageID, _ := strconv.Atoi(parts[4])
+	messageID := respond.PathSegmentInt(r.URL.Path, 4)
 	if messageID == 0 {
 		respond.Error(w, "Invalid message ID")
 		return
 	}
 
-	// Go only auto-parses the request body for POST/PUT/PATCH.
-	// For DELETE with a form body, we override the method temporarily
-	// so ParseForm reads the body.
-	origMethod := r.Method
-	r.Method = "POST"
-	r.ParseForm()
-	r.Method = origMethod
+	respond.ParseFormBody(r)
 
 	emojiName := r.FormValue("emoji_name")
 	emojiCode := r.FormValue("emoji_code")
