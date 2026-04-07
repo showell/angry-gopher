@@ -98,15 +98,16 @@ func seedData(includeWelcome bool) {
 		email    string
 		fullName string
 		apiKey   string
+		isAdmin  int
 	}{
-		{1, "steve@example.com", "Steve Howell", "steve-api-key"},
-		{2, "apoorva@example.com", "Apoorva Pendse", "apoorva-api-key"},
-		{3, "claude@example.com", "Claude", "claude-api-key"},
-		{4, "joe@example.com", "Joe Random", "joe-api-key"},
+		{1, "steve@example.com", "Steve Howell", "steve-api-key", 1},
+		{2, "apoorva@example.com", "Apoorva Pendse", "apoorva-api-key", 0},
+		{3, "claude@example.com", "Claude", "claude-api-key", 1},
+		{4, "joe@example.com", "Joe Random", "joe-api-key", 0},
 	}
 	for _, u := range users {
-		DB.Exec(`INSERT OR IGNORE INTO users (id, email, full_name, api_key) VALUES (?, ?, ?, ?)`,
-			u.id, u.email, u.fullName, u.apiKey)
+		DB.Exec(`INSERT OR IGNORE INTO users (id, email, full_name, api_key, is_admin) VALUES (?, ?, ?, ?, ?)`,
+			u.id, u.email, u.fullName, u.apiKey, u.isAdmin)
 	}
 
 	channels := []struct {

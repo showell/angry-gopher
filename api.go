@@ -476,6 +476,15 @@ func handleUpdateChannel(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("[api] Updated description for channel %d", channelID)
 
+	pushEventToAll(map[string]interface{}{
+		"type":                  "stream",
+		"op":                    "update",
+		"property":              "description",
+		"stream_id":             channelID,
+		"value":                 description,
+		"rendered_description":  renderedDesc,
+	})
+
 	writeJSON(w, map[string]interface{}{
 		"result": "success",
 		"msg":    "",
