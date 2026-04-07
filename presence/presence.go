@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"angry-gopher/auth"
+	"angry-gopher/events"
 	"angry-gopher/respond"
 )
 
@@ -60,12 +61,17 @@ func HandleUpdatePresence(w http.ResponseWriter, r *http.Request) {
 	now := time.Now()
 	prev := statuses[userID]
 
-	// Log "came_online" if this is a new user or they were offline.
+	// Log and broadcast "came_online" if this is a new user or they were offline.
 	if prev == nil || now.Sub(prev.Timestamp) > OfflineThreshold {
 		appendEvent(PresenceEvent{
 			UserID:    userID,
 			Event:     "came_online",
 			Timestamp: now,
+		})
+		events.PushToAll(map[string]interface{}{
+			"type":    "presence",
+			"user_id": userID,
+			"status":  "active",
 		})
 	}
 
@@ -96,6 +102,11 @@ func HandleGetPresence(w http.ResponseWriter, r *http.Request) {
 				Timestamp: p.Timestamp.Add(OfflineThreshold),
 			})
 			p.Status = "offline"
+			events.PushToAll(map[string]interface{}{
+				"type":    "presence",
+				"user_id": userID,
+				"status":  "offline",
+			})
 		}
 	}
 
