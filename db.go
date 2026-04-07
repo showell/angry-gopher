@@ -120,6 +120,12 @@ func initDB(path string) {
 	// no WAL/SHM files. Sufficient for our low-traffic server.
 	DB.SetMaxOpenConns(1)
 
+	// For file-based DBs, tell SQLite to retry for up to 5 seconds
+	// if the database is busy, rather than failing immediately.
+	if path != ":memory:" {
+		DB.Exec("PRAGMA busy_timeout = 5000")
+	}
+
 	_, err = DB.Exec(schema)
 	if err != nil {
 		log.Fatalf("Failed to create schema: %v", err)
