@@ -1,10 +1,7 @@
-// Angry Gopher — a reverse proxy that sits between Angry Cat and Zulip.
+// Angry Gopher — a lightweight Zulip-compatible server backed by SQLite.
 //
-// Listens on port 9000 and forwards all requests to the upstream Zulip
-// server. Angry Cat connects here instead of directly to Zulip.
-//
-// Over time, we'll replace proxied endpoints with our own implementations
-// backed by SQLite.
+// Serves the Zulip API subset that Angry Cat needs, reading from the
+// local database. Fully standalone — no upstream Zulip connection.
 
 package main
 
@@ -13,100 +10,151 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
+	"sync"
 )
 
-const (
-	listenAddr  = ":9000"
-	upstreamURL = "https://macandcheese.zulipchat.com"
-)
+const listenAddr = ":9000"
 
 func main() {
-	http.HandleFunc("/", proxyHandler)
+	initDB("angry_gopher.db")
+
+	// API endpoints served from SQLite.
+	http.HandleFunc("/api/v1/register", withCORS(handleRegister))
+	http.HandleFunc("/api/v1/events", withCORS(handleEvents))
+	http.HandleFunc("/api/v1/users", withCORS(handleUsers))
+	http.HandleFunc("/api/v1/users/me/subscriptions", withCORS(handleSubscriptions))
+	http.HandleFunc("/api/v1/messages", withCORS(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "GET":
+			handleMessages(w, r)
+		case "POST":
+			handleSendMessage(w, r)
+		default:
+			writeJSON(w, errorResponse("Method not allowed"))
+		}
+	}))
+	http.HandleFunc("/api/v1/messages/flags", withCORS(handleUpdateFlags))
+
+	http.HandleFunc("/api/v1/user_uploads", withCORS(handleUpload))
+	http.HandleFunc("/api/v1/user_uploads/", withCORS(handleUploadTempURL))
+	http.HandleFunc("/user_uploads/", withCORS(handleServeUpload))
+
+	// Admin UI.
+	http.HandleFunc("/admin/", adminHandler)
+
+	// Catch-all for unimplemented endpoints.
+	http.HandleFunc("/", withCORS(handleUnimplemented))
 
 	fmt.Printf("Angry Gopher listening on %s\n", listenAddr)
-	fmt.Printf("Proxying to %s\n", upstreamURL)
+	fmt.Printf("Admin UI at http://localhost%s/admin/\n", listenAddr)
 	log.Fatal(http.ListenAndServe(listenAddr, nil))
 }
 
-func proxyHandler(w http.ResponseWriter, r *http.Request) {
-	// Build the upstream URL from the incoming request.
-	targetURL := upstreamURL + r.URL.Path
-	if r.URL.RawQuery != "" {
-		targetURL += "?" + r.URL.RawQuery
-	}
+var uploadsDir = filepath.Join(os.Getenv("HOME"), "AngryGopherImages")
 
-	// Log the request for visibility.
-	log.Printf("%s %s", r.Method, r.URL.Path)
+var (
+	nextUploadID   int
+	nextUploadIDMu sync.Mutex
+)
 
-	// Create the upstream request.
-	upstreamReq, err := http.NewRequest(r.Method, targetURL, r.Body)
-	if err != nil {
-		http.Error(w, "Failed to create upstream request", http.StatusInternalServerError)
-		log.Printf("  ERROR creating request: %v", err)
+// POST /api/v1/user_uploads — accept a multipart file upload, save it
+// to ~/AngryGopherImages/<id>/<filename>, return the URI.
+func handleUpload(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		writeJSON(w, errorResponse("Method not allowed"))
 		return
 	}
 
-	// Forward all headers (including Authorization).
-	for key, values := range r.Header {
-		for _, value := range values {
-			upstreamReq.Header.Add(key, value)
-		}
-	}
-
-	// Send the request to Zulip.
-	client := &http.Client{}
-	resp, err := client.Do(upstreamReq)
+	file, header, err := r.FormFile("FILE")
 	if err != nil {
-		http.Error(w, "Failed to reach upstream", http.StatusBadGateway)
-		log.Printf("  ERROR reaching upstream: %v", err)
+		writeJSON(w, errorResponse("Missing FILE field: "+err.Error()))
 		return
 	}
-	defer resp.Body.Close()
+	defer file.Close()
 
-	// Copy response headers back to the client.
-	for key, values := range resp.Header {
-		for _, value := range values {
-			w.Header().Add(key, value)
-		}
+	nextUploadIDMu.Lock()
+	nextUploadID++
+	id := nextUploadID
+	nextUploadIDMu.Unlock()
+
+	dir := filepath.Join(uploadsDir, strconv.Itoa(id))
+	os.MkdirAll(dir, 0755)
+
+	dst, err := os.Create(filepath.Join(dir, header.Filename))
+	if err != nil {
+		writeJSON(w, errorResponse("Failed to save file: "+err.Error()))
+		return
+	}
+	defer dst.Close()
+	io.Copy(dst, file)
+
+	uri := fmt.Sprintf("/user_uploads/%d/%s", id, header.Filename)
+	log.Printf("[api] Uploaded %s (%d bytes)", uri, header.Size)
+
+	writeJSON(w, map[string]interface{}{
+		"result": "success",
+		"msg":    "",
+		"uri":    uri,
+	})
+}
+
+// GET /api/v1/user_uploads/<id>/<filename> — Angry Cat calls this to
+// get a "temporary" URL for an upload. We just return the direct path.
+func handleUploadTempURL(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/api/v1")
+	writeJSON(w, map[string]interface{}{
+		"result": "success",
+		"msg":    "",
+		"url":    path,
+	})
+}
+
+// GET /user_uploads/<id>/<filename> — serve the file from disk.
+func handleServeUpload(w http.ResponseWriter, r *http.Request) {
+	rel := strings.TrimPrefix(r.URL.Path, "/user_uploads/")
+	filePath := filepath.Join(uploadsDir, rel)
+
+	// Prevent directory traversal.
+	if strings.Contains(rel, "..") {
+		http.NotFound(w, r)
+		return
 	}
 
-	// Add CORS headers so Angry Cat (running on a different port) can
-	// talk to us.
-	origin := r.Header.Get("Origin")
-	if origin != "" {
-		w.Header().Set("Access-Control-Allow-Origin", origin)
-		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
-	}
+	http.ServeFile(w, r, filePath)
+}
 
-	// Handle CORS preflight.
+func handleUnimplemented(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "OPTIONS" {
 		w.WriteHeader(http.StatusOK)
 		return
 	}
+	log.Printf("[unimplemented] %s %s", r.Method, r.URL.Path)
+	writeJSON(w, map[string]interface{}{
+		"result": "error",
+		"msg":    fmt.Sprintf("Endpoint not implemented: %s %s", r.Method, r.URL.Path),
+	})
+}
 
-	w.WriteHeader(resp.StatusCode)
-
-	// Stream the response body back to the client. This is important
-	// for long-polling endpoints like /api/v1/events.
-	if strings.Contains(r.URL.Path, "/events") {
-		// Flush immediately for event polling.
-		flusher, ok := w.(http.Flusher)
-		buf := make([]byte, 4096)
-		for {
-			n, readErr := resp.Body.Read(buf)
-			if n > 0 {
-				w.Write(buf[:n])
-				if ok {
-					flusher.Flush()
-				}
-			}
-			if readErr != nil {
-				break
-			}
+// withCORS wraps a handler to add CORS headers and handle preflight.
+func withCORS(handler http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		origin := r.Header.Get("Origin")
+		if origin != "" {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
 		}
-	} else {
-		io.Copy(w, resp.Body)
+		if r.Method == "OPTIONS" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		if strings.HasPrefix(r.URL.Path, "/api/") {
+			log.Printf("%s %s", r.Method, r.URL.Path)
+		}
+		handler(w, r)
 	}
 }
