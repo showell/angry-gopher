@@ -426,6 +426,7 @@ func TestUpdateChannelDescription(t *testing.T) {
 	form.Set("description", "A channel for **testing**")
 	req := httptest.NewRequest("PATCH", "/api/v1/streams/1", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	steveAuth(req)
 	rec := httptest.NewRecorder()
 	channels.HandleUpdateChannel(rec, req)
 
@@ -544,6 +545,7 @@ func editMessage(t *testing.T, messageID int, content string) *httptest.Response
 	path := "/api/v1/messages/" + strconv.Itoa(messageID)
 	req := httptest.NewRequest("PATCH", path, strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	steveAuth(req)
 
 	rec := httptest.NewRecorder()
 	messages.HandleEditMessage(rec, req)
@@ -869,5 +871,75 @@ func TestSeedDataSubscriptions(t *testing.T) {
 	DB.QueryRow(`SELECT COUNT(*) FROM subscriptions WHERE user_id = 4`).Scan(&joeCount)
 	if joeCount != 1 {
 		t.Errorf("Joe should have 1 subscription, got %d", joeCount)
+	}
+}
+
+// --- Channel access permission tests ---
+
+func TestJoeCannotSeePrivateChannelMessages(t *testing.T) {
+	resetDB()
+
+	// Steve sends a message to channel 1 (Angry Cat, private).
+	sendMessage(t, 1, "secret", "private stuff")
+
+	// Steve sends a message to channel 3 (ChitChat, public).
+	sendMessage(t, 3, "hello", "public stuff")
+
+	// Joe fetches messages — should only see the public one.
+	req := httptest.NewRequest("GET", "/api/v1/messages?anchor=newest&num_before=100", nil)
+	setAuth(req, "joe@example.com", "joe-api-key")
+	rec := httptest.NewRecorder()
+	messages.HandleGetMessages(rec, req)
+
+	body := parseJSON(t, rec)
+	msgs := body["messages"].([]interface{})
+	if len(msgs) != 1 {
+		t.Fatalf("Joe should see 1 message (public only), got %d", len(msgs))
+	}
+	msg := msgs[0].(map[string]interface{})
+	if msg["content"] != "<p>public stuff</p>\n" {
+		t.Errorf("expected public message, got %q", msg["content"])
+	}
+}
+
+func TestJoeCannotSendToPrivateChannel(t *testing.T) {
+	resetDB()
+
+	form := url.Values{}
+	form.Set("to", "1") // Angry Cat (private)
+	form.Set("topic", "sneaky")
+	form.Set("content", "should not work")
+	form.Set("type", "stream")
+
+	req := httptest.NewRequest("POST", "/api/v1/messages", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	setAuth(req, "joe@example.com", "joe-api-key")
+	rec := httptest.NewRecorder()
+	messages.HandleSendMessage(rec, req)
+
+	body := parseJSON(t, rec)
+	if body["result"] != "error" {
+		t.Errorf("Joe should not be able to send to private channel, got %v", body["result"])
+	}
+}
+
+func TestJoeCanSendToPublicChannel(t *testing.T) {
+	resetDB()
+
+	form := url.Values{}
+	form.Set("to", "3") // ChitChat (public)
+	form.Set("topic", "hello")
+	form.Set("content", "hi everyone")
+	form.Set("type", "stream")
+
+	req := httptest.NewRequest("POST", "/api/v1/messages", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	setAuth(req, "joe@example.com", "joe-api-key")
+	rec := httptest.NewRecorder()
+	messages.HandleSendMessage(rec, req)
+
+	body := parseJSON(t, rec)
+	if body["result"] != "success" {
+		t.Errorf("Joe should be able to send to public channel, got %v", body["result"])
 	}
 }

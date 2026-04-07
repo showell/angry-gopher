@@ -7,6 +7,7 @@ import (
 	"net/http"
 
 	"angry-gopher/auth"
+	"angry-gopher/channels"
 	"angry-gopher/events"
 	"angry-gopher/respond"
 )
@@ -25,6 +26,11 @@ func HandleReaction(w http.ResponseWriter, r *http.Request) {
 	messageID := respond.PathSegmentInt(r.URL.Path, 4)
 	if messageID == 0 {
 		respond.Error(w, "Invalid message ID")
+		return
+	}
+
+	if !channels.CanAccessMessage(userID, messageID) {
+		respond.Error(w, "Not authorized for this channel")
 		return
 	}
 

@@ -11,6 +11,7 @@ import (
 	"net/http"
 
 	"angry-gopher/auth"
+	"angry-gopher/channels"
 	"angry-gopher/events"
 	"angry-gopher/respond"
 )
@@ -43,6 +44,14 @@ func HandleUpdateFlags(w http.ResponseWriter, r *http.Request) {
 	if err := json.Unmarshal([]byte(messagesJSON), &messageIDs); err != nil {
 		respond.Error(w, "Invalid messages parameter: "+err.Error())
 		return
+	}
+
+	// Verify the user can access all referenced messages.
+	for _, id := range messageIDs {
+		if !channels.CanAccessMessage(userID, id) {
+			respond.Error(w, "Not authorized for this channel")
+			return
+		}
 	}
 
 	switch flag {

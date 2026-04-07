@@ -17,6 +17,35 @@ var DB *sql.DB
 // with the markdown package.
 var RenderMarkdown func(string) string
 
+// CanAccess returns true if the user can see the given channel.
+// Public channels are visible to everyone; private channels require
+// a subscription.
+func CanAccess(userID, channelID int) bool {
+	var inviteOnly int
+	err := DB.QueryRow(`SELECT invite_only FROM channels WHERE channel_id = ?`, channelID).Scan(&inviteOnly)
+	if err != nil {
+		return false
+	}
+	if inviteOnly == 0 {
+		return true
+	}
+	var count int
+	DB.QueryRow(`SELECT COUNT(*) FROM subscriptions WHERE user_id = ? AND channel_id = ?`,
+		userID, channelID).Scan(&count)
+	return count > 0
+}
+
+// CanAccessMessage returns true if the user can see the channel that
+// contains the given message.
+func CanAccessMessage(userID, messageID int) bool {
+	var channelID int
+	err := DB.QueryRow(`SELECT channel_id FROM messages WHERE id = ?`, messageID).Scan(&channelID)
+	if err != nil {
+		return false
+	}
+	return CanAccess(userID, channelID)
+}
+
 // HandleSubscriptions handles GET /api/v1/users/me/subscriptions.
 func HandleSubscriptions(w http.ResponseWriter, r *http.Request) {
 	userID := auth.Authenticate(r)
@@ -57,9 +86,20 @@ func HandleSubscriptions(w http.ResponseWriter, r *http.Request) {
 
 // HandleUpdateChannel handles PATCH /api/v1/streams/{id}.
 func HandleUpdateChannel(w http.ResponseWriter, r *http.Request) {
+	userID := auth.Authenticate(r)
+	if userID == 0 {
+		respond.Error(w, "Unauthorized")
+		return
+	}
+
 	channelID := respond.PathSegmentInt(r.URL.Path, 4)
 	if channelID == 0 {
 		respond.Error(w, "Invalid channel ID")
+		return
+	}
+
+	if !CanAccess(userID, channelID) {
+		respond.Error(w, "Not authorized for this channel")
 		return
 	}
 

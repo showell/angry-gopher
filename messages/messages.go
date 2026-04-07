@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"angry-gopher/auth"
+	"angry-gopher/channels"
 	"angry-gopher/events"
 	"angry-gopher/flags"
 	"angry-gopher/reactions"
@@ -33,6 +34,14 @@ func HandleGetMessages(w http.ResponseWriter, r *http.Request) {
 		numBefore = 100
 	}
 
+	// Only return messages from channels the user can see:
+	// public channels OR channels the user is subscribed to.
+	accessFilter := `m.channel_id IN (
+		SELECT channel_id FROM channels WHERE invite_only = 0
+		UNION
+		SELECT channel_id FROM subscriptions WHERE user_id = ?
+	)`
+
 	var query string
 	var args []interface{}
 
@@ -43,8 +52,9 @@ func HandleGetMessages(w http.ResponseWriter, r *http.Request) {
 		         JOIN message_content mc ON m.content_id = mc.content_id
 		         JOIN topics t ON m.topic_id = t.topic_id
 		         JOIN users u ON m.sender_id = u.id
+		         WHERE ` + accessFilter + `
 		         ORDER BY m.id DESC LIMIT ?`
-		args = []interface{}{numBefore}
+		args = []interface{}{userID, numBefore}
 	} else {
 		anchorID, _ := strconv.Atoi(anchor)
 		query = `SELECT m.id, mc.html, m.sender_id, m.channel_id, m.timestamp,
@@ -53,9 +63,9 @@ func HandleGetMessages(w http.ResponseWriter, r *http.Request) {
 		         JOIN message_content mc ON m.content_id = mc.content_id
 		         JOIN topics t ON m.topic_id = t.topic_id
 		         JOIN users u ON m.sender_id = u.id
-		         WHERE m.id < ?
+		         WHERE m.id < ? AND ` + accessFilter + `
 		         ORDER BY m.id DESC LIMIT ?`
-		args = []interface{}{anchorID, numBefore}
+		args = []interface{}{anchorID, userID, numBefore}
 	}
 
 	dbRows, err := DB.Query(query, args...)
@@ -138,6 +148,17 @@ func HandleSendMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	senderID := auth.Authenticate(r)
+	if senderID == 0 {
+		respond.Error(w, "Unauthorized")
+		return
+	}
+
+	if !channels.CanAccess(senderID, channelID) {
+		respond.Error(w, "Not authorized for this channel")
+		return
+	}
+
 	// Find or create the topic.
 	var topicID int64
 	err := DB.QueryRow(
@@ -154,12 +175,6 @@ func HandleSendMessage(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		topicID, _ = result.LastInsertId()
-	}
-
-	senderID := auth.Authenticate(r)
-	if senderID == 0 {
-		respond.Error(w, "Unauthorized")
-		return
 	}
 
 	html := RenderMarkdown(content)
@@ -213,9 +228,20 @@ func HandleSendMessage(w http.ResponseWriter, r *http.Request) {
 
 // HandleEditMessage handles PATCH /api/v1/messages/{id}.
 func HandleEditMessage(w http.ResponseWriter, r *http.Request) {
+	userID := auth.Authenticate(r)
+	if userID == 0 {
+		respond.Error(w, "Unauthorized")
+		return
+	}
+
 	messageID := respond.PathSegmentInt(r.URL.Path, 4)
 	if messageID == 0 {
 		respond.Error(w, "Invalid message ID")
+		return
+	}
+
+	if !channels.CanAccessMessage(userID, messageID) {
+		respond.Error(w, "Not authorized for this channel")
 		return
 	}
 
