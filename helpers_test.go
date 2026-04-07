@@ -19,6 +19,7 @@ import (
 	"angry-gopher/auth"
 	"angry-gopher/channels"
 	"angry-gopher/flags"
+	"angry-gopher/invites"
 	"angry-gopher/messages"
 	"angry-gopher/ratelimit"
 	"angry-gopher/reactions"
@@ -36,6 +37,7 @@ func resetDB() {
 	messages.DB = DB
 	flags.DB = DB
 	reactions.DB = DB
+	invites.DB = DB
 	channels.RenderMarkdown = renderMarkdown
 	messages.RenderMarkdown = renderMarkdown
 	ratelimit.Reset()

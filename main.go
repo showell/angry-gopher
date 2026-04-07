@@ -20,6 +20,7 @@ import (
 	"angry-gopher/channels"
 	"angry-gopher/events"
 	"angry-gopher/flags"
+	"angry-gopher/invites"
 	"angry-gopher/messages"
 	"angry-gopher/ratelimit"
 	"angry-gopher/reactions"
@@ -39,6 +40,7 @@ func main() {
 	messages.DB = DB
 	flags.DB = DB
 	reactions.DB = DB
+	invites.DB = DB
 
 	// Wire up markdown rendering to avoid circular imports.
 	channels.RenderMarkdown = renderMarkdown
@@ -73,6 +75,8 @@ func main() {
 		}
 	}))
 	http.HandleFunc("/api/v1/streams/", withCORS(channels.HandleUpdateChannel))
+	http.HandleFunc("/api/v1/invites", withCORS(invites.HandleCreateInvite))
+	http.HandleFunc("/api/v1/invites/redeem", withCORS(invites.HandleRedeemInvite))
 
 	// File uploads.
 	http.HandleFunc("/api/v1/user_uploads", withCORS(handleUpload))

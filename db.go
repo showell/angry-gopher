@@ -79,6 +79,13 @@ CREATE TABLE IF NOT EXISTS unreads (
     PRIMARY KEY (message_id, user_id)
 );
 
+CREATE TABLE IF NOT EXISTS invites (
+    token TEXT PRIMARY KEY,
+    email TEXT NOT NULL,
+    full_name TEXT NOT NULL,
+    expires_at INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS starred_messages (
     message_id INTEGER NOT NULL REFERENCES messages(id),
     user_id INTEGER NOT NULL REFERENCES users(id),
