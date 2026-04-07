@@ -188,12 +188,19 @@ func seedTestMessages() {
 		"- Second item",
 		"- Third item",
 		"",
-		"And some `inline code` plus a code block:",
+		"And some `inline code` plus two code blocks.",
+		"",
+		"Fenced with triple backticks (no language):",
 		"```",
-		"func main() {",
-		`    fmt.Println("Hello!")`,
-		"}",
+		"the quick brown fox",
+		"jumps over the lazy dog",
 		"```",
+		"",
+		"Fenced with tildes and a language tag:",
+		"~~~ py",
+		"def greet(name):",
+		`    print(f"Hello, {name}!")`,
+		"~~~",
 	}, "\n"))
 
 	seedOneMessage(3, 3, 2, 1, 1712500120, strings.Join([]string{

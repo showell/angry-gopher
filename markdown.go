@@ -13,13 +13,16 @@ import (
 	"strings"
 
 	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/extension"
 	"github.com/yuin/goldmark/renderer/html"
 )
 
-// WithUnsafe allows our pre-processed inline HTML (mentions, channel
-// links) to pass through goldmark without being stripped.
 var md = goldmark.New(
+	// WithUnsafe allows our pre-processed inline HTML (mentions,
+	// channel links) to pass through without being stripped.
 	goldmark.WithRendererOptions(html.WithUnsafe()),
+	// GFM extensions: strikethrough (~~text~~), tables, etc.
+	goldmark.WithExtensions(extension.GFM),
 )
 
 var imageExtensions = map[string]bool{
