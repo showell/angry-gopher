@@ -21,6 +21,7 @@ import (
 	"angry-gopher/flags"
 	"angry-gopher/invites"
 	"angry-gopher/messages"
+	"angry-gopher/presence"
 	"angry-gopher/ratelimit"
 	"angry-gopher/reactions"
 	"angry-gopher/users"
@@ -41,6 +42,7 @@ func resetDB() {
 	channels.RenderMarkdown = renderMarkdown
 	messages.RenderMarkdown = renderMarkdown
 	ratelimit.Reset()
+	presence.Reset()
 }
 
 // --- Auth helpers ---

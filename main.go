@@ -22,6 +22,7 @@ import (
 	"angry-gopher/flags"
 	"angry-gopher/invites"
 	"angry-gopher/messages"
+	"angry-gopher/presence"
 	"angry-gopher/ratelimit"
 	"angry-gopher/reactions"
 	"angry-gopher/respond"
@@ -77,6 +78,16 @@ func main() {
 	http.HandleFunc("/api/v1/streams/", withCORS(channels.HandleUpdateChannel))
 	http.HandleFunc("/api/v1/invites", withCORS(invites.HandleCreateInvite))
 	http.HandleFunc("/api/v1/invites/redeem", withCORS(invites.HandleRedeemInvite))
+	http.HandleFunc("/api/v1/users/me/presence", withCORS(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "POST":
+			presence.HandleUpdatePresence(w, r)
+		case "GET":
+			presence.HandleGetPresence(w, r)
+		default:
+			respond.Error(w, "Method not allowed")
+		}
+	}))
 
 	// File uploads.
 	http.HandleFunc("/api/v1/user_uploads", withCORS(handleUpload))
