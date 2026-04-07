@@ -12,7 +12,9 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"strings"
+
+	"angry-gopher/flags"
+	"angry-gopher/messages"
 
 	_ "modernc.org/sqlite"
 )
@@ -119,8 +121,6 @@ func initDB(path string) {
 		log.Fatalf("Failed to create schema: %v", err)
 	}
 
-	seedData(path != ":memory:")
-
 	fmt.Printf("Database initialized at %s\n", path)
 }
 
@@ -177,78 +177,83 @@ func seedData(includeWelcome bool) {
 }
 
 func seedTestMessages() {
-	// Create test topics.
-	DB.Exec(`INSERT INTO topics (topic_id, channel_id, topic_name) VALUES (1, 2, 'test messages')`)
-	DB.Exec(`INSERT INTO topics (topic_id, channel_id, topic_name) VALUES (2, 3, 'welcome')`)
+	// Users: 1=Steve, 2=Apoorva, 3=Claude, 4=Joe
+	// Channels: 1=Angry Cat (private), 2=Angry Gopher (private), 3=ChitChat (public)
 
-	// Welcome message in ChitChat (channel 3, topic 2 "welcome").
-	seedOneMessage(1, 3, 3, 2, 1712500000, "Welcome to Angry Gopher! All systems are go.")
+	send := func(senderID, channelID int, topic, markdown string) int64 {
+		id, err := messages.SendMessage(senderID, channelID, topic, markdown)
+		if err != nil {
+			log.Printf("Failed to seed message: %v", err)
+		}
+		return id
+	}
 
-	// Test messages in Angry Gopher > test messages, sent by Claude (user 3).
-	seedOneMessage(2, 3, 2, 1, 1712500060, strings.Join([]string{
-		"## Basic formatting",
-		"",
-		"Here is **bold text**, *italic text*, and ~~strikethrough~~.",
-		"",
-		"A simple list:",
-		"- First item",
-		"- Second item",
-		"- Third item",
-		"",
-		"And some `inline code` plus two code blocks.",
-		"",
-		"Fenced with triple backticks (no language):",
-		"```",
-		"the quick brown fox",
-		"jumps over the lazy dog",
-		"```",
-		"",
-		"Fenced with tildes and a language tag:",
-		"~~~ py",
-		"def greet(name):",
-		`    print(f"Hello, {name}!")`,
-		"~~~",
-	}, "\n"))
+	steve, apoorva, claude, joe := 1, 2, 3, 4
+	angryCat, angryGopher, chitChat := 1, 2, 3
 
-	seedOneMessage(3, 3, 2, 1, 1712500120, strings.Join([]string{
-		"## Valid links",
-		"",
-		"Mention: @**Steve Howell**",
-		"",
-		"Channel link: #**ChitChat**",
-		"",
-		"Topic link: #**ChitChat>welcome**",
-		"",
-		"Message link: #**ChitChat>welcome@1**",
-	}, "\n"))
+	// --- ChitChat > welcome ---
+	m1 := send(claude, chitChat, "welcome", "Welcome to Angry Gopher! All systems are go.")
+	send(steve, chitChat, "welcome", "Thanks @**Claude**! Excited to be here.")
+	send(apoorva, chitChat, "welcome", "Hello everyone!")
+	send(joe, chitChat, "welcome", "Hey, Joe here. What's this place about?")
+	send(steve, chitChat, "welcome", "Welcome Joe! This is our chat server.")
 
-	seedOneMessage(4, 3, 2, 1, 1712500180, strings.Join([]string{
-		"## Invalid links",
-		"",
-		"Unknown user: @**Nobody Special**",
-		"",
-		"Unknown channel: #**NoSuchChannel**",
-		"",
-		"Unknown topic: #**Angry Gopher>no such topic**",
-	}, "\n"))
+	// --- ChitChat > random ---
+	send(apoorva, chitChat, "random", "Anyone want to grab lunch?")
+	send(steve, chitChat, "random", "Sure, I'm in!")
+	send(claude, chitChat, "random", "I don't eat, but have fun!")
+	send(joe, chitChat, "random", "Pizza sounds good to me.")
 
-	seedOneMessage(5, 3, 2, 1, 1712500240, strings.Join([]string{
-		"## Image test",
-		"",
-		"Here is a test image: [gopher.png](/user_uploads/1/gopher.png)",
-	}, "\n"))
+	// --- Angry Cat > design ---
+	m10 := send(steve, angryCat, "design", "I think we should redesign the channel chooser.")
+	send(apoorva, angryCat, "design", "Agreed. The current one is hard to navigate with many channels.")
+	m12 := send(claude, angryCat, "design", "I can help prototype some options. What about a **tree view**?")
+	send(steve, angryCat, "design", "Tree view could work. Let's discuss more tomorrow.")
 
-	// Create the test image on disk.
+	// --- Angry Gopher > test messages ---
+	send(claude, angryGopher, "test messages", "## Basic formatting\n\n"+
+		"Here is **bold text**, *italic text*, and ~~strikethrough~~.\n\n"+
+		"A simple list:\n- First item\n- Second item\n- Third item\n\n"+
+		"And some `inline code` plus two code blocks.\n\n"+
+		"Fenced with triple backticks (no language):\n```\nthe quick brown fox\njumps over the lazy dog\n```\n\n"+
+		"Fenced with tildes and a language tag:\n~~~ py\ndef greet(name):\n    print(f\"Hello, {name}!\")\n~~~")
+
+	send(claude, angryGopher, "test messages", "## Valid links\n\n"+
+		"Mention: @**Steve Howell**\n\n"+
+		"Channel link: #**ChitChat**\n\n"+
+		"Topic link: #**ChitChat>welcome**\n\n"+
+		fmt.Sprintf("Message link: #**ChitChat>welcome@%d**", m1))
+
+	send(claude, angryGopher, "test messages", "## Invalid links\n\n"+
+		"Unknown user: @**Nobody Special**\n\n"+
+		"Unknown channel: #**NoSuchChannel**\n\n"+
+		"Unknown topic: #**Angry Gopher>no such topic**")
+
+	send(claude, angryGopher, "test messages", "## Image test\n\n"+
+		"Here is a test image: [gopher.png](/user_uploads/1/gopher.png)")
+
+	// --- Angry Gopher > dev log ---
+	send(claude, angryGopher, "dev log", "Implemented message flags (read/unread, starred).")
+	send(claude, angryGopher, "dev log", "Added emoji reactions support. Only unicode for now.")
+	m21 := send(steve, angryGopher, "dev log", "Nice work @**Claude**! The reactions look great.")
+	send(claude, angryGopher, "dev log", "Channel permissions are in place. Private channels are now enforced.")
+	send(apoorva, angryGopher, "dev log", "I tested the invite system — it works perfectly.")
+	send(claude, angryGopher, "dev log", "Presence tracking is live. The Buddies plugin shows who's online.")
+	m25 := send(steve, angryGopher, "dev log", "Let's deploy this soon. Really happy with the progress.")
+	send(claude, angryGopher, "dev log", "Agreed! I'll prepare the deployment checklist.")
+
+	// Star 5 messages for Steve.
+	for _, msgID := range []int64{m1, m10, m12, m21, m25} {
+		flags.StarMessage(int(msgID), steve)
+	}
+
 	seedTestImage()
 }
 
-// seedTestImage creates a small PNG in ~/AngryGopherImages/1/gopher.png
-// so the image test message has something to display.
 func seedTestImage() {
 	dir := filepath.Join(os.Getenv("HOME"), "AngryGopherImages", "1")
 	os.MkdirAll(dir, 0755)
 
-	// Create a simple 64x64 teal square.
 	img := image.NewRGBA(image.Rect(0, 0, 64, 64))
 	teal := color.RGBA{0, 128, 128, 255}
 	for y := 0; y < 64; y++ {
@@ -264,12 +269,4 @@ func seedTestImage() {
 	}
 	defer f.Close()
 	png.Encode(f, img)
-}
-
-func seedOneMessage(msgID, senderID, channelID, topicID int, timestamp int64, markdown string) {
-	html := renderMarkdown(markdown)
-	DB.Exec(`INSERT INTO message_content (content_id, markdown, html) VALUES (?, ?, ?)`,
-		msgID, markdown, html)
-	DB.Exec(`INSERT INTO messages (id, content_id, sender_id, channel_id, topic_id, timestamp) VALUES (?, ?, ?, ?, ?, ?)`,
-		msgID, msgID, senderID, channelID, topicID, timestamp)
 }

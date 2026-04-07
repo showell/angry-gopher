@@ -47,6 +47,8 @@ func main() {
 	channels.RenderMarkdown = renderMarkdown
 	messages.RenderMarkdown = renderMarkdown
 
+	seedData(true)
+
 	// API endpoints.
 	http.HandleFunc("/api/v1/register", withCORS(events.HandleRegister))
 	http.HandleFunc("/api/v1/events", withCORS(events.HandleEvents))

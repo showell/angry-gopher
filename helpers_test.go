@@ -43,6 +43,7 @@ func resetDB() {
 	messages.RenderMarkdown = renderMarkdown
 	ratelimit.Reset()
 	presence.Reset()
+	seedData(false)
 }
 
 // --- Auth helpers ---

@@ -136,6 +136,48 @@ func insertContent(markdown, html string) (int64, error) {
 	return result.LastInsertId()
 }
 
+// SendMessage is the core logic for creating a message. It renders
+// markdown, stores content, creates the topic if needed, and inserts
+// the message. Returns the new message ID. Used by both the HTTP
+// handler and the seed data.
+func SendMessage(senderID, channelID int, topic, markdown string) (int64, error) {
+	// Find or create the topic.
+	var topicID int64
+	err := DB.QueryRow(
+		`SELECT topic_id FROM topics WHERE channel_id = ? AND topic_name = ?`,
+		channelID, topic,
+	).Scan(&topicID)
+	if err != nil {
+		result, err := DB.Exec(
+			`INSERT INTO topics (channel_id, topic_name) VALUES (?, ?)`,
+			channelID, topic,
+		)
+		if err != nil {
+			return 0, err
+		}
+		topicID, _ = result.LastInsertId()
+	}
+
+	html := RenderMarkdown(markdown)
+
+	contentID, err := insertContent(markdown, html)
+	if err != nil {
+		return 0, err
+	}
+
+	timestamp := time.Now().Unix()
+
+	result, err := DB.Exec(
+		`INSERT INTO messages (content_id, sender_id, channel_id, topic_id, timestamp) VALUES (?, ?, ?, ?, ?)`,
+		contentID, senderID, channelID, topicID, timestamp,
+	)
+	if err != nil {
+		return 0, err
+	}
+
+	return result.LastInsertId()
+}
+
 // HandleSendMessage handles POST /api/v1/messages.
 func HandleSendMessage(w http.ResponseWriter, r *http.Request) {
 	channelID, _ := strconv.Atoi(r.FormValue("to"))
@@ -159,51 +201,20 @@ func HandleSendMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Find or create the topic.
-	var topicID int64
-	err := DB.QueryRow(
-		`SELECT topic_id FROM topics WHERE channel_id = ? AND topic_name = ?`,
-		channelID, topic,
-	).Scan(&topicID)
+	messageID, err := SendMessage(senderID, channelID, topic, content)
 	if err != nil {
-		result, err := DB.Exec(
-			`INSERT INTO topics (channel_id, topic_name) VALUES (?, ?)`,
-			channelID, topic,
-		)
-		if err != nil {
-			respond.Error(w, "Failed to create topic")
-			return
-		}
-		topicID, _ = result.LastInsertId()
+		respond.Error(w, "Failed to send message")
+		return
 	}
 
 	html := RenderMarkdown(content)
-
-	contentID, err := insertContent(content, html)
-	if err != nil {
-		respond.Error(w, "Failed to store content")
-		return
-	}
-
 	timestamp := time.Now().Unix()
-
-	result, err := DB.Exec(
-		`INSERT INTO messages (content_id, sender_id, channel_id, topic_id, timestamp) VALUES (?, ?, ?, ?, ?)`,
-		contentID, senderID, channelID, topicID, timestamp,
-	)
-	if err != nil {
-		respond.Error(w, "Failed to insert message")
-		return
-	}
-
-	messageID, _ := result.LastInsertId()
 
 	var email, fullName string
 	DB.QueryRow(`SELECT email, full_name FROM users WHERE id = ?`, senderID).Scan(&email, &fullName)
 
 	log.Printf("[api] New message %d in channel %d, topic %q", messageID, channelID, topic)
 
-	// Only deliver the message event to users who can see this channel.
 	event := map[string]interface{}{
 		"type":  "message",
 		"flags": []string{"read"},

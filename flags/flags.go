@@ -90,6 +90,13 @@ func applyReadFlag(op string, userID int, messageIDs []int) {
 	}
 }
 
+// StarMessage stars a message for a user. Used by both the HTTP
+// handler and seed data.
+func StarMessage(messageID, userID int) {
+	DB.Exec(`INSERT OR IGNORE INTO starred_messages (message_id, user_id) VALUES (?, ?)`,
+		messageID, userID)
+}
+
 func applyStarredFlag(op string, userID int, messageIDs []int) {
 	for _, id := range messageIDs {
 		switch op {
