@@ -524,3 +524,53 @@ func TestIdempotentReaction(t *testing.T) {
 		t.Errorf("expected 1 reaction after double add, got %d", len(rxns))
 	}
 }
+
+// --- Edit message tests ---
+
+func editMessage(t *testing.T, messageID int, content string) *httptest.ResponseRecorder {
+	t.Helper()
+	form := url.Values{}
+	form.Set("content", content)
+
+	path := "/api/v1/messages/" + strconv.Itoa(messageID)
+	req := httptest.NewRequest("PATCH", path, strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	rec := httptest.NewRecorder()
+	messages.HandleEditMessage(rec, req)
+	return rec
+}
+
+func TestEditMessage(t *testing.T) {
+	resetDB()
+	seedMessage(t, 1)
+
+	rec := editMessage(t, 1, "updated **content**")
+	body := parseJSON(t, rec)
+	if body["result"] != "success" {
+		t.Fatalf("expected success, got %v", body["result"])
+	}
+
+	// Verify the stored content is now the rendered HTML.
+	msgs := getMessages(t, "newest")
+	content := msgs[0]["content"].(string)
+	if !strings.Contains(content, "<strong>content</strong>") {
+		t.Errorf("expected rendered markdown, got %q", content)
+	}
+}
+
+func TestEditMessageMissingContent(t *testing.T) {
+	resetDB()
+	seedMessage(t, 1)
+
+	form := url.Values{}
+	req := httptest.NewRequest("PATCH", "/api/v1/messages/1", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	messages.HandleEditMessage(rec, req)
+
+	body := parseJSON(t, rec)
+	if body["result"] != "error" {
+		t.Errorf("expected error for missing content, got %v", body["result"])
+	}
+}

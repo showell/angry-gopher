@@ -30,15 +30,8 @@ The database is recreated fresh on every restart with 4 seeded users,
 | GET | /user_uploads/{id}/{file} | Serve an uploaded file |
 
 | PATCH | /api/v1/streams/{id} | Update channel description (renders markdown) |
-
-## Not yet supported
-
-These endpoints are used by Angry Cat but not yet implemented:
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| PATCH | /api/v1/messages/{id} | Edit a message |
-| POST | /api/v1/messages/{id}/reactions | Add a reaction |
+| PATCH | /api/v1/messages/{id} | Edit a message (re-renders markdown) |
+| POST | /api/v1/messages/{id}/reactions | Add a unicode emoji reaction |
 | DELETE | /api/v1/messages/{id}/reactions | Remove a reaction |
 
 ## Authentication

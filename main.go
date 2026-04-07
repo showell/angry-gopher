@@ -65,6 +65,8 @@ func main() {
 	http.HandleFunc("/api/v1/messages/", withCORS(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/reactions") {
 			reactions.HandleReaction(w, r)
+		} else if r.Method == "PATCH" {
+			messages.HandleEditMessage(w, r)
 		} else {
 			respond.Error(w, "Unknown messages sub-endpoint")
 		}

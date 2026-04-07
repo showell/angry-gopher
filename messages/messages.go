@@ -186,3 +186,37 @@ func HandleSendMessage(w http.ResponseWriter, r *http.Request) {
 
 	respond.Success(w, map[string]interface{}{"id": messageID})
 }
+
+// HandleEditMessage handles PATCH /api/v1/messages/{id}.
+func HandleEditMessage(w http.ResponseWriter, r *http.Request) {
+	messageID := respond.PathSegmentInt(r.URL.Path, 4)
+	if messageID == 0 {
+		respond.Error(w, "Invalid message ID")
+		return
+	}
+
+	content := r.FormValue("content")
+	if content == "" {
+		respond.Error(w, "Missing required parameter: content")
+		return
+	}
+
+	html := RenderMarkdown(content)
+
+	_, err := DB.Exec(`UPDATE messages SET content = ? WHERE id = ?`, html, messageID)
+	if err != nil {
+		respond.Error(w, "Failed to update message")
+		return
+	}
+
+	log.Printf("[api] Edited message %d", messageID)
+
+	events.PushToAll(map[string]interface{}{
+		"type":             "update_message",
+		"message_id":       messageID,
+		"content":          content,
+		"rendered_content":  html,
+	})
+
+	respond.Success(w, nil)
+}
