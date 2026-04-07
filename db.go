@@ -68,10 +68,12 @@ CREATE TABLE IF NOT EXISTS reactions (
     PRIMARY KEY (message_id, user_id, emoji_code)
 );
 
-CREATE TABLE IF NOT EXISTS message_flags (
-    message_id INTEGER NOT NULL REFERENCES messages(id),
-    flag_name TEXT NOT NULL,
-    PRIMARY KEY (message_id, flag_name)
+CREATE TABLE IF NOT EXISTS unreads (
+    message_id INTEGER PRIMARY KEY REFERENCES messages(id)
+);
+
+CREATE TABLE IF NOT EXISTS starred_messages (
+    message_id INTEGER PRIMARY KEY REFERENCES messages(id)
 );
 `
 
