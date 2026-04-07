@@ -31,29 +31,13 @@ import (
 
 const listenAddr = ":9000"
 
-func main() {
-	initDB("angry_gopher.db")
+func buildMux() *http.ServeMux {
+	mux := http.NewServeMux()
 
-	// Wire up package-level DB references.
-	auth.DB = DB
-	users.DB = DB
-	channels.DB = DB
-	messages.DB = DB
-	flags.DB = DB
-	reactions.DB = DB
-	invites.DB = DB
-
-	// Wire up markdown rendering to avoid circular imports.
-	channels.RenderMarkdown = renderMarkdown
-	messages.RenderMarkdown = renderMarkdown
-
-	seedData(true)
-
-	// API endpoints.
-	http.HandleFunc("/api/v1/register", withCORS(events.HandleRegister))
-	http.HandleFunc("/api/v1/events", withCORS(events.HandleEvents))
-	http.HandleFunc("/api/v1/users", withCORS(users.HandleUsers))
-	http.HandleFunc("/api/v1/users/me/subscriptions", withCORS(func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/v1/register", withCORS(events.HandleRegister))
+	mux.HandleFunc("/api/v1/events", withCORS(events.HandleEvents))
+	mux.HandleFunc("/api/v1/users", withCORS(users.HandleUsers))
+	mux.HandleFunc("/api/v1/users/me/subscriptions", withCORS(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "GET":
 			channels.HandleSubscriptions(w, r)
@@ -63,7 +47,7 @@ func main() {
 			respond.Error(w, "Method not allowed")
 		}
 	}))
-	http.HandleFunc("/api/v1/messages", withCORS(func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/v1/messages", withCORS(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "GET":
 			messages.HandleGetMessages(w, r)
@@ -73,11 +57,8 @@ func main() {
 			respond.Error(w, "Method not allowed")
 		}
 	}))
-	http.HandleFunc("/api/v1/messages/flags", withCORS(flags.HandleUpdateFlags))
-	// Routes under /api/v1/messages/ need a dispatcher since Go's
-	// default mux matches by longest prefix. Paths like
-	// /api/v1/messages/123/reactions land here.
-	http.HandleFunc("/api/v1/messages/", withCORS(func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/v1/messages/flags", withCORS(flags.HandleUpdateFlags))
+	mux.HandleFunc("/api/v1/messages/", withCORS(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/reactions") {
 			reactions.HandleReaction(w, r)
 		} else if r.Method == "PATCH" {
@@ -86,10 +67,10 @@ func main() {
 			respond.Error(w, "Unknown messages sub-endpoint")
 		}
 	}))
-	http.HandleFunc("/api/v1/streams/", withCORS(channels.HandleUpdateChannel))
-	http.HandleFunc("/api/v1/invites", withCORS(invites.HandleCreateInvite))
-	http.HandleFunc("/api/v1/invites/redeem", withCORS(invites.HandleRedeemInvite))
-	http.HandleFunc("/api/v1/users/me/presence", withCORS(func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/v1/streams/", withCORS(channels.HandleUpdateChannel))
+	mux.HandleFunc("/api/v1/invites", withCORS(invites.HandleCreateInvite))
+	mux.HandleFunc("/api/v1/invites/redeem", withCORS(invites.HandleRedeemInvite))
+	mux.HandleFunc("/api/v1/users/me/presence", withCORS(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "POST":
 			presence.HandleUpdatePresence(w, r)
@@ -100,20 +81,36 @@ func main() {
 		}
 	}))
 
-	// File uploads.
-	http.HandleFunc("/api/v1/user_uploads", withCORS(handleUpload))
-	http.HandleFunc("/api/v1/user_uploads/", withCORS(handleUploadTempURL))
-	http.HandleFunc("/user_uploads/", withCORS(handleServeUpload))
+	mux.HandleFunc("/api/v1/user_uploads", withCORS(handleUpload))
+	mux.HandleFunc("/api/v1/user_uploads/", withCORS(handleUploadTempURL))
+	mux.HandleFunc("/user_uploads/", withCORS(handleServeUpload))
+	mux.HandleFunc("/admin/", adminHandler)
+	mux.HandleFunc("/", withCORS(handleUnimplemented))
 
-	// Admin UI.
-	http.HandleFunc("/admin/", adminHandler)
+	return mux
+}
 
-	// Catch-all for unimplemented endpoints.
-	http.HandleFunc("/", withCORS(handleUnimplemented))
+func main() {
+	initDB("angry_gopher.db")
+
+	auth.DB = DB
+	users.DB = DB
+	channels.DB = DB
+	messages.DB = DB
+	flags.DB = DB
+	reactions.DB = DB
+	invites.DB = DB
+
+	channels.RenderMarkdown = renderMarkdown
+	messages.RenderMarkdown = renderMarkdown
+
+	seedData(true)
+
+	mux := buildMux()
 
 	fmt.Printf("Angry Gopher listening on %s\n", listenAddr)
 	fmt.Printf("Admin UI at http://localhost%s/admin/\n", listenAddr)
-	log.Fatal(http.ListenAndServe(listenAddr, nil))
+	log.Fatal(http.ListenAndServe(listenAddr, mux))
 }
 
 // --- File uploads ---
@@ -204,10 +201,10 @@ func withCORS(handler http.HandlerFunc) http.HandlerFunc {
 			log.Printf("%s %s", r.Method, r.URL.Path)
 		}
 
-		// Rate limit authenticated users. If no auth header is present,
-		// skip the check — the handler will reject unauthenticated
-		// requests on its own.
-		if r.Header.Get("Authorization") != "" {
+		// Rate limit authenticated users. Skip the check for event
+		// polling (passive listener) and unauthenticated requests.
+		isEventPoll := r.URL.Path == "/api/v1/events"
+		if !isEventPoll && r.Header.Get("Authorization") != "" {
 			userID := auth.Authenticate(r)
 			if userID != 0 && !ratelimit.Check(userID) {
 				w.Header().Set("Retry-After", "60")

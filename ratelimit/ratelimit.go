@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-const (
+var (
 	MaxRequests = 120
 	Window      = 60 * time.Second
 )
