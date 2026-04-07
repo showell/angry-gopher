@@ -174,8 +174,8 @@ func seedTestMessages() {
 	DB.Exec(`INSERT INTO topics (topic_id, channel_id, topic_name) VALUES (1, 2, 'test messages')`)
 	DB.Exec(`INSERT INTO topics (topic_id, channel_id, topic_name) VALUES (2, 3, 'welcome')`)
 
-	// Welcome message in ChitChat.
-	seedOneMessage(1, 3, 2, 3, 1712500000, "Welcome to Angry Gopher! All systems are go.")
+	// Welcome message in ChitChat (channel 3, topic 2 "welcome").
+	seedOneMessage(1, 3, 3, 2, 1712500000, "Welcome to Angry Gopher! All systems are go.")
 
 	// Test messages in Angry Gopher > test messages, sent by Claude (user 3).
 	seedOneMessage(2, 3, 2, 1, 1712500060, strings.Join([]string{

@@ -46,8 +46,19 @@ func renderMarkdown(source string) string {
 	}
 	html := buf.String()
 
+	html = wrapCodeBlocks(html)
 	html = appendImagePreviews(html)
 
+	return html
+}
+
+// wrapCodeBlocks wraps <pre><code> blocks in a Zulip-style
+// <div class="codehilite"> so Angry Cat's CSS and click handlers
+// recognize them.
+func wrapCodeBlocks(html string) string {
+	html = strings.ReplaceAll(html, "<pre><code>", `<div class="codehilite"><pre><code>`)
+	html = strings.ReplaceAll(html, `<pre><code class="`, `<div class="codehilite"><pre><code class="`)
+	html = strings.ReplaceAll(html, "</code></pre>", "</code></pre></div>")
 	return html
 }
 
