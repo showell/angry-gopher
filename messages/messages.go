@@ -203,7 +203,8 @@ func HandleSendMessage(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("[api] New message %d in channel %d, topic %q", messageID, channelID, topic)
 
-	events.PushToAll(map[string]interface{}{
+	// Only deliver the message event to users who can see this channel.
+	event := map[string]interface{}{
 		"type":  "message",
 		"flags": []string{"read"},
 		"message": map[string]interface{}{
@@ -221,6 +222,9 @@ func HandleSendMessage(w http.ResponseWriter, r *http.Request) {
 			"display_recipient": fmt.Sprintf("channel_%d", channelID),
 		},
 		"local_message_id": localID,
+	}
+	events.PushFiltered(event, func(uid int) bool {
+		return channels.CanAccess(uid, channelID)
 	})
 
 	respond.Success(w, map[string]interface{}{"id": messageID})
@@ -266,11 +270,17 @@ func HandleEditMessage(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("[api] Edited message %d", messageID)
 
-	events.PushToAll(map[string]interface{}{
-		"type":              "update_message",
-		"message_id":        messageID,
-		"content":           content,
-		"rendered_content":  html,
+	// Look up the channel so we can filter the event delivery.
+	var channelID int
+	DB.QueryRow(`SELECT channel_id FROM messages WHERE id = ?`, messageID).Scan(&channelID)
+
+	events.PushFiltered(map[string]interface{}{
+		"type":             "update_message",
+		"message_id":       messageID,
+		"content":          content,
+		"rendered_content": html,
+	}, func(uid int) bool {
+		return channels.CanAccess(uid, channelID)
 	})
 
 	respond.Success(w, nil)

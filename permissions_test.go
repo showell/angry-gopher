@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"angry-gopher/channels"
+	"angry-gopher/events"
 	"angry-gopher/flags"
 	"angry-gopher/messages"
 	"angry-gopher/reactions"
@@ -218,5 +219,61 @@ func TestJoeCannotUpdatePrivateChannelDescription(t *testing.T) {
 	body := parseJSON(t, rec)
 	if body["result"] != "error" {
 		t.Errorf("Joe should not be able to update private channel description, got %v", body["result"])
+	}
+}
+
+// --- Event delivery filtered by channel access ---
+
+func TestPrivateMessageEventNotDeliveredToJoe(t *testing.T) {
+	resetDB()
+
+	// Register queues for Steve and Joe.
+	steveRegReq := httptest.NewRequest("POST", "/api/v1/register", nil)
+	steveAuth(steveRegReq)
+	steveRegRec := httptest.NewRecorder()
+	events.HandleRegister(steveRegRec, steveRegReq)
+	steveQueueID := parseJSON(t, steveRegRec)["queue_id"].(string)
+
+	joeRegReq := httptest.NewRequest("POST", "/api/v1/register", nil)
+	joeAuth(joeRegReq)
+	joeRegRec := httptest.NewRecorder()
+	events.HandleRegister(joeRegRec, joeRegReq)
+	joeQueueID := parseJSON(t, joeRegRec)["queue_id"].(string)
+
+	// Steve sends a message to private channel 1 (Angry Cat).
+	sendMessage(t, 1, "secret", "private stuff")
+
+	// Push a broadcast event so both queues have something to return
+	// (avoids the long-poll timeout on Joe's empty queue).
+	events.PushToAll(map[string]interface{}{"type": "heartbeat"})
+
+	// Steve's queue should have the message event.
+	stevePollReq := httptest.NewRequest("GET",
+		"/api/v1/events?queue_id="+steveQueueID+"&last_event_id=-1", nil)
+	stevePollRec := httptest.NewRecorder()
+	events.HandleEvents(stevePollRec, stevePollReq)
+
+	steveEvents := parseJSON(t, stevePollRec)["events"].([]interface{})
+	steveGotMessage := false
+	for _, e := range steveEvents {
+		if e.(map[string]interface{})["type"] == "message" {
+			steveGotMessage = true
+		}
+	}
+	if !steveGotMessage {
+		t.Errorf("Steve should receive the message event")
+	}
+
+	// Joe's queue should have the heartbeat but NOT the message event.
+	joePollReq := httptest.NewRequest("GET",
+		"/api/v1/events?queue_id="+joeQueueID+"&last_event_id=-1", nil)
+	joePollRec := httptest.NewRecorder()
+	events.HandleEvents(joePollRec, joePollReq)
+
+	joeEvents := parseJSON(t, joePollRec)["events"].([]interface{})
+	for _, e := range joeEvents {
+		if e.(map[string]interface{})["type"] == "message" {
+			t.Errorf("Joe should NOT receive message events from private channels")
+		}
 	}
 }

@@ -10,7 +10,10 @@ import (
 )
 
 func TestEventRegisterReturnsQueueID(t *testing.T) {
+	resetDB()
+
 	req := httptest.NewRequest("POST", "/api/v1/register", nil)
+	steveAuth(req)
 	rec := httptest.NewRecorder()
 	events.HandleRegister(rec, req)
 
@@ -27,6 +30,19 @@ func TestEventRegisterReturnsQueueID(t *testing.T) {
 	}
 }
 
+func TestEventRegisterRequiresAuth(t *testing.T) {
+	resetDB()
+
+	req := httptest.NewRequest("POST", "/api/v1/register", nil)
+	rec := httptest.NewRecorder()
+	events.HandleRegister(rec, req)
+
+	body := parseJSON(t, rec)
+	if body["result"] != "error" {
+		t.Errorf("expected error for unauthenticated register, got %v", body["result"])
+	}
+}
+
 func TestEventPollBadQueue(t *testing.T) {
 	req := httptest.NewRequest("GET", "/api/v1/events?queue_id=nonexistent&last_event_id=-1", nil)
 	rec := httptest.NewRecorder()
@@ -39,14 +55,17 @@ func TestEventPollBadQueue(t *testing.T) {
 }
 
 func TestEventPollReceivesEvents(t *testing.T) {
-	// Register a queue.
+	resetDB()
+
+	// Register a queue as Steve.
 	regReq := httptest.NewRequest("POST", "/api/v1/register", nil)
+	steveAuth(regReq)
 	regRec := httptest.NewRecorder()
 	events.HandleRegister(regRec, regReq)
 	regBody := parseJSON(t, regRec)
 	queueID := regBody["queue_id"].(string)
 
-	// Push an event.
+	// Push an event to all queues.
 	events.PushToAll(map[string]interface{}{
 		"type": "test_event",
 	})

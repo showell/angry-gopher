@@ -122,13 +122,15 @@ func HandleUpdateChannel(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("[api] Updated description for channel %d", channelID)
 
-	events.PushToAll(map[string]interface{}{
+	events.PushFiltered(map[string]interface{}{
 		"type":                 "stream",
 		"op":                   "update",
 		"property":             "description",
 		"stream_id":            channelID,
 		"value":                description,
 		"rendered_description": renderedDesc,
+	}, func(uid int) bool {
+		return CanAccess(uid, channelID)
 	})
 
 	respond.Success(w, nil)

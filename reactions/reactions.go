@@ -72,7 +72,11 @@ func HandleReaction(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("[api] %s reaction %s on message %d by user %d", op, emojiName, messageID, userID)
 
-	events.PushToAll(map[string]interface{}{
+	// Look up the channel so we can filter the event delivery.
+	var channelID int
+	DB.QueryRow(`SELECT channel_id FROM messages WHERE id = ?`, messageID).Scan(&channelID)
+
+	events.PushFiltered(map[string]interface{}{
 		"type":          "reaction",
 		"op":            op,
 		"message_id":    messageID,
@@ -80,6 +84,8 @@ func HandleReaction(w http.ResponseWriter, r *http.Request) {
 		"emoji_code":    emojiCode,
 		"emoji_name":    emojiName,
 		"reaction_type": "unicode_emoji",
+	}, func(uid int) bool {
+		return channels.CanAccess(uid, channelID)
 	})
 
 	respond.Success(w, nil)
