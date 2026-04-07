@@ -1,4 +1,5 @@
-// Tests for channel-related endpoints: subscriptions and channel updates.
+// Tests for channel-related endpoints: subscriptions, channel creation,
+// and channel updates.
 
 package main
 
@@ -54,5 +55,91 @@ func TestUpdateChannelDescription(t *testing.T) {
 	}
 	if !strings.Contains(renderedDesc, "<strong>testing</strong>") {
 		t.Errorf("expected rendered HTML, got %q", renderedDesc)
+	}
+}
+
+func TestCreatePublicChannel(t *testing.T) {
+	resetDB()
+
+	form := url.Values{}
+	form.Set("subscriptions", `[{"name":"new-channel","description":"A new channel"}]`)
+	form.Set("principals", "[1,2]")
+
+	req := httptest.NewRequest("POST", "/api/v1/users/me/subscriptions", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	steveAuth(req)
+	rec := httptest.NewRecorder()
+	channels.HandleCreateChannel(rec, req)
+
+	body := parseJSON(t, rec)
+	if body["result"] != "success" {
+		t.Fatalf("expected success, got %v", body["result"])
+	}
+
+	// Channel should exist.
+	var channelID int
+	DB.QueryRow(`SELECT channel_id FROM channels WHERE name = 'new-channel'`).Scan(&channelID)
+	if channelID == 0 {
+		t.Fatal("channel was not created")
+	}
+
+	// Both Steve (1) and Apoorva (2) should be subscribed.
+	var subCount int
+	DB.QueryRow(`SELECT COUNT(*) FROM subscriptions WHERE channel_id = ?`, channelID).Scan(&subCount)
+	if subCount != 2 {
+		t.Errorf("expected 2 subscribers, got %d", subCount)
+	}
+}
+
+func TestCreatePrivateChannel(t *testing.T) {
+	resetDB()
+
+	form := url.Values{}
+	form.Set("subscriptions", `[{"name":"secret-channel","description":""}]`)
+	form.Set("invite_only", "true")
+	form.Set("principals", "[1,3]")
+
+	req := httptest.NewRequest("POST", "/api/v1/users/me/subscriptions", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	steveAuth(req)
+	rec := httptest.NewRecorder()
+	channels.HandleCreateChannel(rec, req)
+
+	body := parseJSON(t, rec)
+	if body["result"] != "success" {
+		t.Fatalf("expected success, got %v", body["result"])
+	}
+
+	var inviteOnly int
+	DB.QueryRow(`SELECT invite_only FROM channels WHERE name = 'secret-channel'`).Scan(&inviteOnly)
+	if inviteOnly != 1 {
+		t.Errorf("expected invite_only=1, got %d", inviteOnly)
+	}
+}
+
+func TestCreateDuplicateChannelIgnored(t *testing.T) {
+	resetDB()
+
+	// "Angry Cat" already exists in seed data.
+	form := url.Values{}
+	form.Set("subscriptions", `[{"name":"Angry Cat","description":"duplicate"}]`)
+	form.Set("principals", "[1]")
+
+	req := httptest.NewRequest("POST", "/api/v1/users/me/subscriptions", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	steveAuth(req)
+	rec := httptest.NewRecorder()
+	channels.HandleCreateChannel(rec, req)
+
+	body := parseJSON(t, rec)
+	if body["result"] != "success" {
+		t.Fatalf("expected success, got %v", body["result"])
+	}
+
+	// Should still be just 3 channels.
+	var count int
+	DB.QueryRow(`SELECT COUNT(*) FROM channels`).Scan(&count)
+	if count != 3 {
+		t.Errorf("expected 3 channels (no duplicate), got %d", count)
 	}
 }

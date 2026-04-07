@@ -53,7 +53,16 @@ func main() {
 	http.HandleFunc("/api/v1/register", withCORS(events.HandleRegister))
 	http.HandleFunc("/api/v1/events", withCORS(events.HandleEvents))
 	http.HandleFunc("/api/v1/users", withCORS(users.HandleUsers))
-	http.HandleFunc("/api/v1/users/me/subscriptions", withCORS(channels.HandleSubscriptions))
+	http.HandleFunc("/api/v1/users/me/subscriptions", withCORS(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "GET":
+			channels.HandleSubscriptions(w, r)
+		case "POST":
+			channels.HandleCreateChannel(w, r)
+		default:
+			respond.Error(w, "Method not allowed")
+		}
+	}))
 	http.HandleFunc("/api/v1/messages", withCORS(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "GET":

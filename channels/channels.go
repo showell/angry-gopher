@@ -3,6 +3,7 @@ package channels
 
 import (
 	"database/sql"
+	"encoding/json"
 	"log"
 	"net/http"
 
@@ -82,6 +83,110 @@ func HandleSubscriptions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respond.Success(w, map[string]interface{}{"subscriptions": subs})
+}
+
+// HandleCreateChannel handles POST /api/v1/users/me/subscriptions.
+// Creates new channels and subscribes the specified principals.
+func HandleCreateChannel(w http.ResponseWriter, r *http.Request) {
+	userID := auth.Authenticate(r)
+	if userID == 0 {
+		respond.Error(w, "Unauthorized")
+		return
+	}
+
+	// Parse subscriptions: [{name, description}]
+	type subInfo struct {
+		Name        string `json:"name"`
+		Description string `json:"description"`
+	}
+	var subs []subInfo
+	if err := json.Unmarshal([]byte(r.FormValue("subscriptions")), &subs); err != nil || len(subs) == 0 {
+		respond.Error(w, "Invalid or missing subscriptions parameter")
+		return
+	}
+
+	inviteOnly := r.FormValue("invite_only") == "true"
+
+	// Parse principals (user IDs to subscribe).
+	var principals []int
+	if p := r.FormValue("principals"); p != "" {
+		json.Unmarshal([]byte(p), &principals)
+	}
+	if len(principals) == 0 {
+		principals = []int{userID}
+	}
+
+	inviteOnlyInt := 0
+	if inviteOnly {
+		inviteOnlyInt = 1
+	}
+
+	var createdNames []string
+
+	for _, sub := range subs {
+		if sub.Name == "" {
+			continue
+		}
+
+		// Check if channel already exists.
+		var existing int
+		DB.QueryRow(`SELECT COUNT(*) FROM channels WHERE name = ?`, sub.Name).Scan(&existing)
+		if existing > 0 {
+			continue
+		}
+
+		renderedDesc := ""
+		if sub.Description != "" {
+			renderedDesc = RenderMarkdown(sub.Description)
+		}
+
+		result, err := DB.Exec(
+			`INSERT INTO channels (name, description, rendered_description, invite_only) VALUES (?, ?, ?, ?)`,
+			sub.Name, sub.Description, renderedDesc, inviteOnlyInt,
+		)
+		if err != nil {
+			respond.Error(w, "Failed to create channel")
+			return
+		}
+
+		channelID, _ := result.LastInsertId()
+		log.Printf("[api] Created channel %d: %s (invite_only=%v)", channelID, sub.Name, inviteOnly)
+
+		// Subscribe all principals.
+		for _, uid := range principals {
+			DB.Exec(`INSERT OR IGNORE INTO subscriptions (user_id, channel_id) VALUES (?, ?)`,
+				uid, channelID)
+		}
+
+		createdNames = append(createdNames, sub.Name)
+
+		// Push subscription_add event to each subscribed user.
+		subEvent := map[string]interface{}{
+			"type": "subscription",
+			"op":   "add",
+			"subscriptions": []map[string]interface{}{
+				{
+					"stream_id":             channelID,
+					"name":                  sub.Name,
+					"description":           sub.Description,
+					"rendered_description":   renderedDesc,
+					"stream_weekly_traffic":  0,
+				},
+			},
+		}
+		principalSet := make(map[int]bool)
+		for _, uid := range principals {
+			principalSet[uid] = true
+		}
+		events.PushFiltered(subEvent, func(uid int) bool {
+			return principalSet[uid]
+		})
+	}
+
+	respond.Success(w, map[string]interface{}{
+		"already_subscribed": map[string]interface{}{},
+		"subscribed":         createdNames,
+	})
 }
 
 // HandleUpdateChannel handles PATCH /api/v1/streams/{id}.
