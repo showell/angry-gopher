@@ -24,6 +24,8 @@ var RenderMarkdown func(string) string
 
 // HandleGetMessages handles GET /api/v1/messages.
 func HandleGetMessages(w http.ResponseWriter, r *http.Request) {
+	userID := auth.Authenticate(r)
+
 	anchor := r.URL.Query().Get("anchor")
 	numBeforeStr := r.URL.Query().Get("num_before")
 	numBefore, _ := strconv.Atoi(numBeforeStr)
@@ -81,7 +83,7 @@ func HandleGetMessages(w http.ResponseWriter, r *http.Request) {
 
 	result := []map[string]interface{}{}
 	for _, row := range rows {
-		msgFlags := flags.GetMessageFlags(row.id)
+		msgFlags := flags.GetMessageFlags(row.id, userID)
 		result = append(result, map[string]interface{}{
 			"id":                row.id,
 			"content":           row.html,

@@ -69,11 +69,15 @@ CREATE TABLE IF NOT EXISTS reactions (
 );
 
 CREATE TABLE IF NOT EXISTS unreads (
-    message_id INTEGER PRIMARY KEY REFERENCES messages(id)
+    message_id INTEGER NOT NULL REFERENCES messages(id),
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    PRIMARY KEY (message_id, user_id)
 );
 
 CREATE TABLE IF NOT EXISTS starred_messages (
-    message_id INTEGER PRIMARY KEY REFERENCES messages(id)
+    message_id INTEGER NOT NULL REFERENCES messages(id),
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    PRIMARY KEY (message_id, user_id)
 );
 `
 

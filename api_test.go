@@ -92,6 +92,7 @@ func postFlags(t *testing.T, op, flag, messagesJSON string) *httptest.ResponseRe
 
 	req := httptest.NewRequest("POST", "/api/v1/messages/flags", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	steveAuth(req)
 
 	rec := httptest.NewRecorder()
 	flags.HandleUpdateFlags(rec, req)
@@ -104,6 +105,7 @@ func postFlags(t *testing.T, op, flag, messagesJSON string) *httptest.ResponseRe
 func getMessages(t *testing.T, anchor string) []map[string]interface{} {
 	t.Helper()
 	req := httptest.NewRequest("GET", "/api/v1/messages?anchor="+anchor+"&num_before=100", nil)
+	steveAuth(req)
 	rec := httptest.NewRecorder()
 	messages.HandleGetMessages(rec, req)
 
@@ -251,6 +253,7 @@ func TestFlagUpdateMissingParams(t *testing.T) {
 	resetDB()
 
 	req := httptest.NewRequest("POST", "/api/v1/messages/flags", nil)
+	steveAuth(req)
 	rec := httptest.NewRecorder()
 	flags.HandleUpdateFlags(rec, req)
 
