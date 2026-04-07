@@ -21,6 +21,7 @@ import (
 	"angry-gopher/events"
 	"angry-gopher/flags"
 	"angry-gopher/messages"
+	"angry-gopher/reactions"
 	"angry-gopher/respond"
 	"angry-gopher/users"
 )
@@ -36,6 +37,7 @@ func main() {
 	channels.DB = DB
 	messages.DB = DB
 	flags.DB = DB
+	reactions.DB = DB
 
 	// Wire up markdown rendering to avoid circular imports.
 	channels.RenderMarkdown = renderMarkdown
@@ -57,6 +59,16 @@ func main() {
 		}
 	}))
 	http.HandleFunc("/api/v1/messages/flags", withCORS(flags.HandleUpdateFlags))
+	// Routes under /api/v1/messages/ need a dispatcher since Go's
+	// default mux matches by longest prefix. Paths like
+	// /api/v1/messages/123/reactions land here.
+	http.HandleFunc("/api/v1/messages/", withCORS(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/reactions") {
+			reactions.HandleReaction(w, r)
+		} else {
+			respond.Error(w, "Unknown messages sub-endpoint")
+		}
+	}))
 	http.HandleFunc("/api/v1/streams/", withCORS(channels.HandleUpdateChannel))
 
 	// File uploads.

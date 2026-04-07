@@ -54,6 +54,14 @@ CREATE TABLE IF NOT EXISTS messages (
     timestamp INTEGER NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS reactions (
+    message_id INTEGER NOT NULL REFERENCES messages(id),
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    emoji_name TEXT NOT NULL,
+    emoji_code TEXT NOT NULL,
+    PRIMARY KEY (message_id, user_id, emoji_code)
+);
+
 CREATE TABLE IF NOT EXISTS message_flags (
     message_id INTEGER NOT NULL REFERENCES messages(id),
     flag_name TEXT NOT NULL,

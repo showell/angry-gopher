@@ -12,6 +12,7 @@ import (
 	"angry-gopher/auth"
 	"angry-gopher/events"
 	"angry-gopher/flags"
+	"angry-gopher/reactions"
 	"angry-gopher/respond"
 )
 
@@ -90,7 +91,7 @@ func HandleGetMessages(w http.ResponseWriter, r *http.Request) {
 			"timestamp":         row.timestamp,
 			"type":              "stream",
 			"flags":             msgFlags,
-			"reactions":         []interface{}{},
+			"reactions":         reactions.GetReactions(row.id),
 			"display_recipient": fmt.Sprintf("channel_%d", row.channelID),
 		})
 	}

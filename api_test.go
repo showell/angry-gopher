@@ -14,6 +14,7 @@ import (
 	"angry-gopher/channels"
 	"angry-gopher/flags"
 	"angry-gopher/messages"
+	"angry-gopher/reactions"
 )
 
 // --- Test helpers ---
@@ -27,6 +28,7 @@ func resetDB() {
 	channels.DB = DB
 	messages.DB = DB
 	flags.DB = DB
+	reactions.DB = DB
 	channels.RenderMarkdown = renderMarkdown
 	messages.RenderMarkdown = renderMarkdown
 }
@@ -432,5 +434,93 @@ func TestUpdateChannelDescription(t *testing.T) {
 	}
 	if !strings.Contains(renderedDesc, "<strong>testing</strong>") {
 		t.Errorf("expected rendered HTML, got %q", renderedDesc)
+	}
+}
+
+// --- Reaction tests ---
+
+func postReaction(t *testing.T, method string, messageID int, emojiName, emojiCode string) *httptest.ResponseRecorder {
+	t.Helper()
+	form := url.Values{}
+	form.Set("emoji_name", emojiName)
+	form.Set("emoji_code", emojiCode)
+	form.Set("reaction_type", "unicode_emoji")
+
+	path := "/api/v1/messages/" + strconv.Itoa(messageID) + "/reactions"
+	req := httptest.NewRequest(method, path, strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	steveAuth(req)
+
+	rec := httptest.NewRecorder()
+	reactions.HandleReaction(rec, req)
+	return rec
+}
+
+func TestAddReaction(t *testing.T) {
+	resetDB()
+	seedMessage(t, 1)
+
+	rec := postReaction(t, "POST", 1, "thumbs_up", "1f44d")
+	body := parseJSON(t, rec)
+	if body["result"] != "success" {
+		t.Fatalf("expected success, got %v", body["result"])
+	}
+
+	// Verify the reaction appears in the messages response.
+	msgs := getMessages(t, "newest")
+	rxns := msgs[0]["reactions"].([]interface{})
+	if len(rxns) != 1 {
+		t.Fatalf("expected 1 reaction, got %d", len(rxns))
+	}
+	rxn := rxns[0].(map[string]interface{})
+	if rxn["emoji_name"] != "thumbs_up" {
+		t.Errorf("expected thumbs_up, got %v", rxn["emoji_name"])
+	}
+	if rxn["emoji_code"] != "1f44d" {
+		t.Errorf("expected 1f44d, got %v", rxn["emoji_code"])
+	}
+}
+
+func TestRemoveReaction(t *testing.T) {
+	resetDB()
+	seedMessage(t, 1)
+
+	postReaction(t, "POST", 1, "thumbs_up", "1f44d")
+	postReaction(t, "DELETE", 1, "thumbs_up", "1f44d")
+
+	msgs := getMessages(t, "newest")
+	rxns := msgs[0]["reactions"].([]interface{})
+	if len(rxns) != 0 {
+		t.Errorf("expected 0 reactions after removal, got %d", len(rxns))
+	}
+}
+
+func TestMultipleReactions(t *testing.T) {
+	resetDB()
+	seedMessage(t, 1)
+
+	postReaction(t, "POST", 1, "thumbs_up", "1f44d")
+	postReaction(t, "POST", 1, "heart", "2764")
+
+	msgs := getMessages(t, "newest")
+	rxns := msgs[0]["reactions"].([]interface{})
+	if len(rxns) != 2 {
+		t.Errorf("expected 2 reactions, got %d", len(rxns))
+	}
+}
+
+func TestIdempotentReaction(t *testing.T) {
+	resetDB()
+	seedMessage(t, 1)
+
+	// Adding the same reaction twice should not error or duplicate
+	// (INSERT OR IGNORE in SQLite).
+	postReaction(t, "POST", 1, "thumbs_up", "1f44d")
+	postReaction(t, "POST", 1, "thumbs_up", "1f44d")
+
+	msgs := getMessages(t, "newest")
+	rxns := msgs[0]["reactions"].([]interface{})
+	if len(rxns) != 1 {
+		t.Errorf("expected 1 reaction after double add, got %d", len(rxns))
 	}
 }
