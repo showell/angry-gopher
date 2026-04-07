@@ -78,6 +78,17 @@ func HandleGetPresence(w http.ResponseWriter, r *http.Request) {
 	respond.Success(w, map[string]interface{}{"presences": result})
 }
 
+// GetAll returns a copy of all presence entries (for the admin UI).
+func GetAll() map[int]UserPresence {
+	mu.Lock()
+	defer mu.Unlock()
+	result := make(map[int]UserPresence, len(statuses))
+	for userID, p := range statuses {
+		result[userID] = *p
+	}
+	return result
+}
+
 // Reset clears all presence state. Used by tests.
 func Reset() {
 	mu.Lock()
