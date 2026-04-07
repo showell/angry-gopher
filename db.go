@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY,
     email TEXT NOT NULL,
     full_name TEXT NOT NULL,
+    api_key TEXT NOT NULL DEFAULT '',
     is_admin INTEGER NOT NULL DEFAULT 0
 );
 
@@ -96,15 +97,16 @@ func seedData(includeWelcome bool) {
 		id       int
 		email    string
 		fullName string
+		apiKey   string
 	}{
-		{1, "steve@example.com", "Steve Howell"},
-		{2, "apoorva@example.com", "Apoorva Pendse"},
-		{3, "claude@example.com", "Claude"},
-		{4, "joe@example.com", "Joe Random"},
+		{1, "steve@example.com", "Steve Howell", "steve-api-key"},
+		{2, "apoorva@example.com", "Apoorva Pendse", "apoorva-api-key"},
+		{3, "claude@example.com", "Claude", "claude-api-key"},
+		{4, "joe@example.com", "Joe Random", "joe-api-key"},
 	}
 	for _, u := range users {
-		DB.Exec(`INSERT OR IGNORE INTO users (id, email, full_name) VALUES (?, ?, ?)`,
-			u.id, u.email, u.fullName)
+		DB.Exec(`INSERT OR IGNORE INTO users (id, email, full_name, api_key) VALUES (?, ?, ?, ?)`,
+			u.id, u.email, u.fullName, u.apiKey)
 	}
 
 	channels := []struct {

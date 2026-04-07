@@ -3,14 +3,54 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
+
+// --- Authentication ---
+//
+// Angry Cat sends HTTP Basic auth on every request: base64(email:api_key).
+// We decode it, look up the user, and stash the user ID in the request
+// context via a query parameter so handlers can read it. (A context.Value
+// would be more idiomatic Go, but this keeps things simple for now.)
+
+// authenticateUser extracts the user from the Basic auth header.
+// Returns the user ID, or 0 if auth fails.
+func authenticateUser(r *http.Request) int {
+	auth := r.Header.Get("Authorization")
+	if !strings.HasPrefix(auth, "Basic ") {
+		return 0
+	}
+
+	decoded, err := base64.StdEncoding.DecodeString(auth[len("Basic "):])
+	if err != nil {
+		return 0
+	}
+
+	parts := strings.SplitN(string(decoded), ":", 2)
+	if len(parts) != 2 {
+		return 0
+	}
+	email, apiKey := parts[0], parts[1]
+
+	var userID int
+	err = DB.QueryRow(
+		`SELECT id FROM users WHERE email = ? AND api_key = ?`,
+		email, apiKey,
+	).Scan(&userID)
+	if err != nil {
+		return 0
+	}
+
+	return userID
+}
 
 // --- Event queue system ---
 //
@@ -183,9 +223,11 @@ func handleUsers(w http.ResponseWriter, r *http.Request) {
 // --- GET /api/v1/users/me/subscriptions ---
 
 func handleSubscriptions(w http.ResponseWriter, r *http.Request) {
-	// Return channels the current user is subscribed to.
-	// For now, we hardcode user 1 (Steve).
-	userID := 1
+	userID := authenticateUser(r)
+	if userID == 0 {
+		writeJSON(w, errorResponse("Unauthorized"))
+		return
+	}
 
 	rows, err := DB.Query(`
 		SELECT c.stream_id, c.name, c.description, c.rendered_description,
@@ -346,11 +388,14 @@ func handleSendMessage(w http.ResponseWriter, r *http.Request) {
 		topicID, _ = result.LastInsertId()
 	}
 
+	senderID := authenticateUser(r)
+	if senderID == 0 {
+		writeJSON(w, errorResponse("Unauthorized"))
+		return
+	}
+
 	// Convert markdown to HTML.
 	html := renderMarkdown(content)
-
-	// For now, all messages are sent as user 1.
-	senderID := 1
 	timestamp := time.Now().Unix()
 
 	result, err := DB.Exec(

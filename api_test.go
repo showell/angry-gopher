@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -19,6 +20,18 @@ func resetDB() {
 	initDB(":memory:")
 }
 
+// setAuth adds a Basic auth header for the given user. The credentials
+// must match what seedData() inserts (e.g. "steve@example.com" / "steve-api-key").
+func setAuth(req *http.Request, email, apiKey string) {
+	encoded := base64.StdEncoding.EncodeToString([]byte(email + ":" + apiKey))
+	req.Header.Set("Authorization", "Basic "+encoded)
+}
+
+// steveAuth adds Steve's auth header — the default test user.
+func steveAuth(req *http.Request) {
+	setAuth(req, "steve@example.com", "steve-api-key")
+}
+
 // seedMessage inserts a message into the test DB. The users and
 // channels already exist from seedData() (called by resetDB), so we
 // only need to ensure the topic exists and insert the message.
@@ -30,7 +43,7 @@ func seedMessage(t *testing.T, messageID int) {
 	DB.Exec(`INSERT OR IGNORE INTO messages (id, content, sender_id, stream_id, topic_id, timestamp) VALUES (?, '<p>test</p>', 1, 1, 1, 1000)`, messageID)
 }
 
-// sendMessage calls handleSendMessage and returns the recorded response.
+// sendMessage calls handleSendMessage as Steve and returns the recorded response.
 func sendMessage(t *testing.T, streamID int, topic, content string) *httptest.ResponseRecorder {
 	t.Helper()
 	form := url.Values{}
@@ -41,6 +54,7 @@ func sendMessage(t *testing.T, streamID int, topic, content string) *httptest.Re
 
 	req := httptest.NewRequest("POST", "/api/v1/messages", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	steveAuth(req)
 
 	rec := httptest.NewRecorder()
 	handleSendMessage(rec, req)
