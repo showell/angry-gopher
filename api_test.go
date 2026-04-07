@@ -9,15 +9,26 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"angry-gopher/auth"
+	"angry-gopher/channels"
+	"angry-gopher/flags"
+	"angry-gopher/messages"
 )
 
 // --- Test helpers ---
 
-// resetDB creates a fresh in-memory SQLite database. Each call to
-// initDB(":memory:") gives us a brand new database with empty tables,
-// so tests are fully isolated from each other.
+// resetDB creates a fresh in-memory SQLite database and wires up
+// all package-level DB references. Each call gives us a brand new
+// database with empty tables, so tests are fully isolated.
 func resetDB() {
 	initDB(":memory:")
+	auth.DB = DB
+	channels.DB = DB
+	messages.DB = DB
+	flags.DB = DB
+	channels.RenderMarkdown = renderMarkdown
+	messages.RenderMarkdown = renderMarkdown
 }
 
 // setAuth adds a Basic auth header for the given user. The credentials
@@ -43,7 +54,7 @@ func seedMessage(t *testing.T, messageID int) {
 	DB.Exec(`INSERT OR IGNORE INTO messages (id, content, sender_id, channel_id, topic_id, timestamp) VALUES (?, '<p>test</p>', 1, 1, 1, 1000)`, messageID)
 }
 
-// sendMessage calls handleSendMessage as Steve and returns the recorded response.
+// sendMessage calls HandleSendMessage as Steve and returns the recorded response.
 func sendMessage(t *testing.T, channelID int, topic, content string) *httptest.ResponseRecorder {
 	t.Helper()
 	form := url.Values{}
@@ -57,11 +68,11 @@ func sendMessage(t *testing.T, channelID int, topic, content string) *httptest.R
 	steveAuth(req)
 
 	rec := httptest.NewRecorder()
-	handleSendMessage(rec, req)
+	messages.HandleSendMessage(rec, req)
 	return rec
 }
 
-// postFlags calls handleUpdateFlags with form-encoded parameters and
+// postFlags calls HandleUpdateFlags with form-encoded parameters and
 // returns the recorded response. httptest.NewRecorder() captures the
 // response in memory (no real HTTP).
 func postFlags(t *testing.T, op, flag, messagesJSON string) *httptest.ResponseRecorder {
@@ -75,18 +86,18 @@ func postFlags(t *testing.T, op, flag, messagesJSON string) *httptest.ResponseRe
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	rec := httptest.NewRecorder()
-	handleUpdateFlags(rec, req)
+	flags.HandleUpdateFlags(rec, req)
 	return rec
 }
 
-// getMessages calls handleMessages and returns the parsed "messages"
+// getMessages calls HandleGetMessages and returns the parsed "messages"
 // array. JSON numbers decode as float64 in Go, so callers that need
 // integer fields (like message id) must convert with int(f).
 func getMessages(t *testing.T, anchor string) []map[string]interface{} {
 	t.Helper()
 	req := httptest.NewRequest("GET", "/api/v1/messages?anchor="+anchor+"&num_before=100", nil)
 	rec := httptest.NewRecorder()
-	handleMessages(rec, req)
+	messages.HandleGetMessages(rec, req)
 
 	body := parseJSON(t, rec)
 	raw := body["messages"].([]interface{})
@@ -111,15 +122,15 @@ func parseJSON(t *testing.T, rec *httptest.ResponseRecorder) map[string]interfac
 func flagsFor(t *testing.T, msg map[string]interface{}) []string {
 	t.Helper()
 	raw := msg["flags"].([]interface{})
-	flags := make([]string, len(raw))
-	for i, f := range raw {
-		flags[i] = f.(string)
+	f := make([]string, len(raw))
+	for i, v := range raw {
+		f[i] = v.(string)
 	}
-	return flags
+	return f
 }
 
-func hasFlag(flags []string, target string) bool {
-	for _, f := range flags {
+func hasFlag(flagList []string, target string) bool {
+	for _, f := range flagList {
 		if f == target {
 			return true
 		}
@@ -138,9 +149,9 @@ func TestMessagesDefaultToRead(t *testing.T) {
 		t.Fatalf("expected 1 message, got %d", len(msgs))
 	}
 
-	flags := flagsFor(t, msgs[0])
-	if !hasFlag(flags, "read") {
-		t.Errorf("expected 'read' flag, got %v", flags)
+	f := flagsFor(t, msgs[0])
+	if !hasFlag(f, "read") {
+		t.Errorf("expected 'read' flag, got %v", f)
 	}
 }
 
@@ -150,17 +161,17 @@ func TestMarkUnreadThenRead(t *testing.T) {
 
 	postFlags(t, "remove", "read", "[1]")
 	{
-		flags := flagsFor(t, getMessages(t, "newest")[0])
-		if hasFlag(flags, "read") {
-			t.Errorf("should be unread, got %v", flags)
+		f := flagsFor(t, getMessages(t, "newest")[0])
+		if hasFlag(f, "read") {
+			t.Errorf("should be unread, got %v", f)
 		}
 	}
 
 	postFlags(t, "add", "read", "[1]")
 	{
-		flags := flagsFor(t, getMessages(t, "newest")[0])
-		if !hasFlag(flags, "read") {
-			t.Errorf("should be read again, got %v", flags)
+		f := flagsFor(t, getMessages(t, "newest")[0])
+		if !hasFlag(f, "read") {
+			t.Errorf("should be read again, got %v", f)
 		}
 	}
 }
@@ -171,20 +182,20 @@ func TestStarredFlag(t *testing.T) {
 
 	postFlags(t, "add", "starred", "[1]")
 	{
-		flags := flagsFor(t, getMessages(t, "newest")[0])
-		if !hasFlag(flags, "starred") {
-			t.Errorf("should be starred, got %v", flags)
+		f := flagsFor(t, getMessages(t, "newest")[0])
+		if !hasFlag(f, "starred") {
+			t.Errorf("should be starred, got %v", f)
 		}
-		if !hasFlag(flags, "read") {
-			t.Errorf("starring should not remove read, got %v", flags)
+		if !hasFlag(f, "read") {
+			t.Errorf("starring should not remove read, got %v", f)
 		}
 	}
 
 	postFlags(t, "remove", "starred", "[1]")
 	{
-		flags := flagsFor(t, getMessages(t, "newest")[0])
-		if hasFlag(flags, "starred") {
-			t.Errorf("should no longer be starred, got %v", flags)
+		f := flagsFor(t, getMessages(t, "newest")[0])
+		if hasFlag(f, "starred") {
+			t.Errorf("should no longer be starred, got %v", f)
 		}
 	}
 }
@@ -200,15 +211,15 @@ func TestBatchFlagUpdate(t *testing.T) {
 
 	for _, msg := range getMessages(t, "newest") {
 		id := int(msg["id"].(float64))
-		flags := flagsFor(t, msg)
+		f := flagsFor(t, msg)
 		switch id {
 		case 1, 3:
-			if hasFlag(flags, "read") {
-				t.Errorf("message %d should be unread, got %v", id, flags)
+			if hasFlag(f, "read") {
+				t.Errorf("message %d should be unread, got %v", id, f)
 			}
 		case 2:
-			if !hasFlag(flags, "read") {
-				t.Errorf("message %d should still be read, got %v", id, flags)
+			if !hasFlag(f, "read") {
+				t.Errorf("message %d should still be read, got %v", id, f)
 			}
 		}
 	}
@@ -233,7 +244,7 @@ func TestFlagUpdateMissingParams(t *testing.T) {
 
 	req := httptest.NewRequest("POST", "/api/v1/messages/flags", nil)
 	rec := httptest.NewRecorder()
-	handleUpdateFlags(rec, req)
+	flags.HandleUpdateFlags(rec, req)
 
 	body := parseJSON(t, rec)
 	if body["result"] != "error" {
@@ -260,9 +271,9 @@ func TestIdempotentFlagOperations(t *testing.T) {
 	postFlags(t, "add", "read", "[1]")
 	postFlags(t, "add", "read", "[1]")
 	{
-		flags := flagsFor(t, getMessages(t, "newest")[0])
-		if !hasFlag(flags, "read") {
-			t.Errorf("should still be read after double add, got %v", flags)
+		f := flagsFor(t, getMessages(t, "newest")[0])
+		if !hasFlag(f, "read") {
+			t.Errorf("should still be read after double add, got %v", f)
 		}
 	}
 
@@ -271,9 +282,9 @@ func TestIdempotentFlagOperations(t *testing.T) {
 	postFlags(t, "add", "starred", "[1]")
 	postFlags(t, "add", "starred", "[1]")
 	{
-		flags := flagsFor(t, getMessages(t, "newest")[0])
-		if !hasFlag(flags, "starred") {
-			t.Errorf("should still be starred after double add, got %v", flags)
+		f := flagsFor(t, getMessages(t, "newest")[0])
+		if !hasFlag(f, "starred") {
+			t.Errorf("should still be starred after double add, got %v", f)
 		}
 	}
 }
@@ -289,12 +300,10 @@ func TestSendMessage(t *testing.T) {
 		t.Fatalf("expected success, got %v", body["result"])
 	}
 
-	// The response includes the new message ID.
 	if body["id"] == nil {
 		t.Fatal("expected id in response")
 	}
 
-	// Verify the message is retrievable and has HTML content.
 	msgs := getMessages(t, "newest")
 	if len(msgs) != 1 {
 		t.Fatalf("expected 1 message, got %d", len(msgs))
@@ -333,7 +342,6 @@ func TestSendMessageImagePreview(t *testing.T) {
 	msg := getMessages(t, "newest")[0]
 	content := msg["content"].(string)
 
-	// Should contain both the link and an appended inline image preview.
 	if !strings.Contains(content, `<a href="/user_uploads/1/cat.png">`) {
 		t.Errorf("expected link in HTML, got %q", content)
 	}
@@ -366,7 +374,6 @@ func TestSendMessageCreatesNewTopic(t *testing.T) {
 		t.Fatalf("expected 2 messages, got %d", len(msgs))
 	}
 
-	// Both messages should share the same topic.
 	if msgs[0]["subject"] != msgs[1]["subject"] {
 		t.Errorf("topics should match: %v vs %v", msgs[0]["subject"], msgs[1]["subject"])
 	}
@@ -377,9 +384,9 @@ func TestSendMessageDefaultsToRead(t *testing.T) {
 
 	sendMessage(t, 1, "test", "content")
 
-	flags := flagsFor(t, getMessages(t, "newest")[0])
-	if !hasFlag(flags, "read") {
-		t.Errorf("sent messages should default to read, got %v", flags)
+	f := flagsFor(t, getMessages(t, "newest")[0])
+	if !hasFlag(f, "read") {
+		t.Errorf("sent messages should default to read, got %v", f)
 	}
 }
 
@@ -388,11 +395,10 @@ func TestSendMessageMissingParams(t *testing.T) {
 
 	form := url.Values{}
 	form.Set("to", "1")
-	// Missing topic and content.
 	req := httptest.NewRequest("POST", "/api/v1/messages", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rec := httptest.NewRecorder()
-	handleSendMessage(rec, req)
+	messages.HandleSendMessage(rec, req)
 
 	body := parseJSON(t, rec)
 	if body["result"] != "error" {
@@ -410,14 +416,13 @@ func TestUpdateChannelDescription(t *testing.T) {
 	req := httptest.NewRequest("PATCH", "/api/v1/streams/1", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rec := httptest.NewRecorder()
-	handleUpdateChannel(rec, req)
+	channels.HandleUpdateChannel(rec, req)
 
 	body := parseJSON(t, rec)
 	if body["result"] != "success" {
 		t.Fatalf("expected success, got %v", body["result"])
 	}
 
-	// Verify the description was stored (raw) and rendered (HTML).
 	var desc, renderedDesc string
 	DB.QueryRow(`SELECT description, rendered_description FROM channels WHERE channel_id = 1`).
 		Scan(&desc, &renderedDesc)
