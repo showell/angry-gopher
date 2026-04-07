@@ -6,8 +6,13 @@ package main
 import (
 	"database/sql"
 	"fmt"
+	"image"
+	"image/color"
+	"image/png"
 	"log"
 	"os"
+	"path/filepath"
+	"strings"
 
 	_ "modernc.org/sqlite"
 )
@@ -160,12 +165,97 @@ func seedData(includeWelcome bool) {
 	}
 
 	if includeWelcome {
-		markdown := "Welcome to Angry Gopher! All systems are go."
-		DB.Exec(`INSERT OR IGNORE INTO message_content (content_id, markdown, html) VALUES (1, ?, ?)`,
-			markdown, renderMarkdown(markdown))
-		DB.Exec(`INSERT OR IGNORE INTO topics (topic_id, channel_id, topic_name) VALUES (1, 3, 'welcome')`)
-		DB.Exec(`INSERT OR IGNORE INTO messages (id, content_id, sender_id, channel_id, topic_id, timestamp) VALUES (1, 1, 3, 3, 1, ?)`,
-			1712500000,
-		)
+		seedTestMessages()
 	}
+}
+
+func seedTestMessages() {
+	// Create test topics.
+	DB.Exec(`INSERT INTO topics (topic_id, channel_id, topic_name) VALUES (1, 2, 'test messages')`)
+	DB.Exec(`INSERT INTO topics (topic_id, channel_id, topic_name) VALUES (2, 3, 'welcome')`)
+
+	// Welcome message in ChitChat.
+	seedOneMessage(1, 3, 2, 3, 1712500000, "Welcome to Angry Gopher! All systems are go.")
+
+	// Test messages in Angry Gopher > test messages, sent by Claude (user 3).
+	seedOneMessage(2, 3, 2, 1, 1712500060, strings.Join([]string{
+		"## Basic formatting",
+		"",
+		"Here is **bold text**, *italic text*, and ~~strikethrough~~.",
+		"",
+		"A simple list:",
+		"- First item",
+		"- Second item",
+		"- Third item",
+		"",
+		"And some `inline code` plus a code block:",
+		"```",
+		"func main() {",
+		`    fmt.Println("Hello!")`,
+		"}",
+		"```",
+	}, "\n"))
+
+	seedOneMessage(3, 3, 2, 1, 1712500120, strings.Join([]string{
+		"## Valid links",
+		"",
+		"Mention: @**Steve Howell**",
+		"",
+		"Channel link: #**ChitChat**",
+		"",
+		"Topic link: #**ChitChat>welcome**",
+		"",
+		"Message link: #**ChitChat>welcome@1**",
+	}, "\n"))
+
+	seedOneMessage(4, 3, 2, 1, 1712500180, strings.Join([]string{
+		"## Invalid links",
+		"",
+		"Unknown user: @**Nobody Special**",
+		"",
+		"Unknown channel: #**NoSuchChannel**",
+		"",
+		"Unknown topic: #**Angry Gopher>no such topic**",
+	}, "\n"))
+
+	seedOneMessage(5, 3, 2, 1, 1712500240, strings.Join([]string{
+		"## Image test",
+		"",
+		"Here is a test image: [gopher.png](/user_uploads/1/gopher.png)",
+	}, "\n"))
+
+	// Create the test image on disk.
+	seedTestImage()
+}
+
+// seedTestImage creates a small PNG in ~/AngryGopherImages/1/gopher.png
+// so the image test message has something to display.
+func seedTestImage() {
+	dir := filepath.Join(os.Getenv("HOME"), "AngryGopherImages", "1")
+	os.MkdirAll(dir, 0755)
+
+	// Create a simple 64x64 teal square.
+	img := image.NewRGBA(image.Rect(0, 0, 64, 64))
+	teal := color.RGBA{0, 128, 128, 255}
+	for y := 0; y < 64; y++ {
+		for x := 0; x < 64; x++ {
+			img.Set(x, y, teal)
+		}
+	}
+
+	f, err := os.Create(filepath.Join(dir, "gopher.png"))
+	if err != nil {
+		log.Printf("Failed to create test image: %v", err)
+		return
+	}
+	defer f.Close()
+	png.Encode(f, img)
+}
+
+func seedOneMessage(msgID, senderID, channelID, topicID int, timestamp int64, markdown string) {
+	html := renderMarkdown(markdown)
+	DB.Exec(`INSERT INTO message_content (content_id, markdown, html) VALUES (?, ?, ?)`,
+		msgID, markdown, html)
+	DB.Exec(`INSERT INTO messages (id, content_id, sender_id, channel_id, topic_id, timestamp) VALUES (?, ?, ?, ?, ?, ?)`,
+		msgID, msgID, senderID, channelID, topicID, timestamp)
 }
