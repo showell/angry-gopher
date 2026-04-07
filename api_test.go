@@ -40,14 +40,14 @@ func steveAuth(req *http.Request) {
 func seedMessage(t *testing.T, messageID int) {
 	t.Helper()
 	DB.Exec(`INSERT OR IGNORE INTO topics (topic_id, channel_id, topic_name) VALUES (1, 1, 'test')`)
-	DB.Exec(`INSERT OR IGNORE INTO messages (id, content, sender_id, stream_id, topic_id, timestamp) VALUES (?, '<p>test</p>', 1, 1, 1, 1000)`, messageID)
+	DB.Exec(`INSERT OR IGNORE INTO messages (id, content, sender_id, channel_id, topic_id, timestamp) VALUES (?, '<p>test</p>', 1, 1, 1, 1000)`, messageID)
 }
 
 // sendMessage calls handleSendMessage as Steve and returns the recorded response.
-func sendMessage(t *testing.T, streamID int, topic, content string) *httptest.ResponseRecorder {
+func sendMessage(t *testing.T, channelID int, topic, content string) *httptest.ResponseRecorder {
 	t.Helper()
 	form := url.Values{}
-	form.Set("to", strconv.Itoa(streamID))
+	form.Set("to", strconv.Itoa(channelID))
 	form.Set("topic", topic)
 	form.Set("content", content)
 	form.Set("type", "stream")
@@ -397,5 +397,35 @@ func TestSendMessageMissingParams(t *testing.T) {
 	body := parseJSON(t, rec)
 	if body["result"] != "error" {
 		t.Errorf("expected error for missing params, got %v", body["result"])
+	}
+}
+
+// --- Update channel description tests ---
+
+func TestUpdateChannelDescription(t *testing.T) {
+	resetDB()
+
+	form := url.Values{}
+	form.Set("description", "A channel for **testing**")
+	req := httptest.NewRequest("PATCH", "/api/v1/streams/1", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	handleUpdateChannel(rec, req)
+
+	body := parseJSON(t, rec)
+	if body["result"] != "success" {
+		t.Fatalf("expected success, got %v", body["result"])
+	}
+
+	// Verify the description was stored (raw) and rendered (HTML).
+	var desc, renderedDesc string
+	DB.QueryRow(`SELECT description, rendered_description FROM channels WHERE channel_id = 1`).
+		Scan(&desc, &renderedDesc)
+
+	if desc != "A channel for **testing**" {
+		t.Errorf("expected raw description stored, got %q", desc)
+	}
+	if !strings.Contains(renderedDesc, "<strong>testing</strong>") {
+		t.Errorf("expected rendered HTML, got %q", renderedDesc)
 	}
 }

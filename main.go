@@ -38,6 +38,7 @@ func main() {
 		}
 	}))
 	http.HandleFunc("/api/v1/messages/flags", withCORS(handleUpdateFlags))
+	http.HandleFunc("/api/v1/streams/", withCORS(handleUpdateChannel))
 
 	http.HandleFunc("/api/v1/user_uploads", withCORS(handleUpload))
 	http.HandleFunc("/api/v1/user_uploads/", withCORS(handleUploadTempURL))

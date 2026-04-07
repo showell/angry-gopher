@@ -230,10 +230,10 @@ func handleSubscriptions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rows, err := DB.Query(`
-		SELECT c.stream_id, c.name, c.description, c.rendered_description,
-		       c.stream_weekly_traffic, c.invite_only
+		SELECT c.channel_id, c.name, c.description, c.rendered_description,
+		       c.channel_weekly_traffic, c.invite_only
 		FROM channels c
-		JOIN subscriptions s ON c.stream_id = s.stream_id
+		JOIN subscriptions s ON c.channel_id = s.channel_id
 		WHERE s.user_id = ?`, userID)
 	if err != nil {
 		writeJSON(w, errorResponse("Failed to query subscriptions"))
@@ -243,11 +243,11 @@ func handleSubscriptions(w http.ResponseWriter, r *http.Request) {
 
 	var subs []map[string]interface{}
 	for rows.Next() {
-		var streamID, traffic, inviteOnly int
+		var channelID, traffic, inviteOnly int
 		var name, desc, renderedDesc string
-		rows.Scan(&streamID, &name, &desc, &renderedDesc, &traffic, &inviteOnly)
+		rows.Scan(&channelID, &name, &desc, &renderedDesc, &traffic, &inviteOnly)
 		subs = append(subs, map[string]interface{}{
-			"stream_id":              streamID,
+			"stream_id":              channelID,
 			"name":                   name,
 			"description":            desc,
 			"rendered_description":   renderedDesc,
@@ -278,7 +278,7 @@ func handleMessages(w http.ResponseWriter, r *http.Request) {
 	var args []interface{}
 
 	if anchor == "newest" {
-		query = `SELECT m.id, m.content, m.sender_id, m.stream_id, m.timestamp,
+		query = `SELECT m.id, m.content, m.sender_id, m.channel_id, m.timestamp,
 		                t.topic_name,
 		                u.email, u.full_name
 		         FROM messages m
@@ -288,7 +288,7 @@ func handleMessages(w http.ResponseWriter, r *http.Request) {
 		args = []interface{}{numBefore}
 	} else {
 		anchorID, _ := strconv.Atoi(anchor)
-		query = `SELECT m.id, m.content, m.sender_id, m.stream_id, m.timestamp,
+		query = `SELECT m.id, m.content, m.sender_id, m.channel_id, m.timestamp,
 		                t.topic_name,
 		                u.email, u.full_name
 		         FROM messages m
@@ -308,15 +308,15 @@ func handleMessages(w http.ResponseWriter, r *http.Request) {
 	// Collect all rows first, then close, so the connection is free
 	// for subsequent queries (flags).
 	type messageRow struct {
-		id, senderID, streamID int
-		timestamp              int64
-		content, topicName     string
-		email, fullName        string
+		id, senderID, channelID int
+		timestamp               int64
+		content, topicName      string
+		email, fullName         string
 	}
 	var rows []messageRow
 	for dbRows.Next() {
 		var row messageRow
-		dbRows.Scan(&row.id, &row.content, &row.senderID, &row.streamID,
+		dbRows.Scan(&row.id, &row.content, &row.senderID, &row.channelID,
 			&row.timestamp, &row.topicName, &row.email, &row.fullName)
 		rows = append(rows, row)
 	}
@@ -331,13 +331,13 @@ func handleMessages(w http.ResponseWriter, r *http.Request) {
 			"sender_id":         row.senderID,
 			"sender_email":      row.email,
 			"sender_full_name":  row.fullName,
-			"stream_id":         row.streamID,
+			"stream_id":         row.channelID,
 			"subject":           row.topicName,
 			"timestamp":         row.timestamp,
 			"type":              "stream",
 			"flags":             flags,
 			"reactions":         []interface{}{},
-			"display_recipient": fmt.Sprintf("channel_%d", row.streamID),
+			"display_recipient": fmt.Sprintf("channel_%d", row.channelID),
 		})
 	}
 
@@ -360,12 +360,12 @@ func handleMessages(w http.ResponseWriter, r *http.Request) {
 // --- POST /api/v1/messages ---
 
 func handleSendMessage(w http.ResponseWriter, r *http.Request) {
-	streamID, _ := strconv.Atoi(r.FormValue("to"))
+	channelID, _ := strconv.Atoi(r.FormValue("to"))
 	topic := r.FormValue("topic")
 	content := r.FormValue("content")
 	localID := r.FormValue("local_id")
 
-	if streamID == 0 || topic == "" || content == "" {
+	if channelID == 0 || topic == "" || content == "" {
 		writeJSON(w, errorResponse("Missing required parameters: to, topic, content"))
 		return
 	}
@@ -374,12 +374,12 @@ func handleSendMessage(w http.ResponseWriter, r *http.Request) {
 	var topicID int64
 	err := DB.QueryRow(
 		`SELECT topic_id FROM topics WHERE channel_id = ? AND topic_name = ?`,
-		streamID, topic,
+		channelID, topic,
 	).Scan(&topicID)
 	if err != nil {
 		result, err := DB.Exec(
 			`INSERT INTO topics (channel_id, topic_name) VALUES (?, ?)`,
-			streamID, topic,
+			channelID, topic,
 		)
 		if err != nil {
 			writeJSON(w, errorResponse("Failed to create topic"))
@@ -399,8 +399,8 @@ func handleSendMessage(w http.ResponseWriter, r *http.Request) {
 	timestamp := time.Now().Unix()
 
 	result, err := DB.Exec(
-		`INSERT INTO messages (content, sender_id, stream_id, topic_id, timestamp) VALUES (?, ?, ?, ?, ?)`,
-		html, senderID, streamID, topicID, timestamp,
+		`INSERT INTO messages (content, sender_id, channel_id, topic_id, timestamp) VALUES (?, ?, ?, ?, ?)`,
+		html, senderID, channelID, topicID, timestamp,
 	)
 	if err != nil {
 		writeJSON(w, errorResponse("Failed to insert message"))
@@ -413,7 +413,7 @@ func handleSendMessage(w http.ResponseWriter, r *http.Request) {
 	var email, fullName string
 	DB.QueryRow(`SELECT email, full_name FROM users WHERE id = ?`, senderID).Scan(&email, &fullName)
 
-	log.Printf("[api] New message %d in channel %d, topic %q", messageID, streamID, topic)
+	log.Printf("[api] New message %d in channel %d, topic %q", messageID, channelID, topic)
 
 	pushEventToAll(map[string]interface{}{
 		"type":  "message",
@@ -424,13 +424,13 @@ func handleSendMessage(w http.ResponseWriter, r *http.Request) {
 			"sender_id":         senderID,
 			"sender_email":      email,
 			"sender_full_name":  fullName,
-			"stream_id":         streamID,
+			"stream_id":         channelID,
 			"subject":           topic,
 			"timestamp":         timestamp,
 			"type":              "stream",
 			"flags":             []string{"read"},
 			"reactions":         []interface{}{},
-			"display_recipient": fmt.Sprintf("channel_%d", streamID),
+			"display_recipient": fmt.Sprintf("channel_%d", channelID),
 		},
 		"local_message_id": localID,
 	})
@@ -439,6 +439,46 @@ func handleSendMessage(w http.ResponseWriter, r *http.Request) {
 		"result": "success",
 		"msg":    "",
 		"id":     messageID,
+	})
+}
+
+// --- PATCH /api/v1/streams/{id} ---
+
+func handleUpdateChannel(w http.ResponseWriter, r *http.Request) {
+	// Extract channel ID from URL: /api/v1/streams/{id}
+	parts := strings.Split(r.URL.Path, "/")
+	if len(parts) < 5 {
+		writeJSON(w, errorResponse("Invalid URL"))
+		return
+	}
+	channelID, _ := strconv.Atoi(parts[4])
+	if channelID == 0 {
+		writeJSON(w, errorResponse("Invalid channel ID"))
+		return
+	}
+
+	description := r.FormValue("description")
+	if description == "" {
+		writeJSON(w, errorResponse("Missing required parameter: description"))
+		return
+	}
+
+	renderedDesc := renderMarkdown(description)
+
+	_, err := DB.Exec(
+		`UPDATE channels SET description = ?, rendered_description = ? WHERE channel_id = ?`,
+		description, renderedDesc, channelID,
+	)
+	if err != nil {
+		writeJSON(w, errorResponse("Failed to update channel"))
+		return
+	}
+
+	log.Printf("[api] Updated description for channel %d", channelID)
+
+	writeJSON(w, map[string]interface{}{
+		"result": "success",
+		"msg":    "",
 	})
 }
 

@@ -29,6 +29,8 @@ The database is recreated fresh on every restart with 4 seeded users,
 | GET | /api/v1/user_uploads/{id}/{file} | Get temporary URL for an upload |
 | GET | /user_uploads/{id}/{file} | Serve an uploaded file |
 
+| PATCH | /api/v1/streams/{id} | Update channel description (renders markdown) |
+
 ## Not yet supported
 
 These endpoints are used by Angry Cat but not yet implemented:
@@ -38,7 +40,6 @@ These endpoints are used by Angry Cat but not yet implemented:
 | PATCH | /api/v1/messages/{id} | Edit a message |
 | POST | /api/v1/messages/{id}/reactions | Add a reaction |
 | DELETE | /api/v1/messages/{id}/reactions | Remove a reaction |
-| PATCH | /api/v1/streams/{id} | Update stream description |
 
 ## Authentication
 
