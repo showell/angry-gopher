@@ -21,6 +21,7 @@ import (
 	"angry-gopher/events"
 	"angry-gopher/flags"
 	"angry-gopher/messages"
+	"angry-gopher/ratelimit"
 	"angry-gopher/reactions"
 	"angry-gopher/respond"
 	"angry-gopher/users"
@@ -176,6 +177,23 @@ func withCORS(handler http.HandlerFunc) http.HandlerFunc {
 		if strings.HasPrefix(r.URL.Path, "/api/") {
 			log.Printf("%s %s", r.Method, r.URL.Path)
 		}
+
+		// Rate limit authenticated users. If no auth header is present,
+		// skip the check — the handler will reject unauthenticated
+		// requests on its own.
+		if r.Header.Get("Authorization") != "" {
+			userID := auth.Authenticate(r)
+			if userID != 0 && !ratelimit.Check(userID) {
+				w.Header().Set("Retry-After", "60")
+				w.WriteHeader(429)
+				respond.WriteJSON(w, map[string]interface{}{
+					"result": "error",
+					"msg":    "Rate limit exceeded",
+				})
+				return
+			}
+		}
+
 		handler(w, r)
 	}
 }
