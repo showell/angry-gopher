@@ -11,10 +11,10 @@ import (
 	"angry-gopher/presence"
 )
 
-func sendPresence(t *testing.T, email, apiKey, status string) *httptest.ResponseRecorder {
+func sendPresence(t *testing.T, email, apiKey string) *httptest.ResponseRecorder {
 	t.Helper()
 	form := url.Values{}
-	form.Set("status", status)
+	form.Set("status", "active")
 
 	req := httptest.NewRequest("POST", "/api/v1/users/me/presence", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -35,7 +35,7 @@ func getPresence(t *testing.T) map[string]interface{} {
 func TestSendAndGetPresence(t *testing.T) {
 	resetDB()
 
-	rec := sendPresence(t, "steve@example.com", "steve-api-key", "active")
+	rec := sendPresence(t, "steve@example.com", "steve-api-key")
 	body := parseJSON(t, rec)
 	if body["result"] != "success" {
 		t.Fatalf("expected success, got %v", body["result"])
@@ -44,7 +44,6 @@ func TestSendAndGetPresence(t *testing.T) {
 	data := getPresence(t)
 	presences := data["presences"].(map[string]interface{})
 
-	// Steve's user ID is 1.
 	stevePresence, ok := presences["1"].(map[string]interface{})
 	if !ok {
 		t.Fatal("expected Steve's presence in response")
@@ -73,28 +72,13 @@ func TestPresenceRequiresAuth(t *testing.T) {
 func TestPresenceMultipleUsers(t *testing.T) {
 	resetDB()
 
-	sendPresence(t, "steve@example.com", "steve-api-key", "active")
-	sendPresence(t, "claude@example.com", "claude-api-key", "idle")
+	sendPresence(t, "steve@example.com", "steve-api-key")
+	sendPresence(t, "claude@example.com", "claude-api-key")
 
 	data := getPresence(t)
 	presences := data["presences"].(map[string]interface{})
 
 	if len(presences) != 2 {
 		t.Fatalf("expected 2 presences, got %d", len(presences))
-	}
-
-	claude := presences["3"].(map[string]interface{})
-	if claude["status"] != "idle" {
-		t.Errorf("expected Claude idle, got %v", claude["status"])
-	}
-}
-
-func TestPresenceInvalidStatus(t *testing.T) {
-	resetDB()
-
-	rec := sendPresence(t, "steve@example.com", "steve-api-key", "away")
-	body := parseJSON(t, rec)
-	if body["result"] != "error" {
-		t.Errorf("expected error for invalid status, got %v", body["result"])
 	}
 }

@@ -1,11 +1,9 @@
-// Package presence tracks which users are online, active, or idle.
+// Package presence tracks which users are online.
 //
-// Angry Cat sends POST /api/v1/users/me/presence every 60 seconds
-// with status "active" or "idle". We store the latest timestamp and
-// status per user in memory (not SQLite — presence is ephemeral).
-//
-// GET /api/v1/users/me/presence returns all users' presence so
-// clients can show who is online.
+// Angry Cat sends POST /api/v1/users/me/presence every 60 seconds.
+// We store a last_seen timestamp per user in memory. A user is
+// considered online if we heard from them within the last 2 minutes.
+// GET returns who is currently online.
 package presence
 
 import (
@@ -15,32 +13,14 @@ import (
 	"time"
 
 	"angry-gopher/auth"
-	"angry-gopher/events"
 	"angry-gopher/respond"
 )
 
-// A user is considered offline if we haven't heard from them in
-// 2 minutes (they send heartbeats every 60 seconds, so one missed
-// heartbeat is tolerated).
 const OfflineThreshold = 2 * time.Minute
-
-type UserPresence struct {
-	Status    string    // "active" or "idle"
-	Timestamp time.Time // when we last heard from them
-}
-
-type PresenceEvent struct {
-	UserID    int       `json:"user_id"`
-	Event     string    `json:"event"` // "came_online" or "went_offline"
-	Timestamp time.Time `json:"timestamp"`
-}
-
-const maxEventLog = 50
 
 var (
 	mu       sync.Mutex
-	statuses = map[int]*UserPresence{}
-	eventLog []PresenceEvent
+	lastSeen = map[int]time.Time{}
 )
 
 // HandleUpdatePresence handles POST /api/v1/users/me/presence.
@@ -51,71 +31,27 @@ func HandleUpdatePresence(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	status := r.FormValue("status")
-	if status != "active" && status != "idle" {
-		respond.Error(w, "Invalid status: must be 'active' or 'idle'")
-		return
-	}
-
 	mu.Lock()
-	now := time.Now()
-	prev := statuses[userID]
-
-	// Log and broadcast "came_online" if this is a new user or they were offline.
-	if prev == nil || now.Sub(prev.Timestamp) > OfflineThreshold {
-		appendEvent(PresenceEvent{
-			UserID:    userID,
-			Event:     "came_online",
-			Timestamp: now,
-		})
-		events.PushToAll(map[string]interface{}{
-			"type":    "presence",
-			"user_id": userID,
-			"status":  "active",
-		})
-	}
-
-	statuses[userID] = &UserPresence{
-		Status:    status,
-		Timestamp: now,
-	}
+	lastSeen[userID] = time.Now()
 	mu.Unlock()
 
 	respond.Success(w, nil)
 }
 
 // HandleGetPresence handles GET /api/v1/users/me/presence.
-// Returns current presence and recent events.
+// Returns all users who have been seen within the offline threshold.
 func HandleGetPresence(w http.ResponseWriter, r *http.Request) {
 	mu.Lock()
 	defer mu.Unlock()
 
-	now := time.Now()
-	cutoff := now.Add(-OfflineThreshold)
-
-	// Check for users who went offline since last check.
-	for userID, p := range statuses {
-		if p.Status != "offline" && p.Timestamp.Before(cutoff) {
-			appendEvent(PresenceEvent{
-				UserID:    userID,
-				Event:     "went_offline",
-				Timestamp: p.Timestamp.Add(OfflineThreshold),
-			})
-			p.Status = "offline"
-			events.PushToAll(map[string]interface{}{
-				"type":    "presence",
-				"user_id": userID,
-				"status":  "offline",
-			})
-		}
-	}
+	cutoff := time.Now().Add(-OfflineThreshold)
 
 	presences := map[string]interface{}{}
-	for userID, p := range statuses {
-		if p.Timestamp.After(cutoff) {
+	for userID, ts := range lastSeen {
+		if ts.After(cutoff) {
 			presences[fmt.Sprintf("%d", userID)] = map[string]interface{}{
-				"status":    p.Status,
-				"timestamp": p.Timestamp.Unix(),
+				"status":    "active",
+				"timestamp": ts.Unix(),
 			}
 		}
 	}
@@ -123,20 +59,13 @@ func HandleGetPresence(w http.ResponseWriter, r *http.Request) {
 	respond.Success(w, map[string]interface{}{"presences": presences})
 }
 
-func appendEvent(e PresenceEvent) {
-	eventLog = append(eventLog, e)
-	if len(eventLog) > maxEventLog {
-		eventLog = eventLog[len(eventLog)-maxEventLog:]
-	}
-}
-
-// GetAll returns a copy of all presence entries (for the admin UI).
-func GetAll() map[int]UserPresence {
+// GetAll returns all last_seen entries (for the admin UI).
+func GetAll() map[int]time.Time {
 	mu.Lock()
 	defer mu.Unlock()
-	result := make(map[int]UserPresence, len(statuses))
-	for userID, p := range statuses {
-		result[userID] = *p
+	result := make(map[int]time.Time, len(lastSeen))
+	for userID, ts := range lastSeen {
+		result[userID] = ts
 	}
 	return result
 }
@@ -145,6 +74,5 @@ func GetAll() map[int]UserPresence {
 func Reset() {
 	mu.Lock()
 	defer mu.Unlock()
-	statuses = map[int]*UserPresence{}
-	eventLog = nil
+	lastSeen = map[int]time.Time{}
 }

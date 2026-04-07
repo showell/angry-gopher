@@ -141,22 +141,24 @@ tr:hover td { background: #f0f0ff; }
 	} else {
 		fmt.Fprint(w, `<table><thead><tr><th>User ID</th><th>Name</th><th>Status</th><th>Last Seen</th></tr></thead><tbody>`)
 
-		for userID, p := range entries {
+		for userID, ts := range entries {
 			var fullName string
 			DB.QueryRow(`SELECT full_name FROM users WHERE id = ?`, userID).Scan(&fullName)
 
-			ago := now.Sub(p.Timestamp).Truncate(time.Second)
+			ago := now.Sub(ts).Truncate(time.Second)
 
-			cssClass := "offline"
-			if ago < presence.OfflineThreshold {
-				cssClass = p.Status
+			cssClass := "active"
+			status := "online"
+			if ago >= presence.OfflineThreshold {
+				cssClass = "offline"
+				status = "offline"
 			}
 
 			fmt.Fprintf(w, `<tr><td>%d</td><td>%s</td><td class="%s">%s</td><td>%s ago</td></tr>`,
 				userID,
 				html.EscapeString(fullName),
 				cssClass,
-				html.EscapeString(p.Status),
+				status,
 				ago,
 			)
 		}
