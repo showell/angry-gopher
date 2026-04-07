@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	MaxRequests = 10
+	MaxRequests = 120
 	Window      = 60 * time.Second
 )
 
