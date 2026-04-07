@@ -28,9 +28,18 @@ type UserPresence struct {
 	Timestamp time.Time // when we last heard from them
 }
 
+type PresenceEvent struct {
+	UserID    int       `json:"user_id"`
+	Event     string    `json:"event"` // "came_online" or "went_offline"
+	Timestamp time.Time `json:"timestamp"`
+}
+
+const maxEventLog = 50
+
 var (
 	mu       sync.Mutex
 	statuses = map[int]*UserPresence{}
+	eventLog []PresenceEvent
 )
 
 // HandleUpdatePresence handles POST /api/v1/users/me/presence.
@@ -48,9 +57,21 @@ func HandleUpdatePresence(w http.ResponseWriter, r *http.Request) {
 	}
 
 	mu.Lock()
+	now := time.Now()
+	prev := statuses[userID]
+
+	// Log "came_online" if this is a new user or they were offline.
+	if prev == nil || now.Sub(prev.Timestamp) > OfflineThreshold {
+		appendEvent(PresenceEvent{
+			UserID:    userID,
+			Event:     "came_online",
+			Timestamp: now,
+		})
+	}
+
 	statuses[userID] = &UserPresence{
 		Status:    status,
-		Timestamp: time.Now(),
+		Timestamp: now,
 	}
 	mu.Unlock()
 
@@ -58,24 +79,44 @@ func HandleUpdatePresence(w http.ResponseWriter, r *http.Request) {
 }
 
 // HandleGetPresence handles GET /api/v1/users/me/presence.
-// Returns presence for all users who have reported recently.
+// Returns current presence and recent events.
 func HandleGetPresence(w http.ResponseWriter, r *http.Request) {
 	mu.Lock()
 	defer mu.Unlock()
 
-	cutoff := time.Now().Add(-OfflineThreshold)
+	now := time.Now()
+	cutoff := now.Add(-OfflineThreshold)
 
-	result := map[string]interface{}{}
+	// Check for users who went offline since last check.
+	for userID, p := range statuses {
+		if p.Status != "offline" && p.Timestamp.Before(cutoff) {
+			appendEvent(PresenceEvent{
+				UserID:    userID,
+				Event:     "went_offline",
+				Timestamp: p.Timestamp.Add(OfflineThreshold),
+			})
+			p.Status = "offline"
+		}
+	}
+
+	presences := map[string]interface{}{}
 	for userID, p := range statuses {
 		if p.Timestamp.After(cutoff) {
-			result[fmt.Sprintf("%d", userID)] = map[string]interface{}{
+			presences[fmt.Sprintf("%d", userID)] = map[string]interface{}{
 				"status":    p.Status,
 				"timestamp": p.Timestamp.Unix(),
 			}
 		}
 	}
 
-	respond.Success(w, map[string]interface{}{"presences": result})
+	respond.Success(w, map[string]interface{}{"presences": presences})
+}
+
+func appendEvent(e PresenceEvent) {
+	eventLog = append(eventLog, e)
+	if len(eventLog) > maxEventLog {
+		eventLog = eventLog[len(eventLog)-maxEventLog:]
+	}
 }
 
 // GetAll returns a copy of all presence entries (for the admin UI).
@@ -94,4 +135,5 @@ func Reset() {
 	mu.Lock()
 	defer mu.Unlock()
 	statuses = map[int]*UserPresence{}
+	eventLog = nil
 }
