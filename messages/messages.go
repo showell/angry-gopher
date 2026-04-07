@@ -35,18 +35,20 @@ func HandleGetMessages(w http.ResponseWriter, r *http.Request) {
 	var args []interface{}
 
 	if anchor == "newest" {
-		query = `SELECT m.id, m.content, m.sender_id, m.channel_id, m.timestamp,
+		query = `SELECT m.id, mc.html, m.sender_id, m.channel_id, m.timestamp,
 		                t.topic_name, u.email, u.full_name
 		         FROM messages m
+		         JOIN message_content mc ON m.content_id = mc.content_id
 		         JOIN topics t ON m.topic_id = t.topic_id
 		         JOIN users u ON m.sender_id = u.id
 		         ORDER BY m.id DESC LIMIT ?`
 		args = []interface{}{numBefore}
 	} else {
 		anchorID, _ := strconv.Atoi(anchor)
-		query = `SELECT m.id, m.content, m.sender_id, m.channel_id, m.timestamp,
+		query = `SELECT m.id, mc.html, m.sender_id, m.channel_id, m.timestamp,
 		                t.topic_name, u.email, u.full_name
 		         FROM messages m
+		         JOIN message_content mc ON m.content_id = mc.content_id
 		         JOIN topics t ON m.topic_id = t.topic_id
 		         JOIN users u ON m.sender_id = u.id
 		         WHERE m.id < ?
@@ -61,17 +63,17 @@ func HandleGetMessages(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Collect all rows first, then close, so the single DB connection
-	// is free for subsequent queries (flags).
+	// is free for subsequent queries (flags, reactions).
 	type messageRow struct {
 		id, senderID, channelID int
 		timestamp               int64
-		content, topicName      string
+		html, topicName         string
 		email, fullName         string
 	}
 	var rows []messageRow
 	for dbRows.Next() {
 		var row messageRow
-		dbRows.Scan(&row.id, &row.content, &row.senderID, &row.channelID,
+		dbRows.Scan(&row.id, &row.html, &row.senderID, &row.channelID,
 			&row.timestamp, &row.topicName, &row.email, &row.fullName)
 		rows = append(rows, row)
 	}
@@ -82,7 +84,7 @@ func HandleGetMessages(w http.ResponseWriter, r *http.Request) {
 		msgFlags := flags.GetMessageFlags(row.id)
 		result = append(result, map[string]interface{}{
 			"id":                row.id,
-			"content":           row.content,
+			"content":           row.html,
 			"sender_id":         row.senderID,
 			"sender_email":      row.email,
 			"sender_full_name":  row.fullName,
@@ -107,6 +109,19 @@ func HandleGetMessages(w http.ResponseWriter, r *http.Request) {
 		"messages":     result,
 		"found_oldest": foundOldest,
 	})
+}
+
+// insertContent stores markdown and rendered HTML in message_content
+// and returns the new content_id.
+func insertContent(markdown, html string) (int64, error) {
+	result, err := DB.Exec(
+		`INSERT INTO message_content (markdown, html) VALUES (?, ?)`,
+		markdown, html,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.LastInsertId()
 }
 
 // HandleSendMessage handles POST /api/v1/messages.
@@ -146,11 +161,18 @@ func HandleSendMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	html := RenderMarkdown(content)
+
+	contentID, err := insertContent(content, html)
+	if err != nil {
+		respond.Error(w, "Failed to store content")
+		return
+	}
+
 	timestamp := time.Now().Unix()
 
 	result, err := DB.Exec(
-		`INSERT INTO messages (content, sender_id, channel_id, topic_id, timestamp) VALUES (?, ?, ?, ?, ?)`,
-		html, senderID, channelID, topicID, timestamp,
+		`INSERT INTO messages (content_id, sender_id, channel_id, topic_id, timestamp) VALUES (?, ?, ?, ?, ?)`,
+		contentID, senderID, channelID, topicID, timestamp,
 	)
 	if err != nil {
 		respond.Error(w, "Failed to insert message")
@@ -203,7 +225,12 @@ func HandleEditMessage(w http.ResponseWriter, r *http.Request) {
 
 	html := RenderMarkdown(content)
 
-	_, err := DB.Exec(`UPDATE messages SET content = ? WHERE id = ?`, html, messageID)
+	// Update the message_content row linked to this message.
+	_, err := DB.Exec(`
+		UPDATE message_content SET markdown = ?, html = ?
+		WHERE content_id = (SELECT content_id FROM messages WHERE id = ?)`,
+		content, html, messageID,
+	)
 	if err != nil {
 		respond.Error(w, "Failed to update message")
 		return
@@ -212,9 +239,9 @@ func HandleEditMessage(w http.ResponseWriter, r *http.Request) {
 	log.Printf("[api] Edited message %d", messageID)
 
 	events.PushToAll(map[string]interface{}{
-		"type":             "update_message",
-		"message_id":       messageID,
-		"content":          content,
+		"type":              "update_message",
+		"message_id":        messageID,
+		"content":           content,
 		"rendered_content":  html,
 	})
 

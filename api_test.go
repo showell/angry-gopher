@@ -56,8 +56,10 @@ func steveAuth(req *http.Request) {
 // they share the same topic row without conflicting on the primary key.
 func seedMessage(t *testing.T, messageID int) {
 	t.Helper()
+	// Insert content first, using messageID as content_id for simplicity.
+	DB.Exec(`INSERT OR IGNORE INTO message_content (content_id, markdown, html) VALUES (?, 'test', '<p>test</p>')`, messageID)
 	DB.Exec(`INSERT OR IGNORE INTO topics (topic_id, channel_id, topic_name) VALUES (1, 1, 'test')`)
-	DB.Exec(`INSERT OR IGNORE INTO messages (id, content, sender_id, channel_id, topic_id, timestamp) VALUES (?, '<p>test</p>', 1, 1, 1, 1000)`, messageID)
+	DB.Exec(`INSERT OR IGNORE INTO messages (id, content_id, sender_id, channel_id, topic_id, timestamp) VALUES (?, ?, 1, 1, 1, 1000)`, messageID, messageID)
 }
 
 // sendMessage calls HandleSendMessage as Steve and returns the recorded response.

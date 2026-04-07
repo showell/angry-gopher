@@ -45,9 +45,15 @@ CREATE TABLE IF NOT EXISTS topics (
     UNIQUE(channel_id, topic_name)
 );
 
+CREATE TABLE IF NOT EXISTS message_content (
+    content_id INTEGER PRIMARY KEY AUTOINCREMENT,
+    markdown TEXT NOT NULL,
+    html TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS messages (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    content TEXT NOT NULL,
+    content_id INTEGER NOT NULL REFERENCES message_content(content_id),
     sender_id INTEGER NOT NULL REFERENCES users(id),
     channel_id INTEGER NOT NULL REFERENCES channels(channel_id),
     topic_id INTEGER NOT NULL REFERENCES topics(topic_id),
@@ -148,9 +154,11 @@ func seedData(includeWelcome bool) {
 	}
 
 	if includeWelcome {
+		markdown := "Welcome to Angry Gopher! All systems are go."
+		DB.Exec(`INSERT OR IGNORE INTO message_content (content_id, markdown, html) VALUES (1, ?, ?)`,
+			markdown, renderMarkdown(markdown))
 		DB.Exec(`INSERT OR IGNORE INTO topics (topic_id, channel_id, topic_name) VALUES (1, 3, 'welcome')`)
-		DB.Exec(`INSERT OR IGNORE INTO messages (id, content, sender_id, channel_id, topic_id, timestamp) VALUES (1, ?, 3, 3, 1, ?)`,
-			renderMarkdown("Welcome to Angry Gopher! All systems are go."),
+		DB.Exec(`INSERT OR IGNORE INTO messages (id, content_id, sender_id, channel_id, topic_id, timestamp) VALUES (1, 1, 3, 3, 1, ?)`,
 			1712500000,
 		)
 	}
