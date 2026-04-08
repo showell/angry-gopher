@@ -123,32 +123,32 @@ func HandleGetMessages(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// insertContent stores markdown and rendered HTML in message_content
-// and returns the new content_id.
-func insertContent(markdown, html string) (int64, error) {
-	result, err := DB.Exec(
-		`INSERT INTO message_content (markdown, html) VALUES (?, ?)`,
-		markdown, html,
-	)
-	if err != nil {
-		return 0, err
-	}
-	return result.LastInsertId()
-}
-
 // SendMessage is the core logic for creating a message. It renders
 // markdown, stores content, creates the topic if needed, and inserts
 // the message. Returns the new message ID. Used by both the HTTP
 // handler and the seed data.
+//
+// All DB operations run inside a single transaction so that
+// concurrent calls don't interleave their queries. Without this,
+// goroutine A could look up a topic, goroutine B could grab the
+// connection and modify state, and then A would fail or see stale data.
 func SendMessage(senderID, channelID int, topic, markdown string) (int64, error) {
+	html := RenderMarkdown(markdown)
+
+	tx, err := DB.Begin()
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+
 	// Find or create the topic.
 	var topicID int64
-	err := DB.QueryRow(
+	err = tx.QueryRow(
 		`SELECT topic_id FROM topics WHERE channel_id = ? AND topic_name = ?`,
 		channelID, topic,
 	).Scan(&topicID)
 	if err != nil {
-		result, err := DB.Exec(
+		result, err := tx.Exec(
 			`INSERT INTO topics (channel_id, topic_name) VALUES (?, ?)`,
 			channelID, topic,
 		)
@@ -158,16 +158,19 @@ func SendMessage(senderID, channelID int, topic, markdown string) (int64, error)
 		topicID, _ = result.LastInsertId()
 	}
 
-	html := RenderMarkdown(markdown)
-
-	contentID, err := insertContent(markdown, html)
+	// Insert content (markdown + rendered HTML).
+	contentResult, err := tx.Exec(
+		`INSERT INTO message_content (markdown, html) VALUES (?, ?)`,
+		markdown, html,
+	)
 	if err != nil {
 		return 0, err
 	}
+	contentID, _ := contentResult.LastInsertId()
 
+	// Insert the message.
 	timestamp := time.Now().Unix()
-
-	result, err := DB.Exec(
+	msgResult, err := tx.Exec(
 		`INSERT INTO messages (content_id, sender_id, channel_id, topic_id, timestamp) VALUES (?, ?, ?, ?, ?)`,
 		contentID, senderID, channelID, topicID, timestamp,
 	)
@@ -175,7 +178,11 @@ func SendMessage(senderID, channelID int, topic, markdown string) (int64, error)
 		return 0, err
 	}
 
-	return result.LastInsertId()
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+
+	return msgResult.LastInsertId()
 }
 
 // HandleSendMessage handles POST /api/v1/messages.

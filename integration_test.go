@@ -27,7 +27,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -311,10 +310,9 @@ func TestStress_ConcurrentLoad(t *testing.T) {
 		queueIDs[i] = result["queue_id"].(string)
 	}
 
-	// All 4 users send concurrently. Track failures so we can
-	// distinguish "dropped by SQLite" from "HTTP error".
+	// All 4 users send concurrently. With the transaction-based
+	// SendMessage, all writes should succeed — zero errors.
 	var wg sync.WaitGroup
-	var sendErrors int32
 	for _, u := range testUsers {
 		wg.Add(1)
 		go func(user testUser) {
@@ -327,37 +325,25 @@ func TestStress_ConcurrentLoad(t *testing.T) {
 					"type":    {"stream"},
 				})
 				if result["result"] != "success" {
-					atomic.AddInt32(&sendErrors, 1)
-					t.Logf("[%s] send error on msg %d: %v", user.name, j, result["msg"])
+					t.Errorf("[%s] send error on msg %d: %v", user.name, j, result["msg"])
 				}
 			}
 		}(u)
 	}
 	wg.Wait()
 
-	if errs := atomic.LoadInt32(&sendErrors); errs > 0 {
-		t.Logf("Send errors: %d (may indicate SQLite contention)", errs)
-	}
-
-	// Verify the database. Under concurrent file-based SQLite access,
-	// a small number of writes may fail due to contention (the server
-	// returns an error, and in production the client would retry).
-	// We verify that all successful sends made it to the DB.
+	// Verify the database has the exact expected total.
 	expectedTotal := len(testUsers) * messagesPerUser
-	errs := int(atomic.LoadInt32(&sendErrors))
-	expectedInDB := expectedTotal - errs
-
 	var dbCount int
 	DB.QueryRow(`SELECT COUNT(*) FROM messages WHERE channel_id = 3`).Scan(&dbCount)
-	if dbCount != expectedInDB {
-		t.Errorf("expected %d messages in DB (%d sent - %d errors), got %d",
-			expectedInDB, expectedTotal, errs, dbCount)
+	if dbCount != expectedTotal {
+		t.Errorf("expected %d messages in DB, got %d", expectedTotal, dbCount)
 	}
-	t.Logf("DB count: %d (%d sent, %d errors)", dbCount, expectedTotal, errs)
+	t.Logf("DB count: %d (expected %d)", dbCount, expectedTotal)
 
 	// Each user polls once. Because event delivery is synchronous
-	// (PushFiltered runs inside each send handler), all events for
-	// successful sends are already in every queue.
+	// (PushFiltered runs inside each send handler), all events are
+	// already in every queue.
 	for i, u := range testUsers {
 		path := fmt.Sprintf("/api/v1/events?queue_id=%s&last_event_id=-1",
 			queueIDs[i])
@@ -368,11 +354,11 @@ func TestStress_ConcurrentLoad(t *testing.T) {
 		}
 
 		msgCount := countMessageEvents(result)
-		if msgCount != dbCount {
+		if msgCount != expectedTotal {
 			t.Errorf("[%s] received %d message events, expected %d",
-				u.name, msgCount, dbCount)
+				u.name, msgCount, expectedTotal)
 		}
 	}
 
-	t.Logf("All %d events delivered to all %d users", dbCount, len(testUsers))
+	t.Logf("All %d events delivered to all %d users", expectedTotal, len(testUsers))
 }
