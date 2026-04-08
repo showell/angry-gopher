@@ -68,8 +68,10 @@ func buildMux() *http.ServeMux {
 		}
 	}))
 	mux.HandleFunc("/api/v1/streams/", withCORS(channels.HandleUpdateChannel))
-	mux.HandleFunc("/api/v1/invites", withCORS(invites.HandleCreateInvite))
-	mux.HandleFunc("/api/v1/invites/redeem", withCORS(invites.HandleRedeemInvite))
+	// Gopher-only endpoints — not part of the Zulip API.
+	mux.HandleFunc("/gopher/version", withCORS(handleVersion))
+	mux.HandleFunc("/gopher/invites", withCORS(invites.HandleCreateInvite))
+	mux.HandleFunc("/gopher/invites/redeem", withCORS(invites.HandleRedeemInvite))
 	mux.HandleFunc("/api/v1/users/me/presence", withCORS(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "POST":
@@ -114,6 +116,14 @@ func main() {
 	fmt.Printf("Angry Gopher listening on %s\n", listenAddr)
 	fmt.Printf("Admin UI at http://localhost%s/admin/\n", listenAddr)
 	log.Fatal(http.ListenAndServe(listenAddr, mux))
+}
+
+// --- Gopher-only ---
+
+func handleVersion(w http.ResponseWriter, r *http.Request) {
+	respond.Success(w, map[string]interface{}{
+		"version": "0.1",
+	})
 }
 
 // --- File uploads ---

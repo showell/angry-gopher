@@ -18,7 +18,7 @@ func createInvite(t *testing.T, email, fullName string) string {
 	form.Set("email", email)
 	form.Set("full_name", fullName)
 
-	req := httptest.NewRequest("POST", "/api/v1/invites", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest("POST", "/gopher/invites", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	steveAuth(req) // Steve is admin
 	rec := httptest.NewRecorder()
@@ -36,7 +36,7 @@ func redeemInvite(t *testing.T, token string) *httptest.ResponseRecorder {
 	form := url.Values{}
 	form.Set("token", token)
 
-	req := httptest.NewRequest("POST", "/api/v1/invites/redeem", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest("POST", "/gopher/invites/redeem", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rec := httptest.NewRecorder()
 	invites.HandleRedeemInvite(rec, req)
@@ -93,7 +93,7 @@ func TestInviteRequiresAdmin(t *testing.T) {
 	form.Set("email", "mom@example.com")
 	form.Set("full_name", "Mom")
 
-	req := httptest.NewRequest("POST", "/api/v1/invites", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest("POST", "/gopher/invites", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	joeAuth(req) // Joe is not admin
 	rec := httptest.NewRecorder()
@@ -123,7 +123,7 @@ func TestDuplicateEmailRejected(t *testing.T) {
 	form.Set("email", "steve@example.com")
 	form.Set("full_name", "Duplicate Steve")
 
-	req := httptest.NewRequest("POST", "/api/v1/invites", strings.NewReader(form.Encode()))
+	req := httptest.NewRequest("POST", "/gopher/invites", strings.NewReader(form.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	steveAuth(req)
 	rec := httptest.NewRecorder()
