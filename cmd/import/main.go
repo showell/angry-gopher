@@ -22,10 +22,30 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"time"
+
+	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/extension"
+	goldhtml "github.com/yuin/goldmark/renderer/html"
+
+	"bytes"
 
 	_ "modernc.org/sqlite"
 )
+
+var md = goldmark.New(
+	goldmark.WithRendererOptions(goldhtml.WithUnsafe()),
+	goldmark.WithExtensions(extension.GFM),
+)
+
+func renderMarkdown(source string) string {
+	var buf bytes.Buffer
+	if err := md.Convert([]byte(source), &buf); err != nil {
+		return "<p>" + source + "</p>"
+	}
+	return buf.String()
+}
 
 // --- Config ---
 
@@ -432,6 +452,186 @@ func importSubscriptions(db *sql.DB) {
 	log.Printf("Done: %d subscriptions created", subCount)
 }
 
+// --- Stage 3: Messages ---
+
+// cutoffTimestamp is 2026-01-01 00:00:00 UTC. We skip older messages.
+var cutoffTimestamp = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC).Unix()
+
+func importMessages(zulip *ZulipClient, db *sql.DB, batchSize int) {
+	log.Println("=== Stage 3: Messages ===")
+
+	// Build lookup maps from our import tables.
+	userMap := make(map[int]int)    // zulip_id → gopher_id
+	rows, _ := db.Query(`SELECT zulip_id, gopher_id FROM zulip_users WHERE gopher_id IS NOT NULL`)
+	for rows.Next() {
+		var zID, gID int
+		rows.Scan(&zID, &gID)
+		userMap[zID] = gID
+	}
+	rows.Close()
+
+	channelMap := make(map[int]int) // zulip_id → gopher_id
+	rows, _ = db.Query(`SELECT zulip_id, gopher_id FROM zulip_channels`)
+	for rows.Next() {
+		var zID, gID int
+		rows.Scan(&zID, &gID)
+		channelMap[zID] = gID
+	}
+	rows.Close()
+
+	log.Printf("User map: %d entries, Channel map: %d entries", len(userMap), len(channelMap))
+
+	anchor := "newest"
+	totalImported := 0
+	totalSkipped := 0
+	reachedCutoff := false
+
+	for !reachedCutoff {
+		params := url.Values{
+			"anchor":         {anchor},
+			"num_before":     {strconv.Itoa(batchSize)},
+			"narrow":         {"[]"},
+			"apply_markdown": {"false"},
+		}
+
+		result, err := zulip.get("messages", params)
+		if err != nil {
+			log.Fatalf("Failed to fetch messages: %v", err)
+		}
+
+		messagesRaw := result["messages"].([]interface{})
+		if len(messagesRaw) == 0 {
+			log.Println("  No more messages.")
+			break
+		}
+
+		// Messages come newest-first when using num_before.
+		// Find the oldest in this batch to set the next anchor.
+		oldestID := 0
+		batchImported := 0
+
+		for _, m := range messagesRaw {
+			msg := m.(map[string]interface{})
+			zulipMsgID := int(msg["id"].(float64))
+			timestamp := int64(msg["timestamp"].(float64))
+			msgType := msg["type"].(string)
+
+			// Track oldest for pagination.
+			if oldestID == 0 || zulipMsgID < oldestID {
+				oldestID = zulipMsgID
+			}
+
+			// Stop at 2026 cutoff.
+			if timestamp < cutoffTimestamp {
+				reachedCutoff = true
+				continue
+			}
+
+			// Only import stream messages (not DMs).
+			if msgType != "stream" {
+				totalSkipped++
+				continue
+			}
+
+			// Already imported?
+			var alreadyDone int
+			db.QueryRow(`SELECT COUNT(*) FROM zulip_message_map WHERE zulip_id = ?`, zulipMsgID).Scan(&alreadyDone)
+			if alreadyDone > 0 {
+				continue
+			}
+
+			senderZulipID := int(msg["sender_id"].(float64))
+			streamZulipID := int(msg["stream_id"].(float64))
+			topic := msg["subject"].(string)
+			markdown := msg["content"].(string)
+
+			// Map sender and channel to Gopher IDs.
+			senderGopherID := userMap[senderZulipID]
+			channelGopherID := channelMap[streamZulipID]
+
+			if senderGopherID == 0 {
+				// Message from a user we didn't import (not one of our targets).
+				// Skip — we only care about messages from our users.
+				totalSkipped++
+				continue
+			}
+			if channelGopherID == 0 {
+				totalSkipped++
+				continue
+			}
+
+			// Render markdown to HTML via goldmark.
+			html := renderMarkdown(markdown)
+
+			// Insert using a transaction.
+			tx, err := db.Begin()
+			if err != nil {
+				log.Printf("  TX begin error: %v", err)
+				continue
+			}
+
+			// Find or create topic.
+			var topicID int64
+			err = tx.QueryRow(
+				`SELECT topic_id FROM topics WHERE channel_id = ? AND topic_name = ?`,
+				channelGopherID, topic,
+			).Scan(&topicID)
+			if err != nil {
+				res, err := tx.Exec(
+					`INSERT INTO topics (channel_id, topic_name) VALUES (?, ?)`,
+					channelGopherID, topic)
+				if err != nil {
+					tx.Rollback()
+					log.Printf("  Topic insert error: %v", err)
+					continue
+				}
+				topicID, _ = res.LastInsertId()
+			}
+
+			// Insert content.
+			contentRes, err := tx.Exec(
+				`INSERT INTO message_content (markdown, html) VALUES (?, ?)`,
+				markdown, html)
+			if err != nil {
+				tx.Rollback()
+				log.Printf("  Content insert error: %v", err)
+				continue
+			}
+			contentID, _ := contentRes.LastInsertId()
+
+			// Insert message.
+			msgRes, err := tx.Exec(
+				`INSERT INTO messages (content_id, sender_id, channel_id, topic_id, timestamp) VALUES (?, ?, ?, ?, ?)`,
+				contentID, senderGopherID, channelGopherID, topicID, timestamp)
+			if err != nil {
+				tx.Rollback()
+				log.Printf("  Message insert error: %v", err)
+				continue
+			}
+			gopherMsgID, _ := msgRes.LastInsertId()
+
+			// Record mapping.
+			tx.Exec(`INSERT INTO zulip_message_map (zulip_id, gopher_id) VALUES (?, ?)`,
+				zulipMsgID, gopherMsgID)
+
+			tx.Commit()
+			batchImported++
+			totalImported++
+		}
+
+		log.Printf("  Batch: %d messages fetched, %d imported (oldest_id=%d)",
+			len(messagesRaw), batchImported, oldestID)
+
+		// Set anchor for next batch — fetch messages before the oldest.
+		anchor = strconv.Itoa(oldestID)
+
+		// Pause between batches to be respectful.
+		time.Sleep(500 * time.Millisecond)
+	}
+
+	log.Printf("Done: %d messages imported, %d skipped", totalImported, totalSkipped)
+}
+
 // --- Main ---
 
 func main() {
@@ -465,6 +665,7 @@ func main() {
 	importUsers(zulip, db)
 	importChannels(zulip, db)
 	importSubscriptions(db)
+	importMessages(zulip, db, config.BatchSize)
 
-	log.Println("=== Stages 1-2 complete ===")
+	log.Println("=== Import complete ===")
 }
