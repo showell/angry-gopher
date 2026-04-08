@@ -43,11 +43,18 @@ func HandleReaction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	tx, err := DB.Begin()
+	if err != nil {
+		respond.Error(w, "Database error")
+		return
+	}
+	defer tx.Rollback()
+
 	var op string
 	switch r.Method {
 	case "POST":
 		op = "add"
-		_, err := DB.Exec(
+		_, err := tx.Exec(
 			`INSERT OR IGNORE INTO reactions (message_id, user_id, emoji_name, emoji_code) VALUES (?, ?, ?, ?)`,
 			messageID, userID, emojiName, emojiCode,
 		)
@@ -57,7 +64,7 @@ func HandleReaction(w http.ResponseWriter, r *http.Request) {
 		}
 	case "DELETE":
 		op = "remove"
-		_, err := DB.Exec(
+		_, err := tx.Exec(
 			`DELETE FROM reactions WHERE message_id = ? AND user_id = ? AND emoji_code = ?`,
 			messageID, userID, emojiCode,
 		)
@@ -70,11 +77,15 @@ func HandleReaction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("[api] %s reaction %s on message %d by user %d", op, emojiName, messageID, userID)
-
-	// Look up the channel so we can filter the event delivery.
 	var channelID int
-	DB.QueryRow(`SELECT channel_id FROM messages WHERE id = ?`, messageID).Scan(&channelID)
+	tx.QueryRow(`SELECT channel_id FROM messages WHERE id = ?`, messageID).Scan(&channelID)
+
+	if err := tx.Commit(); err != nil {
+		respond.Error(w, "Database error")
+		return
+	}
+
+	log.Printf("[api] %s reaction %s on message %d by user %d", op, emojiName, messageID, userID)
 
 	events.PushFiltered(map[string]interface{}{
 		"type":          "reaction",

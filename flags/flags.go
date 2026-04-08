@@ -54,13 +54,25 @@ func HandleUpdateFlags(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	tx, err := DB.Begin()
+	if err != nil {
+		respond.Error(w, "Database error")
+		return
+	}
+	defer tx.Rollback()
+
 	switch flag {
 	case "read":
-		applyReadFlag(op, userID, messageIDs)
+		applyReadFlag(tx, op, userID, messageIDs)
 	case "starred":
-		applyStarredFlag(op, userID, messageIDs)
+		applyStarredFlag(tx, op, userID, messageIDs)
 	default:
 		respond.Error(w, "Unknown flag: "+flag)
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		respond.Error(w, "Database error")
 		return
 	}
 
@@ -79,13 +91,13 @@ func HandleUpdateFlags(w http.ResponseWriter, r *http.Request) {
 
 // "add read" means the message is read, so remove from unreads.
 // "remove read" means mark unread, so insert into unreads.
-func applyReadFlag(op string, userID int, messageIDs []int) {
+func applyReadFlag(tx *sql.Tx, op string, userID int, messageIDs []int) {
 	for _, id := range messageIDs {
 		switch op {
 		case "add":
-			DB.Exec(`DELETE FROM unreads WHERE message_id = ? AND user_id = ?`, id, userID)
+			tx.Exec(`DELETE FROM unreads WHERE message_id = ? AND user_id = ?`, id, userID)
 		case "remove":
-			DB.Exec(`INSERT OR IGNORE INTO unreads (message_id, user_id) VALUES (?, ?)`, id, userID)
+			tx.Exec(`INSERT OR IGNORE INTO unreads (message_id, user_id) VALUES (?, ?)`, id, userID)
 		}
 	}
 }
@@ -97,13 +109,13 @@ func StarMessage(messageID, userID int) {
 		messageID, userID)
 }
 
-func applyStarredFlag(op string, userID int, messageIDs []int) {
+func applyStarredFlag(tx *sql.Tx, op string, userID int, messageIDs []int) {
 	for _, id := range messageIDs {
 		switch op {
 		case "add":
-			DB.Exec(`INSERT OR IGNORE INTO starred_messages (message_id, user_id) VALUES (?, ?)`, id, userID)
+			tx.Exec(`INSERT OR IGNORE INTO starred_messages (message_id, user_id) VALUES (?, ?)`, id, userID)
 		case "remove":
-			DB.Exec(`DELETE FROM starred_messages WHERE message_id = ? AND user_id = ?`, id, userID)
+			tx.Exec(`DELETE FROM starred_messages WHERE message_id = ? AND user_id = ?`, id, userID)
 		}
 	}
 }

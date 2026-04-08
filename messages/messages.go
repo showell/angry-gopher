@@ -275,8 +275,14 @@ func HandleEditMessage(w http.ResponseWriter, r *http.Request) {
 
 	html := RenderMarkdown(content)
 
-	// Update the message_content row linked to this message.
-	_, err := DB.Exec(`
+	tx, err := DB.Begin()
+	if err != nil {
+		respond.Error(w, "Failed to update message")
+		return
+	}
+	defer tx.Rollback()
+
+	_, err = tx.Exec(`
 		UPDATE message_content SET markdown = ?, html = ?
 		WHERE content_id = (SELECT content_id FROM messages WHERE id = ?)`,
 		content, html, messageID,
@@ -286,11 +292,15 @@ func HandleEditMessage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("[api] Edited message %d", messageID)
-
-	// Look up the channel so we can filter the event delivery.
 	var channelID int
-	DB.QueryRow(`SELECT channel_id FROM messages WHERE id = ?`, messageID).Scan(&channelID)
+	tx.QueryRow(`SELECT channel_id FROM messages WHERE id = ?`, messageID).Scan(&channelID)
+
+	if err := tx.Commit(); err != nil {
+		respond.Error(w, "Failed to update message")
+		return
+	}
+
+	log.Printf("[api] Edited message %d", messageID)
 
 	events.PushFiltered(map[string]interface{}{
 		"type":             "update_message",

@@ -121,16 +121,28 @@ func HandleCreateChannel(w http.ResponseWriter, r *http.Request) {
 		inviteOnlyInt = 1
 	}
 
-	var createdNames []string
+	tx, err := DB.Begin()
+	if err != nil {
+		respond.Error(w, "Database error")
+		return
+	}
+	defer tx.Rollback()
+
+	type createdChannel struct {
+		id       int64
+		name     string
+		desc     string
+		rendered string
+	}
+	var created []createdChannel
 
 	for _, sub := range subs {
 		if sub.Name == "" {
 			continue
 		}
 
-		// Check if channel already exists.
 		var existing int
-		DB.QueryRow(`SELECT COUNT(*) FROM channels WHERE name = ?`, sub.Name).Scan(&existing)
+		tx.QueryRow(`SELECT COUNT(*) FROM channels WHERE name = ?`, sub.Name).Scan(&existing)
 		if existing > 0 {
 			continue
 		}
@@ -140,7 +152,7 @@ func HandleCreateChannel(w http.ResponseWriter, r *http.Request) {
 			renderedDesc = RenderMarkdown(sub.Description)
 		}
 
-		result, err := DB.Exec(
+		result, err := tx.Exec(
 			`INSERT INTO channels (name, description, rendered_description, invite_only) VALUES (?, ?, ?, ?)`,
 			sub.Name, sub.Description, renderedDesc, inviteOnlyInt,
 		)
@@ -150,35 +162,43 @@ func HandleCreateChannel(w http.ResponseWriter, r *http.Request) {
 		}
 
 		channelID, _ := result.LastInsertId()
-		log.Printf("[api] Created channel %d: %s (invite_only=%v)", channelID, sub.Name, inviteOnly)
 
-		// Subscribe all principals.
 		for _, uid := range principals {
-			DB.Exec(`INSERT OR IGNORE INTO subscriptions (user_id, channel_id) VALUES (?, ?)`,
+			tx.Exec(`INSERT OR IGNORE INTO subscriptions (user_id, channel_id) VALUES (?, ?)`,
 				uid, channelID)
 		}
 
-		createdNames = append(createdNames, sub.Name)
+		created = append(created, createdChannel{channelID, sub.Name, sub.Description, renderedDesc})
+	}
 
-		// Push subscription_add event to each subscribed user.
-		subEvent := map[string]interface{}{
-			"type": "subscription",
-			"op":   "add",
-			"subscriptions": []map[string]interface{}{
-				{
-					"stream_id":             channelID,
-					"name":                  sub.Name,
-					"description":           sub.Description,
-					"rendered_description":   renderedDesc,
-					"stream_weekly_traffic":  0,
-				},
-			},
-		}
+	if err := tx.Commit(); err != nil {
+		respond.Error(w, "Database error")
+		return
+	}
+
+	// Push events after commit — only for successfully created channels.
+	var createdNames []string
+	for _, ch := range created {
+		log.Printf("[api] Created channel %d: %s (invite_only=%v)", ch.id, ch.name, inviteOnly)
+		createdNames = append(createdNames, ch.name)
+
 		principalSet := make(map[int]bool)
 		for _, uid := range principals {
 			principalSet[uid] = true
 		}
-		events.PushFiltered(subEvent, func(uid int) bool {
+		events.PushFiltered(map[string]interface{}{
+			"type": "subscription",
+			"op":   "add",
+			"subscriptions": []map[string]interface{}{
+				{
+					"stream_id":            ch.id,
+					"name":                 ch.name,
+					"description":          ch.desc,
+					"rendered_description": ch.rendered,
+					"stream_weekly_traffic": 0,
+				},
+			},
+		}, func(uid int) bool {
 			return principalSet[uid]
 		})
 	}
@@ -216,12 +236,24 @@ func HandleUpdateChannel(w http.ResponseWriter, r *http.Request) {
 
 	renderedDesc := RenderMarkdown(description)
 
-	_, err := DB.Exec(
+	tx, err := DB.Begin()
+	if err != nil {
+		respond.Error(w, "Database error")
+		return
+	}
+	defer tx.Rollback()
+
+	_, err = tx.Exec(
 		`UPDATE channels SET description = ?, rendered_description = ? WHERE channel_id = ?`,
 		description, renderedDesc, channelID,
 	)
 	if err != nil {
 		respond.Error(w, "Failed to update channel")
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		respond.Error(w, "Database error")
 		return
 	}
 
