@@ -16,15 +16,11 @@ import (
 	"strings"
 	"testing"
 
-	"angry-gopher/auth"
-	"angry-gopher/channels"
 	"angry-gopher/flags"
-	"angry-gopher/invites"
 	"angry-gopher/messages"
 	"angry-gopher/presence"
 	"angry-gopher/ratelimit"
 	"angry-gopher/reactions"
-	"angry-gopher/users"
 )
 
 // resetDB creates a fresh in-memory SQLite database and wires up
@@ -33,15 +29,7 @@ import (
 func resetDB() {
 	// Always use in-memory DB for tests — never touch a file.
 	initDB(":memory:")
-	auth.DB = DB
-	users.DB = DB
-	channels.DB = DB
-	messages.DB = DB
-	flags.DB = DB
-	reactions.DB = DB
-	invites.DB = DB
-	channels.RenderMarkdown = renderMarkdown
-	messages.RenderMarkdown = renderMarkdown
+	wireDB()
 	ratelimit.Reset()
 	presence.Reset()
 	seedData(false)

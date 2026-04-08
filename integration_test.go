@@ -30,14 +30,7 @@ import (
 	"testing"
 	"time"
 
-	"angry-gopher/auth"
-	"angry-gopher/channels"
-	"angry-gopher/flags"
-	"angry-gopher/invites"
-	"angry-gopher/messages"
 	"angry-gopher/ratelimit"
-	"angry-gopher/reactions"
-	"angry-gopher/users"
 )
 
 // --- Test users (must match seedData) ---
@@ -130,17 +123,7 @@ func startServerWithFile(t *testing.T, dbPath string) *httptest.Server {
 	defer os.Unsetenv("GOPHER_RESET_DB")
 
 	initDB(dbPath)
-
-	auth.DB = DB
-	users.DB = DB
-	channels.DB = DB
-	messages.DB = DB
-	flags.DB = DB
-	reactions.DB = DB
-	invites.DB = DB
-	channels.RenderMarkdown = renderMarkdown
-	messages.RenderMarkdown = renderMarkdown
-
+	wireDB()
 	seedData(false)
 
 	origMax := ratelimit.MaxRequests

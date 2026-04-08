@@ -12,13 +12,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"angry-gopher/auth"
-	"angry-gopher/channels"
-	"angry-gopher/flags"
-	"angry-gopher/invites"
 	"angry-gopher/messages"
-	"angry-gopher/reactions"
-	"angry-gopher/users"
 )
 
 func setupFileDB(t *testing.T, dbPath string) {
@@ -27,15 +21,7 @@ func setupFileDB(t *testing.T, dbPath string) {
 	defer os.Unsetenv("GOPHER_RESET_DB")
 
 	initDB(dbPath)
-	auth.DB = DB
-	users.DB = DB
-	channels.DB = DB
-	messages.DB = DB
-	flags.DB = DB
-	reactions.DB = DB
-	invites.DB = DB
-	channels.RenderMarkdown = renderMarkdown
-	messages.RenderMarkdown = renderMarkdown
+	wireDB()
 	seedData(false)
 
 	t.Cleanup(func() { os.Remove(dbPath) })

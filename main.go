@@ -92,12 +92,7 @@ func buildMux() *http.ServeMux {
 	return mux
 }
 
-func main() {
-	// Development mode: reset the DB on every restart.
-	// Remove this when we switch to persistent storage.
-	os.Setenv("GOPHER_RESET_DB", "1")
-	initDB("angry_gopher.db")
-
+func wireDB() {
 	auth.DB = DB
 	users.DB = DB
 	channels.DB = DB
@@ -105,15 +100,47 @@ func main() {
 	flags.DB = DB
 	reactions.DB = DB
 	invites.DB = DB
-
 	channels.RenderMarkdown = renderMarkdown
 	messages.RenderMarkdown = renderMarkdown
+}
 
-	seedData(true)
+func main() {
+	dbPath := os.Getenv("GOPHER_DB")
+	if dbPath == "" {
+		os.Stderr.WriteString(`
+Angry Gopher requires the GOPHER_DB environment variable.
+
+  Production (persistent database):
+    GOPHER_DB=production.db ./gopher-server
+
+  Development (fresh seed database):
+    GOPHER_DB=seed.db GOPHER_SEED=1 ./gopher-server
+
+  Backup the production database:
+    cp production.db backups/production_$(date +%Y%m%d_%H%M%S).db
+`)
+		os.Exit(1)
+	}
+
+	seed := os.Getenv("GOPHER_SEED") == "1"
+
+	if seed {
+		// Seed mode: destroy and recreate the database.
+		os.Setenv("GOPHER_RESET_DB", "1")
+	}
+
+	initDB(dbPath)
+	wireDB()
+
+	if seed {
+		seedData(true)
+		fmt.Printf("Seeded database: %s\n", dbPath)
+	}
 
 	mux := buildMux()
 
 	fmt.Printf("Angry Gopher listening on %s\n", listenAddr)
+	fmt.Printf("Database: %s\n", dbPath)
 	fmt.Printf("Admin UI at http://localhost%s/admin/\n", listenAddr)
 	log.Fatal(http.ListenAndServe(listenAddr, mux))
 }
