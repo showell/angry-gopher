@@ -261,7 +261,10 @@ func seedTestMessages() {
 }
 
 func seedTestImage() {
-	dir := filepath.Join(os.Getenv("HOME"), "AngryGopherImages", "1")
+	if uploadsDir == "" {
+		return // tests don't use uploads
+	}
+	dir := filepath.Join(uploadsDir, "1")
 	os.MkdirAll(dir, 0755)
 
 	img := image.NewRGBA(image.Rect(0, 0, 64, 64))

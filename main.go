@@ -29,8 +29,6 @@ import (
 	"angry-gopher/users"
 )
 
-const listenAddr = ":9000"
-
 func buildMux() *http.ServeMux {
 	mux := http.NewServeMux()
 
@@ -105,44 +103,72 @@ func wireDB() {
 }
 
 func main() {
-	dbPath := os.Getenv("GOPHER_DB")
-	if dbPath == "" {
+	configPath := os.Getenv("GOPHER_CONFIG")
+	if configPath == "" {
 		os.Stderr.WriteString(`
-Angry Gopher requires the GOPHER_DB environment variable.
+Angry Gopher requires GOPHER_CONFIG pointing to a JSON config file.
 
-  Production (persistent database):
-    GOPHER_DB=production.db ./gopher-server
+Example config (~/AngryGopher/prod.json):
 
-  Development (fresh seed database):
-    GOPHER_DB=seed.db GOPHER_SEED=1 ./gopher-server
+  {
+      "mode": "prod",
+      "root": "/home/steve/AngryGopher/prod",
+      "port": 9000
+  }
 
-  Backup the production database:
-    cp production.db backups/production_$(date +%Y%m%d_%H%M%S).db
+Example config (~/AngryGopher/demo.json):
+
+  {
+      "mode": "demo",
+      "root": "/home/steve/AngryGopher/demo",
+      "port": 9000
+  }
+
+Usage:
+
+  GOPHER_CONFIG=~/AngryGopher/prod.json ./gopher-server
+  GOPHER_CONFIG=~/AngryGopher/demo.json ./gopher-server
+
+Backup the production database:
+
+  cp ~/AngryGopher/prod/gopher.db ~/AngryGopher/prod/backup_$(date +%Y%m%d).db
 `)
 		os.Exit(1)
 	}
 
-	seed := os.Getenv("GOPHER_SEED") == "1"
+	config, err := loadConfig(configPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
 
-	if seed {
-		// Seed mode: destroy and recreate the database.
+	if err := config.EnsureDirectories(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+
+	uploadsDir = config.UploadsDir()
+
+	if config.IsDemo() {
 		os.Setenv("GOPHER_RESET_DB", "1")
 	}
 
-	initDB(dbPath)
+	initDB(config.DBPath())
 	wireDB()
 
-	if seed {
+	if config.IsDemo() {
 		seedData(true)
-		fmt.Printf("Seeded database: %s\n", dbPath)
 	}
 
 	mux := buildMux()
 
-	fmt.Printf("Angry Gopher listening on %s\n", listenAddr)
-	fmt.Printf("Database: %s\n", dbPath)
-	fmt.Printf("Admin UI at http://localhost%s/admin/\n", listenAddr)
-	log.Fatal(http.ListenAndServe(listenAddr, mux))
+	fmt.Printf("Angry Gopher [%s mode]\n", config.Mode)
+	fmt.Printf("  Root:     %s\n", config.Root)
+	fmt.Printf("  Database: %s\n", config.DBPath())
+	fmt.Printf("  Uploads:  %s\n", config.UploadsDir())
+	fmt.Printf("  Listening on %s\n", config.ListenAddr())
+	fmt.Printf("  Admin UI: http://localhost:%d/admin/\n", config.Port)
+	log.Fatal(http.ListenAndServe(config.ListenAddr(), mux))
 }
 
 // --- Gopher-only ---
@@ -155,7 +181,8 @@ func handleVersion(w http.ResponseWriter, r *http.Request) {
 
 // --- File uploads ---
 
-var uploadsDir = filepath.Join(os.Getenv("HOME"), "AngryGopherImages")
+// Set by main() from the config. Tests don't use uploads.
+var uploadsDir string
 
 var (
 	nextUploadID   int

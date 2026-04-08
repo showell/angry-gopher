@@ -8,7 +8,7 @@ sleep 0.5
 
 cd ~/showell_repos/angry-gopher
 go build -o gopher-server . 2>/dev/null
-GOPHER_DB=seed.db GOPHER_SEED=1 nohup ./gopher-server > /tmp/angry-gopher.log 2>&1 &
+GOPHER_CONFIG=~/AngryGopher/demo.json nohup ./gopher-server > /tmp/angry-gopher.log 2>&1 &
 
 cd ~/showell_repos/angry-cat
 nohup npx vite --port 8000 > /tmp/angry-cat.log 2>&1 &
