@@ -249,17 +249,30 @@ func importUsers(zulip *ZulipClient, db *sql.DB) {
 		isBot := user["is_bot"].(bool)
 
 		if isBot {
-			ownerEmail := ""
-			if v, ok := user["bot_owner"]; ok && v != nil {
-				ownerEmail = v.(string)
+			// Zulip bot fields: bot_type (int), bot_owner_id (int).
+			// bot_owner (string email) may or may not be present.
+			ownerID := 0
+			if v, ok := user["bot_owner_id"]; ok && v != nil {
+				ownerID = int(v.(float64))
 			}
-			if targetHumans[ownerEmail] {
+
+			// Check if the bot's owner is one of our target humans
+			// by looking up the owner's zulip_id in our mapping.
+			var ownerEmail string
+			db.QueryRow(`SELECT email FROM zulip_users WHERE zulip_id = ?`, ownerID).Scan(&ownerEmail)
+			isOurs := targetHumans[ownerEmail]
+
+			if isOurs {
+				botType := 0
+				if v, ok := user["bot_type"]; ok && v != nil {
+					botType = int(v.(float64))
+				}
 				db.Exec(`INSERT OR IGNORE INTO staged_bots (zulip_id, email, full_name, owner_email) VALUES (?, ?, ?, ?)`,
 					zulipID, email, fullName, ownerEmail)
 				db.Exec(`INSERT OR REPLACE INTO zulip_users (zulip_id, email, full_name, is_bot) VALUES (?, ?, ?, 1)`,
 					zulipID, email, fullName)
 				botCount++
-				log.Printf("  Staged bot: %s (owner: %s)", fullName, ownerEmail)
+				log.Printf("  Staged bot: %s (type=%d, owner_id=%d → %s)", fullName, botType, ownerID, ownerEmail)
 			}
 			continue
 		}
@@ -305,6 +318,120 @@ func importUsers(zulip *ZulipClient, db *sql.DB) {
 	log.Printf("Done: %d humans imported, %d bots staged", humanCount, botCount)
 }
 
+// --- Stage 2: Channels and subscriptions ---
+
+// Debbie only gets subscribed to these channels (by Zulip name).
+var debbieChannels = map[string]bool{
+	"Debbie/Steve":          true,
+	"Howell/Miller Family":  true,
+}
+
+func importChannels(zulip *ZulipClient, db *sql.DB) {
+	log.Println("=== Stage 2: Channels ===")
+
+	result, err := zulip.get("users/me/subscriptions", nil)
+	if err != nil {
+		log.Fatalf("Failed to fetch subscriptions: %v", err)
+	}
+
+	subs := result["subscriptions"].([]interface{})
+	log.Printf("Steve has %d subscriptions on Zulip", len(subs))
+
+	channelCount := 0
+
+	for _, s := range subs {
+		sub := s.(map[string]interface{})
+		name := sub["name"].(string)
+		zulipID := int(sub["stream_id"].(float64))
+		description := ""
+		if v, ok := sub["description"]; ok && v != nil {
+			description = v.(string)
+		}
+		inviteOnly := false
+		if v, ok := sub["invite_only"]; ok {
+			inviteOnly = v.(bool)
+		}
+
+		// Idempotent: skip if already mapped.
+		var existing int
+		db.QueryRow(`SELECT COUNT(*) FROM zulip_channels WHERE zulip_id = ?`, zulipID).Scan(&existing)
+		if existing > 0 {
+			continue
+		}
+
+		inviteOnlyInt := 0
+		if inviteOnly {
+			inviteOnlyInt = 1
+		}
+
+		insertResult, err := db.Exec(
+			`INSERT INTO channels (name, description, invite_only) VALUES (?, ?, ?)`,
+			name, description, inviteOnlyInt)
+		if err != nil {
+			log.Printf("  Failed to insert channel %s: %v", name, err)
+			continue
+		}
+		gopherID, _ := insertResult.LastInsertId()
+
+		db.Exec(`INSERT INTO zulip_channels (zulip_id, gopher_id, name) VALUES (?, ?, ?)`,
+			zulipID, gopherID, name)
+
+		log.Printf("  Imported channel: %s (zulip=%d → gopher=%d, private=%v)",
+			name, zulipID, gopherID, inviteOnly)
+		channelCount++
+	}
+
+	log.Printf("Done: %d channels imported", channelCount)
+}
+
+func importSubscriptions(db *sql.DB) {
+	log.Println("=== Stage 2b: Subscriptions ===")
+
+	// Look up Gopher user IDs.
+	var steveID, apoorvaID, debbieID int
+	db.QueryRow(`SELECT gopher_id FROM zulip_users WHERE email = 'showell30@yahoo.com'`).Scan(&steveID)
+	db.QueryRow(`SELECT gopher_id FROM zulip_users WHERE email = 'apoorvavpendse@gmail.com'`).Scan(&apoorvaID)
+	db.QueryRow(`SELECT gopher_id FROM zulip_users WHERE full_name = 'Debbie Benton'`).Scan(&debbieID)
+
+	if steveID == 0 || apoorvaID == 0 || debbieID == 0 {
+		log.Fatalf("Missing user IDs: steve=%d apoorva=%d debbie=%d", steveID, apoorvaID, debbieID)
+	}
+
+	rows, err := db.Query(`SELECT gopher_id, name FROM zulip_channels`)
+	if err != nil {
+		log.Fatalf("Failed to query channels: %v", err)
+	}
+
+	type ch struct {
+		gopherID int
+		name     string
+	}
+	var channels []ch
+	for rows.Next() {
+		var c ch
+		rows.Scan(&c.gopherID, &c.name)
+		channels = append(channels, c)
+	}
+	rows.Close()
+
+	subCount := 0
+	for _, c := range channels {
+		// Steve and Apoorva get subscribed to everything.
+		db.Exec(`INSERT OR IGNORE INTO subscriptions (user_id, channel_id) VALUES (?, ?)`, steveID, c.gopherID)
+		db.Exec(`INSERT OR IGNORE INTO subscriptions (user_id, channel_id) VALUES (?, ?)`, apoorvaID, c.gopherID)
+		subCount += 2
+
+		// Debbie only gets her two channels.
+		if debbieChannels[c.name] {
+			db.Exec(`INSERT OR IGNORE INTO subscriptions (user_id, channel_id) VALUES (?, ?)`, debbieID, c.gopherID)
+			subCount++
+			log.Printf("  Debbie subscribed to: %s", c.name)
+		}
+	}
+
+	log.Printf("Done: %d subscriptions created", subCount)
+}
+
 // --- Main ---
 
 func main() {
@@ -336,6 +463,8 @@ func main() {
 
 	ensureSchema(db)
 	importUsers(zulip, db)
+	importChannels(zulip, db)
+	importSubscriptions(db)
 
-	log.Println("=== Stage 1 complete ===")
+	log.Println("=== Stages 1-2 complete ===")
 }
