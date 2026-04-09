@@ -20,6 +20,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"angry-gopher/auth"
@@ -27,6 +28,30 @@ import (
 )
 
 var DB *sql.DB
+
+// Per-game notification: when an event is posted, all waiting
+// long-poll requests for that game wake up and re-query.
+var (
+	waitersMu sync.Mutex
+	waiters   = map[int][]chan struct{}{} // game_id → list of channels
+)
+
+func notifyWaiters(gameID int) {
+	waitersMu.Lock()
+	defer waitersMu.Unlock()
+	for _, ch := range waiters[gameID] {
+		close(ch)
+	}
+	delete(waiters, gameID)
+}
+
+func addWaiter(gameID int) chan struct{} {
+	waitersMu.Lock()
+	defer waitersMu.Unlock()
+	ch := make(chan struct{})
+	waiters[gameID] = append(waiters[gameID], ch)
+	return ch
+}
 
 const Schema = `
 CREATE TABLE IF NOT EXISTS games (
@@ -258,9 +283,40 @@ func handlePostEvent(w http.ResponseWriter, r *http.Request, gameID int) {
 	}
 
 	eventID, _ := result.LastInsertId()
+	notifyWaiters(gameID)
 	respond.Success(w, map[string]interface{}{
 		"event_id": eventID,
 	})
+}
+
+func queryEvents(gameID, after int) ([]eventInfo, error) {
+	rows, err := DB.Query(`
+		SELECT id, user_id, payload, created_at
+		FROM game_events
+		WHERE game_id = ? AND id > ?
+		ORDER BY id ASC
+	`, gameID, after)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var events []eventInfo
+	for rows.Next() {
+		var e eventInfo
+		var payloadStr string
+		rows.Scan(&e.ID, &e.UserID, &payloadStr, &e.CreatedAt)
+		e.Payload = json.RawMessage(payloadStr)
+		events = append(events, e)
+	}
+	return events, nil
+}
+
+type eventInfo struct {
+	ID        int             `json:"id"`
+	UserID    int             `json:"user_id"`
+	Payload   json.RawMessage `json:"payload"`
+	CreatedAt int64           `json:"created_at"`
 }
 
 func handleGetEvents(w http.ResponseWriter, r *http.Request, gameID int) {
@@ -281,32 +337,43 @@ func handleGetEvents(w http.ResponseWriter, r *http.Request, gameID int) {
 		after, _ = strconv.Atoi(afterStr)
 	}
 
-	rows, err := DB.Query(`
-		SELECT id, user_id, payload, created_at
-		FROM game_events
-		WHERE game_id = ? AND id > ?
-		ORDER BY id ASC
-	`, gameID, after)
+	// First check: are there already events waiting?
+	events, err := queryEvents(gameID, after)
 	if err != nil {
 		respond.Error(w, "Failed to get events: "+err.Error())
 		return
 	}
-	defer rows.Close()
 
-	type eventInfo struct {
-		ID        int             `json:"id"`
-		UserID    int             `json:"user_id"`
-		Payload   json.RawMessage `json:"payload"`
-		CreatedAt int64           `json:"created_at"`
-	}
+	// If no events and long-polling requested, block until one arrives
+	// or the timeout expires or the client disconnects.
+	if len(events) == 0 {
+		timeoutStr := r.URL.Query().Get("timeout")
+		timeoutSec := 0
+		if timeoutStr != "" {
+			timeoutSec, _ = strconv.Atoi(timeoutStr)
+		}
 
-	events := []eventInfo{}
-	for rows.Next() {
-		var e eventInfo
-		var payloadStr string
-		rows.Scan(&e.ID, &e.UserID, &payloadStr, &e.CreatedAt)
-		e.Payload = json.RawMessage(payloadStr)
-		events = append(events, e)
+		if timeoutSec > 0 {
+			ch := addWaiter(gameID)
+			timer := time.NewTimer(time.Duration(timeoutSec) * time.Second)
+			defer timer.Stop()
+
+			select {
+			case <-ch:
+				// New event posted — re-query.
+			case <-timer.C:
+				// Timeout — return empty.
+			case <-r.Context().Done():
+				// Client disconnected.
+				return
+			}
+
+			events, err = queryEvents(gameID, after)
+			if err != nil {
+				respond.Error(w, "Failed to get events: "+err.Error())
+				return
+			}
+		}
 	}
 
 	respond.Success(w, map[string]interface{}{

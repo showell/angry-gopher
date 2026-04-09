@@ -88,14 +88,14 @@ func TestCreateAndListGame(t *testing.T) {
 		t.Fatalf("Expected player2_id to be nil, got %v", game["player2_id"])
 	}
 
-	// Mom lists games — should see 0 (not a player yet).
+	// Mom lists games — should see 1 (Steve's open game she can join).
 	w = httptest.NewRecorder()
 	games.HandleGames(w, authRequest("GET", "/gopher/games", "", "mom"))
 	resp = parseResponse(t, w)
 
 	gamesList = resp["games"].([]interface{})
-	if len(gamesList) != 0 {
-		t.Fatalf("Expected 0 games for mom, got %d", len(gamesList))
+	if len(gamesList) != 1 {
+		t.Fatalf("Expected 1 open game for mom, got %d", len(gamesList))
 	}
 }
 
