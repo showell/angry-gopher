@@ -142,7 +142,7 @@ func seedData(includeWelcome bool) {
 		apiKey   string
 		isAdmin  int
 	}{
-		{1, "steve@example.com", "Steve Howell", "steve-api-key", 1},
+		{1, "showell30@yahoo.com", "Steve Howell", "3265966a1813d1bb7707062a17ee8ae3", 1},
 		{2, "apoorva@example.com", "Apoorva Pendse", "apoorva-api-key", 0},
 		{3, "claude@example.com", "Claude", "claude-api-key", 1},
 		{4, "joe@example.com", "Joe Random", "joe-api-key", 0},

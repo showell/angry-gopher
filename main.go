@@ -20,6 +20,7 @@ import (
 	"angry-gopher/channels"
 	"angry-gopher/events"
 	"angry-gopher/flags"
+	"angry-gopher/games"
 	"angry-gopher/invites"
 	"angry-gopher/messages"
 	"angry-gopher/presence"
@@ -70,6 +71,8 @@ func buildMux() *http.ServeMux {
 	mux.HandleFunc("/gopher/version", withCORS(handleVersion))
 	mux.HandleFunc("/gopher/invites", withCORS(invites.HandleCreateInvite))
 	mux.HandleFunc("/gopher/invites/redeem", withCORS(invites.HandleRedeemInvite))
+	mux.HandleFunc("/gopher/games", withCORS(games.HandleGames))
+	mux.HandleFunc("/gopher/games/", withCORS(games.HandleGameSub))
 	mux.HandleFunc("/api/v1/users/me/presence", withCORS(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "POST":
@@ -98,8 +101,10 @@ func wireDB() {
 	flags.DB = DB
 	reactions.DB = DB
 	invites.DB = DB
+	games.DB = DB
 	channels.RenderMarkdown = renderMarkdown
 	messages.RenderMarkdown = renderMarkdown
+	games.InitSchema()
 }
 
 func main() {
