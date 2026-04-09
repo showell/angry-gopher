@@ -87,6 +87,10 @@ func TestCreateAndListGame(t *testing.T) {
 	if game["player2_id"] != nil {
 		t.Fatalf("Expected player2_id to be nil, got %v", game["player2_id"])
 	}
+	// Regular games have a null puzzle_name.
+	if game["puzzle_name"] != nil {
+		t.Fatalf("Expected puzzle_name to be nil for a regular game, got %v", game["puzzle_name"])
+	}
 
 	// Mom lists games — should see 1 (Steve's open game she can join).
 	w = httptest.NewRecorder()
@@ -96,6 +100,61 @@ func TestCreateAndListGame(t *testing.T) {
 	gamesList = resp["games"].([]interface{})
 	if len(gamesList) != 1 {
 		t.Fatalf("Expected 1 open game for mom, got %d", len(gamesList))
+	}
+}
+
+func TestCreatePuzzleGame(t *testing.T) {
+	setupTestDB(t)
+
+	// Steve creates a puzzle game by passing a puzzle_name in the body.
+	w := httptest.NewRecorder()
+	games.HandleGames(w, authRequest(
+		"POST", "/gopher/games",
+		`{"puzzle_name":"puzzle_24"}`, "steve",
+	))
+	resp := parseResponse(t, w)
+	if resp["result"] != "success" {
+		t.Fatalf("Expected success, got: %v", resp)
+	}
+
+	// List games and verify puzzle_name comes back through the lobby
+	// API without any extra round-trip into events.
+	w = httptest.NewRecorder()
+	games.HandleGames(w, authRequest("GET", "/gopher/games", "", "steve"))
+	resp = parseResponse(t, w)
+	gamesList := resp["games"].([]interface{})
+	if len(gamesList) != 1 {
+		t.Fatalf("Expected 1 game, got %d", len(gamesList))
+	}
+	game := gamesList[0].(map[string]interface{})
+	if game["puzzle_name"] != "puzzle_24" {
+		t.Fatalf("Expected puzzle_name=puzzle_24, got %v", game["puzzle_name"])
+	}
+}
+
+func TestCreateGameEmptyBodyStillWorks(t *testing.T) {
+	setupTestDB(t)
+
+	// Steve creates a regular game by sending an empty JSON object.
+	// Existing clients send no body at all, but we want both to work.
+	w := httptest.NewRecorder()
+	games.HandleGames(w, authRequest(
+		"POST", "/gopher/games",
+		`{}`, "steve",
+	))
+	resp := parseResponse(t, w)
+	if resp["result"] != "success" {
+		t.Fatalf("Expected success, got: %v", resp)
+	}
+
+	// Verify it's stored as a non-puzzle game.
+	w = httptest.NewRecorder()
+	games.HandleGames(w, authRequest("GET", "/gopher/games", "", "steve"))
+	resp = parseResponse(t, w)
+	gamesList := resp["games"].([]interface{})
+	game := gamesList[0].(map[string]interface{})
+	if game["puzzle_name"] != nil {
+		t.Fatalf("Expected puzzle_name=nil for empty body, got %v", game["puzzle_name"])
 	}
 }
 

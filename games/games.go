@@ -58,7 +58,8 @@ CREATE TABLE IF NOT EXISTS games (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     player1_id INTEGER NOT NULL REFERENCES users(id),
     player2_id INTEGER,
-    created_at INTEGER NOT NULL
+    created_at INTEGER NOT NULL,
+    puzzle_name TEXT
 );
 
 CREATE TABLE IF NOT EXISTS game_events (
@@ -70,11 +71,52 @@ CREATE TABLE IF NOT EXISTS game_events (
 );
 `
 
-// InitSchema creates the games tables if they don't exist.
+// InitSchema creates the games tables if they don't exist and
+// runs any in-place migrations needed for existing databases.
 func InitSchema() {
 	_, err := DB.Exec(Schema)
 	if err != nil {
 		panic("games: failed to create schema: " + err.Error())
+	}
+	migrate()
+}
+
+// migrate brings an existing database up to the latest schema.
+// Each step is idempotent, so it's safe to run on both fresh and
+// existing databases. For production, the same upgrades should
+// be applied via a SQL migration file before deploy (per
+// DEPLOYMENT.md), but running here too means dev databases stay
+// usable without manual steps.
+func migrate() {
+	addColumnIfMissing("games", "puzzle_name", "TEXT")
+}
+
+// addColumnIfMissing checks PRAGMA table_info and runs an
+// ALTER TABLE only if the column is not already present. SQLite
+// has no IF NOT EXISTS for ADD COLUMN, so we have to look first.
+func addColumnIfMissing(table, column, columnType string) {
+	rows, err := DB.Query("PRAGMA table_info(" + table + ")")
+	if err != nil {
+		panic("games: failed to read table info: " + err.Error())
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var cid int
+		var name, ctype string
+		var notnull, pk int
+		var dflt sql.NullString
+		if err := rows.Scan(&cid, &name, &ctype, &notnull, &dflt, &pk); err != nil {
+			panic("games: failed to scan table info: " + err.Error())
+		}
+		if name == column {
+			return
+		}
+	}
+
+	_, err = DB.Exec("ALTER TABLE " + table + " ADD COLUMN " + column + " " + columnType)
+	if err != nil {
+		panic("games: failed to add column " + column + ": " + err.Error())
 	}
 }
 
@@ -131,10 +173,26 @@ func handleCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Optional JSON body: { "puzzle_name": "puzzle_24" }.
+	// A regular game is created with no body or an empty body —
+	// the server only stores puzzle_name as an opaque label and
+	// never interprets puzzle contents.
+	var body struct {
+		PuzzleName *string `json:"puzzle_name"`
+	}
+	if r.Body != nil {
+		_ = json.NewDecoder(r.Body).Decode(&body)
+	}
+
+	var puzzleName interface{}
+	if body.PuzzleName != nil && *body.PuzzleName != "" {
+		puzzleName = *body.PuzzleName
+	}
+
 	now := time.Now().Unix()
 	result, err := DB.Exec(
-		`INSERT INTO games (player1_id, player2_id, created_at) VALUES (?, NULL, ?)`,
-		userID, now,
+		`INSERT INTO games (player1_id, player2_id, created_at, puzzle_name) VALUES (?, NULL, ?, ?)`,
+		userID, now, puzzleName,
 	)
 	if err != nil {
 		respond.Error(w, "Failed to create game: "+err.Error())
@@ -200,7 +258,7 @@ func handleList(w http.ResponseWriter, r *http.Request) {
 
 	// Return games the user is in, plus open games they could join.
 	rows, err := DB.Query(`
-		SELECT g.id, g.player1_id, g.player2_id, g.created_at,
+		SELECT g.id, g.player1_id, g.player2_id, g.created_at, g.puzzle_name,
 		       (SELECT COUNT(*) FROM game_events WHERE game_id = g.id) AS event_count
 		FROM games g
 		WHERE g.player1_id = ? OR g.player2_id = ?
@@ -214,21 +272,27 @@ func handleList(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 
 	type gameInfo struct {
-		ID         int   `json:"id"`
-		Player1ID  int   `json:"player1_id"`
-		Player2ID  *int  `json:"player2_id"`
-		CreatedAt  int64 `json:"created_at"`
-		EventCount int   `json:"event_count"`
+		ID         int     `json:"id"`
+		Player1ID  int     `json:"player1_id"`
+		Player2ID  *int    `json:"player2_id"`
+		CreatedAt  int64   `json:"created_at"`
+		EventCount int     `json:"event_count"`
+		PuzzleName *string `json:"puzzle_name"`
 	}
 
 	games := []gameInfo{}
 	for rows.Next() {
 		var g gameInfo
 		var p2 sql.NullInt64
-		rows.Scan(&g.ID, &g.Player1ID, &p2, &g.CreatedAt, &g.EventCount)
+		var puzzle sql.NullString
+		rows.Scan(&g.ID, &g.Player1ID, &p2, &g.CreatedAt, &puzzle, &g.EventCount)
 		if p2.Valid {
 			p2val := int(p2.Int64)
 			g.Player2ID = &p2val
+		}
+		if puzzle.Valid {
+			s := puzzle.String
+			g.PuzzleName = &s
 		}
 		games = append(games, g)
 	}
