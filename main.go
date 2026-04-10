@@ -31,6 +31,7 @@ import (
 	"angry-gopher/reactions"
 	"angry-gopher/respond"
 	"angry-gopher/users"
+	"angry-gopher/views"
 	"angry-gopher/webhooks"
 )
 
@@ -88,6 +89,7 @@ func buildMux() *http.ServeMux {
 	mux.HandleFunc("/gopher/invites/redeem", withCORS(invites.HandleRedeemInvite))
 	mux.HandleFunc("/gopher/games", withCORS(games.HandleGames))
 	mux.HandleFunc("/gopher/games/", withCORS(games.HandleGameSub))
+	mux.HandleFunc("/gopher/dm", views.HandleDM)
 	mux.HandleFunc("/gopher/webhooks/github", webhooks.HandleGitHub)
 	mux.HandleFunc("/gopher/github/repos", withCORS(webhooks.HandleRepos))
 	mux.HandleFunc("/api/v1/dm/conversations", withCORS(dm.HandleConversations))
@@ -128,6 +130,8 @@ func wireDB() {
 	channels.RenderMarkdown = renderMarkdown
 	dm.DB = DB
 	dm.RenderMarkdown = renderMarkdown
+	views.DB = DB
+	views.RenderMarkdown = renderMarkdown
 	webhooks.DB = DB
 	events.OnRegister = recordUserLogin
 	messages.RenderMarkdown = renderMarkdown
