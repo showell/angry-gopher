@@ -1,6 +1,7 @@
 package views
 
 import (
+	"database/sql"
 	"fmt"
 	"html"
 	"net/http"
@@ -71,12 +72,20 @@ func renderTopicList(w http.ResponseWriter, userID int, channelID int) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	PageHeader(w, fmt.Sprintf("#%s — Topics", channelName))
 
-	fmt.Fprint(w, `<a class="back" href="/gopher/messages">&larr; Back to channels</a>`)
+	Breadcrumb(w, "Messages", "/gopher/messages", "#"+channelName)
 
+	// Single query: topic name, message count, unread count, most recent timestamp.
 	rows, err := DB.Query(`
-		SELECT t.topic_name FROM topics t
+		SELECT t.topic_name,
+			COUNT(m.id) AS msg_count,
+			SUM(CASE WHEN u.message_id IS NOT NULL THEN 1 ELSE 0 END) AS unread_count,
+			MAX(m.timestamp) AS last_ts
+		FROM topics t
+		LEFT JOIN messages m ON m.topic_id = t.topic_id
+		LEFT JOIN unreads u ON u.message_id = m.id AND u.user_id = ?
 		WHERE t.channel_id = ?
-		ORDER BY t.topic_name`, channelID)
+		GROUP BY t.topic_id
+		ORDER BY last_ts DESC NULLS LAST`, userID, channelID)
 	if err != nil {
 		fmt.Fprint(w, `<p>Failed to load topics.</p>`)
 		PageFooter(w)
@@ -84,12 +93,26 @@ func renderTopicList(w http.ResponseWriter, userID int, channelID int) {
 	}
 	defer rows.Close()
 
-	fmt.Fprint(w, `<table><thead><tr><th>Topic</th></tr></thead><tbody>`)
+	fmt.Fprint(w, `<table><thead><tr><th>Topic</th><th>Messages</th><th>Unread</th><th>Last Activity</th></tr></thead><tbody>`)
 	for rows.Next() {
 		var topicName string
-		rows.Scan(&topicName)
-		fmt.Fprintf(w, `<tr><td><a href="/gopher/messages?channel_id=%d&topic=%s">%s</a></td></tr>`,
-			channelID, html.EscapeString(topicName), html.EscapeString(topicName))
+		var msgCount, unreadCount int
+		var lastTS sql.NullInt64
+		rows.Scan(&topicName, &msgCount, &unreadCount, &lastTS)
+
+		ago := "—"
+		if lastTS.Valid {
+			ago = TimeAgo(lastTS.Int64)
+		}
+
+		unreadBadge := ""
+		if unreadCount > 0 {
+			unreadBadge = fmt.Sprintf(`<span style="background:lavender;padding:2px 6px;border-radius:4px;font-weight:bold">%d</span>`, unreadCount)
+		}
+
+		fmt.Fprintf(w, `<tr><td><a href="/gopher/messages?channel_id=%d&topic=%s">%s</a></td><td>%d</td><td>%s</td><td class="muted">%s</td></tr>`,
+			channelID, html.EscapeString(topicName), html.EscapeString(topicName),
+			msgCount, unreadBadge, ago)
 	}
 	fmt.Fprint(w, `</tbody></table>`)
 	PageFooter(w)
