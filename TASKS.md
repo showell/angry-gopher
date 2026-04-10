@@ -2,7 +2,7 @@
 
 ## High Priority
 
-- [ ] DM UI in Angry Cat — server endpoints are done, need send/receive UI
+- [x] DM UI in Angry Cat — server endpoints + conversation list, send/receive UI
 - [ ] Clean up all tsc errors in Angry Cat
 
 ## Normal Priority
