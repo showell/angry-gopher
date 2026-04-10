@@ -137,12 +137,12 @@ func HandleEvents(w http.ResponseWriter, r *http.Request) {
 
 	pending = collectPending(q, lastEventID)
 
-	if len(pending) == 0 {
-		pending = []map[string]interface{}{
-			{"type": "heartbeat", "id": lastEventID + 1},
-		}
-	}
-
+	// Return whatever we have — possibly empty. We no longer
+	// fabricate heartbeat events because their IDs collided with
+	// real event IDs: the heartbeat used lastEventID+1, which is
+	// the same ID the next real event would get from q.lastID++.
+	// The client advanced past that ID, causing the real event to
+	// be silently skipped on the next poll.
 	respond.Success(w, map[string]interface{}{"events": pending})
 }
 
