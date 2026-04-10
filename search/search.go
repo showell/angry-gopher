@@ -201,8 +201,9 @@ func HandleSearch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	params := ParseParams(r)
-	columns := "m.id, m.content_id, m.channel_id, m.topic_id, m.sender_id, m.timestamp"
-	query, args := BuildQuery(columns, "", userID, params)
+	columns := "m.id, m.content_id, m.channel_id, m.topic_id, t.topic_name, m.sender_id, m.timestamp"
+	joins := "JOIN topics t ON m.topic_id = t.topic_id"
+	query, args := BuildQuery(columns, joins, userID, params)
 
 	rows, err := DB.Query(query, args...)
 	if err != nil {
@@ -214,13 +215,15 @@ func HandleSearch(w http.ResponseWriter, r *http.Request) {
 	var messages []map[string]interface{}
 	for rows.Next() {
 		var id, contentID, channelID, topicID, senderID int
+		var topicName string
 		var timestamp int64
-		rows.Scan(&id, &contentID, &channelID, &topicID, &senderID, &timestamp)
+		rows.Scan(&id, &contentID, &channelID, &topicID, &topicName, &senderID, &timestamp)
 		messages = append(messages, map[string]interface{}{
 			"id":         id,
 			"content_id": contentID,
 			"channel_id": channelID,
 			"topic_id":   topicID,
+			"topic_name": topicName,
 			"sender_id":  senderID,
 			"timestamp":  timestamp,
 		})

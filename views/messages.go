@@ -5,17 +5,13 @@ import (
 	"html"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"angry-gopher/messages"
 )
 
 // HandleMessages serves /gopher/messages.
-//
-//   No params:               list channels
-//   ?channel_id=N:           list topics in channel
-//   ?channel_id=N&topic=T:   show messages + compose
-//   POST:                    send a message
 func HandleMessages(w http.ResponseWriter, r *http.Request) {
 	userID := RequireAuth(w, r)
 	if userID == 0 {
@@ -104,6 +100,8 @@ func renderTopicList(w http.ResponseWriter, userID int, channelID int) {
 	PageFooter(w)
 }
 
+const hydrateLimit = 1000
+
 func renderMessages(w http.ResponseWriter, userID int, channelID int, topic string) {
 	var channelName string
 	DB.QueryRow(`SELECT name FROM channels WHERE channel_id = ?`, channelID).Scan(&channelName)
@@ -113,32 +111,75 @@ func renderMessages(w http.ResponseWriter, userID int, channelID int, topic stri
 
 	fmt.Fprintf(w, `<a class="back" href="/gopher/messages?channel_id=%d">&larr; Back to topics</a>`, channelID)
 
-	rows, err := DB.Query(`
-		SELECT m.id, m.sender_id, u.full_name, mc.html, m.timestamp
-		FROM messages m
-		JOIN users u ON m.sender_id = u.id
-		JOIN message_content mc ON m.content_id = mc.content_id
+	// Step 1: get ALL message IDs (fast, index-only).
+	idRows, err := DB.Query(`
+		SELECT m.id FROM messages m
 		JOIN topics t ON m.topic_id = t.topic_id
 		WHERE m.channel_id = ? AND t.topic_name = ?
-		ORDER BY m.id ASC`, channelID, topic)
+		ORDER BY m.id DESC`, channelID, topic)
 	if err != nil {
 		fmt.Fprint(w, `<p>Failed to load messages.</p>`)
 		PageFooter(w)
 		return
 	}
-	defer rows.Close()
 
-	for rows.Next() {
-		var msgID, senderID int
-		var senderName, content string
-		var timestamp int64
-		rows.Scan(&msgID, &senderID, &senderName, &content, &timestamp)
-		t := time.Unix(timestamp, 0).Format("Jan 2 15:04")
-		fmt.Fprintf(w, `<div style="margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid #ccc">
+	var allIDs []int
+	for idRows.Next() {
+		var id int
+		idRows.Scan(&id)
+		allIDs = append(allIDs, id)
+	}
+	idRows.Close()
+
+	totalCount := len(allIDs)
+	fmt.Fprintf(w, `<p class="muted">%d messages total`, totalCount)
+
+	// Step 2: hydrate the first 1000.
+	showIDs := allIDs
+	if len(showIDs) > hydrateLimit {
+		showIDs = showIDs[:hydrateLimit]
+		fmt.Fprintf(w, `, showing newest %d`, hydrateLimit)
+	}
+	fmt.Fprint(w, `</p>`)
+
+	if len(showIDs) == 0 {
+		fmt.Fprint(w, `<p class="muted">No messages yet.</p>`)
+	} else {
+		placeholders := make([]string, len(showIDs))
+		args := make([]interface{}, len(showIDs))
+		for i, id := range showIDs {
+			placeholders[i] = "?"
+			args[i] = id
+		}
+
+		query := fmt.Sprintf(`
+			SELECT m.id, m.sender_id, u.full_name, mc.html, m.timestamp
+			FROM messages m
+			JOIN users u ON m.sender_id = u.id
+			JOIN message_content mc ON m.content_id = mc.content_id
+			WHERE m.id IN (%s)
+			ORDER BY m.id DESC`, strings.Join(placeholders, ","))
+
+		rows, err := DB.Query(query, args...)
+		if err != nil {
+			fmt.Fprint(w, `<p>Failed to hydrate messages.</p>`)
+			PageFooter(w)
+			return
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var msgID, senderID int
+			var senderName, content string
+			var timestamp int64
+			rows.Scan(&msgID, &senderID, &senderName, &content, &timestamp)
+			t := time.Unix(timestamp, 0).Format("Jan 2 15:04")
+			fmt.Fprintf(w, `<div style="margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid #ccc">
 <b>%s</b> <span class="muted">%s</span>
 <div class="msg-content">%s</div>
 </div>`,
-			UserLink(senderID, senderName), html.EscapeString(t), content)
+				UserLink(senderID, senderName), html.EscapeString(t), content)
+		}
 	}
 
 	// Compose form.

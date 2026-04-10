@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"html"
 	"net/http"
+	"strings"
 	"time"
 
 	"angry-gopher/search"
@@ -114,54 +115,84 @@ func HandleSearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	columns := `m.id, m.sender_id, u.full_name, c.name, t.topic_name, mc.html, m.timestamp`
-	joins := `JOIN users u ON m.sender_id = u.id
-		JOIN channels c ON m.channel_id = c.channel_id
-		JOIN topics t ON m.topic_id = t.topic_id
-		JOIN message_content mc ON m.content_id = mc.content_id`
+	// Step 1: get ALL matching IDs (fast, index-only).
+	// Override limit to get everything.
+	unlimitedParams := params
+	unlimitedParams.Limit = 1000000
+	idQuery, idArgs := search.BuildQuery("m.id", "", userID, unlimitedParams)
 
-	query, args := search.BuildQuery(columns, joins, userID, params)
-
-	rows, err := DB.Query(query, args...)
+	idRows, err := DB.Query(idQuery, idArgs...)
 	if err != nil {
-		fmt.Fprintf(w, `<p>Search error.</p>`)
+		fmt.Fprint(w, `<p>Search error.</p>`)
 		PageFooter(w)
 		return
 	}
-	defer rows.Close()
 
-	count := 0
-	lastID := 0
-	for rows.Next() {
-		var msgID, msgSenderID int
-		var senderName, chName, topicName, content string
-		var timestamp int64
-		rows.Scan(&msgID, &msgSenderID, &senderName, &chName, &topicName, &content, &timestamp)
+	var allIDs []int
+	for idRows.Next() {
+		var id int
+		idRows.Scan(&id)
+		allIDs = append(allIDs, id)
+	}
+	idRows.Close()
 
-		t := time.Unix(timestamp, 0).Format("Jan 2 15:04")
-		fmt.Fprintf(w, `<div style="margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid #ccc">
+	totalCount := len(allIDs)
+	fmt.Fprintf(w, `<p class="muted">%d messages found`, totalCount)
+
+	// Step 2: hydrate the first 1000.
+	showIDs := allIDs
+	if len(showIDs) > hydrateLimit {
+		showIDs = showIDs[:hydrateLimit]
+		fmt.Fprintf(w, `, showing newest %d`, hydrateLimit)
+	}
+	fmt.Fprint(w, `</p>`)
+
+	if len(showIDs) == 0 {
+		fmt.Fprint(w, `<p class="muted">No messages found.</p>`)
+	} else {
+		placeholders := make([]string, len(showIDs))
+		args := make([]interface{}, len(showIDs))
+		for i, id := range showIDs {
+			placeholders[i] = "?"
+			args[i] = id
+		}
+
+		query := fmt.Sprintf(`
+			SELECT m.id, m.sender_id, u.full_name, c.name, t.topic_name, mc.html, m.timestamp, m.channel_id
+			FROM messages m
+			JOIN users u ON m.sender_id = u.id
+			JOIN channels c ON m.channel_id = c.channel_id
+			JOIN topics t ON m.topic_id = t.topic_id
+			JOIN message_content mc ON m.content_id = mc.content_id
+			WHERE m.id IN (%s)
+			ORDER BY m.id DESC`, strings.Join(placeholders, ","))
+
+		rows, err := DB.Query(query, args...)
+		if err != nil {
+			fmt.Fprint(w, `<p>Hydration error.</p>`)
+			PageFooter(w)
+			return
+		}
+		defer rows.Close()
+
+		for rows.Next() {
+			var msgID, msgSenderID, msgChannelID int
+			var senderName, chName, topicName, content string
+			var timestamp int64
+			rows.Scan(&msgID, &msgSenderID, &senderName, &chName, &topicName, &content, &timestamp, &msgChannelID)
+
+			t := time.Unix(timestamp, 0).Format("Jan 2 15:04")
+			fmt.Fprintf(w, `<div style="margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid #ccc">
 <b>%s</b> in %s > %s <span class="muted">%s</span>
 <div class="msg-content">%s</div>
 </div>`,
-			UserLink(msgSenderID, senderName),
-			ChannelLink(params.ChannelID, chName),
-			html.EscapeString(topicName),
-			html.EscapeString(t),
-			content)
-		lastID = msgID
-		count++
-	}
-
-	if count == 0 {
-		fmt.Fprint(w, `<p class="muted">No messages found.</p>`)
-	} else if count == params.Limit {
-		nextURL := fmt.Sprintf("/gopher/search?channel_id=%d&topic_id=%d&sender_id=%d&before=%d",
-			params.ChannelID, params.TopicID, senderID, lastID)
-		fmt.Fprintf(w, `<p><a href="%s">Next page &rarr;</a></p>`, nextURL)
-	} else {
-		fmt.Fprintf(w, `<p class="muted">%d results</p>`, count)
+				UserLink(msgSenderID, senderName),
+				ChannelLink(msgChannelID, chName),
+				html.EscapeString(topicName),
+				html.EscapeString(t),
+				content)
+		}
 	}
 
 	PageFooter(w)
 }
-
