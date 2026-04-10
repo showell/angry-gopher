@@ -5,6 +5,7 @@ package views
 
 import (
 	"fmt"
+	"html"
 	"net/http"
 
 	"angry-gopher/auth"
@@ -31,6 +32,8 @@ body { font-family: sans-serif; margin: 40px; max-width: 700px; }
 h1 { color: #000080; }
 h2 { color: #000080; margin-top: 24px; }
 a { color: #000080; }
+nav { margin-bottom: 16px; font-size: 13px; }
+nav a { margin-right: 12px; }
 table { border-collapse: collapse; margin-top: 8px; width: 100%%; }
 th { background: #000080; color: white; padding: 6px 12px; text-align: left; }
 td { border-bottom: 1px solid #ccc; padding: 6px 12px; }
@@ -44,10 +47,61 @@ button:hover { background: #0000a0; }
 .back { margin-bottom: 16px; display: inline-block; }
 </style>
 </head><body>
+<nav>
+<a href="/gopher/">Home</a>
+<a href="/gopher/messages">Messages</a>
+<a href="/gopher/channels">Channels</a>
+<a href="/gopher/dm">DMs</a>
+<a href="/gopher/users">Users</a>
+<a href="/gopher/buddies">Buddies</a>
+<a href="/gopher/github">GitHub</a>
+</nav>
 <h1>%s</h1>`, title, title)
 }
 
 // PageFooter closes the HTML.
 func PageFooter(w http.ResponseWriter) {
 	fmt.Fprint(w, `</body></html>`)
+}
+
+// UserLink returns an HTML link to the user's page.
+func UserLink(userID int, name string) string {
+	return fmt.Sprintf(`<a href="/gopher/users?id=%d">%s</a>`, userID, html.EscapeString(name))
+}
+
+// ChannelLink returns an HTML link to the channel's page.
+func ChannelLink(channelID int, name string) string {
+	return fmt.Sprintf(`<a href="/gopher/channels?id=%d">#%s</a>`, channelID, html.EscapeString(name))
+}
+
+// HandleIndex serves /gopher/ — the master page linking to all views.
+func HandleIndex(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/gopher/" {
+		http.NotFound(w, r)
+		return
+	}
+	userID := RequireAuth(w, r)
+	if userID == 0 {
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	PageHeader(w, "Angry Gopher")
+
+	fmt.Fprint(w, `<div style="display:flex;flex-direction:column;gap:12px;margin-top:8px">
+<a href="/gopher/messages" style="font-size:18px;font-weight:bold">Messages</a>
+<span class="muted">Browse channels, topics, and messages</span>
+<a href="/gopher/channels" style="font-size:18px;font-weight:bold">Channels</a>
+<span class="muted">List, create, and edit channels</span>
+<a href="/gopher/dm" style="font-size:18px;font-weight:bold">Direct Messages</a>
+<span class="muted">1:1 conversations</span>
+<a href="/gopher/users" style="font-size:18px;font-weight:bold">Users</a>
+<span class="muted">User directory, edit your profile</span>
+<a href="/gopher/buddies" style="font-size:18px;font-weight:bold">Buddies</a>
+<span class="muted">Manage your buddy list</span>
+<a href="/gopher/github" style="font-size:18px;font-weight:bold">GitHub</a>
+<span class="muted">Configure GitHub webhook integrations</span>
+</div>`)
+
+	PageFooter(w)
 }

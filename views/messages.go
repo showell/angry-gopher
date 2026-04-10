@@ -112,7 +112,7 @@ func renderMessages(w http.ResponseWriter, userID int, channelID int, topic stri
 	fmt.Fprintf(w, `<a class="back" href="/gopher/messages?channel_id=%d">&larr; Back to topics</a>`, channelID)
 
 	rows, err := DB.Query(`
-		SELECT m.id, u.full_name, mc.html, m.timestamp
+		SELECT m.id, m.sender_id, u.full_name, mc.html, m.timestamp
 		FROM messages m
 		JOIN users u ON m.sender_id = u.id
 		JOIN message_content mc ON m.content_id = mc.content_id
@@ -127,16 +127,16 @@ func renderMessages(w http.ResponseWriter, userID int, channelID int, topic stri
 	defer rows.Close()
 
 	for rows.Next() {
-		var msgID int
+		var msgID, senderID int
 		var senderName, content string
 		var timestamp int64
-		rows.Scan(&msgID, &senderName, &content, &timestamp)
+		rows.Scan(&msgID, &senderID, &senderName, &content, &timestamp)
 		t := time.Unix(timestamp, 0).Format("Jan 2 15:04")
 		fmt.Fprintf(w, `<div style="margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid #ccc">
 <b>%s</b> <span class="muted">%s</span>
 <div class="msg-content">%s</div>
 </div>`,
-			html.EscapeString(senderName), html.EscapeString(t), content)
+			UserLink(senderID, senderName), html.EscapeString(t), content)
 	}
 
 	// Compose form.

@@ -89,6 +89,7 @@ func buildMux() *http.ServeMux {
 	mux.HandleFunc("/gopher/invites/redeem", withCORS(invites.HandleRedeemInvite))
 	mux.HandleFunc("/gopher/games", withCORS(games.HandleGames))
 	mux.HandleFunc("/gopher/games/", withCORS(games.HandleGameSub))
+	mux.HandleFunc("/gopher/", views.HandleIndex)
 	mux.HandleFunc("/gopher/dm", views.HandleDM)
 	mux.HandleFunc("/gopher/messages", views.HandleMessages)
 	mux.HandleFunc("/gopher/channels", views.HandleChannels)

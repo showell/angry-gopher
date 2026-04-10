@@ -58,8 +58,8 @@ func renderChannelIndex(w http.ResponseWriter, userID int) {
 		if inviteOnly == 1 {
 			visibility = "Private"
 		}
-		fmt.Fprintf(w, `<tr><td><a href="/gopher/channels?id=%d">#%s</a></td><td>%s</td><td>%d</td></tr>`,
-			id, html.EscapeString(name), visibility, subCount)
+		fmt.Fprintf(w, `<tr><td>%s</td><td>%s</td><td>%d</td></tr>`,
+			ChannelLink(id, name), visibility, subCount)
 	}
 	fmt.Fprint(w, `</tbody></table>`)
 
@@ -112,7 +112,7 @@ func renderChannelDetail(w http.ResponseWriter, userID int, channelID int) {
 			var uid int
 			var fullName string
 			rows.Scan(&uid, &fullName)
-			fmt.Fprintf(w, `<li>%s</li>`, html.EscapeString(fullName))
+			fmt.Fprintf(w, `<li>%s</li>`, UserLink(uid, fullName))
 		}
 		fmt.Fprint(w, `</ul>`)
 	}

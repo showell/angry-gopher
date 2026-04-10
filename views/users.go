@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"html"
 	"net/http"
+	"strconv"
 )
 
 // HandleUsers serves /gopher/users.
@@ -18,6 +19,13 @@ func HandleUsers(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method == "POST" {
 		handleUserUpdate(w, r, userID)
+		return
+	}
+
+	idStr := r.URL.Query().Get("id")
+	if idStr != "" {
+		id, _ := strconv.Atoi(idStr)
+		renderUserDetail(w, userID, id)
 		return
 	}
 
@@ -65,9 +73,58 @@ func renderUserList(w http.ResponseWriter, userID int) {
 			style = ` style="background:#f0f0ff"`
 		}
 		fmt.Fprintf(w, `<tr%s><td>%s</td><td>%s</td><td>%s</td></tr>`,
-			style, html.EscapeString(name), html.EscapeString(email), role)
+			style, UserLink(id, name), html.EscapeString(email), role)
 	}
 	fmt.Fprint(w, `</tbody></table>`)
+
+	PageFooter(w)
+}
+
+func renderUserDetail(w http.ResponseWriter, currentUserID, targetID int) {
+	var name, email string
+	var isAdmin int
+	err := DB.QueryRow(`SELECT full_name, email, is_admin FROM users WHERE id = ?`, targetID).Scan(&name, &email, &isAdmin)
+	if err != nil {
+		http.Error(w, "User not found", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	PageHeader(w, name)
+
+	fmt.Fprint(w, `<a class="back" href="/gopher/users">&larr; Back to users</a>`)
+
+	role := "Member"
+	if isAdmin == 1 {
+		role = "Admin"
+	}
+	fmt.Fprintf(w, `<table>
+<tr><td><b>Email</b></td><td>%s</td></tr>
+<tr><td><b>Role</b></td><td>%s</td></tr>
+</table>`, html.EscapeString(email), role)
+
+	// Channels this user is subscribed to.
+	rows, err := DB.Query(`
+		SELECT c.channel_id, c.name FROM channels c
+		JOIN subscriptions s ON c.channel_id = s.channel_id
+		WHERE s.user_id = ?
+		ORDER BY c.name`, targetID)
+	if err == nil {
+		defer rows.Close()
+		fmt.Fprint(w, `<h2>Channels</h2><ul>`)
+		for rows.Next() {
+			var chID int
+			var chName string
+			rows.Scan(&chID, &chName)
+			fmt.Fprintf(w, `<li>%s</li>`, ChannelLink(chID, chName))
+		}
+		fmt.Fprint(w, `</ul>`)
+	}
+
+	// Link to DM if not self.
+	if targetID != currentUserID {
+		fmt.Fprintf(w, `<p><a href="/gopher/dm?user_id=%d">Send a DM &rarr;</a></p>`, targetID)
+	}
 
 	PageFooter(w)
 }

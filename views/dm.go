@@ -87,8 +87,8 @@ func renderDMList(w http.ResponseWriter, userID int) {
 			continue
 		}
 		hasConvos = true
-		fmt.Fprintf(w, `<tr><td><a href="/gopher/dm?user_id=%d">%s</a></td><td>%d</td></tr>`,
-			u.id, html.EscapeString(u.name), u.msgCount)
+		fmt.Fprintf(w, `<tr><td><a href="/gopher/dm?user_id=%d">%s</a> (%s)</td><td>%d</td></tr>`,
+			u.id, html.EscapeString(u.name), UserLink(u.id, "profile"), u.msgCount)
 	}
 	fmt.Fprint(w, `</tbody></table>`)
 	if !hasConvos {
@@ -157,7 +157,7 @@ func renderDMConversation(w http.ResponseWriter, userID, otherID int) {
 <b>%s</b> <span class="muted">%s</span>
 <div class="msg-content">%s</div>
 </div>`,
-			html.EscapeString(senderName), html.EscapeString(t), content)
+			UserLink(senderID, senderName), html.EscapeString(t), content)
 		msgCount++
 	}
 
