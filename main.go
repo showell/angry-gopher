@@ -238,11 +238,14 @@ var serverStartTime time.Time
 
 
 func ensureBotUsers() {
-	// GitHub bot — insert if not present, then look up the ID.
-	DB.Exec(`INSERT OR IGNORE INTO users (email, full_name, api_key, is_admin) VALUES (?, ?, ?, ?)`,
-		"github-bot@gopher.internal", "GitHub", "github-bot-key", 0)
 	var ghBotID int
 	DB.QueryRow(`SELECT id FROM users WHERE email = 'github-bot@gopher.internal'`).Scan(&ghBotID)
+	if ghBotID == 0 {
+		result, _ := DB.Exec(`INSERT INTO users (email, full_name, api_key, is_admin) VALUES (?, ?, ?, ?)`,
+			"github-bot@gopher.internal", "GitHub", "github-bot-key", 0)
+		id, _ := result.LastInsertId()
+		ghBotID = int(id)
+	}
 	webhooks.WebhookUserID = ghBotID
 	log.Printf("GitHub bot user: id=%d", ghBotID)
 }
