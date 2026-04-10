@@ -33,8 +33,6 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS channels (
     channel_id INTEGER PRIMARY KEY,
     name TEXT NOT NULL,
-    description TEXT NOT NULL DEFAULT '',
-    rendered_description TEXT NOT NULL DEFAULT '',
     channel_weekly_traffic INTEGER NOT NULL DEFAULT 0,
     invite_only INTEGER NOT NULL DEFAULT 0
 );
