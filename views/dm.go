@@ -39,6 +39,7 @@ func HandleDM(w http.ResponseWriter, r *http.Request) {
 func renderDMList(w http.ResponseWriter, userID int) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	PageHeader(w, "Direct Messages")
+	PageSubtitle(w, "Private 1:1 conversations. Your buddy list determines who appears in the sidebar.")
 
 	// All users (for "New conversation" links).
 	rows, err := DB.Query(`SELECT id, full_name FROM users WHERE id != ? ORDER BY full_name`, userID)

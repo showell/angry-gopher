@@ -37,6 +37,7 @@ func HandleGames(w http.ResponseWriter, r *http.Request) {
 func renderGameList(w http.ResponseWriter, userID int) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	PageHeader(w, "Games")
+	PageSubtitle(w, "Play LynRummy and other games with your team — right inside your chat app.")
 
 	rows, err := DB.Query(`
 		SELECT g.id, g.player1_id, g.player2_id, g.created_at, g.puzzle_name,

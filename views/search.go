@@ -21,6 +21,7 @@ func HandleSearch(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	PageHeader(w, "Search")
+	PageSubtitle(w, "Find any message by text, channel, topic, or sender. Trigram search finds URLs and code snippets that other chat apps miss.")
 
 	// Channel picker.
 	channelRows, err := DB.Query(`

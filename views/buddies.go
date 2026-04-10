@@ -28,6 +28,7 @@ func HandleBuddies(w http.ResponseWriter, r *http.Request) {
 func renderBuddyList(w http.ResponseWriter, userID int) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	PageHeader(w, "Buddies")
+	PageSubtitle(w, "Your curated list of people you care about. Buddy lists are private and persist across sessions.")
 
 	// Get current buddy IDs.
 	buddyIDs := map[int]bool{}

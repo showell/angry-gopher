@@ -35,6 +35,7 @@ func HandleUsers(w http.ResponseWriter, r *http.Request) {
 func renderUserList(w http.ResponseWriter, userID int) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	PageHeader(w, "Users")
+	PageSubtitle(w, "Everyone in your organization. Click a name to see their channels and start a DM.")
 
 	var myName, myEmail string
 	DB.QueryRow(`SELECT full_name, email FROM users WHERE id = ?`, userID).Scan(&myName, &myEmail)

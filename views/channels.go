@@ -35,6 +35,7 @@ func HandleChannels(w http.ResponseWriter, r *http.Request) {
 func renderChannelIndex(w http.ResponseWriter, userID int) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	PageHeader(w, "Channels")
+	PageSubtitle(w, "Public and private channels. Click any channel name to browse its topics.")
 
 	rows, err := DB.Query(`
 		SELECT c.channel_id, c.name, c.invite_only,

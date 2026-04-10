@@ -36,6 +36,7 @@ func HandleGitHub(w http.ResponseWriter, r *http.Request) {
 func renderGitHubIndex(w http.ResponseWriter, userID int) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	PageHeader(w, "GitHub Integration")
+	PageSubtitle(w, "First-class GitHub support. Configure repos, get webhook URLs, and use linkifier prefixes like AG#123.")
 
 	// Get admin's API key for webhook URLs.
 	var apiKey string

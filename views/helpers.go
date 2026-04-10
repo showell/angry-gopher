@@ -86,6 +86,11 @@ button:hover { background: #0000a0; }
 <h1>%s</h1>`, title, html.EscapeString(currentUserName(lastAuthUserID)), title)
 }
 
+// PageSubtitle renders a brief help/marketing blurb below the title.
+func PageSubtitle(w http.ResponseWriter, text string) {
+	fmt.Fprintf(w, `<p style="color:#666;font-size:13px;margin-top:-8px;margin-bottom:12px">%s</p>`, text)
+}
+
 // PageFooter closes the HTML.
 func PageFooter(w http.ResponseWriter) {
 	fmt.Fprint(w, `</body></html>`)

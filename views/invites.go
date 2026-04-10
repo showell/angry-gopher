@@ -51,6 +51,7 @@ func HandleInvites(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	PageHeader(w, "Invitations")
+	PageSubtitle(w, "Invite new users with a one-click link. Invitations expire after 7 days.")
 	FlashFromRequest(w, r)
 
 	now := time.Now().Unix()

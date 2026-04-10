@@ -40,6 +40,7 @@ func HandleMessages(w http.ResponseWriter, r *http.Request) {
 func renderChannelList(w http.ResponseWriter, userID int) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	PageHeader(w, "Messages")
+	PageSubtitle(w, "Browse channels and topics. Messages stream progressively — no waiting for large topics to load.")
 
 	rows, err := DB.Query(`
 		SELECT c.channel_id, c.name

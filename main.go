@@ -97,6 +97,7 @@ func buildMux() *http.ServeMux {
 	mux.HandleFunc("/gopher/search", views.HandleSearch)
 	mux.HandleFunc("/gopher/sse/messages", views.HandleSSEMessages)
 	mux.HandleFunc("/gopher/sse/events", views.HandleSSEEvents)
+	mux.HandleFunc("/gopher/tour", views.HandleTour)
 	mux.HandleFunc("/gopher/", views.HandleIndex)
 
 	// --- Admin & uploads ---
