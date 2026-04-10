@@ -422,9 +422,19 @@ type parsedMessage struct {
 	html      string
 	timestamp int64
 	reactions []parsedReaction
+	starred   bool // starred by the importing user
 }
 
-func importMessages(zulip *ZulipClient, db *sql.DB, batchSize int, maxBatches int) {
+type parsedDM struct {
+	zulipID      int
+	senderID     int // gopher ID
+	recipientIDs []int // gopher IDs (both participants)
+	markdown     string
+	html         string
+	timestamp    int64
+}
+
+func importMessages(zulip *ZulipClient, db *sql.DB, config *ImportConfig, batchSize int, maxBatches int) {
 	log.Println("=== Stage 3: Messages ===")
 
 	// Build lookup maps from our import tables.
@@ -446,7 +456,12 @@ func importMessages(zulip *ZulipClient, db *sql.DB, batchSize int, maxBatches in
 	}
 	rows.Close()
 
+	// The importing user — their starred flags apply to this gopher ID.
+	var importingUserID int
+	db.QueryRow(`SELECT gopher_id FROM zulip_users WHERE email = ?`, config.ZulipEmail).Scan(&importingUserID)
+
 	log.Printf("User map: %d entries, Channel map: %d entries", len(userMap), len(channelMap))
+	log.Printf("Importing user: gopher_id=%d (%s)", importingUserID, config.ZulipEmail)
 
 	// --- Phase 1: Fetch all messages into a buffer ---
 	//
@@ -459,6 +474,9 @@ func importMessages(zulip *ZulipClient, db *sql.DB, batchSize int, maxBatches in
 	anchor := "newest"
 	totalSkipped := 0
 	totalReactions := 0
+	totalStarred := 0
+	var dmBuffer []parsedDM
+	totalDMs := 0
 	reachedCutoff := false
 
 	batchCount := 0
@@ -504,6 +522,41 @@ func importMessages(zulip *ZulipClient, db *sql.DB, batchSize int, maxBatches in
 				continue
 			}
 
+			if msgType == "private" {
+				// Capture DMs between our target users.
+				senderGopherID := userMap[int(msg["sender_id"].(float64))]
+				if senderGopherID == 0 {
+					totalSkipped++
+					continue
+				}
+				recipients, _ := msg["display_recipient"].([]interface{})
+				var recipientIDs []int
+				allMapped := true
+				for _, r := range recipients {
+					ru := r.(map[string]interface{})
+					gID := userMap[int(ru["id"].(float64))]
+					if gID == 0 {
+						allMapped = false
+						break
+					}
+					recipientIDs = append(recipientIDs, gID)
+				}
+				if !allMapped || len(recipientIDs) != 2 {
+					totalSkipped++
+					continue
+				}
+				markdown := msg["content"].(string)
+				dmBuffer = append(dmBuffer, parsedDM{
+					zulipID:      zulipMsgID,
+					senderID:     senderGopherID,
+					recipientIDs: recipientIDs,
+					markdown:     markdown,
+					html:         renderMarkdown(markdown),
+					timestamp:    timestamp,
+				})
+				continue
+			}
+
 			if msgType != "stream" {
 				totalSkipped++
 				continue
@@ -524,6 +577,17 @@ func importMessages(zulip *ZulipClient, db *sql.DB, batchSize int, maxBatches in
 			}
 
 			markdown := msg["content"].(string)
+			// Check if the importing user starred this message.
+			starred := false
+			if rawFlags, ok := msg["flags"].([]interface{}); ok {
+				for _, f := range rawFlags {
+					if f == "starred" {
+						starred = true
+						break
+					}
+				}
+			}
+
 			pm := parsedMessage{
 				zulipID:   zulipMsgID,
 				senderID:  senderGopherID,
@@ -532,6 +596,7 @@ func importMessages(zulip *ZulipClient, db *sql.DB, batchSize int, maxBatches in
 				markdown:  markdown,
 				html:      renderMarkdown(markdown),
 				timestamp: timestamp,
+				starred:   starred,
 			}
 
 			// Capture reactions.
@@ -627,11 +692,65 @@ func importMessages(zulip *ZulipClient, db *sql.DB, batchSize int, maxBatches in
 			totalReactions++
 		}
 
+		if pm.starred && importingUserID != 0 {
+			tx.Exec(`INSERT OR IGNORE INTO starred_messages (message_id, user_id) VALUES (?, ?)`,
+				gopherMsgID, importingUserID)
+			totalStarred++
+		}
+
 		tx.Commit()
 		totalImported++
 	}
 
-	log.Printf("Done: %d messages imported, %d reactions, %d skipped", totalImported, totalReactions, totalSkipped)
+	log.Printf("Done: %d messages, %d reactions, %d starred, %d skipped",
+		totalImported, totalReactions, totalStarred, totalSkipped)
+
+	// --- Phase 4: Import DMs ---
+	if len(dmBuffer) > 0 {
+		log.Printf("Importing %d DMs...", len(dmBuffer))
+
+		// Sort by timestamp for consistent ordering.
+		sort.Slice(dmBuffer, func(i, j int) bool {
+			return dmBuffer[i].timestamp < dmBuffer[j].timestamp
+		})
+
+		for _, dm := range dmBuffer {
+			// Determine conversation pair (lo, hi).
+			lo, hi := dm.recipientIDs[0], dm.recipientIDs[1]
+			if lo > hi {
+				lo, hi = hi, lo
+			}
+
+			// Get or create conversation.
+			var convID int64
+			err := db.QueryRow(
+				`SELECT id FROM dm_conversations WHERE user_id_1 = ? AND user_id_2 = ?`,
+				lo, hi).Scan(&convID)
+			if err != nil {
+				result, err := db.Exec(
+					`INSERT INTO dm_conversations (user_id_1, user_id_2) VALUES (?, ?)`,
+					lo, hi)
+				if err != nil {
+					continue
+				}
+				convID, _ = result.LastInsertId()
+			}
+
+			contentResult, err := db.Exec(
+				`INSERT INTO message_content (markdown, html) VALUES (?, ?)`,
+				dm.markdown, dm.html)
+			if err != nil {
+				continue
+			}
+			contentID, _ := contentResult.LastInsertId()
+
+			db.Exec(
+				`INSERT INTO dm_messages (conversation_id, sender_id, content_id, timestamp) VALUES (?, ?, ?, ?)`,
+				convID, dm.senderID, contentID, dm.timestamp)
+			totalDMs++
+		}
+		log.Printf("Done: %d DMs imported", totalDMs)
+	}
 }
 
 // --- Welcome message ---
@@ -750,7 +869,7 @@ func main() {
 	if *mode == "tiny" {
 		maxBatches = 2
 	}
-	importMessages(zulip, db, config.BatchSize, maxBatches)
+	importMessages(zulip, db, config, config.BatchSize, maxBatches)
 
 	addWelcomeMessage(db)
 
