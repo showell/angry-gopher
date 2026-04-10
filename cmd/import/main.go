@@ -162,6 +162,11 @@ CREATE TABLE IF NOT EXISTS channels (
     channel_weekly_traffic INTEGER NOT NULL DEFAULT 0,
     invite_only INTEGER NOT NULL DEFAULT 0
 );
+CREATE TABLE IF NOT EXISTS channel_descriptions (
+    channel_id INTEGER PRIMARY KEY REFERENCES channels(channel_id),
+    markdown TEXT NOT NULL DEFAULT '',
+    html TEXT NOT NULL DEFAULT ''
+);
 CREATE TABLE IF NOT EXISTS subscriptions (
     user_id INTEGER NOT NULL REFERENCES users(id),
     channel_id INTEGER NOT NULL REFERENCES channels(channel_id),
