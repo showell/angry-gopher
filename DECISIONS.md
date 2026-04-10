@@ -27,6 +27,15 @@ distinguished by name only.
 future delivery. We don't see this as necessary for our use case
 and won't add first-class server support for it.
 
+**No user groups.** Zulip has org-wide user groups that admins
+manage. They tend to be a misfeature — individual users can't
+customize them, and at our target scale they add complexity
+without value.
+
+**No channel folders.** Zulip lets admins organize channels into
+folders. Same problem as user groups — org-wide, not per-user
+customizable. At our scale, a flat channel list is fine.
+
 ## Architecture
 
 **One server per org, medium scale.** Zulip is designed for large

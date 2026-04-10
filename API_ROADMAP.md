@@ -90,10 +90,7 @@ Based on the [Zulip REST API table of contents](https://zulip.com/api/).
 | | Delete a topic |
 | | Add a default channel |
 | | Remove a default channel |
-| | Create a channel folder |
-| | Get channel folders |
-| | Reorder channel folders |
-| | Update a channel folder |
+| N/A | Channel folders (see DECISIONS.md) |
 
 ## Users
 
@@ -122,15 +119,7 @@ Based on the [Zulip REST API table of contents](https://zulip.com/api/).
 | | Get attachments |
 | | Delete an attachment |
 | DONE | Update settings |
-| | Get user groups |
-| | Create a user group |
-| | Update a user group |
-| | Deactivate a user group |
-| | Update user group members |
-| | Update subgroups of a user group |
-| | Get user group membership status |
-| | Get user group members |
-| | Get subgroups of a user group |
+| N/A | User groups (see DECISIONS.md) |
 | | Mute a user |
 | | Unmute a user |
 | | Get all alert words |
