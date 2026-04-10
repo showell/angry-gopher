@@ -45,16 +45,18 @@ func TestUpdateChannelDescription(t *testing.T) {
 		t.Fatalf("expected success, got %v", body["result"])
 	}
 
-	// Verify both raw markdown and rendered HTML are stored.
-	var desc, renderedDesc string
-	DB.QueryRow(`SELECT description, rendered_description FROM channels WHERE channel_id = 1`).
-		Scan(&desc, &renderedDesc)
+	// Verify both raw markdown and rendered HTML are stored
+	// in the channel_descriptions table (not the old inline
+	// columns on channels).
+	var markdown, html string
+	DB.QueryRow(`SELECT markdown, html FROM channel_descriptions WHERE channel_id = 1`).
+		Scan(&markdown, &html)
 
-	if desc != "A channel for **testing**" {
-		t.Errorf("expected raw description stored, got %q", desc)
+	if markdown != "A channel for **testing**" {
+		t.Errorf("expected raw markdown stored, got %q", markdown)
 	}
-	if !strings.Contains(renderedDesc, "<strong>testing</strong>") {
-		t.Errorf("expected rendered HTML, got %q", renderedDesc)
+	if !strings.Contains(html, "<strong>testing</strong>") {
+		t.Errorf("expected rendered HTML, got %q", html)
 	}
 }
 

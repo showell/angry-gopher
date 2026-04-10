@@ -385,13 +385,20 @@ func importChannels(zulip *ZulipClient, db *sql.DB) {
 		}
 
 		insertResult, err := db.Exec(
-			`INSERT INTO channels (name, description, invite_only) VALUES (?, ?, ?)`,
-			name, description, inviteOnlyInt)
+			`INSERT INTO channels (name, invite_only) VALUES (?, ?)`,
+			name, inviteOnlyInt)
 		if err != nil {
 			log.Printf("  Failed to insert channel %s: %v", name, err)
 			continue
 		}
 		gopherID, _ := insertResult.LastInsertId()
+
+		if description != "" {
+			renderedDescription := renderMarkdown(description)
+			db.Exec(
+				`INSERT INTO channel_descriptions (channel_id, markdown, html) VALUES (?, ?, ?)`,
+				gopherID, description, renderedDescription)
+		}
 
 		db.Exec(`INSERT INTO zulip_channels (zulip_id, gopher_id, name) VALUES (?, ?, ?)`,
 			zulipID, gopherID, name)

@@ -57,10 +57,12 @@ func HandleSubscriptions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rows, err := DB.Query(`
-		SELECT c.channel_id, c.name, c.description, c.rendered_description,
+		SELECT c.channel_id, c.name,
+		       COALESCE(cd.markdown, ''), COALESCE(cd.html, ''),
 		       c.channel_weekly_traffic, c.invite_only
 		FROM channels c
 		JOIN subscriptions s ON c.channel_id = s.channel_id
+		LEFT JOIN channel_descriptions cd ON c.channel_id = cd.channel_id
 		WHERE s.user_id = ?`, userID)
 	if err != nil {
 		respond.Error(w, "Failed to query subscriptions")
@@ -154,8 +156,8 @@ func HandleCreateChannel(w http.ResponseWriter, r *http.Request) {
 		}
 
 		result, err := tx.Exec(
-			`INSERT INTO channels (name, description, rendered_description, invite_only) VALUES (?, ?, ?, ?)`,
-			sub.Name, sub.Description, renderedDesc, inviteOnlyInt,
+			`INSERT INTO channels (name, invite_only) VALUES (?, ?)`,
+			sub.Name, inviteOnlyInt,
 		)
 		if err != nil {
 			respond.Error(w, "Failed to create channel")
@@ -163,6 +165,12 @@ func HandleCreateChannel(w http.ResponseWriter, r *http.Request) {
 		}
 
 		channelID, _ := result.LastInsertId()
+
+		if sub.Description != "" {
+			tx.Exec(
+				`INSERT INTO channel_descriptions (channel_id, markdown, html) VALUES (?, ?, ?)`,
+				channelID, sub.Description, renderedDesc)
+		}
 
 		for _, uid := range principals {
 			tx.Exec(`INSERT OR IGNORE INTO subscriptions (user_id, channel_id) VALUES (?, ?)`,
@@ -240,26 +248,18 @@ func HandleUpdateChannel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	renderedDesc := RenderMarkdown(description)
+	html := RenderMarkdown(description)
 
-	tx, err := DB.Begin()
-	if err != nil {
-		respond.Error(w, "Database error")
-		return
-	}
-	defer tx.Rollback()
-
-	_, err = tx.Exec(
-		`UPDATE channels SET description = ?, rendered_description = ? WHERE channel_id = ?`,
-		description, renderedDesc, channelID,
+	// Upsert into channel_descriptions: INSERT if no row exists
+	// yet for this channel, UPDATE if one already does.
+	_, err := DB.Exec(
+		`INSERT INTO channel_descriptions (channel_id, markdown, html)
+		 VALUES (?, ?, ?)
+		 ON CONFLICT(channel_id) DO UPDATE SET markdown = ?, html = ?`,
+		channelID, description, html, description, html,
 	)
 	if err != nil {
-		respond.Error(w, "Failed to update channel")
-		return
-	}
-
-	if err := tx.Commit(); err != nil {
-		respond.Error(w, "Database error")
+		respond.Error(w, "Failed to update channel description")
 		return
 	}
 
@@ -271,7 +271,7 @@ func HandleUpdateChannel(w http.ResponseWriter, r *http.Request) {
 		"property":             "description",
 		"stream_id":            channelID,
 		"value":                description,
-		"rendered_description": renderedDesc,
+		"rendered_description": html,
 	}, func(uid int) bool {
 		return CanAccess(uid, channelID)
 	})
