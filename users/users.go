@@ -5,6 +5,7 @@ package users
 
 import (
 	"database/sql"
+	"log"
 	"net/http"
 	"strings"
 
@@ -65,7 +66,7 @@ func HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 
 	userID := auth.Authenticate(r)
 	if userID == 0 {
-		respond.Error(w, "Authentication required")
+		respond.Error(w, "Unauthorized")
 		return
 	}
 
@@ -80,9 +81,11 @@ func HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 		fullName, userID,
 	)
 	if err != nil {
-		respond.Error(w, "Failed to update full_name: "+err.Error())
+		respond.Error(w, "Failed to update settings")
 		return
 	}
+
+	log.Printf("[api] Updated full_name for user %d to %q", userID, fullName)
 
 	// Notify all connected clients so buddy lists, message
 	// sender names, etc. update in real time without a page

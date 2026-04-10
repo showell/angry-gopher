@@ -228,6 +228,40 @@ Based on the [Zulip REST API table of contents](https://zulip.com/api/).
 
 ---
 
+## Handler patterns
+
+Every PATCH (update) handler in Angry Gopher follows this
+standard sequence. New endpoints should match the pattern
+so the codebase stays consistent and auditable.
+
+```
+1. Method check       — if r.Method != http.MethodPatch { ... }
+2. Authenticate       — userID := auth.Authenticate(r)
+                        if userID == 0 { respond.Error(w, "Unauthorized"); return }
+3. Parse path params  — e.g. respond.PathSegmentInt(r.URL.Path, 4)
+                        (skip for endpoints like /settings that have no ID)
+4. Access check       — e.g. channels.CanAccess(userID, channelID)
+                        (skip for self-only endpoints like /settings)
+5. Parse + validate   — r.FormValue("field"), strings.TrimSpace,
+                        reject empty with respond.Error
+6. DB update          — use a transaction if touching multiple tables,
+                        plain Exec for single-table updates
+7. Log                — log.Printf("[api] Edited X %d", id)
+8. Emit event         — events.PushFiltered (channel-scoped) or
+                        events.PushToAll (global, e.g. user changes)
+                        Match the Zulip event type+op shape.
+9. Respond            — respond.Success(w, data)
+```
+
+Auth error message is always "Unauthorized" (not "Authentication
+required" or other variants). Error messages for DB failures
+use "Failed to update X" without leaking the Go error string.
+User-facing text fields (names, descriptions) are TrimSpace'd
+before validation. Message content is NOT trimmed (whitespace
+may be intentional in code blocks).
+
+---
+
 ## Summary
 
 **DONE:** 19 endpoints (Messages: 7, Channels: 3, Users: 4,

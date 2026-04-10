@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"strings"
 
 	"angry-gopher/auth"
 	"angry-gopher/events"
@@ -211,6 +212,11 @@ func HandleCreateChannel(w http.ResponseWriter, r *http.Request) {
 
 // HandleUpdateChannel handles PATCH /api/v1/streams/{id}.
 func HandleUpdateChannel(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPatch {
+		respond.Error(w, "Method not allowed")
+		return
+	}
+
 	userID := auth.Authenticate(r)
 	if userID == 0 {
 		respond.Error(w, "Unauthorized")
@@ -228,7 +234,7 @@ func HandleUpdateChannel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	description := r.FormValue("description")
+	description := strings.TrimSpace(r.FormValue("description"))
 	if description == "" {
 		respond.Error(w, "Missing required parameter: description")
 		return
