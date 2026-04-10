@@ -4,15 +4,6 @@
 //
 // All parameters are optional. Returns lightweight ID tuples —
 // no content, no user names. The client hydrates separately.
-//
-// Response:
-//   {
-//     "result": "success",
-//     "messages": [
-//       {"id": 999, "content_id": 42, "channel_id": 1, "topic_id": 5, "sender_id": 3, "timestamp": 1712345678},
-//       ...
-//     ]
-//   }
 package search
 
 import (
@@ -28,8 +19,178 @@ import (
 
 var DB *sql.DB
 
-const defaultLimit = 50
-const maxLimit = 200
+const DefaultLimit = 50
+const MaxLimit = 200
+
+// Params holds the parsed search filters.
+type Params struct {
+	ChannelID int
+	TopicID   int
+	SenderIDs []int
+	Before    int // cursor: messages with id < before
+	Limit     int
+}
+
+// ParseParams extracts search parameters from the request.
+func ParseParams(r *http.Request) Params {
+	p := Params{
+		Limit: DefaultLimit,
+	}
+
+	if v := r.URL.Query().Get("channel_id"); v != "" {
+		p.ChannelID, _ = strconv.Atoi(v)
+	}
+	if v := r.URL.Query().Get("topic_id"); v != "" {
+		p.TopicID, _ = strconv.Atoi(v)
+	}
+	if v := r.URL.Query().Get("sender_id"); v != "" {
+		id, _ := strconv.Atoi(v)
+		if id > 0 {
+			p.SenderIDs = []int{id}
+		}
+	}
+	if v := r.URL.Query().Get("sender_ids"); v != "" {
+		for _, s := range strings.Split(v, ",") {
+			id, _ := strconv.Atoi(strings.TrimSpace(s))
+			if id > 0 {
+				p.SenderIDs = append(p.SenderIDs, id)
+			}
+		}
+	}
+	if v := r.URL.Query().Get("before"); v != "" {
+		p.Before, _ = strconv.Atoi(v)
+	}
+	if v := r.URL.Query().Get("limit"); v != "" {
+		p.Limit, _ = strconv.Atoi(v)
+	}
+	if p.Limit <= 0 || p.Limit > MaxLimit {
+		p.Limit = DefaultLimit
+	}
+
+	return p
+}
+
+// BuildQuery constructs a SQL query for the given columns and filters.
+// The columns string is inserted into SELECT. The joins string is
+// appended after "FROM messages m" — use it for content/user joins
+// in the HTML view, or leave empty for the ID-only API.
+func BuildQuery(columns, joins string, userID int, p Params) (string, []interface{}) {
+	conditions := []string{`m.channel_id IN (
+		SELECT channel_id FROM channels WHERE invite_only = 0
+		UNION
+		SELECT channel_id FROM subscriptions WHERE user_id = ?
+	)`}
+	args := []interface{}{userID}
+
+	if p.ChannelID > 0 {
+		conditions = append(conditions, "m.channel_id = ?")
+		args = append(args, p.ChannelID)
+	}
+	if p.TopicID > 0 {
+		conditions = append(conditions, "m.topic_id = ?")
+		args = append(args, p.TopicID)
+	}
+	if len(p.SenderIDs) == 1 {
+		conditions = append(conditions, "m.sender_id = ?")
+		args = append(args, p.SenderIDs[0])
+	} else if len(p.SenderIDs) > 1 {
+		placeholders := make([]string, len(p.SenderIDs))
+		for i, id := range p.SenderIDs {
+			placeholders[i] = "?"
+			args = append(args, id)
+		}
+		conditions = append(conditions, fmt.Sprintf("m.sender_id IN (%s)", strings.Join(placeholders, ",")))
+	}
+	if p.Before > 0 {
+		conditions = append(conditions, "m.id < ?")
+		args = append(args, p.Before)
+	}
+
+	query := fmt.Sprintf(
+		`SELECT %s FROM messages m %s WHERE %s ORDER BY m.id DESC LIMIT ?`,
+		columns, joins, strings.Join(conditions, " AND "))
+	args = append(args, p.Limit)
+
+	return query, args
+}
+
+// HandleHydrate handles POST /api/v1/hydrate.
+// Accepts {"message_ids": [1, 2, 3]} and returns full content
+// for each message. Both markdown and HTML are included.
+func HandleHydrate(w http.ResponseWriter, r *http.Request) {
+	userID := auth.Authenticate(r)
+	if userID == 0 {
+		respond.Error(w, "Unauthorized")
+		return
+	}
+
+	r.ParseForm()
+	idsJSON := r.FormValue("message_ids")
+	if idsJSON == "" {
+		respond.Error(w, "Missing required param: message_ids")
+		return
+	}
+
+	// Parse the ID list.
+	var ids []int
+	for _, s := range strings.Split(strings.Trim(idsJSON, "[]"), ",") {
+		id, _ := strconv.Atoi(strings.TrimSpace(s))
+		if id > 0 {
+			ids = append(ids, id)
+		}
+	}
+
+	if len(ids) == 0 {
+		respond.Success(w, map[string]interface{}{"messages": []interface{}{}})
+		return
+	}
+	if len(ids) > 10000 {
+		respond.Error(w, "Too many IDs (max 10000)")
+		return
+	}
+
+	placeholders := make([]string, len(ids))
+	args := make([]interface{}, len(ids))
+	for i, id := range ids {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+
+	query := fmt.Sprintf(`
+		SELECT m.id, m.content_id, mc.markdown, mc.html, m.sender_id, m.channel_id,
+			m.topic_id, m.timestamp
+		FROM messages m
+		JOIN message_content mc ON m.content_id = mc.content_id
+		WHERE m.id IN (%s)
+		ORDER BY m.id`, strings.Join(placeholders, ","))
+
+	rows, err := DB.Query(query, args...)
+	if err != nil {
+		respond.Error(w, "Hydration query failed")
+		return
+	}
+	defer rows.Close()
+
+	var messages []map[string]interface{}
+	for rows.Next() {
+		var id, contentID, senderID, channelID, topicID int
+		var markdown, html string
+		var timestamp int64
+		rows.Scan(&id, &contentID, &markdown, &html, &senderID, &channelID, &topicID, &timestamp)
+		messages = append(messages, map[string]interface{}{
+			"id":         id,
+			"content_id": contentID,
+			"markdown":   markdown,
+			"html":       html,
+			"sender_id":  senderID,
+			"channel_id": channelID,
+			"topic_id":   topicID,
+			"timestamp":  timestamp,
+		})
+	}
+
+	respond.Success(w, map[string]interface{}{"messages": messages})
+}
 
 // HandleSearch handles GET /api/v1/search.
 func HandleSearch(w http.ResponseWriter, r *http.Request) {
@@ -39,9 +200,9 @@ func HandleSearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	params := parseParams(r)
-
-	query, args := buildQuery(userID, params)
+	params := ParseParams(r)
+	columns := "m.id, m.content_id, m.channel_id, m.topic_id, m.sender_id, m.timestamp"
+	query, args := BuildQuery(columns, "", userID, params)
 
 	rows, err := DB.Query(query, args...)
 	if err != nil {
@@ -66,97 +227,4 @@ func HandleSearch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respond.Success(w, map[string]interface{}{"messages": messages})
-}
-
-type searchParams struct {
-	channelID int
-	topicID   int
-	senderIDs []int
-	before    int // cursor: messages with id < before
-	limit     int
-}
-
-func parseParams(r *http.Request) searchParams {
-	p := searchParams{
-		limit: defaultLimit,
-	}
-
-	if v := r.URL.Query().Get("channel_id"); v != "" {
-		p.channelID, _ = strconv.Atoi(v)
-	}
-	if v := r.URL.Query().Get("topic_id"); v != "" {
-		p.topicID, _ = strconv.Atoi(v)
-	}
-	if v := r.URL.Query().Get("sender_id"); v != "" {
-		// Single sender.
-		id, _ := strconv.Atoi(v)
-		if id > 0 {
-			p.senderIDs = []int{id}
-		}
-	}
-	if v := r.URL.Query().Get("sender_ids"); v != "" {
-		// Comma-separated list (for buddy filtering).
-		for _, s := range strings.Split(v, ",") {
-			id, _ := strconv.Atoi(strings.TrimSpace(s))
-			if id > 0 {
-				p.senderIDs = append(p.senderIDs, id)
-			}
-		}
-	}
-	if v := r.URL.Query().Get("before"); v != "" {
-		p.before, _ = strconv.Atoi(v)
-	}
-	if v := r.URL.Query().Get("limit"); v != "" {
-		p.limit, _ = strconv.Atoi(v)
-	}
-	if p.limit <= 0 || p.limit > maxLimit {
-		p.limit = defaultLimit
-	}
-
-	return p
-}
-
-func buildQuery(userID int, p searchParams) (string, []interface{}) {
-	// Access filter: only messages from channels the user can see.
-	conditions := []string{`m.channel_id IN (
-		SELECT channel_id FROM channels WHERE invite_only = 0
-		UNION
-		SELECT channel_id FROM subscriptions WHERE user_id = ?
-	)`}
-	args := []interface{}{userID}
-
-	if p.channelID > 0 {
-		conditions = append(conditions, "m.channel_id = ?")
-		args = append(args, p.channelID)
-	}
-	if p.topicID > 0 {
-		conditions = append(conditions, "m.topic_id = ?")
-		args = append(args, p.topicID)
-	}
-	if len(p.senderIDs) == 1 {
-		conditions = append(conditions, "m.sender_id = ?")
-		args = append(args, p.senderIDs[0])
-	} else if len(p.senderIDs) > 1 {
-		placeholders := make([]string, len(p.senderIDs))
-		for i, id := range p.senderIDs {
-			placeholders[i] = "?"
-			args = append(args, id)
-		}
-		conditions = append(conditions, fmt.Sprintf("m.sender_id IN (%s)", strings.Join(placeholders, ",")))
-	}
-	if p.before > 0 {
-		conditions = append(conditions, "m.id < ?")
-		args = append(args, p.before)
-	}
-
-	query := fmt.Sprintf(
-		`SELECT m.id, m.content_id, m.channel_id, m.topic_id, m.sender_id, m.timestamp
-		 FROM messages m
-		 WHERE %s
-		 ORDER BY m.id DESC
-		 LIMIT ?`,
-		strings.Join(conditions, " AND "))
-	args = append(args, p.limit)
-
-	return query, args
 }

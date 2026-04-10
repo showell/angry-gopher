@@ -35,6 +35,13 @@ random offsets. Sequential integers are simple, fast for indexes,
 and compact on the wire. Organizations that need to hide their
 message volume should look elsewhere.
 
+**Clients get both markdown and HTML.** The hydration endpoint
+returns both `markdown` and `html` for each message. Clients
+don't need to choose — they get the raw source and the rendered
+output in one response. This avoids a re-render on the client
+side and lets the client use whichever format fits the context
+(HTML for display, markdown for editing).
+
 **Search returns IDs, not content.** Search API endpoints return
 lightweight rows: message_id, content_id, channel_id, topic_id,
 and sender_id. No HTML, no markdown, no user names. The client

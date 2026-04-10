@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"html"
 	"net/http"
-	"strconv"
 	"time"
+
+	"angry-gopher/search"
 )
 
 // HandleSearch serves /gopher/search.
@@ -41,11 +42,7 @@ func HandleSearch(w http.ResponseWriter, r *http.Request) {
 		channels = append(channels, ch)
 	}
 
-	// Current filter values.
-	channelID, _ := strconv.Atoi(r.URL.Query().Get("channel_id"))
-	topicID, _ := strconv.Atoi(r.URL.Query().Get("topic_id"))
-	senderID, _ := strconv.Atoi(r.URL.Query().Get("sender_id"))
-	before, _ := strconv.Atoi(r.URL.Query().Get("before"))
+	params := search.ParseParams(r)
 
 	// --- Filter form ---
 	fmt.Fprint(w, `<form method="GET" action="/gopher/search" style="margin-bottom:16px">`)
@@ -55,26 +52,25 @@ func HandleSearch(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, `<option value="">Any</option>`)
 	for _, ch := range channels {
 		sel := ""
-		if ch.id == channelID {
+		if ch.id == params.ChannelID {
 			sel = " selected"
 		}
 		fmt.Fprintf(w, `<option value="%d"%s>#%s</option>`, ch.id, sel, html.EscapeString(ch.name))
 	}
 	fmt.Fprint(w, `</select><br>`)
 
-	// Topic picker (only if channel selected).
-	if channelID > 0 {
+	if params.ChannelID > 0 {
 		fmt.Fprint(w, `<label style="display:block;font-weight:bold;margin-bottom:4px">Topic</label>`)
 		fmt.Fprint(w, `<select name="topic_id" style="margin-bottom:8px">`)
 		fmt.Fprint(w, `<option value="">Any</option>`)
-		topicRows, _ := DB.Query(`SELECT topic_id, topic_name FROM topics WHERE channel_id = ? ORDER BY topic_name`, channelID)
+		topicRows, _ := DB.Query(`SELECT topic_id, topic_name FROM topics WHERE channel_id = ? ORDER BY topic_name`, params.ChannelID)
 		if topicRows != nil {
 			for topicRows.Next() {
 				var tid int
 				var tname string
 				topicRows.Scan(&tid, &tname)
 				sel := ""
-				if tid == topicID {
+				if tid == params.TopicID {
 					sel = " selected"
 				}
 				fmt.Fprintf(w, `<option value="%d"%s>%s</option>`, tid, sel, html.EscapeString(tname))
@@ -84,7 +80,10 @@ func HandleSearch(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, `</select><br>`)
 	}
 
-	// Sender picker.
+	senderID := 0
+	if len(params.SenderIDs) == 1 {
+		senderID = params.SenderIDs[0]
+	}
 	fmt.Fprint(w, `<label style="display:block;font-weight:bold;margin-bottom:4px">Sender</label>`)
 	fmt.Fprint(w, `<select name="sender_id" style="margin-bottom:8px">`)
 	fmt.Fprint(w, `<option value="">Any</option>`)
@@ -108,53 +107,24 @@ func HandleSearch(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, `</form>`)
 
 	// --- Results ---
-	hasFilter := channelID > 0 || topicID > 0 || senderID > 0
+	hasFilter := params.ChannelID > 0 || params.TopicID > 0 || len(params.SenderIDs) > 0
 	if !hasFilter {
 		fmt.Fprint(w, `<p class="muted">Pick at least one filter to search.</p>`)
 		PageFooter(w)
 		return
 	}
 
-	// Build query (replicating search package logic for the HTML view).
-	conditions := []string{`m.channel_id IN (
-		SELECT channel_id FROM channels WHERE invite_only = 0
-		UNION
-		SELECT channel_id FROM subscriptions WHERE user_id = ?
-	)`}
-	args := []interface{}{userID}
-
-	if channelID > 0 {
-		conditions = append(conditions, "m.channel_id = ?")
-		args = append(args, channelID)
-	}
-	if topicID > 0 {
-		conditions = append(conditions, "m.topic_id = ?")
-		args = append(args, topicID)
-	}
-	if senderID > 0 {
-		conditions = append(conditions, "m.sender_id = ?")
-		args = append(args, senderID)
-	}
-	if before > 0 {
-		conditions = append(conditions, "m.id < ?")
-		args = append(args, before)
-	}
-	args = append(args, 50)
-
-	query := fmt.Sprintf(`
-		SELECT m.id, u.full_name, c.name, t.topic_name, mc.html, m.timestamp, m.sender_id
-		FROM messages m
-		JOIN users u ON m.sender_id = u.id
+	columns := `m.id, m.sender_id, u.full_name, c.name, t.topic_name, mc.html, m.timestamp`
+	joins := `JOIN users u ON m.sender_id = u.id
 		JOIN channels c ON m.channel_id = c.channel_id
 		JOIN topics t ON m.topic_id = t.topic_id
-		JOIN message_content mc ON m.content_id = mc.content_id
-		WHERE %s
-		ORDER BY m.id DESC LIMIT ?`,
-		joinConditions(conditions))
+		JOIN message_content mc ON m.content_id = mc.content_id`
+
+	query, args := search.BuildQuery(columns, joins, userID, params)
 
 	rows, err := DB.Query(query, args...)
 	if err != nil {
-		fmt.Fprintf(w, `<p>Search error: %v</p>`, err)
+		fmt.Fprintf(w, `<p>Search error.</p>`)
 		PageFooter(w)
 		return
 	}
@@ -166,7 +136,7 @@ func HandleSearch(w http.ResponseWriter, r *http.Request) {
 		var msgID, msgSenderID int
 		var senderName, chName, topicName, content string
 		var timestamp int64
-		rows.Scan(&msgID, &senderName, &chName, &topicName, &content, &timestamp, &msgSenderID)
+		rows.Scan(&msgID, &msgSenderID, &senderName, &chName, &topicName, &content, &timestamp)
 
 		t := time.Unix(timestamp, 0).Format("Jan 2 15:04")
 		fmt.Fprintf(w, `<div style="margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid #ccc">
@@ -174,7 +144,7 @@ func HandleSearch(w http.ResponseWriter, r *http.Request) {
 <div class="msg-content">%s</div>
 </div>`,
 			UserLink(msgSenderID, senderName),
-			ChannelLink(channelID, chName),
+			ChannelLink(params.ChannelID, chName),
 			html.EscapeString(topicName),
 			html.EscapeString(t),
 			content)
@@ -184,10 +154,9 @@ func HandleSearch(w http.ResponseWriter, r *http.Request) {
 
 	if count == 0 {
 		fmt.Fprint(w, `<p class="muted">No messages found.</p>`)
-	} else if count == 50 {
-		// Pagination link.
+	} else if count == params.Limit {
 		nextURL := fmt.Sprintf("/gopher/search?channel_id=%d&topic_id=%d&sender_id=%d&before=%d",
-			channelID, topicID, senderID, lastID)
+			params.ChannelID, params.TopicID, senderID, lastID)
 		fmt.Fprintf(w, `<p><a href="%s">Next page &rarr;</a></p>`, nextURL)
 	} else {
 		fmt.Fprintf(w, `<p class="muted">%d results</p>`, count)
@@ -196,10 +165,3 @@ func HandleSearch(w http.ResponseWriter, r *http.Request) {
 	PageFooter(w)
 }
 
-func joinConditions(conditions []string) string {
-	result := conditions[0]
-	for _, c := range conditions[1:] {
-		result += " AND " + c
-	}
-	return result
-}

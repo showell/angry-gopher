@@ -55,6 +55,7 @@ func buildMux() *http.ServeMux {
 	mux.HandleFunc("/api/v1/users", api(routeUsers))
 	mux.HandleFunc("/api/v1/settings", api(users.HandleUpdateSettings))
 	mux.HandleFunc("/api/v1/search", api(search.HandleSearch))
+	mux.HandleFunc("/api/v1/hydrate", api(search.HandleHydrate))
 	mux.HandleFunc("/api/v1/messages/render", api(messages.HandleRenderMessage))
 	mux.HandleFunc("/api/v1/messages/flags", api(flags.HandleUpdateFlags))
 	mux.HandleFunc("/api/v1/messages/", api(routeMessageByID))
