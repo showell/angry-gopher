@@ -38,21 +38,35 @@ func HandleUpdatePresence(w http.ResponseWriter, r *http.Request) {
 	respond.Success(w, nil)
 }
 
-// HandleGetPresence handles GET /api/v1/users/me/presence.
-// Returns all users who have been seen within the offline threshold.
-func HandleGetPresence(w http.ResponseWriter, r *http.Request) {
+// OnlineUserIDs returns the user IDs of all users whose last
+// presence update is within the offline threshold.
+func OnlineUserIDs() []int {
 	mu.Lock()
 	defer mu.Unlock()
 
 	cutoff := time.Now().Add(-OfflineThreshold)
-
-	presences := map[string]interface{}{}
+	var ids []int
 	for userID, ts := range lastSeen {
 		if ts.After(cutoff) {
-			presences[fmt.Sprintf("%d", userID)] = map[string]interface{}{
-				"status":    "active",
-				"timestamp": ts.Unix(),
-			}
+			ids = append(ids, userID)
+		}
+	}
+	return ids
+}
+
+// HandleGetPresence handles GET /api/v1/users/me/presence.
+// Returns all users who have been seen within the offline threshold.
+func HandleGetPresence(w http.ResponseWriter, r *http.Request) {
+	ids := OnlineUserIDs()
+
+	presences := map[string]interface{}{}
+	for _, userID := range ids {
+		mu.Lock()
+		ts := lastSeen[userID]
+		mu.Unlock()
+		presences[fmt.Sprintf("%d", userID)] = map[string]interface{}{
+			"status":    "active",
+			"timestamp": ts.Unix(),
 		}
 	}
 

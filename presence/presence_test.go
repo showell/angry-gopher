@@ -23,7 +23,7 @@ func TestRecentUserIsOnline(t *testing.T) {
 	reset()
 	setLastSeen(1, time.Now())
 
-	online := onlineUserIDs()
+	online := OnlineUserIDs()
 	if !contains(online, 1) {
 		t.Errorf("user 1 should be online, got %v", online)
 	}
@@ -34,7 +34,7 @@ func TestStaleUserIsOffline(t *testing.T) {
 	// Last seen 3 minutes ago — past the 2-minute threshold.
 	setLastSeen(1, time.Now().Add(-3*time.Minute))
 
-	online := onlineUserIDs()
+	online := OnlineUserIDs()
 	if contains(online, 1) {
 		t.Errorf("user 1 should be offline after 3 minutes, got %v", online)
 	}
@@ -46,7 +46,7 @@ func TestUserAtExactThresholdIsOffline(t *testing.T) {
 	// be offline — the check is strictly "after cutoff."
 	setLastSeen(1, time.Now().Add(-OfflineThreshold-time.Millisecond))
 
-	online := onlineUserIDs()
+	online := OnlineUserIDs()
 	if contains(online, 1) {
 		t.Errorf("user at threshold boundary should be offline, got %v", online)
 	}
@@ -57,7 +57,7 @@ func TestUserJustInsideThresholdIsOnline(t *testing.T) {
 	// One second inside the threshold — should still be online.
 	setLastSeen(1, time.Now().Add(-OfflineThreshold+time.Second))
 
-	online := onlineUserIDs()
+	online := OnlineUserIDs()
 	if !contains(online, 1) {
 		t.Errorf("user just inside threshold should be online, got %v", online)
 	}
@@ -69,7 +69,7 @@ func TestMultipleUsersOnlineAndOffline(t *testing.T) {
 	setLastSeen(2, time.Now().Add(-5*time.Minute))       // offline
 	setLastSeen(3, time.Now().Add(-30*time.Second))      // online
 
-	online := onlineUserIDs()
+	online := OnlineUserIDs()
 	if !contains(online, 1) {
 		t.Errorf("user 1 should be online")
 	}
@@ -114,22 +114,6 @@ func TestResetClearsAllState(t *testing.T) {
 }
 
 // --- helpers ---
-
-// onlineUserIDs extracts the set of online users using the same
-// logic as HandleGetPresence, without going through HTTP.
-func onlineUserIDs() []int {
-	mu.Lock()
-	defer mu.Unlock()
-
-	cutoff := time.Now().Add(-OfflineThreshold)
-	var ids []int
-	for userID, ts := range lastSeen {
-		if ts.After(cutoff) {
-			ids = append(ids, userID)
-		}
-	}
-	return ids
-}
 
 func contains(ids []int, target int) bool {
 	for _, id := range ids {
