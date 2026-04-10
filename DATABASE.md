@@ -27,6 +27,14 @@ because every version is a complete content row (no torn reads).
 Users take seconds to read messages; worrying about sub-millisecond
 race windows is pointless.
 
+**IDs are not secrets.** Auto-increment IDs for messages, content,
+topics, and users are exposed directly to clients. The approximate
+size of any Angry Gopher database can be inferred from the IDs.
+We make no effort to obscure this — no UUIDs, no hash IDs, no
+random offsets. Sequential integers are simple, fast for indexes,
+and compact on the wire. Organizations that need to hide their
+message volume should look elsewhere.
+
 ## Content separation
 
 Rendered text (markdown + HTML) is stored in dedicated tables rather
