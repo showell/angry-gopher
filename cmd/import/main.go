@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"sort"
 	"strconv"
 	"time"
 
@@ -469,6 +470,21 @@ func importSubscriptions(db *sql.DB) {
 // cutoffTimestamp is 2026-01-01 00:00:00 UTC. We skip older messages.
 var cutoffTimestamp = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC).Unix()
 
+// A parsed message ready for insertion. We buffer all messages
+// during the fetch phase and sort by timestamp before inserting,
+// so that auto-increment IDs increase monotonically with time.
+// This preserves the "higher ID = more recent" invariant that
+// Angry Cat relies on for sorting.
+type parsedMessage struct {
+	zulipID   int
+	senderID  int // gopher ID
+	channelID int // gopher ID
+	topic     string
+	markdown  string
+	html      string
+	timestamp int64
+}
+
 func importMessages(zulip *ZulipClient, db *sql.DB, batchSize int, maxBatches int) {
 	log.Println("=== Stage 3: Messages ===")
 
@@ -493,8 +509,15 @@ func importMessages(zulip *ZulipClient, db *sql.DB, batchSize int, maxBatches in
 
 	log.Printf("User map: %d entries, Channel map: %d entries", len(userMap), len(channelMap))
 
+	// --- Phase 1: Fetch all messages into a buffer ---
+	//
+	// We fetch newest-first (Zulip's default for num_before) and
+	// buffer everything. After fetching, we sort by timestamp
+	// ascending so that the insert phase assigns auto-increment
+	// IDs in chronological order.
+
+	var buffer []parsedMessage
 	anchor := "newest"
-	totalImported := 0
 	totalSkipped := 0
 	reachedCutoff := false
 
@@ -523,10 +546,8 @@ func importMessages(zulip *ZulipClient, db *sql.DB, batchSize int, maxBatches in
 			break
 		}
 
-		// Messages come newest-first when using num_before.
-		// Find the oldest in this batch to set the next anchor.
 		oldestID := 0
-		batchImported := 0
+		batchAccepted := 0
 
 		for _, m := range messagesRaw {
 			msg := m.(map[string]interface{})
@@ -534,117 +555,111 @@ func importMessages(zulip *ZulipClient, db *sql.DB, batchSize int, maxBatches in
 			timestamp := int64(msg["timestamp"].(float64))
 			msgType := msg["type"].(string)
 
-			// Track oldest for pagination.
 			if oldestID == 0 || zulipMsgID < oldestID {
 				oldestID = zulipMsgID
 			}
 
-			// Stop at 2026 cutoff.
 			if timestamp < cutoffTimestamp {
 				reachedCutoff = true
 				continue
 			}
 
-			// Only import stream messages (not DMs).
 			if msgType != "stream" {
 				totalSkipped++
 				continue
 			}
 
-			// Already imported?
 			var alreadyDone int
 			db.QueryRow(`SELECT COUNT(*) FROM zulip_message_map WHERE zulip_id = ?`, zulipMsgID).Scan(&alreadyDone)
 			if alreadyDone > 0 {
 				continue
 			}
 
-			senderZulipID := int(msg["sender_id"].(float64))
-			streamZulipID := int(msg["stream_id"].(float64))
-			topic := msg["subject"].(string)
+			senderGopherID := userMap[int(msg["sender_id"].(float64))]
+			channelGopherID := channelMap[int(msg["stream_id"].(float64))]
+
+			if senderGopherID == 0 || channelGopherID == 0 {
+				totalSkipped++
+				continue
+			}
+
 			markdown := msg["content"].(string)
-
-			// Map sender and channel to Gopher IDs.
-			senderGopherID := userMap[senderZulipID]
-			channelGopherID := channelMap[streamZulipID]
-
-			if senderGopherID == 0 {
-				// Message from a user we didn't import (not one of our targets).
-				// Skip — we only care about messages from our users.
-				totalSkipped++
-				continue
-			}
-			if channelGopherID == 0 {
-				totalSkipped++
-				continue
-			}
-
-			// Render markdown to HTML via goldmark.
-			html := renderMarkdown(markdown)
-
-			// Insert using a transaction.
-			tx, err := db.Begin()
-			if err != nil {
-				log.Printf("  TX begin error: %v", err)
-				continue
-			}
-
-			// Find or create topic.
-			var topicID int64
-			err = tx.QueryRow(
-				`SELECT topic_id FROM topics WHERE channel_id = ? AND topic_name = ?`,
-				channelGopherID, topic,
-			).Scan(&topicID)
-			if err != nil {
-				res, err := tx.Exec(
-					`INSERT INTO topics (channel_id, topic_name) VALUES (?, ?)`,
-					channelGopherID, topic)
-				if err != nil {
-					tx.Rollback()
-					log.Printf("  Topic insert error: %v", err)
-					continue
-				}
-				topicID, _ = res.LastInsertId()
-			}
-
-			// Insert content.
-			contentRes, err := tx.Exec(
-				`INSERT INTO message_content (markdown, html) VALUES (?, ?)`,
-				markdown, html)
-			if err != nil {
-				tx.Rollback()
-				log.Printf("  Content insert error: %v", err)
-				continue
-			}
-			contentID, _ := contentRes.LastInsertId()
-
-			// Insert message.
-			msgRes, err := tx.Exec(
-				`INSERT INTO messages (content_id, sender_id, channel_id, topic_id, timestamp) VALUES (?, ?, ?, ?, ?)`,
-				contentID, senderGopherID, channelGopherID, topicID, timestamp)
-			if err != nil {
-				tx.Rollback()
-				log.Printf("  Message insert error: %v", err)
-				continue
-			}
-			gopherMsgID, _ := msgRes.LastInsertId()
-
-			// Record mapping.
-			tx.Exec(`INSERT INTO zulip_message_map (zulip_id, gopher_id) VALUES (?, ?)`,
-				zulipMsgID, gopherMsgID)
-
-			tx.Commit()
-			batchImported++
-			totalImported++
+			buffer = append(buffer, parsedMessage{
+				zulipID:   zulipMsgID,
+				senderID:  senderGopherID,
+				channelID: channelGopherID,
+				topic:     msg["subject"].(string),
+				markdown:  markdown,
+				html:      renderMarkdown(markdown),
+				timestamp: timestamp,
+			})
+			batchAccepted++
 		}
 
-		log.Printf("  Batch: %d messages fetched, %d imported (oldest_id=%d)",
-			len(messagesRaw), batchImported, oldestID)
+		log.Printf("  Batch: %d fetched, %d accepted (oldest_id=%d)",
+			len(messagesRaw), batchAccepted, oldestID)
 
-		// Set anchor for next batch — fetch messages before the oldest.
 		anchor = strconv.Itoa(oldestID)
-
-		// Pause between batches to be respectful.
 		time.Sleep(500 * time.Millisecond)
+	}
+
+	// --- Phase 2: Sort by timestamp ascending ---
+	//
+	// This ensures auto-increment IDs match chronological order.
+	sort.Slice(buffer, func(i, j int) bool {
+		return buffer[i].timestamp < buffer[j].timestamp
+	})
+
+	log.Printf("Inserting %d messages in chronological order...", len(buffer))
+
+	// --- Phase 3: Insert in order ---
+	totalImported := 0
+	for _, pm := range buffer {
+		tx, err := db.Begin()
+		if err != nil {
+			log.Printf("  TX begin error: %v", err)
+			continue
+		}
+
+		var topicID int64
+		err = tx.QueryRow(
+			`SELECT topic_id FROM topics WHERE channel_id = ? AND topic_name = ?`,
+			pm.channelID, pm.topic,
+		).Scan(&topicID)
+		if err != nil {
+			res, err := tx.Exec(
+				`INSERT INTO topics (channel_id, topic_name) VALUES (?, ?)`,
+				pm.channelID, pm.topic)
+			if err != nil {
+				tx.Rollback()
+				continue
+			}
+			topicID, _ = res.LastInsertId()
+		}
+
+		contentRes, err := tx.Exec(
+			`INSERT INTO message_content (markdown, html) VALUES (?, ?)`,
+			pm.markdown, pm.html)
+		if err != nil {
+			tx.Rollback()
+			continue
+		}
+		contentID, _ := contentRes.LastInsertId()
+
+		msgRes, err := tx.Exec(
+			`INSERT INTO messages (content_id, sender_id, channel_id, topic_id, timestamp) VALUES (?, ?, ?, ?, ?)`,
+			contentID, pm.senderID, pm.channelID, topicID, pm.timestamp)
+		if err != nil {
+			tx.Rollback()
+			continue
+		}
+		gopherMsgID, _ := msgRes.LastInsertId()
+
+		tx.Exec(`INSERT INTO zulip_message_map (zulip_id, gopher_id) VALUES (?, ?)`,
+			pm.zulipID, gopherMsgID)
+
+		tx.Commit()
+		totalImported++
 	}
 
 	log.Printf("Done: %d messages imported, %d skipped", totalImported, totalSkipped)
@@ -688,6 +703,24 @@ func addWelcomeMessage(db *sql.DB) {
 	log.Printf("Welcome message added to #%s > welcome", channelName)
 }
 
+// serverIsRunning probes the Gopher server's version endpoint.
+// If it responds, the server is alive and we should NOT import
+// (the running server would have a stale DB handle after we
+// replace the database file).
+func serverIsRunning(config *ImportConfig) bool {
+	// The server URL isn't in the import config, but the DB path
+	// tells us the root. For now, try localhost on common ports.
+	for _, port := range []string{"9000", "9001"} {
+		resp, err := http.Get("http://localhost:" + port + "/gopher/version")
+		if err == nil {
+			resp.Body.Close()
+			log.Printf("Server detected on port %s", port)
+			return true
+		}
+	}
+	return false
+}
+
 // --- Main ---
 
 func main() {
@@ -708,6 +741,13 @@ func main() {
 	config, err := loadImportConfig(*configPath)
 	if err != nil {
 		log.Fatalf("Config error: %v", err)
+	}
+
+	// Refuse to run if the Gopher server is already listening on the
+	// configured port. Importing while the server is running leads to
+	// stale DB handles and confusing credential mismatches.
+	if serverIsRunning(config) {
+		log.Fatalf("Angry Gopher appears to be running (port responded). Stop the server before importing.")
 	}
 
 	db, err := sql.Open("sqlite", config.GopherDB)
