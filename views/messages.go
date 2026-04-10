@@ -42,8 +42,7 @@ func renderChannelList(w http.ResponseWriter, userID int) {
 	PageHeader(w, "Messages")
 
 	rows, err := DB.Query(`
-		SELECT c.channel_id, c.name,
-			(SELECT COUNT(*) FROM messages m WHERE m.channel_id = c.channel_id) AS msg_count
+		SELECT c.channel_id, c.name
 		FROM channels c
 		JOIN subscriptions s ON c.channel_id = s.channel_id AND s.user_id = ?
 		ORDER BY c.name`, userID)
@@ -54,13 +53,13 @@ func renderChannelList(w http.ResponseWriter, userID int) {
 	}
 	defer rows.Close()
 
-	fmt.Fprint(w, `<table><thead><tr><th>Channel</th><th>Messages</th></tr></thead><tbody>`)
+	fmt.Fprint(w, `<table><thead><tr><th>Channel</th></tr></thead><tbody>`)
 	for rows.Next() {
-		var id, count int
+		var id int
 		var name string
-		rows.Scan(&id, &name, &count)
-		fmt.Fprintf(w, `<tr><td><a href="/gopher/messages?channel_id=%d">#%s</a></td><td>%d</td></tr>`,
-			id, html.EscapeString(name), count)
+		rows.Scan(&id, &name)
+		fmt.Fprintf(w, `<tr><td><a href="/gopher/messages?channel_id=%d">#%s</a></td></tr>`,
+			id, html.EscapeString(name))
 	}
 	fmt.Fprint(w, `</tbody></table>`)
 	PageFooter(w)
@@ -76,9 +75,7 @@ func renderTopicList(w http.ResponseWriter, userID int, channelID int) {
 	fmt.Fprint(w, `<a class="back" href="/gopher/messages">&larr; Back to channels</a>`)
 
 	rows, err := DB.Query(`
-		SELECT t.topic_name,
-			(SELECT COUNT(*) FROM messages m WHERE m.topic_id = t.topic_id) AS msg_count
-		FROM topics t
+		SELECT t.topic_name FROM topics t
 		WHERE t.channel_id = ?
 		ORDER BY t.topic_name`, channelID)
 	if err != nil {
@@ -88,19 +85,16 @@ func renderTopicList(w http.ResponseWriter, userID int, channelID int) {
 	}
 	defer rows.Close()
 
-	fmt.Fprint(w, `<table><thead><tr><th>Topic</th><th>Messages</th></tr></thead><tbody>`)
+	fmt.Fprint(w, `<table><thead><tr><th>Topic</th></tr></thead><tbody>`)
 	for rows.Next() {
-		var count int
 		var topicName string
-		rows.Scan(&topicName, &count)
-		fmt.Fprintf(w, `<tr><td><a href="/gopher/messages?channel_id=%d&topic=%s">%s</a></td><td>%d</td></tr>`,
-			channelID, html.EscapeString(topicName), html.EscapeString(topicName), count)
+		rows.Scan(&topicName)
+		fmt.Fprintf(w, `<tr><td><a href="/gopher/messages?channel_id=%d&topic=%s">%s</a></td></tr>`,
+			channelID, html.EscapeString(topicName), html.EscapeString(topicName))
 	}
 	fmt.Fprint(w, `</tbody></table>`)
 	PageFooter(w)
 }
-
-const hydrateLimit = 1000
 
 func renderMessages(w http.ResponseWriter, userID int, channelID int, topic string) {
 	var channelName string
@@ -111,56 +105,45 @@ func renderMessages(w http.ResponseWriter, userID int, channelID int, topic stri
 
 	fmt.Fprintf(w, `<a class="back" href="/gopher/messages?channel_id=%d">&larr; Back to topics</a>`, channelID)
 
-	// Step 1: get ALL message IDs (fast, index-only).
+	const renderLimit = 25000
+
+	// Get IDs with LIMIT.
 	idRows, err := DB.Query(`
 		SELECT m.id FROM messages m
 		JOIN topics t ON m.topic_id = t.topic_id
 		WHERE m.channel_id = ? AND t.topic_name = ?
-		ORDER BY m.id DESC`, channelID, topic)
+		ORDER BY m.id DESC LIMIT ?`, channelID, topic, renderLimit)
 	if err != nil {
 		fmt.Fprint(w, `<p>Failed to load messages.</p>`)
 		PageFooter(w)
 		return
 	}
 
-	var allIDs []int
+	var ids []int
 	for idRows.Next() {
 		var id int
 		idRows.Scan(&id)
-		allIDs = append(allIDs, id)
+		ids = append(ids, id)
 	}
 	idRows.Close()
 
-	totalCount := len(allIDs)
-	fmt.Fprintf(w, `<p class="muted">%d messages total`, totalCount)
+	fmt.Fprintf(w, `<p class="muted">%d messages</p>`, len(ids))
 
-	// Step 2: hydrate the first 1000.
-	showIDs := allIDs
-	if len(showIDs) > hydrateLimit {
-		showIDs = showIDs[:hydrateLimit]
-		fmt.Fprintf(w, `, showing newest %d`, hydrateLimit)
-	}
-	fmt.Fprint(w, `</p>`)
-
-	if len(showIDs) == 0 {
-		fmt.Fprint(w, `<p class="muted">No messages yet.</p>`)
-	} else {
-		placeholders := make([]string, len(showIDs))
-		args := make([]interface{}, len(showIDs))
-		for i, id := range showIDs {
+	if len(ids) > 0 {
+		placeholders := make([]string, len(ids))
+		args := make([]interface{}, len(ids))
+		for i, id := range ids {
 			placeholders[i] = "?"
 			args[i] = id
 		}
 
-		query := fmt.Sprintf(`
+		rows, err := DB.Query(fmt.Sprintf(`
 			SELECT m.id, m.sender_id, u.full_name, mc.html, m.timestamp
 			FROM messages m
 			JOIN users u ON m.sender_id = u.id
 			JOIN message_content mc ON m.content_id = mc.content_id
 			WHERE m.id IN (%s)
-			ORDER BY m.id DESC`, strings.Join(placeholders, ","))
-
-		rows, err := DB.Query(query, args...)
+			ORDER BY m.id DESC`, strings.Join(placeholders, ",")), args...)
 		if err != nil {
 			fmt.Fprint(w, `<p>Failed to hydrate messages.</p>`)
 			PageFooter(w)
@@ -177,12 +160,10 @@ func renderMessages(w http.ResponseWriter, userID int, channelID int, topic stri
 			fmt.Fprintf(w, `<div style="margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid #ccc">
 <b>%s</b> <span class="muted">%s</span>
 <div class="msg-content">%s</div>
-</div>`,
-				UserLink(senderID, senderName), html.EscapeString(t), content)
+</div>`, html.EscapeString(senderName), html.EscapeString(t), content)
 		}
 	}
 
-	// Compose form.
 	fmt.Fprintf(w, `
 <form method="POST" action="/gopher/messages">
 <input type="hidden" name="channel_id" value="%d">

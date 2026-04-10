@@ -90,7 +90,12 @@ func buildMux() *http.ServeMux {
 	mux.HandleFunc("/gopher/github", views.HandleGitHub)
 	mux.HandleFunc("/gopher/game-lobby", views.HandleGames)
 	mux.HandleFunc("/gopher/invites-view", views.HandleInvites)
+	mux.HandleFunc("/gopher/quicknav", views.HandleQuickNav)
+	mux.HandleFunc("/gopher/nav", func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, "views/static_nav.html")
+	})
 	mux.HandleFunc("/gopher/search", views.HandleSearch)
+	mux.HandleFunc("/gopher/sse/messages", views.HandleSSEMessages)
 	mux.HandleFunc("/gopher/", views.HandleIndex)
 
 	// --- Admin & uploads ---

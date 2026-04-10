@@ -10,6 +10,8 @@ import (
 	"angry-gopher/search"
 )
 
+const hydrateLimit = 1000
+
 // HandleSearch serves /gopher/search.
 func HandleSearch(w http.ResponseWriter, r *http.Request) {
 	userID := RequireAuth(w, r)
