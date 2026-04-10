@@ -469,7 +469,7 @@ func importSubscriptions(db *sql.DB) {
 // cutoffTimestamp is 2026-01-01 00:00:00 UTC. We skip older messages.
 var cutoffTimestamp = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC).Unix()
 
-func importMessages(zulip *ZulipClient, db *sql.DB, batchSize int) {
+func importMessages(zulip *ZulipClient, db *sql.DB, batchSize int, maxBatches int) {
 	log.Println("=== Stage 3: Messages ===")
 
 	// Build lookup maps from our import tables.
@@ -498,7 +498,13 @@ func importMessages(zulip *ZulipClient, db *sql.DB, batchSize int) {
 	totalSkipped := 0
 	reachedCutoff := false
 
+	batchCount := 0
 	for !reachedCutoff {
+		if maxBatches > 0 && batchCount >= maxBatches {
+			log.Printf("  Reached batch limit (%d)", maxBatches)
+			break
+		}
+		batchCount++
 		params := url.Values{
 			"anchor":         {anchor},
 			"num_before":     {strconv.Itoa(batchSize)},
@@ -644,14 +650,58 @@ func importMessages(zulip *ZulipClient, db *sql.DB, batchSize int) {
 	log.Printf("Done: %d messages imported, %d skipped", totalImported, totalSkipped)
 }
 
+// --- Welcome message ---
+
+// addWelcomeMessage inserts a single welcome message into the
+// first public channel. Gives the user something to see when
+// they first load Angry Cat after an import.
+func addWelcomeMessage(db *sql.DB) {
+	var channelID int
+	var channelName string
+	err := db.QueryRow(
+		`SELECT channel_id, name FROM channels WHERE invite_only = 0 ORDER BY channel_id LIMIT 1`,
+	).Scan(&channelID, &channelName)
+	if err != nil {
+		log.Println("  No public channel for welcome message")
+		return
+	}
+
+	var senderID int
+	db.QueryRow(`SELECT id FROM users WHERE is_admin = 1 LIMIT 1`).Scan(&senderID)
+	if senderID == 0 {
+		db.QueryRow(`SELECT id FROM users LIMIT 1`).Scan(&senderID)
+	}
+
+	db.Exec(`INSERT OR IGNORE INTO topics (channel_id, topic_name) VALUES (?, 'welcome')`, channelID)
+	var topicID int
+	db.QueryRow(`SELECT topic_id FROM topics WHERE channel_id = ? AND topic_name = 'welcome'`, channelID).Scan(&topicID)
+
+	markdown := fmt.Sprintf("Welcome to **#%s**! The database has been freshly imported.", channelName)
+	html := renderMarkdown(markdown)
+	result, _ := db.Exec(`INSERT INTO message_content (markdown, html) VALUES (?, ?)`, markdown, html)
+	contentID, _ := result.LastInsertId()
+
+	now := time.Now().Unix()
+	db.Exec(`INSERT INTO messages (content_id, sender_id, channel_id, topic_id, timestamp) VALUES (?, ?, ?, ?, ?)`,
+		contentID, senderID, channelID, topicID, now)
+
+	log.Printf("Welcome message added to #%s > welcome", channelName)
+}
+
 // --- Main ---
 
 func main() {
 	configPath := flag.String("config", "", "Path to import config JSON")
+	mode := flag.String("mode", "full", "Import mode: empty, tiny, full")
 	flag.Parse()
 
 	if *configPath == "" {
-		fmt.Fprintln(os.Stderr, "Usage: go run ./cmd/import -config import_config.json")
+		fmt.Fprintln(os.Stderr, "Usage: go run ./cmd/import -config config.json [-mode empty|tiny|full]")
+		fmt.Fprintln(os.Stderr, "")
+		fmt.Fprintln(os.Stderr, "Modes:")
+		fmt.Fprintln(os.Stderr, "  empty  Create schema only, no data (for testing)")
+		fmt.Fprintln(os.Stderr, "  tiny   Import channels + subscriptions + 2 message batches + welcome")
+		fmt.Fprintln(os.Stderr, "  full   Full import from Zulip back to January + welcome (default)")
 		os.Exit(1)
 	}
 
@@ -660,8 +710,6 @@ func main() {
 		log.Fatalf("Config error: %v", err)
 	}
 
-	zulip := NewZulipClient(config)
-
 	db, err := sql.Open("sqlite", config.GopherDB)
 	if err != nil {
 		log.Fatalf("Cannot open DB: %v", err)
@@ -669,15 +717,33 @@ func main() {
 	db.SetMaxOpenConns(1)
 	db.Exec("PRAGMA busy_timeout = 5000")
 
-	log.Printf("Zulip:      %s (as %s)", config.ZulipURL, config.ZulipEmail)
+	log.Printf("Mode:       %s", *mode)
 	log.Printf("Gopher DB:  %s", config.GopherDB)
-	log.Printf("Batch size: %d", config.BatchSize)
 
 	ensureSchema(db)
+
+	if *mode == "empty" {
+		log.Println("Schema created. No data imported.")
+		log.Println("=== Import complete ===")
+		return
+	}
+
+	zulip := NewZulipClient(config)
+
+	log.Printf("Zulip:      %s (as %s)", config.ZulipURL, config.ZulipEmail)
+	log.Printf("Batch size: %d", config.BatchSize)
+
 	importUsers(zulip, db)
 	importChannels(zulip, db)
 	importSubscriptions(db)
-	importMessages(zulip, db, config.BatchSize)
+
+	maxBatches := 0
+	if *mode == "tiny" {
+		maxBatches = 2
+	}
+	importMessages(zulip, db, config.BatchSize, maxBatches)
+
+	addWelcomeMessage(db)
 
 	log.Println("=== Import complete ===")
 }
