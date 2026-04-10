@@ -90,6 +90,25 @@ faster than a single join (3.7s vs 6.3s).
 The pattern also pairs naturally with caching — if some content
 rows are already cached, you only hydrate the missing ones.
 
+## IN clause limits
+
+SQLite has a hard limit of 32,766 variables per query. At 10M rows:
+
+| IDs | IN clause | Temp table |
+|-----|-----------|-----------|
+| 1,000 | 6ms | — |
+| 10,000 | 213ms | 133ms |
+| 50,000 | ERROR | 679ms |
+| 100,000 | ERROR | 984ms |
+
+**Default strategy:** use IN clause for up to 10K IDs (covers
+virtually all real search results). For rare bulk operations,
+batch the IN clause in chunks of 10K.
+
+Temp tables work beyond the limit but the insert cost dominates
+at large sizes (4.3s to insert 500K IDs). Not worth the
+complexity for our use case.
+
 ## Benchmark data
 
 A 10M message test database can be generated with:

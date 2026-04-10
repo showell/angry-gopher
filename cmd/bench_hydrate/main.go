@@ -1,9 +1,13 @@
-// Quick hydration benchmark — run manually, not part of test suite.
-// go run ./cmd/bench_search/hydrate_test.go
+// Hydration benchmarks — tests the two-trip pattern and IN clause limits.
+//
+// Usage:
+//   go run ./cmd/bench_hydrate
+//   go run ./cmd/bench_hydrate -limit-test
 package main
 
 import (
 	"database/sql"
+	"flag"
 	"fmt"
 	"log"
 	"strings"
@@ -12,15 +16,92 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+const dbPath = "/tmp/gopher_bench.db"
+
 func main() {
-	db, err := sql.Open("sqlite", "/tmp/gopher_bench.db")
+	limitTest := flag.Bool("limit-test", false, "test IN clause with increasing sizes up to 1M")
+	flag.Parse()
+
+	if *limitTest {
+		runLimitTest()
+	} else {
+		runHydrationBench()
+	}
+}
+
+func openDB() *sql.DB {
+	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer db.Close()
 	db.SetMaxOpenConns(1)
+	return db
+}
 
-	// Step 1: IDs only for channel+topic
+func runLimitTest() {
+	db := openDB()
+	defer db.Close()
+
+	rows, _ := db.Query(`SELECT id FROM messages ORDER BY id LIMIT 1000000`)
+	var allIDs []int
+	for rows.Next() {
+		var id int
+		rows.Scan(&id)
+		allIDs = append(allIDs, id)
+	}
+	rows.Close()
+	fmt.Printf("Loaded %d message IDs\n\n", len(allIDs))
+
+	sizes := []int{100, 500, 1000, 5000, 10000, 50000, 100000, 250000, 500000, 1000000}
+
+	for _, n := range sizes {
+		if n > len(allIDs) {
+			break
+		}
+		ids := allIDs[:n]
+
+		placeholders := make([]string, n)
+		args := make([]interface{}, n)
+		for i, id := range ids {
+			placeholders[i] = "?"
+			args[i] = id
+		}
+		query := fmt.Sprintf(
+			`SELECT m.id, mc.html FROM messages m
+			 JOIN message_content mc ON m.content_id = mc.content_id
+			 WHERE m.id IN (%s)`,
+			strings.Join(placeholders, ","))
+
+		start := time.Now()
+		rows, err := db.Query(query, args...)
+		if err != nil {
+			fmt.Printf("%8d IDs: ERROR — %v\n", n, err)
+			continue
+		}
+		count := 0
+		for rows.Next() {
+			var id int
+			var html string
+			rows.Scan(&id, &html)
+			count++
+		}
+		rows.Close()
+		elapsed := time.Since(start)
+
+		perRow := time.Duration(0)
+		if count > 0 {
+			perRow = elapsed / time.Duration(count)
+		}
+		fmt.Printf("%8d IDs: %d rows in %s  (%s/row)\n", n, count, elapsed, perRow)
+	}
+}
+
+func runHydrationBench() {
+	db := openDB()
+	defer db.Close()
+
+	fmt.Println("--- All rows in channel+topic ---")
+
 	start := time.Now()
 	rows, _ := db.Query(`
 		SELECT m.id FROM messages m
@@ -34,10 +115,8 @@ func main() {
 		ids = append(ids, id)
 	}
 	rows.Close()
-	idsOnly := time.Since(start)
-	fmt.Printf("IDs only:    %d ids in %s\n", len(ids), idsOnly)
+	fmt.Printf("IDs only:    %d ids in %s\n", len(ids), time.Since(start))
 
-	// Step 2: Full join (IDs + content in one query)
 	start = time.Now()
 	rows, _ = db.Query(`
 		SELECT m.id, mc.html FROM messages m
@@ -53,26 +132,9 @@ func main() {
 		count++
 	}
 	rows.Close()
-	fullJoin := time.Since(start)
-	fmt.Printf("Full join:   %d rows in %s\n", count, fullJoin)
+	fmt.Printf("Full join:   %d rows in %s\n", count, time.Since(start))
 
-	// Step 3: Two-trip hydration — get IDs, then batch-fetch content
-	// First get IDs (reuse from step 1)
 	start = time.Now()
-	rows, _ = db.Query(`
-		SELECT m.id FROM messages m
-		JOIN topics t ON m.topic_id = t.topic_id
-		WHERE m.channel_id = 1 AND t.topic_name = 'general topic 1'
-		ORDER BY m.id DESC`)
-	ids = nil
-	for rows.Next() {
-		var id int
-		rows.Scan(&id)
-		ids = append(ids, id)
-	}
-	rows.Close()
-
-	// Now hydrate in one batch using IN clause
 	placeholders := make([]string, len(ids))
 	args := make([]interface{}, len(ids))
 	for i, id := range ids {
@@ -92,10 +154,8 @@ func main() {
 		count++
 	}
 	rows.Close()
-	twoTrip := time.Since(start)
-	fmt.Printf("Two-trip:    %d rows in %s\n", count, twoTrip)
+	fmt.Printf("Hydrate IN:  %d rows in %s\n", count, time.Since(start))
 
-	// Step 4: Same but with LIMIT 50 (realistic pagination)
 	fmt.Println("\n--- With LIMIT 50 ---")
 
 	start = time.Now()
