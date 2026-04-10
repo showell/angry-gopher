@@ -2,6 +2,7 @@
 
 ## High Priority
 
+- [ ] Advanced search — server-side message search with filters (sender, channel, date range, content)
 - [x] DM UI in Angry Cat — server endpoints + conversation list, send/receive UI
 - [ ] Clean up all tsc errors in Angry Cat
 
