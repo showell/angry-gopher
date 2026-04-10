@@ -91,6 +91,34 @@ than the overhead of a more "optimal" index-hop strategy. Trust
 the planner, benchmark before adding indexes, and remember that
 LIMIT changes everything.
 
+## Buddy filtering (OR/IN queries)
+
+A common query: "show me messages in this topic, but only from
+my buddies." Tested OR chains, IN clauses, temp tables, and
+subquery IN across buddy list sizes of 2-20 at 10M rows.
+
+**With LIMIT 50 (the real-world case):** ~400µs regardless of
+buddy count. 2 buddies or 20 — doesn't matter. The IN clause
+is the right choice: simple code, fast execution.
+
+| Approach | 2 buddies | 20 buddies |
+|----------|-----------|-----------|
+| OR chain | 107ms | 146ms |
+| IN clause | 91ms | 125ms |
+| Temp table | 100ms | 98ms |
+| IN + LIMIT 50 | **2.6ms** | **0.4ms** |
+
+**Surprising finding:** filtering by sender on top of channel+topic
+is *slower* than no filter at all (90-145ms vs 3.6ms). The
+channel+topic index already narrows to ~23K rows; adding a sender
+check on each row costs more than it saves because it can't use
+an index within that set. The sender filter only pays for itself
+when combined with LIMIT, which lets SQLite stop early.
+
+**Takeaway:** use IN clause for buddy filtering. Don't bother
+with temp tables or OR chains — they're slower or more complex
+for no benefit. LIMIT makes everything fast.
+
 ## Two-trip hydration pattern
 
 For search and pagination, fetch message IDs first, then hydrate
@@ -148,6 +176,11 @@ go run ./cmd/bench_hydrate -limit-test    # IN clause scaling
 Test query planner behavior:
 ```bash
 go run ./cmd/bench_planner
+```
+
+Test buddy/OR query behavior:
+```bash
+go run ./cmd/bench_or
 ```
 
 The 10M test database takes ~8 minutes to generate — keep it
