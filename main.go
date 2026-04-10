@@ -26,7 +26,6 @@ import (
 	"angry-gopher/games"
 	"angry-gopher/invites"
 	"angry-gopher/messages"
-	"angry-gopher/presence"
 	"angry-gopher/ratelimit"
 	"angry-gopher/reactions"
 	"angry-gopher/respond"
@@ -37,116 +36,49 @@ import (
 
 func buildMux() *http.ServeMux {
 	mux := http.NewServeMux()
+	api := withMiddleware
 
-	mux.HandleFunc("/api/v1/server_settings", withMiddleware(handleServerSettings))
-	mux.HandleFunc("/api/v1/register", withMiddleware(events.HandleRegister))
-	mux.HandleFunc("/api/v1/events", withMiddleware(func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case "GET":
-			events.HandleEvents(w, r)
-		case "DELETE":
-			events.HandleDeleteQueue(w, r)
-		default:
-			respond.Error(w, "Method not allowed")
-		}
-	}))
-	mux.HandleFunc("/api/v1/users/me", withMiddleware(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "DELETE" {
-			users.HandleDeactivateOwnUser(w, r)
-		} else {
-			users.HandleGetOwnUser(w, r)
-		}
-	}))
-	mux.HandleFunc("/api/v1/users/me/muted_users/", withMiddleware(users.HandleMuteUser))
-	mux.HandleFunc("/api/v1/users/me/muted_users", withMiddleware(users.HandleGetMutedUsers))
-	mux.HandleFunc("/api/v1/users/me/muted_topics", withMiddleware(channels.HandleMuteTopic))
-	mux.HandleFunc("/api/v1/users/me/subscriptions/add", withMiddleware(channels.HandleSubscribe))
-	mux.HandleFunc("/api/v1/users/by_email", withMiddleware(users.HandleGetUserByEmail))
-	mux.HandleFunc("/api/v1/users/", withMiddleware(func(w http.ResponseWriter, r *http.Request) {
-		if strings.Contains(r.URL.Path, "/subscriptions/") {
-			channels.HandleGetSubscriptionStatus(w, r)
-		} else if strings.HasSuffix(r.URL.Path, "/deactivate") {
-			users.HandleDeactivateUser(w, r)
-		} else if strings.HasSuffix(r.URL.Path, "/reactivate") {
-			users.HandleReactivateUser(w, r)
-		} else if strings.HasSuffix(r.URL.Path, "/regenerate_api_key") {
-			users.HandleRegenerateAPIKey(w, r)
-		} else if r.Method == "PATCH" {
-			users.HandleUpdateUser(w, r)
-		} else {
-			users.HandleGetUser(w, r)
-		}
-	}))
-	mux.HandleFunc("/api/v1/users", withMiddleware(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "POST" {
-			users.HandleCreateUser(w, r)
-		} else {
-			users.HandleUsers(w, r)
-		}
-	}))
-	mux.HandleFunc("/api/v1/settings", withMiddleware(users.HandleUpdateSettings))
-	mux.HandleFunc("/api/v1/users/me/subscriptions", withMiddleware(func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case "GET":
-			channels.HandleSubscriptions(w, r)
-		case "POST":
-			channels.HandleCreateChannel(w, r)
-		case "DELETE":
-			channels.HandleUnsubscribe(w, r)
-		default:
-			respond.Error(w, "Method not allowed")
-		}
-	}))
-	mux.HandleFunc("/api/v1/messages", withMiddleware(func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case "GET":
-			messages.HandleGetMessages(w, r)
-		case "POST":
-			messages.HandleSendMessage(w, r)
-		default:
-			respond.Error(w, "Method not allowed")
-		}
-	}))
-	mux.HandleFunc("/api/v1/messages/render", withMiddleware(messages.HandleRenderMessage))
-	mux.HandleFunc("/api/v1/messages/flags", withMiddleware(flags.HandleUpdateFlags))
-	mux.HandleFunc("/api/v1/mark_all_as_read", withMiddleware(flags.HandleMarkAllRead))
-	mux.HandleFunc("/api/v1/mark_channel_as_read", withMiddleware(flags.HandleMarkChannelRead))
-	mux.HandleFunc("/api/v1/mark_topic_as_read", withMiddleware(flags.HandleMarkTopicRead))
-	mux.HandleFunc("/api/v1/get_stream_id", withMiddleware(channels.HandleGetChannelID))
-	mux.HandleFunc("/api/v1/messages/", withMiddleware(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasSuffix(r.URL.Path, "/reactions") {
-			reactions.HandleReaction(w, r)
-		} else if r.Method == "PATCH" {
-			messages.HandleEditMessage(w, r)
-		} else if r.Method == "GET" {
-			messages.HandleGetSingleMessage(w, r)
-		} else if r.Method == "DELETE" {
-			messages.HandleDeleteMessage(w, r)
-		} else {
-			respond.Error(w, "Unknown messages sub-endpoint")
-		}
-	}))
-	mux.HandleFunc("/api/v1/streams", withMiddleware(channels.HandleGetAllChannels))
-	mux.HandleFunc("/api/v1/streams/", withMiddleware(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasSuffix(r.URL.Path, "/topics") {
-			channels.HandleGetTopics(w, r)
-		} else if strings.HasSuffix(r.URL.Path, "/subscribers") {
-			channels.HandleGetSubscribers(w, r)
-		} else if r.Method == "PATCH" {
-			channels.HandleUpdateChannel(w, r)
-		} else if r.Method == "GET" {
-			channels.HandleGetChannel(w, r)
-		} else {
-			respond.Error(w, "Unknown streams sub-endpoint")
-		}
-	}))
-	// Gopher-only endpoints — not part of the Zulip API.
-	mux.HandleFunc("/gopher/version", withMiddleware(handleVersion))
-	mux.HandleFunc("/gopher/invites", withMiddleware(invites.HandleCreateInvite))
-	mux.HandleFunc("/gopher/invites/redeem", withMiddleware(invites.HandleRedeemInvite))
-	mux.HandleFunc("/gopher/games", withMiddleware(games.HandleGames))
-	mux.HandleFunc("/gopher/games/", withMiddleware(games.HandleGameSub))
-	mux.HandleFunc("/gopher/", views.HandleIndex)
+	// --- Zulip-compatible API ---
+	mux.HandleFunc("/api/v1/server_settings", api(handleServerSettings))
+	mux.HandleFunc("/api/v1/register", api(events.HandleRegister))
+	mux.HandleFunc("/api/v1/events", api(routeEvents))
+	mux.HandleFunc("/api/v1/users/me", api(routeOwnUser))
+	mux.HandleFunc("/api/v1/users/me/muted_users/", api(users.HandleMuteUser))
+	mux.HandleFunc("/api/v1/users/me/muted_users", api(users.HandleGetMutedUsers))
+	mux.HandleFunc("/api/v1/users/me/muted_topics", api(channels.HandleMuteTopic))
+	mux.HandleFunc("/api/v1/users/me/subscriptions/add", api(channels.HandleSubscribe))
+	mux.HandleFunc("/api/v1/users/me/subscriptions", api(routeSubscriptions))
+	mux.HandleFunc("/api/v1/users/me/presence", api(routePresence))
+	mux.HandleFunc("/api/v1/users/by_email", api(users.HandleGetUserByEmail))
+	mux.HandleFunc("/api/v1/users/", api(routeUserByID))
+	mux.HandleFunc("/api/v1/users", api(routeUsers))
+	mux.HandleFunc("/api/v1/settings", api(users.HandleUpdateSettings))
+	mux.HandleFunc("/api/v1/messages/render", api(messages.HandleRenderMessage))
+	mux.HandleFunc("/api/v1/messages/flags", api(flags.HandleUpdateFlags))
+	mux.HandleFunc("/api/v1/messages/", api(routeMessageByID))
+	mux.HandleFunc("/api/v1/messages", api(routeMessages))
+	mux.HandleFunc("/api/v1/mark_all_as_read", api(flags.HandleMarkAllRead))
+	mux.HandleFunc("/api/v1/mark_channel_as_read", api(flags.HandleMarkChannelRead))
+	mux.HandleFunc("/api/v1/mark_topic_as_read", api(flags.HandleMarkTopicRead))
+	mux.HandleFunc("/api/v1/get_stream_id", api(channels.HandleGetChannelID))
+	mux.HandleFunc("/api/v1/streams/", api(routeStreamByID))
+	mux.HandleFunc("/api/v1/streams", api(channels.HandleGetAllChannels))
+	mux.HandleFunc("/api/v1/dm/conversations", api(dm.HandleConversations))
+	mux.HandleFunc("/api/v1/dm/messages", api(dm.HandleMessages))
+	mux.HandleFunc("/api/v1/buddies", api(buddies.HandleBuddies))
+	mux.HandleFunc("/api/v1/user_uploads/", api(handleUploadTempURL))
+	mux.HandleFunc("/api/v1/user_uploads", api(handleUpload))
+
+	// --- Gopher-only API ---
+	mux.HandleFunc("/gopher/version", api(handleVersion))
+	mux.HandleFunc("/gopher/invites", api(invites.HandleCreateInvite))
+	mux.HandleFunc("/gopher/invites/redeem", api(invites.HandleRedeemInvite))
+	mux.HandleFunc("/gopher/games/", api(games.HandleGameSub))
+	mux.HandleFunc("/gopher/games", api(games.HandleGames))
+	mux.HandleFunc("/gopher/webhooks/github", webhooks.HandleGitHub)
+	mux.HandleFunc("/gopher/github/repos", api(webhooks.HandleRepos))
+
+	// --- HTML views (Basic auth, no middleware) ---
 	mux.HandleFunc("/gopher/dm", views.HandleDM)
 	mux.HandleFunc("/gopher/messages", views.HandleMessages)
 	mux.HandleFunc("/gopher/channels", views.HandleChannels)
@@ -155,29 +87,14 @@ func buildMux() *http.ServeMux {
 	mux.HandleFunc("/gopher/github", views.HandleGitHub)
 	mux.HandleFunc("/gopher/game-lobby", views.HandleGames)
 	mux.HandleFunc("/gopher/invites-view", views.HandleInvites)
-	mux.HandleFunc("/gopher/webhooks/github", webhooks.HandleGitHub)
-	mux.HandleFunc("/gopher/github/repos", withMiddleware(webhooks.HandleRepos))
-	mux.HandleFunc("/api/v1/dm/conversations", withMiddleware(dm.HandleConversations))
-	mux.HandleFunc("/api/v1/dm/messages", withMiddleware(dm.HandleMessages))
-	mux.HandleFunc("/api/v1/users/me/presence", withMiddleware(func(w http.ResponseWriter, r *http.Request) {
-		switch r.Method {
-		case "POST":
-			presence.HandleUpdatePresence(w, r)
-		case "GET":
-			presence.HandleGetPresence(w, r)
-		default:
-			respond.Error(w, "Method not allowed")
-		}
-	}))
+	mux.HandleFunc("/gopher/", views.HandleIndex)
 
-	mux.HandleFunc("/api/v1/buddies", withMiddleware(buddies.HandleBuddies))
-	mux.HandleFunc("/api/v1/user_uploads", withMiddleware(handleUpload))
-	mux.HandleFunc("/api/v1/user_uploads/", withMiddleware(handleUploadTempURL))
-	mux.HandleFunc("/user_uploads/", withMiddleware(handleServeUpload))
+	// --- Admin & uploads ---
+	mux.HandleFunc("/user_uploads/", api(handleServeUpload))
 	mux.HandleFunc("/admin/login", handleAdminLogin)
 	mux.HandleFunc("/admin/health", handleHealthCheck)
 	mux.HandleFunc("/admin/", adminHandler)
-	mux.HandleFunc("/", withMiddleware(handleUnimplemented))
+	mux.HandleFunc("/", api(handleUnimplemented))
 
 	return mux
 }
