@@ -236,6 +236,17 @@ func SendMessageHTML(senderID, channelID int, topic, markdown, html string) (int
 	return msgResult.LastInsertId()
 }
 
+// MarkUnreadForSubscribers inserts unread rows for all users
+// subscribed to the channel, except the sender.
+func MarkUnreadForSubscribers(messageID int64, channelID, senderID int) {
+	DB.Exec(`
+		INSERT OR IGNORE INTO unreads (message_id, user_id)
+		SELECT ?, s.user_id
+		FROM subscriptions s
+		WHERE s.channel_id = ? AND s.user_id != ?`,
+		messageID, channelID, senderID)
+}
+
 // HandleSendMessage handles POST /api/v1/messages.
 func HandleSendMessage(w http.ResponseWriter, r *http.Request) {
 	channelID, _ := strconv.Atoi(r.FormValue("to"))
@@ -264,6 +275,8 @@ func HandleSendMessage(w http.ResponseWriter, r *http.Request) {
 		respond.Error(w, "Failed to send message")
 		return
 	}
+
+	MarkUnreadForSubscribers(messageID, channelID, senderID)
 
 	html := RenderMarkdown(content)
 	timestamp := time.Now().Unix()

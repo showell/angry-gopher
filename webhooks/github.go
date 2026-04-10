@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"angry-gopher/auth"
 	"angry-gopher/channels"
@@ -241,11 +242,30 @@ func HandleGitHub(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	messages.MarkUnreadForSubscribers(msgID, repo.ChannelID, senderID)
+
+	// Look up sender info for the event.
+	var senderEmail, senderName string
+	DB.QueryRow(`SELECT email, full_name FROM users WHERE id = ?`, senderID).Scan(&senderEmail, &senderName)
+
 	channelID := repo.ChannelID
+	timestamp := time.Now().Unix()
 	events.PushFiltered(map[string]interface{}{
-		"type": "message",
+		"type":  "message",
+		"flags": []string{},
 		"message": map[string]interface{}{
-			"id": msgID,
+			"id":                msgID,
+			"content":           htmlContent,
+			"sender_id":         senderID,
+			"sender_email":      senderEmail,
+			"sender_full_name":  senderName,
+			"stream_id":         channelID,
+			"subject":           topic,
+			"timestamp":         timestamp,
+			"type":              "stream",
+			"flags":             []string{},
+			"reactions":         []interface{}{},
+			"display_recipient": fmt.Sprintf("channel_%d", channelID),
 		},
 	}, func(userID int) bool {
 		return channels.CanAccess(userID, channelID)
