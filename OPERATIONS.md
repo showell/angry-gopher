@@ -16,9 +16,13 @@ The import tool fetches users, channels, and messages from a Zulip
 server and writes them to a Gopher production database.
 
 ```bash
-# Edit ~/AngryGopher/import_config.json with your Zulip credentials
-go run ./cmd/import -config ~/AngryGopher/import_config.json
+ops/import              # full import (default)
+ops/import -mode tiny   # channels + 2 batches of messages
+ops/import -mode empty  # schema only
 ```
+
+If `~/AngryGopher/import_config.json` is missing, the script prints
+setup instructions.
 
 The import is idempotent — safe to rerun at any time. It skips
 already-imported messages and picks up where it left off.

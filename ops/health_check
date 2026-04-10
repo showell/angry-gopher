@@ -1,0 +1,11 @@
+#!/bin/bash
+# Check server health: queues, rate limits, presence.
+# Defaults to the stress server (port 9002). Override with -url.
+#
+# Examples:
+#   ops/health_check
+#   ops/health_check -url http://localhost:9000
+set -e
+
+cd ~/showell_repos/angry-gopher
+go run ./cmd/health_check "$@"

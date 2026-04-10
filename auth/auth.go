@@ -41,3 +41,10 @@ func Authenticate(r *http.Request) int {
 
 	return userID
 }
+
+// IsAdmin returns true if the given user has admin privileges.
+func IsAdmin(userID int) bool {
+	var isAdmin int
+	err := DB.QueryRow(`SELECT is_admin FROM users WHERE id = ?`, userID).Scan(&isAdmin)
+	return err == nil && isAdmin == 1
+}

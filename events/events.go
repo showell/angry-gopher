@@ -114,6 +114,14 @@ func PushFiltered(event map[string]interface{}, filter func(userID int) bool) {
 	}
 }
 
+// Reset clears all queues and resets the queue ID counter.
+func Reset() {
+	queuesMu.Lock()
+	defer queuesMu.Unlock()
+	queues = map[string]*queue{}
+	nextQueueID = 0
+}
+
 // HandleRegister handles POST /api/v1/register.
 func HandleRegister(w http.ResponseWriter, r *http.Request) {
 	userID := auth.Authenticate(r)

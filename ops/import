@@ -1,0 +1,57 @@
+#!/bin/bash
+# Import data from Zulip into an Angry Gopher database.
+#
+# Credentials are stored in ~/AngryGopher/import_config.json (outside
+# source control, non-hidden). If the file doesn't exist, this script
+# prints setup instructions.
+#
+# You must specify a mode:
+#   ops/import -mode full    Full import from Zulip back to January
+#   ops/import -mode tiny    Channels + 2 batches of messages
+#   ops/import -mode empty   Schema only, no data
+set -e
+
+CONFIG=~/AngryGopher/import_config.json
+
+if [ ! -f "$CONFIG" ]; then
+    echo "Missing credentials file: $CONFIG"
+    echo ""
+    echo "Create it with your Zulip credentials:"
+    echo ""
+    echo "  cat > $CONFIG << 'EOF'"
+    echo '  {'
+    echo '      "zulip_url": "https://YOUR_ORG.zulipchat.com",'
+    echo '      "zulip_email": "your-email@example.com",'
+    echo '      "zulip_api_key": "YOUR_API_KEY",'
+    echo '      "gopher_db": "~/AngryGopher/prod/gopher.db",'
+    echo '      "batch_size": 10'
+    echo '  }'
+    echo '  EOF'
+    echo ""
+    echo "Get your API key from: Zulip > Settings > Account & privacy > API key"
+    echo ""
+    echo "Convention: credentials live in ~/AngryGopher/ (non-hidden, outside git)."
+    exit 1
+fi
+
+# Require explicit mode selection.
+HAS_MODE=false
+for arg in "$@"; do
+    if [ "$arg" = "-mode" ]; then
+        HAS_MODE=true
+        break
+    fi
+done
+
+if [ "$HAS_MODE" = false ]; then
+    echo "Usage: ops/import -mode <full|tiny|empty>"
+    echo ""
+    echo "Modes:"
+    echo "  full    Full import from Zulip back to January"
+    echo "  tiny    Channels + 2 batches of messages (quick test)"
+    echo "  empty   Schema only, no data"
+    exit 1
+fi
+
+cd ~/showell_repos/angry-gopher
+go run ./cmd/import -config "$CONFIG" "$@"

@@ -5,19 +5,29 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"html"
+	"log"
 	"net/http"
 	"sort"
 	"strings"
 	"time"
 
+	"angry-gopher/auth"
 	"angry-gopher/events"
 	"angry-gopher/presence"
 	"angry-gopher/ratelimit"
 )
 
 func adminHandler(w http.ResponseWriter, r *http.Request) {
+	userID := auth.Authenticate(r)
+	if userID == 0 || !auth.IsAdmin(userID) {
+		w.Header().Set("WWW-Authenticate", `Basic realm="Angry Gopher Admin"`)
+		http.Error(w, "Admin access required", http.StatusForbidden)
+		return
+	}
+
 	// Parse which table to show (default: overview of all tables).
 	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
 	tableName := ""
@@ -32,6 +42,10 @@ func adminHandler(w http.ResponseWriter, r *http.Request) {
 	} else if tableName == "presence" {
 		renderAdminPresence(w)
 	} else if tableName == "ops" {
+		if r.Method == "POST" {
+			handleOpsReset(w, r)
+			return
+		}
 		renderOpsDashboard(w)
 	} else {
 		renderAdminTable(w, tableName)
@@ -199,7 +213,10 @@ tr:hover td { background: #f0f0ff; }
 </head><body>
 <a href="/admin/">← Back</a>
 <h1>🔧 Ops Dashboard</h1>
-<p style="color:#888;font-size:13px">Auto-refreshes every 10 seconds</p>`)
+<p style="color:#888;font-size:13px">Auto-refreshes every 10 seconds</p>
+<form method="POST" style="margin:12px 0" onsubmit="return confirm('Reset all ops counters and queues?')">
+<button type="submit" style="background:#cc0000;color:white;border:none;padding:8px 20px;font-size:14px;font-weight:bold;cursor:pointer;border-radius:4px">Reset All</button>
+</form>`)
 
 	// --- Summary stats ---
 	queueStats := events.Stats()
@@ -318,6 +335,69 @@ tr:hover td { background: #f0f0ff; }
 	}
 
 	fmt.Fprint(w, `</body></html>`)
+}
+
+func handleHealthCheck(w http.ResponseWriter, r *http.Request) {
+	userID := auth.Authenticate(r)
+	if userID == 0 || !auth.IsAdmin(userID) {
+		http.Error(w, "Admin access required", http.StatusForbidden)
+		return
+	}
+
+	queueStats := events.Stats()
+	onlineIDs := presence.OnlineUserIDs()
+	rejected429s, userRLStats := ratelimit.Stats()
+
+	type queueInfo struct {
+		ID         string `json:"id"`
+		UserID     int    `json:"user_id"`
+		Pending    int    `json:"pending"`
+		LastID     int    `json:"last_id"`
+	}
+	type rlUserInfo struct {
+		UserID   int `json:"user_id"`
+		Requests int `json:"requests"`
+		Headroom int `json:"headroom"`
+	}
+	type healthData struct {
+		Queues       []queueInfo  `json:"queues"`
+		OnlineUsers  int          `json:"online_users"`
+		Rejected429s int          `json:"rejected_429s"`
+		RLUsers      []rlUserInfo `json:"rate_limit_users"`
+		RLMax        int          `json:"rate_limit_max"`
+	}
+
+	data := healthData{
+		OnlineUsers:  len(onlineIDs),
+		Rejected429s: rejected429s,
+		RLMax:        ratelimit.MaxRequests,
+	}
+	for _, q := range queueStats {
+		data.Queues = append(data.Queues, queueInfo{
+			ID:      q.ID,
+			UserID:  q.UserID,
+			Pending: q.EventCount,
+			LastID:  q.LastID,
+		})
+	}
+	for _, u := range userRLStats {
+		data.RLUsers = append(data.RLUsers, rlUserInfo{
+			UserID:   u.UserID,
+			Requests: u.RequestsInWindow,
+			Headroom: ratelimit.MaxRequests - u.RequestsInWindow,
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(data)
+}
+
+func handleOpsReset(w http.ResponseWriter, r *http.Request) {
+	events.Reset()
+	presence.Reset()
+	ratelimit.Reset()
+	log.Println("[admin] Ops reset: cleared all queues, presence, and rate limit counters")
+	http.Redirect(w, r, "/admin/ops", http.StatusSeeOther)
 }
 
 // --- Database helpers for admin ---

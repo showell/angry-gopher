@@ -1,5 +1,5 @@
 #!/bin/bash
-# Kill existing servers, rebuild Angry Gopher, start both servers.
+# Start demo server (port 9000) + Angry Cat frontend (port 8000).
 set -e
 
 lsof -ti:9000 | xargs kill -9 2>/dev/null || true
@@ -7,7 +7,7 @@ lsof -ti:8000 | xargs kill -9 2>/dev/null || true
 sleep 0.5
 
 cd ~/showell_repos/angry-gopher
-go build -o gopher-server . 2>/dev/null
+go build -o gopher-server .
 GOPHER_CONFIG=~/AngryGopher/demo.json nohup ./gopher-server > /tmp/angry-gopher.log 2>&1 &
 
 cd ~/showell_repos/angry-cat

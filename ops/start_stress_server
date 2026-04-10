@@ -1,0 +1,24 @@
+#!/bin/bash
+# Start the stress test server (port 9002). This is the server that
+# run_stress_test connects to — start this first.
+set -e
+
+lsof -ti:9002 | xargs kill -9 2>/dev/null || true
+sleep 0.5
+
+cd ~/showell_repos/angry-gopher
+go build -o gopher-server .
+GOPHER_CONFIG=~/AngryGopher/stress.json nohup ./gopher-server > /tmp/angry-gopher-stress.log 2>&1 &
+
+for i in $(seq 1 10); do
+    CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:9002/api/v1/users 2>/dev/null || true)
+    if [ "$CODE" = "200" ]; then
+        echo "Stress server: http://localhost:9002 (ready)"
+        echo "Ops dashboard: http://localhost:9002/admin/ops"
+        echo "Logs: tail -f /tmp/angry-gopher-stress.log"
+        exit 0
+    fi
+    sleep 1
+done
+
+echo "Warning: server may not be fully ready yet"

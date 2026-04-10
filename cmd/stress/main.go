@@ -15,6 +15,7 @@
 package main
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"flag"
@@ -50,6 +51,7 @@ type botConfig struct {
 type bot struct {
 	cfg      botConfig
 	baseURL  string
+	channels []string // channel IDs this bot can post to
 	queueID  string
 	lastEvID int
 	msgsSent int
@@ -67,10 +69,27 @@ func main() {
 		log.Fatalf("bots must be between 1 and %d", len(allBots))
 	}
 
-	// Seed phase: generate messages through the API to populate the DB
-	// before the bots start their long-running loops.
+	// Set up bots first (fetch channels + register queues) while the
+	// rate limiter is clear, then seed, then start the loops.
+	bots := make([]*bot, *numBots)
+	for i := 0; i < *numBots; i++ {
+		b := &bot{
+			cfg:     allBots[i],
+			baseURL: *baseURL,
+		}
+		bots[i] = b
+
+		if !b.fetchChannels() {
+			log.Fatalf("[%s] failed to fetch channels — is the server running at %s?", b.cfg.name, *baseURL)
+		}
+		if !b.register() {
+			log.Fatalf("[%s] failed to register queue — is the server running at %s?", b.cfg.name, *baseURL)
+		}
+		log.Printf("[%s] registered queue %s (channels: %v)", b.cfg.name, b.queueID, b.channels)
+	}
+
 	if *seedCount > 0 {
-		seedMessages(*baseURL, *numBots, *seedCount)
+		seedMessages(*baseURL, bots, *seedCount)
 	}
 
 	// Ctrl-C to stop.
@@ -79,20 +98,7 @@ func main() {
 	done := make(chan struct{})
 
 	var wg sync.WaitGroup
-	bots := make([]*bot, *numBots)
-
-	for i := 0; i < *numBots; i++ {
-		b := &bot{
-			cfg:     allBots[i],
-			baseURL: *baseURL,
-		}
-		bots[i] = b
-
-		if !b.register() {
-			log.Fatalf("[%s] failed to register queue — is the server running at %s?", b.cfg.name, *baseURL)
-		}
-		log.Printf("[%s] registered queue %s", b.cfg.name, b.queueID)
-
+	for _, b := range bots {
 		wg.Add(2)
 		go func() { defer wg.Done(); b.pollLoop(done) }()
 		go func() { defer wg.Done(); b.activityLoop(done) }()
@@ -114,6 +120,25 @@ func main() {
 			b.cfg.name, b.msgsSent, b.evtsRecv)
 		b.mu.Unlock()
 	}
+}
+
+// fetchChannels queries the server for channels this bot is subscribed to.
+func (b *bot) fetchChannels() bool {
+	result := b.get("/api/v1/users/me/subscriptions", 10*time.Second)
+	if result == nil || result["result"] != "success" {
+		return false
+	}
+	subs, ok := result["subscriptions"].([]interface{})
+	if !ok {
+		return false
+	}
+	b.channels = nil
+	for _, s := range subs {
+		sub := s.(map[string]interface{})
+		id := int(sub["stream_id"].(float64))
+		b.channels = append(b.channels, fmt.Sprintf("%d", id))
+	}
+	return len(b.channels) > 0
 }
 
 // register creates an event queue on the server.
@@ -138,7 +163,7 @@ func (b *bot) pollLoop(done chan struct{}) {
 
 		path := fmt.Sprintf("/api/v1/events?queue_id=%s&last_event_id=%d",
 			b.queueID, b.lastEvID)
-		result := b.get(path, 55*time.Second)
+		result := b.getWithCancel(path, 55*time.Second, done)
 
 		if result == nil {
 			// Timeout or error — just retry.
@@ -260,8 +285,7 @@ func (b *bot) sendMessage() float64 {
 	topic := topics[rand.Intn(len(topics))]
 	content := messageTemplates[rand.Intn(len(messageTemplates))]
 
-	// Channel 1 (general) or 3 (public test channel).
-	channel := []string{"1", "3"}[rand.Intn(2)]
+	channel := b.channels[rand.Intn(len(b.channels))]
 
 	result := b.post("/api/v1/messages", url.Values{
 		"to":      {channel},
@@ -317,15 +341,9 @@ func (b *bot) addReaction(msgID int) {
 // seedMessages sends N messages through the API, spread across bots,
 // channels, and topics to create realistic data volume. This runs
 // synchronously before the bot loops start.
-func seedMessages(baseURL string, numBots, count int) {
+func seedMessages(baseURL string, bots []*bot, count int) {
 	log.Printf("Seeding %d messages...", count)
 
-	bots := make([]*bot, numBots)
-	for i := 0; i < numBots; i++ {
-		bots[i] = &bot{cfg: allBots[i], baseURL: baseURL}
-	}
-
-	channels := []string{"1", "3"}
 	seedTopics := []string{
 		"project kickoff", "architecture decisions", "code review",
 		"deployment checklist", "bug triage", "sprint planning",
@@ -353,7 +371,10 @@ func seedMessages(baseURL string, numBots, count int) {
 	errors := 0
 	for i := 0; i < count; i++ {
 		b := bots[i%len(bots)]
-		ch := channels[rand.Intn(len(channels))]
+		if len(b.channels) == 0 {
+			continue
+		}
+		ch := b.channels[rand.Intn(len(b.channels))]
 		topic := seedTopics[rand.Intn(len(seedTopics))]
 		body := seedBodies[rand.Intn(len(seedBodies))]
 
@@ -416,6 +437,32 @@ func (b *bot) patch(path string, params url.Values) map[string]interface{} {
 	req, _ := http.NewRequest("PATCH", b.baseURL+path,
 		strings.NewReader(params.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Authorization", b.authHeader())
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil
+	}
+	defer resp.Body.Close()
+	data, _ := io.ReadAll(resp.Body)
+
+	var result map[string]interface{}
+	json.Unmarshal(data, &result)
+	return result
+}
+
+func (b *bot) getWithCancel(path string, timeout time.Duration, done chan struct{}) map[string]interface{} {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	// Cancel the request immediately when done is closed.
+	go func() {
+		select {
+		case <-done:
+			cancel()
+		case <-ctx.Done():
+		}
+	}()
+	req, _ := http.NewRequestWithContext(ctx, "GET", b.baseURL+path, nil)
 	req.Header.Set("Authorization", b.authHeader())
 
 	resp, err := http.DefaultClient.Do(req)

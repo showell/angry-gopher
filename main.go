@@ -88,6 +88,7 @@ func buildMux() *http.ServeMux {
 	mux.HandleFunc("/api/v1/user_uploads", withCORS(handleUpload))
 	mux.HandleFunc("/api/v1/user_uploads/", withCORS(handleUploadTempURL))
 	mux.HandleFunc("/user_uploads/", withCORS(handleServeUpload))
+	mux.HandleFunc("/admin/health", handleHealthCheck)
 	mux.HandleFunc("/admin/", adminHandler)
 	mux.HandleFunc("/", withCORS(handleUnimplemented))
 

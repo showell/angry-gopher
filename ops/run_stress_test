@@ -1,0 +1,27 @@
+#!/bin/bash
+# Run stress test bots against the stress server (port 9002).
+# Start the stress server first with: ops/start_stress_server
+#
+# You must specify at least one option:
+#   ops/run_stress_test -seed 500           Seed 500 messages, then run 4 bots
+#   ops/run_stress_test -bots 2             Run 2 bots (no seeding)
+#   ops/run_stress_test -seed 500 -bots 2   Seed 500 messages, then run 2 bots
+set -e
+
+if [ $# -eq 0 ]; then
+    echo "Usage: ops/run_stress_test [options]"
+    echo ""
+    echo "Options (at least one required):"
+    echo "  -seed N    Seed N messages before starting bots"
+    echo "  -bots N    Number of bots to run (1-4, default: 4)"
+    echo "  -url URL   Server URL (default: http://localhost:9002)"
+    echo ""
+    echo "Examples:"
+    echo "  ops/run_stress_test -seed 500"
+    echo "  ops/run_stress_test -bots 2"
+    echo "  ops/run_stress_test -seed 500 -bots 2"
+    exit 1
+fi
+
+cd ~/showell_repos/angry-gopher
+go run ./cmd/stress "$@"
