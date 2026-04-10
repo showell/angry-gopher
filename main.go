@@ -81,6 +81,10 @@ func buildMux() *http.ServeMux {
 		}
 	}))
 	mux.HandleFunc("/api/v1/messages/flags", withCORS(flags.HandleUpdateFlags))
+	mux.HandleFunc("/api/v1/mark_all_as_read", withCORS(flags.HandleMarkAllRead))
+	mux.HandleFunc("/api/v1/mark_channel_as_read", withCORS(flags.HandleMarkChannelRead))
+	mux.HandleFunc("/api/v1/mark_topic_as_read", withCORS(flags.HandleMarkTopicRead))
+	mux.HandleFunc("/api/v1/get_stream_id", withCORS(channels.HandleGetChannelID))
 	mux.HandleFunc("/api/v1/messages/", withCORS(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/reactions") {
 			reactions.HandleReaction(w, r)
@@ -102,6 +106,8 @@ func buildMux() *http.ServeMux {
 			channels.HandleGetSubscribers(w, r)
 		} else if r.Method == "PATCH" {
 			channels.HandleUpdateChannel(w, r)
+		} else if r.Method == "GET" {
+			channels.HandleGetChannel(w, r)
 		} else {
 			respond.Error(w, "Unknown streams sub-endpoint")
 		}

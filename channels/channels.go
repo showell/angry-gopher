@@ -30,6 +30,56 @@ func ChannelExists(channelID int) bool {
 	return count > 0
 }
 
+// HandleGetChannel handles GET /api/v1/streams/{id} (without /topics or /subscribers suffix).
+func HandleGetChannel(w http.ResponseWriter, r *http.Request) {
+	channelID := respond.PathSegmentInt(r.URL.Path, 4)
+	if channelID == 0 {
+		respond.Error(w, "Invalid channel ID")
+		return
+	}
+
+	var name string
+	var inviteOnly, traffic int
+	err := DB.QueryRow(`SELECT name, invite_only, channel_weekly_traffic FROM channels WHERE channel_id = ?`,
+		channelID).Scan(&name, &inviteOnly, &traffic)
+	if err != nil {
+		respond.Error(w, "Channel not found")
+		return
+	}
+
+	var desc, renderedDesc string
+	DB.QueryRow(`SELECT markdown, html FROM channel_descriptions WHERE channel_id = ?`, channelID).Scan(&desc, &renderedDesc)
+
+	respond.Success(w, map[string]interface{}{
+		"stream": map[string]interface{}{
+			"stream_id":             channelID,
+			"name":                  name,
+			"description":           desc,
+			"rendered_description":  renderedDesc,
+			"stream_weekly_traffic": traffic,
+			"invite_only":           inviteOnly == 1,
+		},
+	})
+}
+
+// HandleGetChannelID handles GET /api/v1/get_stream_id?stream=NAME.
+func HandleGetChannelID(w http.ResponseWriter, r *http.Request) {
+	name := r.URL.Query().Get("stream")
+	if name == "" {
+		respond.Error(w, "Missing required param: stream")
+		return
+	}
+
+	var channelID int
+	err := DB.QueryRow(`SELECT channel_id FROM channels WHERE name = ?`, name).Scan(&channelID)
+	if err != nil {
+		respond.Error(w, "Channel not found")
+		return
+	}
+
+	respond.Success(w, map[string]interface{}{"stream_id": channelID})
+}
+
 func CanAccess(userID, channelID int) bool {
 	var inviteOnly int
 	err := DB.QueryRow(`SELECT invite_only FROM channels WHERE channel_id = ?`, channelID).Scan(&inviteOnly)

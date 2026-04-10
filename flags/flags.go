@@ -120,6 +120,80 @@ func applyStarredFlag(tx *sql.Tx, op string, userID int, messageIDs []int) {
 	}
 }
 
+// HandleMarkAllRead handles POST /api/v1/mark_all_as_read.
+func HandleMarkAllRead(w http.ResponseWriter, r *http.Request) {
+	userID := auth.Authenticate(r)
+	if userID == 0 {
+		respond.Error(w, "Unauthorized")
+		return
+	}
+
+	DB.Exec(`DELETE FROM unreads WHERE user_id = ?`, userID)
+	log.Printf("[api] Marked all messages as read for user %d", userID)
+	respond.Success(w, nil)
+}
+
+// HandleMarkChannelRead handles POST /api/v1/mark_channel_as_read.
+func HandleMarkChannelRead(w http.ResponseWriter, r *http.Request) {
+	userID := auth.Authenticate(r)
+	if userID == 0 {
+		respond.Error(w, "Unauthorized")
+		return
+	}
+
+	r.ParseForm()
+	channelIDStr := r.FormValue("channel_id")
+	var channelID int
+	if channelIDStr != "" {
+		json.Unmarshal([]byte(channelIDStr), &channelID)
+		if channelID == 0 {
+			// Try plain int.
+			DB.QueryRow("SELECT ?+0", channelIDStr).Scan(&channelID)
+		}
+	}
+	if channelID == 0 {
+		respond.Error(w, "Missing required param: channel_id")
+		return
+	}
+
+	DB.Exec(`DELETE FROM unreads WHERE user_id = ? AND message_id IN (SELECT id FROM messages WHERE channel_id = ?)`,
+		userID, channelID)
+	log.Printf("[api] Marked channel %d as read for user %d", channelID, userID)
+	respond.Success(w, nil)
+}
+
+// HandleMarkTopicRead handles POST /api/v1/mark_topic_as_read.
+func HandleMarkTopicRead(w http.ResponseWriter, r *http.Request) {
+	userID := auth.Authenticate(r)
+	if userID == 0 {
+		respond.Error(w, "Unauthorized")
+		return
+	}
+
+	r.ParseForm()
+	channelIDStr := r.FormValue("channel_id")
+	topicName := r.FormValue("topic")
+	var channelID int
+	if channelIDStr != "" {
+		json.Unmarshal([]byte(channelIDStr), &channelID)
+		if channelID == 0 {
+			DB.QueryRow("SELECT ?+0", channelIDStr).Scan(&channelID)
+		}
+	}
+	if channelID == 0 || topicName == "" {
+		respond.Error(w, "Missing required params: channel_id, topic")
+		return
+	}
+
+	DB.Exec(`DELETE FROM unreads WHERE user_id = ? AND message_id IN (
+		SELECT m.id FROM messages m
+		JOIN topics t ON m.topic_id = t.topic_id
+		WHERE m.channel_id = ? AND t.topic_name = ?)`,
+		userID, channelID, topicName)
+	log.Printf("[api] Marked topic %q in channel %d as read for user %d", topicName, channelID, userID)
+	respond.Success(w, nil)
+}
+
 // GetMessageFlags returns the Zulip-style flags list for a message
 // as seen by the given user.
 func GetMessageFlags(messageID, userID int) []string {

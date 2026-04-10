@@ -25,9 +25,9 @@ Based on the [Zulip REST API table of contents](https://zulip.com/api/).
 | | Get a message's edit history |
 | DONE | Update personal message flags |
 | | Update personal message flags for narrow |
-| | Mark all messages as read |
-| | Mark messages in a channel as read |
-| | Mark messages in a topic as read |
+| DONE | Mark all messages as read |
+| DONE | Mark messages in a channel as read |
+| DONE | Mark messages in a topic as read |
 | | Get a message's read receipts |
 | DONE | Get temporary URL for an uploaded file |
 | | Check thumbnail status |
@@ -78,8 +78,8 @@ Based on the [Zulip REST API table of contents](https://zulip.com/api/).
 | | Update a subscription setting |
 | | Bulk update subscription settings |
 | DONE | Get all channels |
-| | Get a channel by ID |
-| | Get channel ID |
+| DONE | Get a channel by ID |
+| DONE | Get channel ID |
 | DONE | Create a channel |
 | DONE | Update a channel |
 | | Archive a channel |
@@ -248,7 +248,7 @@ may be intentional in code blocks).
 
 ## Summary
 
-**DONE:** 36 endpoints (Messages: 9, Channels: 10, Users: 9,
+**DONE:** 41 endpoints (Messages: 12, Channels: 12, Users: 9,
 Server: 1, Invitations: 3, Real-time events: 3, Gopher-only: 10)
 
 **N/A:** Scheduled messages (see DECISIONS.md)
