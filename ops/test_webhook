@@ -1,28 +1,28 @@
 #!/bin/bash
 # Send a simulated GitHub webhook event to the local server.
 #
-# You must specify a channel ID and an event type:
-#   ops/test_webhook 3 push
-#   ops/test_webhook 3 pull_request
-#   ops/test_webhook 3 issue
+# You must specify a repo ID and an event type:
+#   ops/test_webhook 1 push
+#   ops/test_webhook 1 pull_request
+#   ops/test_webhook 1 issue
 set -e
 
 if [ $# -lt 2 ]; then
-    echo "Usage: ops/test_webhook <channel_id> <event_type>"
+    echo "Usage: ops/test_webhook <repo_id> <event_type>"
     echo ""
     echo "Event types:"
     echo "  push            Simulated push with 2 commits"
     echo "  pull_request    Simulated PR opened"
     echo "  issue           Simulated issue opened"
     echo ""
-    echo "Available channels:"
+    echo "Configured repos:"
     cd ~/showell_repos/angry-gopher
     go run ./cmd/db_query -db ~/AngryGopher/prod/gopher.db \
-        "SELECT channel_id, name FROM channels ORDER BY channel_id" 2>/dev/null
+        "SELECT gr.id, gr.owner || '/' || gr.name AS repo, c.name AS channel, gr.default_topic FROM github_repos gr JOIN channels c ON gr.channel_id = c.channel_id" 2>/dev/null
     exit 1
 fi
 
-CHANNEL_ID="$1"
+REPO_ID="$1"
 EVENT="$2"
 URL="http://localhost:9000"
 
@@ -36,7 +36,7 @@ if [ -z "$API_KEY" ]; then
     exit 1
 fi
 
-WEBHOOK_URL="${URL}/gopher/webhooks/github?api_key=${API_KEY}&channel_id=${CHANNEL_ID}"
+WEBHOOK_URL="${URL}/gopher/webhooks/github?api_key=${API_KEY}&repo_id=${REPO_ID}"
 
 case "$EVENT" in
     push)
@@ -94,7 +94,7 @@ case "$EVENT" in
         ;;
 esac
 
-echo "Sending $GITHUB_EVENT event to channel $CHANNEL_ID..."
+echo "Sending $GITHUB_EVENT event to repo_id $REPO_ID..."
 RESPONSE=$(curl -s -X POST "$WEBHOOK_URL" \
     -H "Content-Type: application/json" \
     -H "X-GitHub-Event: $GITHUB_EVENT" \

@@ -88,7 +88,7 @@ func buildMux() *http.ServeMux {
 	mux.HandleFunc("/gopher/games", withCORS(games.HandleGames))
 	mux.HandleFunc("/gopher/games/", withCORS(games.HandleGameSub))
 	mux.HandleFunc("/gopher/webhooks/github", webhooks.HandleGitHub)
-	mux.HandleFunc("/gopher/webhooks/github/setup", withCORS(handleGitHubSetup))
+	mux.HandleFunc("/gopher/github/repos", withCORS(webhooks.HandleRepos))
 	mux.HandleFunc("/api/v1/users/me/presence", withCORS(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "POST":
@@ -123,6 +123,7 @@ func wireDB() {
 	invites.DB = DB
 	games.DB = DB
 	channels.RenderMarkdown = renderMarkdown
+	webhooks.DB = DB
 	events.OnRegister = recordUserLogin
 	messages.RenderMarkdown = renderMarkdown
 	games.InitSchema()
@@ -225,54 +226,7 @@ var gitCommit = "dev"
 var currentGeneration int
 var serverStartTime time.Time
 
-func handleGitHubSetup(w http.ResponseWriter, r *http.Request) {
-	userID := auth.Authenticate(r)
-	if userID == 0 {
-		respond.Error(w, "Unauthorized")
-		return
-	}
-	if !auth.IsAdmin(userID) {
-		respond.Error(w, "Admin access required")
-		return
-	}
 
-	// Get the admin's API key to embed in the webhook URL.
-	var apiKey string
-	DB.QueryRow(`SELECT api_key FROM users WHERE id = ?`, userID).Scan(&apiKey)
-
-	// Build the base webhook URL. We use the request's Host header
-	// so the URL works regardless of port.
-	scheme := "http"
-	if r.TLS != nil {
-		scheme = "https"
-	}
-	baseURL := fmt.Sprintf("%s://%s/gopher/webhooks/github", scheme, r.Host)
-
-	// List channels for the picker.
-	rows, err := DB.Query(`SELECT channel_id, name FROM channels ORDER BY name`)
-	if err != nil {
-		respond.Error(w, "Failed to query channels")
-		return
-	}
-	defer rows.Close()
-
-	var chans []map[string]interface{}
-	for rows.Next() {
-		var id int
-		var name string
-		rows.Scan(&id, &name)
-		webhookURL := fmt.Sprintf("%s?api_key=%s&channel_id=%d", baseURL, apiKey, id)
-		chans = append(chans, map[string]interface{}{
-			"channel_id":  id,
-			"name":        name,
-			"webhook_url": webhookURL,
-		})
-	}
-
-	respond.Success(w, map[string]interface{}{
-		"channels": chans,
-	})
-}
 
 func ensureBotUsers() {
 	// GitHub bot — insert if not present, then look up the ID.
