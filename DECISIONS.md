@@ -51,6 +51,12 @@ seen very little adoption in practice. We'd rather invest in
 good incoming webhook support than replicate an underused outbound
 framework.
 
+**GitHub is a first-class integration, not just a webhook client.**
+We intend tight integration with GitHub — dedicated bot user,
+org-level project configuration, linkifiers, and a setup wizard
+in Angry Cat. Zulip treats GitHub as one of ~100 webhook
+integrations. We treat it as a core part of the product.
+
 **Webhook messages skip markdown rendering.** Zulip renders all
 messages through markdown, including integration payloads. We
 produce HTML directly in the webhook handler and store it as-is.
