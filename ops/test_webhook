@@ -1,23 +1,29 @@
 #!/bin/bash
 # Send a simulated GitHub webhook event to the local server.
 #
-# You must specify an event type:
-#   ops/test_webhook push
-#   ops/test_webhook pull_request
-#   ops/test_webhook issue
+# You must specify a channel ID and an event type:
+#   ops/test_webhook 3 push
+#   ops/test_webhook 3 pull_request
+#   ops/test_webhook 3 issue
 set -e
 
-if [ $# -eq 0 ]; then
-    echo "Usage: ops/test_webhook <event_type>"
+if [ $# -lt 2 ]; then
+    echo "Usage: ops/test_webhook <channel_id> <event_type>"
     echo ""
     echo "Event types:"
     echo "  push            Simulated push with 2 commits"
     echo "  pull_request    Simulated PR opened"
     echo "  issue           Simulated issue opened"
+    echo ""
+    echo "Available channels:"
+    cd ~/showell_repos/angry-gopher
+    go run ./cmd/db_query -db ~/AngryGopher/prod/gopher.db \
+        "SELECT channel_id, name FROM channels ORDER BY channel_id" 2>/dev/null
     exit 1
 fi
 
-EVENT="$1"
+CHANNEL_ID="$1"
+EVENT="$2"
 URL="http://localhost:9000"
 
 # Look up an admin API key from the database.
@@ -29,9 +35,6 @@ if [ -z "$API_KEY" ]; then
     echo "Could not find an admin API key in the prod database."
     exit 1
 fi
-
-# Default to channel 1; override with CHANNEL_ID env var.
-CHANNEL_ID="${CHANNEL_ID:-1}"
 
 WEBHOOK_URL="${URL}/gopher/webhooks/github?api_key=${API_KEY}&channel_id=${CHANNEL_ID}"
 
