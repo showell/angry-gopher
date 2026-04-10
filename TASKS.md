@@ -11,6 +11,10 @@
 - [x] Add server metadata DB tables — generation tracking, user sessions, ops dashboard
 - [ ] GitHub linkifiers in Angry Cat (part of first-class GH integration)
 
+## Low Priority — Angry Gopher
+
+- [ ] Enforce user name/email uniqueness to avoid confusion (e.g. duplicate bot users)
+
 ## Low Priority — Angry Cat
 
 - [ ] Clean up async/await usage — refine policy and make it consistent across the codebase
