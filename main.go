@@ -29,6 +29,7 @@ import (
 	"angry-gopher/ratelimit"
 	"angry-gopher/reactions"
 	"angry-gopher/respond"
+	"angry-gopher/search"
 	"angry-gopher/users"
 	"angry-gopher/views"
 	"angry-gopher/webhooks"
@@ -53,6 +54,7 @@ func buildMux() *http.ServeMux {
 	mux.HandleFunc("/api/v1/users/", api(routeUserByID))
 	mux.HandleFunc("/api/v1/users", api(routeUsers))
 	mux.HandleFunc("/api/v1/settings", api(users.HandleUpdateSettings))
+	mux.HandleFunc("/api/v1/search", api(search.HandleSearch))
 	mux.HandleFunc("/api/v1/messages/render", api(messages.HandleRenderMessage))
 	mux.HandleFunc("/api/v1/messages/flags", api(flags.HandleUpdateFlags))
 	mux.HandleFunc("/api/v1/messages/", api(routeMessageByID))
@@ -87,6 +89,7 @@ func buildMux() *http.ServeMux {
 	mux.HandleFunc("/gopher/github", views.HandleGitHub)
 	mux.HandleFunc("/gopher/game-lobby", views.HandleGames)
 	mux.HandleFunc("/gopher/invites-view", views.HandleInvites)
+	mux.HandleFunc("/gopher/search", views.HandleSearch)
 	mux.HandleFunc("/gopher/", views.HandleIndex)
 
 	// --- Admin & uploads ---
@@ -114,6 +117,7 @@ func wireDB() {
 	dm.RenderMarkdown = renderMarkdown
 	views.DB = DB
 	views.RenderMarkdown = renderMarkdown
+	search.DB = DB
 	webhooks.DB = DB
 	events.OnRegister = recordUserLogin
 	messages.RenderMarkdown = renderMarkdown
