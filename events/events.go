@@ -150,6 +150,30 @@ func HandleRegister(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// HandleDeleteQueue handles DELETE /api/v1/events.
+func HandleDeleteQueue(w http.ResponseWriter, r *http.Request) {
+	queueID := r.URL.Query().Get("queue_id")
+
+	queuesMu.Lock()
+	_, ok := queues[queueID]
+	if ok {
+		delete(queues, queueID)
+	}
+	queuesMu.Unlock()
+
+	if !ok {
+		respond.WriteJSON(w, map[string]interface{}{
+			"result": "error",
+			"msg":    "Bad event queue id: " + queueID,
+			"code":   "BAD_EVENT_QUEUE_ID",
+		})
+		return
+	}
+
+	log.Printf("[api] Deleted event queue: %s", queueID)
+	respond.Success(w, nil)
+}
+
 // HandleEvents handles GET /api/v1/events (long-poll).
 func HandleEvents(w http.ResponseWriter, r *http.Request) {
 	queueID := r.URL.Query().Get("queue_id")

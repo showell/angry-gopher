@@ -37,7 +37,16 @@ func buildMux() *http.ServeMux {
 
 	mux.HandleFunc("/api/v1/server_settings", withCORS(handleServerSettings))
 	mux.HandleFunc("/api/v1/register", withCORS(events.HandleRegister))
-	mux.HandleFunc("/api/v1/events", withCORS(events.HandleEvents))
+	mux.HandleFunc("/api/v1/events", withCORS(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "GET":
+			events.HandleEvents(w, r)
+		case "DELETE":
+			events.HandleDeleteQueue(w, r)
+		default:
+			respond.Error(w, "Method not allowed")
+		}
+	}))
 	mux.HandleFunc("/api/v1/users", withCORS(users.HandleUsers))
 	mux.HandleFunc("/api/v1/settings", withCORS(users.HandleUpdateSettings))
 	mux.HandleFunc("/api/v1/users/me/subscriptions", withCORS(func(w http.ResponseWriter, r *http.Request) {
@@ -185,7 +194,7 @@ Backup the production database:
 	fmt.Printf("  Uploads:  %s\n", config.UploadsDir())
 	fmt.Printf("  Listening on %s\n", config.ListenAddr())
 	fmt.Printf("  Admin UI: http://localhost:%d/admin/\n", config.Port)
-	events.StartReaper(10 * time.Minute)
+	events.StartReaper(90 * time.Second)
 	log.Fatal(http.ListenAndServe(config.ListenAddr(), mux))
 }
 

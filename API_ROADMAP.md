@@ -174,7 +174,7 @@ Based on the [Zulip REST API table of contents](https://zulip.com/api/).
 |--------|----------|
 | DONE | Register an event queue |
 | DONE | Get events from an event queue |
-| | Delete an event queue |
+| DONE | Delete an event queue |
 
 ## Specialty endpoints
 
@@ -247,8 +247,8 @@ may be intentional in code blocks).
 
 ## Summary
 
-**DONE:** 20 endpoints (Messages: 7, Channels: 3, Users: 4,
-Server: 1, Invitations: 1, Real-time events: 2, Gopher-only: 9)
+**DONE:** 21 endpoints (Messages: 7, Channels: 3, Users: 4,
+Server: 1, Invitations: 1, Real-time events: 3, Gopher-only: 9)
 
 **N/A:** Scheduled messages (see DECISIONS.md)
 

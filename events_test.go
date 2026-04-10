@@ -130,6 +130,62 @@ func pollEvents(t *testing.T, queueID string, lastEventID int) []map[string]inte
 	return result
 }
 
+func TestEventDeleteQueue(t *testing.T) {
+	resetDB()
+	queueID := registerQueue(t, steveAuth)
+
+	// Delete the queue.
+	req := httptest.NewRequest("DELETE", "/api/v1/events?queue_id="+queueID, nil)
+	rec := httptest.NewRecorder()
+	events.HandleDeleteQueue(rec, req)
+	body := parseJSON(t, rec)
+	if body["result"] != "success" {
+		t.Fatalf("expected success, got %v", body)
+	}
+
+	// Polling the deleted queue should return BAD_EVENT_QUEUE_ID.
+	pollReq := httptest.NewRequest("GET", "/api/v1/events?queue_id="+queueID+"&last_event_id=-1", nil)
+	pollRec := httptest.NewRecorder()
+	events.HandleEvents(pollRec, pollReq)
+	pollBody := parseJSON(t, pollRec)
+	if pollBody["code"] != "BAD_EVENT_QUEUE_ID" {
+		t.Fatalf("expected BAD_EVENT_QUEUE_ID after delete, got %v", pollBody)
+	}
+}
+
+func TestEventDeleteBadQueue(t *testing.T) {
+	resetDB()
+
+	req := httptest.NewRequest("DELETE", "/api/v1/events?queue_id=nonexistent", nil)
+	rec := httptest.NewRecorder()
+	events.HandleDeleteQueue(rec, req)
+	body := parseJSON(t, rec)
+	if body["code"] != "BAD_EVENT_QUEUE_ID" {
+		t.Fatalf("expected BAD_EVENT_QUEUE_ID, got %v", body)
+	}
+}
+
+func TestEventDeleteStopsEventAccumulation(t *testing.T) {
+	resetDB()
+	queueID := registerQueue(t, steveAuth)
+
+	// Delete the queue.
+	req := httptest.NewRequest("DELETE", "/api/v1/events?queue_id="+queueID, nil)
+	rec := httptest.NewRecorder()
+	events.HandleDeleteQueue(rec, req)
+
+	// Push events after deletion — should not accumulate anywhere.
+	events.PushToAll(map[string]interface{}{"type": "orphan"})
+
+	// Verify no queues have pending events.
+	stats := events.Stats()
+	for _, q := range stats {
+		if q.ID == queueID {
+			t.Fatalf("deleted queue %s still exists with %d events", queueID, q.EventCount)
+		}
+	}
+}
+
 // No heartbeat fabrication: polling with no pending events should
 // return an empty array, not a synthetic heartbeat. Fabricated
 // heartbeats used lastEventID+1 as their ID, which collided with
