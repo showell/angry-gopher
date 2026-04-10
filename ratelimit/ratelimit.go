@@ -16,8 +16,9 @@ var (
 )
 
 var (
-	mu       sync.Mutex
-	requests = map[int][]time.Time{}
+	mu           sync.Mutex
+	requests     = map[int][]time.Time{}
+	rejected429s int
 )
 
 // Check returns true if the user is within the rate limit.
@@ -40,6 +41,7 @@ func Check(userID int) bool {
 
 	if len(valid) >= MaxRequests {
 		requests[userID] = valid
+		rejected429s++
 		return false
 	}
 
@@ -47,9 +49,40 @@ func Check(userID int) bool {
 	return true
 }
 
+// UserStats holds the current rate limit state for a single user.
+type UserStats struct {
+	UserID          int
+	RequestsInWindow int
+}
+
+// Stats returns the total number of 429 rejections and per-user
+// request counts within the current window.
+func Stats() (rejected int, users []UserStats) {
+	mu.Lock()
+	defer mu.Unlock()
+
+	now := time.Now()
+	cutoff := now.Add(-Window)
+
+	rejected = rejected429s
+	for userID, timestamps := range requests {
+		count := 0
+		for _, ts := range timestamps {
+			if ts.After(cutoff) {
+				count++
+			}
+		}
+		if count > 0 {
+			users = append(users, UserStats{UserID: userID, RequestsInWindow: count})
+		}
+	}
+	return
+}
+
 // Reset clears all tracked state. Used by tests.
 func Reset() {
 	mu.Lock()
 	defer mu.Unlock()
 	requests = map[int][]time.Time{}
+	rejected429s = 0
 }

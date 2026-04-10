@@ -31,6 +31,33 @@ var (
 	nextQueueID int
 )
 
+// QueueStats holds a snapshot of one event queue's state.
+type QueueStats struct {
+	ID         string
+	UserID     int
+	EventCount int
+	LastID     int
+}
+
+// Stats returns a snapshot of all registered event queues.
+func Stats() []QueueStats {
+	queuesMu.Lock()
+	defer queuesMu.Unlock()
+
+	stats := make([]QueueStats, 0, len(queues))
+	for _, q := range queues {
+		q.mu.Lock()
+		stats = append(stats, QueueStats{
+			ID:         q.id,
+			UserID:     q.userID,
+			EventCount: len(q.events),
+			LastID:     q.lastID,
+		})
+		q.mu.Unlock()
+	}
+	return stats
+}
+
 func newQueue(userID int) *queue {
 	queuesMu.Lock()
 	defer queuesMu.Unlock()

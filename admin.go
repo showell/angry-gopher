@@ -8,10 +8,13 @@ import (
 	"fmt"
 	"html"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
+	"angry-gopher/events"
 	"angry-gopher/presence"
+	"angry-gopher/ratelimit"
 )
 
 func adminHandler(w http.ResponseWriter, r *http.Request) {
@@ -28,6 +31,8 @@ func adminHandler(w http.ResponseWriter, r *http.Request) {
 		renderAdminIndex(w)
 	} else if tableName == "presence" {
 		renderAdminPresence(w)
+	} else if tableName == "ops" {
+		renderOpsDashboard(w)
 	} else {
 		renderAdminTable(w, tableName)
 	}
@@ -61,6 +66,7 @@ a { color: #000080; font-weight: bold; font-size: 18px; }
 	fmt.Fprint(w, `<h2 style="color:#000080;margin-top:30px">In-Memory State</h2>`)
 	fmt.Fprint(w, `<div class="table-list">`)
 	fmt.Fprint(w, `<div><a href="/admin/presence">presence</a><span class="count">(live)</span></div>`)
+	fmt.Fprint(w, `<div><a href="/admin/ops">ops dashboard</a><span class="count">(live)</span></div>`)
 	fmt.Fprint(w, `</div>`)
 
 	fmt.Fprint(w, `</body></html>`)
@@ -167,6 +173,132 @@ tr:hover td { background: #f0f0ff; }
 	}
 
 	fmt.Fprintf(w, `<p style="color:#888">%d entries</p>`, len(entries))
+	fmt.Fprint(w, `</body></html>`)
+}
+
+func renderOpsDashboard(w http.ResponseWriter) {
+	fmt.Fprint(w, `<!DOCTYPE html>
+<html><head><title>Ops Dashboard — Angry Gopher</title>
+<meta http-equiv="refresh" content="10">
+<style>
+body { font-family: sans-serif; margin: 40px; }
+h1 { color: #000080; }
+h2 { color: #000080; margin-top: 28px; }
+a { color: #000080; }
+table { border-collapse: collapse; margin-top: 8px; }
+th { background: #000080; color: white; padding: 6px 12px; text-align: left; }
+td { border-bottom: 1px solid #ccc; padding: 6px 12px; }
+tr:hover td { background: #f0f0ff; }
+.ok { color: green; font-weight: bold; }
+.warn { color: orange; font-weight: bold; }
+.stat { font-size: 28px; font-weight: bold; color: #000080; }
+.stat-label { font-size: 14px; color: #666; }
+.stats-row { display: flex; gap: 40px; margin: 12px 0; }
+.stat-box { text-align: center; }
+</style>
+</head><body>
+<a href="/admin/">← Back</a>
+<h1>🔧 Ops Dashboard</h1>
+<p style="color:#888;font-size:13px">Auto-refreshes every 10 seconds</p>`)
+
+	// --- Summary stats ---
+	queueStats := events.Stats()
+	onlineIDs := presence.OnlineUserIDs()
+	rejected429s, userRLStats := ratelimit.Stats()
+
+	fmt.Fprint(w, `<div class="stats-row">`)
+	fmt.Fprintf(w, `<div class="stat-box"><div class="stat">%d</div><div class="stat-label">Event Queues</div></div>`, len(queueStats))
+	fmt.Fprintf(w, `<div class="stat-box"><div class="stat">%d</div><div class="stat-label">Users Online</div></div>`, len(onlineIDs))
+	fmt.Fprintf(w, `<div class="stat-box"><div class="stat">%d</div><div class="stat-label">429s Sent</div></div>`, rejected429s)
+
+	// Count unexpired invites.
+	var inviteCount int
+	DB.QueryRow(`SELECT COUNT(*) FROM invites WHERE expires_at > ?`, time.Now().Unix()).Scan(&inviteCount)
+	fmt.Fprintf(w, `<div class="stat-box"><div class="stat">%d</div><div class="stat-label">Active Invites</div></div>`, inviteCount)
+	fmt.Fprint(w, `</div>`)
+
+	// --- Event Queues ---
+	fmt.Fprint(w, `<h2>Event Queues</h2>`)
+	if len(queueStats) == 0 {
+		fmt.Fprint(w, `<p>No registered queues.</p>`)
+	} else {
+		// Look up user names.
+		fmt.Fprint(w, `<table><thead><tr><th>Queue ID</th><th>User</th><th>Pending Events</th><th>Last Event ID</th></tr></thead><tbody>`)
+		sort.Slice(queueStats, func(i, j int) bool {
+			return queueStats[i].ID < queueStats[j].ID
+		})
+		for _, q := range queueStats {
+			var fullName string
+			DB.QueryRow(`SELECT full_name FROM users WHERE id = ?`, q.UserID).Scan(&fullName)
+			if fullName == "" {
+				fullName = fmt.Sprintf("user %d", q.UserID)
+			}
+			fmt.Fprintf(w, `<tr><td>%s</td><td>%s (id %d)</td><td>%d</td><td>%d</td></tr>`,
+				html.EscapeString(q.ID),
+				html.EscapeString(fullName),
+				q.UserID,
+				q.EventCount,
+				q.LastID,
+			)
+		}
+		fmt.Fprint(w, `</tbody></table>`)
+	}
+
+	// --- Presence ---
+	fmt.Fprint(w, `<h2>Presence</h2>`)
+	allPresence := presence.GetAll()
+	if len(allPresence) == 0 {
+		fmt.Fprint(w, `<p>No presence data.</p>`)
+	} else {
+		now := time.Now()
+		fmt.Fprint(w, `<table><thead><tr><th>User</th><th>Status</th><th>Last Seen</th></tr></thead><tbody>`)
+		for userID, ts := range allPresence {
+			var fullName string
+			DB.QueryRow(`SELECT full_name FROM users WHERE id = ?`, userID).Scan(&fullName)
+			if fullName == "" {
+				fullName = fmt.Sprintf("user %d", userID)
+			}
+			ago := now.Sub(ts).Truncate(time.Second)
+			cssClass := "ok"
+			status := "online"
+			if ago >= presence.OfflineThreshold {
+				cssClass = "warn"
+				status = "offline"
+			}
+			fmt.Fprintf(w, `<tr><td>%s (id %d)</td><td class="%s">%s</td><td>%s ago</td></tr>`,
+				html.EscapeString(fullName), userID, cssClass, status, ago)
+		}
+		fmt.Fprint(w, `</tbody></table>`)
+	}
+
+	// --- Rate Limiting ---
+	fmt.Fprint(w, `<h2>Rate Limiting</h2>`)
+	fmt.Fprintf(w, `<p>Window: %d requests / %s — Total 429s served: <b>%d</b></p>`,
+		ratelimit.MaxRequests, ratelimit.Window, rejected429s)
+	if len(userRLStats) == 0 {
+		fmt.Fprint(w, `<p>No active users in current window.</p>`)
+	} else {
+		sort.Slice(userRLStats, func(i, j int) bool {
+			return userRLStats[i].RequestsInWindow > userRLStats[j].RequestsInWindow
+		})
+		fmt.Fprint(w, `<table><thead><tr><th>User</th><th>Requests in Window</th><th>Headroom</th></tr></thead><tbody>`)
+		for _, u := range userRLStats {
+			var fullName string
+			DB.QueryRow(`SELECT full_name FROM users WHERE id = ?`, u.UserID).Scan(&fullName)
+			if fullName == "" {
+				fullName = fmt.Sprintf("user %d", u.UserID)
+			}
+			headroom := ratelimit.MaxRequests - u.RequestsInWindow
+			cssClass := "ok"
+			if headroom < 20 {
+				cssClass = "warn"
+			}
+			fmt.Fprintf(w, `<tr><td>%s (id %d)</td><td>%d</td><td class="%s">%d</td></tr>`,
+				html.EscapeString(fullName), u.UserID, u.RequestsInWindow, cssClass, headroom)
+		}
+		fmt.Fprint(w, `</tbody></table>`)
+	}
+
 	fmt.Fprint(w, `</body></html>`)
 }
 

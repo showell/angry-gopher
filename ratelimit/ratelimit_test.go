@@ -113,6 +113,78 @@ func TestBlockedWhenAllTimestampsAreRecent(t *testing.T) {
 	}
 }
 
+func TestRejectedCounterIncrements(t *testing.T) {
+	Reset()
+	for i := 0; i < MaxRequests; i++ {
+		Check(1)
+	}
+
+	// Three rejected requests.
+	Check(1)
+	Check(1)
+	Check(1)
+
+	rejected, _ := Stats()
+	if rejected != 3 {
+		t.Errorf("expected 3 rejections, got %d", rejected)
+	}
+}
+
+func TestStatsReportsActiveUsers(t *testing.T) {
+	Reset()
+	Check(1)
+	Check(1)
+	Check(2)
+
+	_, users := Stats()
+	if len(users) != 2 {
+		t.Fatalf("expected 2 users in stats, got %d", len(users))
+	}
+
+	counts := map[int]int{}
+	for _, u := range users {
+		counts[u.UserID] = u.RequestsInWindow
+	}
+	if counts[1] != 2 {
+		t.Errorf("user 1: expected 2 requests, got %d", counts[1])
+	}
+	if counts[2] != 1 {
+		t.Errorf("user 2: expected 1 request, got %d", counts[2])
+	}
+}
+
+func TestStatsExcludesExpiredRequests(t *testing.T) {
+	Reset()
+
+	old := time.Now().Add(-Window - time.Second)
+	injectTimestamps(1, []time.Time{old, old, old})
+
+	_, users := Stats()
+	if len(users) != 0 {
+		t.Errorf("expected no active users after expiry, got %v", users)
+	}
+}
+
+func TestResetClearsRejectedCounter(t *testing.T) {
+	Reset()
+	for i := 0; i < MaxRequests; i++ {
+		Check(1)
+	}
+	Check(1) // rejected
+
+	rejected, _ := Stats()
+	if rejected != 1 {
+		t.Fatalf("expected 1 rejection before reset, got %d", rejected)
+	}
+
+	Reset()
+
+	rejected, _ = Stats()
+	if rejected != 0 {
+		t.Errorf("expected 0 rejections after reset, got %d", rejected)
+	}
+}
+
 func TestResetClearsAllState(t *testing.T) {
 	reset()
 	for i := 0; i < MaxRequests; i++ {
