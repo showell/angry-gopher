@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"angry-gopher/auth"
+	"angry-gopher/events"
 	"angry-gopher/respond"
 )
 
@@ -82,6 +83,18 @@ func HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 		respond.Error(w, "Failed to update full_name: "+err.Error())
 		return
 	}
+
+	// Notify all connected clients so buddy lists, message
+	// sender names, etc. update in real time without a page
+	// refresh. Matches Zulip's "realm_user" event shape.
+	events.PushToAll(map[string]interface{}{
+		"type": "realm_user",
+		"op":   "update",
+		"person": map[string]interface{}{
+			"user_id":   userID,
+			"full_name": fullName,
+		},
+	})
 
 	respond.Success(w, map[string]interface{}{
 		"full_name": fullName,
