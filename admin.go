@@ -5,12 +5,17 @@
 package main
 
 import (
+	"crypto/hmac"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"html"
 	"log"
 	"net/http"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -20,11 +25,59 @@ import (
 	"angry-gopher/ratelimit"
 )
 
-func adminHandler(w http.ResponseWriter, r *http.Request) {
+// Session cookie signing key — regenerated on each server start,
+// so sessions don't survive restarts. That's fine for admin use.
+var sessionKey []byte
+
+func init() {
+	sessionKey = make([]byte, 32)
+	rand.Read(sessionKey)
+}
+
+func signSession(userID int) string {
+	payload := strconv.Itoa(userID)
+	mac := hmac.New(sha256.New, sessionKey)
+	mac.Write([]byte(payload))
+	sig := hex.EncodeToString(mac.Sum(nil))
+	return payload + "." + sig
+}
+
+func verifySession(cookie string) int {
+	parts := strings.SplitN(cookie, ".", 2)
+	if len(parts) != 2 {
+		return 0
+	}
+	userID, err := strconv.Atoi(parts[0])
+	if err != nil || userID == 0 {
+		return 0
+	}
+	mac := hmac.New(sha256.New, sessionKey)
+	mac.Write([]byte(parts[0]))
+	expected := hex.EncodeToString(mac.Sum(nil))
+	if !hmac.Equal([]byte(parts[1]), []byte(expected)) {
+		return 0
+	}
+	return userID
+}
+
+// authenticateAdmin checks for a valid admin session cookie first,
+// then falls back to Basic auth (used by CLI tools like health_check).
+func authenticateAdmin(r *http.Request) int {
+	if c, err := r.Cookie("gopher_admin"); err == nil {
+		if userID := verifySession(c.Value); userID != 0 && auth.IsAdmin(userID) {
+			return userID
+		}
+	}
 	userID := auth.Authenticate(r)
-	if userID == 0 || !auth.IsAdmin(userID) {
-		w.Header().Set("WWW-Authenticate", `Basic realm="Angry Gopher Admin"`)
-		http.Error(w, "Admin access required", http.StatusForbidden)
+	if userID != 0 && auth.IsAdmin(userID) {
+		return userID
+	}
+	return 0
+}
+
+func adminHandler(w http.ResponseWriter, r *http.Request) {
+	if authenticateAdmin(r) == 0 {
+		http.Redirect(w, r, "/admin/login", http.StatusSeeOther)
 		return
 	}
 
@@ -219,6 +272,7 @@ tr:hover td { background: #f0f0ff; }
 </form>`)
 
 	// --- Summary stats ---
+	now := time.Now()
 	queueStats := events.Stats()
 	onlineIDs := presence.OnlineUserIDs()
 	rejected429s, userRLStats := ratelimit.Stats()
@@ -244,7 +298,6 @@ tr:hover td { background: #f0f0ff; }
 		sort.Slice(queueStats, func(i, j int) bool {
 			return queueStats[i].ID < queueStats[j].ID
 		})
-		now := time.Now()
 		for _, q := range queueStats {
 			var fullName string
 			DB.QueryRow(`SELECT full_name FROM users WHERE id = ?`, q.UserID).Scan(&fullName)
@@ -328,25 +381,116 @@ tr:hover td { background: #f0f0ff; }
 		fmt.Fprint(w, `</tbody></table>`)
 	}
 
-	// --- Server Info ---
-	fmt.Fprint(w, `<h2>Server Info</h2>`)
+	// --- Server Session ---
+	fmt.Fprint(w, `<h2>Server Session</h2>`)
+	uptime := now.Sub(serverStartTime).Truncate(time.Second)
+	fmt.Fprintf(w, `<table>
+<tr><td><b>Generation</b></td><td>%d</td></tr>
+<tr><td><b>Started</b></td><td>%s (%s ago)</td></tr>
+<tr><td><b>Git Commit</b></td><td><code>%s</code></td></tr>`,
+		currentGeneration,
+		serverStartTime.Format("2006-01-02 15:04:05"),
+		uptime,
+		html.EscapeString(gitCommit),
+	)
 	if serverConfig != nil {
-		fmt.Fprintf(w, `<table>
+		fmt.Fprintf(w, `
 <tr><td><b>Mode</b></td><td>%s</td></tr>
 <tr><td><b>Database</b></td><td><code>%s</code></td></tr>
-<tr><td><b>Listening</b></td><td>%s</td></tr>
-</table>`,
+<tr><td><b>Listening</b></td><td>%s</td></tr>`,
 			html.EscapeString(serverConfig.Mode),
 			html.EscapeString(serverConfig.DBPath()),
 			html.EscapeString(serverConfig.ListenAddr()),
 		)
-		fmt.Fprintf(w, `<p style="margin-top:12px;font-size:13px;color:#666">Logs go to stderr. To tail:</p>`)
-		fmt.Fprintf(w, `<pre style="background:#f4f4f4;padding:8px;font-size:13px">GOPHER_CONFIG=... ./angry-gopher 2>&1 | tail -f</pre>`)
-	} else {
-		fmt.Fprint(w, `<p style="color:#888">Running in test mode (no config file).</p>`)
+	}
+	fmt.Fprint(w, `</table>`)
+
+	// --- User Sessions ---
+	fmt.Fprint(w, `<h2>User Sessions</h2>`)
+	usRows, err := DB.Query(`
+		SELECT us.user_id, u.full_name, us.generation, us.logged_in_at
+		FROM user_sessions us
+		JOIN users u ON us.user_id = u.id
+		ORDER BY us.id DESC
+		LIMIT 20`)
+	if err == nil {
+		defer usRows.Close()
+		fmt.Fprint(w, `<table><thead><tr><th>User</th><th>Generation</th><th>Logged In</th></tr></thead><tbody>`)
+		rowCount := 0
+		for usRows.Next() {
+			var userID, gen int
+			var fullName, loggedIn string
+			usRows.Scan(&userID, &fullName, &gen, &loggedIn)
+			genClass := "ok"
+			if gen != currentGeneration {
+				genClass = "warn"
+			}
+			fmt.Fprintf(w, `<tr><td>%s (id %d)</td><td class="%s">%d</td><td>%s</td></tr>`,
+				html.EscapeString(fullName), userID, genClass, gen, html.EscapeString(loggedIn))
+			rowCount++
+		}
+		fmt.Fprint(w, `</tbody></table>`)
+		if rowCount == 0 {
+			fmt.Fprint(w, `<p>No user sessions recorded yet.</p>`)
+		}
 	}
 
 	fmt.Fprint(w, `</body></html>`)
+}
+
+func handleAdminLogin(w http.ResponseWriter, r *http.Request) {
+	if r.Method == "POST" {
+		r.ParseForm()
+		email := r.FormValue("email")
+		apiKey := r.FormValue("api_key")
+
+		var userID int
+		err := DB.QueryRow(`SELECT id FROM users WHERE email = ? AND api_key = ? AND is_admin = 1`,
+			email, apiKey).Scan(&userID)
+		if err != nil || userID == 0 {
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			fmt.Fprint(w, adminLoginPage("Invalid credentials or not an admin."))
+			return
+		}
+
+		http.SetCookie(w, &http.Cookie{
+			Name:     "gopher_admin",
+			Value:    signSession(userID),
+			Path:     "/admin/",
+			HttpOnly: true,
+			SameSite: http.SameSiteLaxMode,
+		})
+		http.Redirect(w, r, "/admin/", http.StatusSeeOther)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	fmt.Fprint(w, adminLoginPage(""))
+}
+
+func adminLoginPage(errMsg string) string {
+	errorHTML := ""
+	if errMsg != "" {
+		errorHTML = fmt.Sprintf(`<p style="color:red;font-weight:bold">%s</p>`, html.EscapeString(errMsg))
+	}
+	return fmt.Sprintf(`<!DOCTYPE html>
+<html><head><title>Admin Login — Angry Gopher</title>
+<style>
+body { font-family: sans-serif; margin: 40px; max-width: 400px; }
+h1 { color: #000080; }
+label { display: block; margin-top: 12px; font-weight: bold; }
+input { width: 100%%; padding: 6px; margin-top: 4px; font-size: 14px; box-sizing: border-box; }
+button { margin-top: 16px; padding: 8px 20px; font-size: 14px; background: #000080; color: white; border: none; cursor: pointer; border-radius: 4px; }
+</style>
+</head><body>
+<h1>Admin Login</h1>
+%s
+<form method="POST">
+<label>Email<input type="email" name="email" required autofocus></label>
+<label>API Key<input type="password" name="api_key" required></label>
+<button type="submit">Log in</button>
+</form>
+</body></html>`, errorHTML)
 }
 
 func handleHealthCheck(w http.ResponseWriter, r *http.Request) {
@@ -373,6 +517,9 @@ func handleHealthCheck(w http.ResponseWriter, r *http.Request) {
 		Headroom int `json:"headroom"`
 	}
 	type healthData struct {
+		Generation   int          `json:"generation"`
+		UptimeSecs   int          `json:"uptime_secs"`
+		GitCommit    string       `json:"git_commit"`
 		Queues       []queueInfo  `json:"queues"`
 		OnlineUsers  int          `json:"online_users"`
 		Rejected429s int          `json:"rejected_429s"`
@@ -381,6 +528,9 @@ func handleHealthCheck(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := healthData{
+		Generation:   currentGeneration,
+		UptimeSecs:   int(time.Since(serverStartTime).Seconds()),
+		GitCommit:    gitCommit,
 		OnlineUsers:  len(onlineIDs),
 		Rejected429s: rejected429s,
 		RLMax:        ratelimit.MaxRequests,

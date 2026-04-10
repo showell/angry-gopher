@@ -2,8 +2,9 @@
 
 ## High Priority
 
-- [ ] Persist buddies (presence) in the database — currently in-memory only, lost on restart
+- [x] Persist buddies (presence) in the database — server API done, Angry Cat wired up
 - [ ] Add server metadata DB tables (e.g. server start time) — support ops dashboard with persistent data
+- [ ] Clean up all tsc errors in Angry Cat
 
 ## Normal Priority
 

@@ -162,7 +162,7 @@ Based on the [Zulip REST API table of contents](https://zulip.com/api/).
 
 | Status | Endpoint |
 |--------|----------|
-| | Get server settings |
+| DONE | Get server settings |
 | | Get linkifiers |
 | | Add a linkifier |
 | | Update a linkifier |
