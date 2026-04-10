@@ -129,12 +129,25 @@ func renderMessages(w http.ResponseWriter, userID int, channelID int, topic stri
 
 	fmt.Fprintf(w, `<p class="muted">%d messages</p>`, len(ids))
 
-	if len(ids) > 0 {
-		placeholders := make([]string, len(ids))
-		args := make([]interface{}, len(ids))
-		for i, id := range ids {
-			placeholders[i] = "?"
-			args[i] = id
+	flusher, canFlush := w.(http.Flusher)
+	if canFlush {
+		flusher.Flush()
+	}
+
+	// Hydrate and flush in chunks.
+	const chunkSize = 500
+	for i := 0; i < len(ids); i += chunkSize {
+		end := i + chunkSize
+		if end > len(ids) {
+			end = len(ids)
+		}
+		chunk := ids[i:end]
+
+		placeholders := make([]string, len(chunk))
+		args := make([]interface{}, len(chunk))
+		for j, id := range chunk {
+			placeholders[j] = "?"
+			args[j] = id
 		}
 
 		rows, err := DB.Query(fmt.Sprintf(`
@@ -145,11 +158,8 @@ func renderMessages(w http.ResponseWriter, userID int, channelID int, topic stri
 			WHERE m.id IN (%s)
 			ORDER BY m.id DESC`, strings.Join(placeholders, ",")), args...)
 		if err != nil {
-			fmt.Fprint(w, `<p>Failed to hydrate messages.</p>`)
-			PageFooter(w)
-			return
+			continue
 		}
-		defer rows.Close()
 
 		for rows.Next() {
 			var msgID, senderID int
@@ -161,6 +171,11 @@ func renderMessages(w http.ResponseWriter, userID int, channelID int, topic stri
 <b>%s</b> <span class="muted">%s</span>
 <div class="msg-content">%s</div>
 </div>`, html.EscapeString(senderName), html.EscapeString(t), content)
+		}
+		rows.Close()
+
+		if canFlush {
+			flusher.Flush()
 		}
 	}
 
