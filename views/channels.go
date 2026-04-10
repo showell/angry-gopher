@@ -91,7 +91,8 @@ func renderChannelDetail(w http.ResponseWriter, userID int, channelID int) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	PageHeader(w, fmt.Sprintf("#%s", name))
 
-	fmt.Fprint(w, `<a class="back" href="/gopher/channels">&larr; Back to channels</a>`)
+	Breadcrumb(w, "Channels", "/gopher/channels", "#"+name)
+	fmt.Fprintf(w, `<p><a href="/gopher/messages?channel_id=%d">Browse topics &rarr;</a></p>`, channelID)
 
 	visibility := "Public"
 	if inviteOnly == 1 {

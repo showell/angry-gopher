@@ -144,9 +144,9 @@ func UserLink(userID int, name string) string {
 	return fmt.Sprintf(`<a href="/gopher/users?id=%d">%s</a>`, userID, html.EscapeString(name))
 }
 
-// ChannelLink returns an HTML link to the channel's page.
+// ChannelLink returns an HTML link to the channel's topics page.
 func ChannelLink(channelID int, name string) string {
-	return fmt.Sprintf(`<a href="/gopher/channels?id=%d">#%s</a>`, channelID, html.EscapeString(name))
+	return fmt.Sprintf(`<a href="/gopher/messages?channel_id=%d">#%s</a>`, channelID, html.EscapeString(name))
 }
 
 // HandleIndex serves /gopher/ — the master page linking to all views.
