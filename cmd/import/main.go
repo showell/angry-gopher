@@ -32,6 +32,8 @@ import (
 
 	"bytes"
 
+	"angry-gopher/schema"
+
 	_ "modernc.org/sqlite"
 )
 
@@ -147,74 +149,6 @@ var targetByName = map[string]bool{
 
 // --- Schema ---
 
-const gopherSchema = `
-CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY,
-    email TEXT NOT NULL,
-    full_name TEXT NOT NULL,
-    api_key TEXT NOT NULL DEFAULT '',
-    is_admin INTEGER NOT NULL DEFAULT 0
-);
-CREATE TABLE IF NOT EXISTS channels (
-    channel_id INTEGER PRIMARY KEY,
-    name TEXT NOT NULL,
-    channel_weekly_traffic INTEGER NOT NULL DEFAULT 0,
-    invite_only INTEGER NOT NULL DEFAULT 0
-);
-CREATE TABLE IF NOT EXISTS channel_descriptions (
-    channel_id INTEGER PRIMARY KEY REFERENCES channels(channel_id),
-    markdown TEXT NOT NULL DEFAULT '',
-    html TEXT NOT NULL DEFAULT ''
-);
-CREATE TABLE IF NOT EXISTS subscriptions (
-    user_id INTEGER NOT NULL REFERENCES users(id),
-    channel_id INTEGER NOT NULL REFERENCES channels(channel_id),
-    PRIMARY KEY (user_id, channel_id)
-);
-CREATE TABLE IF NOT EXISTS topics (
-    topic_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    channel_id INTEGER NOT NULL REFERENCES channels(channel_id),
-    topic_name TEXT NOT NULL,
-    UNIQUE(channel_id, topic_name)
-);
-CREATE TABLE IF NOT EXISTS message_content (
-    content_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    markdown TEXT NOT NULL,
-    html TEXT NOT NULL
-);
-CREATE TABLE IF NOT EXISTS messages (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    content_id INTEGER NOT NULL REFERENCES message_content(content_id),
-    sender_id INTEGER NOT NULL REFERENCES users(id),
-    channel_id INTEGER NOT NULL REFERENCES channels(channel_id),
-    topic_id INTEGER NOT NULL REFERENCES topics(topic_id),
-    timestamp INTEGER NOT NULL
-);
-CREATE TABLE IF NOT EXISTS reactions (
-    message_id INTEGER NOT NULL REFERENCES messages(id),
-    user_id INTEGER NOT NULL REFERENCES users(id),
-    emoji_name TEXT NOT NULL,
-    emoji_code TEXT NOT NULL,
-    PRIMARY KEY (message_id, user_id, emoji_code)
-);
-CREATE TABLE IF NOT EXISTS unreads (
-    message_id INTEGER NOT NULL REFERENCES messages(id),
-    user_id INTEGER NOT NULL REFERENCES users(id),
-    PRIMARY KEY (message_id, user_id)
-);
-CREATE TABLE IF NOT EXISTS starred_messages (
-    message_id INTEGER NOT NULL REFERENCES messages(id),
-    user_id INTEGER NOT NULL REFERENCES users(id),
-    PRIMARY KEY (message_id, user_id)
-);
-CREATE TABLE IF NOT EXISTS invites (
-    token TEXT PRIMARY KEY,
-    email TEXT NOT NULL,
-    full_name TEXT NOT NULL,
-    expires_at INTEGER NOT NULL
-);
-`
-
 const importSchema = `
 CREATE TABLE IF NOT EXISTS zulip_users (
     zulip_id INTEGER PRIMARY KEY,
@@ -241,7 +175,7 @@ CREATE TABLE IF NOT EXISTS zulip_channels (
 `
 
 func ensureSchema(db *sql.DB) {
-	if _, err := db.Exec(gopherSchema); err != nil {
+	if _, err := db.Exec(schema.Core); err != nil {
 		log.Fatalf("Failed to create Gopher schema: %v", err)
 	}
 	if _, err := db.Exec(importSchema); err != nil {
@@ -473,6 +407,12 @@ var cutoffTimestamp = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC).Unix()
 // so that auto-increment IDs increase monotonically with time.
 // This preserves the "higher ID = more recent" invariant that
 // Angry Cat relies on for sorting.
+type parsedReaction struct {
+	userID    int // gopher ID
+	emojiName string
+	emojiCode string
+}
+
 type parsedMessage struct {
 	zulipID   int
 	senderID  int // gopher ID
@@ -481,6 +421,7 @@ type parsedMessage struct {
 	markdown  string
 	html      string
 	timestamp int64
+	reactions []parsedReaction
 }
 
 func importMessages(zulip *ZulipClient, db *sql.DB, batchSize int, maxBatches int) {
@@ -517,6 +458,7 @@ func importMessages(zulip *ZulipClient, db *sql.DB, batchSize int, maxBatches in
 	var buffer []parsedMessage
 	anchor := "newest"
 	totalSkipped := 0
+	totalReactions := 0
 	reachedCutoff := false
 
 	batchCount := 0
@@ -582,7 +524,7 @@ func importMessages(zulip *ZulipClient, db *sql.DB, batchSize int, maxBatches in
 			}
 
 			markdown := msg["content"].(string)
-			buffer = append(buffer, parsedMessage{
+			pm := parsedMessage{
 				zulipID:   zulipMsgID,
 				senderID:  senderGopherID,
 				channelID: channelGopherID,
@@ -590,7 +532,30 @@ func importMessages(zulip *ZulipClient, db *sql.DB, batchSize int, maxBatches in
 				markdown:  markdown,
 				html:      renderMarkdown(markdown),
 				timestamp: timestamp,
-			})
+			}
+
+			// Capture reactions.
+			if rawReactions, ok := msg["reactions"].([]interface{}); ok {
+				for _, rr := range rawReactions {
+					r := rr.(map[string]interface{})
+					rType, _ := r["reaction_type"].(string)
+					if rType != "unicode_emoji" {
+						continue
+					}
+					zulipUserID := int(r["user_id"].(float64))
+					gopherUserID := userMap[zulipUserID]
+					if gopherUserID == 0 {
+						continue
+					}
+					pm.reactions = append(pm.reactions, parsedReaction{
+						userID:    gopherUserID,
+						emojiName: r["emoji_name"].(string),
+						emojiCode: r["emoji_code"].(string),
+					})
+				}
+			}
+
+			buffer = append(buffer, pm)
 			batchAccepted++
 		}
 
@@ -656,11 +621,17 @@ func importMessages(zulip *ZulipClient, db *sql.DB, batchSize int, maxBatches in
 		tx.Exec(`INSERT INTO zulip_message_map (zulip_id, gopher_id) VALUES (?, ?)`,
 			pm.zulipID, gopherMsgID)
 
+		for _, r := range pm.reactions {
+			tx.Exec(`INSERT OR IGNORE INTO reactions (message_id, user_id, emoji_name, emoji_code) VALUES (?, ?, ?, ?)`,
+				gopherMsgID, r.userID, r.emojiName, r.emojiCode)
+			totalReactions++
+		}
+
 		tx.Commit()
 		totalImported++
 	}
 
-	log.Printf("Done: %d messages imported, %d skipped", totalImported, totalSkipped)
+	log.Printf("Done: %d messages imported, %d reactions, %d skipped", totalImported, totalReactions, totalSkipped)
 }
 
 // --- Welcome message ---
