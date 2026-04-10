@@ -70,8 +70,8 @@ Based on the [Zulip REST API table of contents](https://zulip.com/api/).
 | Status | Endpoint |
 |--------|----------|
 | DONE | Get subscribed channels |
-| | Subscribe to a channel |
-| | Unsubscribe from a channel |
+| DONE | Subscribe to a channel |
+| DONE | Unsubscribe from a channel |
 | | Get subscription status |
 | DONE | Get channel subscribers |
 | | Get a user's subscribed channels |
@@ -85,7 +85,7 @@ Based on the [Zulip REST API table of contents](https://zulip.com/api/).
 | | Archive a channel |
 | | Get channel's email address |
 | DONE | Get topics in a channel |
-| | Topic muting |
+| DONE | Topic muting |
 | | Update personal preferences for a topic |
 | | Delete a topic |
 | | Add a default channel |
@@ -96,9 +96,9 @@ Based on the [Zulip REST API table of contents](https://zulip.com/api/).
 
 | Status | Endpoint |
 |--------|----------|
-| | Get a user |
+| DONE | Get a user |
 | | Get a user by email |
-| | Get own user |
+| DONE | Get own user |
 | DONE | Get users |
 | | Create a user |
 | | Update a user |
@@ -120,8 +120,8 @@ Based on the [Zulip REST API table of contents](https://zulip.com/api/).
 | | Delete an attachment |
 | DONE | Update settings |
 | N/A | User groups (see DECISIONS.md) |
-| | Mute a user |
-| | Unmute a user |
+| DONE | Mute a user |
+| DONE | Unmute a user |
 | | Get all alert words |
 | | Add alert words |
 | | Remove alert words |
@@ -248,7 +248,7 @@ may be intentional in code blocks).
 
 ## Summary
 
-**DONE:** 29 endpoints (Messages: 9, Channels: 7, Users: 4,
+**DONE:** 36 endpoints (Messages: 9, Channels: 10, Users: 9,
 Server: 1, Invitations: 3, Real-time events: 3, Gopher-only: 10)
 
 **N/A:** Scheduled messages (see DECISIONS.md)

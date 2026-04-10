@@ -50,6 +50,12 @@ func buildMux() *http.ServeMux {
 			respond.Error(w, "Method not allowed")
 		}
 	}))
+	mux.HandleFunc("/api/v1/users/me", withCORS(users.HandleGetOwnUser))
+	mux.HandleFunc("/api/v1/users/me/muted_users/", withCORS(users.HandleMuteUser))
+	mux.HandleFunc("/api/v1/users/me/muted_users", withCORS(users.HandleGetMutedUsers))
+	mux.HandleFunc("/api/v1/users/me/muted_topics", withCORS(channels.HandleMuteTopic))
+	mux.HandleFunc("/api/v1/users/me/subscriptions/add", withCORS(channels.HandleSubscribe))
+	mux.HandleFunc("/api/v1/users/", withCORS(users.HandleGetUser))
 	mux.HandleFunc("/api/v1/users", withCORS(users.HandleUsers))
 	mux.HandleFunc("/api/v1/settings", withCORS(users.HandleUpdateSettings))
 	mux.HandleFunc("/api/v1/users/me/subscriptions", withCORS(func(w http.ResponseWriter, r *http.Request) {
@@ -58,6 +64,8 @@ func buildMux() *http.ServeMux {
 			channels.HandleSubscriptions(w, r)
 		case "POST":
 			channels.HandleCreateChannel(w, r)
+		case "DELETE":
+			channels.HandleUnsubscribe(w, r)
 		default:
 			respond.Error(w, "Method not allowed")
 		}

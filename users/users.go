@@ -42,6 +42,112 @@ func HandleUsers(w http.ResponseWriter, r *http.Request) {
 	respond.Success(w, map[string]interface{}{"members": members})
 }
 
+// HandleGetUser handles GET /api/v1/users/{id}.
+func HandleGetUser(w http.ResponseWriter, r *http.Request) {
+	userID := respond.PathSegmentInt(r.URL.Path, 4)
+	if userID == 0 {
+		respond.Error(w, "Invalid user ID")
+		return
+	}
+
+	var email, fullName string
+	var isAdmin int
+	err := DB.QueryRow(`SELECT email, full_name, is_admin FROM users WHERE id = ?`, userID).Scan(&email, &fullName, &isAdmin)
+	if err != nil {
+		respond.Error(w, "User not found")
+		return
+	}
+
+	respond.Success(w, map[string]interface{}{
+		"user": map[string]interface{}{
+			"user_id":   userID,
+			"email":     email,
+			"full_name": fullName,
+			"is_admin":  isAdmin == 1,
+		},
+	})
+}
+
+// HandleGetOwnUser handles GET /api/v1/users/me.
+func HandleGetOwnUser(w http.ResponseWriter, r *http.Request) {
+	userID := auth.Authenticate(r)
+	if userID == 0 {
+		respond.Error(w, "Unauthorized")
+		return
+	}
+
+	var email, fullName string
+	var isAdmin int
+	DB.QueryRow(`SELECT email, full_name, is_admin FROM users WHERE id = ?`, userID).Scan(&email, &fullName, &isAdmin)
+
+	respond.Success(w, map[string]interface{}{
+		"user_id":   userID,
+		"email":     email,
+		"full_name": fullName,
+		"is_admin":  isAdmin == 1,
+	})
+}
+
+// HandleMuteUser handles POST /api/v1/users/me/muted_users/{id}.
+func HandleMuteUser(w http.ResponseWriter, r *http.Request) {
+	userID := auth.Authenticate(r)
+	if userID == 0 {
+		respond.Error(w, "Unauthorized")
+		return
+	}
+
+	mutedID := respond.PathSegmentInt(r.URL.Path, 5)
+	if mutedID == 0 {
+		respond.Error(w, "Invalid user ID")
+		return
+	}
+
+	if r.Method == "POST" {
+		DB.Exec(`INSERT OR IGNORE INTO muted_users (user_id, muted_user_id) VALUES (?, ?)`, userID, mutedID)
+		log.Printf("[api] User %d muted user %d", userID, mutedID)
+		respond.Success(w, nil)
+	} else if r.Method == "DELETE" {
+		DB.Exec(`DELETE FROM muted_users WHERE user_id = ? AND muted_user_id = ?`, userID, mutedID)
+		log.Printf("[api] User %d unmuted user %d", userID, mutedID)
+		respond.Success(w, nil)
+	} else {
+		respond.Error(w, "Method not allowed")
+	}
+}
+
+// HandleGetMutedUsers handles GET /api/v1/users/me/muted_users.
+func HandleGetMutedUsers(w http.ResponseWriter, r *http.Request) {
+	userID := auth.Authenticate(r)
+	if userID == 0 {
+		respond.Error(w, "Unauthorized")
+		return
+	}
+
+	rows, err := DB.Query(`
+		SELECT mu.muted_user_id, u.full_name
+		FROM muted_users mu
+		JOIN users u ON mu.muted_user_id = u.id
+		WHERE mu.user_id = ?`, userID)
+	if err != nil {
+		respond.Error(w, "Failed to query muted users")
+		return
+	}
+	defer rows.Close()
+
+	var muted []map[string]interface{}
+	for rows.Next() {
+		var id int
+		var name string
+		rows.Scan(&id, &name)
+		muted = append(muted, map[string]interface{}{
+			"id":        id,
+			"full_name": name,
+		})
+	}
+
+	respond.Success(w, map[string]interface{}{"muted_users": muted})
+}
+
 // HandleUpdateSettings handles PATCH /api/v1/settings.
 //
 // Mirrors Zulip's settings update endpoint. The authenticated
