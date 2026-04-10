@@ -107,7 +107,7 @@ func HandleSearch(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, `</select><br>`)
 
 	fmt.Fprint(w, `<label style="display:block;font-weight:bold;margin-bottom:4px">Text (substring)</label>`)
-	fmt.Fprintf(w, `<input type="text" name="text" value="%s" placeholder="e.g. http://foo.com" style="width:300px;padding:4px;margin-bottom:8px"><br>`,
+	fmt.Fprintf(w, `<input type="text" name="text" value="%s" placeholder="e.g. http://foo.com" style="width:300px;padding:4px;margin-bottom:8px" autofocus><br>`,
 		html.EscapeString(params.Text))
 
 	fmt.Fprint(w, `<button type="submit">Search</button>`)
