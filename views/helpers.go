@@ -78,6 +78,9 @@ button:hover { background: #0000a0; }
 <a href="/gopher/users">Users</a>
 <a href="/gopher/buddies">Buddies</a>
 <a href="/gopher/github">GitHub</a>
+<a href="/gopher/recent">Recent</a>
+<a href="/gopher/unread">Unread</a>
+<a href="/gopher/starred">Starred</a>
 <a href="/gopher/search">Search</a>
 <a href="/gopher/game-lobby">Games</a>
 <a href="/gopher/invites-view">Invites</a>
