@@ -1,15 +1,19 @@
-// SSE (Server-Sent Events) for streaming message content.
+// SSE (Server-Sent Events) endpoints:
 //
 // GET /gopher/sse/messages?channel_id=1&topic=hello
+//   Streams hydrated message HTML fragments for initial page load.
 //
-// Streams hydrated message HTML fragments as SSE events.
-// The client opens an EventSource and appends each fragment.
+// GET /gopher/sse/events
+//   Live event stream. Bridges the event queue system to SSE.
+//   When a new message arrives, renders it as HTML and pushes it.
 package views
 
 import (
+	"encoding/json"
 	"fmt"
 	"html"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -123,6 +127,110 @@ func HandleSSEMessages(w http.ResponseWriter, r *http.Request) {
 
 	sseEvent(w, "done", fmt.Sprintf("%d", len(allIDs)))
 	flusher.Flush()
+}
+
+// HandleSSEEvents provides a live event stream for CRUD pages.
+// The client opens an EventSource, and the server pushes new
+// messages as rendered HTML fragments.
+//
+// GET /gopher/sse/events?channel_id=1&topic=hello
+//
+// Filters: channel_id and topic are optional. If provided, only
+// messages matching the filter are pushed.
+func HandleSSEEvents(w http.ResponseWriter, r *http.Request) {
+	userID := RequireAuth(w, r)
+	if userID == 0 {
+		return
+	}
+
+	filterChannelID, _ := strconv.Atoi(r.URL.Query().Get("channel_id"))
+	filterTopic := r.URL.Query().Get("topic")
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "Streaming not supported", http.StatusInternalServerError)
+		return
+	}
+
+	// Simple polling approach: check for new messages every 2 seconds.
+	sseEvent(w, "connected", "ok")
+	flusher.Flush()
+
+	// Track the newest message ID we've seen.
+	var maxMsgID int
+	DB.QueryRow(`SELECT COALESCE(MAX(id), 0) FROM messages`).Scan(&maxMsgID)
+
+	// Poll for new messages.
+	ctx := r.Context()
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			// Check for new messages since maxMsgID.
+			query := `SELECT m.id, m.sender_id, u.full_name, mc.html, m.timestamp,
+					m.channel_id, t.topic_name
+				FROM messages m
+				JOIN users u ON m.sender_id = u.id
+				JOIN message_content mc ON m.content_id = mc.content_id
+				JOIN topics t ON m.topic_id = t.topic_id
+				WHERE m.id > ?`
+			args := []interface{}{maxMsgID}
+
+			if filterChannelID > 0 {
+				query += ` AND m.channel_id = ?`
+				args = append(args, filterChannelID)
+			}
+			if filterTopic != "" {
+				query += ` AND t.topic_name = ?`
+				args = append(args, filterTopic)
+			}
+			query += ` ORDER BY m.id ASC`
+
+			rows, err := DB.Query(query, args...)
+			if err != nil {
+				continue
+			}
+
+			for rows.Next() {
+				var msgID, senderID, chID int
+				var senderName, content, topicName string
+				var timestamp int64
+				rows.Scan(&msgID, &senderID, &senderName, &content, &timestamp, &chID, &topicName)
+
+				ago := TimeAgo(timestamp)
+				fragment := fmt.Sprintf(
+					`<div class="new-msg" style="margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid #ccc">`+
+						`<b>%s</b> <span style="color:#888">%s</span>`+
+						`<div style="padding:4px 0">%s</div></div>`,
+					html.EscapeString(senderName),
+					html.EscapeString(ago),
+					content)
+
+				// Include metadata as JSON for the client to decide placement.
+				meta, _ := json.Marshal(map[string]interface{}{
+					"id":         msgID,
+					"channel_id": chID,
+					"topic":      topicName,
+				})
+				sseEvent(w, "meta", string(meta))
+				sseEvent(w, "message", fragment)
+				flusher.Flush()
+
+				if msgID > maxMsgID {
+					maxMsgID = msgID
+				}
+			}
+			rows.Close()
+		}
+	}
 }
 
 func sseEvent(w http.ResponseWriter, event, data string) {

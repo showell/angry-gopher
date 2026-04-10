@@ -154,6 +154,7 @@ func renderMessages(w http.ResponseWriter, r *http.Request, userID int, channelI
 	idRows.Close()
 
 	fmt.Fprintf(w, `<p class="muted">%d messages</p>`, len(ids))
+	fmt.Fprint(w, `<div id="messages">`)
 
 	flusher, canFlush := w.(http.Flusher)
 	if canFlush {
@@ -205,6 +206,8 @@ func renderMessages(w http.ResponseWriter, r *http.Request, userID int, channelI
 		}
 	}
 
+	fmt.Fprint(w, `</div>`) // close #messages
+
 	fmt.Fprintf(w, `
 <div class="compose-sticky">
 <form method="POST" action="/gopher/messages">
@@ -213,7 +216,14 @@ func renderMessages(w http.ResponseWriter, r *http.Request, userID int, channelI
 <textarea name="content" placeholder="Write a message..." required></textarea>
 <button type="submit">Send</button>
 </form>
-</div>`, channelID, html.EscapeString(topic))
+</div>
+
+<script>
+const es = new EventSource("/gopher/sse/events?channel_id=%d&topic=%s");
+es.addEventListener("message", function(e) {
+    document.getElementById("messages").insertAdjacentHTML("afterbegin", e.data);
+});
+</script>`, channelID, html.EscapeString(topic), channelID, html.EscapeString(topic))
 
 	PageFooter(w)
 }
