@@ -1,0 +1,379 @@
+// Command stress runs realistic bot clients against a live Angry
+// Gopher server. Each bot registers an event queue, polls for
+// events in a background goroutine, sends presence heartbeats,
+// and periodically sends messages, edits them, and adds reactions.
+//
+// Usage:
+//
+//	go run ./cmd/stress                          # 4 bots, default server
+//	go run ./cmd/stress -url http://localhost:9001  # point at demo
+//	go run ./cmd/stress -bots 2                  # fewer bots
+//
+// The bots run until interrupted (Ctrl-C). Watch the ops dashboard
+// at /admin/ops to see queues, presence, and rate limit stats.
+package main
+
+import (
+	"encoding/base64"
+	"encoding/json"
+	"flag"
+	"fmt"
+	"io"
+	"log"
+	"math/rand"
+	"net/http"
+	"net/url"
+	"os"
+	"os/signal"
+	"strings"
+	"sync"
+	"time"
+)
+
+// Bot credentials must match what seedData() inserts.
+var allBots = []botConfig{
+	{name: "Steve", email: "steve@example.com", apiKey: "steve-api-key"},
+	{name: "Apoorva", email: "apoorva@example.com", apiKey: "apoorva-api-key"},
+	{name: "Claude", email: "claude@example.com", apiKey: "claude-api-key"},
+	{name: "Joe", email: "joe@example.com", apiKey: "joe-api-key"},
+}
+
+type botConfig struct {
+	name   string
+	email  string
+	apiKey string
+}
+
+// bot is a single simulated client with its own event queue and
+// activity loop.
+type bot struct {
+	cfg      botConfig
+	baseURL  string
+	queueID  string
+	lastEvID int
+	msgsSent int
+	evtsRecv int
+	mu       sync.Mutex // protects stats
+}
+
+func main() {
+	baseURL := flag.String("url", "http://localhost:9000", "server base URL")
+	numBots := flag.Int("bots", 4, "number of bots to run (1-4)")
+	flag.Parse()
+
+	if *numBots < 1 || *numBots > len(allBots) {
+		log.Fatalf("bots must be between 1 and %d", len(allBots))
+	}
+
+	// Ctrl-C to stop.
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt)
+	done := make(chan struct{})
+
+	var wg sync.WaitGroup
+	bots := make([]*bot, *numBots)
+
+	for i := 0; i < *numBots; i++ {
+		b := &bot{
+			cfg:     allBots[i],
+			baseURL: *baseURL,
+		}
+		bots[i] = b
+
+		if !b.register() {
+			log.Fatalf("[%s] failed to register queue — is the server running at %s?", b.cfg.name, *baseURL)
+		}
+		log.Printf("[%s] registered queue %s", b.cfg.name, b.queueID)
+
+		wg.Add(2)
+		go func() { defer wg.Done(); b.pollLoop(done) }()
+		go func() { defer wg.Done(); b.activityLoop(done) }()
+	}
+
+	log.Printf("All %d bots running. Press Ctrl-C to stop.", *numBots)
+	log.Printf("Watch the dashboard: %s/admin/ops", *baseURL)
+
+	<-stop
+	log.Println("Shutting down...")
+	close(done)
+	wg.Wait()
+
+	// Print summary.
+	fmt.Println("\n=== Summary ===")
+	for _, b := range bots {
+		b.mu.Lock()
+		fmt.Printf("  %-10s  sent: %d messages  received: %d events\n",
+			b.cfg.name, b.msgsSent, b.evtsRecv)
+		b.mu.Unlock()
+	}
+}
+
+// register creates an event queue on the server.
+func (b *bot) register() bool {
+	result := b.post("/api/v1/register", nil)
+	if result == nil || result["result"] != "success" {
+		return false
+	}
+	b.queueID = result["queue_id"].(string)
+	b.lastEvID = int(result["last_event_id"].(float64))
+	return true
+}
+
+// pollLoop long-polls for events until done is closed.
+func (b *bot) pollLoop(done chan struct{}) {
+	for {
+		select {
+		case <-done:
+			return
+		default:
+		}
+
+		path := fmt.Sprintf("/api/v1/events?queue_id=%s&last_event_id=%d",
+			b.queueID, b.lastEvID)
+		result := b.get(path, 55*time.Second)
+
+		if result == nil {
+			// Timeout or error — just retry.
+			continue
+		}
+
+		if result["result"] != "success" {
+			code, _ := result["code"].(string)
+			if code == "BAD_EVENT_QUEUE_ID" {
+				log.Printf("[%s] queue expired, re-registering", b.cfg.name)
+				if !b.register() {
+					log.Printf("[%s] re-register failed, retrying in 5s", b.cfg.name)
+					sleepOrDone(done, 5*time.Second)
+				}
+			}
+			continue
+		}
+
+		events, ok := result["events"].([]interface{})
+		if !ok || len(events) == 0 {
+			continue
+		}
+
+		// Advance past real events only (skip heartbeats).
+		for _, e := range events {
+			evt := e.(map[string]interface{})
+			if evt["type"] != "heartbeat" {
+				id := int(evt["id"].(float64))
+				if id > b.lastEvID {
+					b.lastEvID = id
+				}
+			}
+		}
+
+		b.mu.Lock()
+		b.evtsRecv += len(events)
+		b.mu.Unlock()
+	}
+}
+
+// activityLoop simulates realistic user behavior:
+//   - Presence heartbeat every 60 seconds
+//   - Send a message every 10-30 seconds
+//   - Occasionally edit the last message or add a reaction
+func (b *bot) activityLoop(done chan struct{}) {
+	// Stagger bot startup so they don't all fire at once.
+	sleepOrDone(done, time.Duration(rand.Intn(3000))*time.Millisecond)
+
+	presenceTicker := time.NewTicker(60 * time.Second)
+	defer presenceTicker.Stop()
+
+	// Send initial presence immediately.
+	b.sendPresence()
+
+	var lastMsgID float64
+
+	for {
+		// Random interval between messages: 10-30 seconds.
+		msgDelay := time.Duration(10+rand.Intn(20)) * time.Second
+
+		select {
+		case <-done:
+			return
+		case <-presenceTicker.C:
+			b.sendPresence()
+		case <-time.After(msgDelay):
+			// Pick an action weighted toward sending messages.
+			action := rand.Intn(10)
+			switch {
+			case action < 6:
+				// Send a message.
+				msgID := b.sendMessage()
+				if msgID > 0 {
+					lastMsgID = msgID
+				}
+			case action < 8 && lastMsgID > 0:
+				// Edit the last message.
+				b.editMessage(int(lastMsgID))
+			case lastMsgID > 0:
+				// Add a reaction.
+				b.addReaction(int(lastMsgID))
+			default:
+				msgID := b.sendMessage()
+				if msgID > 0 {
+					lastMsgID = msgID
+				}
+			}
+		}
+	}
+}
+
+// --- Actions ---
+
+func (b *bot) sendPresence() {
+	b.post("/api/v1/users/me/presence", url.Values{
+		"status": {"active"},
+	})
+}
+
+var topics = []string{
+	"weekly sync", "bug reports", "design review",
+	"onboarding", "release planning", "random",
+}
+
+var messageTemplates = []string{
+	"Has anyone looked at the latest PR?",
+	"I think we should revisit the approach here.",
+	"LGTM, shipping it.",
+	"Can someone review this before EOD?",
+	"I'll take a look after lunch.",
+	"Just pushed a fix for the flaky test.",
+	"The dashboard looks great!",
+	"Are we still on track for the release?",
+	"I'm seeing some weird behavior in staging.",
+	"Let me know if you need help with that.",
+}
+
+func (b *bot) sendMessage() float64 {
+	topic := topics[rand.Intn(len(topics))]
+	content := messageTemplates[rand.Intn(len(messageTemplates))]
+
+	// Channel 1 (general) or 3 (public test channel).
+	channel := []string{"1", "3"}[rand.Intn(2)]
+
+	result := b.post("/api/v1/messages", url.Values{
+		"to":      {channel},
+		"topic":   {topic},
+		"content": {fmt.Sprintf("[%s] %s", b.cfg.name, content)},
+		"type":    {"stream"},
+	})
+
+	if result != nil && result["result"] == "success" {
+		b.mu.Lock()
+		b.msgsSent++
+		b.mu.Unlock()
+		if id, ok := result["id"].(float64); ok {
+			return id
+		}
+	}
+	return 0
+}
+
+func (b *bot) editMessage(msgID int) {
+	edits := []string{
+		"(edited) Never mind, I figured it out.",
+		"(edited) Updated with more context.",
+		"(edited) Fixed the typo.",
+	}
+	b.patch(fmt.Sprintf("/api/v1/messages/%d", msgID), url.Values{
+		"content": {edits[rand.Intn(len(edits))]},
+	})
+}
+
+var reactions = []struct {
+	name string
+	code string
+}{
+	{"thumbs_up", "1f44d"},
+	{"heart", "2764"},
+	{"laughing", "1f606"},
+	{"rocket", "1f680"},
+	{"eyes", "1f440"},
+}
+
+func (b *bot) addReaction(msgID int) {
+	r := reactions[rand.Intn(len(reactions))]
+	b.post(fmt.Sprintf("/api/v1/messages/%d/reactions", msgID), url.Values{
+		"emoji_name": {r.name},
+		"emoji_code": {r.code},
+		"reaction_type": {"unicode_emoji"},
+	})
+}
+
+// --- HTTP helpers ---
+
+func (b *bot) authHeader() string {
+	return "Basic " + base64.StdEncoding.EncodeToString(
+		[]byte(b.cfg.email+":"+b.cfg.apiKey))
+}
+
+func (b *bot) post(path string, params url.Values) map[string]interface{} {
+	var body io.Reader
+	if params != nil {
+		body = strings.NewReader(params.Encode())
+	}
+	req, _ := http.NewRequest("POST", b.baseURL+path, body)
+	if params != nil {
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	}
+	req.Header.Set("Authorization", b.authHeader())
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil
+	}
+	defer resp.Body.Close()
+	data, _ := io.ReadAll(resp.Body)
+
+	var result map[string]interface{}
+	json.Unmarshal(data, &result)
+	return result
+}
+
+func (b *bot) patch(path string, params url.Values) map[string]interface{} {
+	req, _ := http.NewRequest("PATCH", b.baseURL+path,
+		strings.NewReader(params.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Authorization", b.authHeader())
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil
+	}
+	defer resp.Body.Close()
+	data, _ := io.ReadAll(resp.Body)
+
+	var result map[string]interface{}
+	json.Unmarshal(data, &result)
+	return result
+}
+
+func (b *bot) get(path string, timeout time.Duration) map[string]interface{} {
+	req, _ := http.NewRequest("GET", b.baseURL+path, nil)
+	req.Header.Set("Authorization", b.authHeader())
+
+	client := &http.Client{Timeout: timeout}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil
+	}
+	defer resp.Body.Close()
+	data, _ := io.ReadAll(resp.Body)
+
+	var result map[string]interface{}
+	json.Unmarshal(data, &result)
+	return result
+}
+
+// sleepOrDone sleeps for the given duration or returns early if
+// done is closed.
+func sleepOrDone(done chan struct{}, d time.Duration) {
+	select {
+	case <-done:
+	case <-time.After(d):
+	}
+}
