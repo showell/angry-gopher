@@ -3,21 +3,6 @@
 Run realistic bot clients against a live Angry Gopher server while
 watching the ops dashboard.
 
-## Ops dashboard
-
-Open in your browser while the stress server is running:
-
-```
-http://localhost:9002/admin/ops
-```
-
-The dashboard auto-refreshes every 10 seconds and shows:
-- **Event Queues** -- queue count, pending events, last event ID per queue
-- **Presence** -- which users are online/offline, last seen times
-- **Rate Limiting** -- requests per user in the current window, headroom, total 429s served
-- **Active Invites** -- count of unexpired invite tokens
-- **Server Info** -- mode, database path, listen address
-
 ## Setup
 
 Start the stress server (port 9002, demo mode, own database):
@@ -37,6 +22,21 @@ The config is at `~/AngryGopher/stress.json`:
     "port": 9002
 }
 ```
+
+## Ops dashboard
+
+Once the server is running, open the dashboard in your browser:
+
+```
+http://localhost:9002/admin/ops
+```
+
+The dashboard auto-refreshes every 10 seconds and shows:
+- **Event Queues** -- queue count, pending events, last event ID per queue
+- **Presence** -- which users are online/offline, last seen times
+- **Rate Limiting** -- requests per user in the current window, headroom, total 429s served
+- **Active Invites** -- count of unexpired invite tokens
+- **Server Info** -- mode, database path, listen address
 
 ## Seed data
 
