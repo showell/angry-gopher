@@ -239,13 +239,6 @@ func importUsers(zulip *ZulipClient, db *sql.DB) {
 			continue
 		}
 
-		var existing int
-		db.QueryRow(`SELECT COUNT(*) FROM zulip_users WHERE zulip_id = ?`, zulipID).Scan(&existing)
-		if existing > 0 {
-			log.Printf("  Already imported: %s (%s)", fullName, email)
-			continue
-		}
-
 		isAdmin := false
 		if v, ok := user["is_admin"]; ok {
 			isAdmin = v.(bool)
@@ -308,13 +301,6 @@ func importChannels(zulip *ZulipClient, db *sql.DB) {
 		inviteOnly := false
 		if v, ok := sub["invite_only"]; ok {
 			inviteOnly = v.(bool)
-		}
-
-		// Idempotent: skip if already mapped.
-		var existing int
-		db.QueryRow(`SELECT COUNT(*) FROM zulip_channels WHERE zulip_id = ?`, zulipID).Scan(&existing)
-		if existing > 0 {
-			continue
 		}
 
 		inviteOnlyInt := 0
@@ -506,6 +492,7 @@ func importMessages(zulip *ZulipClient, db *sql.DB, config *ImportConfig, batchS
 
 		oldestID := 0
 		batchAccepted := 0
+		batchDMs := 0
 
 		for _, m := range messagesRaw {
 			msg := m.(map[string]interface{})
@@ -554,6 +541,7 @@ func importMessages(zulip *ZulipClient, db *sql.DB, config *ImportConfig, batchS
 					html:         renderMarkdown(markdown),
 					timestamp:    timestamp,
 				})
+				batchDMs++
 				continue
 			}
 
@@ -624,8 +612,8 @@ func importMessages(zulip *ZulipClient, db *sql.DB, config *ImportConfig, batchS
 			batchAccepted++
 		}
 
-		log.Printf("  Batch: %d fetched, %d accepted (oldest_id=%d)",
-			len(messagesRaw), batchAccepted, oldestID)
+		log.Printf("  Batch: %d fetched, %d stream + %d DMs accepted (oldest_id=%d)",
+			len(messagesRaw), batchAccepted, batchDMs, oldestID)
 
 		anchor = strconv.Itoa(oldestID)
 		time.Sleep(500 * time.Millisecond)
@@ -836,6 +824,19 @@ func main() {
 	// stale DB handles and confusing credential mismatches.
 	if serverIsRunning(config) {
 		log.Fatalf("Angry Gopher appears to be running (port responded). Stop the server before importing.")
+	}
+
+	// Refuse to run if the DB already has data.
+	if _, err := os.Stat(config.GopherDB); err == nil {
+		probe, err := sql.Open("sqlite", config.GopherDB)
+		if err == nil {
+			var count int
+			probe.QueryRow(`SELECT COUNT(*) FROM messages`).Scan(&count)
+			probe.Close()
+			if count > 0 {
+				log.Fatalf("Database already has data (%d messages). Delete it first:\n  rm %s", count, config.GopherDB)
+			}
+		}
 	}
 
 	db, err := sql.Open("sqlite", config.GopherDB)
