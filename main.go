@@ -55,7 +55,14 @@ func buildMux() *http.ServeMux {
 	mux.HandleFunc("/api/v1/users/me/muted_users", withCORS(users.HandleGetMutedUsers))
 	mux.HandleFunc("/api/v1/users/me/muted_topics", withCORS(channels.HandleMuteTopic))
 	mux.HandleFunc("/api/v1/users/me/subscriptions/add", withCORS(channels.HandleSubscribe))
-	mux.HandleFunc("/api/v1/users/", withCORS(users.HandleGetUser))
+	mux.HandleFunc("/api/v1/users/by_email", withCORS(users.HandleGetUserByEmail))
+	mux.HandleFunc("/api/v1/users/", withCORS(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(r.URL.Path, "/subscriptions/") {
+			channels.HandleGetSubscriptionStatus(w, r)
+		} else {
+			users.HandleGetUser(w, r)
+		}
+	}))
 	mux.HandleFunc("/api/v1/users", withCORS(users.HandleUsers))
 	mux.HandleFunc("/api/v1/settings", withCORS(users.HandleUpdateSettings))
 	mux.HandleFunc("/api/v1/users/me/subscriptions", withCORS(func(w http.ResponseWriter, r *http.Request) {
@@ -80,6 +87,7 @@ func buildMux() *http.ServeMux {
 			respond.Error(w, "Method not allowed")
 		}
 	}))
+	mux.HandleFunc("/api/v1/messages/render", withCORS(messages.HandleRenderMessage))
 	mux.HandleFunc("/api/v1/messages/flags", withCORS(flags.HandleUpdateFlags))
 	mux.HandleFunc("/api/v1/mark_all_as_read", withCORS(flags.HandleMarkAllRead))
 	mux.HandleFunc("/api/v1/mark_channel_as_read", withCORS(flags.HandleMarkChannelRead))

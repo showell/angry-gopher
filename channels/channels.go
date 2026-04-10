@@ -565,6 +565,30 @@ func HandleMuteTopic(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// HandleGetSubscriptionStatus handles GET /api/v1/users/{uid}/subscriptions/{cid}.
+func HandleGetSubscriptionStatus(w http.ResponseWriter, r *http.Request) {
+	parts := strings.Split(r.URL.Path, "/")
+	// /api/v1/users/{uid}/subscriptions/{cid}
+	if len(parts) < 7 {
+		respond.Error(w, "Invalid path")
+		return
+	}
+	var userID, channelID int
+	fmt.Sscanf(parts[4], "%d", &userID)
+	fmt.Sscanf(parts[6], "%d", &channelID)
+
+	if userID == 0 || channelID == 0 {
+		respond.Error(w, "Invalid user or channel ID")
+		return
+	}
+
+	var count int
+	DB.QueryRow(`SELECT COUNT(*) FROM subscriptions WHERE user_id = ? AND channel_id = ?`,
+		userID, channelID).Scan(&count)
+
+	respond.Success(w, map[string]interface{}{"is_subscribed": count > 0})
+}
+
 func handleGetMutedTopics(w http.ResponseWriter, userID int) {
 	rows, err := DB.Query(`
 		SELECT mt.channel_id, c.name, mt.topic_name

@@ -68,6 +68,33 @@ func HandleGetUser(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// HandleGetUserByEmail handles GET /api/v1/users/by_email?email=...
+func HandleGetUserByEmail(w http.ResponseWriter, r *http.Request) {
+	email := r.URL.Query().Get("email")
+	if email == "" {
+		respond.Error(w, "Missing required param: email")
+		return
+	}
+
+	var id int
+	var fullName string
+	var isAdmin int
+	err := DB.QueryRow(`SELECT id, full_name, is_admin FROM users WHERE email = ?`, email).Scan(&id, &fullName, &isAdmin)
+	if err != nil {
+		respond.Error(w, "User not found")
+		return
+	}
+
+	respond.Success(w, map[string]interface{}{
+		"user": map[string]interface{}{
+			"user_id":   id,
+			"email":     email,
+			"full_name": fullName,
+			"is_admin":  isAdmin == 1,
+		},
+	})
+}
+
 // HandleGetOwnUser handles GET /api/v1/users/me.
 func HandleGetOwnUser(w http.ResponseWriter, r *http.Request) {
 	userID := auth.Authenticate(r)

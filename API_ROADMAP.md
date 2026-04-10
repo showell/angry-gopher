@@ -19,7 +19,7 @@ Based on the [Zulip REST API table of contents](https://zulip.com/api/).
 | | Construct a narrow |
 | DONE | Add an emoji reaction |
 | DONE | Remove an emoji reaction |
-| | Render a message |
+| DONE | Render a message |
 | DONE | Fetch a single message |
 | | Check if messages match a narrow |
 | | Get a message's edit history |
@@ -72,7 +72,7 @@ Based on the [Zulip REST API table of contents](https://zulip.com/api/).
 | DONE | Get subscribed channels |
 | DONE | Subscribe to a channel |
 | DONE | Unsubscribe from a channel |
-| | Get subscription status |
+| DONE | Get subscription status |
 | DONE | Get channel subscribers |
 | | Get a user's subscribed channels |
 | | Update a subscription setting |
@@ -97,7 +97,7 @@ Based on the [Zulip REST API table of contents](https://zulip.com/api/).
 | Status | Endpoint |
 |--------|----------|
 | DONE | Get a user |
-| | Get a user by email |
+| DONE | Get a user by email |
 | DONE | Get own user |
 | DONE | Get users |
 | | Create a user |
@@ -248,7 +248,7 @@ may be intentional in code blocks).
 
 ## Summary
 
-**DONE:** 41 endpoints (Messages: 12, Channels: 12, Users: 9,
+**DONE:** 44 endpoints (Messages: 13, Channels: 13, Users: 10,
 Server: 1, Invitations: 3, Real-time events: 3, Gopher-only: 10)
 
 **N/A:** Scheduled messages (see DECISIONS.md)

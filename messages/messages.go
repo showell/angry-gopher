@@ -247,6 +247,17 @@ func MarkUnreadForSubscribers(messageID int64, channelID, senderID int) {
 		messageID, channelID, senderID)
 }
 
+// HandleRenderMessage handles POST /api/v1/messages/render.
+func HandleRenderMessage(w http.ResponseWriter, r *http.Request) {
+	content := r.FormValue("content")
+	if content == "" {
+		respond.Error(w, "Missing required param: content")
+		return
+	}
+	html := RenderMarkdown(content)
+	respond.Success(w, map[string]interface{}{"rendered": html})
+}
+
 // HandleSendMessage handles POST /api/v1/messages.
 func HandleSendMessage(w http.ResponseWriter, r *http.Request) {
 	channelID, _ := strconv.Atoi(r.FormValue("to"))
