@@ -51,6 +51,13 @@ seen very little adoption in practice. We'd rather invest in
 good incoming webhook support than replicate an underused outbound
 framework.
 
+**Webhook messages skip markdown rendering.** Zulip renders all
+messages through markdown, including integration payloads. We
+produce HTML directly in the webhook handler and store it as-is.
+Users can't edit webhook messages, so there's no round-trip
+concern, and we avoid markdown-rendering artifacts on structured
+content.
+
 ## Shared features with different approaches
 
 **Server settings returns generation, not Zulip's full payload.**

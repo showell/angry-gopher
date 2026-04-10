@@ -30,6 +30,7 @@ import (
 	"angry-gopher/reactions"
 	"angry-gopher/respond"
 	"angry-gopher/users"
+	"angry-gopher/webhooks"
 )
 
 func buildMux() *http.ServeMux {
@@ -86,6 +87,7 @@ func buildMux() *http.ServeMux {
 	mux.HandleFunc("/gopher/invites/redeem", withCORS(invites.HandleRedeemInvite))
 	mux.HandleFunc("/gopher/games", withCORS(games.HandleGames))
 	mux.HandleFunc("/gopher/games/", withCORS(games.HandleGameSub))
+	mux.HandleFunc("/gopher/webhooks/github", webhooks.HandleGitHub)
 	mux.HandleFunc("/api/v1/users/me/presence", withCORS(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "POST":

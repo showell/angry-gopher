@@ -22,6 +22,13 @@ var RenderMarkdown func(string) string
 // CanAccess returns true if the user can see the given channel.
 // Public channels are visible to everyone; private channels require
 // a subscription.
+// ChannelExists returns true if the given channel ID exists.
+func ChannelExists(channelID int) bool {
+	var count int
+	DB.QueryRow(`SELECT COUNT(*) FROM channels WHERE channel_id = ?`, channelID).Scan(&count)
+	return count > 0
+}
+
 func CanAccess(userID, channelID int) bool {
 	var inviteOnly int
 	err := DB.QueryRow(`SELECT invite_only FROM channels WHERE channel_id = ?`, channelID).Scan(&inviteOnly)

@@ -200,6 +200,7 @@ Based on the [Zulip REST API table of contents](https://zulip.com/api/).
 | Status | Endpoint |
 |--------|----------|
 | DONE | GET/PUT /api/v1/buddies (buddy list) |
+| DONE | POST /gopher/webhooks/github (incoming webhook) |
 | DONE | GET /gopher/version |
 | DONE | POST /gopher/invites (create invite) |
 | DONE | POST /gopher/invites/redeem |
@@ -247,8 +248,8 @@ may be intentional in code blocks).
 
 ## Summary
 
-**DONE:** 21 endpoints (Messages: 7, Channels: 3, Users: 4,
-Server: 1, Invitations: 1, Real-time events: 3, Gopher-only: 9)
+**DONE:** 22 endpoints (Messages: 7, Channels: 3, Users: 4,
+Server: 1, Invitations: 1, Real-time events: 3, Gopher-only: 10)
 
 **N/A:** Scheduled messages (see DECISIONS.md)
 
