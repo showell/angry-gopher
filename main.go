@@ -20,6 +20,7 @@ import (
 	"angry-gopher/auth"
 	"angry-gopher/buddies"
 	"angry-gopher/channels"
+	"angry-gopher/dm"
 	"angry-gopher/events"
 	"angry-gopher/flags"
 	"angry-gopher/games"
@@ -89,6 +90,8 @@ func buildMux() *http.ServeMux {
 	mux.HandleFunc("/gopher/games/", withCORS(games.HandleGameSub))
 	mux.HandleFunc("/gopher/webhooks/github", webhooks.HandleGitHub)
 	mux.HandleFunc("/gopher/github/repos", withCORS(webhooks.HandleRepos))
+	mux.HandleFunc("/api/v1/dm/conversations", withCORS(dm.HandleConversations))
+	mux.HandleFunc("/api/v1/dm/messages", withCORS(dm.HandleMessages))
 	mux.HandleFunc("/api/v1/users/me/presence", withCORS(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "POST":
@@ -123,6 +126,8 @@ func wireDB() {
 	invites.DB = DB
 	games.DB = DB
 	channels.RenderMarkdown = renderMarkdown
+	dm.DB = DB
+	dm.RenderMarkdown = renderMarkdown
 	webhooks.DB = DB
 	events.OnRegister = recordUserLogin
 	messages.RenderMarkdown = renderMarkdown

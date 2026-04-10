@@ -106,6 +106,21 @@ CREATE TABLE IF NOT EXISTS buddies (
     PRIMARY KEY (user_id, buddy_id)
 );
 
+CREATE TABLE IF NOT EXISTS dm_conversations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id_1 INTEGER NOT NULL REFERENCES users(id),
+    user_id_2 INTEGER NOT NULL REFERENCES users(id),
+    UNIQUE(user_id_1, user_id_2)
+);
+
+CREATE TABLE IF NOT EXISTS dm_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    conversation_id INTEGER NOT NULL REFERENCES dm_conversations(id),
+    sender_id INTEGER NOT NULL REFERENCES users(id),
+    content_id INTEGER NOT NULL REFERENCES message_content(content_id),
+    timestamp INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS github_repos (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     owner TEXT NOT NULL,
