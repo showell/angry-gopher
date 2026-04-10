@@ -51,6 +51,22 @@ The compound `(channel_id, id DESC)` index lets SQLite satisfy
 both the WHERE and ORDER BY from the same index, stopping at the
 LIMIT without scanning.
 
+## No consistency guarantees on content reads
+
+We never wrap search + hydration in a transaction or retry on
+races. If a message is edited between the ID query and the
+content fetch, the user sees whichever version the query hits —
+old or new. Both are valid.
+
+The reasoning: users take seconds or minutes to read messages.
+Worrying about sub-millisecond race windows is silly when users
+routinely respond to content that was edited moments ago. We do
+the best we can to hydrate content, and that's good enough.
+
+This pairs with immutable content rows — every version is a real
+row, so there's no torn read. You always get a complete, valid
+version of the content.
+
 ## Other indexes
 
 ```sql
