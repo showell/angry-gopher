@@ -5,9 +5,10 @@
 //
 // Usage:
 //
-//	go run ./cmd/stress                          # 4 bots, default server
+//	go run ./cmd/stress                            # 4 bots, stress server
+//	go run ./cmd/stress -seed 500                  # seed 500 messages first
 //	go run ./cmd/stress -url http://localhost:9001  # point at demo
-//	go run ./cmd/stress -bots 2                  # fewer bots
+//	go run ./cmd/stress -bots 2                    # fewer bots
 //
 // The bots run until interrupted (Ctrl-C). Watch the ops dashboard
 // at /admin/ops to see queues, presence, and rate limit stats.
@@ -57,12 +58,19 @@ type bot struct {
 }
 
 func main() {
-	baseURL := flag.String("url", "http://localhost:9000", "server base URL")
+	baseURL := flag.String("url", "http://localhost:9002", "server base URL")
 	numBots := flag.Int("bots", 4, "number of bots to run (1-4)")
+	seedCount := flag.Int("seed", 0, "generate N messages as warmup before starting bots")
 	flag.Parse()
 
 	if *numBots < 1 || *numBots > len(allBots) {
 		log.Fatalf("bots must be between 1 and %d", len(allBots))
+	}
+
+	// Seed phase: generate messages through the API to populate the DB
+	// before the bots start their long-running loops.
+	if *seedCount > 0 {
+		seedMessages(*baseURL, *numBots, *seedCount)
 	}
 
 	// Ctrl-C to stop.
@@ -302,6 +310,76 @@ func (b *bot) addReaction(msgID int) {
 		"emoji_code": {r.code},
 		"reaction_type": {"unicode_emoji"},
 	})
+}
+
+// --- Seed phase ---
+
+// seedMessages sends N messages through the API, spread across bots,
+// channels, and topics to create realistic data volume. This runs
+// synchronously before the bot loops start.
+func seedMessages(baseURL string, numBots, count int) {
+	log.Printf("Seeding %d messages...", count)
+
+	bots := make([]*bot, numBots)
+	for i := 0; i < numBots; i++ {
+		bots[i] = &bot{cfg: allBots[i], baseURL: baseURL}
+	}
+
+	channels := []string{"1", "3"}
+	seedTopics := []string{
+		"project kickoff", "architecture decisions", "code review",
+		"deployment checklist", "bug triage", "sprint planning",
+		"documentation", "performance tuning", "security audit",
+		"onboarding notes",
+	}
+	seedBodies := []string{
+		"I've been thinking about this and I think we should reconsider the approach.",
+		"Here's what I found after investigating: the root cause is in the event loop.",
+		"Can we schedule a quick sync on this? I have some concerns.",
+		"Pushed a fix. The issue was a race condition in the queue handler.",
+		"I tested this locally and it works. Ready for review.",
+		"We should add monitoring for this. I'll file a ticket.",
+		"Good catch! I missed that edge case. Updating the PR now.",
+		"The benchmarks look much better after the optimization.",
+		"I think this is ready to ship. Any objections?",
+		"Let me look into this more. I'll report back after lunch.",
+		"We need to update the docs before the release.",
+		"The integration tests are passing now. All green.",
+		"I agree with the plan. Let's move forward.",
+		"One more thing — we should also handle the timeout case.",
+		"Nice work on the refactor. The code is much cleaner now.",
+	}
+
+	errors := 0
+	for i := 0; i < count; i++ {
+		b := bots[i%len(bots)]
+		ch := channels[rand.Intn(len(channels))]
+		topic := seedTopics[rand.Intn(len(seedTopics))]
+		body := seedBodies[rand.Intn(len(seedBodies))]
+
+		result := b.post("/api/v1/messages", url.Values{
+			"to":      {ch},
+			"topic":   {topic},
+			"content": {fmt.Sprintf("[%s] %s", b.cfg.name, body)},
+			"type":    {"stream"},
+		})
+		if result == nil || result["result"] != "success" {
+			errors++
+			if errors == 1 {
+				log.Printf("  seed error: %v", result)
+			}
+		}
+
+		if (i+1)%100 == 0 {
+			log.Printf("  seeded %d / %d messages", i+1, count)
+		}
+	}
+
+	if errors > 0 {
+		log.Printf("  seeding complete: %d errors out of %d", errors, count)
+	} else {
+		log.Printf("  seeded %d messages", count)
+	}
 }
 
 // --- HTTP helpers ---
