@@ -35,6 +35,14 @@ random offsets. Sequential integers are simple, fast for indexes,
 and compact on the wire. Organizations that need to hide their
 message volume should look elsewhere.
 
+**Search returns IDs, not content.** Search API endpoints return
+lightweight rows: message_id, content_id, channel_id, topic_id,
+and sender_id. No HTML, no markdown, no user names. The client
+hydrates what it needs in a second request. This keeps search
+responses fast and small. Combined with immutable content rows,
+the content_id serves as a natural cache key — if the message's
+content_id hasn't changed, the cached content is still valid.
+
 ## Content separation
 
 Rendered text (markdown + HTML) is stored in dedicated tables rather
