@@ -27,6 +27,15 @@ distinguished by name only.
 future delivery. We don't see this as necessary for our use case
 and won't add first-class server support for it.
 
+## Architecture
+
+**One server per org, medium scale.** Zulip is designed for large
+multi-tenant deployments with PostgreSQL, Redis, RabbitMQ, and
+memcached. We run one Gopher process per organization backed by a
+single SQLite file. This gives us Go's concurrency with SQLite's
+simplicity — one binary, one database file, trivial backups and
+migrations. We're targeting teams, not platforms.
+
 ## Shared features with different approaches
 
 **Server settings returns generation, not Zulip's full payload.**
