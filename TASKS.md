@@ -14,6 +14,7 @@
 ## Low Priority — Angry Gopher
 
 - [ ] Enforce user name/email uniqueness to avoid confusion (e.g. duplicate bot users)
+- [ ] Explore mapping Zulip events to SSE/htmx for live-updating HTML views
 
 ## Low Priority — Angry Cat
 
