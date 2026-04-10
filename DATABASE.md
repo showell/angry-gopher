@@ -63,6 +63,33 @@ At 10M rows:
 - **Sender filter**: 93ms (19x faster)
 - **Channel + topic**: 522ms (5x faster)
 
+## Two-trip hydration pattern
+
+For search and pagination, fetch message IDs first, then hydrate
+content in a second query using `WHERE m.id IN (...)`. This is
+faster than a single join because:
+
+1. The ID query touches only indexes — no content data loaded
+2. The IN-clause hydration does targeted PK lookups
+3. SQLite handles thousands of IDs in an IN clause efficiently
+
+At 10M rows, fetching the 50 newest messages in a channel+topic:
+
+| Step | Time |
+|------|------|
+| Get 50 IDs (index only) | 4.9ms |
+| Hydrate 50 via IN | 0.7ms |
+| **Total** | **5.6ms** |
+
+Compare to a single-query full join for the same 50 rows: the
+join must carry content data through the sort, which is slower.
+
+For bulk queries (all 23K messages in a topic), two-trip is 40%
+faster than a single join (3.7s vs 6.3s).
+
+The pattern also pairs naturally with caching — if some content
+rows are already cached, you only hydrate the missing ones.
+
 ## Benchmark data
 
 A 10M message test database can be generated with:
