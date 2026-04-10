@@ -23,6 +23,10 @@ hosts game state via `/gopher/` endpoints.
 We don't track or render stream colors. Channels are visually
 distinguished by name only.
 
+**No scheduled messages.** Zulip supports scheduling messages for
+future delivery. We don't see this as necessary for our use case
+and won't add first-class server support for it.
+
 ## Shared features with different approaches
 
 **Server settings returns generation, not Zulip's full payload.**
