@@ -15,8 +15,10 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"angry-gopher/auth"
+	"angry-gopher/buddies"
 	"angry-gopher/channels"
 	"angry-gopher/events"
 	"angry-gopher/flags"
@@ -85,6 +87,7 @@ func buildMux() *http.ServeMux {
 		}
 	}))
 
+	mux.HandleFunc("/api/v1/buddies", withCORS(buddies.HandleBuddies))
 	mux.HandleFunc("/api/v1/user_uploads", withCORS(handleUpload))
 	mux.HandleFunc("/api/v1/user_uploads/", withCORS(handleUploadTempURL))
 	mux.HandleFunc("/user_uploads/", withCORS(handleServeUpload))
@@ -98,6 +101,7 @@ func buildMux() *http.ServeMux {
 func wireDB() {
 	auth.DB = DB
 	users.DB = DB
+	buddies.DB = DB
 	channels.DB = DB
 	messages.DB = DB
 	flags.DB = DB
@@ -176,6 +180,7 @@ Backup the production database:
 	fmt.Printf("  Uploads:  %s\n", config.UploadsDir())
 	fmt.Printf("  Listening on %s\n", config.ListenAddr())
 	fmt.Printf("  Admin UI: http://localhost:%d/admin/\n", config.Port)
+	events.StartReaper(10 * time.Minute)
 	log.Fatal(http.ListenAndServe(config.ListenAddr(), mux))
 }
 
@@ -269,7 +274,7 @@ func withCORS(handler http.HandlerFunc) http.HandlerFunc {
 		if origin != "" {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 		}
 		if r.Method == "OPTIONS" {
 			w.WriteHeader(http.StatusOK)

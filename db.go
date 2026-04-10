@@ -99,6 +99,12 @@ CREATE TABLE IF NOT EXISTS starred_messages (
     user_id INTEGER NOT NULL REFERENCES users(id),
     PRIMARY KEY (message_id, user_id)
 );
+
+CREATE TABLE IF NOT EXISTS buddies (
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    buddy_id INTEGER NOT NULL REFERENCES users(id),
+    PRIMARY KEY (user_id, buddy_id)
+);
 `
 
 func initDB(path string) {

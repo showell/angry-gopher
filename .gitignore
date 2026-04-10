@@ -1,5 +1,8 @@
-# Build outputs
-gopher-server
+# Build outputs (binaries produced by go build in repo root)
+/gopher-server
+/health_check
+/stress
+/import
 
 # Editor temp files
 *.swp

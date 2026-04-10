@@ -240,22 +240,34 @@ tr:hover td { background: #f0f0ff; }
 		fmt.Fprint(w, `<p>No registered queues.</p>`)
 	} else {
 		// Look up user names.
-		fmt.Fprint(w, `<table><thead><tr><th>Queue ID</th><th>User</th><th>Pending Events</th><th>Last Event ID</th></tr></thead><tbody>`)
+		fmt.Fprint(w, `<table><thead><tr><th>Queue ID</th><th>User</th><th>Pending Events</th><th>Last Event ID</th><th>Last Poll</th></tr></thead><tbody>`)
 		sort.Slice(queueStats, func(i, j int) bool {
 			return queueStats[i].ID < queueStats[j].ID
 		})
+		now := time.Now()
 		for _, q := range queueStats {
 			var fullName string
 			DB.QueryRow(`SELECT full_name FROM users WHERE id = ?`, q.UserID).Scan(&fullName)
 			if fullName == "" {
 				fullName = fmt.Sprintf("user %d", q.UserID)
 			}
-			fmt.Fprintf(w, `<tr><td>%s</td><td>%s (id %d)</td><td>%d</td><td>%d</td></tr>`,
+			lastPoll := "never"
+			pollClass := "warn"
+			if !q.LastPollTime.IsZero() {
+				ago := now.Sub(q.LastPollTime).Truncate(time.Second)
+				lastPoll = fmt.Sprintf("%s ago", ago)
+				if ago < 2*time.Minute {
+					pollClass = "ok"
+				}
+			}
+			fmt.Fprintf(w, `<tr><td>%s</td><td>%s (id %d)</td><td>%d</td><td>%d</td><td class="%s">%s</td></tr>`,
 				html.EscapeString(q.ID),
 				html.EscapeString(fullName),
 				q.UserID,
 				q.EventCount,
 				q.LastID,
+				pollClass,
+				lastPoll,
 			)
 		}
 		fmt.Fprint(w, `</tbody></table>`)
@@ -349,10 +361,11 @@ func handleHealthCheck(w http.ResponseWriter, r *http.Request) {
 	rejected429s, userRLStats := ratelimit.Stats()
 
 	type queueInfo struct {
-		ID         string `json:"id"`
-		UserID     int    `json:"user_id"`
-		Pending    int    `json:"pending"`
-		LastID     int    `json:"last_id"`
+		ID           string `json:"id"`
+		UserID       int    `json:"user_id"`
+		Pending      int    `json:"pending"`
+		LastID       int    `json:"last_id"`
+		LastPollSecs int    `json:"last_poll_secs"` // seconds since last poll, -1 if never
 	}
 	type rlUserInfo struct {
 		UserID   int `json:"user_id"`
@@ -372,12 +385,18 @@ func handleHealthCheck(w http.ResponseWriter, r *http.Request) {
 		Rejected429s: rejected429s,
 		RLMax:        ratelimit.MaxRequests,
 	}
+	now := time.Now()
 	for _, q := range queueStats {
+		pollSecs := -1
+		if !q.LastPollTime.IsZero() {
+			pollSecs = int(now.Sub(q.LastPollTime).Seconds())
+		}
 		data.Queues = append(data.Queues, queueInfo{
-			ID:      q.ID,
-			UserID:  q.UserID,
-			Pending: q.EventCount,
-			LastID:  q.LastID,
+			ID:           q.ID,
+			UserID:       q.UserID,
+			Pending:      q.EventCount,
+			LastID:        q.LastID,
+			LastPollSecs: pollSecs,
 		})
 	}
 	for _, u := range userRLStats {

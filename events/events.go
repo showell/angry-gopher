@@ -17,12 +17,14 @@ import (
 )
 
 type queue struct {
-	id     string
-	userID int
-	events []map[string]interface{}
-	lastID int
-	mu     sync.Mutex
-	notify chan struct{}
+	id           string
+	userID       int
+	events       []map[string]interface{}
+	lastID       int
+	createdAt    time.Time
+	lastPollTime time.Time
+	mu           sync.Mutex
+	notify       chan struct{}
 }
 
 var (
@@ -33,10 +35,11 @@ var (
 
 // QueueStats holds a snapshot of one event queue's state.
 type QueueStats struct {
-	ID         string
-	UserID     int
-	EventCount int
-	LastID     int
+	ID           string
+	UserID       int
+	EventCount   int
+	LastID       int
+	LastPollTime time.Time
 }
 
 // Stats returns a snapshot of all registered event queues.
@@ -48,10 +51,11 @@ func Stats() []QueueStats {
 	for _, q := range queues {
 		q.mu.Lock()
 		stats = append(stats, QueueStats{
-			ID:         q.id,
-			UserID:     q.userID,
-			EventCount: len(q.events),
-			LastID:     q.lastID,
+			ID:           q.id,
+			UserID:       q.userID,
+			EventCount:   len(q.events),
+			LastID:        q.lastID,
+			LastPollTime: q.lastPollTime,
 		})
 		q.mu.Unlock()
 	}
@@ -63,10 +67,11 @@ func newQueue(userID int) *queue {
 	defer queuesMu.Unlock()
 	nextQueueID++
 	q := &queue{
-		id:     fmt.Sprintf("gopher-%d", nextQueueID),
-		userID: userID,
-		lastID: -1,
-		notify: make(chan struct{}, 1),
+		id:        fmt.Sprintf("gopher-%d", nextQueueID),
+		userID:    userID,
+		lastID:    -1,
+		createdAt: time.Now(),
+		notify:    make(chan struct{}, 1),
 	}
 	queues[q.id] = q
 	return q
@@ -157,6 +162,12 @@ func HandleEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Record poll time and trim events the client has already consumed.
+	q.mu.Lock()
+	q.lastPollTime = time.Now()
+	trimEvents(q, lastEventID)
+	q.mu.Unlock()
+
 	pending := collectPending(q, lastEventID)
 
 	if len(pending) > 0 {
@@ -179,6 +190,54 @@ func HandleEvents(w http.ResponseWriter, r *http.Request) {
 	// The client advanced past that ID, causing the real event to
 	// be silently skipped on the next poll.
 	respond.Success(w, map[string]interface{}{"events": pending})
+}
+
+// trimEvents removes events the client has already consumed.
+// Caller must hold q.mu.
+func trimEvents(q *queue, consumedUpTo int) {
+	keep := q.events[:0]
+	for _, ev := range q.events {
+		if ev["id"].(int) > consumedUpTo {
+			keep = append(keep, ev)
+		}
+	}
+	q.events = keep
+}
+
+// StartReaper launches a background goroutine that removes queues
+// that haven't been polled within the given timeout. Call this once
+// at server startup.
+func StartReaper(timeout time.Duration) {
+	go func() {
+		for {
+			time.Sleep(timeout / 2)
+			reapStaleQueues(timeout)
+		}
+	}()
+}
+
+func reapStaleQueues(timeout time.Duration) {
+	queuesMu.Lock()
+	defer queuesMu.Unlock()
+
+	now := time.Now()
+	for id, q := range queues {
+		q.mu.Lock()
+		// Use last poll time if the queue has been polled, otherwise
+		// fall back to creation time (gives new queues a grace period).
+		lastActivity := q.lastPollTime
+		if lastActivity.IsZero() {
+			lastActivity = q.createdAt
+		}
+		idle := now.Sub(lastActivity)
+		q.mu.Unlock()
+
+		if idle > timeout {
+			log.Printf("[reaper] Removing stale queue %s (user %d, idle %s)",
+				id, q.userID, idle.Truncate(time.Second))
+			delete(queues, id)
+		}
+	}
 }
 
 func collectPending(q *queue, afterID int) []map[string]interface{} {

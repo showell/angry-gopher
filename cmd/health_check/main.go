@@ -28,10 +28,11 @@ type healthData struct {
 }
 
 type queueInfo struct {
-	ID      string `json:"id"`
-	UserID  int    `json:"user_id"`
-	Pending int    `json:"pending"`
-	LastID  int    `json:"last_id"`
+	ID           string `json:"id"`
+	UserID       int    `json:"user_id"`
+	Pending      int    `json:"pending"`
+	LastID       int    `json:"last_id"`
+	LastPollSecs int    `json:"last_poll_secs"`
 }
 
 type rlUserInfo struct {
@@ -73,8 +74,17 @@ func main() {
 
 	// Check for orphaned or bloated queues.
 	for _, q := range data.Queues {
+		if q.LastPollSecs < 0 {
+			fmt.Printf("WARN: queue %s (user %d) has never been polled (%d pending events)\n",
+				q.ID, q.UserID, q.Pending)
+			problems++
+		} else if q.LastPollSecs > 300 {
+			fmt.Printf("WARN: queue %s (user %d) last polled %ds ago (%d pending) — likely orphaned\n",
+				q.ID, q.UserID, q.LastPollSecs, q.Pending)
+			problems++
+		}
 		if q.Pending > 500 {
-			fmt.Printf("WARN: queue %s (user %d) has %d pending events — likely orphaned or stuck\n",
+			fmt.Printf("WARN: queue %s (user %d) has %d pending events\n",
 				q.ID, q.UserID, q.Pending)
 			problems++
 		} else if q.Pending > 100 {
