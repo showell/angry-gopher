@@ -50,7 +50,13 @@ func buildMux() *http.ServeMux {
 			respond.Error(w, "Method not allowed")
 		}
 	}))
-	mux.HandleFunc("/api/v1/users/me", withCORS(users.HandleGetOwnUser))
+	mux.HandleFunc("/api/v1/users/me", withCORS(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "DELETE" {
+			users.HandleDeactivateOwnUser(w, r)
+		} else {
+			users.HandleGetOwnUser(w, r)
+		}
+	}))
 	mux.HandleFunc("/api/v1/users/me/muted_users/", withCORS(users.HandleMuteUser))
 	mux.HandleFunc("/api/v1/users/me/muted_users", withCORS(users.HandleGetMutedUsers))
 	mux.HandleFunc("/api/v1/users/me/muted_topics", withCORS(channels.HandleMuteTopic))
@@ -59,11 +65,25 @@ func buildMux() *http.ServeMux {
 	mux.HandleFunc("/api/v1/users/", withCORS(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "/subscriptions/") {
 			channels.HandleGetSubscriptionStatus(w, r)
+		} else if strings.HasSuffix(r.URL.Path, "/deactivate") {
+			users.HandleDeactivateUser(w, r)
+		} else if strings.HasSuffix(r.URL.Path, "/reactivate") {
+			users.HandleReactivateUser(w, r)
+		} else if strings.HasSuffix(r.URL.Path, "/regenerate_api_key") {
+			users.HandleRegenerateAPIKey(w, r)
+		} else if r.Method == "PATCH" {
+			users.HandleUpdateUser(w, r)
 		} else {
 			users.HandleGetUser(w, r)
 		}
 	}))
-	mux.HandleFunc("/api/v1/users", withCORS(users.HandleUsers))
+	mux.HandleFunc("/api/v1/users", withCORS(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "POST" {
+			users.HandleCreateUser(w, r)
+		} else {
+			users.HandleUsers(w, r)
+		}
+	}))
 	mux.HandleFunc("/api/v1/settings", withCORS(users.HandleUpdateSettings))
 	mux.HandleFunc("/api/v1/users/me/subscriptions", withCORS(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {

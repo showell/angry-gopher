@@ -100,12 +100,12 @@ Based on the [Zulip REST API table of contents](https://zulip.com/api/).
 | DONE | Get a user by email |
 | DONE | Get own user |
 | DONE | Get users |
-| | Create a user |
-| | Update a user |
+| DONE | Create a user |
+| DONE | Update a user |
 | | Update a user by email |
-| | Deactivate a user |
-| | Deactivate own user |
-| | Reactivate a user |
+| DONE | Deactivate a user |
+| DONE | Deactivate own user |
+| DONE | Reactivate a user |
 | | Get a user's status |
 | | Update your status |
 | | Update user status |
@@ -125,7 +125,7 @@ Based on the [Zulip REST API table of contents](https://zulip.com/api/).
 | | Get all alert words |
 | | Add alert words |
 | | Remove alert words |
-| | Regenerate your API key |
+| DONE | Regenerate your API key |
 | | Get a bot's API key |
 | | Regenerate a bot's API key |
 
@@ -248,7 +248,7 @@ may be intentional in code blocks).
 
 ## Summary
 
-**DONE:** 44 endpoints (Messages: 13, Channels: 13, Users: 10,
+**DONE:** 50 endpoints (Messages: 13, Channels: 13, Users: 16,
 Server: 1, Invitations: 3, Real-time events: 3, Gopher-only: 10)
 
 **N/A:** Scheduled messages (see DECISIONS.md)
