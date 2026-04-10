@@ -1,114 +1,119 @@
 # Database Decisions
 
-Design choices for Angry Gopher's SQLite database.
+Design choices for Angry Gopher's SQLite database. All benchmarks
+are against a 10M message test database with realistic distribution
+(50 users, 30 channels, 538 topics, power-law activity).
 
-## Schema is the single source of truth
+## Core principles
 
-The schema lives in `schema/schema.go`. Both the server and the
-import tool use it. There are no migrations — data is disposable
-and can be re-imported from Zulip at any time.
+**Schema is the single source of truth.** The schema lives in
+`schema/schema.go`. Both the server and the import tool use it.
+There are no migrations — data is disposable and can be re-imported
+from Zulip at any time.
+
+**Content rows are immutable.** Content tables (`message_content`,
+`channel_descriptions`) are never updated. When a message is edited,
+we INSERT a new content row and UPDATE the message's `content_id`
+pointer. The old row stays forever — free edit history, no audit
+table. The FK update is a cheap integer write; the expensive text
+data is never mutated. This makes content rows cache-friendly and
+safe for concurrent reads.
+
+**No consistency guarantees on content reads.** We never wrap
+search + hydration in a transaction or retry on races. If a message
+is edited between the ID query and the content fetch, the user sees
+whichever version the query hits — old or new. Both are valid,
+because every version is a complete content row (no torn reads).
+Users take seconds to read messages; worrying about sub-millisecond
+race windows is pointless.
 
 ## Content separation
 
-Rendered text (markdown + HTML) is stored in dedicated tables
-(`message_content`, `channel_descriptions`) rather than inline on
-the parent row. This keeps the core tables lean and allows ops
-access to structural data without exposing user content.
+Rendered text (markdown + HTML) is stored in dedicated tables rather
+than inline on the parent row. This keeps the core tables lean and
+allows ops access to structural data without exposing user content.
 
-## Content rows are immutable
+## Indexes
 
-Content tables (`message_content`, `channel_descriptions`) are
-never updated. When a message is edited:
-
-1. INSERT a new row into `message_content` with the new text
-2. UPDATE `messages.content_id` to point to the new row
-
-The old content row stays forever — it's the edit history for
-free, with no separate audit table. The FK update on `messages`
-is a cheap integer write. The content row itself, which holds
-the expensive text data, is never mutated.
-
-This makes content rows cache-friendly and safe for concurrent
-reads. It also means `message_content` can be treated as an
-append-only log if we ever need replication or backup strategies.
-
-## The critical pagination index
+### The critical pagination index
 
 ```sql
 CREATE INDEX idx_messages_channel_id_desc ON messages(channel_id, id DESC);
 ```
 
 This is the most important index in the system. Without it, SQLite
-chooses a channel_id-only index for filtering, but then loses the
-ability to walk the primary key in reverse for `ORDER BY id DESC
-LIMIT N` queries. The result at 10M rows:
+chooses a channel-only index for filtering, then loses the ability
+to walk the primary key in reverse for `ORDER BY id DESC LIMIT N`.
 
 | Query | Without | With |
 |-------|---------|------|
 | Recent 50 in channel | 474ms | 39µs |
 
 The compound `(channel_id, id DESC)` index lets SQLite satisfy
-both the WHERE and ORDER BY from the same index, stopping at the
-LIMIT without scanning.
+both the WHERE and ORDER BY from a single index walk, stopping
+at the LIMIT without scanning.
 
-## No consistency guarantees on content reads
-
-We never wrap search + hydration in a transaction or retry on
-races. If a message is edited between the ID query and the
-content fetch, the user sees whichever version the query hits —
-old or new. Both are valid.
-
-The reasoning: users take seconds or minutes to read messages.
-Worrying about sub-millisecond race windows is silly when users
-routinely respond to content that was edited moments ago. We do
-the best we can to hydrate content, and that's good enough.
-
-This pairs with immutable content rows — every version is a real
-row, so there's no torn read. You always get a complete, valid
-version of the content.
-
-## Other indexes
+### Supporting indexes
 
 ```sql
 CREATE INDEX idx_messages_channel_topic ON messages(channel_id, topic_id);
 CREATE INDEX idx_messages_sender ON messages(sender_id);
 ```
 
-At 10M rows:
-- **Channel filter**: 175ms (8x faster than no index)
-- **Sender filter**: 93ms (19x faster)
-- **Channel + topic**: 522ms (5x faster)
+| Query | No index | Indexed | Speedup |
+|-------|----------|---------|---------|
+| Channel filter | 1.66s | 175ms | 10x |
+| Channel + topic | 2.59s | 522ms | 5x |
+| Sender filter | 1.68s | 89ms | 19x |
+
+### What we learned about the query planner
+
+SQLite's planner is **not tricked by WHERE clause order.** We
+tested all 6 permutations of channel + topic + sender in the
+WHERE clause — SQLite picks the same plan every time.
+
+For a query filtering on channel, topic, and sender simultaneously,
+SQLite chooses the sender index (most selective single column)
+rather than the channel+topic composite. This looks suboptimal —
+sender_id=1 matches 200K rows while channel+topic matches ~460 —
+but with `LIMIT 50` it doesn't matter. SQLite scans the sender
+index, filters by channel+topic in memory, and stops at 50 results
+in ~400µs.
+
+A triple composite index `(channel_id, topic_id, sender_id)` was
+tested and made no difference — SQLite still preferred the sender
+index. We dropped it.
+
+**Takeaway:** sequential scans are fast. Modern hardware reads
+cache lines linearly at enormous throughput. An index that narrows
+to 200K rows followed by an in-memory filter is ~400µs — faster
+than the overhead of a more "optimal" index-hop strategy. Trust
+the planner, benchmark before adding indexes, and remember that
+LIMIT changes everything.
 
 ## Two-trip hydration pattern
 
 For search and pagination, fetch message IDs first, then hydrate
-content in a second query using `WHERE m.id IN (...)`. This is
-faster than a single join because:
+content in a second query using `WHERE m.id IN (...)`.
+
+Why this is faster than a single join:
 
 1. The ID query touches only indexes — no content data loaded
-2. The IN-clause hydration does targeted PK lookups
-3. SQLite handles thousands of IDs in an IN clause efficiently
+2. The hydration does targeted PK lookups on `message_content`
+3. Content data never flows through the sort
 
-At 10M rows, fetching the 50 newest messages in a channel+topic:
-
-| Step | Time |
-|------|------|
-| Get 50 IDs (index only) | 4.9ms |
-| Hydrate 50 via IN | 0.7ms |
-| **Total** | **5.6ms** |
-
-Compare to a single-query full join for the same 50 rows: the
-join must carry content data through the sort, which is slower.
-
-For bulk queries (all 23K messages in a topic), two-trip is 40%
-faster than a single join (3.7s vs 6.3s).
+| Approach | 50 rows | 23K rows |
+|----------|---------|----------|
+| IDs only | 4.9ms | 3.0s |
+| Single join | — | 6.3s |
+| Two-trip (IDs + IN) | **5.6ms** | **3.7s** |
 
 The pattern also pairs naturally with caching — if some content
-rows are already cached, you only hydrate the missing ones.
+rows are already cached, only hydrate the missing ones.
 
-## IN clause limits
+### IN clause limits
 
-SQLite has a hard limit of 32,766 variables per query. At 10M rows:
+SQLite caps at 32,766 bind variables per query.
 
 | IDs | IN clause | Temp table |
 |-----|-----------|-----------|
@@ -117,25 +122,33 @@ SQLite has a hard limit of 32,766 variables per query. At 10M rows:
 | 50,000 | ERROR | 679ms |
 | 100,000 | ERROR | 984ms |
 
-**Default strategy:** use IN clause for up to 10K IDs (covers
-virtually all real search results). For rare bulk operations,
-batch the IN clause in chunks of 10K.
+**Strategy:** use IN for up to 10K IDs (covers virtually all
+real search results). For rare bulk operations, batch in chunks
+of 10K. Temp tables work beyond the limit but the insert cost
+dominates at large sizes — not worth the complexity.
 
-Temp tables work beyond the limit but the insert cost dominates
-at large sizes (4.3s to insert 500K IDs). Not worth the
-complexity for our use case.
+## Benchmark tools
 
-## Benchmark data
-
-A 10M message test database can be generated with:
+Generate a test database:
 ```bash
 go run ./cmd/gen_test_data -db /tmp/gopher_bench.db -messages 10000000
 ```
 
-Benchmarks can be run with:
+Run search benchmarks:
 ```bash
 go run ./cmd/bench_search -db /tmp/gopher_bench.db
 ```
 
-The test database at `/tmp/gopher_bench.db` is expensive to
-generate (~8 minutes) — keep it around for iterating on indexes.
+Run hydration benchmarks:
+```bash
+go run ./cmd/bench_hydrate                # two-trip comparison
+go run ./cmd/bench_hydrate -limit-test    # IN clause scaling
+```
+
+Test query planner behavior:
+```bash
+go run ./cmd/bench_planner
+```
+
+The 10M test database takes ~8 minutes to generate — keep it
+around for iterating.
