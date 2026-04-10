@@ -45,6 +45,12 @@ single SQLite file. This gives us Go's concurrency with SQLite's
 simplicity — one binary, one database file, trivial backups and
 migrations. We're targeting teams, not platforms.
 
+**No outgoing webhooks.** Zulip supports outgoing webhooks that
+call external URLs when messages match patterns. The feature has
+seen very little adoption in practice. We'd rather invest in
+good incoming webhook support than replicate an underused outbound
+framework.
+
 ## Shared features with different approaches
 
 **Server settings returns generation, not Zulip's full payload.**
