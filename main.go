@@ -78,11 +78,26 @@ func buildMux() *http.ServeMux {
 			reactions.HandleReaction(w, r)
 		} else if r.Method == "PATCH" {
 			messages.HandleEditMessage(w, r)
+		} else if r.Method == "GET" {
+			messages.HandleGetSingleMessage(w, r)
+		} else if r.Method == "DELETE" {
+			messages.HandleDeleteMessage(w, r)
 		} else {
 			respond.Error(w, "Unknown messages sub-endpoint")
 		}
 	}))
-	mux.HandleFunc("/api/v1/streams/", withCORS(channels.HandleUpdateChannel))
+	mux.HandleFunc("/api/v1/streams", withCORS(channels.HandleGetAllChannels))
+	mux.HandleFunc("/api/v1/streams/", withCORS(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/topics") {
+			channels.HandleGetTopics(w, r)
+		} else if strings.HasSuffix(r.URL.Path, "/subscribers") {
+			channels.HandleGetSubscribers(w, r)
+		} else if r.Method == "PATCH" {
+			channels.HandleUpdateChannel(w, r)
+		} else {
+			respond.Error(w, "Unknown streams sub-endpoint")
+		}
+	}))
 	// Gopher-only endpoints — not part of the Zulip API.
 	mux.HandleFunc("/gopher/version", withCORS(handleVersion))
 	mux.HandleFunc("/gopher/invites", withCORS(invites.HandleCreateInvite))
@@ -97,6 +112,7 @@ func buildMux() *http.ServeMux {
 	mux.HandleFunc("/gopher/buddies", views.HandleBuddies)
 	mux.HandleFunc("/gopher/github", views.HandleGitHub)
 	mux.HandleFunc("/gopher/game-lobby", views.HandleGames)
+	mux.HandleFunc("/gopher/invites-view", views.HandleInvites)
 	mux.HandleFunc("/gopher/webhooks/github", webhooks.HandleGitHub)
 	mux.HandleFunc("/gopher/github/repos", withCORS(webhooks.HandleRepos))
 	mux.HandleFunc("/api/v1/dm/conversations", withCORS(dm.HandleConversations))

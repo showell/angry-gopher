@@ -14,13 +14,13 @@ Based on the [Zulip REST API table of contents](https://zulip.com/api/).
 | DONE | Send a message |
 | DONE | Upload a file |
 | DONE | Edit a message |
-| | Delete a message |
+| DONE | Delete a message |
 | DONE | Get messages |
 | | Construct a narrow |
 | DONE | Add an emoji reaction |
 | DONE | Remove an emoji reaction |
 | | Render a message |
-| | Fetch a single message |
+| DONE | Fetch a single message |
 | | Check if messages match a narrow |
 | | Get a message's edit history |
 | DONE | Update personal message flags |
@@ -73,18 +73,18 @@ Based on the [Zulip REST API table of contents](https://zulip.com/api/).
 | | Subscribe to a channel |
 | | Unsubscribe from a channel |
 | | Get subscription status |
-| | Get channel subscribers |
+| DONE | Get channel subscribers |
 | | Get a user's subscribed channels |
 | | Update a subscription setting |
 | | Bulk update subscription settings |
-| | Get all channels |
+| DONE | Get all channels |
 | | Get a channel by ID |
 | | Get channel ID |
 | DONE | Create a channel |
 | DONE | Update a channel |
 | | Archive a channel |
 | | Get channel's email address |
-| | Get topics in a channel |
+| DONE | Get topics in a channel |
 | | Topic muting |
 | | Update personal preferences for a topic |
 | | Delete a topic |
@@ -133,11 +133,11 @@ Based on the [Zulip REST API table of contents](https://zulip.com/api/).
 
 | Status | Endpoint |
 |--------|----------|
-| | Get all invitations |
+| DONE | Get all invitations |
 | DONE | Send invitations (Gopher-only: POST /gopher/invites) |
 | | Create a reusable invitation link |
 | | Resend an email invitation |
-| | Revoke an email invitation |
+| DONE | Revoke an email invitation |
 | | Revoke a reusable invitation link |
 
 ## Server & organizations
@@ -248,8 +248,8 @@ may be intentional in code blocks).
 
 ## Summary
 
-**DONE:** 22 endpoints (Messages: 7, Channels: 3, Users: 4,
-Server: 1, Invitations: 1, Real-time events: 3, Gopher-only: 10)
+**DONE:** 29 endpoints (Messages: 9, Channels: 7, Users: 4,
+Server: 1, Invitations: 3, Real-time events: 3, Gopher-only: 10)
 
 **N/A:** Scheduled messages (see DECISIONS.md)
 

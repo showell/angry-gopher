@@ -377,3 +377,113 @@ func HandleEditMessage(w http.ResponseWriter, r *http.Request) {
 
 	respond.Success(w, nil)
 }
+
+// HandleGetSingleMessage handles GET /api/v1/messages/{id}.
+func HandleGetSingleMessage(w http.ResponseWriter, r *http.Request) {
+	userID := auth.Authenticate(r)
+	if userID == 0 {
+		respond.Error(w, "Unauthorized")
+		return
+	}
+
+	messageID := respond.PathSegmentInt(r.URL.Path, 4)
+	if messageID == 0 {
+		respond.Error(w, "Invalid message ID")
+		return
+	}
+
+	if !channels.CanAccessMessage(userID, messageID) {
+		respond.Error(w, "Not authorized for this channel")
+		return
+	}
+
+	var senderID, channelID int
+	var content, senderEmail, senderName, topicName string
+	var timestamp int64
+	err := DB.QueryRow(`
+		SELECT m.sender_id, m.channel_id, mc.html, m.timestamp,
+			u.email, u.full_name, t.topic_name
+		FROM messages m
+		JOIN message_content mc ON m.content_id = mc.content_id
+		JOIN users u ON m.sender_id = u.id
+		JOIN topics t ON m.topic_id = t.topic_id
+		WHERE m.id = ?`, messageID).Scan(
+		&senderID, &channelID, &content, &timestamp,
+		&senderEmail, &senderName, &topicName)
+	if err != nil {
+		respond.Error(w, "Message not found")
+		return
+	}
+
+	respond.Success(w, map[string]interface{}{
+		"message": map[string]interface{}{
+			"id":               messageID,
+			"content":          content,
+			"sender_id":        senderID,
+			"sender_email":     senderEmail,
+			"sender_full_name": senderName,
+			"stream_id":        channelID,
+			"subject":          topicName,
+			"timestamp":        timestamp,
+			"type":             "stream",
+		},
+	})
+}
+
+// HandleDeleteMessage handles DELETE /api/v1/messages/{id}.
+func HandleDeleteMessage(w http.ResponseWriter, r *http.Request) {
+	userID := auth.Authenticate(r)
+	if userID == 0 {
+		respond.Error(w, "Unauthorized")
+		return
+	}
+
+	messageID := respond.PathSegmentInt(r.URL.Path, 4)
+	if messageID == 0 {
+		respond.Error(w, "Invalid message ID")
+		return
+	}
+
+	// Only the sender can delete their own message.
+	var senderID, channelID int
+	err := DB.QueryRow(`SELECT sender_id, channel_id FROM messages WHERE id = ?`, messageID).Scan(&senderID, &channelID)
+	if err != nil {
+		respond.Error(w, "Message not found")
+		return
+	}
+	if senderID != userID {
+		respond.Error(w, "You can only delete your own messages")
+		return
+	}
+
+	tx, err := DB.Begin()
+	if err != nil {
+		respond.Error(w, "Failed to delete message")
+		return
+	}
+	defer tx.Rollback()
+
+	var contentID int
+	tx.QueryRow(`SELECT content_id FROM messages WHERE id = ?`, messageID).Scan(&contentID)
+	tx.Exec(`DELETE FROM reactions WHERE message_id = ?`, messageID)
+	tx.Exec(`DELETE FROM unreads WHERE message_id = ?`, messageID)
+	tx.Exec(`DELETE FROM starred_messages WHERE message_id = ?`, messageID)
+	tx.Exec(`DELETE FROM messages WHERE id = ?`, messageID)
+	tx.Exec(`DELETE FROM message_content WHERE content_id = ?`, contentID)
+
+	if err := tx.Commit(); err != nil {
+		respond.Error(w, "Failed to delete message")
+		return
+	}
+
+	log.Printf("[api] Deleted message %d", messageID)
+
+	events.PushFiltered(map[string]interface{}{
+		"type":       "delete_message",
+		"message_id": messageID,
+	}, func(uid int) bool {
+		return channels.CanAccess(uid, channelID)
+	})
+
+	respond.Success(w, nil)
+}

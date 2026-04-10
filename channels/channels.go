@@ -285,3 +285,134 @@ func HandleUpdateChannel(w http.ResponseWriter, r *http.Request) {
 
 	respond.Success(w, nil)
 }
+
+// HandleGetTopics handles GET /api/v1/streams/{id}/topics.
+func HandleGetTopics(w http.ResponseWriter, r *http.Request) {
+	userID := auth.Authenticate(r)
+	if userID == 0 {
+		respond.Error(w, "Unauthorized")
+		return
+	}
+
+	channelID := respond.PathSegmentInt(r.URL.Path, 4)
+	if channelID == 0 {
+		respond.Error(w, "Invalid channel ID")
+		return
+	}
+
+	if !CanAccess(userID, channelID) {
+		respond.Error(w, "Not authorized for this channel")
+		return
+	}
+
+	rows, err := DB.Query(`
+		SELECT t.topic_name,
+			(SELECT MAX(m.id) FROM messages m WHERE m.topic_id = t.topic_id) AS max_id
+		FROM topics t
+		WHERE t.channel_id = ?
+		ORDER BY max_id DESC`, channelID)
+	if err != nil {
+		respond.Error(w, "Failed to query topics")
+		return
+	}
+	defer rows.Close()
+
+	var topics []map[string]interface{}
+	for rows.Next() {
+		var name string
+		var maxID sql.NullInt64
+		rows.Scan(&name, &maxID)
+		t := map[string]interface{}{"name": name, "max_id": 0}
+		if maxID.Valid {
+			t["max_id"] = maxID.Int64
+		}
+		topics = append(topics, t)
+	}
+
+	respond.Success(w, map[string]interface{}{"topics": topics})
+}
+
+// HandleGetSubscribers handles GET /api/v1/streams/{id}/subscribers.
+func HandleGetSubscribers(w http.ResponseWriter, r *http.Request) {
+	userID := auth.Authenticate(r)
+	if userID == 0 {
+		respond.Error(w, "Unauthorized")
+		return
+	}
+
+	channelID := respond.PathSegmentInt(r.URL.Path, 4)
+	if channelID == 0 {
+		respond.Error(w, "Invalid channel ID")
+		return
+	}
+
+	if !CanAccess(userID, channelID) {
+		respond.Error(w, "Not authorized for this channel")
+		return
+	}
+
+	rows, err := DB.Query(`
+		SELECT u.id, u.full_name, u.email
+		FROM users u
+		JOIN subscriptions s ON u.id = s.user_id
+		WHERE s.channel_id = ?
+		ORDER BY u.full_name`, channelID)
+	if err != nil {
+		respond.Error(w, "Failed to query subscribers")
+		return
+	}
+	defer rows.Close()
+
+	var subs []map[string]interface{}
+	for rows.Next() {
+		var id int
+		var name, email string
+		rows.Scan(&id, &name, &email)
+		subs = append(subs, map[string]interface{}{
+			"user_id":   id,
+			"full_name": name,
+			"email":     email,
+		})
+	}
+
+	respond.Success(w, map[string]interface{}{"subscribers": subs})
+}
+
+// HandleGetAllChannels handles GET /api/v1/streams.
+func HandleGetAllChannels(w http.ResponseWriter, r *http.Request) {
+	userID := auth.Authenticate(r)
+	if userID == 0 {
+		respond.Error(w, "Unauthorized")
+		return
+	}
+
+	rows, err := DB.Query(`
+		SELECT c.channel_id, c.name, c.invite_only,
+			COALESCE(cd.markdown, ''), COALESCE(cd.html, ''),
+			c.channel_weekly_traffic
+		FROM channels c
+		LEFT JOIN channel_descriptions cd ON c.channel_id = cd.channel_id
+		ORDER BY c.name`)
+	if err != nil {
+		respond.Error(w, "Failed to query channels")
+		return
+	}
+	defer rows.Close()
+
+	var streams []map[string]interface{}
+	for rows.Next() {
+		var id, inviteOnly, traffic int
+		var name, desc, renderedDesc string
+		rows.Scan(&id, &name, &inviteOnly, &desc, &renderedDesc, &traffic)
+		streams = append(streams, map[string]interface{}{
+			"stream_id":             id,
+			"name":                  name,
+			"description":           desc,
+			"rendered_description":  renderedDesc,
+			"stream_weekly_traffic": traffic,
+			"invite_only":           inviteOnly == 1,
+		})
+	}
+
+	respond.Success(w, map[string]interface{}{"streams": streams})
+}

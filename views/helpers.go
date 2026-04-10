@@ -56,6 +56,7 @@ button:hover { background: #0000a0; }
 <a href="/gopher/buddies">Buddies</a>
 <a href="/gopher/github">GitHub</a>
 <a href="/gopher/game-lobby">Games</a>
+<a href="/gopher/invites-view">Invites</a>
 </nav>
 <h1>%s</h1>`, title, title)
 }
@@ -104,6 +105,8 @@ func HandleIndex(w http.ResponseWriter, r *http.Request) {
 <span class="muted">Configure GitHub webhook integrations</span>
 <a href="/gopher/game-lobby" style="font-size:18px;font-weight:bold">Games</a>
 <span class="muted">Game lobby — create, join, and view games</span>
+<a href="/gopher/invites-view" style="font-size:18px;font-weight:bold">Invitations</a>
+<span class="muted">View and revoke invitations (admin)</span>
 </div>`)
 
 	PageFooter(w)

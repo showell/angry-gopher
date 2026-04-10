@@ -106,6 +106,19 @@ CREATE TABLE IF NOT EXISTS buddies (
     PRIMARY KEY (user_id, buddy_id)
 );
 
+CREATE TABLE IF NOT EXISTS muted_users (
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    muted_user_id INTEGER NOT NULL REFERENCES users(id),
+    PRIMARY KEY (user_id, muted_user_id)
+);
+
+CREATE TABLE IF NOT EXISTS muted_topics (
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    channel_id INTEGER NOT NULL REFERENCES channels(channel_id),
+    topic_name TEXT NOT NULL,
+    PRIMARY KEY (user_id, channel_id, topic_name)
+);
+
 CREATE TABLE IF NOT EXISTS dm_conversations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id_1 INTEGER NOT NULL REFERENCES users(id),

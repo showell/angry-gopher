@@ -14,6 +14,7 @@ Basic auth (browser caches credentials).
 | `/gopher/buddies` | `buddies` (GET/PUT) | Toggle buddies with checkboxes |
 | `/gopher/github` | `github/repos` (GET/POST/DELETE) | Manage repo configs, show webhook URLs (admin-only) |
 | `/gopher/game-lobby` | `games` (GET/POST), `games/{id}/*` | List/create games, view players and event log |
+| `/gopher/invites-view` | `invites` (list/revoke) | View and revoke invitations (admin-only) |
 
 ## Not covered (operational / no CRUD equivalent)
 
