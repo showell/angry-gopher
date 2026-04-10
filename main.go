@@ -38,9 +38,9 @@ import (
 func buildMux() *http.ServeMux {
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("/api/v1/server_settings", withCORS(handleServerSettings))
-	mux.HandleFunc("/api/v1/register", withCORS(events.HandleRegister))
-	mux.HandleFunc("/api/v1/events", withCORS(func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/v1/server_settings", withMiddleware(handleServerSettings))
+	mux.HandleFunc("/api/v1/register", withMiddleware(events.HandleRegister))
+	mux.HandleFunc("/api/v1/events", withMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "GET":
 			events.HandleEvents(w, r)
@@ -50,19 +50,19 @@ func buildMux() *http.ServeMux {
 			respond.Error(w, "Method not allowed")
 		}
 	}))
-	mux.HandleFunc("/api/v1/users/me", withCORS(func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/v1/users/me", withMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "DELETE" {
 			users.HandleDeactivateOwnUser(w, r)
 		} else {
 			users.HandleGetOwnUser(w, r)
 		}
 	}))
-	mux.HandleFunc("/api/v1/users/me/muted_users/", withCORS(users.HandleMuteUser))
-	mux.HandleFunc("/api/v1/users/me/muted_users", withCORS(users.HandleGetMutedUsers))
-	mux.HandleFunc("/api/v1/users/me/muted_topics", withCORS(channels.HandleMuteTopic))
-	mux.HandleFunc("/api/v1/users/me/subscriptions/add", withCORS(channels.HandleSubscribe))
-	mux.HandleFunc("/api/v1/users/by_email", withCORS(users.HandleGetUserByEmail))
-	mux.HandleFunc("/api/v1/users/", withCORS(func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/v1/users/me/muted_users/", withMiddleware(users.HandleMuteUser))
+	mux.HandleFunc("/api/v1/users/me/muted_users", withMiddleware(users.HandleGetMutedUsers))
+	mux.HandleFunc("/api/v1/users/me/muted_topics", withMiddleware(channels.HandleMuteTopic))
+	mux.HandleFunc("/api/v1/users/me/subscriptions/add", withMiddleware(channels.HandleSubscribe))
+	mux.HandleFunc("/api/v1/users/by_email", withMiddleware(users.HandleGetUserByEmail))
+	mux.HandleFunc("/api/v1/users/", withMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(r.URL.Path, "/subscriptions/") {
 			channels.HandleGetSubscriptionStatus(w, r)
 		} else if strings.HasSuffix(r.URL.Path, "/deactivate") {
@@ -77,15 +77,15 @@ func buildMux() *http.ServeMux {
 			users.HandleGetUser(w, r)
 		}
 	}))
-	mux.HandleFunc("/api/v1/users", withCORS(func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/v1/users", withMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "POST" {
 			users.HandleCreateUser(w, r)
 		} else {
 			users.HandleUsers(w, r)
 		}
 	}))
-	mux.HandleFunc("/api/v1/settings", withCORS(users.HandleUpdateSettings))
-	mux.HandleFunc("/api/v1/users/me/subscriptions", withCORS(func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/v1/settings", withMiddleware(users.HandleUpdateSettings))
+	mux.HandleFunc("/api/v1/users/me/subscriptions", withMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "GET":
 			channels.HandleSubscriptions(w, r)
@@ -97,7 +97,7 @@ func buildMux() *http.ServeMux {
 			respond.Error(w, "Method not allowed")
 		}
 	}))
-	mux.HandleFunc("/api/v1/messages", withCORS(func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/v1/messages", withMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "GET":
 			messages.HandleGetMessages(w, r)
@@ -107,13 +107,13 @@ func buildMux() *http.ServeMux {
 			respond.Error(w, "Method not allowed")
 		}
 	}))
-	mux.HandleFunc("/api/v1/messages/render", withCORS(messages.HandleRenderMessage))
-	mux.HandleFunc("/api/v1/messages/flags", withCORS(flags.HandleUpdateFlags))
-	mux.HandleFunc("/api/v1/mark_all_as_read", withCORS(flags.HandleMarkAllRead))
-	mux.HandleFunc("/api/v1/mark_channel_as_read", withCORS(flags.HandleMarkChannelRead))
-	mux.HandleFunc("/api/v1/mark_topic_as_read", withCORS(flags.HandleMarkTopicRead))
-	mux.HandleFunc("/api/v1/get_stream_id", withCORS(channels.HandleGetChannelID))
-	mux.HandleFunc("/api/v1/messages/", withCORS(func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/v1/messages/render", withMiddleware(messages.HandleRenderMessage))
+	mux.HandleFunc("/api/v1/messages/flags", withMiddleware(flags.HandleUpdateFlags))
+	mux.HandleFunc("/api/v1/mark_all_as_read", withMiddleware(flags.HandleMarkAllRead))
+	mux.HandleFunc("/api/v1/mark_channel_as_read", withMiddleware(flags.HandleMarkChannelRead))
+	mux.HandleFunc("/api/v1/mark_topic_as_read", withMiddleware(flags.HandleMarkTopicRead))
+	mux.HandleFunc("/api/v1/get_stream_id", withMiddleware(channels.HandleGetChannelID))
+	mux.HandleFunc("/api/v1/messages/", withMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/reactions") {
 			reactions.HandleReaction(w, r)
 		} else if r.Method == "PATCH" {
@@ -126,8 +126,8 @@ func buildMux() *http.ServeMux {
 			respond.Error(w, "Unknown messages sub-endpoint")
 		}
 	}))
-	mux.HandleFunc("/api/v1/streams", withCORS(channels.HandleGetAllChannels))
-	mux.HandleFunc("/api/v1/streams/", withCORS(func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/api/v1/streams", withMiddleware(channels.HandleGetAllChannels))
+	mux.HandleFunc("/api/v1/streams/", withMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/topics") {
 			channels.HandleGetTopics(w, r)
 		} else if strings.HasSuffix(r.URL.Path, "/subscribers") {
@@ -141,11 +141,11 @@ func buildMux() *http.ServeMux {
 		}
 	}))
 	// Gopher-only endpoints — not part of the Zulip API.
-	mux.HandleFunc("/gopher/version", withCORS(handleVersion))
-	mux.HandleFunc("/gopher/invites", withCORS(invites.HandleCreateInvite))
-	mux.HandleFunc("/gopher/invites/redeem", withCORS(invites.HandleRedeemInvite))
-	mux.HandleFunc("/gopher/games", withCORS(games.HandleGames))
-	mux.HandleFunc("/gopher/games/", withCORS(games.HandleGameSub))
+	mux.HandleFunc("/gopher/version", withMiddleware(handleVersion))
+	mux.HandleFunc("/gopher/invites", withMiddleware(invites.HandleCreateInvite))
+	mux.HandleFunc("/gopher/invites/redeem", withMiddleware(invites.HandleRedeemInvite))
+	mux.HandleFunc("/gopher/games", withMiddleware(games.HandleGames))
+	mux.HandleFunc("/gopher/games/", withMiddleware(games.HandleGameSub))
 	mux.HandleFunc("/gopher/", views.HandleIndex)
 	mux.HandleFunc("/gopher/dm", views.HandleDM)
 	mux.HandleFunc("/gopher/messages", views.HandleMessages)
@@ -156,10 +156,10 @@ func buildMux() *http.ServeMux {
 	mux.HandleFunc("/gopher/game-lobby", views.HandleGames)
 	mux.HandleFunc("/gopher/invites-view", views.HandleInvites)
 	mux.HandleFunc("/gopher/webhooks/github", webhooks.HandleGitHub)
-	mux.HandleFunc("/gopher/github/repos", withCORS(webhooks.HandleRepos))
-	mux.HandleFunc("/api/v1/dm/conversations", withCORS(dm.HandleConversations))
-	mux.HandleFunc("/api/v1/dm/messages", withCORS(dm.HandleMessages))
-	mux.HandleFunc("/api/v1/users/me/presence", withCORS(func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/gopher/github/repos", withMiddleware(webhooks.HandleRepos))
+	mux.HandleFunc("/api/v1/dm/conversations", withMiddleware(dm.HandleConversations))
+	mux.HandleFunc("/api/v1/dm/messages", withMiddleware(dm.HandleMessages))
+	mux.HandleFunc("/api/v1/users/me/presence", withMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "POST":
 			presence.HandleUpdatePresence(w, r)
@@ -170,14 +170,14 @@ func buildMux() *http.ServeMux {
 		}
 	}))
 
-	mux.HandleFunc("/api/v1/buddies", withCORS(buddies.HandleBuddies))
-	mux.HandleFunc("/api/v1/user_uploads", withCORS(handleUpload))
-	mux.HandleFunc("/api/v1/user_uploads/", withCORS(handleUploadTempURL))
-	mux.HandleFunc("/user_uploads/", withCORS(handleServeUpload))
+	mux.HandleFunc("/api/v1/buddies", withMiddleware(buddies.HandleBuddies))
+	mux.HandleFunc("/api/v1/user_uploads", withMiddleware(handleUpload))
+	mux.HandleFunc("/api/v1/user_uploads/", withMiddleware(handleUploadTempURL))
+	mux.HandleFunc("/user_uploads/", withMiddleware(handleServeUpload))
 	mux.HandleFunc("/admin/login", handleAdminLogin)
 	mux.HandleFunc("/admin/health", handleHealthCheck)
 	mux.HandleFunc("/admin/", adminHandler)
-	mux.HandleFunc("/", withCORS(handleUnimplemented))
+	mux.HandleFunc("/", withMiddleware(handleUnimplemented))
 
 	return mux
 }
@@ -200,7 +200,6 @@ func wireDB() {
 	webhooks.DB = DB
 	events.OnRegister = recordUserLogin
 	messages.RenderMarkdown = renderMarkdown
-	games.InitSchema()
 }
 
 func main() {
@@ -408,7 +407,7 @@ func handleUnimplemented(w http.ResponseWriter, r *http.Request) {
 	respond.Error(w, fmt.Sprintf("Endpoint not implemented: %s %s", r.Method, r.URL.Path))
 }
 
-func withCORS(handler http.HandlerFunc) http.HandlerFunc {
+func withMiddleware(handler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
 		if origin != "" {

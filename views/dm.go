@@ -1,17 +1,15 @@
 package views
 
 import (
-	"database/sql"
 	"fmt"
 	"html"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
-)
 
-var DB *sql.DB
-var RenderMarkdown func(string) string
+	"angry-gopher/dm"
+)
 
 // HandleDM serves GET /gopher/dm (conversation list or message view)
 // and POST /gopher/dm (send a message).
@@ -187,44 +185,11 @@ func handleDMSend(w http.ResponseWriter, r *http.Request, userID int) {
 		return
 	}
 
-	// Use the DM API logic by importing the dm package would create
-	// a circular dependency, so we duplicate the core insert here.
-	lo, hi := userID, recipientID
-	if lo > hi {
-		lo, hi = hi, lo
-	}
-
-	// Get or create conversation.
-	var convID int64
-	err := DB.QueryRow(
-		`SELECT id FROM dm_conversations WHERE user_id_1 = ? AND user_id_2 = ?`,
-		lo, hi).Scan(&convID)
+	_, err := dm.SendDM(userID, recipientID, content)
 	if err != nil {
-		result, err := DB.Exec(
-			`INSERT INTO dm_conversations (user_id_1, user_id_2) VALUES (?, ?)`,
-			lo, hi)
-		if err != nil {
-			http.Error(w, "Failed to create conversation", http.StatusInternalServerError)
-			return
-		}
-		convID, _ = result.LastInsertId()
-	}
-
-	htmlContent := RenderMarkdown(content)
-	contentResult, err := DB.Exec(
-		`INSERT INTO message_content (markdown, html) VALUES (?, ?)`,
-		content, htmlContent)
-	if err != nil {
-		http.Error(w, "Failed to save message", http.StatusInternalServerError)
+		http.Error(w, "Failed to send message", http.StatusInternalServerError)
 		return
 	}
-	contentID, _ := contentResult.LastInsertId()
 
-	timestamp := time.Now().Unix()
-	DB.Exec(
-		`INSERT INTO dm_messages (conversation_id, sender_id, content_id, timestamp) VALUES (?, ?, ?, ?)`,
-		convID, userID, contentID, timestamp)
-
-	// Redirect back to the conversation.
 	http.Redirect(w, r, fmt.Sprintf("/gopher/dm?user_id=%d", recipientID), http.StatusSeeOther)
 }

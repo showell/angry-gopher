@@ -124,6 +124,22 @@ CREATE TABLE IF NOT EXISTS github_repos (
     UNIQUE(owner, name)
 );
 
+CREATE TABLE IF NOT EXISTS games (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    player1_id INTEGER NOT NULL REFERENCES users(id),
+    player2_id INTEGER,
+    created_at INTEGER NOT NULL,
+    puzzle_name TEXT
+);
+
+CREATE TABLE IF NOT EXISTS game_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    game_id INTEGER NOT NULL REFERENCES games(id),
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    payload TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS server_sessions (
     generation INTEGER PRIMARY KEY AUTOINCREMENT,
     started_at TEXT NOT NULL,

@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+
+	"angry-gopher/messages"
 )
 
 // HandleMessages serves /gopher/messages.
@@ -163,25 +165,11 @@ func handleMessageSend(w http.ResponseWriter, r *http.Request, userID int) {
 		return
 	}
 
-	htmlContent := RenderMarkdown(content)
-	tx, _ := DB.Begin()
-	defer tx.Rollback()
-
-	var topicID int64
-	err := tx.QueryRow(`SELECT topic_id FROM topics WHERE channel_id = ? AND topic_name = ?`,
-		channelID, topic).Scan(&topicID)
+	_, err := messages.SendMessage(userID, channelID, topic, content)
 	if err != nil {
-		result, _ := tx.Exec(`INSERT INTO topics (channel_id, topic_name) VALUES (?, ?)`, channelID, topic)
-		topicID, _ = result.LastInsertId()
+		http.Error(w, "Failed to send message", http.StatusInternalServerError)
+		return
 	}
-
-	contentResult, _ := tx.Exec(`INSERT INTO message_content (markdown, html) VALUES (?, ?)`, content, htmlContent)
-	contentID, _ := contentResult.LastInsertId()
-
-	timestamp := time.Now().Unix()
-	tx.Exec(`INSERT INTO messages (content_id, sender_id, channel_id, topic_id, timestamp) VALUES (?, ?, ?, ?, ?)`,
-		contentID, userID, channelID, topicID, timestamp)
-	tx.Commit()
 
 	http.Redirect(w, r, fmt.Sprintf("/gopher/messages?channel_id=%d&topic=%s", channelID, topic), http.StatusSeeOther)
 }

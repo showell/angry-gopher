@@ -152,6 +152,67 @@ func handleGetMessages(w http.ResponseWriter, r *http.Request, userID int) {
 	respond.Success(w, map[string]interface{}{"messages": msgs})
 }
 
+// SendDM is the core logic for sending a DM. Used by both the
+// HTTP handler and the HTML view.
+func SendDM(senderID, recipientID int, content string) (int64, error) {
+	conversationID, err := getOrCreateConversation(senderID, recipientID)
+	if err != nil {
+		return 0, err
+	}
+
+	html := RenderMarkdown(content)
+
+	contentResult, err := DB.Exec(
+		`INSERT INTO message_content (markdown, html) VALUES (?, ?)`,
+		content, html,
+	)
+	if err != nil {
+		return 0, err
+	}
+	contentID, _ := contentResult.LastInsertId()
+
+	timestamp := time.Now().Unix()
+	msgResult, err := DB.Exec(
+		`INSERT INTO dm_messages (conversation_id, sender_id, content_id, timestamp) VALUES (?, ?, ?, ?)`,
+		conversationID, senderID, contentID, timestamp,
+	)
+	if err != nil {
+		return 0, err
+	}
+	msgID, _ := msgResult.LastInsertId()
+
+	DB.Exec(`INSERT OR IGNORE INTO unreads (message_id, user_id) VALUES (?, ?)`,
+		msgID, recipientID)
+
+	var senderEmail, senderName string
+	DB.QueryRow(`SELECT email, full_name FROM users WHERE id = ?`, senderID).Scan(&senderEmail, &senderName)
+
+	event := map[string]interface{}{
+		"type": "message",
+		"message": map[string]interface{}{
+			"id":                msgID,
+			"content":           html,
+			"sender_id":         senderID,
+			"sender_email":      senderEmail,
+			"sender_full_name":  senderName,
+			"timestamp":         timestamp,
+			"type":              "private",
+			"flags":             []string{},
+			"reactions":         []interface{}{},
+			"display_recipient": []map[string]interface{}{
+				{"id": senderID},
+				{"id": recipientID},
+			},
+		},
+	}
+
+	events.PushFiltered(event, func(uid int) bool {
+		return uid == senderID || uid == recipientID
+	})
+
+	return msgID, nil
+}
+
 func handleSendMessage(w http.ResponseWriter, r *http.Request, userID int) {
 	r.ParseForm()
 	recipientIDStr := r.FormValue("to")
@@ -168,7 +229,6 @@ func handleSendMessage(w http.ResponseWriter, r *http.Request, userID int) {
 		return
 	}
 
-	// Verify recipient exists.
 	var exists int
 	DB.QueryRow(`SELECT COUNT(*) FROM users WHERE id = ?`, recipientID).Scan(&exists)
 	if exists == 0 {
@@ -176,66 +236,11 @@ func handleSendMessage(w http.ResponseWriter, r *http.Request, userID int) {
 		return
 	}
 
-	conversationID, err := getOrCreateConversation(userID, recipientID)
+	msgID, err := SendDM(userID, recipientID, content)
 	if err != nil {
-		respond.Error(w, "Failed to create conversation")
+		respond.Error(w, "Failed to send message")
 		return
 	}
-
-	html := RenderMarkdown(content)
-
-	contentResult, err := DB.Exec(
-		`INSERT INTO message_content (markdown, html) VALUES (?, ?)`,
-		content, html,
-	)
-	if err != nil {
-		respond.Error(w, "Failed to save message")
-		return
-	}
-	contentID, _ := contentResult.LastInsertId()
-
-	timestamp := time.Now().Unix()
-	msgResult, err := DB.Exec(
-		`INSERT INTO dm_messages (conversation_id, sender_id, content_id, timestamp) VALUES (?, ?, ?, ?)`,
-		conversationID, userID, contentID, timestamp,
-	)
-	if err != nil {
-		respond.Error(w, "Failed to save message")
-		return
-	}
-	msgID, _ := msgResult.LastInsertId()
-
-	// Mark unread for the recipient.
-	DB.Exec(`INSERT OR IGNORE INTO unreads (message_id, user_id) VALUES (?, ?)`,
-		msgID, recipientID)
-
-	// Look up sender info for the event.
-	var senderEmail, senderName string
-	DB.QueryRow(`SELECT email, full_name FROM users WHERE id = ?`, userID).Scan(&senderEmail, &senderName)
-
-	// Push event to both participants.
-	event := map[string]interface{}{
-		"type": "message",
-		"message": map[string]interface{}{
-			"id":                msgID,
-			"content":           html,
-			"sender_id":         userID,
-			"sender_email":      senderEmail,
-			"sender_full_name":  senderName,
-			"timestamp":         timestamp,
-			"type":              "private",
-			"flags":             []string{},
-			"reactions":         []interface{}{},
-			"display_recipient": []map[string]interface{}{
-				{"id": userID},
-				{"id": recipientID},
-			},
-		},
-	}
-
-	events.PushFiltered(event, func(uid int) bool {
-		return uid == userID || uid == recipientID
-	})
 
 	log.Printf("[api] DM %d → user %d from user %d", msgID, recipientID, userID)
 	respond.Success(w, map[string]interface{}{"id": msgID})

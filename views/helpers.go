@@ -4,12 +4,16 @@
 package views
 
 import (
+	"database/sql"
 	"fmt"
 	"html"
 	"net/http"
 
 	"angry-gopher/auth"
 )
+
+var DB *sql.DB
+var RenderMarkdown func(string) string
 
 // RequireAuth returns the authenticated user ID or writes a 401
 // response that triggers the browser's Basic auth prompt.
