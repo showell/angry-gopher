@@ -33,14 +33,7 @@ Based on the [Zulip REST API table of contents](https://zulip.com/api/).
 | | Check thumbnail status |
 | | Report a message |
 
-## Scheduled messages
-
-| Status | Endpoint |
-|--------|----------|
-| | Get scheduled messages |
-| | Create a scheduled message |
-| | Edit a scheduled message |
-| | Delete a scheduled message |
+## Scheduled messages — N/A (see DECISIONS.md)
 
 ## Message reminders
 
@@ -217,6 +210,7 @@ Based on the [Zulip REST API table of contents](https://zulip.com/api/).
 
 | Status | Endpoint |
 |--------|----------|
+| DONE | GET/PUT /api/v1/buddies (buddy list) |
 | DONE | GET /gopher/version |
 | DONE | POST /gopher/invites (create invite) |
 | DONE | POST /gopher/invites/redeem |
@@ -264,8 +258,10 @@ may be intentional in code blocks).
 
 ## Summary
 
-**DONE:** 19 endpoints (Messages: 7, Channels: 3, Users: 4,
-Invitations: 1, Real-time events: 2, Gopher-only: 8)
+**DONE:** 20 endpoints (Messages: 7, Channels: 3, Users: 4,
+Server: 1, Invitations: 1, Real-time events: 2, Gopher-only: 9)
 
-**Remaining:** ~130 Zulip endpoints, most of which are low
+**N/A:** Scheduled messages (see DECISIONS.md)
+
+**Remaining:** ~125 Zulip endpoints, most of which are low
 priority or N/A for Angry Gopher's current scope.
