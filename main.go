@@ -96,6 +96,7 @@ func buildMux() *http.ServeMux {
 	mux.HandleFunc("/gopher/users", views.HandleUsers)
 	mux.HandleFunc("/gopher/buddies", views.HandleBuddies)
 	mux.HandleFunc("/gopher/github", views.HandleGitHub)
+	mux.HandleFunc("/gopher/game-lobby", views.HandleGames)
 	mux.HandleFunc("/gopher/webhooks/github", webhooks.HandleGitHub)
 	mux.HandleFunc("/gopher/github/repos", withCORS(webhooks.HandleRepos))
 	mux.HandleFunc("/api/v1/dm/conversations", withCORS(dm.HandleConversations))
