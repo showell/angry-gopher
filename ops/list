@@ -2,10 +2,12 @@
 # List available ops commands.
 echo "Available ops commands (run from repo root):"
 echo ""
+echo "  ops/start                Start prod server (9000) + Angry Cat (8000)"
 echo "  ops/start_demo           Start demo server (9000) + Angry Cat (8000)"
 echo "  ops/start_stress_server  Start stress server (9002)"
 echo "  ops/run_stress_test      Run stress test bots against stress server"
 echo "  ops/health_check         Check server health (queues, rate limits, presence)"
 echo "  ops/import               Import data from Zulip (needs ~/AngryGopher/import_config.json)"
+echo "  ops/test_webhook         Send a simulated GitHub webhook event (push, pull_request, issue)"
 echo ""
 echo "Credentials convention: store in ~/AngryGopher/ (non-hidden, outside git)."
