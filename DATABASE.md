@@ -178,6 +178,34 @@ real search results). For rare bulk operations, batch in chunks
 of 10K. Temp tables work beyond the limit but the insert cost
 dominates at large sizes — not worth the complexity.
 
+## Performance summary
+
+Three architectural wins, in order of impact:
+
+1. **Chunked flushing (SSE/streaming)** — the biggest perceived
+   performance win. The browser starts rendering immediately while
+   the server continues hydrating. Total time is unchanged but
+   users start reading in milliseconds. Chunk size 100-1000 all
+   perform within 2% of each other.
+
+2. **In-memory LRU cache** keyed by content_id. Since content rows
+   are immutable, the cache never goes stale — no invalidation logic.
+   At 20 concurrent readers with realistic topic rotation, the cache
+   reaches 89% hit rate and delivers 14% more reads/sec. This is
+   our equivalent of Zulip's memcached, but in-process with zero
+   network hops. A 100K-entry cache uses ~17MB (real messages
+   average 175 bytes HTML).
+
+3. **Avoiding expensive queries.** Correlated subqueries (COUNT per
+   topic) and unbounded result sets are 10x+ slower than indexed
+   queries with LIMIT. The biggest single speedup came from dropping
+   COUNT(*) from listing pages.
+
+What didn't help:
+- **Split databases** (index vs content) — slower due to two-connection overhead
+- **SQLite PRAGMA tuning** — marginal gains; the OS page cache already works well
+- **Application-level caching at low concurrency** — mutex contention outweighs the benefit at 4 readers
+
 ## Benchmark tools
 
 Generate a test database:
