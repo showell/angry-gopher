@@ -4,7 +4,26 @@ Angry Gopher is not a Zulip clone. It is a topic-based office chat
 system for a targeted niche of users. This document records intentional
 divergences from Zulip and key design choices.
 
-## API
+## Extra features (Gopher has, Zulip doesn't)
+
+**Server-side buddy lists.** Users can curate a list of people they
+care about seeing in the sidebar. Zulip has no buddy concept — only
+presence. Persisted via `GET/PUT /api/v1/buddies`.
+
+**Server session tracking.** Each server start gets a generation
+number. User logins are recorded with their generation. The ops
+dashboard and health check expose this. Zulip has no equivalent.
+
+**Game engine.** LynRummy is playable within Angry Cat. The server
+hosts game state via `/gopher/` endpoints.
+
+## Deliberately missing features
+
+**No stream colors.** Zulip lets each user pick a color per channel.
+We don't track or render stream colors. Channels are visually
+distinguished by name only.
+
+## Shared features with different approaches
 
 **Server settings returns generation, not Zulip's full payload.**
 `GET /api/v1/server_settings` returns only the server generation
@@ -12,10 +31,8 @@ number. Zulip returns a large blob of feature flags, auth backends,
 and realm info. We'll add fields as needed but won't mirror the
 Zulip shape.
 
-## UI principles
-
 **Pessimistic updates.** When the server is involved, the UI waits
 for confirmation before updating local state. The compose box
 disables while sending; the buddy checkbox disables during toggle.
-This applies uniformly — even localStorage saves follow the same
-code path shape for consistency.
+Zulip uses optimistic updates in many places. We chose pessimistic
+uniformly for simplicity and correctness.
