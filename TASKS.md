@@ -2,13 +2,14 @@
 
 ## High Priority
 
-- [x] Persist buddies (presence) in the database — server API done, Angry Cat wired up
-- [ ] Add server metadata DB tables (e.g. server start time) — support ops dashboard with persistent data
+- [ ] DM UI in Angry Cat — server endpoints are done, need send/receive UI
 - [ ] Clean up all tsc errors in Angry Cat
 
 ## Normal Priority
 
-(empty)
+- [x] Persist buddies in the database — server API done, Angry Cat wired up
+- [x] Add server metadata DB tables — generation tracking, user sessions, ops dashboard
+- [ ] GitHub linkifiers in Angry Cat (part of first-class GH integration)
 
 ## Low Priority — Angry Cat
 
