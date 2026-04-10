@@ -153,6 +153,7 @@ Backup the production database:
 		os.Exit(1)
 	}
 
+	serverConfig = config
 	uploadsDir = config.UploadsDir()
 
 	if config.IsDemo() {
@@ -189,6 +190,9 @@ func handleVersion(w http.ResponseWriter, r *http.Request) {
 
 // Set by main() from the config. Tests don't use uploads.
 var uploadsDir string
+
+// Set by main() so the admin/ops dashboard can show server info.
+var serverConfig *ServerConfig
 
 var (
 	nextUploadID   int

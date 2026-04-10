@@ -299,6 +299,24 @@ tr:hover td { background: #f0f0ff; }
 		fmt.Fprint(w, `</tbody></table>`)
 	}
 
+	// --- Server Info ---
+	fmt.Fprint(w, `<h2>Server Info</h2>`)
+	if serverConfig != nil {
+		fmt.Fprintf(w, `<table>
+<tr><td><b>Mode</b></td><td>%s</td></tr>
+<tr><td><b>Database</b></td><td><code>%s</code></td></tr>
+<tr><td><b>Listening</b></td><td>%s</td></tr>
+</table>`,
+			html.EscapeString(serverConfig.Mode),
+			html.EscapeString(serverConfig.DBPath()),
+			html.EscapeString(serverConfig.ListenAddr()),
+		)
+		fmt.Fprintf(w, `<p style="margin-top:12px;font-size:13px;color:#666">Logs go to stderr. To tail:</p>`)
+		fmt.Fprintf(w, `<pre style="background:#f4f4f4;padding:8px;font-size:13px">GOPHER_CONFIG=... ./angry-gopher 2>&1 | tail -f</pre>`)
+	} else {
+		fmt.Fprint(w, `<p style="color:#888">Running in test mode (no config file).</p>`)
+	}
+
 	fmt.Fprint(w, `</body></html>`)
 }
 
