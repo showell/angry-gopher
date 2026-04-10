@@ -1,10 +1,14 @@
-// Package users handles GET /api/v1/users.
+// Package users handles user-related Zulip API endpoints:
+//   GET   /api/v1/users     — list all users
+//   PATCH /api/v1/settings  — update the authenticated user's settings
 package users
 
 import (
 	"database/sql"
 	"net/http"
+	"strings"
 
+	"angry-gopher/auth"
 	"angry-gopher/respond"
 )
 
@@ -34,4 +38,52 @@ func HandleUsers(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respond.Success(w, map[string]interface{}{"members": members})
+}
+
+// HandleUpdateSettings handles PATCH /api/v1/settings.
+//
+// Mirrors Zulip's settings update endpoint. The authenticated
+// user updates their own profile. For now we accept a single
+// field, full_name, but the endpoint is shaped to grow more
+// fields without changing the route. Unknown form fields are
+// ignored.
+//
+// Request:
+//   PATCH /api/v1/settings
+//   Content-Type: application/x-www-form-urlencoded
+//   full_name=...
+//
+// Response:
+//   { "result": "success", "full_name": "..." }   on success
+//   { "result": "error",   "msg": "..."        }   on failure
+func HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPatch {
+		respond.Error(w, "Method not allowed")
+		return
+	}
+
+	userID := auth.Authenticate(r)
+	if userID == 0 {
+		respond.Error(w, "Authentication required")
+		return
+	}
+
+	fullName := strings.TrimSpace(r.FormValue("full_name"))
+	if fullName == "" {
+		respond.Error(w, "full_name cannot be empty")
+		return
+	}
+
+	_, err := DB.Exec(
+		`UPDATE users SET full_name = ? WHERE id = ?`,
+		fullName, userID,
+	)
+	if err != nil {
+		respond.Error(w, "Failed to update full_name: "+err.Error())
+		return
+	}
+
+	respond.Success(w, map[string]interface{}{
+		"full_name": fullName,
+	})
 }

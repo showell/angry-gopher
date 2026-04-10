@@ -36,6 +36,7 @@ func buildMux() *http.ServeMux {
 	mux.HandleFunc("/api/v1/register", withCORS(events.HandleRegister))
 	mux.HandleFunc("/api/v1/events", withCORS(events.HandleEvents))
 	mux.HandleFunc("/api/v1/users", withCORS(users.HandleUsers))
+	mux.HandleFunc("/api/v1/settings", withCORS(users.HandleUpdateSettings))
 	mux.HandleFunc("/api/v1/users/me/subscriptions", withCORS(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "GET":
