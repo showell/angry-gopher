@@ -26,9 +26,24 @@ func HandleInvites(w http.ResponseWriter, r *http.Request) {
 
 	if r.Method == "POST" {
 		r.ParseForm()
-		token := r.FormValue("token")
-		if token != "" {
-			DB.Exec(`DELETE FROM invites WHERE token = ?`, token)
+		action := r.FormValue("action")
+
+		if action == "create" {
+			fullName := r.FormValue("full_name")
+			email := r.FormValue("email")
+			if fullName != "" && email != "" {
+				token := fmt.Sprintf("%d-%s", time.Now().UnixNano(), email)
+				expiresAt := time.Now().Add(7 * 24 * time.Hour).Unix()
+				DB.Exec(`INSERT INTO invites (token, email, full_name, expires_at) VALUES (?, ?, ?, ?)`,
+					token, email, fullName, expiresAt)
+				http.Redirect(w, r, "/gopher/invites-view?flash=Invite+created!", http.StatusSeeOther)
+				return
+			}
+		} else {
+			token := r.FormValue("token")
+			if token != "" {
+				DB.Exec(`DELETE FROM invites WHERE token = ?`, token)
+			}
 		}
 		http.Redirect(w, r, "/gopher/invites-view", http.StatusSeeOther)
 		return
@@ -36,6 +51,7 @@ func HandleInvites(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	PageHeader(w, "Invitations")
+	FlashFromRequest(w, r)
 
 	now := time.Now().Unix()
 
@@ -70,6 +86,17 @@ func HandleInvites(w http.ResponseWriter, r *http.Request) {
 	if count == 0 {
 		fmt.Fprint(w, `<p class="muted">No invitations.</p>`)
 	}
+
+	// Create invite form.
+	fmt.Fprint(w, `<h2>Create Invitation</h2>
+<form method="POST" action="/gopher/invites-view">
+<input type="hidden" name="action" value="create">
+<label style="display:block;margin-bottom:4px;font-weight:bold">Full name</label>
+<input type="text" name="full_name" required style="width:300px;padding:4px;margin-bottom:8px"><br>
+<label style="display:block;margin-bottom:4px;font-weight:bold">Email</label>
+<input type="email" name="email" required style="width:300px;padding:4px;margin-bottom:8px"><br>
+<button type="submit">Create Invite</button>
+</form>`)
 
 	PageFooter(w)
 }

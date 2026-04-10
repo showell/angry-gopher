@@ -43,7 +43,7 @@ func renderGitHubIndex(w http.ResponseWriter, userID int) {
 
 	// List configured repos.
 	rows, err := DB.Query(`
-		SELECT gr.id, gr.owner, gr.name, gr.channel_id, c.name, gr.default_topic
+		SELECT gr.id, gr.owner, gr.name, gr.channel_id, c.name, gr.default_topic, gr.prefix
 		FROM github_repos gr
 		JOIN channels c ON gr.channel_id = c.channel_id
 		ORDER BY gr.owner, gr.name`)
@@ -55,28 +55,34 @@ func renderGitHubIndex(w http.ResponseWriter, userID int) {
 	defer rows.Close()
 
 	fmt.Fprint(w, `<h2>Configured Repos</h2>`)
-	fmt.Fprint(w, `<table><thead><tr><th>Repo</th><th>Channel</th><th>Default Topic</th><th>Webhook URL</th><th></th></tr></thead><tbody>`)
+	fmt.Fprint(w, `<table><thead><tr><th>Repo</th><th>Channel</th><th>Topic</th><th>Prefix</th><th>Webhook URL</th><th></th></tr></thead><tbody>`)
 	hasRepos := false
 	for rows.Next() {
 		hasRepos = true
 		var id, channelID int
-		var owner, name, channelName, defaultTopic string
-		rows.Scan(&id, &owner, &name, &channelID, &channelName, &defaultTopic)
+		var owner, name, channelName, defaultTopic, prefix string
+		rows.Scan(&id, &owner, &name, &channelID, &channelName, &defaultTopic, &prefix)
 		webhookURL := fmt.Sprintf("/gopher/webhooks/github?repo_id=%d&api_key=%s", id, apiKey)
 		topicDisplay := defaultTopic
 		if topicDisplay == "" {
 			topicDisplay = "(auto)"
 		}
+		prefixDisplay := prefix
+		if prefixDisplay == "" {
+			prefixDisplay = "—"
+		}
 		fmt.Fprintf(w, `<tr>
 <td><b>%s/%s</b></td>
 <td>#%s</td>
 <td>%s</td>
-<td><input type="text" value="%s" readonly style="width:300px;font-size:12px;font-family:monospace;padding:2px"></td>
+<td>%s</td>
+<td><input type="text" value="%s" readonly style="width:250px;font-size:12px;font-family:monospace;padding:2px"></td>
 <td><form method="POST" style="margin:0"><input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="%d"><button type="submit" style="background:#cc0000">Remove</button></form></td>
 </tr>`,
 			html.EscapeString(owner), html.EscapeString(name),
 			html.EscapeString(channelName),
 			html.EscapeString(topicDisplay),
+			html.EscapeString(prefixDisplay),
 			html.EscapeString(webhookURL),
 			id)
 	}
@@ -114,6 +120,9 @@ func renderGitHubIndex(w http.ResponseWriter, userID int) {
 	fmt.Fprint(w, `<label style="display:block;margin-bottom:4px;font-weight:bold">Default topic (optional)</label>
 <input type="text" name="default_topic" placeholder="Leave blank for auto" style="width:200px;padding:4px;margin-bottom:8px"><br>`)
 
+	fmt.Fprint(w, `<label style="display:block;margin-bottom:4px;font-weight:bold">Linkifier prefix (optional)</label>
+<input type="text" name="prefix" placeholder="e.g. AG for AG#123" style="width:200px;padding:4px;margin-bottom:8px"><br>`)
+
 	fmt.Fprint(w, `<button type="submit">Add Repo</button></form>`)
 
 	PageFooter(w)
@@ -130,14 +139,15 @@ func handleGitHubPost(w http.ResponseWriter, r *http.Request, userID int) {
 		channelIDStr := r.FormValue("channel_id")
 		channelID, _ := strconv.Atoi(channelIDStr)
 		defaultTopic := r.FormValue("default_topic")
+		prefix := r.FormValue("prefix")
 
 		if owner == "" || name == "" || channelID == 0 {
 			http.Error(w, "Missing required fields", http.StatusBadRequest)
 			return
 		}
 
-		DB.Exec(`INSERT OR REPLACE INTO github_repos (owner, name, channel_id, default_topic) VALUES (?, ?, ?, ?)`,
-			owner, name, channelID, defaultTopic)
+		DB.Exec(`INSERT OR REPLACE INTO github_repos (owner, name, channel_id, default_topic, prefix) VALUES (?, ?, ?, ?, ?)`,
+			owner, name, channelID, defaultTopic, prefix)
 
 	case "delete":
 		idStr := r.FormValue("id")
