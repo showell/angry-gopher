@@ -15,6 +15,23 @@ Rendered text (markdown + HTML) is stored in dedicated tables
 the parent row. This keeps the core tables lean and allows ops
 access to structural data without exposing user content.
 
+## Content rows are immutable
+
+Content tables (`message_content`, `channel_descriptions`) are
+never updated. When a message is edited:
+
+1. INSERT a new row into `message_content` with the new text
+2. UPDATE `messages.content_id` to point to the new row
+
+The old content row stays forever — it's the edit history for
+free, with no separate audit table. The FK update on `messages`
+is a cheap integer write. The content row itself, which holds
+the expensive text data, is never mutated.
+
+This makes content rows cache-friendly and safe for concurrent
+reads. It also means `message_content` can be treated as an
+append-only log if we ever need replication or backup strategies.
+
 ## The critical pagination index
 
 ```sql

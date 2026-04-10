@@ -350,6 +350,8 @@ func HandleEditMessage(w http.ResponseWriter, r *http.Request) {
 
 	html := RenderMarkdown(content)
 
+	// Insert new content row (old row preserved as edit history).
+	// Then update the message's content_id pointer.
 	tx, err := DB.Begin()
 	if err != nil {
 		respond.Error(w, "Failed to update message")
@@ -357,11 +359,17 @@ func HandleEditMessage(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 
-	_, err = tx.Exec(`
-		UPDATE message_content SET markdown = ?, html = ?
-		WHERE content_id = (SELECT content_id FROM messages WHERE id = ?)`,
-		content, html, messageID,
-	)
+	contentResult, err := tx.Exec(
+		`INSERT INTO message_content (markdown, html) VALUES (?, ?)`,
+		content, html)
+	if err != nil {
+		respond.Error(w, "Failed to update message")
+		return
+	}
+	newContentID, _ := contentResult.LastInsertId()
+
+	_, err = tx.Exec(`UPDATE messages SET content_id = ? WHERE id = ?`,
+		newContentID, messageID)
 	if err != nil {
 		respond.Error(w, "Failed to update message")
 		return
