@@ -90,6 +90,36 @@ func TestSearchMultipleSenders(t *testing.T) {
 	}
 }
 
+func TestSearchTextSubstring(t *testing.T) {
+	resetDB()
+	sendMessage(t, 3, "links", "check out http://example.com/foo for details")
+	sendMessage(t, 3, "links", "nothing interesting here")
+	sendMessage(t, 3, "links", "also see http://example.com/bar")
+
+	msgs := searchMessages(t, "text=example.com")
+	if len(msgs) != 2 {
+		t.Fatalf("expected 2 messages matching URL substring, got %d", len(msgs))
+	}
+}
+
+func TestSearchTextWithChannelFilter(t *testing.T) {
+	resetDB()
+	sendMessage(t, 3, "test", "the quick brown fox")
+	sendMessage(t, 1, "test", "the quick brown fox") // private channel
+
+	// Steve can see both channels.
+	msgs := searchMessages(t, "text=quick+brown")
+	if len(msgs) != 2 {
+		t.Fatalf("expected 2 matches, got %d", len(msgs))
+	}
+
+	// Filter to channel 3 only.
+	msgs = searchMessages(t, "text=quick+brown&channel_id=3")
+	if len(msgs) != 1 {
+		t.Fatalf("expected 1 match in channel 3, got %d", len(msgs))
+	}
+}
+
 func TestSearchPagination(t *testing.T) {
 	resetDB()
 	for i := 0; i < 5; i++ {

@@ -140,6 +140,16 @@ CREATE TABLE IF NOT EXISTS game_events (
     created_at INTEGER NOT NULL
 );
 
+-- Full-text search via trigram tokenizer. Enables substring
+-- matching on any 3+ character sequence, including URLs and
+-- code snippets. Keyed by content_id so results join cleanly
+-- back to messages.
+CREATE VIRTUAL TABLE IF NOT EXISTS message_fts USING fts5(
+    content,
+    content_id UNINDEXED,
+    tokenize='trigram'
+);
+
 -- Indexes for search and pagination.
 -- The (channel_id, id DESC) index is critical: without it, SQLite
 -- uses the channel_id index for filtering but loses the ability to

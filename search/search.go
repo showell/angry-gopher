@@ -27,7 +27,8 @@ type Params struct {
 	ChannelID int
 	TopicID   int
 	SenderIDs []int
-	Before    int // cursor: messages with id < before
+	Text      string // trigram full-text search
+	Before    int    // cursor: messages with id < before
 	Limit     int
 }
 
@@ -56,6 +57,9 @@ func ParseParams(r *http.Request) Params {
 				p.SenderIDs = append(p.SenderIDs, id)
 			}
 		}
+	}
+	if v := r.URL.Query().Get("text"); v != "" {
+		p.Text = strings.TrimSpace(v)
 	}
 	if v := r.URL.Query().Get("before"); v != "" {
 		p.Before, _ = strconv.Atoi(v)
@@ -100,6 +104,14 @@ func BuildQuery(columns, joins string, userID int, p Params) (string, []interfac
 			args = append(args, id)
 		}
 		conditions = append(conditions, fmt.Sprintf("m.sender_id IN (%s)", strings.Join(placeholders, ",")))
+	}
+	if p.Text != "" {
+		// Join FTS table via content_id. The MATCH uses trigram
+		// tokenization so any 3+ character substring works,
+		// including URLs and code.
+		joins += ` JOIN message_fts fts ON fts.content_id = m.content_id`
+		conditions = append(conditions, "fts.content MATCH ?")
+		args = append(args, `"`+p.Text+`"`)
 	}
 	if p.Before > 0 {
 		conditions = append(conditions, "m.id < ?")

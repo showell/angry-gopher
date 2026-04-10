@@ -106,11 +106,15 @@ func HandleSearch(w http.ResponseWriter, r *http.Request) {
 	}
 	fmt.Fprint(w, `</select><br>`)
 
+	fmt.Fprint(w, `<label style="display:block;font-weight:bold;margin-bottom:4px">Text (substring)</label>`)
+	fmt.Fprintf(w, `<input type="text" name="text" value="%s" placeholder="e.g. http://foo.com" style="width:300px;padding:4px;margin-bottom:8px"><br>`,
+		html.EscapeString(params.Text))
+
 	fmt.Fprint(w, `<button type="submit">Search</button>`)
 	fmt.Fprint(w, `</form>`)
 
 	// --- Results ---
-	hasFilter := params.ChannelID > 0 || params.TopicID > 0 || len(params.SenderIDs) > 0
+	hasFilter := params.ChannelID > 0 || params.TopicID > 0 || len(params.SenderIDs) > 0 || params.Text != ""
 	if !hasFilter {
 		fmt.Fprint(w, `<p class="muted">Pick at least one filter to search.</p>`)
 		PageFooter(w)

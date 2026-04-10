@@ -168,6 +168,10 @@ func SendMessage(senderID, channelID int, topic, markdown string) (int64, error)
 	}
 	contentID, _ := contentResult.LastInsertId()
 
+	// Index for full-text search.
+	tx.Exec(`INSERT INTO message_fts (rowid, content, content_id) VALUES (?, ?, ?)`,
+		contentID, markdown, contentID)
+
 	// Insert the message.
 	timestamp := time.Now().Unix()
 	msgResult, err := tx.Exec(
@@ -219,6 +223,9 @@ func SendMessageHTML(senderID, channelID int, topic, markdown, html string) (int
 		return 0, err
 	}
 	contentID, _ := contentResult.LastInsertId()
+
+	tx.Exec(`INSERT INTO message_fts (rowid, content, content_id) VALUES (?, ?, ?)`,
+		contentID, markdown, contentID)
 
 	timestamp := time.Now().Unix()
 	msgResult, err := tx.Exec(
