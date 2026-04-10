@@ -140,6 +140,15 @@ CREATE TABLE IF NOT EXISTS game_events (
     created_at INTEGER NOT NULL
 );
 
+-- Indexes for search and pagination.
+-- The (channel_id, id DESC) index is critical: without it, SQLite
+-- uses the channel_id index for filtering but loses the ability to
+-- walk the PK in reverse for LIMIT queries, turning 40µs pagination
+-- into 500ms full scans at 10M rows.
+CREATE INDEX IF NOT EXISTS idx_messages_channel_id_desc ON messages(channel_id, id DESC);
+CREATE INDEX IF NOT EXISTS idx_messages_channel_topic ON messages(channel_id, topic_id);
+CREATE INDEX IF NOT EXISTS idx_messages_sender ON messages(sender_id);
+
 CREATE TABLE IF NOT EXISTS server_sessions (
     generation INTEGER PRIMARY KEY AUTOINCREMENT,
     started_at TEXT NOT NULL,
