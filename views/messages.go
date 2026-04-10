@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 
 	"angry-gopher/messages"
 )
@@ -33,7 +32,7 @@ func HandleMessages(w http.ResponseWriter, r *http.Request) {
 		renderTopicList(w, userID, channelID)
 	} else {
 		channelID, _ := strconv.Atoi(channelIDStr)
-		renderMessages(w, userID, channelID, topic)
+		renderMessages(w, r, userID, channelID, topic)
 	}
 }
 
@@ -96,14 +95,18 @@ func renderTopicList(w http.ResponseWriter, userID int, channelID int) {
 	PageFooter(w)
 }
 
-func renderMessages(w http.ResponseWriter, userID int, channelID int, topic string) {
+func renderMessages(w http.ResponseWriter, r *http.Request, userID int, channelID int, topic string) {
 	var channelName string
 	DB.QueryRow(`SELECT name FROM channels WHERE channel_id = ?`, channelID).Scan(&channelName)
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	PageHeader(w, fmt.Sprintf("#%s > %s", channelName, topic))
 
-	fmt.Fprintf(w, `<a class="back" href="/gopher/messages?channel_id=%d">&larr; Back to topics</a>`, channelID)
+	Breadcrumb(w,
+		"Messages", "/gopher/messages",
+		"#"+channelName, fmt.Sprintf("/gopher/messages?channel_id=%d", channelID),
+		topic)
+	FlashFromRequest(w, r)
 
 	const renderLimit = 25000
 
@@ -166,11 +169,11 @@ func renderMessages(w http.ResponseWriter, userID int, channelID int, topic stri
 			var senderName, content string
 			var timestamp int64
 			rows.Scan(&msgID, &senderID, &senderName, &content, &timestamp)
-			t := time.Unix(timestamp, 0).Format("Jan 2 15:04")
+			ago := TimeAgo(timestamp)
 			fmt.Fprintf(w, `<div style="margin-bottom:8px;padding-bottom:8px;border-bottom:1px solid #ccc">
 <b>%s</b> <span class="muted">%s</span>
 <div class="msg-content">%s</div>
-</div>`, html.EscapeString(senderName), html.EscapeString(t), content)
+</div>`, html.EscapeString(senderName), html.EscapeString(ago), content)
 		}
 		rows.Close()
 
@@ -180,12 +183,14 @@ func renderMessages(w http.ResponseWriter, userID int, channelID int, topic stri
 	}
 
 	fmt.Fprintf(w, `
+<div class="compose-sticky">
 <form method="POST" action="/gopher/messages">
 <input type="hidden" name="channel_id" value="%d">
 <input type="hidden" name="topic" value="%s">
 <textarea name="content" placeholder="Write a message..." required></textarea>
 <button type="submit">Send</button>
-</form>`, channelID, html.EscapeString(topic))
+</form>
+</div>`, channelID, html.EscapeString(topic))
 
 	PageFooter(w)
 }
@@ -208,5 +213,5 @@ func handleMessageSend(w http.ResponseWriter, r *http.Request, userID int) {
 		return
 	}
 
-	http.Redirect(w, r, fmt.Sprintf("/gopher/messages?channel_id=%d&topic=%s", channelID, topic), http.StatusSeeOther)
+	http.Redirect(w, r, fmt.Sprintf("/gopher/messages?channel_id=%d&topic=%s&flash=Message+sent!", channelID, topic), http.StatusSeeOther)
 }

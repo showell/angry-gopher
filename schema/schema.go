@@ -121,6 +121,7 @@ CREATE TABLE IF NOT EXISTS github_repos (
     name TEXT NOT NULL,
     channel_id INTEGER NOT NULL REFERENCES channels(channel_id),
     default_topic TEXT NOT NULL DEFAULT '',
+    prefix TEXT NOT NULL DEFAULT '',
     UNIQUE(owner, name)
 );
 

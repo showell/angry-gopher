@@ -78,6 +78,15 @@ to create small private channels. Postponed indefinitely.
 
 ## Shared features with different approaches
 
+**Linkifiers are built-in, not regex-configured.** Zulip makes
+admins configure linkifiers with regexes. We hardcode the common
+patterns: `#123` for issues/PRs, `owner/repo#123` for explicit
+references, `abc1234` for commits, and custom prefixes like
+`AG#123`. Repos are configured in the GitHub integration, and
+linkifiers use that config directly — no separate regex setup.
+If you have one repo, `#123` just works. Multiple repos use
+prefixes (`AG#123`, `AC#456`) to disambiguate.
+
 **Server settings returns generation, not Zulip's full payload.**
 `GET /api/v1/server_settings` returns only the server generation
 number. Zulip returns a large blob of feature flags, auth backends,
