@@ -64,6 +64,18 @@ Users can't edit webhook messages, so there's no round-trip
 concern, and we avoid markdown-rendering artifacts on structured
 content.
 
+## Under consideration
+
+**1:1 DMs.** Zulip supports both 1:1 and group DMs. We have no
+DM support yet on the server side (Angry Cat has client-side DM
+support against Zulip). We'll likely add 1:1 DMs eventually but
+haven't committed to the approach.
+
+**No group DMs.** Group DMs add significant complexity to the data
+model and event system. We'd rather solve the underlying need —
+quick private conversations among a few people — by making it easy
+to create small private channels. Postponed indefinitely.
+
 ## Shared features with different approaches
 
 **Server settings returns generation, not Zulip's full payload.**
