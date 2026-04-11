@@ -40,12 +40,24 @@ a cold run. The remaining ~5s is compilation and linking.
 
 | Test | Time | What it does |
 |------|------|-------------|
-| TestDB_ConcurrentSendMessage | 9.6s | 4 goroutines writing 100 messages each |
-| TestStress_ConcurrentLoad | 4.5s | 4 users sending concurrently via HTTP |
-| TestIntegration_RateLimiting | 2.1s | Exhausts rate limit window |
+| TestDB_ConcurrentSendMessage | 1.5s | 4 goroutines writing concurrently |
+| TestStress_ConcurrentLoad | 1.2s | 4 users sending via HTTP concurrently |
+| TestIntegration_RateLimiting | 0.3s | Exhausts rate limit window |
 
 These are valuable stress tests but don't need to run on every
 edit. Use `go test ./...` (without `-short`) for thorough checks.
+Use `STRESS_MESSAGES=500` for thorough stress testing.
+
+### Best practice for stress/integration tests
+
+Write stress tests with high loop counts during initial
+investigation — they help find race conditions and contention
+bugs. Once the investigation is complete and the code is stable,
+**reduce the loop counts** to keep the test suite fast. The test
+still exercises the same code paths and concurrency patterns; it
+just does fewer iterations. Keep the original counts documented
+(or configurable via environment variables) so they can be
+cranked back up for future investigations.
 
 ## Sacred tests
 
