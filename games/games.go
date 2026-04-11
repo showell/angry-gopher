@@ -115,11 +115,12 @@ func handleCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Optional JSON body with game_type and puzzle_name.
-	// game_type defaults to "lynrummy" — the only game we host today.
+	// The client sends a shuffled deck; the Host's Dealer sets up
+	// the game and stores the setup as the first event. One round trip.
 	var body struct {
-		GameType   string  `json:"game_type"`
-		PuzzleName *string `json:"puzzle_name"`
+		GameType    string              `json:"game_type"`
+		PuzzleName *string             `json:"puzzle_name"`
+		ShuffledDeck []lynrummy.WireCard `json:"shuffled_deck"`
 	}
 	if r.Body != nil {
 		_ = json.NewDecoder(r.Body).Decode(&body)
@@ -147,9 +148,38 @@ func handleCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	gameID, _ := result.LastInsertId()
-	respond.Success(w, map[string]interface{}{
+
+	// If the client sent a shuffled deck, the Dealer deals and
+	// stores the setup as the first event.
+	var gameSetup *lynrummy.WireGameSetup
+	if len(body.ShuffledDeck) == 104 && gameType == "lynrummy" {
+		cards := make([]lynrummy.Card, len(body.ShuffledDeck))
+		for i, wc := range body.ShuffledDeck {
+			cards[i] = lynrummy.Card{
+				Value:      wc.Value,
+				Suit:       lynrummy.Suit(wc.Suit),
+				OriginDeck: wc.OriginDeck,
+			}
+		}
+		setup := lynrummy.DealFullGame(cards)
+		gameSetup = &setup
+
+		setupJSON, _ := json.Marshal(map[string]interface{}{
+			"game_setup": setup,
+		})
+		DB.Exec(
+			`INSERT INTO game_events (game_id, user_id, payload, created_at) VALUES (?, ?, ?, ?)`,
+			gameID, userID, string(setupJSON), now,
+		)
+	}
+
+	resp := map[string]interface{}{
 		"game_id": gameID,
-	})
+	}
+	if gameSetup != nil {
+		resp["game_setup"] = gameSetup
+	}
+	respond.Success(w, resp)
 }
 
 func handleJoin(w http.ResponseWriter, r *http.Request, gameID int) {
