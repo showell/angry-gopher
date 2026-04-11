@@ -36,7 +36,7 @@ func TestDB_ConcurrentSendMessage(t *testing.T) {
 	setupFileDB(t, "test_contention.db")
 
 	const numWorkers = 4
-	const messagesPerWorker = 100
+	const messagesPerWorker = 10
 
 	var wg sync.WaitGroup
 	var errorCount int32

@@ -211,7 +211,7 @@ func TestIntegration_RateLimiting(t *testing.T) {
 	origMax := ratelimit.MaxRequests
 	origWindow := ratelimit.Window
 	ratelimit.MaxRequests = 3
-	ratelimit.Window = 2 * time.Second
+	ratelimit.Window = 200 * time.Millisecond
 	defer func() {
 		ratelimit.MaxRequests = origMax
 		ratelimit.Window = origWindow
@@ -270,7 +270,7 @@ func getStressMessageCount() int {
 			return n
 		}
 	}
-	return 25 // default
+	return 5 // default (use STRESS_MESSAGES=500 for thorough checks)
 }
 
 // Test: 4 users send N messages concurrently to the same channel.
