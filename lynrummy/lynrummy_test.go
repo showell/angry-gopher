@@ -201,7 +201,10 @@ func TestGeometryRejectsOutOfBounds(t *testing.T) {
 	}
 }
 
-func TestSemanticsRejectsBogus(t *testing.T) {
+// Mid-turn moves skip semantics — bogus/incomplete stacks are
+// allowed. Semantics are enforced at turn boundaries.
+
+func TestMidturnAllowsBogus(t *testing.T) {
 	bogus := stack(at(10, 10),
 		fresh(1, Heart, 0), fresh(5, Club, 0), fresh(13, Diamond, 0))
 
@@ -212,12 +215,17 @@ func TestSemanticsRejectsBogus(t *testing.T) {
 			{1, Heart, 0}, {5, Club, 0}, {13, Diamond, 0},
 		},
 	}, bounds)
-	if err == nil || err.Stage != "semantics" {
-		t.Fatalf("expected semantics error, got %v", err)
+	if err != nil {
+		t.Fatalf("mid-turn bogus should be accepted, got %v", err)
+	}
+
+	turnErr := ValidateTurnComplete([]CardStack{bogus}, bounds)
+	if turnErr == nil || turnErr.Stage != "semantics" {
+		t.Fatalf("turn complete should reject bogus, got %v", turnErr)
 	}
 }
 
-func TestSemanticsRejectsIncomplete(t *testing.T) {
+func TestMidturnAllowsIncomplete(t *testing.T) {
 	incomplete := stack(at(10, 10),
 		fresh(1, Heart, 0), fresh(2, Heart, 0))
 
@@ -226,8 +234,13 @@ func TestSemanticsRejectsIncomplete(t *testing.T) {
 		StacksToAdd:     []CardStack{incomplete},
 		HandCardsPlayed: []Card{{1, Heart, 0}, {2, Heart, 0}},
 	}, bounds)
-	if err == nil || err.Stage != "semantics" {
-		t.Fatalf("expected semantics error, got %v", err)
+	if err != nil {
+		t.Fatalf("mid-turn incomplete should be accepted, got %v", err)
+	}
+
+	turnErr := ValidateTurnComplete([]CardStack{incomplete}, bounds)
+	if turnErr == nil || turnErr.Stage != "semantics" {
+		t.Fatalf("turn complete should reject incomplete, got %v", turnErr)
 	}
 }
 
@@ -363,7 +376,7 @@ func TestStagesAreIndependent(t *testing.T) {
 	validRun := stack(at(10, 10),
 		bc(1, Club, 0), bc(2, Club, 0), bc(3, Club, 0))
 
-	// Replace with bogus — protocol and geometry fine, semantics catches it.
+	// Replace with bogus — mid-turn accepts, turn complete rejects.
 	bogus := stack(at(10, 10),
 		bc(1, Club, 0), fresh(5, Diamond, 0), fresh(13, Heart, 0))
 
@@ -375,7 +388,12 @@ func TestStagesAreIndependent(t *testing.T) {
 			{5, Diamond, 0}, {13, Heart, 0},
 		},
 	}, bounds)
-	if err == nil || err.Stage != "semantics" {
-		t.Fatalf("expected semantics error, got %v", err)
+	if err != nil {
+		t.Fatalf("mid-turn bogus replacement should be accepted, got %v", err)
+	}
+
+	turnErr := ValidateTurnComplete([]CardStack{bogus}, bounds)
+	if turnErr == nil || turnErr.Stage != "semantics" {
+		t.Fatalf("turn complete should reject bogus, got %v", turnErr)
 	}
 }

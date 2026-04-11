@@ -61,9 +61,9 @@ func TestParseAndValidateExtendRun(t *testing.T) {
 	}
 }
 
-// A bogus stack should fail semantics.
+// A bogus stack is accepted mid-turn but rejected at turn completion.
 
-func TestParseAndRejectBogusStack(t *testing.T) {
+func TestParseAndAcceptBogusStackMidturn(t *testing.T) {
 	payload := json.RawMessage(`{
 		"json_game_event": {
 			"type": 2,
@@ -98,11 +98,8 @@ func TestParseAndRejectBogusStack(t *testing.T) {
 	}
 
 	refErr := ValidateGameMove(*move, bounds)
-	if refErr == nil {
-		t.Fatal("expected referee to reject bogus stack")
-	}
-	if refErr.Stage != "semantics" {
-		t.Fatalf("expected semantics error, got %s: %s", refErr.Stage, refErr.Message)
+	if refErr != nil {
+		t.Fatalf("mid-turn bogus should be accepted, got %v", refErr)
 	}
 }
 

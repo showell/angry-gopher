@@ -534,6 +534,11 @@ type Move struct {
 
 // ValidateGameMove rules on a single move during a turn.
 // Returns nil if the move is valid.
+//
+// Checks protocol, geometry, and inventory — but NOT semantics.
+// The board can be messy mid-turn (incomplete stacks, splits in
+// progress). Semantics are enforced at turn boundaries via
+// ValidateTurnComplete.
 func ValidateGameMove(move Move, bounds BoardBounds) *RefereeError {
 	// Stage 1: Protocol.
 	if err := checkProtocol(move); err != nil {
@@ -551,12 +556,7 @@ func ValidateGameMove(move Move, bounds BoardBounds) *RefereeError {
 		return err
 	}
 
-	// Stage 3: Semantics.
-	if err := checkSemantics(boardAfter); err != nil {
-		return err
-	}
-
-	// Stage 4: Inventory.
+	// Stage 3: Inventory.
 	if err := checkInventory(move, boardAfter); err != nil {
 		return err
 	}
