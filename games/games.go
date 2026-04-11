@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"angry-gopher/auth"
+	"angry-gopher/lynrummy"
 	"angry-gopher/respond"
 )
 
@@ -251,6 +252,35 @@ func handleList(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// refereeCheck asks the LynRummy package to validate a move.
+// The host's only job is to collect the payloads — the lynrummy
+// package owns reconstruction, parsing, and ruling.
+func refereeCheck(gameID int, payload json.RawMessage) *lynrummy.RefereeError {
+	var gameType string
+	DB.QueryRow(`SELECT game_type FROM games WHERE id = ?`, gameID).Scan(&gameType)
+	if gameType != "lynrummy" {
+		return nil
+	}
+
+	rows, err := DB.Query(
+		`SELECT payload FROM game_events WHERE game_id = ? ORDER BY id ASC`,
+		gameID,
+	)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+
+	var priorPayloads []json.RawMessage
+	for rows.Next() {
+		var p string
+		rows.Scan(&p)
+		priorPayloads = append(priorPayloads, json.RawMessage(p))
+	}
+
+	return lynrummy.CheckEvent(priorPayloads, payload)
+}
+
 func isPlayerInGame(userID, gameID int) bool {
 	var count int
 	DB.QueryRow(
@@ -282,6 +312,12 @@ func handlePostEvent(w http.ResponseWriter, r *http.Request, gameID int) {
 	var payload json.RawMessage
 	if err := json.Unmarshal(body, &payload); err != nil {
 		respond.Error(w, "Invalid JSON payload")
+		return
+	}
+
+	// Ask the referee if this is a LynRummy game.
+	if refErr := refereeCheck(gameID, payload); refErr != nil {
+		respond.Error(w, "Referee rejected move: "+refErr.Error())
 		return
 	}
 

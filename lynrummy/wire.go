@@ -11,7 +11,10 @@
 
 package lynrummy
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"fmt"
+)
 
 // --- Wire types (match Angry Cat's JSON shapes) ---
 
@@ -71,6 +74,14 @@ type WireGameEvent struct {
 type WireEventRow struct {
 	GameEvent WireGameEvent `json:"json_game_event"`
 	Addr      string        `json:"addr"`
+}
+
+// WireGameSetup matches GameSetup from game/game.ts.
+// The "photo" from the dealer — first event in a game.
+type WireGameSetup struct {
+	Board []WireCardStack `json:"board"`
+	Hands [2][]WireCard   `json:"hands"`
+	Deck  []WireCard      `json:"deck"`
 }
 
 const (
@@ -151,4 +162,93 @@ func ParseMoveEvent(payload json.RawMessage, boardBefore []CardStack) (*Move, er
 		HandCardsPlayed: handCards,
 	}
 	return move, nil
+}
+
+// CheckEvent is the single entry point the host calls. Give it
+// all prior event payloads and the new payload. It reconstructs
+// the board, parses the move, and asks the referee. Returns nil
+// if the event is valid or not a player action.
+func CheckEvent(priorPayloads []json.RawMessage, newPayload json.RawMessage) *RefereeError {
+	// No prior events means this is the setup event.
+	if len(priorPayloads) == 0 {
+		return nil
+	}
+
+	board, err := ReconstructBoard(priorPayloads)
+	if err != nil {
+		return nil
+	}
+
+	move, err := ParseMoveEvent(newPayload, board)
+	if err != nil {
+		return nil
+	}
+	if move == nil {
+		return nil
+	}
+
+	bounds := BoardBounds{MaxWidth: 800, MaxHeight: 600, Margin: 5}
+	return ValidateGameMove(*move, bounds)
+}
+
+// ReconstructBoard rebuilds the current board state from a sequence
+// of raw JSON event payloads. The first payload must be a game_setup
+// event. Subsequent payloads are game events — player actions are
+// applied to the board; other event types are skipped.
+//
+// Returns the current board, or an error if the setup event is
+// missing or malformed.
+func ReconstructBoard(payloads []json.RawMessage) ([]CardStack, error) {
+	if len(payloads) == 0 {
+		return nil, fmt.Errorf("no events")
+	}
+
+	// Parse the first event as a game setup.
+	var firstEvent struct {
+		GameSetup *WireGameSetup `json:"game_setup"`
+	}
+	if err := json.Unmarshal(payloads[0], &firstEvent); err != nil {
+		return nil, fmt.Errorf("failed to parse setup event: %w", err)
+	}
+	if firstEvent.GameSetup == nil {
+		return nil, fmt.Errorf("first event is not a game_setup")
+	}
+
+	board := wireStacksToCardStacks(firstEvent.GameSetup.Board)
+
+	// Replay subsequent events.
+	for _, payload := range payloads[1:] {
+		var row WireEventRow
+		if err := json.Unmarshal(payload, &row); err != nil {
+			continue // skip non-game payloads
+		}
+		if row.GameEvent.Type != EventTypePlayerAction {
+			continue
+		}
+		if row.GameEvent.PlayerAction == nil {
+			continue
+		}
+
+		be := row.GameEvent.PlayerAction.BoardEvent
+		toRemove := wireStacksToCardStacks(be.StacksToRemove)
+		toAdd := wireStacksToCardStacks(be.StacksToAdd)
+
+		// Apply: remove matching stacks, then add new ones.
+		var remaining []CardStack
+		removeList := make([]CardStack, len(toRemove))
+		copy(removeList, toRemove)
+
+		for _, s := range board {
+			idx := findMatchingStack(removeList, s)
+			if idx >= 0 {
+				removeList = append(removeList[:idx], removeList[idx+1:]...)
+			} else {
+				remaining = append(remaining, s)
+			}
+		}
+
+		board = append(remaining, toAdd...)
+	}
+
+	return board, nil
 }
