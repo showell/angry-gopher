@@ -2,8 +2,9 @@
 """
 LynRummy console player — talks to the Angry Gopher game host via HTTP.
 
-This is a spectating/playing tool, not a UI. It polls game events,
-tracks board and hand state, and can send moves via curl-style HTTP.
+Tracks board and hand state by polling game events. Can send moves
+as any authenticated player. Used for spectating, advising, and
+playing via the command line.
 
 Usage:
     python3 player.py --game-id 1 --email EMAIL --api-key KEY [--host URL]
@@ -15,7 +16,7 @@ import json
 import sys
 import urllib.request
 
-# --- Card display ---
+# --- Card types and display ---
 
 SUIT_NAMES = {0: "C", 1: "D", 2: "S", 3: "H"}
 VALUE_NAMES = {
@@ -33,8 +34,20 @@ def card_str(card):
     return f"{v}{s}:{d}"
 
 
+def make_card(value, suit, origin_deck=0):
+    """Build a card dict."""
+    return {"value": value, "suit": suit, "origin_deck": origin_deck}
+
+
+def cards_equal(a, b):
+    """Card identity: value + suit + origin_deck."""
+    return (a["value"] == b["value"] and
+            a["suit"] == b["suit"] and
+            a["origin_deck"] == b["origin_deck"])
+
+
 def show_hand(name, hand):
-    """Print a hand organized by suit."""
+    """Print a hand organized by suit (H, S, D, C order)."""
     print(f"{name}:")
     for suit in SUIT_ORDER:
         suit_cards = [c for c in hand if c["suit"] == suit]
@@ -55,36 +68,68 @@ def show_board(board):
     for i, stack in enumerate(board):
         cards = " ".join(card_str(bc["card"]) for bc in stack["board_cards"])
         loc = stack["loc"]
-        print(f"  [{i}] ({loc['left']:.0f}, {loc['top']:.0f}) {cards}")
+        print(f"  [{i}] ({loc['left']:.1f}, {loc['top']:.1f}) {cards}")
     print()
 
 
-# --- Initial board setup ---
-# These cards are pulled from the deck (always deck 1) before dealing.
+# --- Stack helpers ---
+
+def make_board_card(card, state=0):
+    """Wrap a card as a board card with a state."""
+    return {"card": card, "state": state}
+
+
+def make_stack(board_cards, loc):
+    """Build a stack dict."""
+    return {"board_cards": board_cards, "loc": loc}
+
+
+def stack_cards(stack):
+    """Extract the raw cards from a stack."""
+    return [bc["card"] for bc in stack["board_cards"]]
+
+
+def stacks_match(a, b):
+    """Check if two stacks match (same cards in order, same location).
+
+    Card state is ignored for matching — only value, suit, origin_deck
+    and exact location matter. Locations are compared as-is (floats).
+    """
+    if len(a["board_cards"]) != len(b["board_cards"]):
+        return False
+    for ac, bc in zip(a["board_cards"], b["board_cards"]):
+        if not cards_equal(ac["card"], bc["card"]):
+            return False
+    la, lb = a["loc"], b["loc"]
+    return la["top"] == lb["top"] and la["left"] == lb["left"]
+
+
+def find_board_stack(board, stack):
+    """Find the index of a matching stack on the board, or -1."""
+    for i, bs in enumerate(board):
+        if stacks_match(bs, stack):
+            return i
+    return -1
+
+
+# --- Dealer setup ---
+#
+# The dealer pulls initial board stacks from the deck (all deck 1),
+# then deals 15 cards from the front to each player.
 
 INITIAL_BOARD_SIGS = [
-    ("KS,AS,2S,3S", 0),
-    ("TD,JD,QD,KD", 1),
-    ("2H,3H,4H", 2),
-    ("7S,7D,7C", 3),
-    ("AC,AD,AH", 4),
-    ("2C,3D,4C,5H,6S,7H", 5),
+    "KS,AS,2S,3S",
+    "TD,JD,QD,KD",
+    "2H,3H,4H",
+    "7S,7D,7C",
+    "AC,AD,AH",
+    "2C,3D,4C,5H,6S,7H",
 ]
 
 LABEL_TO_CARD = {}
 for v, vn in VALUE_NAMES.items():
     for s, sn in SUIT_NAMES.items():
         LABEL_TO_CARD[f"{vn}{sn}"] = {"value": v, "suit": s}
-
-
-def parse_board_sig(sig):
-    """Parse 'KS,AS,2S,3S' into a list of cards (all deck 1)."""
-    cards = []
-    for label in sig.split(","):
-        c = dict(LABEL_TO_CARD[label])
-        c["origin_deck"] = 0  # always deck 1
-        cards.append(c)
-    return cards
 
 
 def board_location(row):
@@ -94,27 +139,26 @@ def board_location(row):
 
 
 def pull_board_cards_from_deck(deck):
-    """Remove initial board cards from deck, return (board_stacks, remaining_deck)."""
+    """Remove initial board cards from deck.
+
+    Returns (board_stacks, remaining_deck).
+    """
     remaining = list(deck)
     board = []
 
-    for sig, row in INITIAL_BOARD_SIGS:
-        cards = parse_board_sig(sig)
+    for row, sig in enumerate(INITIAL_BOARD_SIGS):
         board_cards = []
-        for c in cards:
-            # Search and remove from deck (matching value, suit, origin_deck)
+        for label in sig.split(","):
+            proto = LABEL_TO_CARD[label]
+            card = make_card(proto["value"], proto["suit"], origin_deck=0)
+            # Search and remove from deck.
             for i, dc in enumerate(remaining):
-                if (dc["value"] == c["value"] and
-                    dc["suit"] == c["suit"] and
-                    dc["origin_deck"] == c["origin_deck"]):
+                if cards_equal(dc, card):
                     remaining.pop(i)
                     break
-            board_cards.append({"card": c, "state": 0})
+            board_cards.append(make_board_card(card, state=0))
 
-        board.append({
-            "board_cards": board_cards,
-            "loc": board_location(row),
-        })
+        board.append(make_stack(board_cards, board_location(row)))
 
     return board, remaining
 
@@ -128,7 +172,7 @@ def deal_hands(deck, hand_size=15):
     return p1_hand, p2_hand, rest
 
 
-# --- HTTP helpers ---
+# --- HTTP client ---
 
 class GopherClient:
     def __init__(self, host, email, api_key):
@@ -160,13 +204,16 @@ class GopherClient:
 
 
 # --- Move construction ---
+#
+# These build the exact JSON payloads that Angry Cat expects.
+# The addr field must be the sender's user ID as a string.
 
 def make_event_row(addr, board_event, hand_cards=None):
-    """Build the full event payload that Angry Cat expects."""
+    """Build the full EventRow payload."""
     hand_cards_to_release = []
     if hand_cards:
         for c in hand_cards:
-            hand_cards_to_release.append({"card": c, "state": 0})
+            hand_cards_to_release.append(make_board_card(c, state=0))
 
     return {
         "json_game_event": {
@@ -180,7 +227,7 @@ def make_event_row(addr, board_event, hand_cards=None):
     }
 
 
-def make_move_stack(stacks_to_remove, stacks_to_add):
+def make_board_event(stacks_to_remove, stacks_to_add):
     """Build a board_event from remove/add lists."""
     return {
         "stacks_to_remove": stacks_to_remove,
@@ -188,11 +235,46 @@ def make_move_stack(stacks_to_remove, stacks_to_add):
     }
 
 
-def move_stack(stack, new_loc):
-    """Create a board_event that moves a stack to a new location."""
-    moved = dict(stack)
-    moved["loc"] = new_loc
-    return make_move_stack([stack], [moved])
+# --- Move helpers ---
+#
+# High-level operations that build board_events for common plays.
+
+def move_stack_event(stack, new_loc):
+    """Move a stack to a new location (pure rearrangement)."""
+    moved = make_stack(stack["board_cards"], new_loc)
+    return make_board_event([stack], [moved])
+
+
+def extend_stack_right_event(stack, hand_card):
+    """Add a card from hand to the right end of a stack."""
+    new_board_cards = list(stack["board_cards"])
+    new_board_cards.append(make_board_card(hand_card, state=1))
+    new_stack = make_stack(new_board_cards, stack["loc"])
+    return make_board_event([stack], [new_stack])
+
+
+def extend_stack_left_event(stack, hand_card):
+    """Add a card from hand to the left end of a stack."""
+    new_board_cards = [make_board_card(hand_card, state=1)]
+    new_board_cards.extend(stack["board_cards"])
+    new_stack = make_stack(new_board_cards, stack["loc"])
+    return make_board_event([stack], [new_stack])
+
+
+def place_new_stack_event(hand_cards, loc):
+    """Place cards from hand as a new stack on the board."""
+    board_cards = [make_board_card(c, state=1) for c in hand_cards]
+    new_stack = make_stack(board_cards, loc)
+    return make_board_event([], [new_stack])
+
+
+def split_stack_event(stack, split_at, left_loc, right_loc):
+    """Split a stack into two at the given card index."""
+    left_cards = stack["board_cards"][:split_at]
+    right_cards = stack["board_cards"][split_at:]
+    left_stack = make_stack(left_cards, left_loc)
+    right_stack = make_stack(right_cards, right_loc)
+    return make_board_event([stack], [left_stack, right_stack])
 
 
 # --- Game state tracker ---
@@ -201,30 +283,29 @@ class GameState:
     def __init__(self, deck_event):
         raw_deck = deck_event["payload"]["deck"]
         self.initial_board, remaining = pull_board_cards_from_deck(raw_deck)
-        p1_hand, p2_hand, self.deck = deal_hands(remaining)
+        p1_hand, p2_hand, self.remaining_deck = deal_hands(remaining)
         self.hands = [p1_hand, p2_hand]
-        # Board tracks current state — starts with initial stacks.
         self.board = [dict(s) for s in self.initial_board]
+        self.last_event_id = deck_event["id"]
 
     def apply_event(self, event):
+        """Apply a game event to the board. Skips invalid moves."""
+        self.last_event_id = event["id"]
+
         payload = event["payload"]
         if "json_game_event" not in payload:
-            return  # deck event or other non-game event
+            return
 
         ge = payload["json_game_event"]
-        if ge["type"] != 2:  # not a player action
-            return
-        if ge.get("player_action") is None:
+        if ge["type"] != 2 or ge.get("player_action") is None:
             return
 
         be = ge["player_action"]["board_event"]
         to_remove = be["stacks_to_remove"]
         to_add = be["stacks_to_add"]
 
-        # Remove matching stacks. If any remove doesn't match,
-        # the whole move is invalid (same as the referee).
+        # Validate all removes before applying.
         indices_to_remove = []
-        valid = True
         for rem in to_remove:
             found = False
             for i, bs in enumerate(self.board):
@@ -233,40 +314,34 @@ class GameState:
                     found = True
                     break
             if not found:
-                valid = False
-                break
+                return  # invalid move — skip
 
-        if not valid:
-            return  # skip this event — referee would reject it
-
-        # Remove in reverse order to preserve indices.
         for i in sorted(indices_to_remove, reverse=True):
             self.board.pop(i)
 
-        # Add new stacks.
         for add in to_add:
             self.board.append(add)
 
-    def show(self, my_player_index):
+    def show(self, player_index):
         show_board(self.board)
-        show_hand("My hand", self.hands[my_player_index])
+        show_hand("Player 1 hand", self.hands[0])
+        show_hand("Player 2 hand", self.hands[1])
+        print(f"Deck: {len(self.remaining_deck)} cards remaining")
 
-
-def stacks_match(a, b):
-    """Check if two stacks match (same cards in order, same location)."""
-    if len(a["board_cards"]) != len(b["board_cards"]):
-        return False
-    for ac, bc in zip(a["board_cards"], b["board_cards"]):
-        ca, cb = ac["card"], bc["card"]
-        if (ca["value"] != cb["value"] or
-            ca["suit"] != cb["suit"] or
-            ca["origin_deck"] != cb["origin_deck"]):
-            return False
-    # Location must match exactly (floats from UI).
-    la, lb = a["loc"], b["loc"]
-    if la["top"] != lb["top"] or la["left"] != lb["left"]:
-        return False
-    return True
+    def send_move(self, client, game_id, addr, board_event, hand_cards=None):
+        """Send a move to the host and apply it locally."""
+        payload = make_event_row(addr, board_event, hand_cards)
+        result = client.post_event(game_id, payload)
+        event_id = result.get("event_id")
+        if event_id:
+            print(f"Sent event {event_id}")
+            # Apply locally by constructing a fake event.
+            fake_event = {
+                "id": event_id,
+                "payload": payload,
+            }
+            self.apply_event(fake_event)
+        return result
 
 
 # --- Main ---
@@ -281,9 +356,8 @@ def main():
     args = parser.parse_args()
 
     client = GopherClient(args.host, args.email, args.api_key)
-    player_index = args.player - 1  # 0-based
+    player_index = args.player - 1
 
-    # Fetch all events.
     result = client.get_events(args.game_id)
     events = result.get("events", [])
 
@@ -291,10 +365,7 @@ def main():
         print("No events yet — waiting for game to start.")
         return
 
-    # First event should be the deck.
     state = GameState(events[0])
-
-    # Apply all subsequent events.
     for event in events[1:]:
         state.apply_event(event)
 
