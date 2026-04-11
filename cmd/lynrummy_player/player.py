@@ -280,13 +280,26 @@ def split_stack_event(stack, split_at, left_loc, right_loc):
 # --- Game state tracker ---
 
 class GameState:
-    def __init__(self, deck_event):
-        raw_deck = deck_event["payload"]["deck"]
-        self.initial_board, remaining = pull_board_cards_from_deck(raw_deck)
-        p1_hand, p2_hand, self.remaining_deck = deal_hands(remaining)
-        self.hands = [p1_hand, p2_hand]
-        self.board = [dict(s) for s in self.initial_board]
-        self.last_event_id = deck_event["id"]
+    def __init__(self, setup_event):
+        payload = setup_event["payload"]
+
+        if "game_setup" in payload:
+            # New format: the "photo" from the dealer.
+            setup = payload["game_setup"]
+            self.board = setup["board"]
+            self.hands = [setup["hands"][0], setup["hands"][1]]
+            self.remaining_deck = setup["deck"]
+        elif "deck" in payload:
+            # Legacy format: raw shuffled deck, dealer runs locally.
+            raw_deck = payload["deck"]
+            initial_board, remaining = pull_board_cards_from_deck(raw_deck)
+            p1_hand, p2_hand, self.remaining_deck = deal_hands(remaining)
+            self.board = initial_board
+            self.hands = [p1_hand, p2_hand]
+        else:
+            raise ValueError("First event must be game_setup or deck")
+
+        self.last_event_id = setup_event["id"]
 
     def apply_event(self, event):
         """Apply a game event to the board. Skips invalid moves."""
