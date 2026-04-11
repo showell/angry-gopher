@@ -82,26 +82,8 @@ func buildMux() *http.ServeMux {
 	mux.HandleFunc("/gopher/github/repos", api(webhooks.HandleRepos))
 
 	// --- HTML views (Basic auth, no middleware) ---
-	mux.HandleFunc("/gopher/dm", views.HandleDM)
-	mux.HandleFunc("/gopher/messages", views.HandleMessages)
-	mux.HandleFunc("/gopher/channels", views.HandleChannels)
-	mux.HandleFunc("/gopher/users", views.HandleUsers)
-	mux.HandleFunc("/gopher/buddies", views.HandleBuddies)
-	mux.HandleFunc("/gopher/github", views.HandleGitHub)
-	mux.HandleFunc("/gopher/game-lobby", views.HandleGames)
-	mux.HandleFunc("/gopher/invites-view", views.HandleInvites)
-	mux.HandleFunc("/gopher/quicknav", views.HandleQuickNav)
-	mux.HandleFunc("/gopher/nav", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "views/static_nav.html")
-	})
-	mux.HandleFunc("/gopher/search", views.HandleSearch)
-	mux.HandleFunc("/gopher/sse/messages", views.HandleSSEMessages)
-	mux.HandleFunc("/gopher/sse/events", views.HandleSSEEvents)
-	mux.HandleFunc("/gopher/tour", views.HandleTour)
-	mux.HandleFunc("/gopher/recent", views.HandleRecent)
-	mux.HandleFunc("/gopher/unread", views.HandleUnread)
-	mux.HandleFunc("/gopher/starred", views.HandleStarred)
-	mux.HandleFunc("/gopher/", views.HandleIndex)
+	// All pages registered from views.Pages (single source of truth).
+	views.RegisterPages(mux)
 
 	// --- Admin & uploads ---
 	mux.HandleFunc("/user_uploads/", api(handleServeUpload))

@@ -72,21 +72,13 @@ button:hover { background: #0000a0; }
 </head><body>
 <nav>
 <a href="/gopher/">Home</a>
-<a href="/gopher/messages">Messages</a>
-<a href="/gopher/channels">Channels</a>
-<a href="/gopher/dm">DMs</a>
-<a href="/gopher/users">Users</a>
-<a href="/gopher/buddies">Buddies</a>
-<a href="/gopher/github">GitHub</a>
-<a href="/gopher/recent">Recent</a>
-<a href="/gopher/unread">Unread</a>
-<a href="/gopher/starred">Starred</a>
-<a href="/gopher/search">Search</a>
-<a href="/gopher/game-lobby">Games</a>
-<a href="/gopher/invites-view">Invites</a>
-<span style="float:right;color:#888">%s</span>
+`)
+	for _, p := range GetPages() {
+		fmt.Fprintf(w, `<a href="%s">%s</a> `, p.Path, p.NavLabel)
+	}
+	fmt.Fprintf(w, `<span style="float:right;color:#888">%s</span>
 </nav>
-<h1>%s</h1>`, title, html.EscapeString(currentUserName(lastAuthUserID)), title)
+<h1>%s</h1>`, html.EscapeString(currentUserName(lastAuthUserID)), title)
 }
 
 // PageSubtitle renders a brief help/marketing blurb below the title.
@@ -171,26 +163,12 @@ func HandleIndex(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	PageHeader(w, "Angry Gopher")
 
-	fmt.Fprint(w, `<div style="display:flex;flex-direction:column;gap:12px;margin-top:8px">
-<a href="/gopher/messages" style="font-size:18px;font-weight:bold">Messages</a>
-<span class="muted">Browse channels, topics, and messages</span>
-<a href="/gopher/channels" style="font-size:18px;font-weight:bold">Channels</a>
-<span class="muted">List, create, and edit channels</span>
-<a href="/gopher/dm" style="font-size:18px;font-weight:bold">Direct Messages</a>
-<span class="muted">1:1 conversations</span>
-<a href="/gopher/users" style="font-size:18px;font-weight:bold">Users</a>
-<span class="muted">User directory, edit your profile</span>
-<a href="/gopher/buddies" style="font-size:18px;font-weight:bold">Buddies</a>
-<span class="muted">Manage your buddy list</span>
-<a href="/gopher/github" style="font-size:18px;font-weight:bold">GitHub</a>
-<span class="muted">Configure GitHub webhook integrations</span>
-<a href="/gopher/search" style="font-size:18px;font-weight:bold">Search</a>
-<span class="muted">Find messages by channel, topic, and sender</span>
-<a href="/gopher/game-lobby" style="font-size:18px;font-weight:bold">Games</a>
-<span class="muted">Game lobby — create, join, and view games</span>
-<a href="/gopher/invites-view" style="font-size:18px;font-weight:bold">Invitations</a>
-<span class="muted">View and revoke invitations (admin)</span>
-</div>`)
+	fmt.Fprint(w, `<div style="display:flex;flex-direction:column;gap:12px;margin-top:8px">`)
+	for _, p := range GetPages() {
+		fmt.Fprintf(w, `<a href="%s" style="font-size:18px;font-weight:bold">%s</a>
+<span class="muted">%s</span>`, p.Path, p.Title, p.Subtitle)
+	}
+	fmt.Fprint(w, `</div>`)
 
 	PageFooter(w)
 }

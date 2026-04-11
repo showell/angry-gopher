@@ -15,21 +15,6 @@ func HandleTour(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 
-	pages := []struct {
-		title string
-		url   string
-	}{
-		{"Messages", "/gopher/messages"},
-		{"Search", "/gopher/search"},
-		{"Channels", "/gopher/channels"},
-		{"Direct Messages", "/gopher/dm"},
-		{"Users", "/gopher/users"},
-		{"Buddies", "/gopher/buddies"},
-		{"GitHub", "/gopher/github"},
-		{"Games", "/gopher/game-lobby"},
-		{"Invitations", "/gopher/invites-view"},
-	}
-
 	fmt.Fprint(w, `<!DOCTYPE html>
 <html><head><title>Tour — Angry Gopher</title>
 <style>
@@ -48,11 +33,11 @@ iframe { width: 100%; height: 400px; border: none; }
 <p>Every page in one view. Click a title to open it full-size.</p>
 <div class="grid">`)
 
-	for _, page := range pages {
+	for _, page := range GetPages() {
 		fmt.Fprintf(w, `<div class="card">
 <div class="card-header"><a href="%s">%s</a></div>
 <iframe src="%s" loading="lazy"></iframe>
-</div>`, page.url, page.title, page.url)
+</div>`, page.Path, page.Title, page.Path)
 	}
 
 	fmt.Fprint(w, `</div></body></html>`)
