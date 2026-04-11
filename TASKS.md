@@ -31,3 +31,4 @@
 - [ ] Multiplayer LynRummy in CRUD — turn-based via form submit, SSE for turn notifications
 - [ ] Game replay scrubber — render events up to move N
 - [ ] Daily puzzle feature
+- [ ] Scoring reward for tidying board from CROWDED to CLEANLY_SPACED

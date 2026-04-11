@@ -127,10 +127,12 @@ CREATE TABLE IF NOT EXISTS github_repos (
 
 CREATE TABLE IF NOT EXISTS games (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    game_type TEXT NOT NULL DEFAULT 'lynrummy',
     player1_id INTEGER NOT NULL REFERENCES users(id),
     player2_id INTEGER,
     created_at INTEGER NOT NULL,
-    puzzle_name TEXT
+    puzzle_name TEXT,
+    status TEXT NOT NULL DEFAULT 'waiting'
 );
 
 CREATE TABLE IF NOT EXISTS game_events (

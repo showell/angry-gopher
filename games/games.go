@@ -1,8 +1,15 @@
-// Package games provides a simple game event bus.
+// Package games is the Game Lobby Host.
 //
-// A game has 1-2 players and an ordered sequence of opaque JSON
-// events. Angry Gopher doesn't understand the game rules — it
-// just relays payloads between authenticated players.
+// The host manages the logistics of game sessions: authentication,
+// matchmaking, event relay, and game lifecycle. It knows who the
+// players are and what game type they're playing, but it does not
+// understand game rules. Rule enforcement is delegated to a
+// game-specific referee (e.g., the lynrummy package).
+//
+// The host is like the person holding the phone for a remote
+// player — relaying messages faithfully without understanding
+// the game. The referee is the expert at the table who gives
+// rulings when asked.
 //
 // Endpoints:
 //   POST /gopher/games          — create a game (caller is player 1)
@@ -107,15 +114,19 @@ func handleCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Optional JSON body: { "puzzle_name": "puzzle_24" }.
-	// A regular game is created with no body or an empty body —
-	// the server only stores puzzle_name as an opaque label and
-	// never interprets puzzle contents.
+	// Optional JSON body with game_type and puzzle_name.
+	// game_type defaults to "lynrummy" — the only game we host today.
 	var body struct {
+		GameType   string  `json:"game_type"`
 		PuzzleName *string `json:"puzzle_name"`
 	}
 	if r.Body != nil {
 		_ = json.NewDecoder(r.Body).Decode(&body)
+	}
+
+	gameType := body.GameType
+	if gameType == "" {
+		gameType = "lynrummy"
 	}
 
 	var puzzleName interface{}
@@ -125,8 +136,9 @@ func handleCreate(w http.ResponseWriter, r *http.Request) {
 
 	now := time.Now().Unix()
 	result, err := DB.Exec(
-		`INSERT INTO games (player1_id, player2_id, created_at, puzzle_name) VALUES (?, NULL, ?, ?)`,
-		userID, now, puzzleName,
+		`INSERT INTO games (game_type, player1_id, player2_id, created_at, puzzle_name, status)
+		 VALUES (?, ?, NULL, ?, ?, 'waiting')`,
+		gameType, userID, now, puzzleName,
 	)
 	if err != nil {
 		respond.Error(w, "Failed to create game: "+err.Error())
@@ -172,7 +184,7 @@ func handleJoin(w http.ResponseWriter, r *http.Request, gameID int) {
 	}
 
 	_, err = DB.Exec(
-		`UPDATE games SET player2_id = ? WHERE id = ?`,
+		`UPDATE games SET player2_id = ?, status = 'playing' WHERE id = ?`,
 		userID, gameID,
 	)
 	if err != nil {
@@ -192,7 +204,8 @@ func handleList(w http.ResponseWriter, r *http.Request) {
 
 	// Return games the user is in, plus open games they could join.
 	rows, err := DB.Query(`
-		SELECT g.id, g.player1_id, g.player2_id, g.created_at, g.puzzle_name,
+		SELECT g.id, g.game_type, g.player1_id, g.player2_id,
+		       g.created_at, g.puzzle_name, g.status,
 		       (SELECT COUNT(*) FROM game_events WHERE game_id = g.id) AS event_count
 		FROM games g
 		WHERE g.player1_id = ? OR g.player2_id = ?
@@ -207,11 +220,13 @@ func handleList(w http.ResponseWriter, r *http.Request) {
 
 	type gameInfo struct {
 		ID         int     `json:"id"`
+		GameType   string  `json:"game_type"`
 		Player1ID  int     `json:"player1_id"`
 		Player2ID  *int    `json:"player2_id"`
 		CreatedAt  int64   `json:"created_at"`
-		EventCount int     `json:"event_count"`
 		PuzzleName *string `json:"puzzle_name"`
+		Status     string  `json:"status"`
+		EventCount int     `json:"event_count"`
 	}
 
 	games := []gameInfo{}
@@ -219,7 +234,7 @@ func handleList(w http.ResponseWriter, r *http.Request) {
 		var g gameInfo
 		var p2 sql.NullInt64
 		var puzzle sql.NullString
-		rows.Scan(&g.ID, &g.Player1ID, &p2, &g.CreatedAt, &puzzle, &g.EventCount)
+		rows.Scan(&g.ID, &g.GameType, &g.Player1ID, &p2, &g.CreatedAt, &puzzle, &g.Status, &g.EventCount)
 		if p2.Valid {
 			p2val := int(p2.Int64)
 			g.Player2ID = &p2val
