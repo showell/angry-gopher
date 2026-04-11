@@ -3,19 +3,38 @@
 ## Running tests
 
 ```bash
-go test -short ./...    # Fast suite (~7s) — skips stress tests
-go test ./...           # Full suite (~21s) — includes stress tests
+go test -short ./...    # Fast suite — cached ~1s, cold ~7s
+go test ./...           # Full suite — cached ~1s, cold ~21s
+go test -count=1 ./...  # Force fresh (bypasses cache) — always slow
 ```
 
 ## Test speed analysis (April 2026)
 
-**147 tests, 2.1s of actual test execution, ~7s wall clock.**
+**147 tests, 2.1s of actual test execution.**
 
-The bottleneck is not the tests — it's compile time. The
-`modernc.org/sqlite` package (pure Go, transpiled from C) takes
-~2.2s to compile the test binary. Each test averages 14ms. Running
-a single test still takes 2.2s wall clock because compilation
-dominates.
+### Go's build cache changes everything
+
+| Scenario | Wall clock |
+|----------|-----------|
+| Cold cache, full suite | ~21s |
+| Cold cache, `-short` | ~7s |
+| **Warm cache, `-short`** | **~1.1s** |
+| After touching one file | ~1.2s |
+| Cold cache, single test | ~2.2s |
+
+In normal development (warm cache), tests run in ~1 second.
+The `-count=1` flag bypasses the cache and forces recompilation
+— avoid it for routine iteration.
+
+### Why cold starts are slow
+
+The `modernc.org/sqlite` package (pure Go, transpiled from C)
+is a 14-module dependency chain. Compiling it from scratch takes
+~2.2s. This is a one-time cost per clean build — Go caches the
+compiled package for subsequent runs.
+
+Each test averages 14ms. The 147 tests contribute only 2.1s to
+a cold run. The remaining ~5s is compilation and linking.
 
 ### Slow tests (tagged with -short skip)
 
