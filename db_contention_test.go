@@ -30,6 +30,9 @@ func setupFileDB(t *testing.T, dbPath string) {
 // 4 goroutines each call SendMessage 100 times to the same channel.
 // All writes should succeed — zero errors.
 func TestDB_ConcurrentSendMessage(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping slow contention test")
+	}
 	setupFileDB(t, "test_contention.db")
 
 	const numWorkers = 4

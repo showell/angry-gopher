@@ -40,7 +40,8 @@ func currentUserName(userID int) string {
 // PageHeader writes the HTML boilerplate and opens the body.
 func PageHeader(w http.ResponseWriter, title string) {
 	fmt.Fprintf(w, `<!DOCTYPE html>
-<html><head><title>%s — Angry Gopher</title>
+<html><head><title>%s — Angry Gopher</title>`, title)
+	fmt.Fprint(w, `
 <style>
 body { font-family: sans-serif; margin: 40px; max-width: 700px; padding-bottom: 100px; }
 h1 { color: #000080; }

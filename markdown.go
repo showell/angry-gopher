@@ -146,22 +146,35 @@ func processChannelLinks(source string) string {
 //   AG#123        → link (custom prefix)
 //   owner/repo#123 → link (explicit)
 //   abc1234       → commit link (7+ hex chars)
-func processLinkifiers(source string) string {
-	// Load configured repos.
-	type repo struct {
-		owner, name, prefix string
-	}
-	var repos []repo
+// Cached repo list for linkifiers. Refreshed by RefreshLinkifierCache().
+var linkifierRepos []linkifierRepo
+
+type linkifierRepo struct {
+	owner, name, prefix string
+}
+
+// RefreshLinkifierCache reloads the repo list from the database.
+// Called on startup and when repos are added/removed.
+func RefreshLinkifierCache() {
 	rows, err := DB.Query(`SELECT owner, name, prefix FROM github_repos`)
-	if err != nil || rows == nil {
-		return source
+	if err != nil {
+		return
 	}
+	defer rows.Close()
+	var repos []linkifierRepo
 	for rows.Next() {
-		var r repo
+		var r linkifierRepo
 		rows.Scan(&r.owner, &r.name, &r.prefix)
 		repos = append(repos, r)
 	}
-	rows.Close()
+	linkifierRepos = repos
+}
+
+func processLinkifiers(source string) string {
+	repos := linkifierRepos
+	if len(repos) == 0 {
+		return source
+	}
 
 	if len(repos) == 0 {
 		return source

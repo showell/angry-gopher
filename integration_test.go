@@ -202,6 +202,9 @@ func TestIntegration_BasicMessaging(t *testing.T) {
 // Test: rapid sends trigger 429, then succeed after the sliding
 // window expires. Event polling is exempt (see EVENTS.md).
 func TestIntegration_RateLimiting(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping slow rate limiting test")
+	}
 	server := startServerInMemory(t)
 	defer server.Close()
 
@@ -274,6 +277,9 @@ func getStressMessageCount() int {
 // Verifies the DB has the correct total and each user receives all
 // events via a single poll. Uses a real file-based DB.
 func TestStress_ConcurrentLoad(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping slow stress test")
+	}
 	messagesPerUser := getStressMessageCount()
 	dbPath := "test_stress.db"
 

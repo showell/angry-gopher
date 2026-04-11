@@ -176,6 +176,7 @@ Backup the production database:
 	}
 
 	ensureBotUsers()
+	RefreshLinkifierCache()
 	recordServerStart()
 
 	mux := buildMux()

@@ -5,10 +5,15 @@ import (
 	"testing"
 )
 
+func addRepo(owner, name, prefix string) {
+	DB.Exec(`INSERT INTO github_repos (owner, name, channel_id, prefix) VALUES (?, ?, 3, ?)`,
+		owner, name, prefix)
+	RefreshLinkifierCache()
+}
+
 func TestLinkifierBareIssue(t *testing.T) {
 	resetDB()
-	// Configure one repo.
-	DB.Exec(`INSERT INTO github_repos (owner, name, channel_id, prefix) VALUES ('showell', 'angry-gopher', 3, '')`)
+	addRepo("showell", "angry-gopher", "")
 
 	html := renderMarkdown("Fixed #42 today")
 	if !strings.Contains(html, "github.com/showell/angry-gopher/issues/42") {
@@ -18,8 +23,8 @@ func TestLinkifierBareIssue(t *testing.T) {
 
 func TestLinkifierPrefix(t *testing.T) {
 	resetDB()
-	DB.Exec(`INSERT INTO github_repos (owner, name, channel_id, prefix) VALUES ('showell', 'angry-gopher', 3, 'AG')`)
-	DB.Exec(`INSERT INTO github_repos (owner, name, channel_id, prefix) VALUES ('showell', 'angry-cat', 3, 'AC')`)
+	addRepo("showell", "angry-gopher", "AG")
+	addRepo("showell", "angry-cat", "AC")
 
 	html := renderMarkdown("See AG#123 and AC#456")
 	if !strings.Contains(html, "angry-gopher/issues/123") {
@@ -32,7 +37,7 @@ func TestLinkifierPrefix(t *testing.T) {
 
 func TestLinkifierExplicitRepo(t *testing.T) {
 	resetDB()
-	DB.Exec(`INSERT INTO github_repos (owner, name, channel_id, prefix) VALUES ('showell', 'angry-gopher', 3, '')`)
+	addRepo("showell", "angry-gopher", "")
 
 	html := renderMarkdown("See showell/angry-gopher#99")
 	if !strings.Contains(html, "github.com/showell/angry-gopher/issues/99") {
@@ -42,7 +47,7 @@ func TestLinkifierExplicitRepo(t *testing.T) {
 
 func TestLinkifierCommitHash(t *testing.T) {
 	resetDB()
-	DB.Exec(`INSERT INTO github_repos (owner, name, channel_id, prefix) VALUES ('showell', 'angry-gopher', 3, '')`)
+	addRepo("showell", "angry-gopher", "")
 
 	html := renderMarkdown("Fixed in abc1234def")
 	if !strings.Contains(html, "github.com/showell/angry-gopher/commit/abc1234def") {
@@ -52,7 +57,6 @@ func TestLinkifierCommitHash(t *testing.T) {
 
 func TestLinkifierNoRepos(t *testing.T) {
 	resetDB()
-	// No repos configured — #123 should pass through as-is.
 	html := renderMarkdown("See #123")
 	if strings.Contains(html, "github.com") {
 		t.Fatalf("should not linkify without repos, got: %s", html)
@@ -61,11 +65,9 @@ func TestLinkifierNoRepos(t *testing.T) {
 
 func TestLinkifierMultipleReposNoPrefix(t *testing.T) {
 	resetDB()
-	DB.Exec(`INSERT INTO github_repos (owner, name, channel_id, prefix) VALUES ('showell', 'angry-gopher', 3, '')`)
-	DB.Exec(`INSERT INTO github_repos (owner, name, channel_id, prefix) VALUES ('showell', 'angry-cat', 3, '')`)
+	addRepo("showell", "angry-gopher", "")
+	addRepo("showell", "angry-cat", "")
 
-	// With multiple repos and no prefix, bare #123 should NOT linkify
-	// (ambiguous). But explicit owner/repo#123 should still work.
 	html := renderMarkdown("See #123")
 	if strings.Contains(html, "github.com") {
 		t.Fatalf("bare #123 should be ambiguous with multiple repos, got: %s", html)
