@@ -164,6 +164,30 @@ func ParseMoveEvent(payload json.RawMessage, boardBefore []CardStack) (*Move, er
 	return move, nil
 }
 
+// BoardFingerprint returns a compact string representation of the board
+// for debugging. Same format as Angry Cat's board_fingerprint.
+func BoardFingerprint(board []CardStack) string {
+	parts := make([]string, len(board))
+	for i, s := range board {
+		cards := ""
+		for j, bc := range s.BoardCards {
+			if j > 0 {
+				cards += " "
+			}
+			cards += bc.Card.Str()
+		}
+		parts[i] = fmt.Sprintf("(%d,%d) [%s]", s.Loc.Left, s.Loc.Top, cards)
+	}
+	result := ""
+	for i, p := range parts {
+		if i > 0 {
+			result += " | "
+		}
+		result += p
+	}
+	return result
+}
+
 // CheckEvent is the single entry point the host calls. Give it
 // all prior event payloads and the new payload. It reconstructs
 // the board, parses the move, and asks the referee. Returns nil
@@ -186,6 +210,10 @@ func CheckEvent(priorPayloads []json.RawMessage, newPayload json.RawMessage) *Re
 	if move == nil {
 		return nil
 	}
+
+	fmt.Println("[board] gopher before move:", BoardFingerprint(board))
+	fmt.Println("[board] gopher stacks_to_remove:", BoardFingerprint(move.StacksToRemove))
+	fmt.Println("[board] gopher stacks_to_add:", BoardFingerprint(move.StacksToAdd))
 
 	bounds := BoardBounds{MaxWidth: 800, MaxHeight: 600, Margin: 5}
 	return ValidateGameMove(*move, bounds)

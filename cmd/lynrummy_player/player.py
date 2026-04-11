@@ -59,6 +59,16 @@ def show_hand(name, hand):
     print()
 
 
+def board_fingerprint(board):
+    """Compact board string matching Angry Cat and Gopher format."""
+    parts = []
+    for stack in board:
+        cards = " ".join(card_str(bc["card"]) for bc in stack["board_cards"])
+        loc = stack["loc"]
+        parts.append(f"({loc['left']},{loc['top']}) [{cards}]")
+    return " | ".join(parts)
+
+
 def show_board(board):
     """Print all stacks on the board."""
     if not board:
@@ -110,6 +120,20 @@ def find_board_stack(board, stack):
         if stacks_match(bs, stack):
             return i
     return -1
+
+
+def find_stack_by_cards(board, card_tuples):
+    """Find a board stack whose cards match the given (value, suit, deck) tuples.
+
+    Returns the stack dict, or None. This is safer than using board
+    indices, which shift as moves are applied.
+    """
+    for stack in board:
+        stack_cards = [(bc["card"]["value"], bc["card"]["suit"], bc["card"]["origin_deck"])
+                       for bc in stack["board_cards"]]
+        if stack_cards == card_tuples:
+            return stack
+    return None
 
 
 # --- Dealer setup ---
@@ -300,6 +324,7 @@ class GameState:
             raise ValueError("First event must be game_setup or deck")
 
         self.last_event_id = setup_event["id"]
+        print(f"[board] python setup: {board_fingerprint(self.board)}")
 
     def apply_event(self, event):
         """Apply a game event to the board. Skips invalid moves."""
@@ -343,6 +368,7 @@ class GameState:
 
     def send_move(self, client, game_id, addr, board_event, hand_cards=None):
         """Send a move to the host and apply it locally."""
+        print(f"[board] python before move: {board_fingerprint(self.board)}")
         payload = make_event_row(addr, board_event, hand_cards)
         result = client.post_event(game_id, payload)
         event_id = result.get("event_id")
