@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+
+	"angry-gopher/auth"
 )
 
 // HandleGames serves /gopher/game-lobby.
@@ -22,6 +24,10 @@ func HandleGames(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if r.Method == "POST" {
+		if r.URL.Query().Get("rename") == "1" {
+			handleRename(w, r, userID)
+			return
+		}
 		handleGamePost(w, r, userID)
 		return
 	}
@@ -142,6 +148,20 @@ func renderGameDetail(w http.ResponseWriter, userID, gameID int) {
 		fmt.Fprint(w, `<tr><td><b>Player 2</b></td><td class="muted">Waiting for player</td></tr>`)
 	}
 	fmt.Fprintf(w, `<tr><td><b>Created</b></td><td>%s</td></tr></table>`, t)
+
+	// Rename form (admins only).
+	if auth.IsAdmin(userID) {
+		currentName := ""
+		if puzzleName.Valid {
+			currentName = puzzleName.String
+		}
+		fmt.Fprintf(w, `<h2>Rename</h2>
+<form method="POST" action="/gopher/game-lobby?id=%d&rename=1" style="margin-bottom:16px">
+<input type="text" name="puzzle_name" value="%s" placeholder="New puzzle name" style="width:240px;padding:4px">
+<button type="submit">Save</button>
+<span style="color:#888;font-size:12px;margin-left:8px">Leave blank to clear the puzzle name</span>
+</form>`, gameID, html.EscapeString(currentName))
+	}
 
 	// Event log.
 	fmt.Fprintf(w, `<h2>Event Log</h2>
@@ -698,6 +718,31 @@ render();
 </script>`, string(eventsJSON), p1Name, p2)
 
 	PageFooter(w)
+}
+
+func handleRename(w http.ResponseWriter, r *http.Request, userID int) {
+	if !auth.IsAdmin(userID) {
+		http.Error(w, "Admin only", http.StatusForbidden)
+		return
+	}
+	idStr := r.URL.Query().Get("id")
+	gameID, _ := strconv.Atoi(idStr)
+	if gameID <= 0 {
+		http.Error(w, "Invalid game id", http.StatusBadRequest)
+		return
+	}
+	r.ParseForm()
+	newName := r.FormValue("puzzle_name")
+	var nameVal interface{}
+	if newName != "" {
+		nameVal = newName
+	}
+	_, err := DB.Exec(`UPDATE games SET puzzle_name = ? WHERE id = ?`, nameVal, gameID)
+	if err != nil {
+		http.Error(w, "Failed to rename", http.StatusInternalServerError)
+		return
+	}
+	http.Redirect(w, r, fmt.Sprintf("/gopher/game-lobby?id=%d", gameID), http.StatusSeeOther)
 }
 
 func handleGamePost(w http.ResponseWriter, r *http.Request, userID int) {
