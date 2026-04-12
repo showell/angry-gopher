@@ -309,9 +309,16 @@ func renderGameReplay(w http.ResponseWriter, userID, gameID int) {
 		p2 = p2Name.String
 	}
 
+	// Left-join lynrummy_plays so the replay viewer can overlay each
+	// move with its trick metadata where available. Moves that came in
+	// via the legacy /events endpoint will have NULL trick columns,
+	// which the frontend renders as unannotated.
 	rows, err := DB.Query(`
-		SELECT ge.user_id, ge.payload FROM game_events ge
-		WHERE ge.game_id = ? ORDER BY ge.id ASC`, gameID)
+		SELECT ge.user_id, ge.payload, lp.trick_id, lp.description
+		FROM game_events ge
+		LEFT JOIN lynrummy_plays lp ON lp.event_id = ge.id
+		WHERE ge.game_id = ?
+		ORDER BY ge.id ASC`, gameID)
 	if err != nil {
 		http.Error(w, "Failed to load events", http.StatusInternalServerError)
 		return
@@ -319,15 +326,24 @@ func renderGameReplay(w http.ResponseWriter, userID, gameID int) {
 	defer rows.Close()
 
 	type eventWithUser struct {
-		UserID  int             `json:"user_id"`
-		Payload json.RawMessage `json:"payload"`
+		UserID           int             `json:"user_id"`
+		Payload          json.RawMessage `json:"payload"`
+		TrickID          string          `json:"trick_id,omitempty"`
+		TrickDescription string          `json:"trick_description,omitempty"`
 	}
 	var events []eventWithUser
 	for rows.Next() {
 		var e eventWithUser
 		var p string
-		rows.Scan(&e.UserID, &p)
+		var trick, desc sql.NullString
+		rows.Scan(&e.UserID, &p, &trick, &desc)
 		e.Payload = json.RawMessage(p)
+		if trick.Valid {
+			e.TrickID = trick.String
+		}
+		if desc.Valid {
+			e.TrickDescription = desc.String
+		}
 		events = append(events, e)
 	}
 
@@ -366,6 +382,14 @@ func renderGameReplay(w http.ResponseWriter, userID, gameID int) {
 .ml-item:hover { background: #e8e8ff; }
 .ml-item.active { background: #c0c0ff; font-weight: bold; }
 .ml-type { display: inline-block; width: 16px; text-align: center; }
+.trick-tag {
+    margin-top: 4px; font-size: 12px; color: #505070;
+    background: #f5f5fa; padding: 2px 6px; border-radius: 3px;
+    display: inline-block;
+}
+.trick-tag .trick-id {
+    font-family: monospace; font-weight: bold; color: #003080;
+}
 </style>
 <div id="replay-wrap">
 <div id="controls">
@@ -526,6 +550,16 @@ function buildNarration(step, stepIdx) {
         text = "";
     }
 
+    // If the move has strategic metadata (from the trick plugin
+    // system), append a one-line trick tag to the narration.
+    if (step.trickId) {
+        const tag = '<div class="trick-tag"><span class="trick-id">' +
+                    step.trickId + '</span> \u2014 ' +
+                    step.trickDescription + '</div>';
+        return '<img src="/static/' + avatar + '">' +
+               '<div class="text">' + text + tag + '</div>';
+    }
+
     return '<img src="/static/' + avatar + '">' +
            '<div class="text">' + text + '</div>';
 }
@@ -592,6 +626,8 @@ function buildSteps() {
             board: JSON.parse(JSON.stringify(board)),
             hands: [hands[0].slice(), hands[1].slice()],
             type: info.type, turn, turnPlayer, handCards,
+            trickId: EVENTS[i].trick_id || "",
+            trickDescription: EVENTS[i].trick_description || "",
         });
     }
 }
@@ -675,10 +711,16 @@ const SHORT = {
 };
 
 function stepLabel(s) {
+    let label;
     if (s.type === "place" || s.type === "play") {
-        return s.handCards.map(c => VN[c.value]+SL[c.suit]).join(" ");
+        label = s.handCards.map(c => VN[c.value]+SL[c.suit]).join(" ");
+    } else {
+        label = SHORT[s.type] || s.type;
     }
-    return SHORT[s.type] || s.type;
+    if (s.trickId) {
+        label = '[' + s.trickId + '] ' + label;
+    }
+    return label;
 }
 
 function updateMoveList() {
