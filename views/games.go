@@ -484,7 +484,9 @@ function buildNarration(step, stepIdx) {
     let avatar = "cat_professor.webp";
 
     if (t === "setup") {
-        text = "Welcome to Lyn Rummy! The dealer has laid out 6 stacks with 23 cards. " + P1_NAME + " goes first. Good luck!";
+        const nStacks = step.board.length;
+        const nCards = step.board.reduce((n, s) => n + s.board_cards.length, 0);
+        text = "Starting position: " + nStacks + " stacks, " + nCards + " cards on the board.";
         avatar = "steve.png";
     } else if (t === "advance") {
         text = "Turn passes. It's now " + p + "'s turn. Let's see what they can do!";
@@ -529,9 +531,18 @@ function buildSteps() {
     steps = [];
     if (EVENTS.length === 0) return;
     const first = EVENTS[0].payload;
-    if (!first.game_setup) return;
 
-    let board = first.game_setup.board.map(s => ({board_cards: s.board_cards, loc: s.loc}));
+    // Accept either a regular game_setup or a puzzle_setup.
+    let initial_board;
+    if (first.game_setup) {
+        initial_board = first.game_setup.board.map(s => ({board_cards: s.board_cards, loc: s.loc}));
+    } else if (first.puzzle_setup) {
+        initial_board = first.puzzle_setup.board_stacks.map(s => ({board_cards: s.board_cards, loc: s.loc}));
+    } else {
+        return;
+    }
+
+    let board = initial_board;
     let turn = 1, turnPlayer = P1_NAME;
 
     steps.push({
