@@ -53,5 +53,7 @@ if [ "$HAS_MODE" = false ]; then
     exit 1
 fi
 
-cd ~/showell_repos/angry-gopher
+source "$(dirname "$0")/_paths.sh"
+
+cd "$GOPHER_DIR"
 go run ./cmd/import -config "$CONFIG" "$@"

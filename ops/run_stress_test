@@ -23,5 +23,7 @@ if [ $# -eq 0 ]; then
     exit 1
 fi
 
-cd ~/showell_repos/angry-gopher
+source "$(dirname "$0")/_paths.sh"
+
+cd "$GOPHER_DIR"
 go run ./cmd/stress "$@"

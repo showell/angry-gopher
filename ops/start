@@ -2,16 +2,18 @@
 # Start prod Gopher server (port 9000) + Angry Cat frontend (port 8000).
 set -e
 
+source "$(dirname "$0")/_paths.sh"
+
 lsof -ti:9000 | xargs kill -9 2>/dev/null || true
 lsof -ti:8000 | xargs kill -9 2>/dev/null || true
 sleep 0.5
 
-cd ~/showell_repos/angry-gopher
+cd "$GOPHER_DIR"
 COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 go build -ldflags "-X main.gitCommit=$COMMIT" -o gopher-server .
 GOPHER_CONFIG=~/AngryGopher/prod.json nohup ./gopher-server > /tmp/angry-gopher.log 2>&1 &
 
-cd ~/showell_repos/angry-cat
+cd "$CAT_DIR"
 nohup npx vite --port 8000 > /tmp/angry-cat.log 2>&1 &
 
 # Wait for both to be ready.

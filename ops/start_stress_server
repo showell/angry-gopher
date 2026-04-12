@@ -3,10 +3,12 @@
 # run_stress_test connects to — start this first.
 set -e
 
+source "$(dirname "$0")/_paths.sh"
+
 lsof -ti:9002 | xargs kill -9 2>/dev/null || true
 sleep 0.5
 
-cd ~/showell_repos/angry-gopher
+cd "$GOPHER_DIR"
 COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 go build -ldflags "-X main.gitCommit=$COMMIT" -o gopher-server .
 GOPHER_CONFIG=~/AngryGopher/stress.json nohup ./gopher-server > /tmp/angry-gopher-stress.log 2>&1 &
