@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -206,3 +207,145 @@ func TestFullRoundTrip(t *testing.T) {
 		t.Fatalf("Expected 2 events, got %d", len(events))
 	}
 }
+
+// --- LynRummy plays endpoints ---
+
+func playsRequest(t *testing.T, method, path, body, email, apiKey string) map[string]interface{} {
+	t.Helper()
+	var req *http.Request
+	if body != "" {
+		req = httptest.NewRequest(method, path, strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+	} else {
+		req = httptest.NewRequest(method, path, nil)
+	}
+	setAuth(req, email, apiKey)
+	rec := httptest.NewRecorder()
+
+	// Route to the right handler based on path shape.
+	// /gopher/games/{id}/plays → HandleGameSub
+	// /gopher/plays/{id}       → HandlePlaysRoot
+	if strings.HasPrefix(path, "/gopher/games/") {
+		games.HandleGameSub(rec, req)
+	} else {
+		games.HandlePlaysRoot(rec, req)
+	}
+	var result map[string]interface{}
+	json.Unmarshal(rec.Body.Bytes(), &result)
+	return result
+}
+
+func TestPlayRoundTrip(t *testing.T) {
+	resetDB()
+	steveGame(t, "POST", "/gopher/games", "")
+
+	// Minimal PlayRecord — a direct_play. board_event must be non-empty
+	// JSON; the mechanical side is opaque to the plays handler.
+	body := `{
+        "trick_id": "direct_play",
+        "description": "Play 4H onto [AH 2H 3H]",
+        "hand_cards": [{"value":4,"suit":3,"origin_deck":0}],
+        "board_cards": [],
+        "detail": {"target_stack_idx": 2, "side": "right"},
+        "player": 0,
+        "board_event": {"stacks_to_remove":[], "stacks_to_add":[]}
+    }`
+	resp := playsRequest(t, "POST", "/gopher/games/1/plays", body,
+		"steve@example.com", "steve-api-key")
+	if resp["result"] != "success" {
+		t.Fatalf("POST play failed: %v", resp)
+	}
+	eventID := int(resp["event_id"].(float64))
+	if eventID <= 0 {
+		t.Fatalf("Expected positive event_id, got %v", eventID)
+	}
+
+	// GET the plays list.
+	resp = playsRequest(t, "GET", "/gopher/games/1/plays", "",
+		"steve@example.com", "steve-api-key")
+	if resp["result"] != "success" {
+		t.Fatalf("GET plays failed: %v", resp)
+	}
+	plays := resp["plays"].([]interface{})
+	if len(plays) != 1 {
+		t.Fatalf("Expected 1 play, got %d", len(plays))
+	}
+	p := plays[0].(map[string]interface{})
+	if p["trick_id"] != "direct_play" {
+		t.Errorf("trick_id: got %v", p["trick_id"])
+	}
+	if p["description"] != "Play 4H onto [AH 2H 3H]" {
+		t.Errorf("description mismatch: %v", p["description"])
+	}
+	if p["note"] != "" {
+		t.Errorf("note should start blank: %v", p["note"])
+	}
+
+	// The mechanical side should also be present in game_events.
+	resp = steveGame(t, "GET", "/gopher/games/1/events", "")
+	events := resp["events"].([]interface{})
+	if len(events) != 1 {
+		t.Fatalf("Expected 1 mechanical event, got %d", len(events))
+	}
+
+	// Annotate the play via PATCH.
+	resp = playsRequest(t, "PATCH",
+		"/gopher/plays/"+strconv.Itoa(eventID),
+		`{"note":"setup move for the 5H"}`,
+		"steve@example.com", "steve-api-key",
+	)
+	if resp["result"] != "success" {
+		t.Fatalf("PATCH failed: %v", resp)
+	}
+
+	resp = playsRequest(t, "GET", "/gopher/games/1/plays", "",
+		"steve@example.com", "steve-api-key")
+	plays = resp["plays"].([]interface{})
+	p = plays[0].(map[string]interface{})
+	if p["note"] != "setup move for the 5H" {
+		t.Errorf("note after PATCH: got %v", p["note"])
+	}
+}
+
+func TestPlayAccessControl(t *testing.T) {
+	resetDB()
+	steveGame(t, "POST", "/gopher/games", "")
+
+	body := `{"trick_id":"direct_play","description":"x","hand_cards":[],"board_cards":[],"detail":null,"player":0,"board_event":{"stacks_to_remove":[],"stacks_to_add":[]}}`
+
+	// Joe isn't in the game — can't post.
+	resp := playsRequest(t, "POST", "/gopher/games/1/plays", body,
+		"joe@example.com", "joe-api-key")
+	if resp["result"] != "error" {
+		t.Fatalf("Expected error for non-player POST: %v", resp)
+	}
+
+	// Joe can't read either.
+	resp = playsRequest(t, "GET", "/gopher/games/1/plays", "",
+		"joe@example.com", "joe-api-key")
+	if resp["result"] != "error" {
+		t.Fatalf("Expected error for non-player GET: %v", resp)
+	}
+}
+
+func TestPlayRejectsMissingFields(t *testing.T) {
+	resetDB()
+	steveGame(t, "POST", "/gopher/games", "")
+
+	// Missing trick_id.
+	resp := playsRequest(t, "POST", "/gopher/games/1/plays",
+		`{"description":"x","board_event":{}}`,
+		"steve@example.com", "steve-api-key")
+	if resp["result"] != "error" {
+		t.Fatalf("Expected error for missing trick_id: %v", resp)
+	}
+
+	// Missing board_event.
+	resp = playsRequest(t, "POST", "/gopher/games/1/plays",
+		`{"trick_id":"direct_play","description":"x"}`,
+		"steve@example.com", "steve-api-key")
+	if resp["result"] != "error" {
+		t.Fatalf("Expected error for missing board_event: %v", resp)
+	}
+}
+

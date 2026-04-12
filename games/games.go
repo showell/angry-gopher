@@ -128,6 +128,15 @@ func HandleGameSub(w http.ResponseWriter, r *http.Request) {
 		default:
 			respond.Error(w, "Method not allowed")
 		}
+	case "plays":
+		switch r.Method {
+		case "POST":
+			handlePostPlay(w, r, gameID)
+		case "GET":
+			handleGetPlays(w, r, gameID)
+		default:
+			respond.Error(w, "Method not allowed")
+		}
 	default:
 		respond.Error(w, "Unknown game action: "+action)
 	}

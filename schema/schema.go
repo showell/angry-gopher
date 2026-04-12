@@ -143,6 +143,26 @@ CREATE TABLE IF NOT EXISTS game_events (
     created_at INTEGER NOT NULL
 );
 
+-- LynRummy-specific: structured metadata about each play (trick used,
+-- human-readable description, cards involved, per-trick detail).
+-- Strategic layer — generic game_events still stores the mechanical
+-- board diff and hand-cards-to-release payload.
+CREATE TABLE IF NOT EXISTS lynrummy_plays (
+    event_id INTEGER PRIMARY KEY REFERENCES game_events(id),
+    game_id INTEGER NOT NULL REFERENCES games(id),
+    player INTEGER NOT NULL,
+    trick_id TEXT NOT NULL,
+    description TEXT NOT NULL,
+    hand_cards_json TEXT NOT NULL,
+    board_cards_json TEXT NOT NULL,
+    detail_json TEXT NOT NULL,
+    note TEXT NOT NULL DEFAULT '',
+    created_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_lynrummy_plays_game ON lynrummy_plays(game_id, event_id);
+CREATE INDEX IF NOT EXISTS idx_lynrummy_plays_trick ON lynrummy_plays(trick_id);
+
 -- Full-text search via trigram tokenizer. Enables substring
 -- matching on any 3+ character sequence, including URLs and
 -- code snippets. Keyed by content_id so results join cleanly

@@ -78,6 +78,7 @@ func buildMux() *http.ServeMux {
 	mux.HandleFunc("/gopher/invites/redeem", api(invites.HandleRedeemInvite))
 	mux.HandleFunc("/gopher/games/", api(games.HandleGameSub))
 	mux.HandleFunc("/gopher/games", api(games.HandleGames))
+	mux.HandleFunc("/gopher/plays/", api(games.HandlePlaysRoot))
 	mux.HandleFunc("/gopher/webhooks/github", webhooks.HandleGitHub)
 	mux.HandleFunc("/gopher/github/repos", api(webhooks.HandleRepos))
 
