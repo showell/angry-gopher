@@ -352,8 +352,8 @@ func renderGameReplay(w http.ResponseWriter, userID, gameID int) {
   <button id="btn-prev" onclick="prev()" title="Left arrow key">&#9664;</button>
   <button id="btn-play" onclick="toggleAutoplay()" title="Spacebar">&#9654; Play</button>
   <button id="btn-next" onclick="next()" title="Right arrow key">&#9654;</button>
-  <input id="speed" type="range" min="1" max="10" value="5" style="width:100px" title="Speed">
-  <span id="step-label" style="font-weight:bold;font-size:14px;margin-left:8px"></span>
+  <input id="scrubber" type="range" min="0" max="1" value="0" style="flex:1;margin:0 8px" title="Scrub through game">
+  <span id="step-label" style="font-weight:bold;font-size:14px;white-space:nowrap"></span>
 </div>
 <div id="narration"></div>
 <div id="layout">
@@ -654,11 +654,19 @@ function render() {
     const narr = buildNarration(step, currentStep);
     document.getElementById("narration").innerHTML = narr;
 
+    const scrubber = document.getElementById("scrubber");
+    scrubber.max = steps.length - 1;
+    scrubber.value = currentStep;
+
     document.getElementById("step-label").textContent =
         currentStep + " / " + (steps.length - 1);
     document.getElementById("btn-prev").disabled = currentStep === 0;
     document.getElementById("btn-next").disabled = currentStep === steps.length - 1;
 }
+
+document.getElementById("scrubber").addEventListener("input", (e) => {
+    goTo(parseInt(e.target.value));
+});
 
 function next() { if (currentStep < steps.length-1) { currentStep++; render(); } else stopAutoplay(); }
 function prev() { if (currentStep > 0) { currentStep--; render(); } }
@@ -668,10 +676,9 @@ function toggleAutoplay() {
     if (autoplayTimer) { stopAutoplay(); return; }
     document.getElementById("btn-play").textContent = "\u23F8 Pause";
     (function tick() {
-        const ms = 1200 - document.getElementById("speed").value * 100;
         if (currentStep < steps.length-1) {
             currentStep++; render();
-            autoplayTimer = setTimeout(tick, ms);
+            autoplayTimer = setTimeout(tick, 700);
         } else stopAutoplay();
     })();
 }
