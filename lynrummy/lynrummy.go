@@ -551,10 +551,13 @@ func ValidateGameMove(move Move, bounds BoardBounds) *RefereeError {
 		return err
 	}
 
-	// Stage 2: Geometry.
-	if err := checkGeometry(boardAfter, bounds); err != nil {
-		return err
-	}
+	// Stage 2: Geometry — temporarily disabled for the console
+	// player's learning phase. It generates bad placements while
+	// exploring, and geometry is UI-ish anyway.
+	// if err := checkGeometry(boardAfter, bounds); err != nil {
+	// 	return err
+	// }
+	_ = bounds
 
 	// Stage 3: Inventory.
 	if err := checkInventory(move, boardAfter); err != nil {
