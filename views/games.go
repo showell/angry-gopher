@@ -319,23 +319,44 @@ func renderGameReplay(w http.ResponseWriter, userID, gameID int) {
 	fmt.Fprintf(w, `<a class="back" href="/gopher/game-lobby?id=%d">&larr; Back to game</a>`, gameID)
 
 	fmt.Fprint(w, `
-<div id="controls" style="margin:16px 0;display:flex;align-items:center;gap:8px">
-  <button id="btn-prev" onclick="prev()" title="Left arrow">&#9664;</button>
-  <button id="btn-play" onclick="toggleAutoplay()">&#9654; Play</button>
-  <button id="btn-next" onclick="next()" title="Right arrow">&#9654;</button>
-  <input id="speed" type="range" min="1" max="10" value="5" style="width:80px" title="Speed">
-  <span id="step-label" style="font-weight:bold;font-size:14px"></span>
+<style>
+#replay-wrap { max-width: 1100px; }
+#controls { margin:12px 0; display:flex; align-items:center; gap:8px; }
+#controls button { min-width: 36px; }
+#narration {
+    background: #f0f0ff; border-left: 4px solid #000080; padding: 10px 14px;
+    margin: 8px 0 12px; font-size: 15px; line-height: 1.5; min-height: 44px;
+    border-radius: 0 4px 4px 0;
+}
+#narration .player-name { font-weight: bold; color: #000080; }
+#narration .card { font-weight: bold; }
+#narration .card.red { color: #cc0000; }
+#narration .card.black { color: #1a1a1a; }
+#layout { display: flex; gap: 16px; align-items: flex-start; }
+#move-list-wrap {
+    min-width: 200px; max-width: 220px; font-size: 12px;
+    max-height: 520px; overflow-y: auto; border: 1px solid #ddd;
+    border-radius: 4px; padding: 4px;
+}
+.ml-turn { margin-top: 6px; font-weight: bold; color: #000080; font-size: 13px; padding: 2px 4px; }
+.ml-item { padding: 3px 6px; cursor: pointer; border-radius: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ml-item:hover { background: #e8e8ff; }
+.ml-item.active { background: #c0c0ff; font-weight: bold; }
+.ml-type { display: inline-block; width: 16px; text-align: center; }
+</style>
+<div id="replay-wrap">
+<div id="controls">
+  <button id="btn-prev" onclick="prev()" title="Left arrow key">&#9664;</button>
+  <button id="btn-play" onclick="toggleAutoplay()" title="Spacebar">&#9654; Play</button>
+  <button id="btn-next" onclick="next()" title="Right arrow key">&#9654;</button>
+  <input id="speed" type="range" min="1" max="10" value="5" style="width:100px" title="Speed">
+  <span id="step-label" style="font-weight:bold;font-size:14px;margin-left:8px"></span>
 </div>
-<div style="display:flex;gap:16px">
-  <div>
-    <canvas id="board" width="800" height="600" style="border:1px solid #ccc;background:#f8f8f0;border-radius:4px"></canvas>
-  </div>
-  <div id="sidebar" style="min-width:180px;font-size:13px">
-    <div id="turn-info" style="margin-bottom:12px"></div>
-    <div id="board-info" style="margin-bottom:12px"></div>
-    <h3 style="color:#000080;margin:0 0 4px">Moves</h3>
-    <div id="move-list" style="max-height:400px;overflow-y:auto"></div>
-  </div>
+<div id="narration"></div>
+<div id="layout">
+  <canvas id="board" width="800" height="500" style="border:1px solid #ccc;background:#faf9f0;border-radius:6px"></canvas>
+  <div id="move-list-wrap"></div>
+</div>
 </div>
 `)
 
@@ -344,13 +365,21 @@ const EVENTS = %s;
 const P1_NAME = %q;
 const P2_NAME = %q;
 
-// --- Constants ---
-const CW = 27, CH = 40, PITCH = 33;
-const VN = {1:"A",2:"2",3:"3",4:"4",5:"5",6:"6",7:"7",8:"8",9:"9",10:"T",11:"J",12:"Q",13:"K"};
+// --- Card display ---
+const CW = 42, CH = 58, PITCH = 48;
+const VN = {1:"A",2:"2",3:"3",4:"4",5:"5",6:"6",7:"7",8:"8",9:"9",10:"10",11:"J",12:"Q",13:"K"};
 const SN = {0:"\u2663",1:"\u2666",2:"\u2660",3:"\u2665"};
 const SC = {0:"#1a1a1a",1:"#cc0000",2:"#1a1a1a",3:"#cc0000"};
+const SL = {0:"C",1:"D",2:"S",3:"H"};
 
 function cl(c) { return VN[c.value] + SN[c.suit]; }
+function cardHTML(c) {
+    const color = c.suit === 1 || c.suit === 3 ? "red" : "black";
+    return '<span class="card ' + color + '">' + VN[c.value] + SN[c.suit] + '</span>';
+}
+function stackDesc(cards) {
+    return cards.map(bc => cl(bc.card)).join(" ");
+}
 
 // --- Board logic ---
 function stacksMatch(a, b) {
@@ -375,34 +404,69 @@ function applyMove(board, payload) {
     return [...result, ...be.stacks_to_add];
 }
 
-// --- Steps ---
+// --- Step building with compound event detection ---
 let steps = [];
 let currentStep = 0;
 let autoplayTimer = null;
 
-function describePayload(payload) {
-    if (payload.game_setup) return { desc: "Deal", type: "setup" };
+function classifyEvent(payload) {
+    if (payload.game_setup) return { type: "setup", cards: [] };
     const ge = payload.json_game_event;
-    if (!ge) return { desc: "?", type: "unknown" };
-    if (ge.type === 0) return { desc: "Next turn", type: "advance" };
-    if (ge.type === 1) return { desc: "End turn", type: "complete" };
-    if (ge.type === 3) return { desc: "Undo", type: "undo" };
-    if (ge.type === 2 && ge.player_action) {
-        const hand = ge.player_action.hand_cards_to_release || [];
-        const be = ge.player_action.board_event;
-        const nr = be.stacks_to_remove.length, na = be.stacks_to_add.length;
-        if (hand.length > 0) {
-            const cards = hand.map(h => cl(h.card)).join(" ");
-            if (nr === 0) return { desc: "Place " + cards, type: "place" };
-            return { desc: "Play " + cards, type: "play" };
-        }
-        if (nr === 1 && na === 2) return { desc: "Split", type: "split" };
-        if (nr === 2 && na === 1) return { desc: "Merge", type: "merge" };
-        if (nr > 1 && na > 1) return { desc: "Tidy board", type: "tidy" };
-        if (nr === 1 && na === 1) return { desc: "Move stack", type: "move" };
-        return { desc: "Rearrange", type: "rearrange" };
+    if (!ge) return { type: "unknown", cards: [] };
+    if (ge.type === 0) return { type: "advance", cards: [] };
+    if (ge.type === 1) return { type: "complete", cards: [] };
+    if (ge.type === 3) return { type: "undo", cards: [] };
+    if (ge.type !== 2 || !ge.player_action) return { type: "unknown", cards: [] };
+
+    const hand = ge.player_action.hand_cards_to_release || [];
+    const be = ge.player_action.board_event;
+    const nr = be.stacks_to_remove.length, na = be.stacks_to_add.length;
+    const cards = hand.map(h => h.card);
+
+    if (cards.length > 0 && nr === 0) return { type: "place", cards };
+    if (cards.length > 0 && nr > 0) return { type: "play", cards };
+    if (nr === 1 && na === 2) return { type: "split", cards };
+    if (nr === 2 && na === 1) return { type: "merge", cards };
+    if (nr > 1 && na > 1) return { type: "tidy", cards };
+    if (nr === 1 && na === 1) return { type: "move", cards };
+    return { type: "rearrange", cards };
+}
+
+function buildNarration(step, prevStep) {
+    const t = step.type;
+    const p = '<span class="player-name">' + step.turnPlayer + '</span>';
+
+    if (t === "setup") return "The dealer lays out the initial board. 6 stacks, 23 cards. Let the game begin!";
+    if (t === "advance") return "Turn passes. It's now " + p + "'s turn.";
+    if (t === "complete") {
+        const nStacks = step.board.length;
+        const nCards = step.board.reduce((n, s) => n + s.board_cards.length, 0);
+        return p + " ends their turn. Board: " + nStacks + " stacks, " + nCards + " cards.";
     }
-    return { desc: "Action", type: "action" };
+    if (t === "undo") return p + " undoes their last move.";
+    if (t === "tidy") return p + " tidies the board \u2014 rearranging stacks for a cleaner layout.";
+    if (t === "move") return p + " repositions a stack.";
+
+    if (t === "place") {
+        const cards = step.handCards.map(c => cardHTML(c)).join(" ");
+        const n = step.handCards.length;
+        if (n >= 3) {
+            // Determine stack type from the added stack.
+            return p + " places " + cards + " from hand as a new stack on the board.";
+        }
+        return p + " places " + cards + " on the board.";
+    }
+
+    if (t === "play") {
+        const cards = step.handCards.map(c => cardHTML(c)).join(" ");
+        return p + " plays " + cards + " from hand, extending a board stack.";
+    }
+
+    if (t === "split") return p + " splits a stack into two pieces.";
+    if (t === "merge") return p + " merges two stacks together.";
+    if (t === "rearrange") return p + " rearranges the board.";
+
+    return "";
 }
 
 function buildSteps() {
@@ -412,29 +476,21 @@ function buildSteps() {
     if (!first.game_setup) return;
 
     let board = first.game_setup.board.map(s => ({board_cards: s.board_cards, loc: s.loc}));
-    let turn = 1;
-    let turnPlayer = P1_NAME;
+    let turn = 1, turnPlayer = P1_NAME;
 
     steps.push({
         board: JSON.parse(JSON.stringify(board)),
-        desc: "Initial board",
-        type: "setup",
-        turn, turnPlayer,
-        handCards: [],
+        type: "setup", turn, turnPlayer, handCards: [],
     });
 
     for (let i = 1; i < EVENTS.length; i++) {
-        const ev = EVENTS[i];
-        const payload = ev.payload;
-        const info = describePayload(payload);
-
+        const payload = EVENTS[i].payload;
+        const info = classifyEvent(payload);
         board = applyMove(board, payload);
 
-        // Track hand cards played.
         let handCards = [];
         if (payload.json_game_event && payload.json_game_event.player_action) {
-            const hcr = payload.json_game_event.player_action.hand_cards_to_release || [];
-            handCards = hcr.map(h => h.card);
+            handCards = (payload.json_game_event.player_action.hand_cards_to_release || []).map(h => h.card);
         }
 
         if (info.type === "advance") {
@@ -444,158 +500,145 @@ function buildSteps() {
 
         steps.push({
             board: JSON.parse(JSON.stringify(board)),
-            desc: info.desc,
-            type: info.type,
-            turn, turnPlayer,
-            handCards,
+            type: info.type, turn, turnPlayer, handCards,
         });
     }
 }
 
-// --- Rendering ---
+// --- Canvas rendering ---
 const canvas = document.getElementById("board");
 const ctx = canvas.getContext("2d");
 
 function roundRect(x, y, w, h, r) {
     ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.lineTo(x + w - r, y);
-    ctx.arcTo(x + w, y, x + w, y + r, r);
-    ctx.lineTo(x + w, y + h - r);
-    ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
-    ctx.lineTo(x + r, y + h);
-    ctx.arcTo(x, y + h, x, y + h - r, r);
-    ctx.lineTo(x, y + r);
-    ctx.arcTo(x, y, x + r, y, r);
+    ctx.moveTo(x+r,y); ctx.lineTo(x+w-r,y); ctx.arcTo(x+w,y,x+w,y+r,r);
+    ctx.lineTo(x+w,y+h-r); ctx.arcTo(x+w,y+h,x+w-r,y+h,r);
+    ctx.lineTo(x+r,y+h); ctx.arcTo(x,y+h,x,y+h-r,r);
+    ctx.lineTo(x,y+r); ctx.arcTo(x,y,x+r,y,r);
     ctx.closePath();
 }
 
-function drawCard(x, y, card, fresh, highlighted) {
-    const label = cl(card);
+function drawCard(x, y, card, highlighted) {
+    const val = VN[card.value];
+    const suit = SN[card.suit];
     const color = SC[card.suit];
 
     // Shadow.
-    ctx.fillStyle = "rgba(0,0,0,0.08)";
-    roundRect(x + 1, y + 1, CW, CH, 3);
+    ctx.fillStyle = "rgba(0,0,0,0.1)";
+    roundRect(x+2, y+2, CW, CH, 4);
     ctx.fill();
 
-    // Card body.
-    ctx.fillStyle = highlighted ? "#fff3b0" : (fresh ? "#fffff0" : "white");
-    roundRect(x, y, CW, CH, 3);
+    // Body.
+    ctx.fillStyle = highlighted ? "#fff3b0" : "white";
+    roundRect(x, y, CW, CH, 4);
     ctx.fill();
 
     // Border.
-    ctx.strokeStyle = highlighted ? "#e6a800" : "#aaa";
-    ctx.lineWidth = highlighted ? 1.5 : 0.8;
-    roundRect(x, y, CW, CH, 3);
+    ctx.strokeStyle = highlighted ? "#d4a800" : "#999";
+    ctx.lineWidth = highlighted ? 2 : 1;
+    roundRect(x, y, CW, CH, 4);
     ctx.stroke();
 
-    // Text.
+    // Value top-left.
     ctx.fillStyle = color;
-    ctx.font = "bold 11px 'Courier New', monospace";
+    ctx.font = "bold 14px 'Georgia', serif";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+    ctx.fillText(val, x + 3, y + 2);
+
+    // Suit center.
+    ctx.font = "18px serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(label, x + CW / 2, y + CH / 2);
+    ctx.fillText(suit, x + CW/2, y + CH/2 + 4);
 }
 
 function drawBoard(step) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Find newly added cards (in stacks_to_add but not stacks_to_remove).
-    const newCards = new Set();
-    for (const c of step.handCards) {
-        newCards.add(c.value + "," + c.suit + "," + c.origin_deck);
-    }
+    const hl = new Set();
+    for (const c of step.handCards) hl.add(c.value+","+c.suit+","+c.origin_deck);
 
     for (const stack of step.board) {
         for (let i = 0; i < stack.board_cards.length; i++) {
             const bc = stack.board_cards[i];
             const x = stack.loc.left + i * PITCH;
             const y = stack.loc.top;
-            const key = bc.card.value + "," + bc.card.suit + "," + bc.card.origin_deck;
-            const highlighted = newCards.has(key);
-            drawCard(x, y, bc.card, bc.state === 1, highlighted);
+            const key = bc.card.value+","+bc.card.suit+","+bc.card.origin_deck;
+            drawCard(x, y, bc.card, hl.has(key));
         }
     }
 }
 
-// --- Sidebar ---
-function updateSidebar(step) {
-    document.getElementById("turn-info").innerHTML =
-        "<b>Turn " + step.turn + "</b> — " + step.turnPlayer + "'s turn";
-    document.getElementById("board-info").innerHTML =
-        step.board.length + " stacks, " +
-        step.board.reduce((n, s) => n + s.board_cards.length, 0) + " cards on board";
+// --- Move list sidebar ---
+const ICONS = {
+    setup: "\u{1F3B4}", place: "\u2660", play: "\u2660",
+    complete: "\u2714", advance: "\u27A1", tidy: "\u2728",
+    split: "\u2702", merge: "\u{1F4A5}", undo: "\u21A9",
+    move: "\u2194", rearrange: "\u{1F500}", unknown: "?",
+};
+const SHORT = {
+    setup: "Deal", advance: "Next turn", complete: "End turn",
+    undo: "Undo", tidy: "Tidy", move: "Move", split: "Split",
+    merge: "Merge", rearrange: "Rearrange", unknown: "?",
+};
+
+function stepLabel(s) {
+    if (s.type === "place" || s.type === "play") {
+        return s.handCards.map(c => VN[c.value]+SL[c.suit]).join(" ");
+    }
+    return SHORT[s.type] || s.type;
 }
 
 function updateMoveList() {
-    const el = document.getElementById("move-list");
+    const el = document.getElementById("move-list-wrap");
     let html = "";
     let lastTurn = 0;
     for (let i = 0; i < steps.length; i++) {
         const s = steps[i];
         if (s.turn !== lastTurn) {
-            html += "<div style='margin-top:8px;font-weight:bold;color:#000080'>Turn " + s.turn + " — " + s.turnPlayer + "</div>";
+            html += '<div class="ml-turn">Turn ' + s.turn + ' \u2014 ' + s.turnPlayer + '</div>';
             lastTurn = s.turn;
         }
-        const active = i === currentStep;
-        const style = active
-            ? "background:#e0e0ff;padding:2px 4px;border-radius:3px;cursor:pointer"
-            : "padding:2px 4px;cursor:pointer";
-        const icon = s.type === "place" || s.type === "play" ? "\u2660 "
-            : s.type === "complete" ? "\u2714 "
-            : s.type === "advance" ? "\u27a1 "
-            : s.type === "tidy" ? "\u2728 "
-            : s.type === "split" ? "\u2702 "
-            : "";
-        html += "<div style='" + style + "' onclick='goTo(" + i + ")'>" + icon + s.desc + "</div>";
+        const cls = i === currentStep ? "ml-item active" : "ml-item";
+        const icon = ICONS[s.type] || "";
+        html += '<div class="' + cls + '" onclick="goTo(' + i + ')"><span class="ml-type">' + icon + '</span> ' + stepLabel(s) + '</div>';
     }
     el.innerHTML = html;
-
-    // Scroll active into view.
-    const activeEl = el.querySelector("[style*='background:#e0e0ff']");
-    if (activeEl) activeEl.scrollIntoView({ block: "nearest" });
+    const active = el.querySelector(".active");
+    if (active) active.scrollIntoView({ block: "nearest" });
 }
 
 // --- Controls ---
 function render() {
     const step = steps[currentStep];
     drawBoard(step);
-    updateSidebar(step);
     updateMoveList();
+
+    const narr = buildNarration(step, currentStep > 0 ? steps[currentStep-1] : null);
+    document.getElementById("narration").innerHTML = narr;
+
     document.getElementById("step-label").textContent =
-        (currentStep) + " / " + (steps.length - 1) + ": " + step.desc;
+        currentStep + " / " + (steps.length - 1);
     document.getElementById("btn-prev").disabled = currentStep === 0;
     document.getElementById("btn-next").disabled = currentStep === steps.length - 1;
 }
 
-function next() {
-    if (currentStep < steps.length - 1) { currentStep++; render(); }
-    else stopAutoplay();
-}
-function prev() {
-    if (currentStep > 0) { currentStep--; render(); }
-}
-function goTo(i) {
-    currentStep = i; render(); stopAutoplay();
-}
+function next() { if (currentStep < steps.length-1) { currentStep++; render(); } else stopAutoplay(); }
+function prev() { if (currentStep > 0) { currentStep--; render(); } }
+function goTo(i) { currentStep = i; render(); stopAutoplay(); }
 
 function toggleAutoplay() {
     if (autoplayTimer) { stopAutoplay(); return; }
     document.getElementById("btn-play").textContent = "\u23F8 Pause";
-    function tick() {
-        const speed = document.getElementById("speed").value;
-        const ms = 1200 - speed * 100;
-        if (currentStep < steps.length - 1) {
+    (function tick() {
+        const ms = 1200 - document.getElementById("speed").value * 100;
+        if (currentStep < steps.length-1) {
             currentStep++; render();
             autoplayTimer = setTimeout(tick, ms);
-        } else {
-            stopAutoplay();
-        }
-    }
-    tick();
+        } else stopAutoplay();
+    })();
 }
-
 function stopAutoplay() {
     if (autoplayTimer) { clearTimeout(autoplayTimer); autoplayTimer = null; }
     document.getElementById("btn-play").textContent = "\u25B6 Play";
