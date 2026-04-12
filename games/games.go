@@ -74,12 +74,27 @@ func HandleGames(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// HandleDeleteGame handles DELETE /gopher/games/{id}.
+func handleDeleteGame(w http.ResponseWriter, r *http.Request, gameID int) {
+	userID := auth.Authenticate(r)
+	if userID == 0 {
+		respond.Error(w, "Authentication required")
+		return
+	}
+	if !isPlayerInGame(userID, gameID) {
+		respond.Error(w, "You are not a player in this game")
+		return
+	}
+	DB.Exec(`DELETE FROM game_events WHERE game_id = ?`, gameID)
+	DB.Exec(`DELETE FROM games WHERE id = ?`, gameID)
+	respond.Success(w, nil)
+}
+
 // HandleGameSub routes /gopher/games/{id}/join and /gopher/games/{id}/events.
 func HandleGameSub(w http.ResponseWriter, r *http.Request) {
-	// Path: /gopher/games/{id}/action
-	parts := strings.Split(r.URL.Path, "/")
-	// Expected: ["", "gopher", "games", "{id}", "{action}"]
-	if len(parts) < 5 {
+	// Path: /gopher/games/{id}[/action]
+	parts := strings.Split(strings.TrimSuffix(r.URL.Path, "/"), "/")
+	if len(parts) < 4 {
 		respond.Error(w, "Invalid game path")
 		return
 	}
@@ -87,6 +102,16 @@ func HandleGameSub(w http.ResponseWriter, r *http.Request) {
 	gameID, err := strconv.Atoi(parts[3])
 	if err != nil || gameID <= 0 {
 		respond.Error(w, "Invalid game ID")
+		return
+	}
+
+	// DELETE /gopher/games/{id} (no action segment).
+	if len(parts) == 4 {
+		if r.Method == "DELETE" {
+			handleDeleteGame(w, r, gameID)
+			return
+		}
+		respond.Error(w, "Method not allowed")
 		return
 	}
 
