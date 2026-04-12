@@ -377,7 +377,10 @@ func renderGameReplay(w http.ResponseWriter, userID, gameID int) {
 </div>
 <div id="narration"></div>
 <div id="layout">
-  <canvas id="board" width="800" height="500" style="border:1px solid #ccc;background:#faf9f0;border-radius:6px"></canvas>
+  <div style="flex:1">
+    <canvas id="board" width="800" height="500" style="border:1px solid #ccc;background:#faf9f0;border-radius:6px"></canvas>
+    <div id="hands" style="margin-top:10px;display:flex;gap:24px;flex-wrap:wrap"></div>
+  </div>
   <div id="move-list-wrap"></div>
 </div>
 </div>
@@ -534,19 +537,27 @@ function buildSteps() {
 
     // Accept either a regular game_setup or a puzzle_setup.
     let initial_board;
+    let initial_hands = [[], []];
     if (first.game_setup) {
         initial_board = first.game_setup.board.map(s => ({board_cards: s.board_cards, loc: s.loc}));
+        initial_hands = [
+            (first.game_setup.hands[0] || []).slice(),
+            (first.game_setup.hands[1] || []).slice(),
+        ];
     } else if (first.puzzle_setup) {
         initial_board = first.puzzle_setup.board_stacks.map(s => ({board_cards: s.board_cards, loc: s.loc}));
+        initial_hands = [(first.puzzle_setup.player1_hand || []).slice(), []];
     } else {
         return;
     }
 
     let board = initial_board;
+    let hands = [initial_hands[0].slice(), initial_hands[1].slice()];
     let turn = 1, turnPlayer = P1_NAME;
 
     steps.push({
         board: JSON.parse(JSON.stringify(board)),
+        hands: [hands[0].slice(), hands[1].slice()],
         type: "setup", turn, turnPlayer, handCards: [],
     });
 
@@ -560,6 +571,18 @@ function buildSteps() {
             handCards = (payload.json_game_event.player_action.hand_cards_to_release || []).map(h => h.card);
         }
 
+        // Remove played cards from the active player's hand.
+        const playerIdx = turnPlayer === P1_NAME ? 0 : 1;
+        for (const c of handCards) {
+            const h = hands[playerIdx];
+            for (let k = 0; k < h.length; k++) {
+                if (h[k].value === c.value && h[k].suit === c.suit && h[k].origin_deck === c.origin_deck) {
+                    h.splice(k, 1);
+                    break;
+                }
+            }
+        }
+
         if (info.type === "advance") {
             turn++;
             turnPlayer = (turn %% 2 === 1) ? P1_NAME : P2_NAME;
@@ -567,6 +590,7 @@ function buildSteps() {
 
         steps.push({
             board: JSON.parse(JSON.stringify(board)),
+            hands: [hands[0].slice(), hands[1].slice()],
             type: info.type, turn, turnPlayer, handCards,
         });
     }
@@ -677,9 +701,29 @@ function updateMoveList() {
 }
 
 // --- Controls ---
+function renderHands(step) {
+    const el = document.getElementById("hands");
+    const suit_order = [3, 2, 1, 0];
+    function hand_html(name, cards) {
+        if (cards.length === 0) return "";
+        let html = '<div><b>' + name + "</b> (" + cards.length + ")<br>";
+        for (const suit of suit_order) {
+            const suit_cards = cards.filter(c => c.suit === suit).sort((a, b) => a.value - b.value);
+            if (suit_cards.length === 0) continue;
+            html += suit_cards.map(c => cardHTML(c)).join(" ") + "<br>";
+        }
+        html += "</div>";
+        return html;
+    }
+    const p1 = hand_html(P1_NAME, step.hands[0] || []);
+    const p2 = hand_html(P2_NAME, step.hands[1] || []);
+    el.innerHTML = p1 + p2;
+}
+
 function render() {
     const step = steps[currentStep];
     drawBoard(step);
+    renderHands(step);
     updateMoveList();
 
     const narr = buildNarration(step, currentStep);
