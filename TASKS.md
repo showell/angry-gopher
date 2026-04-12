@@ -36,3 +36,5 @@
 - [ ] Hint coverage: decide whether REARRANGE_PLAY should be wired into get_hint as an opt-in expert level, or removed entirely (currently dormant per STRATEGY.md)
 - [ ] Hint system: narrator strings live inside HintLevel enum values; if we ever want i18n or richer hints, split narrator into a separate table (see insights/hint_system_process.md)
 - [ ] UI friction on multi-step tricks — Steve's SWAP solve used 7 UI ops for a one-gesture table move; explore drag-and-replace primitive (see memory: project_lynrummy_ui_friction.md) — queued as next session's topic
+- [ ] Retroactive trick detection — after a human drag-and-drop move lands, re-run the TrickBag against the pre-move state and tag the resulting play with the matching trick_id. Surfaces unconscious trick usage in replay analytics.
+- [ ] Hint-driven moves — when user clicks Hint + a "Play it" button, auto-execute the suggested play and POST /plays with that trick_id. Makes the UI an actor in the plugin system instead of just a displayer.
