@@ -678,7 +678,7 @@ function toggleAutoplay() {
     (function tick() {
         if (currentStep < steps.length-1) {
             currentStep++; render();
-            autoplayTimer = setTimeout(tick, 700);
+            autoplayTimer = setTimeout(tick, 2000);
         } else stopAutoplay();
     })();
 }
