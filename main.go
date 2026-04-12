@@ -85,6 +85,9 @@ func buildMux() *http.ServeMux {
 	// All pages registered from views.Pages (single source of truth).
 	views.RegisterPages(mux)
 
+	// --- Static assets ---
+	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("views/static"))))
+
 	// --- Admin & uploads ---
 	mux.HandleFunc("/user_uploads/", api(handleServeUpload))
 	mux.HandleFunc("/admin/login", handleAdminLogin)

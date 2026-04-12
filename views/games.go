@@ -327,7 +327,10 @@ func renderGameReplay(w http.ResponseWriter, userID, gameID int) {
     background: #f0f0ff; border-left: 4px solid #000080; padding: 10px 14px;
     margin: 8px 0 12px; font-size: 15px; line-height: 1.5; min-height: 44px;
     border-radius: 0 4px 4px 0;
+    display: flex; align-items: center; gap: 12px;
 }
+#narration img { width: 48px; height: 48px; border-radius: 50%%; flex-shrink: 0; }
+#narration .text { flex: 1; }
 #narration .player-name { font-weight: bold; color: #000080; }
 #narration .card { font-weight: bold; }
 #narration .card.red { color: #cc0000; }
@@ -365,11 +368,11 @@ const EVENTS = %s;
 const P1_NAME = %q;
 const P2_NAME = %q;
 
-// --- Card display ---
-const CW = 42, CH = 58, PITCH = 48;
+// --- Card display (matches Angry Cat rendering) ---
+const CW = 32, CH = 46, PITCH = 38;
 const VN = {1:"A",2:"2",3:"3",4:"4",5:"5",6:"6",7:"7",8:"8",9:"9",10:"10",11:"J",12:"Q",13:"K"};
 const SN = {0:"\u2663",1:"\u2666",2:"\u2660",3:"\u2665"};
-const SC = {0:"#1a1a1a",1:"#cc0000",2:"#1a1a1a",3:"#cc0000"};
+const SC = {0:"black",1:"red",2:"black",3:"red"};
 const SL = {0:"C",1:"D",2:"S",3:"H"};
 
 function cl(c) { return VN[c.value] + SN[c.suit]; }
@@ -432,41 +435,74 @@ function classifyEvent(payload) {
     return { type: "rearrange", cards };
 }
 
-function buildNarration(step, prevStep) {
+// Look ahead from current step to detect compound moves.
+// Returns a richer description if the next few steps form
+// a recognizable pattern (split-extract-merge = "peel for set").
+function detectCompound(stepIdx) {
+    if (stepIdx >= steps.length) return null;
+    const s = steps[stepIdx];
+
+    // Split followed by merge with hand card = split-for-set or peel
+    if (s.type === "split" && stepIdx + 1 < steps.length) {
+        const s2 = steps[stepIdx + 1];
+        if (s2.type === "merge" && s2.handCards.length > 0) {
+            const cards = s2.handCards.map(c => cardHTML(c)).join(" ");
+            return "Splitting a run and merging with " + cards + " from hand to form a new group.";
+        }
+        if (s2.type === "play" || s2.type === "place") {
+            const cards = s2.handCards.map(c => cardHTML(c)).join(" ");
+            return "Splitting a stack to make room, then playing " + cards + ".";
+        }
+    }
+    return null;
+}
+
+function buildNarration(step, stepIdx) {
     const t = step.type;
     const p = '<span class="player-name">' + step.turnPlayer + '</span>';
+    let text = "";
+    let avatar = "cat_professor.webp";
 
-    if (t === "setup") return "The dealer lays out the initial board. 6 stacks, 23 cards. Let the game begin!";
-    if (t === "advance") return "Turn passes. It's now " + p + "'s turn.";
-    if (t === "complete") {
+    if (t === "setup") {
+        text = "Welcome to Lyn Rummy! The dealer has laid out 6 stacks with 23 cards. " + P1_NAME + " goes first. Good luck!";
+        avatar = "steve.png";
+    } else if (t === "advance") {
+        text = "Turn passes. It's now " + p + "'s turn. Let's see what they can do!";
+    } else if (t === "complete") {
         const nStacks = step.board.length;
         const nCards = step.board.reduce((n, s) => n + s.board_cards.length, 0);
-        return p + " ends their turn. Board: " + nStacks + " stacks, " + nCards + " cards.";
-    }
-    if (t === "undo") return p + " undoes their last move.";
-    if (t === "tidy") return p + " tidies the board \u2014 rearranging stacks for a cleaner layout.";
-    if (t === "move") return p + " repositions a stack.";
-
-    if (t === "place") {
+        text = p + " ends their turn. The board now has " + nStacks + " stacks with " + nCards + " cards.";
+        avatar = "steve.png";
+    } else if (t === "undo") {
+        text = p + " takes back their last move. It happens to the best of us!";
+        avatar = "oliver.png";
+    } else if (t === "tidy") {
+        text = p + " tidies up the board \u2014 nice and organized!";
+    } else if (t === "move") {
+        text = p + " repositions a stack.";
+    } else if (t === "place") {
         const cards = step.handCards.map(c => cardHTML(c)).join(" ");
-        const n = step.handCards.length;
-        if (n >= 3) {
-            // Determine stack type from the added stack.
-            return p + " places " + cards + " from hand as a new stack on the board.";
+        text = p + " places " + cards + " from hand as a new stack.";
+    } else if (t === "play") {
+        const cards = step.handCards.map(c => cardHTML(c)).join(" ");
+        text = p + " plays " + cards + " from hand, extending a stack.";
+    } else if (t === "split") {
+        const compound = detectCompound(stepIdx);
+        if (compound) {
+            text = p + ": " + compound;
+        } else {
+            text = p + " splits a stack into two pieces.";
         }
-        return p + " places " + cards + " on the board.";
+    } else if (t === "merge") {
+        text = p + " merges two stacks together.";
+    } else if (t === "rearrange") {
+        text = p + " rearranges the board.";
+    } else {
+        text = "";
     }
 
-    if (t === "play") {
-        const cards = step.handCards.map(c => cardHTML(c)).join(" ");
-        return p + " plays " + cards + " from hand, extending a board stack.";
-    }
-
-    if (t === "split") return p + " splits a stack into two pieces.";
-    if (t === "merge") return p + " merges two stacks together.";
-    if (t === "rearrange") return p + " rearranges the board.";
-
-    return "";
+    return '<img src="/static/' + avatar + '">' +
+           '<div class="text">' + text + '</div>';
 }
 
 function buildSteps() {
@@ -524,33 +560,33 @@ function drawCard(x, y, card, highlighted) {
     const color = SC[card.suit];
 
     // Shadow.
-    ctx.fillStyle = "rgba(0,0,0,0.1)";
-    roundRect(x+2, y+2, CW, CH, 4);
+    ctx.fillStyle = "rgba(0,0,0,0.08)";
+    roundRect(x+1, y+1, CW, CH, 3);
     ctx.fill();
 
     // Body.
-    ctx.fillStyle = highlighted ? "#fff3b0" : "white";
-    roundRect(x, y, CW, CH, 4);
+    ctx.fillStyle = highlighted ? "#fffacc" : "white";
+    roundRect(x, y, CW, CH, 3);
     ctx.fill();
 
-    // Border.
-    ctx.strokeStyle = highlighted ? "#d4a800" : "#999";
-    ctx.lineWidth = highlighted ? 2 : 1;
-    roundRect(x, y, CW, CH, 4);
+    // Border — blue like Angry Cat.
+    ctx.strokeStyle = highlighted ? "#c8a000" : "#0000cc";
+    ctx.lineWidth = 1;
+    roundRect(x, y, CW, CH, 3);
     ctx.stroke();
 
-    // Value top-left.
+    // Two-line layout: value on top, suit on bottom.
     ctx.fillStyle = color;
-    ctx.font = "bold 14px 'Georgia', serif";
-    ctx.textAlign = "left";
-    ctx.textBaseline = "top";
-    ctx.fillText(val, x + 3, y + 2);
 
-    // Suit center.
-    ctx.font = "18px serif";
+    // Value.
+    ctx.font = "bold 16px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillText(suit, x + CW/2, y + CH/2 + 4);
+    ctx.fillText(val, x + CW/2, y + CH * 0.33);
+
+    // Suit.
+    ctx.font = "16px sans-serif";
+    ctx.fillText(suit, x + CW/2, y + CH * 0.7);
 }
 
 function drawBoard(step) {
@@ -615,7 +651,7 @@ function render() {
     drawBoard(step);
     updateMoveList();
 
-    const narr = buildNarration(step, currentStep > 0 ? steps[currentStep-1] : null);
+    const narr = buildNarration(step, currentStep);
     document.getElementById("narration").innerHTML = narr;
 
     document.getElementById("step-label").textContent =
