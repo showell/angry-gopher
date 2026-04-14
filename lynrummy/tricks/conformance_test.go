@@ -22,8 +22,13 @@ const opTrickFirstPlay = "trick_first_play"
 // Registered tricks — the runner dispatches on fixture.trick_id.
 // Add new tricks here as they're ported.
 var trickRegistry = map[string]Trick{
-	"direct_play": DirectPlay,
-	"hand_stacks": HandStacks,
+	"direct_play":     DirectPlay,
+	"hand_stacks":     HandStacks,
+	"split_for_set":   SplitForSet,
+	"peel_for_run":    PeelForRun,
+	"rb_swap":         RbSwap,
+	"pair_peel":       PairPeel,
+	"loose_card_play": LooseCardPlay,
 }
 
 // --- Fixture envelope ---

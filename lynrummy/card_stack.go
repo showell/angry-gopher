@@ -168,6 +168,32 @@ func (s *CardStack) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// CanExtract reports whether the card at `cardIdx` in this stack
+// can be legally extracted by a trick:
+//   - End peel: first/last card of a 4+ stack (any stack type).
+//   - Set peel: any card in a 4+ SET.
+//   - Middle peel: card in a run where both halves would be 3+.
+//
+// Mirrors TS's `can_extract` from core/board_physics.ts.
+func (s CardStack) CanExtract(cardIdx int) bool {
+	size := s.Size()
+	st := s.Type()
+
+	if st == Set {
+		return size >= 4
+	}
+	if st != PureRun && st != RedBlackRun {
+		return false
+	}
+	if size >= 4 && (cardIdx == 0 || cardIdx == size-1) {
+		return true
+	}
+	if cardIdx >= 3 && (size-cardIdx-1) >= 3 {
+		return true
+	}
+	return false
+}
+
 // --- Merge ---
 
 // maybeMerge attempts to merge s1 and s2 at loc. Returns nil if the

@@ -1,0 +1,51 @@
+{
+  "name": "pair_peel_rb_from_pure_run",
+  "description": "Hand has JS+QH (rb pair, values 11-12). Peeling TD (value 10, in the set's opp-color palette) from the end of a pure diamond run completes a [TD, JS, QH] red-black run.",
+  "operation": "trick_first_play",
+  "input": {
+    "trick_id": "pair_peel",
+    "hand": [
+      { "card": { "value": 11, "suit": 2, "origin_deck": 0 }, "state": 0 },
+      { "card": { "value": 12, "suit": 3, "origin_deck": 0 }, "state": 0 }
+    ],
+    "board": [
+      {
+        "board_cards": [
+          { "card": { "value": 10, "suit": 1, "origin_deck": 0 }, "state": 0 },
+          { "card": { "value": 11, "suit": 1, "origin_deck": 0 }, "state": 0 },
+          { "card": { "value": 12, "suit": 1, "origin_deck": 0 }, "state": 0 },
+          { "card": { "value": 13, "suit": 1, "origin_deck": 0 }, "state": 0 }
+        ],
+        "loc": { "top": 10, "left": 10 }
+      }
+    ]
+  },
+  "bounds": { "max_width": 800, "max_height": 600, "margin": 5 },
+  "expected": {
+    "ok": true,
+    "play": {
+      "hand_cards_played": [
+        { "card": { "value": 11, "suit": 2, "origin_deck": 0 }, "state": 0 },
+        { "card": { "value": 12, "suit": 3, "origin_deck": 0 }, "state": 0 }
+      ],
+      "board_after": [
+        {
+          "board_cards": [
+            { "card": { "value": 11, "suit": 1, "origin_deck": 0 }, "state": 0 },
+            { "card": { "value": 12, "suit": 1, "origin_deck": 0 }, "state": 0 },
+            { "card": { "value": 13, "suit": 1, "origin_deck": 0 }, "state": 0 }
+          ],
+          "loc": { "top": 10, "left": 10 }
+        },
+        {
+          "board_cards": [
+            { "card": { "value": 10, "suit": 1, "origin_deck": 0 }, "state": 0 },
+            { "card": { "value": 11, "suit": 2, "origin_deck": 0 }, "state": 1 },
+            { "card": { "value": 12, "suit": 3, "origin_deck": 0 }, "state": 1 }
+          ],
+          "loc": { "top": 0, "left": 0 }
+        }
+      ]
+    }
+  }
+}

@@ -19,12 +19,22 @@ const (
 	RedBlackRun StackType = "red/black alternating"
 )
 
-func successor(val int) int {
-	// K wraps to A, A goes to 2.
+// Successor returns the next card value, wrapping K → A.
+// K, A, 2 is a valid run.
+func Successor(val int) int {
 	if val == 13 {
 		return 1
 	}
 	return val + 1
+}
+
+// Predecessor returns the previous card value, wrapping A → K.
+// The inverse of Successor.
+func Predecessor(val int) int {
+	if val == 1 {
+		return 13
+	}
+	return val - 1
 }
 
 func cardPairType(c1, c2 Card) StackType {
@@ -34,7 +44,7 @@ func cardPairType(c1, c2 Card) StackType {
 	if c1.Value == c2.Value {
 		return Set
 	}
-	if c2.Value == successor(c1.Value) {
+	if c2.Value == Successor(c1.Value) {
 		if c1.Suit == c2.Suit {
 			return PureRun
 		}

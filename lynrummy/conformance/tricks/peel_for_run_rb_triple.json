@@ -1,0 +1,66 @@
+{
+  "name": "peel_for_run_rb_triple",
+  "description": "Hand 5H; peel 4S off a 4-set of 4s and 6S off a 4-set of 6s. The three form a new red-black run [4S, 5H, 6S] at DUMMY_LOC.",
+  "operation": "trick_first_play",
+  "input": {
+    "trick_id": "peel_for_run",
+    "hand": [
+      { "card": { "value": 5, "suit": 3, "origin_deck": 0 }, "state": 0 }
+    ],
+    "board": [
+      {
+        "board_cards": [
+          { "card": { "value": 4, "suit": 2, "origin_deck": 0 }, "state": 0 },
+          { "card": { "value": 4, "suit": 0, "origin_deck": 0 }, "state": 0 },
+          { "card": { "value": 4, "suit": 1, "origin_deck": 0 }, "state": 0 },
+          { "card": { "value": 4, "suit": 3, "origin_deck": 0 }, "state": 0 }
+        ],
+        "loc": { "top": 10, "left": 10 }
+      },
+      {
+        "board_cards": [
+          { "card": { "value": 6, "suit": 2, "origin_deck": 0 }, "state": 0 },
+          { "card": { "value": 6, "suit": 0, "origin_deck": 0 }, "state": 0 },
+          { "card": { "value": 6, "suit": 1, "origin_deck": 0 }, "state": 0 },
+          { "card": { "value": 6, "suit": 3, "origin_deck": 0 }, "state": 0 }
+        ],
+        "loc": { "top": 10, "left": 200 }
+      }
+    ]
+  },
+  "bounds": { "max_width": 800, "max_height": 600, "margin": 5 },
+  "expected": {
+    "ok": true,
+    "play": {
+      "hand_cards_played": [
+        { "card": { "value": 5, "suit": 3, "origin_deck": 0 }, "state": 0 }
+      ],
+      "board_after": [
+        {
+          "board_cards": [
+            { "card": { "value": 4, "suit": 0, "origin_deck": 0 }, "state": 0 },
+            { "card": { "value": 4, "suit": 1, "origin_deck": 0 }, "state": 0 },
+            { "card": { "value": 4, "suit": 3, "origin_deck": 0 }, "state": 0 }
+          ],
+          "loc": { "top": 10, "left": 10 }
+        },
+        {
+          "board_cards": [
+            { "card": { "value": 6, "suit": 0, "origin_deck": 0 }, "state": 0 },
+            { "card": { "value": 6, "suit": 1, "origin_deck": 0 }, "state": 0 },
+            { "card": { "value": 6, "suit": 3, "origin_deck": 0 }, "state": 0 }
+          ],
+          "loc": { "top": 10, "left": 200 }
+        },
+        {
+          "board_cards": [
+            { "card": { "value": 4, "suit": 2, "origin_deck": 0 }, "state": 0 },
+            { "card": { "value": 5, "suit": 3, "origin_deck": 0 }, "state": 1 },
+            { "card": { "value": 6, "suit": 2, "origin_deck": 0 }, "state": 0 }
+          ],
+          "loc": { "top": 0, "left": 0 }
+        }
+      ]
+    }
+  }
+}
