@@ -6,3 +6,10 @@
 
 # Editor temp files
 *.swp
+
+# Python bytecode caches
+__pycache__/
+*.pyc
+
+# Stray compiled binary from `go build` with no -o (see cmd/ for proper output paths)
+/angry-gopher
