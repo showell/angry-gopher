@@ -1,0 +1,26 @@
+{
+  "name": "direct_play_no_plays",
+  "description": "Hand 9D cannot extend any existing stack; the trick produces no plays.",
+  "operation": "trick_first_play",
+  "input": {
+    "trick_id": "direct_play",
+    "hand": [
+      { "card": { "value": 9, "suit": 1, "origin_deck": 0 }, "state": 0 }
+    ],
+    "board": [
+      {
+        "board_cards": [
+          { "card": { "value": 5, "suit": 3, "origin_deck": 0 }, "state": 0 },
+          { "card": { "value": 6, "suit": 3, "origin_deck": 0 }, "state": 0 },
+          { "card": { "value": 7, "suit": 3, "origin_deck": 0 }, "state": 0 }
+        ],
+        "loc": { "top": 10, "left": 10 }
+      }
+    ]
+  },
+  "bounds": { "max_width": 800, "max_height": 600, "margin": 5 },
+  "expected": {
+    "ok": true,
+    "no_plays": true
+  }
+}

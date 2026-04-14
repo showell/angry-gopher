@@ -1,0 +1,35 @@
+{
+  "name": "hand_stacks_set",
+  "description": "Hand contains 7H, 7S, 7D — a complete 3-set. HAND_STACKS pushes it as a new stack at DUMMY_LOC.",
+  "operation": "trick_first_play",
+  "input": {
+    "trick_id": "hand_stacks",
+    "hand": [
+      { "card": { "value": 7, "suit": 3, "origin_deck": 0 }, "state": 0 },
+      { "card": { "value": 7, "suit": 2, "origin_deck": 0 }, "state": 0 },
+      { "card": { "value": 7, "suit": 1, "origin_deck": 0 }, "state": 0 }
+    ],
+    "board": []
+  },
+  "bounds": { "max_width": 800, "max_height": 600, "margin": 5 },
+  "expected": {
+    "ok": true,
+    "play": {
+      "hand_cards_played": [
+        { "card": { "value": 7, "suit": 3, "origin_deck": 0 }, "state": 0 },
+        { "card": { "value": 7, "suit": 2, "origin_deck": 0 }, "state": 0 },
+        { "card": { "value": 7, "suit": 1, "origin_deck": 0 }, "state": 0 }
+      ],
+      "board_after": [
+        {
+          "board_cards": [
+            { "card": { "value": 7, "suit": 3, "origin_deck": 0 }, "state": 1 },
+            { "card": { "value": 7, "suit": 2, "origin_deck": 0 }, "state": 1 },
+            { "card": { "value": 7, "suit": 1, "origin_deck": 0 }, "state": 1 }
+          ],
+          "loc": { "top": 0, "left": 0 }
+        }
+      ]
+    }
+  }
+}

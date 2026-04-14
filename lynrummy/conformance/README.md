@@ -27,7 +27,12 @@ Each file is a single JSON object with these top-level fields:
 |---|---|---|---|
 | `name` | string | yes | Should match the filename stem. |
 | `description` | string | yes | One sentence; what the scenario tests. |
-| `operation` | `"validate_game_move"` \| `"validate_turn_complete"` | yes | Which referee entry point to call. |
+| `operation` | see below | yes | Which entry point to call. |
+
+**Valid `operation` values:**
+- `"validate_game_move"` — referee mid-turn ruling.
+- `"validate_turn_complete"` — referee turn-boundary ruling.
+- `"trick_first_play"` — run a single trick's `find_plays()` and assert on the first Play it returns (or on "no plays"). See "Trick operations" below.
 | `input` | object | yes | Operation-specific input. See below. |
 | `bounds` | `BoardBounds` JSON | yes | The board bounds for the scenario. |
 | `expected` | object | yes | Expected referee output. See below. |
@@ -198,6 +203,108 @@ substring.
     "error": {
       "stage": "semantics",
       "message_substr": "incomplete"
+    }
+  }
+}
+```
+
+## Trick operations
+
+For `operation: "trick_first_play"`:
+
+The fixture names one registered trick, supplies a `(hand, board)`
+input state, and asserts on what `trick.find_plays(hand, board)[0]`
+should produce (or that the list should be empty).
+
+Trick fixtures live under `conformance/tricks/` as a subdirectory —
+tricks are structurally different from referee operations (they
+generate moves rather than ruling on them), and grouping keeps the
+fixture list scannable.
+
+### `input` shape
+
+```json
+{
+  "trick_id": "direct_play",
+  "hand": [ /* HandCard[] */ ],
+  "board": [ /* CardStack[] */ ]
+}
+```
+
+`trick_id` matches the Trick's `id` field (e.g. `direct_play`,
+`hand_stacks`, `rb_swap`).
+
+### `expected` shape
+
+For "no plays found":
+
+```json
+{ "ok": true, "no_plays": true }
+```
+
+For "first play is X":
+
+```json
+{
+  "ok": true,
+  "play": {
+    "hand_cards_played": [ /* HandCard[] */ ],
+    "board_after": [ /* CardStack[] — after play.apply(board) */ ]
+  }
+}
+```
+
+**Why first play only:** `find_plays` may return multiple Plays;
+the order is trick-internal and not worth locking into fixtures at
+this stage. Asserting on the first one is enough to catch the
+common drift cases; a future `trick_all_plays` operation can pin
+the full list if we need it.
+
+**Why `board_after` is byte-equal:** locks in the exact merge
+behavior — any drift in location arithmetic, state transitions, or
+stack identity shows up as a fixture failure.
+
+### Example
+
+```json
+{
+  "name": "direct_play_extends_heart_run",
+  "description": "Hand 8H extends an existing 5H-6H-7H run at the right end.",
+  "operation": "trick_first_play",
+  "input": {
+    "trick_id": "direct_play",
+    "hand": [
+      { "card": { "value": 8, "suit": 3, "origin_deck": 0 }, "state": 0 }
+    ],
+    "board": [
+      {
+        "board_cards": [
+          { "card": { "value": 5, "suit": 3, "origin_deck": 0 }, "state": 0 },
+          { "card": { "value": 6, "suit": 3, "origin_deck": 0 }, "state": 0 },
+          { "card": { "value": 7, "suit": 3, "origin_deck": 0 }, "state": 0 }
+        ],
+        "loc": { "top": 10, "left": 10 }
+      }
+    ]
+  },
+  "bounds": { "max_width": 800, "max_height": 600, "margin": 5 },
+  "expected": {
+    "ok": true,
+    "play": {
+      "hand_cards_played": [
+        { "card": { "value": 8, "suit": 3, "origin_deck": 0 }, "state": 0 }
+      ],
+      "board_after": [
+        {
+          "board_cards": [
+            { "card": { "value": 5, "suit": 3, "origin_deck": 0 }, "state": 0 },
+            { "card": { "value": 6, "suit": 3, "origin_deck": 0 }, "state": 0 },
+            { "card": { "value": 7, "suit": 3, "origin_deck": 0 }, "state": 0 },
+            { "card": { "value": 8, "suit": 3, "origin_deck": 0 }, "state": 1 }
+          ],
+          "loc": { "top": 10, "left": 10 }
+        }
+      ]
     }
   }
 }

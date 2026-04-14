@@ -1,0 +1,52 @@
+{
+  "name": "hand_stacks_pure_run",
+  "description": "Hand already contains 2C-3C-4C as a consecutive same-suit run; HAND_STACKS pushes it onto the board as a new stack at DUMMY_LOC (0,0).",
+  "operation": "trick_first_play",
+  "input": {
+    "trick_id": "hand_stacks",
+    "hand": [
+      { "card": { "value": 2, "suit": 0, "origin_deck": 0 }, "state": 0 },
+      { "card": { "value": 3, "suit": 0, "origin_deck": 0 }, "state": 0 },
+      { "card": { "value": 4, "suit": 0, "origin_deck": 0 }, "state": 0 }
+    ],
+    "board": [
+      {
+        "board_cards": [
+          { "card": { "value": 1, "suit": 3, "origin_deck": 0 }, "state": 0 },
+          { "card": { "value": 2, "suit": 3, "origin_deck": 0 }, "state": 0 },
+          { "card": { "value": 3, "suit": 3, "origin_deck": 0 }, "state": 0 }
+        ],
+        "loc": { "top": 10, "left": 10 }
+      }
+    ]
+  },
+  "bounds": { "max_width": 800, "max_height": 600, "margin": 5 },
+  "expected": {
+    "ok": true,
+    "play": {
+      "hand_cards_played": [
+        { "card": { "value": 2, "suit": 0, "origin_deck": 0 }, "state": 0 },
+        { "card": { "value": 3, "suit": 0, "origin_deck": 0 }, "state": 0 },
+        { "card": { "value": 4, "suit": 0, "origin_deck": 0 }, "state": 0 }
+      ],
+      "board_after": [
+        {
+          "board_cards": [
+            { "card": { "value": 1, "suit": 3, "origin_deck": 0 }, "state": 0 },
+            { "card": { "value": 2, "suit": 3, "origin_deck": 0 }, "state": 0 },
+            { "card": { "value": 3, "suit": 3, "origin_deck": 0 }, "state": 0 }
+          ],
+          "loc": { "top": 10, "left": 10 }
+        },
+        {
+          "board_cards": [
+            { "card": { "value": 2, "suit": 0, "origin_deck": 0 }, "state": 1 },
+            { "card": { "value": 3, "suit": 0, "origin_deck": 0 }, "state": 1 },
+            { "card": { "value": 4, "suit": 0, "origin_deck": 0 }, "state": 1 }
+          ],
+          "loc": { "top": 0, "left": 0 }
+        }
+      ]
+    }
+  }
+}

@@ -1,5 +1,9 @@
 # Task Queue
 
+## Immediately after current 8h tricks-port
+
+- [ ] **Replace fixture system with code-generation from a mainstream language.** Steve will elaborate on motivation/design. Decision recorded 2026-04-14 during the TrickBag Go-port session. Current system: hand-written JSON in `lynrummy/conformance/`, consumed by typed loaders in Go / Elm / TS. Next evolution: generate fixtures programmatically from one source of truth rather than maintaining JSON by hand.
+
 ## High Priority
 
 - [x] Advanced search — trigram FTS5, substring matching, combined filters
