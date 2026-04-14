@@ -1,0 +1,24 @@
+{
+  "name": "turn_complete_rejects_incomplete",
+  "description": "Two-card stack is allowed mid-turn but rejected at turn-complete (semantics enforces minimum 3-card groups).",
+  "operation": "validate_turn_complete",
+  "input": {
+    "board": [
+      {
+        "board_cards": [
+          { "card": { "value": 1, "suit": 3, "origin_deck": 0 }, "state": 0 },
+          { "card": { "value": 2, "suit": 3, "origin_deck": 0 }, "state": 0 }
+        ],
+        "loc": { "top": 10, "left": 10 }
+      }
+    ]
+  },
+  "bounds": { "max_width": 800, "max_height": 600, "margin": 5 },
+  "expected": {
+    "ok": false,
+    "error": {
+      "stage": "semantics",
+      "message_substr": "incomplete"
+    }
+  }
+}

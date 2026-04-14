@@ -1,0 +1,27 @@
+{
+  "name": "turn_complete_clean_board",
+  "description": "Turn-complete check passes when every stack on the board is a valid group (a run and a set, well-spaced).",
+  "operation": "validate_turn_complete",
+  "input": {
+    "board": [
+      {
+        "board_cards": [
+          { "card": { "value": 1, "suit": 3, "origin_deck": 0 }, "state": 0 },
+          { "card": { "value": 2, "suit": 3, "origin_deck": 0 }, "state": 0 },
+          { "card": { "value": 3, "suit": 3, "origin_deck": 0 }, "state": 0 }
+        ],
+        "loc": { "top": 10, "left": 10 }
+      },
+      {
+        "board_cards": [
+          { "card": { "value": 13, "suit": 0, "origin_deck": 0 }, "state": 0 },
+          { "card": { "value": 13, "suit": 1, "origin_deck": 0 }, "state": 0 },
+          { "card": { "value": 13, "suit": 2, "origin_deck": 0 }, "state": 0 }
+        ],
+        "loc": { "top": 10, "left": 200 }
+      }
+    ]
+  },
+  "bounds": { "max_width": 800, "max_height": 600, "margin": 5 },
+  "expected": { "ok": true }
+}
