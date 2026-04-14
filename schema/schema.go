@@ -132,7 +132,9 @@ CREATE TABLE IF NOT EXISTS games (
     player2_id INTEGER,
     created_at INTEGER NOT NULL,
     puzzle_name TEXT,
-    status TEXT NOT NULL DEFAULT 'waiting'
+    status TEXT NOT NULL DEFAULT 'waiting',
+    label TEXT NOT NULL DEFAULT '',
+    archived INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS game_events (

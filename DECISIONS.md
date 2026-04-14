@@ -98,3 +98,16 @@ for confirmation before updating local state. The compose box
 disables while sending; the buddy checkbox disables during toggle.
 Zulip uses optimistic updates in many places. We chose pessimistic
 uniformly for simplicity and correctness.
+
+
+**UI engine: Elm by default (2026-04-13).** New UI work scaffolds
+in Elm. LynRummy is being ported from its TypeScript home in Angry
+Cat to Elm incrementally; the TS version stays alive during the
+port and retires once the Elm version covers the same surface.
+Trigger was the elm-cows port (~/showell_repos/elm-cows), which
+delivered a bug-free first-play through a 2-round game with
+substantially fewer agent debug cycles than the JS equivalent.
+Gopher pages with high UI demands may support both Elm and plain
+HTML/JS as appropriate — read-mostly pages stay in plain HTML.
+Not a one-way door: if a real LynRummy feature pushes back on
+Elm, we reassess.
