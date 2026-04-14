@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"angry-gopher/auth"
+	"angry-gopher/lynrummy"
+	"angry-gopher/lynrummy/tricks"
 )
 
 // HandleGames serves /gopher/game-lobby.
@@ -313,6 +315,71 @@ func min(a, b int) int {
 
 // --- Game replay ---
 
+// advanceBoard walks a single event's payload and applies its
+// effect to the running board. Setup events initialize; player
+// actions apply the stacks_to_remove/add diff; other events are
+// no-ops.
+func advanceBoard(board *[]lynrummy.CardStack, payload json.RawMessage) {
+	// Setup event?
+	var setup struct {
+		GameSetup *lynrummy.GameSetup `json:"game_setup"`
+	}
+	if err := json.Unmarshal(payload, &setup); err == nil && setup.GameSetup != nil {
+		*board = append([]lynrummy.CardStack{}, setup.GameSetup.Board...)
+		return
+	}
+
+	move, err := lynrummy.ParseMoveEvent(payload, *board)
+	if err != nil || move == nil {
+		return
+	}
+
+	toRemove := append([]lynrummy.CardStack{}, move.StacksToRemove...)
+	var remaining []lynrummy.CardStack
+	for _, s := range *board {
+		matched := -1
+		for i, r := range toRemove {
+			if s.Equals(r) {
+				matched = i
+				break
+			}
+		}
+		if matched >= 0 {
+			toRemove = append(toRemove[:matched], toRemove[matched+1:]...)
+		} else {
+			remaining = append(remaining, s)
+		}
+	}
+	*board = append(remaining, move.StacksToAdd...)
+}
+
+// retroDetectAndAdvance attempts to identify which trick the
+// player used on this event, using the current board state and the
+// event's released hand cards. Returns "" for non-player events or
+// when no trick matches. Advances the board as a side effect.
+func retroDetectAndAdvance(board *[]lynrummy.CardStack, payload json.RawMessage) string {
+	before := append([]lynrummy.CardStack{}, *board...)
+
+	// Setup events aren't moves; just initialize and return.
+	var setup struct {
+		GameSetup *lynrummy.GameSetup `json:"game_setup"`
+	}
+	if err := json.Unmarshal(payload, &setup); err == nil && setup.GameSetup != nil {
+		*board = append([]lynrummy.CardStack{}, setup.GameSetup.Board...)
+		return ""
+	}
+
+	move, err := lynrummy.ParseMoveEvent(payload, before)
+	if err != nil || move == nil {
+		advanceBoard(board, payload)
+		return ""
+	}
+
+	trickID := tricks.Detect(move.HandCardsPlayed, before)
+	advanceBoard(board, payload)
+	return trickID
+}
+
 func renderGameReplay(w http.ResponseWriter, userID, gameID int) {
 	var p1Name string
 	var p2Name sql.NullString
@@ -355,6 +422,13 @@ func renderGameReplay(w http.ResponseWriter, userID, gameID int) {
 		TrickDescription string          `json:"trick_description,omitempty"`
 	}
 	var events []eventWithUser
+
+	// Running board state, advanced as we walk events. Used for
+	// retroactive trick detection on any event whose lynrummy_plays
+	// row is missing (typical for live-Cat games that only populate
+	// via auto_player).
+	var board []lynrummy.CardStack
+
 	for rows.Next() {
 		var e eventWithUser
 		var p string
@@ -367,6 +441,18 @@ func renderGameReplay(w http.ResponseWriter, userID, gameID int) {
 		if desc.Valid {
 			e.TrickDescription = desc.String
 		}
+
+		// Advance the running board and (if DB didn't annotate)
+		// retro-detect. retroDetect always advances the board as a
+		// side effect, so we only call one or the other.
+		if e.TrickID == "" {
+			if detected := retroDetectAndAdvance(&board, e.Payload); detected != "" {
+				e.TrickID = detected
+			}
+		} else {
+			advanceBoard(&board, e.Payload)
+		}
+
 		events = append(events, e)
 	}
 

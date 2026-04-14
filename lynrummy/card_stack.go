@@ -44,6 +44,24 @@ type Location struct {
 	Left int `json:"left"`
 }
 
+// UnmarshalJSON accepts either integer or floating-point
+// coordinates on the wire. Cat's drag-and-drop UI sends floats
+// (e.g. 401.9333190917969); the dealer and the referee work in
+// ints. Truncating on decode mirrors what the referee's geometry
+// check would treat them as anyway.
+func (l *Location) UnmarshalJSON(data []byte) error {
+	var raw struct {
+		Top  float64 `json:"top"`
+		Left float64 `json:"left"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	l.Top = int(raw.Top)
+	l.Left = int(raw.Left)
+	return nil
+}
+
 type BoardCard struct {
 	Card  Card           `json:"card"`
 	State BoardCardState `json:"state"`
@@ -197,8 +215,10 @@ func (s CardStack) CanExtract(cardIdx int) bool {
 // --- Merge ---
 
 // maybeMerge attempts to merge s1 and s2 at loc. Returns nil if the
-// result would be Bogus, Dup, Incomplete, or if the stacks are
-// card-equal. Mirrors Elm's CardStack.maybeMerge.
+// result would be Bogus or Dup, or if the stacks are card-equal.
+// Incomplete (2-card) results ARE allowed — mid-turn boards
+// legitimately contain 2-card stacks en route to a run or set.
+// Mirrors TS's CardStack.maybe_merge / Elm's problematic check.
 func maybeMerge(s1, s2 CardStack, loc Location) *CardStack {
 	if stacksEqual(s1, s2) {
 		return nil
@@ -208,7 +228,7 @@ func maybeMerge(s1, s2 CardStack, loc Location) *CardStack {
 		loc,
 	)
 	switch merged.Type() {
-	case Bogus, Dup, Incomplete:
+	case Bogus, Dup:
 		return nil
 	}
 	return &merged
