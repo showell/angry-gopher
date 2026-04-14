@@ -1,0 +1,207 @@
+// Stack types, card state enums, and stack operations. Mirrors
+// elm-lynrummy's CardStack.elm module.
+//
+// Owns: Location, BoardCardState, HandCardState, BoardCard,
+// HandCard, CardStack, merge operations, FromHandCard constructor,
+// and the shared card-display width constant.
+//
+// JSON shape matches Elm's encoder/decoder output. BoardCard,
+// HandCard, and Location use struct tags directly; CardStack has
+// custom JSON methods because it carries a cached stackType field
+// that must be re-derived on unmarshal.
+
+package lynrummy
+
+import "encoding/json"
+
+// CardWidth is the on-board visual width of a single card in
+// pixels. Elm exports `cardWidth` from CardStack.elm; Go mirrors
+// that placement.
+const CardWidth = 27
+
+// --- State enums ---
+
+type BoardCardState int
+
+const (
+	FirmlyOnBoard             BoardCardState = 0
+	FreshlyPlayed             BoardCardState = 1
+	FreshlyPlayedByLastPlayer BoardCardState = 2
+)
+
+type HandCardState int
+
+const (
+	HandNormal    HandCardState = 0
+	FreshlyDrawn  HandCardState = 1
+	BackFromBoard HandCardState = 2
+)
+
+// --- Primitive types ---
+
+type Location struct {
+	Top  int `json:"top"`
+	Left int `json:"left"`
+}
+
+type BoardCard struct {
+	Card  Card           `json:"card"`
+	State BoardCardState `json:"state"`
+}
+
+type HandCard struct {
+	Card  Card          `json:"card"`
+	State HandCardState `json:"state"`
+}
+
+// --- CardStack ---
+
+type CardStack struct {
+	BoardCards []BoardCard
+	Loc        Location
+	stackType  StackType // cached; re-derived on construction
+}
+
+func NewCardStack(cards []BoardCard, loc Location) CardStack {
+	raw := make([]Card, len(cards))
+	for i, bc := range cards {
+		raw[i] = bc.Card
+	}
+	return CardStack{
+		BoardCards: cards,
+		Loc:        loc,
+		stackType:  GetStackType(raw),
+	}
+}
+
+// FromHandCard builds a singleton stack at `loc` containing the
+// hand card's Card as a freshly-played BoardCard. Mirrors Elm's
+// CardStack.fromHandCard.
+func FromHandCard(hc HandCard, loc Location) CardStack {
+	return NewCardStack(
+		[]BoardCard{{Card: hc.Card, State: FreshlyPlayed}},
+		loc,
+	)
+}
+
+func (s CardStack) Type() StackType {
+	return s.stackType
+}
+
+func (s CardStack) Cards() []Card {
+	cards := make([]Card, len(s.BoardCards))
+	for i, bc := range s.BoardCards {
+		cards[i] = bc.Card
+	}
+	return cards
+}
+
+func (s CardStack) Size() int {
+	return len(s.BoardCards)
+}
+
+func (s CardStack) Equals(other CardStack) bool {
+	if s.Loc != other.Loc {
+		return false
+	}
+	if len(s.BoardCards) != len(other.BoardCards) {
+		return false
+	}
+	for i := range s.BoardCards {
+		if !s.BoardCards[i].Card.Equals(other.BoardCards[i].Card) {
+			return false
+		}
+	}
+	return true
+}
+
+// stacksEqual compares by cards only (ignoring location). Used
+// inside merge to prevent merging a stack with itself or with a
+// same-card pile. Mirrors Elm's CardStack.stacksEqual.
+func stacksEqual(a, b CardStack) bool {
+	if len(a.BoardCards) != len(b.BoardCards) {
+		return false
+	}
+	for i := range a.BoardCards {
+		if !a.BoardCards[i].Card.Equals(b.BoardCards[i].Card) {
+			return false
+		}
+	}
+	return true
+}
+
+func (s CardStack) Str() string {
+	result := ""
+	for i, bc := range s.BoardCards {
+		if i > 0 {
+			result += " "
+		}
+		result += bc.Card.Str()
+	}
+	return result
+}
+
+// --- JSON ---
+//
+// CardStack's on-wire shape is {board_cards, loc}. We drop the
+// cached stackType when marshaling and rebuild it via NewCardStack
+// when unmarshaling.
+
+type cardStackJSON struct {
+	BoardCards []BoardCard `json:"board_cards"`
+	Loc        Location    `json:"loc"`
+}
+
+func (s CardStack) MarshalJSON() ([]byte, error) {
+	return json.Marshal(cardStackJSON{
+		BoardCards: s.BoardCards,
+		Loc:        s.Loc,
+	})
+}
+
+func (s *CardStack) UnmarshalJSON(data []byte) error {
+	var raw cardStackJSON
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	*s = NewCardStack(raw.BoardCards, raw.Loc)
+	return nil
+}
+
+// --- Merge ---
+
+// maybeMerge attempts to merge s1 and s2 at loc. Returns nil if the
+// result would be Bogus, Dup, Incomplete, or if the stacks are
+// card-equal. Mirrors Elm's CardStack.maybeMerge.
+func maybeMerge(s1, s2 CardStack, loc Location) *CardStack {
+	if stacksEqual(s1, s2) {
+		return nil
+	}
+	merged := NewCardStack(
+		append(append([]BoardCard{}, s1.BoardCards...), s2.BoardCards...),
+		loc,
+	)
+	switch merged.Type() {
+	case Bogus, Dup, Incomplete:
+		return nil
+	}
+	return &merged
+}
+
+// LeftMerge attempts to merge `other` onto the LEFT of `s`. The
+// resulting stack sits at a location offset left by other.size *
+// pitch. Mirrors Elm's CardStack.leftMerge.
+func (s CardStack) LeftMerge(other CardStack) *CardStack {
+	loc := Location{
+		Left: s.Loc.Left - (CardWidth+6)*other.Size(),
+		Top:  s.Loc.Top,
+	}
+	return maybeMerge(other, s, loc)
+}
+
+// RightMerge attempts to merge `other` onto the RIGHT of `s`. The
+// resulting stack keeps `s`'s location. Mirrors Elm's
+// CardStack.rightMerge.
+func (s CardStack) RightMerge(other CardStack) *CardStack {
+	return maybeMerge(s, other, s.Loc)
+}

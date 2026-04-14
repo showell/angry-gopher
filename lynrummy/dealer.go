@@ -1,10 +1,10 @@
-// The Dealer sets up a LynRummy game: builds a shuffled double deck,
-// pulls the initial board stacks, deals hands, and produces a
-// WireGameSetup "photo" that any client can consume.
+// The Dealer sets up a LynRummy game: builds a shuffled double
+// deck, pulls the initial board stacks, deals hands, and produces
+// a GameSetup "photo" that any client can consume.
 //
 // The Dealer is autonomous — Angry Gopher can set up a game without
-// needing an Angry Cat client. Any client (TypeScript, Python, curl)
-// can read the resulting GameSetup and start playing.
+// needing an Angry Cat client. Any client (TypeScript, Python,
+// curl) can read the resulting GameSetup and start playing.
 
 package lynrummy
 
@@ -34,13 +34,12 @@ func BuildDoubleDeck() []Card {
 
 // --- Initial board stacks ---
 //
-// These are pulled from the deck (always deck 1) before dealing.
-// The stacks and their board positions are hard-coded — chosen by
-// the game designer to give players a starting board to work with.
+// Hard-coded stacks pulled from deck 1 before dealing. The designer
+// chose them to give players a starting board to work with.
 
 type boardStackDef struct {
 	row    int
-	labels []string // e.g., ["K","S"], ["A","S"], ["2","S"], ["3","S"]
+	labels []string
 }
 
 var initialBoardDefs = []boardStackDef{
@@ -128,7 +127,7 @@ func buildInitialBoard(deck *[]Card) []CardStack {
 		for _, label := range def.labels {
 			target := parseLabel(label)
 			*deck = pullCard(*deck, target)
-			boardCards = append(boardCards, BoardCard{Card: target, State: 0})
+			boardCards = append(boardCards, BoardCard{Card: target, State: FirmlyOnBoard})
 		}
 		stacks = append(stacks, NewCardStack(boardCards, boardLocation(def.row)))
 	}
@@ -141,7 +140,7 @@ func buildInitialBoard(deck *[]Card) []CardStack {
 // DealFullGame takes a shuffled deck, sets up the board, deals
 // hands, and returns the GameSetup "photo" ready to send over
 // the wire.
-func DealFullGame(shuffledCards []Card) WireGameSetup {
+func DealFullGame(shuffledCards []Card) GameSetup {
 	deck := make([]Card, len(shuffledCards))
 	copy(deck, shuffledCards)
 
@@ -153,33 +152,9 @@ func DealFullGame(shuffledCards []Card) WireGameSetup {
 	hand2 := deck[:15]
 	deck = deck[15:]
 
-	// Convert to wire types.
-	wireBoard := make([]WireCardStack, len(board))
-	for i, s := range board {
-		wbcs := make([]WireBoardCard, len(s.BoardCards))
-		for j, bc := range s.BoardCards {
-			wbcs[j] = WireBoardCard{
-				Card:  WireCard{Value: bc.Card.Value, Suit: int(bc.Card.Suit), OriginDeck: bc.Card.OriginDeck},
-				State: bc.State,
-			}
-		}
-		wireBoard[i] = WireCardStack{
-			BoardCards: wbcs,
-			Loc:        WireLocation{Top: s.Loc.Top, Left: s.Loc.Left},
-		}
-	}
-
-	toWireCards := func(cards []Card) []WireCard {
-		wc := make([]WireCard, len(cards))
-		for i, c := range cards {
-			wc[i] = WireCard{Value: c.Value, Suit: int(c.Suit), OriginDeck: c.OriginDeck}
-		}
-		return wc
-	}
-
-	return WireGameSetup{
-		Board: wireBoard,
-		Hands: [2][]WireCard{toWireCards(hand1), toWireCards(hand2)},
-		Deck:  toWireCards(deck),
+	return GameSetup{
+		Board: board,
+		Hands: [2][]Card{hand1, hand2},
+		Deck:  deck,
 	}
 }

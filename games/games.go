@@ -152,9 +152,9 @@ func handleCreate(w http.ResponseWriter, r *http.Request) {
 	// The client sends a shuffled deck; the Host's Dealer sets up
 	// the game and stores the setup as the first event. One round trip.
 	var body struct {
-		GameType    string              `json:"game_type"`
-		PuzzleName *string             `json:"puzzle_name"`
-		ShuffledDeck []lynrummy.WireCard `json:"shuffled_deck"`
+		GameType     string          `json:"game_type"`
+		PuzzleName   *string         `json:"puzzle_name"`
+		ShuffledDeck []lynrummy.Card `json:"shuffled_deck"`
 	}
 	if r.Body != nil {
 		_ = json.NewDecoder(r.Body).Decode(&body)
@@ -185,17 +185,9 @@ func handleCreate(w http.ResponseWriter, r *http.Request) {
 
 	// If the client sent a shuffled deck, the Dealer deals and
 	// stores the setup as the first event.
-	var gameSetup *lynrummy.WireGameSetup
+	var gameSetup *lynrummy.GameSetup
 	if len(body.ShuffledDeck) == 104 && gameType == "lynrummy" {
-		cards := make([]lynrummy.Card, len(body.ShuffledDeck))
-		for i, wc := range body.ShuffledDeck {
-			cards[i] = lynrummy.Card{
-				Value:      wc.Value,
-				Suit:       lynrummy.Suit(wc.Suit),
-				OriginDeck: wc.OriginDeck,
-			}
-		}
-		setup := lynrummy.DealFullGame(cards)
+		setup := lynrummy.DealFullGame(body.ShuffledDeck)
 		gameSetup = &setup
 
 		setupJSON, _ := json.Marshal(map[string]interface{}{

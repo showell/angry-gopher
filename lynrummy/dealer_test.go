@@ -115,8 +115,8 @@ func TestDealFullGameNoDuplicates(t *testing.T) {
 	}
 	seen := map[cardKey]bool{}
 
-	check := func(label string, v, s, d int) {
-		k := cardKey{v, s, d}
+	check := func(label string, v int, s Suit, d int) {
+		k := cardKey{v, int(s), d}
 		if seen[k] {
 			t.Errorf("duplicate card in %s: value=%d suit=%d deck=%d", label, v, s, d)
 		}
