@@ -10,7 +10,7 @@ If all three impls pass the same fixture suite, they agree on
 the rules. Drift in any impl flips a CI test in the others.
 
 This is Phase 2 of the cross-language conformance work; see
-`PORTING_CHEAT_SHEET.md` → "Find the boundaries" and
+`~/showell_repos/angry-gopher/agent_collab/PORTING_CHEAT_SHEET.md` → "Find the boundaries" and
 `PORTING_NOTES.md` insight #19 for the methodology.
 
 ---
