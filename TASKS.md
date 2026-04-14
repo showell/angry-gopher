@@ -25,6 +25,7 @@
 ## Low Priority — Angry Cat
 
 - [ ] Clean up async/await usage — refine policy and make it consistent across the codebase
+- [ ] Add "determinism in tests" principle to `src/tests/TESTING.md` — generalize from the mulberry32 port: tests should not depend on anything they don't explicitly control. Slots include PRNG seeds, clocks, filesystem ordering, hash-set iteration order, UUIDs, network. For each slot, inject as a parameter; tests pass fixed values, production passes real ones.
 
 ## Low Priority — LynRummy
 
