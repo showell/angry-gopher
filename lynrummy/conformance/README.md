@@ -312,6 +312,49 @@ stack identity shows up as a fixture failure.
 
 ---
 
+## Lessons from the first real integration (2026-04-14)
+
+Retroactively running the TrickBag against live game events
+surfaced two bugs the fixture suite had missed. Both are examples
+of *fixture selection bias*: fixtures were authored from the
+canonical happy-path shape of a game and never exercised the
+edges that real browsers produce.
+
+**Bug 1: `maybeMerge` wrongly rejected `Incomplete` (2-card)
+results.** TS and Elm both accept 2-card stacks mid-turn; the
+semantics check runs only at turn boundaries. All 12 initial
+fixtures used ≥3-card merges (immediately-complete groups), so no
+fixture ever produced an Incomplete result. The bug was invisible
+until a live Cat game dropped a lone card and then extended it.
+
+**Bug 2: `Location.UnmarshalJSON` didn't accept fractional
+pixels.** Cat's drag-and-drop sends values like
+`401.9333190917969`; all hand-authored fixtures used integer
+coords inherited from the dealer's initial board (`20 + row*60`
+etc.). The wire never carried a float through the fixture suite.
+
+**Authoring guidance to avoid the same trap:**
+
+- If a trick's detector has a branch for "extend a 1-card stack,"
+  "peel into a 2-card remainder," "merge onto a stack with a
+  freshly-played card already in it" — write a fixture for it.
+  Canonical happy paths aren't enough.
+- If a field is defined as `int` in one impl but produced by a
+  browser via floating-point math elsewhere, write at least one
+  fixture with fractional values.
+- Before declaring a fixture suite "done," exercise the actual
+  wire against at least one live session and see what new cases
+  surface. Static coverage does not predict live coverage.
+
+Regression tests for both bugs landed alongside the fixes:
+- `lynrummy/card_stack_test.go` — `TestMaybeMergeAcceptsTwoCardIncomplete`,
+  `TestLocationUnmarshalAcceptsFractional`,
+  `TestCardStackJSONWithFractionalLoc`.
+- `conformance/tricks/direct_play_extends_loose_card.json` —
+  end-to-end fixture for the 2-card Incomplete path.
+
+---
+
 ## Fixture home
 
 This directory (`angry-gopher/lynrummy/conformance/`) is the
