@@ -15,9 +15,9 @@ const (
 )
 
 type BoardBounds struct {
-	MaxWidth  int
-	MaxHeight int
-	Margin    int // minimum gap between stacks
+	MaxWidth  int `json:"max_width"`
+	MaxHeight int `json:"max_height"`
+	Margin    int `json:"margin"` // minimum gap between stacks
 }
 
 type rect struct {
@@ -50,7 +50,7 @@ func checkGeometry(board []CardStack, bounds BoardBounds) *RefereeError {
 		if r.left < 0 || r.top < 0 || r.right > bounds.MaxWidth || r.bottom > bounds.MaxHeight {
 			return &RefereeError{
 				Stage:   "geometry",
-				Message: fmt.Sprintf("stack %d out of bounds", i),
+				Message: fmt.Sprintf("stack %d extends outside the board", i),
 			}
 		}
 	}

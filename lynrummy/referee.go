@@ -226,9 +226,9 @@ func findMatchingStack(stacks []CardStack, target CardStack) int {
 // ValidateGameMove rules on a single move during a turn.
 // Returns nil if the move is valid.
 //
-// Checks protocol and inventory. Geometry is temporarily disabled
-// for the console player's learning phase. Semantics are enforced
-// at turn boundaries via ValidateTurnComplete.
+// Checks protocol, geometry, and inventory. Semantics are enforced
+// only at turn boundaries via ValidateTurnComplete (mid-turn
+// boards may legitimately contain incomplete stacks).
 func ValidateGameMove(move Move, bounds BoardBounds) *RefereeError {
 	if err := checkProtocol(move); err != nil {
 		return err
@@ -239,11 +239,9 @@ func ValidateGameMove(move Move, bounds BoardBounds) *RefereeError {
 		return err
 	}
 
-	// Geometry temporarily disabled — see referee.go:ValidateGameMove.
-	_ = bounds
-	// if err := checkGeometry(boardAfter, bounds); err != nil {
-	// 	return err
-	// }
+	if err := checkGeometry(boardAfter, bounds); err != nil {
+		return err
+	}
 
 	if err := checkInventory(move, boardAfter); err != nil {
 		return err
