@@ -1,0 +1,761 @@
+module Main exposing (main)
+
+{-| LynRummy board view — first isolated component.
+
+Knobs: learning=5, durability=5.
+
+Read-only render of a real LynRummy board pulled verbatim from
+~/showell_repos/angry-cat/src/lyn_rummy/game_boards.json. No
+interactions yet — that's the next increment.
+
+Vocabulary types are first-class: Stack is a tagged union of
+PureRun / RbRun / Set, matching the three classes in the JSON
+source. Cards know their value, suit, and which deck they came
+from (LynRummy uses two decks).
+
+-}
+
+import Browser
+import Html exposing (Html)
+import Html.Attributes as HA
+import Html.Events
+import Json.Decode as D
+import Svg exposing (Svg)
+import Svg.Attributes as SA
+import Svg.Events
+
+
+
+-- DOMAIN TYPES
+
+
+type Suit
+    = Spades
+    | Hearts
+    | Diamonds
+    | Clubs
+
+
+type alias Card =
+    { value : Int -- 1=A, 2-9, 10=T, 11=J, 12=Q, 13=K
+    , suit : Suit
+    , deck : Int -- 1 or 2
+    }
+
+
+type Stack
+    = PureRun (List Card)
+    | RbRun (List Card) -- red/black alternating
+    | Set (List Card)
+
+
+type alias Board =
+    { label : String, turn : Int, stacks : List Stack }
+
+
+
+-- CARD PARSING
+--
+-- Source format is "VS:D" where V=A,2..9,T,J,Q,K, S=S,H,D,C, D=1|2.
+-- Parsing is total: bad input becomes a 0/Spades/0 placeholder so a
+-- typo in the fixtures shows up as a visibly broken card rather than
+-- crashing the whole board. The vocabulary types still let us catch
+-- structural errors elsewhere.
+
+
+parseCard : String -> Card
+parseCard s =
+    case String.split ":" s of
+        [ rankSuit, deckStr ] ->
+            case String.toList rankSuit of
+                [ r, suitChar ] ->
+                    { value = parseValue r
+                    , suit = parseSuit suitChar
+                    , deck = String.toInt deckStr |> Maybe.withDefault 0
+                    }
+
+                _ ->
+                    badCard
+
+        _ ->
+            badCard
+
+
+badCard : Card
+badCard =
+    { value = 0, suit = Spades, deck = 0 }
+
+
+parseValue : Char -> Int
+parseValue c =
+    case c of
+        'A' ->
+            1
+
+        '2' ->
+            2
+
+        '3' ->
+            3
+
+        '4' ->
+            4
+
+        '5' ->
+            5
+
+        '6' ->
+            6
+
+        '7' ->
+            7
+
+        '8' ->
+            8
+
+        '9' ->
+            9
+
+        'T' ->
+            10
+
+        'J' ->
+            11
+
+        'Q' ->
+            12
+
+        'K' ->
+            13
+
+        _ ->
+            0
+
+
+parseSuit : Char -> Suit
+parseSuit c =
+    case c of
+        'S' ->
+            Spades
+
+        'H' ->
+            Hearts
+
+        'D' ->
+            Diamonds
+
+        'C' ->
+            Clubs
+
+        _ ->
+            Spades
+
+
+valueText : Int -> String
+valueText v =
+    case v of
+        1 ->
+            "A"
+
+        10 ->
+            "10"
+
+        11 ->
+            "J"
+
+        12 ->
+            "Q"
+
+        13 ->
+            "K"
+
+        _ ->
+            String.fromInt v
+
+
+suitText : Suit -> String
+suitText s =
+    case s of
+        Spades ->
+            "\u{2660}"
+
+        Hearts ->
+            "\u{2665}"
+
+        Diamonds ->
+            "\u{2666}"
+
+        Clubs ->
+            "\u{2663}"
+
+
+suitColor : Suit -> String
+suitColor s =
+    case s of
+        Hearts ->
+            "#c00"
+
+        Diamonds ->
+            "#c00"
+
+        _ ->
+            "#000"
+
+
+stackKindLabel : Stack -> String
+stackKindLabel s =
+    case s of
+        PureRun _ ->
+            "pure run"
+
+        RbRun _ ->
+            "red/black"
+
+        Set _ ->
+            "set"
+
+
+stackCards : Stack -> List Card
+stackCards s =
+    case s of
+        PureRun cs ->
+            cs
+
+        RbRun cs ->
+            cs
+
+        Set cs ->
+            cs
+
+
+deckMark : Card -> String
+deckMark c =
+    if c.deck == 2 then
+        "²"
+
+    else
+        ""
+
+
+
+-- FIXTURES (lifted from angry-cat/src/lyn_rummy/game_boards.json)
+
+
+makePure : List String -> Stack
+makePure raw =
+    PureRun (List.map parseCard raw)
+
+
+makeRb : List String -> Stack
+makeRb raw =
+    RbRun (List.map parseCard raw)
+
+
+makeSet : List String -> Stack
+makeSet raw =
+    Set (List.map parseCard raw)
+
+
+boards : List Board
+boards =
+    [ { label = "initial (turn 0, 6 stacks)"
+      , turn = 0
+      , stacks =
+            [ makePure [ "KS:1", "AS:1", "2S:1", "3S:1" ]
+            , makePure [ "TD:1", "JD:1", "QD:1", "KD:1" ]
+            , makePure [ "2H:1", "3H:1", "4H:1" ]
+            , makeSet [ "7S:1", "7D:1", "7C:1" ]
+            , makeSet [ "AC:1", "AD:1", "AH:1" ]
+            , makeRb [ "2C:1", "3D:1", "4C:1", "5H:1", "6S:1", "7H:1" ]
+            ]
+      }
+    , { label = "early (turn 2, 11 stacks)"
+      , turn = 2
+      , stacks =
+            [ makePure [ "KS:1", "AS:1", "2S:1" ]
+            , makePure [ "TD:1", "JD:1", "QD:1" ]
+            , makePure [ "AH:2", "2H:1", "3H:1", "4H:1" ]
+            , makeSet [ "7S:1", "7D:1", "7C:1" ]
+            , makeSet [ "AC:1", "AD:1", "AH:1" ]
+            , makeRb [ "2C:1", "3D:1", "4C:1", "5H:1", "6S:1", "7H:1", "8S:1" ]
+            , makeSet [ "4H:2", "4S:1", "4D:2" ]
+            , makeSet [ "KS:2", "KH:1", "KD:1" ]
+            , makeSet [ "6C:2", "6S:2", "6H:2" ]
+            , makePure [ "TH:1", "JH:2", "QH:1" ]
+            , makeRb [ "AC:2", "2H:2", "3S:1" ]
+            ]
+      }
+    , { label = "midgame (turn 17, 14 stacks)"
+      , turn = 17
+      , stacks =
+            [ makePure [ "KS:1", "AS:1", "2S:1", "3S:1" ]
+            , makePure [ "6S:2", "7S:2", "8S:1", "9S:2", "TS:2" ]
+            , makePure [ "JD:1", "QD:1", "KD:1", "AD:1", "2D:2", "3D:1" ]
+            , makePure [ "TH:2", "JH:2", "QH:1", "KH:1", "AH:2", "2H:1", "3H:1" ]
+            , makeRb [ "JC:2", "QH:2", "KS:2", "AD:2", "2C:1" ]
+            , makeRb [ "2C:2", "3D:2", "4S:1", "5D:2", "6C:1", "7D:1" ]
+            , makeRb [ "TC:1", "JD:2", "QS:2", "KD:2", "AC:2", "2H:2", "3C:1", "4D:2", "5S:2", "6D:2" ]
+            , makePure [ "3H:2", "4H:2", "5H:1", "6H:2", "7H:1" ]
+            , makePure [ "4C:1", "5C:1", "6C:2", "7C:1" ]
+            , makePure [ "6S:1", "7S:1", "8S:2" ]
+            , makeSet [ "AC:1", "AH:1", "AS:2" ]
+            , makeRb [ "4H:1", "5C:2", "6H:1" ]
+            , makeSet [ "TC:2", "TH:1", "TD:1" ]
+            , makeSet [ "9D:1", "9C:2", "9H:1" ]
+            ]
+      }
+    , { label = "late (turn 28, 10 stacks)"
+      , turn = 28
+      , stacks =
+            [ makePure [ "KS:1", "AS:1", "2S:1", "3S:1", "4S:1", "5S:2", "6S:2", "7S:2", "8S:1" ]
+            , makePure [ "TD:1", "JD:1", "QD:1", "KD:1", "AD:1" ]
+            , makePure [ "TH:1", "JH:2", "QH:1", "KH:1", "AH:2", "2H:1", "3H:1", "4H:1" ]
+            , makeRb [ "KS:2", "AD:2", "2C:1", "3D:1", "4C:1", "5D:2", "6C:1", "7D:1" ]
+            , makeRb [ "AC:2", "2H:2", "3C:1", "4D:2" ]
+            , makePure [ "3H:2", "4H:2", "5H:1", "6H:2", "7H:1" ]
+            , makePure [ "5C:1", "6C:2", "7C:1" ]
+            , makePure [ "6S:1", "7S:1", "8S:2", "9S:2" ]
+            , makeSet [ "TH:2", "TC:1", "TS:2" ]
+            , makeSet [ "AC:1", "AH:1", "AS:2" ]
+            ]
+      }
+    ]
+
+
+
+-- MODEL / MSG
+
+
+type alias Model =
+    { boardIdx : Int
+    , selectedStackIdx : Maybe Int -- index into the current board's stacks
+    , selectedCardIdx : Maybe Int -- index within the selected stack; meaningful only when selectedStackIdx is Just
+    , hoveredStackIdx : Maybe Int
+    }
+
+
+type Msg
+    = SelectBoard Int
+    | SelectStack Int
+    | DeselectStack
+    | SelectCard Int
+    | HoverStack (Maybe Int)
+
+
+main : Program () Model Msg
+main =
+    Browser.sandbox
+        { init = initModel
+        , view = view
+        , update = update
+        }
+
+
+initModel : Model
+initModel =
+    { boardIdx = 0
+    , selectedStackIdx = Nothing
+    , selectedCardIdx = Nothing
+    , hoveredStackIdx = Nothing
+    }
+
+
+update : Msg -> Model -> Model
+update msg model =
+    case msg of
+        SelectBoard i ->
+            -- Switching boards clears any per-board ephemeral state.
+            { model
+                | boardIdx = i
+                , selectedStackIdx = Nothing
+                , selectedCardIdx = Nothing
+                , hoveredStackIdx = Nothing
+            }
+
+        SelectStack i ->
+            -- Tap toggles. Selecting a different stack clears the card
+            -- selection (a card only makes sense in the context of its
+            -- enclosing stack).
+            if model.selectedStackIdx == Just i then
+                { model | selectedStackIdx = Nothing, selectedCardIdx = Nothing }
+
+            else
+                { model | selectedStackIdx = Just i, selectedCardIdx = Nothing }
+
+        DeselectStack ->
+            { model | selectedStackIdx = Nothing, selectedCardIdx = Nothing }
+
+        SelectCard i ->
+            -- Toggle the card-level selection. Only meaningful within
+            -- the currently-selected stack; we trust the caller (only
+            -- big cards emit this Msg).
+            if model.selectedCardIdx == Just i then
+                { model | selectedCardIdx = Nothing }
+
+            else
+                { model | selectedCardIdx = Just i }
+
+        HoverStack maybeI ->
+            { model | hoveredStackIdx = maybeI }
+
+
+
+-- VIEW
+--
+-- Layout: header with board picker, then a vertical column of stacks.
+-- Each stack: small kind label, then cards rendered with full faces
+-- and a tiny gap (PITCH = CW + 1) so neighbors are clearly distinct.
+-- Deck-2 cards get a tiny "²" superscript after the rank.
+
+
+-- Two card sizes. Small is the default; big is for the currently
+-- selected stack (tablet-friendly tap targets, Steve's mom plays on
+-- a tablet — see feedback_tablet_first.md).
+
+
+cwSmall : Int
+cwSmall =
+    32
+
+
+chSmall : Int
+chSmall =
+    46
+
+
+pitchSmall : Int
+pitchSmall =
+    cwSmall + 1
+
+
+cwBig : Int
+cwBig =
+    50
+
+
+chBig : Int
+chBig =
+    72
+
+
+pitchBig : Int
+pitchBig =
+    cwBig + 2
+
+
+type alias CardMetrics =
+    { cw : Int, ch : Int, pitch : Int, rankFont : Int, suitFont : Int }
+
+
+smallMetrics : CardMetrics
+smallMetrics =
+    { cw = cwSmall, ch = chSmall, pitch = pitchSmall, rankFont = 14, suitFont = 16 }
+
+
+bigMetrics : CardMetrics
+bigMetrics =
+    { cw = cwBig, ch = chBig, pitch = pitchBig, rankFont = 22, suitFont = 24 }
+
+
+view : Model -> Html Msg
+view model =
+    let
+        currentBoard =
+            getAt model.boardIdx boards
+                |> Maybe.withDefault dummyBoard
+    in
+    Html.div
+        [ HA.style "font-family" "sans-serif"
+        , HA.style "padding" "16px"
+        , HA.style "background" "#f4f4ec"
+        , HA.style "min-height" "100vh"
+        ]
+        [ viewPicker model.boardIdx
+        , Html.h2 [ HA.style "margin" "16px 0 8px" ]
+            [ Html.text currentBoard.label ]
+        , viewSelectionInfo model currentBoard
+        , viewStacks model currentBoard.stacks
+        ]
+
+
+
+
+
+viewSelectionInfo : Model -> Board -> Html Msg
+viewSelectionInfo model board =
+    let
+        focusIdx =
+            case model.selectedStackIdx of
+                Just i ->
+                    Just i
+
+                Nothing ->
+                    model.hoveredStackIdx
+
+        focusKind =
+            case focusIdx of
+                Just i ->
+                    case getAt i board.stacks of
+                        Just s ->
+                            Just s
+
+                        Nothing ->
+                            Nothing
+
+                Nothing ->
+                    Nothing
+
+        selectedCardText =
+            case ( model.selectedStackIdx, model.selectedCardIdx ) of
+                ( Just si, Just ci ) ->
+                    case getAt si board.stacks of
+                        Just s ->
+                            case getAt ci (stackCards s) of
+                                Just c ->
+                                    " · selected: " ++ valueText c.value ++ suitText c.suit ++ deckMark c
+
+                                Nothing ->
+                                    ""
+
+                        Nothing ->
+                            ""
+
+                _ ->
+                    ""
+
+        text_ =
+            case focusKind of
+                Just s ->
+                    let
+                        n =
+                            List.length (stackCards s)
+                    in
+                    stackKindLabel s ++ " — " ++ String.fromInt n ++ " cards" ++ selectedCardText
+
+                Nothing ->
+                    "(tap a stack to select; tap its cards to drill in)"
+    in
+    Html.div
+        [ HA.style "min-height" "20px"
+        , HA.style "margin" "0 0 8px"
+        , HA.style "font-size" "13px"
+        , HA.style "color" "#555"
+        ]
+        [ Html.text text_ ]
+
+
+viewPicker : Int -> Html Msg
+viewPicker active =
+    Html.div [ HA.style "display" "flex", HA.style "gap" "8px" ]
+        (List.indexedMap (viewPickerBtn active) boards)
+
+
+viewPickerBtn : Int -> Int -> Board -> Html Msg
+viewPickerBtn active i board =
+    let
+        isActive =
+            i == active
+    in
+    Html.button
+        [ Html.Events.onClick (SelectBoard i)
+        , HA.style "padding" "6px 12px"
+        , HA.style "font-weight"
+            (if isActive then
+                "bold"
+
+             else
+                "normal"
+            )
+        , HA.style "background"
+            (if isActive then
+                "#d9f0b8"
+
+             else
+                "white"
+            )
+        , HA.style "border" "1px solid #6b8e3f"
+        , HA.style "cursor" "pointer"
+        ]
+        [ Html.text board.label ]
+
+
+viewStacks : Model -> List Stack -> Html Msg
+viewStacks model stacks =
+    Html.div [ HA.style "display" "flex", HA.style "flex-direction" "column", HA.style "gap" "6px" ]
+        (List.indexedMap (viewStack model) stacks)
+
+
+viewStack : Model -> Int -> Stack -> Html Msg
+viewStack model idx stack =
+    let
+        cards =
+            stackCards stack
+
+        n =
+            List.length cards
+
+        isSelected =
+            model.selectedStackIdx == Just idx
+
+        isHovered =
+            model.hoveredStackIdx == Just idx
+
+        metrics =
+            if isSelected then
+                bigMetrics
+
+            else
+                smallMetrics
+
+        wPx =
+            metrics.cw + (n - 1) * metrics.pitch
+
+        rowBg =
+            if isSelected then
+                "#d9f0b8"
+
+            else if isHovered then
+                "#f0e9c4"
+
+            else
+                "transparent"
+
+        rowBorder =
+            if isSelected then
+                "2px solid #6b8e3f"
+
+            else
+                "2px solid transparent"
+
+        cardView i c =
+            viewCard metrics isSelected (model.selectedCardIdx == Just i) i c
+    in
+    Html.div
+        [ HA.style "display" "flex"
+        , HA.style "align-items" "center"
+        , HA.style "gap" "12px"
+        , HA.style "padding" "4px 8px"
+        , HA.style "background" rowBg
+        , HA.style "border" rowBorder
+        , HA.style "border-radius" "4px"
+        , HA.style "cursor" "pointer"
+        , Html.Events.onClick (SelectStack idx)
+        , Html.Events.onMouseEnter (HoverStack (Just idx))
+        , Html.Events.onMouseLeave (HoverStack Nothing)
+        ]
+        [ Html.span
+            [ HA.style "width" "80px"
+            , HA.style "font-size" "12px"
+            , HA.style "color" "#666"
+            , HA.style "text-align" "right"
+            , HA.style "font-style" "italic"
+            ]
+            [ Html.text (stackKindLabel stack) ]
+        , Svg.svg
+            [ SA.width (String.fromInt wPx)
+            , SA.height (String.fromInt metrics.ch)
+            , SA.viewBox ("0 0 " ++ String.fromInt wPx ++ " " ++ String.fromInt metrics.ch)
+            ]
+            (List.indexedMap cardView cards)
+        ]
+
+
+viewCard : CardMetrics -> Bool -> Bool -> Int -> Card -> Svg Msg
+viewCard m clickable selected i card =
+    let
+        x =
+            i * m.pitch
+
+        borderColor =
+            if selected then
+                "#b8860b"
+
+            else
+                "#0000cc"
+
+        borderWidth =
+            if selected then
+                "3"
+
+            else
+                "1"
+
+        clickAttrs =
+            if clickable then
+                [ Svg.Events.onClick (SelectCard i)
+                , Svg.Events.stopPropagationOn "click" (D.succeed ( SelectCard i, True ))
+                ]
+
+            else
+                []
+    in
+    Svg.g clickAttrs
+        [ -- shadow
+          Svg.rect
+            [ SA.x (String.fromInt (x + 1))
+            , SA.y "1"
+            , SA.width (String.fromInt m.cw)
+            , SA.height (String.fromInt m.ch)
+            , SA.fill "rgba(0,0,0,0.08)"
+            , SA.rx "3"
+            ]
+            []
+        , -- card face
+          Svg.rect
+            [ SA.x (String.fromInt x)
+            , SA.y "0"
+            , SA.width (String.fromInt m.cw)
+            , SA.height (String.fromInt m.ch)
+            , SA.fill "white"
+            , SA.stroke borderColor
+            , SA.strokeWidth borderWidth
+            , SA.rx "3"
+            ]
+            []
+        , -- rank
+          Svg.text_
+            [ SA.x (String.fromInt (x + m.cw // 2))
+            , SA.y (String.fromInt (m.ch * 33 // 100 + 4))
+            , SA.fill (suitColor card.suit)
+            , SA.fontSize (String.fromInt m.rankFont)
+            , SA.fontWeight "bold"
+            , SA.textAnchor "middle"
+            ]
+            [ Svg.text (valueText card.value) ]
+        , -- suit
+          Svg.text_
+            [ SA.x (String.fromInt (x + m.cw // 2))
+            , SA.y (String.fromInt (m.ch * 70 // 100 + 4))
+            , SA.fill (suitColor card.suit)
+            , SA.fontSize (String.fromInt m.suitFont)
+            , SA.textAnchor "middle"
+            ]
+            [ Svg.text (suitText card.suit) ]
+        , -- deck-2 superscript
+          if card.deck == 2 then
+            Svg.text_
+                [ SA.x (String.fromInt (x + m.cw - 4))
+                , SA.y (String.fromInt (m.rankFont - 4))
+                , SA.fill "#888"
+                , SA.fontSize (String.fromInt (m.rankFont * 60 // 100))
+                , SA.textAnchor "end"
+                ]
+                [ Svg.text "²" ]
+
+          else
+            Svg.g [] []
+        ]
+
+
+
+-- HELPERS
+
+
+getAt : Int -> List a -> Maybe a
+getAt i xs =
+    List.head (List.drop i xs)
+
+
+dummyBoard : Board
+dummyBoard =
+    { label = "(no board)", turn = 0, stacks = [] }

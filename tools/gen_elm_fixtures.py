@@ -17,7 +17,7 @@ from pathlib import Path
 
 REPO = Path("/home/steve/showell_repos/angry-gopher")
 FIXTURES_DIR = REPO / "lynrummy" / "conformance"
-OUT_PATH = Path("/home/steve/showell_repos/elm-lynrummy/tests/LynRummy/Fixtures.elm")
+OUT_PATH = Path("/home/steve/showell_repos/angry-gopher/elm-lynrummy/tests/LynRummy/Fixtures.elm")
 
 
 TRIPLE = '"' * 3

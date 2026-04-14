@@ -21,7 +21,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 
 GO_ROOT = Path("/home/steve/showell_repos/angry-gopher/lynrummy")
-ELM_ROOT = Path("/home/steve/showell_repos/elm-lynrummy/src/LynRummy")
+ELM_ROOT = Path("/home/steve/showell_repos/angry-gopher/elm-lynrummy/src/LynRummy")
 
 MODULE_PAIRS = [
     ("card",           "card.go",           "Card.elm"),
