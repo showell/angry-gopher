@@ -44,7 +44,17 @@ func rectsOverlap(a, b rect) bool {
 		a.bottom > b.top
 }
 
+func padRect(r rect, margin int) rect {
+	return rect{
+		left:   r.left - margin,
+		top:    r.top - margin,
+		right:  r.right + margin,
+		bottom: r.bottom + margin,
+	}
+}
+
 func checkGeometry(board []CardStack, bounds BoardBounds) *RefereeError {
+	rects := make([]rect, len(board))
 	for i, s := range board {
 		r := stackRect(s)
 		if r.left < 0 || r.top < 0 || r.right > bounds.MaxWidth || r.bottom > bounds.MaxHeight {
@@ -53,14 +63,27 @@ func checkGeometry(board []CardStack, bounds BoardBounds) *RefereeError {
 				Message: fmt.Sprintf("stack %d extends outside the board", i),
 			}
 		}
+		rects[i] = r
 	}
 
-	for i := 0; i < len(board); i++ {
-		for j := i + 1; j < len(board); j++ {
-			if rectsOverlap(stackRect(board[i]), stackRect(board[j])) {
+	// Highest severity first: actual overlap, then within-margin crowding.
+	for i := 0; i < len(rects); i++ {
+		for j := i + 1; j < len(rects); j++ {
+			if rectsOverlap(rects[i], rects[j]) {
 				return &RefereeError{
 					Stage:   "geometry",
 					Message: fmt.Sprintf("stacks %d and %d overlap", i, j),
+				}
+			}
+		}
+	}
+
+	for i := 0; i < len(rects); i++ {
+		for j := i + 1; j < len(rects); j++ {
+			if rectsOverlap(padRect(rects[i], bounds.Margin), rects[j]) {
+				return &RefereeError{
+					Stage:   "geometry",
+					Message: fmt.Sprintf("stacks %d and %d are too close (within %dpx margin)", i, j, bounds.Margin),
 				}
 			}
 		}

@@ -77,6 +77,63 @@ func Test_direct_play_right_extend_heart_run(t *testing.T) {
 	}
 }
 
+// Two stacks within BoardBounds.margin (5px) but not overlapping.
+func Test_geometry_crowded(t *testing.T) {
+	bounds := lynrummy.BoardBounds{MaxWidth: 800, MaxHeight: 600, Margin: 5}
+	boardBefore := []lynrummy.CardStack(nil)
+	stacksToRemove := []lynrummy.CardStack(nil)
+	stacksToAdd := []lynrummy.CardStack{lynrummy.NewCardStack([]lynrummy.BoardCard{{Card: lynrummy.Card{Value: 1, Suit: lynrummy.Heart, OriginDeck: 0}, State: lynrummy.FreshlyPlayed}}, lynrummy.Location{Top: 10, Left: 10}), lynrummy.NewCardStack([]lynrummy.BoardCard{{Card: lynrummy.Card{Value: 2, Suit: lynrummy.Spade, OriginDeck: 0}, State: lynrummy.FreshlyPlayed}}, lynrummy.Location{Top: 10, Left: 40})}
+	hand := []lynrummy.Card{lynrummy.Card{Value: 1, Suit: lynrummy.Heart, OriginDeck: 0}, lynrummy.Card{Value: 2, Suit: lynrummy.Spade, OriginDeck: 0}}
+	got := lynrummy.ValidateGameMove(lynrummy.Move{BoardBefore: boardBefore, StacksToRemove: stacksToRemove, StacksToAdd: stacksToAdd, HandCardsPlayed: hand}, bounds)
+	if got == nil {
+		t.Fatal("expected error at stage \"geometry\", got ok")
+	}
+	if got.Stage != "geometry" {
+		t.Fatalf("stage: want \"geometry\", got %q", got.Stage)
+	}
+	if !stringsContainsDSL(got.Message, "too close") {
+		t.Fatalf("message: want substring \"too close\", got %q", got.Message)
+	}
+}
+
+// Stack whose right edge exceeds MaxWidth is rejected.
+func Test_geometry_out_of_bounds(t *testing.T) {
+	bounds := lynrummy.BoardBounds{MaxWidth: 800, MaxHeight: 600, Margin: 5}
+	boardBefore := []lynrummy.CardStack(nil)
+	stacksToRemove := []lynrummy.CardStack(nil)
+	stacksToAdd := []lynrummy.CardStack{lynrummy.NewCardStack([]lynrummy.BoardCard{{Card: lynrummy.Card{Value: 1, Suit: lynrummy.Heart, OriginDeck: 0}, State: lynrummy.FreshlyPlayed}}, lynrummy.Location{Top: 10, Left: 790})}
+	hand := []lynrummy.Card{lynrummy.Card{Value: 1, Suit: lynrummy.Heart, OriginDeck: 0}}
+	got := lynrummy.ValidateGameMove(lynrummy.Move{BoardBefore: boardBefore, StacksToRemove: stacksToRemove, StacksToAdd: stacksToAdd, HandCardsPlayed: hand}, bounds)
+	if got == nil {
+		t.Fatal("expected error at stage \"geometry\", got ok")
+	}
+	if got.Stage != "geometry" {
+		t.Fatalf("stage: want \"geometry\", got %q", got.Stage)
+	}
+	if !stringsContainsDSL(got.Message, "outside") {
+		t.Fatalf("message: want substring \"outside\", got %q", got.Message)
+	}
+}
+
+// Two stacks at the same coordinates actually overlap.
+func Test_geometry_overlap(t *testing.T) {
+	bounds := lynrummy.BoardBounds{MaxWidth: 800, MaxHeight: 600, Margin: 5}
+	boardBefore := []lynrummy.CardStack(nil)
+	stacksToRemove := []lynrummy.CardStack(nil)
+	stacksToAdd := []lynrummy.CardStack{lynrummy.NewCardStack([]lynrummy.BoardCard{{Card: lynrummy.Card{Value: 1, Suit: lynrummy.Heart, OriginDeck: 0}, State: lynrummy.FreshlyPlayed}}, lynrummy.Location{Top: 10, Left: 10}), lynrummy.NewCardStack([]lynrummy.BoardCard{{Card: lynrummy.Card{Value: 2, Suit: lynrummy.Spade, OriginDeck: 0}, State: lynrummy.FreshlyPlayed}}, lynrummy.Location{Top: 10, Left: 10})}
+	hand := []lynrummy.Card{lynrummy.Card{Value: 1, Suit: lynrummy.Heart, OriginDeck: 0}, lynrummy.Card{Value: 2, Suit: lynrummy.Spade, OriginDeck: 0}}
+	got := lynrummy.ValidateGameMove(lynrummy.Move{BoardBefore: boardBefore, StacksToRemove: stacksToRemove, StacksToAdd: stacksToAdd, HandCardsPlayed: hand}, bounds)
+	if got == nil {
+		t.Fatal("expected error at stage \"geometry\", got ok")
+	}
+	if got.Stage != "geometry" {
+		t.Fatalf("stage: want \"geometry\", got %q", got.Stage)
+	}
+	if !stringsContainsDSL(got.Message, "overlap") {
+		t.Fatalf("message: want substring \"overlap\", got %q", got.Message)
+	}
+}
+
 // Hand has no 3+ group forming a set or run.
 func Test_hand_stacks_no_plays(t *testing.T) {
 	hand := []lynrummy.HandCard{{Card: lynrummy.Card{Value: 7, Suit: lynrummy.Heart, OriginDeck: 0}, State: lynrummy.HandNormal}, {Card: lynrummy.Card{Value: 2, Suit: lynrummy.Diamond, OriginDeck: 0}, State: lynrummy.HandNormal}}

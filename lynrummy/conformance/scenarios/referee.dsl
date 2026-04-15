@@ -51,3 +51,41 @@ scenario turn_complete_rejects_incomplete
   expect: error
     stage: semantics
     message_contains: incomplete
+
+scenario geometry_out_of_bounds
+  desc: Stack whose right edge exceeds MaxWidth is rejected.
+  op: validate_game_move
+  board_before:
+  stacks_to_remove:
+  stacks_to_add:
+    at (10,790): AH*
+  hand_cards_played: AH
+  expect: error
+    stage: geometry
+    message_contains: outside
+
+scenario geometry_overlap
+  desc: Two stacks at the same coordinates actually overlap.
+  op: validate_game_move
+  board_before:
+  stacks_to_remove:
+  stacks_to_add:
+    at (10,10): AH*
+    at (10,10): 2S*
+  hand_cards_played: AH 2S
+  expect: error
+    stage: geometry
+    message_contains: overlap
+
+scenario geometry_crowded
+  desc: Two stacks within BoardBounds.margin (5px) but not overlapping.
+  op: validate_game_move
+  board_before:
+  stacks_to_remove:
+  stacks_to_add:
+    at (10,10): AH*
+    at (10,40): 2S*
+  hand_cards_played: AH 2S
+  expect: error
+    stage: geometry
+    message_contains: too close

@@ -178,6 +178,86 @@ directPlayRightExtendHeartRun =
                         Expect.pass
 
 
+geometryCrowded : Test
+geometryCrowded =
+    test "geometry_crowded" <|
+        \_ ->
+            let
+                move =
+                    { boardBefore = []
+                    , stacksToRemove = []
+                    , stacksToAdd = [ { boardCards = [ { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = FreshlyPlayed } ], loc = { top = 10, left = 10 } }
+                        , { boardCards = [ { card = { value = Two, suit = Spade, originDeck = DeckOne }, state = FreshlyPlayed } ], loc = { top = 10, left = 40 } }
+                        ]
+                    , handCardsPlayed = [ { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = HandNormal }, { card = { value = Two, suit = Spade, originDeck = DeckOne }, state = HandNormal } ]
+                    }
+            in
+            case Referee.validateGameMove move standardBounds of
+                Ok _ ->
+                    Expect.fail ("expected error at stage " ++ "geometry" ++ ", got ok")
+
+                Err err ->
+                    if refereeStageToString err.stage /= "geometry" then
+                        Expect.fail ("stage: want " ++ "geometry" ++ ", got " ++ refereeStageToString err.stage)
+                    else if not (String.contains "too close" err.message) then
+                        Expect.fail ("message substring " ++ "too close" ++ " not found in " ++ err.message)
+                    else
+                        Expect.pass
+
+
+geometryOutOfBounds : Test
+geometryOutOfBounds =
+    test "geometry_out_of_bounds" <|
+        \_ ->
+            let
+                move =
+                    { boardBefore = []
+                    , stacksToRemove = []
+                    , stacksToAdd = [ { boardCards = [ { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = FreshlyPlayed } ], loc = { top = 10, left = 790 } }
+                        ]
+                    , handCardsPlayed = [ { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = HandNormal } ]
+                    }
+            in
+            case Referee.validateGameMove move standardBounds of
+                Ok _ ->
+                    Expect.fail ("expected error at stage " ++ "geometry" ++ ", got ok")
+
+                Err err ->
+                    if refereeStageToString err.stage /= "geometry" then
+                        Expect.fail ("stage: want " ++ "geometry" ++ ", got " ++ refereeStageToString err.stage)
+                    else if not (String.contains "outside" err.message) then
+                        Expect.fail ("message substring " ++ "outside" ++ " not found in " ++ err.message)
+                    else
+                        Expect.pass
+
+
+geometryOverlap : Test
+geometryOverlap =
+    test "geometry_overlap" <|
+        \_ ->
+            let
+                move =
+                    { boardBefore = []
+                    , stacksToRemove = []
+                    , stacksToAdd = [ { boardCards = [ { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = FreshlyPlayed } ], loc = { top = 10, left = 10 } }
+                        , { boardCards = [ { card = { value = Two, suit = Spade, originDeck = DeckOne }, state = FreshlyPlayed } ], loc = { top = 10, left = 10 } }
+                        ]
+                    , handCardsPlayed = [ { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = HandNormal }, { card = { value = Two, suit = Spade, originDeck = DeckOne }, state = HandNormal } ]
+                    }
+            in
+            case Referee.validateGameMove move standardBounds of
+                Ok _ ->
+                    Expect.fail ("expected error at stage " ++ "geometry" ++ ", got ok")
+
+                Err err ->
+                    if refereeStageToString err.stage /= "geometry" then
+                        Expect.fail ("stage: want " ++ "geometry" ++ ", got " ++ refereeStageToString err.stage)
+                    else if not (String.contains "overlap" err.message) then
+                        Expect.fail ("message substring " ++ "overlap" ++ " not found in " ++ err.message)
+                    else
+                        Expect.pass
+
+
 handStacksNoPlays : Test
 handStacksNoPlays =
     test "hand_stacks_no_plays" <|
@@ -636,6 +716,9 @@ suite =
         , directPlayLeftExtendHeartRun
         , directPlayNoPlays
         , directPlayRightExtendHeartRun
+        , geometryCrowded
+        , geometryOutOfBounds
+        , geometryOverlap
         , handStacksNoPlays
         , handStacksPureRun
         , handStacksSet
