@@ -81,19 +81,19 @@ func GetPages() []PageDef {
 		Handler:  HandleUsers,
 	},
 	{
+		Path:     "/gopher/game-lobby",
+		NavLabel: "Games",
+		Title:    "Games",
+		Subtitle: "Play LynRummy and other games with your team — right inside your chat app.",
+		Handler:  HandleGames,
+	},
+	{
 		Path:      "/gopher/github",
 		NavLabel:  "GitHub",
 		Title:     "GitHub Integration",
 		Subtitle:  "First-class GitHub support. Configure repos, get webhook URLs, and use linkifier prefixes like AG#123.",
 		Handler:   HandleGitHub,
 		AdminOnly: true,
-	},
-	{
-		Path:     "/gopher/game-lobby",
-		NavLabel: "Games",
-		Title:    "Games",
-		Subtitle: "Play LynRummy and other games with your team — right inside your chat app.",
-		Handler:  HandleGames,
 	},
 	{
 		Path:      "/gopher/invites-view",

@@ -42,6 +42,47 @@ type view struct {
 	when     string // "method=GET" today; extend as needed
 	preamble *preamble
 	table    *tableSpec
+	forms    []form
+
+	// Detail-view fields (populated only when view dispatches on
+	// a row id, typically `when: id`).
+	detailQuery string  // SQL that returns exactly one row
+	notFound    string  // 404 message if the query returns none
+	heading     string  // <h1> template; may reference row columns
+	facts       []fact  // 2-col key/value block
+	links       []link  // named anchor links (back, replay, etc.)
+	sections    []section
+}
+
+type fact struct {
+	label   string
+	renderer string // "user_link", "user_link_or", "time_short", ...
+	args    map[string]string
+}
+
+type link struct {
+	name string // "back", "replay", etc.
+	href string // template — may include {id} etc.
+	text string
+}
+
+type section struct {
+	title string
+	table *tableSpec
+}
+
+// form is an HTML form rendered inline in a view. The POST is
+// delegated to a named handler block elsewhere in the page.
+type form struct {
+	name         string
+	title        string // rendered as <h2>
+	submit       string // button text
+	hint         string // <span> below the submit, optional
+	fields       []field
+	handlerName  string // top-level handler block that processes POST
+	ownerGate    []string // column names whose value must match $user
+	adminOnly    bool
+	actionPath   string // override for <form action="...">; empty = auto
 }
 
 type preamble struct {
@@ -68,17 +109,49 @@ type column struct {
 }
 
 type handler struct {
-	name     string
-	when     string // "method=POST"
-	fields   []field
-	action   action
-	redirect string
+	name       string
+	when       string // raw "method=POST id label=1" predicate string
+	predicates []predicate
+	ownerGate  []string
+	adminOnly  bool
+	fields     []field
+	action     action
+	redirect   string
+}
+
+// predicate is a single when-clause token. Examples:
+//   method=POST    → {kind: "method", value: "POST"}
+//   id             → {kind: "has_param", value: "id"}
+//   label=1        → {kind: "param_eq", param: "label", value: "1"}
+type predicate struct {
+	kind  string
+	param string
+	value string
+}
+
+func parseWhen(raw string) []predicate {
+	var out []predicate
+	for _, tok := range strings.Fields(raw) {
+		if eq := strings.Index(tok, "="); eq > 0 {
+			k := tok[:eq]
+			v := tok[eq+1:]
+			if k == "method" {
+				out = append(out, predicate{kind: "method", value: v})
+			} else {
+				out = append(out, predicate{kind: "param_eq", param: k, value: v})
+			}
+		} else {
+			out = append(out, predicate{kind: "has_param", param: tok})
+		}
+	}
+	return out
 }
 
 type field struct {
 	name     string
-	goType   string // "int" | "string"
+	goType   string            // "int" | "string" | "text" | "textarea" | "checkbox" | "hidden"
 	required bool
+	attrs    map[string]string // value, placeholder, width, etc.
 }
 
 type action struct {
@@ -313,8 +386,48 @@ func parseView(name string, children []line, path string) (view, error) {
 				return v, err
 			}
 			v.table = ts
+		case "form":
+			f, err := parseForm(val, sub, path)
+			if err != nil {
+				return v, err
+			}
+			v.forms = append(v.forms, f)
+		case "query":
+			if val != "" {
+				v.detailQuery = val
+			} else {
+				var parts []string
+				for _, s := range sub {
+					parts = append(parts, s.content)
+				}
+				v.detailQuery = strings.Join(parts, " ")
+			}
+		case "not_found":
+			v.notFound = stripQuotes(val)
+		case "heading":
+			v.heading = stripQuotes(val)
+		case "facts":
+			facts, err := parseFacts(sub, path)
+			if err != nil {
+				return v, err
+			}
+			v.facts = facts
+		case "section":
+			sec, err := parseSection(val, sub, path)
+			if err != nil {
+				return v, err
+			}
+			v.sections = append(v.sections, sec)
 		default:
-			return v, fmt.Errorf("%s:%d: unknown view field %q", path, l.lineNum, key)
+			if strings.HasPrefix(key, "link ") {
+				ln, err := parseLink(strings.TrimPrefix(key, "link "), val)
+				if err != nil {
+					return v, err
+				}
+				v.links = append(v.links, ln)
+			} else {
+				return v, fmt.Errorf("%s:%d: unknown view field %q", path, l.lineNum, key)
+			}
 		}
 	}
 	return v, nil
@@ -393,8 +506,175 @@ func parseColumns(children []line, path string) ([]column, error) {
 	return out, nil
 }
 
-func parseHandler(name string, children []line, path string) (handler, error) {
-	h := handler{name: name}
+// parseFacts parses a "facts:" block — each line is
+// `"Label": renderer(args)`.
+func parseFacts(children []line, path string) ([]fact, error) {
+	var out []fact
+	for _, l := range children {
+		hdr, rest, ok := strings.Cut(l.content, ":")
+		if !ok {
+			return nil, fmt.Errorf("%s:%d: bad fact syntax", path, l.lineNum)
+		}
+		label := stripQuotes(strings.TrimSpace(hdr))
+		rest = strings.TrimSpace(rest)
+		name, args, err := parseCall(rest)
+		if err != nil {
+			return nil, fmt.Errorf("%s:%d: %w", path, l.lineNum, err)
+		}
+		out = append(out, fact{label: label, renderer: name, args: args})
+	}
+	return out, nil
+}
+
+// parseSection parses `section "Title"` with a nested table.
+func parseSection(header string, children []line, path string) (section, error) {
+	s := section{title: stripQuotes(header)}
+	for i := 0; i < len(children); i++ {
+		l := children[i]
+		key, _, _ := splitKV(l.content)
+		if key != "table" {
+			continue
+		}
+		// Collect deeper-indented lines as table's children.
+		var sub []line
+		i++
+		for i < len(children) && children[i].indent > l.indent {
+			sub = append(sub, children[i])
+			i++
+		}
+		i--
+		ts, err := parseTable(sub, path)
+		if err != nil {
+			return s, err
+		}
+		s.table = ts
+	}
+	return s, nil
+}
+
+// parseLink parses `link <name>: <href> text="Display Text"`.
+// The name (back/replay/etc.) is purely for grouping; href and
+// text are what render.
+func parseLink(name, spec string) (link, error) {
+	ln := link{name: strings.TrimSpace(name)}
+	// Split on whitespace but keep text="..." together.
+	parts := splitArgs(spec)
+	if len(parts) > 0 {
+		// First positional = href.
+		firstLine := strings.TrimSpace(parts[0])
+		// href may have trailing text="..."; split on the first
+		// whitespace after an =".
+		if idx := strings.Index(firstLine, " text="); idx > 0 {
+			ln.href = strings.TrimSpace(firstLine[:idx])
+			ln.text = stripQuotes(strings.TrimSpace(firstLine[idx+len(" text="):]))
+		} else {
+			ln.href = firstLine
+		}
+	}
+	return ln, nil
+}
+
+// parseForm parses a form block. Header syntax: "form <name>"
+// optionally followed by a bracketed gate like "[owner: c1, c2]"
+// or "[admin: true]" — captured in the name value verbatim and
+// split out here.
+func parseForm(header string, children []line, path string) (form, error) {
+	f := form{}
+	f.name, f.ownerGate, f.adminOnly = parseBlockHeaderGate(header)
+	for i := 0; i < len(children); i++ {
+		l := children[i]
+		key, val, hasBlock := splitKV(l.content)
+		_ = hasBlock
+		switch key {
+		case "title":
+			f.title = stripQuotes(val)
+		case "submit":
+			f.submit = stripQuotes(val)
+		case "hint":
+			f.hint = stripQuotes(val)
+		case "handler":
+			f.handlerName = val
+		case "action":
+			f.actionPath = val
+		default:
+			if strings.HasPrefix(key, "field ") {
+				fld, err := parseFormField(strings.TrimPrefix(key, "field "), val)
+				if err != nil {
+					return f, err
+				}
+				f.fields = append(f.fields, fld)
+			} else {
+				return f, fmt.Errorf("%s:%d: unknown form field %q", path, l.lineNum, key)
+			}
+		}
+	}
+	return f, nil
+}
+
+// parseFormField parses "field <name>: <type> attr=val attr=val".
+// Types: text, textarea, checkbox, hidden. Attrs tracked:
+// value (initial-value expression), placeholder, width, optional.
+func parseFormField(name, spec string) (field, error) {
+	f := field{name: name}
+	parts := strings.Fields(spec)
+	if len(parts) == 0 {
+		return f, fmt.Errorf("field %q missing type", name)
+	}
+	f.goType = parts[0]
+	f.attrs = map[string]string{}
+	for _, p := range parts[1:] {
+		if p == "optional" {
+			f.required = false
+			continue
+		}
+		if p == "required" {
+			f.required = true
+			continue
+		}
+		if eq := strings.Index(p, "="); eq > 0 {
+			f.attrs[p[:eq]] = stripQuotes(p[eq+1:])
+		}
+	}
+	return f, nil
+}
+
+// parseBlockHeaderGate extracts a "[owner: c1, c2]" or "[admin:
+// true]" suffix from a block header like "label [owner: player1_id]".
+// Returns the cleaned name, owner columns, and adminOnly flag.
+func parseBlockHeaderGate(header string) (name string, ownerCols []string, adminOnly bool) {
+	lb := strings.Index(header, "[")
+	if lb < 0 {
+		return strings.TrimSpace(header), nil, false
+	}
+	rb := strings.LastIndex(header, "]")
+	if rb < 0 || rb < lb {
+		return strings.TrimSpace(header), nil, false
+	}
+	name = strings.TrimSpace(header[:lb])
+	inner := header[lb+1 : rb]
+	for _, part := range strings.Split(inner, ";") {
+		part = strings.TrimSpace(part)
+		k, v, _ := strings.Cut(part, ":")
+		k = strings.TrimSpace(k)
+		v = strings.TrimSpace(v)
+		switch k {
+		case "owner":
+			for _, col := range strings.Split(v, ",") {
+				col = strings.TrimSpace(col)
+				if col != "" {
+					ownerCols = append(ownerCols, col)
+				}
+			}
+		case "admin":
+			adminOnly = v == "true" || v == "1"
+		}
+	}
+	return name, ownerCols, adminOnly
+}
+
+func parseHandler(header string, children []line, path string) (handler, error) {
+	name, owner, admin := parseBlockHeaderGate(header)
+	h := handler{name: name, ownerGate: owner, adminOnly: admin}
 	i := 0
 	for i < len(children) {
 		l := children[i]
@@ -409,6 +689,7 @@ func parseHandler(name string, children []line, path string) (handler, error) {
 		switch key {
 		case "when":
 			h.when = val
+			h.predicates = parseWhen(val)
 		case "redirect":
 			h.redirect = val
 		case "action":
@@ -460,7 +741,10 @@ func parseField(name, spec string) (field, error) {
 // --- Helpers ---
 
 func splitKV(s string) (key, val string, hasBlock bool) {
-	idx := strings.Index(s, ":")
+	// Find first colon outside of brackets/parens. Bracketed
+	// gates like "[owner: col1, col2]" contain colons that must
+	// not be treated as key-value separators.
+	idx := firstColonOutsideBrackets(s)
 	if idx < 0 {
 		// No colon — split first word as key, rest as value.
 		// Used for block headers like "view list" / "handler toggle".
@@ -474,6 +758,25 @@ func splitKV(s string) (key, val string, hasBlock bool) {
 	val = strings.TrimSpace(s[idx+1:])
 	hasBlock = val == ""
 	return
+}
+
+func firstColonOutsideBrackets(s string) int {
+	depth := 0
+	for i := 0; i < len(s); i++ {
+		switch s[i] {
+		case '[', '(':
+			depth++
+		case ']', ')':
+			if depth > 0 {
+				depth--
+			}
+		case ':':
+			if depth == 0 {
+				return i
+			}
+		}
+	}
+	return -1
 }
 
 func stripQuotes(s string) string {
@@ -561,12 +864,12 @@ func emitGo(p page) string {
 		b.WriteString("\tuserID := RequireAuth(w, r)\n\tif userID == 0 {\n\t\treturn\n\t}\n")
 		b.WriteString("\tif !auth.IsAdmin(userID) {\n\t\thttp.Error(w, \"Admin only\", http.StatusForbidden)\n\t\treturn\n\t}\n")
 	}
-	// Dispatch: POST handlers first, then views
+	// Dispatch: POST handlers first (in declared order, most specific
+	// first), then views. Each handler's predicates become a guard.
 	for _, h := range p.handlers {
-		if strings.Contains(h.when, "method=POST") {
-			fmt.Fprintf(&b, "\tif r.Method == \"POST\" {\n\t\t%s_handler_%s(w, r, userID)\n\t\treturn\n\t}\n",
-				p.name, h.name)
-		}
+		guard := dispatchGuard(h.predicates)
+		fmt.Fprintf(&b, "\tif %s {\n\t\t%s_handler_%s(w, r, userID)\n\t\treturn\n\t}\n",
+			guard, p.name, h.name)
 	}
 	for _, v := range p.views {
 		if strings.Contains(v.when, "method=GET") || v.when == "" {
@@ -697,7 +1000,12 @@ func emitColumnCell(b *strings.Builder, c column) {
 	switch c.renderer {
 	case "text":
 		fieldName := c.args["_0"]
-		fmt.Fprintf(b, "\t\tfmt.Fprintf(w, `<td>%%s</td>`, html.EscapeString(%s))\n", goVarFromSQL(fieldName))
+		goVar := goVarFromSQL(fieldName)
+		if inferGoType(fieldName) == "int" {
+			fmt.Fprintf(b, "\t\tfmt.Fprintf(w, `<td>%%d</td>`, %s)\n", goVar)
+		} else {
+			fmt.Fprintf(b, "\t\tfmt.Fprintf(w, `<td>%%s</td>`, html.EscapeString(%s))\n", goVar)
+		}
 	case "toggle_form":
 		flagArg := c.args["_0"]
 		post := c.args["post"]
@@ -713,9 +1021,51 @@ func emitColumnCell(b *strings.Builder, c column) {
 	}
 }
 
+func dispatchGuard(preds []predicate) string {
+	var parts []string
+	for _, p := range preds {
+		switch p.kind {
+		case "method":
+			parts = append(parts, fmt.Sprintf("r.Method == %q", p.value))
+		case "has_param":
+			parts = append(parts, fmt.Sprintf("r.URL.Query().Get(%q) != \"\"", p.param))
+		case "param_eq":
+			parts = append(parts, fmt.Sprintf("r.URL.Query().Get(%q) == %q", p.param, p.value))
+		}
+	}
+	if len(parts) == 0 {
+		return "true"
+	}
+	return strings.Join(parts, " && ")
+}
+
+// emitQueryParamExtraction auto-declares Go variables for any
+// URL-query params named in the handler's when-predicates — e.g.
+// `when: method=POST id label=1` emits `id := atoi(Query["id"])`
+// so the update SQL's `WHERE id = ?` has a binding. Tracks which
+// names were emitted so we don't double-declare fields.
+func emitQueryParamExtraction(b *strings.Builder, h handler) map[string]bool {
+	declared := map[string]bool{}
+	for _, pred := range h.predicates {
+		name := pred.param
+		if name == "" || declared[name] {
+			continue
+		}
+		declared[name] = true
+		if pred.kind == "has_param" {
+			fmt.Fprintf(b, "\t%sStr_ := r.URL.Query().Get(%q)\n", name, name)
+			fmt.Fprintf(b, "\t%s, _ := strconv.Atoi(%sStr_)\n", name, name)
+		}
+		// param_eq doesn't need a Go binding (value is hardcoded
+		// in the dispatcher guard).
+	}
+	return declared
+}
+
 func emitHandler(b *strings.Builder, p page, h handler) {
 	fmt.Fprintf(b, "func %s_handler_%s(w http.ResponseWriter, r *http.Request, userID int) {\n", p.name, h.name)
 	b.WriteString("\tr.ParseForm()\n")
+	emitQueryParamExtraction(b, h)
 	for _, f := range h.fields {
 		switch f.goType {
 		case "int":
@@ -770,9 +1120,141 @@ func emitAction(b *strings.Builder, a action) {
 			table, where, varsList)
 		fmt.Fprintf(b, "\t} else {\n\t\tDB.Exec(`INSERT OR IGNORE INTO %s (%s) VALUES (%s)`, %s)\n\t}\n",
 			table, strings.Join(cols, ", "), placeholders, varsList)
+	case "update_row":
+		emitUpdateRow(b, a)
+	case "insert_row":
+		emitInsertRow(b, a)
 	default:
 		fmt.Fprintf(b, "\t// unsupported action: %s\n", a.kind)
 	}
+}
+
+// emitUpdateRow handles:
+//
+//	action: update_row
+//	  table: games
+//	  set:   label=$label
+//	  where: id=$id
+func emitUpdateRow(b *strings.Builder, a action) {
+	table := a.attrs["table"]
+	setPairs := parsePairs(a.attrs["set"])
+	wherePairs := parsePairs(a.attrs["where"])
+
+	var setCols []string
+	var setVars []string
+	for _, p := range setPairs {
+		setCols = append(setCols, p.col+" = "+sqlValueExpr(p.value))
+		if v := dollarArgFor(p.value); v != "" {
+			setVars = append(setVars, v)
+		}
+	}
+	var whereCols []string
+	var whereVars []string
+	for _, p := range wherePairs {
+		whereCols = append(whereCols, p.col+" = ?")
+		whereVars = append(whereVars, dollarVarToGo(p.value))
+	}
+
+	args := append([]string{}, setVars...)
+	args = append(args, whereVars...)
+	argsList := ""
+	if len(args) > 0 {
+		argsList = ", " + strings.Join(args, ", ")
+	}
+	fmt.Fprintf(b, "\tDB.Exec(`UPDATE %s SET %s WHERE %s`%s)\n",
+		table, strings.Join(setCols, ", "), strings.Join(whereCols, " AND "), argsList)
+}
+
+// emitInsertRow handles:
+//
+//	action: insert_row
+//	  table: games
+//	  columns: game_type="lynrummy", player1_id=$user, created_at=now, ...
+//
+// Special value keywords: now → time.Now().Unix(); "lit" → bound
+// string; $var → Go variable.
+func emitInsertRow(b *strings.Builder, a action) {
+	table := a.attrs["table"]
+	pairs := parsePairs(a.attrs["columns"])
+
+	var cols []string
+	var placeholders []string
+	var args []string
+	for _, p := range pairs {
+		cols = append(cols, p.col)
+		placeholders = append(placeholders, "?")
+		args = append(args, sqlArgExpr(p.value))
+	}
+	argsList := ""
+	if len(args) > 0 {
+		argsList = ", " + strings.Join(args, ", ")
+	}
+	fmt.Fprintf(b, "\t_, _ = DB.Exec(`INSERT INTO %s (%s) VALUES (%s)`%s)\n",
+		table, strings.Join(cols, ", "), strings.Join(placeholders, ", "), argsList)
+}
+
+// parsePairs parses "col1=val1, col2=val2" into ordered (col, val) pairs.
+type kvPair struct{ col, value string }
+
+func parsePairs(s string) []kvPair {
+	var out []kvPair
+	for _, part := range splitArgs(s) {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		if eq := strings.Index(part, "="); eq > 0 {
+			out = append(out, kvPair{
+				col:   strings.TrimSpace(part[:eq]),
+				value: strings.TrimSpace(part[eq+1:]),
+			})
+		}
+	}
+	return out
+}
+
+// sqlValueExpr renders an update `SET col = X` fragment where X
+// is either a literal SQL expression (nullif, now) or a `?`
+// placeholder. Returns just the `?` or the fragment (no binding).
+func sqlValueExpr(v string) string {
+	if strings.HasPrefix(v, "nullif(") {
+		// nullif($x, "") → NULLIF(?, '')
+		return `NULLIF(?, '')`
+	}
+	if v == "now" {
+		return "?"
+	}
+	return "?"
+}
+
+// sqlArgExpr returns the Go expression for a DSL value used as a
+// SQL bind arg. Handles literal strings, $var references, and
+// special keywords like `now`.
+func sqlArgExpr(v string) string {
+	if v == "now" {
+		return "time.Now().Unix()"
+	}
+	if strings.HasPrefix(v, "\"") && strings.HasSuffix(v, "\"") {
+		return v // literal Go string
+	}
+	if strings.HasPrefix(v, "nullif(") {
+		inner := strings.TrimSuffix(strings.TrimPrefix(v, "nullif("), ")")
+		arg, _, _ := strings.Cut(inner, ",")
+		return dollarVarToGo(strings.TrimSpace(arg))
+	}
+	return dollarVarToGo(v)
+}
+
+// dollarArgFor returns the Go expression to bind for `$var` values
+// used inside nullif or similar expressions. Empty string if the
+// value doesn't bind anything.
+func dollarArgFor(v string) string {
+	if strings.HasPrefix(v, "nullif(") {
+		inner := strings.TrimSuffix(strings.TrimPrefix(v, "nullif("), ")")
+		arg, _, _ := strings.Cut(inner, ",")
+		return dollarVarToGo(strings.TrimSpace(arg))
+	}
+	return dollarVarToGo(v)
 }
 
 // --- SQL helpers ---
