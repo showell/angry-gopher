@@ -1,61 +1,72 @@
 // fixturegen: parse a LynRummy-DSL scenario file and emit native
-// test code for Go + Elm. Deliberately small; the DSL is simple
-// enough that the whole tool fits in one file.
+// test code for Go + Elm.
+//
+// Pipeline (template-driven):
+//   parse .dsl → AST → render templates → goimports+gofmt → write
+//   → go build verify → idempotence check
 //
 // Usage:
 //   go run ./cmd/fixturegen ./lynrummy/conformance/scenarios/*.dsl
-//
-// Emits:
-//   ./lynrummy/tricks/dsl_conformance_test.go
-//   ./elm-lynrummy/tests/LynRummy/DslConformanceTest.elm
 
 package main
 
 import (
+	"bytes"
 	"fmt"
+	"go/format"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
+	"text/template"
+
+	"golang.org/x/tools/imports"
 )
 
-// --- AST ---
+// --- AST (exported fields so text/template can access them) ---
 
-type scenario struct {
-	name      string
-	desc      string
-	op        string // validate_game_move | validate_turn_complete | trick_first_play
-	trick     string
-	hand      []card
-	boardVar  string      // "board" or "board_before"
-	board     []stack     // for trick_first_play + validate_turn_complete
-	removed   []stack     // validate_game_move
-	added     []stack     // validate_game_move
-	handPlayed []card     // validate_game_move explicit hand
-	expect    expectation
+type Scenario struct {
+	Name       string
+	Desc       string
+	Op         string
+	Trick      string
+	Hand       []Card
+	BoardVar   string
+	Board      []Stack
+	Removed    []Stack
+	Added      []Stack
+	HandPlayed []Card
+	Expect     Expectation
 }
 
-type expectation struct {
-	kind          string // "ok" | "no_plays" | "play" | "error"
-	handPlayed    []card
-	boardAfter    []stack
-	stage         string
-	messageSubstr string
+type Expectation struct {
+	Kind          string
+	HandPlayed    []Card
+	BoardAfter    []Stack
+	Stage         string
+	MessageSubstr string
 }
 
-type stack struct {
-	top, left int
-	cards     []card
+type Stack struct {
+	Top, Left int
+	Cards     []Card
 }
 
-type card struct {
-	value      int  // 1..13
-	suit       int  // 0=C, 1=D, 2=S, 3=H
-	deck       int  // 0 or 1
-	boardState int  // 0=firm, 1=fresh, 2=fresh-by-last-player
+type Card struct {
+	Value      int
+	Suit       int
+	Deck       int
+	BoardState int
 }
 
 // --- Entry point ---
+
+const (
+	goOutPath  = "./lynrummy/tricks/dsl_conformance_test.go"
+	elmOutPath = "./elm-lynrummy/tests/LynRummy/DslConformanceTest.elm"
+	goPackage  = "./lynrummy/tricks/..."
+)
 
 func main() {
 	if len(os.Args) < 2 {
@@ -63,7 +74,7 @@ func main() {
 		os.Exit(2)
 	}
 
-	var all []scenario
+	var all []Scenario
 	for _, arg := range os.Args[1:] {
 		matches, err := filepath.Glob(arg)
 		if err != nil {
@@ -82,16 +93,28 @@ func main() {
 		}
 	}
 
-	sort.Slice(all, func(i, j int) bool { return all[i].name < all[j].name })
+	sort.Slice(all, func(i, j int) bool { return all[i].Name < all[j].Name })
 
-	if err := writeGo(all, "./lynrummy/tricks/dsl_conformance_test.go"); err != nil {
-		die(err)
+	if err := emitGo(all, goOutPath); err != nil {
+		die(fmt.Errorf("go emit: %w", err))
 	}
-	if err := writeElm(all, "./elm-lynrummy/tests/LynRummy/DslConformanceTest.elm"); err != nil {
-		die(err)
+	if err := emitElm(all, elmOutPath); err != nil {
+		die(fmt.Errorf("elm emit: %w", err))
 	}
 
-	fmt.Printf("Emitted %d scenarios → Go + Elm test files.\n", len(all))
+	// Build-gate: the real compiler tells us instantly if the
+	// generator produced invalid code.
+	if err := runGoBuild(); err != nil {
+		die(fmt.Errorf("generated Go didn't build:\n%w", err))
+	}
+
+	// Idempotence: regen and diff; a clean generator never produces
+	// different output for the same input.
+	if err := checkIdempotence(all); err != nil {
+		die(fmt.Errorf("regen not idempotent: %w", err))
+	}
+
+	fmt.Printf("Emitted %d scenarios → Go + Elm test files (built + idempotent).\n", len(all))
 }
 
 func die(err error) {
@@ -99,13 +122,451 @@ func die(err error) {
 	os.Exit(1)
 }
 
-// --- Parser ---
-//
-// Line-oriented, 2-space indent. Every line is either:
-//   - blank / comment (#)
-//   - "scenario <name>" at column 0
-//   - "key: value" at indent ≥ 2
-//   - "key:" at indent ≥ 2 followed by indented child lines
+// --- Post-process pipeline ---
+
+// writeGoFile formats + imports-resolves + writes Go source.
+// The emitter emits raw code without an import block; imports
+// adds what's needed from context. gofmt happens as part of
+// imports.Process.
+func writeGoFile(path string, src []byte) error {
+	formatted, err := imports.Process(path, src, &imports.Options{
+		Comments:  true,
+		TabIndent: true,
+		TabWidth:  8,
+	})
+	if err != nil {
+		// Fall back to plain gofmt so we can see what we wrote.
+		_ = os.WriteFile(path+".raw", src, 0644)
+		return fmt.Errorf("goimports: %w (raw saved to %s.raw)", err, path)
+	}
+	return os.WriteFile(path, formatted, 0644)
+}
+
+// writeElmFile is the Elm equivalent — no auto-formatter dep in
+// the Go tool, so we just write as-is. (elm-format could be
+// shelled out later if we want; not wired today.)
+func writeElmFile(path string, src []byte) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return err
+	}
+	return os.WriteFile(path, src, 0644)
+}
+
+func runGoBuild() error {
+	cmd := exec.Command("go", "build", goPackage)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("%s\n%s", err, out)
+	}
+	return nil
+}
+
+func checkIdempotence(all []Scenario) error {
+	// Read current bytes, regenerate, compare.
+	originalGo, err := os.ReadFile(goOutPath)
+	if err != nil {
+		return err
+	}
+	originalElm, err := os.ReadFile(elmOutPath)
+	if err != nil {
+		return err
+	}
+	if err := emitGo(all, goOutPath); err != nil {
+		return err
+	}
+	if err := emitElm(all, elmOutPath); err != nil {
+		return err
+	}
+	afterGo, _ := os.ReadFile(goOutPath)
+	afterElm, _ := os.ReadFile(elmOutPath)
+	if !bytes.Equal(originalGo, afterGo) {
+		return fmt.Errorf("Go output differs on second regen")
+	}
+	if !bytes.Equal(originalElm, afterElm) {
+		return fmt.Errorf("Elm output differs on second regen")
+	}
+	return nil
+}
+
+// --- Go emission (template-based) ---
+
+const goTemplate = `// GENERATED by cmd/fixturegen — DO NOT EDIT.
+// Source scenarios: lynrummy/conformance/scenarios/*.dsl
+// Regenerate with: go run ./cmd/fixturegen ./lynrummy/conformance/scenarios/*.dsl
+
+package tricks
+
+import (
+	"testing"
+
+	"angry-gopher/lynrummy"
+)
+
+{{range .}}// {{.Desc}}
+func Test_{{.Name}}(t *testing.T) {
+{{goScenarioBody .}}}
+
+{{end}}`
+
+func emitGo(scenarios []Scenario, outPath string) error {
+	t := template.New("go").Funcs(goFuncs())
+	if _, err := t.Parse(goTemplate); err != nil {
+		return err
+	}
+	var buf bytes.Buffer
+	if err := t.Execute(&buf, scenarios); err != nil {
+		return err
+	}
+	return writeGoFile(outPath, buf.Bytes())
+}
+
+func goFuncs() template.FuncMap {
+	return template.FuncMap{
+		"goScenarioBody": goScenarioBody,
+	}
+}
+
+// goScenarioBody emits the inside of a Test_ function. One big
+// switch over op type. Using a function (not template-within-
+// template) because the emitted code is imperative and reads
+// more naturally as Go code than as nested Go templates.
+func goScenarioBody(sc Scenario) string {
+	var b strings.Builder
+	switch sc.Op {
+	case "trick_first_play":
+		goTrickFirstPlay(&b, sc)
+	case "validate_game_move":
+		goValidateMove(&b, sc, false)
+	case "validate_turn_complete":
+		goValidateMove(&b, sc, true)
+	default:
+		fmt.Fprintf(&b, "\tt.Fatalf(%q)\n", "unknown op "+sc.Op)
+	}
+	return b.String()
+}
+
+func goTrickFirstPlay(b *strings.Builder, sc Scenario) {
+	fmt.Fprintf(b, "\thand := %s\n", goHandCards(sc.Hand))
+	fmt.Fprintf(b, "\tboard := %s\n", goStacksVar(sc.Board))
+	fmt.Fprintf(b, "\tplays := %s.FindPlays(hand, board)\n", trickGoVar(sc.Trick))
+
+	switch sc.Expect.Kind {
+	case "no_plays":
+		b.WriteString("\tif len(plays) != 0 {\n\t\tt.Fatalf(\"expected no plays, got %d\", len(plays))\n\t}\n")
+	case "play":
+		b.WriteString("\tif len(plays) == 0 {\n\t\tt.Fatal(\"expected a play, got none\")\n\t}\n")
+		b.WriteString("\tgotBoard, gotHand := plays[0].Apply(board)\n")
+		fmt.Fprintf(b, "\twantHand := %s\n", goHandCards(sc.Expect.HandPlayed))
+		fmt.Fprintf(b, "\twantBoard := %s\n", goStacksVar(sc.Expect.BoardAfter))
+		b.WriteString("\tif !handsEqualDSL(gotHand, wantHand) {\n\t\tt.Fatalf(\"hand mismatch:\\n  want %v\\n  got  %v\", wantHand, gotHand)\n\t}\n")
+		b.WriteString("\tif !boardsEqualDSL(gotBoard, wantBoard) {\n\t\tt.Fatalf(\"board mismatch:\\n  want %v\\n  got  %v\", wantBoard, gotBoard)\n\t}\n")
+	default:
+		fmt.Fprintf(b, "\tt.Fatalf(%q)\n", "unsupported expectation "+sc.Expect.Kind)
+	}
+}
+
+func goValidateMove(b *strings.Builder, sc Scenario, turnComplete bool) {
+	b.WriteString("\tbounds := lynrummy.BoardBounds{MaxWidth: 800, MaxHeight: 600, Margin: 5}\n")
+	var call string
+	if turnComplete {
+		fmt.Fprintf(b, "\tboard := %s\n", goStacksVar(sc.Board))
+		call = "lynrummy.ValidateTurnComplete(board, bounds)"
+	} else {
+		fmt.Fprintf(b, "\tboardBefore := %s\n", goStacksVar(sc.Board))
+		fmt.Fprintf(b, "\tstacksToRemove := %s\n", goStacksVar(sc.Removed))
+		fmt.Fprintf(b, "\tstacksToAdd := %s\n", goStacksVar(sc.Added))
+		fmt.Fprintf(b, "\thand := %s\n", goRawCardsVar(sc.HandPlayed))
+		call = "lynrummy.ValidateGameMove(lynrummy.Move{BoardBefore: boardBefore, StacksToRemove: stacksToRemove, StacksToAdd: stacksToAdd, HandCardsPlayed: hand}, bounds)"
+	}
+	fmt.Fprintf(b, "\tgot := %s\n", call)
+	switch sc.Expect.Kind {
+	case "ok":
+		b.WriteString("\tif got != nil {\n\t\tt.Fatalf(\"expected ok, got %s: %s\", got.Stage, got.Message)\n\t}\n")
+	case "error":
+		fmt.Fprintf(b, "\tif got == nil {\n\t\tt.Fatal(%q)\n\t}\n",
+			fmt.Sprintf("expected error at stage %q, got ok", sc.Expect.Stage))
+		fmt.Fprintf(b, "\tif got.Stage != %q {\n\t\tt.Fatalf(%q, got.Stage)\n\t}\n",
+			sc.Expect.Stage,
+			fmt.Sprintf("stage: want %q, got %%q", sc.Expect.Stage))
+		if sc.Expect.MessageSubstr != "" {
+			fmt.Fprintf(b, "\tif !stringsContainsDSL(got.Message, %q) {\n\t\tt.Fatalf(%q, got.Message)\n\t}\n",
+				sc.Expect.MessageSubstr,
+				fmt.Sprintf("message: want substring %q, got %%q", sc.Expect.MessageSubstr))
+		}
+	default:
+		fmt.Fprintf(b, "\tt.Fatalf(%q)\n", "unsupported expectation "+sc.Expect.Kind)
+	}
+}
+
+// --- Go value renderers ---
+
+func goHandCards(cs []Card) string {
+	if len(cs) == 0 {
+		return "[]lynrummy.HandCard{}"
+	}
+	var parts []string
+	for _, c := range cs {
+		parts = append(parts, fmt.Sprintf("{Card: %s, State: lynrummy.HandNormal}", goCardLit(c)))
+	}
+	return "[]lynrummy.HandCard{" + strings.Join(parts, ", ") + "}"
+}
+
+func goRawCardsVar(cs []Card) string {
+	if len(cs) == 0 {
+		return "[]lynrummy.Card(nil)"
+	}
+	var parts []string
+	for _, c := range cs {
+		parts = append(parts, goCardLit(c))
+	}
+	return "[]lynrummy.Card{" + strings.Join(parts, ", ") + "}"
+}
+
+func goStacksVar(ss []Stack) string {
+	if len(ss) == 0 {
+		return "[]lynrummy.CardStack(nil)"
+	}
+	var parts []string
+	for _, s := range ss {
+		parts = append(parts, goStackLit(s))
+	}
+	return "[]lynrummy.CardStack{" + strings.Join(parts, ", ") + "}"
+}
+
+func goStackLit(s Stack) string {
+	var bcs []string
+	for _, c := range s.Cards {
+		bcs = append(bcs, fmt.Sprintf("{Card: %s, State: %s}", goCardLit(c), goBoardState(c.BoardState)))
+	}
+	return fmt.Sprintf("lynrummy.NewCardStack([]lynrummy.BoardCard{%s}, lynrummy.Location{Top: %d, Left: %d})",
+		strings.Join(bcs, ", "), s.Top, s.Left)
+}
+
+func goCardLit(c Card) string {
+	return fmt.Sprintf("lynrummy.Card{Value: %d, Suit: %s, OriginDeck: %d}", c.Value, goSuit(c.Suit), c.Deck)
+}
+
+func goSuit(s int) string {
+	return []string{"lynrummy.Club", "lynrummy.Diamond", "lynrummy.Spade", "lynrummy.Heart"}[s]
+}
+
+func goBoardState(s int) string {
+	return []string{"lynrummy.FirmlyOnBoard", "lynrummy.FreshlyPlayed", "lynrummy.FreshlyPlayedByLastPlayer"}[s]
+}
+
+func trickGoVar(id string) string {
+	parts := strings.Split(id, "_")
+	var buf strings.Builder
+	for _, p := range parts {
+		if p == "" {
+			continue
+		}
+		buf.WriteByte(p[0] &^ 0x20)
+		buf.WriteString(p[1:])
+	}
+	return buf.String()
+}
+
+// --- Elm emission (template-based) ---
+
+const elmTemplate = `-- GENERATED by cmd/fixturegen — DO NOT EDIT.
+-- Source scenarios: lynrummy/conformance/scenarios/*.dsl
+-- Regenerate with: go run ./cmd/fixturegen ./lynrummy/conformance/scenarios/*.dsl
+
+module LynRummy.DslConformanceTest exposing (suite)
+
+import Expect
+import LynRummy.BoardGeometry exposing (BoardBounds)
+import LynRummy.Card exposing (Card, CardValue(..), OriginDeck(..), Suit(..))
+import LynRummy.CardStack
+    exposing
+        ( BoardCard
+        , BoardCardState(..)
+        , BoardLocation
+        , CardStack
+        , HandCard
+        , HandCardState(..)
+        )
+import LynRummy.Referee as Referee exposing (RefereeStage(..), refereeStageToString)
+import Test exposing (Test, describe, test)
+
+
+standardBounds : BoardBounds
+standardBounds =
+    { maxWidth = 800, maxHeight = 600, margin = 5 }
+
+{{range .}}
+
+{{elmTestFn .}} : Test
+{{elmTestFn .}} =
+    test {{quote .Name}} <|
+        \_ ->
+{{elmScenarioBody .}}
+{{end}}
+
+suite : Test
+suite =
+    describe "DSL conformance"
+        [ {{range $i, $sc := .}}{{if $i}}
+        , {{end}}{{elmTestFn $sc}}{{end}}
+        ]
+`
+
+func emitElm(scenarios []Scenario, outPath string) error {
+	t := template.New("elm").Funcs(template.FuncMap{
+		"elmTestFn":       elmTestFn,
+		"elmScenarioBody": elmScenarioBody,
+		"quote":           func(s string) string { return `"` + s + `"` },
+	})
+	if _, err := t.Parse(elmTemplate); err != nil {
+		return err
+	}
+	var buf bytes.Buffer
+	if err := t.Execute(&buf, scenarios); err != nil {
+		return err
+	}
+	return writeElmFile(outPath, buf.Bytes())
+}
+
+func elmTestFn(sc Scenario) string {
+	return elmTestName(sc.Name)
+}
+
+func elmTestName(s string) string {
+	parts := strings.Split(s, "_")
+	var buf strings.Builder
+	for i, p := range parts {
+		if p == "" {
+			continue
+		}
+		if i == 0 {
+			buf.WriteString(p)
+			continue
+		}
+		c := p[0]
+		if c >= 'a' && c <= 'z' {
+			buf.WriteByte(c &^ 0x20)
+			buf.WriteString(p[1:])
+		} else {
+			buf.WriteString(p)
+		}
+	}
+	return buf.String()
+}
+
+func elmScenarioBody(sc Scenario) string {
+	var b strings.Builder
+	switch sc.Op {
+	case "trick_first_play":
+		// Elm tricks not ported yet; placeholder pass.
+		fmt.Fprintf(&b, "            -- Elm TrickBag not ported yet (%s / %s)\n            Expect.pass", sc.Trick, sc.Expect.Kind)
+	case "validate_game_move":
+		elmValidateMove(&b, sc, false)
+	case "validate_turn_complete":
+		elmValidateMove(&b, sc, true)
+	default:
+		fmt.Fprintf(&b, "            Expect.fail \"unknown op %s\"", sc.Op)
+	}
+	return b.String()
+}
+
+func elmValidateMove(b *strings.Builder, sc Scenario, turnComplete bool) {
+	if turnComplete {
+		fmt.Fprintf(b, "            let\n                board =\n                    %s\n            in\n", elmStacks(sc.Board, "                    "))
+		b.WriteString("            case Referee.validateTurnComplete board standardBounds of\n")
+	} else {
+		fmt.Fprintf(b, "            let\n                move =\n                    { boardBefore = %s\n                    , stacksToRemove = %s\n                    , stacksToAdd = %s\n                    , handCardsPlayed = %s\n                    }\n            in\n",
+			elmStacks(sc.Board, "                        "),
+			elmStacks(sc.Removed, "                        "),
+			elmStacks(sc.Added, "                        "),
+			elmHandCards(sc.HandPlayed),
+		)
+		b.WriteString("            case Referee.validateGameMove move standardBounds of\n")
+	}
+	switch sc.Expect.Kind {
+	case "ok":
+		b.WriteString(`                Ok _ ->
+                    Expect.pass
+
+                Err err ->
+                    Expect.fail (refereeStageToString err.stage ++ ": " ++ err.message)`)
+	case "error":
+		stageQ := `"` + sc.Expect.Stage + `"`
+		msgQ := `"` + sc.Expect.MessageSubstr + `"`
+		fmt.Fprintf(b, `                Ok _ ->
+                    Expect.fail ("expected error at stage " ++ %s ++ ", got ok")
+
+                Err err ->
+                    if refereeStageToString err.stage /= %s then
+                        Expect.fail ("stage: want " ++ %s ++ ", got " ++ refereeStageToString err.stage)
+                    else if not (String.contains %s err.message) then
+                        Expect.fail ("message substring " ++ %s ++ " not found in " ++ err.message)
+                    else
+                        Expect.pass`,
+			stageQ, stageQ, stageQ, msgQ, msgQ)
+	}
+}
+
+func elmStacks(ss []Stack, indent string) string {
+	if len(ss) == 0 {
+		return "[]"
+	}
+	var parts []string
+	for _, s := range ss {
+		parts = append(parts, elmStackLit(s))
+	}
+	return "[ " + strings.Join(parts, "\n"+indent+", ") + "\n" + indent + "]"
+}
+
+func elmStackLit(s Stack) string {
+	var bcs []string
+	for _, c := range s.Cards {
+		bcs = append(bcs, fmt.Sprintf("{ card = %s, state = %s }", elmCardLit(c), elmBoardState(c.BoardState)))
+	}
+	return fmt.Sprintf("{ boardCards = [ %s ], loc = { top = %d, left = %d } }",
+		strings.Join(bcs, ", "), s.Top, s.Left)
+}
+
+func elmHandCards(cs []Card) string {
+	if len(cs) == 0 {
+		return "[]"
+	}
+	var parts []string
+	for _, c := range cs {
+		parts = append(parts, fmt.Sprintf("{ card = %s, state = HandNormal }", elmCardLit(c)))
+	}
+	return "[ " + strings.Join(parts, ", ") + " ]"
+}
+
+func elmCardLit(c Card) string {
+	return fmt.Sprintf("{ value = %s, suit = %s, originDeck = %s }",
+		elmValue(c.Value), elmSuit(c.Suit), elmDeck(c.Deck))
+}
+
+func elmValue(v int) string {
+	return []string{"", "Ace", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Jack", "Queen", "King"}[v]
+}
+
+func elmSuit(s int) string {
+	return []string{"Club", "Diamond", "Spade", "Heart"}[s]
+}
+
+func elmDeck(d int) string {
+	if d == 0 {
+		return "DeckOne"
+	}
+	return "DeckTwo"
+}
+
+func elmBoardState(s int) string {
+	return []string{"FirmlyOnBoard", "FreshlyPlayed", "FreshlyPlayedByLastPlayer"}[s]
+}
+
+// keep format import reachable so goimports doesn't strip it in
+// case we later use gofmt's Source directly
+var _ = format.Source
+
+// --- Parser (unchanged) ---
 
 type line struct {
 	indent  int
@@ -113,7 +574,7 @@ type line struct {
 	lineNum int
 }
 
-func parse(src, path string) ([]scenario, error) {
+func parse(src, path string) ([]Scenario, error) {
 	var lines []line
 	for i, raw := range strings.Split(src, "\n") {
 		stripped := strings.TrimRight(raw, " \t")
@@ -135,7 +596,7 @@ func parse(src, path string) ([]scenario, error) {
 		})
 	}
 
-	var scenarios []scenario
+	var scenarios []Scenario
 	for i := 0; i < len(lines); {
 		if !strings.HasPrefix(lines[i].content, "scenario ") {
 			return nil, fmt.Errorf("%s:%d: expected 'scenario <name>'", path, lines[i].lineNum)
@@ -145,7 +606,6 @@ func parse(src, path string) ([]scenario, error) {
 		}
 		name := strings.TrimSpace(strings.TrimPrefix(lines[i].content, "scenario"))
 		i++
-		// Collect lines until next scenario / EOF.
 		var body []line
 		for i < len(lines) && lines[i].indent > 0 {
 			body = append(body, lines[i])
@@ -160,10 +620,8 @@ func parse(src, path string) ([]scenario, error) {
 	return scenarios, nil
 }
 
-// parseBody parses the indented body lines of one scenario.
-// All lines in `body` have indent ≥ 1.
-func parseBody(name string, body []line, path string) (scenario, error) {
-	sc := scenario{name: name}
+func parseBody(name string, body []line, path string) (Scenario, error) {
+	sc := Scenario{Name: name}
 	i := 0
 	for i < len(body) {
 		l := body[i]
@@ -172,9 +630,6 @@ func parseBody(name string, body []line, path string) (scenario, error) {
 		}
 		key, val, hasBlock := splitField(l.content)
 		i++
-		// Always collect any indented-child lines that follow — lets
-		// fields that are "scalar + block" (like `expect: error`
-		// followed by `stage:` / `message_contains:`) work uniformly.
 		var children []line
 		for i < len(body) && body[i].indent >= 2 {
 			children = append(children, body[i])
@@ -186,9 +641,9 @@ func parseBody(name string, body []line, path string) (scenario, error) {
 				return sc, err
 			}
 		case key == "expect":
-			sc.expect.kind = val
+			sc.Expect.Kind = val
 			if len(children) > 0 {
-				if err := parseExpectBlock(&sc.expect, children, path); err != nil {
+				if err := parseExpectBlock(&sc.Expect, children, path); err != nil {
 					return sc, err
 				}
 			}
@@ -204,8 +659,6 @@ func parseBody(name string, body []line, path string) (scenario, error) {
 	return sc, nil
 }
 
-// splitField splits "key: value" into (key, value, hasInlineValue).
-// If no value is present after the colon, hasBlock is true.
 func splitField(s string) (key, val string, hasBlock bool) {
 	idx := strings.Index(s, ":")
 	if idx < 0 {
@@ -219,86 +672,76 @@ func splitField(s string) (key, val string, hasBlock bool) {
 	return key, rest, false
 }
 
-func applyScalarField(sc *scenario, key, val string, ln int, path string) error {
+func applyScalarField(sc *Scenario, key, val string, ln int, path string) error {
 	switch key {
 	case "desc":
-		sc.desc = val
+		sc.Desc = val
 	case "op":
-		sc.op = val
+		sc.Op = val
 	case "trick":
-		sc.trick = val
+		sc.Trick = val
 	case "hand":
 		cards, err := parseCards(val)
 		if err != nil {
 			return fmt.Errorf("%s:%d: hand: %w", path, ln, err)
 		}
-		sc.hand = cards
+		sc.Hand = cards
 	case "hand_cards_played":
 		cards, err := parseCards(val)
 		if err != nil {
 			return fmt.Errorf("%s:%d: hand_cards_played: %w", path, ln, err)
 		}
-		sc.handPlayed = cards
+		sc.HandPlayed = cards
 	case "expect":
-		sc.expect.kind = val
+		sc.Expect.Kind = val
 	default:
 		return fmt.Errorf("%s:%d: unknown field %q", path, ln, key)
 	}
 	return nil
 }
 
-func applyBlockField(sc *scenario, key string, children []line, path string) error {
+func applyBlockField(sc *Scenario, key string, children []line, path string) error {
 	switch key {
 	case "board":
 		stacks, err := parseStacks(children, path)
 		if err != nil {
 			return err
 		}
-		sc.board = stacks
-		sc.boardVar = "board"
+		sc.Board = stacks
+		sc.BoardVar = "board"
 	case "board_before":
 		stacks, err := parseStacks(children, path)
 		if err != nil {
 			return err
 		}
-		sc.board = stacks
-		sc.boardVar = "board_before"
+		sc.Board = stacks
+		sc.BoardVar = "board_before"
 	case "stacks_to_remove":
 		stacks, err := parseStacks(children, path)
 		if err != nil {
 			return err
 		}
-		sc.removed = stacks
+		sc.Removed = stacks
 	case "stacks_to_add":
 		stacks, err := parseStacks(children, path)
 		if err != nil {
 			return err
 		}
-		sc.added = stacks
+		sc.Added = stacks
 	case "expect":
-		return parseExpectBlock(&sc.expect, children, path)
+		return parseExpectBlock(&sc.Expect, children, path)
 	default:
 		return fmt.Errorf("%s: unknown block field %q", path, key)
 	}
 	return nil
 }
 
-// parseExpectBlock handles "expect: <kind>" followed by indented
-// child fields. The caller has already captured `kind` on the
-// expect line (e.g., "expect: play") — children carry the detail.
-func parseExpectBlock(e *expectation, children []line, path string) error {
-	// The 'expect:' line had no inline value (block form). We need
-	// kind to have been set either on the same line OR as the first
-	// indented child. Handle the "expect: play\n  hand_played: ..."
-	// case — kind was already set via scalar path if inline. Here,
-	// the block form sets kind from the first child that's a verb.
+func parseExpectBlock(e *Expectation, children []line, path string) error {
 	i := 0
-	if e.kind == "" && i < len(children) {
-		// Defensive: if someone wrote "expect:\n  play" we'd see
-		// "play" as the first child. Accept that shape too.
+	if e.Kind == "" && i < len(children) {
 		c := children[i].content
 		if !strings.Contains(c, ":") && (c == "ok" || c == "no_plays" || c == "play" || c == "error") {
-			e.kind = c
+			e.Kind = c
 			i++
 		}
 	}
@@ -309,7 +752,6 @@ func parseExpectBlock(e *expectation, children []line, path string) error {
 		}
 		key, val, hasBlock := splitField(l.content)
 		if hasBlock {
-			// collect indent-3 children
 			var sub []line
 			i++
 			for i < len(children) && children[i].indent >= 3 {
@@ -323,7 +765,7 @@ func parseExpectBlock(e *expectation, children []line, path string) error {
 				if err != nil {
 					return err
 				}
-				e.boardAfter = stacks
+				e.BoardAfter = stacks
 			default:
 				return fmt.Errorf("%s:%d: unknown expect block %q", path, l.lineNum, key)
 			}
@@ -334,11 +776,11 @@ func parseExpectBlock(e *expectation, children []line, path string) error {
 				if err != nil {
 					return fmt.Errorf("%s:%d: %w", path, l.lineNum, err)
 				}
-				e.handPlayed = cards
+				e.HandPlayed = cards
 			case "stage":
-				e.stage = val
+				e.Stage = val
 			case "message_contains":
-				e.messageSubstr = val
+				e.MessageSubstr = val
 			default:
 				return fmt.Errorf("%s:%d: unknown expect field %q", path, l.lineNum, key)
 			}
@@ -347,10 +789,8 @@ func parseExpectBlock(e *expectation, children []line, path string) error {
 	return nil
 }
 
-// parseStacks parses a run of `at (t,l): <cards>` child lines.
-// All must be at the same indent level.
-func parseStacks(children []line, path string) ([]stack, error) {
-	var stacks []stack
+func parseStacks(children []line, path string) ([]Stack, error) {
+	var stacks []Stack
 	baseIndent := -1
 	for _, l := range children {
 		if baseIndent == -1 {
@@ -386,16 +826,16 @@ func parseStacks(children []line, path string) ([]stack, error) {
 		if err != nil {
 			return nil, fmt.Errorf("%s:%d: %w", path, l.lineNum, err)
 		}
-		stacks = append(stacks, stack{top: top, left: left, cards: cards})
+		stacks = append(stacks, Stack{Top: top, Left: left, Cards: cards})
 	}
 	return stacks, nil
 }
 
-func parseCards(s string) ([]card, error) {
+func parseCards(s string) ([]Card, error) {
 	if s == "" {
 		return nil, nil
 	}
-	var cards []card
+	var cards []Card
 	for _, tok := range strings.Fields(s) {
 		c, err := parseCard(tok)
 		if err != nil {
@@ -406,40 +846,35 @@ func parseCards(s string) ([]card, error) {
 	return cards, nil
 }
 
-func parseCard(tok string) (card, error) {
-	// Grammar: value suit deck? state?
-	// value: A 2 3 4 5 6 7 8 9 T J Q K
-	// suit: H S D C
-	// deck (optional): '
-	// state (optional): *   (FreshlyPlayed) | ** (FreshlyPlayedByLastPlayer)
+func parseCard(tok string) (Card, error) {
 	if len(tok) < 2 {
-		return card{}, fmt.Errorf("card too short: %q", tok)
+		return Card{}, fmt.Errorf("card too short: %q", tok)
 	}
 	v := valueFromLetter(tok[0])
 	if v == 0 {
-		return card{}, fmt.Errorf("bad value letter: %q", tok)
+		return Card{}, fmt.Errorf("bad value letter: %q", tok)
 	}
 	s := suitFromLetter(tok[1])
 	if s == -1 {
-		return card{}, fmt.Errorf("bad suit letter: %q", tok)
+		return Card{}, fmt.Errorf("bad suit letter: %q", tok)
 	}
-	c := card{value: v, suit: s, deck: 0, boardState: 0}
+	c := Card{Value: v, Suit: s, Deck: 0, BoardState: 0}
 	i := 2
 	if i < len(tok) && tok[i] == '\'' {
-		c.deck = 1
+		c.Deck = 1
 		i++
 	}
 	if i < len(tok) && tok[i] == '*' {
 		if i+1 < len(tok) && tok[i+1] == '*' {
-			c.boardState = 2
+			c.BoardState = 2
 			i += 2
 		} else {
-			c.boardState = 1
+			c.BoardState = 1
 			i++
 		}
 	}
 	if i != len(tok) {
-		return card{}, fmt.Errorf("trailing chars in card: %q", tok)
+		return Card{}, fmt.Errorf("trailing chars in card: %q", tok)
 	}
 	return c, nil
 }
@@ -448,22 +883,6 @@ func valueFromLetter(b byte) int {
 	switch b {
 	case 'A':
 		return 1
-	case '2':
-		return 2
-	case '3':
-		return 3
-	case '4':
-		return 4
-	case '5':
-		return 5
-	case '6':
-		return 6
-	case '7':
-		return 7
-	case '8':
-		return 8
-	case '9':
-		return 9
 	case 'T':
 		return 10
 	case 'J':
@@ -472,6 +891,9 @@ func valueFromLetter(b byte) int {
 		return 12
 	case 'K':
 		return 13
+	}
+	if b >= '2' && b <= '9' {
+		return int(b - '0')
 	}
 	return 0
 }
@@ -512,422 +934,4 @@ func atoi(s string) (int, error) {
 		n = -n
 	}
 	return n, nil
-}
-
-// --- Go emitter ---
-
-func writeGo(scenarios []scenario, outPath string) error {
-	var b strings.Builder
-	b.WriteString(`// GENERATED by cmd/fixturegen — DO NOT EDIT.
-// Source scenarios: lynrummy/conformance/scenarios/*.dsl
-// Regenerate with: go run ./cmd/fixturegen ./lynrummy/conformance/scenarios/*.dsl
-
-package tricks
-
-import (
-	"testing"
-
-	"angry-gopher/lynrummy"
-)
-
-`)
-	for _, sc := range scenarios {
-		writeGoScenario(&b, sc)
-	}
-	return os.WriteFile(outPath, []byte(b.String()), 0644)
-}
-
-func writeGoScenario(b *strings.Builder, sc scenario) {
-	fmt.Fprintf(b, "// %s\nfunc Test_%s(t *testing.T) {\n", sc.desc, sc.name)
-	switch sc.op {
-	case "trick_first_play":
-		writeGoTrickFirstPlay(b, sc)
-	case "validate_game_move":
-		writeGoValidateMove(b, sc, false)
-	case "validate_turn_complete":
-		writeGoValidateMove(b, sc, true)
-	default:
-		fmt.Fprintf(b, "\tt.Fatalf(\"unknown op %q\")\n", sc.op)
-	}
-	b.WriteString("}\n\n")
-}
-
-func writeGoTrickFirstPlay(b *strings.Builder, sc scenario) {
-	fmt.Fprintf(b, "\thand := %s\n", goHandCards(sc.hand))
-	fmt.Fprintf(b, "\tboard := %s\n", goStacksVar(sc.board, "lynrummy.CardStack"))
-	trickVar := trickGoVar(sc.trick)
-	fmt.Fprintf(b, "\tplays := %s.FindPlays(hand, board)\n", trickVar)
-
-	switch sc.expect.kind {
-	case "no_plays":
-		b.WriteString("\tif len(plays) != 0 {\n\t\tt.Fatalf(\"expected no plays, got %d\", len(plays))\n\t}\n")
-	case "play":
-		b.WriteString("\tif len(plays) == 0 {\n\t\tt.Fatal(\"expected a play, got none\")\n\t}\n")
-		b.WriteString("\tgotBoard, gotHand := plays[0].Apply(board)\n")
-		fmt.Fprintf(b, "\twantHand := %s\n", goHandCards(sc.expect.handPlayed))
-		fmt.Fprintf(b, "\twantBoard := %s\n", goStacksVar(sc.expect.boardAfter, "lynrummy.CardStack"))
-		b.WriteString("\tif !handsEqualDSL(gotHand, wantHand) {\n\t\tt.Fatalf(\"hand mismatch:\\n  want %v\\n  got  %v\", wantHand, gotHand)\n\t}\n")
-		b.WriteString("\tif !boardsEqualDSL(gotBoard, wantBoard) {\n\t\tt.Fatalf(\"board mismatch:\\n  want %v\\n  got  %v\", wantBoard, gotBoard)\n\t}\n")
-	default:
-		fmt.Fprintf(b, "\tt.Fatalf(\"unsupported expectation %q\")\n", sc.expect.kind)
-	}
-}
-
-func writeGoValidateMove(b *strings.Builder, sc scenario, turnComplete bool) {
-	fmt.Fprintf(b, "\tbounds := lynrummy.BoardBounds{MaxWidth: 800, MaxHeight: 600, Margin: 5}\n")
-	var got string
-	if turnComplete {
-		fmt.Fprintf(b, "\tboard := %s\n", goStacksVar(sc.board, "lynrummy.CardStack"))
-		got = "lynrummy.ValidateTurnComplete(board, bounds)"
-	} else {
-		fmt.Fprintf(b, "\tboardBefore := %s\n", goStacksVar(sc.board, "lynrummy.CardStack"))
-		fmt.Fprintf(b, "\tstacksToRemove := %s\n", goStacksVar(sc.removed, "lynrummy.CardStack"))
-		fmt.Fprintf(b, "\tstacksToAdd := %s\n", goStacksVar(sc.added, "lynrummy.CardStack"))
-		fmt.Fprintf(b, "\thand := %s\n", goRawCardsVar(sc.handPlayed))
-		got = "lynrummy.ValidateGameMove(lynrummy.Move{BoardBefore: boardBefore, StacksToRemove: stacksToRemove, StacksToAdd: stacksToAdd, HandCardsPlayed: hand}, bounds)"
-	}
-	fmt.Fprintf(b, "\tgot := %s\n", got)
-	switch sc.expect.kind {
-	case "ok":
-		b.WriteString("\tif got != nil {\n\t\tt.Fatalf(\"expected ok, got %s: %s\", got.Stage, got.Message)\n\t}\n")
-	case "error":
-		wantOk := fmt.Sprintf("expected error at stage %q, got ok", sc.expect.stage)
-		fmt.Fprintf(b, "\tif got == nil {\n\t\tt.Fatal(%q)\n\t}\n", wantOk)
-		wantStage := fmt.Sprintf("stage: want %q, got %%q", sc.expect.stage)
-		fmt.Fprintf(b, "\tif got.Stage != %q {\n\t\tt.Fatalf(%q, got.Stage)\n\t}\n", sc.expect.stage, wantStage)
-		if sc.expect.messageSubstr != "" {
-			wantMsg := fmt.Sprintf("message: want substring %q, got %%q", sc.expect.messageSubstr)
-			fmt.Fprintf(b, "\tif !stringsContainsDSL(got.Message, %q) {\n\t\tt.Fatalf(%q, got.Message)\n\t}\n", sc.expect.messageSubstr, wantMsg)
-		}
-	default:
-		fmt.Fprintf(b, "\tt.Fatalf(%q)\n", "unsupported expectation "+sc.expect.kind)
-	}
-}
-
-// goStacksVar returns an expression usable to initialize a
-// `var x []T` — either `[]T{...}` literal or a typed nil-equivalent
-// via `[]T(nil)`. Avoids the untyped-nil Go compile error.
-func goStacksVar(ss []stack, elemType string) string {
-	if len(ss) == 0 {
-		return "[]" + elemType + "(nil)"
-	}
-	return goStacks(ss)
-}
-
-func goRawCardsVar(cs []card) string {
-	if len(cs) == 0 {
-		return "[]lynrummy.Card(nil)"
-	}
-	return goRawCards(cs)
-}
-
-func goHandCards(cs []card) string {
-	if len(cs) == 0 {
-		return "[]lynrummy.HandCard{}"
-	}
-	var parts []string
-	for _, c := range cs {
-		parts = append(parts, fmt.Sprintf("{Card: %s, State: lynrummy.HandNormal}", goCardLit(c)))
-	}
-	return "[]lynrummy.HandCard{" + strings.Join(parts, ", ") + "}"
-}
-
-func goRawCards(cs []card) string {
-	if len(cs) == 0 {
-		return "nil"
-	}
-	var parts []string
-	for _, c := range cs {
-		parts = append(parts, goCardLit(c))
-	}
-	return "[]lynrummy.Card{" + strings.Join(parts, ", ") + "}"
-}
-
-func goStacks(ss []stack) string {
-	if len(ss) == 0 {
-		return "nil"
-	}
-	var parts []string
-	for _, s := range ss {
-		parts = append(parts, goStackLit(s))
-	}
-	return "[]lynrummy.CardStack{" + strings.Join(parts, ", ") + "}"
-}
-
-func goStackLit(s stack) string {
-	var bcs []string
-	for _, c := range s.cards {
-		bcs = append(bcs, fmt.Sprintf("{Card: %s, State: %s}", goCardLit(c), goBoardState(c.boardState)))
-	}
-	return fmt.Sprintf("lynrummy.NewCardStack([]lynrummy.BoardCard{%s}, lynrummy.Location{Top: %d, Left: %d})",
-		strings.Join(bcs, ", "), s.top, s.left)
-}
-
-func goCardLit(c card) string {
-	return fmt.Sprintf("lynrummy.Card{Value: %d, Suit: %s, OriginDeck: %d}", c.value, goSuit(c.suit), c.deck)
-}
-
-func goSuit(s int) string {
-	switch s {
-	case 0:
-		return "lynrummy.Club"
-	case 1:
-		return "lynrummy.Diamond"
-	case 2:
-		return "lynrummy.Spade"
-	case 3:
-		return "lynrummy.Heart"
-	}
-	return "lynrummy.Club"
-}
-
-func goBoardState(s int) string {
-	switch s {
-	case 0:
-		return "lynrummy.FirmlyOnBoard"
-	case 1:
-		return "lynrummy.FreshlyPlayed"
-	case 2:
-		return "lynrummy.FreshlyPlayedByLastPlayer"
-	}
-	return "lynrummy.FirmlyOnBoard"
-}
-
-func trickGoVar(id string) string {
-	// direct_play -> DirectPlay etc.
-	parts := strings.Split(id, "_")
-	var buf strings.Builder
-	for _, p := range parts {
-		if p == "" {
-			continue
-		}
-		buf.WriteByte(p[0] &^ 0x20)
-		buf.WriteString(p[1:])
-	}
-	return buf.String()
-}
-
-// --- Elm emitter ---
-
-func writeElm(scenarios []scenario, outPath string) error {
-	var b strings.Builder
-	b.WriteString(`-- GENERATED by cmd/fixturegen — DO NOT EDIT.
--- Source scenarios: lynrummy/conformance/scenarios/*.dsl
--- Regenerate with: go run ./cmd/fixturegen ./lynrummy/conformance/scenarios/*.dsl
-
-module LynRummy.DslConformanceTest exposing (suite)
-
-import Expect
-import LynRummy.BoardGeometry exposing (BoardBounds)
-import LynRummy.Card exposing (Card, CardValue(..), OriginDeck(..), Suit(..), allCardValues)
-import LynRummy.CardStack
-    exposing
-        ( BoardCard
-        , BoardCardState(..)
-        , BoardLocation
-        , CardStack
-        , HandCard
-        , HandCardState(..)
-        )
-import LynRummy.Referee as Referee exposing (RefereeStage(..), refereeStageToString)
-import Test exposing (Test, describe, test)
-
-
-standardBounds : BoardBounds
-standardBounds =
-    { maxWidth = 800, maxHeight = 600, margin = 5 }
-
-
-`)
-	var caseNames []string
-	for _, sc := range scenarios {
-		name := elmTestName(sc.name)
-		caseNames = append(caseNames, name)
-		writeElmScenario(&b, sc, name)
-	}
-
-	b.WriteString("suite : Test\nsuite =\n    describe \"DSL conformance\"\n        [")
-	for i, n := range caseNames {
-		if i > 0 {
-			b.WriteString("\n        ,")
-		}
-		fmt.Fprintf(&b, " %s", n)
-	}
-	b.WriteString("\n        ]\n")
-
-	if err := os.MkdirAll(filepath.Dir(outPath), 0755); err != nil {
-		return err
-	}
-	return os.WriteFile(outPath, []byte(b.String()), 0644)
-}
-
-func elmTestName(s string) string {
-	// already snake_case; sanitize for Elm identifier (lowerCamel).
-	// Parts beginning with a digit can't have their first char
-	// uppercased — Elm identifiers forbid leading digits AND can't
-	// start with a non-ASCII control byte (which `b &^ 0x20` would
-	// produce for digit bytes). Prefix digit-leading parts with
-	// their preceding part's trailing char form so the identifier
-	// stays valid.
-	parts := strings.Split(s, "_")
-	var buf strings.Builder
-	for i, p := range parts {
-		if p == "" {
-			continue
-		}
-		if i == 0 {
-			buf.WriteString(p)
-			continue
-		}
-		c := p[0]
-		if c >= 'a' && c <= 'z' {
-			buf.WriteByte(c &^ 0x20)
-			buf.WriteString(p[1:])
-		} else {
-			// Digit- or symbol-leading parts (e.g., "7H") stay as-is
-			// so the compiler sees a legal Elm identifier in context.
-			buf.WriteString(p)
-		}
-	}
-	return buf.String()
-}
-
-func writeElmScenario(b *strings.Builder, sc scenario, fnName string) {
-	fmt.Fprintf(b, "%s : Test\n%s =\n    test %q <|\n        \\_ ->\n", fnName, fnName, sc.name)
-	switch sc.op {
-	case "trick_first_play":
-		writeElmTrickFirstPlay(b, sc)
-	case "validate_game_move":
-		writeElmValidateMove(b, sc, false)
-	case "validate_turn_complete":
-		writeElmValidateMove(b, sc, true)
-	default:
-		fmt.Fprintf(b, "            Expect.fail \"unknown op %s\"\n", sc.op)
-	}
-	b.WriteString("\n\n")
-}
-
-func writeElmTrickFirstPlay(b *strings.Builder, sc scenario) {
-	// Tricks aren't ported to Elm yet — placeholder pass so the
-	// suite stays green. When Elm tricks land, swap for a real
-	// assertion path analogous to the Go emitter.
-	fmt.Fprintf(b, "            -- Elm TrickBag not ported yet (%s / %s)\n            Expect.pass\n",
-		sc.trick, sc.expect.kind)
-}
-
-func writeElmValidateMove(b *strings.Builder, sc scenario, turnComplete bool) {
-	if turnComplete {
-		fmt.Fprintf(b, "            let\n                board =\n                    %s\n            in\n", elmStacks(sc.board, "                    "))
-		b.WriteString("            case Referee.validateTurnComplete board standardBounds of\n")
-	} else {
-		fmt.Fprintf(b, "            let\n                move =\n                    { boardBefore = %s\n                    , stacksToRemove = %s\n                    , stacksToAdd = %s\n                    , handCardsPlayed = %s\n                    }\n            in\n",
-			elmStacks(sc.board, "                        "),
-			elmStacks(sc.removed, "                        "),
-			elmStacks(sc.added, "                        "),
-			elmHandCards(sc.handPlayed),
-		)
-		b.WriteString("            case Referee.validateGameMove move standardBounds of\n")
-	}
-	switch sc.expect.kind {
-	case "ok":
-		b.WriteString(`                Ok _ ->
-                    Expect.pass
-
-                Err err ->
-                    Expect.fail (refereeStageToString err.stage ++ ": " ++ err.message)
-`)
-	case "error":
-		fmt.Fprintf(b, `                Ok _ ->
-                    Expect.fail ("expected error at stage " ++ %q ++ ", got ok")
-
-                Err err ->
-                    if refereeStageToString err.stage /= %q then
-                        Expect.fail ("stage: want " ++ %q ++ ", got " ++ refereeStageToString err.stage)
-                    else if not (String.contains %q err.message) then
-                        Expect.fail ("message substring " ++ %q ++ " not found in " ++ err.message)
-                    else
-                        Expect.pass
-`, sc.expect.stage, sc.expect.stage, sc.expect.stage, sc.expect.messageSubstr, sc.expect.messageSubstr)
-	default:
-		fmt.Fprintf(b, "                _ ->\n                    Expect.fail \"unsupported expectation %s\"\n", sc.expect.kind)
-	}
-}
-
-func elmStacks(ss []stack, indent string) string {
-	if len(ss) == 0 {
-		return "[]"
-	}
-	var parts []string
-	for _, s := range ss {
-		parts = append(parts, elmStackLit(s))
-	}
-	return "[ " + strings.Join(parts, "\n"+indent+", ") + "\n" + indent + "]"
-}
-
-func elmStackLit(s stack) string {
-	var bcs []string
-	for _, c := range s.cards {
-		bcs = append(bcs, fmt.Sprintf("{ card = %s, state = %s }", elmCardLit(c), elmBoardState(c.boardState)))
-	}
-	return fmt.Sprintf("{ boardCards = [ %s ], loc = { top = %d, left = %d } }",
-		strings.Join(bcs, ", "), s.top, s.left)
-}
-
-func elmHandCards(cs []card) string {
-	if len(cs) == 0 {
-		return "[]"
-	}
-	var parts []string
-	for _, c := range cs {
-		parts = append(parts, fmt.Sprintf("{ card = %s, state = HandNormal }", elmCardLit(c)))
-	}
-	return "[ " + strings.Join(parts, ", ") + " ]"
-}
-
-func elmCardLit(c card) string {
-	v := elmValue(c.value)
-	s := elmSuit(c.suit)
-	d := elmDeck(c.deck)
-	return fmt.Sprintf("{ value = %s, suit = %s, originDeck = %s }", v, s, d)
-}
-
-func elmValue(v int) string {
-	names := []string{"", "Ace", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Jack", "Queen", "King"}
-	if v >= 1 && v <= 13 {
-		return names[v]
-	}
-	return "Ace"
-}
-
-func elmSuit(s int) string {
-	switch s {
-	case 0:
-		return "Club"
-	case 1:
-		return "Diamond"
-	case 2:
-		return "Spade"
-	case 3:
-		return "Heart"
-	}
-	return "Club"
-}
-
-func elmDeck(d int) string {
-	if d == 0 {
-		return "DeckOne"
-	}
-	return "DeckTwo"
-}
-
-func elmBoardState(s int) string {
-	switch s {
-	case 0:
-		return "FirmlyOnBoard"
-	case 1:
-		return "FreshlyPlayed"
-	case 2:
-		return "FreshlyPlayedByLastPlayer"
-	}
-	return "FirmlyOnBoard"
 }
