@@ -31,6 +31,13 @@ var playableStudies = map[string]bool{
 	"sort_cats": true,
 }
 
+// buggyStudies: playable but known-broken. Portal shows a visible
+// [BUGGY] tag so nobody gets surprised. Clear this entry once the
+// feature is fixed.
+var buggyStudies = map[string]string{
+	"sort_cats": "orange/grey cats visually ambiguous; sorted cats still draggable; drop behavior unreliable",
+}
+
 // HandleCritters dispatches /gopher/critters/*.
 func HandleCritters(w http.ResponseWriter, r *http.Request) {
 	sub := strings.TrimPrefix(r.URL.Path, "/gopher/critters/")
@@ -85,6 +92,10 @@ to Gopher.</p>
 		if playableStudies[s.Name] {
 			fmt.Fprintf(w, `<a href="/gopher/critters/play/%s">Play ▶</a>`,
 				html.EscapeString(s.Name))
+			if note, buggy := buggyStudies[s.Name]; buggy {
+				fmt.Fprintf(w, ` <span style="color:#c1440e;font-weight:bold">[BUGGY]</span> <span class="muted">— %s</span>`,
+					html.EscapeString(note))
+			}
 		} else {
 			fmt.Fprint(w, `<span class="muted">DSL defined; engine not yet implemented</span>`)
 		}
