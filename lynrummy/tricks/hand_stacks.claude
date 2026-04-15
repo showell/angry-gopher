@@ -1,3 +1,19 @@
 just_use hand_stacks.go
 
 # label: INTRICATE
+# role: encodes domain knowledge
+
+The "you already have 3+ cards that make a set or run" trick. Three
+emit-order buckets: sets (by value), pure runs (by suit), rb runs.
+Matches TS iteration order so first_play is stable across impls.
+
+Double-deck wrinkles:
+- Sets: pickValidSet takes the first card seen per distinct suit; later
+  same-suit duplicates are skipped (can't have two Kings of Hearts in
+  one set).
+- Pure runs + rb runs: dedup by value (no two same-value cards in a run,
+  even from different decks).
+
+isValidGroup is a defensive check — the shape finder can produce
+candidates that GetStackType still rejects, and we'd rather re-validate
+than produce a Bogus Play.

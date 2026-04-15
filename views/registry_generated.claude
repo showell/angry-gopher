@@ -1,7 +1,13 @@
 just_use registry_generated.go
 
-# Package-level slice + registerGeneratedPage() hub that .claude-compiled pages push into.
-#
-# Migration: Pure infra. Adjacency: touched indirectly whenever a new .claude page is added (but via init() in the generated .go, not this file).
-
 # label: GENERATED
+# role: encodes domain knowledge
+
+Hub that crudgen-compiled pages push into via init(). Each .claude → .go
+file emits an init() calling registerGeneratedPage; GetPages() appends
+generatedPages to the hardcoded list so nav / index / tour pick them up
+automatically.
+
+This removes the main.go / registry.go adjacency-churn that every new
+CRUD page used to create. You don't edit this file when adding a page;
+you add the .claude and let crudgen emit the init().

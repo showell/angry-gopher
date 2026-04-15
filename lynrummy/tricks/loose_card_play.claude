@@ -1,3 +1,18 @@
 just_use loose_card_play.go
 
 # label: INTRICATE
+# role: encodes domain knowledge
+
+"Move one board card to a new home, then play a hand card on the resulting
+board." The most computationally expensive trick — quadruple-nested loop
+over (src stack, src card, dest stack, stranded hand card) with a
+simulateMove in the inner check.
+
+**Pre-filter:** only hand cards that CAN'T already direct-play are
+"stranded" and worth the combinatorial search. Cards that extend something
+already will be picked up by direct_play; this trick rescues cards that
+have no home.
+
+peelIntoResidual is a narrower variant of extractCard that for middle-of-
+run splits returns only the LEFT half — the right half wouldn't accept
+the hand card in a loose-move context, so we don't bother materializing it.

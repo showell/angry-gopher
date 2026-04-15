@@ -1,3 +1,8 @@
 just_use ratelimit.go
 
 # label: CLEAN_INFRA
+# role: supports feature — per-user sliding-window rate limit
+
+Simple timestamp-slice approach: 120 req / 60s by default, prune on every
+Check. Called only for authenticated non-poll requests (see main.go). 429
+count is process-lifetime for the ops dashboard; Reset() clears it.

@@ -1,3 +1,9 @@
 just_use users.go
 
 # label: WORKHORSE
+# role: supports feature — user read endpoints + self-settings update
+
+Handles /users, /users/{id}, /users/by_email, /users/me, and PATCH
+/settings. Currently only full_name is settable; the endpoint is shaped to
+grow additional fields without new routes. Self-update pushes realm_user
+to every connected client so names update in real time.

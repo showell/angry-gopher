@@ -1,3 +1,8 @@
 just_use direct_play.go
 
 # label: SIMPLE
+# role: supports feature — simplest trick: extend an existing stack with one hand card
+
+Iterates every (hand card, stack) pair, tries RightMerge first then
+LeftMerge (right-prefer so the play set is deterministic). One Play per
+matching hand card × target; state is explicit, no closures.

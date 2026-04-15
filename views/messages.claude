@@ -1,7 +1,7 @@
 just_use messages.go
 
-# Main messages feed: channel + topic browsing, compose, reactions.
-#
-# Migration: Top hit on pain_rank (515 lines, 16 churn, 18 err checks). Too complex for DSL today; candidate for targeted cleanup first.
-
 # label: WORKHORSE
+# role: supports feature — main messages feed (channel + topic browsing, compose, reactions)
+
+Migration to DSL: top hit on pain_rank (515 lines, 16 churn, 18 err
+checks). Too complex for DSL today; candidate for targeted cleanup first.

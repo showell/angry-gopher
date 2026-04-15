@@ -1,3 +1,14 @@
 just_use markdown.go
 
 # label: CLEAN_INFRA
+# role: encodes domain knowledge
+
+Zulip-flavored markdown: goldmark (CommonMark + GFM) with pre-processing
+for @**Name**, #**Channel**, #**Channel>Topic**, #**Channel>Topic@MsgID**
+and post-processing to attach image previews under /user_uploads/* links.
+
+WithUnsafe() is deliberate: the pre-processor emits inline HTML spans for
+mentions/links that goldmark would otherwise strip. Safe because the only
+unsafe content is what we generated from matched regexes — user markdown
+still runs through the sanitized path. Unknown names/channels fall through
+unchanged (goldmark renders the **bold** naturally).

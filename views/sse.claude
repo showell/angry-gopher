@@ -1,7 +1,11 @@
 just_use sse.go
 
-# Server-Sent Events endpoint for streaming message updates.
-#
-# Migration: Long-poll-ish infra; will never be a DSL page.
-
 # label: CANONICAL
+# role: encodes domain knowledge
+
+Server-Sent Events bridge. Two endpoints:
+  /gopher/sse/messages — batched hydrated HTML fragments for initial load
+  /gopher/sse/events   — live stream, bridges the event-queue system to SSE
+
+Stays hand-written — long-poll-ish infra that will never be a DSL page.
+Changes here should match Cat's SSE consumer in lockstep.

@@ -1,3 +1,4 @@
 just_use main.go
 
 # label: TOOL
+# role: supports feature — search query timing against a gen_test_data DB

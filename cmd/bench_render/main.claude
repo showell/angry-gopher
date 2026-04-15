@@ -1,3 +1,7 @@
 just_use main.go
 
 # label: TOOL
+# role: supports feature — hydration strategy bench (IN-chunks vs per-row prepared)
+
+Writes rendered HTML to /dev/null (via Counter) so network/browser time
+doesn't pollute the DB + render timing.

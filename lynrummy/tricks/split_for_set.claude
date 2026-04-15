@@ -1,3 +1,15 @@
 just_use split_for_set.go
 
 # label: INTRICATE
+# role: encodes domain knowledge
+
+Hand card V finds two same-value, different-suit extractable board cards;
+the three cards together form a new 3-set.
+
+**Index stability.** Apply relocates each target by card identity
+(relocate, shared with peel_for_run) on the current board, since earlier
+plays this turn may have shifted indices. Defined in this file as the
+canonical home for the helper.
+
+pickTwoDistinctSuits also rejects candidates matching the hand card's
+suit — you need THREE distinct suits in the final set.

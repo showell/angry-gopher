@@ -1,3 +1,13 @@
 just_use helpers.go
 
 # label: CLEAN_INFRA
+# role: encodes domain knowledge
+
+Shared primitives for the tricks package. extractCard is the load-bearing
+one: it encodes the three legal peel shapes (end-peel on a 4+ stack; set-
+peel of any middle card of a 4+ SET; middle-peel of a run when both halves
+would be ≥ 3). Returns a new board rather than mutating — divergence from
+TS's in-place mutation that simplifies atomic Apply semantics.
+
+substituteInStack, pushNewStack, freshlyPlayed, singleStackFromCard are
+straightforward wrappers that keep individual trick files uncluttered.

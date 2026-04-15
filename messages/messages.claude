@@ -1,3 +1,17 @@
 just_use messages.go
 
 # label: WORKHORSE
+# role: encodes domain knowledge
+
+Message CRUD + access-filtered listing. Two invariants:
+
+- **All sends are transactional.** SendMessage begins a tx so find-or-
+  create-topic + insert-content + FTS-index + insert-message can't
+  interleave with a concurrent send on the single DB connection.
+- **Edits never overwrite content.** HandleEditMessage inserts a new
+  message_content row and re-points messages.content_id at it; the old
+  row stays as edit history. Deletes cascade both (content + message)
+  in one tx.
+
+Access filter repeats in every SELECT: visible = public channels ∪
+user's subscriptions. Factor candidate; currently inlined.

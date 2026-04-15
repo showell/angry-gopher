@@ -1,3 +1,9 @@
 just_use reactions.go
 
 # label: CLEAN_INFRA
+# role: supports feature — unicode emoji reactions on messages
+
+POST adds, DELETE removes, both keyed on (message_id, user_id, emoji_code).
+Only unicode emoji are supported — reaction_type is hardcoded to
+"unicode_emoji" in both the INSERT and the event payload. Adding custom
+emoji would touch the schema and this file together.

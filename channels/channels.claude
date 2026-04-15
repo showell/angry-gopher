@@ -1,3 +1,13 @@
 just_use channels.go
 
 # label: WORKHORSE
+# role: encodes domain knowledge
+
+Load-bearing predicate: CanAccess(userID, channelID). Public channels are
+visible to everyone; private (invite_only) channels require a subscriptions
+row. Flags, messages, reactions, and events-filtering all call through here
+rather than re-implementing the join — keep this the one place that knows
+what "access" means.
+
+Channel descriptions live in a separate channel_descriptions table (UPSERT
+via ON CONFLICT) so channels rows stay small and editable independently.

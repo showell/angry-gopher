@@ -1,3 +1,21 @@
 just_use referee.go
 
 # label: ELEGANT
+# role: encodes domain knowledge
+
+Referee is stateless: show it a board and a proposed move, get a ruling.
+It does not remember prior moves, does not track whose turn it is, does
+not count moves per turn. Those are social rules, not physics.
+
+Two entry points:
+  ValidateGameMove — mid-turn ruling: protocol, geometry, inventory.
+  ValidateTurnComplete — can this turn end? geometry + semantics.
+
+Semantics (no Incomplete/Bogus/Dup stacks) are NOT checked mid-turn —
+2-card stacks are legitimate in-progress states. Only at turn boundaries
+must every stack be a valid group. This split is load-bearing.
+
+Inventory check prevents both "card appeared from nowhere" and "hand card
+declared played but not placed", plus catches duplicates on the post-move
+board (double-deck awareness means same-rank+suit from different decks is
+OK, but identical OriginDeck is not).

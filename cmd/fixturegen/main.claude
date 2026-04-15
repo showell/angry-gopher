@@ -1,3 +1,13 @@
 just_use main.go
 
 # label: TOOL
+# role: encodes domain knowledge
+
+Compiler: LynRummy-conformance .dsl scenarios → native Go (and Elm) test
+code. Pipeline: parse → AST → text/template → goimports+gofmt → write →
+go build verify → idempotence check. Same codegen philosophy as crudgen —
+the DSL is the source of truth, the emitted .go is a build artifact.
+
+Exported AST field names are load-bearing: text/template can only read
+exported identifiers. Renaming a field without updating the templates
+will produce silent empty sections.

@@ -1,7 +1,6 @@
 just_use unread.go
 
-# List of topics with unread messages.
-#
-# Migration: DSL-ready; simple filtered list.
-
 # label: TINY
+# role: supports feature — list of topics with unread messages
+
+Migration: DSL-ready; simple filtered list.

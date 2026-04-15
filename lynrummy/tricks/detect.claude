@@ -1,3 +1,15 @@
 just_use detect.go
 
 # label: SIMPLE
+# role: encodes domain knowledge
+
+Retroactive trick attribution: given the hand cards a player released and
+the board just before the move, return the trick ID that best explains
+the move. Used by the CRUD replay view to annotate historical games that
+never populated lynrummy_plays.
+
+**Heuristic, not proof.** Matches on hand-card usage as a multiset, not
+board-after byte equality. Ambiguity is possible in principle; DefaultOrder
+(hand_stacks → direct_play → rb_swap → pair_peel → split_for_set →
+peel_for_run → loose_card_play) gives a deterministic tiebreak that
+matches TS's BAG. Sharpen later if real games show false attributions.

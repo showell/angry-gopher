@@ -1,3 +1,13 @@
 just_use trick.go
 
 # label: TINY
+# role: encodes domain knowledge
+
+Declares the Trick + Play interfaces that every trick in this package
+implements. Plugin shape: stateless singleton trick (zero-sized struct),
+FindPlays returns concrete Plays, each Play carries its own captured
+state (no closures) and knows how to Apply against a board.
+
+**Divergence from TS:** TS's apply(board) mutates in place and returns
+the hand cards. Go returns (newBoard, played) — simpler, avoids TS's
+defensive "re-check at apply time" rescan.

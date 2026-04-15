@@ -1,3 +1,8 @@
 just_use main.go
 
 # label: TOOL
+# role: supports feature — experiment: split index-only DB from content DB
+
+Derives two databases from /tmp/gopher_bench.db and times queries against
+each. Feeds the "should we split content into its own DB?" conversation —
+not a live ops split.

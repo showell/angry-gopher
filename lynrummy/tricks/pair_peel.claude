@@ -1,3 +1,18 @@
 just_use pair_peel.go
 
 # label: INTRICATE
+# role: encodes domain knowledge
+
+"Two hand cards form a pair, peel a board card to complete the triplet."
+Three pair kinds handled by pairNeeds:
+
+- Set pair (same value, different suits) — need any of the remaining two
+  suits at that value.
+- Pure-run pair (consecutive same-suit) — need predecessor OR successor in
+  the same suit.
+- Rb-run pair (consecutive alternating color) — need predecessor OR
+  successor in the opposite color's two suits.
+
+Peel target must pass CanExtract. On Apply, sorts the trio by value
+before pushing so the new stack reads naturally, plus a belt-and-braces
+GetStackType check (Bogus/Dup/Incomplete rejected).

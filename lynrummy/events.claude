@@ -1,3 +1,18 @@
 just_use events.go
 
 # label: ELEGANT
+# role: encodes domain knowledge
+
+Cross-domain wire types + event replay. Only GameSetup is exported; the
+wire* structs are internal JSON plumbing that consumers never see directly
+— they call CheckEvent / ParseMoveEvent / ReconstructBoard.
+
+CheckEvent is the single entry point the Host (games package) calls:
+feed it all prior payloads + the new payload; it reconstructs the board,
+parses the move, and routes to the referee. Non-player-action events
+(advance-turn, undo) return nil (no ruling needed).
+
+ReconstructBoard is deterministic replay: first payload must be a
+game_setup, subsequent player-action payloads apply stacks_to_remove /
+stacks_to_add in order. This is how the host maintains no in-memory game
+state — every ruling is recomputed from event_ids.

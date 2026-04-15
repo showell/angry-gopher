@@ -1,3 +1,8 @@
 just_use routes.go
 
 # label: SCAFFOLD
+# role: supports feature — method/path dispatch for API routes
+
+Extracted from buildMux so main.go's route table stays readable. Every
+function here is a tiny switch that picks the right package-level handler
+based on method, path suffix, or query shape. No logic lives here.

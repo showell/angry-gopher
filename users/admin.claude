@@ -1,3 +1,9 @@
 just_use admin.go
 
 # label: WORKHORSE
+# role: supports feature — admin-only user create/update
+
+New users get a random 16-byte hex api_key generated on create; the
+response returns it once — there's no "forgot your key" flow. requireAdmin
+gates both endpoints. Admin user updates broadcast a realm_user event so
+all connected clients refresh their cached names.

@@ -1,3 +1,4 @@
 just_use main.go
 
 # label: TOOL
+# role: supports feature — SQLite cache + mmap pragma microbench (cold vs warm)

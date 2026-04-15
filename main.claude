@@ -1,3 +1,16 @@
 just_use main.go
 
 # label: ONE_OFF
+# role: encodes domain knowledge
+
+The mux and the wireDB() step. Every package that needs the DB gets
+*sql.DB injected here via package-level vars; this is how we break the
+obvious import cycle (auth ← channels ← flags ← events all wired to the
+same DB). RenderMarkdown is injected the same way to avoid a markdown-
+package import cycle.
+
+Entry point: GOPHER_CONFIG → loadConfig → initDB → seedData (demo only) →
+buildMux → ListenAndServe. Demo mode auto-sets GOPHER_RESET_DB=1 and seeds
+test data; prod never does either. Rate limiting runs on authenticated
+non-poll requests only — /api/v1/events is exempt because polling at idle
+should not burn a user's window.

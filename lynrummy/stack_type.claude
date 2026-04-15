@@ -1,3 +1,14 @@
 just_use stack_type.go
 
 # label: ELEGANT
+# role: encodes domain knowledge
+
+"The most important function of the game": GetStackType classifies a card
+group as Incomplete / Bogus / Dup / Set / PureRun / RedBlackRun.
+
+Wrapping arithmetic: Successor(K)=A, Predecessor(A)=K, so K-A-2 is a
+valid run. This is a LynRummy house rule, not standard rummy.
+
+Chosen representation: `type StackType string` for cheap debuggability at
+the cost of compile-time exhaustiveness (Elm's sum type gets exhaustive
+checks, Go's string aliases don't). Tradeoff taken deliberately.

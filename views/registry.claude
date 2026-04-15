@@ -1,7 +1,12 @@
 just_use registry.go
 
-# PageDef type + GetPages() declaring hand-registered CRUD pages.
-#
-# Migration: Infra — shrinks as pages migrate to self-registration via .claude files.
-
 # label: CANONICAL
+# role: encodes domain knowledge
+
+Single source of truth for hand-registered CRUD pages (PageDef + GetPages).
+Nav bar, index, and tour all read from this list. GetPages is a function,
+not a var, to avoid an init cycle: Pages → handlers → PageHeader → Pages.
+
+Generated pages appended via `generatedPages` (see registry_generated.go)
+so this hardcoded list shrinks as crudgen coverage grows. RegisterPages
+wires all routes plus the non-page infra (tour, quicknav, sse/*, /).

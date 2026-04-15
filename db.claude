@@ -1,3 +1,13 @@
 just_use db.go
 
 # label: CANONICAL
+# role: encodes domain knowledge
+
+Single-connection SQLite (SetMaxOpenConns(1)) — serializes all access so
+there's no lock contention, no WAL/SHM sidecar files, and every package
+shares the one `DB` var without coordination. Fine for our traffic level.
+
+seedData() hardcodes four users (Steve, Apoorva, Claude, Joe) with fixed
+api_keys. These are test fixtures that ship in demo mode only; prod sets
+GOPHER_RESET_DB=1 explicitly or never at all. Schema comes from
+schema.Core — no migrations, rebuild on change.

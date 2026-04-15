@@ -1,3 +1,9 @@
 just_use admin_ops.go
 
 # label: WORKHORSE
+# role: supports feature — /admin/ops dashboard + /admin/health JSON + reset
+
+Three surfaces share one data source: HTML dashboard (auto-refreshes every
+10s), JSON health endpoint (consumed by cmd/health_check for triage), and
+a POST reset that zeroes events/presence/ratelimit counters in one shot.
+In-memory stats only — doesn't survive restart, which is the point.

@@ -1,3 +1,20 @@
 just_use card.go
 
 # label: ELEGANT
+# role: encodes domain knowledge
+
+Card is the atomic unit of LynRummy. Load-bearing choices:
+
+- **Double-deck awareness.** OriginDeck (0 or 1) tracks which physical
+  deck a card came from. Equals considers origin (strict identity);
+  IsDup ignores it (same rank+suit, either deck). Both are needed —
+  a run can have two Kings of Hearts (one per deck), but a peel has
+  to know whether two cards are "the same card."
+- **Typed Suit enum.** `type Suit int` with explicit constants
+  (Club=0..Heart=3). Lets `encoding/json` handle serialization
+  natively, which is why the JSON shape IS the domain shape (no
+  intermediate DTO / wire type).
+- **CardColor derives from Suit.** Club/Spade=Black, Diamond/Heart=Red.
+  Centralized in SuitColor so the coloring rule has one home.
+
+Mirrors elm-lynrummy Card.elm — keep them in sync when changing shape.

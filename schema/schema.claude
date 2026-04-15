@@ -1,3 +1,10 @@
 just_use schema.go
 
 # label: CANONICAL
+# role: encodes domain knowledge
+
+Single source of truth for every DB table in Gopher. There are no
+migrations — when the schema changes, the DB gets rebuilt and data
+re-imported. Adding a column means editing this file, not creating
+a migration layer. ALTER TABLE statements anywhere in the repo are
+a smell; they mean someone is fighting the convention.
