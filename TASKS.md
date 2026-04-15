@@ -4,11 +4,9 @@
 **Confidence:** Tentative — queue of intent, not a stable record; individual entries reflect whatever was on our minds at write time.
 **Durability:** Task queue; individual items churn. Expect continuous add/remove.
 
-## Immediately after current 8h tricks-port
-
-- [ ] **Replace fixture system with code-generation from a mainstream language.** Steve will elaborate on motivation/design. Decision recorded 2026-04-14 during the TrickBag Go-port session. Current system: hand-written JSON in `lynrummy/conformance/`, consumed by typed loaders in Go / Elm / TS. Next evolution: generate fixtures programmatically from one source of truth rather than maintaining JSON by hand.
-
 ## High Priority
+
+- [x] Replace JSON fixtures with code-generation DSL — shipped as `cmd/fixturegen`, emits Go + Elm native tests from `lynrummy/conformance/scenarios/*.dsl`.
 
 - [x] Advanced search — trigram FTS5, substring matching, combined filters
 - [ ] LynRummy MPA — solitaire puzzle playable in CRUD app, no login, HTML+CSS cards, form-based moves

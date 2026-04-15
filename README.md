@@ -37,7 +37,6 @@ If you're landing cold and need to find something fast:
 | **Module-label index (INTRICATE, WORKHORSE, etc.)** | `LABELS.md` (generated) |
 | **LynRummy ↔ Elm port status** | `lynrummy/ELM_TO_GO.md` |
 | **How Steve & Claude collaborate** | `agent_collab/` |
-| **Session-level log (disposable)** | `SESSION_NOTES.md` |
 
 Every `.go` file has a sibling `.claude` sidecar carrying its maturity + domain knowledge. When landing in unfamiliar code, read the sidecar first.
 
