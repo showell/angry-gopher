@@ -209,7 +209,6 @@ body { max-width: 1200px !important; }
 <span id="dm-status" class="muted" style="margin-left:12px;"></span>
 <span style="float:right;">
 <a href="/gopher/claude-issues" style="background:#ffe0e8;padding:2px 8px;border-radius:3px;font-weight:bold;font-size:13px;text-decoration:none;">🗂️ Issues</a>
-<a href="/gopher/claude-log" style="background:#e0f0ff;padding:2px 8px;border-radius:3px;font-weight:bold;font-size:13px;text-decoration:none;margin-left:4px;">📝 Log</a>
 <a href="/gopher/wiki/" style="background:#f4f4f0;padding:2px 8px;border-radius:3px;font-weight:bold;font-size:13px;text-decoration:none;margin-left:4px;">📚 Wiki</a>
 </span>
 </div>

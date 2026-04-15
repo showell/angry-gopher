@@ -91,20 +91,52 @@ func renderClaudeIssuesIndex(w http.ResponseWriter, issues []claudeIssue) {
 	fmt.Fprintf(w, `<p class="muted">Status: <b>%d open</b> · <b>%d in-progress</b> · <b>%d done</b></p>`,
 		counts["open"], counts["in-progress"], counts["done"])
 
-	fmt.Fprint(w, `<table><thead><tr><th>#</th><th>Status</th><th>Title</th><th>Source</th><th>Updated</th></tr></thead><tbody>`)
+	var active, shipped []claudeIssue
 	for _, iss := range issues {
-		statusStyle := statusBadge(iss.Status)
-		fmt.Fprintf(w,
-			`<tr><td>%d</td><td>%s</td><td><a href="/gopher/claude-issues/%d">%s</a></td><td class="muted">%s</td><td class="muted">%s</td></tr>`,
-			iss.ID,
-			statusStyle,
-			iss.ID,
-			html.EscapeString(iss.Title),
-			html.EscapeString(iss.Source),
-			html.EscapeString(iss.Updated),
-		)
+		if iss.Status == "done" {
+			shipped = append(shipped, iss)
+		} else {
+			active = append(active, iss)
+		}
 	}
-	fmt.Fprint(w, `</tbody></table>`)
+
+	fmt.Fprintf(w, `<h2>Active <span class="muted">(%d)</span></h2>`, len(active))
+	if len(active) == 0 {
+		fmt.Fprint(w, `<p class="muted">Nothing open.</p>`)
+	} else {
+		fmt.Fprint(w, `<table><thead><tr><th>#</th><th>Status</th><th>Title</th><th>Source</th><th>Updated</th></tr></thead><tbody>`)
+		for _, iss := range active {
+			fmt.Fprintf(w,
+				`<tr><td>%d</td><td>%s</td><td><a href="/gopher/claude-issues/%d">%s</a></td><td class="muted">%s</td><td class="muted">%s</td></tr>`,
+				iss.ID, statusBadge(iss.Status), iss.ID,
+				html.EscapeString(iss.Title), html.EscapeString(iss.Source), html.EscapeString(iss.Updated),
+			)
+		}
+		fmt.Fprint(w, `</tbody></table>`)
+	}
+
+	// Recently shipped — newest-first, capped at 10. Replaces the old
+	// hand-maintained FIXES.md.
+	sort.Slice(shipped, func(i, j int) bool {
+		return shipped[i].Updated > shipped[j].Updated
+	})
+	limit := 10
+	if len(shipped) < limit {
+		limit = len(shipped)
+	}
+	fmt.Fprintf(w, `<h2>Recently shipped <span class="muted">(showing %d of %d)</span></h2>`, limit, len(shipped))
+	if limit == 0 {
+		fmt.Fprint(w, `<p class="muted">Nothing shipped yet.</p>`)
+	} else {
+		fmt.Fprint(w, `<table><thead><tr><th>#</th><th>Title</th><th>Shipped</th></tr></thead><tbody>`)
+		for _, iss := range shipped[:limit] {
+			fmt.Fprintf(w,
+				`<tr><td>%d</td><td><a href="/gopher/claude-issues/%d">%s</a></td><td class="muted">%s</td></tr>`,
+				iss.ID, iss.ID, html.EscapeString(iss.Title), html.EscapeString(iss.Updated),
+			)
+		}
+		fmt.Fprint(w, `</tbody></table>`)
+	}
 	PageFooter(w)
 }
 

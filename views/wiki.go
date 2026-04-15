@@ -20,9 +20,6 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
-	"time"
-
-	"angry-gopher/notify"
 )
 
 // wikiRepos maps a short repo name (used in URLs) to its filesystem
@@ -91,11 +88,6 @@ func HandleWiki(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if r.Method == "POST" && strings.HasSuffix(rest, ".claude.comments") {
-		handleCommentReply(w, r, repo, rest)
-		return
-	}
-
 	if rest == "" || rest == "/" {
 		wikiRender(w, repo, "README.md", repo+"/README.md")
 		return
@@ -123,46 +115,7 @@ func wikiLanding(w http.ResponseWriter) {
 			html.EscapeString(name), html.EscapeString(name), html.EscapeString(root))
 	}
 	fmt.Fprint(w, `</ul>`)
-	renderCommentsIndex(w, "gopher")
 	wikiFooter(w)
-}
-
-// renderCommentsIndex walks the repo for *.claude.comments files and
-// lists them. First stop on the wiki landing page — findability=10.
-func renderCommentsIndex(w http.ResponseWriter, repo string) {
-	root, ok := repoRoot(repo)
-	if !ok {
-		return
-	}
-	var found []string
-	_ = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
-		if err != nil || info.IsDir() {
-			return nil
-		}
-		name := info.Name()
-		if strings.HasPrefix(name, ".") {
-			return nil
-		}
-		if strings.HasSuffix(name, ".claude.comments") {
-			rel, err := filepath.Rel(root, path)
-			if err == nil {
-				found = append(found, rel)
-			}
-		}
-		return nil
-	})
-	if len(found) == 0 {
-		return
-	}
-	sort.Strings(found)
-	fmt.Fprintf(w, `<h2>Open comments <span class="muted">(%d)</span></h2><ul class="wiki-tree">`, len(found))
-	for _, rel := range found {
-		parent := strings.TrimSuffix(rel, ".comments")
-		fmt.Fprintf(w, `<li><a href="/gopher/wiki/%s/%s">%s</a> <span class="muted">→ <a href="/gopher/wiki/%s/%s">sidecar</a></span></li>`,
-			html.EscapeString(repo), html.EscapeString(rel), html.EscapeString(rel),
-			html.EscapeString(repo), html.EscapeString(parent))
-	}
-	fmt.Fprint(w, `</ul>`)
 }
 
 // wikiRender reads a file and serves it — markdown for .md,
@@ -192,239 +145,16 @@ func wikiRender(w http.ResponseWriter, repo, sub, displayPath string) {
 	if link := sidecarLink(repo, sub); link != "" {
 		fmt.Fprint(w, link)
 	}
-	if link := commentsLink(repo, sub); link != "" {
-		fmt.Fprint(w, link)
-	}
-	if strings.HasSuffix(sub, ".claude.comments") {
-		renderCommentsSectioned(w, repo, sub, string(body))
-	} else if strings.HasSuffix(sub, ".md") && RenderMarkdown != nil {
+	if strings.HasSuffix(sub, ".md") && RenderMarkdown != nil {
 		fmt.Fprint(w, `<div class="wiki-md">`)
 		fmt.Fprint(w, RenderMarkdown(string(body)))
 		fmt.Fprint(w, `</div>`)
 	} else {
 		renderSourceWithLines(w, string(body))
 	}
-	if strings.HasSuffix(sub, ".claude") {
-		renderInlineComments(w, repo, sub)
-	}
 	wikiFooter(w)
 }
 
-// commentsLink shows a banner when viewing a .claude sidecar that has
-// a sibling .claude.comments file, or when viewing the .comments file
-// itself (pointing back to the sidecar).
-func commentsLink(repo, sub string) string {
-	if strings.HasSuffix(sub, ".claude") {
-		sib := sub + ".comments"
-		abs, ok := resolveRepoPath(repo, sib)
-		if !ok {
-			return ""
-		}
-		if _, err := os.Stat(abs); err != nil {
-			return ""
-		}
-		return fmt.Sprintf(
-			`<div class="wiki-comments-banner">Has comments: <a href="/gopher/wiki/%s/%s">%s</a></div>`,
-			html.EscapeString(repo), html.EscapeString(sib), html.EscapeString(sib),
-		)
-	}
-	if strings.HasSuffix(sub, ".claude.comments") {
-		parent := strings.TrimSuffix(sub, ".comments")
-		return fmt.Sprintf(
-			`<div class="wiki-comments-banner">Sidecar: <a href="/gopher/wiki/%s/%s">%s</a></div>`,
-			html.EscapeString(repo), html.EscapeString(parent), html.EscapeString(parent),
-		)
-	}
-	return ""
-}
-
-// renderInlineComments appends the contents of a sibling .claude.comments
-// file below the sidecar, so readers see comments in situ.
-func renderInlineComments(w http.ResponseWriter, repo, sub string) {
-	sib := sub + ".comments"
-	abs, ok := resolveRepoPath(repo, sib)
-	if !ok {
-		return
-	}
-	body, err := os.ReadFile(abs)
-	if err != nil {
-		return
-	}
-	fmt.Fprint(w, `<div class="wiki-comments">`)
-	fmt.Fprintf(w, `<h2>Comments <span class="muted">(%s)</span></h2>`, html.EscapeString(sib))
-	renderCommentsSectioned(w, repo, sib, string(body))
-	fmt.Fprint(w, `</div>`)
-}
-
-// renderCommentsSectioned splits the comments file on `## ` headings
-// and renders each section with a reply form. Replies are `### `
-// sub-sections inside the parent comment.
-func renderCommentsSectioned(w http.ResponseWriter, repo, sub, body string) {
-	intro, sections := splitCommentSections(body)
-	if RenderMarkdown != nil && strings.TrimSpace(intro) != "" {
-		fmt.Fprint(w, `<div class="wiki-md">`)
-		fmt.Fprint(w, RenderMarkdown(intro))
-		fmt.Fprint(w, `</div>`)
-	}
-	for _, sec := range sections {
-		slug := slugify(sec.heading)
-		fmt.Fprintf(w, `<div class="wiki-comment" id="c-%s">`, html.EscapeString(slug))
-		if RenderMarkdown != nil {
-			fmt.Fprint(w, `<div class="wiki-md">`)
-			fmt.Fprint(w, RenderMarkdown("## "+sec.heading+"\n\n"+sec.body))
-			fmt.Fprint(w, `</div>`)
-		} else {
-			fmt.Fprintf(w, `<pre>## %s\n\n%s</pre>`, html.EscapeString(sec.heading), html.EscapeString(sec.body))
-		}
-		fmt.Fprintf(w, `<form class="wiki-reply" method="POST" action="/gopher/wiki/%s/%s">`,
-			html.EscapeString(repo), html.EscapeString(sub))
-		fmt.Fprintf(w, `<input type="hidden" name="comment_slug" value="%s">`, html.EscapeString(slug))
-		fmt.Fprint(w, `<textarea name="body" rows="12" placeholder="Reply..." style="width:100%;min-height:240px;font-size:15px;padding:10px;box-sizing:border-box;"></textarea><br>`)
-		fmt.Fprint(w, `<button type="submit" name="author" value="Steve">Reply as Steve</button> `)
-		fmt.Fprint(w, `<button type="submit" name="author" value="Claude">Reply as Claude</button>`)
-		fmt.Fprint(w, `</form></div>`)
-	}
-}
-
-type commentSection struct {
-	heading string // text after "## "
-	body    string // everything up to next "## " (includes "### " replies)
-}
-
-// splitCommentSections splits a markdown string on top-level `## `
-// headings. The intro is everything before the first `## ` (usually
-// a `# Title` line). Each section's body includes its `### ` replies.
-func splitCommentSections(body string) (intro string, sections []commentSection) {
-	lines := strings.Split(body, "\n")
-	var cur *commentSection
-	var introLines []string
-	for _, line := range lines {
-		if strings.HasPrefix(line, "## ") && !strings.HasPrefix(line, "### ") {
-			if cur != nil {
-				sections = append(sections, *cur)
-			}
-			h := strings.TrimPrefix(line, "## ")
-			cur = &commentSection{heading: h}
-			continue
-		}
-		if cur == nil {
-			introLines = append(introLines, line)
-		} else {
-			cur.body += line + "\n"
-		}
-	}
-	if cur != nil {
-		sections = append(sections, *cur)
-	}
-	intro = strings.Join(introLines, "\n")
-	return
-}
-
-// slugify turns a heading like "2026-04-15 · Claude · OPEN · meta"
-// into "2026-04-15-claude-open-meta". Stable identifier for anchors.
-func slugify(s string) string {
-	var b strings.Builder
-	prevDash := true
-	for _, r := range strings.ToLower(s) {
-		switch {
-		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
-			b.WriteRune(r)
-			prevDash = false
-		default:
-			if !prevDash {
-				b.WriteRune('-')
-				prevDash = true
-			}
-		}
-	}
-	return strings.Trim(b.String(), "-")
-}
-
-// handleCommentReply appends a `### ` sub-heading under the matching
-// `## ` parent, preserving the rest of the file.
-func handleCommentReply(w http.ResponseWriter, r *http.Request, repo, sub string) {
-	abs, ok := resolveRepoPath(repo, sub)
-	if !ok {
-		http.Error(w, "Invalid path", http.StatusBadRequest)
-		return
-	}
-	if err := r.ParseForm(); err != nil {
-		http.Error(w, "Bad form", http.StatusBadRequest)
-		return
-	}
-	slug := r.FormValue("comment_slug")
-	author := r.FormValue("author")
-	origin := strings.TrimSpace(r.FormValue("origin"))
-	replyBody := strings.TrimSpace(r.FormValue("body"))
-	if slug == "" || author == "" || replyBody == "" {
-		http.Redirect(w, r, "/gopher/wiki/"+repo+"/"+sub, http.StatusSeeOther)
-		return
-	}
-	if origin != "" {
-		author = author + " (" + origin + ")"
-	}
-	existing, err := os.ReadFile(abs)
-	if err != nil {
-		http.Error(w, "Cannot read", http.StatusInternalServerError)
-		return
-	}
-	intro, sections := splitCommentSections(string(existing))
-	found := false
-	for i := range sections {
-		if slugify(sections[i].heading) == slug {
-			// Trim trailing blank lines, then append the reply.
-			body := strings.TrimRight(sections[i].body, "\n")
-			stamp := time.Now().Format("2006-01-02")
-			reply := fmt.Sprintf("\n\n### %s · %s · reply\n\n%s\n", stamp, author, replyBody)
-			sections[i].body = body + reply
-			found = true
-			break
-		}
-	}
-	if !found {
-		http.Error(w, "Comment not found: "+slug, http.StatusNotFound)
-		return
-	}
-	var out strings.Builder
-	out.WriteString(intro)
-	if intro != "" && !strings.HasSuffix(intro, "\n") {
-		out.WriteString("\n")
-	}
-	for _, sec := range sections {
-		out.WriteString("## ")
-		out.WriteString(sec.heading)
-		out.WriteString("\n")
-		out.WriteString(sec.body)
-		if !strings.HasSuffix(sec.body, "\n") {
-			out.WriteString("\n")
-		}
-	}
-	if err := os.WriteFile(abs, []byte(out.String()), 0644); err != nil {
-		http.Error(w, "Cannot write", http.StatusInternalServerError)
-		return
-	}
-	location := repo + "/" + sub
-	anchor := "#c-" + slug
-	notify.Breadcrumb("wiki-comment", author, location, anchor, replyBody)
-	if strings.HasPrefix(author, "Claude") {
-		summary := "Claude replied on " + sub
-		if origin != "" {
-			summary = "Claude (" + origin + ") replied on " + sub
-		}
-		snippet := replyBody
-		if len(snippet) > 200 {
-			snippet = snippet[:200] + "…"
-		}
-		notify.Broadcast(notify.Event{
-			Summary: summary,
-			URL:     "/gopher/wiki/" + location + anchor,
-			Kind:    "wiki-comment",
-			Sender:  author,
-			Snippet: snippet,
-		})
-	}
-	http.Redirect(w, r, "/gopher/wiki/"+location+anchor, http.StatusSeeOther)
-}
 
 // sidecarLink returns a small HTML snippet cross-linking a source
 // file to its .claude sidecar (or vice versa). Convention: sidecar
@@ -578,22 +308,6 @@ pre.wiki-src .line:target { background: #fff3a8; }
 .wiki-sidecar { background: #eef6ff; border: 1px solid #cfe2f7; padding: 6px 10px;
                 margin: 0 0 12px; font-size: 13px; border-radius: 3px; }
 .wiki-sidecar a { font-weight: bold; }
-.wiki-comments-banner { background: #fff3a8; border: 1px solid #e6d670; padding: 6px 10px;
-                margin: 0 0 12px; font-size: 13px; border-radius: 3px; }
-.wiki-comments-banner a { font-weight: bold; }
-.wiki-comments { margin-top: 32px; padding-top: 16px; border-top: 2px solid #ccc; }
-.wiki-comments h2 { color: #000080; }
-.wiki-comments .muted { color: #888; font-size: 12px; font-weight: normal; }
-.wiki-comment { border: 1px solid #ddd; border-radius: 4px; padding: 10px 16px;
-                margin: 12px 0; background: #fbfbf8; }
-.wiki-comment h2 { margin-top: 4px; font-size: 15px; }
-.wiki-comment h3 { margin-top: 12px; font-size: 13px; color: #555;
-                   border-top: 1px dashed #ddd; padding-top: 8px; }
-.wiki-reply { margin-top: 12px; padding-top: 8px; border-top: 1px dashed #ccc; }
-.wiki-reply textarea { width: 100%; font-family: inherit; font-size: 15px;
-                       line-height: 1.4; padding: 10px; box-sizing: border-box;
-                       min-height: 200px; }
-.wiki-reply button { margin-top: 6px; padding: 4px 10px; font-size: 13px; }
 code { background: #f0f0ec; padding: 1px 4px; border-radius: 2px; }
 pre code { background: none; padding: 0; }
 .wiki-md table { border-collapse: collapse; margin: 8px 0; }
@@ -636,7 +350,6 @@ pre code { background: none; padding: 0; }
 <ul>
 <li><a href="/gopher/dm?user_id=2" style="background:#fff3a8;padding:2px 8px;border-radius:3px;font-weight:bold;">💬 DM Claude</a></li>
 <li><a href="/gopher/claude-issues" style="background:#ffe0e8;padding:2px 8px;border-radius:3px;font-weight:bold;">🗂️ Issues</a></li>
-<li><a href="/gopher/claude-log" style="background:#e0f0ff;padding:2px 8px;border-radius:3px;font-weight:bold;">📝 Log</a></li>
 </ul>
 <h3><a href="/gopher/wiki/">Wiki home</a></h3>
 <h3>Repos</h3>
@@ -666,7 +379,6 @@ pre code { background: none; padding: 0; }
 <li><a href="/gopher/wiki/gopher/TASKS.md">TASKS</a></li>
 <li><a href="/gopher/wiki/gopher/LABELS.md">LABELS</a></li>
 <li><a href="/gopher/wiki/gopher/GLOSSARY.md">GLOSSARY</a></li>
-<li><a href="/gopher/wiki/gopher/FIXES.md">FIXES</a> <span class="muted">(running fixes log)</span></li>
 </ul>
 <h3>Browse Gopher</h3>
 <ul>

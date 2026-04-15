@@ -199,7 +199,8 @@ func SendDM(senderID, recipientID int, content string) (int64, error) {
 	DB.QueryRow(`SELECT '' AS email, full_name FROM users WHERE id = ?`, senderID).Scan(&senderEmail, &senderName)
 
 	event := map[string]interface{}{
-		"type": "message",
+		"type":  "message",
+		"flags": []string{},
 		"message": map[string]interface{}{
 			"id":                msgID,
 			"content":           html,
