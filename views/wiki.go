@@ -365,6 +365,7 @@ pre code { background: none; padding: 0; }
 <li><a href="/gopher/wiki/gopher/TESTING.md">TESTING</a></li>
 <li><a href="/gopher/wiki/gopher/TASKS.md">TASKS</a></li>
 <li><a href="/gopher/wiki/gopher/LABELS.md">LABELS</a></li>
+<li><a href="/gopher/wiki/gopher/GLOSSARY.md">GLOSSARY</a></li>
 </ul>
 <h3>Browse Gopher</h3>
 <ul>
