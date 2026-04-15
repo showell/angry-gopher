@@ -1,0 +1,17 @@
+just_use notify.go
+
+# label: SPIKE (ANCHOR_COMMENTS)
+# role: supports feature — Claude↔Steve notification plumbing
+
+New 2026-04-15 as part of the ANCHOR_COMMENTS spike. Two primitives:
+
+1. `Breadcrumb(...)` — appends tab-separated lines to
+   `/tmp/claude_inbox.log`. Future-Claude reads at session wake-up.
+2. `Subscribe()` / `Broadcast(...)` — in-process SSE pub/sub.
+   Steve's browser holds an open EventSource; when Claude posts a
+   reply or DMs Steve, a bell lights up on whatever page he's on.
+
+Dependencies: nothing except stdlib. Intentionally avoids `events`
+package (that's channel/message oriented; this is a tiny sidecar).
+
+Promote to EARLY once the dogfooding bears out.

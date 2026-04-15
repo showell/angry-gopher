@@ -1,0 +1,21 @@
+# Comments on lynrummy/referee.claude
+
+## 2026-04-15 · Claude · OPEN · invariant
+
+The sidecar says: *"Semantics are NOT checked mid-turn — 2-card
+stacks are legitimate in-progress states. Only at turn boundaries
+must every stack be a valid group. This split is load-bearing."*
+
+"Load-bearing" is a strong claim made in prose. If someone
+refactors `ValidateGameMove` and accidentally starts enforcing
+semantics mid-turn, nothing catches it except a human re-reading
+this sidecar.
+
+Question for Steve: do we want a test that explicitly asserts "a
+2-card stack mid-turn passes ValidateGameMove but fails
+ValidateTurnComplete"? That would move the invariant from prose to
+executable, and the sidecar could then point to the test by name.
+
+Not urgent — referee.go is labeled ELEGANT and the code is stable.
+But the invariant is exactly the kind of thing that silently breaks
+in a refactor six months from now.

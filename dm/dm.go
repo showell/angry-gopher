@@ -7,6 +7,7 @@ package dm
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
@@ -15,6 +16,7 @@ import (
 
 	"angry-gopher/auth"
 	"angry-gopher/events"
+	"angry-gopher/notify"
 	"angry-gopher/respond"
 )
 
@@ -160,6 +162,15 @@ func SendDM(senderID, recipientID int, content string) (int64, error) {
 		return 0, err
 	}
 
+	// Dev-harness: if Claude is the sender, auto-append a link to the
+	// Issues landing page (per issue #4), unless the content already
+	// carries a claude-issues link.
+	var preName string
+	DB.QueryRow(`SELECT full_name FROM users WHERE id = ?`, senderID).Scan(&preName)
+	if preName == "Claude" && !strings.Contains(content, "/gopher/claude-issues") {
+		content = content + "\n\n— http://localhost:9000/gopher/claude-issues"
+	}
+
 	html := RenderMarkdown(content)
 
 	contentResult, err := DB.Exec(
@@ -209,6 +220,30 @@ func SendDM(senderID, recipientID int, content string) (int64, error) {
 	events.PushFiltered(event, func(uid int) bool {
 		return uid == senderID || uid == recipientID
 	})
+
+	// Dev-harness Claude↔Steve notification hooks. Log every DM that
+	// touches Claude (either direction); broadcast when Claude is the
+	// sender so Steve's browser lights up on whatever page he's on.
+	var recipientName string
+	DB.QueryRow(`SELECT full_name FROM users WHERE id = ?`, recipientID).Scan(&recipientName)
+	if senderName == "Claude" || recipientName == "Claude" {
+		location := "dm:" + senderName + "→" + recipientName
+		anchor := fmt.Sprintf("msg=%d", msgID)
+		notify.Breadcrumb("dm", senderName, location, anchor, content)
+	}
+	if senderName == "Claude" {
+		snippet := content
+		if len(snippet) > 200 {
+			snippet = snippet[:200] + "…"
+		}
+		notify.Broadcast(notify.Event{
+			Summary: "Claude DM to " + recipientName,
+			URL:     fmt.Sprintf("/gopher/dm?user_id=%d", senderID),
+			Kind:    "dm",
+			Sender:  senderName,
+			Snippet: snippet,
+		})
+	}
 
 	return msgID, nil
 }

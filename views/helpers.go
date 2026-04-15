@@ -71,8 +71,13 @@ button:hover { background: #0000a0; }
                    border-top: 1px solid #ccc; margin-top: 12px; }
 </style>
 </head><body>
-<nav>
+`)
+	fmt.Fprint(w, NotificationWidget)
+	fmt.Fprint(w, `<nav>
 <a href="/gopher/">Home</a>
+<a href="/gopher/dm?user_id=2" style="background:#fff3a8;padding:2px 8px;border-radius:3px;font-weight:bold;">💬 DM Claude</a>
+<a href="/gopher/claude-log" style="background:#e0f0ff;padding:2px 8px;border-radius:3px;font-weight:bold;">📝 Claude log</a>
+<a href="/gopher/claude-issues" style="background:#ffe0e8;padding:2px 8px;border-radius:3px;font-weight:bold;">🗂️ Issues</a>
 `)
 	for _, p := range GetPages() {
 		if p.NavLabel == "" {
