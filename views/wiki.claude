@@ -1,0 +1,16 @@
+just_use wiki.go
+
+# label: SPIKE
+# spike: SIDECAR_WIKI
+# role: supports feature — browser-based read-only wiki for repo docs + sidecars + source
+
+SIDECAR_WIKI V1 (2026-04-15). Serves the repo as a read-only wiki
+at `/gopher/wiki/...`. Landing = README.md rendered. Tree browsing
+at `/gopher/wiki/tree/*`. Markdown rendered via goldmark; everything
+else shown as preformatted text.
+
+Security: path resolved against repo root (cwd at server start),
+rejects any path that escapes via `..`.
+
+Expected to evolve: comments, search, anchored feedback. Promote
+to WORKHORSE once stable; drop the SIDECAR_WIKI tag at that point.
