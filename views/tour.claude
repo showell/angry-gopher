@@ -1,0 +1,5 @@
+just_use tour.go
+
+# About-the-app intro / walkthrough page.
+#
+# Migration: Static-ish content; low DSL priority.

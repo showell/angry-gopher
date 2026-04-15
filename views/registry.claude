@@ -1,0 +1,5 @@
+just_use registry.go
+
+# PageDef type + GetPages() declaring hand-registered CRUD pages.
+#
+# Migration: Infra — shrinks as pages migrate to self-registration via .claude files.

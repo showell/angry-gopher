@@ -1,0 +1,5 @@
+just_use quicknav.go
+
+# Keyboard-shortcut command palette (press ?).
+#
+# Migration: Small, specialized. Low DSL priority.

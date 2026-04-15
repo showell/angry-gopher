@@ -1,0 +1,5 @@
+just_use games_replay.go
+
+# Canvas/SSE game replay scrubber. Hand-written JS + retroactive trick annotation.
+#
+# Migration: Non-CRUD. Needs include_script + after_render escape hatches before DSL can fit.

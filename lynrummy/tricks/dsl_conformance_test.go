@@ -300,4 +300,3 @@ func Test_valid_extend_run_with_8H(t *testing.T) {
 		t.Fatalf("expected ok, got %s: %s", got.Stage, got.Message)
 	}
 }
-

@@ -1,0 +1,113 @@
+page games
+  path: /gopher/game-lobby
+  nav: Games
+  title: Games
+  subtitle: Play LynRummy and other games with your team — right inside your chat app.
+  auth: user
+  handler: HandleGames
+
+  view list
+    when: no id
+    table
+      query:
+        SELECT g.id, g.player1_id, g.player2_id, g.created_at,
+        g.puzzle_name, g.label,
+        u1.full_name AS player1_name,
+        u2.full_name AS player2_name,
+        (SELECT COUNT(*) FROM game_events WHERE game_id = g.id) AS events
+        FROM games g
+        JOIN users u1 ON g.player1_id = u1.id
+        LEFT JOIN users u2 ON g.player2_id = u2.id
+        WHERE g.archived = 0
+        AND (g.player1_id = $user OR g.player2_id = $user OR g.player2_id IS NULL)
+        ORDER BY g.created_at DESC
+      empty: "No games yet."
+      columns:
+        "#":        link_to_self(id, param=id)
+        "Label":    muted_or(label, "—")
+        "Puzzle":   muted_or(puzzle_name, "—")
+        "Player 1": user_link(player1_id, player1_name)
+        "Player 2": user_link_or(player2_id, player2_name, "open — waiting for player")
+        "Events":   text(events)
+        "Created":  time_short(created_at)
+
+    form create
+      title: Create Game
+      field puzzle_name: text placeholder="e.g. puzzle_24" width=200 optional
+      submit: Create
+      handler: new_game
+
+  view detail
+    when: id
+    query:
+      SELECT player1_id, player2_id, created_at, puzzle_name, label
+      FROM games
+      WHERE id = $id
+    not_found: "Game not found"
+    heading: "Game #{id}" + label_suffix(label)
+
+    link back: /gopher/game-lobby text="← Back to games"
+
+    facts:
+      "Player 1": user_link(player1_id)
+      "Player 2": user_link_or(player2_id, "Waiting for player")
+      "Created":  time_short(created_at)
+
+    form label [owner: player1_id, player2_id]
+      title: Label
+      field label: text value=label placeholder="e.g. Throwaway Game" width=240 optional
+      hint: "A human-memorable handle for this game. Leave blank to clear."
+      submit: Save
+      handler: update_label
+
+    form rename [admin: true]
+      title: Rename (puzzle)
+      field puzzle_name: text value=puzzle_name placeholder="New puzzle name" width=240 optional
+      submit: Save
+      hint: "Leave blank to clear the puzzle name"
+      handler: update_puzzle_name
+
+    link replay: /gopher/game-replay?id={id} text="Replay Game"
+
+    section "Event Log"
+      table
+        query:
+          SELECT ge.id, ge.user_id, u.full_name AS user_name,
+          ge.payload, ge.created_at
+          FROM game_events ge
+          JOIN users u ON ge.user_id = u.id
+          WHERE ge.game_id = $id
+          ORDER BY ge.id ASC
+        empty: "No events yet."
+        columns:
+          "#":      text(id)
+          "Player": user_link(user_id, user_name)
+          "Action": custom(describeEvent, payload)
+          "Time":   time_hms(created_at)
+
+  handler new_game
+    when: method=POST
+    when_no: id label rename
+    field puzzle_name: string optional
+    action: insert_row
+      table: games
+      columns: game_type="lynrummy", player1_id=$user, created_at=now, puzzle_name=$puzzle_name, status="waiting"
+    redirect: /gopher/game-lobby?id={last_insert_id}
+
+  handler update_label [owner: player1_id, player2_id]
+    when: method=POST id label=1
+    field label: string optional
+    action: update_row
+      table: games
+      set: label=$label
+      where: id=$id
+    redirect: /gopher/game-lobby?id={id}
+
+  handler update_puzzle_name [admin: true]
+    when: method=POST id rename=1
+    field puzzle_name: string optional
+    action: update_row
+      table: games
+      set: puzzle_name=nullif($puzzle_name, "")
+      where: id=$id
+    redirect: /gopher/game-lobby?id={id}

@@ -1,0 +1,5 @@
+just_use helpers.go
+
+# Infra: PageHeader / PageFooter / PageSubtitle / RequireAuth / UserLink etc.
+#
+# Migration: Not a page; cross-cutting helpers. Stays hand-written.

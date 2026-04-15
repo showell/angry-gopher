@@ -1,0 +1,5 @@
+just_use dm.go
+
+# Direct-message conversations: list + thread view + compose.
+#
+# Migration: Not a CRUD shape; thread rendering + partial-load pattern would need richer primitives.

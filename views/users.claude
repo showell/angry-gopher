@@ -1,0 +1,5 @@
+just_use users.go
+
+# User list (with inline edit-own-name form) + user detail (channels + DM link).
+#
+# Migration: DSL-ready after: inline-form-in-list primitive, related-data section, row-style conditional.
