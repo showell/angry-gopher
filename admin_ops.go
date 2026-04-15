@@ -156,10 +156,8 @@ tr:hover td { background: #f0f0ff; }
 	fmt.Fprint(w, `<h2>Server Session</h2>`)
 	uptime := now.Sub(serverStartTime).Truncate(time.Second)
 	fmt.Fprintf(w, `<table>
-<tr><td><b>Generation</b></td><td>%d</td></tr>
 <tr><td><b>Started</b></td><td>%s (%s ago)</td></tr>
 <tr><td><b>Git Commit</b></td><td><code>%s</code></td></tr>`,
-		currentGeneration,
 		serverStartTime.Format("2006-01-02 15:04:05"),
 		uptime,
 		html.EscapeString(gitCommit),
@@ -175,36 +173,6 @@ tr:hover td { background: #f0f0ff; }
 		)
 	}
 	fmt.Fprint(w, `</table>`)
-
-	// --- User Sessions ---
-	fmt.Fprint(w, `<h2>User Sessions</h2>`)
-	usRows, err := DB.Query(`
-		SELECT us.user_id, u.full_name, us.generation, us.logged_in_at
-		FROM user_sessions us
-		JOIN users u ON us.user_id = u.id
-		ORDER BY us.id DESC
-		LIMIT 20`)
-	if err == nil {
-		defer usRows.Close()
-		fmt.Fprint(w, `<table><thead><tr><th>User</th><th>Generation</th><th>Logged In</th></tr></thead><tbody>`)
-		rowCount := 0
-		for usRows.Next() {
-			var userID, gen int
-			var fullName, loggedIn string
-			usRows.Scan(&userID, &fullName, &gen, &loggedIn)
-			genClass := "ok"
-			if gen != currentGeneration {
-				genClass = "warn"
-			}
-			fmt.Fprintf(w, `<tr><td>%s (id %d)</td><td class="%s">%d</td><td>%s</td></tr>`,
-				html.EscapeString(fullName), userID, genClass, gen, html.EscapeString(loggedIn))
-			rowCount++
-		}
-		fmt.Fprint(w, `</tbody></table>`)
-		if rowCount == 0 {
-			fmt.Fprint(w, `<p>No user sessions recorded yet.</p>`)
-		}
-	}
 
 	fmt.Fprint(w, `</body></html>`)
 }
@@ -233,7 +201,6 @@ func handleHealthCheck(w http.ResponseWriter, r *http.Request) {
 		Headroom int `json:"headroom"`
 	}
 	type healthData struct {
-		Generation   int          `json:"generation"`
 		UptimeSecs   int          `json:"uptime_secs"`
 		GitCommit    string       `json:"git_commit"`
 		Queues       []queueInfo  `json:"queues"`
@@ -244,7 +211,6 @@ func handleHealthCheck(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := healthData{
-		Generation:   currentGeneration,
 		UptimeSecs:   int(time.Since(serverStartTime).Seconds()),
 		GitCommit:    gitCommit,
 		OnlineUsers:  len(onlineIDs),

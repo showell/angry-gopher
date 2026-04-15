@@ -87,12 +87,6 @@ linkifiers use that config directly — no separate regex setup.
 If you have one repo, `#123` just works. Multiple repos use
 prefixes (`AG#123`, `AC#456`) to disambiguate.
 
-**Server settings returns generation, not Zulip's full payload.**
-`GET /api/v1/server_settings` returns only the server generation
-number. Zulip returns a large blob of feature flags, auth backends,
-and realm info. We'll add fields as needed but won't mirror the
-Zulip shape.
-
 **Pessimistic updates.** When the server is involved, the UI waits
 for confirmation before updating local state. The compose box
 disables while sending; the buddy checkbox disables during toggle.

@@ -127,10 +127,6 @@ func Reset() {
 	nextQueueID = 0
 }
 
-// OnRegister is called after a queue is successfully registered.
-// Set by main to record user logins without a circular import.
-var OnRegister func(userID int)
-
 // HandleRegister handles POST /api/v1/register.
 func HandleRegister(w http.ResponseWriter, r *http.Request) {
 	userID := auth.Authenticate(r)
@@ -141,9 +137,6 @@ func HandleRegister(w http.ResponseWriter, r *http.Request) {
 
 	q := newQueue(userID)
 	log.Printf("[api] Registered event queue: %s (user %d)", q.id, userID)
-	if OnRegister != nil {
-		OnRegister(userID)
-	}
 	respond.Success(w, map[string]interface{}{
 		"queue_id":      q.id,
 		"last_event_id": -1,

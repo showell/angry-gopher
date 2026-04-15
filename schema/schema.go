@@ -183,17 +183,4 @@ CREATE VIRTUAL TABLE IF NOT EXISTS message_fts USING fts5(
 CREATE INDEX IF NOT EXISTS idx_messages_channel_id_desc ON messages(channel_id, id DESC);
 CREATE INDEX IF NOT EXISTS idx_messages_channel_topic ON messages(channel_id, topic_id);
 CREATE INDEX IF NOT EXISTS idx_messages_sender ON messages(sender_id);
-
-CREATE TABLE IF NOT EXISTS server_sessions (
-    generation INTEGER PRIMARY KEY AUTOINCREMENT,
-    started_at TEXT NOT NULL,
-    git_commit TEXT NOT NULL DEFAULT ''
-);
-
-CREATE TABLE IF NOT EXISTS user_sessions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL REFERENCES users(id),
-    generation INTEGER NOT NULL REFERENCES server_sessions(generation),
-    logged_in_at TEXT NOT NULL
-);
 `

@@ -40,7 +40,6 @@ func buildMux() *http.ServeMux {
 	api := withMiddleware
 
 	// --- Zulip-compatible API ---
-	mux.HandleFunc("/api/v1/server_settings", api(handleServerSettings))
 	mux.HandleFunc("/api/v1/register", api(events.HandleRegister))
 	mux.HandleFunc("/api/v1/events", api(routeEvents))
 	mux.HandleFunc("/api/v1/users/me", api(routeOwnUser))
@@ -116,7 +115,6 @@ func wireDB() {
 	views.RenderMarkdown = renderMarkdown
 	search.DB = DB
 	webhooks.DB = DB
-	events.OnRegister = recordUserLogin
 	messages.RenderMarkdown = renderMarkdown
 }
 
@@ -181,7 +179,6 @@ Backup the production database:
 
 	ensureBotUsers()
 	RefreshLinkifierCache()
-	recordServerStart()
 
 	mux := buildMux()
 
@@ -213,12 +210,7 @@ var serverConfig *ServerConfig
 
 // Set at build time via -ldflags "-X main.gitCommit=...".
 var gitCommit = "dev"
-
-// Current server generation, set by recordServerStart().
-var currentGeneration int
-var serverStartTime time.Time
-
-
+var serverStartTime = time.Now()
 
 func ensureBotUsers() {
 	var ghBotID int
@@ -231,31 +223,6 @@ func ensureBotUsers() {
 	}
 	webhooks.WebhookUserID = ghBotID
 	log.Printf("GitHub bot user: id=%d", ghBotID)
-}
-
-func handleServerSettings(w http.ResponseWriter, r *http.Request) {
-	respond.Success(w, map[string]interface{}{
-		"generation": currentGeneration,
-	})
-}
-
-func recordServerStart() {
-	serverStartTime = time.Now()
-	result, err := DB.Exec(
-		`INSERT INTO server_sessions (started_at, git_commit) VALUES (?, ?)`,
-		serverStartTime.Format(time.RFC3339), gitCommit)
-	if err != nil {
-		log.Printf("Failed to record server start: %v", err)
-		return
-	}
-	gen, _ := result.LastInsertId()
-	currentGeneration = int(gen)
-	log.Printf("Server generation: %d", currentGeneration)
-}
-
-func recordUserLogin(userID int) {
-	DB.Exec(`INSERT INTO user_sessions (user_id, generation, logged_in_at) VALUES (?, ?, ?)`,
-		userID, currentGeneration, time.Now().Format(time.RFC3339))
 }
 
 var (
