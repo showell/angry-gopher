@@ -31,3 +31,5 @@ page buddies
       table: buddies
       match: user_id=$user, buddy_id=$buddy_id
     redirect: /gopher/buddies
+
+# label: GENERATED

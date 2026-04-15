@@ -3,3 +3,5 @@ just_use invites.go
 # Admin-only invitation create + list + revoke. One-click invite links with expiry.
 #
 # Migration: DSL-ready after: admin gate, date-typed field, insert_row action with computed expiry.
+
+# label: SIMPLE

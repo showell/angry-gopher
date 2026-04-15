@@ -3,3 +3,5 @@ just_use recent.go
 # List of recent conversations (topics with most recent activity).
 #
 # Migration: DSL-ready; simple list view.
+
+# label: TINY

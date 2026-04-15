@@ -3,3 +3,5 @@ just_use sse.go
 # Server-Sent Events endpoint for streaming message updates.
 #
 # Migration: Long-poll-ish infra; will never be a DSL page.
+
+# label: CANONICAL

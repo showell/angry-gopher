@@ -3,3 +3,5 @@ just_use search.go
 # Full-text search across messages with filters (channel / topic / sender / date).
 #
 # Migration: Complex filter-combination UI; not DSL-friendly until we have composable query primitives.
+
+# label: WORKHORSE

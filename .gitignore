@@ -3,6 +3,8 @@
 /health_check
 /stress
 /import
+/crudgen
+/fixturegen
 
 # Editor temp files
 *.swp

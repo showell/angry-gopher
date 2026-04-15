@@ -3,3 +3,5 @@ just_use registry_generated.go
 # Package-level slice + registerGeneratedPage() hub that .claude-compiled pages push into.
 #
 # Migration: Pure infra. Adjacency: touched indirectly whenever a new .claude page is added (but via init() in the generated .go, not this file).
+
+# label: GENERATED

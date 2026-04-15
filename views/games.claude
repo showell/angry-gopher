@@ -128,3 +128,5 @@ just_use games.go
 ##       table: games
 ##       columns: game_type="lynrummy", player1_id=$user, created_at=now, puzzle_name=$puzzle_name, status="waiting"
 ##     redirect: /gopher/game-lobby?id={last_insert_id}
+
+# label: WORKHORSE

@@ -3,3 +3,5 @@ just_use starred.go
 # List of messages the user has starred for quick reference.
 #
 # Migration: DSL-ready; simple filtered list.
+
+# label: TINY
