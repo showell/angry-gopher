@@ -77,6 +77,20 @@ scenario geometry_overlap
     stage: geometry
     message_contains: overlap
 
+scenario deck_identity_mismatch_in_remove
+  desc: Client's stacks_to_remove has the wrong originDeck; must not match the board stack (fabrication guard).
+  op: validate_game_move
+  board_before:
+    at (10,10): 5H 6H 7H
+  stacks_to_remove:
+    at (10,10): 5H' 6H' 7H'
+  stacks_to_add:
+    at (10,10): 5H' 6H' 7H' 8H'*
+  hand_cards_played: 8H'
+  expect: error
+    stage: inventory
+    message_contains: not on the board
+
 scenario geometry_crowded
   desc: Two stacks within BoardBounds.margin (5px) but not overlapping.
   op: validate_game_move

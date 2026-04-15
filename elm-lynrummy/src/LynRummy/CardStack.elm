@@ -49,12 +49,11 @@ Intentional Elm divergences:
   - `CardStack.stackType` is a function (derived on demand), not
     a stored field. Insight #5 — don't carry state that's a pure
     function of other state.
-  - `stacksEqual` deliberately ignores `originDeck` AND
-    BoardCard `state` — the equality reflects what the
-    *player* sees on the board, since the referee uses it to
-    match `stacksToRemove` against the player-supplied move.
-    See the function docstring for the full rationale and the
-    other available equality concepts.
+  - `stacksEqual` compares full card identity (including
+    `originDeck`) so inventory accounting is conservative on
+    double-deck boards. BoardCard `state` (recency) is still
+    ignored — it's a turn-accounting concern, not identity.
+    See the function docstring for the rationale.
   - `clone` is N/A in Elm (values are inherently immutable).
   - `toJSON` / `fromJson` deferred (boundary plumbing).
   - `pullFromDeck` deferred (requires a pure model of the deck
@@ -170,28 +169,41 @@ stackStr s =
         |> String.join ","
 
 
-{-| CardStack equality from the player's perspective. Two
-stacks compare equal iff:
+{-| CardStack equality for referee accounting. Two stacks
+compare equal iff:
 
-  - their cards display the same (same `value` + `suit` in the
-    same order — `originDeck` and BoardCard `state` are
-    *intentionally ignored*), AND
+  - their cards are identical pairwise — same `value`, `suit`,
+    AND `originDeck`, in the same order, AND
   - their `loc` values are equal.
 
-This is the equality the referee uses to match
-`stacksToRemove` against the board: it mirrors what the player
-*sees*. The player can't distinguish a 5♥ from `DeckOne` vs
-`DeckTwo` — they look identical — so the referee shouldn't
-either. `loc` does the disambiguation when two stacks have the
-same display.
+`BoardCard.state` (recency) is *intentionally ignored* —
+that's turn-accounting, not identity.
 
-If you want strict full-identity equality (every field
-including deck and recency), use `==` directly on the records.
+Why deck identity matters: on a double-deck board there are
+two 5♥'s — 5♥(d0) and 5♥(d1). They look identical to the
+player, but inventory accounting must distinguish them. If
+equality were deck-blind, a client could claim to have
+removed 5♥(d0) from the board while adding 5♥(d1) it never
+held — and the referee couldn't tell. Full-identity equality
+keeps `stacks_to_remove` honest.
 
 -}
 stacksEqual : CardStack -> CardStack -> Bool
 stacksEqual a b =
-    stackStr a == stackStr b && locsEqual a.loc b.loc
+    locsEqual a.loc b.loc && cardsEqualInOrder a.boardCards b.boardCards
+
+
+cardsEqualInOrder : List BoardCard -> List BoardCard -> Bool
+cardsEqualInOrder xs ys =
+    case ( xs, ys ) of
+        ( [], [] ) ->
+            True
+
+        ( x :: xrest, y :: yrest ) ->
+            x.card == y.card && cardsEqualInOrder xrest yrest
+
+        _ ->
+            False
 
 
 locsEqual : BoardLocation -> BoardLocation -> Bool

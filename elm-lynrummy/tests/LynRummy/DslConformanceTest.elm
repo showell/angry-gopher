@@ -33,6 +33,34 @@ standardBounds =
 
 
 
+deckIdentityMismatchInRemove : Test
+deckIdentityMismatchInRemove =
+    test "deck_identity_mismatch_in_remove" <|
+        \_ ->
+            let
+                move =
+                    { boardBefore = [ { boardCards = [ { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 10, left = 10 } }
+                        ]
+                    , stacksToRemove = [ { boardCards = [ { card = { value = Five, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Six, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 10, left = 10 } }
+                        ]
+                    , stacksToAdd = [ { boardCards = [ { card = { value = Five, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Six, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Eight, suit = Heart, originDeck = DeckTwo }, state = FreshlyPlayed } ], loc = { top = 10, left = 10 } }
+                        ]
+                    , handCardsPlayed = [ { card = { value = Eight, suit = Heart, originDeck = DeckTwo }, state = HandNormal } ]
+                    }
+            in
+            case Referee.validateGameMove move standardBounds of
+                Ok _ ->
+                    Expect.fail ("expected error at stage " ++ "inventory" ++ ", got ok")
+
+                Err err ->
+                    if refereeStageToString err.stage /= "inventory" then
+                        Expect.fail ("stage: want " ++ "inventory" ++ ", got " ++ refereeStageToString err.stage)
+                    else if not (String.contains "not on the board" err.message) then
+                        Expect.fail ("message substring " ++ "not on the board" ++ " not found in " ++ err.message)
+                    else
+                        Expect.pass
+
+
 directPlayExtendsLooseCard : Test
 directPlayExtendsLooseCard =
     test "direct_play_extends_loose_card" <|
@@ -712,7 +740,8 @@ validExtendRunWith8H =
 suite : Test
 suite =
     describe "DSL conformance"
-        [ directPlayExtendsLooseCard
+        [ deckIdentityMismatchInRemove
+        , directPlayExtendsLooseCard
         , directPlayLeftExtendHeartRun
         , directPlayNoPlays
         , directPlayRightExtendHeartRun

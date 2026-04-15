@@ -10,6 +10,25 @@ import (
 	"angry-gopher/lynrummy"
 )
 
+// Client's stacks_to_remove has the wrong originDeck; must not match the board stack (fabrication guard).
+func Test_deck_identity_mismatch_in_remove(t *testing.T) {
+	bounds := lynrummy.BoardBounds{MaxWidth: 800, MaxHeight: 600, Margin: 5}
+	boardBefore := []lynrummy.CardStack{lynrummy.NewCardStack([]lynrummy.BoardCard{{Card: lynrummy.Card{Value: 5, Suit: lynrummy.Heart, OriginDeck: 0}, State: lynrummy.FirmlyOnBoard}, {Card: lynrummy.Card{Value: 6, Suit: lynrummy.Heart, OriginDeck: 0}, State: lynrummy.FirmlyOnBoard}, {Card: lynrummy.Card{Value: 7, Suit: lynrummy.Heart, OriginDeck: 0}, State: lynrummy.FirmlyOnBoard}}, lynrummy.Location{Top: 10, Left: 10})}
+	stacksToRemove := []lynrummy.CardStack{lynrummy.NewCardStack([]lynrummy.BoardCard{{Card: lynrummy.Card{Value: 5, Suit: lynrummy.Heart, OriginDeck: 1}, State: lynrummy.FirmlyOnBoard}, {Card: lynrummy.Card{Value: 6, Suit: lynrummy.Heart, OriginDeck: 1}, State: lynrummy.FirmlyOnBoard}, {Card: lynrummy.Card{Value: 7, Suit: lynrummy.Heart, OriginDeck: 1}, State: lynrummy.FirmlyOnBoard}}, lynrummy.Location{Top: 10, Left: 10})}
+	stacksToAdd := []lynrummy.CardStack{lynrummy.NewCardStack([]lynrummy.BoardCard{{Card: lynrummy.Card{Value: 5, Suit: lynrummy.Heart, OriginDeck: 1}, State: lynrummy.FirmlyOnBoard}, {Card: lynrummy.Card{Value: 6, Suit: lynrummy.Heart, OriginDeck: 1}, State: lynrummy.FirmlyOnBoard}, {Card: lynrummy.Card{Value: 7, Suit: lynrummy.Heart, OriginDeck: 1}, State: lynrummy.FirmlyOnBoard}, {Card: lynrummy.Card{Value: 8, Suit: lynrummy.Heart, OriginDeck: 1}, State: lynrummy.FreshlyPlayed}}, lynrummy.Location{Top: 10, Left: 10})}
+	hand := []lynrummy.Card{lynrummy.Card{Value: 8, Suit: lynrummy.Heart, OriginDeck: 1}}
+	got := lynrummy.ValidateGameMove(lynrummy.Move{BoardBefore: boardBefore, StacksToRemove: stacksToRemove, StacksToAdd: stacksToAdd, HandCardsPlayed: hand}, bounds)
+	if got == nil {
+		t.Fatal("expected error at stage \"inventory\", got ok")
+	}
+	if got.Stage != "inventory" {
+		t.Fatalf("stage: want \"inventory\", got %q", got.Stage)
+	}
+	if !stringsContainsDSL(got.Message, "not on the board") {
+		t.Fatalf("message: want substring \"not on the board\", got %q", got.Message)
+	}
+}
+
 // Hand 6H right-extends a loose 1-card 5H stack to a 2-card Incomplete — regression guard for maybeMerge.
 func Test_direct_play_extends_loose_card(t *testing.T) {
 	hand := []lynrummy.HandCard{{Card: lynrummy.Card{Value: 6, Suit: lynrummy.Heart, OriginDeck: 0}, State: lynrummy.HandNormal}}
