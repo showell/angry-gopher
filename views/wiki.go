@@ -1,13 +1,15 @@
-// Wiki view — browser-based reader for the repo's docs, sidecars,
-// and source files. V1 is read-only.
+// Wiki view — browser-based reader for repo docs, sidecars, and
+// source files. Serves multiple repos so Steve can navigate between
+// Gopher + sibling Elm projects in one browser tab.
 //
-//   /gopher/wiki/                  — home (renders README.md)
-//   /gopher/wiki/<path>            — render any file in the repo
-//   /gopher/wiki/tree              — directory listing at repo root
-//   /gopher/wiki/tree/<subpath>    — directory listing at subpath
+//   /gopher/wiki/                      — landing (lists repos + landmarks)
+//   /gopher/wiki/<repo>/               — repo home (README.md)
+//   /gopher/wiki/<repo>/<path>         — render any file in <repo>
+//   /gopher/wiki/<repo>/tree[/subpath] — directory listing
 //
-// Files are resolved against the current working directory (the
-// repo root when the server is started via ops/start).
+// Known repos live in wikiRepos. To add one, map a name to an
+// absolute path. Findability knob = 10: every repo Steve might want
+// is exposed; no gating.
 package views
 
 import (
@@ -20,20 +22,38 @@ import (
 	"strings"
 )
 
-// wikiRoot returns the repo root (current working directory when the
-// server was started). Sufficient for V1.
-func wikiRoot() string {
-	cwd, err := os.Getwd()
-	if err != nil {
-		return "."
-	}
-	return cwd
+// wikiRepos maps a short repo name (used in URLs) to its filesystem
+// root. Order is the display order in the sidebar.
+var wikiRepoOrder = []string{"gopher", "elm-critters", "elm-lynrummy"}
+
+var wikiRepos = map[string]string{
+	"gopher":       "", // resolved to cwd lazily
+	"elm-critters": filepath.Join(os.Getenv("HOME"), "showell_repos/elm-critters"),
+	"elm-lynrummy": filepath.Join(os.Getenv("HOME"), "showell_repos/elm-lynrummy"),
 }
 
-// resolveWikiPath joins the request subpath onto the repo root and
-// refuses anything that escapes the root (path traversal guard).
-func resolveWikiPath(sub string) (string, bool) {
-	root := wikiRoot()
+func repoRoot(repo string) (string, bool) {
+	root, ok := wikiRepos[repo]
+	if !ok {
+		return "", false
+	}
+	if repo == "gopher" {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return "", false
+		}
+		return cwd, true
+	}
+	return root, true
+}
+
+// resolveRepoPath joins sub onto the repo root and refuses anything
+// that escapes via `..`.
+func resolveRepoPath(repo, sub string) (string, bool) {
+	root, ok := repoRoot(repo)
+	if !ok {
+		return "", false
+	}
 	cleaned := filepath.Clean(filepath.Join(root, sub))
 	rel, err := filepath.Rel(root, cleaned)
 	if err != nil || strings.HasPrefix(rel, "..") {
@@ -43,42 +63,76 @@ func resolveWikiPath(sub string) (string, bool) {
 }
 
 // HandleWiki dispatches all /gopher/wiki/* requests.
-// No auth: V1 is read-only and the files are already on disk for
-// anyone with shell access. Matches the broader user-rip direction.
+// No auth: V1 is read-only and the files are on disk for anyone
+// with shell access. Findability is the point.
 func HandleWiki(w http.ResponseWriter, r *http.Request) {
 	sub := strings.TrimPrefix(r.URL.Path, "/gopher/wiki/")
-	sub = strings.TrimPrefix(sub, "/gopher/wiki") // handles bare /gopher/wiki
+	sub = strings.TrimPrefix(sub, "/gopher/wiki")
+	sub = strings.TrimPrefix(sub, "/")
 
-	if sub == "" || sub == "/" {
-		wikiRender(w, "README.md", "Wiki")
+	if sub == "" {
+		wikiLanding(w)
 		return
 	}
 
-	if strings.HasPrefix(sub, "tree") {
-		rest := strings.TrimPrefix(sub, "tree")
-		rest = strings.TrimPrefix(rest, "/")
-		wikiTree(w, rest)
+	// First segment is the repo name.
+	parts := strings.SplitN(sub, "/", 2)
+	repo := parts[0]
+	rest := ""
+	if len(parts) > 1 {
+		rest = parts[1]
+	}
+
+	if _, ok := wikiRepos[repo]; !ok {
+		http.Error(w, "Unknown repo: "+repo, http.StatusNotFound)
 		return
 	}
 
-	wikiRender(w, sub, sub)
+	if rest == "" || rest == "/" {
+		wikiRender(w, repo, "README.md", repo+"/README.md")
+		return
+	}
+
+	if strings.HasPrefix(rest, "tree") {
+		treeRest := strings.TrimPrefix(rest, "tree")
+		treeRest = strings.TrimPrefix(treeRest, "/")
+		wikiTree(w, repo, treeRest)
+		return
+	}
+
+	wikiRender(w, repo, rest, repo+"/"+rest)
+}
+
+func wikiLanding(w http.ResponseWriter) {
+	wikiHeader(w, "Wiki", "/", "")
+	fmt.Fprint(w, `<p>Browser-based reader for Steve's dev harness. Pick a repo:</p><ul class="wiki-tree">`)
+	for _, name := range wikiRepoOrder {
+		root, ok := repoRoot(name)
+		if !ok {
+			continue
+		}
+		fmt.Fprintf(w, `<li><a href="/gopher/wiki/%s/"><b>%s</b></a> <span class="muted">— %s</span></li>`,
+			html.EscapeString(name), html.EscapeString(name), html.EscapeString(root))
+	}
+	fmt.Fprint(w, `</ul>`)
+	wikiFooter(w)
 }
 
 // wikiRender reads a file and serves it — markdown for .md,
 // preformatted for everything else.
-func wikiRender(w http.ResponseWriter, sub, title string) {
-	abs, ok := resolveWikiPath(sub)
+func wikiRender(w http.ResponseWriter, repo, sub, displayPath string) {
+	abs, ok := resolveRepoPath(repo, sub)
 	if !ok {
 		http.Error(w, "Invalid path", http.StatusBadRequest)
 		return
 	}
 	info, err := os.Stat(abs)
 	if err != nil {
-		http.Error(w, "Not found: "+sub, http.StatusNotFound)
+		http.Error(w, "Not found: "+displayPath, http.StatusNotFound)
 		return
 	}
 	if info.IsDir() {
-		wikiTree(w, sub)
+		wikiTree(w, repo, sub)
 		return
 	}
 	body, err := os.ReadFile(abs)
@@ -87,7 +141,7 @@ func wikiRender(w http.ResponseWriter, sub, title string) {
 		return
 	}
 
-	wikiHeader(w, title, sub)
+	wikiHeader(w, sub, displayPath, repo)
 	if strings.HasSuffix(sub, ".md") && RenderMarkdown != nil {
 		fmt.Fprint(w, `<div class="wiki-md">`)
 		fmt.Fprint(w, RenderMarkdown(string(body)))
@@ -98,9 +152,9 @@ func wikiRender(w http.ResponseWriter, sub, title string) {
 	wikiFooter(w)
 }
 
-// wikiTree lists a directory.
-func wikiTree(w http.ResponseWriter, sub string) {
-	abs, ok := resolveWikiPath(sub)
+// wikiTree lists a directory inside a repo.
+func wikiTree(w http.ResponseWriter, repo, sub string) {
+	abs, ok := resolveRepoPath(repo, sub)
 	if !ok {
 		http.Error(w, "Invalid path", http.StatusBadRequest)
 		return
@@ -120,7 +174,8 @@ func wikiTree(w http.ResponseWriter, sub string) {
 	if title == "" {
 		title = "/"
 	}
-	wikiHeader(w, "Tree: "+title, "tree/"+sub)
+	displayPath := repo + "/tree/" + sub
+	wikiHeader(w, "Tree: "+title, displayPath, repo)
 	fmt.Fprint(w, `<ul class="wiki-tree">`)
 	for _, e := range entries {
 		name := e.Name()
@@ -129,11 +184,11 @@ func wikiTree(w http.ResponseWriter, sub string) {
 		}
 		child := filepath.Join(sub, name)
 		if e.IsDir() {
-			fmt.Fprintf(w, `<li><a href="/gopher/wiki/tree/%s">%s/</a></li>`,
-				html.EscapeString(child), html.EscapeString(name))
+			fmt.Fprintf(w, `<li><a href="/gopher/wiki/%s/tree/%s">%s/</a></li>`,
+				html.EscapeString(repo), html.EscapeString(child), html.EscapeString(name))
 		} else {
-			fmt.Fprintf(w, `<li><a href="/gopher/wiki/%s">%s</a></li>`,
-				html.EscapeString(child), html.EscapeString(name))
+			fmt.Fprintf(w, `<li><a href="/gopher/wiki/%s/%s">%s</a></li>`,
+				html.EscapeString(repo), html.EscapeString(child), html.EscapeString(name))
 		}
 	}
 	fmt.Fprint(w, `</ul>`)
@@ -141,8 +196,9 @@ func wikiTree(w http.ResponseWriter, sub string) {
 }
 
 // wikiHeader writes wiki-specific HTML shell with a sidebar.
-// The regular PageHeader is too narrow (700px) for doc reading.
-func wikiHeader(w http.ResponseWriter, title, currentPath string) {
+// `currentRepo` scopes the per-repo landmarks/tree links; empty at
+// the landing page.
+func wikiHeader(w http.ResponseWriter, title, currentPath, currentRepo string) {
 	fmt.Fprintf(w, `<!DOCTYPE html>
 <html><head><title>%s — Wiki</title>
 <style>
@@ -153,6 +209,8 @@ aside h3 { margin: 16px 0 6px; color: #000080; font-size: 13px; }
 aside ul { list-style: none; padding-left: 10px; margin: 4px 0; }
 aside a { color: #000080; text-decoration: none; }
 aside a:hover { text-decoration: underline; }
+aside .muted { color: #888; font-size: 11px; }
+aside .repo-current { font-weight: bold; background: #fff3a8; padding: 0 4px; }
 main { flex: 1; padding: 24px 40px; max-width: 900px; }
 h1 { color: #000080; } h2 { color: #000080; margin-top: 24px; }
 a { color: #000080; }
@@ -170,32 +228,80 @@ pre code { background: none; padding: 0; }
 </style>
 </head><body>
 <aside>
-<h3><a href="/gopher/wiki/">Wiki Home</a></h3>
-<h3>Landmarks</h3>
+<h3><a href="/gopher/">← Gopher home</a></h3>
+<h3><a href="/gopher/wiki/">Wiki home</a></h3>
+<h3>Repos</h3>
+<ul>`, html.EscapeString(title))
+	for _, name := range wikiRepoOrder {
+		cls := ""
+		if name == currentRepo {
+			cls = ` class="repo-current"`
+		}
+		fmt.Fprintf(w, `<li><a href="/gopher/wiki/%s/"%s>%s</a></li>`, name, cls, name)
+	}
+	fmt.Fprint(w, `</ul>`)
+
+	if currentRepo == "gopher" || currentRepo == "" {
+		fmt.Fprint(w, `
+<h3>Gopher landmarks</h3>
 <ul>
-<li><a href="/gopher/wiki/README.md">README</a></li>
-<li><a href="/gopher/wiki/DECISIONS.md">DECISIONS</a></li>
-<li><a href="/gopher/wiki/DATABASE.md">DATABASE</a></li>
-<li><a href="/gopher/wiki/TESTING.md">TESTING</a></li>
-<li><a href="/gopher/wiki/TASKS.md">TASKS</a></li>
-<li><a href="/gopher/wiki/LABELS.md">LABELS</a></li>
+<li><a href="/gopher/wiki/gopher/README.md">README</a></li>
+<li><a href="/gopher/wiki/gopher/DECISIONS.md">DECISIONS</a></li>
+<li><a href="/gopher/wiki/gopher/DATABASE.md">DATABASE</a></li>
+<li><a href="/gopher/wiki/gopher/TESTING.md">TESTING</a></li>
+<li><a href="/gopher/wiki/gopher/TASKS.md">TASKS</a></li>
+<li><a href="/gopher/wiki/gopher/LABELS.md">LABELS</a></li>
 </ul>
-<h3>Browse</h3>
+<h3>Browse Gopher</h3>
 <ul>
-<li><a href="/gopher/wiki/tree/">Repo tree</a></li>
-<li><a href="/gopher/wiki/tree/lynrummy">lynrummy/</a></li>
-<li><a href="/gopher/wiki/tree/views">views/</a></li>
-<li><a href="/gopher/wiki/tree/agent_collab">agent_collab/</a></li>
-<li><a href="/gopher/wiki/tree/cmd">cmd/</a></li>
-<li><a href="/gopher/wiki/tree/tools">tools/</a></li>
+<li><a href="/gopher/wiki/gopher/tree/">All files</a></li>
+<li><a href="/gopher/wiki/gopher/tree/lynrummy">lynrummy/</a></li>
+<li><a href="/gopher/wiki/gopher/tree/critters">critters/</a></li>
+<li><a href="/gopher/wiki/gopher/tree/views">views/</a></li>
+<li><a href="/gopher/wiki/gopher/tree/agent_collab">agent_collab/</a></li>
+<li><a href="/gopher/wiki/gopher/tree/cmd">cmd/</a></li>
+<li><a href="/gopher/wiki/gopher/tree/tools">tools/</a></li>
+</ul>`)
+	}
+
+	if currentRepo == "elm-critters" {
+		fmt.Fprint(w, `
+<h3>elm-critters</h3>
+<ul>
+<li><a href="/gopher/wiki/elm-critters/README.md">README</a></li>
+<li><a href="/gopher/wiki/elm-critters/src/Main.elm">Main.elm</a></li>
+<li><a href="/gopher/wiki/elm-critters/tree/">All files</a></li>
 </ul>
-<h3>Back</h3>
-<ul><li><a href="/gopher/">Gopher home</a></li></ul>
+<h3>Live product</h3>
+<ul><li><a href="/gopher/critters/">Critter studies portal</a></li></ul>`)
+	}
+
+	if currentRepo == "elm-lynrummy" {
+		fmt.Fprint(w, `
+<h3>elm-lynrummy</h3>
+<ul>
+<li><a href="/gopher/wiki/elm-lynrummy/README.md">README</a></li>
+<li><a href="/gopher/wiki/elm-lynrummy/tree/src">src/</a></li>
+<li><a href="/gopher/wiki/elm-lynrummy/tree/">All files</a></li>
+</ul>
+<h3>Live product</h3>
+<ul><li><a href="/gopher/game-lobby">Game lobby</a></li></ul>`)
+	}
+
+	fmt.Fprint(w, `
+<h3>Products</h3>
+<ul>
+<li><a href="/gopher/">Gopher home</a></li>
+<li><a href="/gopher/critters/">Critter studies</a></li>
+<li><a href="/gopher/game-lobby">LynRummy</a></li>
+</ul>
 </aside>
 <main>
-<div class="breadcrumb"><a href="/gopher/wiki/">/</a> %s</div>
+<div class="breadcrumb"><a href="/gopher/wiki/">/</a> `)
+	fmt.Fprint(w, html.EscapeString(currentPath))
+	fmt.Fprintf(w, `</div>
 <h1>%s</h1>
-`, html.EscapeString(title), html.EscapeString(currentPath), html.EscapeString(title))
+`, html.EscapeString(title))
 }
 
 func wikiFooter(w http.ResponseWriter) {

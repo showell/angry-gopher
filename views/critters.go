@@ -99,9 +99,39 @@ to Gopher.</p>
 		} else {
 			fmt.Fprint(w, `<span class="muted">DSL defined; engine not yet implemented</span>`)
 		}
+		// Per-study code & docs cross-links.
+		fmt.Fprintf(w, ` <span class="muted"> · <a href="/gopher/wiki/gopher/critters/studies/%s.claude">DSL</a></span>`,
+			html.EscapeString(s.Name))
 		fmt.Fprint(w, `</div>`)
 	}
-	fmt.Fprint(w, `</body></html>`)
+
+	// Code & Docs section — findability knob = 10.
+	fmt.Fprint(w, `
+<h2>Code &amp; Docs</h2>
+<ul>
+<li><b>Gopher side:</b>
+  <a href="/gopher/wiki/gopher/critters/critters.go">critters/critters.go</a> ·
+  <a href="/gopher/wiki/gopher/critters/critters.claude">sidecar</a> ·
+  <a href="/gopher/wiki/gopher/views/critters.go">views/critters.go</a> ·
+  <a href="/gopher/wiki/gopher/views/critters.claude">sidecar</a>
+</li>
+<li><b>Study DSLs:</b>
+  <a href="/gopher/wiki/gopher/tree/critters/studies">critters/studies/</a>
+</li>
+<li><b>Elm engine:</b>
+  <a href="/gopher/wiki/elm-critters/">elm-critters repo</a> ·
+  <a href="/gopher/wiki/elm-critters/README.md">README</a> ·
+  <a href="/gopher/wiki/elm-critters/src/Main.elm">Main.elm</a>
+</li>
+<li><b>Schema:</b>
+  <a href="/gopher/wiki/gopher/schema/schema.go">schema.go</a>
+  (critter_sessions table)
+</li>
+<li><b>Live data:</b>
+  <a href="/gopher/critters/sessions">Recorded sessions</a>
+</li>
+</ul>
+</body></html>`)
 }
 
 // crittersPlay serves the Elm-loading page for a given study.
@@ -121,7 +151,11 @@ func crittersPlay(w http.ResponseWriter, study string) {
 	fmt.Fprintf(w, `<!doctype html>
 <html><head><meta charset="utf-8"><title>%s</title>
 <style>
-  body { margin: 20px; font-family: sans-serif; background: #f4f4ec; }
+  body { margin: 0; font-family: sans-serif; background: #f4f4ec; }
+  .app-nav { padding: 8px 16px; background: #000080; color: white; font-size: 13px; }
+  .app-nav a { color: white; text-decoration: none; margin-right: 14px; }
+  .app-nav a:hover { text-decoration: underline; }
+  .app-main { padding: 20px; }
   @keyframes wobble {
     0%%   { transform: translate(0, 0); }
     20%%  { transform: translate(-8px, 4px); }
@@ -133,6 +167,13 @@ func crittersPlay(w http.ResponseWriter, study string) {
   .wobble { animation: wobble 0.4s; }
 </style>
 </head><body>
+<div class="app-nav">
+  <a href="/gopher/">← Gopher home</a>
+  <a href="/gopher/critters/">Critter studies</a>
+  <a href="/gopher/wiki/elm-critters/">elm-critters source</a>
+  <a href="/gopher/wiki/gopher/critters/studies/%s.claude">%s.claude (DSL)</a>
+</div>
+<div class="app-main">
 <div id="root"></div>
 <script src="/gopher/critters/elm.js"></script>
 <script>
@@ -161,8 +202,9 @@ app.ports.saveRecording.subscribe(function (payload) {
     });
 });
 </script>
+</div>
 </body></html>
-`, html.EscapeString(title), study, study)
+`, html.EscapeString(title), study, study, study, study)
 }
 
 // crittersSessionsList lists recent recorded sessions.
@@ -191,7 +233,7 @@ a { color: #000080; }
 nav { font-size: 13px; margin-bottom: 16px; }
 </style>
 </head><body>
-<nav><a href="/gopher/">← Gopher home</a> &nbsp;·&nbsp; <a href="/gopher/critters/">Studies</a></nav>
+<nav><a href="/gopher/">← Gopher home</a> &nbsp;·&nbsp; <a href="/gopher/critters/">Studies</a> &nbsp;·&nbsp; <a href="/gopher/wiki/">Wiki</a></nav>
 <h1>Recorded sessions</h1>
 <table><thead><tr><th>ID</th><th>Study</th><th>Label</th><th>Saved at</th><th>Bytes</th></tr></thead><tbody>`)
 	count := 0
@@ -242,7 +284,7 @@ nav { font-size: 13px; margin-bottom: 16px; }
 nav a { color: #000080; }
 </style>
 </head><body>
-<nav><a href="/gopher/critters/sessions">← Sessions</a> &nbsp;·&nbsp; <a href="/gopher/critters/">Studies</a></nav>
+<nav><a href="/gopher/">← Gopher home</a> &nbsp;·&nbsp; <a href="/gopher/critters/sessions">Sessions</a> &nbsp;·&nbsp; <a href="/gopher/critters/">Studies</a></nav>
 <h1>Session %d</h1>
 <dl>
 <dt>Study</dt><dd>%s</dd>
