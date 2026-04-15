@@ -26,8 +26,9 @@ var ElmCrittersDir = filepath.Join(os.Getenv("HOME"), "showell_repos/elm-critter
 // implements. The DSL files for other studies exist but haven't
 // been compiled into playable code yet.
 var playableStudies = map[string]bool{
-	"cows": true,
-	"mice": true,
+	"cows":      true,
+	"mice":      true,
+	"sort_cats": true,
 }
 
 // HandleCritters dispatches /gopher/critters/*.
