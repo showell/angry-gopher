@@ -34,20 +34,11 @@ var imageExtensions = map[string]bool{
 var mentionRe = regexp.MustCompile(`@\*\*([^*]+)\*\*`)
 var channelLinkRe = regexp.MustCompile(`#\*\*([^*]+)\*\*`)
 
-// GitHub linkifiers:
-//   #123           → issue/PR link (single configured repo)
-//   owner/repo#123 → explicit repo reference
-//   abc1234def     → commit link (7+ hex chars, word boundary)
-var issueRe = regexp.MustCompile(`(?:^|[\s(])#(\d+)\b`)
-var explicitIssueRe = regexp.MustCompile(`([a-zA-Z0-9_.-]+/[a-zA-Z0-9_.-]+)#(\d+)`)
-var commitRe = regexp.MustCompile(`(?:^|[\s(])([0-9a-f]{7,40})\b`)
-
 func renderMarkdown(source string) string {
 	// Pre-process Zulip-specific syntax before goldmark runs.
 	// These produce inline HTML that goldmark passes through.
 	source = processMentions(source)
 	source = processChannelLinks(source)
-	source = processLinkifiers(source)
 
 	var buf bytes.Buffer
 	if err := md.Convert([]byte(source), &buf); err != nil {
@@ -139,106 +130,6 @@ func processChannelLinks(source string) string {
 
 		return fmt.Sprintf(`<a href="%s">#%s</a>`, href, display)
 	})
-}
-
-// processLinkifiers converts GitHub references to links:
-//   #123          → link (if exactly one repo configured or prefix matches)
-//   AG#123        → link (custom prefix)
-//   owner/repo#123 → link (explicit)
-//   abc1234       → commit link (7+ hex chars)
-// Cached repo list for linkifiers. Refreshed by RefreshLinkifierCache().
-var linkifierRepos []linkifierRepo
-
-type linkifierRepo struct {
-	owner, name, prefix string
-}
-
-// RefreshLinkifierCache reloads the repo list from the database.
-// Called on startup and when repos are added/removed.
-func RefreshLinkifierCache() {
-	rows, err := DB.Query(`SELECT owner, name, prefix FROM github_repos`)
-	if err != nil {
-		return
-	}
-	defer rows.Close()
-	var repos []linkifierRepo
-	for rows.Next() {
-		var r linkifierRepo
-		rows.Scan(&r.owner, &r.name, &r.prefix)
-		repos = append(repos, r)
-	}
-	linkifierRepos = repos
-}
-
-func processLinkifiers(source string) string {
-	repos := linkifierRepos
-	if len(repos) == 0 {
-		return source
-	}
-
-	if len(repos) == 0 {
-		return source
-	}
-
-	// Explicit: owner/repo#123
-	source = explicitIssueRe.ReplaceAllStringFunc(source, func(match string) string {
-		parts := explicitIssueRe.FindStringSubmatch(match)
-		fullName, num := parts[1], parts[2]
-		for _, r := range repos {
-			if r.owner+"/"+r.name == fullName {
-				return fmt.Sprintf(`[%s](https://github.com/%s/issues/%s)`, match, fullName, num)
-			}
-		}
-		return match
-	})
-
-	// Prefix: AG#123 or bare #123
-	for _, r := range repos {
-		if r.prefix != "" {
-			// Custom prefix: AG#123
-			prefixRe := regexp.MustCompile(`(?:^|[\s(])` + regexp.QuoteMeta(r.prefix) + `#(\d+)\b`)
-			source = prefixRe.ReplaceAllStringFunc(source, func(match string) string {
-				parts := prefixRe.FindStringSubmatch(match)
-				num := parts[1]
-				leading := match[:len(match)-len(r.prefix)-1-len(num)]
-				link := fmt.Sprintf(`[%s#%s](https://github.com/%s/%s/issues/%s)`,
-					r.prefix, num, r.owner, r.name, num)
-				return leading + link
-			})
-		}
-	}
-
-	// Bare #123 — only if exactly one repo configured.
-	if len(repos) == 1 {
-		r := repos[0]
-		source = issueRe.ReplaceAllStringFunc(source, func(match string) string {
-			parts := issueRe.FindStringSubmatch(match)
-			num := parts[1]
-			leading := match[:len(match)-1-len(num)]
-			link := fmt.Sprintf(`[#%s](https://github.com/%s/%s/issues/%s)`,
-				num, r.owner, r.name, num)
-			return leading + link
-		})
-	}
-
-	// Commit hashes: 7+ hex chars.
-	if len(repos) == 1 {
-		r := repos[0]
-		source = commitRe.ReplaceAllStringFunc(source, func(match string) string {
-			parts := commitRe.FindStringSubmatch(match)
-			sha := parts[1]
-			short := sha
-			if len(short) > 7 {
-				short = short[:7]
-			}
-			leading := match[:len(match)-len(sha)]
-			link := fmt.Sprintf(`[%s](https://github.com/%s/%s/commit/%s)`,
-				short, r.owner, r.name, sha)
-			return leading + link
-		})
-	}
-
-	return source
 }
 
 func appendImagePreviews(html string) string {

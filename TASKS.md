@@ -7,7 +7,6 @@
 ## High Priority
 
 - [x] Advanced search — trigram FTS5, substring matching, combined filters
-- [x] Linkifiers — #123, AG#123, commit hashes auto-link to GitHub
 - [ ] LynRummy MPA — solitaire puzzle playable in CRUD app, no login, HTML+CSS cards, form-based moves
 - [ ] Search autocomplete — debounced as-you-type results in HTML view
 - [ ] Clean up all tsc errors in Angry Cat
@@ -15,7 +14,6 @@
 ## Normal Priority
 
 - [ ] Angry Cat Gopher fetch strategy — use search API + hydration instead of Zulip batches
-- [ ] GitHub linkifiers in Angry Cat (part of first-class GH integration)
 
 ## Low Priority — Angry Gopher
 

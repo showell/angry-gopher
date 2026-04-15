@@ -2,8 +2,8 @@
 
 A topic-based office chat server for small teams, backed by SQLite.
 Serves the Zulip API subset that [Angry Cat](https://github.com/showell/angry-cat)
-needs, plus Gopher-specific endpoints for games, GitHub integration,
-DMs, search, and HTML views.
+needs, plus Gopher-specific endpoints for games, DMs, search, and
+HTML views.
 
 Angry Gopher treats LynRummy as a first-class citizen: it hosts
 games, deals cards, and runs a server-side referee that validates
@@ -36,7 +36,6 @@ For a fresh demo with seeded data:
 | `users` | User CRUD, settings, deactivation |
 | `games` | Game lobby host — matchmaking, event relay |
 | `lynrummy` | LynRummy referee + dealer (card physics, no network) |
-| `webhooks` | GitHub webhook integration |
 | `views` | HTML CRUD pages (server-rendered) |
 | `schema` | Single source of truth for all DB tables |
 | `respond` | JSON response helpers |
@@ -52,8 +51,6 @@ For a fresh demo with seeded data:
 | POST | /gopher/games/{id}/join | Join an existing game |
 | POST | /gopher/games/{id}/events | Post a game event (referee-validated) |
 | GET | /gopher/games/{id}/events | Poll for game events (long-poll supported) |
-| POST | /gopher/webhooks/github | GitHub webhook receiver |
-| GET | /gopher/github/repos | List configured GitHub repos |
 
 ## LynRummy
 
@@ -90,7 +87,6 @@ Server-rendered pages at `/gopher/*` with Basic auth:
 | Channels | Channel list |
 | DMs | Direct message conversations |
 | Users | User directory |
-| GitHub | GitHub webhook activity |
 | Games | Game lobby |
 
 ## Zulip-compatible API
@@ -112,7 +108,6 @@ Scripts in `ops/`:
 | `health_check` | Check server health |
 | `import` | Import data from Zulip |
 | `list` | List ops commands |
-| `test_webhook` | Send a test GitHub webhook |
 
 ## Testing
 

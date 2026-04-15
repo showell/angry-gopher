@@ -88,16 +88,6 @@ CREATE TABLE IF NOT EXISTS dm_messages (
     timestamp INTEGER NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS github_repos (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    owner TEXT NOT NULL,
-    name TEXT NOT NULL,
-    channel_id INTEGER NOT NULL REFERENCES channels(channel_id),
-    default_topic TEXT NOT NULL DEFAULT '',
-    prefix TEXT NOT NULL DEFAULT '',
-    UNIQUE(owner, name)
-);
-
 CREATE TABLE IF NOT EXISTS games (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     game_type TEXT NOT NULL DEFAULT 'lynrummy',

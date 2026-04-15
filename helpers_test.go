@@ -32,7 +32,6 @@ func resetDB() {
 	wireDB()
 	ratelimit.Reset()
 	presence.Reset()
-	linkifierRepos = nil
 	seedData(false)
 }
 

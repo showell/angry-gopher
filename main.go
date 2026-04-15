@@ -30,7 +30,6 @@ import (
 	"angry-gopher/search"
 	"angry-gopher/users"
 	"angry-gopher/views"
-	"angry-gopher/webhooks"
 )
 
 func buildMux() *http.ServeMux {
@@ -70,8 +69,6 @@ func buildMux() *http.ServeMux {
 	mux.HandleFunc("/gopher/games/", api(games.HandleGameSub))
 	mux.HandleFunc("/gopher/games", api(games.HandleGames))
 	mux.HandleFunc("/gopher/plays/", api(games.HandlePlaysRoot))
-	mux.HandleFunc("/gopher/webhooks/github", webhooks.HandleGitHub)
-	mux.HandleFunc("/gopher/github/repos", api(webhooks.HandleRepos))
 
 	// --- HTML views (Basic auth, no middleware) ---
 	// All pages registered from views.Pages (single source of truth).
@@ -104,7 +101,6 @@ func wireDB() {
 	views.DB = DB
 	views.RenderMarkdown = renderMarkdown
 	search.DB = DB
-	webhooks.DB = DB
 	messages.RenderMarkdown = renderMarkdown
 }
 
@@ -167,9 +163,6 @@ Backup the production database:
 		seedData(true)
 	}
 
-	ensureBotUsers()
-	RefreshLinkifierCache()
-
 	mux := buildMux()
 
 	fmt.Printf("Angry Gopher [%s mode]\n", config.Mode)
@@ -201,19 +194,6 @@ var serverConfig *ServerConfig
 // Set at build time via -ldflags "-X main.gitCommit=...".
 var gitCommit = "dev"
 var serverStartTime = time.Now()
-
-func ensureBotUsers() {
-	var ghBotID int
-	DB.QueryRow(`SELECT id FROM users WHERE email = 'github-bot@gopher.internal'`).Scan(&ghBotID)
-	if ghBotID == 0 {
-		result, _ := DB.Exec(`INSERT INTO users (email, full_name, api_key, is_admin) VALUES (?, ?, ?, ?)`,
-			"github-bot@gopher.internal", "GitHub", "github-bot-key", 0)
-		id, _ := result.LastInsertId()
-		ghBotID = int(id)
-	}
-	webhooks.WebhookUserID = ghBotID
-	log.Printf("GitHub bot user: id=%d", ghBotID)
-}
 
 var (
 	nextUploadID   int

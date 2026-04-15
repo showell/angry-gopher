@@ -189,60 +189,6 @@ func SendMessage(senderID, channelID int, topic, markdown string) (int64, error)
 	return msgResult.LastInsertId()
 }
 
-// SendMessageHTML is like SendMessage but takes pre-rendered HTML
-// instead of running the markdown renderer. Used by webhook
-// integrations that produce their own HTML.
-func SendMessageHTML(senderID, channelID int, topic, markdown, html string) (int64, error) {
-	tx, err := DB.Begin()
-	if err != nil {
-		return 0, err
-	}
-	defer tx.Rollback()
-
-	var topicID int64
-	err = tx.QueryRow(
-		`SELECT topic_id FROM topics WHERE channel_id = ? AND topic_name = ?`,
-		channelID, topic,
-	).Scan(&topicID)
-	if err != nil {
-		result, err := tx.Exec(
-			`INSERT INTO topics (channel_id, topic_name) VALUES (?, ?)`,
-			channelID, topic,
-		)
-		if err != nil {
-			return 0, err
-		}
-		topicID, _ = result.LastInsertId()
-	}
-
-	contentResult, err := tx.Exec(
-		`INSERT INTO message_content (markdown, html) VALUES (?, ?)`,
-		markdown, html,
-	)
-	if err != nil {
-		return 0, err
-	}
-	contentID, _ := contentResult.LastInsertId()
-
-	tx.Exec(`INSERT INTO message_fts (rowid, content, content_id) VALUES (?, ?, ?)`,
-		contentID, markdown, contentID)
-
-	timestamp := time.Now().Unix()
-	msgResult, err := tx.Exec(
-		`INSERT INTO messages (content_id, sender_id, channel_id, topic_id, timestamp) VALUES (?, ?, ?, ?, ?)`,
-		contentID, senderID, channelID, topicID, timestamp,
-	)
-	if err != nil {
-		return 0, err
-	}
-
-	if err := tx.Commit(); err != nil {
-		return 0, err
-	}
-
-	return msgResult.LastInsertId()
-}
-
 // MarkUnreadForSubscribers inserts unread rows for all users
 // subscribed to the channel, except the sender.
 func MarkUnreadForSubscribers(messageID int64, channelID, senderID int) {

@@ -37,25 +37,6 @@ single SQLite file. This gives us Go's concurrency with SQLite's
 simplicity — one binary, one database file, trivial backups and
 migrations. We're targeting teams, not platforms.
 
-**No outgoing webhooks.** Zulip supports outgoing webhooks that
-call external URLs when messages match patterns. The feature has
-seen very little adoption in practice. We'd rather invest in
-good incoming webhook support than replicate an underused outbound
-framework.
-
-**GitHub is a first-class integration, not just a webhook client.**
-We intend tight integration with GitHub — dedicated bot user,
-org-level project configuration, linkifiers, and a setup wizard
-in Angry Cat. Zulip treats GitHub as one of ~100 webhook
-integrations. We treat it as a core part of the product.
-
-**Webhook messages skip markdown rendering.** Zulip renders all
-messages through markdown, including integration payloads. We
-produce HTML directly in the webhook handler and store it as-is.
-Users can't edit webhook messages, so there's no round-trip
-concern, and we avoid markdown-rendering artifacts on structured
-content.
-
 ## Under consideration
 
 **1:1 DMs.** Zulip supports both 1:1 and group DMs. We have no
@@ -69,15 +50,6 @@ quick private conversations among a few people — by making it easy
 to create small private channels. Postponed indefinitely.
 
 ## Shared features with different approaches
-
-**Linkifiers are built-in, not regex-configured.** Zulip makes
-admins configure linkifiers with regexes. We hardcode the common
-patterns: `#123` for issues/PRs, `owner/repo#123` for explicit
-references, `abc1234` for commits, and custom prefixes like
-`AG#123`. Repos are configured in the GitHub integration, and
-linkifiers use that config directly — no separate regex setup.
-If you have one repo, `#123` just works. Multiple repos use
-prefixes (`AG#123`, `AC#456`) to disambiguate.
 
 **Pessimistic updates.** When the server is involved, the UI waits
 for confirmation before updating local state. The compose box
@@ -96,3 +68,31 @@ Gopher pages with high UI demands may support both Elm and plain
 HTML/JS as appropriate — read-mostly pages stay in plain HTML.
 Not a one-way door: if a real LynRummy feature pushes back on
 Elm, we reassess.
+
+## Security patterns
+
+**Webhook signature verification.** Motivation: a public webhook
+URL is reachable by anyone on the internet, so we need to confirm
+the request actually came from the third party and not a spammer.
+Three constraints are load-bearing: (a) HMAC over the raw body,
+not the parsed form — any re-serialization breaks it; (b)
+constant-time compare to prevent timing attacks; (c) verify
+*before* parsing, so a malformed payload can't crash you before
+rejection.
+
+## Historical
+
+**GitHub integration (removed 2026-04-15).** A first-class GitHub
+integration existed (webhook receiver, repo config, linkifiers,
+admin UI). Ripped when we pivoted to get the user/actor concept
+right before adding peripheral features back. Two design insights
+survive:
+
+- **Linkifiers = repo config.** When auto-linking repo references
+  (`#123`, `AG#123`), the set of tracked repos is already the
+  source of truth — avoid a second config registry. Prefix
+  disambiguation scales from 1 to N repos without new UI surface.
+- **Single-case cheap, disambiguation only on demand.** When one
+  namespace is common and N is rare, the one-case syntax should
+  carry zero prefix cost (`#123`); prefixes (`AG#123`, `AC#456`)
+  appear only when ambiguity is real.

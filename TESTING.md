@@ -70,28 +70,17 @@ Security tests are never skipped. These verify:
 - Buddy list privacy (no event leakage)
 - Channel access control (private channels enforced)
 
-## Bugs found during test cleanup
+## Lessons learned
 
-### Linkifier deadlock (April 2026)
-
-**Symptom:** `TestCreatePublicChannel` hung for 60+ seconds.
-
-**Root cause:** `processLinkifiers()` queried `github_repos`
-during `renderMarkdown()`, which was called inside a transaction
-in `HandleCreateChannel`. With `MaxOpenConns(1)` on in-memory
-test databases, the query waited for the transaction's connection
-— which would never release because it was waiting for
-`renderMarkdown` to return. Classic single-connection deadlock.
-
-**Fix:** Cache the repo list in memory (`linkifierRepos`),
-refreshed on startup and when repos change. The markdown renderer
-never touches the DB for linkification.
-
-**Lesson:** Any function called during a transaction must not
-make its own DB queries. When a function is used in multiple
-contexts (HTTP handler vs. inside a transaction), the DB access
-pattern must work for the most constrained context. Caching is
-the natural solution when the data changes rarely.
+**Single-connection deadlock from in-transaction queries.** Any
+function called during a transaction must not make its own DB
+queries. When a function is used in multiple contexts (HTTP
+handler vs. inside a transaction), the DB access pattern must
+work for the most constrained context. Caching is the natural
+solution when the data changes rarely. (Found via a markdown
+renderer that queried a config table from inside
+`HandleCreateChannel`'s transaction — hung for 60s under
+`MaxOpenConns(1)`.)
 
 ## Test organization
 
@@ -103,7 +92,7 @@ The `resetDB()` function:
 1. Creates a fresh `:memory:` SQLite database
 2. Applies the full schema from `schema.Core`
 3. Wires up all package DB references
-4. Resets rate limiter, presence, and linkifier cache
+4. Resets rate limiter and presence
 5. Seeds test users, channels, and subscriptions
 
 Tests that need specific data (repos, messages) insert it after

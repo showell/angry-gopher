@@ -1,7 +1,0 @@
-just_use github.go
-
-# Admin-only GitHub integration setup (repo list, webhook URL display).
-#
-# Migration: DSL-ready once admin-gate primitive lands; trivial page shape.
-
-# label: WORKHORSE

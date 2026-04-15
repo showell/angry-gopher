@@ -128,11 +128,6 @@ Based on the [Zulip REST API table of contents](https://zulip.com/api/).
 | Status | Endpoint |
 |--------|----------|
 | DONE | Get server settings |
-| | Get linkifiers |
-| | Add a linkifier |
-| | Update a linkifier |
-| | Remove a linkifier |
-| | Reorder linkifiers |
 | | Add a code playground |
 | | Remove a code playground |
 | | Get all custom emoji |
@@ -174,7 +169,6 @@ Based on the [Zulip REST API table of contents](https://zulip.com/api/).
 | | Add an FCM registration token |
 | | Remove an FCM registration token |
 | | Create BigBlueButton video call |
-| | Outgoing webhook payloads |
 
 ---
 
@@ -182,7 +176,6 @@ Based on the [Zulip REST API table of contents](https://zulip.com/api/).
 
 | Status | Endpoint |
 |--------|----------|
-| DONE | POST /gopher/webhooks/github (incoming webhook) |
 | DONE | GET /gopher/version |
 | DONE | POST /gopher/games (create game) |
 | DONE | GET /gopher/games (list games) |
