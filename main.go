@@ -19,6 +19,7 @@ import (
 
 	"angry-gopher/auth"
 	"angry-gopher/channels"
+	"angry-gopher/critters"
 	"angry-gopher/dm"
 	"angry-gopher/events"
 	"angry-gopher/flags"
@@ -90,6 +91,7 @@ func buildMux() *http.ServeMux {
 func wireDB() {
 	auth.DB = DB
 	users.DB = DB
+	critters.DB = DB
 	channels.DB = DB
 	messages.DB = DB
 	flags.DB = DB

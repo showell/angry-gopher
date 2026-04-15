@@ -1,0 +1,17 @@
+just_use critters.go
+
+# label: EARLY
+# role: supports feature — critter-study metadata + telemetry intake
+
+CRITTER_STUDIES V1 (2026-04-15). Reads study DSLs from
+`critters/studies/*.claude` and provides a minimal Study index for
+the portal. Accepts telemetry payloads from the Elm engine's
+saveRecording port and stores each session as a row in
+critter_sessions (payload kept as raw JSON; study + label lifted
+for indexing).
+
+Gopher only parses `title:` and `desc:` from the .claude; the full
+DSL is the Elm engine's responsibility.
+
+2MB body cap on telemetry to avoid accidental DoS. Study name is
+derived from the filename (stable id) not the DSL contents.

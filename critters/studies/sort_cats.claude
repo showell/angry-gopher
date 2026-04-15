@@ -1,0 +1,102 @@
+study sort_cats
+  title: Sort the Cats
+  desc: Each cat goes home in its matching-color bed.
+
+  # --- CRITTERS (now carry attributes for matching) ---
+
+  critters:
+    - emoji: 🐈
+      attrs: color=orange
+    - emoji: 🐈⬛
+      attrs: color=black
+    - emoji: 🐈
+      attrs: color=grey
+    - emoji: 🐈
+      attrs: color=white
+
+  # --- TARGETS (list, each accepts by attribute) ---
+
+  targets:
+    - name: Orange Bed
+      emoji: 🟧
+      color: "#f4a261"
+      accepts: color=orange
+    - name: Black Bed
+      emoji: ⬛
+      color: "#2b2b2b"
+      accepts: color=black
+    - name: Grey Bed
+      emoji: 🔘
+      color: "#808080"
+      accepts: color=grey
+    - name: White Bed
+      emoji: 🟪
+      color: "#ffffff"
+      accepts: color=white
+
+  backgrounds: "#f9e5c8" "#fff3e0" "#e8d5b7" "#c9d8f0" "#3a3a3a"
+
+  # --- MECHANIC (different from cows/mice) ---
+
+  mechanic: sort_into_boxes
+  # No obstacle — sorting IS the challenge.
+
+  # --- SESSION STRUCTURE ---
+
+  rounds:
+    - name: The Easy Nap
+      boards: 3
+      critter_count: 4..6
+      # Attribute balance: framework ensures each round has a
+      # mix of critter attributes across the targets.
+      attribute_mix: even
+      target_count: 2..3      # which subset of targets appears
+    - name: Feline Chaos
+      boards: 5
+      critter_count: 8..14
+      attribute_mix: uneven
+      target_count: 3..4
+
+  # --- FEEDBACK (new event: wrong target) ---
+
+  feedback:
+    on_correct: green_ring + pulse
+    on_wrong_target: shake + snap_back + red_flash
+    # No outside-highlight; sorting doesn't have an "outside."
+    bg_cycle_button: true
+
+  # --- CHROME (framework defaults cover this) ---
+
+  quit_button: true
+  count_up_clock: top_right
+  # next_button defaults
+
+  # --- PRAISE ---
+
+  praise_round:
+    - "Every cat in its rightful bed."
+    - "A symphony of purring. Round done."
+    - "Felines filed. Purrfect."
+    - "Catnap commander."
+
+  praise_session:
+    - "You've organized the whole feline league."
+    - "Session done. The cats respect you."
+
+  # --- TELEMETRY (mechanic-specific additions) ---
+
+  record:
+    drag_paths: true
+    click_misses: true
+    bg_cycles: true
+    # Mechanic-specific:
+    correct_attempts: true            # critter dropped on matching box
+    wrong_attempts: true              # critter dropped on mismatching box
+    attempt_target: true              # which target was attempted
+    # Framework:
+    board_start: true
+    round_complete: true
+    session_complete: true
+
+  save_to: /save_recording
+  consent: "Each cat has a bed. Drag them to the matching color. Say yes to start."

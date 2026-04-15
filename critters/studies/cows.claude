@@ -1,0 +1,94 @@
+study cows
+  title: Cows in Pasture
+  desc: Drag the cows into the pasture. Mind the fence.
+
+  # --- VISUAL THEME (varies per study) ---
+
+  critters: 🐄 🐂 🐃 🐖 🐗 🐈 🐈⬛
+  target: pasture                    # rectangular zone on canvas
+  target_color: #a8d5a8              # the pasture green
+  backgrounds: "#f9f4d8" "#e6e6e6" "#c9d8f0" "#f5d5e0" "#3a4a3a" "#2b2b2b" "#e8ddbb"
+
+  # --- CANVAS (usually same across studies; default omitted) ---
+
+  canvas: 780 x 420
+  critter_size: 50 px
+  critter_font: 44 px
+  edge_margin: 60 px
+
+  # --- MECHANIC (selects which framework logic runs) ---
+
+  mechanic: drag_to_zone             # one of: drag_to_zone, sort_into_boxes, feed, react_tap
+  obstacle: fence
+    sides: any                       # top|bottom|left|right|any
+    behavior: soft_snap_back + wobble
+
+  # --- SESSION STRUCTURE (varies per study) ---
+
+  rounds:
+    - name: Round 1
+      boards: 4
+      critter_count: 4..12
+      already_inside_rate: 0.40      # fraction spawned inside the target
+      fence_coverage_pct: 40..70
+      target_area_pct: 45..65        # fraction of canvas area
+    - name: Round 2
+      boards: 4
+      critter_count: 7..14
+      already_inside_rate: 0.20
+      fence_coverage_pct: 55..80
+      target_area_pct: 40..55
+
+  # --- FEEDBACK (framework-provided, opt-in per study) ---
+
+  feedback:
+    on_success: green_ring + pulse
+    still_outside_highlight: yellow_ring
+    bg_cycle_button: true
+
+  # --- CHROME (common; "none" would disable) ---
+
+  next_button:
+    randomize_position: true
+    positions:
+      - (470, 10, small)
+      - (470, 360, big)
+      - (470, 680, medium)
+      - (60, 800, medium)
+      - (200, 800, big)
+      - (340, 800, small)
+      - (4, 700, small)
+  quit_button: true
+  count_up_clock: top_right
+
+  # --- PRAISE (per-study flavor text) ---
+
+  praise_round:
+    - "Magnificent farming!"
+    - "You're a natural!"
+    - "Cows, pigs, cats — all tucked in. Nicely done!"
+    - "The whole barnyard thanks you."
+    - "Round complete. You rock!"
+    - "Expert-level shepherding."
+    - "That was some serious livestock wrangling."
+
+  praise_session:
+    - "Champion farmer!"
+    - "All rounds complete — take a victory lap!"
+    - "You've tamed every pasture. Farmhand of the year!"
+    - "Session conquered. Well done!"
+
+  # --- TELEMETRY (framework-provided; can add study-specific fields) ---
+
+  record:
+    drag_paths: true                 # every mouse move during drag
+    click_misses: true               # clicks that didn't hit a critter
+    bg_cycles: true                  # bg-change button presses
+    wobble_events: true              # fence-hit count per drag
+    reward_entries: true             # per-critter entry into target
+    board_start: true                # t0 for each board
+    round_complete: true
+    session_complete: true
+
+  save_to: /save_recording           # POST endpoint on serve.py
+  consent: "Help cows find the pasture! Drag each one in. Say yes to begin."

@@ -1,0 +1,19 @@
+just_use critters.go
+
+# label: EARLY
+# role: supports feature — CRITTER_STUDIES portal + launch + elm.js proxy
+
+V1 (2026-04-15). Lists studies from critters/studies/*.claude,
+launches playable studies (currently only "cows"), proxies the
+compiled elm.js from ~/showell_repos/elm-critters, and accepts
+telemetry POSTs by delegating to critters.HandleSaveRecording.
+
+Non-playable studies (mice, sort_cats) show "DSL defined; engine
+not yet implemented" — the DSL files exist but the Elm engine is
+currently hardcoded to the cow game. Future: one engine with the
+study name as a flag.
+
+The launch page is a near-copy of elm-critters/index.html with
+two Gopher-specific changes: elm.js is loaded from /gopher/critters/elm.js,
+and the saveRecording port posts to /gopher/critters/save_recording
+with the study name stamped on the payload.

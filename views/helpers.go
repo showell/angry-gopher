@@ -193,7 +193,7 @@ footer a { color: #000080; }
     <p>Game hosting with a server-side referee. Play inside Angry Cat or on the CRUD pages.</p>
     <ul>
       <li><a href="/gopher/game-lobby">LynRummy</a> <span class="muted">— lobby + replay</span></li>
-      <li><span class="muted">Critter studies — coming soon</span></li>
+      <li><a href="/gopher/critters/">Critter studies</a> <span class="muted">— drag-and-drop behavioral studies</span></li>
     </ul>
   </div>
 

@@ -106,5 +106,7 @@ func RegisterPages(mux *http.ServeMux) {
 	mux.HandleFunc("/gopher/sse/events", HandleSSEEvents)
 	mux.HandleFunc("/gopher/wiki/", HandleWiki)
 	mux.HandleFunc("/gopher/wiki", HandleWiki)
+	mux.HandleFunc("/gopher/critters/", HandleCritters)
+	mux.HandleFunc("/gopher/critters", HandleCritters)
 	mux.HandleFunc("/gopher/", HandleIndex)
 }

@@ -128,6 +128,19 @@ CREATE TABLE IF NOT EXISTS lynrummy_plays (
 CREATE INDEX IF NOT EXISTS idx_lynrummy_plays_game ON lynrummy_plays(game_id, event_id);
 CREATE INDEX IF NOT EXISTS idx_lynrummy_plays_trick ON lynrummy_plays(trick_id);
 
+-- CRITTER_STUDIES: telemetry from Elm critter-study sessions.
+-- One session row per study run (from "yes" at consent through
+-- quit or session-complete). Events accumulate per-session.
+CREATE TABLE IF NOT EXISTS critter_sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    study TEXT NOT NULL,
+    label TEXT NOT NULL DEFAULT '',
+    saved_at TEXT NOT NULL,
+    payload TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_critter_sessions_study ON critter_sessions(study, id DESC);
+
 -- Full-text search via trigram tokenizer. Enables substring
 -- matching on any 3+ character sequence, including URLs and
 -- code snippets. Keyed by content_id so results join cleanly
