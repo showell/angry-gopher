@@ -232,7 +232,7 @@ main { flex: 1; padding: 24px 40px; max-width: 900px; }
 h1 { color: #000080; } h2 { color: #000080; margin-top: 24px; }
 a { color: #000080; }
 pre.wiki-src { background: #f8f8f4; padding: 12px 12px 12px 0; border: 1px solid #ddd;
-               overflow-x: auto; font-size: 12px; line-height: 1.4;
+               overflow-x: auto; font-size: 14px; line-height: 1.2;
                counter-reset: wikiline; }
 pre.wiki-src .line { display: block; counter-increment: wikiline; padding-left: 0.5em; }
 pre.wiki-src .line::before { content: counter(wikiline); display: inline-block;
