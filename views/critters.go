@@ -27,6 +27,7 @@ var ElmCrittersDir = filepath.Join(os.Getenv("HOME"), "showell_repos/elm-critter
 // been compiled into playable code yet.
 var playableStudies = map[string]bool{
 	"cows": true,
+	"mice": true,
 }
 
 // HandleCritters dispatches /gopher/critters/*.
@@ -125,7 +126,10 @@ func crittersPlay(w http.ResponseWriter, study string) {
 <script>
 var app = Elm.Main.init({
   node: document.getElementById("root"),
-  flags: Math.floor(Math.random() * 2147483647)
+  flags: {
+    seed: Math.floor(Math.random() * 2147483647),
+    study: %q
+  }
 });
 app.ports.saveRecording.subscribe(function (payload) {
   payload.saved_at = new Date().toISOString();
@@ -146,7 +150,7 @@ app.ports.saveRecording.subscribe(function (payload) {
 });
 </script>
 </body></html>
-`, html.EscapeString(title), study)
+`, html.EscapeString(title), study, study)
 }
 
 // crittersSessionsList lists recent recorded sessions.
