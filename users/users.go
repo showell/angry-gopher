@@ -1,10 +1,18 @@
 // Package users handles user-related Zulip API endpoints:
 //   GET   /api/v1/users     — list all users
-//   PATCH /api/v1/settings  — update the authenticated user's settings
+//   GET   /api/v1/users/me  — current user (from auth.Authenticate)
+//   PATCH /api/v1/settings  — update the authenticated user's full_name
+//
+// Post-user-rip: users have only id + full_name + created_at.
+// Every API response still emits email/is_admin/is_bot shaped like
+// Zulip expects for Angry Cat compatibility, filled with stable
+// defaults (synthesized "<name>@gopher.local" email, all is_admin=true,
+// is_bot=false).
 package users
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 	"net/http"
 	"strings"
@@ -16,8 +24,16 @@ import (
 
 var DB *sql.DB
 
+// synthEmail builds a stable pseudo-email for Angry Cat compatibility.
+// Cat still filters/displays by email; keep the shape while the data
+// has drained away.
+func synthEmail(fullName string) string {
+	slug := strings.ToLower(strings.ReplaceAll(fullName, " ", "."))
+	return fmt.Sprintf("%s@gopher.local", slug)
+}
+
 func HandleUsers(w http.ResponseWriter, r *http.Request) {
-	rows, err := DB.Query(`SELECT id, email, full_name, is_admin FROM users`)
+	rows, err := DB.Query(`SELECT id, full_name FROM users ORDER BY id`)
 	if err != nil {
 		respond.Error(w, "Failed to query users")
 		return
@@ -27,14 +43,13 @@ func HandleUsers(w http.ResponseWriter, r *http.Request) {
 	var members []map[string]interface{}
 	for rows.Next() {
 		var id int
-		var email, fullName string
-		var isAdmin int
-		rows.Scan(&id, &email, &fullName, &isAdmin)
+		var fullName string
+		rows.Scan(&id, &fullName)
 		members = append(members, map[string]interface{}{
 			"user_id":   id,
-			"email":     email,
+			"email":     synthEmail(fullName),
 			"full_name": fullName,
-			"is_admin":  isAdmin == 1,
+			"is_admin":  true,
 			"is_bot":    false,
 		})
 	}
@@ -50,9 +65,8 @@ func HandleGetUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var email, fullName string
-	var isAdmin int
-	err := DB.QueryRow(`SELECT email, full_name, is_admin FROM users WHERE id = ?`, userID).Scan(&email, &fullName, &isAdmin)
+	var fullName string
+	err := DB.QueryRow(`SELECT full_name FROM users WHERE id = ?`, userID).Scan(&fullName)
 	if err != nil {
 		respond.Error(w, "User not found")
 		return
@@ -61,14 +75,16 @@ func HandleGetUser(w http.ResponseWriter, r *http.Request) {
 	respond.Success(w, map[string]interface{}{
 		"user": map[string]interface{}{
 			"user_id":   userID,
-			"email":     email,
+			"email":     synthEmail(fullName),
 			"full_name": fullName,
-			"is_admin":  isAdmin == 1,
+			"is_admin":  true,
 		},
 	})
 }
 
 // HandleGetUserByEmail handles GET /api/v1/users/by_email?email=...
+// Matches against synthesized emails so Angry Cat still finds users
+// by their old-style "<slug>@gopher.local" identifier.
 func HandleGetUserByEmail(w http.ResponseWriter, r *http.Request) {
 	email := r.URL.Query().Get("email")
 	if email == "" {
@@ -76,61 +92,47 @@ func HandleGetUserByEmail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var id int
-	var fullName string
-	var isAdmin int
-	err := DB.QueryRow(`SELECT id, full_name, is_admin FROM users WHERE email = ?`, email).Scan(&id, &fullName, &isAdmin)
+	rows, err := DB.Query(`SELECT id, full_name FROM users`)
 	if err != nil {
-		respond.Error(w, "User not found")
+		respond.Error(w, "Failed to query users")
 		return
 	}
-
-	respond.Success(w, map[string]interface{}{
-		"user": map[string]interface{}{
-			"user_id":   id,
-			"email":     email,
-			"full_name": fullName,
-			"is_admin":  isAdmin == 1,
-		},
-	})
+	defer rows.Close()
+	for rows.Next() {
+		var id int
+		var fullName string
+		rows.Scan(&id, &fullName)
+		if synthEmail(fullName) == email {
+			respond.Success(w, map[string]interface{}{
+				"user": map[string]interface{}{
+					"user_id":   id,
+					"email":     email,
+					"full_name": fullName,
+					"is_admin":  true,
+				},
+			})
+			return
+		}
+	}
+	respond.Error(w, "User not found")
 }
 
 // HandleGetOwnUser handles GET /api/v1/users/me.
 func HandleGetOwnUser(w http.ResponseWriter, r *http.Request) {
 	userID := auth.Authenticate(r)
-	if userID == 0 {
-		respond.Error(w, "Unauthorized")
-		return
-	}
 
-	var email, fullName string
-	var isAdmin int
-	DB.QueryRow(`SELECT email, full_name, is_admin FROM users WHERE id = ?`, userID).Scan(&email, &fullName, &isAdmin)
+	var fullName string
+	DB.QueryRow(`SELECT full_name FROM users WHERE id = ?`, userID).Scan(&fullName)
 
 	respond.Success(w, map[string]interface{}{
 		"user_id":   userID,
-		"email":     email,
+		"email":     synthEmail(fullName),
 		"full_name": fullName,
-		"is_admin":  isAdmin == 1,
+		"is_admin":  true,
 	})
 }
 
 // HandleUpdateSettings handles PATCH /api/v1/settings.
-//
-// Mirrors Zulip's settings update endpoint. The authenticated
-// user updates their own profile. For now we accept a single
-// field, full_name, but the endpoint is shaped to grow more
-// fields without changing the route. Unknown form fields are
-// ignored.
-//
-// Request:
-//   PATCH /api/v1/settings
-//   Content-Type: application/x-www-form-urlencoded
-//   full_name=...
-//
-// Response:
-//   { "result": "success", "full_name": "..." }   on success
-//   { "result": "error",   "msg": "..."        }   on failure
 func HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPatch {
 		respond.Error(w, "Method not allowed")
@@ -138,11 +140,6 @@ func HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	userID := auth.Authenticate(r)
-	if userID == 0 {
-		respond.Error(w, "Unauthorized")
-		return
-	}
-
 	fullName := strings.TrimSpace(r.FormValue("full_name"))
 	if fullName == "" {
 		respond.Error(w, "full_name cannot be empty")
@@ -160,9 +157,6 @@ func HandleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("[api] Updated full_name for user %d to %q", userID, fullName)
 
-	// Notify all connected clients so buddy lists, message
-	// sender names, etc. update in real time without a page
-	// refresh. Matches Zulip's "realm_user" event shape.
 	events.PushToAll(map[string]interface{}{
 		"type": "realm_user",
 		"op":   "update",

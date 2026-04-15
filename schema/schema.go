@@ -6,10 +6,8 @@ package schema
 const Core = `
 CREATE TABLE IF NOT EXISTS users (
     id INTEGER PRIMARY KEY,
-    email TEXT NOT NULL,
     full_name TEXT NOT NULL,
-    api_key TEXT NOT NULL DEFAULT '',
-    is_admin INTEGER NOT NULL DEFAULT 0
+    created_at INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS channels (

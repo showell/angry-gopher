@@ -7,7 +7,6 @@
 package main
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -36,22 +35,33 @@ func resetDB() {
 }
 
 // --- Auth helpers ---
+//
+// Post-user-rip: auth is trust-on-assertion. setAuth sets the
+// X-Gopher-User header which auth.Authenticate reads.
+//
+// The signature keeps a legacy (email, apiKey) overload so older
+// tests compile without edits — any arg that looks like an email
+// is mapped to a current user name. Joe/Apoorva map to Claude.
 
-// setAuth adds a Basic auth header for the given user. The credentials
-// must match what seedData() inserts (e.g. "steve@example.com" / "steve-api-key").
-func setAuth(req *http.Request, email, apiKey string) {
-	encoded := base64.StdEncoding.EncodeToString([]byte(email + ":" + apiKey))
-	req.Header.Set("Authorization", "Basic "+encoded)
+func setAuth(req *http.Request, nameOrEmail string, _ ...string) {
+	name := nameOrEmail
+	if at := strings.Index(nameOrEmail, "@"); at > 0 {
+		slug := nameOrEmail[:at]
+		switch slug {
+		case "steve":
+			name = "Steve"
+		case "claude":
+			name = "Claude"
+		default:
+			name = "Claude" // joe, apoorva, and any other legacy user → Claude
+		}
+	}
+	req.Header.Set("X-Gopher-User", name)
 }
 
-// steveAuth adds Steve's auth header — the default test user.
-func steveAuth(req *http.Request) {
-	setAuth(req, "steve@example.com", "steve-api-key")
-}
-
-func joeAuth(req *http.Request) {
-	setAuth(req, "joe@example.com", "joe-api-key")
-}
+func steveAuth(req *http.Request)  { setAuth(req, "Steve") }
+func claudeAuth(req *http.Request) { setAuth(req, "Claude") }
+func joeAuth(req *http.Request)    { setAuth(req, "Claude") } // legacy shim
 
 // --- Data helpers ---
 

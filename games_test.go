@@ -119,8 +119,8 @@ func TestJoinGame(t *testing.T) {
 		t.Fatalf("Expected 1 game for Joe, got %d", len(gamesList))
 	}
 	game := gamesList[0].(map[string]interface{})
-	if game["player2_id"].(float64) != 4 { // Joe is user 4
-		t.Fatalf("Expected player2_id=4, got %v", game["player2_id"])
+	if game["player2_id"].(float64) != 2 { // Claude is user 2 (legacy joeAuth → Claude)
+		t.Fatalf("Expected player2_id=2, got %v", game["player2_id"])
 	}
 }
 

@@ -37,11 +37,10 @@ func renderUserList(w http.ResponseWriter, userID int) {
 	PageHeader(w, "Users")
 	PageSubtitle(w, "Everyone in your organization. Click a name to see their channels and start a DM.")
 
-	var myName, myEmail string
-	DB.QueryRow(`SELECT full_name, email FROM users WHERE id = ?`, userID).Scan(&myName, &myEmail)
+	var myName string
+	DB.QueryRow(`SELECT full_name FROM users WHERE id = ?`, userID).Scan(&myName)
 
-	fmt.Fprintf(w, `<p>Logged in as <b>%s</b> (%s)</p>`,
-		html.EscapeString(myName), html.EscapeString(myEmail))
+	fmt.Fprintf(w, `<p>Acting as <b>%s</b></p>`, html.EscapeString(myName))
 
 	// Edit own name.
 	fmt.Fprintf(w, `<h2>Update Your Name</h2>
@@ -52,7 +51,7 @@ func renderUserList(w http.ResponseWriter, userID int) {
 
 	// All users list.
 	fmt.Fprint(w, `<h2>All Users</h2>`)
-	rows, err := DB.Query(`SELECT id, full_name, email, is_admin FROM users ORDER BY full_name`)
+	rows, err := DB.Query(`SELECT id, full_name FROM users ORDER BY full_name`)
 	if err != nil {
 		fmt.Fprint(w, `<p>Failed to load users.</p>`)
 		PageFooter(w)
@@ -60,21 +59,17 @@ func renderUserList(w http.ResponseWriter, userID int) {
 	}
 	defer rows.Close()
 
-	fmt.Fprint(w, `<table><thead><tr><th>Name</th><th>Email</th><th>Role</th></tr></thead><tbody>`)
+	fmt.Fprint(w, `<table><thead><tr><th>Name</th><th>Switch to</th></tr></thead><tbody>`)
 	for rows.Next() {
-		var id, isAdmin int
-		var name, email string
-		rows.Scan(&id, &name, &email, &isAdmin)
-		role := ""
-		if isAdmin == 1 {
-			role = "Admin"
-		}
+		var id int
+		var name string
+		rows.Scan(&id, &name)
 		style := ""
 		if id == userID {
 			style = ` style="background:#f0f0ff"`
 		}
-		fmt.Fprintf(w, `<tr%s><td>%s</td><td>%s</td><td>%s</td></tr>`,
-			style, UserLink(id, name), html.EscapeString(email), role)
+		fmt.Fprintf(w, `<tr%s><td>%s</td><td><a href="/gopher/switch?as=%d">act as %s</a></td></tr>`,
+			style, UserLink(id, name), id, html.EscapeString(name))
 	}
 	fmt.Fprint(w, `</tbody></table>`)
 
@@ -82,9 +77,8 @@ func renderUserList(w http.ResponseWriter, userID int) {
 }
 
 func renderUserDetail(w http.ResponseWriter, currentUserID, targetID int) {
-	var name, email string
-	var isAdmin int
-	err := DB.QueryRow(`SELECT full_name, email, is_admin FROM users WHERE id = ?`, targetID).Scan(&name, &email, &isAdmin)
+	var name string
+	err := DB.QueryRow(`SELECT full_name FROM users WHERE id = ?`, targetID).Scan(&name)
 	if err != nil {
 		http.Error(w, "User not found", http.StatusNotFound)
 		return
@@ -94,15 +88,6 @@ func renderUserDetail(w http.ResponseWriter, currentUserID, targetID int) {
 	PageHeader(w, name)
 
 	fmt.Fprint(w, `<a class="back" href="/gopher/users">&larr; Back to users</a>`)
-
-	role := "Member"
-	if isAdmin == 1 {
-		role = "Admin"
-	}
-	fmt.Fprintf(w, `<table>
-<tr><td><b>Email</b></td><td>%s</td></tr>
-<tr><td><b>Role</b></td><td>%s</td></tr>
-</table>`, html.EscapeString(email), role)
 
 	// Channels this user is subscribed to.
 	rows, err := DB.Query(`

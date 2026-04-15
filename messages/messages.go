@@ -47,7 +47,7 @@ func HandleGetMessages(w http.ResponseWriter, r *http.Request) {
 
 	if anchor == "newest" {
 		query = `SELECT m.id, mc.html, m.sender_id, m.channel_id, m.timestamp,
-		                t.topic_name, u.email, u.full_name
+		                t.topic_name, '' AS email, u.full_name
 		         FROM messages m
 		         JOIN message_content mc ON m.content_id = mc.content_id
 		         JOIN topics t ON m.topic_id = t.topic_id
@@ -58,7 +58,7 @@ func HandleGetMessages(w http.ResponseWriter, r *http.Request) {
 	} else {
 		anchorID, _ := strconv.Atoi(anchor)
 		query = `SELECT m.id, mc.html, m.sender_id, m.channel_id, m.timestamp,
-		                t.topic_name, u.email, u.full_name
+		                t.topic_name, '' AS email, u.full_name
 		         FROM messages m
 		         JOIN message_content mc ON m.content_id = mc.content_id
 		         JOIN topics t ON m.topic_id = t.topic_id
@@ -246,7 +246,7 @@ func HandleSendMessage(w http.ResponseWriter, r *http.Request) {
 	timestamp := time.Now().Unix()
 
 	var email, fullName string
-	DB.QueryRow(`SELECT email, full_name FROM users WHERE id = ?`, senderID).Scan(&email, &fullName)
+	DB.QueryRow(`SELECT '' AS email, full_name FROM users WHERE id = ?`, senderID).Scan(&email, &fullName)
 
 	log.Printf("[api] New message %d in channel %d, topic %q", messageID, channelID, topic)
 
@@ -374,7 +374,7 @@ func HandleGetSingleMessage(w http.ResponseWriter, r *http.Request) {
 	var timestamp int64
 	err := DB.QueryRow(`
 		SELECT m.sender_id, m.channel_id, mc.html, m.timestamp,
-			u.email, u.full_name, t.topic_name
+			'' AS email, u.full_name, t.topic_name
 		FROM messages m
 		JOIN message_content mc ON m.content_id = mc.content_id
 		JOIN users u ON m.sender_id = u.id

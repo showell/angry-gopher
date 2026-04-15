@@ -12,6 +12,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"time"
 
 	"angry-gopher/flags"
 	"angry-gopher/messages"
@@ -64,19 +65,15 @@ func initDB(path string) {
 func seedData(includeWelcome bool) {
 	users := []struct {
 		id       int
-		email    string
 		fullName string
-		apiKey   string
-		isAdmin  int
 	}{
-		{1, "steve@example.com", "Steve Howell", "steve-api-key", 1},
-		{2, "apoorva@example.com", "Apoorva Pendse", "apoorva-api-key", 0},
-		{3, "claude@example.com", "Claude", "claude-api-key", 1},
-		{4, "joe@example.com", "Joe Random", "joe-api-key", 0},
+		{1, "Steve"},
+		{2, "Claude"},
 	}
+	now := time.Now().Unix()
 	for _, u := range users {
-		DB.Exec(`INSERT OR IGNORE INTO users (id, email, full_name, api_key, is_admin) VALUES (?, ?, ?, ?, ?)`,
-			u.id, u.email, u.fullName, u.apiKey, u.isAdmin)
+		DB.Exec(`INSERT OR IGNORE INTO users (id, full_name, created_at) VALUES (?, ?, ?)`,
+			u.id, u.fullName, now)
 	}
 
 	channels := []struct {
@@ -93,15 +90,14 @@ func seedData(includeWelcome bool) {
 			ch.id, ch.name, ch.inviteOnly)
 	}
 
-	// Steve, Apoorva, and Claude are subscribed to the private channels.
-	// All four users are subscribed to ChitChat.
+	// Steve and Claude are subscribed to all channels.
 	subs := []struct {
 		userID    int
 		channelID int
 	}{
-		{1, 1}, {2, 1}, {3, 1}, // Angry Cat
-		{1, 2}, {2, 2}, {3, 2}, // Angry Gopher
-		{1, 3}, {2, 3}, {3, 3}, {4, 3}, // ChitChat
+		{1, 1}, {2, 1}, // Angry Cat
+		{1, 2}, {2, 2}, // Angry Gopher
+		{1, 3}, {2, 3}, // ChitChat
 	}
 	for _, s := range subs {
 		DB.Exec(`INSERT OR IGNORE INTO subscriptions (user_id, channel_id) VALUES (?, ?)`,
@@ -114,7 +110,7 @@ func seedData(includeWelcome bool) {
 }
 
 func seedTestMessages() {
-	// Users: 1=Steve, 2=Apoorva, 3=Claude, 4=Joe
+	// Users: 1=Steve, 2=Claude
 	// Channels: 1=Angry Cat (private), 2=Angry Gopher (private), 3=ChitChat (public)
 
 	send := func(senderID, channelID int, topic, markdown string) int64 {
@@ -125,29 +121,19 @@ func seedTestMessages() {
 		return id
 	}
 
-	steve, apoorva, claude, joe := 1, 2, 3, 4
+	steve, claude := 1, 2
 	angryCat, angryGopher, chitChat := 1, 2, 3
 
 	// --- ChitChat > welcome ---
 	m1 := send(claude, chitChat, "welcome", "Welcome to Angry Gopher! All systems are go.")
 	send(steve, chitChat, "welcome", "Thanks @**Claude**! Excited to be here.")
-	send(apoorva, chitChat, "welcome", "Hello everyone!")
-	send(joe, chitChat, "welcome", "Hey, Joe here. What's this place about?")
-	send(steve, chitChat, "welcome", "Welcome Joe! This is our chat server.")
-
-	// --- ChitChat > random ---
-	send(apoorva, chitChat, "random", "Anyone want to grab lunch?")
-	send(steve, chitChat, "random", "Sure, I'm in!")
-	send(claude, chitChat, "random", "I don't eat, but have fun!")
-	send(joe, chitChat, "random", "Pizza sounds good to me.")
 
 	// --- Angry Cat > design ---
 	m10 := send(steve, angryCat, "design", "I think we should redesign the channel chooser.")
-	send(apoorva, angryCat, "design", "Agreed. The current one is hard to navigate with many channels.")
 	m12 := send(claude, angryCat, "design", "I can help prototype some options. What about a **tree view**?")
 	send(steve, angryCat, "design", "Tree view could work. Let's discuss more tomorrow.")
 
-	// --- Angry Gopher > test messages ---
+	// --- Angry Gopher > test messages (markdown exerciser) ---
 	send(claude, angryGopher, "test messages", "## Basic formatting\n\n"+
 		"Here is **bold text**, *italic text*, and ~~strikethrough~~.\n\n"+
 		"A simple list:\n- First item\n- Second item\n- Third item\n\n"+
@@ -156,30 +142,19 @@ func seedTestMessages() {
 		"Fenced with tildes and a language tag:\n~~~ py\ndef greet(name):\n    print(f\"Hello, {name}!\")\n~~~")
 
 	send(claude, angryGopher, "test messages", "## Valid links\n\n"+
-		"Mention: @**Steve Howell**\n\n"+
+		"Mention: @**Steve**\n\n"+
 		"Channel link: #**ChitChat**\n\n"+
 		"Topic link: #**ChitChat>welcome**\n\n"+
 		fmt.Sprintf("Message link: #**ChitChat>welcome@%d**", m1))
-
-	send(claude, angryGopher, "test messages", "## Invalid links\n\n"+
-		"Unknown user: @**Nobody Special**\n\n"+
-		"Unknown channel: #**NoSuchChannel**\n\n"+
-		"Unknown topic: #**Angry Gopher>no such topic**")
-
-	send(claude, angryGopher, "test messages", "## Image test\n\n"+
-		"Here is a test image: [gopher.png](/user_uploads/1/gopher.png)")
 
 	// --- Angry Gopher > dev log ---
 	send(claude, angryGopher, "dev log", "Implemented message flags (read/unread, starred).")
 	send(claude, angryGopher, "dev log", "Added emoji reactions support. Only unicode for now.")
 	m21 := send(steve, angryGopher, "dev log", "Nice work @**Claude**! The reactions look great.")
-	send(claude, angryGopher, "dev log", "Channel permissions are in place. Private channels are now enforced.")
-	send(apoorva, angryGopher, "dev log", "I tested the invite system — it works perfectly.")
-	send(claude, angryGopher, "dev log", "Presence tracking is live. The Buddies plugin shows who's online.")
-	m25 := send(steve, angryGopher, "dev log", "Let's deploy this soon. Really happy with the progress.")
-	send(claude, angryGopher, "dev log", "Agreed! I'll prepare the deployment checklist.")
+	m25 := send(steve, angryGopher, "dev log", "Really happy with the progress.")
+	send(claude, angryGopher, "dev log", "Agreed!")
 
-	// Star 5 messages for Steve.
+	// Star a few messages for Steve.
 	for _, msgID := range []int64{m1, m10, m12, m21, m25} {
 		flags.StarMessage(int(msgID), steve)
 	}

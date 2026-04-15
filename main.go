@@ -161,9 +161,10 @@ Backup the production database:
 	initDB(config.DBPath())
 	wireDB()
 
-	if config.IsDemo() {
-		seedData(true)
-	}
+	// Always seed the two canonical users (Steve=1, Claude=2) so the
+	// empty-DB case still yields a playable system. Welcome/test
+	// messages are demo-only.
+	seedData(config.IsDemo())
 
 	mux := buildMux()
 

@@ -11,7 +11,7 @@ import (
 func TestMentionKnownUser(t *testing.T) {
 	resetDB()
 
-	sendMessage(t, 1, "test", "hello @**Steve Howell**")
+	sendMessage(t, 1, "test", "hello @**Steve**")
 
 	content := getMessages(t, "newest")[0]["content"].(string)
 	if !strings.Contains(content, `class="user-mention"`) {
@@ -20,7 +20,7 @@ func TestMentionKnownUser(t *testing.T) {
 	if !strings.Contains(content, `data-user-id="1"`) {
 		t.Errorf("expected data-user-id for Steve, got %q", content)
 	}
-	if !strings.Contains(content, `@Steve Howell`) {
+	if !strings.Contains(content, `@Steve`) {
 		t.Errorf("expected display name in mention, got %q", content)
 	}
 }

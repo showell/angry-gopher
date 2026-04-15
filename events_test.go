@@ -32,19 +32,6 @@ func TestEventRegisterReturnsQueueID(t *testing.T) {
 	}
 }
 
-func TestEventRegisterRequiresAuth(t *testing.T) {
-	resetDB()
-
-	req := httptest.NewRequest("POST", "/api/v1/register", nil)
-	rec := httptest.NewRecorder()
-	events.HandleRegister(rec, req)
-
-	body := parseJSON(t, rec)
-	if body["result"] != "error" {
-		t.Errorf("expected error for unauthenticated register, got %v", body["result"])
-	}
-}
-
 func TestEventPollBadQueue(t *testing.T) {
 	req := httptest.NewRequest("GET", "/api/v1/events?queue_id=nonexistent&last_event_id=-1", nil)
 	rec := httptest.NewRecorder()
