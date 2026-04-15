@@ -70,7 +70,7 @@ func GetPages() []PageDef {
 		Path:     "/gopher/dm",
 		NavLabel: "DMs",
 		Title:    "Direct Messages",
-		Subtitle: "Private 1:1 conversations. Your buddy list determines who appears in the sidebar.",
+		Subtitle: "Private 1:1 conversations.",
 		Handler:  HandleDM,
 	},
 	{

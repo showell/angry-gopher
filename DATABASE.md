@@ -114,17 +114,17 @@ than the overhead of a more "optimal" index-hop strategy. Trust
 the planner, benchmark before adding indexes, and remember that
 LIMIT changes everything.
 
-## Buddy filtering (OR/IN queries)
+## Sender-list filtering (OR/IN queries)
 
 A common query: "show me messages in this topic, but only from
-my buddies." Tested OR chains, IN clauses, temp tables, and
-subquery IN across buddy list sizes of 2-20 at 10M rows.
+these senders." Tested OR chains, IN clauses, temp tables, and
+subquery IN across sender list sizes of 2-20 at 10M rows.
 
 **With LIMIT 50 (the real-world case):** ~400µs regardless of
-buddy count. 2 buddies or 20 — doesn't matter. The IN clause
-is the right choice: simple code, fast execution.
+list size. 2 senders or 20 — doesn't matter. The IN clause is
+the right choice: simple code, fast execution.
 
-| Approach | 2 buddies | 20 buddies |
+| Approach | 2 senders | 20 senders |
 |----------|-----------|-----------|
 | OR chain | 107ms | 146ms |
 | IN clause | 91ms | 125ms |
@@ -138,7 +138,7 @@ check on each row costs more than it saves because it can't use
 an index within that set. The sender filter only pays for itself
 when combined with LIMIT, which lets SQLite stop early.
 
-**Takeaway:** use IN clause for buddy filtering. Don't bother
+**Takeaway:** use IN clause for sender-list filtering. Don't bother
 with temp tables or OR chains — they're slower or more complex
 for no benefit. LIMIT makes everything fast.
 
@@ -229,7 +229,7 @@ Test query planner behavior:
 go run ./cmd/bench_planner
 ```
 
-Test buddy/OR query behavior:
+Test OR/IN query behavior:
 ```bash
 go run ./cmd/bench_or
 ```

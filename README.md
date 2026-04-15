@@ -32,7 +32,6 @@ For a fresh demo with seeded data:
 | `flags` | Read/unread, starred message flags |
 | `reactions` | Unicode emoji reactions |
 | `dm` | Direct message conversations |
-| `buddies` | Buddy list (online/offline status) |
 | `presence` | User presence tracking |
 | `users` | User CRUD, settings, deactivation |
 | `games` | Game lobby host — matchmaking, event relay |
@@ -94,7 +93,6 @@ Server-rendered pages at `/gopher/*` with Basic auth:
 | Channels | Channel list |
 | DMs | Direct message conversations |
 | Users | User directory |
-| Buddies | Online/offline buddy list |
 | GitHub | GitHub webhook activity |
 | Games | Game lobby |
 | Invites | Invite code management |

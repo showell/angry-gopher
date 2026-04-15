@@ -6,14 +6,6 @@ divergences from Zulip and key design choices.
 
 ## Extra features (Gopher has, Zulip doesn't)
 
-**Server-side buddy lists.** Users can curate a list of people they
-care about seeing in the sidebar. Zulip has no buddy concept — only
-presence. Persisted via `GET/PUT /api/v1/buddies`.
-
-**Server session tracking.** Each server start gets a generation
-number. User logins are recorded with their generation. The ops
-dashboard and health check expose this. Zulip has no equivalent.
-
 **Game engine.** LynRummy is playable within Angry Cat. The server
 hosts game state via `/gopher/` endpoints.
 
@@ -89,9 +81,8 @@ prefixes (`AG#123`, `AC#456`) to disambiguate.
 
 **Pessimistic updates.** When the server is involved, the UI waits
 for confirmation before updating local state. The compose box
-disables while sending; the buddy checkbox disables during toggle.
-Zulip uses optimistic updates in many places. We chose pessimistic
-uniformly for simplicity and correctness.
+disables while sending. Zulip uses optimistic updates in many
+places. We chose pessimistic uniformly for simplicity and correctness.
 
 
 **UI engine: Elm by default (2026-04-13).** New UI work scaffolds

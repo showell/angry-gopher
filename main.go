@@ -18,7 +18,6 @@ import (
 	"time"
 
 	"angry-gopher/auth"
-	"angry-gopher/buddies"
 	"angry-gopher/channels"
 	"angry-gopher/dm"
 	"angry-gopher/events"
@@ -67,7 +66,6 @@ func buildMux() *http.ServeMux {
 	mux.HandleFunc("/api/v1/streams", api(channels.HandleGetAllChannels))
 	mux.HandleFunc("/api/v1/dm/conversations", api(dm.HandleConversations))
 	mux.HandleFunc("/api/v1/dm/messages", api(dm.HandleMessages))
-	mux.HandleFunc("/api/v1/buddies", api(buddies.HandleBuddies))
 	mux.HandleFunc("/api/v1/user_uploads/", api(handleUploadTempURL))
 	mux.HandleFunc("/api/v1/user_uploads", api(handleUpload))
 
@@ -101,7 +99,6 @@ func buildMux() *http.ServeMux {
 func wireDB() {
 	auth.DB = DB
 	users.DB = DB
-	buddies.DB = DB
 	channels.DB = DB
 	messages.DB = DB
 	flags.DB = DB

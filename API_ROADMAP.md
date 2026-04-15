@@ -198,7 +198,6 @@ Based on the [Zulip REST API table of contents](https://zulip.com/api/).
 
 | Status | Endpoint |
 |--------|----------|
-| DONE | GET/PUT /api/v1/buddies (buddy list) |
 | DONE | POST /gopher/webhooks/github (incoming webhook) |
 | DONE | GET /gopher/version |
 | DONE | POST /gopher/invites (create invite) |

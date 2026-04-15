@@ -81,12 +81,6 @@ CREATE TABLE IF NOT EXISTS starred_messages (
     PRIMARY KEY (message_id, user_id)
 );
 
-CREATE TABLE IF NOT EXISTS buddies (
-    user_id INTEGER NOT NULL REFERENCES users(id),
-    buddy_id INTEGER NOT NULL REFERENCES users(id),
-    PRIMARY KEY (user_id, buddy_id)
-);
-
 CREATE TABLE IF NOT EXISTS muted_users (
     user_id INTEGER NOT NULL REFERENCES users(id),
     muted_user_id INTEGER NOT NULL REFERENCES users(id),

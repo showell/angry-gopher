@@ -14,8 +14,6 @@
 
 ## Normal Priority
 
-- [x] Persist buddies in the database — server API done, Angry Cat wired up
-- [x] Add server metadata DB tables — generation tracking, user sessions, ops dashboard
 - [ ] Angry Cat Gopher fetch strategy — use search API + hydration instead of Zulip batches
 - [ ] GitHub linkifiers in Angry Cat (part of first-class GH integration)
 

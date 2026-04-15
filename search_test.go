@@ -83,10 +83,10 @@ func TestSearchMultipleSenders(t *testing.T) {
 	resetDB()
 	sendMessage(t, 3, "hello", "from steve")
 
-	// Steve is user 1 — search for users 1 and 4 (buddy list).
+	// Search for multiple senders by id list.
 	msgs := searchMessages(t, "sender_ids=1,4")
 	if len(msgs) != 1 {
-		t.Fatalf("expected 1 message from buddy list, got %d", len(msgs))
+		t.Fatalf("expected 1 message, got %d", len(msgs))
 	}
 }
 
