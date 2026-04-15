@@ -55,10 +55,6 @@ tr:hover td { background: #f0f0ff; }
 	fmt.Fprintf(w, `<div class="stat-box"><div class="stat">%d</div><div class="stat-label">Event Queues</div></div>`, len(queueStats))
 	fmt.Fprintf(w, `<div class="stat-box"><div class="stat">%d</div><div class="stat-label">Users Online</div></div>`, len(onlineIDs))
 	fmt.Fprintf(w, `<div class="stat-box"><div class="stat">%d</div><div class="stat-label">429s Sent</div></div>`, rejected429s)
-
-	var inviteCount int
-	DB.QueryRow(`SELECT COUNT(*) FROM invites WHERE expires_at > ?`, time.Now().Unix()).Scan(&inviteCount)
-	fmt.Fprintf(w, `<div class="stat-box"><div class="stat">%d</div><div class="stat-label">Active Invites</div></div>`, inviteCount)
 	fmt.Fprint(w, `</div>`)
 
 	// --- Event Queues ---

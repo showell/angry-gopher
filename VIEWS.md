@@ -13,7 +13,6 @@ Basic auth (browser caches credentials).
 | `/gopher/users` | `users` (GET), `settings` (PATCH) | List users, edit own name, user detail pages |
 | `/gopher/github` | `github/repos` (GET/POST/DELETE) | Manage repo configs, show webhook URLs (admin-only) |
 | `/gopher/game-lobby` | `games` (GET/POST), `games/{id}/*` | List/create games, view players and event log |
-| `/gopher/invites-view` | `invites` (list/revoke) | View and revoke invitations (admin-only) |
 
 ## Not covered (operational / no CRUD equivalent)
 
@@ -23,5 +22,4 @@ Basic auth (browser caches credentials).
 - Reactions — managed through message views
 - Uploads — used inline in compose
 - Server settings — on ops dashboard
-- Invites — managed through Angry Cat plugin
 - Games — managed through Angry Cat plugin

@@ -34,19 +34,6 @@ Config fields:
 - `gopher_db` — path to the Gopher database
 - `batch_size` — messages per API request (start with 10, use 5000 for full import)
 
-## Inviting users
-
-Admins can invite users via the Invite plugin in Angry Cat (press `p`,
-select "Invite"). This generates a one-time link. The invitee clicks
-it and is automatically logged in.
-
-Programmatically:
-```bash
-curl -X POST http://localhost:9000/gopher/invites \
-  -H "Authorization: Basic $(echo -n 'email:api_key' | base64)" \
-  -d "email=mom@example.com&full_name=Mom"
-```
-
 ## Backups
 
 ```bash

@@ -23,7 +23,6 @@ import (
 	"angry-gopher/events"
 	"angry-gopher/flags"
 	"angry-gopher/games"
-	"angry-gopher/invites"
 	"angry-gopher/messages"
 	"angry-gopher/ratelimit"
 	"angry-gopher/reactions"
@@ -68,8 +67,6 @@ func buildMux() *http.ServeMux {
 
 	// --- Gopher-only API ---
 	mux.HandleFunc("/gopher/version", api(handleVersion))
-	mux.HandleFunc("/gopher/invites", api(invites.HandleCreateInvite))
-	mux.HandleFunc("/gopher/invites/redeem", api(invites.HandleRedeemInvite))
 	mux.HandleFunc("/gopher/games/", api(games.HandleGameSub))
 	mux.HandleFunc("/gopher/games", api(games.HandleGames))
 	mux.HandleFunc("/gopher/plays/", api(games.HandlePlaysRoot))
@@ -100,7 +97,6 @@ func wireDB() {
 	messages.DB = DB
 	flags.DB = DB
 	reactions.DB = DB
-	invites.DB = DB
 	games.DB = DB
 	channels.RenderMarkdown = renderMarkdown
 	dm.DB = DB

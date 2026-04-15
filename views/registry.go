@@ -95,14 +95,6 @@ func GetPages() []PageDef {
 		Handler:   HandleGitHub,
 		AdminOnly: true,
 	},
-	{
-		Path:      "/gopher/invites-view",
-		NavLabel:  "Invites",
-		Title:     "Invitations",
-		Subtitle:  "Invite new users with a one-click link. Invitations expire after 7 days.",
-		Handler:   HandleInvites,
-		AdminOnly: true,
-	},
 	}
 	return append(hardcoded, generatedPages...)
 }

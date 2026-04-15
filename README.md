@@ -3,7 +3,7 @@
 A topic-based office chat server for small teams, backed by SQLite.
 Serves the Zulip API subset that [Angry Cat](https://github.com/showell/angry-cat)
 needs, plus Gopher-specific endpoints for games, GitHub integration,
-invites, DMs, search, and HTML views.
+DMs, search, and HTML views.
 
 Angry Gopher treats LynRummy as a first-class citizen: it hosts
 games, deals cards, and runs a server-side referee that validates
@@ -37,7 +37,6 @@ For a fresh demo with seeded data:
 | `games` | Game lobby host — matchmaking, event relay |
 | `lynrummy` | LynRummy referee + dealer (card physics, no network) |
 | `webhooks` | GitHub webhook integration |
-| `invites` | Invite codes for new users |
 | `views` | HTML CRUD pages (server-rendered) |
 | `schema` | Single source of truth for all DB tables |
 | `respond` | JSON response helpers |
@@ -53,8 +52,6 @@ For a fresh demo with seeded data:
 | POST | /gopher/games/{id}/join | Join an existing game |
 | POST | /gopher/games/{id}/events | Post a game event (referee-validated) |
 | GET | /gopher/games/{id}/events | Poll for game events (long-poll supported) |
-| POST | /gopher/invites | Create an invite code |
-| POST | /gopher/invites/redeem | Redeem an invite code |
 | POST | /gopher/webhooks/github | GitHub webhook receiver |
 | GET | /gopher/github/repos | List configured GitHub repos |
 
@@ -95,7 +92,6 @@ Server-rendered pages at `/gopher/*` with Basic auth:
 | Users | User directory |
 | GitHub | GitHub webhook activity |
 | Games | Game lobby |
-| Invites | Invite code management |
 
 ## Zulip-compatible API
 

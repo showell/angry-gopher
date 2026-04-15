@@ -126,17 +126,6 @@ Based on the [Zulip REST API table of contents](https://zulip.com/api/).
 | | Get a bot's API key |
 | | Regenerate a bot's API key |
 
-## Invitations
-
-| Status | Endpoint |
-|--------|----------|
-| DONE | Get all invitations |
-| DONE | Send invitations (Gopher-only: POST /gopher/invites) |
-| | Create a reusable invitation link |
-| | Resend an email invitation |
-| DONE | Revoke an email invitation |
-| | Revoke a reusable invitation link |
-
 ## Server & organizations
 
 | Status | Endpoint |
@@ -198,8 +187,6 @@ Based on the [Zulip REST API table of contents](https://zulip.com/api/).
 |--------|----------|
 | DONE | POST /gopher/webhooks/github (incoming webhook) |
 | DONE | GET /gopher/version |
-| DONE | POST /gopher/invites (create invite) |
-| DONE | POST /gopher/invites/redeem |
 | DONE | POST /gopher/games (create game) |
 | DONE | GET /gopher/games (list games) |
 | DONE | POST /gopher/games/{id}/join |
