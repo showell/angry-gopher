@@ -1,5 +1,9 @@
 # Agent conventions
 
+**As-of:** 2026-04-15
+**Confidence:** Working — patterns distilled from weeks of collaboration; some entries Firm, some still settling.
+**Durability:** Stable until the collaboration model shifts; revise as new patterns crystallize.
+
 For an agent (Claude Code or equivalent) joining a new human
 collaborator in this codebase or a sibling repo (Angry Cat, Angry
 Gopher, LynRummy, silly-canvas-games). Read this first.

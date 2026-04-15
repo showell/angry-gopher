@@ -1,5 +1,9 @@
 # Porting cheat sheet (DRAFT)
 
+**As-of:** 2026-04-15
+**Confidence:** Firm — captured immediately after the LynRummy → Elm port; rules held across the whole 2k+ LOC effort.
+**Durability:** Stable indefinitely for language-to-language ports; update if a future port invalidates a rule.
+
 A one-pager for future-dev + future-PM starting a new
 language-to-language port. Distilled from the 2026-04-14
 LynRummy → Elm port.

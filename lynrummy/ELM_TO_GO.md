@@ -1,5 +1,9 @@
 # ELM ↔ GO structural audit
 
+**As-of:** 2026-04-15
+**Confidence:** Working — snapshot audit plus action plan; findings accurate at capture, plan items in flight.
+**Durability:** Revisit as audit items are resolved; re-audit when either side refactors.
+
 **Purpose:** Elm (`~/showell_repos/elm-lynrummy/src/LynRummy/`) and Go
 (`./lynrummy/`) share responsibilities. Steve's constraint: keep
 structure as parallel as possible so cross-language work stays cheap

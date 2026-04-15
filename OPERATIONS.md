@@ -1,5 +1,9 @@
 # Operations Guide
 
+**As-of:** 2026-04-15
+**Confidence:** Working — commands are current; ops workflow evolves as tooling matures.
+**Durability:** Revisit whenever ops/start or config format changes.
+
 ## Quick start
 
 ```bash

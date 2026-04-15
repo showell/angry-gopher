@@ -1,5 +1,9 @@
 # Deployment Philosophy
 
+**As-of:** 2026-04-15
+**Confidence:** Working — principles acted on daily; small ops surface so not every edge case is battle-tested.
+**Durability:** Stable until we deploy beyond Steve's WSL2 / single-host setup.
+
 ## Core principles
 
 **Safety over convenience.** The server requires explicit configuration

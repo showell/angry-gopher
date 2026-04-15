@@ -1,5 +1,9 @@
 # Onboarding for human collaborators
 
+**As-of:** 2026-04-15
+**Confidence:** Firm — collaboration pattern has held across Angry Cat / LynRummy / Angry Gopher / silly-canvas-games.
+**Durability:** Stable indefinitely; tweak only as the collaboration model itself evolves.
+
 Welcome. This doc is for you — a human who is new (or relatively new)
 to working day-to-day with an AI coding agent. The specific context
 is Steve's collaboration pattern, built up over Angry Cat / LynRummy /

@@ -1,5 +1,9 @@
 # Agent-collaboration docs
 
+**As-of:** 2026-04-15
+**Confidence:** Firm — index doc for a stable set of sibling files.
+**Durability:** Stable indefinitely; update when files are added/removed from the directory.
+
 Durable notes about how Steve and his collaborators work with AI
 coding agents (currently Claude Code). Not secret — these are the
 conventions, not the active experiments.
@@ -21,6 +25,8 @@ project in the suite. They're not Gopher-specific.
 - `CLAUDE_SETUP.md` — practical setup for a fresh Claude Code install.
 - `PATTERNS.md` — reference sheet of conventions that recur across
   our projects.
+- `PORTING_CHEAT_SHEET.md` — one-pager for language-to-language ports,
+  distilled from the LynRummy → Elm port.
 
 ## Context
 

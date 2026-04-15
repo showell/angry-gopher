@@ -1,5 +1,9 @@
 # Database Decisions
 
+**As-of:** 2026-04-15
+**Confidence:** Firm — benchmarks measured against a 10M-message test DB; architectural patterns shipped and in production use.
+**Durability:** Stable indefinitely; revisit if storage backend changes or workload profile shifts by an order of magnitude.
+
 Design choices for Angry Gopher's SQLite database. All benchmarks
 are against a 10M message test database with realistic distribution
 (50 users, 30 channels, 538 topics, power-law activity).

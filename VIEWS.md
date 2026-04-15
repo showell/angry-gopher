@@ -1,5 +1,9 @@
 # HTML CRUD Views
 
+**As-of:** 2026-04-15
+**Confidence:** Working — table reflects the current CRUD surface but churns as views are added/ripped.
+**Durability:** Revisit each time a view is added or removed; no formal audit cadence.
+
 Every API endpoint has a corresponding HTML page served by Angry
 Gopher. These are thin layers over the API, authenticated via
 Basic auth (browser caches credentials).

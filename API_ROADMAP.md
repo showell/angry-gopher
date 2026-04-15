@@ -1,5 +1,9 @@
 # Angry Gopher API Roadmap
 
+**As-of:** 2026-04-15
+**Confidence:** Working — live status tracker of Zulip-endpoint coverage; half task-queue, half dashboard. Entries are accurate when touched; gaps in review cadence.
+**Durability:** Revisit each time we implement or rip an endpoint; no planned audit date.
+
 Status key: **DONE** = endpoint is implemented with the most important
 details working. Blank = not yet started.
 

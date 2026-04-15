@@ -1,5 +1,9 @@
 # Patterns cheat sheet
 
+**As-of:** 2026-04-15
+**Confidence:** Firm — distilled from recurring conventions across all sibling repos.
+**Durability:** Stable indefinitely; add entries as new patterns recur, rarely remove.
+
 One-line reference to the conventions we use. For the fuller
 rationale, see AGENT_CONVENTIONS.md. For the human-side take, see
 ONBOARDING.md.

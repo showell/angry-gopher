@@ -1,5 +1,9 @@
 # Event System
 
+**As-of:** 2026-04-15
+**Confidence:** Firm — describes the shipped long-polling system in use by Angry Cat.
+**Durability:** Stable indefinitely; revisit only if we swap transport (e.g. to SSE or WebSockets).
+
 This document explains how Angry Gopher delivers real-time updates to
 clients. If you've worked with WebSockets, this will feel familiar —
 but we use HTTP long-polling instead, which is simpler and works

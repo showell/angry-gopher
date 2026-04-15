@@ -1,5 +1,9 @@
 # Testing Guide
 
+**As-of:** 2026-04-15
+**Confidence:** Working — commands and numbers are Firm; "Lessons learned" section is Working as patterns evolve.
+**Durability:** Stable for the current Go test layout; revisit when test infrastructure shifts.
+
 ## Running tests
 
 ```bash
@@ -64,10 +68,7 @@ cranked back up for future investigations.
 Security tests are never skipped. These verify:
 - Admin-only access for user management endpoints
 - Non-admin rejection for all admin operations
-- Deactivated users can't authenticate
-- API key regeneration invalidates old keys
 - DM privacy (third parties can't see your DMs)
-- Buddy list privacy (no event leakage)
 - Channel access control (private channels enforced)
 
 ## Lessons learned

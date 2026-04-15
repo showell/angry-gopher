@@ -1,5 +1,9 @@
 # Claude Code — first setup
 
+**As-of:** 2026-04-15
+**Confidence:** Working — steps match Steve's setup; Claude Code itself changes fast so specific flags/paths may drift.
+**Durability:** Revisit when Claude Code ships a major version or Anthropic updates install paths.
+
 Practical steps for a human getting Claude Code running for the
 first time. Written for someone who already knows software but
 hasn't used Claude Code specifically.

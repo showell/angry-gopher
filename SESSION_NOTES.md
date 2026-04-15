@@ -1,5 +1,9 @@
 # Session notes — 2026-04-14 (disposable)
 
+**As-of:** 2026-04-15
+**Confidence:** Tentative — live session artifact; captures in-flight context only.
+**Durability:** Disposable — snapshot of a single session; delete once re-oriented.
+
 Quick reference for what happened today. Deletable once you've
 re-oriented; nothing durable here that isn't already in code,
 commits, or memory.
