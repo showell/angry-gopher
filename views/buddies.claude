@@ -1,0 +1,32 @@
+page buddies
+  path: /gopher/buddies
+  title: Buddies
+  subtitle: Your curated list of people you care about. Buddy lists are private and persist across sessions.
+  auth: user
+  handler: HandleBuddies
+
+  view list
+    when: method=GET
+    preamble:
+      text: "You have <b>{count}</b> buddies selected."
+      count: SELECT COUNT(*) FROM buddies WHERE user_id = $user
+
+    table
+      query:
+        SELECT id, full_name,
+        EXISTS(SELECT 1 FROM buddies WHERE user_id = $user AND buddy_id = id) AS is_buddy
+        FROM users
+        WHERE id != $user
+        ORDER BY full_name
+      empty: "No other users yet."
+      columns:
+        "Buddy": toggle_form(is_buddy, post=/gopher/buddies, field=buddy_id, value=id)
+        "User":  text(full_name)
+
+  handler toggle
+    when: method=POST
+    field buddy_id: int required
+    action: toggle_row
+      table: buddies
+      match: user_id=$user, buddy_id=$buddy_id
+    redirect: /gopher/buddies
