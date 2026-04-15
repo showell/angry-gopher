@@ -156,26 +156,63 @@ func ChannelLink(channelID int, name string) string {
 	return fmt.Sprintf(`<a href="/gopher/messages?channel_id=%d">#%s</a>`, channelID, html.EscapeString(name))
 }
 
-// HandleIndex serves /gopher/ — the master page linking to all views.
+// HandleIndex serves /gopher/ — the portal. Two top-level categories
+// (Games, Wiki); secondary pages linked via /gopher/tour.
 func HandleIndex(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/gopher/" {
 		http.NotFound(w, r)
 		return
 	}
-	userID := RequireAuth(w, r)
-	if userID == 0 {
-		return
-	}
-
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	PageHeader(w, "Angry Gopher")
+	fmt.Fprint(w, `<!DOCTYPE html>
+<html><head><title>Angry Gopher</title>
+<style>
+body { font-family: sans-serif; margin: 60px auto; max-width: 780px; padding: 0 24px; }
+h1 { color: #000080; font-size: 34px; margin-bottom: 4px; }
+.tag { color: #888; font-size: 13px; margin-bottom: 40px; }
+.cards { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.card { border: 1px solid #ccc; border-radius: 6px; padding: 20px; background: #fcfcf8; }
+.card h2 { color: #000080; margin: 0 0 8px; font-size: 22px; }
+.card p { color: #555; margin: 0 0 12px; font-size: 14px; }
+.card ul { list-style: none; padding: 0; margin: 0; }
+.card li { padding: 4px 0; }
+.card a { color: #000080; text-decoration: none; font-weight: bold; }
+.card a:hover { text-decoration: underline; }
+.card .muted { color: #999; font-weight: normal; }
+footer { margin-top: 40px; font-size: 12px; color: #888; text-align: center; }
+footer a { color: #000080; }
+</style>
+</head><body>
+<h1>Angry Gopher</h1>
+<div class="tag">Critter-sized server for games, docs, and small-team chat.</div>
 
-	fmt.Fprint(w, `<div style="display:flex;flex-direction:column;gap:12px;margin-top:8px">`)
-	for _, p := range GetPages() {
-		fmt.Fprintf(w, `<a href="%s" style="font-size:18px;font-weight:bold">%s</a>
-<span class="muted">%s</span>`, p.Path, p.Title, p.Subtitle)
-	}
-	fmt.Fprint(w, `</div>`)
+<div class="cards">
 
-	PageFooter(w)
+  <div class="card">
+    <h2>Games</h2>
+    <p>Game hosting with a server-side referee. Play inside Angry Cat or on the CRUD pages.</p>
+    <ul>
+      <li><a href="/gopher/game-lobby">LynRummy</a> <span class="muted">— lobby + replay</span></li>
+      <li><span class="muted">Critter studies — coming soon</span></li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2>Wiki</h2>
+    <p>Browse the repo's docs, sidecars, and source in your browser. Everything's linked.</p>
+    <ul>
+      <li><a href="/gopher/wiki/">Wiki home</a> <span class="muted">— README + landmarks</span></li>
+      <li><a href="/gopher/wiki/tree/">Repo tree</a> <span class="muted">— full filesystem</span></li>
+    </ul>
+  </div>
+
+</div>
+
+<footer>
+<a href="/gopher/tour">All CRUD pages</a>
+&nbsp;·&nbsp;
+<a href="/admin/">Admin</a>
+</footer>
+</body></html>
+`)
 }
