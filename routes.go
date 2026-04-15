@@ -42,8 +42,6 @@ func routeUserByID(w http.ResponseWriter, r *http.Request) {
 		users.HandleDeactivateUser(w, r)
 	} else if strings.HasSuffix(r.URL.Path, "/reactivate") {
 		users.HandleReactivateUser(w, r)
-	} else if strings.HasSuffix(r.URL.Path, "/regenerate_api_key") {
-		users.HandleRegenerateAPIKey(w, r)
 	} else if r.Method == "PATCH" {
 		users.HandleUpdateUser(w, r)
 	} else {

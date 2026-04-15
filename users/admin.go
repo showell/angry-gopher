@@ -5,7 +5,6 @@
 //   POST   /api/v1/users/{id}/deactivate — deactivate a user (admin)
 //   POST   /api/v1/users/{id}/reactivate — reactivate a user (admin)
 //   DELETE /api/v1/users/me             — deactivate own account
-//   POST   /api/v1/users/{id}/regenerate_api_key — regenerate API key (admin)
 package users
 
 import (
@@ -195,26 +194,3 @@ func HandleDeactivateOwnUser(w http.ResponseWriter, r *http.Request) {
 	respond.Success(w, nil)
 }
 
-// HandleRegenerateAPIKey handles POST /api/v1/users/{id}/regenerate_api_key.
-func HandleRegenerateAPIKey(w http.ResponseWriter, r *http.Request) {
-	if requireAdmin(r) == 0 {
-		respond.Error(w, "Admin access required")
-		return
-	}
-
-	targetID := respond.PathSegmentInt(r.URL.Path, 4)
-	if targetID == 0 {
-		respond.Error(w, "Invalid user ID")
-		return
-	}
-
-	newKey := generateAPIKey()
-	_, err := DB.Exec(`UPDATE users SET api_key = ? WHERE id = ?`, newKey, targetID)
-	if err != nil {
-		respond.Error(w, "Failed to regenerate API key")
-		return
-	}
-
-	log.Printf("[api] Regenerated API key for user %d", targetID)
-	respond.Success(w, map[string]interface{}{"api_key": newKey})
-}

@@ -125,7 +125,6 @@ Based on the [Zulip REST API table of contents](https://zulip.com/api/).
 | | Get all alert words |
 | | Add alert words |
 | | Remove alert words |
-| DONE | Regenerate your API key |
 | | Get a bot's API key |
 | | Regenerate a bot's API key |
 

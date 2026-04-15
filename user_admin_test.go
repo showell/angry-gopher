@@ -164,40 +164,6 @@ func TestDeactivateOwnAccount(t *testing.T) {
 	}
 }
 
-// --- Regenerate API key ---
-
-func TestRegenerateAPIKeyAsAdmin(t *testing.T) {
-	resetDB()
-	rec := adminPost(t, "/api/v1/users/4/regenerate_api_key", url.Values{})
-	body := parseJSON(t, rec)
-	if body["result"] != "success" {
-		t.Fatalf("expected success, got %v", body)
-	}
-	newKey, _ := body["api_key"].(string)
-	if newKey == "" || newKey == "joe-api-key" {
-		t.Fatalf("expected new API key, got %q", newKey)
-	}
-
-	// Old key should no longer work.
-	req := httptest.NewRequest("GET", "/api/v1/users/me", nil)
-	joeAuth(req) // uses old key
-	rec = httptest.NewRecorder()
-	users.HandleGetOwnUser(rec, req)
-	body = parseJSON(t, rec)
-	if body["result"] != "error" {
-		t.Fatalf("old API key should not work after regeneration, got %v", body)
-	}
-}
-
-func TestRegenerateAPIKeyNonAdminRejected(t *testing.T) {
-	resetDB()
-	rec := nonAdminPost(t, "/api/v1/users/1/regenerate_api_key", url.Values{})
-	body := parseJSON(t, rec)
-	if body["result"] != "error" {
-		t.Fatalf("non-admin should not regenerate API keys, got %v", body)
-	}
-}
-
 // --- Update user (admin) ---
 
 func TestUpdateUserAsAdmin(t *testing.T) {
