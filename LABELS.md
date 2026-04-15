@@ -26,24 +26,22 @@ Labels describe *developer experience*, not function — see
 - `lynrummy/referee.go`
 - `lynrummy/stack_type.go`
 
-## CLEAN_INFRA  (7)
+## CLEAN_INFRA  (6)
 *Well-factored plumbing. Focused, small, self-contained. Don't bloat it.*
 
 - `admin_auth.go`
-- `buddies/buddies.go`
 - `lynrummy/tricks/helpers.go`
 - `markdown.go`
 - `presence/presence.go`
 - `ratelimit/ratelimit.go`
 - `reactions/reactions.go`
 
-## SIMPLE  (4)
+## SIMPLE  (3)
 *Short and obvious. Like TINY but with a bit more going on.*
 
 - `config.go`
 - `lynrummy/tricks/detect.go`
 - `lynrummy/tricks/direct_play.go`
-- `views/invites.go`
 
 ## TINY  (8)
 *So small the whole thing fits in your head. Edits are trivial; bugs are rare.*
@@ -67,7 +65,7 @@ Labels describe *developer experience*, not function — see
 - `lynrummy/tricks/rb_swap.go`
 - `lynrummy/tricks/split_for_set.go`
 
-## WORKHORSE  (20)
+## WORKHORSE  (17)
 *Ugly but productive. Don't polish, just modify. Edits are easy enough; aesthetic improvements rarely pay.*
 
 - `admin_ops.go`
@@ -77,7 +75,6 @@ Labels describe *developer experience*, not function — see
 - `flags/flags.go`
 - `games/games.go`
 - `games/plays.go`
-- `invites/invites.go`
 - `messages/messages.go`
 - `search/search.go`
 - `users/admin.go`
@@ -85,11 +82,9 @@ Labels describe *developer experience*, not function — see
 - `views/channels.go`
 - `views/dm.go`
 - `views/games.go`
-- `views/github.go`
 - `views/messages.go`
 - `views/search.go`
 - `views/users.go`
-- `webhooks/github.go`
 
 ## SCAFFOLD  (1)
 *Wires things together. Easy to miss a connection; trace carefully.*
@@ -101,10 +96,9 @@ Labels describe *developer experience*, not function — see
 
 - `admin.go`
 
-## GENERATED  (2)
+## GENERATED  (1)
 *Produced by a tool. Do NOT hand-edit; regenerate instead.*
 
-- `views/buddies.go`
 - `views/registry_generated.go`
 
 ## TOOL  (14)
@@ -139,5 +133,5 @@ Labels describe *developer experience*, not function — see
 
 ---
 
-Total labeled files: **80**
+Total labeled files: **74**
 Distinct labels in use: **13**

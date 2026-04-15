@@ -68,7 +68,7 @@ Demo mode (`"mode": "demo"`) is for development and testing:
 Production mode (`"mode": "prod"`) is for real usage:
 - Opens the existing database (creates schema if first run)
 - Never seeds or resets — your data accumulates over time
-- Users are created via the invite system
+- Users are created by direct DB insert (Librarian role)
 - Channels are created via the Angry Cat admin plugin
 
 ## Backups

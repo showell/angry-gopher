@@ -40,14 +40,12 @@ LABELS = {
 
     # Auth / core packages
     "auth/auth.go":                "TINY",
-    "buddies/buddies.go":          "CLEAN_INFRA",
     "channels/channels.go":        "WORKHORSE",
     "dm/dm.go":                    "WORKHORSE",
     "events/events.go":            "CANONICAL",
     "flags/flags.go":              "WORKHORSE",
     "games/games.go":              "WORKHORSE",
     "games/plays.go":              "WORKHORSE",
-    "invites/invites.go":          "WORKHORSE",
     "messages/messages.go":        "WORKHORSE",
     "presence/presence.go":        "CLEAN_INFRA",
     "ratelimit/ratelimit.go":      "CLEAN_INFRA",
@@ -57,7 +55,6 @@ LABELS = {
     "search/search.go":            "WORKHORSE",
     "users/admin.go":              "WORKHORSE",
     "users/users.go":              "WORKHORSE",
-    "webhooks/github.go":          "WORKHORSE",
 
     # LynRummy domain
     "lynrummy/board_geometry.go":       "ELEGANT",
@@ -79,14 +76,11 @@ LABELS = {
     "lynrummy/tricks/trick.go":         "TINY",
 
     # Views
-    "views/buddies.go":       "GENERATED",
     "views/channels.go":      "WORKHORSE",
     "views/dm.go":            "WORKHORSE",
     "views/games.go":         "WORKHORSE",
     "views/games_replay.go":  "ONE_OFF",
-    "views/github.go":        "WORKHORSE",
     "views/helpers.go":       "CANONICAL",
-    "views/invites.go":       "SIMPLE",
     "views/messages.go":      "WORKHORSE",
     "views/quicknav.go":      "TINY",
     "views/recent.go":        "TINY",

@@ -35,7 +35,6 @@ The dashboard auto-refreshes every 10 seconds and shows:
 - **Event Queues** -- queue count, pending events, last event ID per queue
 - **Presence** -- which users are online/offline, last seen times
 - **Rate Limiting** -- requests per user in the current window, headroom, total 429s served
-- **Active Invites** -- count of unexpired invite tokens
 - **Server Info** -- mode, database path, listen address
 
 ## Seed data

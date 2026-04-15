@@ -1,5 +1,9 @@
 # LynRummy conformance scenarios
 
+**As-of:** 2026-04-15
+**Confidence:** Firm — DSL shipped 2026-04-14, replaced JSON fixtures, in use across Go+Elm.
+**Durability:** Stable until fixturegen evolves; grammar is small and intentionally extensible.
+
 Scenarios for cross-language correctness checks on the LynRummy
 game logic (referee + tricks). Shared between the Go impl in
 `../` and the Elm impl in `../../elm-lynrummy/src/LynRummy/`.
