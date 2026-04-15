@@ -1,5 +1,6 @@
 page buddies
   path: /gopher/buddies
+  nav: Buddies
   title: Buddies
   subtitle: Your curated list of people you care about. Buddy lists are private and persist across sessions.
   auth: user

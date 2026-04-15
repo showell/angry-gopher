@@ -18,8 +18,12 @@ type PageDef struct {
 // Pages returns the ordered list of all CRUD pages.
 // This is a function (not a var) to avoid an initialization cycle
 // between Pages → handlers → PageHeader → Pages.
+//
+// Pages declared in crudgen .claude files self-register via
+// generatedPages (see registry_generated.go) and appear after
+// the hardcoded list below.
 func GetPages() []PageDef {
-	return []PageDef{
+	hardcoded := []PageDef{
 	{
 		Path:     "/gopher/messages",
 		NavLabel: "Messages",
@@ -77,13 +81,6 @@ func GetPages() []PageDef {
 		Handler:  HandleUsers,
 	},
 	{
-		Path:     "/gopher/buddies",
-		NavLabel: "Buddies",
-		Title:    "Buddies",
-		Subtitle: "Your curated list of people you care about. Buddy lists are private and persist across sessions.",
-		Handler:  HandleBuddies,
-	},
-	{
 		Path:      "/gopher/github",
 		NavLabel:  "GitHub",
 		Title:     "GitHub Integration",
@@ -107,6 +104,7 @@ func GetPages() []PageDef {
 		AdminOnly: true,
 	},
 	}
+	return append(hardcoded, generatedPages...)
 }
 
 // RegisterPages wires all page handlers into the mux.

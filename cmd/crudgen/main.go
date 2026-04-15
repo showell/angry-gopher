@@ -25,14 +25,16 @@ import (
 // --- AST ---
 
 type page struct {
-	name     string
-	path     string
-	title    string
-	subtitle string
-	auth     string // "user" | "admin" | "guest"
-	handler  string // Go func name, e.g. "HandleBuddies"
-	views    []view
-	handlers []handler
+	name      string
+	path      string
+	nav       string // top-nav label; empty = omit from nav
+	title     string
+	subtitle  string
+	auth      string // "user" | "admin" | "guest"
+	adminOnly bool   // mirrors registry.go PageDef.AdminOnly
+	handler   string // Go func name, e.g. "HandleBuddies"
+	views     []view
+	handlers  []handler
 }
 
 type view struct {
@@ -241,12 +243,19 @@ func applyPageField(p *page, key, val string, hasBlock bool, children []line, pa
 	switch key {
 	case "path":
 		p.path = val
+	case "nav":
+		p.nav = val
 	case "title":
 		p.title = val
 	case "subtitle":
 		p.subtitle = val
 	case "auth":
 		p.auth = val
+		if val == "admin" {
+			p.adminOnly = true
+		}
+	case "admin_only":
+		p.adminOnly = val == "true" || val == "1"
 	case "handler":
 		// "handler: <GoFuncName>" scalar = sets p.handler.
 		// "handler <name>" block = defines a POST handler.
@@ -577,7 +586,29 @@ func emitGo(p page) string {
 		emitHandler(&b, p, h)
 	}
 
+	// Self-register into the PageDef list so main.go never has to
+	// touch registry.go for a new .claude-backed page. Skip if nav
+	// is empty AND admin-only — that's a "no nav entry" admin page
+	// and it stil registers, just doesn't appear in nav (same as
+	// hardcoded admin-only entries today).
+	emitRegistration(&b, p)
+
 	return b.String()
+}
+
+func emitRegistration(b *strings.Builder, p page) {
+	fmt.Fprintf(b, `
+func init() {
+	registerGeneratedPage(PageDef{
+		Path:      %q,
+		NavLabel:  %q,
+		Title:     %q,
+		Subtitle:  %q,
+		Handler:   %s,
+		AdminOnly: %t,
+	})
+}
+`, p.path, p.nav, p.title, p.subtitle, p.handler, p.adminOnly)
 }
 
 func emitView(b *strings.Builder, p page, v view) {

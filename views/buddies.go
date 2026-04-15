@@ -81,3 +81,13 @@ func buddies_handler_toggle(w http.ResponseWriter, r *http.Request, userID int) 
 	http.Redirect(w, r, "/gopher/buddies", http.StatusSeeOther)
 }
 
+func init() {
+	registerGeneratedPage(PageDef{
+		Path:      "/gopher/buddies",
+		NavLabel:  "Buddies",
+		Title:     "Buddies",
+		Subtitle:  "Your curated list of people you care about. Buddy lists are private and persist across sessions.",
+		Handler:   HandleBuddies,
+		AdminOnly: false,
+	})
+}
