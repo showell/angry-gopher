@@ -32,7 +32,7 @@ func Authenticate(r *http.Request) int {
 
 	var userID int
 	err = DB.QueryRow(
-		`SELECT id FROM users WHERE email = ? AND api_key = ? AND is_active = 1`,
+		`SELECT id FROM users WHERE email = ? AND api_key = ?`,
 		email, apiKey,
 	).Scan(&userID)
 	if err != nil {

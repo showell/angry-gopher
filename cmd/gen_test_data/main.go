@@ -47,7 +47,7 @@ func main() {
 	numUsers := 50
 	log.Printf("Creating %d users...", numUsers)
 	for i := 1; i <= numUsers; i++ {
-		db.Exec(`INSERT INTO users (id, email, full_name, api_key, is_admin, is_active) VALUES (?, ?, ?, ?, ?, 1)`,
+		db.Exec(`INSERT INTO users (id, email, full_name, api_key, is_admin) VALUES (?, ?, ?, ?, ?)`,
 			i,
 			fmt.Sprintf("user%d@example.com", i),
 			fmt.Sprintf("User %d", i),

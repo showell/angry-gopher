@@ -1,10 +1,7 @@
 // Admin user management endpoints.
 //
-//   POST   /api/v1/users                — create a user (admin)
-//   PATCH  /api/v1/users/{id}           — update a user (admin)
-//   POST   /api/v1/users/{id}/deactivate — deactivate a user (admin)
-//   POST   /api/v1/users/{id}/reactivate — reactivate a user (admin)
-//   DELETE /api/v1/users/me             — deactivate own account
+//   POST   /api/v1/users      — create a user (admin)
+//   PATCH  /api/v1/users/{id} — update a user (admin)
 package users
 
 import (
@@ -64,7 +61,7 @@ func HandleCreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	result, err := DB.Exec(
-		`INSERT INTO users (email, full_name, api_key, is_admin, is_active) VALUES (?, ?, ?, ?, 1)`,
+		`INSERT INTO users (email, full_name, api_key, is_admin) VALUES (?, ?, ?, ?)`,
 		email, fullName, apiKey, isAdmin)
 	if err != nil {
 		respond.Error(w, "Failed to create user")
@@ -116,81 +113,6 @@ func HandleUpdateUser(w http.ResponseWriter, r *http.Request) {
 		},
 	})
 
-	respond.Success(w, nil)
-}
-
-// HandleDeactivateUser handles POST /api/v1/users/{id}/deactivate.
-func HandleDeactivateUser(w http.ResponseWriter, r *http.Request) {
-	adminID := requireAdmin(r)
-	if adminID == 0 {
-		respond.Error(w, "Admin access required")
-		return
-	}
-
-	targetID := respond.PathSegmentInt(r.URL.Path, 4)
-	if targetID == 0 {
-		respond.Error(w, "Invalid user ID")
-		return
-	}
-
-	if targetID == adminID {
-		respond.Error(w, "Cannot deactivate yourself via this endpoint")
-		return
-	}
-
-	result, err := DB.Exec(`UPDATE users SET is_active = 0 WHERE id = ? AND is_active = 1`, targetID)
-	if err != nil {
-		respond.Error(w, "Failed to deactivate user")
-		return
-	}
-	rows, _ := result.RowsAffected()
-	if rows == 0 {
-		respond.Error(w, "User not found or already deactivated")
-		return
-	}
-
-	log.Printf("[api] Admin %d deactivated user %d", adminID, targetID)
-	respond.Success(w, nil)
-}
-
-// HandleReactivateUser handles POST /api/v1/users/{id}/reactivate.
-func HandleReactivateUser(w http.ResponseWriter, r *http.Request) {
-	if requireAdmin(r) == 0 {
-		respond.Error(w, "Admin access required")
-		return
-	}
-
-	targetID := respond.PathSegmentInt(r.URL.Path, 4)
-	if targetID == 0 {
-		respond.Error(w, "Invalid user ID")
-		return
-	}
-
-	result, err := DB.Exec(`UPDATE users SET is_active = 1 WHERE id = ? AND is_active = 0`, targetID)
-	if err != nil {
-		respond.Error(w, "Failed to reactivate user")
-		return
-	}
-	rows, _ := result.RowsAffected()
-	if rows == 0 {
-		respond.Error(w, "User not found or already active")
-		return
-	}
-
-	log.Printf("[api] Reactivated user %d", targetID)
-	respond.Success(w, nil)
-}
-
-// HandleDeactivateOwnUser handles DELETE /api/v1/users/me.
-func HandleDeactivateOwnUser(w http.ResponseWriter, r *http.Request) {
-	userID := auth.Authenticate(r)
-	if userID == 0 {
-		respond.Error(w, "Unauthorized")
-		return
-	}
-
-	DB.Exec(`UPDATE users SET is_active = 0 WHERE id = ?`, userID)
-	log.Printf("[api] User %d deactivated their own account", userID)
 	respond.Success(w, nil)
 }
 

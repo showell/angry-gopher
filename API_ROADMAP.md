@@ -103,9 +103,6 @@ Based on the [Zulip REST API table of contents](https://zulip.com/api/).
 | DONE | Create a user |
 | DONE | Update a user |
 | | Update a user by email |
-| DONE | Deactivate a user |
-| DONE | Deactivate own user |
-| DONE | Reactivate a user |
 | | Get a user's status |
 | | Update your status |
 | | Update user status |

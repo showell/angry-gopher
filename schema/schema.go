@@ -9,8 +9,7 @@ CREATE TABLE IF NOT EXISTS users (
     email TEXT NOT NULL,
     full_name TEXT NOT NULL,
     api_key TEXT NOT NULL DEFAULT '',
-    is_admin INTEGER NOT NULL DEFAULT 0,
-    is_active INTEGER NOT NULL DEFAULT 1
+    is_admin INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS channels (

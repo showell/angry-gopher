@@ -5,8 +5,6 @@ import (
 	"net/url"
 	"strings"
 	"testing"
-
-	"angry-gopher/users"
 )
 
 func adminPost(t *testing.T, path string, form url.Values) *httptest.ResponseRecorder {
@@ -67,102 +65,6 @@ func TestCreateUserDuplicateEmail(t *testing.T) {
 }
 
 // --- Deactivate user ---
-
-func TestDeactivateUserAsAdmin(t *testing.T) {
-	resetDB()
-	// Deactivate Joe (user 4).
-	rec := adminPost(t, "/api/v1/users/4/deactivate", url.Values{})
-	body := parseJSON(t, rec)
-	if body["result"] != "success" {
-		t.Fatalf("expected success, got %v", body)
-	}
-
-	// Joe should no longer be able to authenticate.
-	req := httptest.NewRequest("GET", "/api/v1/users/me", nil)
-	joeAuth(req)
-	rec = httptest.NewRecorder()
-	users.HandleGetOwnUser(rec, req)
-	body = parseJSON(t, rec)
-	if body["result"] != "error" {
-		t.Fatalf("deactivated user should not authenticate, got %v", body)
-	}
-}
-
-func TestDeactivateUserNonAdminRejected(t *testing.T) {
-	resetDB()
-	rec := nonAdminPost(t, "/api/v1/users/1/deactivate", url.Values{})
-	body := parseJSON(t, rec)
-	if body["result"] != "error" {
-		t.Fatalf("non-admin should not deactivate users, got %v", body)
-	}
-}
-
-func TestAdminCannotDeactivateSelf(t *testing.T) {
-	resetDB()
-	// Steve (user 1) tries to deactivate himself via admin endpoint.
-	rec := adminPost(t, "/api/v1/users/1/deactivate", url.Values{})
-	body := parseJSON(t, rec)
-	if body["result"] != "error" {
-		t.Fatalf("admin should not deactivate self via admin endpoint, got %v", body)
-	}
-}
-
-// --- Reactivate user ---
-
-func TestReactivateUser(t *testing.T) {
-	resetDB()
-	// Deactivate then reactivate Joe.
-	adminPost(t, "/api/v1/users/4/deactivate", url.Values{})
-	rec := adminPost(t, "/api/v1/users/4/reactivate", url.Values{})
-	body := parseJSON(t, rec)
-	if body["result"] != "success" {
-		t.Fatalf("expected success, got %v", body)
-	}
-
-	// Joe should be able to authenticate again.
-	req := httptest.NewRequest("GET", "/api/v1/users/me", nil)
-	joeAuth(req)
-	rec = httptest.NewRecorder()
-	users.HandleGetOwnUser(rec, req)
-	body = parseJSON(t, rec)
-	if body["result"] != "success" {
-		t.Fatalf("reactivated user should authenticate, got %v", body)
-	}
-}
-
-func TestReactivateNonAdminRejected(t *testing.T) {
-	resetDB()
-	rec := nonAdminPost(t, "/api/v1/users/4/reactivate", url.Values{})
-	body := parseJSON(t, rec)
-	if body["result"] != "error" {
-		t.Fatalf("non-admin should not reactivate users, got %v", body)
-	}
-}
-
-// --- Deactivate own account ---
-
-func TestDeactivateOwnAccount(t *testing.T) {
-	resetDB()
-	// Joe deactivates himself.
-	req := httptest.NewRequest("DELETE", "/api/v1/users/me", nil)
-	joeAuth(req)
-	rec := httptest.NewRecorder()
-	users.HandleDeactivateOwnUser(rec, req)
-	body := parseJSON(t, rec)
-	if body["result"] != "success" {
-		t.Fatalf("expected success, got %v", body)
-	}
-
-	// Joe should no longer authenticate.
-	req = httptest.NewRequest("GET", "/api/v1/users/me", nil)
-	joeAuth(req)
-	rec = httptest.NewRecorder()
-	users.HandleGetOwnUser(rec, req)
-	body = parseJSON(t, rec)
-	if body["result"] != "error" {
-		t.Fatalf("self-deactivated user should not authenticate, got %v", body)
-	}
-}
 
 // --- Update user (admin) ---
 

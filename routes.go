@@ -28,20 +28,12 @@ func routeEvents(w http.ResponseWriter, r *http.Request) {
 }
 
 func routeOwnUser(w http.ResponseWriter, r *http.Request) {
-	if r.Method == "DELETE" {
-		users.HandleDeactivateOwnUser(w, r)
-	} else {
-		users.HandleGetOwnUser(w, r)
-	}
+	users.HandleGetOwnUser(w, r)
 }
 
 func routeUserByID(w http.ResponseWriter, r *http.Request) {
 	if strings.Contains(r.URL.Path, "/subscriptions/") {
 		channels.HandleGetSubscriptionStatus(w, r)
-	} else if strings.HasSuffix(r.URL.Path, "/deactivate") {
-		users.HandleDeactivateUser(w, r)
-	} else if strings.HasSuffix(r.URL.Path, "/reactivate") {
-		users.HandleReactivateUser(w, r)
 	} else if r.Method == "PATCH" {
 		users.HandleUpdateUser(w, r)
 	} else {

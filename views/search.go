@@ -91,7 +91,7 @@ func HandleSearch(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, `<label style="display:block;font-weight:bold;margin-bottom:4px">Sender</label>`)
 	fmt.Fprint(w, `<select name="sender_id" style="margin-bottom:8px">`)
 	fmt.Fprint(w, `<option value="">Any</option>`)
-	userRows, _ := DB.Query(`SELECT id, full_name FROM users WHERE is_active = 1 ORDER BY full_name`)
+	userRows, _ := DB.Query(`SELECT id, full_name FROM users ORDER BY full_name`)
 	if userRows != nil {
 		for userRows.Next() {
 			var uid int
