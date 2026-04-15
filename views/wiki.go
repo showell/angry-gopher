@@ -147,9 +147,26 @@ func wikiRender(w http.ResponseWriter, repo, sub, displayPath string) {
 		fmt.Fprint(w, RenderMarkdown(string(body)))
 		fmt.Fprint(w, `</div>`)
 	} else {
-		fmt.Fprintf(w, `<pre class="wiki-src">%s</pre>`, html.EscapeString(string(body)))
+		renderSourceWithLines(w, string(body))
 	}
 	wikiFooter(w)
+}
+
+// renderSourceWithLines emits a <pre> where each source line is a
+// <span class="line" id="L<n>">. Fragment #L42 or #L42-L57 highlights
+// the range via the inline script in wikiHeader. Sharing a link to a
+// specific section is the point: paste `…/file.go#L120-L140` into chat.
+func renderSourceWithLines(w http.ResponseWriter, body string) {
+	lines := strings.Split(body, "\n")
+	// Avoid a trailing empty line from a terminating newline.
+	if n := len(lines); n > 0 && lines[n-1] == "" {
+		lines = lines[:n-1]
+	}
+	fmt.Fprint(w, `<pre class="wiki-src">`)
+	for i, line := range lines {
+		fmt.Fprintf(w, `<span class="line" id="L%d">%s</span>`+"\n", i+1, html.EscapeString(line))
+	}
+	fmt.Fprint(w, `</pre>`)
 }
 
 // wikiTree lists a directory inside a repo.
@@ -214,8 +231,16 @@ aside .repo-current { font-weight: bold; background: #fff3a8; padding: 0 4px; }
 main { flex: 1; padding: 24px 40px; max-width: 900px; }
 h1 { color: #000080; } h2 { color: #000080; margin-top: 24px; }
 a { color: #000080; }
-pre.wiki-src { background: #f8f8f4; padding: 12px; border: 1px solid #ddd;
-               overflow-x: auto; font-size: 12px; line-height: 1.4; }
+pre.wiki-src { background: #f8f8f4; padding: 12px 12px 12px 0; border: 1px solid #ddd;
+               overflow-x: auto; font-size: 12px; line-height: 1.4;
+               counter-reset: wikiline; }
+pre.wiki-src .line { display: block; counter-increment: wikiline; padding-left: 0.5em; }
+pre.wiki-src .line::before { content: counter(wikiline); display: inline-block;
+                             width: 3.5em; margin-right: 1em; color: #999;
+                             text-align: right; user-select: none;
+                             border-right: 1px solid #ddd; padding-right: 0.5em; }
+pre.wiki-src .line.hilite { background: #fff3a8; }
+pre.wiki-src .line:target { background: #fff3a8; }
 code { background: #f0f0ec; padding: 1px 4px; border-radius: 2px; }
 pre code { background: none; padding: 0; }
 .wiki-md table { border-collapse: collapse; margin: 8px 0; }
@@ -226,6 +251,29 @@ pre code { background: none; padding: 0; }
 .breadcrumb { color: #888; font-size: 12px; margin-bottom: 16px; }
 .breadcrumb a { color: #000080; }
 </style>
+<script>
+(function () {
+    // Accept #L42 or #L42-L57 (with or without the second 'L').
+    function highlightFromHash() {
+        document.querySelectorAll('.line.hilite').forEach(function (el) {
+            el.classList.remove('hilite');
+        });
+        var m = location.hash.match(/^#L(\d+)(?:-L?(\d+))?$/);
+        if (!m) return;
+        var start = parseInt(m[1], 10);
+        var end = m[2] ? parseInt(m[2], 10) : start;
+        if (end < start) { var t = start; start = end; end = t; }
+        for (var i = start; i <= end; i++) {
+            var el = document.getElementById('L' + i);
+            if (el) el.classList.add('hilite');
+        }
+        var first = document.getElementById('L' + start);
+        if (first) first.scrollIntoView({ block: 'center' });
+    }
+    window.addEventListener('DOMContentLoaded', highlightFromHash);
+    window.addEventListener('hashchange', highlightFromHash);
+})();
+</script>
 </head><body>
 <aside>
 <h3><a href="/gopher/">← Gopher home</a></h3>
