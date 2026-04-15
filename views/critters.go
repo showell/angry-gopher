@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"angry-gopher/critters"
@@ -41,6 +42,10 @@ func HandleCritters(w http.ResponseWriter, r *http.Request) {
 		crittersElmJS(w, r)
 	case sub == "save_recording":
 		critters.HandleSaveRecording(w, r)
+	case sub == "sessions":
+		crittersSessionsList(w)
+	case strings.HasPrefix(sub, "sessions/"):
+		crittersSessionDetail(w, strings.TrimPrefix(sub, "sessions/"))
 	default:
 		http.NotFound(w, r)
 	}
@@ -66,7 +71,7 @@ nav { margin-bottom: 16px; font-size: 13px; }
 nav a { color: #000080; }
 </style>
 </head><body>
-<nav><a href="/gopher/">← Gopher home</a></nav>
+<nav><a href="/gopher/">← Gopher home</a> &nbsp;·&nbsp; <a href="/gopher/critters/sessions">Recorded sessions</a></nav>
 <h1>Critter Studies</h1>
 <p>General-purpose critter-study engine. Each study is a small
 drag-and-drop browser game that records behavioral telemetry back
@@ -142,6 +147,97 @@ app.ports.saveRecording.subscribe(function (payload) {
 </script>
 </body></html>
 `, html.EscapeString(title), study)
+}
+
+// crittersSessionsList lists recent recorded sessions.
+func crittersSessionsList(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	rows, err := DB.Query(`
+		SELECT id, study, label, saved_at, length(payload)
+		FROM critter_sessions
+		ORDER BY id DESC
+		LIMIT 100`)
+	if err != nil {
+		http.Error(w, "query failed", http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+	fmt.Fprint(w, `<!DOCTYPE html>
+<html><head><title>Critter Sessions</title>
+<style>
+body { font-family: sans-serif; margin: 40px auto; max-width: 900px; padding: 0 24px; }
+h1 { color: #000080; }
+table { border-collapse: collapse; width: 100%; margin-top: 12px; }
+th { background: #000080; color: white; padding: 6px 12px; text-align: left; }
+td { border-bottom: 1px solid #ccc; padding: 6px 12px; }
+tr:hover td { background: #f0f0ff; }
+a { color: #000080; }
+nav { font-size: 13px; margin-bottom: 16px; }
+</style>
+</head><body>
+<nav><a href="/gopher/">← Gopher home</a> &nbsp;·&nbsp; <a href="/gopher/critters/">Studies</a></nav>
+<h1>Recorded sessions</h1>
+<table><thead><tr><th>ID</th><th>Study</th><th>Label</th><th>Saved at</th><th>Bytes</th></tr></thead><tbody>`)
+	count := 0
+	for rows.Next() {
+		var id, bytes int
+		var study, label, savedAt string
+		if err := rows.Scan(&id, &study, &label, &savedAt, &bytes); err != nil {
+			continue
+		}
+		fmt.Fprintf(w, `<tr><td><a href="/gopher/critters/sessions/%d">%d</a></td><td>%s</td><td>%s</td><td>%s</td><td>%d</td></tr>`,
+			id, id, html.EscapeString(study), html.EscapeString(label),
+			html.EscapeString(savedAt), bytes)
+		count++
+	}
+	fmt.Fprint(w, `</tbody></table>`)
+	if count == 0 {
+		fmt.Fprint(w, `<p><em>No sessions yet. Play a study from the <a href="/gopher/critters/">studies page</a>.</em></p>`)
+	}
+	fmt.Fprint(w, `</body></html>`)
+}
+
+// crittersSessionDetail shows the raw payload for one session.
+func crittersSessionDetail(w http.ResponseWriter, idStr string) {
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "bad id", http.StatusBadRequest)
+		return
+	}
+	var study, label, savedAt, payload string
+	err = DB.QueryRow(
+		`SELECT study, label, saved_at, payload FROM critter_sessions WHERE id = ?`, id,
+	).Scan(&study, &label, &savedAt, &payload)
+	if err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	fmt.Fprintf(w, `<!DOCTYPE html>
+<html><head><title>Session %d — %s</title>
+<style>
+body { font-family: sans-serif; margin: 40px auto; max-width: 1100px; padding: 0 24px; }
+h1 { color: #000080; }
+dt { font-weight: bold; color: #555; }
+dd { margin: 4px 0 10px 0; }
+pre { background: #f8f8f4; border: 1px solid #ddd; padding: 12px; overflow-x: auto;
+      font-size: 12px; line-height: 1.4; white-space: pre-wrap; word-break: break-word; }
+nav { font-size: 13px; margin-bottom: 16px; }
+nav a { color: #000080; }
+</style>
+</head><body>
+<nav><a href="/gopher/critters/sessions">← Sessions</a> &nbsp;·&nbsp; <a href="/gopher/critters/">Studies</a></nav>
+<h1>Session %d</h1>
+<dl>
+<dt>Study</dt><dd>%s</dd>
+<dt>Label</dt><dd>%s</dd>
+<dt>Saved at</dt><dd>%s</dd>
+</dl>
+<h2>Payload</h2>
+<pre>%s</pre>
+</body></html>`, id, html.EscapeString(study), id,
+		html.EscapeString(study), html.EscapeString(label),
+		html.EscapeString(savedAt), html.EscapeString(payload))
 }
 
 // crittersElmJS serves the compiled elm.js from the elm-critters repo.
