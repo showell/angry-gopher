@@ -11,6 +11,7 @@ For the full list (open + in-progress + done), see
 
 | When | # | Title |
 |---|---|---|
+| 2026-04-15 18:30 | [#14](http://localhost:9000/gopher/claude-issues/14) | Angry Cat event-queue infinite loop on Zulip 429 — use `with_retry` on poll fetch |
 | 2026-04-15 17:09 | [#9](http://localhost:9000/gopher/claude-issues/9) | Inline DM reply markers — "↩ reply" link + "↳ in reply to msg N" chip |
 | 2026-04-15 17:07 | [#4](http://localhost:9000/gopher/claude-issues/4) | Claude DMs auto-append landing-page link (if not already present) |
 | 2026-04-15 17:07 | [#3/6/10](http://localhost:9000/gopher/claude-issues/3) | Meta / self-referential: the Issues feature itself (shipped) |

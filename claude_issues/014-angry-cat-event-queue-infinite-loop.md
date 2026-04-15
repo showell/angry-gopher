@@ -2,9 +2,9 @@
 id: 14
 title: Angry Cat event queue may infinite-loop (potential regression)
 source: steve (console, out-of-band)
-status: open
+status: done
 created: 2026-04-15T17:28
-updated: 2026-04-15T17:28
+updated: 2026-04-15T18:30
 ---
 
 ## What Steve said
@@ -16,22 +16,34 @@ updated: 2026-04-15T17:28
 
 ## Status
 
-Not started. Flagged by Steve as out-of-band (console, not in the
-DM/wiki channel) because the ANCHOR_COMMENTS stack is for
-feature-track talk — production incidents go console-side.
+**Done 2026-04-15T18:30.** Root-caused and fixed. Actual symptom
+came from the **Zulip** path, not Gopher — Steve saw `Queue error,
+re-registering... API usage exceeded rate limit`.
 
-## Plan
+## Root cause
 
-- Start in `angry-cat/src/` — grep for `event_queue`, `pollEvents`,
-  `getEvents`, the classic Zulip-style long-polling loop names.
-- Candidate regressions: did anything in the auth rip (Gopher commit
-  `dd08da7`) or the LynRummy / Cat cleanup earlier this session
-  change what the event queue expects to receive? A 4xx that used to
-  terminate the loop might now silently retry.
-- Reproduce: run Cat against Gopher prod, open devtools Network tab,
-  watch `/json/events` (or Gopher's equivalent) for rapid-fire calls.
-- Add a circuit-breaker: abort after N consecutive failures in a
-  short window. Log the cause.
+`src/backend/event_queue.ts:87` used a bare `fetch(...)` for
+polling, without `with_retry`. When Zulip returned HTTP 429 with
+body `{result:"error", code:"RATE_LIMIT_HIT"}`, the polling loop
+misread that as "queue went bad" and called `register_queue()`.
+Registering burns *more* quota — every trip through the loop made
+the rate limit worse. `register_queue` itself already used
+`with_retry`, which is why only the poll path was infinite-looping.
+
+Probably pre-existing latent bug. Today's session pushed more
+restart traffic through Zulip, which tripped the limit and exposed
+it.
+
+## Fix
+
+Wrapped the poll fetch in `with_retry` — symmetric with
+`register_queue`, one-liner. 429 now causes a `Retry-After` sleep
+and retry, not a re-registration.
+
+## Log
+
+- 2026-04-15T17:28  Flagged by Steve (console, out-of-band)
+- 2026-04-15T18:30  Diagnosed + shipped one-line fix
 
 ## Log
 
