@@ -31,6 +31,15 @@ LYNRUMMY=(
   "src/LynRummy/CardStack.elm"
   "src/LynRummy/BoardGeometry.elm"
   "src/LynRummy/Referee.elm"
+  "src/LynRummy/Tricks/Trick.elm"
+  "src/LynRummy/Tricks/Helpers.elm"
+  "src/LynRummy/Tricks/DirectPlay.elm"
+  "src/LynRummy/Tricks/HandStacks.elm"
+  "src/LynRummy/Tricks/SplitForSet.elm"
+  "src/LynRummy/Tricks/PeelForRun.elm"
+  "src/LynRummy/Tricks/RbSwap.elm"
+  "src/LynRummy/Tricks/PairPeel.elm"
+  "src/LynRummy/Tricks/LooseCardPlay.elm"
 )
 
 echo "==> Building Main"

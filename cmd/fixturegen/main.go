@@ -389,6 +389,12 @@ import LynRummy.CardStack
         )
 import LynRummy.Referee as Referee exposing (RefereeStage(..), refereeStageToString)
 import LynRummy.Tricks.DirectPlay
+import LynRummy.Tricks.HandStacks
+import LynRummy.Tricks.LooseCardPlay
+import LynRummy.Tricks.PairPeel
+import LynRummy.Tricks.PeelForRun
+import LynRummy.Tricks.RbSwap
+import LynRummy.Tricks.SplitForSet
 import Test exposing (Test, describe, test)
 
 
@@ -460,7 +466,13 @@ func elmTestName(s string) string {
 // elm-lynrummy/src/LynRummy/Tricks/. Scenarios for unported tricks
 // stay as Expect.pass placeholders.
 var elmPortedTricks = map[string]string{
-	"direct_play": "LynRummy.Tricks.DirectPlay.trick",
+	"direct_play":     "LynRummy.Tricks.DirectPlay.trick",
+	"hand_stacks":     "LynRummy.Tricks.HandStacks.trick",
+	"loose_card_play": "LynRummy.Tricks.LooseCardPlay.trick",
+	"pair_peel":       "LynRummy.Tricks.PairPeel.trick",
+	"peel_for_run":    "LynRummy.Tricks.PeelForRun.trick",
+	"rb_swap":         "LynRummy.Tricks.RbSwap.trick",
+	"split_for_set":   "LynRummy.Tricks.SplitForSet.trick",
 }
 
 func elmScenarioBody(sc Scenario) string {
