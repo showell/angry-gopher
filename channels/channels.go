@@ -521,50 +521,6 @@ func HandleUnsubscribe(w http.ResponseWriter, r *http.Request) {
 	respond.Success(w, nil)
 }
 
-// HandleMuteTopic handles POST/DELETE /api/v1/users/me/muted_topics.
-func HandleMuteTopic(w http.ResponseWriter, r *http.Request) {
-	userID := auth.Authenticate(r)
-	if userID == 0 {
-		respond.Error(w, "Unauthorized")
-		return
-	}
-
-	if r.Method == "GET" {
-		handleGetMutedTopics(w, userID)
-		return
-	}
-
-	if r.Method == "DELETE" {
-		respond.ParseFormBody(r)
-	} else {
-		r.ParseForm()
-	}
-
-	channelIDStr := r.FormValue("channel_id")
-	topicName := r.FormValue("topic")
-	var channelID int
-	fmt.Sscanf(channelIDStr, "%d", &channelID)
-
-	if channelID == 0 || topicName == "" {
-		respond.Error(w, "Missing required params: channel_id, topic")
-		return
-	}
-
-	if r.Method == "POST" {
-		DB.Exec(`INSERT OR IGNORE INTO muted_topics (user_id, channel_id, topic_name) VALUES (?, ?, ?)`,
-			userID, channelID, topicName)
-		log.Printf("[api] User %d muted topic %q in channel %d", userID, topicName, channelID)
-		respond.Success(w, nil)
-	} else if r.Method == "DELETE" {
-		DB.Exec(`DELETE FROM muted_topics WHERE user_id = ? AND channel_id = ? AND topic_name = ?`,
-			userID, channelID, topicName)
-		log.Printf("[api] User %d unmuted topic %q in channel %d", userID, topicName, channelID)
-		respond.Success(w, nil)
-	} else {
-		respond.Error(w, "Method not allowed")
-	}
-}
-
 // HandleGetSubscriptionStatus handles GET /api/v1/users/{uid}/subscriptions/{cid}.
 func HandleGetSubscriptionStatus(w http.ResponseWriter, r *http.Request) {
 	parts := strings.Split(r.URL.Path, "/")
@@ -589,30 +545,3 @@ func HandleGetSubscriptionStatus(w http.ResponseWriter, r *http.Request) {
 	respond.Success(w, map[string]interface{}{"is_subscribed": count > 0})
 }
 
-func handleGetMutedTopics(w http.ResponseWriter, userID int) {
-	rows, err := DB.Query(`
-		SELECT mt.channel_id, c.name, mt.topic_name
-		FROM muted_topics mt
-		JOIN channels c ON mt.channel_id = c.channel_id
-		WHERE mt.user_id = ?
-		ORDER BY c.name, mt.topic_name`, userID)
-	if err != nil {
-		respond.Error(w, "Failed to query muted topics")
-		return
-	}
-	defer rows.Close()
-
-	var muted []map[string]interface{}
-	for rows.Next() {
-		var channelID int
-		var channelName, topicName string
-		rows.Scan(&channelID, &channelName, &topicName)
-		muted = append(muted, map[string]interface{}{
-			"channel_id":   channelID,
-			"channel_name": channelName,
-			"topic":        topicName,
-		})
-	}
-
-	respond.Success(w, map[string]interface{}{"muted_topics": muted})
-}

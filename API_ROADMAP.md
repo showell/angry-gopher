@@ -120,8 +120,6 @@ Based on the [Zulip REST API table of contents](https://zulip.com/api/).
 | | Delete an attachment |
 | DONE | Update settings |
 | N/A | User groups (see DECISIONS.md) |
-| DONE | Mute a user |
-| DONE | Unmute a user |
 | | Get all alert words |
 | | Add alert words |
 | | Remove alert words |
