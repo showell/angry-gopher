@@ -43,10 +43,9 @@ func resolveWikiPath(sub string) (string, bool) {
 }
 
 // HandleWiki dispatches all /gopher/wiki/* requests.
+// No auth: V1 is read-only and the files are already on disk for
+// anyone with shell access. Matches the broader user-rip direction.
 func HandleWiki(w http.ResponseWriter, r *http.Request) {
-	if RequireAuth(w, r) == 0 {
-		return
-	}
 	sub := strings.TrimPrefix(r.URL.Path, "/gopher/wiki/")
 	sub = strings.TrimPrefix(sub, "/gopher/wiki") // handles bare /gopher/wiki
 
