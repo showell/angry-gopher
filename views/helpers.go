@@ -75,6 +75,12 @@ button:hover { background: #0000a0; }
 <a href="/gopher/">Home</a>
 `)
 	for _, p := range GetPages() {
+		if p.NavLabel == "" {
+			// Self-registered pages with no nav label are routes
+			// only (e.g. /gopher/game-replay linked from a detail
+			// view, not a top-level nav entry).
+			continue
+		}
 		fmt.Fprintf(w, `<a href="%s">%s</a> `, p.Path, p.NavLabel)
 	}
 	fmt.Fprintf(w, `<span style="float:right;color:#888">%s</span>
