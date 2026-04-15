@@ -142,6 +142,9 @@ func wikiRender(w http.ResponseWriter, repo, sub, displayPath string) {
 	}
 
 	wikiHeader(w, sub, displayPath, repo)
+	if link := sidecarLink(repo, sub); link != "" {
+		fmt.Fprint(w, link)
+	}
 	if strings.HasSuffix(sub, ".md") && RenderMarkdown != nil {
 		fmt.Fprint(w, `<div class="wiki-md">`)
 		fmt.Fprint(w, RenderMarkdown(string(body)))
@@ -150,6 +153,64 @@ func wikiRender(w http.ResponseWriter, repo, sub, displayPath string) {
 		renderSourceWithLines(w, string(body))
 	}
 	wikiFooter(w)
+}
+
+// sidecarLink returns a small HTML snippet cross-linking a source
+// file to its .claude sidecar (or vice versa). Convention: sidecar
+// shares the basename — `foo.go` ↔ `foo.claude`, also package-style
+// `messages/messages.claude` ↔ `messages/messages.go`. Returns "" when
+// there is no obvious pairing.
+func sidecarLink(repo, sub string) string {
+	ext := filepath.Ext(sub)
+	if ext == "" {
+		return ""
+	}
+	base := strings.TrimSuffix(sub, ext)
+
+	if ext == ".claude" {
+		// Find a sibling file with a different extension.
+		dir := filepath.Dir(sub)
+		abs, ok := resolveRepoPath(repo, dir)
+		if !ok {
+			return ""
+		}
+		entries, err := os.ReadDir(abs)
+		if err != nil {
+			return ""
+		}
+		want := filepath.Base(base) + "."
+		self := filepath.Base(sub)
+		for _, e := range entries {
+			if e.IsDir() {
+				continue
+			}
+			name := e.Name()
+			if name == self {
+				continue
+			}
+			if strings.HasPrefix(name, want) && !strings.HasSuffix(name, ".claude") {
+				sib := filepath.Join(dir, name)
+				return fmt.Sprintf(
+					`<div class="wiki-sidecar">Source: <a href="/gopher/wiki/%s/%s">%s</a></div>`,
+					html.EscapeString(repo), html.EscapeString(sib), html.EscapeString(sib),
+				)
+			}
+		}
+		return ""
+	}
+
+	sib := base + ".claude"
+	abs, ok := resolveRepoPath(repo, sib)
+	if !ok {
+		return ""
+	}
+	if _, err := os.Stat(abs); err != nil {
+		return ""
+	}
+	return fmt.Sprintf(
+		`<div class="wiki-sidecar">Sidecar: <a href="/gopher/wiki/%s/%s">%s</a></div>`,
+		html.EscapeString(repo), html.EscapeString(sib), html.EscapeString(sib),
+	)
 }
 
 // renderSourceWithLines emits a <pre> where each source line is a
@@ -164,7 +225,9 @@ func renderSourceWithLines(w http.ResponseWriter, body string) {
 	}
 	fmt.Fprint(w, `<pre class="wiki-src">`)
 	for i, line := range lines {
-		fmt.Fprintf(w, `<span class="line" id="L%d">%s</span>`+"\n", i+1, html.EscapeString(line))
+		// No trailing newline between spans: .line is display:block,
+		// and a literal \n inside <pre> renders as an extra blank line.
+		fmt.Fprintf(w, `<span class="line" id="L%d">%s</span>`, i+1, html.EscapeString(line))
 	}
 	fmt.Fprint(w, `</pre>`)
 }
@@ -232,7 +295,7 @@ main { flex: 1; padding: 24px 40px; max-width: 900px; }
 h1 { color: #000080; } h2 { color: #000080; margin-top: 24px; }
 a { color: #000080; }
 pre.wiki-src { background: #f8f8f4; padding: 12px 12px 12px 0; border: 1px solid #ddd;
-               overflow-x: auto; font-size: 14px; line-height: 1.2;
+               overflow-x: auto; font-size: 16px; line-height: 1.2;
                counter-reset: wikiline; }
 pre.wiki-src .line { display: block; counter-increment: wikiline; padding-left: 0.5em; }
 pre.wiki-src .line::before { content: counter(wikiline); display: inline-block;
@@ -241,6 +304,9 @@ pre.wiki-src .line::before { content: counter(wikiline); display: inline-block;
                              border-right: 1px solid #ddd; padding-right: 0.5em; }
 pre.wiki-src .line.hilite { background: #fff3a8; }
 pre.wiki-src .line:target { background: #fff3a8; }
+.wiki-sidecar { background: #eef6ff; border: 1px solid #cfe2f7; padding: 6px 10px;
+                margin: 0 0 12px; font-size: 13px; border-radius: 3px; }
+.wiki-sidecar a { font-weight: bold; }
 code { background: #f0f0ec; padding: 1px 4px; border-radius: 2px; }
 pre code { background: none; padding: 0; }
 .wiki-md table { border-collapse: collapse; margin: 8px 0; }
