@@ -388,6 +388,7 @@ import LynRummy.CardStack
         , HandCardState(..)
         )
 import LynRummy.Referee as Referee exposing (RefereeStage(..), refereeStageToString)
+import LynRummy.Tricks.DirectPlay
 import Test exposing (Test, describe, test)
 
 
@@ -454,12 +455,23 @@ func elmTestName(s string) string {
 	return buf.String()
 }
 
+// elmPortedTricks records which TS/Go tricks have a fully-ported
+// Elm counterpart. Expand as more land in
+// elm-lynrummy/src/LynRummy/Tricks/. Scenarios for unported tricks
+// stay as Expect.pass placeholders.
+var elmPortedTricks = map[string]string{
+	"direct_play": "LynRummy.Tricks.DirectPlay.trick",
+}
+
 func elmScenarioBody(sc Scenario) string {
 	var b strings.Builder
 	switch sc.Op {
 	case "trick_first_play":
-		// Elm tricks not ported yet; placeholder pass.
-		fmt.Fprintf(&b, "            -- Elm TrickBag not ported yet (%s / %s)\n            Expect.pass", sc.Trick, sc.Expect.Kind)
+		if trickVar, ok := elmPortedTricks[sc.Trick]; ok {
+			elmTrickFirstPlay(&b, sc, trickVar)
+		} else {
+			fmt.Fprintf(&b, "            -- Elm TrickBag not ported yet (%s / %s)\n            Expect.pass", sc.Trick, sc.Expect.Kind)
+		}
 	case "validate_game_move":
 		elmValidateMove(&b, sc, false)
 	case "validate_turn_complete":
@@ -468,6 +480,49 @@ func elmScenarioBody(sc Scenario) string {
 		fmt.Fprintf(&b, "            Expect.fail \"unknown op %s\"", sc.Op)
 	}
 	return b.String()
+}
+
+func elmTrickFirstPlay(b *strings.Builder, sc Scenario, trickVar string) {
+	fmt.Fprintf(b, "            let\n                hand =\n                    %s\n\n                board =\n                    %s\n\n                plays =\n                    %s.findPlays hand board\n            in\n",
+		elmHandCards(sc.Hand),
+		elmStacks(sc.Board, "                        "),
+		trickVar)
+	switch sc.Expect.Kind {
+	case "no_plays":
+		b.WriteString(`            if not (List.isEmpty plays) then
+                Expect.fail ("expected no plays, got " ++ String.fromInt (List.length plays))
+
+            else
+                Expect.pass`)
+	case "play":
+		fmt.Fprintf(b, `            case plays of
+                [] ->
+                    Expect.fail "expected a play, got none"
+
+                play :: _ ->
+                    let
+                        ( gotBoard, gotHand ) =
+                            play.apply board
+
+                        wantHand =
+                            %s
+
+                        wantBoard =
+                            %s
+                    in
+                    if gotHand /= wantHand then
+                        Expect.fail ("hand mismatch:\n  want " ++ Debug.toString wantHand ++ "\n  got  " ++ Debug.toString gotHand)
+
+                    else if gotBoard /= wantBoard then
+                        Expect.fail ("board mismatch:\n  want " ++ Debug.toString wantBoard ++ "\n  got  " ++ Debug.toString gotBoard)
+
+                    else
+                        Expect.pass`,
+			elmHandCards(sc.Expect.HandPlayed),
+			elmStacks(sc.Expect.BoardAfter, "                            "))
+	default:
+		fmt.Fprintf(b, "            Expect.fail \"unsupported expectation: %s\"", sc.Expect.Kind)
+	}
 }
 
 func elmValidateMove(b *strings.Builder, sc Scenario, turnComplete bool) {

@@ -6,7 +6,7 @@ module LynRummy.DslConformanceTest exposing (suite)
 
 import Expect
 import LynRummy.BoardGeometry exposing (BoardBounds)
-import LynRummy.Card exposing (Card, CardValue(..), OriginDeck(..), Suit(..), allCardValues)
+import LynRummy.Card exposing (Card, CardValue(..), OriginDeck(..), Suit(..))
 import LynRummy.CardStack
     exposing
         ( BoardCard
@@ -17,6 +17,7 @@ import LynRummy.CardStack
         , HandCardState(..)
         )
 import LynRummy.Referee as Referee exposing (RefereeStage(..), refereeStageToString)
+import LynRummy.Tricks.DirectPlay
 import Test exposing (Test, describe, test)
 
 
@@ -25,36 +26,150 @@ standardBounds =
     { maxWidth = 800, maxHeight = 600, margin = 5 }
 
 
+
 directPlayExtendsLooseCard : Test
 directPlayExtendsLooseCard =
     test "direct_play_extends_loose_card" <|
         \_ ->
-            -- Elm TrickBag not ported yet (direct_play / play)
-            Expect.pass
+            let
+                hand =
+                    [ { card = { value = Six, suit = Heart, originDeck = DeckOne }, state = HandNormal } ]
+
+                board =
+                    [ { boardCards = [ { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 10, left = 50 } }
+                        ]
+
+                plays =
+                    LynRummy.Tricks.DirectPlay.trick.findPlays hand board
+            in
+            case plays of
+                [] ->
+                    Expect.fail "expected a play, got none"
+
+                play :: _ ->
+                    let
+                        ( gotBoard, gotHand ) =
+                            play.apply board
+
+                        wantHand =
+                            [ { card = { value = Six, suit = Heart, originDeck = DeckOne }, state = HandNormal } ]
+
+                        wantBoard =
+                            [ { boardCards = [ { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Heart, originDeck = DeckOne }, state = FreshlyPlayed } ], loc = { top = 10, left = 50 } }
+                            ]
+                    in
+                    if gotHand /= wantHand then
+                        Expect.fail ("hand mismatch:\n  want " ++ Debug.toString wantHand ++ "\n  got  " ++ Debug.toString gotHand)
+
+                    else if gotBoard /= wantBoard then
+                        Expect.fail ("board mismatch:\n  want " ++ Debug.toString wantBoard ++ "\n  got  " ++ Debug.toString gotBoard)
+
+                    else
+                        Expect.pass
 
 
 directPlayLeftExtendHeartRun : Test
 directPlayLeftExtendHeartRun =
     test "direct_play_left_extend_heart_run" <|
         \_ ->
-            -- Elm TrickBag not ported yet (direct_play / play)
-            Expect.pass
+            let
+                hand =
+                    [ { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = HandNormal } ]
+
+                board =
+                    [ { boardCards = [ { card = { value = Three, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 10, left = 200 } }
+                        ]
+
+                plays =
+                    LynRummy.Tricks.DirectPlay.trick.findPlays hand board
+            in
+            case plays of
+                [] ->
+                    Expect.fail "expected a play, got none"
+
+                play :: _ ->
+                    let
+                        ( gotBoard, gotHand ) =
+                            play.apply board
+
+                        wantHand =
+                            [ { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = HandNormal } ]
+
+                        wantBoard =
+                            [ { boardCards = [ { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = FreshlyPlayed }, { card = { value = Three, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 10, left = 167 } }
+                            ]
+                    in
+                    if gotHand /= wantHand then
+                        Expect.fail ("hand mismatch:\n  want " ++ Debug.toString wantHand ++ "\n  got  " ++ Debug.toString gotHand)
+
+                    else if gotBoard /= wantBoard then
+                        Expect.fail ("board mismatch:\n  want " ++ Debug.toString wantBoard ++ "\n  got  " ++ Debug.toString gotBoard)
+
+                    else
+                        Expect.pass
 
 
 directPlayNoPlays : Test
 directPlayNoPlays =
     test "direct_play_no_plays" <|
         \_ ->
-            -- Elm TrickBag not ported yet (direct_play / no_plays)
-            Expect.pass
+            let
+                hand =
+                    [ { card = { value = Nine, suit = Diamond, originDeck = DeckOne }, state = HandNormal } ]
+
+                board =
+                    [ { boardCards = [ { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 10, left = 10 } }
+                        ]
+
+                plays =
+                    LynRummy.Tricks.DirectPlay.trick.findPlays hand board
+            in
+            if not (List.isEmpty plays) then
+                Expect.fail ("expected no plays, got " ++ String.fromInt (List.length plays))
+
+            else
+                Expect.pass
 
 
 directPlayRightExtendHeartRun : Test
 directPlayRightExtendHeartRun =
     test "direct_play_right_extend_heart_run" <|
         \_ ->
-            -- Elm TrickBag not ported yet (direct_play / play)
-            Expect.pass
+            let
+                hand =
+                    [ { card = { value = Eight, suit = Heart, originDeck = DeckOne }, state = HandNormal } ]
+
+                board =
+                    [ { boardCards = [ { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 10, left = 10 } }
+                        ]
+
+                plays =
+                    LynRummy.Tricks.DirectPlay.trick.findPlays hand board
+            in
+            case plays of
+                [] ->
+                    Expect.fail "expected a play, got none"
+
+                play :: _ ->
+                    let
+                        ( gotBoard, gotHand ) =
+                            play.apply board
+
+                        wantHand =
+                            [ { card = { value = Eight, suit = Heart, originDeck = DeckOne }, state = HandNormal } ]
+
+                        wantBoard =
+                            [ { boardCards = [ { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Eight, suit = Heart, originDeck = DeckOne }, state = FreshlyPlayed } ], loc = { top = 10, left = 10 } }
+                            ]
+                    in
+                    if gotHand /= wantHand then
+                        Expect.fail ("hand mismatch:\n  want " ++ Debug.toString wantHand ++ "\n  got  " ++ Debug.toString gotHand)
+
+                    else if gotBoard /= wantBoard then
+                        Expect.fail ("board mismatch:\n  want " ++ Debug.toString wantBoard ++ "\n  got  " ++ Debug.toString gotBoard)
+
+                    else
+                        Expect.pass
 
 
 handStacksNoPlays : Test

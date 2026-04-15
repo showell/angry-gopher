@@ -11,6 +11,7 @@ module LynRummy.CardStack exposing
     , boardCardSameCard
     , boardCardStateToInt
     , boardLocationDecoder
+    , canExtract
     , cardStackDecoder
     , cardWidth
     , encodeBoardCard
@@ -600,3 +601,37 @@ intDecoderVia toMaybe label =
                                 ++ String.fromInt n
                             )
             )
+
+
+
+-- EXTRACT
+--
+-- canExtract reports whether the card at `cardIdx` can be legally
+-- extracted by a trick: end-peel (size >= 4), set-peel (any pos
+-- in a 4+ SET), or middle-peel (run where both halves are >= 3).
+-- Mirrors angry-gopher/lynrummy/card_stack.go CanExtract.
+
+
+canExtract : CardStack -> Int -> Bool
+canExtract stack cardIdx =
+    let
+        n =
+            size stack
+
+        st =
+            stackType stack
+    in
+    if st == Set then
+        n >= 4
+
+    else if st /= PureRun && st /= RedBlackRun then
+        False
+
+    else if n >= 4 && (cardIdx == 0 || cardIdx == n - 1) then
+        True
+
+    else if cardIdx >= 3 && n - cardIdx - 1 >= 3 then
+        True
+
+    else
+        False
