@@ -46,7 +46,8 @@ Terms for how Steve and Claude work together. These shape process, not product.
 | **Frozen doc** | A doc explicitly set up as pre-fix truth for a walkthrough; read-only for the duration even as code changes around it. |
 | **Kitchen-table test** | Asking "would this feel right at an actual card table?" — LynRummy's UX tie-breaker. |
 | **Rip** | Delete code fearlessly — removing an un-earning feature is a first-class skill, not a regret. |
-| **Miracle vs. folly** | Genius-or-folly framing: when a design lands perfectly OR when it dies from wish-framing / circular "rob Peter to pay Paul" reasoning. |
+| **Genius vs. folly** | Steve's aphorism: "humans are good at turning problem A into problem B. Usually that's our folly, but sometimes that is our genius." A reframe is *genius* when problem B has a terminating check (finite search, verifiable absence); *folly* when B is just another open-ended rearrangement. |
+| **Robbing Peter to pay Paul** | The kitchen-table name for the folly side of a reframe — a "solution" that relocates the difficulty or undoes earlier progress. Canonical label when naming the anti-pattern. |
 
 ## How to add an entry
 
