@@ -12,7 +12,7 @@ import (
 	"strconv"
 	"strings"
 
-	"angry-gopher/critters"
+	"angry-gopher/games/critters"
 )
 
 // CritterStudiesDir is where study DSLs live. Set by main.

@@ -199,7 +199,7 @@ package tricks
 import (
 	"testing"
 
-	"angry-gopher/lynrummy"
+	"angry-gopher/games/lynrummy"
 )
 
 {{range .}}// {{.Desc}}

@@ -15,8 +15,8 @@ import (
 	"net/http"
 	"strconv"
 
-	"angry-gopher/lynrummy"
-	"angry-gopher/lynrummy/tricks"
+	"angry-gopher/games/lynrummy"
+	"angry-gopher/games/lynrummy/tricks"
 )
 
 func HandleGameReplay(w http.ResponseWriter, r *http.Request) {

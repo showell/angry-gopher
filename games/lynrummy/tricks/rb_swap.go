@@ -7,7 +7,7 @@
 
 package tricks
 
-import "angry-gopher/lynrummy"
+import "angry-gopher/games/lynrummy"
 
 type rbSwapTrick struct{}
 

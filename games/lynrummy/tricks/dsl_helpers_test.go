@@ -8,7 +8,7 @@ import (
 	"encoding/json"
 	"strings"
 
-	"angry-gopher/lynrummy"
+	"angry-gopher/games/lynrummy"
 )
 
 // handsEqualDSL compares two HandCard lists by serializing both

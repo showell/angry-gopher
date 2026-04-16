@@ -31,7 +31,7 @@ import (
 	"time"
 
 	"angry-gopher/auth"
-	"angry-gopher/lynrummy"
+	"angry-gopher/games/lynrummy"
 	"angry-gopher/respond"
 )
 

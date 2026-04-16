@@ -18,7 +18,7 @@ import (
 	"time"
 
 	"angry-gopher/auth"
-	"angry-gopher/critters"
+	"angry-gopher/games/critters"
 	"angry-gopher/dm"
 	"angry-gopher/events"
 	"angry-gopher/games"

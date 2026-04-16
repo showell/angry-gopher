@@ -1,0 +1,15 @@
+# REORG — batch 1: nest game-domain packages under games/
+#
+# Currently lynrummy/ and critters/ sit at root alongside
+# infrastructure packages (auth/, events/, schema/). They're
+# game-specific and belong under games/.
+#
+# After this:
+#   games/
+#     games.go, plays.go    (HTTP API layer — already here)
+#     lynrummy/             (rummy engine + referee)
+#       tricks/             (trick detection)
+#     critters/             (behavioral-study engine)
+
+mv lynrummy/ games/lynrummy/
+mv critters/ games/critters/

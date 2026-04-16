@@ -7,7 +7,7 @@ package tricks
 import (
 	"testing"
 
-	"angry-gopher/lynrummy"
+	"angry-gopher/games/lynrummy"
 )
 
 // Client's stacks_to_remove has the wrong originDeck; must not match the board stack (fabrication guard).

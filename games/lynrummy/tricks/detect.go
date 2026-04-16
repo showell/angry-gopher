@@ -8,7 +8,7 @@
 
 package tricks
 
-import "angry-gopher/lynrummy"
+import "angry-gopher/games/lynrummy"
 
 // DefaultOrder is the canonical trick iteration order. Matches
 // TS's BAG order in angry-cat/src/lyn_rummy/tools/record_game.ts

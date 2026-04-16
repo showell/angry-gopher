@@ -10,7 +10,7 @@ package tricks
 import (
 	"sort"
 
-	"angry-gopher/lynrummy"
+	"angry-gopher/games/lynrummy"
 )
 
 type peelForRunTrick struct{}

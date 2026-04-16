@@ -3,7 +3,7 @@
 
 package tricks
 
-import "angry-gopher/lynrummy"
+import "angry-gopher/games/lynrummy"
 
 // dummyLoc is the default location for a freshly-created stack
 // that a trick appends to the board. Matches TS's DUMMY_LOC.

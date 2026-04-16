@@ -11,7 +11,7 @@
 
 package tricks
 
-import "angry-gopher/lynrummy"
+import "angry-gopher/games/lynrummy"
 
 // Trick is the plugin interface. Each registered trick is a
 // stateless singleton (zero-sized struct) with methods for its
