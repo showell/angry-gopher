@@ -13,7 +13,6 @@ import (
 
 	"angry-gopher/auth"
 	"angry-gopher/events"
-	"angry-gopher/presence"
 	"angry-gopher/ratelimit"
 )
 
@@ -48,7 +47,7 @@ tr:hover td { background: #f0f0ff; }
 	// --- Summary stats ---
 	now := time.Now()
 	queueStats := events.Stats()
-	onlineIDs := presence.OnlineUserIDs()
+	var onlineIDs []int
 	rejected429s, userRLStats := ratelimit.Stats()
 
 	fmt.Fprint(w, `<div class="stats-row">`)
@@ -90,32 +89,6 @@ tr:hover td { background: #f0f0ff; }
 				pollClass,
 				lastPoll,
 			)
-		}
-		fmt.Fprint(w, `</tbody></table>`)
-	}
-
-	// --- Presence ---
-	fmt.Fprint(w, `<h2>Presence</h2>`)
-	allPresence := presence.GetAll()
-	if len(allPresence) == 0 {
-		fmt.Fprint(w, `<p>No presence data.</p>`)
-	} else {
-		fmt.Fprint(w, `<table><thead><tr><th>User</th><th>Status</th><th>Last Seen</th></tr></thead><tbody>`)
-		for userID, ts := range allPresence {
-			var fullName string
-			DB.QueryRow(`SELECT full_name FROM users WHERE id = ?`, userID).Scan(&fullName)
-			if fullName == "" {
-				fullName = fmt.Sprintf("user %d", userID)
-			}
-			ago := now.Sub(ts).Truncate(time.Second)
-			cssClass := "ok"
-			status := "online"
-			if ago >= presence.OfflineThreshold {
-				cssClass = "warn"
-				status = "offline"
-			}
-			fmt.Fprintf(w, `<tr><td>%s (id %d)</td><td class="%s">%s</td><td>%s ago</td></tr>`,
-				html.EscapeString(fullName), userID, cssClass, status, ago)
 		}
 		fmt.Fprint(w, `</tbody></table>`)
 	}
@@ -181,7 +154,7 @@ func handleHealthCheck(w http.ResponseWriter, r *http.Request) {
 	}
 
 	queueStats := events.Stats()
-	onlineIDs := presence.OnlineUserIDs()
+	var onlineIDs []int
 	rejected429s, userRLStats := ratelimit.Stats()
 
 	type queueInfo struct {
@@ -241,7 +214,6 @@ func handleHealthCheck(w http.ResponseWriter, r *http.Request) {
 
 func handleOpsReset(w http.ResponseWriter, r *http.Request) {
 	events.Reset()
-	presence.Reset()
 	ratelimit.Reset()
 	log.Println("[admin] Ops reset: cleared all queues, presence, and rate limit counters")
 	http.Redirect(w, r, "/admin/ops", http.StatusSeeOther)

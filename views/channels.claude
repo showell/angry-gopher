@@ -1,7 +1,0 @@
-just_use channels.go
-
-# label: WORKHORSE
-# role: supports feature — channel list, detail (description + messages), create/edit forms
-
-Migration to crudgen DSL: ready once primitives land for textarea field,
-checkbox field, and related-data query.

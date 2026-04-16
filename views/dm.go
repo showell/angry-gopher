@@ -263,7 +263,7 @@ body { max-width: 1200px !important; }
   });
 
   // Live-append incoming DMs when the current page is the matching conversation.
-  // Matches /gopher/dm?user_id=%d against the event URL (the sender's user_id).
+  // Matches /gopher/dm?user_id=N against the event URL (the sender's user_id).
   if (window.EventSource) {
     var myUrl = location.pathname + location.search;
     var es = new EventSource('/gopher/sse/claude-activity');

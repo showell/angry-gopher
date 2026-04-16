@@ -1,6 +1,0 @@
-just_use starred.go
-
-# label: TINY
-# role: supports feature — list of messages the user has starred
-
-Migration: DSL-ready; simple filtered list.

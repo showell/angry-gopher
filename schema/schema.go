@@ -10,65 +10,10 @@ CREATE TABLE IF NOT EXISTS users (
     created_at INTEGER NOT NULL DEFAULT 0
 );
 
-CREATE TABLE IF NOT EXISTS channels (
-    channel_id INTEGER PRIMARY KEY,
-    name TEXT NOT NULL,
-    channel_weekly_traffic INTEGER NOT NULL DEFAULT 0,
-    invite_only INTEGER NOT NULL DEFAULT 0
-);
-
-CREATE TABLE IF NOT EXISTS channel_descriptions (
-    channel_id INTEGER PRIMARY KEY REFERENCES channels(channel_id),
-    markdown TEXT NOT NULL DEFAULT '',
-    html TEXT NOT NULL DEFAULT ''
-);
-
-CREATE TABLE IF NOT EXISTS subscriptions (
-    user_id INTEGER NOT NULL REFERENCES users(id),
-    channel_id INTEGER NOT NULL REFERENCES channels(channel_id),
-    PRIMARY KEY (user_id, channel_id)
-);
-
-CREATE TABLE IF NOT EXISTS topics (
-    topic_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    channel_id INTEGER NOT NULL REFERENCES channels(channel_id),
-    topic_name TEXT NOT NULL,
-    UNIQUE(channel_id, topic_name)
-);
-
 CREATE TABLE IF NOT EXISTS message_content (
     content_id INTEGER PRIMARY KEY AUTOINCREMENT,
     markdown TEXT NOT NULL,
     html TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS messages (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    content_id INTEGER NOT NULL REFERENCES message_content(content_id),
-    sender_id INTEGER NOT NULL REFERENCES users(id),
-    channel_id INTEGER NOT NULL REFERENCES channels(channel_id),
-    topic_id INTEGER NOT NULL REFERENCES topics(topic_id),
-    timestamp INTEGER NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS reactions (
-    message_id INTEGER NOT NULL REFERENCES messages(id),
-    user_id INTEGER NOT NULL REFERENCES users(id),
-    emoji_name TEXT NOT NULL,
-    emoji_code TEXT NOT NULL,
-    PRIMARY KEY (message_id, user_id, emoji_code)
-);
-
-CREATE TABLE IF NOT EXISTS unreads (
-    message_id INTEGER NOT NULL REFERENCES messages(id),
-    user_id INTEGER NOT NULL REFERENCES users(id),
-    PRIMARY KEY (message_id, user_id)
-);
-
-CREATE TABLE IF NOT EXISTS starred_messages (
-    message_id INTEGER NOT NULL REFERENCES messages(id),
-    user_id INTEGER NOT NULL REFERENCES users(id),
-    PRIMARY KEY (message_id, user_id)
 );
 
 CREATE TABLE IF NOT EXISTS dm_conversations (
@@ -127,8 +72,6 @@ CREATE INDEX IF NOT EXISTS idx_lynrummy_plays_game ON lynrummy_plays(game_id, ev
 CREATE INDEX IF NOT EXISTS idx_lynrummy_plays_trick ON lynrummy_plays(trick_id);
 
 -- CRITTER_STUDIES: telemetry from Elm critter-study sessions.
--- One session row per study run (from "yes" at consent through
--- quit or session-complete). Events accumulate per-session.
 CREATE TABLE IF NOT EXISTS critter_sessions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     study TEXT NOT NULL,
@@ -138,23 +81,4 @@ CREATE TABLE IF NOT EXISTS critter_sessions (
 );
 
 CREATE INDEX IF NOT EXISTS idx_critter_sessions_study ON critter_sessions(study, id DESC);
-
--- Full-text search via trigram tokenizer. Enables substring
--- matching on any 3+ character sequence, including URLs and
--- code snippets. Keyed by content_id so results join cleanly
--- back to messages.
-CREATE VIRTUAL TABLE IF NOT EXISTS message_fts USING fts5(
-    content,
-    content_id UNINDEXED,
-    tokenize='trigram'
-);
-
--- Indexes for search and pagination.
--- The (channel_id, id DESC) index is critical: without it, SQLite
--- uses the channel_id index for filtering but loses the ability to
--- walk the PK in reverse for LIMIT queries, turning 40µs pagination
--- into 500ms full scans at 10M rows.
-CREATE INDEX IF NOT EXISTS idx_messages_channel_id_desc ON messages(channel_id, id DESC);
-CREATE INDEX IF NOT EXISTS idx_messages_channel_topic ON messages(channel_id, topic_id);
-CREATE INDEX IF NOT EXISTS idx_messages_sender ON messages(sender_id);
 `

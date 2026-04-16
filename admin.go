@@ -26,8 +26,6 @@ func adminHandler(w http.ResponseWriter, r *http.Request) {
 
 	if tableName == "" {
 		renderAdminIndex(w)
-	} else if tableName == "presence" {
-		renderAdminPresence(w)
 	} else if tableName == "ops" {
 		if r.Method == "POST" {
 			handleOpsReset(w, r)

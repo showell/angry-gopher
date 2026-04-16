@@ -16,56 +16,8 @@ type PageDef struct {
 }
 
 // Pages returns the ordered list of all CRUD pages.
-// This is a function (not a var) to avoid an initialization cycle
-// between Pages → handlers → PageHeader → Pages.
-//
-// Pages declared in crudgen .claude files self-register via
-// generatedPages (see registry_generated.go) and appear after
-// the hardcoded list below.
 func GetPages() []PageDef {
 	hardcoded := []PageDef{
-	{
-		Path:     "/gopher/messages",
-		NavLabel: "Messages",
-		Title:    "Messages",
-		Subtitle: "Browse channels and topics. Messages stream progressively — no waiting for large topics to load.",
-		Handler:  HandleMessages,
-	},
-	{
-		Path:     "/gopher/recent",
-		NavLabel: "Recent",
-		Title:    "Recent Conversations",
-		Subtitle: "Topics with the most recent activity across all your channels.",
-		Handler:  HandleRecent,
-	},
-	{
-		Path:     "/gopher/unread",
-		NavLabel: "Unread",
-		Title:    "Unread Messages",
-		Subtitle: "Topics where you have unread messages. Click to catch up.",
-		Handler:  HandleUnread,
-	},
-	{
-		Path:     "/gopher/starred",
-		NavLabel: "Starred",
-		Title:    "Starred Messages",
-		Subtitle: "Messages you've starred for quick reference. Stars persist across sessions.",
-		Handler:  HandleStarred,
-	},
-	{
-		Path:     "/gopher/search",
-		NavLabel: "Search",
-		Title:    "Search",
-		Subtitle: "Find any message by text, channel, topic, or sender. Trigram search finds URLs and code snippets that other chat apps miss.",
-		Handler:  HandleSearch,
-	},
-	{
-		Path:     "/gopher/channels",
-		NavLabel: "Channels",
-		Title:    "Channels",
-		Subtitle: "Public and private channels. Click any channel name to browse its topics.",
-		Handler:  HandleChannels,
-	},
 	{
 		Path:     "/gopher/dm",
 		NavLabel: "DMs",
@@ -92,7 +44,6 @@ func GetPages() []PageDef {
 }
 
 // RegisterPages wires all page handlers into the mux.
-// Also registers the index, tour, and utility routes.
 func RegisterPages(mux *http.ServeMux) {
 	for _, p := range GetPages() {
 		mux.HandleFunc(p.Path, p.Handler)

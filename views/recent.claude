@@ -1,6 +1,0 @@
-just_use recent.go
-
-# label: TINY
-# role: supports feature — list of topics with most recent activity
-
-Migration: DSL-ready; simple list view.

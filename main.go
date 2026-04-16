@@ -18,17 +18,12 @@ import (
 	"time"
 
 	"angry-gopher/auth"
-	"angry-gopher/channels"
 	"angry-gopher/critters"
 	"angry-gopher/dm"
 	"angry-gopher/events"
-	"angry-gopher/flags"
 	"angry-gopher/games"
-	"angry-gopher/messages"
 	"angry-gopher/ratelimit"
-	"angry-gopher/reactions"
 	"angry-gopher/respond"
-	"angry-gopher/search"
 	"angry-gopher/users"
 	"angry-gopher/views"
 )
@@ -37,29 +32,14 @@ func buildMux() *http.ServeMux {
 	mux := http.NewServeMux()
 	api := withMiddleware
 
-	// --- Zulip-compatible API ---
+	// --- API ---
 	mux.HandleFunc("/api/v1/register", api(events.HandleRegister))
 	mux.HandleFunc("/api/v1/events", api(routeEvents))
 	mux.HandleFunc("/api/v1/users/me", api(routeOwnUser))
-	mux.HandleFunc("/api/v1/users/me/subscriptions/add", api(channels.HandleSubscribe))
-	mux.HandleFunc("/api/v1/users/me/subscriptions", api(routeSubscriptions))
-	mux.HandleFunc("/api/v1/users/me/presence", api(routePresence))
 	mux.HandleFunc("/api/v1/users/by_email", api(users.HandleGetUserByEmail))
 	mux.HandleFunc("/api/v1/users/", api(routeUserByID))
 	mux.HandleFunc("/api/v1/users", api(routeUsers))
 	mux.HandleFunc("/api/v1/settings", api(users.HandleUpdateSettings))
-	mux.HandleFunc("/api/v1/search", api(search.HandleSearch))
-	mux.HandleFunc("/api/v1/hydrate", api(search.HandleHydrate))
-	mux.HandleFunc("/api/v1/messages/render", api(messages.HandleRenderMessage))
-	mux.HandleFunc("/api/v1/messages/flags", api(flags.HandleUpdateFlags))
-	mux.HandleFunc("/api/v1/messages/", api(routeMessageByID))
-	mux.HandleFunc("/api/v1/messages", api(routeMessages))
-	mux.HandleFunc("/api/v1/mark_all_as_read", api(flags.HandleMarkAllRead))
-	mux.HandleFunc("/api/v1/mark_channel_as_read", api(flags.HandleMarkChannelRead))
-	mux.HandleFunc("/api/v1/mark_topic_as_read", api(flags.HandleMarkTopicRead))
-	mux.HandleFunc("/api/v1/get_stream_id", api(channels.HandleGetChannelID))
-	mux.HandleFunc("/api/v1/streams/", api(routeStreamByID))
-	mux.HandleFunc("/api/v1/streams", api(channels.HandleGetAllChannels))
 	mux.HandleFunc("/api/v1/dm/conversations", api(dm.HandleConversations))
 	mux.HandleFunc("/api/v1/dm/messages", api(dm.HandleMessages))
 	mux.HandleFunc("/api/v1/user_uploads/", api(handleUploadTempURL))
@@ -92,18 +72,11 @@ func wireDB() {
 	auth.DB = DB
 	users.DB = DB
 	critters.DB = DB
-	channels.DB = DB
-	messages.DB = DB
-	flags.DB = DB
-	reactions.DB = DB
 	games.DB = DB
-	channels.RenderMarkdown = renderMarkdown
 	dm.DB = DB
 	dm.RenderMarkdown = renderMarkdown
 	views.DB = DB
 	views.RenderMarkdown = renderMarkdown
-	search.DB = DB
-	messages.RenderMarkdown = renderMarkdown
 }
 
 func main() {

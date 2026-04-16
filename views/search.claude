@@ -1,7 +1,0 @@
-just_use search.go
-
-# label: WORKHORSE
-# role: supports feature — full-text search UI (channel/topic/sender/date filters)
-
-Migration to DSL: complex filter-combination UI; not DSL-friendly until
-composable query primitives exist.

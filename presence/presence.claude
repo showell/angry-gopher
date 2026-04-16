@@ -1,9 +1,0 @@
-just_use presence.go
-
-# label: CLEAN_INFRA
-# role: supports feature — online-user tracking (in-memory last_seen)
-
-Cat POSTs every 60s; a user is online if seen within OfflineThreshold
-(2 minutes). Pure in-memory — no DB, no persistence. Restart = everyone
-offline until the next heartbeat, which is fine because presence is an
-ephemeral signal by design.

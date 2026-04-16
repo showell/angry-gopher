@@ -14,8 +14,6 @@ import (
 	"path/filepath"
 	"time"
 
-	"angry-gopher/flags"
-	"angry-gopher/messages"
 	"angry-gopher/schema"
 
 	_ "modernc.org/sqlite"
@@ -76,90 +74,9 @@ func seedData(includeWelcome bool) {
 			u.id, u.fullName, now)
 	}
 
-	channels := []struct {
-		id         int
-		name       string
-		inviteOnly int
-	}{
-		{1, "Angry Cat", 1},
-		{2, "Angry Gopher", 1},
-		{3, "ChitChat", 0},
-	}
-	for _, ch := range channels {
-		DB.Exec(`INSERT OR IGNORE INTO channels (channel_id, name, invite_only) VALUES (?, ?, ?)`,
-			ch.id, ch.name, ch.inviteOnly)
-	}
-
-	// Steve and Claude are subscribed to all channels.
-	subs := []struct {
-		userID    int
-		channelID int
-	}{
-		{1, 1}, {2, 1}, // Angry Cat
-		{1, 2}, {2, 2}, // Angry Gopher
-		{1, 3}, {2, 3}, // ChitChat
-	}
-	for _, s := range subs {
-		DB.Exec(`INSERT OR IGNORE INTO subscriptions (user_id, channel_id) VALUES (?, ?)`,
-			s.userID, s.channelID)
-	}
-
 	if includeWelcome {
-		seedTestMessages()
+		seedTestImage()
 	}
-}
-
-func seedTestMessages() {
-	// Users: 1=Steve, 2=Claude
-	// Channels: 1=Angry Cat (private), 2=Angry Gopher (private), 3=ChitChat (public)
-
-	send := func(senderID, channelID int, topic, markdown string) int64 {
-		id, err := messages.SendMessage(senderID, channelID, topic, markdown)
-		if err != nil {
-			log.Printf("Failed to seed message: %v", err)
-		}
-		return id
-	}
-
-	steve, claude := 1, 2
-	angryCat, angryGopher, chitChat := 1, 2, 3
-
-	// --- ChitChat > welcome ---
-	m1 := send(claude, chitChat, "welcome", "Welcome to Angry Gopher! All systems are go.")
-	send(steve, chitChat, "welcome", "Thanks @**Claude**! Excited to be here.")
-
-	// --- Angry Cat > design ---
-	m10 := send(steve, angryCat, "design", "I think we should redesign the channel chooser.")
-	m12 := send(claude, angryCat, "design", "I can help prototype some options. What about a **tree view**?")
-	send(steve, angryCat, "design", "Tree view could work. Let's discuss more tomorrow.")
-
-	// --- Angry Gopher > test messages (markdown exerciser) ---
-	send(claude, angryGopher, "test messages", "## Basic formatting\n\n"+
-		"Here is **bold text**, *italic text*, and ~~strikethrough~~.\n\n"+
-		"A simple list:\n- First item\n- Second item\n- Third item\n\n"+
-		"And some `inline code` plus two code blocks.\n\n"+
-		"Fenced with triple backticks (no language):\n```\nthe quick brown fox\njumps over the lazy dog\n```\n\n"+
-		"Fenced with tildes and a language tag:\n~~~ py\ndef greet(name):\n    print(f\"Hello, {name}!\")\n~~~")
-
-	send(claude, angryGopher, "test messages", "## Valid links\n\n"+
-		"Mention: @**Steve**\n\n"+
-		"Channel link: #**ChitChat**\n\n"+
-		"Topic link: #**ChitChat>welcome**\n\n"+
-		fmt.Sprintf("Message link: #**ChitChat>welcome@%d**", m1))
-
-	// --- Angry Gopher > dev log ---
-	send(claude, angryGopher, "dev log", "Implemented message flags (read/unread, starred).")
-	send(claude, angryGopher, "dev log", "Added emoji reactions support. Only unicode for now.")
-	m21 := send(steve, angryGopher, "dev log", "Nice work @**Claude**! The reactions look great.")
-	m25 := send(steve, angryGopher, "dev log", "Really happy with the progress.")
-	send(claude, angryGopher, "dev log", "Agreed!")
-
-	// Star a few messages for Steve.
-	for _, msgID := range []int64{m1, m10, m12, m21, m25} {
-		flags.StarMessage(int(msgID), steve)
-	}
-
-	seedTestImage()
 }
 
 func seedTestImage() {
