@@ -392,6 +392,7 @@ func collectAllDocs() []docEntry {
 // opens it full-page.
 func renderCodeLanding(w http.ResponseWriter) {
 	entries := collectAllCodeFiles()
+	exts := collectExtensions(entries)
 
 	fmt.Fprint(w, `<!DOCTYPE html>
 <html><head><title>Code — Angry Gopher</title>
@@ -404,36 +405,57 @@ body { margin: 0; padding: 0; display: flex; flex-direction: column; min-height:
                         padding: 12px 16px; font-size: 17px; border: 1px solid #bbb;
                         border-radius: 24px; box-sizing: border-box; outline: none; }
 .code-searchbar input:focus { border-color: #000080; box-shadow: 0 0 0 3px #e0e8ff; }
-.code-main { flex: 1; max-width: 860px; margin: 0 auto; width: 100%;
-             padding: 24px 32px 60px; box-sizing: border-box; }
-.code-count { color: #888; font-size: 13px; margin-bottom: 12px; text-align: center; }
+.code-body { flex: 1; display: flex; min-height: 0; }
+.code-sidebar { width: 160px; background: #fafafa; border-right: 1px solid #ddd;
+                padding: 12px 0; overflow-y: auto; position: sticky; top: 0; }
+.code-sidebar h4 { margin: 0 12px 8px; font-size: 11px; text-transform: uppercase;
+                   letter-spacing: 0.06em; color: #888; }
+.code-sidebar ul { list-style: none; margin: 0; padding: 0; }
+.code-sidebar li { padding: 0; }
+.code-sidebar button { display: block; width: 100%%; background: none; border: none;
+                       text-align: left; padding: 6px 14px; font-family: "Courier New", monospace;
+                       font-size: 15px; color: #222; cursor: pointer; }
+.code-sidebar button:hover { background: #f0f0ff; }
+.code-sidebar button.active { background: #e6eaf6; font-weight: bold; color: #000080; }
+.code-sidebar .ext-count { color: #888; font-size: 11px; margin-left: 6px; }
+.code-main { flex: 1; max-width: 900px; padding: 24px 32px 60px; box-sizing: border-box;
+             overflow-y: auto; }
+.code-count { color: #888; font-size: 13px; margin-bottom: 12px; }
 .code-tree ul { list-style: none; margin: 0; padding: 0; }
 .code-tree li.hidden { display: none; }
+.code-tree li.dimmed { opacity: 0.2; }
 
 /* Repo headers: big section dividers. */
-.code-tree .repo-header { margin: 28px 0 12px; padding: 6px 12px;
-                          font-size: 22px; font-weight: bold; color: #000080;
-                          border-bottom: 2px solid #000080; }
+.code-tree .repo-header { margin: 32px 0 14px; padding: 8px 14px;
+                          font-size: 26px; font-weight: bold; color: #000080;
+                          border-bottom: 3px solid #000080; }
 .code-tree .repo-header:first-child { margin-top: 0; }
 
 /* Dirs: obviously different from files — chunkier, colored, no monospace. */
-.code-tree .dir { margin: 12px 0 2px; padding: 4px 10px; font-size: 17px;
-                  font-weight: 600; color: #555; background: #f4f1e8;
-                  border-left: 4px solid #c9bfa7; border-radius: 3px;
-                  letter-spacing: 0.01em; }
-.code-tree .dir .dir-name::before { content: "📂 "; font-size: 16px; }
+.code-tree .dir { margin: 14px 0 4px; padding: 6px 12px; font-size: 20px;
+                  font-weight: 700; color: #444; background: #f4f1e8;
+                  border-left: 5px solid #c9bfa7; border-radius: 3px;
+                  letter-spacing: 0.01em; transition: opacity 0.15s; }
+.code-tree .dir .dir-name::before { content: "📂 "; font-size: 18px; }
 
 /* Files: clean monospace rows, one per line, generous size. */
-.code-tree li.file { padding: 0; }
-.code-tree li.file a { display: block; padding: 3px 8px; color: #222;
+.code-tree li.file { padding: 0; transition: opacity 0.15s; }
+.code-tree li.file a { display: block; padding: 4px 8px; color: #222;
                        text-decoration: none; font-family: "Courier New", monospace;
-                       font-size: 15px; border-left: 3px solid transparent; }
+                       font-size: 17px; line-height: 1.5;
+                       border-left: 3px solid transparent; }
 .code-tree li.file a:hover { background: #f0f0ff; text-decoration: underline; }
+.code-tree .loc { display: inline-block; width: 4ch; text-align: right;
+                  color: #666; font-size: 15px; margin-right: 10px; }
 .code-tree .claude-sidecar a { color: #805500; }
 .code-tree .claude-sidecar a .name { background: #fff3a8; padding: 1px 6px;
                                      border-radius: 3px; font-weight: bold; }
 
 @media (max-width: 720px) {
+  .code-body { flex-direction: column; }
+  .code-sidebar { width: 100%%; max-height: 120px; border-right: none;
+                  border-bottom: 1px solid #ddd; display: flex; flex-wrap: wrap; gap: 4px; padding: 8px; }
+  .code-sidebar h4 { display: none; }
   .code-main { padding: 16px 12px 40px; }
 }
 ` + AppChromeCSS + `
@@ -445,6 +467,18 @@ body { margin: 0; padding: 0; display: flex; flex-direction: column; min-height:
 <div class="code-searchbar">
   <input id="code-search" type="search" placeholder="Filter by filename or path (e.g. wiki, auth, .claude)" autofocus>
 </div>
+<div class="code-body">
+<div class="code-sidebar">
+<h4>File types</h4>
+<ul>
+<li><button class="active" data-ext="*">All<span class="ext-count">`)
+	fmt.Fprintf(w, "%d", countCodeFiles(entries))
+	fmt.Fprint(w, `</span></button></li>`)
+	for _, ext := range exts {
+		fmt.Fprintf(w, `<li><button data-ext="%s">%s<span class="ext-count">%d</span></button></li>`,
+			html.EscapeString(ext.ext), html.EscapeString(ext.ext), ext.count)
+	}
+	fmt.Fprint(w, `</ul></div>
 <div class="code-main">`)
 	fmt.Fprintf(w, `<div class="code-count"><span id="code-count">%d</span> files</div>`, countCodeFiles(entries))
 	fmt.Fprint(w, `<div class="code-tree"><ul id="code-list">`)
@@ -464,54 +498,77 @@ body { margin: 0; padding: 0; display: flex; flex-direction: column; min-height:
 			renderCodeTreeRow(w, repo, n)
 		}
 	}
-	fmt.Fprint(w, `</ul></div></div></div>
+	fmt.Fprint(w, `</ul></div></div></div></div>
 <script>
 (function(){
   var search = document.getElementById('code-search');
   var list = document.getElementById('code-list');
   var count = document.getElementById('code-count');
-  var items = Array.prototype.slice.call(list.querySelectorAll('li.file a'));
+  var items = Array.prototype.slice.call(list.querySelectorAll('li.file'));
   var dirs = Array.prototype.slice.call(list.querySelectorAll('li.dir'));
   var repoHeaders = Array.prototype.slice.call(list.querySelectorAll('li.repo-header'));
+  var sidebar = document.querySelector('.code-sidebar');
+  var activeExt = '*';
 
-  function filter() {
+  function applyFilters() {
     var q = search.value.trim().toLowerCase();
     var visible = 0;
     var perRepo = {};
-    items.forEach(function(a){
+
+    items.forEach(function(li){
+      var a = li.querySelector('a');
+      var ext = li.getAttribute('data-ext') || '';
       var hay = (a.getAttribute('data-repo') + '/' + a.getAttribute('data-path')).toLowerCase();
-      var match = q === '' || hay.indexOf(q) !== -1;
-      a.parentElement.classList.toggle('hidden', !match);
-      if (match) {
+      var matchText = q === '' || hay.indexOf(q) !== -1;
+      var matchExt = activeExt === '*' || ext === activeExt;
+      var show = matchText && matchExt;
+      li.classList.toggle('hidden', !show);
+      if (show) {
         visible++;
         var r = a.getAttribute('data-repo');
         perRepo[r] = (perRepo[r] || 0) + 1;
       }
     });
+
+    // Dirs: show always but dim if no visible children.
     dirs.forEach(function(d){
       var dirPath = d.getAttribute('data-dir');
       var dirRepo = d.getAttribute('data-repo');
-      var anyVisible = items.some(function(a){
+      var anyVisible = items.some(function(li){
+        var a = li.querySelector('a');
         return a.getAttribute('data-repo') === dirRepo &&
                a.getAttribute('data-path').startsWith(dirPath + '/') &&
-               !a.parentElement.classList.contains('hidden');
+               !li.classList.contains('hidden');
       });
-      d.classList.toggle('hidden', !anyVisible);
+      d.classList.remove('hidden');
+      d.classList.toggle('dimmed', !anyVisible);
     });
+
     repoHeaders.forEach(function(h){
-      h.classList.toggle('hidden', !perRepo[h.getAttribute('data-repo')]);
+      h.classList.remove('hidden');
+      h.classList.toggle('dimmed', !perRepo[h.getAttribute('data-repo')]);
     });
     count.textContent = visible;
   }
-  search.addEventListener('input', filter);
+
+  search.addEventListener('input', applyFilters);
   search.addEventListener('keydown', function(e){
     if (e.key === 'Enter') {
-      var first = items.find(function(a){ return !a.parentElement.classList.contains('hidden'); });
-      if (first) first.click();
+      var first = items.find(function(li){ return !li.classList.contains('hidden'); });
+      if (first) first.querySelector('a').click();
     } else if (e.key === 'Escape') {
       search.value = '';
-      filter();
+      applyFilters();
     }
+  });
+
+  sidebar.addEventListener('click', function(e){
+    var btn = e.target.closest('button');
+    if (!btn) return;
+    activeExt = btn.getAttribute('data-ext');
+    sidebar.querySelectorAll('button').forEach(function(b){ b.classList.remove('active'); });
+    btn.classList.add('active');
+    applyFilters();
   });
 })();
 </script>`)
@@ -524,8 +581,32 @@ body { margin: 0; padding: 0; display: flex; flex-direction: column; min-height:
 type treeNode struct {
 	rel   string // relative path from repo root
 	name  string // base name
+	ext   string // file extension including dot, e.g. ".go"
 	depth int    // number of path segments (0 for root-level)
 	isDir bool
+	loc   int    // lines of code (files only)
+}
+
+type extEntry struct {
+	ext   string
+	count int
+}
+
+func collectExtensions(entries map[string][]treeNode) []extEntry {
+	counts := map[string]int{}
+	for _, nodes := range entries {
+		for _, n := range nodes {
+			if !n.isDir && n.ext != "" {
+				counts[n.ext]++
+			}
+		}
+	}
+	var out []extEntry
+	for ext, c := range counts {
+		out = append(out, extEntry{ext, c})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ext < out[j].ext })
+	return out
 }
 
 // collectAllCodeFiles walks each tracked repo depth-first and returns
@@ -552,7 +633,7 @@ func collectAllCodeFiles() map[string][]treeNode {
 			}
 			sort.Slice(ents, func(i, j int) bool {
 				if ents[i].IsDir() != ents[j].IsDir() {
-					return ents[i].IsDir()
+					return !ents[i].IsDir()
 				}
 				return ents[i].Name() < ents[j].Name()
 			})
@@ -574,8 +655,11 @@ func collectAllCodeFiles() map[string][]treeNode {
 					})
 					walk(filepath.Join(dir, name), childRel, depth+1)
 				} else {
+					ext := filepath.Ext(name)
+					loc := countLines(filepath.Join(dir, name))
 					nodes = append(nodes, treeNode{
-						rel: childRel, name: name, depth: depth, isDir: false,
+						rel: childRel, name: name, ext: ext,
+						depth: depth, isDir: false, loc: loc,
 					})
 				}
 			}
@@ -584,6 +668,21 @@ func collectAllCodeFiles() map[string][]treeNode {
 		result[repo] = nodes
 	}
 	return result
+}
+
+func countLines(path string) int {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return 0
+	}
+	if len(data) == 0 {
+		return 0
+	}
+	n := strings.Count(string(data), "\n")
+	if data[len(data)-1] != '\n' {
+		n++
+	}
+	return n
 }
 
 func countCodeFiles(m map[string][]treeNode) int {
@@ -599,7 +698,6 @@ func countCodeFiles(m map[string][]treeNode) int {
 }
 
 func renderCodeTreeRow(w http.ResponseWriter, repo string, n treeNode) {
-	// Generous indentation so depth is unambiguous at a glance.
 	indent := (n.depth + 1) * 32
 	if n.isDir {
 		fmt.Fprintf(w,
@@ -613,10 +711,11 @@ func renderCodeTreeRow(w http.ResponseWriter, repo string, n treeNode) {
 		cls = "file claude-sidecar"
 	}
 	fmt.Fprintf(w,
-		`<li class="%s"><a href="/gopher/code/%s/%s" data-repo="%s" data-path="%s" style="padding-left:%dpx"><span class="name">%s</span></a></li>`,
-		cls, html.EscapeString(repo), html.EscapeString(n.rel),
+		`<li class="%s" data-ext="%s"><a href="/gopher/code/%s/%s" data-repo="%s" data-path="%s" style="padding-left:%dpx"><span class="loc">%4d</span> <span class="name">%s</span></a></li>`,
+		cls, html.EscapeString(n.ext),
+		html.EscapeString(repo), html.EscapeString(n.rel),
 		html.EscapeString(repo), html.EscapeString(n.rel), indent,
-		html.EscapeString(n.name),
+		n.loc, html.EscapeString(n.name),
 	)
 }
 
