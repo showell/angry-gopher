@@ -1,7 +1,0 @@
-just_use main.go
-
-# label: TOOL
-# role: supports feature — one-shot generator for a static nav HTML page
-
-Run once against a bench DB, open the output in a browser. Not wired to
-live Gopher — this is for eyeballing message-count distributions.

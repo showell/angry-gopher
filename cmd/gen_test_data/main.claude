@@ -1,8 +1,0 @@
-just_use main.go
-
-# label: TOOL
-# role: supports feature — synthesize a 1M-message bench DB
-
-Realistic distribution over channels, topics, senders, timestamps.
-Overwrites the target DB — uses schema.Core directly so the test DB shape
-matches production without the server needing to run first.

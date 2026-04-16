@@ -1,8 +1,0 @@
-just_use main.go
-
-# label: TOOL
-# role: supports feature — concurrent reader/writer throughput stress
-
-Bypasses HTTP/rate-limit and hits SQLite directly. The -cache flag adds an
-in-memory LRU for content_id → html (content rows are immutable, so the
-cache never invalidates) — simulates Zulip's memcached pattern.

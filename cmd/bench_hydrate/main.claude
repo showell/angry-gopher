@@ -1,9 +1,0 @@
-just_use main.go
-
-# label: TOOL
-# role: supports feature — hydration benchmark + IN-clause size limit probe
-
-Two modes: normal run measures the two-trip pattern (search → hydrate) at
-realistic sizes; -limit-test pushes the IN(?, ?, ...) clause up past 1M to
-find SQLite's actual ceiling. Reads from /tmp/gopher_bench.db — pair with
-cmd/gen_test_data first.

@@ -1,6 +1,0 @@
-{
-    "zulip_url": "https://macandcheese.zulipchat.com",
-    "zulip_email": "showell30@yahoo.com",
-    "zulip_api_key": "YOUR_API_KEY_HERE",
-    "gopher_db": "/home/steve/AngryGopher/prod/gopher.db"
-}

@@ -1,7 +1,0 @@
-just_use main.go
-
-# label: TOOL
-# role: supports feature — exercise all 6 permutations of WHERE clause ordering
-
-Confirms (or refutes) the assumption that SQLite's query planner picks the
-same plan regardless of predicate ordering. Run when a query surprises you.

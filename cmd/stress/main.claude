@@ -1,9 +1,0 @@
-just_use main.go
-
-# label: TOOL
-# role: supports feature — realistic multi-bot stress harness
-
-Bots register event queues, long-poll, send presence, post/edit messages,
-react. Runs until Ctrl-C. Pair with /admin/ops open in a browser to watch
-queues, presence, and 429 counters in real time. End-to-end smoke test
-for the Zulip-compatible API surface.
