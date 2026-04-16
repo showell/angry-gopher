@@ -175,14 +175,17 @@ body { font-family: sans-serif; margin: 60px auto; max-width: 780px; padding: 0 
 h1 { color: #000080; font-size: 34px; margin-bottom: 4px; }
 .tag { color: #888; font-size: 13px; margin-bottom: 40px; }
 .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+@media (max-width: 640px) { .cards { grid-template-columns: 1fr; } }
 .card { border: 1px solid #ccc; border-radius: 6px; padding: 20px; background: #fcfcf8; }
-.card h2 { color: #000080; margin: 0 0 8px; font-size: 22px; }
-.card p { color: #555; margin: 0 0 12px; font-size: 14px; }
+.card h2 { margin: 0 0 8px; font-size: 22px; }
+.card h2 a { color: #000080; text-decoration: none; }
+.card h2 a:hover { text-decoration: underline; }
+.card p { color: #444; margin: 0 0 12px; font-size: 14px; }
 .card ul { list-style: none; padding: 0; margin: 0; }
 .card li { padding: 4px 0; }
-.card a { color: #000080; text-decoration: none; font-weight: bold; }
-.card a:hover { text-decoration: underline; }
-.card .muted { color: #999; font-weight: normal; }
+.card ul a { color: #000080; text-decoration: none; font-weight: bold; }
+.card ul a:hover { text-decoration: underline; }
+.card .muted { color: #888; font-weight: normal; }
 footer { margin-top: 40px; font-size: 12px; color: #888; text-align: center; }
 footer a { color: #000080; }
 </style>
@@ -193,7 +196,7 @@ footer a { color: #000080; }
 <div class="cards">
 
   <div class="card">
-    <h2>Games</h2>
+    <h2><a href="/gopher/game-lobby">Games</a></h2>
     <p>Game hosting with a server-side referee. Play inside Angry Cat or on the CRUD pages.</p>
     <ul>
       <li><a href="/gopher/game-lobby">LynRummy</a> <span class="muted">— lobby + replay</span></li>
@@ -202,11 +205,29 @@ footer a { color: #000080; }
   </div>
 
   <div class="card">
-    <h2>Wiki</h2>
-    <p>Browse the repo's docs, sidecars, and source in your browser. Everything's linked.</p>
+    <h2><a href="/gopher/claude">Claude</a></h2>
+    <p>Talk to Claude and see what he's working on. File issues; reply to DMs.</p>
     <ul>
-      <li><a href="/gopher/wiki/">Wiki home</a> <span class="muted">— README + landmarks</span></li>
-      <li><a href="/gopher/wiki/tree/">Repo tree</a> <span class="muted">— full filesystem</span></li>
+      <li><a href="/gopher/claude-issues">Issues</a> <span class="muted">— active + recently shipped</span></li>
+      <li><a href="/gopher/dm?user_id=2">DM Claude</a> <span class="muted">— ongoing conversation</span></li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2><a href="/gopher/docs/">Docs</a></h2>
+    <p>Curated markdown documentation — architecture, decisions, glossaries, testing notes.</p>
+    <ul>
+      <li><a href="/gopher/docs/">Docs home</a> <span class="muted">— repo READMEs</span></li>
+      <li><a href="/gopher/docs/gopher/DECISIONS.md">Landmarks</a> <span class="muted">— DECISIONS, DATABASE, TESTING, GLOSSARY</span></li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2><a href="/gopher/code/gopher/tree/">Code</a></h2>
+    <p>Browse source files and <code>.claude</code> sidecars across all tracked repos.</p>
+    <ul>
+      <li><a href="/gopher/code/gopher/tree/">Repo tree</a> <span class="muted">— full filesystem</span></li>
+      <li><a href="/gopher/code/gopher/tree/views">views/</a> <span class="muted">— Gopher view handlers</span></li>
     </ul>
   </div>
 
