@@ -67,7 +67,7 @@ func HandleClaudeIssues(w http.ResponseWriter, r *http.Request) {
 
 func renderClaudeIssuesIndex(w http.ResponseWriter, issues []claudeIssue) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	PageHeader(w, "Claude issues")
+	PageHeaderArea(w, "Claude issues", "claude")
 	PageSubtitle(w, fmt.Sprintf("Backlog of things Steve has asked Claude to do (%d total). Click any row for the detail page.", len(issues)))
 
 	// New-issue form at the top. File directly from the UI.
@@ -157,7 +157,7 @@ func statusBadge(s string) string {
 
 func renderClaudeIssueDetail(w http.ResponseWriter, iss claudeIssue) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	PageHeader(w, fmt.Sprintf("#%d — %s", iss.ID, iss.Title))
+	PageHeaderArea(w, fmt.Sprintf("#%d — %s", iss.ID, iss.Title), "claude")
 	fmt.Fprintf(w, `<p><a href="/gopher/claude-issues">&larr; All issues</a></p>`)
 	fmt.Fprintf(w,
 		`<p>%s · <span class="muted">source: %s · created %s · updated %s</span></p>`,

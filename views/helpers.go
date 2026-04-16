@@ -37,13 +37,69 @@ func currentUserName(userID int) string {
 	return name
 }
 
-// PageHeader writes the HTML boilerplate and opens the body.
-func PageHeader(w http.ResponseWriter, title string) {
+// AppChromeCSS is the shared stylesheet for the app-wide top and
+// bottom bars. Emitted by every page that uses AppChromeTop/Bottom.
+const AppChromeCSS = `
+.app-top { background: #f0ede4; border-bottom: 1px solid #c9bfa7; padding: 8px 24px;
+           font-family: sans-serif; }
+.app-top-home { font-size: 12px; }
+.app-top-home a { color: #000080; text-decoration: none; font-weight: bold; }
+.app-top-home a:hover { text-decoration: underline; }
+.app-top-areas { margin-top: 4px; display: flex; gap: 18px; flex-wrap: wrap; }
+.app-top-areas a { color: #000080; text-decoration: none; font-size: 14px; }
+.app-top-areas a:hover { text-decoration: underline; }
+.app-top-areas .current { font-weight: bold; background: #fff3a8; padding: 1px 6px; border-radius: 3px; }
+.app-bottom { border-top: 1px solid #c9bfa7; padding: 10px 24px; font-size: 12px;
+              color: #888; text-align: center; font-family: sans-serif; }
+.app-bottom a { color: #000080; text-decoration: none; }
+.app-bottom a:hover { text-decoration: underline; }
+`
+
+// AppChromeTop emits the global top bar. `current` should be one of
+// "games" / "claude" / "docs" / "code" / "" (when not in any area).
+// Pass empty for the home page or un-tagged pages.
+func AppChromeTop(w http.ResponseWriter, current string) {
+	areas := []struct{ key, label, href string }{
+		{"claude", "Claude", "/gopher/claude"},
+		{"code", "Code", "/gopher/code/"},
+		{"docs", "Docs", "/gopher/docs/"},
+		{"games", "Games", "/gopher/game-lobby"},
+	}
+	fmt.Fprint(w, `<header class="app-top"><div class="app-top-home"><a href="/gopher/">← Gopher Home</a></div><div class="app-top-areas">`)
+	for _, a := range areas {
+		cls := ""
+		if a.key == current {
+			cls = ` class="current"`
+		}
+		fmt.Fprintf(w, `<a href="%s"%s>%s</a>`, a.href, cls, a.label)
+	}
+	fmt.Fprint(w, `</div></header>`)
+}
+
+// AppChromeBottom emits the global bottom footer.
+func AppChromeBottom(w http.ResponseWriter) {
+	fmt.Fprint(w, `<footer class="app-bottom"><a href="/gopher/tour">All CRUD pages</a>&nbsp;·&nbsp;<a href="/admin/">Admin</a></footer>`)
+}
+
+// PageHeader writes the HTML boilerplate and opens the body. Use
+// PageHeaderArea if this page belongs to one of the four major areas
+// (Games/Claude/Docs/Code) so the top bar can highlight it.
+func PageHeader(w http.ResponseWriter, title string) { PageHeaderArea(w, title, "") }
+
+// PageHeaderArea is PageHeader plus an "area" key for top-bar
+// highlighting. Pass "games" / "claude" / "docs" / "code", or ""
+// for pages that don't belong to one.
+func PageHeaderArea(w http.ResponseWriter, title, area string) {
 	fmt.Fprintf(w, `<!DOCTYPE html>
 <html><head><title>%s — Angry Gopher</title>`, title)
 	fmt.Fprint(w, `
 <style>
-body { font-family: sans-serif; margin: 40px; max-width: 700px; padding-bottom: 100px; }
+body { font-family: sans-serif; margin: 0; padding: 0;
+       display: flex; flex-direction: column; min-height: 100vh; }
+.app-body-wrap { flex: 1; max-width: 820px; margin: 32px auto; padding: 0 24px 60px;
+                 width: 100%; box-sizing: border-box; }`)
+	fmt.Fprint(w, AppChromeCSS)
+	fmt.Fprint(w, `
 h1 { color: #000080; }
 h2 { color: #000080; margin-top: 24px; }
 a { color: #000080; }
@@ -69,27 +125,24 @@ button:hover { background: #0000a0; }
 .new-msg { border-left: 3px solid violet; padding-left: 8px; }
 .compose-sticky { position: sticky; bottom: 0; background: white; padding: 8px 0;
                    border-top: 1px solid #ccc; margin-top: 12px; }
+.cards { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px; }
+@media (max-width: 640px) { .cards { grid-template-columns: 1fr; } }
+.card { border: 1px solid #ccc; border-radius: 6px; padding: 20px; background: #fcfcf8; }
+.card h2 { margin: 0 0 8px; font-size: 22px; }
+.card h2 a { color: #000080; text-decoration: none; }
+.card h2 a:hover { text-decoration: underline; }
+.card p { color: #444; margin: 0 0 12px; font-size: 14px; }
+.card ul { list-style: none; padding: 0; margin: 0; }
+.card li { padding: 4px 0; }
+.card ul a { color: #000080; text-decoration: none; font-weight: bold; }
+.card ul a:hover { text-decoration: underline; }
+.card .muted { color: #888; font-weight: normal; }
 </style>
 </head><body>
 `)
 	fmt.Fprint(w, NotificationWidget)
-	fmt.Fprint(w, `<nav>
-<a href="/gopher/">Home</a>
-<a href="/gopher/dm?user_id=2" style="background:#fff3a8;padding:2px 8px;border-radius:3px;font-weight:bold;">💬 DM Claude</a>
-<a href="/gopher/claude-issues" style="background:#ffe0e8;padding:2px 8px;border-radius:3px;font-weight:bold;">🗂️ Issues</a>
-`)
-	for _, p := range GetPages() {
-		if p.NavLabel == "" {
-			// Self-registered pages with no nav label are routes
-			// only (e.g. /gopher/game-replay linked from a detail
-			// view, not a top-level nav entry).
-			continue
-		}
-		fmt.Fprintf(w, `<a href="%s">%s</a> `, p.Path, p.NavLabel)
-	}
-	fmt.Fprintf(w, `<span style="float:right;color:#888">%s</span>
-</nav>
-<h1>%s</h1>`, html.EscapeString(currentUserName(lastAuthUserID)), title)
+	AppChromeTop(w, area)
+	fmt.Fprintf(w, `<div class="app-body-wrap"><h1>%s</h1>`, html.EscapeString(title))
 }
 
 // PageSubtitle renders a brief help/marketing blurb below the title.
@@ -99,6 +152,8 @@ func PageSubtitle(w http.ResponseWriter, text string) {
 
 // PageFooter closes the HTML.
 func PageFooter(w http.ResponseWriter) {
+	fmt.Fprint(w, `</div>`)
+	AppChromeBottom(w)
 	fmt.Fprint(w, `</body></html>`)
 }
 
@@ -171,7 +226,10 @@ func HandleIndex(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, `<!DOCTYPE html>
 <html><head><title>Angry Gopher</title>
 <style>
-body { font-family: sans-serif; margin: 60px auto; max-width: 780px; padding: 0 24px; }
+body { font-family: sans-serif; margin: 0; padding: 0;
+       display: flex; flex-direction: column; min-height: 100vh; }
+.app-body-wrap { flex: 1; max-width: 780px; margin: 40px auto 0; padding: 0 24px 40px;
+                 width: 100%; box-sizing: border-box; }
 h1 { color: #000080; font-size: 34px; margin-bottom: 4px; }
 .tag { color: #888; font-size: 13px; margin-bottom: 40px; }
 .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
@@ -186,23 +244,16 @@ h1 { color: #000080; font-size: 34px; margin-bottom: 4px; }
 .card ul a { color: #000080; text-decoration: none; font-weight: bold; }
 .card ul a:hover { text-decoration: underline; }
 .card .muted { color: #888; font-weight: normal; }
-footer { margin-top: 40px; font-size: 12px; color: #888; text-align: center; }
-footer a { color: #000080; }
+` + AppChromeCSS + `
 </style>
-</head><body>
+</head><body>`)
+	AppChromeTop(w, "")
+	fmt.Fprint(w, `<div class="app-body-wrap">
 <h1>Angry Gopher</h1>
-<div class="tag">Critter-sized server for games, docs, and small-team chat.</div>
+<div class="tag">Critter-sized server for games, docs, and small-team chat.</div>`)
+	fmt.Fprint(w, `
 
 <div class="cards">
-
-  <div class="card">
-    <h2><a href="/gopher/game-lobby">Games</a></h2>
-    <p>Game hosting with a server-side referee. Play inside Angry Cat or on the CRUD pages.</p>
-    <ul>
-      <li><a href="/gopher/game-lobby">LynRummy</a> <span class="muted">— lobby + replay</span></li>
-      <li><a href="/gopher/critters/">Critter studies</a> <span class="muted">— drag-and-drop behavioral studies</span></li>
-    </ul>
-  </div>
 
   <div class="card">
     <h2><a href="/gopher/claude">Claude</a></h2>
@@ -210,6 +261,15 @@ footer a { color: #000080; }
     <ul>
       <li><a href="/gopher/claude-issues">Issues</a> <span class="muted">— active + recently shipped</span></li>
       <li><a href="/gopher/dm?user_id=2">DM Claude</a> <span class="muted">— ongoing conversation</span></li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2><a href="/gopher/code/">Code</a></h2>
+    <p>Browse source files and <code>.claude</code> sidecars across all tracked repos.</p>
+    <ul>
+      <li><a href="/gopher/code/">Repo tree</a> <span class="muted">— full filesystem</span></li>
+      <li><a href="/gopher/code/views">views/</a> <span class="muted">— Gopher view handlers</span></li>
     </ul>
   </div>
 
@@ -223,21 +283,16 @@ footer a { color: #000080; }
   </div>
 
   <div class="card">
-    <h2><a href="/gopher/code/gopher/tree/">Code</a></h2>
-    <p>Browse source files and <code>.claude</code> sidecars across all tracked repos.</p>
+    <h2><a href="/gopher/game-lobby">Games</a></h2>
+    <p>Game hosting with a server-side referee. Play inside Angry Cat or on the CRUD pages.</p>
     <ul>
-      <li><a href="/gopher/code/gopher/tree/">Repo tree</a> <span class="muted">— full filesystem</span></li>
-      <li><a href="/gopher/code/gopher/tree/views">views/</a> <span class="muted">— Gopher view handlers</span></li>
+      <li><a href="/gopher/game-lobby">LynRummy</a> <span class="muted">— lobby + replay</span></li>
+      <li><a href="/gopher/critters/">Critter studies</a> <span class="muted">— drag-and-drop behavioral studies</span></li>
     </ul>
   </div>
 
 </div>
-
-<footer>
-<a href="/gopher/tour">All CRUD pages</a>
-&nbsp;·&nbsp;
-<a href="/admin/">Admin</a>
-</footer>
-</body></html>
-`)
+</div>`)
+	AppChromeBottom(w)
+	fmt.Fprint(w, `</body></html>`)
 }

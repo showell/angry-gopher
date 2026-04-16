@@ -13,7 +13,7 @@ func HandleClaudeLanding(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	PageHeader(w, "Claude")
+	PageHeaderArea(w, "Claude", "claude")
 	PageSubtitle(w, "Talk to Claude, see what he's working on, file new issues.")
 	fmt.Fprint(w, `<div class="cards">
   <div class="card">

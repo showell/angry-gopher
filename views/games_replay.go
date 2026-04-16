@@ -189,7 +189,7 @@ func renderGameReplay(w http.ResponseWriter, userID, gameID int) {
 	eventsJSON, _ := json.Marshal(events)
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	PageHeader(w, fmt.Sprintf("Replay: %s vs %s", p1Name, p2))
+	PageHeaderArea(w, fmt.Sprintf("Replay: %s vs %s", p1Name, p2), "games")
 
 	fmt.Fprintf(w, `<a class="back" href="/gopher/game-lobby?id=%d">&larr; Back to game</a>`, gameID)
 

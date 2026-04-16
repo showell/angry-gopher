@@ -107,8 +107,10 @@ func handleWikiSection(w http.ResponseWriter, r *http.Request, section string) {
 		return
 	}
 
+	bare := r.URL.Query().Get("bare") == "1"
+
 	if rest == "" || rest == "/" {
-		wikiRender(w, section, repo, "README.md", repo+"/README.md")
+		wikiRenderMaybeBare(w, section, repo, "README.md", repo+"/README.md", bare)
 		return
 	}
 
@@ -119,10 +121,72 @@ func handleWikiSection(w http.ResponseWriter, r *http.Request, section string) {
 		return
 	}
 
-	wikiRender(w, section, repo, rest, repo+"/"+rest)
+	wikiRenderMaybeBare(w, section, repo, rest, repo+"/"+rest, bare)
+}
+
+// wikiRenderMaybeBare dispatches to the full-chrome renderer or a
+// bare-content renderer (for iframe embeds on the Docs landing).
+func wikiRenderMaybeBare(w http.ResponseWriter, section, repo, sub, displayPath string, bare bool) {
+	if bare {
+		wikiRenderBare(w, section, repo, sub, displayPath)
+		return
+	}
+	wikiRender(w, section, repo, sub, displayPath)
+}
+
+// wikiRenderBare renders just the file content for iframe embedding:
+// minimal HTML shell, no sidebar, no top/bottom chrome, no breadcrumb.
+func wikiRenderBare(w http.ResponseWriter, section, repo, sub, displayPath string) {
+	abs, ok := resolveRepoPath(repo, sub)
+	if !ok {
+		http.Error(w, "Invalid path", http.StatusBadRequest)
+		return
+	}
+	body, err := os.ReadFile(abs)
+	if err != nil {
+		http.Error(w, "Cannot read", http.StatusInternalServerError)
+		return
+	}
+	fmt.Fprintf(w, `<!DOCTYPE html>
+<html><head><title>%s</title>
+<style>
+body { font-family: sans-serif; margin: 0; padding: 24px 32px 40px;
+       max-width: 820px; color: #222; line-height: 1.5; }
+h1 { color: #000080; margin-top: 0; }
+h2, h3 { color: #000080; }
+a { color: #000080; }
+code { background: #f0f0ec; padding: 1px 4px; border-radius: 2px; }
+pre { background: #f8f8f4; padding: 12px; border: 1px solid #ddd; overflow-x: auto; }
+pre code { background: none; padding: 0; }
+table { border-collapse: collapse; margin: 8px 0; }
+th, td { border: 1px solid #ccc; padding: 4px 10px; }
+th { background: #000080; color: white; }
+.wiki-path { color: #888; font-size: 12px; font-family: "Courier New", monospace;
+             margin-bottom: 12px; }
+.wiki-path a { color: #555; text-decoration: none; }
+.wiki-path a:hover { text-decoration: underline; }
+</style></head><body>`, html.EscapeString(displayPath))
+	fmt.Fprintf(w, `<div class="wiki-path"><a href="/gopher/%s/%s/%s" target="_top">Open in full page ↗</a> · %s</div>`,
+		html.EscapeString(section), html.EscapeString(repo), html.EscapeString(sub), html.EscapeString(displayPath))
+	if strings.HasSuffix(sub, ".md") && RenderMarkdown != nil {
+		fmt.Fprint(w, RenderMarkdown(string(body)))
+	} else {
+		fmt.Fprint(w, `<pre style="white-space:pre-wrap">`)
+		fmt.Fprint(w, html.EscapeString(string(body)))
+		fmt.Fprint(w, `</pre>`)
+	}
+	fmt.Fprint(w, `</body></html>`)
 }
 
 func wikiLanding(w http.ResponseWriter, section string) {
+	if section == "docs" {
+		renderDocsLanding(w)
+		return
+	}
+	if section == "code" {
+		renderCodeLanding(w)
+		return
+	}
 	wikiHeader(w, section, "Home", "/", "")
 	fmt.Fprint(w, `<p>Browser-based reader for Steve's dev harness. Pick a repo:</p><ul class="wiki-tree">`)
 	for _, name := range wikiRepoOrder {
@@ -137,6 +201,425 @@ func wikiLanding(w http.ResponseWriter, section string) {
 	wikiFooter(w)
 }
 
+// renderDocsLanding is the Docs landing: a Google-ish search box, a
+// flat A–Z index of every .md across all repos, and an iframe preview
+// pane for bulk reading without losing your place in the index.
+func renderDocsLanding(w http.ResponseWriter) {
+	docs := collectAllDocs()
+	renderDocsLandingHTML(w, docs)
+}
+
+// renderDocsLandingHTML is the actual HTML emitter — kept separate so
+// we can reason about the markup without the file walking.
+func renderDocsLandingHTML(w http.ResponseWriter, docs []docEntry) {
+	fmt.Fprint(w, `<!DOCTYPE html>
+<html><head><title>Docs — Angry Gopher</title>
+<style>
+body { margin: 0; padding: 0; display: flex; flex-direction: column; min-height: 100vh;
+       font-family: sans-serif; color: #1d1a14; background: #fff; }
+.docs-layout { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.docs-searchbar { padding: 14px 24px; background: #fafafa; border-bottom: 1px solid #ddd; }
+.docs-searchbar input { width: 100%; max-width: 900px; display: block; margin: 0 auto;
+                        padding: 10px 14px; font-size: 16px; border: 1px solid #bbb;
+                        border-radius: 20px; box-sizing: border-box; outline: none; }
+.docs-searchbar input:focus { border-color: #000080; box-shadow: 0 0 0 3px #e0e8ff; }
+.docs-split { flex: 1; display: flex; min-height: 0; }
+.docs-index { width: 340px; border-right: 1px solid #ddd; overflow-y: auto;
+              background: #fafafa; padding: 8px 0; }
+.docs-index ul { list-style: none; margin: 0; padding: 0; }
+.docs-index li.hidden { display: none; }
+.docs-index a { display: block; padding: 5px 14px; font-family: "Courier New", monospace;
+                font-size: 13px; color: #222; text-decoration: none;
+                border-left: 3px solid transparent; }
+.docs-index a:hover { background: #f0f0ff; }
+.docs-index a.active { background: #e6eaf6; border-left-color: #000080; font-weight: bold; }
+.docs-index .group-heading { padding: 10px 14px 4px; font-size: 11px; text-transform: uppercase;
+                             letter-spacing: 0.06em; color: #888; font-weight: bold; }
+.docs-count { padding: 6px 14px; color: #888; font-size: 12px; }
+.docs-preview { flex: 1; position: relative; background: #fff; }
+.docs-preview iframe { width: 100%; height: 100%; border: none; display: block; }
+.docs-preview .empty-state { padding: 60px 40px; color: #888; text-align: center; font-size: 14px; }
+@media (max-width: 820px) {
+  .docs-split { flex-direction: column; }
+  .docs-index { width: 100%; max-height: 40vh; border-right: none; border-bottom: 1px solid #ddd; }
+}
+` + AppChromeCSS + `
+</style>
+</head><body>`)
+	fmt.Fprint(w, NotificationWidget)
+	AppChromeTop(w, "docs")
+	fmt.Fprint(w, `<div class="docs-layout">
+<div class="docs-searchbar">
+  <input id="docs-search" type="search" placeholder="Search docs — filename or path (e.g. decisions, testing, README)" autofocus>
+</div>
+<div class="docs-split">
+<div class="docs-index">`)
+	fmt.Fprintf(w, `<div class="docs-count"><span id="docs-count">%d</span> documents</div><ul id="docs-list">`, len(docs))
+	lastRepo := ""
+	for _, d := range docs {
+		if d.repo != lastRepo {
+			fmt.Fprintf(w, `<li class="group-heading" data-repo="%s">%s</li>`,
+				html.EscapeString(d.repo), html.EscapeString(d.repo))
+			lastRepo = d.repo
+		}
+		fmt.Fprintf(w, `<li><a href="/gopher/docs/%s/%s?bare=1" data-repo="%s" data-path="%s">%s</a></li>`,
+			html.EscapeString(d.repo), html.EscapeString(d.path),
+			html.EscapeString(d.repo), html.EscapeString(d.path), html.EscapeString(d.path),
+		)
+	}
+	fmt.Fprint(w, `</ul></div>
+<div class="docs-preview">
+  <iframe id="docs-preview" src="about:blank"></iframe>
+  <div id="docs-preview-empty" class="empty-state">
+    Pick a doc from the left to start reading. Use the searchbar to filter by filename or path.
+  </div>
+</div>
+</div>
+</div>
+<script>
+(function(){
+  var search = document.getElementById('docs-search');
+  var list = document.getElementById('docs-list');
+  var count = document.getElementById('docs-count');
+  var iframe = document.getElementById('docs-preview');
+  var empty = document.getElementById('docs-preview-empty');
+  var items = Array.prototype.slice.call(list.querySelectorAll('li a'));
+  var groups = Array.prototype.slice.call(list.querySelectorAll('li.group-heading'));
+
+  function filter() {
+    var q = search.value.trim().toLowerCase();
+    var visible = 0;
+    var perRepo = {};
+    items.forEach(function(a){
+      var hay = (a.getAttribute('data-repo') + '/' + a.getAttribute('data-path')).toLowerCase();
+      var match = q === '' || hay.indexOf(q) !== -1;
+      a.parentElement.classList.toggle('hidden', !match);
+      if (match) {
+        visible++;
+        var r = a.getAttribute('data-repo');
+        perRepo[r] = (perRepo[r] || 0) + 1;
+      }
+    });
+    groups.forEach(function(g){
+      var r = g.getAttribute('data-repo');
+      g.classList.toggle('hidden', !perRepo[r]);
+    });
+    count.textContent = visible;
+  }
+  search.addEventListener('input', filter);
+
+  list.addEventListener('click', function(e){
+    var a = e.target.closest('a');
+    if (!a) return;
+    e.preventDefault();
+    items.forEach(function(x){ x.classList.remove('active'); });
+    a.classList.add('active');
+    iframe.src = a.getAttribute('href');
+    empty.style.display = 'none';
+  });
+
+  search.addEventListener('keydown', function(e){
+    if (e.key === 'Enter') {
+      var first = items.find(function(a){ return !a.parentElement.classList.contains('hidden'); });
+      if (first) first.click();
+    } else if (e.key === 'Escape') {
+      search.value = '';
+      filter();
+    }
+  });
+})();
+</script>`)
+	AppChromeBottom(w)
+	fmt.Fprint(w, `</body></html>`)
+}
+
+type docEntry struct {
+	repo string
+	path string
+}
+
+// collectAllDocs walks every tracked repo for *.md files and returns
+// a flat slice sorted A–Z by repo then path. Skips hidden directories
+// and common vendored/build trees.
+func collectAllDocs() []docEntry {
+	skipDirs := map[string]bool{
+		"node_modules": true, "elm-stuff": true, ".git": true,
+		"dist": true, "build": true, "bin": true,
+	}
+	var out []docEntry
+	for _, repo := range wikiRepoOrder {
+		root, ok := repoRoot(repo)
+		if !ok {
+			continue
+		}
+		filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+			if err != nil {
+				return nil
+			}
+			if info.IsDir() {
+				name := info.Name()
+				if path != root && strings.HasPrefix(name, ".") {
+					return filepath.SkipDir
+				}
+				if skipDirs[name] {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+			if !strings.HasSuffix(info.Name(), ".md") {
+				return nil
+			}
+			rel, err := filepath.Rel(root, path)
+			if err != nil {
+				return nil
+			}
+			out = append(out, docEntry{repo: repo, path: rel})
+			return nil
+		})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].repo != out[j].repo {
+			return out[i].repo < out[j].repo
+		}
+		return out[i].path < out[j].path
+	})
+	return out
+}
+
+// renderCodeLanding is the Code landing: a centered, fully-expanded
+// tree of every tracked repo, one file per row. Generous indentation
+// + distinct dir/file typography. No preview pane; clicking a file
+// opens it full-page.
+func renderCodeLanding(w http.ResponseWriter) {
+	entries := collectAllCodeFiles()
+
+	fmt.Fprint(w, `<!DOCTYPE html>
+<html><head><title>Code — Angry Gopher</title>
+<style>
+body { margin: 0; padding: 0; display: flex; flex-direction: column; min-height: 100vh;
+       font-family: sans-serif; color: #222; background: #fff; }
+.code-layout { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.code-searchbar { padding: 16px 24px; background: #fafafa; border-bottom: 1px solid #ddd; }
+.code-searchbar input { width: 100%; max-width: 720px; display: block; margin: 0 auto;
+                        padding: 12px 16px; font-size: 17px; border: 1px solid #bbb;
+                        border-radius: 24px; box-sizing: border-box; outline: none; }
+.code-searchbar input:focus { border-color: #000080; box-shadow: 0 0 0 3px #e0e8ff; }
+.code-main { flex: 1; max-width: 860px; margin: 0 auto; width: 100%;
+             padding: 24px 32px 60px; box-sizing: border-box; }
+.code-count { color: #888; font-size: 13px; margin-bottom: 12px; text-align: center; }
+.code-tree ul { list-style: none; margin: 0; padding: 0; }
+.code-tree li.hidden { display: none; }
+
+/* Repo headers: big section dividers. */
+.code-tree .repo-header { margin: 28px 0 12px; padding: 6px 12px;
+                          font-size: 22px; font-weight: bold; color: #000080;
+                          border-bottom: 2px solid #000080; }
+.code-tree .repo-header:first-child { margin-top: 0; }
+
+/* Dirs: obviously different from files — chunkier, colored, no monospace. */
+.code-tree .dir { margin: 12px 0 2px; padding: 4px 10px; font-size: 17px;
+                  font-weight: 600; color: #555; background: #f4f1e8;
+                  border-left: 4px solid #c9bfa7; border-radius: 3px;
+                  letter-spacing: 0.01em; }
+.code-tree .dir .dir-name::before { content: "📂 "; font-size: 16px; }
+
+/* Files: clean monospace rows, one per line, generous size. */
+.code-tree li.file { padding: 0; }
+.code-tree li.file a { display: block; padding: 3px 8px; color: #222;
+                       text-decoration: none; font-family: "Courier New", monospace;
+                       font-size: 15px; border-left: 3px solid transparent; }
+.code-tree li.file a:hover { background: #f0f0ff; text-decoration: underline; }
+.code-tree .claude-sidecar a { color: #805500; }
+.code-tree .claude-sidecar a .name { background: #fff3a8; padding: 1px 6px;
+                                     border-radius: 3px; font-weight: bold; }
+
+@media (max-width: 720px) {
+  .code-main { padding: 16px 12px 40px; }
+}
+` + AppChromeCSS + `
+</style>
+</head><body>`)
+	fmt.Fprint(w, NotificationWidget)
+	AppChromeTop(w, "code")
+	fmt.Fprint(w, `<div class="code-layout">
+<div class="code-searchbar">
+  <input id="code-search" type="search" placeholder="Filter by filename or path (e.g. wiki, auth, .claude)" autofocus>
+</div>
+<div class="code-main">`)
+	fmt.Fprintf(w, `<div class="code-count"><span id="code-count">%d</span> files</div>`, countCodeFiles(entries))
+	fmt.Fprint(w, `<div class="code-tree"><ul id="code-list">`)
+
+	lastRepo := ""
+	for _, repo := range wikiRepoOrder {
+		nodes, ok := entries[repo]
+		if !ok {
+			continue
+		}
+		if repo != lastRepo {
+			fmt.Fprintf(w, `<li class="repo-header" data-repo="%s">%s/</li>`,
+				html.EscapeString(repo), html.EscapeString(repo))
+			lastRepo = repo
+		}
+		for _, n := range nodes {
+			renderCodeTreeRow(w, repo, n)
+		}
+	}
+	fmt.Fprint(w, `</ul></div></div></div>
+<script>
+(function(){
+  var search = document.getElementById('code-search');
+  var list = document.getElementById('code-list');
+  var count = document.getElementById('code-count');
+  var items = Array.prototype.slice.call(list.querySelectorAll('li.file a'));
+  var dirs = Array.prototype.slice.call(list.querySelectorAll('li.dir'));
+  var repoHeaders = Array.prototype.slice.call(list.querySelectorAll('li.repo-header'));
+
+  function filter() {
+    var q = search.value.trim().toLowerCase();
+    var visible = 0;
+    var perRepo = {};
+    items.forEach(function(a){
+      var hay = (a.getAttribute('data-repo') + '/' + a.getAttribute('data-path')).toLowerCase();
+      var match = q === '' || hay.indexOf(q) !== -1;
+      a.parentElement.classList.toggle('hidden', !match);
+      if (match) {
+        visible++;
+        var r = a.getAttribute('data-repo');
+        perRepo[r] = (perRepo[r] || 0) + 1;
+      }
+    });
+    dirs.forEach(function(d){
+      var dirPath = d.getAttribute('data-dir');
+      var dirRepo = d.getAttribute('data-repo');
+      var anyVisible = items.some(function(a){
+        return a.getAttribute('data-repo') === dirRepo &&
+               a.getAttribute('data-path').startsWith(dirPath + '/') &&
+               !a.parentElement.classList.contains('hidden');
+      });
+      d.classList.toggle('hidden', !anyVisible);
+    });
+    repoHeaders.forEach(function(h){
+      h.classList.toggle('hidden', !perRepo[h.getAttribute('data-repo')]);
+    });
+    count.textContent = visible;
+  }
+  search.addEventListener('input', filter);
+  search.addEventListener('keydown', function(e){
+    if (e.key === 'Enter') {
+      var first = items.find(function(a){ return !a.parentElement.classList.contains('hidden'); });
+      if (first) first.click();
+    } else if (e.key === 'Escape') {
+      search.value = '';
+      filter();
+    }
+  });
+})();
+</script>`)
+	AppChromeBottom(w)
+	fmt.Fprint(w, `</body></html>`)
+}
+
+// treeNode is a file or directory marker in the pre-rendered tree.
+// Dirs are emitted as label rows; files as clickable rows.
+type treeNode struct {
+	rel   string // relative path from repo root
+	name  string // base name
+	depth int    // number of path segments (0 for root-level)
+	isDir bool
+}
+
+// collectAllCodeFiles walks each tracked repo depth-first and returns
+// a per-repo slice of treeNodes in display order. Dirs appear before
+// their contents; entries within a dir are sorted A–Z with dirs
+// first.
+func collectAllCodeFiles() map[string][]treeNode {
+	skipDirs := map[string]bool{
+		"node_modules": true, "elm-stuff": true, ".git": true,
+		"dist": true, "build": true, "bin": true,
+	}
+	result := map[string][]treeNode{}
+	for _, repo := range wikiRepoOrder {
+		root, ok := repoRoot(repo)
+		if !ok {
+			continue
+		}
+		var nodes []treeNode
+		var walk func(dir, rel string, depth int)
+		walk = func(dir, rel string, depth int) {
+			ents, err := os.ReadDir(dir)
+			if err != nil {
+				return
+			}
+			sort.Slice(ents, func(i, j int) bool {
+				if ents[i].IsDir() != ents[j].IsDir() {
+					return ents[i].IsDir()
+				}
+				return ents[i].Name() < ents[j].Name()
+			})
+			for _, e := range ents {
+				name := e.Name()
+				if strings.HasPrefix(name, ".") && name != ".gitignore" {
+					continue
+				}
+				if e.IsDir() && skipDirs[name] {
+					continue
+				}
+				childRel := name
+				if rel != "" {
+					childRel = rel + "/" + name
+				}
+				if e.IsDir() {
+					nodes = append(nodes, treeNode{
+						rel: childRel, name: name, depth: depth, isDir: true,
+					})
+					walk(filepath.Join(dir, name), childRel, depth+1)
+				} else {
+					nodes = append(nodes, treeNode{
+						rel: childRel, name: name, depth: depth, isDir: false,
+					})
+				}
+			}
+		}
+		walk(root, "", 0)
+		result[repo] = nodes
+	}
+	return result
+}
+
+func countCodeFiles(m map[string][]treeNode) int {
+	n := 0
+	for _, nodes := range m {
+		for _, node := range nodes {
+			if !node.isDir {
+				n++
+			}
+		}
+	}
+	return n
+}
+
+func renderCodeTreeRow(w http.ResponseWriter, repo string, n treeNode) {
+	// Generous indentation so depth is unambiguous at a glance.
+	indent := (n.depth + 1) * 32
+	if n.isDir {
+		fmt.Fprintf(w,
+			`<li class="dir" data-repo="%s" data-dir="%s" style="margin-left:%dpx"><span class="dir-name">%s/</span></li>`,
+			html.EscapeString(repo), html.EscapeString(n.rel), indent, html.EscapeString(n.name),
+		)
+		return
+	}
+	cls := "file"
+	if strings.HasSuffix(n.name, ".claude") {
+		cls = "file claude-sidecar"
+	}
+	fmt.Fprintf(w,
+		`<li class="%s"><a href="/gopher/code/%s/%s" data-repo="%s" data-path="%s" style="padding-left:%dpx"><span class="name">%s</span></a></li>`,
+		cls, html.EscapeString(repo), html.EscapeString(n.rel),
+		html.EscapeString(repo), html.EscapeString(n.rel), indent,
+		html.EscapeString(n.name),
+	)
+}
+
 func sectionTitle(section string) string {
 	switch section {
 	case "code":
@@ -144,6 +627,45 @@ func sectionTitle(section string) string {
 	default:
 		return "Docs"
 	}
+}
+
+// sectionCSS returns an extra <style> block that layers on top of the
+// base wiki stylesheet. Docs gets a "physical library" treatment —
+// serif, cream paper, black ink; Code keeps the default look.
+func sectionCSS(section string) string {
+	if section != "docs" {
+		return ""
+	}
+	return `<style>
+body, main, aside { background: #faf7ef; }
+body { color: #1d1a14; }
+aside { background: #f1ece0; border-right: 1px solid #c9bfa7; }
+main { font-family: Georgia, "Times New Roman", serif; font-size: 16px; line-height: 1.65;
+       max-width: 720px; padding: 36px 48px 64px; }
+main h1, main h2, main h3 { font-family: Georgia, "Times New Roman", serif;
+                            color: #1d1a14; letter-spacing: 0.01em; }
+main h1 { font-size: 34px; font-weight: normal; border-bottom: 1px solid #1d1a14;
+          padding-bottom: 6px; margin-bottom: 24px; }
+main h2 { font-size: 22px; font-weight: normal; font-style: italic; margin-top: 32px; }
+main h3 { font-size: 18px; font-weight: bold; margin-top: 20px; }
+main a { color: #1d1a14; text-decoration: underline; text-decoration-thickness: 1px; }
+main a:hover { background: #f0e6c6; }
+main p { margin: 0 0 14px; text-align: justify; hyphens: auto; }
+main em { font-style: italic; }
+main code { background: #efe9d7; color: #1d1a14; padding: 0 4px; border-radius: 0;
+            font-family: "Courier New", monospace; font-size: 14px; }
+main pre { background: #efe9d7; border: 1px solid #c9bfa7; border-radius: 0; }
+main .wiki-md table { border: 1px solid #c9bfa7; }
+main .wiki-md th { background: #1d1a14; color: #faf7ef; font-family: Georgia, serif;
+                   font-weight: normal; letter-spacing: 0.04em; }
+main .wiki-md td { border-color: #c9bfa7; }
+.breadcrumb { font-family: Georgia, serif; font-style: italic; color: #5c5547; }
+.breadcrumb a { color: #1d1a14; }
+aside h3 { color: #5c5547; }
+aside h3 a { color: #1d1a14; font-style: italic; font-weight: normal; }
+aside a { color: #1d1a14; }
+aside .repo-current { background: #e6dcc0; }
+</style>`
 }
 
 // wikiRender reads a file and serves it — markdown for .md,
@@ -313,7 +835,9 @@ func wikiHeader(w http.ResponseWriter, section, title, currentPath, currentRepo 
 <html><head><title>%s — %s</title>`, html.EscapeString(title), html.EscapeString(secLabel))
 	fmt.Fprint(w, `
 <style>
-body { font-family: sans-serif; margin: 0; display: flex; min-height: 100vh; }
+body { font-family: sans-serif; margin: 0; display: flex; flex-direction: column;
+       min-height: 100vh; }
+.app-body-wiki { display: flex; flex: 1; }
 aside { width: 240px; background: #f4f4f0; padding: 16px; border-right: 1px solid #ccc;
         overflow-y: auto; max-height: 100vh; position: sticky; top: 0; font-size: 13px; }
 aside h3 { margin: 16px 0 6px; color: #444; font-size: 12px; font-weight: 600;
@@ -349,7 +873,9 @@ pre code { background: none; padding: 0; }
 .wiki-tree li { padding: 2px 0; }
 .breadcrumb { color: #888; font-size: 12px; margin-bottom: 16px; }
 .breadcrumb a { color: #000080; }
+` + AppChromeCSS + `
 </style>
+` + sectionCSS(section) + `
 <script>
 (function () {
     // Accept #L42 or #L42-L57 (with or without the second 'L').
@@ -376,8 +902,9 @@ pre code { background: none; padding: 0; }
 </head><body>
 `)
 	fmt.Fprint(w, NotificationWidget)
+	AppChromeTop(w, section)
+	fmt.Fprint(w, `<div class="app-body-wiki">`)
 	fmt.Fprint(w, `<aside>`)
-	fmt.Fprintf(w, `<h3><a href="/gopher/">← Gopher home</a></h3>`)
 	fmt.Fprint(w, `<h3>Talk to Claude</h3>
 <ul>
 <li><a href="/gopher/dm?user_id=2" style="background:#fff3a8;padding:2px 8px;border-radius:3px;font-weight:bold;">💬 DM Claude</a></li>
@@ -466,5 +993,7 @@ pre code { background: none; padding: 0; }
 }
 
 func wikiFooter(w http.ResponseWriter) {
-	fmt.Fprint(w, `</main></body></html>`)
+	fmt.Fprint(w, `</main></div>`)
+	AppChromeBottom(w)
+	fmt.Fprint(w, `</body></html>`)
 }

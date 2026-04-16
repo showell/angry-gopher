@@ -39,7 +39,7 @@ func HandleDM(w http.ResponseWriter, r *http.Request) {
 
 func renderDMList(w http.ResponseWriter, userID int) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	PageHeader(w, "Direct Messages")
+	PageHeaderArea(w, "Direct Messages", "claude")
 	PageSubtitle(w, "Private 1:1 conversations.")
 
 	// All users (for "New conversation" links).
@@ -124,7 +124,7 @@ func renderDMConversation(w http.ResponseWriter, userID, otherID int) {
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	PageHeader(w, fmt.Sprintf("DM with %s", otherName))
+	PageHeaderArea(w, fmt.Sprintf("DM with %s", otherName), "claude")
 
 	fmt.Fprint(w, `<a class="back" href="/gopher/dm">&larr; Back to conversations</a>`)
 

@@ -47,73 +47,185 @@ func HandleGames(w http.ResponseWriter, r *http.Request) {
 
 func renderGameList(w http.ResponseWriter, userID int) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	PageHeader(w, "Games")
-	PageSubtitle(w, "Play LynRummy and other games with your team — right inside your chat app.")
+	PageHeaderArea(w, "Games", "games")
+	PageSubtitle(w, "Pick your poison. Two-player rummy with a real referee, or drag-critter behavior studies.")
 
+	renderGamesHero(w, userID)
+
+	// Create game form — tucked under a disclosure below the hero.
+	fmt.Fprint(w, `<details style="margin-top:16px"><summary style="cursor:pointer;font-weight:bold;color:#000080">➕ Create a new LynRummy game</summary>
+<form method="POST" action="/gopher/game-lobby" style="margin-top:8px">
+<label style="display:block;margin-bottom:4px;font-weight:bold">Puzzle name (optional)</label>
+<input type="text" name="puzzle_name" placeholder="e.g. puzzle_24" style="width:200px;padding:4px;margin-bottom:8px"><br>
+<button type="submit">Create</button>
+</form></details>`)
+
+	PageFooter(w)
+}
+
+// renderGamesHero is the Games landing's single-row hero: three tiles
+// side-by-side on wide screens (LynRummy promise, Critters promise,
+// your active LynRummy games). Collapses to stacked on narrow screens.
+// Visuals are randomized each pageload so it doesn't feel static.
+func renderGamesHero(w http.ResponseWriter, userID int) {
+	fmt.Fprint(w, `<style>
+.games-hero { display:grid; grid-template-columns: 1fr 1fr minmax(280px, 1.1fr); gap:20px; margin:20px 0 28px; }
+@media (max-width: 1100px) { .games-hero { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 720px) { .games-hero { grid-template-columns: 1fr; } }
+.games-tile { border:1px solid #ccc; border-radius:8px; padding:18px; background:#fcfcf8;
+              display:flex; flex-direction:column; }
+.games-tile h2 { margin:0 0 4px; font-size:20px; }
+.games-tile h2 a { color:#000080; text-decoration:none; }
+.games-tile h2 a:hover { text-decoration:underline; }
+.games-tile p { color:#444; margin:0 0 12px; font-size:13px; line-height:1.4; }
+.games-tile .stage { flex:1; display:flex; align-items:center; justify-content:center;
+                     min-height:140px; background:#f4f4f0; border-radius:6px; margin:4px 0 12px; padding:12px; }
+.playing-card { display:inline-block; width:56px; height:78px; border:1px solid #888;
+                border-radius:5px; background:white; position:relative; margin:0 -8px;
+                box-shadow:0 1px 3px rgba(0,0,0,.15); font-family:serif;
+                transform-origin:bottom center; }
+.playing-card.red { color:#c00; }
+.playing-card.black { color:#111; }
+.playing-card .rank { position:absolute; top:4px; left:6px; font-size:14px; font-weight:bold; }
+.playing-card .suit-big { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+                          font-size:28px; }
+.playing-card .rank-br { position:absolute; bottom:4px; right:6px; font-size:14px; font-weight:bold;
+                         transform:rotate(180deg); }
+.critter { font-size:48px; margin:0 6px; display:inline-block; }
+.critter.floaty { animation: critter-float 3s ease-in-out infinite; }
+@keyframes critter-float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+.games-tile .cta { margin-top:auto; }
+.games-tile .cta a { display:inline-block; background:#000080; color:white; padding:6px 14px;
+                     border-radius:4px; text-decoration:none; font-weight:bold; font-size:13px; }
+.games-tile .cta a:hover { background:#0000a0; }
+.games-active-list { list-style:none; padding:0; margin:0; font-size:13px;
+                     max-height:160px; overflow-y:auto; }
+.games-active-list li { padding:4px 6px; border-bottom:1px dashed #ddd; }
+.games-active-list li:last-child { border-bottom:none; }
+.games-active-list a { color:#000080; font-weight:bold; text-decoration:none; }
+.games-active-list a:hover { text-decoration:underline; }
+.games-active-list .row-meta { color:#888; font-size:11px; }
+</style>
+<div class="games-hero">
+  <div class="games-tile">
+    <h2><a href="#lynrummy-active">LynRummy</a></h2>
+    <p>Two-player rummy variant. Drag cards, build runs and sets, let the referee catch mistakes.</p>
+    <div class="stage">`)
+	// Render a fanned hand of 5 cards with a small random tilt.
+	fmt.Fprint(w, randomHandHTML(5))
+	fmt.Fprint(w, `</div>
+    <div class="cta"><a href="#lynrummy-active">Active games ↓</a></div>
+  </div>
+  <div class="games-tile">
+    <h2><a href="/gopher/critters/">Critter studies</a></h2>
+    <p>Drag-and-drop behavioral games. Sort mice, group ducks, whatever the study calls for.</p>
+    <div class="stage">`)
+	fmt.Fprint(w, randomCrittersHTML(4))
+	fmt.Fprint(w, `</div>
+    <div class="cta"><a href="/gopher/critters/">Open portal →</a></div>
+  </div>
+  <div class="games-tile">
+    <h2>Your active games</h2>
+    <p>LynRummy — click through to open or spectate.</p>`)
+	renderActiveGamesList(w, userID)
+	fmt.Fprint(w, `
+  </div>
+</div>`)
+}
+
+// renderActiveGamesList emits a compact list for the Games-landing
+// third column. One line per game: #, label/puzzle, opponent, event
+// count. Full detail still lives on /gopher/game-lobby?id=N.
+func renderActiveGamesList(w http.ResponseWriter, userID int) {
 	rows, err := DB.Query(`
-		SELECT g.id, g.player1_id, g.player2_id, g.created_at, g.puzzle_name, g.label,
-			u1.full_name,
-			u2.full_name,
+		SELECT g.id, g.player1_id, g.player2_id, g.puzzle_name, g.label,
+			u1.full_name, u2.full_name,
 			(SELECT COUNT(*) FROM game_events WHERE game_id = g.id) AS event_count
 		FROM games g
 		JOIN users u1 ON g.player1_id = u1.id
 		LEFT JOIN users u2 ON g.player2_id = u2.id
 		WHERE g.archived = 0 AND (g.player1_id = ? OR g.player2_id = ?
 			OR (g.player2_id IS NULL AND g.player1_id != ?))
-		ORDER BY g.created_at DESC`,
+		ORDER BY g.created_at DESC
+		LIMIT 20`,
 		userID, userID, userID)
 	if err != nil {
-		fmt.Fprint(w, `<p>Failed to load games.</p>`)
-		PageFooter(w)
+		fmt.Fprint(w, `<p class="muted">Failed to load games.</p>`)
 		return
 	}
 	defer rows.Close()
 
-	fmt.Fprint(w, `<table><thead><tr><th>#</th><th>Label</th><th>Puzzle</th><th>Player 1</th><th>Player 2</th><th>Events</th><th>Created</th></tr></thead><tbody>`)
+	fmt.Fprint(w, `<ul class="games-active-list">`)
 	hasGames := false
 	for rows.Next() {
 		hasGames = true
 		var id, p1ID, eventCount int
 		var p2ID sql.NullInt64
-		var createdAt int64
 		var puzzleName sql.NullString
-		var label string
-		var p1Name string
+		var label, p1Name string
 		var p2Name sql.NullString
-		rows.Scan(&id, &p1ID, &p2ID, &createdAt, &puzzleName, &label, &p1Name, &p2Name, &eventCount)
+		rows.Scan(&id, &p1ID, &p2ID, &puzzleName, &label, &p1Name, &p2Name, &eventCount)
 
-		labelCell := `<span class="muted">—</span>`
+		title := fmt.Sprintf("#%d", id)
 		if label != "" {
-			labelCell = html.EscapeString(label)
-		}
-		puzzleCell := `<span class="muted">—</span>`
-		if puzzleName.Valid && puzzleName.String != "" {
-			puzzleCell = html.EscapeString(puzzleName.String)
+			title = fmt.Sprintf("#%d — %s", id, label)
+		} else if puzzleName.Valid && puzzleName.String != "" {
+			title = fmt.Sprintf("#%d — %s", id, puzzleName.String)
 		}
 
-		p2Display := `<span class="muted">open — waiting for player</span>`
-		if p2ID.Valid && p2Name.Valid {
-			p2Display = UserLink(int(p2ID.Int64), p2Name.String)
+		var opponent string
+		switch {
+		case p1ID == userID && p2ID.Valid && p2Name.Valid:
+			opponent = "vs " + p2Name.String
+		case p1ID == userID:
+			opponent = "waiting for player"
+		case p2ID.Valid && int(p2ID.Int64) == userID:
+			opponent = "vs " + p1Name
+		default:
+			opponent = "open — " + p1Name
 		}
-
-		t := time.Unix(createdAt, 0).Format("Jan 2 15:04")
-		fmt.Fprintf(w, `<tr><td><a href="/gopher/game-lobby?id=%d">%d</a></td><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%d</td><td>%s</td></tr>`,
-			id, id, labelCell, puzzleCell, UserLink(p1ID, p1Name), p2Display, eventCount, t)
+		fmt.Fprintf(w,
+			`<li><a href="/gopher/game-lobby?id=%d">%s</a> <span class="row-meta">%s · %d events</span></li>`,
+			id, html.EscapeString(title), html.EscapeString(opponent), eventCount,
+		)
 	}
-	fmt.Fprint(w, `</tbody></table>`)
+	fmt.Fprint(w, `</ul>`)
 	if !hasGames {
-		fmt.Fprint(w, `<p class="muted">No games yet.</p>`)
+		fmt.Fprint(w, `<p class="muted" style="font-size:13px">No games yet — create one below.</p>`)
 	}
+}
 
-	// Create game form.
-	fmt.Fprint(w, `<h2>Create Game</h2>
-<form method="POST" action="/gopher/game-lobby">
-<label style="display:block;margin-bottom:4px;font-weight:bold">Puzzle name (optional)</label>
-<input type="text" name="puzzle_name" placeholder="e.g. puzzle_24" style="width:200px;padding:4px;margin-bottom:8px"><br>
-<button type="submit">Create</button>
-</form>`)
+func randomHandHTML(n int) string {
+	suits := []struct {
+		glyph string
+		color string
+	}{
+		{"♠", "black"}, {"♥", "red"}, {"♦", "red"}, {"♣", "black"},
+	}
+	ranks := []string{"A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"}
+	var b []byte
+	baseTilt := -8
+	for i := 0; i < n; i++ {
+		s := suits[(int(time.Now().UnixNano())/((i+1)*131))%len(suits)]
+		r := ranks[(int(time.Now().UnixNano())/((i+1)*419))%len(ranks)]
+		tilt := baseTilt + (16*i)/(n-1+1)
+		card := fmt.Sprintf(
+			`<span class="playing-card %s" style="transform:rotate(%ddeg)"><span class="rank">%s%s</span><span class="suit-big">%s</span><span class="rank-br">%s%s</span></span>`,
+			s.color, tilt, r, s.glyph, s.glyph, r, s.glyph,
+		)
+		b = append(b, card...)
+	}
+	return string(b)
+}
 
-	PageFooter(w)
+func randomCrittersHTML(n int) string {
+	pool := []string{"🐭", "🐁", "🐹", "🦆", "🐥", "🐰", "🐢", "🦀"}
+	var b []byte
+	for i := 0; i < n; i++ {
+		em := pool[(int(time.Now().UnixNano())/((i+1)*97))%len(pool)]
+		b = append(b, fmt.Sprintf(`<span class="critter floaty" style="animation-delay:%dms">%s</span>`, i*250, em)...)
+	}
+	return string(b)
 }
 
 func renderGameDetail(w http.ResponseWriter, userID, gameID int) {
@@ -140,7 +252,7 @@ func renderGameDetail(w http.ResponseWriter, userID, gameID int) {
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	PageHeader(w, heading)
+	PageHeaderArea(w, heading, "games")
 
 	fmt.Fprint(w, `<a class="back" href="/gopher/game-lobby">&larr; Back to games</a>`)
 
