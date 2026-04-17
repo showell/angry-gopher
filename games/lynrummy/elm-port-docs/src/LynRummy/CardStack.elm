@@ -36,6 +36,8 @@ module LynRummy.CardStack exposing
     , size
     , split
     , stackCards
+    , stackDisplayWidth
+    , stackPitch
     , stackStr
     , stackType
     , stacksEqual
@@ -141,6 +143,22 @@ See `OPEN_QUESTIONS.md` (Resolved) for the rationale.
 cardWidth : Int
 cardWidth =
     27
+
+
+{-| Per-card horizontal pitch when cards sit side-by-side in
+a stack. Card body plus padding + border + margin.
+-}
+stackPitch : Int
+stackPitch =
+    cardWidth + 6
+
+
+{-| Visible width of a stack in pixels: `n * stackPitch`.
+Used for placing wings and for drag-hit math.
+-}
+stackDisplayWidth : CardStack -> Int
+stackDisplayWidth s =
+    size s * stackPitch
 
 
 

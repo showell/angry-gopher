@@ -25,6 +25,7 @@ LYNRUMMY=(
   "src/LynRummy/PlaceStack.elm"
   "src/LynRummy/Dealer.elm"
   "src/LynRummy/View.elm"
+  "src/LynRummy/WingOracle.elm"
   "src/LynRummy/Tricks/Trick.elm"
   "src/LynRummy/Tricks/Helpers.elm"
   "src/LynRummy/Tricks/DirectPlay.elm"

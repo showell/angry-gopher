@@ -1,21 +1,27 @@
 module LynRummy.View exposing
-    ( viewBoard
+    ( boardShell
+    , cardHeightPx
+    , mergeableGreen
+    , mergeableHover
+    , navy
     , viewBoardHeading
     , viewCard
     , viewStack
+    , viewStackWithAttrs
+    , viewWing
     )
 
 {-| HTML rendering for a LynRummy board and its cards.
 Faithful port of the `render_*` pure-drawing functions in
 `angry-cat/src/lyn_rummy/game/game.ts` (lines ~945–1180).
 
-First-pass coverage: card, stack, board, heading. Action
-buttons, hand row, and drag-target styling are deferred.
+Primitives only. Drag state, wings, and dragged-stack overlays
+are composed in `Main.elm` using these pieces.
 
 -}
 
 import Html exposing (Html, div, text)
-import Html.Attributes as HA exposing (style)
+import Html.Attributes exposing (style)
 import LynRummy.Card as Card exposing (Card, CardColor(..))
 import LynRummy.CardStack as CardStack exposing (BoardCard, CardStack)
 
@@ -29,9 +35,31 @@ navy =
     "#000080"
 
 
+{-| Mergeable-wing background. `hsl(105, 72.70%, 87.10%)` in
+`game.ts:1347` — a light pastel green. Faithful.
+-}
+mergeableGreen : String
+mergeableGreen =
+    "hsl(105, 72.70%, 87.10%)"
+
+
+{-| Hover-over-wing background. Direct port of `"mauve"` at
+`game.ts:1353`. The CSS `mauve` keyword isn't universal —
+using the conventional CSS color.
+-}
+mergeableHover : String
+mergeableHover =
+    "#E0B0FF"
+
+
 cardWidthPx : String
 cardWidthPx =
     String.fromInt CardStack.cardWidth ++ "px"
+
+
+cardHeightPx : String
+cardHeightPx =
+    "40px"
 
 
 
@@ -53,8 +81,12 @@ viewBoardHeading =
 -- BOARD
 
 
-viewBoard : List CardStack -> Html msg
-viewBoard stacks =
+{-| Board shell — khaki play surface, navy border, relative
+position. Callers supply all children (stacks, wings,
+dragged-stack overlay).
+-}
+boardShell : List (Html msg) -> Html msg
+boardShell children =
     div
         [ style "background-color" "khaki"
         , style "border" ("1px solid " ++ navy)
@@ -63,15 +95,27 @@ viewBoard stacks =
         , style "height" "540px"
         , style "margin-top" "8px"
         ]
-        (List.map viewStack stacks)
+        children
 
 
 
 -- STACK
 
 
+{-| Render a stack at its stored board location. No wings, no
+drop targets — base physics only.
+-}
 viewStack : CardStack -> Html msg
 viewStack stack =
+    viewStackWithAttrs [] stack
+
+
+{-| Same as `viewStack` but with extra attributes (e.g. a
+`Html.Events.onMouseDown` for drag initiation, or a style
+override for opacity while the stack is being dragged).
+-}
+viewStackWithAttrs : List (Html.Attribute msg) -> CardStack -> Html msg
+viewStackWithAttrs extraAttrs stack =
     let
         isIncomplete =
             CardStack.incomplete stack
@@ -95,8 +139,7 @@ viewStack stack =
         cardNodes =
             List.indexedMap viewBoardCardAt stack.boardCards
     in
-    div (baseAttrs ++ incompleteAttrs)
-        (viewWing :: cardNodes ++ [ viewWing ])
+    div (baseAttrs ++ incompleteAttrs ++ extraAttrs) cardNodes
 
 
 viewBoardCardAt : Int -> BoardCard -> Html msg
@@ -136,8 +179,8 @@ viewPlayingCardWith extraAttrs card =
 
         baseAttrs =
             [ style "display" "inline-block"
-            , style "height" "40px"
-            , style "padding" "1px"
+            , style "height" cardHeightPx
+            , style "padding" "1px 1px 3px 1px"
             , style "user-select" "none"
             , style "text-align" "center"
             , style "vertical-align" "center"
@@ -167,23 +210,45 @@ viewCardChar c =
 -- WING
 
 
-{-| Invisible zero-width placeholder at each end of a stack.
-Faithful to TS structure; will carry drop-target logic when
-drag work arrives.
+{-| Render a wing at an absolute board position. Faithful port
+of `render_wing` (`game.ts:984`) — transparent card-char
+scaffolding gives the element its height — with
+`style_as_mergeable` / `style_for_hover` applied at the call
+site via `bgColor`.
+
+Wings are top-level board children here, not nested inside the
+stack div (unlike TS). This avoids the ugly "grow the wrapper
+and compensate by shifting the stack left" pattern — stacks
+stay stable, wings render next to them.
+
 -}
-viewWing : Html msg
-viewWing =
-    div
-        [ style "background-color" "transparent"
-        , style "display" "inline-block"
-        , style "height" "40px"
-        , style "padding" "1px"
-        , style "user-select" "none"
-        , style "text-align" "center"
-        , style "vertical-align" "center"
-        , style "font-size" "17px"
-        , style "width" "0px"
-        ]
-        [ div [ style "display" "block", style "user-select" "none", style "color" "transparent" ] [ text "+" ]
-        , div [ style "display" "block", style "user-select" "none", style "color" "transparent" ] [ text "+" ]
+viewWing :
+    { top : Int
+    , left : Int
+    , width : Int
+    , bgColor : String
+    , extraAttrs : List (Html.Attribute msg)
+    }
+    -> Html msg
+viewWing { top, left, width, bgColor, extraAttrs } =
+    let
+        base =
+            [ style "position" "absolute"
+            , style "top" (String.fromInt top ++ "px")
+            , style "left" (String.fromInt left ++ "px")
+            , style "width" (String.fromInt width ++ "px")
+            , style "height" cardHeightPx
+            , style "padding" "1px"
+            , style "background-color" bgColor
+            , style "user-select" "none"
+            , style "text-align" "center"
+            , style "vertical-align" "center"
+            , style "font-size" "17px"
+            , style "box-sizing" "border-box"
+            , style "border" "1px solid transparent"
+            ]
+    in
+    div (base ++ extraAttrs)
+        [ div [ style "color" "transparent" ] [ text "+" ]
+        , div [ style "color" "transparent" ] [ text "+" ]
         ]
