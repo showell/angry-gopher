@@ -202,6 +202,96 @@ top-level binding is already an immutable value.
 | `const` with computed value at top level | Top-level binding `foo = expr`, optionally preceded by type annotation `foo : T` on its own line | Elm top-level values are all "constants" by default; no keyword needed. |
 | Dependency injection via interface | Function taking the dependency as argument | No interfaces; just pass the function or record. |
 
+## UI-layer patterns (added 2026-04-17 during UI port)
+
+These patterns are specific to porting UI code (event loops,
+drag/drop, HTTP, DOM construction). The model-layer port didn't
+exercise them; the game.ts + drag_drop.ts + plugin.ts layer
+does.
+
+### The Elm Architecture (TEA) as the global shape
+
+The top-level of an Elm UI is a `Model` / `Msg` / `update` /
+`view` quartet, threaded by `Browser.element` (or
+`Browser.application` for multi-page). TS's UI is typically a
+class owning state + callbacks — a fundamentally different
+shape. Port posture: **don't translate shape; translate
+behavior into TEA**. Inventory every piece of mutable state
+the TS class owns and place it in `Model`; every
+event/callback becomes a `Msg` variant with its payload as the
+variant's fields.
+
+### Imperative DOM → declarative view
+
+| TS pattern | Elm equivalent | Notes |
+|------------|----------------|-------|
+| `document.createElement("div"); div.appendChild(...)` | `div [] [ ... ]` in `Html msg` | View is a pure function `Model -> Html Msg`. No imperative construction. |
+| `element.onclick = handler` | `onClick SomeMsg` in attribute list | Handler dispatches a `Msg`; the update function handles it. |
+| `element.style.cssProperty = value` | `style "css-property" value` attribute | Attributes are data, not side effects. |
+| DOM-based state reads (`element.value`) | `Msg` carrying the payload from the event decoder | Values flow out via `Html.Events.on "event" decoder` producing a `Msg`. |
+
+### Stateful class → Model + Msg state machine
+
+| TS pattern | Elm equivalent | Notes |
+|------------|----------------|-------|
+| Class with mutable instance fields | Record in `Model`; fields updated via `{ model \| field = newValue }` in `update` | The class identity becomes a sub-record inside `Model`. |
+| `this.state = newState` (imperative mutation) | Return `{ model \| state = newState }` from `update` | Always return a new model; never mutate. |
+| State machine as `switch (this.phase)` with assignments | `case model.phase of` with explicit returns | Each branch returns the next Model + any Cmds. |
+| Class constructor | `init : flags -> ( Model, Cmd Msg )` | Initial model comes from `init`. Any startup effects (HTTP fetch, focus, etc.) go in the Cmd. |
+
+### Drag/drop specifically
+
+| TS pattern | Elm equivalent | Notes |
+|------------|----------------|-------|
+| `DragSession` class with `start()`/`move()`/`end()` methods that mutate over the lifetime of a drag | `DragState` variant in Model (`NoDrag`, `Dragging { item : X, offset : Point, ... }`) | Lifecycle expressed as transitions between variants. |
+| Global mousemove/mouseup listeners installed on drag start | `Browser.Events.onMouseMove` / `onMouseUp` subscriptions gated by drag state | Subscriptions activate only while dragging. |
+| Synchronous collision check inside mousemove handler | `List.filter` over drop targets inside `update` when a `DragMove` Msg arrives | Collision logic moves from callback to update branch. |
+| Hand-over via DOM-event bubbling | Msg dispatch with the parent handling the drop explicitly | No bubbling; make the hand-off explicit. |
+
+### Async HTTP (Promise / fetch) → Cmd + Http
+
+| TS pattern | Elm equivalent | Notes |
+|------------|----------------|-------|
+| `await fetch(url, { method, body })` | `Http.task { method, url, body, resolver, ... }` wrapped in `Task.attempt ResultMsg` | Returns a `Cmd Msg`; result arrives as a separate `Msg` later. |
+| `async function foo() { ... }` chain | Compose `Task` values and `Task.andThen` through the chain | Each step is a pure `Task` description; `Task.attempt` materializes the Cmd. |
+| Promise-rejection handling | `Task.onError` or handle the `Err` branch of the `Result` in the result Msg | No throwing; failures are values. |
+| `JSON.parse(response)` | `Json.Decode.decodeString decoder body` returning `Result Error a` | Same decoder pattern as wire-format section above. |
+
+### Class-as-singleton → module of functions
+
+| TS pattern | Elm equivalent | Notes |
+|------------|----------------|-------|
+| `export const Score = new ScoreSingleton();` + `Score.for_stack(s)` | Module `Score` exposing `forStack : CardStack -> Int` | Drop the object; expose functions. No state to carry, so singleton is gone. |
+| Singleton with cached state | Module with functions + a `State` record threaded through calls | If the singleton had state, externalize it; Elm has no module-level mutables. |
+
+### WebXdc-style injected interface → port module or direct function arg
+
+The WebXdc interface in TS is `{ sendUpdate, setUpdateListener, selfAddr, ... }` passed to the game at construction. Elm equivalent:
+
+| TS approach | Elm equivalent | Notes |
+|-------------|----------------|-------|
+| Constructor takes an interface object | `init` takes a flags record; subsequent effects are `Cmd` | Interface stays external; Elm code describes effects declaratively. |
+| Injected `sendEvent(payload)` method | `port sendEvent : Value -> Cmd msg` | Outbound events go through a port. |
+| Injected `onEvent(handler)` listener | `port receiveEvent : (Value -> msg) -> Sub msg` | Inbound events come through a subscription port. |
+
+Prefer to avoid ports where an `Http` module Task works. Reserve ports for things Elm can't do natively (DOM focus, WebSocket, localStorage, etc.).
+
+### Decoder-based protocol validation
+
+TS's `protocol_validation.ts` uses `any`-typed runtime checks that accumulate error messages. Elm replaces this with `Json.Decode` pipelines.
+
+| TS approach | Elm equivalent | Notes |
+|-------------|----------------|-------|
+| `if (typeof card.value !== "number") errors.push(...)` | `Decode.field "value" Decode.int` | Failures are `Result Error a`; no explicit accumulation. |
+| Accumulating error list over multiple optional checks | `Json.Decode.Pipeline` with `required` / `optional` | Pipeline-style decoders give good error messages at the first failure. |
+| Path-tagged error like `{ message, path: "board[2].card" }` | Elm's default decoder error already carries path info | Use the `Error` type's formatter rather than reinventing path-tagging. |
+
+### When the TS has a "plugin" shell
+
+`game/plugin.ts` is a factory that constructs DOM + wires callbacks. The Elm equivalent is typically `Browser.element` with a `main` function — the plugin boundary disappears into the Elm bootstrap. Port posture: replace plugin.ts with an `Main.elm` that calls `Browser.element`; translate the context-passing into flags.
+
+---
+
 ## Test scaffolding
 
 elm-test tests are values, not script-side effects — grouped
