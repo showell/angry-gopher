@@ -185,3 +185,7 @@ bounded stage on which we could notice what UIs actually do.
 Thanks for the afternoon. It earned its keep.
 
 — C.
+
+---
+
+**Next →** [Writing the Sidecars](writing_the_sidecars.md)

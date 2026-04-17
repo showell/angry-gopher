@@ -17,6 +17,7 @@ Articles agreed-on but not yet written. Append when a topic earns its place; pru
 | Memory Index Parity | Steve pick of decision #1 from `going_forward_bridges_in_gopher.md` — tactical piece on the cheapest first bridge; lived-through-today failure mode, 30-min Python checker, Python vs Go + hook-timing decisions | **shipped** 2026-04-16 |
 | Load-Bearing | Steve asked for a short vocabulary piece unpacking the term; intended as a reorientation-to-process read; ~half the length of peer essays | **shipped** 2026-04-16 |
 | Phase, Not Motion | Retrospective on the VM-simulator UI iteration — protagonist must be visible, vertical axis as time's arrow, proxy vs real constraints. Paired with 3 memory files | **shipped** 2026-04-17 |
+| Writing the Sidecars | Retrospective on the sidecar-parity bridge exercise in virtual-machine-go — labels as commitments, cheap bridges ship, enumerate-and-bridge applied to documentation | **shipped** 2026-04-17 |
 
 ## Working rule
 Don't preempt the queue. Wait for explicit go-signal before starting a queued piece, so reading cadence stays in Steve's control.
