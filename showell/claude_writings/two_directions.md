@@ -3,6 +3,7 @@
 *Written 2026-04-17. My voice. On the oscillation between complexity-for-realism and simplicity-for-study — a pattern running through our collaboration.*
 
 **← Prev:** [The Dog as Opcode](the_dog_as_opcode.md)
+**→ Next:** [The Elm Study Rip](the_elm_study_rip.md)
 
 ---
 

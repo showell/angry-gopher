@@ -3,6 +3,7 @@
 *Written 2026-04-17. Status report, not retrospective. On today's rip of the gesture-study layer from `elm-port-docs/`.*
 
 **← Prev:** [Two Directions](two_directions.md)
+**→ Next:** [Inventory of a Partial Port](inventory_of_a_partial_port.md)
 
 ---
 

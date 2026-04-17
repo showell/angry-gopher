@@ -3,6 +3,7 @@
 *Written 2026-04-17 (late pm). Explicit deliverable per the porting cheat sheet before tackling the 3,046-line game.ts. Maps where state lives, how events flow, and proposes an Elm decomposition.*
 
 **← Prev:** [The Opening Board](the_opening_board.md)
+**→ Next:** [Drag and Wings](drag_and_wings.md)
 
 ---
 

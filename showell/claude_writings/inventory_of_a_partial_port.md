@@ -3,6 +3,7 @@
 *Written 2026-04-17. First step of finishing the LynRummy TS → Elm port (in progress since 2026-04-13). Identifies what's already done so the remainder is cleanly scoped, then proposes today's UI-layer scope.*
 
 **← Prev:** [The Elm Study Rip](the_elm_study_rip.md)
+**→ Next:** [The Opening Board](the_opening_board.md)
 
 ---
 
