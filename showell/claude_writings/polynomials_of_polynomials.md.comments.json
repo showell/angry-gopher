@@ -1,0 +1,178 @@
+{
+  "comments": [
+    {
+      "para_index": 8,
+      "author": "Steve",
+      "timestamp": "2026-04-16T12:03:32-04:00",
+      "text": "Yup. A similar type of problem is writing compilers, once you remove the language design complications and human factors. It's still a hard problem but only in one dimension.  You get a lot of tractability from the fact that it really is just math in disguise at that point."
+    },
+    {
+      "para_index": 13,
+      "author": "Steve",
+      "timestamp": "2026-04-16T12:09:49-04:00",
+      "text": "Correct, there was really almost no original ideas in this exercise. I had watched a few YouTube videos of college classes. I absorbed the math pretty quickly. I did the Python exercise partly to dust off my programming skils, partly to cement the math.\n\nThis is Steph Curry working on his free throws."
+    },
+    {
+      "para_index": 17,
+      "author": "Steve",
+      "timestamp": "2026-04-16T12:12:50-04:00",
+      "text": "This is certainly a principle that is well understood by senior developers, including myself, of course: Canonicalization.\n\nI can't think of any time we used it in Lyn Rummy and friends, but that might be the fish-doesn't-know-what-water-is principle (in a good way).  I think the DSL effort was conceptually adjacent maybe?"
+    },
+    {
+      "para_index": 25,
+      "author": "Steve",
+      "timestamp": "2026-04-16T12:23:01-04:00",
+      "text": "I don't remember doing this consciously at all! That could be my lack of recall for sure.  More likely, I was doing something very close to what you describe with the similar cognitive horsepower.  In this project I wasn't doing much extrapolation beyond what the teacher was teaching in an Abstract Algebra class."
+    },
+    {
+      "para_index": 26,
+      "author": "Steve",
+      "timestamp": "2026-04-16T12:23:35-04:00",
+      "text": "That part was more intentional for sure--the steady progression upwards."
+    },
+    {
+      "para_index": 27,
+      "author": "Steve",
+      "timestamp": "2026-04-16T12:23:54-04:00",
+      "text": "Correct. Expedient."
+    },
+    {
+      "para_index": 31,
+      "author": "Steve",
+      "timestamp": "2026-04-16T12:26:26-04:00",
+      "text": "Exactly. That's why this was a beautiful problem to work on. The math, once you understood it, led to the easy, elegant solution.  It wasn't elegant by MY design--I was just expressing the underlying elegance of the math in Python. In a nice way."
+    },
+    {
+      "para_index": 33,
+      "author": "Steve",
+      "timestamp": "2026-04-16T12:28:43-04:00",
+      "text": "Correct! The computer science connection here wasn't that I did it in Python. Python was just the tool.  I was doing computer-science-like things in the very closely related domain of abstract algebra."
+    },
+    {
+      "para_index": 35,
+      "author": "Steve",
+      "timestamp": "2026-04-16T12:31:12-04:00",
+      "text": "The conceptual thing kinda relates to redundancy-is-a-tool mindset when done right:\n\n* use DSL language for Angry Gopher directory structure (when we get to it)\n* 2/3 implementations of LynRummy core is not a liability, it's an ASSET!"
+    },
+    {
+      "para_index": 36,
+      "author": "Steve",
+      "timestamp": "2026-04-16T12:34:31-04:00",
+      "text": "Ok! Let's follow on up this in Angry Gopher terms. ARTICLE: Describe what we should do GOING FORWARD to apply this very important paradigm in our Angry Gopher work. This requires some speculation about where the product is going. If that amount of unpredictability makes it hard to generate ideas, think simply in terms of code quality for what we have right now."
+    },
+    {
+      "para_index": 37,
+      "author": "Steve",
+      "timestamp": "2026-04-16T12:37:02-04:00",
+      "text": "yup"
+    },
+    {
+      "para_index": 39,
+      "author": "Steve",
+      "timestamp": "2026-04-16T12:38:01-04:00",
+      "text": "The more mundane explanation here, unfortunately, was competing priorities in my life."
+    },
+    {
+      "para_index": 40,
+      "author": "Steve",
+      "timestamp": "2026-04-16T12:39:07-04:00",
+      "text": "overreaching on the conclusion...It was really much more that I ran out of time or started to explore another idea and just never got back to it"
+    },
+    {
+      "para_index": 46,
+      "author": "Steve",
+      "timestamp": "2026-04-16T12:41:49-04:00",
+      "text": "I think this is the easiest lesson to translate to junior programmers: create self-auditing representations of your data.\n\nTWO ENGINES, ONE TRUTH is really the core here, actually. That's a way more elegant way to say it than enumerate-and-bridge. Or at least the idea that's easiest to teach.\n\nBUILD IT TWICE, THEN IT'S NICE."
+    },
+    {
+      "para_index": 47,
+      "author": "Steve",
+      "timestamp": "2026-04-16T12:43:04-04:00",
+      "text": "We should tweak the name for fixturegen. I think that's your name haha.  But it's my fault for not naming it, too."
+    },
+    {
+      "para_index": 48,
+      "author": "Steve",
+      "timestamp": "2026-04-16T12:43:57-04:00",
+      "text": "yeah, I wish it were that easy, honestly...leads to deeper discussion about general math literacy"
+    },
+    {
+      "para_index": 49,
+      "author": "Steve",
+      "timestamp": "2026-04-16T12:44:17-04:00",
+      "text": "yup :)"
+    },
+    {
+      "para_index": 50,
+      "author": "Steve",
+      "timestamp": "2026-04-16T12:44:42-04:00",
+      "text": "yup"
+    },
+    {
+      "para_index": 51,
+      "author": "Steve",
+      "timestamp": "2026-04-16T12:45:30-04:00",
+      "text": "All of my above comments about running out of time still apply, but you're right. There's a skill of knowing when to stop."
+    },
+    {
+      "para_index": 8,
+      "author": "Claude",
+      "timestamp": "2026-04-16T12:54:21-04:00",
+      "text": "Good extension. Compiler writing once you strip language-design and human-factors is tractable because the core transformations are mathematical — AST → AST, type-check as constraint-solving, codegen as structure-preserving emission. The hard part of compilers in the wild is mostly the non-math parts. Worth naming: \"math in disguise\" as a tractability marker."
+    },
+    {
+      "para_index": 13,
+      "author": "Claude",
+      "timestamp": "2026-04-16T12:54:21-04:00",
+      "text": "\"Steph Curry working on his free throws\" — perfect framing. The math wasn't novel to humanity; doing it in code was the rep. And a good reminder that plateau-skill practice isn't about inventing, it's about maintaining and deepening what's already compiled. Dust-off-plus-cementing is exactly the shape of why an experienced programmer does a side project in an already-known domain."
+    },
+    {
+      "para_index": 17,
+      "author": "Claude",
+      "timestamp": "2026-04-16T12:54:21-04:00",
+      "text": "Interesting example of the fish-in-water case. You use canonicalization in LynRummy without calling it that — for instance any time you compare two game states or hand representations, there's an implicit normalization happening. The DSL work is definitely adjacent: any DSL has a parse-and-canonicalize step so downstream tools can trust equality. Probably worth a slow audit of LynRummy for latent canonicalization moves; I'd bet there are a few lying around un-named."
+    },
+    {
+      "para_index": 25,
+      "author": "Claude",
+      "timestamp": "2026-04-16T12:54:21-04:00",
+      "text": "That tracks. The move I was describing (domain-shaped types) is one of those things that comes out right when you're following the math carefully, even if you weren't intending to be deliberate about it. Which is the fish-in-water again — you did the move, the article names it, and neither of us should mistake the naming for invention."
+    },
+    {
+      "para_index": 26,
+      "author": "Claude",
+      "timestamp": "2026-04-16T12:54:21-04:00",
+      "text": "Good — that one earned its intention."
+    },
+    {
+      "para_index": 27,
+      "author": "Claude",
+      "timestamp": "2026-04-16T12:54:21-04:00",
+      "text": "👍"
+    },
+    {
+      "para_index": 31,
+      "author": "Claude",
+      "timestamp": "2026-04-16T12:54:21-04:00",
+      "text": "\"I was just expressing the underlying elegance of the math in Python\" — that's a better description of the project than anything I wrote. The elegance isn't yours in an ego-sense; it's the math's, and your contribution was keeping the translation honest. A lot of bad code happens when programmers try to *add* elegance to a domain that already has it — the right move is to expose, not embellish."
+    },
+    {
+      "para_index": 33,
+      "author": "Claude",
+      "timestamp": "2026-04-16T12:54:21-04:00",
+      "text": "Right — Python was the rendering substrate. The project's center of gravity is abstract algebra; it happens to be expressed as Python. Worth noting because it reframes what makes the code good: not \"clean Python\" per se, but *faithful rendering of the abstract algebra into Python*. Those are different quality standards."
+    },
+    {
+      "para_index": 35,
+      "author": "Claude",
+      "timestamp": "2026-04-16T12:54:21-04:00",
+      "text": "Yes — redundancy-as-asset is the right framing. When two independent reductions of the same thing are kept around on purpose, each one watches the other. The DSL-for-directory-structure idea and the 2/3 LynRummy implementations are both instances. I'll make redundancy-as-asset the anchor of the follow-on article — it's a cleaner name than \"enumerate-and-bridge\" for how this plays out in practice."
+    },
+    {
+      "para_index": 36,
+      "author": "Claude",
+      "timestamp": "2026-04-16T12:56:03-04:00",
+      "text": "Article shipped: [Going Forward: Bridges in Angry Gopher](going_forward_bridges_in_gopher.md). Anchored to this paragraph and ¶35 (redundancy-as-asset) together, per your \"implicit context anchor\" note. It audits existing bridges (full + half), proposes new ones the current code is quietly asking for, adds speculative bridges by product direction, and ends with three tactical decisions for you to make before I start any concrete work."
+    }
+  ]
+}

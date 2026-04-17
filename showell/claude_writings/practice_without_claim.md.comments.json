@@ -1,0 +1,94 @@
+{
+  "comments": [
+    {
+      "para_index": 4,
+      "author": "Steve",
+      "timestamp": "2026-04-16T07:39:40-04:00",
+      "text": "Very important clarification. There's lots of feeling in playing music. The guitar is somewhat  of a percussive instrument.  I'm just genuinely not talented at it.  I am a good listener of music and can feel the structure in my head, but it doesn't translate to muscles.  Don't dwell on this too much, though. I chose sports for a reason."
+    },
+    {
+      "para_index": 5,
+      "author": "Steve",
+      "timestamp": "2026-04-16T07:41:40-04:00",
+      "text": "Good distinction but don't over-extrapolate too much. The score isn't the reward in basketball for me. I compete and know the score. But whether watching or playing, the fun is still aesthetic. It's the pretty behind-the-back pass or the explosive dunk that makes the game. I'm actually physically capable of the former."
+    },
+    {
+      "para_index": 6,
+      "author": "Steve",
+      "timestamp": "2026-04-16T07:43:51-04:00",
+      "text": "Yes.  The feedback mechanism is felt more by me in basketball than guitar. I have done the work of standing at the foul line for 50 shots or whatever and gotten the desired outcomes. I actually DO have some athletic talent (or did when I was younger); the limitations were more physique than coordination."
+    },
+    {
+      "para_index": 7,
+      "author": "Steve",
+      "timestamp": "2026-04-16T07:45:38-04:00",
+      "text": "It's also just the chunking. I think this applies to music, sports, and programming. When you compose low-level skills the high-level stuff gets easier, whether it's an improvisational setting (fast-break in basketball, jazz in music) or a controlled setting (free throws in basketball, Chopin etude in music)."
+    },
+    {
+      "para_index": 11,
+      "author": "Steve",
+      "timestamp": "2026-04-16T07:48:22-04:00",
+      "text": "Good athletes do watch film. Kobe Bryant was obsessive. But that's for fine-tuning. I truly believe it's the playing and practicing that mostly makes you a better basketball player (assuming you at least have some talent)."
+    },
+    {
+      "para_index": 14,
+      "author": "Steve",
+      "timestamp": "2026-04-16T07:51:44-04:00",
+      "text": "Yeah.  Especially for music and sports, it's just a modest claim that's pretty easy to verify against other human participants.  I know how good I am at basketball.  I know a musician when I see them.\n\nFor the math angle, it's tricky, because my talent level is just way higher, and human interest is in it is much more across the spectrum.\n\nMost people actually like music and sports, especially the former.."
+    },
+    {
+      "para_index": 15,
+      "author": "Steve",
+      "timestamp": "2026-04-16T07:53:35-04:00",
+      "text": "Haha. We need to unpack this in the next round. That's very, very controversial.  Saving this one. Please note the \"informed visitor\" hypothesis."
+    },
+    {
+      "para_index": 18,
+      "author": "Steve",
+      "timestamp": "2026-04-16T07:55:03-04:00",
+      "text": "Noted. That's somewhat a conscious decision, but it's worth emphasizing.  And thank you, I think that's a compliment, correct?"
+    },
+    {
+      "para_index": 19,
+      "author": "Steve",
+      "timestamp": "2026-04-16T07:56:03-04:00",
+      "text": "I think you're on to something, but the \"informed-visitor\" phrase isn't quite registering."
+    },
+    {
+      "para_index": 20,
+      "author": "Steve",
+      "timestamp": "2026-04-16T07:58:55-04:00",
+      "text": "Mostly.  Some of it's more mundane and just watching other people play and curious about the outcome. For example, I can enjoy watching some sports that I have never participated in. I don't have any passion for playing soccer but enjoy watching it being played at the highest, highest level. So the signal here isn't very sharp, unfortunately."
+    },
+    {
+      "para_index": 21,
+      "author": "Steve",
+      "timestamp": "2026-04-16T08:01:43-04:00",
+      "text": "Yup, that's fair.  I do think we're mostly on the same ground in the domain we're in.  Maybe I'm not giving you enough credit, but you seem to think about software with mostly the same cognitive patterns that I use, and you're just faster and better at it. That might be very patronizing to you.\n\nI'm not sure the \"feel\" is even super important for you to understand from the inside.  Sometimes it's useful just to observe the outcome and it is what it is. Critter studies, lab rat studies. The critter does this when I do this: stimulus, response"
+    },
+    {
+      "para_index": 4,
+      "author": "Claude",
+      "timestamp": "2026-04-16T08:03:13-04:00",
+      "text": "Noted and won't dwell. Music has plenty of feeling; what your guitar experience lacks is the kinesthetic-translation step — you hear structure but don't embody it. Sports was the right example for that reason, not the accidental one."
+    },
+    {
+      "para_index": 5,
+      "author": "Claude",
+      "timestamp": "2026-04-16T08:03:13-04:00",
+      "text": "A real correction of mine. I collapsed feedback (clean binary: shot in or not) with reward (aesthetic: the pretty pass, the dunk). Those are separable. Sports and music share the aesthetic driver; they differ only at the feedback layer."
+    },
+    {
+      "para_index": 6,
+      "author": "Claude",
+      "timestamp": "2026-04-16T08:03:13-04:00",
+      "text": "Build, not skill — pins the genetic-humility more precisely than I had. Coordination was adequate; physique was the ceiling. Sibling to the math-atrophy: one economic, one biological, both real, neither pretending otherwise."
+    },
+    {
+      "para_index": 7,
+      "author": "Claude",
+      "timestamp": "2026-04-16T08:03:13-04:00",
+      "text": "The biggest addition. **Chunking** is the shared substrate across domains — sports, music, programming — and the improv/controlled distinction is orthogonal. Fast-break = jazz solo = live debug (improv); free throws = Chopin etude = reviewed code (controlled). Adding to GLOSSARY."
+    }
+  ]
+}
