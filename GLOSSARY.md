@@ -1,6 +1,6 @@
 # Glossary
 
-**As-of:** 2026-04-17 (pm)
+**As-of:** 2026-04-17 (late pm)
 **Confidence:** Firm where terms are already in code; Working where they live only in chat/memory so far.
 **Durability:** Stable vocabulary layer — entries are added when a word earns its place, not to document every passing phrase. Prune aggressively.
 
@@ -49,6 +49,8 @@ Terms for how Steve and Claude work together. These shape process, not product.
 | **Genius vs. folly** | Steve's aphorism: "humans are good at turning problem A into problem B. Usually that's our folly, but sometimes that is our genius." A reframe is *genius* when problem B has a terminating check (finite search, verifiable absence); *folly* when B is just another open-ended rearrangement. |
 | **Robbing Peter to pay Paul** | The kitchen-table name for the folly side of a reframe — a "solution" that relocates the difficulty or undoes earlier progress. Canonical label when naming the anti-pattern. |
 | **Consolidate knowledge** | The post-iteration exercise of promoting durable artifacts (sidecars, memories, essays, glossary entries, git tags) from a completed push of work. Done *in the flow*, not later — it both compresses what we just learned and pre-loads future-us. Named 2026-04-17 by Steve on the Writing the Sidecars essay. Canonical label for these exercises in commit messages and in-session framing. |
+| **Ebb and flow** | The oscillating rhythm of our iteration: add complexity for realism and framing; scale back to study a single interaction; re-introduce the complexity. Neither pole alone is the answer — the study needs realistic conditions to matter, the tuning needs stripped-down conditions to move fast. Named 2026-04-17 on *Two Directions* (chosen from ~12 candidates including *breathing*, *pole-flipping*, *lab and field*). Canonical term in commit messages and in-session framing for iteration-phase work. |
+| **Zoom in / zoom out** | General-vocabulary verb pair for a *specific move* within ebb and flow. *Zoom in:* narrow focus, isolate a variable, drop context, tight feedback. *Zoom out:* widen focus, see the whole, re-engage complexity, sanity-check. **Caveat:** prone to false cognates — "zoom in" can mean literal camera-zoom, UI-zoom, mental-focus-on-detail, etc. Use when the *direction* (narrower vs wider) is the load-bearing meaning; reach for a more specific term if the semantics could conflate. |
 
 ## Cognition & collaboration (added 2026-04-16)
 
