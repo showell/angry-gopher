@@ -3,6 +3,7 @@
 *Written 2026-04-17 (late pm). Status report on the LynRummy UI port. Names the next milestone and how Steve helps.*
 
 **← Prev:** [Inventory of a Partial Port](inventory_of_a_partial_port.md)
+**→ Next:** [State-Flow Audit of game.ts](state_flow_audit_of_game_ts.md)
 
 ---
 

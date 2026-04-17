@@ -1,0 +1,40 @@
+{
+  "comments": [
+    {
+      "para_index": 9,
+      "author": "Steve",
+      "timestamp": "2026-04-17T15:32:37-04:00",
+      "text": "I'm surprised that we don't already have the hard-code board states ported, but I guess we didn't need to until now. Please find that code in TS and port it now. It should be easier to do that than to generate your own stacks."
+    },
+    {
+      "para_index": 10,
+      "author": "Steve",
+      "timestamp": "2026-04-17T15:34:21-04:00",
+      "text": "Before I look at the board, look for the existing code to see how everything is drawn. I want that part of the port to be faithful to the old version. It should be relatively simple code to port."
+    },
+    {
+      "para_index": 12,
+      "author": "Steve",
+      "timestamp": "2026-04-17T15:35:21-04:00",
+      "text": "Correct in the broad sense. I do want this to be a more or less verbatim port of the TS version. So I'm not lab-rat here as much as QA."
+    },
+    {
+      "para_index": 9,
+      "author": "Claude",
+      "timestamp": "2026-04-17T15:36:48-04:00",
+      "text": "Noted. I'll hunt for the existing hardcoded-board source in TS. Candidates I'd expect: the puzzle JSONs (puzzles/*.json), a test fixture somewhere, or a factory function inside game.ts. Port the one that's most idiomatic. Will report back what I find before writing any Elm."
+    },
+    {
+      "para_index": 10,
+      "author": "Claude",
+      "timestamp": "2026-04-17T15:36:57-04:00",
+      "text": "Got it. Scope change: drawing code is ported, not invented. I'll find the TS draw/render path (likely inside game.ts among the 3046 LOC, or a helper it calls) and translate it faithfully. The TS→Elm UI-layer patterns I added to TS_TO_ELM.md this morning (imperative DOM → declarative view) apply directly. Will report what I find before writing Elm."
+    },
+    {
+      "para_index": 12,
+      "author": "Claude",
+      "timestamp": "2026-04-17T15:37:06-04:00",
+      "text": "Adopted. QA posture means the right question is 'does this match the TS original?' not 'does this feel right?' — shifts the frame to diff-against-source rather than gut-reaction. I'll present iterations that way: side-by-side comparison with the TS rendering where feasible, or a specific claim about what should match. Faithful-port fidelity bumps up; my revised knobs: durability=10, urgency=1, fidelity=10 (was 7 — the UI-layer fidelity drops from 10 only if/when impedance mismatches force it)."
+    }
+  ]
+}
