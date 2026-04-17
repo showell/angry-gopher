@@ -63,7 +63,13 @@ func buildMux() *http.ServeMux {
 	mux.HandleFunc("/admin/login", handleAdminLogin)
 	mux.HandleFunc("/admin/health", handleHealthCheck)
 	mux.HandleFunc("/admin/", adminHandler)
-	mux.HandleFunc("/", api(handleUnimplemented))
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/" {
+			http.Redirect(w, r, "/gopher/", http.StatusFound)
+			return
+		}
+		api(handleUnimplemented)(w, r)
+	})
 
 	return mux
 }
