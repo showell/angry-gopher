@@ -1,7 +1,7 @@
 # Porting cheat sheet (DRAFT)
 
-**As-of:** 2026-04-15
-**Confidence:** Firm — captured immediately after the LynRummy → Elm port; rules held across the whole 2k+ LOC effort.
+**As-of:** 2026-04-17
+**Confidence:** Firm — captured immediately after the LynRummy → Elm port; rules held across the whole 2k+ LOC effort. Essay workflow added 2026-04-17 after a week of heavy use outside porting.
 **Durability:** Stable indefinitely for language-to-language ports; update if a future port invalidates a rule.
 
 A one-pager for future-dev + future-PM starting a new
@@ -129,8 +129,9 @@ mismatches as an explicit list.** You can't port cleanly while
 discovering mismatches mid-flight.
 
 If a language-pair handbook already exists (e.g.,
-`~/showell_repos/angry-gopher/lynrummy/tricks/TS_TO_GO.md` for
-the Go trick port; `~/showell_repos/elm-lynrummy/TS_TO_ELM.md`
+`~/showell_repos/angry-gopher/games/lynrummy/tricks/TS_TO_GO.md`
+for the Go trick port;
+`~/showell_repos/angry-gopher/games/lynrummy/elm-port-docs/TS_TO_ELM.md`
 for the Elm model port), it IS the output of this step — use it
 and extend it. If not, this step produces one, placed near the
 target code.
@@ -346,6 +347,34 @@ the port is doing meta-learning (ask the PM if unsure), keep
 a notes file with tagged entries (`[initial]`, `[validated]`,
 `[revised]`) so revisions are diff-legible.
 
+**Essays for batched PM evaluation.** When accumulated info —
+observations, open decisions, reframings, "here's what I
+noticed" — is more than fits in commit messages but doesn't
+belong in chat, drop it into a prose essay rather than
+burying it.
+
+- Target length: ~800–1700 words, narrative, first-person.
+- Location: `showell/claude_writings/<slug>.md`, chained via
+  prev/next links to the prior essay.
+- Queue tracking: append to `showell/claude_writings/QUEUE.md`
+  with one-line source + intent; mark `**shipped**` on ship.
+- Conversation venue: PM reads at own pace and leaves inline
+  paragraph comments via the `.para-add-btn` UI; agent replies
+  inline via POST to `/gopher/article-comments` with
+  `author=Claude`. URL path uses `article=gopher/<sub>` (repo
+  name is "gopher", not "angry-gopher").
+- Right trigger: "I have more info than fits in a commit
+  message, and I need the PM to evaluate it at their pace."
+- Wrong use: tiny status updates that fit in chat; pure code
+  changes with no narrative value.
+- Rule: do not preempt the queue with a new essay on a
+  different thread without a go-signal from the PM.
+
+A port that accumulates methodology insights (revised
+cheat-sheet rules, unforeseen impedance mismatches, scope
+reshapings) is a strong essay candidate — those insights are
+evaluated better at reading pace than at chat pace.
+
 **Set durability standards on roughly a per-directory level,
 not project-wide.** Non-trivial projects sometimes have
 components in differing stages of evolution.
@@ -374,8 +403,8 @@ become the port's idiom contract. Extend the list whenever the
 port surfaces a pattern worth naming.
 
 Existing pair handbooks:
-- **TS → Go:** `~/showell_repos/angry-gopher/lynrummy/tricks/TS_TO_GO.md`
-- **TS → Elm:** `~/showell_repos/elm-lynrummy/TS_TO_ELM.md`
+- **TS → Go:** `~/showell_repos/angry-gopher/games/lynrummy/tricks/TS_TO_GO.md`
+- **TS → Elm:** `~/showell_repos/angry-gopher/games/lynrummy/elm-port-docs/TS_TO_ELM.md`
 
 ---
 
