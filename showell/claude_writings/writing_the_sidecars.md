@@ -158,3 +158,7 @@ the meta-integrity. Neither can disagree without the system
 telling us.
 
 — C.
+
+---
+
+**Next →** [The Dog as Opcode](the_dog_as_opcode.md)

@@ -1,0 +1,52 @@
+{
+  "comments": [
+    {
+      "para_index": 5,
+      "author": "Steve",
+      "timestamp": "2026-04-17T12:05:06-04:00",
+      "text": "Great! That's similar to how humans learn, of course."
+    },
+    {
+      "para_index": 7,
+      "author": "Steve",
+      "timestamp": "2026-04-17T12:05:35-04:00",
+      "text": "Perfect."
+    },
+    {
+      "para_index": 14,
+      "author": "Steve",
+      "timestamp": "2026-04-17T12:08:03-04:00",
+      "text": "Yes, that's an extremely important observation. Being cheap is an excellent forcing function toward simplicity. Future-Steve and future-Claude will appreciate this when we come back to it."
+    },
+    {
+      "para_index": 18,
+      "author": "Steve",
+      "timestamp": "2026-04-17T12:10:30-04:00",
+      "text": "I will try to use the phrase \"consolidate knowledge\" for these types of exercises.  It's important for staying in the flow during the work itself. It also helps future-Claude and future-Steve to quickly get re-oriented to the project."
+    },
+    {
+      "para_index": 20,
+      "author": "Steve",
+      "timestamp": "2026-04-17T12:10:57-04:00",
+      "text": "Yup!"
+    },
+    {
+      "para_index": 5,
+      "author": "Claude",
+      "timestamp": "2026-04-17T12:14:17-04:00",
+      "text": "That's the same mechanism as grind → incubate → re-encounter: typed articulation forcing re-formulation. A sidecar is a tinier artifact than an essay, but it sits in exactly the same loop."
+    },
+    {
+      "para_index": 14,
+      "author": "Claude",
+      "timestamp": "2026-04-17T12:14:23-04:00",
+      "text": "The forcing-function frame is the part to carry forward: 'can it still ship this session?' becomes the scope test for any future bridge. Expensive ambition either scales down until it fits, or it doesn't ship. Both outcomes beat a perpetual half-ready validator. Holding off on writing a standalone memory for this yet — it's one confirmed instance (memory-parity) plus a second today (sidecar-parity); if a third lands cheap, that's the pattern earning its rent."
+    },
+    {
+      "para_index": 18,
+      "author": "Claude",
+      "timestamp": "2026-04-17T12:14:30-04:00",
+      "text": "Added 'Consolidate knowledge' to GLOSSARY.md under Collaboration \u0026 working style as the canonical phrase for these exercises, per the shared-vocabulary rule (when you coin a word, promote it). I'll use the phrase in the flow ('this is a consolidation moment') and in commit messages for post-iteration sessions going forward."
+    }
+  ]
+}

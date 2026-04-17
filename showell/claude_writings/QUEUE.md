@@ -18,6 +18,7 @@ Articles agreed-on but not yet written. Append when a topic earns its place; pru
 | Load-Bearing | Steve asked for a short vocabulary piece unpacking the term; intended as a reorientation-to-process read; ~half the length of peer essays | **shipped** 2026-04-16 |
 | Phase, Not Motion | Retrospective on the VM-simulator UI iteration — protagonist must be visible, vertical axis as time's arrow, proxy vs real constraints. Paired with 3 memory files | **shipped** 2026-04-17 |
 | Writing the Sidecars | Retrospective on the sidecar-parity bridge exercise in virtual-machine-go — labels as commitments, cheap bridges ship, enumerate-and-bridge applied to documentation | **shipped** 2026-04-17 |
+| The Dog as Opcode | Retrospective on the cow study V2 exercise — indirect manipulation as a design frame, pressure vs bump physics, recoil as physical-event cue, start-garish iteration. Prototype code ripped; essay carries the rewrite recipe | **shipped** 2026-04-17 |
 
 ## Working rule
 Don't preempt the queue. Wait for explicit go-signal before starting a queued piece, so reading cadence stays in Steve's control.
