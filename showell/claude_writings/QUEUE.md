@@ -24,6 +24,7 @@ Articles agreed-on but not yet written. Append when a topic earns its place; pru
 | Inventory of a Partial Port | First step of finishing the LynRummy TS → Elm port: enumerate what's already ported so the remainder is cleanly scoped. Includes the Elm index, the unported-by-role breakdown, scope proposal (knobs + MVP surface), and a meta-note proposing "Partial ports start with inventory" as a cheat-sheet addition. | **shipped** 2026-04-17 |
 | The Opening Board | Status report after five modules ported; proposes "display the opening board" as the next checkpoint; outlines how Steve helps (look at rendered board, gut-react). | **shipped** 2026-04-17 |
 | State-Flow Audit of game.ts | Pre-port audit of the 3046 LOC `game.ts`. Maps 14 module-level globals into domain/UI/meta layers, walks the action flow from user input to re-render, proposes 12-module Elm decomposition (~1400-1700 LOC) and porting order. Ends with 3 yes/no rulings for Steve. | **shipped** 2026-04-17 |
+| Drag and Wings | Pivot essay. Plan for drag-drop + wings on the opening board as the next checkpoint, ahead of game.ts decomposition. Three parts (base physics / merge oracle / wings decoration); Model+Msg snippet; wings-oracle snippet; out-of-scope + risk flags. | **shipped** 2026-04-17 |
 
 ## Working rule
 Don't preempt the queue. Wait for explicit go-signal before starting a queued piece, so reading cadence stays in Steve's control.
