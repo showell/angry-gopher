@@ -5,6 +5,7 @@ writing — the shapes in the code snippets are what we're
 aiming for, not what's committed yet.*
 
 **← Prev:** [The Port So Far](the_port_so_far.md)
+**→ Next:** [The Fast Day](the_fast_day.md)
 
 ---
 

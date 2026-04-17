@@ -27,6 +27,7 @@ Articles agreed-on but not yet written. Append when a topic earns its place; pru
 | Drag and Wings | Pivot essay. Plan for drag-drop + wings on the opening board as the next checkpoint, ahead of game.ts decomposition. Three parts (base physics / merge oracle / wings decoration); Model+Msg snippet; wings-oracle snippet; out-of-scope + risk flags. | **shipped** 2026-04-17 |
 | The Port So Far | End-of-day status report covering the full LynRummy TS→Elm port work of 2026-04-17: five model-layer ports, opening-board checkpoint, shelved state-flow audit, drag-and-wings pivot with three-pass implementation, fidelity-per-component crystallization. Verbose, mildly reflective, no next-steps section. | **shipped** 2026-04-17 |
 | Hand to Board | Forward plan for the next checkpoint: render player hands, allow hand-card drag to the board (merge via wing OR place as singleton). Three code snippets (DragSource extension, branched wing oracle, MouseUp with new branch). Notes on opponent rendering, board-relative coords, scope of each file change. | **shipped** 2026-04-17 |
+| The Fast Day | Short end-of-day consolidation essay. What shipped in ~4 wall hours (from the go signal), what made it fast (pivot / per-component fidelity / sidecar-first / "just port it" / infrastructure reuse), what to do differently. Preserves signal from a day that moved quickly. | **shipped** 2026-04-17 |
 
 ## Working rule
 Don't preempt the queue. Wait for explicit go-signal before starting a queued piece, so reading cadence stays in Steve's control.
