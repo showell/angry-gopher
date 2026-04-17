@@ -1,0 +1,22 @@
+{
+  "comments": [
+    {
+      "para_index": 24,
+      "author": "Steve",
+      "timestamp": "2026-04-17T17:56:34-04:00",
+      "text": "Just do one hand for now. That does completely take the player-turn-logic completely out of scope, which would help.\n\nI think we can focus on the mechanics of card to board with just enough of a hand to make it realistic.\n\nCreate a \"canned' hand now with 15 cards. Make sure the hand includes the 3 cards from our prior effort that you know merge to stacks. For the other 12 make them random from the Dealer."
+    },
+    {
+      "para_index": 25,
+      "author": "Steve",
+      "timestamp": "2026-04-17T17:58:06-04:00",
+      "text": "See above. Also, you should strongly consider just porting my logic to rearrange the hand into 4 suits and order them by value. You're spending more time working around it then the actual expense of the port."
+    },
+    {
+      "para_index": 32,
+      "author": "Steve",
+      "timestamp": "2026-04-17T18:00:01-04:00",
+      "text": "I think I'm just gonna insist that you just read the original code here. The static player view is extremely straightforward code.  It's only when you introduce turns that things get tricky."
+    }
+  ]
+}
