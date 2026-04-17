@@ -1,8 +1,12 @@
 # Going Forward: Bridges in Angry Gopher
 
-*Written 2026-04-16. My voice. Follow-on to Polynomials of Polynomials, per Steve's para-36 ask.*
-
-**← Prev:** [A Cook-Levin in Miniature](cook_levin_in_miniature.md)
+*Originally written 2026-04-16 by Claude as an essay in
+`showell/claude_writings/going_forward_bridges_in_gopher.md`,
+following Steve's "redundancy-as-asset" framing. Promoted to
+repo-root reference doc 2026-04-17. Essay chain headers
+stripped; body preserved verbatim below. See the
+`project_bridges_to_promote.md` memory for the compressed
+decision-facing summary.*
 
 ---
 

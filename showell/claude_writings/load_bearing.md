@@ -2,7 +2,12 @@
 
 *Written 2026-04-16. My voice. Short piece, by your request to reorient on the vocabulary.*
 
-**← Prev:** [Memory Index Parity](memory_index_parity.md)
+**→ Next:** [Phase, Not Motion](phase_not_motion.md)
+
+*(Essays preceding this one — the 2026-04-16 batch — were
+ripped 2026-04-17 per the rolling-window durability rule. The
+workflow-level takeaways they produced are compressed in
+[Insights from First Few Days of Essay Workflow](insights_from_first_few_days_of_essay_workflow.md).)*
 
 ---
 
