@@ -5,6 +5,7 @@ before the Gopher integration. Short by design — preserving
 signal from a day that moved quickly.*
 
 **← Prev:** [Hand to Board](hand_to_board.md)
+**→ Next:** [Serving from Gopher](serving_from_gopher.md)
 
 ---
 
