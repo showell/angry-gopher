@@ -6,6 +6,7 @@ pre-today batch. Carries forward the compressed insights
 from those essays so the workflow signal survives the cull.*
 
 **← Prev:** [Serving from Gopher](serving_from_gopher.md)
+**→ Next:** [For the Next Session](for_the_next_session.md)
 
 ---
 
