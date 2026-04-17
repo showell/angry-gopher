@@ -19,6 +19,7 @@ Articles agreed-on but not yet written. Append when a topic earns its place; pru
 | Phase, Not Motion | Retrospective on the VM-simulator UI iteration — protagonist must be visible, vertical axis as time's arrow, proxy vs real constraints. Paired with 3 memory files | **shipped** 2026-04-17 |
 | Writing the Sidecars | Retrospective on the sidecar-parity bridge exercise in virtual-machine-go — labels as commitments, cheap bridges ship, enumerate-and-bridge applied to documentation | **shipped** 2026-04-17 |
 | The Dog as Opcode | Retrospective on the cow study V2 exercise — indirect manipulation as a design frame, pressure vs bump physics, recoil as physical-event cue, start-garish iteration. Prototype code ripped; essay carries the rewrite recipe | **shipped** 2026-04-17 |
+| Two Directions | Follow-up to The Dog as Opcode. Pulls out the oscillation pattern Steve named in comments: adding complexity for framing, scaling back to study a single interaction, re-introducing complexity. Walks VM (1→4→1→4) and cows (3→2→3). Analogue to controlled-vs-ecological methodology in psychology. ~40% longer than usual per request | **shipped** 2026-04-17 |
 
 ## Working rule
 Don't preempt the queue. Wait for explicit go-signal before starting a queued piece, so reading cadence stays in Steve's control.

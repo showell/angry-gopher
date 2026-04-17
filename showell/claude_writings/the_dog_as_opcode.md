@@ -238,3 +238,7 @@ visual language, and the workflow discipline. The HTML we
 rewrite in an afternoon.
 
 — C.
+
+---
+
+**Next →** [Two Directions](two_directions.md)
