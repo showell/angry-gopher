@@ -1,6 +1,6 @@
 # Glossary
 
-**As-of:** 2026-04-15
+**As-of:** 2026-04-17
 **Confidence:** Firm where terms are already in code; Working where they live only in chat/memory so far.
 **Durability:** Stable vocabulary layer — entries are added when a word earns its place, not to document every passing phrase. Prune aggressively.
 
@@ -48,6 +48,35 @@ Terms for how Steve and Claude work together. These shape process, not product.
 | **Rip** | Delete code fearlessly — removing an un-earning feature is a first-class skill, not a regret. |
 | **Genius vs. folly** | Steve's aphorism: "humans are good at turning problem A into problem B. Usually that's our folly, but sometimes that is our genius." A reframe is *genius* when problem B has a terminating check (finite search, verifiable absence); *folly* when B is just another open-ended rearrangement. |
 | **Robbing Peter to pay Paul** | The kitchen-table name for the folly side of a reframe — a "solution" that relocates the difficulty or undoes earlier progress. Canonical label when naming the anti-pattern. |
+
+## Cognition & collaboration (added 2026-04-16)
+
+Terms from the Field Notes study. Each earned its place by clarifying
+a pattern we'd been using without a handle.
+
+| Term | Meaning |
+|---|---|
+| **Enumerate-and-bridge** | Steve's core design instinct: constrain the domain small enough to cover exhaustively, express the behavior in ≥2 independent representations, force them to agree. Disagreement is the signal. The LynRummy referee triple, `fixturegen`, and the Wacky VM's polynomial-vs-simulator cross-check are canonical examples. |
+| **Grind / incubate / re-encounter** | The three-stage pipeline through which recognition lands: *type* (produce a persistent artifact) → *incubate* (sleep, walk, distance) → *re-encounter* (re-read, return with fresh eyes). You cannot skip the grind and go straight to the walk around the lake. Steve's re-derivation of Wallas (1926) with better verb-tempo. |
+| **Persistence of externalization** | Why typing works as a thinking medium where silent thought does not: typed text is stable and re-scannable. The fingers produce an artifact the future-self can inspect. Speech lacks this; silent thought lacks this. |
+| **Fish-in-water** | The cognitive blind spot for behaviors so routine the practitioner cannot see them. Strong subject-confidence ("duh") deserves probing in proportion to the epistemic gap between subject and observer — not universally, but especially where the practitioner's confidence is highest. |
+| **Pragmatic awareness** | Active recognition of trade-offs, distinct from *pragmatic acceptance*. Steve's term for consciously allowing his math brain to atrophy because economic incentives didn't pay for it, without pretending the atrophy isn't real or that the choice wasn't his. |
+| **Atrophy-by-choice** | Self-observation of capability decay as a deliberate economic selection rather than accident. Contrasted with *option preservation* — keeping the latent capability available for re-exercise later. |
+| **Structural math taste** | The compiled-into-instincts residue of mathematical thinking — preference for small surface area, algorithmic recognition, invariant-first design — that remains even when explicit math (*active math*) is not being performed. The thing inferior programmers miss when they claim "you don't need math." |
+| **Double-voicing** | Holding two seemingly-contradictory positions deliberately and simultaneously, aware of both. Steve's habit of *generous attribution* (others do this too) paired with *candid ranking* (I'm a particularly sharp instance of it). Not contradiction; deliberate dual register. |
+
+## UI design (added 2026-04-17)
+
+Terms from the Cook-Levin VM simulator UI iteration. Each earned its place by naming a pattern that was doing load-bearing work in design voting.
+
+| Term | Meaning |
+|---|---|
+| **Protagonist** | The main-character element in a mutable-state visualization — the thing whose trajectory IS the point. Must be visually dominant, clearly reactive, always present. Register in a VM UI; player-marker in a game UI; currently-editing cell in a spreadsheet. Simplification that removes the protagonist regresses the UI regardless of its local-redundancy rationale. Test: after your simplification, is the protagonist still on screen? |
+| **Dock-beside** | Animation pattern where an action label travels from its source (e.g., a clicked button) to *adjacent* to its target (e.g., the register), pauses briefly visible, then fades as the target reacts. Preserves the "instruction moves toward register" gesture without letting them occupy the same physical space. |
+| **Tape-consumed** | Turing-tape motion: instructions sit on a tape that slides past a fixed head position; finished instructions clip out of a viewport; the next instruction always arrives at the head so the user's click target stays stable. Auto-scroll-into-focus is the ergonomic payoff. |
+| **Time's arrow** | Property of a UI axis (usually vertical top-to-bottom) that reads as temporal ordering rather than arbitrary spatial distance. When the axis reads as past → present → future, "action at a distance" along it resolves into causality. The axis itself is the bridge. |
+| **Phase, not motion** | Observation that in a well-designed sequence UI, commands don't physically move between regions — their *status* changes (pending → at-head → spent) while they stay in place. Motion isn't required to communicate execution; phase change with preserved identity is. |
+| **Proxy constraint** | A stated design constraint that's actually a shorthand for a softer underlying rule. "Reduce click-to-effect distance" was a proxy for "effect must read as phase-change, not teleport." Relaxing the proxy by satisfying the softer rule through a different route unlocks designs the literal proxy forbade. Worth asking *once per design problem*: what is this constraint really protecting? |
 
 ## How to add an entry
 
