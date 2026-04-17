@@ -1,29 +1,16 @@
 #!/usr/bin/env bash
-# Build every gesture module standalone, in addition to Main.
+# Type-check every durable LynRummy module standalone, then
+# run the test suite. Keeps the durable code from bit-rotting
+# regardless of which host shell imports it.
 #
-# Catches a class of bug that bit us during the Kinematics
-# refactor: a gesture not currently wired into Main can
-# silently bit-rot, because Main's import graph determines
-# what `elm make src/Main.elm` actually compiles. Parked
-# gestures (registered for a future study but not the
-# active one) need their own type-check.
-#
-# Add new gestures to the GESTURES list below.
+# Host shell (Main.elm + gesture studies) was ripped
+# 2026-04-17 — only the durable model remains here; the
+# playable game will be built fresh on top of these modules.
 
 set -euo pipefail
 
 cd "$(dirname "$0")"
 
-GESTURES=(
-  "src/Gesture/SingleCardDrop.elm"
-  "src/Gesture/StackMerge.elm"
-  "src/Gesture/InjectCard.elm"
-  "src/Gesture/MoveStack.elm"
-  "src/Gesture/IntegratedPlay.elm"
-)
-
-# Durable LynRummy model port — standalone type-check so the
-# durable code never rots even when not wired into Main.
 LYNRUMMY=(
   "src/LynRummy/Random.elm"
   "src/LynRummy/Card.elm"
@@ -42,14 +29,6 @@ LYNRUMMY=(
   "src/LynRummy/Tricks/LooseCardPlay.elm"
 )
 
-echo "==> Building Main"
-npx --yes elm make src/Main.elm --output=elm.js >/dev/null
-
-for g in "${GESTURES[@]}"; do
-  echo "==> Type-checking $g standalone"
-  npx --yes elm make "$g" --output=/dev/null >/dev/null
-done
-
 for m in "${LYNRUMMY[@]}"; do
   echo "==> Type-checking $m standalone"
   npx --yes elm make "$m" --output=/dev/null >/dev/null
@@ -64,4 +43,4 @@ if [ -z "${ELM_BIN:-}" ]; then
 fi
 npx --yes elm-test --compiler "$ELM_BIN" >/dev/null
 
-echo "All gestures compile; LynRummy modules compile and tests pass."
+echo "All LynRummy modules compile and tests pass."
