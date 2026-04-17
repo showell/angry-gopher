@@ -5,6 +5,11 @@
 /import
 /crudgen
 /fixturegen
+/db_query
+/reorg
+
+# Claude Code per-session state (scheduled_tasks.lock, settings.local.json)
+/.claude/
 
 # Editor temp files
 *.swp
