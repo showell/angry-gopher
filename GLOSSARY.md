@@ -1,6 +1,6 @@
 # Glossary
 
-**As-of:** 2026-04-17
+**As-of:** 2026-04-17 (pm)
 **Confidence:** Firm where terms are already in code; Working where they live only in chat/memory so far.
 **Durability:** Stable vocabulary layer — entries are added when a word earns its place, not to document every passing phrase. Prune aggressively.
 
@@ -48,6 +48,7 @@ Terms for how Steve and Claude work together. These shape process, not product.
 | **Rip** | Delete code fearlessly — removing an un-earning feature is a first-class skill, not a regret. |
 | **Genius vs. folly** | Steve's aphorism: "humans are good at turning problem A into problem B. Usually that's our folly, but sometimes that is our genius." A reframe is *genius* when problem B has a terminating check (finite search, verifiable absence); *folly* when B is just another open-ended rearrangement. |
 | **Robbing Peter to pay Paul** | The kitchen-table name for the folly side of a reframe — a "solution" that relocates the difficulty or undoes earlier progress. Canonical label when naming the anti-pattern. |
+| **Consolidate knowledge** | The post-iteration exercise of promoting durable artifacts (sidecars, memories, essays, glossary entries, git tags) from a completed push of work. Done *in the flow*, not later — it both compresses what we just learned and pre-loads future-us. Named 2026-04-17 by Steve on the Writing the Sidecars essay. Canonical label for these exercises in commit messages and in-session framing. |
 
 ## Cognition & collaboration (added 2026-04-16)
 
