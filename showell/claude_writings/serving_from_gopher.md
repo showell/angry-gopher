@@ -6,6 +6,7 @@ Gopher UI. Two-part shape — today's bar (get it working at
 all) and tomorrow's (real integration and deployment).*
 
 **← Prev:** [The Fast Day](the_fast_day.md)
+**→ Next:** [Insights from First Few Days of Essay Workflow](insights_from_first_few_days_of_essay_workflow.md)
 
 ---
 
