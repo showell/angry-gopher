@@ -21,6 +21,7 @@ LYNRUMMY=(
   "src/LynRummy/Score.elm"
   "src/LynRummy/BoardPhysics.elm"
   "src/LynRummy/PlayerTurn.elm"
+  "src/LynRummy/BoardActions.elm"
   "src/LynRummy/Tricks/Trick.elm"
   "src/LynRummy/Tricks/Helpers.elm"
   "src/LynRummy/Tricks/DirectPlay.elm"

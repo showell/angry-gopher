@@ -1,0 +1,49 @@
+# BoardActions.elm — WORKHORSE
+
+Decision logic for card-merging and placement — what merges
+are possible and what is the resulting `BoardChange`. No DOM,
+no rendering. Faithful port of
+`angry-cat/src/lyn_rummy/game/board_actions.ts`.
+
+## Status
+
+- **Label:** WORKHORSE. Pure functions; stable decision rules.
+- **Source:** `angry-cat/src/lyn_rummy/game/board_actions.ts` (119 LOC).
+- **Tests:** ported from `board_actions_test.ts`.
+
+## Key invariants (preserved from TS)
+
+- Every successful action returns a `BoardChange` diff:
+  `stacksToRemove`, `stacksToAdd`, `handCardsToRelease`.
+  Callers apply the diff; the module never mutates a board.
+- `tryHandMerge`: play a hand card onto a stack's left or
+  right end. Produces a merge or returns `Nothing`.
+- `tryStackMerge`: merge two on-board stacks. Produces a
+  merge or returns `Nothing`.
+- `placeHandCard`: create a new single-card stack at a
+  location; releases the hand card.
+- `moveStack`: reposition a stack (remove old + add at new
+  loc).
+- `findAllStackMerges` / `findAllHandMerges`: exhaustive
+  enumeration of valid merges for a dragged stack or hand
+  card against a board.
+
+## Elm divergences from TS
+
+- TS string-union `"left" | "right"` → Elm `Side = Left | Right`.
+- TS `other === target` (reference equality) in
+  `find_all_stack_merges` → Elm structural `==` (or
+  `stacksEqual` via maybeMerge's internal check). Outcomes
+  match: identical stacks can't merge with each other anyway
+  because `maybeMerge` rejects `stacksEqual` pairs.
+- TS `CardStack.from_hand_card(hc, loc)` → Elm
+  `CardStack.fromHandCard hc loc` (already ported).
+- TS anonymous object return shapes → Elm named record types
+  (`BoardChange`, `StackMergeResult`, `HandMergeResult`).
+
+## Pointers
+
+- Depends on: `CardStack.fromHandCard`, `CardStack.leftMerge`,
+  `CardStack.rightMerge`, `CardStack` and `HandCard` types.
+- Consumer: game.ts-derived UI will call these on drag-release
+  to compute and apply board diffs.
