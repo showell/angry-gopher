@@ -6,6 +6,7 @@ reflective where the work produced an observation worth
 noting; not durability-optimized.*
 
 **← Prev:** [Drag and Wings](drag_and_wings.md)
+**→ Next:** [Hand to Board](hand_to_board.md)
 
 ---
 
