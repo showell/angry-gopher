@@ -1,42 +1,34 @@
-module LynRummy.Dealer exposing (initialBoard)
+module LynRummy.Dealer exposing (initialBoard, openingHand)
 
-{-| Opening-board factory. Produces the six hardcoded stacks
-at formula-derived positions. Faithful port of
+{-| Opening-board + opening-hand factory. Produces the six
+hardcoded board stacks at formula-derived positions, and a
+15-card canned hand. Faithful-enough port of
 `Dealer.build_initial_board` inside
-`angry-cat/src/lyn_rummy/game/game.ts` (line 291).
+`angry-cat/src/lyn_rummy/game/game.ts` (line 291); the hand
+is not from TS — it's a test fixture for the hand-to-board
+drag milestone.
 
 TS threads cards through a deck via `pull_from_deck`; Elm
-constructs stacks directly via `fromShorthand`. Same resulting
-`CardStack` shape.
+constructs stacks and hand cards directly. Same resulting
+`CardStack` and `HandCard` shapes.
 
 -}
 
-import LynRummy.Card exposing (OriginDeck(..))
+import LynRummy.Card as Card exposing (Card, OriginDeck(..))
 import LynRummy.CardStack as CardStack exposing (BoardLocation, CardStack)
+import LynRummy.Hand as Hand exposing (Hand)
+
+
+
+-- BOARD
 
 
 {-| The six-stack hardcoded opening board.
 -}
 initialBoard : List CardStack
 initialBoard =
-    (List.indexedMap stackFromRow openingShorthands
+    List.indexedMap stackFromRow openingShorthands
         |> List.filterMap identity
-    )
-        ++ List.filterMap identity dragTestSingletons
-
-
-{-| THROWAWAY: three single-card stacks parked on the right
-for drag-to-merge testing. 7H merges with the 6-run
-"2C,3D,4C,5H,6S,7H" (already ends in 7H — pair peel / set
-bait). 8C is a loose card. 4S extends the spade run at row 0.
-Remove once drag-drop UI is baked.
--}
-dragTestSingletons : List (Maybe CardStack)
-dragTestSingletons =
-    [ CardStack.fromShorthand "7H" DeckOne { top = 40, left = 400 }
-    , CardStack.fromShorthand "8C" DeckOne { top = 140, left = 400 }
-    , CardStack.fromShorthand "4S" DeckOne { top = 240, left = 400 }
-    ]
 
 
 openingShorthands : List String
@@ -64,3 +56,43 @@ rowLoc row =
     { top = 20 + row * 60
     , left = 40 + col * 30
     }
+
+
+
+-- HAND
+
+
+{-| Canned 15-card hand for the hand-to-board drag milestone.
+Includes 7H, 8C, 4S (our known drag testers — all three have
+legal merges against the initial board). Other 12 are a grab
+bag: 9D and QS also extend existing runs; the rest are loose
+cards with no merges to exercise the "land as singleton"
+path.
+-}
+openingHand : Hand
+openingHand =
+    let
+        cards =
+            List.filterMap (\label -> Card.cardFromLabel label DeckOne) openingHandLabels
+    in
+    Hand.addCards cards CardStack.HandNormal Hand.empty
+
+
+openingHandLabels : List String
+openingHandLabels =
+    [ "7H"
+    , "8C"
+    , "4S"
+    , "9D"
+    , "QS"
+    , "KH"
+    , "JH"
+    , "6H"
+    , "TS"
+    , "5D"
+    , "8H"
+    , "3C"
+    , "2D"
+    , "9C"
+    , "6C"
+    ]

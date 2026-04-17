@@ -1,7 +1,11 @@
-module LynRummy.WingOracle exposing (WingId, wingsFor)
+module LynRummy.WingOracle exposing
+    ( WingId
+    , wingsForHandCard
+    , wingsForStack
+    )
 
-{-| For a dragged source stack, enumerate which board stacks
-can legally accept it — and on which side.
+{-| For a dragged source (stack or hand card), enumerate which
+board stacks can legally accept it — and on which side.
 
 `side = Left` means: the source attaches to the LEFT of the
 target (cards visually end up as `source ++ target`).
@@ -9,14 +13,20 @@ target (cards visually end up as `source ++ target`).
 the target (cards end up as `target ++ source`).
 
 Call convention is TARGET-first: `tryStackMerge target source
-side`. This makes the target the "anchor" — the merged stack's
+side` (and equivalently `tryHandMerge target handCard side`).
+This makes the target the "anchor" — the merged stack's
 position is derived from the target, not the source — which
 matches the drop-onto-target UX.
+
+Two entry points, one `WingId` shape out. Stack-source and
+hand-source paths are deliberately kept as two separate
+functions; they are two similar things, not one parametrized
+thing.
 
 -}
 
 import LynRummy.BoardActions as BoardActions exposing (Side(..))
-import LynRummy.CardStack as CardStack exposing (CardStack)
+import LynRummy.CardStack as CardStack exposing (CardStack, HandCard)
 
 
 type alias WingId =
@@ -25,11 +35,14 @@ type alias WingId =
     }
 
 
-{-| Enumerate every winged target for the dragged stack against
-the current board. Empty list means no legal merges.
+
+-- STACK SOURCE
+
+
+{-| Wings for a board stack being dragged.
 -}
-wingsFor : Int -> List CardStack -> List WingId
-wingsFor sourceIndex board =
+wingsForStack : Int -> List CardStack -> List WingId
+wingsForStack sourceIndex board =
     case listAt sourceIndex board of
         Nothing ->
             []
@@ -37,11 +50,11 @@ wingsFor sourceIndex board =
         Just source ->
             board
                 |> List.indexedMap Tuple.pair
-                |> List.concatMap (wingsForTarget sourceIndex source)
+                |> List.concatMap (stackWingsForTarget sourceIndex source)
 
 
-wingsForTarget : Int -> CardStack -> ( Int, CardStack ) -> List WingId
-wingsForTarget sourceIndex source ( targetIndex, target ) =
+stackWingsForTarget : Int -> CardStack -> ( Int, CardStack ) -> List WingId
+stackWingsForTarget sourceIndex source ( targetIndex, target ) =
     if targetIndex == sourceIndex then
         []
 
@@ -64,6 +77,45 @@ wingsForTarget sourceIndex source ( targetIndex, target ) =
                         []
         in
         leftWing ++ rightWing
+
+
+
+-- HAND-CARD SOURCE
+
+
+{-| Wings for a hand card being dragged.
+-}
+wingsForHandCard : HandCard -> List CardStack -> List WingId
+wingsForHandCard handCard board =
+    board
+        |> List.indexedMap Tuple.pair
+        |> List.concatMap (handCardWingsForTarget handCard)
+
+
+handCardWingsForTarget : HandCard -> ( Int, CardStack ) -> List WingId
+handCardWingsForTarget handCard ( targetIndex, target ) =
+    let
+        leftWing =
+            case BoardActions.tryHandMerge target handCard Left of
+                Just _ ->
+                    [ { stackIndex = targetIndex, side = Left } ]
+
+                Nothing ->
+                    []
+
+        rightWing =
+            case BoardActions.tryHandMerge target handCard Right of
+                Just _ ->
+                    [ { stackIndex = targetIndex, side = Right } ]
+
+                Nothing ->
+                    []
+    in
+    leftWing ++ rightWing
+
+
+
+-- HELPERS
 
 
 listAt : Int -> List a -> Maybe a

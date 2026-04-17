@@ -24,6 +24,7 @@ LYNRUMMY=(
   "src/LynRummy/BoardActions.elm"
   "src/LynRummy/PlaceStack.elm"
   "src/LynRummy/Dealer.elm"
+  "src/LynRummy/Hand.elm"
   "src/LynRummy/View.elm"
   "src/LynRummy/WingOracle.elm"
   "src/LynRummy/Tricks/Trick.elm"

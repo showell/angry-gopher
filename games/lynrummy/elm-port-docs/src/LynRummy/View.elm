@@ -1,11 +1,15 @@
 module LynRummy.View exposing
     ( boardShell
+    , boardShellWith
     , cardHeightPx
     , mergeableGreen
     , mergeableHover
     , navy
     , viewBoardHeading
     , viewCard
+    , viewCardWithAttrs
+    , viewHand
+    , viewHandHeading
     , viewStack
     , viewStackWithAttrs
     , viewWing
@@ -22,8 +26,9 @@ are composed in `Main.elm` using these pieces.
 
 import Html exposing (Html, div, text)
 import Html.Attributes exposing (style)
-import LynRummy.Card as Card exposing (Card, CardColor(..))
-import LynRummy.CardStack as CardStack exposing (BoardCard, CardStack)
+import LynRummy.Card as Card exposing (Card, CardColor(..), Suit)
+import LynRummy.CardStack as CardStack exposing (BoardCard, CardStack, HandCard, HandCardState(..))
+import LynRummy.Hand exposing (Hand)
 
 
 
@@ -68,13 +73,23 @@ cardHeightPx =
 
 viewBoardHeading : Html msg
 viewBoardHeading =
+    sectionHeading "Board"
+
+
+viewHandHeading : Html msg
+viewHandHeading =
+    sectionHeading "Hand"
+
+
+sectionHeading : String -> Html msg
+sectionHeading label =
     div
         [ style "color" navy
         , style "font-weight" "bold"
         , style "font-size" "19px"
         , style "margin-top" "20px"
         ]
-        [ text "Board" ]
+        [ text label ]
 
 
 
@@ -87,15 +102,26 @@ dragged-stack overlay).
 -}
 boardShell : List (Html msg) -> Html msg
 boardShell children =
-    div
-        [ style "background-color" "khaki"
-        , style "border" ("1px solid " ++ navy)
-        , style "border-radius" "15px"
-        , style "position" "relative"
-        , style "height" "540px"
-        , style "margin-top" "8px"
-        ]
-        children
+    boardShellWith [] children
+
+
+{-| Board shell with extra attributes on the shell element
+(e.g. an `id` for measurement, or mouseenter / mouseleave
+handlers for tracking whether the cursor is over the board).
+-}
+boardShellWith : List (Html.Attribute msg) -> List (Html msg) -> Html msg
+boardShellWith extraAttrs children =
+    let
+        baseAttrs =
+            [ style "background-color" "khaki"
+            , style "border" ("1px solid " ++ navy)
+            , style "border-radius" "15px"
+            , style "position" "relative"
+            , style "height" "540px"
+            , style "margin-top" "8px"
+            ]
+    in
+    div (baseAttrs ++ extraAttrs) children
 
 
 
@@ -166,6 +192,14 @@ viewCard card =
     viewPlayingCardWith [] card
 
 
+{-| Single playing card with extra attributes (mousedown
+handler, margin overrides, background color).
+-}
+viewCardWithAttrs : List (Html.Attribute msg) -> Card -> Html msg
+viewCardWithAttrs extraAttrs card =
+    viewPlayingCardWith extraAttrs card
+
+
 viewPlayingCardWith : List (Html.Attribute msg) -> Card -> Html msg
 viewPlayingCardWith extraAttrs card =
     let
@@ -204,6 +238,93 @@ viewCardChar c =
         , style "user-select" "none"
         ]
         [ text c ]
+
+
+
+-- HAND
+
+
+{-| Render a hand, sorted into rows of 4 suits in display
+order (Heart, Spade, Diamond, Club), each row sorted by value
+ascending. Empty suit rows are skipped. Faithful port of
+`PhysicalHand.populate` in `game.ts:1589`.
+
+`attrsForCard` supplies the mousedown handler (and any other
+per-card attributes) keyed by hand-card index within the full
+hand list. We pass the index rather than the `HandCard` itself
+so Main.elm can dispatch `MouseDownOnHandCard index` cleanly.
+
+-}
+viewHand :
+    { attrsForCard : Int -> HandCard -> List (Html.Attribute msg) }
+    -> Hand
+    -> Html msg
+viewHand config hand =
+    let
+        indexed =
+            List.indexedMap Tuple.pair hand.handCards
+    in
+    div
+        [ style "margin-top" "10px" ]
+        (List.filterMap (viewSuitRow config indexed) Card.allSuits)
+
+
+viewSuitRow :
+    { attrsForCard : Int -> HandCard -> List (Html.Attribute msg) }
+    -> List ( Int, HandCard )
+    -> Suit
+    -> Maybe (Html msg)
+viewSuitRow config indexed suit =
+    let
+        suitCards =
+            indexed
+                |> List.filter (\( _, hc ) -> hc.card.suit == suit)
+                |> List.sortBy (\( _, hc ) -> Card.cardValueToInt hc.card.value)
+    in
+    if List.isEmpty suitCards then
+        Nothing
+
+    else
+        Just <|
+            div
+                [ style "padding-bottom" "10px" ]
+                (List.map
+                    (\( idx, hc ) -> viewHandCard (config.attrsForCard idx hc) hc)
+                    suitCards
+                )
+
+
+viewHandCard : List (Html.Attribute msg) -> HandCard -> Html msg
+viewHandCard extraAttrs hc =
+    let
+        bgColor =
+            handCardBgColor hc
+
+        handAttrs =
+            [ style "margin" "3px"
+            , style "cursor" "grab"
+            , style "background-color" bgColor
+            ]
+    in
+    viewPlayingCardWith (handAttrs ++ extraAttrs) hc.card
+
+
+{-| Background color per HandCardState. Faithful port of
+`PhysicalHandCard.update_state_styles` in `game.ts:1233`.
+`is_hint` → "lightgreen" is omitted here; hints re-wire fresh
+later.
+-}
+handCardBgColor : HandCard -> String
+handCardBgColor hc =
+    case hc.state of
+        FreshlyDrawn ->
+            "cyan"
+
+        BackFromBoard ->
+            "yellow"
+
+        HandNormal ->
+            "white"
 
 
 
