@@ -5,6 +5,7 @@ Pivot essay: drag-drop + wings on the opening board is the next
 deliverable, ahead of the game.ts decomposition.*
 
 **← Prev:** [State-Flow Audit of game.ts](state_flow_audit_of_game_ts.md)
+**→ Next:** [The Port So Far](the_port_so_far.md)
 
 ---
 
