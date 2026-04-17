@@ -18,6 +18,7 @@ LYNRUMMY=(
   "src/LynRummy/CardStack.elm"
   "src/LynRummy/BoardGeometry.elm"
   "src/LynRummy/Referee.elm"
+  "src/LynRummy/Score.elm"
   "src/LynRummy/Tricks/Trick.elm"
   "src/LynRummy/Tricks/Helpers.elm"
   "src/LynRummy/Tricks/DirectPlay.elm"
