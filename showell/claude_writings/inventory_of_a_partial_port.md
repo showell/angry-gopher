@@ -236,3 +236,7 @@ decomposable or needs a pre-port refactor on the TS side.
 Parked here pending your go-signal on the scope.
 
 — C.
+
+---
+
+**Next →** [The Opening Board](the_opening_board.md)

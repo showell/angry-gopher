@@ -22,6 +22,7 @@ Articles agreed-on but not yet written. Append when a topic earns its place; pru
 | Two Directions | Follow-up to The Dog as Opcode. Pulls out the oscillation pattern Steve named in comments: adding complexity for framing, scaling back to study a single interaction, re-introducing complexity. Walks VM (1→4→1→4) and cows (3→2→3). Analogue to controlled-vs-ecological methodology in psychology. ~40% longer than usual per request | **shipped** 2026-04-17 |
 | The Elm Study Rip | Brief status report on ripping the gesture-study layer from elm-port-docs. Calls out where recently-earned vocabulary (ebb and flow, clarifying-question discipline, asset-preservation checklist, TS-as-source-of-truth, display-vs-identity memory, rip methodology, consolidate knowledge) did real work. | **shipped** 2026-04-17 |
 | Inventory of a Partial Port | First step of finishing the LynRummy TS → Elm port: enumerate what's already ported so the remainder is cleanly scoped. Includes the Elm index, the unported-by-role breakdown, scope proposal (knobs + MVP surface), and a meta-note proposing "Partial ports start with inventory" as a cheat-sheet addition. | **shipped** 2026-04-17 |
+| The Opening Board | Status report after five modules ported; proposes "display the opening board" as the next checkpoint; outlines how Steve helps (look at rendered board, gut-react). | **shipped** 2026-04-17 |
 
 ## Working rule
 Don't preempt the queue. Wait for explicit go-signal before starting a queued piece, so reading cadence stays in Steve's control.

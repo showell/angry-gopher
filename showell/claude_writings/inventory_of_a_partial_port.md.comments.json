@@ -1,0 +1,52 @@
+{
+  "comments": [
+    {
+      "para_index": 5,
+      "author": "Steve",
+      "timestamp": "2026-04-17T14:45:24-04:00",
+      "text": "We will want hints to be active by the end of today's port, but I agree that they are more like the first add-on and not crucial right away. I am confident that you can simply omit code that interacts with the hints when you port game.ts. The integration for that is not tricky; we will just re-do it from scratch."
+    },
+    {
+      "para_index": 12,
+      "author": "Steve",
+      "timestamp": "2026-04-17T14:47:49-04:00",
+      "text": "Very good to know. Based on our past work, I think a three-wall-day budget here is realistic. That's enough time that we need to be a little extra cautious about creating checkpoints and dividing the work. Three days is short enough that we don't need to rush at all."
+    },
+    {
+      "para_index": 15,
+      "author": "Steve",
+      "timestamp": "2026-04-17T14:51:00-04:00",
+      "text": "For our purposes, we should consider the TS port to be idiomatic.  We generally should consider that the Angry Cat source code works perfectly for its current intent. So we want to be cautious about adjusting it.\n\nIn places where we have impedance mismatches, we will just handle that on the Elm side, unless we discover glaring problems in TS itself (highly unlikely)."
+    },
+    {
+      "para_index": 20,
+      "author": "Steve",
+      "timestamp": "2026-04-17T14:52:27-04:00",
+      "text": "Yes, I think that's the correct way to go. Keep a separate list of observations that might end up in the cheat sheet, but defer the edits, as you say."
+    },
+    {
+      "para_index": 5,
+      "author": "Claude",
+      "timestamp": "2026-04-17T14:55:31-04:00",
+      "text": "Logged. I'll strip hint-interaction code from game.ts as I port it (stub the call sites; note them in a deferral list). Hint-display wiring gets a fresh pass once the base game is playable."
+    },
+    {
+      "para_index": 12,
+      "author": "Claude",
+      "timestamp": "2026-04-17T14:55:38-04:00",
+      "text": "Three-wall-day pacing, urgency=1 confirmed. I'll aim for a checkpoint commit at each natural boundary (per-module port, per-impedance-mismatch resolution, per-milestone), and treat anything bigger than a single module as its own commit rather than batching."
+    },
+    {
+      "para_index": 15,
+      "author": "Claude",
+      "timestamp": "2026-04-17T14:55:46-04:00",
+      "text": "Ruling logged: TS is frozen source of truth for this port. Impedance mismatches resolved Elm-side only. I won't propose source-side refactors unless I find a glaring TS bug (unlikely). This also means 'source expedient vs idiomatic' stops being an open question — we treat it as idiomatic and port accordingly."
+    },
+    {
+      "para_index": 20,
+      "author": "Claude",
+      "timestamp": "2026-04-17T14:55:52-04:00",
+      "text": "Starting agent_collab/CHEAT_SHEET_CANDIDATES.md with the 'Partial ports start with inventory' observation as the seed entry. Dated, short, no edits to the actual cheat sheet during the port. When we have three or four candidates I'll ship an essay proposing the batch edit."
+    }
+  ]
+}
