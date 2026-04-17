@@ -1,0 +1,35 @@
+# Main.elm — EARLY
+
+TEA bootstrap for the standalone LynRummy Elm game. Replaces
+TS's `plugin.ts` factory. First milestone renders only the
+opening board; no Msgs, no interaction.
+
+## Status
+
+- **Label:** EARLY. Entry point scaffolding; will grow as we
+  wire interaction.
+- **Source:** new Elm file (no 1:1 TS source). Conceptually
+  replaces `plugin.ts`'s role of bootstrapping the game into
+  the host.
+
+## Scope of the first milestone
+
+- Model: `{ board : List CardStack }`, initialized from
+  `LynRummy.Dealer.initialBoard`.
+- Msg: placeholder variant (`NoOp`) — nothing dispatches yet.
+- update: no-op.
+- view: `LynRummy.View.viewBoardHeading` + `viewBoard model.board`.
+- main: `Browser.element` with empty subscriptions.
+
+## Deferred (grows as the port continues)
+
+- Hand zone, action buttons, turn chrome.
+- Drag/drop (Msgs for DragStart / DragMove / DragEnd).
+- Turn orchestration (PlayerTurn integration).
+- Referee validation + any wire plumbing (V2).
+
+## Pointers
+
+- `index.html` in same dir hosts the `elm.js` build.
+- Serve via `python3 -m http.server 8788` from
+  `games/lynrummy/elm-port-docs/`.

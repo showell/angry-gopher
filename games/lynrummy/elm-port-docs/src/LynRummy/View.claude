@@ -1,0 +1,61 @@
+# View.elm — EARLY
+
+HTML rendering of a LynRummy board and its cards. Faithful
+port of the `render_*` pure-drawing functions in
+`angry-cat/src/lyn_rummy/game/game.ts` (lines ~945–1180).
+
+## Status
+
+- **Label:** EARLY. First visible surface; expected to evolve
+  as we wire turn chrome, hand zone, action buttons.
+- **Source:** game.ts render_card_char / render_playing_card /
+  render_wing / render_card_stack / render_board /
+  render_board_heading. Action buttons deferred.
+
+## What's in this first pass
+
+- `viewCard : Card -> Html msg` — a single playing card. Two
+  stacked text divs (value + suit emoji), red/black color,
+  white bg, `1px blue solid` border, 27px × 40px, 17px font.
+- `viewWing : Html msg` — invisible zero-width placeholder for
+  drop targets. Kept for faithful structure even though no
+  drag yet.
+- `viewStack : CardStack -> Html msg` — position-absolute div
+  at `stack.loc.top` / `stack.loc.left`; contains
+  [left wing, cards with 2px margin-left between, right wing].
+  Incomplete stacks get a gray tint (faithful).
+- `viewBoard : List CardStack -> Html msg` — the khaki
+  container with `#000080` border, 15px border-radius, 540px
+  height, `position: relative`.
+- `viewBoardHeading : Html msg` — "Board" text in bold navy
+  19px.
+
+## Deferred from the TS source
+
+- Action buttons (complete turn / undo / hint / replay).
+- Hand-card row + hand advice.
+- Drag handles / cursors (arrive with drag/drop work).
+- Mergeable-stack highlights (arrive with drag-over).
+
+## Elm divergences from TS
+
+- Imperative `document.createElement("div"); div.style.foo = bar`
+  → declarative `div [ style "foo" "bar" ] [...]`.
+- TS mutates styles post-construction (e.g.,
+  `card_span.style.marginLeft = "2px"` on all but the first
+  card in a stack). Elm passes the margin as an extra
+  attribute to `viewPlayingCard`.
+- TS nests DOM nodes inside a card div (value div + suit
+  div); Elm mirrors that structure exactly.
+- `set_common_card_styles` TS helper → inline list of
+  `style` attributes in `viewPlayingCard`. Inlined for
+  single-call-site clarity.
+
+## Pointers
+
+- Consumer: `Main.elm` wires view into `Browser.element`.
+- Depends on: `LynRummy.Card.valueDisplayStr`,
+  `LynRummy.Card.suitEmojiStr`, `LynRummy.Card.cardColor`,
+  `LynRummy.CardStack.incomplete`.
+- TS reference: game.ts lines 945–1180 (the `PURE DRAWING
+  CODE` section).

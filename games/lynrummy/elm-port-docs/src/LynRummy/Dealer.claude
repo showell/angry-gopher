@@ -1,0 +1,44 @@
+# Dealer.elm — WORKHORSE
+
+The canonical opening-board factory. Produces six specific
+card stacks at formula-derived positions. Faithful port of
+`Dealer.build_initial_board` inside
+`angry-cat/src/lyn_rummy/game/game.ts` (line 291).
+
+## Status
+
+- **Label:** WORKHORSE. Hardcoded composition + positioning;
+  stable.
+- **Source:** game.ts line 291 (`Dealer.build_initial_board`).
+  Same six stacks, same formula positions.
+
+## Key invariants (preserved from TS)
+
+- Six stacks, indices 0–5.
+- Position per row: `top = 20 + row * 60`, `left = 40 + col * 30`,
+  `col = (row * 3 + 1) mod 5`.
+- Stack compositions (row → shorthand):
+  0 → `"KS,AS,2S,3S"`
+  1 → `"TD,JD,QD,KD"`
+  2 → `"2H,3H,4H"`
+  3 → `"7S,7D,7C"`
+  4 → `"AC,AD,AH"`
+  5 → `"2C,3D,4C,5H,6S,7H"`
+- All cards from DeckOne.
+
+## Elm divergences from TS
+
+- TS `CardStack.pull_from_deck` threads a deck and removes
+  cards; Elm's `CardStack.fromShorthand` constructs a stack
+  directly. Same resulting `CardStack` shape; deck threading
+  is V2 work.
+- Any shorthand that fails to parse is silently dropped via
+  `List.filterMap identity`. Hardcoded input, so this is a
+  "shouldn't happen" branch; if it does, the bug is in
+  `fromShorthand` or the shorthand itself.
+
+## Pointers
+
+- Depends on: `CardStack.fromShorthand`, `OriginDeck(DeckOne)`.
+- Consumer: `Main.elm` loads `initialBoard` at startup for the
+  opening-board milestone.

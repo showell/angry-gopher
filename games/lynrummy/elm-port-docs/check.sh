@@ -23,6 +23,8 @@ LYNRUMMY=(
   "src/LynRummy/PlayerTurn.elm"
   "src/LynRummy/BoardActions.elm"
   "src/LynRummy/PlaceStack.elm"
+  "src/LynRummy/Dealer.elm"
+  "src/LynRummy/View.elm"
   "src/LynRummy/Tricks/Trick.elm"
   "src/LynRummy/Tricks/Helpers.elm"
   "src/LynRummy/Tricks/DirectPlay.elm"
@@ -38,6 +40,9 @@ for m in "${LYNRUMMY[@]}"; do
   echo "==> Type-checking $m standalone"
   npx --yes elm make "$m" --output=/dev/null >/dev/null
 done
+
+echo "==> Building Main"
+npx --yes elm make src/Main.elm --output=elm.js >/dev/null
 
 echo "==> Running LynRummy tests"
 # elm-test can't auto-discover elm when installed via npx; pass
