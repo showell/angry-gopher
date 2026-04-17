@@ -367,14 +367,35 @@ pointDecoder =
 view : Model -> Html Msg
 view model =
     div
-        [ style "padding" "20px"
-        , style "font-family" "system-ui, sans-serif"
+        [ style "font-family" "system-ui, sans-serif" ]
+        [ div
+            [ style "padding" "20px"
+            , style "display" "flex"
+            , style "gap" "24px"
+            , style "align-items" "flex-start"
+            ]
+            [ handColumn model
+            , boardColumn model
+            ]
+        , draggedOverlay model
         ]
+
+
+handColumn : Model -> Html Msg
+handColumn model =
+    div
+        [ style "min-width" "220px" ]
+        [ View.viewHandHeading
+        , View.viewHand { attrsForCard = handCardAttrs model.drag } model.hand
+        ]
+
+
+boardColumn : Model -> Html Msg
+boardColumn model =
+    div
+        [ style "min-width" "560px" ]
         [ View.viewBoardHeading
         , boardWithWings model
-        , View.viewHandHeading
-        , View.viewHand { attrsForCard = handCardAttrs model.drag } model.hand
-        , draggedOverlay model
         ]
 
 
