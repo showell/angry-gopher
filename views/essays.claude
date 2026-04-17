@@ -1,0 +1,22 @@
+just_use essays.go
+
+# label: SPIKE (essays-landing)
+# role: supports feature — first-class essay landing in the Gopher portal
+
+V1 (2026-04-17). Lists every `*.md` in `showell/claude_writings/`
+(except `QUEUE.md`, `README.md`), sorted newest-first by file
+mtime. Each row shows the essay's title (from its first `# `
+heading) and mtime in US Eastern (`America/New_York`), formatted
+`Jan 2, 2006 · 3:04 PM MST`.
+
+Linked from the Claude card on the Gopher landing page.
+Individual essays open via the existing docs route, which renders
+the markdown + injects the article-comments script.
+
+Future refinements to expect:
+- Date source: currently file mtime, which rebases when files
+  are edited. Swap to git first-commit timestamp if Steve wants
+  stable "written on" dates.
+- Body previews / excerpts.
+- Tag or category filters (status reports vs reflective essays
+  vs plan essays).

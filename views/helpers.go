@@ -261,6 +261,7 @@ h1 { color: #000080; font-size: 34px; margin-bottom: 4px; }
     <ul>
       <li><a href="/gopher/claude-issues">Issues</a> <span class="muted">— active + recently shipped</span></li>
       <li><a href="/gopher/dm?user_id=2">DM Claude</a> <span class="muted">— ongoing conversation</span></li>
+      <li><a href="/gopher/essays">Essays</a> <span class="muted">— long-form writing with inline comments</span></li>
     </ul>
   </div>
 
