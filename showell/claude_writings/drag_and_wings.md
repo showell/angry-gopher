@@ -141,9 +141,13 @@ here should be a no-op, not a guess.
   family; we'll layer it once the mouse version feels right.
 - **Animation on commit** — the merged stack will pop into
   existence. No slide, no fade. Pure state transition.
-- **Wings styling polish** — I'll start with something visibly
-  ugly so we can iterate. Wings are an announcement, not a
-  painting.
+- **Wings styling polish** — the wings themselves are a
+  faithful port of `render_wing()` (`game.ts` line 984): a div
+  with transparent background, two transparent `+` card-char
+  nodes for height, `width: 0`, and `set_common_card_styles`
+  for the card-edge silhouette. No iteration from ugly — the
+  existing code is straightforward and the look is already
+  right.
 - **Multi-card stack dragging** — the test singletons are
   single cards, and single-card merges are the first risk to
   reduce. Rigid-multi-card drag lands the same day but isn't
