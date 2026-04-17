@@ -19,8 +19,24 @@ import LynRummy.CardStack as CardStack exposing (BoardLocation, CardStack)
 -}
 initialBoard : List CardStack
 initialBoard =
-    List.indexedMap stackFromRow openingShorthands
+    (List.indexedMap stackFromRow openingShorthands
         |> List.filterMap identity
+    )
+        ++ List.filterMap identity dragTestSingletons
+
+
+{-| THROWAWAY: three single-card stacks parked on the right
+for drag-to-merge testing. 7H merges with the 6-run
+"2C,3D,4C,5H,6S,7H" (already ends in 7H — pair peel / set
+bait). 8C is a loose card. 4S extends the spade run at row 0.
+Remove once drag-drop UI is baked.
+-}
+dragTestSingletons : List (Maybe CardStack)
+dragTestSingletons =
+    [ CardStack.fromShorthand "7H" DeckOne { top = 40, left = 400 }
+    , CardStack.fromShorthand "8C" DeckOne { top = 140, left = 400 }
+    , CardStack.fromShorthand "4S" DeckOne { top = 240, left = 400 }
+    ]
 
 
 openingShorthands : List String
