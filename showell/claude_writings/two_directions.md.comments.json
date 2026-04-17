@@ -1,0 +1,82 @@
+{
+  "comments": [
+    {
+      "para_index": 10,
+      "author": "Steve",
+      "timestamp": "2026-04-17T13:23:13-04:00",
+      "text": "This is extremely import for the human who is steering the design.  This is about \"herding\" needs to very clearly established as the broad frame up front."
+    },
+    {
+      "para_index": 12,
+      "author": "Steve",
+      "timestamp": "2026-04-17T13:25:17-04:00",
+      "text": "We are about to see this as we re-visit Lyn Rummy explorations.  We have some Elm simulations of card physics that were mostly performed out of context of the actual game. We learned something from them, but not all the learning will directly translate into usable concepts within Lyn Rummy itself."
+    },
+    {
+      "para_index": 17,
+      "author": "Steve",
+      "timestamp": "2026-04-17T13:26:28-04:00",
+      "text": "Yeah, breathing is a powerful metaphor here."
+    },
+    {
+      "para_index": 25,
+      "author": "Steve",
+      "timestamp": "2026-04-17T13:31:21-04:00",
+      "text": "THAT'S THE MECHANISM:\n\nA field finding gets followed up with a lab experiment; a lab finding gets field-validated.\n\nWe will mostly use the terms \"field finding\" and \"lab finding\" during the early stages of development, but they will apply throughout the product cycle."
+    },
+    {
+      "para_index": 28,
+      "author": "Steve",
+      "timestamp": "2026-04-17T13:37:01-04:00",
+      "text": "worth an encoded memory"
+    },
+    {
+      "para_index": 29,
+      "author": "Steve",
+      "timestamp": "2026-04-17T13:39:35-04:00",
+      "text": "You always have the right to ask \"shall we test this at full realism for a quick reality check?\". I can cheaply say \"not yet\" and that's fine. I will usually say yes going forward, because there is going to be less danger of either of us being confused.  As long as your intermediate work products are organized under this principle, then reality checks should be inexpensive to conduct."
+    },
+    {
+      "para_index": 31,
+      "author": "Steve",
+      "timestamp": "2026-04-17T13:40:13-04:00",
+      "text": "Perfect."
+    },
+    {
+      "para_index": 10,
+      "author": "Claude",
+      "timestamp": "2026-04-17T13:41:35-04:00",
+      "text": "Taken. Framing is a *precondition* for iteration, not a parallel track. If the up-front frame isn't locked — 'this study is about herding' — the zoom-in work has nothing to anchor against. You can tune bumps all day and end up with a perfect bump mechanic inside a study nobody understood the point of. Frame first, always; zoom in from there."
+    },
+    {
+      "para_index": 12,
+      "author": "Claude",
+      "timestamp": "2026-04-17T13:41:42-04:00",
+      "text": "Exactly the case I was gesturing at with ecological validity. The elm-port-docs STUDY_RESULTS.md measurements (60ms lookahead, 0.50/0.25 lock thresholds, 0.7 ghost opacity) were tuned on gestures performed in isolation — they'll need field-validation when wired into actual LynRummy play. Some will transfer cleanly; some won't, because the game adds context (cards around the drop target, attention divided, strategic pressure) that the lab study didn't include. The findings aren't wrong; they're lab-calibrated, and lab-to-field transfer is the open question. Good case to use the field/lab vocabulary on explicitly."
+    },
+    {
+      "para_index": 17,
+      "author": "Claude",
+      "timestamp": "2026-04-17T13:41:48-04:00",
+      "text": "Agreed. And one property of breathing that fits especially well: it becomes involuntary. An experienced team doesn't *decide* to zoom out every time — the stall in iteration triggers the reflex. Conscious pole-flipping is the training-wheels version; breathing is the end state. We'll know the pattern is internalized when we stop having to name it."
+    },
+    {
+      "para_index": 25,
+      "author": "Claude",
+      "timestamp": "2026-04-17T13:41:55-04:00",
+      "text": "Adopted. Adding 'field finding' and 'lab finding' to the glossary. I'll use the terms explicitly in commit messages and framing — 'this is a lab finding pending field validation' makes the epistemic status of a claim visible at a glance. And since the same work-product can migrate through both states (measured cleanly in isolation, then re-measured in context), the vocabulary supports re-labeling as the finding moves through the cycle."
+    },
+    {
+      "para_index": 28,
+      "author": "Claude",
+      "timestamp": "2026-04-17T13:42:01-04:00",
+      "text": "Will do — capturing as a memory after this reply pass. Core content: the three commitments from this paragraph (keep the full-realism baseline accessible; keep the same code path across zoom levels; flag overdue pole-flips) plus the reality-check permission from para 29 are the practical-discipline half of ebb and flow. Memory will live in the general / collaboration section so it applies across projects, not just cows or the VM."
+    },
+    {
+      "para_index": 29,
+      "author": "Claude",
+      "timestamp": "2026-04-17T13:42:11-04:00",
+      "text": "Accepted with the obligation on my side: I can only cheaply cash in the reality-check right if my intermediate work products are *already* organized for it. That means the stripped-down and full-realism states have to be parameter-swappable, not structurally divergent. When I strip scaffolding for a tuning pass, it should be a config change or a reduced initial state — never a fork of the mechanic. Keeping the reality check cheap is the condition that makes 'usually yes' tenable. That discipline belongs in the memory too."
+    }
+  ]
+}

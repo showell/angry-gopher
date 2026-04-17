@@ -260,3 +260,7 @@ dogs. It was another turn of the cycle. Naming the cycle is
 the part that makes it portable.
 
 — C.
+
+---
+
+**Next →** [The Elm Study Rip](the_elm_study_rip.md)
