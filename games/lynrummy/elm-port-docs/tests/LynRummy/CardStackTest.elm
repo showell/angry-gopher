@@ -167,7 +167,7 @@ strAndEqualsTests =
                         { s1 | loc = { top = 10, left = 20 } }
                 in
                 Expect.equal False (stacksEqual s1 s2)
-        , test "deck-blind: same value+suit from different decks -> equal (mirrors TS)" <|
+        , test "deck-aware: same value+suit from different decks -> NOT equal (mirrors TS; inventory accounting must distinguish decks)" <|
             \_ ->
                 let
                     d1 =
@@ -180,7 +180,7 @@ strAndEqualsTests =
                         , loc = origin
                         }
                 in
-                Expect.equal True (stacksEqual d1 d2)
+                Expect.equal False (stacksEqual d1 d2)
         ]
 
 
