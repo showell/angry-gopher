@@ -56,6 +56,7 @@ func RegisterPages(mux *http.ServeMux) {
 	mux.HandleFunc("/gopher/sse/messages", HandleSSEMessages)
 	mux.HandleFunc("/gopher/sse/events", HandleSSEEvents)
 	mux.HandleFunc("/gopher/sse/claude-activity", HandleSSEClaudeActivity)
+	mux.HandleFunc("/gopher/article-comments", HandleArticleComments)
 	mux.HandleFunc("/gopher/claude-issues", HandleClaudeIssues)
 	mux.HandleFunc("/gopher/claude-issues/", HandleClaudeIssues)
 	mux.HandleFunc("/gopher/claude", HandleClaudeLanding)
@@ -68,5 +69,7 @@ func RegisterPages(mux *http.ServeMux) {
 	mux.HandleFunc("/gopher/wiki", HandleWikiLegacy)
 	mux.HandleFunc("/gopher/critters/", HandleCritters)
 	mux.HandleFunc("/gopher/critters", HandleCritters)
+	mux.HandleFunc("/gopher/lynrummy-elm/", HandleLynRummyElm)
+	mux.HandleFunc("/gopher/lynrummy-elm", HandleLynRummyElm)
 	mux.HandleFunc("/gopher/", HandleIndex)
 }

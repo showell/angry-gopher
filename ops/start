@@ -11,6 +11,13 @@ sleep 0.5
 cd "$GOPHER_DIR"
 COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 go build -ldflags "-X main.gitCommit=$COMMIT" -o gopher-server .
+
+# Compile the standalone Elm LynRummy client so Gopher can serve elm.js
+# from games/lynrummy/elm-port-docs/. Non-fatal if it fails — the
+# handler returns a helpful 404 pointing at the rebuild command.
+(cd games/lynrummy/elm-port-docs && npx --yes elm make src/Main.elm --output=elm.js >/dev/null 2>&1) \
+    || echo "Warning: Elm LynRummy build failed; /gopher/lynrummy-elm/ will 404 on elm.js"
+
 GOPHER_CONFIG=~/AngryGopher/prod.json nohup ./gopher-server > /tmp/angry-gopher.log 2>&1 &
 
 cd "$CAT_DIR"

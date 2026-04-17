@@ -287,6 +287,7 @@ h1 { color: #000080; font-size: 34px; margin-bottom: 4px; }
     <p>Game hosting with a server-side referee. Play inside Angry Cat or on the CRUD pages.</p>
     <ul>
       <li><a href="/gopher/game-lobby">LynRummy</a> <span class="muted">— lobby + replay</span></li>
+      <li><a href="/gopher/lynrummy-elm/">LynRummy (Elm, standalone)</a> <span class="muted">— drag + wings, no server yet</span></li>
       <li><a href="/gopher/critters/">Critter studies</a> <span class="muted">— drag-and-drop behavioral studies</span></li>
     </ul>
   </div>
