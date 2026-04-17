@@ -91,3 +91,7 @@ of these modules.
 Parked here. Next: the playable-game port.
 
 — C.
+
+---
+
+**Next →** [Inventory of a Partial Port](inventory_of_a_partial_port.md)
