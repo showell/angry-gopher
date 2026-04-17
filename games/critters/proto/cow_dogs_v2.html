@@ -64,8 +64,8 @@
 <h1>Cow study V2 &mdash; drag the dog</h1>
 <p class="subtitle">
   Drag the 🐕. Cows flee when the dog gets within their influence radius (120px).
-  Speed of flight falls off with distance. Fences clamp — cows can't escape the board.
-  Three cows, no pasture yet. First iteration of the indirect-manipulation mechanic.
+  Get close enough to bump and the cow picks up momentum — it keeps sliding even
+  after the dog backs off, slowing down with friction. Three cows, no pasture yet.
 </p>
 
 <div id="stage"></div>
@@ -77,11 +77,25 @@ const STAGE_H        = 500;
 const COW_EMOJI      = "\u{1F404}";  // 🐄
 const DOG_EMOJI      = "\u{1F415}";  // 🐕
 const COW_COUNT      = 3;
-const INFLUENCE_R    = 120;   // px; cow "sees" the dog within this
-const COW_MAX_SPEED  = 2.0;   // px per frame at d=0 (linearly down to 0 at d=R)
 const CRITTER_SIZE   = 48;
 const HALF           = CRITTER_SIZE / 2;
 const MARGIN_FROM_EDGE = HALF + 6;
+
+// --- Physics constants (iteration 2: pressure + bump + momentum) ---
+// Pressure (dog inside cow's influence radius): an acceleration
+// whose magnitude falls off linearly with distance.
+const INFLUENCE_R     = 120;   // px; cow "sees" the dog within this
+const PRESSURE_ACCEL  = 0.08;  // per-frame accel at d=0
+
+// Bump (dog close enough to physically collide): an extra impulse
+// layered on top of pressure. Tapers to 0 at BUMP_DIST.
+const BUMP_DIST       = 44;    // px; touching distance (< critter_size)
+const BUMP_ACCEL      = 0.18;  // extra per-frame accel at d=0
+
+// Friction: velocity multiplier per frame. 0.96 = 4% loss/frame.
+// Post-bump motion decays to near-zero over ~1.5-2 seconds.
+const FRICTION        = 0.96;
+
 const MIN_COW_DOG_GAP  = INFLUENCE_R * 1.3;
 
 const stage = document.getElementById("stage");
@@ -118,7 +132,7 @@ function initCows() {
       if (dist(pos, c) < CRITTER_SIZE * 1.5) { tooCloseToCow = true; break; }
     }
     if (tooCloseToCow) continue;
-    cows.push(pos);
+    cows.push({ x: pos.x, y: pos.y, vx: 0, vy: 0 });
   }
 }
 
@@ -164,18 +178,33 @@ window.addEventListener("mouseup", () => {
 });
 
 function step() {
-  // Cows flee when dog is within influence radius.
+  // Velocity-based physics. Pressure and bump accelerate the cow;
+  // friction decays velocity every frame; position integrates.
   cows.forEach(cow => {
     const d = dist(cow, dog);
     if (d > 0 && d < INFLUENCE_R) {
       const ux = (cow.x - dog.x) / d;
       const uy = (cow.y - dog.y) / d;
-      const speed = COW_MAX_SPEED * (1 - d / INFLUENCE_R);
-      cow.x += ux * speed;
-      cow.y += uy * speed;
-      cow.x = clamp(cow.x, HALF, STAGE_W - HALF);
-      cow.y = clamp(cow.y, HALF, STAGE_H - HALF);
+      const pressureMag = PRESSURE_ACCEL * (1 - d / INFLUENCE_R);
+      cow.vx += ux * pressureMag;
+      cow.vy += uy * pressureMag;
+      if (d < BUMP_DIST) {
+        const bumpMag = BUMP_ACCEL * (1 - d / BUMP_DIST);
+        cow.vx += ux * bumpMag;
+        cow.vy += uy * bumpMag;
+      }
     }
+    // Integrate position from velocity, then decay velocity.
+    cow.x += cow.vx;
+    cow.y += cow.vy;
+    cow.vx *= FRICTION;
+    cow.vy *= FRICTION;
+    // Wall clamp — zero out the perpendicular velocity component
+    // so a cow pinned against a fence doesn't keep trying to push.
+    if (cow.x < HALF) { cow.x = HALF; cow.vx = 0; }
+    if (cow.x > STAGE_W - HALF) { cow.x = STAGE_W - HALF; cow.vx = 0; }
+    if (cow.y < HALF) { cow.y = HALF; cow.vy = 0; }
+    if (cow.y > STAGE_H - HALF) { cow.y = STAGE_H - HALF; cow.vy = 0; }
   });
 
   // Render positions.
@@ -193,8 +222,8 @@ function step() {
   }
 
   // Debug line — helpful while iterating on feel.
-  const distances = cows.map(c => Math.round(dist(c, dog))).join(", ");
-  debug.textContent = `dog at (${Math.round(dog.x)}, ${Math.round(dog.y)}) — dog-to-cow distances: [${distances}]`;
+  const speeds = cows.map(c => Math.sqrt(c.vx * c.vx + c.vy * c.vy).toFixed(2)).join(", ");
+  debug.textContent = `cow speeds: [${speeds}] px/frame`;
 
   requestAnimationFrame(step);
 }
