@@ -1,30 +1,62 @@
 <!DOCTYPE html>
 <!--
-  cow_dogs_v2.html — indirect-manipulation prototype for the
-  cow herding study. The human drags the dog; cows flee when
-  the dog is within their influence radius; fences clamp cows
-  at the canvas boundary.
+  cow_dogs_v2.html — canonical single-pane for the V2 cow
+  herding study. Indirect-manipulation prototype: human drags
+  the dog, dog pressures and bumps cows, cows have momentum.
 
-  Design parallel: the cows are the "register", the dog is the
-  "opcode" (vocabulary for mutating cow state). See
-  ~/showell_repos/angry-gopher/showell/claude_writings/phase_not_motion.md
-  and the Writing the Sidecars essay for the indirection frame.
+  Current design state (iteration 3, 2026-04-17 pm):
+    - Pressure + bump + momentum physics, slowed 20% from v2-baseline.
+    - Bump event visuals: physical recoil (Variant C from the
+      bump voting harness) — cow wobble + dog head-shake + 💢
+      at contact + OUCH! shake-in above the board.
+    - Workflow tweaks: 2 cows (was 3), dog pinned to left
+      perimeter at reset, cows spawn at least 2 cow-lengths
+      from every fence, cow-to-dog spawn distance 140-280px.
 
-  First iteration: one dog, three cows, no pasture yet, no
-  commands (drag is the whole vocabulary).
+  Voting/exploration history lives in cow_dogs_bump_vote.html.
+  Narrative: ~/showell_repos/angry-gopher/showell/claude_writings/
+             the_dog_as_opcode.md
 -->
 <html>
 <head>
 <meta charset="utf-8">
-<title>Cow study V2 — drag the dog, watch the cows</title>
+<title>Cow study V2 — drag the dog</title>
 <style>
-  body { font-family: system-ui, sans-serif; padding: 1.5em; max-width: 960px; color: #222; }
+  body { font-family: system-ui, sans-serif; padding: 1.5em; max-width: 780px; color: #222; }
   h1 { font-size: 1.3em; margin-bottom: 0.2em; }
   .subtitle { color: #666; margin: 0 0 1em 0; font-size: 0.9em; line-height: 1.5; }
+  code { background: #f4f4f4; padding: 0.1em 0.3em; border-radius: 3px; }
+
+  .status-bar {
+    height: 1.6em;
+    font-family: ui-monospace, monospace;
+    margin-bottom: 0.3em;
+    position: relative;
+  }
+  .ouch {
+    font-weight: bold;
+    color: #c2410c;
+    font-size: 1em;
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    opacity: 0;
+    pointer-events: none;
+    animation: ouch-shake 600ms ease-out forwards;
+  }
+  @keyframes ouch-shake {
+    0%   { opacity: 0; transform: translateX(-50%); }
+    15%  { opacity: 1; transform: translateX(calc(-50% - 5px)); }
+    30%  { transform: translateX(calc(-50% + 5px)); }
+    45%  { transform: translateX(calc(-50% - 3px)); }
+    60%  { transform: translateX(calc(-50% + 3px)); }
+    75%  { transform: translateX(-50%); }
+    100% { opacity: 0; transform: translateX(-50%); }
+  }
 
   #stage {
-    width: 900px;
-    height: 500px;
+    width: 700px;
+    height: 320px;
     border: 3px solid #8b6b3a;
     background: #f5efdd;
     position: relative;
@@ -35,14 +67,15 @@
 
   .critter {
     position: absolute;
-    font-size: 48px;
+    font-size: 42px;
     line-height: 1;
-    width: 48px; height: 48px;
+    width: 42px; height: 42px;
     display: flex;
     align-items: center;
     justify-content: center;
     user-select: none;
     pointer-events: none;
+    transform-origin: center;
   }
   .dog {
     cursor: grab;
@@ -51,9 +84,44 @@
   }
   .dog.dragging { cursor: grabbing; }
 
-  .debug {
+  .cow.bump { animation: cow-wobble 300ms ease-out; }
+  @keyframes cow-wobble {
+    0%   { transform: rotate(0); }
+    25%  { transform: rotate(-15deg); }
+    50%  { transform: rotate(12deg); }
+    75%  { transform: rotate(-6deg); }
+    100% { transform: rotate(0); }
+  }
+  .dog.shake { animation: dog-shake 250ms ease-out; }
+  @keyframes dog-shake {
+    0%   { transform: rotate(0); }
+    25%  { transform: rotate(10deg); }
+    50%  { transform: rotate(-10deg); }
+    75%  { transform: rotate(6deg); }
+    100% { transform: rotate(0); }
+  }
+  .impact {
+    position: absolute;
+    font-size: 26px;
+    line-height: 1;
+    pointer-events: none;
+    animation: impact-fade 380ms ease-out forwards;
+  }
+  @keyframes impact-fade {
+    0%   { opacity: 0; transform: scale(0.4); }
+    30%  { opacity: 1; transform: scale(1.1); }
+    100% { opacity: 0; transform: scale(0.9); }
+  }
+
+  button.reset {
+    padding: 0.3em 0.9em;
+    font-size: 0.85em;
     margin-top: 0.5em;
-    font-size: 0.8em;
+    cursor: pointer;
+  }
+  .debug {
+    margin-top: 0.4em;
+    font-size: 0.75em;
     color: #888;
     font-family: ui-monospace, monospace;
   }
@@ -63,76 +131,66 @@
 
 <h1>Cow study V2 &mdash; drag the dog</h1>
 <p class="subtitle">
-  Drag the 🐕. Cows flee when the dog gets within their influence radius (120px).
-  Get close enough to bump and the cow picks up momentum — it keeps sliding even
-  after the dog backs off, slowing down with friction. Three cows, no pasture yet.
+  Drag the 🐕. Cows flee when the dog is within their influence radius (120px).
+  Touch a cow and it picks up momentum — "OUCH!", wobble, dog head-shake, impact symbol.
+  Fences clamp. Two cows to chase.
 </p>
 
+<div class="status-bar" id="status"></div>
 <div id="stage"></div>
+<button class="reset" onclick="resetSim()">Reset</button>
 <div class="debug" id="debug"></div>
 
 <script>
-const STAGE_W        = 900;
-const STAGE_H        = 500;
-const COW_EMOJI      = "\u{1F404}";  // 🐄
-const DOG_EMOJI      = "\u{1F415}";  // 🐕
-const COW_COUNT      = 3;
-const CRITTER_SIZE   = 48;
-const HALF           = CRITTER_SIZE / 2;
-const MARGIN_FROM_EDGE = HALF + 6;
+const STAGE_W       = 700;
+const STAGE_H       = 320;
+const COW_EMOJI     = "\u{1F404}";
+const DOG_EMOJI     = "\u{1F415}";
+const COW_COUNT     = 2;
+const CRITTER_SIZE  = 42;
+const HALF          = CRITTER_SIZE / 2;
+const COW_EDGE_MARGIN = HALF + 2 * CRITTER_SIZE;
 
-// --- Physics constants (iteration 2: pressure + bump + momentum) ---
-// Pressure (dog inside cow's influence radius): an acceleration
-// whose magnitude falls off linearly with distance.
-const INFLUENCE_R     = 120;   // px; cow "sees" the dog within this
-const PRESSURE_ACCEL  = 0.08;  // per-frame accel at d=0
+const INFLUENCE_R    = 120;
+const PRESSURE_ACCEL = 0.064;
+const BUMP_DIST      = 44;
+const BUMP_ACCEL     = 0.144;
+const FRICTION       = 0.96;
 
-// Bump (dog close enough to physically collide): an extra impulse
-// layered on top of pressure. Tapers to 0 at BUMP_DIST.
-const BUMP_DIST       = 44;    // px; touching distance (< critter_size)
-const BUMP_ACCEL      = 0.18;  // extra per-frame accel at d=0
+const MIN_COW_DOG_GAP = 140;
+const MAX_COW_DOG_GAP = 280;
+const DOG_START_X     = HALF;
+const DOG_START_Y     = STAGE_H / 2;
 
-// Friction: velocity multiplier per frame. 0.96 = 4% loss/frame.
-// Post-bump motion decays to near-zero over ~1.5-2 seconds.
-const FRICTION        = 0.96;
+const stage  = document.getElementById("stage");
+const status = document.getElementById("status");
+const debug  = document.getElementById("debug");
 
-const MIN_COW_DOG_GAP  = INFLUENCE_R * 1.3;
-
-const stage = document.getElementById("stage");
-const debug = document.getElementById("debug");
-
-// State
-let dog = { x: STAGE_W / 2, y: STAGE_H / 2 };
-let cows = [];
-let dragging = false;
-let dragOffset = { x: 0, y: 0 };
+let dog, cows, dragging, dragOffset, dogEl;
 
 function dist(a, b) {
-  const dx = a.x - b.x;
-  const dy = a.y - b.y;
+  const dx = a.x - b.x, dy = a.y - b.y;
   return Math.sqrt(dx * dx + dy * dy);
 }
-
-function clamp(v, lo, hi) {
-  return Math.max(lo, Math.min(hi, v));
-}
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
 function initCows() {
   cows = [];
   let safety = 0;
-  while (cows.length < COW_COUNT && safety < 200) {
+  while (cows.length < COW_COUNT && safety < 500) {
     safety++;
     const pos = {
-      x: MARGIN_FROM_EDGE + Math.random() * (STAGE_W - MARGIN_FROM_EDGE * 2),
-      y: MARGIN_FROM_EDGE + Math.random() * (STAGE_H - MARGIN_FROM_EDGE * 2),
+      x: COW_EDGE_MARGIN + Math.random() * (STAGE_W - COW_EDGE_MARGIN * 2),
+      y: COW_EDGE_MARGIN + Math.random() * (STAGE_H - COW_EDGE_MARGIN * 2),
     };
-    if (dist(pos, dog) < MIN_COW_DOG_GAP) continue;
-    let tooCloseToCow = false;
+    const d = dist(pos, dog);
+    if (d < MIN_COW_DOG_GAP || d > MAX_COW_DOG_GAP) continue;
+    let tooClose = false;
     for (const c of cows) {
-      if (dist(pos, c) < CRITTER_SIZE * 1.5) { tooCloseToCow = true; break; }
+      if (dist(pos, c) < CRITTER_SIZE * 1.8) { tooClose = true; break; }
     }
-    if (tooCloseToCow) continue;
-    cows.push({ x: pos.x, y: pos.y, vx: 0, vy: 0 });
+    if (tooClose) continue;
+    cows.push({ x: pos.x, y: pos.y, vx: 0, vy: 0, wasBumped: false });
   }
 }
 
@@ -145,7 +203,7 @@ function build() {
     el.textContent = COW_EMOJI;
     stage.appendChild(el);
   });
-  const dogEl = document.createElement("div");
+  dogEl = document.createElement("div");
   dogEl.className = "critter dog";
   dogEl.id = "dog";
   dogEl.textContent = DOG_EMOJI;
@@ -164,50 +222,79 @@ function build() {
 window.addEventListener("mousemove", (e) => {
   if (!dragging) return;
   const rect = stage.getBoundingClientRect();
-  const rx = e.clientX - rect.left - dragOffset.x;
-  const ry = e.clientY - rect.top  - dragOffset.y;
-  dog.x = clamp(rx, HALF, STAGE_W - HALF);
-  dog.y = clamp(ry, HALF, STAGE_H - HALF);
+  dog.x = clamp(e.clientX - rect.left - dragOffset.x, HALF, STAGE_W - HALF);
+  dog.y = clamp(e.clientY - rect.top  - dragOffset.y, HALF, STAGE_H - HALF);
 });
-
 window.addEventListener("mouseup", () => {
   if (!dragging) return;
   dragging = false;
-  const dogEl = document.getElementById("dog");
   if (dogEl) dogEl.classList.remove("dragging");
 });
 
+function showOuch() {
+  status.innerHTML = "";
+  const el = document.createElement("span");
+  el.className = "ouch";
+  el.textContent = "OUCH!";
+  status.appendChild(el);
+  setTimeout(() => { if (el.parentNode === status) el.remove(); }, 650);
+}
+
+function onBump(cow, cowEl) {
+  showOuch();
+  if (cowEl) {
+    cowEl.classList.remove("bump");
+    void cowEl.offsetWidth;
+    cowEl.classList.add("bump");
+    setTimeout(() => cowEl.classList.remove("bump"), 310);
+  }
+  if (dogEl) {
+    dogEl.classList.remove("shake");
+    void dogEl.offsetWidth;
+    dogEl.classList.add("shake");
+    setTimeout(() => dogEl.classList.remove("shake"), 260);
+  }
+  const impact = document.createElement("div");
+  impact.className = "impact";
+  impact.textContent = "\u{1F4A2}"; // 💢
+  impact.style.left = ((cow.x + dog.x) / 2 - 13) + "px";
+  impact.style.top  = ((cow.y + dog.y) / 2 - 13) + "px";
+  stage.appendChild(impact);
+  setTimeout(() => impact.remove(), 390);
+}
+
 function step() {
-  // Velocity-based physics. Pressure and bump accelerate the cow;
-  // friction decays velocity every frame; position integrates.
-  cows.forEach(cow => {
+  cows.forEach((cow, i) => {
     const d = dist(cow, dog);
+    const isBumping = d < BUMP_DIST && d > 0;
     if (d > 0 && d < INFLUENCE_R) {
       const ux = (cow.x - dog.x) / d;
       const uy = (cow.y - dog.y) / d;
-      const pressureMag = PRESSURE_ACCEL * (1 - d / INFLUENCE_R);
-      cow.vx += ux * pressureMag;
-      cow.vy += uy * pressureMag;
-      if (d < BUMP_DIST) {
-        const bumpMag = BUMP_ACCEL * (1 - d / BUMP_DIST);
-        cow.vx += ux * bumpMag;
-        cow.vy += uy * bumpMag;
+      const pMag = PRESSURE_ACCEL * (1 - d / INFLUENCE_R);
+      cow.vx += ux * pMag;
+      cow.vy += uy * pMag;
+      if (isBumping) {
+        const bMag = BUMP_ACCEL * (1 - d / BUMP_DIST);
+        cow.vx += ux * bMag;
+        cow.vy += uy * bMag;
       }
     }
-    // Integrate position from velocity, then decay velocity.
+    if (isBumping && !cow.wasBumped) {
+      onBump(cow, document.getElementById("cow-" + i));
+    }
+    cow.wasBumped = isBumping;
+
     cow.x += cow.vx;
     cow.y += cow.vy;
     cow.vx *= FRICTION;
     cow.vy *= FRICTION;
-    // Wall clamp — zero out the perpendicular velocity component
-    // so a cow pinned against a fence doesn't keep trying to push.
+
     if (cow.x < HALF) { cow.x = HALF; cow.vx = 0; }
     if (cow.x > STAGE_W - HALF) { cow.x = STAGE_W - HALF; cow.vx = 0; }
     if (cow.y < HALF) { cow.y = HALF; cow.vy = 0; }
     if (cow.y > STAGE_H - HALF) { cow.y = STAGE_H - HALF; cow.vy = 0; }
   });
 
-  // Render positions.
   cows.forEach((c, i) => {
     const el = document.getElementById("cow-" + i);
     if (el) {
@@ -215,21 +302,26 @@ function step() {
       el.style.top  = (c.y - HALF) + "px";
     }
   });
-  const dogEl = document.getElementById("dog");
   if (dogEl) {
     dogEl.style.left = (dog.x - HALF) + "px";
     dogEl.style.top  = (dog.y - HALF) + "px";
   }
 
-  // Debug line — helpful while iterating on feel.
   const speeds = cows.map(c => Math.sqrt(c.vx * c.vx + c.vy * c.vy).toFixed(2)).join(", ");
-  debug.textContent = `cow speeds: [${speeds}] px/frame`;
+  debug.textContent = `cow speeds: [${speeds}]`;
 
   requestAnimationFrame(step);
 }
 
-initCows();
-build();
+function resetSim() {
+  dog = { x: DOG_START_X, y: DOG_START_Y };
+  dragging = false;
+  dragOffset = { x: 0, y: 0 };
+  initCows();
+  build();
+}
+
+resetSim();
 step();
 </script>
 
