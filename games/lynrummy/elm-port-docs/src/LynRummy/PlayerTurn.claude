@@ -1,0 +1,45 @@
+# PlayerTurn.elm — WORKHORSE
+
+Turn-level scoring and outcome-type tracking for LynRummy.
+Holds per-turn state (starting board score, cards played,
+empty-hand bonus, victory bonus) and computes the final turn
+score and result category. Faithful port of
+`angry-cat/src/lyn_rummy/game/player_turn.ts`.
+
+## Status
+
+- **Label:** WORKHORSE. Stable scoring rules.
+- **Source:** `angry-cat/src/lyn_rummy/game/player_turn.ts` (87 LOC).
+- **Tests:** ported from `player_turn_test.ts`.
+
+## Key invariants (preserved from TS)
+
+- Turn score = board_delta + cards_played_bonus + victory_bonus + empty_hand_bonus.
+- `emptyHandBonus = 1000` if the player empties their hand.
+- `victoryBonus = 500` additional on top of empty-hand if the
+  player is the victor.
+- `revokeEmptyHandBonuses` zeroes both bonuses (called if the
+  referee disallows the empty-hand state).
+- `CompleteTurnResult` discriminates five outcomes:
+  `Success`, `SuccessButNeedsCards`, `SuccessWithHandEmptied`,
+  `SuccessAsVictor`, `Failure`.
+  TS's `turn_result()` never returns FAILURE — that variant is
+  reserved for callers that want to signal a refused turn.
+
+## Elm divergences from TS
+
+- TS class → Elm record + module functions.
+- Constructor `new PlayerTurn(score)` → `PlayerTurn.new score`
+  producing an initial record.
+- Mutating methods (`update_score_after_move`) → pure
+  functions returning new records (`updateScoreAfterMove : PlayerTurn -> PlayerTurn`).
+- Argument convention: the record comes last where there are
+  multiple args (`getScore currentBoardScore turn`) so
+  callers can pipe naturally (`turn |> getScore 100`).
+- CompleteTurnResult enum → Elm sum type with constructors.
+
+## Pointers
+
+- Depends on: `LynRummy.Score.forCardsPlayed`.
+- Consumer: game.ts (when ported) will hold a PlayerTurn
+  record per active turn and thread it through updates.
