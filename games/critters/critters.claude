@@ -15,9 +15,3 @@ DSL is the Elm engine's responsibility.
 
 2MB body cap on telemetry to avoid accidental DoS. Study name is
 derived from the filename (stable id) not the DSL contents.
-
-V2 prototyping (2026-04-17): standalone browser prototypes for
-new mechanics live under `proto/` — see `proto/README.md`. The
-current iteration adds indirect manipulation (human drags a dog,
-dog pressures cows). When a prototype graduates, it moves into
-the Elm engine or gets its own study DSL under `studies/`.
