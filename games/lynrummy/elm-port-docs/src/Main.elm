@@ -155,22 +155,14 @@ update msg model =
 commitMerge : WingId -> Int -> Model -> Model
 commitMerge wing sourceIndex model =
     case ( listAt sourceIndex model.board, listAt wing.stackIndex model.board ) of
-        ( Just source, Just _ ) ->
-            let
-                target =
-                    listAt wing.stackIndex model.board
-            in
-            case target of
-                Just t ->
-                    case BoardActions.tryStackMerge source t wing.side of
-                        Just change ->
-                            { model
-                                | board = applyChange change model.board
-                                , drag = NotDragging
-                            }
-
-                        Nothing ->
-                            { model | drag = NotDragging }
+        ( Just source, Just target ) ->
+            -- Target-first: merged stack anchors on target's loc.
+            case BoardActions.tryStackMerge target source wing.side of
+                Just change ->
+                    { model
+                        | board = applyChange change model.board
+                        , drag = NotDragging
+                    }
 
                 Nothing ->
                     { model | drag = NotDragging }

@@ -1,17 +1,24 @@
 module LynRummy.WingOracle exposing (WingId, wingsFor)
 
-{-| Translate `BoardActions.findAllStackMerges` results into the
-set of wings that should render during a drag. One wing = one
-legal merge: a specific target stack index, plus which side
-(Left/Right) of that target the dragged stack attaches to.
+{-| For a dragged source stack, enumerate which board stacks
+can legally accept it — and on which side.
+
+`side = Left` means: the source attaches to the LEFT of the
+target (cards visually end up as `source ++ target`).
+`side = Right` means: the source attaches to the RIGHT of
+the target (cards end up as `target ++ source`).
+
+Call convention is TARGET-first: `tryStackMerge target source
+side`. This makes the target the "anchor" — the merged stack's
+position is derived from the target, not the source — which
+matches the drop-onto-target UX.
+
 -}
 
-import LynRummy.BoardActions as BoardActions exposing (Side)
-import LynRummy.CardStack as CardStack exposing (CardStack, stacksEqual)
+import LynRummy.BoardActions as BoardActions exposing (Side(..))
+import LynRummy.CardStack as CardStack exposing (CardStack)
 
 
-{-| A specific wing on the board: whose stack, which side.
--}
 type alias WingId =
     { stackIndex : Int
     , side : Side
@@ -28,39 +35,37 @@ wingsFor sourceIndex board =
             []
 
         Just source ->
-            BoardActions.findAllStackMerges source board
-                |> List.filterMap (resultToWing sourceIndex source board)
+            board
+                |> List.indexedMap Tuple.pair
+                |> List.concatMap (wingsForTarget sourceIndex source)
 
 
-resultToWing :
-    Int
-    -> CardStack
-    -> List CardStack
-    -> BoardActions.StackMergeResult
-    -> Maybe WingId
-resultToWing sourceIndex source board result =
-    let
-        targets =
-            List.filter (\s -> not (stacksEqual s source)) result.change.stacksToRemove
-    in
-    case List.head targets of
-        Just target ->
-            indexOfStack target sourceIndex board
-                |> Maybe.map (\idx -> { stackIndex = idx, side = result.side })
+wingsForTarget : Int -> CardStack -> ( Int, CardStack ) -> List WingId
+wingsForTarget sourceIndex source ( targetIndex, target ) =
+    if targetIndex == sourceIndex then
+        []
 
-        Nothing ->
-            Nothing
+    else
+        let
+            leftWing =
+                case BoardActions.tryStackMerge target source Left of
+                    Just _ ->
+                        [ { stackIndex = targetIndex, side = Left } ]
+
+                    Nothing ->
+                        []
+
+            rightWing =
+                case BoardActions.tryStackMerge target source Right of
+                    Just _ ->
+                        [ { stackIndex = targetIndex, side = Right } ]
+
+                    Nothing ->
+                        []
+        in
+        leftWing ++ rightWing
 
 
 listAt : Int -> List a -> Maybe a
 listAt i xs =
     List.head (List.drop i xs)
-
-
-indexOfStack : CardStack -> Int -> List CardStack -> Maybe Int
-indexOfStack target excludeIndex board =
-    board
-        |> List.indexedMap Tuple.pair
-        |> List.filter (\( i, s ) -> i /= excludeIndex && stacksEqual s target)
-        |> List.head
-        |> Maybe.map Tuple.first
