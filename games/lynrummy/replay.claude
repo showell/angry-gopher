@@ -1,0 +1,59 @@
+just_use replay.go
+
+# label: WORKHORSE (replay-engine)
+# role: domain — server-authoritative state reconstruction from WireActions
+
+Mirror of `elm-port-docs/src/LynRummy/Replay.elm`. Takes a
+`WireAction` and applies it to a `(Board, Hand)` state to produce
+the next state. Stateless, pure, deterministic.
+
+## Exposed surface
+
+- `type State struct { Board []CardStack; Hand Hand }`
+- `InitialState() State` — 6-stack opening board + 15-card
+  canned opening hand (matches Elm's Dealer.initialBoard +
+  Dealer.openingHand exactly).
+- `ApplyAction(action WireAction, state State) State` — applies
+  one action; silent no-op on bad references or invalid merges.
+- `ReplayActions(actions []WireAction) State` — folds ApplyAction
+  over a list from InitialState.
+
+## Behavior contract
+
+Matches the Elm Replay module byte-for-byte in transition
+semantics:
+
+- Split, MergeStack, MergeHand, PlaceHand, MoveStack produce
+  the expected (Board, Hand) mutations.
+- Draw / Discard / CompleteTurn / Undo are no-ops for now
+  (turn-logic not modeled). They'll get transitions when turn
+  flow lands.
+- Out-of-bounds indices and not-in-hand card references are
+  silent no-ops — the same contract as the Elm side.
+
+## Positional indices — important
+
+Wire actions carry positional `stack_index` relative to the
+board list at emit time. Every mutation (split / merge / place /
+move) shifts indices. Callers (human or scripted) that cache
+an index across mutations will hit stale references. The Python
+client has `find_stack_containing()` for content-based lookup;
+the Elm client's local state always reflects current indices
+because its event loop mutates atomically.
+
+This isn't a bug — it's the contract. The wire is a log of
+*what happened*, not *named entities over time*. Content-by-
+content is how introspecting consumers resolve references.
+
+## Tests
+
+`replay_test.go` mirrors `tests/LynRummy/ReplayTest.elm`:
+transition-per-action-type, turn-action no-ops, bad-reference
+no-ops, sequenced actions, initial-state shape, ReplayActions
+fold equivalence.
+
+## Consumer endpoint
+
+`GET /gopher/lynrummy-elm/sessions/<id>/state` — the server
+response is literally `ReplayActions(actions_for_session)`.
+Python player uses this.

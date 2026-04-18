@@ -1,0 +1,31 @@
+just_use hand.go
+
+# label: WORKHORSE
+# role: domain — Hand type + operations (Go side)
+
+Mirror of `elm-port-docs/src/LynRummy/Hand.elm`. Holds a list
+of HandCards; supports add, remove, query, and content-based
+lookup.
+
+## Exposed surface
+
+- `type Hand struct { HandCards []HandCard }`
+- `EmptyHand() Hand`
+- `Hand.IsEmpty() bool`, `Hand.Size() int`
+- `Hand.AddCards(cards []Card, state HandCardState) Hand`
+- `Hand.RemoveHandCard(target HandCard) Hand` — first-match
+  removal by Card identity; silent no-op if not present.
+- `Hand.FindByCard(c Card) *HandCard` — content-identity
+  lookup; nil if absent.
+
+## Elm divergences
+
+- Elm's `removeHandCard` throws; Go's silently no-ops (same
+  total-function contract as the Elm port adopted).
+- Elm has `resetState`; Go doesn't (no consumer yet — turn
+  logic isn't modeled on Go side yet either).
+
+## Pointers
+
+- Used by `replay.go` — `State.Hand` is a Hand value.
+- Used by `dealer.go` — `OpeningHand()` returns a Hand.

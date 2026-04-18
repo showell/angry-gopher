@@ -117,6 +117,39 @@ func pullCard(deck []Card, target Card) []Card {
 	return deck // not found — shouldn't happen
 }
 
+// InitialBoard builds the canonical opening board directly (no
+// deck threading). Mirrors elm-port-docs/src/LynRummy/Dealer.elm's
+// initialBoard. Used during session replay where we want the
+// starting board state without a shuffled deck.
+func InitialBoard() []CardStack {
+	var stacks []CardStack
+	for _, def := range initialBoardDefs {
+		var boardCards []BoardCard
+		for _, label := range def.labels {
+			boardCards = append(boardCards, BoardCard{Card: parseLabel(label), State: FirmlyOnBoard})
+		}
+		stacks = append(stacks, NewCardStack(boardCards, boardLocation(def.row)))
+	}
+	return stacks
+}
+
+// openingHandLabels is the canned 15-card hand used by the Elm
+// client. Mirrors elm-port-docs/src/LynRummy/Dealer.elm's
+// openingHandLabels exactly — same cards, same order.
+var openingHandLabels = []string{
+	"7H", "8C", "4S", "9D", "QS", "KH", "JH", "6H", "TS", "5D", "8H", "3C", "2D", "9C", "6C",
+}
+
+// OpeningHand builds the canned 15-card opening hand. Mirrors the
+// Elm Dealer.openingHand.
+func OpeningHand() Hand {
+	var cards []Card
+	for _, label := range openingHandLabels {
+		cards = append(cards, parseLabel(label))
+	}
+	return EmptyHand().AddCards(cards, HandNormal)
+}
+
 // buildInitialBoard pulls the hard-coded stacks from the deck.
 // Mutates the deck slice via pullCard.
 func buildInitialBoard(deck *[]Card) []CardStack {

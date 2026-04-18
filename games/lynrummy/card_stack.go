@@ -251,3 +251,36 @@ func (s CardStack) LeftMerge(other CardStack) *CardStack {
 func (s CardStack) RightMerge(other CardStack) *CardStack {
 	return maybeMerge(s, other, s.Loc)
 }
+
+// Split divides `s` at `cardIndex` into two stacks. If `s` has
+// one card, returns a single-element list (caller can detect
+// no-op). Mirrors Elm's CardStack.split.
+func (s CardStack) Split(cardIndex int) []CardStack {
+	if s.Size() <= 1 {
+		return []CardStack{s}
+	}
+	if cardIndex+1 <= s.Size()/2 {
+		return leftSplit(cardIndex+1, s)
+	}
+	return rightSplit(cardIndex, s)
+}
+
+func leftSplit(leftCount int, s CardStack) []CardStack {
+	leftCards := append([]BoardCard{}, s.BoardCards[:leftCount]...)
+	rightCards := append([]BoardCard{}, s.BoardCards[leftCount:]...)
+	pitch := CardWidth + 6
+	return []CardStack{
+		NewCardStack(leftCards, Location{Top: s.Loc.Top - 4, Left: s.Loc.Left - 2}),
+		NewCardStack(rightCards, Location{Top: s.Loc.Top, Left: s.Loc.Left + leftCount*pitch + 8}),
+	}
+}
+
+func rightSplit(leftCount int, s CardStack) []CardStack {
+	leftCards := append([]BoardCard{}, s.BoardCards[:leftCount]...)
+	rightCards := append([]BoardCard{}, s.BoardCards[leftCount:]...)
+	pitch := CardWidth + 6
+	return []CardStack{
+		NewCardStack(leftCards, Location{Top: s.Loc.Top, Left: s.Loc.Left - 8}),
+		NewCardStack(rightCards, Location{Top: s.Loc.Top - 4, Left: s.Loc.Left + leftCount*pitch + 4}),
+	}
+}

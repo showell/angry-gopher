@@ -9,6 +9,7 @@ package views
 
 import (
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"html"
 	"io"
@@ -43,6 +44,9 @@ func HandleLynRummyElm(w http.ResponseWriter, r *http.Request) {
 		lynrummyElmNewSession(w, r)
 	case sub == "sessions":
 		lynrummyElmSessionsList(w)
+	case strings.HasSuffix(sub, "/state") && strings.HasPrefix(sub, "sessions/"):
+		idStr := strings.TrimSuffix(strings.TrimPrefix(sub, "sessions/"), "/state")
+		lynrummyElmSessionState(w, idStr)
 	case strings.HasPrefix(sub, "sessions/"):
 		lynrummyElmSessionDetail(w, strings.TrimPrefix(sub, "sessions/"))
 	default:
@@ -270,6 +274,78 @@ func labelSuffix(label string) string {
 		return ""
 	}
 	return " · " + html.EscapeString(label)
+}
+
+// lynrummyElmSessionState reconstructs the current game state for
+// a session by replaying its action log from the initial state.
+// JSON response: {"session_id":N,"seq":M,"state":{"board":[...],"hand":{...}}}.
+// Python player reads this to know the current board/hand.
+func lynrummyElmSessionState(w http.ResponseWriter, idStr string) {
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil || id <= 0 {
+		http.NotFound(w, nil)
+		return
+	}
+
+	var exists int
+	if err := DB.QueryRow(`SELECT 1 FROM lynrummy_elm_sessions WHERE id = ?`, id).Scan(&exists); err != nil {
+		if err == sql.ErrNoRows {
+			http.NotFound(w, nil)
+			return
+		}
+		http.Error(w, "session lookup: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	rows, err := DB.Query(
+		`SELECT action_json FROM lynrummy_elm_actions WHERE session_id = ? ORDER BY seq`,
+		id,
+	)
+	if err != nil {
+		http.Error(w, "query actions: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	var actions []lynrummy.WireAction
+	var seqCount int64
+	for rows.Next() {
+		var jsonBytes string
+		if err := rows.Scan(&jsonBytes); err != nil {
+			http.Error(w, "scan action: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		action, err := lynrummy.DecodeWireAction([]byte(jsonBytes))
+		if err != nil {
+			// One malformed row shouldn't poison the whole
+			// session; log + skip. (Format-lock tests should
+			// prevent this in practice.)
+			log.Printf("lynrummy-elm state: decode err=%v on session=%d json=%s",
+				err, id, jsonBytes)
+			continue
+		}
+		actions = append(actions, action)
+		seqCount++
+	}
+
+	state := lynrummy.ReplayActions(actions)
+
+	payload := struct {
+		SessionID int64           `json:"session_id"`
+		Seq       int64           `json:"seq"`
+		State     lynrummy.State  `json:"state"`
+	}{
+		SessionID: id,
+		Seq:       seqCount,
+		State:     state,
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		http.Error(w, "marshal: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Write(body)
 }
 
 func lynrummyElmPlay(w http.ResponseWriter) {
