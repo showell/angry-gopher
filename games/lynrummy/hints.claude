@@ -1,0 +1,46 @@
+just_use hints.go
+
+# label: WORKHORSE (hint-enumeration)
+# role: domain — enumerate every legal move from (board, hand) state
+
+Exhaustively lists legal merges: hand-card → board stack, and
+board stack → board stack. Caller picks which subset to display
+or act on.
+
+## Exposed surface
+
+- `type HintKind string` — `"merge_hand" | "merge_stack"`.
+- `type Hint struct { Kind, HandCard?, SourceStack?, TargetStack, Side, ResultScore }`.
+- `LegalHandMerges(hand, board) []Hint`
+- `LegalStackMerges(board) []Hint`
+- `AllLegalMerges(hand, board) []Hint` — concat.
+
+`ResultScore` previews board score if the hint is played.
+Computed via `scoreAfterReplace` — pure, no state change.
+
+## Consumer endpoint
+
+`GET /gopher/lynrummy-elm/sessions/<id>/hints` returns
+`{base_score, hand_merges:[Hint...], stack_merges:[Hint...]}`
+after replaying the session's action log.
+
+## Why this belongs here (not in Python)
+
+Python client is intentionally dumb. Rule knowledge lives on
+the Go+Elm enumerate-and-bridge spine. A Python player asks
+"what's legal?" via this endpoint rather than computing
+locally — that way we don't create a third implementation
+that could drift.
+
+## Deferred
+
+- Splits aren't reported. A split is always structurally
+  legal at any size-≥-2 stack; listing them would drown the
+  hints output in no-op suggestions. If an agent wants to
+  propose splits, it should enumerate `(stack, cardIdx)` on
+  its own.
+- Placements (hand → empty board loc) aren't reported — also
+  always legal, infinitely many locations. Caller proposes.
+- `merge_stack` pairs enumerate every `(source, target)`; in
+  a symmetric set merge both `A→B` and `B→A` appear. Caller
+  filters if they want unique merges.

@@ -50,6 +50,9 @@ func HandleLynRummyElm(w http.ResponseWriter, r *http.Request) {
 	case strings.HasSuffix(sub, "/score") && strings.HasPrefix(sub, "sessions/"):
 		idStr := strings.TrimSuffix(strings.TrimPrefix(sub, "sessions/"), "/score")
 		lynrummyElmSessionScore(w, idStr)
+	case strings.HasSuffix(sub, "/hints") && strings.HasPrefix(sub, "sessions/"):
+		idStr := strings.TrimSuffix(strings.TrimPrefix(sub, "sessions/"), "/hints")
+		lynrummyElmSessionHints(w, idStr)
 	case strings.HasPrefix(sub, "sessions/"):
 		lynrummyElmSessionDetail(w, strings.TrimPrefix(sub, "sessions/"))
 	default:
@@ -380,6 +383,45 @@ func lynrummyElmSessionScore(w http.ResponseWriter, idStr string) {
 		BoardScore: boardScore,
 		HandSize:   state.Hand.Size(),
 		PerStack:   entries,
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		http.Error(w, "marshal: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Write(body)
+}
+
+// lynrummyElmSessionHints returns every legal move the current
+// hand + board supports right now — hand-card merges and stack-
+// to-stack merges. Mirrors the UI's future hint system: agent
+// reads this to know what's playable without walking the rules
+// itself.
+func lynrummyElmSessionHints(w http.ResponseWriter, idStr string) {
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil || id <= 0 {
+		http.NotFound(w, nil)
+		return
+	}
+	state, ok := replaySession(w, id)
+	if !ok {
+		return
+	}
+
+	handMerges := lynrummy.LegalHandMerges(state.Hand, state.Board)
+	stackMerges := lynrummy.LegalStackMerges(state.Board)
+
+	payload := struct {
+		SessionID     int64          `json:"session_id"`
+		BaseScore     int            `json:"base_score"`
+		HandMerges    []lynrummy.Hint `json:"hand_merges"`
+		StackMerges   []lynrummy.Hint `json:"stack_merges"`
+	}{
+		SessionID:   id,
+		BaseScore:   lynrummy.ScoreForStacks(state.Board),
+		HandMerges:  handMerges,
+		StackMerges: stackMerges,
 	}
 	body, err := json.Marshal(payload)
 	if err != nil {

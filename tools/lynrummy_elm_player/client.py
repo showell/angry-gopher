@@ -114,6 +114,15 @@ class Client:
         """GET /sessions/<id>/score → board_score + hand_size + per_stack breakdown."""
         return self._get(f"{self.base}/sessions/{session_id}/score")
 
+    def get_hints(self, session_id):
+        """GET /sessions/<id>/hints → every legal merge available now.
+
+        Returns {"base_score", "hand_merges":[Hint...], "stack_merges":[Hint...]}.
+        Each Hint has kind, target_stack, side, result_score, plus either
+        hand_card (for hand_merges) or source_stack (for stack_merges).
+        """
+        return self._get(f"{self.base}/sessions/{session_id}/hints")
+
     # --- HTTP helpers ---
 
     def _get(self, url):

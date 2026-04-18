@@ -1,0 +1,32 @@
+just_use score.go
+
+# label: WORKHORSE
+# role: domain — LynRummy scoring (Go side)
+
+Mirror of `elm-port-docs/src/LynRummy/Score.elm` (itself a port
+of `angry-cat/src/lyn_rummy/core/score.ts`). Flat per-card
+scoring: each card in a valid 3+ family is worth one
+stackTypeValue.
+
+## Exposed surface
+
+- `StackTypeValue(StackType) int` — points per card.
+  PureRun=100, Set=60, RedBlackRun=50, otherwise 0.
+- `ScoreForStack(CardStack) int` — `size * StackTypeValue(type)`.
+- `ScoreForStacks([]CardStack) int` — sum.
+- `ScoreForCardsPlayed(num) int` — per-turn bonus:
+  200 + 100*num² for num>0, else 0.
+
+## Tests
+
+- Constants per stack type.
+- Initial-board score positive.
+- Split-of-6-run-at-midpoint preserves total (the flat-per-
+  card formula's guarantee: two valid 3-runs = one valid
+  6-run in score terms).
+- Bonus formula at num=0, 1, 2, 3, 10.
+
+## Consumer
+
+`views/lynrummy_elm.go` — the /score endpoint and the live
+score on the session-detail HTML page both use ScoreForStacks.
