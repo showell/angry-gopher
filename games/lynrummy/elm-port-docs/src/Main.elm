@@ -21,6 +21,7 @@ import LynRummy.CardStack as CardStack exposing (BoardLocation, CardStack, HandC
 import LynRummy.Dealer
 import LynRummy.GestureArbitration as GA
 import LynRummy.Hand as Hand exposing (Hand)
+import LynRummy.Score as Score
 import LynRummy.View as View
 import LynRummy.WingOracle as WingOracle exposing (WingId)
 import LynRummy.WireAction as WA exposing (WireAction)
@@ -36,7 +37,20 @@ type alias Model =
     , hand : Hand
     , drag : DragState
     , sessionId : Maybe Int
+    , status : StatusMessage
+    , score : Int
+    , turnIndex : Int
     }
+
+
+type alias StatusMessage =
+    { text : String, kind : StatusKind }
+
+
+type StatusKind
+    = Inform
+    | Celebrate
+    | Scold
 
 
 type DragState
@@ -76,6 +90,9 @@ init _ =
       , hand = LynRummy.Dealer.openingHand
       , drag = NotDragging
       , sessionId = Nothing
+      , status = { text = "Begin game. Drag hand cards or board stacks onto the board.", kind = Inform }
+      , score = 0
+      , turnIndex = 0
       }
     , fetchNewSession
     )
@@ -95,6 +112,39 @@ sessionIdDecoder =
     Decode.field "session_id" Decode.int
 
 
+{-| Authoritative state as the server computes it. Elm pulls this
+after special actions (CompleteTurn, Undo) where the local
+optimistic-apply shape isn't straightforward.
+-}
+type alias RemoteState =
+    { board : List CardStack
+    , hand : Hand
+    , turnIndex : Int
+    }
+
+
+remoteStateDecoder : Decoder RemoteState
+remoteStateDecoder =
+    Decode.field "state"
+        (Decode.map3 RemoteState
+            (Decode.field "board" (Decode.list CardStack.cardStackDecoder))
+            (Decode.field "hand"
+                (Decode.field "hand_cards" (Decode.list CardStack.handCardDecoder)
+                    |> Decode.map (\cards -> { handCards = cards })
+                )
+            )
+            (Decode.field "turn_index" Decode.int)
+        )
+
+
+fetchRemoteState : Int -> Cmd Msg
+fetchRemoteState sid =
+    Http.get
+        { url = "/gopher/lynrummy-elm/sessions/" ++ String.fromInt sid ++ "/state"
+        , expect = Http.expectJson StateRefreshed remoteStateDecoder
+        }
+
+
 
 -- MSG
 
@@ -109,6 +159,9 @@ type Msg
     | BoardRectReceived (Result Browser.Dom.Error Browser.Dom.Element)
     | ActionSent (Result Http.Error ())
     | SessionReceived (Result Http.Error Int)
+    | ClickCompleteTurn
+    | ClickUndo
+    | StateRefreshed (Result Http.Error RemoteState)
 
 
 
@@ -176,6 +229,44 @@ update msg model =
         SessionReceived (Err _) ->
             -- If the server can't hand us a session, actions stay
             -- unpersisted. UI keeps working locally.
+            ( model, Cmd.none )
+
+        ClickCompleteTurn ->
+            case model.sessionId of
+                Just sid ->
+                    ( { model
+                        | status =
+                            { text = "Turn " ++ String.fromInt (model.turnIndex + 1) ++ " complete."
+                            , kind = Inform
+                            }
+                      }
+                    , Cmd.batch [ sendAction sid WA.CompleteTurn, fetchRemoteState sid ]
+                    )
+
+                Nothing ->
+                    ( model, Cmd.none )
+
+        ClickUndo ->
+            case model.sessionId of
+                Just sid ->
+                    ( { model | status = { text = "Undone.", kind = Inform } }
+                    , Cmd.batch [ sendAction sid WA.Undo, fetchRemoteState sid ]
+                    )
+
+                Nothing ->
+                    ( model, Cmd.none )
+
+        StateRefreshed (Ok rs) ->
+            ( { model
+                | board = rs.board
+                , hand = rs.hand
+                , turnIndex = rs.turnIndex
+                , score = Score.forStacks rs.board
+              }
+            , Cmd.none
+            )
+
+        StateRefreshed (Err _) ->
             ( model, Cmd.none )
 
         BoardRectReceived result ->
@@ -275,8 +366,11 @@ handleMouseUp model =
 
         Dragging info ->
             let
-                ( newModel, maybeAction ) =
+                ( afterResolve, maybeAction ) =
                     resolveGesture info model
+
+                newModel =
+                    { afterResolve | score = Score.forStacks afterResolve.board }
 
                 cmd =
                     case ( maybeAction, newModel.sessionId ) of
@@ -534,7 +628,9 @@ view : Model -> Html Msg
 view model =
     div
         [ style "font-family" "system-ui, sans-serif" ]
-        [ div
+        [ viewTopBar
+        , viewStatusBar model.status
+        , div
             [ style "padding" "20px"
             , style "display" "flex"
             , style "gap" "24px"
@@ -547,13 +643,105 @@ view model =
         ]
 
 
+viewTopBar : Html Msg
+viewTopBar =
+    div
+        [ style "background-color" View.navy
+        , style "color" "white"
+        , style "text-align" "center"
+        , style "padding" "6px"
+        , style "font-size" "18px"
+        ]
+        [ Html.text "Welcome to Lyn Rummy! Have fun!" ]
+
+
+viewStatusBar : StatusMessage -> Html Msg
+viewStatusBar status =
+    let
+        color =
+            case status.kind of
+                Inform ->
+                    "#31708f"
+
+                Celebrate ->
+                    "green"
+
+                Scold ->
+                    "red"
+    in
+    div
+        [ style "padding" "6px 20px"
+        , style "font-size" "15px"
+        , style "color" color
+        , style "border-bottom" "1px solid #eee"
+        ]
+        [ Html.text status.text ]
+
+
 handColumn : Model -> Html Msg
 handColumn model =
     div
-        [ style "min-width" "220px" ]
-        [ View.viewHandHeading
-        , View.viewHand { attrsForCard = handCardAttrs model.drag } model.hand
+        [ style "min-width" "240px"
+        , style "padding-right" "20px"
+        , style "border-right" "1px gray solid"
         ]
+        [ viewPlayerHeader model
+        , View.viewHandHeading
+        , View.viewHand { attrsForCard = handCardAttrs model.drag } model.hand
+        , viewTurnControls
+        ]
+
+
+viewPlayerHeader : Model -> Html Msg
+viewPlayerHeader model =
+    div []
+        [ div
+            [ style "font-weight" "bold"
+            , style "font-size" "16px"
+            , style "color" View.navy
+            , style "margin-top" "12px"
+            ]
+            [ Html.text "You" ]
+        , div
+            [ style "color" "maroon"
+            , style "margin-bottom" "4px"
+            , style "margin-top" "4px"
+            ]
+            [ Html.text ("Score: " ++ String.fromInt model.score) ]
+        , div
+            [ style "color" "#666"
+            , style "font-size" "13px"
+            , style "margin-bottom" "4px"
+            ]
+            [ Html.text ("Turn " ++ String.fromInt (model.turnIndex + 1)) ]
+        ]
+
+
+viewTurnControls : Html Msg
+viewTurnControls =
+    div
+        [ style "margin-top" "12px"
+        , style "display" "flex"
+        , style "gap" "8px"
+        ]
+        [ gameButton "Complete turn" ClickCompleteTurn
+        , gameButton "Undo" ClickUndo
+        ]
+
+
+gameButton : String -> Msg -> Html Msg
+gameButton label msg =
+    Html.button
+        [ Events.onClick msg
+        , style "padding" "6px 12px"
+        , style "font-size" "14px"
+        , style "border" ("1px solid " ++ View.navy)
+        , style "background" "white"
+        , style "color" View.navy
+        , style "border-radius" "3px"
+        , style "cursor" "pointer"
+        ]
+        [ Html.text label ]
 
 
 boardColumn : Model -> Html Msg
