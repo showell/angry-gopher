@@ -7,6 +7,7 @@ enough to test the hunch that the elementsFromPoint capability
 gap dissolves on its own.*
 
 **← Prev:** [Reading DragDropHelper](reading_dragdrophelper.md)
+**→ Next:** [The Bar for Done](the_bar_for_done.md)
 
 ---
 
