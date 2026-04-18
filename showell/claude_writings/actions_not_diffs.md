@@ -6,6 +6,7 @@ with a brief tour of the current format to show why the gap
 is structural, then the new shape with Elm + JSON sketches.*
 
 **← Prev:** [Click and Drag](click_and_drag.md)
+**→ Next:** [The Wire, Working](the_wire_working.md)
 
 ---
 
