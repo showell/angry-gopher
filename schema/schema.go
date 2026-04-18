@@ -81,4 +81,25 @@ CREATE TABLE IF NOT EXISTS critter_sessions (
 );
 
 CREATE INDEX IF NOT EXISTS idx_critter_sessions_study ON critter_sessions(study, id DESC);
+
+-- LynRummy Elm client action log. V1 scaffolding: every page load
+-- gets a new session; actions posted to /gopher/lynrummy-elm/actions
+-- are stored with their WireAction JSON verbatim, sequenced per
+-- session.
+CREATE TABLE IF NOT EXISTS lynrummy_elm_sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at INTEGER NOT NULL,
+    label TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS lynrummy_elm_actions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id INTEGER NOT NULL REFERENCES lynrummy_elm_sessions(id),
+    seq INTEGER NOT NULL,
+    action_kind TEXT NOT NULL,
+    action_json TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_lynrummy_elm_actions_session ON lynrummy_elm_actions(session_id, seq);
 `

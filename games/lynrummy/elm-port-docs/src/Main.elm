@@ -35,6 +35,7 @@ type alias Model =
     { board : List CardStack
     , hand : Hand
     , drag : DragState
+    , sessionId : Maybe Int
     }
 
 
@@ -74,9 +75,24 @@ init _ =
     ( { board = LynRummy.Dealer.initialBoard
       , hand = LynRummy.Dealer.openingHand
       , drag = NotDragging
+      , sessionId = Nothing
       }
-    , Cmd.none
+    , fetchNewSession
     )
+
+
+fetchNewSession : Cmd Msg
+fetchNewSession =
+    Http.post
+        { url = "/gopher/lynrummy-elm/new-session"
+        , body = Http.emptyBody
+        , expect = Http.expectJson SessionReceived sessionIdDecoder
+        }
+
+
+sessionIdDecoder : Decoder Int
+sessionIdDecoder =
+    Decode.field "session_id" Decode.int
 
 
 
@@ -92,6 +108,7 @@ type Msg
     | WingLeft WingId
     | BoardRectReceived (Result Browser.Dom.Error Browser.Dom.Element)
     | ActionSent (Result Http.Error ())
+    | SessionReceived (Result Http.Error Int)
 
 
 
@@ -151,6 +168,14 @@ update msg model =
         ActionSent _ ->
             -- V1: fire-and-forget. Errors are ignored; server-side
             -- validation + broadcast arrive with multiplayer.
+            ( model, Cmd.none )
+
+        SessionReceived (Ok sid) ->
+            ( { model | sessionId = Just sid }, Cmd.none )
+
+        SessionReceived (Err _) ->
+            -- If the server can't hand us a session, actions stay
+            -- unpersisted. UI keeps working locally.
             ( model, Cmd.none )
 
         BoardRectReceived result ->
@@ -254,9 +279,12 @@ handleMouseUp model =
                     resolveGesture info model
 
                 cmd =
-                    maybeAction
-                        |> Maybe.map sendAction
-                        |> Maybe.withDefault Cmd.none
+                    case ( maybeAction, newModel.sessionId ) of
+                        ( Just action, Just sid ) ->
+                            sendAction sid action
+
+                        _ ->
+                            Cmd.none
             in
             ( newModel, cmd )
 
@@ -359,10 +387,10 @@ dropLoc info =
             )
 
 
-sendAction : WireAction -> Cmd Msg
-sendAction action =
+sendAction : Int -> WireAction -> Cmd Msg
+sendAction sessionId action =
     Http.post
-        { url = "/gopher/lynrummy-elm/actions"
+        { url = "/gopher/lynrummy-elm/actions?session=" ++ String.fromInt sessionId
         , body = Http.jsonBody (WA.encode action)
         , expect = Http.expectWhatever ActionSent
         }
