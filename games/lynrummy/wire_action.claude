@@ -8,6 +8,17 @@ Each `WireAction` value names what the player did, rather than
 the mechanical diff. Receiver applies the action to prior state
 to derive the post-state.
 
+Two recent additions for multi-card-trick support:
+- `PlayTrickAction` (client-emitted convenience): `{trick_id,
+  hand_cards}`. Server resolves it at submission time via
+  `tricks.FindPlay` + `Play.Apply`, then persists the expanded
+  `TrickResultAction` instead.
+- `TrickResultAction` (persisted form): carries the resulting
+  board diff (`stacks_to_remove` + `stacks_to_add`) plus
+  `hand_cards_released`. `replay.go` applies it directly without
+  needing the tricks package — keeps the replay engine free of
+  cyclic imports.
+
 See `showell/claude_writings/actions_not_diffs.md` for rationale.
 
 ## Exposed surface

@@ -110,10 +110,45 @@ applyAction action state =
         Undo ->
             state
 
+        PlayTrick _ ->
+            -- Submission-time convenience; the server expands
+            -- PlayTrick to TrickResult at receipt time and persists
+            -- the latter. A PlayTrick should never end up in a
+            -- replayed log; if one does, no-op.
+            state
+
+        TrickResult p ->
+            let
+                boardSansRemoved =
+                    List.foldl removeStackOnce state.board p.stacksToRemove
+
+                newBoard =
+                    boardSansRemoved ++ p.stacksToAdd
+
+                newHand =
+                    List.foldl removeHandCardByContent state.hand p.handCardsReleased
+            in
+            { state | board = newBoard, hand = newHand }
+
 
 
 -- HELPERS (local; duplicated across Main.elm and here. ~6 LOC
 -- total; cheaper than coupling the modules for now.)
+
+
+removeStackOnce : CardStack -> List CardStack -> List CardStack
+removeStackOnce target board =
+    List.filter (\s -> not (stacksEqual s target)) board
+
+
+removeHandCardByContent : Card -> Hand -> Hand
+removeHandCardByContent card hand =
+    case findHandCard card hand of
+        Just hc ->
+            Hand.removeHandCard hc hand
+
+        Nothing ->
+            hand
 
 
 listAt : Int -> List a -> Maybe a

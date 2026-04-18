@@ -113,6 +113,25 @@ func lynrummyElmActions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	sessionIDStr := r.URL.Query().Get("session")
+	sessionIDForExpand, _ := strconv.ParseInt(sessionIDStr, 10, 64)
+
+	// Expand PlayTrickAction into TrickResultAction at submission
+	// time. This keeps the replay engine free of the tricks-package
+	// dependency and gives the stored log a clean board-diff shape.
+	if pt, ok := action.(lynrummy.PlayTrickAction); ok {
+		resolved, resolveErr := expandPlayTrick(pt, sessionIDForExpand)
+		if resolveErr != nil {
+			log.Printf("lynrummy-elm action: play_trick resolve err=%v", resolveErr)
+			http.Error(w, "play_trick resolve: "+resolveErr.Error(), http.StatusBadRequest)
+			return
+		}
+		action = resolved
+		body, err = json.Marshal(resolved)
+		if err != nil {
+			http.Error(w, "marshal resolved: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
 	sessionID, err := strconv.ParseInt(sessionIDStr, 10, 64)
 	if err != nil || sessionID <= 0 {
 		log.Printf("lynrummy-elm action: bad/missing session param=%q", sessionIDStr)
@@ -437,6 +456,62 @@ func lynrummyElmSessionHints(w http.ResponseWriter, idStr string) {
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Write(body)
+}
+
+// expandPlayTrick turns a client-emitted PlayTrickAction into a
+// TrickResultAction by: (1) replaying the session to the current
+// state, (2) asking the TrickBag for the matching Play,
+// (3) applying the Play to compute the new board, (4) diffing
+// old vs new to produce stacks_to_remove + stacks_to_add.
+func expandPlayTrick(pt lynrummy.PlayTrickAction, sessionID int64) (lynrummy.TrickResultAction, error) {
+	if sessionID <= 0 {
+		return lynrummy.TrickResultAction{}, fmt.Errorf("missing session id")
+	}
+	state, ok, err := replaySessionNoHTTP(sessionID)
+	if err != nil {
+		return lynrummy.TrickResultAction{}, err
+	}
+	if !ok {
+		return lynrummy.TrickResultAction{}, fmt.Errorf("session %d not found", sessionID)
+	}
+	play := tricks.FindPlay(pt.TrickID, pt.HandCards, state.Board)
+	if play == nil {
+		return lynrummy.TrickResultAction{}, fmt.Errorf(
+			"no %s play matches the given hand cards against current board", pt.TrickID)
+	}
+	newBoard, _ := play.Apply(state.Board)
+	toRemove, toAdd := diffBoards(state.Board, newBoard)
+	return lynrummy.TrickResultAction{
+		TrickID:           pt.TrickID,
+		StacksToRemove:    toRemove,
+		StacksToAdd:       toAdd,
+		HandCardsReleased: pt.HandCards,
+	}, nil
+}
+
+// diffBoards computes (removed, added) such that applying
+// "remove these stacks, add those stacks" to `before` produces
+// `after` (up to order). Matches by structural equality, which
+// accounts for loc + cards + deck tags — so a stack that moved
+// shows up as both removed and re-added.
+func diffBoards(before, after []lynrummy.CardStack) (removed, added []lynrummy.CardStack) {
+	afterCopy := append([]lynrummy.CardStack{}, after...)
+	for _, s := range before {
+		found := -1
+		for i, t := range afterCopy {
+			if s.Equals(t) {
+				found = i
+				break
+			}
+		}
+		if found >= 0 {
+			afterCopy = append(afterCopy[:found], afterCopy[found+1:]...)
+		} else {
+			removed = append(removed, s)
+		}
+	}
+	added = afterCopy
+	return
 }
 
 // lynrummyElmSessionTurnLog walks the session's action log,

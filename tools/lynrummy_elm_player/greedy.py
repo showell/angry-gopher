@@ -43,14 +43,37 @@ def play_greedy(c, session_id, max_turns=50, verbose=True):
         plays = 0
         while True:
             hints = c.get_hints(session_id)
-            combined = (hints.get("hand_merges") or []) + (hints.get("stack_merges") or [])
-            if not combined:
+            atomic = (hints.get("hand_merges") or []) + (hints.get("stack_merges") or [])
+            trick_plays = hints.get("trick_plays") or []
+            # Ignore direct_play trick entries — they duplicate the
+            # atomic hand_merges and add no new capability.
+            multi_trick_plays = [
+                p for p in trick_plays if p["trick_id"] != "direct_play"
+            ]
+            all_opts = (
+                [("atomic", h) for h in atomic] +
+                [("trick", h) for h in multi_trick_plays]
+            )
+            if not all_opts:
                 break
-            best = max(combined, key=lambda h: h["result_score"])
-            c.send_action(session_id, _hint_to_action(best))
+            best_kind, best = max(all_opts, key=lambda kv: kv[1]["result_score"])
+            if best_kind == "atomic":
+                c.send_action(session_id, _hint_to_action(best))
+                if verbose:
+                    print(f"  turn {turn_num}.{plays + 1}: {_describe(best)}")
+            else:
+                c.send_play_trick(
+                    session_id,
+                    trick_id=best["trick_id"],
+                    hand_cards=best["hand_cards"],
+                )
+                if verbose:
+                    labels = ",".join(
+                        f"V{c['value']}S{c['suit']}" for c in best["hand_cards"]
+                    )
+                    print(f"  turn {turn_num}.{plays + 1}: trick {best['trick_id']} "
+                          f"cards=[{labels}] → score={best['result_score']}")
             plays += 1
-            if verbose:
-                print(f"  turn {turn_num}.{plays}: {_describe(best)}")
 
         c.send_complete_turn(session_id)
         score = c.get_score(session_id)

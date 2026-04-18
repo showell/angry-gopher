@@ -18,7 +18,7 @@ import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode exposing (Value)
 import LynRummy.BoardActions exposing (Side(..))
 import LynRummy.Card as Card exposing (Card)
-import LynRummy.CardStack exposing (BoardLocation, boardLocationDecoder, encodeBoardLocation)
+import LynRummy.CardStack exposing (BoardLocation, CardStack, boardLocationDecoder, cardStackDecoder, encodeBoardLocation, encodeCardStack)
 
 
 type WireAction
@@ -31,6 +31,13 @@ type WireAction
     | Discard { handCard : Card }
     | CompleteTurn
     | Undo
+    | PlayTrick { trickId : String, handCards : List Card }
+    | TrickResult
+        { trickId : String
+        , stacksToRemove : List CardStack
+        , stacksToAdd : List CardStack
+        , handCardsReleased : List Card
+        }
 
 
 
@@ -91,6 +98,22 @@ encode action =
 
         Undo ->
             Encode.object [ ( "action", Encode.string "undo" ) ]
+
+        PlayTrick p ->
+            Encode.object
+                [ ( "action", Encode.string "play_trick" )
+                , ( "trick_id", Encode.string p.trickId )
+                , ( "hand_cards", Encode.list Card.encodeCard p.handCards )
+                ]
+
+        TrickResult p ->
+            Encode.object
+                [ ( "action", Encode.string "trick_result" )
+                , ( "trick_id", Encode.string p.trickId )
+                , ( "stacks_to_remove", Encode.list encodeCardStack p.stacksToRemove )
+                , ( "stacks_to_add", Encode.list encodeCardStack p.stacksToAdd )
+                , ( "hand_cards_released", Encode.list Card.encodeCard p.handCardsReleased )
+                ]
 
 
 encodeSide : Side -> Value
@@ -177,6 +200,29 @@ decoderForAction kind =
 
         "undo" ->
             Decode.succeed Undo
+
+        "play_trick" ->
+            Decode.map2
+                (\trickId handCards ->
+                    PlayTrick { trickId = trickId, handCards = handCards }
+                )
+                (Decode.field "trick_id" Decode.string)
+                (Decode.field "hand_cards" (Decode.list Card.cardDecoder))
+
+        "trick_result" ->
+            Decode.map4
+                (\trickId stacksToRemove stacksToAdd handCardsReleased ->
+                    TrickResult
+                        { trickId = trickId
+                        , stacksToRemove = stacksToRemove
+                        , stacksToAdd = stacksToAdd
+                        , handCardsReleased = handCardsReleased
+                        }
+                )
+                (Decode.field "trick_id" Decode.string)
+                (Decode.field "stacks_to_remove" (Decode.list cardStackDecoder))
+                (Decode.field "stacks_to_add" (Decode.list cardStackDecoder))
+                (Decode.field "hand_cards_released" (Decode.list Card.cardDecoder))
 
         other ->
             Decode.fail ("Unknown action: " ++ other)

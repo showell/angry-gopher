@@ -23,6 +23,35 @@ var DefaultOrder = []Trick{
 	LooseCardPlay,
 }
 
+// FindPlay returns the first Play from the named trick whose
+// HandCards match (as a multiset) the given `hand` argument.
+// Returns nil if the trick id is unknown or no matching Play
+// exists. The caller is responsible for applying the Play via
+// Play.Apply(board).
+//
+// Used by the server when executing a PlayTrickAction: agent
+// supplies (trick_id, hand_cards); server re-runs FindPlays and
+// picks the matching Play to Apply.
+func FindPlay(trickID string, hand []lynrummy.Card, board []lynrummy.CardStack) Play {
+	handHC := make([]lynrummy.HandCard, len(hand))
+	for i, c := range hand {
+		handHC[i] = lynrummy.HandCard{Card: c, State: lynrummy.HandNormal}
+	}
+	for _, trick := range DefaultOrder {
+		if trick.ID() != trickID {
+			continue
+		}
+		plays := trick.FindPlays(handHC, board)
+		for _, p := range plays {
+			if handCardsEqualMultiset(p.HandCards(), handHC) {
+				return p
+			}
+		}
+		return nil
+	}
+	return nil
+}
+
 // Detect returns the ID of the first trick whose FindPlays emits
 // at least one play that uses EXACTLY the given hand cards (as a
 // multiset). Empty string if no trick matches.

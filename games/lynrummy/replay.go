@@ -104,6 +104,15 @@ func ApplyAction(action WireAction, state State) State {
 		// Snapshot-based undo is deferred. For now a no-op so the
 		// wire accepts undo events without breaking replay.
 		return state
+
+	case PlayTrickAction:
+		// The action handler expands PlayTrick to TrickResult at
+		// submission time, so this case shouldn't normally fire
+		// during replay. If it ever does (old log, raw POST), no-op.
+		return state
+
+	case TrickResultAction:
+		return applyTrickResult(a, state)
 	}
 	return state
 }
@@ -236,6 +245,30 @@ func applyDiscard(a DiscardAction, state State) State {
 	out := state
 	out.Hand = state.Hand.RemoveHandCard(*hc)
 	out.Discard = append(append([]Card{}, state.Discard...), a.HandCard)
+	return out
+}
+
+// applyTrickResult applies the board diff computed at submission
+// time + removes the released hand cards. Tricks often span 2+
+// hand cards and non-trivial board transformations; the diff
+// captures all of it so replay is a single-step operation.
+func applyTrickResult(a TrickResultAction, state State) State {
+	out := state
+	newBoard := append([]CardStack{}, state.Board...)
+	for _, r := range a.StacksToRemove {
+		newBoard = removeStack(newBoard, r)
+	}
+	newBoard = append(newBoard, a.StacksToAdd...)
+	out.Board = newBoard
+
+	newHand := state.Hand
+	for _, c := range a.HandCardsReleased {
+		if hc := newHand.FindByCard(c); hc != nil {
+			newHand = newHand.RemoveHandCard(*hc)
+		}
+	}
+	out.Hand = newHand
+	out.CardsPlayedThisTurn = state.CardsPlayedThisTurn + len(a.HandCardsReleased)
 	return out
 }
 

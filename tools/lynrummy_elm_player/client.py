@@ -104,6 +104,20 @@ class Client:
     def send_undo(self, session_id):
         return self.send_action(session_id, {"action": "undo"})
 
+    def send_play_trick(self, session_id, *, trick_id, hand_cards):
+        """Send a play_trick action.
+
+        Server resolves it at submission time via the Go TrickBag
+        (FindPlay + Apply) and persists the expanded TrickResult
+        diff — so replay doesn't need to know about tricks.
+
+        hand_cards is a list of Card dicts (use card() to build them).
+        """
+        return self.send_action(
+            session_id,
+            {"action": "play_trick", "trick_id": trick_id, "hand_cards": hand_cards},
+        )
+
     # --- Queries ---
 
     def get_state(self, session_id):
