@@ -46,6 +46,8 @@ func HandleLynRummyElm(w http.ResponseWriter, r *http.Request) {
 		lynrummyElmNewSession(w, r)
 	case sub == "sessions":
 		lynrummyElmSessionsList(w)
+	case sub == "api/sessions":
+		lynrummyElmSessionsJSON(w)
 	case strings.HasSuffix(sub, "/state") && strings.HasPrefix(sub, "sessions/"):
 		idStr := strings.TrimSuffix(strings.TrimPrefix(sub, "sessions/"), "/state")
 		lynrummyElmSessionState(w, idStr)
@@ -238,6 +240,54 @@ a { color: #000080; }
 		fmt.Fprint(w, `<tr><td colspan="4" class="muted">No sessions yet.</td></tr>`)
 	}
 	fmt.Fprint(w, `</table></body></html>`)
+}
+
+// lynrummyElmSessionsJSON returns the sessions list as JSON for
+// the Elm client's lobby view. Mirrors the HTML /sessions
+// endpoint's shape (id, created_at, label, action_count) but
+// machine-readable.
+func lynrummyElmSessionsJSON(w http.ResponseWriter) {
+	rows, err := DB.Query(`
+		SELECT s.id, s.created_at, s.label,
+		       (SELECT COUNT(*) FROM lynrummy_elm_actions WHERE session_id = s.id) AS n
+		FROM lynrummy_elm_sessions s
+		ORDER BY s.id DESC
+		LIMIT 200`)
+	if err != nil {
+		http.Error(w, "query: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	type entry struct {
+		ID          int64  `json:"id"`
+		CreatedAt   int64  `json:"created_at"`
+		Label       string `json:"label"`
+		ActionCount int    `json:"action_count"`
+	}
+	var out []entry
+	for rows.Next() {
+		var e entry
+		if err := rows.Scan(&e.ID, &e.CreatedAt, &e.Label, &e.ActionCount); err != nil {
+			continue
+		}
+		out = append(out, e)
+	}
+	if out == nil {
+		out = []entry{}
+	}
+
+	payload := struct {
+		Sessions []entry `json:"sessions"`
+	}{Sessions: out}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		http.Error(w, "marshal: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Write(body)
 }
 
 func lynrummyElmSessionDetail(w http.ResponseWriter, idStr string) {

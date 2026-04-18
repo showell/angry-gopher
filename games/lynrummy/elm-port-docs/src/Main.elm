@@ -33,13 +33,34 @@ import Task
 
 
 type alias Model =
-    { board : List CardStack
+    { phase : Phase
+    , board : List CardStack
     , hand : Hand
     , drag : DragState
     , sessionId : Maybe Int
     , status : StatusMessage
     , score : Int
     , turnIndex : Int
+    , sessions : SessionsLoad
+    }
+
+
+type Phase
+    = Lobby
+    | Playing
+
+
+type SessionsLoad
+    = SessionsLoading
+    | SessionsLoaded (List SessionSummary)
+    | SessionsError
+
+
+type alias SessionSummary =
+    { id : Int
+    , createdAt : Int
+    , label : String
+    , actionCount : Int
     }
 
 
@@ -86,16 +107,39 @@ boardDomId =
 
 init : () -> ( Model, Cmd Msg )
 init _ =
-    ( { board = LynRummy.Dealer.initialBoard
+    ( { phase = Lobby
+      , board = LynRummy.Dealer.initialBoard
       , hand = LynRummy.Dealer.openingHand
       , drag = NotDragging
       , sessionId = Nothing
-      , status = { text = "Begin game. Drag hand cards or board stacks onto the board.", kind = Inform }
+      , status = { text = "Pick a session or start a new game.", kind = Inform }
       , score = 0
       , turnIndex = 0
+      , sessions = SessionsLoading
       }
-    , fetchNewSession
+    , fetchSessionsList
     )
+
+
+fetchSessionsList : Cmd Msg
+fetchSessionsList =
+    Http.get
+        { url = "/gopher/lynrummy-elm/api/sessions"
+        , expect = Http.expectJson SessionsListReceived sessionsDecoder
+        }
+
+
+sessionsDecoder : Decoder (List SessionSummary)
+sessionsDecoder =
+    Decode.field "sessions"
+        (Decode.list
+            (Decode.map4 SessionSummary
+                (Decode.field "id" Decode.int)
+                (Decode.field "created_at" Decode.int)
+                (Decode.field "label" Decode.string)
+                (Decode.field "action_count" Decode.int)
+            )
+        )
 
 
 fetchNewSession : Cmd Msg
@@ -162,6 +206,10 @@ type Msg
     | ClickCompleteTurn
     | ClickUndo
     | StateRefreshed (Result Http.Error RemoteState)
+    | SessionsListReceived (Result Http.Error (List SessionSummary))
+    | ClickNewGame
+    | ClickResumeSession Int
+    | ClickBackToLobby
 
 
 
@@ -258,7 +306,8 @@ update msg model =
 
         StateRefreshed (Ok rs) ->
             ( { model
-                | board = rs.board
+                | phase = Playing
+                , board = rs.board
                 , hand = rs.hand
                 , turnIndex = rs.turnIndex
                 , score = Score.forStacks rs.board
@@ -268,6 +317,47 @@ update msg model =
 
         StateRefreshed (Err _) ->
             ( model, Cmd.none )
+
+        SessionsListReceived (Ok list) ->
+            ( { model | sessions = SessionsLoaded list }, Cmd.none )
+
+        SessionsListReceived (Err _) ->
+            ( { model | sessions = SessionsError }, Cmd.none )
+
+        ClickNewGame ->
+            ( { model
+                | phase = Playing
+                , board = LynRummy.Dealer.initialBoard
+                , hand = LynRummy.Dealer.openingHand
+                , sessionId = Nothing
+                , turnIndex = 0
+                , score = Score.forStacks LynRummy.Dealer.initialBoard
+                , status =
+                    { text = "Begin game. Drag hand cards or board stacks onto the board."
+                    , kind = Inform
+                    }
+              }
+            , fetchNewSession
+            )
+
+        ClickResumeSession sid ->
+            ( { model
+                | phase = Playing
+                , sessionId = Just sid
+                , status = { text = "Resuming session " ++ String.fromInt sid ++ "…", kind = Inform }
+              }
+            , fetchRemoteState sid
+            )
+
+        ClickBackToLobby ->
+            ( { model
+                | phase = Lobby
+                , sessionId = Nothing
+                , sessions = SessionsLoading
+                , status = { text = "Pick a session or start a new game.", kind = Inform }
+              }
+            , fetchSessionsList
+            )
 
         BoardRectReceived result ->
             case ( model.drag, result ) of
@@ -628,18 +718,115 @@ view : Model -> Html Msg
 view model =
     div
         [ style "font-family" "system-ui, sans-serif" ]
-        [ viewTopBar
-        , viewStatusBar model.status
-        , div
-            [ style "padding" "20px"
-            , style "display" "flex"
-            , style "gap" "24px"
-            , style "align-items" "flex-start"
+        (case model.phase of
+            Lobby ->
+                [ viewTopBar
+                , viewStatusBar model.status
+                , viewLobby model
+                ]
+
+            Playing ->
+                [ viewTopBar
+                , viewStatusBar model.status
+                , div
+                    [ style "padding" "20px"
+                    , style "display" "flex"
+                    , style "gap" "24px"
+                    , style "align-items" "flex-start"
+                    ]
+                    [ handColumn model
+                    , boardColumn model
+                    ]
+                , draggedOverlay model
+                ]
+        )
+
+
+viewLobby : Model -> Html Msg
+viewLobby model =
+    div
+        [ style "padding" "20px 40px"
+        , style "max-width" "720px"
+        ]
+        [ div
+            [ style "margin-bottom" "16px" ]
+            [ gameButton "Start new game" ClickNewGame ]
+        , Html.h2
+            [ style "color" View.navy
+            , style "margin-top" "24px"
             ]
-            [ handColumn model
-            , boardColumn model
+            [ Html.text "Your sessions" ]
+        , viewSessionsList model.sessions
+        ]
+
+
+viewSessionsList : SessionsLoad -> Html Msg
+viewSessionsList loaded =
+    case loaded of
+        SessionsLoading ->
+            div [ style "color" "#888" ] [ Html.text "Loading…" ]
+
+        SessionsError ->
+            div [ style "color" "red" ]
+                [ Html.text "Couldn't load sessions." ]
+
+        SessionsLoaded [] ->
+            div [ style "color" "#888" ]
+                [ Html.text "No sessions yet. Start a new game to get going." ]
+
+        SessionsLoaded sessions ->
+            Html.table
+                [ style "border-collapse" "collapse"
+                , style "width" "100%"
+                ]
+                (Html.tr
+                    [ style "text-align" "left"
+                    , style "border-bottom" "1px solid #ddd"
+                    ]
+                    [ Html.th [ style "padding" "6px 10px" ] [ Html.text "id" ]
+                    , Html.th [ style "padding" "6px 10px" ] [ Html.text "label" ]
+                    , Html.th [ style "padding" "6px 10px", style "text-align" "right" ]
+                        [ Html.text "actions" ]
+                    , Html.th [ style "padding" "6px 10px" ] []
+                    ]
+                    :: List.map viewSessionRow sessions
+                )
+
+
+viewSessionRow : SessionSummary -> Html Msg
+viewSessionRow s =
+    Html.tr
+        [ style "border-bottom" "1px solid #eee" ]
+        [ Html.td
+            [ style "padding" "6px 10px"
+            , style "color" View.navy
+            , style "font-variant-numeric" "tabular-nums"
             ]
-        , draggedOverlay model
+            [ Html.text ("#" ++ String.fromInt s.id) ]
+        , Html.td
+            [ style "padding" "6px 10px"
+            , style "color" "#666"
+            ]
+            [ Html.text
+                (if String.isEmpty s.label then
+                    "—"
+
+                 else
+                    s.label
+                )
+            ]
+        , Html.td
+            [ style "padding" "6px 10px"
+            , style "text-align" "right"
+            , style "font-variant-numeric" "tabular-nums"
+            , style "color" "#888"
+            ]
+            [ Html.text (String.fromInt s.actionCount) ]
+        , Html.td
+            [ style "padding" "6px 10px"
+            , style "text-align" "right"
+            ]
+            [ gameButton "Resume" (ClickResumeSession s.id) ]
         ]
 
 
@@ -723,9 +910,11 @@ viewTurnControls =
         [ style "margin-top" "12px"
         , style "display" "flex"
         , style "gap" "8px"
+        , style "flex-wrap" "wrap"
         ]
         [ gameButton "Complete turn" ClickCompleteTurn
         , gameButton "Undo" ClickUndo
+        , gameButton "← Lobby" ClickBackToLobby
         ]
 
 
