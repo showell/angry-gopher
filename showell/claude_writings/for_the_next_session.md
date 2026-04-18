@@ -7,6 +7,7 @@ Steve is secondary audience; he'll read this but it's not
 written for him.*
 
 **← Prev:** [Insights from First Few Days of Essay Workflow](insights_from_first_few_days_of_essay_workflow.md)
+**→ Next:** [Reading DragDropHelper](reading_dragdrophelper.md)
 
 ---
 
