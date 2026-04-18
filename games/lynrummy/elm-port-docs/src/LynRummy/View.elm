@@ -12,6 +12,7 @@ module LynRummy.View exposing
     , viewHandHeading
     , viewStack
     , viewStackWithAttrs
+    , viewStackWithCardAttrs
     , viewWing
     )
 
@@ -136,12 +137,34 @@ viewStack stack =
     viewStackWithAttrs [] stack
 
 
-{-| Same as `viewStack` but with extra attributes (e.g. a
-`Html.Events.onMouseDown` for drag initiation, or a style
-override for opacity while the stack is being dragged).
+{-| Same as `viewStack` but with extra attributes on the
+**stack div** (e.g. a style override for opacity while the
+stack is being dragged).
 -}
 viewStackWithAttrs : List (Html.Attribute msg) -> CardStack -> Html msg
 viewStackWithAttrs extraAttrs stack =
+    viewStackInternal extraAttrs (\_ -> []) stack
+
+
+{-| Same as `viewStack` but with extra attributes on each
+**individual card** (e.g. a `Html.Events.onMouseDown` for
+click-or-drag initiation, indexed by the card's position in
+the stack).
+-}
+viewStackWithCardAttrs :
+    (Int -> List (Html.Attribute msg))
+    -> CardStack
+    -> Html msg
+viewStackWithCardAttrs attrsForCard stack =
+    viewStackInternal [] attrsForCard stack
+
+
+viewStackInternal :
+    List (Html.Attribute msg)
+    -> (Int -> List (Html.Attribute msg))
+    -> CardStack
+    -> Html msg
+viewStackInternal stackExtraAttrs attrsForCard stack =
     let
         isIncomplete =
             CardStack.incomplete stack
@@ -163,22 +186,24 @@ viewStackWithAttrs extraAttrs stack =
                 []
 
         cardNodes =
-            List.indexedMap viewBoardCardAt stack.boardCards
+            List.indexedMap
+                (\i bc -> viewBoardCardAt (attrsForCard i) i bc)
+                stack.boardCards
     in
-    div (baseAttrs ++ incompleteAttrs ++ extraAttrs) cardNodes
+    div (baseAttrs ++ incompleteAttrs ++ stackExtraAttrs) cardNodes
 
 
-viewBoardCardAt : Int -> BoardCard -> Html msg
-viewBoardCardAt index bc =
+viewBoardCardAt : List (Html.Attribute msg) -> Int -> BoardCard -> Html msg
+viewBoardCardAt cardAttrs index bc =
     let
-        extra =
+        marginAttrs =
             if index == 0 then
                 []
 
             else
                 [ style "margin-left" "2px" ]
     in
-    viewPlayingCardWith extra bc.card
+    viewPlayingCardWith (marginAttrs ++ cardAttrs) bc.card
 
 
 

@@ -1,16 +1,26 @@
-# Dealer.elm — WORKHORSE
+# Dealer.elm — EARLY
 
-The canonical opening-board factory. Produces six specific
-card stacks at formula-derived positions. Faithful port of
+The canonical opening-board factory + a 15-card canned hand
+for testing. Faithful-where-possible port of
 `Dealer.build_initial_board` inside
-`angry-cat/src/lyn_rummy/game/game.ts` (line 291).
+`angry-cat/src/lyn_rummy/game/game.ts` (line 291); the hand
+is a port-time test fixture, not from TS.
 
 ## Status
 
-- **Label:** WORKHORSE. Hardcoded composition + positioning;
-  stable.
-- **Source:** game.ts line 291 (`Dealer.build_initial_board`).
-  Same six stacks, same formula positions.
+- **Label:** EARLY. Board half is stable + faithful; hand
+  half is a test fixture that gets thrown away when real
+  dealing arrives.
+- **Source:** game.ts line 291 (`Dealer.build_initial_board`)
+  for the board. Hand has no TS counterpart.
+
+## What's exported
+
+- `initialBoard : List CardStack` — six hardcoded stacks.
+- `openingHand : Hand` — 15 cards including 7H, 8C, 4S
+  (known to merge against the initial board) plus 12
+  grab-bag cards. 9D and QS also extend existing runs;
+  rest are loose singletons.
 
 ## Key invariants (preserved from TS)
 

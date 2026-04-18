@@ -18,6 +18,7 @@ import Json.Decode as Decode exposing (Decoder)
 import LynRummy.BoardActions as BoardActions exposing (Side(..))
 import LynRummy.CardStack as CardStack exposing (BoardLocation, CardStack, HandCard, stacksEqual)
 import LynRummy.Dealer
+import LynRummy.GestureArbitration as GA
 import LynRummy.Hand as Hand exposing (Hand)
 import LynRummy.View as View
 import LynRummy.WingOracle as WingOracle exposing (WingId)
@@ -43,11 +44,13 @@ type DragState
 type alias DragInfo =
     { source : DragSource
     , cursor : Point
+    , originalCursor : Point
     , grabOffset : Point
     , wings : List WingId
     , hoveredWing : Maybe WingId
     , overBoard : Bool
     , boardRect : Maybe Rect
+    , clickIntent : Maybe Int
     }
 
 
@@ -84,7 +87,7 @@ init _ =
 
 
 type Msg
-    = MouseDownOnStack Int Point
+    = MouseDownOnBoardCard { stackIndex : Int, cardIndex : Int } Point
     | MouseDownOnHandCard Int Point
     | MouseMove Point
     | MouseUp
@@ -102,8 +105,8 @@ type Msg
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        MouseDownOnStack idx clientPoint ->
-            startStackDrag idx clientPoint model
+        MouseDownOnBoardCard ref clientPoint ->
+            startBoardCardDrag ref clientPoint model
 
         MouseDownOnHandCard idx clientPoint ->
             startHandDrag idx clientPoint model
@@ -111,7 +114,17 @@ update msg model =
         MouseMove pos ->
             case model.drag of
                 Dragging info ->
-                    ( { model | drag = Dragging { info | cursor = pos } }, Cmd.none )
+                    let
+                        nextIntent =
+                            GA.clickIntentAfterMove info.originalCursor pos info.clickIntent
+                    in
+                    ( { model
+                        | drag =
+                            Dragging
+                                { info | cursor = pos, clickIntent = nextIntent }
+                      }
+                    , Cmd.none
+                    )
 
                 NotDragging ->
                     ( model, Cmd.none )
@@ -172,13 +185,17 @@ update msg model =
                     ( model, Cmd.none )
 
 
-startStackDrag : Int -> Point -> Model -> ( Model, Cmd Msg )
-startStackDrag idx clientPoint model =
-    case ( model.drag, listAt idx model.board ) of
+startBoardCardDrag :
+    { stackIndex : Int, cardIndex : Int }
+    -> Point
+    -> Model
+    -> ( Model, Cmd Msg )
+startBoardCardDrag { stackIndex, cardIndex } clientPoint model =
+    case ( model.drag, listAt stackIndex model.board ) of
         ( NotDragging, Just stack ) ->
             let
                 wings =
-                    WingOracle.wingsForStack idx model.board
+                    WingOracle.wingsForStack stackIndex model.board
 
                 halfWidth =
                     CardStack.stackDisplayWidth stack // 2
@@ -186,13 +203,15 @@ startStackDrag idx clientPoint model =
             ( { model
                 | drag =
                     Dragging
-                        { source = FromBoardStack idx
+                        { source = FromBoardStack stackIndex
                         , cursor = clientPoint
+                        , originalCursor = clientPoint
                         , grabOffset = { x = halfWidth, y = 20 }
                         , wings = wings
                         , hoveredWing = Nothing
                         , overBoard = False
                         , boardRect = Nothing
+                        , clickIntent = Just cardIndex
                         }
               }
             , Cmd.none
@@ -218,11 +237,13 @@ startHandDrag idx clientPoint model =
                     Dragging
                         { source = FromHandCard idx
                         , cursor = clientPoint
+                        , originalCursor = clientPoint
                         , grabOffset = { x = halfWidth, y = 20 }
                         , wings = wings
                         , hoveredWing = Nothing
                         , overBoard = False
                         , boardRect = Nothing
+                        , clickIntent = Nothing
                         }
               }
             , fetchBoardRect
@@ -245,19 +266,34 @@ handleMouseUp model =
             ( model, Cmd.none )
 
         Dragging info ->
-            case ( info.hoveredWing, info.source ) of
-                ( Just wing, _ ) ->
-                    ( commitMerge wing info.source model, Cmd.none )
+            -- Click takes precedence over drag, mirroring the TS
+            -- engine's process_pointerup logic.
+            case ( info.clickIntent, info.source ) of
+                ( Just cardIdx, FromBoardStack stackIdx ) ->
+                    ( commitSplit stackIdx cardIdx model, Cmd.none )
 
-                ( Nothing, FromHandCard handIdx ) ->
-                    if info.overBoard then
-                        ( commitPlaceHandCard handIdx info model, Cmd.none )
+                _ ->
+                    case ( info.hoveredWing, info.source ) of
+                        ( Just wing, _ ) ->
+                            ( commitMerge wing info.source model, Cmd.none )
 
-                    else
-                        ( clearDrag model, Cmd.none )
+                        ( Nothing, FromHandCard handIdx ) ->
+                            if info.overBoard then
+                                ( commitPlaceHandCard handIdx info model, Cmd.none )
 
-                ( Nothing, FromBoardStack _ ) ->
-                    ( clearDrag model, Cmd.none )
+                            else
+                                ( clearDrag model, Cmd.none )
+
+                        ( Nothing, FromBoardStack _ ) ->
+                            ( clearDrag model, Cmd.none )
+
+
+commitSplit : Int -> Int -> Model -> Model
+commitSplit stackIdx cardIdx model =
+    { model
+        | board = GA.applySplit stackIdx cardIdx model.board
+        , drag = NotDragging
+    }
 
 
 clearDrag : Model -> Model
@@ -429,12 +465,12 @@ boardChildren model =
 
 
 viewStackForBoard : DragState -> Int -> CardStack -> Html Msg
-viewStackForBoard drag idx stack =
+viewStackForBoard drag stackIdx stack =
     case drag of
         Dragging info ->
             case info.source of
                 FromBoardStack sourceIdx ->
-                    if sourceIdx == idx then
+                    if sourceIdx == stackIdx then
                         Html.text ""
 
                     else
@@ -444,12 +480,17 @@ viewStackForBoard drag idx stack =
                     View.viewStack stack
 
         NotDragging ->
-            View.viewStackWithAttrs [ stackMouseDown idx ] stack
+            View.viewStackWithCardAttrs (cardMouseDown stackIdx) stack
 
 
-stackMouseDown : Int -> Html.Attribute Msg
-stackMouseDown idx =
-    Events.on "mousedown" (Decode.map (MouseDownOnStack idx) pointDecoder)
+cardMouseDown : Int -> Int -> List (Html.Attribute Msg)
+cardMouseDown stackIdx cardIdx =
+    [ Events.on "mousedown"
+        (Decode.map
+            (MouseDownOnBoardCard { stackIndex = stackIdx, cardIndex = cardIdx })
+            pointDecoder
+        )
+    ]
 
 
 handCardAttrs : DragState -> Int -> HandCard -> List (Html.Attribute Msg)

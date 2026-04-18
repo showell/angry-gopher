@@ -1,0 +1,44 @@
+just_use WingOracle.elm
+
+# label: WORKHORSE (wings-oracle)
+# role: derived data — which board stacks accept which dragged source, on which side
+
+Pure helper that translates `BoardActions.findAllStackMerges` /
+`tryStackMerge` / `tryHandMerge` results into the set of wings
+to render during a drag.
+
+## Exposed surface
+
+- `type alias WingId = { stackIndex : Int, side : Side }`
+- `wingsForStack : Int -> List CardStack -> List WingId` —
+  enumerates wings for a board-stack drag source.
+- `wingsForHandCard : HandCard -> List CardStack -> List WingId`
+  — enumerates wings for a hand-card drag source.
+
+## Calling convention
+
+TARGET-first: `BoardActions.tryStackMerge target source side`
+and `BoardActions.tryHandMerge target source side`. This makes
+the target the "anchor" — the merged stack's position is
+derived from the target, not the source — which matches the
+drop-onto-target UX.
+
+`side = Left` → source attaches to LEFT of target → wing
+renders to the LEFT of target. Same for Right. No flipping,
+no inversion. See memory `feedback_skill_as_three_factors`-
+adjacent: keep LEFT and RIGHT as two distinct cases.
+
+## Why two functions instead of one polymorphic
+
+Stack-source and hand-source paths are deliberately kept as
+two separate functions; they are two similar things, not one
+parameterized thing. Mirrors Steve's "strong concept of LEFT
+and RIGHT" rule applied to source type.
+
+## Pointers
+
+- Consumer: `Main.elm` startBoardCardDrag / startHandDrag.
+- Depends on: `BoardActions.tryStackMerge` /
+  `BoardActions.tryHandMerge` (faithful TS port).
+- Tests: indirect via Main; direct unit tests would be cheap
+  if a regression ever surfaces.

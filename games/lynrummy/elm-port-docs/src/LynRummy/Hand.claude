@@ -1,0 +1,37 @@
+just_use Hand.elm
+
+# label: WORKHORSE
+# role: domain — `Hand` type + add/remove/reset operations
+
+Faithful port of the `Hand` class in
+`angry-cat/src/lyn_rummy/game/game.ts` (line 322). A hand
+holds a list of `HandCard`s; operations are add, remove,
+reset state, and query.
+
+## Exposed surface
+
+- `type alias Hand = { handCards : List HandCard }`
+- `empty : Hand`
+- `isEmpty : Hand -> Bool`
+- `size : Hand -> Int`
+- `addCards : List Card -> HandCardState -> Hand -> Hand`
+- `removeHandCard : HandCard -> Hand -> Hand` — removes the
+  first card with the same identity (same `Card`); silent
+  no-op if not present (TS throws; Elm port favors total
+  functions).
+- `resetState : Hand -> Hand` — sets every card back to
+  `HandNormal`. Called after the active player's turn ends.
+
+## Elm divergences from TS
+
+- `remove_card_from_hand` throws on miss in TS. Elm version
+  silently no-ops. Caller is expected to know the card is
+  present; if a real bug ever surfaces from a missing card,
+  swap to a `Result`.
+
+## Pointers
+
+- Consumer: `Main.elm` (model field `hand : Hand`); `Dealer.openingHand`
+  produces the canned 15-card test hand.
+- Tests: none yet — module is mostly trivial List ops over
+  HandCard records. Add tests if behavior grows.

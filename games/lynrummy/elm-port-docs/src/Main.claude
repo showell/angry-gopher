@@ -1,35 +1,87 @@
 # Main.elm — EARLY
 
-TEA bootstrap for the standalone LynRummy Elm game. Replaces
-TS's `plugin.ts` factory. First milestone renders only the
-opening board; no Msgs, no interaction.
+TEA bootstrap for the standalone LynRummy Elm game. Wires
+the model + Msg + update + view into `Browser.element`.
 
 ## Status
 
-- **Label:** EARLY. Entry point scaffolding; will grow as we
-  wire interaction.
+- **Label:** EARLY. Active churn — most file edits during
+  port work land here. Stable shape but expanding scope.
 - **Source:** new Elm file (no 1:1 TS source). Conceptually
-  replaces `plugin.ts`'s role of bootstrapping the game into
-  the host.
+  replaces `plugin.ts`'s host-bootstrap role.
 
-## Scope of the first milestone
+## Current scope
 
-- Model: `{ board : List CardStack }`, initialized from
-  `LynRummy.Dealer.initialBoard`.
-- Msg: placeholder variant (`NoOp`) — nothing dispatches yet.
-- update: no-op.
-- view: `LynRummy.View.viewBoardHeading` + `viewBoard model.board`.
-- main: `Browser.element` with empty subscriptions.
+Model:
 
-## Deferred (grows as the port continues)
+```
+Model = { board : List CardStack
+        , hand  : Hand
+        , drag  : DragState
+        }
+```
 
-- Hand zone, action buttons, turn chrome.
-- Drag/drop (Msgs for DragStart / DragMove / DragEnd).
-- Turn orchestration (PlayerTurn integration).
-- Referee validation + any wire plumbing (V2).
+DragState carries `source` (`FromBoardStack Int` |
+`FromHandCard Int`), `cursor`, `originalCursor`,
+`grabOffset`, `wings`, `hoveredWing`, `overBoard`,
+`boardRect`, and `clickIntent : Maybe Int` (cardIndex within
+the source stack, only ever `Just _` when source is a board
+stack).
+
+Msg:
+
+- `MouseDownOnBoardCard {stackIndex, cardIndex} Point` —
+  fired by per-card mousedown. Both drag and click intents
+  begin here; `clickIntent = Just cardIndex` is recorded
+  optimistically and may die during MouseMove.
+- `MouseDownOnHandCard Int Point` — hand-card drag start;
+  no click semantic, `clickIntent = Nothing`.
+- `MouseMove Point` — updates cursor; calls
+  `GestureArbitration.clickIntentAfterMove` to maybe-kill
+  the click intent.
+- `MouseUp` — click takes precedence: if `clickIntent` is
+  still `Just _` AND source is `FromBoardStack`, commits a
+  split via `GestureArbitration.applySplit`. Otherwise falls
+  through to wing-merge / place-as-singleton / snap-back
+  branches.
+- `WingEntered WingId` / `WingLeft WingId` — hover state on
+  drop targets.
+- `BoardEntered` / `BoardLeft` — track whether cursor is over
+  the board (for hand-card place-as-singleton on MouseUp).
+- `BoardRectReceived (Result … Element)` — `Browser.Dom.getElement`
+  resolves on hand-drag start; rect cached for later
+  cursor → board-relative coord translation.
+
+## Subscriptions
+
+`Browser.Events.onMouseMove` and `onMouseUp` are subscribed
+ONLY while `drag = Dragging _`. Idle-state subscription is
+empty.
+
+## View composition
+
+- Two-column flex shell: hand column (min-width 220px) left,
+  board column (min-width 560px) right. Per memory
+  `feedback_hand_upper_left`.
+- `View.boardShellWith` carries `id="lynrummy-board"` for
+  `getElement`, plus mouseenter/leave handlers.
+- Each board card carries its own mousedown handler via
+  `View.viewStackWithCardAttrs`. The stack div itself has
+  no listener — the inversion described in
+  `showell/claude_writings/splitting_a_stack.md`.
+
+## Concession
+
+Click UI is sub-optimal (TS literal `1`-pixel threshold;
+fragile under jitter). Steve knows; preserved faithfully per
+the bar-for-done. See `LynRummy/GestureArbitration.claude`.
 
 ## Pointers
 
-- `index.html` in same dir hosts the `elm.js` build.
-- Serve via `python3 -m http.server 8788` from
-  `games/lynrummy/elm-port-docs/`.
+- Hosted at `index.html` in this dir; built into `elm.js`
+  via `npx elm make src/Main.elm --output=elm.js` (run
+  automatically by `ops/start`).
+- Served through Gopher at
+  `http://localhost:9000/gopher/lynrummy-elm/`.
+- Standalone-served at `http://localhost:8788/` if a Python
+  http.server is running here.
