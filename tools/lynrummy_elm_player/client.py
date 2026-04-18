@@ -118,10 +118,21 @@ class Client:
         """GET /sessions/<id>/hints → every legal merge available now.
 
         Returns {"base_score", "hand_merges":[Hint...], "stack_merges":[Hint...]}.
-        Each Hint has kind, target_stack, side, result_score, plus either
-        hand_card (for hand_merges) or source_stack (for stack_merges).
+        Each Hint has kind, target_stack, side, result_score, trick_id,
+        plus either hand_card (for hand_merges) or source_stack
+        (for stack_merges).
         """
         return self._get(f"{self.base}/sessions/{session_id}/hints")
+
+    def get_turn_log(self, session_id):
+        """GET /sessions/<id>/turn-log → per-turn action history.
+
+        Returns {"turns":[{turn_index, actions, score_before, score_after,
+        cards_played, turn_bonus}, ...]}. Each action carries its seq,
+        kind, score_after, and (for hand merges / place_hand) the
+        detected trick_id. Uses raw log — undone moves still appear.
+        """
+        return self._get(f"{self.base}/sessions/{session_id}/turn-log")
 
     # --- HTTP helpers ---
 

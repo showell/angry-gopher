@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"angry-gopher/games/lynrummy"
+	"angry-gopher/games/lynrummy/tricks"
 )
 
 // ElmLynRummyDir is the repo-relative directory containing the
@@ -53,6 +54,9 @@ func HandleLynRummyElm(w http.ResponseWriter, r *http.Request) {
 	case strings.HasSuffix(sub, "/hints") && strings.HasPrefix(sub, "sessions/"):
 		idStr := strings.TrimSuffix(strings.TrimPrefix(sub, "sessions/"), "/hints")
 		lynrummyElmSessionHints(w, idStr)
+	case strings.HasSuffix(sub, "/turn-log") && strings.HasPrefix(sub, "sessions/"):
+		idStr := strings.TrimSuffix(strings.TrimPrefix(sub, "sessions/"), "/turn-log")
+		lynrummyElmSessionTurnLog(w, idStr)
 	case strings.HasPrefix(sub, "sessions/"):
 		lynrummyElmSessionDetail(w, strings.TrimPrefix(sub, "sessions/"))
 	default:
@@ -409,19 +413,22 @@ func lynrummyElmSessionHints(w http.ResponseWriter, idStr string) {
 		return
 	}
 
-	handMerges := lynrummy.LegalHandMerges(state.Hand, state.Board)
-	stackMerges := lynrummy.LegalStackMerges(state.Board)
+	handMerges := annotateHints(lynrummy.LegalHandMerges(state.Hand, state.Board), state.Board)
+	stackMerges := annotateHints(lynrummy.LegalStackMerges(state.Board), state.Board)
+	trickPlays := enumerateTrickPlays(state.Hand, state.Board)
 
 	payload := struct {
-		SessionID     int64          `json:"session_id"`
-		BaseScore     int            `json:"base_score"`
-		HandMerges    []lynrummy.Hint `json:"hand_merges"`
-		StackMerges   []lynrummy.Hint `json:"stack_merges"`
+		SessionID   int64            `json:"session_id"`
+		BaseScore   int              `json:"base_score"`
+		HandMerges  []annotatedHint  `json:"hand_merges"`
+		StackMerges []annotatedHint  `json:"stack_merges"`
+		TrickPlays  []trickPlayEntry `json:"trick_plays"`
 	}{
 		SessionID:   id,
 		BaseScore:   lynrummy.ScoreForStacks(state.Board),
 		HandMerges:  handMerges,
 		StackMerges: stackMerges,
+		TrickPlays:  trickPlays,
 	}
 	body, err := json.Marshal(payload)
 	if err != nil {
@@ -430,6 +437,186 @@ func lynrummyElmSessionHints(w http.ResponseWriter, idStr string) {
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Write(body)
+}
+
+// lynrummyElmSessionTurnLog walks the session's action log,
+// grouping actions by CompleteTurn boundary and computing per-turn
+// summaries: actions played, cards released from hand, score delta,
+// trick ids used. Intended for agent-side analysis and for the
+// Elm replay UI.
+//
+// Note: uses the RAW log (not EffectiveActions), so undone moves
+// still appear with their trick annotations. An agent that wants
+// only "effective" history can filter post-hoc.
+func lynrummyElmSessionTurnLog(w http.ResponseWriter, idStr string) {
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil || id <= 0 {
+		http.NotFound(w, nil)
+		return
+	}
+
+	var exists int
+	if err := DB.QueryRow(`SELECT 1 FROM lynrummy_elm_sessions WHERE id = ?`, id).Scan(&exists); err != nil {
+		if err == sql.ErrNoRows {
+			http.NotFound(w, nil)
+			return
+		}
+		http.Error(w, "session lookup: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	rows, err := DB.Query(
+		`SELECT seq, action_kind, action_json FROM lynrummy_elm_actions WHERE session_id = ? ORDER BY seq`,
+		id,
+	)
+	if err != nil {
+		http.Error(w, "query actions: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	type actionEntry struct {
+		Seq        int64  `json:"seq"`
+		Kind       string `json:"kind"`
+		TrickID    string `json:"trick_id,omitempty"`
+		ScoreAfter int    `json:"score_after"`
+	}
+	type turnEntry struct {
+		TurnIndex   int           `json:"turn_index"`
+		Actions     []actionEntry `json:"actions"`
+		ScoreBefore int           `json:"score_before"`
+		ScoreAfter  int           `json:"score_after"`
+		CardsPlayed int           `json:"cards_played"`
+		TurnBonus   int           `json:"turn_bonus"`
+	}
+
+	state := lynrummy.InitialState()
+	currentTurn := turnEntry{TurnIndex: 0, ScoreBefore: lynrummy.ScoreForStacks(state.Board)}
+	var turns []turnEntry
+
+	for rows.Next() {
+		var seq int64
+		var kind, jsonBytes string
+		if err := rows.Scan(&seq, &kind, &jsonBytes); err != nil {
+			continue
+		}
+		action, err := lynrummy.DecodeWireAction([]byte(jsonBytes))
+		if err != nil {
+			continue
+		}
+
+		// For trick annotation we peek at the BEFORE-action state
+		// (state pre-apply).
+		var trickID string
+		switch a := action.(type) {
+		case lynrummy.MergeHandAction:
+			trickID = tricks.Detect([]lynrummy.Card{a.HandCard}, state.Board)
+		case lynrummy.PlaceHandAction:
+			trickID = tricks.Detect([]lynrummy.Card{a.HandCard}, state.Board)
+		}
+
+		handBefore := state.Hand.Size()
+		state = lynrummy.ApplyAction(action, state)
+		cardsReleased := handBefore - state.Hand.Size()
+		if cardsReleased > 0 {
+			currentTurn.CardsPlayed += cardsReleased
+		}
+		currentTurn.Actions = append(currentTurn.Actions, actionEntry{
+			Seq:        seq,
+			Kind:       kind,
+			TrickID:    trickID,
+			ScoreAfter: lynrummy.ScoreForStacks(state.Board),
+		})
+
+		if _, isComplete := action.(lynrummy.CompleteTurnAction); isComplete {
+			currentTurn.ScoreAfter = lynrummy.ScoreForStacks(state.Board)
+			currentTurn.TurnBonus = lynrummy.ScoreForCardsPlayed(currentTurn.CardsPlayed)
+			turns = append(turns, currentTurn)
+			currentTurn = turnEntry{
+				TurnIndex:   state.TurnIndex,
+				ScoreBefore: currentTurn.ScoreAfter,
+			}
+		}
+	}
+	// Include the in-progress (not-yet-completed) turn if any.
+	if len(currentTurn.Actions) > 0 {
+		currentTurn.ScoreAfter = lynrummy.ScoreForStacks(state.Board)
+		currentTurn.TurnBonus = lynrummy.ScoreForCardsPlayed(currentTurn.CardsPlayed)
+		turns = append(turns, currentTurn)
+	}
+
+	payload := struct {
+		SessionID int64       `json:"session_id"`
+		Turns     []turnEntry `json:"turns"`
+	}{SessionID: id, Turns: turns}
+
+	body, err := json.Marshal(payload)
+	if err != nil {
+		http.Error(w, "marshal: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Write(body)
+}
+
+// annotatedHint wraps a Hint with the trick id that explains the
+// play. For a single-hand-card merge we run tricks.Detect against
+// the current board; for a stack-to-stack merge (no hand cards
+// released) the trick_id stays empty. Letting the agent know
+// *which* trick a hint exemplifies mirrors what the UI will
+// eventually render as hint-highlight colors or labels.
+type annotatedHint struct {
+	lynrummy.Hint
+	TrickID string `json:"trick_id,omitempty"`
+}
+
+func annotateHints(hints []lynrummy.Hint, board []lynrummy.CardStack) []annotatedHint {
+	out := make([]annotatedHint, len(hints))
+	for i, h := range hints {
+		trickID := ""
+		if h.HandCard != nil {
+			trickID = tricks.Detect([]lynrummy.Card{*h.HandCard}, board)
+		}
+		out[i] = annotatedHint{Hint: h, TrickID: trickID}
+	}
+	return out
+}
+
+// trickPlayEntry is one Play enumerated from the TrickBag. Unlike
+// hand_merges / stack_merges (which are raw merge tuples), a
+// trick play can involve multiple hand cards and a compound board
+// transformation (e.g., SplitForSet extracts two board cards and
+// merges three into a new set). The agent translates a chosen
+// trick play into the appropriate wire-action sequence.
+type trickPlayEntry struct {
+	TrickID     string           `json:"trick_id"`
+	Description string           `json:"description,omitempty"`
+	HandCards   []lynrummy.Card  `json:"hand_cards"`
+	ResultScore int              `json:"result_score"`
+}
+
+// enumerateTrickPlays walks the full TrickBag and returns every
+// Play the current (hand, board) supports, with result_score
+// previews. Used by /hints for agent-side strategic introspection.
+func enumerateTrickPlays(hand lynrummy.Hand, board []lynrummy.CardStack) []trickPlayEntry {
+	var out []trickPlayEntry
+	for _, trick := range tricks.DefaultOrder {
+		plays := trick.FindPlays(hand.HandCards, board)
+		for _, p := range plays {
+			newBoard, _ := p.Apply(board)
+			cards := make([]lynrummy.Card, 0, len(p.HandCards()))
+			for _, hc := range p.HandCards() {
+				cards = append(cards, hc.Card)
+			}
+			out = append(out, trickPlayEntry{
+				TrickID:     trick.ID(),
+				Description: trick.Description(),
+				HandCards:   cards,
+				ResultScore: lynrummy.ScoreForStacks(newBoard),
+			})
+		}
+	}
+	return out
 }
 
 // replaySession is the HTTP-handler version: DB errors become
