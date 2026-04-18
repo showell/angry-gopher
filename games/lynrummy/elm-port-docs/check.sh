@@ -26,6 +26,7 @@ LYNRUMMY=(
   "src/LynRummy/Dealer.elm"
   "src/LynRummy/GestureArbitration.elm"
   "src/LynRummy/Hand.elm"
+  "src/LynRummy/Replay.elm"
   "src/LynRummy/View.elm"
   "src/LynRummy/WingOracle.elm"
   "src/LynRummy/WireAction.elm"
