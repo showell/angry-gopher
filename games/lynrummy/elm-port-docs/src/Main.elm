@@ -48,8 +48,7 @@ type alias DragInfo =
     , grabOffset : Point
     , wings : List WingId
     , hoveredWing : Maybe WingId
-    , overBoard : Bool
-    , boardRect : Maybe Rect
+    , boardRect : Maybe GA.Rect
     , clickIntent : Maybe Int
     }
 
@@ -61,10 +60,6 @@ type DragSource
 
 type alias Point =
     { x : Int, y : Int }
-
-
-type alias Rect =
-    { x : Int, y : Int, width : Int, height : Int }
 
 
 boardDomId : String
@@ -93,8 +88,6 @@ type Msg
     | MouseUp
     | WingEntered WingId
     | WingLeft WingId
-    | BoardEntered
-    | BoardLeft
     | BoardRectReceived (Result Browser.Dom.Error Browser.Dom.Element)
 
 
@@ -152,22 +145,6 @@ update msg model =
                 NotDragging ->
                     ( model, Cmd.none )
 
-        BoardEntered ->
-            case model.drag of
-                Dragging info ->
-                    ( { model | drag = Dragging { info | overBoard = True } }, Cmd.none )
-
-                NotDragging ->
-                    ( model, Cmd.none )
-
-        BoardLeft ->
-            case model.drag of
-                Dragging info ->
-                    ( { model | drag = Dragging { info | overBoard = False } }, Cmd.none )
-
-                NotDragging ->
-                    ( model, Cmd.none )
-
         BoardRectReceived result ->
             case ( model.drag, result ) of
                 ( Dragging info, Ok element ) ->
@@ -209,12 +186,11 @@ startBoardCardDrag { stackIndex, cardIndex } clientPoint model =
                         , grabOffset = { x = halfWidth, y = 20 }
                         , wings = wings
                         , hoveredWing = Nothing
-                        , overBoard = False
                         , boardRect = Nothing
                         , clickIntent = Just cardIndex
                         }
               }
-            , Cmd.none
+            , fetchBoardRect
             )
 
         _ ->
@@ -241,7 +217,6 @@ startHandDrag idx clientPoint model =
                         , grabOffset = { x = halfWidth, y = 20 }
                         , wings = wings
                         , hoveredWing = Nothing
-                        , overBoard = False
                         , boardRect = Nothing
                         , clickIntent = Nothing
                         }
@@ -278,14 +253,28 @@ handleMouseUp model =
                             ( commitMerge wing info.source model, Cmd.none )
 
                         ( Nothing, FromHandCard handIdx ) ->
-                            if info.overBoard then
+                            if cursorOverBoard info then
                                 ( commitPlaceHandCard handIdx info model, Cmd.none )
 
                             else
                                 ( clearDrag model, Cmd.none )
 
-                        ( Nothing, FromBoardStack _ ) ->
-                            ( clearDrag model, Cmd.none )
+                        ( Nothing, FromBoardStack stackIdx ) ->
+                            if cursorOverBoard info then
+                                ( commitMoveStack stackIdx info model, Cmd.none )
+
+                            else
+                                ( clearDrag model, Cmd.none )
+
+
+cursorOverBoard : DragInfo -> Bool
+cursorOverBoard info =
+    case info.boardRect of
+        Just rect ->
+            GA.cursorInRect info.cursor rect
+
+        Nothing ->
+            False
 
 
 commitSplit : Int -> Int -> Model -> Model
@@ -294,6 +283,28 @@ commitSplit stackIdx cardIdx model =
         | board = GA.applySplit stackIdx cardIdx model.board
         , drag = NotDragging
     }
+
+
+commitMoveStack : Int -> DragInfo -> Model -> Model
+commitMoveStack stackIdx info model =
+    case ( listAt stackIdx model.board, info.boardRect ) of
+        ( Just stack, Just rect ) ->
+            let
+                newLoc =
+                    { left = info.cursor.x - info.grabOffset.x - rect.x
+                    , top = info.cursor.y - info.grabOffset.y - rect.y
+                    }
+
+                change =
+                    BoardActions.moveStack stack newLoc
+            in
+            { model
+                | board = applyChange change model.board
+                , drag = NotDragging
+            }
+
+        _ ->
+            clearDrag model
 
 
 clearDrag : Model -> Model
@@ -437,14 +448,7 @@ boardColumn model =
 
 boardWithWings : Model -> Html Msg
 boardWithWings model =
-    let
-        boardAttrs =
-            [ id boardDomId
-            , Events.onMouseEnter BoardEntered
-            , Events.onMouseLeave BoardLeft
-            ]
-    in
-    View.boardShellWith boardAttrs (boardChildren model)
+    View.boardShellWith [ id boardDomId ] (boardChildren model)
 
 
 boardChildren : Model -> List (Html Msg)

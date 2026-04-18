@@ -1,8 +1,10 @@
 module LynRummy.GestureArbitration exposing
     ( Point
+    , Rect
     , applySplit
     , clickIntentAfterMove
     , clickThreshold
+    , cursorInRect
     , distSquared
     )
 
@@ -32,6 +34,24 @@ import LynRummy.CardStack as CardStack exposing (CardStack, stacksEqual)
 
 type alias Point =
     { x : Int, y : Int }
+
+
+type alias Rect =
+    { x : Int, y : Int, width : Int, height : Int }
+
+
+{-| Half-open AABB containment check: `x >= rect.x && x < rect.x + rect.width`,
+same for y. A point on the top/left edge is inside; a point on the
+bottom/right edge is outside. Used at drop time to decide whether
+a snap-back should apply — the decision is a drop-time predicate,
+not a flag tracked during the drag.
+-}
+cursorInRect : Point -> Rect -> Bool
+cursorInRect p r =
+    (p.x >= r.x)
+        && (p.x < r.x + r.width)
+        && (p.y >= r.y)
+        && (p.y < r.y + r.height)
 
 
 {-| Squared-distance threshold above which click intent dies.

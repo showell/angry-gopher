@@ -83,6 +83,40 @@ suite =
                     afterReturnToOrigin
                         |> Expect.equal Nothing
             ]
+        , describe "cursorInRect"
+            [ test "point strictly inside" <|
+                \_ ->
+                    GA.cursorInRect { x = 50, y = 50 } sampleRect
+                        |> Expect.equal True
+            , test "top-left corner is inside (half-open)" <|
+                \_ ->
+                    GA.cursorInRect { x = 10, y = 20 } sampleRect
+                        |> Expect.equal True
+            , test "bottom-right corner is outside (half-open)" <|
+                \_ ->
+                    GA.cursorInRect { x = 110, y = 120 } sampleRect
+                        |> Expect.equal False
+            , test "just inside right edge" <|
+                \_ ->
+                    GA.cursorInRect { x = 109, y = 50 } sampleRect
+                        |> Expect.equal True
+            , test "just inside bottom edge" <|
+                \_ ->
+                    GA.cursorInRect { x = 50, y = 119 } sampleRect
+                        |> Expect.equal True
+            , test "outside left" <|
+                \_ ->
+                    GA.cursorInRect { x = 5, y = 50 } sampleRect
+                        |> Expect.equal False
+            , test "outside above" <|
+                \_ ->
+                    GA.cursorInRect { x = 50, y = 5 } sampleRect
+                        |> Expect.equal False
+            , test "far outside" <|
+                \_ ->
+                    GA.cursorInRect { x = 500, y = 500 } sampleRect
+                        |> Expect.equal False
+            ]
         , describe "applySplit"
             [ test "splitting a 3-card stack at index 1 yields 2 stacks total" <|
                 \_ ->
@@ -171,6 +205,11 @@ suite =
 
 
 -- HELPERS
+
+
+sampleRect : GA.Rect
+sampleRect =
+    { x = 10, y = 20, width = 100, height = 100 }
 
 
 makeStack : String -> CardStack

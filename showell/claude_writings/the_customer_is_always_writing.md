@@ -7,6 +7,7 @@ coincidence, certain resemblances to actual Steve Howell. The
 caricature is offered in good faith.*
 
 **← Prev:** [The Bar for Done](the_bar_for_done.md)
+**→ Next:** [Click and Drag](click_and_drag.md)
 
 ---
 
