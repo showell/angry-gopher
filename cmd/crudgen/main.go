@@ -1014,7 +1014,11 @@ func emitColumnCell(b *strings.Builder, c column) {
 		fmt.Fprintf(b, "\t\tcheckedAttr_ := \"\"\n\t\tif %s {\n\t\t\tcheckedAttr_ = \" checked\"\n\t\t}\n", goVarFromSQL(flagArg))
 		fmt.Fprintf(b, "\t\tfmt.Fprintf(w, `<td><form method=\"POST\" action=\"%s\" style=\"margin:0\">`+\n", post)
 		fmt.Fprintf(b, "\t\t\t`<input type=\"hidden\" name=\"%s\" value=\"%%d\">`+\n", fieldName)
-		fmt.Fprint(b, "\t\t\t`<input type=\"checkbox\" onchange=\"this.form.submit()\"%s></form></td>`,\n")
+		// The %s here is part of the generated source — not a
+		// format directive for this Fprint. WriteString sidesteps
+		// go vet's printf-lint which otherwise flags Fprint with
+		// a %-containing literal.
+		b.WriteString("\t\t\t`<input type=\"checkbox\" onchange=\"this.form.submit()\"%s></form></td>`,\n")
 		fmt.Fprintf(b, "\t\t\t%s, checkedAttr_)\n", goVarFromSQL(valueField))
 	default:
 		fmt.Fprintf(b, "\t\tfmt.Fprint(w, `<td>?renderer:%s?</td>`)\n", c.renderer)

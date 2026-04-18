@@ -1032,12 +1032,11 @@ pre code { background: none; padding: 0; }
 <h3>Gopher landmarks</h3>
 <ul>
 <li><a href="/gopher/%[1]s/gopher/README.md">README</a></li>
-<li><a href="/gopher/%[1]s/gopher/DECISIONS.md">DECISIONS</a></li>
-<li><a href="/gopher/%[1]s/gopher/DATABASE.md">DATABASE</a></li>
 <li><a href="/gopher/%[1]s/gopher/TESTING.md">TESTING</a></li>
-<li><a href="/gopher/%[1]s/gopher/TASKS.md">TASKS</a></li>
 <li><a href="/gopher/%[1]s/gopher/LABELS.md">LABELS</a></li>
 <li><a href="/gopher/%[1]s/gopher/GLOSSARY.md">GLOSSARY</a></li>
+<li><a href="/gopher/%[1]s/gopher/PATTERNS.md">PATTERNS</a></li>
+<li><a href="/gopher/%[1]s/gopher/BRIDGES.md">BRIDGES</a></li>
 </ul>`, html.EscapeString(section))
 		tree := fmt.Sprintf(`
 <h3>Browse Gopher</h3>

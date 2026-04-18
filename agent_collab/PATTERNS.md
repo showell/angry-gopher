@@ -14,8 +14,9 @@ ONBOARDING.md.
   production.
 - **No migrations** — schema file is the truth; rebuild and
   re-import.
-- **Intentional vs pragmatic** — edicts go in DECISIONS.md, TODOs
-  in TASKS.md.
+- **Intentional vs pragmatic** — edicts go in the repo's
+  decisions doc (or a memory file); TODOs go in the repo's task
+  queue or issue tracker.
 - **Commit small, commit often, commit both related repos**
   (Cat + Gopher or LynRummy + Cat together).
 - **No feature flags or back-compat shims** for code under active
@@ -36,8 +37,8 @@ ONBOARDING.md.
 
 - **Memory on correction AND confirmation.** If you only save
   "don't do that", the agent drifts from good judgment.
-- **Durable intent in files, not chat.** CLAUDE.md, TASKS.md,
-  VISION.md, DECISIONS.md. Chat is ephemeral.
+- **Durable intent in files, not chat.** CLAUDE.md + whatever
+  strategy/task docs your repo uses. Chat is ephemeral.
 - **Push back on tangents** — "let's finish this first."
 - **Short responses** — skip preamble and summary.
 - **Distinguish human-expedience moves from algorithmic signals**

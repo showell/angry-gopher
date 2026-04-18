@@ -34,15 +34,21 @@ You read this at session start. It tells you what the repo is,
 current priorities, conventions, and pointers to other docs. Keep
 it up to date — when conventions change, edit this file first.
 
-### TASKS.md (repo root)
-Persistent task queue. Add items, mark them done, keep a short
-"deferred" section. Session-internal todo lists disappear; this
-doesn't.
+### Persistent task queue (repo-local file)
+If the repo has a persistent task file, use it. Add items, mark
+them done, keep a short "deferred" section. Session-internal
+todo lists disappear; a committed task file doesn't. (This repo
+has consolidated on memory files + issue tracker in lieu of a
+TASKS.md — check what the repo uses before assuming.)
 
-### VISION.md / DECISIONS.md / ARCHITECTURE.md (repo-specific)
-Long-lived strategy docs. When you make a decision that affects
-the shape of the system, append a one-paragraph entry with the
-date and rationale. Future you will thank present you.
+### Strategy docs (repo-specific)
+Long-lived design docs capture durable decisions. Look for
+`VISION.md` / `DECISIONS.md` / `ARCHITECTURE.md` or the
+repo's named equivalent. When you make a decision that shapes
+the system, append a dated one-paragraph entry with rationale.
+(This repo currently keeps most durable intent in memory files
+and essays; review `GLOSSARY.md`, `PATTERNS.md`, and
+`BRIDGES.md` for the current vocabulary.)
 
 ### Memory files (agent-owned, outside the repo)
 Per-project markdown files capturing the human's preferences,
@@ -81,9 +87,11 @@ abstractions cheaply.
 
 ### Intentional vs pragmatic
 When recording a missing feature, distinguish:
-- **Intentional**: we decided not to do this. Edicts belong in
-  DECISIONS.md.
-- **Pragmatic**: we'd like to, haven't yet. Belongs in TASKS.md.
+- **Intentional**: we decided not to do this. Belongs in the
+  repo's strategy/decisions doc (or a memory file for
+  repo-agnostic edicts).
+- **Pragmatic**: we'd like to, haven't yet. Belongs in the
+  repo's task queue or issue tracker.
 
 Confusing these breeds design drift.
 

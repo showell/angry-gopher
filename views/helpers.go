@@ -278,7 +278,7 @@ h1 { color: #000080; font-size: 34px; margin-bottom: 4px; }
     <p>Curated markdown documentation — architecture, decisions, glossaries, testing notes.</p>
     <ul>
       <li><a href="/gopher/docs/">Docs home</a> <span class="muted">— repo READMEs</span></li>
-      <li><a href="/gopher/docs/gopher/DECISIONS.md">Landmarks</a> <span class="muted">— DECISIONS, DATABASE, TESTING, GLOSSARY</span></li>
+      <li><a href="/gopher/docs/gopher/README.md">Landmarks</a> <span class="muted">— README, TESTING, GLOSSARY, PATTERNS, BRIDGES</span></li>
     </ul>
   </div>
 

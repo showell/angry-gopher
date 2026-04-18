@@ -25,7 +25,8 @@ what a PR is. You do need to be told how the agent fits in.
   those by telling the agent things like "remember that we always do
   X" and it writes a file for next time.
 - You keep durable intent in **docs committed to the repo** (CLAUDE.md,
-  TASKS.md, VISION.md, DECISIONS.md). The agent reads these first.
+  a strategy/decisions doc, a task file — whatever your repo uses).
+  The agent reads these first.
 - You give feedback ruthlessly and immediately. "Don't do that" is a
   memory write. "Yes, that's right" is also a memory write (so it
   doesn't drift away from good calls).
@@ -110,8 +111,8 @@ decisions to memory/docs before they fall out.
   not to read until done. This isn't theater — knowing biases
   the experiment.
 - **Task queues are files.** Not session-scoped todo lists. A
-  `TASKS.md` that persists is more useful than anything the agent
-  tracks internally.
+  committed task file (or issue tracker) that persists is more
+  useful than anything the agent tracks internally.
 - **Tests inform structure.** If your test uses a verb like
   "kick the Ace", there should probably be a `kick()` function.
 - **Commit small and often.** The agent's suggestions are best
