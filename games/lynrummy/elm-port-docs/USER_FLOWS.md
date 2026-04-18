@@ -159,16 +159,32 @@ verified ("button exists and fires Msg X"), it's a step.
 
 ### 12. Get a hint
 
-1. User clicks "Hint" button. ✅
-2. Client: `ClickHint` → `fetchHints sid`. ✅
-3. Server: GET /hints returns hand_merges + stack_merges +
-   trick_plays arrays with `result_score` previews. ✅
-4. Client: decoder normalizes to `List HintOption`. ✅
-5. Client: `pickBestHint` returns the max-score option. ✅
-6. Status bar shows the hint's description. ✅
-7. `model.hintedCards` is set to the hint's hand cards. ✅
-8. Hand cards in `hintedCards` render with a lightgreen
-   background. ✅
+Hint system rebuilt 2026-04-18. Current Elm wiring is a
+placeholder; the Python client is the first consumer of the new
+`/hint` endpoint. The Elm retrofit is pending.
+
+**New flow (server side, live):**
+
+1. User clicks "Hint" button. 🟡 (Elm shows placeholder message)
+2. Client GETs `/gopher/lynrummy-elm/sessions/<id>/hint`.
+3. Server calls `tricks.BuildSuggestions(hand, board)` which
+   walks `HintPriorityOrder` (the seven tricks in simplest-first
+   order: direct_play → hand_stacks → pair_peel → split_for_set →
+   → peel_for_run → rb_swap → loose_card_play). First play per
+   firing trick becomes a `Suggestion`.
+4. Returns `{ "suggestions": [{rank, trick_id, description,
+   hand_cards, action}, ...] }`.
+5. Client picks `suggestions[0]` as the top hint, uses `action`
+   directly as a POSTable wire action.
+6. Status bar shows the description. 🟡 (pending Elm retrofit)
+7. Hand cards from `hand_cards` get highlighted in green. 🟡
+   (pending Elm retrofit)
+
+**Design principles** (see `showell/claude_writings/hints_from_first_principles.md`):
+- Priority is processing order, not a score metric.
+- Server over-shares; client filters.
+- One representative play per firing trick.
+- `direct_play` is the beginner-favorite.
 
 ---
 
