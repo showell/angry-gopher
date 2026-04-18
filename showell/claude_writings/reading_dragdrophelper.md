@@ -7,6 +7,7 @@ Frame: "what does this code already do, and what should you
 not break when changing it."*
 
 **← Prev:** [For the Next Session](for_the_next_session.md)
+**→ Next:** [Splitting a Stack](splitting_a_stack.md)
 
 ---
 
