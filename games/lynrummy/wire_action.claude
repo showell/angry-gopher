@@ -1,0 +1,76 @@
+just_use wire_action.go
+
+# label: WORKHORSE (wire-action-v2)
+# role: domain — action-shaped wire format (Go side)
+
+Go counterpart to `elm-port-docs/src/LynRummy/WireAction.elm`.
+Each `WireAction` value names what the player did, rather than
+the mechanical diff. Receiver applies the action to prior state
+to derive the post-state.
+
+See `showell/claude_writings/actions_not_diffs.md` for rationale.
+
+## Exposed surface
+
+`WireAction` interface + 9 concrete types:
+
+- `SplitAction` — `{stack_index, card_index}`
+- `MergeStackAction` — `{source_stack, target_stack, side}`
+- `MergeHandAction` — `{hand_card, target_stack, side}`
+- `PlaceHandAction` — `{hand_card, loc}`
+- `MoveStackAction` — `{stack_index, new_loc}`
+- `DrawAction` — `{}`
+- `DiscardAction` — `{hand_card}`
+- `CompleteTurnAction` — `{}`
+- `UndoAction` — `{}`
+
+Plus `Side` as a typed string (`LeftSide`/`RightSide`) and
+`DecodeWireAction([]byte) (WireAction, error)`.
+
+## Idiom
+
+Go doesn't have native sum types. We use an interface
+(`WireAction`) with a marker method (`ActionKind() string`)
+and concrete struct types per action kind. Each concrete
+type implements `MarshalJSON` to prepend the `"action"` tag
+via an anonymous wrapper struct — standard Go pattern for
+injecting a field.
+
+Decoding is a `switch` on the decoded `action` tag, dispatching
+to the concrete type's unmarshal. `strictUnmarshal` verifies
+required fields are present in the raw JSON (guards against
+JSON's default zero-value-on-missing behavior quietly
+accepting `{"action":"split"}`).
+
+## Cross-language conformance
+
+The format-lock tests in `wire_action_test.go` assert exact
+JSON byte strings for 4 representative shapes. The Elm test
+suite (`WireActionTest.elm`) asserts the same strings for the
+same inputs. If either side's encoding drifts, one suite
+breaks first and the string-match against the other side
+fails on inspection.
+
+Key JSON shapes (same bytes both sides):
+
+```
+{"action":"split","stack_index":5,"card_index":2}
+{"action":"merge_stack","source_stack":1,"target_stack":2,"side":"right"}
+{"action":"complete_turn"}
+{"action":"draw"}
+```
+
+Field ordering matters: Go's `encoding/json` emits struct
+fields in declaration order; Elm's `Json.Encode.object` emits
+in list order. Both are pinned by the tests.
+
+## Pointers
+
+- Consumer: not wired into the server yet (no handler reads
+  this). Next step: HTTP endpoint for player-action submission
+  that decodes via `DecodeWireAction`, validates, persists.
+- Deprecates: the diff-based `wire*` types in `events.go`
+  (see `stacks_to_remove`/`stacks_to_add`). Those stay for now
+  so the existing game-replay UI keeps working; they go away
+  when the clean cut is complete.
+- Depends on: `Card`, `Location` from this package.
