@@ -5,6 +5,7 @@ the LynRummy TS→Elm porting effort. Durable-ish — the bar
 itself shouldn't move much.*
 
 **← Prev:** [Splitting a Stack](splitting_a_stack.md)
+**→ Next:** [The Customer Is Always Writing](the_customer_is_always_writing.md)
 
 ---
 
