@@ -89,7 +89,8 @@ CREATE INDEX IF NOT EXISTS idx_critter_sessions_study ON critter_sessions(study,
 CREATE TABLE IF NOT EXISTS lynrummy_elm_sessions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     created_at INTEGER NOT NULL,
-    label TEXT NOT NULL DEFAULT ''
+    label TEXT NOT NULL DEFAULT '',
+    deck_seed INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS lynrummy_elm_actions (

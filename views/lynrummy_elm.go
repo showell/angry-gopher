@@ -14,6 +14,7 @@ import (
 	"html"
 	"io"
 	"log"
+	mathRand "math/rand"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -66,14 +67,24 @@ func HandleLynRummyElm(w http.ResponseWriter, r *http.Request) {
 
 // lynrummyElmNewSession creates a fresh session row and returns
 // its id. Called by the Elm client on boot; client stores the id
-// and includes it with every subsequent action POST.
+// and includes it with every subsequent action POST. A
+// per-session deck seed is generated here; replays use it so
+// each session has its own shuffled deck order — deterministic
+// within a session, different across sessions.
 func lynrummyElmNewSession(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 	now := time.Now().Unix()
-	res, err := DB.Exec(`INSERT INTO lynrummy_elm_sessions (created_at) VALUES (?)`, now)
+	seed := now*1_000_003 + int64(mathRandInt63()) // monotonic + noise
+	if seed == 0 {
+		seed = 1 // zero means "no shuffle" downstream; force non-zero
+	}
+	res, err := DB.Exec(
+		`INSERT INTO lynrummy_elm_sessions (created_at, deck_seed) VALUES (?, ?)`,
+		now, seed,
+	)
 	if err != nil {
 		http.Error(w, "insert session: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -83,9 +94,15 @@ func lynrummyElmNewSession(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "lastinsertid: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	log.Printf("lynrummy-elm session: new id=%d", id)
+	log.Printf("lynrummy-elm session: new id=%d seed=%d", id, seed)
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	fmt.Fprintf(w, `{"session_id":%d}`, id)
+}
+
+// mathRandInt63 returns a random int63 for seeding. Wraps
+// math/rand.Int63 so we keep the import local.
+func mathRandInt63() int64 {
+	return mathRand.Int63()
 }
 
 // lynrummyElmActions receives a WireAction from the Elm client
@@ -530,8 +547,10 @@ func lynrummyElmSessionTurnLog(w http.ResponseWriter, idStr string) {
 		return
 	}
 
-	var exists int
-	if err := DB.QueryRow(`SELECT 1 FROM lynrummy_elm_sessions WHERE id = ?`, id).Scan(&exists); err != nil {
+	var seed int64
+	if err := DB.QueryRow(
+		`SELECT deck_seed FROM lynrummy_elm_sessions WHERE id = ?`, id,
+	).Scan(&seed); err != nil {
 		if err == sql.ErrNoRows {
 			http.NotFound(w, nil)
 			return
@@ -565,7 +584,7 @@ func lynrummyElmSessionTurnLog(w http.ResponseWriter, idStr string) {
 		TurnBonus   int           `json:"turn_bonus"`
 	}
 
-	state := lynrummy.InitialState()
+	state := lynrummy.InitialStateWithSeed(seed)
 	currentTurn := turnEntry{TurnIndex: 0, ScoreBefore: lynrummy.ScoreForStacks(state.Board)}
 	var turns []turnEntry
 
@@ -717,8 +736,10 @@ func replaySession(w http.ResponseWriter, id int64) (lynrummy.State, bool) {
 // (state, ok, err). ok=false with nil err means "session not
 // found"; non-nil err means "DB problem."
 func replaySessionNoHTTP(id int64) (lynrummy.State, bool, error) {
-	var exists int
-	err := DB.QueryRow(`SELECT 1 FROM lynrummy_elm_sessions WHERE id = ?`, id).Scan(&exists)
+	var seed int64
+	err := DB.QueryRow(
+		`SELECT deck_seed FROM lynrummy_elm_sessions WHERE id = ?`, id,
+	).Scan(&seed)
 	if err == sql.ErrNoRows {
 		return lynrummy.State{}, false, nil
 	}
@@ -749,7 +770,7 @@ func replaySessionNoHTTP(id int64) (lynrummy.State, bool, error) {
 		}
 		actions = append(actions, action)
 	}
-	return lynrummy.ReplayActions(actions), true, nil
+	return lynrummy.ReplayActionsSeeded(actions, seed), true, nil
 }
 
 func lynrummyElmPlay(w http.ResponseWriter) {

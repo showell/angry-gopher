@@ -14,6 +14,8 @@
 
 package lynrummy
 
+import "math/rand"
+
 type State struct {
 	Board     []CardStack `json:"board"`
 	Hand      Hand        `json:"hand"`
@@ -27,19 +29,42 @@ type State struct {
 	CardsPlayedThisTurn int `json:"cards_played_this_turn"`
 }
 
-// InitialState produces the starting state for a fresh session:
-// the canonical opening board + the canned 15-card opening hand +
-// the remaining cards in the double deck, deterministic order.
-// Randomness (shuffled deck per session seed) comes later.
+// InitialState produces the starting state with a deterministic
+// (unshuffled) deck. Used by tests and as a fallback when no
+// per-session seed exists.
 func InitialState() State {
+	return InitialStateWithSeed(0)
+}
+
+// InitialStateWithSeed produces the starting state for a session
+// with the deck shuffled by the given seed. Seed = 0 means
+// deterministic (no shuffle); any non-zero seed produces a
+// reproducible shuffle. Replays of a session use its stored seed
+// so reconstructions always agree.
+func InitialStateWithSeed(seed int64) State {
 	board := InitialBoard()
 	hand := OpeningHand()
+	deck := remainingDeckAfter(board, hand)
+	if seed != 0 {
+		deck = shuffleDeckSeeded(deck, seed)
+	}
 	return State{
 		Board:   board,
 		Hand:    hand,
-		Deck:    remainingDeckAfter(board, hand),
+		Deck:    deck,
 		Discard: []Card{},
 	}
+}
+
+// shuffleDeckSeeded returns a copy of deck shuffled with a fixed
+// seed. Same seed → same order, every time.
+func shuffleDeckSeeded(deck []Card, seed int64) []Card {
+	out := append([]Card{}, deck...)
+	r := rand.New(rand.NewSource(seed))
+	r.Shuffle(len(out), func(i, j int) {
+		out[i], out[j] = out[j], out[i]
+	})
+	return out
 }
 
 // remainingDeckAfter = "double deck minus cards in board + hand."
@@ -294,14 +319,19 @@ func removeStack(board []CardStack, target CardStack) []CardStack {
 	return board
 }
 
-// ReplayActions walks the given action list from InitialState,
-// applying each in order, and returns the final state.
-// Undo actions are resolved during a preprocessing pass —
-// every Undo cancels the last non-Undo action, leaving history
-// intact but removing the action's effect. See
-// EffectiveActions for the rule.
+// ReplayActions walks the given action list from InitialState
+// (deterministic deck order). Used by tests and as a fallback.
 func ReplayActions(actions []WireAction) State {
-	state := InitialState()
+	return ReplayActionsSeeded(actions, 0)
+}
+
+// ReplayActionsSeeded walks the action list from
+// InitialStateWithSeed(seed). The server stores a per-session
+// seed when the session is created and passes it here on every
+// replay — so reconstructions are reproducible per session.
+// Undo actions are resolved during a preprocessing pass.
+func ReplayActionsSeeded(actions []WireAction, seed int64) State {
+	state := InitialStateWithSeed(seed)
 	for _, a := range EffectiveActions(actions) {
 		state = ApplyAction(a, state)
 	}
