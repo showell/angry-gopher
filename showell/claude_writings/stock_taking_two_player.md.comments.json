@@ -1,0 +1,22 @@
+{
+  "comments": [
+    {
+      "para_index": 37,
+      "author": "Steve",
+      "timestamp": "2026-04-18T08:52:09-04:00",
+      "text": "Does it peel at all? How does it even determine which move to play?"
+    },
+    {
+      "para_index": 42,
+      "author": "Steve",
+      "timestamp": "2026-04-18T08:53:10-04:00",
+      "text": "This should be high priority relative to almost everything on this essay."
+    },
+    {
+      "para_index": 52,
+      "author": "Steve",
+      "timestamp": "2026-04-18T08:55:33-04:00",
+      "text": "We need to discuss the UI for this. In Angry Cat there is no Draw button. Instead, if you hit Complete Turn, then the rules dictate how many cards the dealer gives you (either 0, 3, or 5)."
+    }
+  ]
+}

@@ -26,8 +26,6 @@ func TestWireAction_RoundTrip(t *testing.T) {
 		{"merge_hand", MergeHandAction{HandCard: card8H, TargetStack: 5, Side: RightSide}},
 		{"place_hand", PlaceHandAction{HandCard: card8H, Loc: Location{Top: 140, Left: 220}}},
 		{"move_stack", MoveStackAction{StackIndex: 5, NewLoc: Location{Top: 140, Left: 220}}},
-		{"draw", DrawAction{}},
-		{"discard", DiscardAction{HandCard: card8H}},
 		{"complete_turn", CompleteTurnAction{}},
 		{"undo", UndoAction{}},
 	}
@@ -74,11 +72,6 @@ func TestWireAction_JSONShape(t *testing.T) {
 			"complete_turn — bare tag",
 			CompleteTurnAction{},
 			`{"action":"complete_turn"}`,
-		},
-		{
-			"draw — bare tag",
-			DrawAction{},
-			`{"action":"draw"}`,
 		},
 	}
 

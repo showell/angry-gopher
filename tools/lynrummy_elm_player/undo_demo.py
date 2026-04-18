@@ -22,7 +22,7 @@ def main():
     def snap(label):
         st = c.get_state(sid)
         sc = c.get_score(sid)
-        print(f"  [{label}]  hand={len(st['state']['hand']['hand_cards'])}  "
+        print(f"  [{label}]  hand={len(st['state']['hands'][st['state']['active_player_index']]['hand_cards'])}  "
               f"board_stacks={len(st['state']['board'])}  "
               f"score={sc['board_score']}  seq={st['seq']}")
 

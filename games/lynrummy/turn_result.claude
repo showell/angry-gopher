@@ -1,0 +1,23 @@
+just_use turn_result.go
+
+# label: EARLY
+# role: domain — classifies which flavor of success a CompleteTurn is
+
+Go port of player_turn.ts's `turn_result()` decision tree. The TS side
+tracks cards_played_during_turn / empty_hand_bonus / victory_bonus as
+mutable PlayerTurn state; Go derives the same classification from the
+session's replay-computed State + a session-level victor flag.
+
+Product decisions captured here (from TS player_turn.ts):
+- 0 cards played → SUCCESS_BUT_NEEDS_CARDS (server would deal 3 cards next turn)
+- hand empty + first-in-session → SUCCESS_AS_VICTOR (1500-ish bonus)
+- hand empty + victor already declared → SUCCESS_WITH_HAND_EMPTIED
+- else → SUCCESS
+- dirty board → FAILURE, but that's the /actions gate, not here
+
+Simplification vs TS: TS's `declares_me_victor()` checks board cleanness
+at the moment hand became empty (mid-move). Go only sees the replay
+snapshot AT CompleteTurn time, so it treats every "hand-empty at
+CompleteTurn" as a potential victor — the board is guaranteed clean
+by the gate. Differs from TS only in the edge case "emptied on dirty
+board, then tidied up." Not porting that fidelity until it matters.

@@ -54,9 +54,9 @@ func HandleLynRummyElm(w http.ResponseWriter, r *http.Request) {
 	case strings.HasSuffix(sub, "/score") && strings.HasPrefix(sub, "sessions/"):
 		idStr := strings.TrimSuffix(strings.TrimPrefix(sub, "sessions/"), "/score")
 		lynrummyElmSessionScore(w, idStr)
-	case strings.HasSuffix(sub, "/hints") && strings.HasPrefix(sub, "sessions/"):
-		idStr := strings.TrimSuffix(strings.TrimPrefix(sub, "sessions/"), "/hints")
-		lynrummyElmSessionHints(w, idStr)
+	case strings.HasSuffix(sub, "/hint") && strings.HasPrefix(sub, "sessions/"):
+		idStr := strings.TrimSuffix(strings.TrimPrefix(sub, "sessions/"), "/hint")
+		lynrummyElmSessionHint(w, idStr)
 	case strings.HasSuffix(sub, "/turn-log") && strings.HasPrefix(sub, "sessions/"):
 		idStr := strings.TrimSuffix(strings.TrimPrefix(sub, "sessions/"), "/turn-log")
 		lynrummyElmSessionTurnLog(w, idStr)
@@ -134,28 +134,58 @@ func lynrummyElmActions(w http.ResponseWriter, r *http.Request) {
 	sessionIDStr := r.URL.Query().Get("session")
 	sessionIDForExpand, _ := strconv.ParseInt(sessionIDStr, 10, 64)
 
-	// Expand PlayTrickAction into TrickResultAction at submission
-	// time. This keeps the replay engine free of the tricks-package
-	// dependency and gives the stored log a clean board-diff shape.
-	if pt, ok := action.(lynrummy.PlayTrickAction); ok {
-		resolved, resolveErr := expandPlayTrick(pt, sessionIDForExpand)
-		if resolveErr != nil {
-			log.Printf("lynrummy-elm action: play_trick resolve err=%v", resolveErr)
-			http.Error(w, "play_trick resolve: "+resolveErr.Error(), http.StatusBadRequest)
-			return
-		}
-		action = resolved
-		body, err = json.Marshal(resolved)
-		if err != nil {
-			http.Error(w, "marshal resolved: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-	}
+	_ = sessionIDForExpand // PlayTrickAction expansion retired with hints/tricks rip.
 	sessionID, err := strconv.ParseInt(sessionIDStr, 10, 64)
 	if err != nil || sessionID <= 0 {
 		log.Printf("lynrummy-elm action: bad/missing session param=%q", sessionIDStr)
 		http.Error(w, "missing or bad ?session=<id>", http.StatusBadRequest)
 		return
+	}
+
+	// CompleteTurn referee gate + classification. Mirrors
+	// Game.maybe_complete_turn in TS game.ts: the board must pass
+	// ValidateTurnComplete (geometry + semantics — no incomplete /
+	// bogus / dup stacks) before a turn can end. After the gate,
+	// classify which variant of success this is so the client can
+	// surface a per-branch status message.
+	var turnResult lynrummy.CompleteTurnResult
+	var turnScore, cardsDrawn int
+	if _, isComplete := action.(lynrummy.CompleteTurnAction); isComplete {
+		state, ok, stateErr := replaySessionNoHTTP(sessionID)
+		if stateErr != nil {
+			log.Printf("lynrummy-elm action: complete_turn replay err=%v", stateErr)
+			http.Error(w, "replay: "+stateErr.Error(), http.StatusInternalServerError)
+			return
+		}
+		if !ok {
+			http.Error(w, "session not found", http.StatusNotFound)
+			return
+		}
+		bounds := lynrummy.BoardBounds{MaxWidth: 800, MaxHeight: 600, Margin: 5}
+		if refErr := lynrummy.ValidateTurnComplete(state.Board, bounds); refErr != nil {
+			log.Printf("lynrummy-elm action: complete_turn rejected session=%d stage=%s msg=%s",
+				sessionID, refErr.Stage, refErr.Message)
+			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			w.WriteHeader(http.StatusBadRequest)
+			fmt.Fprintf(w, `{"ok":false,"turn_result":%q,"stage":%q,"message":%q}`,
+				lynrummy.TurnResultFailure, refErr.Stage, refErr.Message)
+			return
+		}
+		turnResult = lynrummy.ClassifyTurnResult(state, state.VictorAwarded)
+
+		// Narrate the promise: pre-compute turn_score + cards_drawn
+		// by applying the action to an in-memory copy. The real apply
+		// happens on the next /state replay; this copy just lets the
+		// client popup say "you scored N" and "we will deal M cards"
+		// before the UI visually flips seats.
+		outgoing := state.ActivePlayerIndex
+		post := lynrummy.ApplyAction(lynrummy.CompleteTurnAction{}, state)
+		if outgoing < len(post.Scores) && outgoing < len(state.Scores) {
+			turnScore = post.Scores[outgoing] - state.Scores[outgoing]
+		}
+		if outgoing < len(post.Hands) && outgoing < len(state.Hands) {
+			cardsDrawn = post.Hands[outgoing].Size() - state.Hands[outgoing].Size()
+		}
 	}
 
 	// Sequence number = count of prior actions in this session + 1.
@@ -181,7 +211,13 @@ func lynrummyElmActions(w http.ResponseWriter, r *http.Request) {
 	log.Printf("lynrummy-elm action: session=%d seq=%d kind=%s payload=%s",
 		sessionID, nextSeq, action.ActionKind(), body)
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	fmt.Fprintf(w, `{"ok":true,"seq":%d}`, nextSeq)
+	if turnResult != "" {
+		fmt.Fprintf(w,
+			`{"ok":true,"seq":%d,"turn_result":%q,"turn_score":%d,"cards_drawn":%d}`,
+			nextSeq, turnResult, turnScore, cardsDrawn)
+	} else {
+		fmt.Fprintf(w, `{"ok":true,"seq":%d}`, nextSeq)
+	}
 }
 
 // --- Sessions browser ---
@@ -317,7 +353,7 @@ func lynrummyElmSessionDetail(w http.ResponseWriter, idStr string) {
 	var handSize int
 	if ok {
 		currentScore = lynrummy.ScoreForStacks(state.Board)
-		handSize = state.Hand.Size()
+		handSize = state.ActiveHand().Size()
 	}
 
 	rows, err := DB.Query(
@@ -471,7 +507,7 @@ func lynrummyElmSessionScore(w http.ResponseWriter, idStr string) {
 	}{
 		SessionID:  id,
 		BoardScore: boardScore,
-		HandSize:   state.Hand.Size(),
+		HandSize:   state.ActiveHand().Size(),
 		PerStack:   entries,
 	}
 	body, err := json.Marshal(payload)
@@ -483,12 +519,15 @@ func lynrummyElmSessionScore(w http.ResponseWriter, idStr string) {
 	w.Write(body)
 }
 
-// lynrummyElmSessionHints returns every legal move the current
-// hand + board supports right now — hand-card merges and stack-
-// to-stack merges. Mirrors the UI's future hint system: agent
-// reads this to know what's playable without walking the rules
-// itself.
-func lynrummyElmSessionHints(w http.ResponseWriter, idStr string) {
+// lynrummyElmSessionHint walks the seven tricks in priority
+// order against the active player's (hand, board) and returns
+// one representative Suggestion per firing trick, ranked. The
+// client's common case is `suggestions[0]`; a strategic agent
+// can inspect deeper.
+//
+// Empty array = no trick fires ("no obvious play"). Never 404s
+// for a valid session.
+func lynrummyElmSessionHint(w http.ResponseWriter, idStr string) {
 	id, err := strconv.ParseInt(idStr, 10, 64)
 	if err != nil || id <= 0 {
 		http.NotFound(w, nil)
@@ -499,23 +538,16 @@ func lynrummyElmSessionHints(w http.ResponseWriter, idStr string) {
 		return
 	}
 
-	handMerges := annotateHints(lynrummy.LegalHandMerges(state.Hand, state.Board), state.Board)
-	stackMerges := annotateHints(lynrummy.LegalStackMerges(state.Board), state.Board)
-	trickPlays := enumerateTrickPlays(state.Hand, state.Board)
+	suggestions := tricks.BuildSuggestions(state.ActiveHand(), state.Board)
+	if suggestions == nil {
+		suggestions = []tricks.Suggestion{}
+	}
 
 	payload := struct {
-		SessionID   int64            `json:"session_id"`
-		BaseScore   int              `json:"base_score"`
-		HandMerges  []annotatedHint  `json:"hand_merges"`
-		StackMerges []annotatedHint  `json:"stack_merges"`
-		TrickPlays  []trickPlayEntry `json:"trick_plays"`
-	}{
-		SessionID:   id,
-		BaseScore:   lynrummy.ScoreForStacks(state.Board),
-		HandMerges:  handMerges,
-		StackMerges: stackMerges,
-		TrickPlays:  trickPlays,
-	}
+		SessionID   int64                `json:"session_id"`
+		Suggestions []tricks.Suggestion  `json:"suggestions"`
+	}{SessionID: id, Suggestions: suggestions}
+
 	body, err := json.Marshal(payload)
 	if err != nil {
 		http.Error(w, "marshal: "+err.Error(), http.StatusInternalServerError)
@@ -523,62 +555,6 @@ func lynrummyElmSessionHints(w http.ResponseWriter, idStr string) {
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Write(body)
-}
-
-// expandPlayTrick turns a client-emitted PlayTrickAction into a
-// TrickResultAction by: (1) replaying the session to the current
-// state, (2) asking the TrickBag for the matching Play,
-// (3) applying the Play to compute the new board, (4) diffing
-// old vs new to produce stacks_to_remove + stacks_to_add.
-func expandPlayTrick(pt lynrummy.PlayTrickAction, sessionID int64) (lynrummy.TrickResultAction, error) {
-	if sessionID <= 0 {
-		return lynrummy.TrickResultAction{}, fmt.Errorf("missing session id")
-	}
-	state, ok, err := replaySessionNoHTTP(sessionID)
-	if err != nil {
-		return lynrummy.TrickResultAction{}, err
-	}
-	if !ok {
-		return lynrummy.TrickResultAction{}, fmt.Errorf("session %d not found", sessionID)
-	}
-	play := tricks.FindPlay(pt.TrickID, pt.HandCards, state.Board)
-	if play == nil {
-		return lynrummy.TrickResultAction{}, fmt.Errorf(
-			"no %s play matches the given hand cards against current board", pt.TrickID)
-	}
-	newBoard, _ := play.Apply(state.Board)
-	toRemove, toAdd := diffBoards(state.Board, newBoard)
-	return lynrummy.TrickResultAction{
-		TrickID:           pt.TrickID,
-		StacksToRemove:    toRemove,
-		StacksToAdd:       toAdd,
-		HandCardsReleased: pt.HandCards,
-	}, nil
-}
-
-// diffBoards computes (removed, added) such that applying
-// "remove these stacks, add those stacks" to `before` produces
-// `after` (up to order). Matches by structural equality, which
-// accounts for loc + cards + deck tags — so a stack that moved
-// shows up as both removed and re-added.
-func diffBoards(before, after []lynrummy.CardStack) (removed, added []lynrummy.CardStack) {
-	afterCopy := append([]lynrummy.CardStack{}, after...)
-	for _, s := range before {
-		found := -1
-		for i, t := range afterCopy {
-			if s.Equals(t) {
-				found = i
-				break
-			}
-		}
-		if found >= 0 {
-			afterCopy = append(afterCopy[:found], afterCopy[found+1:]...)
-		} else {
-			removed = append(removed, s)
-		}
-	}
-	added = afterCopy
-	return
 }
 
 // lynrummyElmSessionTurnLog walks the session's action log,
@@ -649,26 +625,18 @@ func lynrummyElmSessionTurnLog(w http.ResponseWriter, idStr string) {
 			continue
 		}
 
-		// For trick annotation we peek at the BEFORE-action state
-		// (state pre-apply).
-		var trickID string
-		switch a := action.(type) {
-		case lynrummy.MergeHandAction:
-			trickID = tricks.Detect([]lynrummy.Card{a.HandCard}, state.Board)
-		case lynrummy.PlaceHandAction:
-			trickID = tricks.Detect([]lynrummy.Card{a.HandCard}, state.Board)
-		}
-
-		handBefore := state.Hand.Size()
+		// Retroactive trick annotation retired 2026-04-18 with the
+		// hints/tricks rip. Kind + score is enough for now.
+		preActive := state.ActivePlayerIndex
+		handBefore := state.Hands[preActive].Size()
 		state = lynrummy.ApplyAction(action, state)
-		cardsReleased := handBefore - state.Hand.Size()
+		cardsReleased := handBefore - state.Hands[preActive].Size()
 		if cardsReleased > 0 {
 			currentTurn.CardsPlayed += cardsReleased
 		}
 		currentTurn.Actions = append(currentTurn.Actions, actionEntry{
 			Seq:        seq,
 			Kind:       kind,
-			TrickID:    trickID,
 			ScoreAfter: lynrummy.ScoreForStacks(state.Board),
 		})
 
@@ -703,66 +671,6 @@ func lynrummyElmSessionTurnLog(w http.ResponseWriter, idStr string) {
 	w.Write(body)
 }
 
-// annotatedHint wraps a Hint with the trick id that explains the
-// play. For a single-hand-card merge we run tricks.Detect against
-// the current board; for a stack-to-stack merge (no hand cards
-// released) the trick_id stays empty. Letting the agent know
-// *which* trick a hint exemplifies mirrors what the UI will
-// eventually render as hint-highlight colors or labels.
-type annotatedHint struct {
-	lynrummy.Hint
-	TrickID string `json:"trick_id,omitempty"`
-}
-
-func annotateHints(hints []lynrummy.Hint, board []lynrummy.CardStack) []annotatedHint {
-	out := make([]annotatedHint, len(hints))
-	for i, h := range hints {
-		trickID := ""
-		if h.HandCard != nil {
-			trickID = tricks.Detect([]lynrummy.Card{*h.HandCard}, board)
-		}
-		out[i] = annotatedHint{Hint: h, TrickID: trickID}
-	}
-	return out
-}
-
-// trickPlayEntry is one Play enumerated from the TrickBag. Unlike
-// hand_merges / stack_merges (which are raw merge tuples), a
-// trick play can involve multiple hand cards and a compound board
-// transformation (e.g., SplitForSet extracts two board cards and
-// merges three into a new set). The agent translates a chosen
-// trick play into the appropriate wire-action sequence.
-type trickPlayEntry struct {
-	TrickID     string           `json:"trick_id"`
-	Description string           `json:"description,omitempty"`
-	HandCards   []lynrummy.Card  `json:"hand_cards"`
-	ResultScore int              `json:"result_score"`
-}
-
-// enumerateTrickPlays walks the full TrickBag and returns every
-// Play the current (hand, board) supports, with result_score
-// previews. Used by /hints for agent-side strategic introspection.
-func enumerateTrickPlays(hand lynrummy.Hand, board []lynrummy.CardStack) []trickPlayEntry {
-	var out []trickPlayEntry
-	for _, trick := range tricks.DefaultOrder {
-		plays := trick.FindPlays(hand.HandCards, board)
-		for _, p := range plays {
-			newBoard, _ := p.Apply(board)
-			cards := make([]lynrummy.Card, 0, len(p.HandCards()))
-			for _, hc := range p.HandCards() {
-				cards = append(cards, hc.Card)
-			}
-			out = append(out, trickPlayEntry{
-				TrickID:     trick.ID(),
-				Description: trick.Description(),
-				HandCards:   cards,
-				ResultScore: lynrummy.ScoreForStacks(newBoard),
-			})
-		}
-	}
-	return out
-}
-
 // replaySession is the HTTP-handler version: DB errors become
 // HTTP responses. Wraps replaySessionNoHTTP.
 func replaySession(w http.ResponseWriter, id int64) (lynrummy.State, bool) {
@@ -781,6 +689,7 @@ func replaySession(w http.ResponseWriter, id int64) (lynrummy.State, bool) {
 	}
 	return state, true
 }
+
 
 // replaySessionNoHTTP is the plain data-layer version. Returns
 // (state, ok, err). ok=false with nil err means "session not
@@ -845,7 +754,19 @@ func lynrummyElmPlay(w http.ResponseWriter) {
 <div id="root"></div>
 <script src="/gopher/lynrummy-elm/elm.js"></script>
 <script>
-  Elm.Main.init({ node: document.getElementById("root") });
+  // URL hash like "#12" pins the active session. On reload, Elm
+  // resumes that session; on back-to-lobby, the port clears the
+  // hash.
+  var sidMatch = /^#(\d+)$/.exec(window.location.hash);
+  var initialSessionId = sidMatch ? parseInt(sidMatch[1], 10) : null;
+  var app = Elm.Main.init({
+    node: document.getElementById("root"),
+    flags: { initialSessionId: initialSessionId },
+  });
+  app.ports.setSessionHash.subscribe(function(sid) {
+    var hash = sid === "" ? "" : "#" + sid;
+    history.replaceState(null, "", window.location.pathname + window.location.search + hash);
+  });
 </script>
 </div>
 </body></html>`)

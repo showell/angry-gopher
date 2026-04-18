@@ -8,25 +8,59 @@
 // downstream queries (score, hints, turn-state) read from state
 // produced this way.
 //
-// No-op for Draw / Discard / CompleteTurn / Undo — turn-logic
-// isn't modeled yet. When it is, they'll get their own transitions
-// here.
+// CompleteTurn + Undo have their own transitions.
 
 package lynrummy
 
 import "math/rand"
 
 type State struct {
-	Board     []CardStack `json:"board"`
-	Hand      Hand        `json:"hand"`
-	Deck      []Card      `json:"deck"`
-	Discard   []Card      `json:"discard"`
-	TurnIndex int         `json:"turn_index"`
+	Board   []CardStack `json:"board"`
+	Hands   []Hand      `json:"hands"`
+	Deck    []Card      `json:"deck"`
+	Discard []Card      `json:"discard"`
 
-	// CardsPlayedThisTurn counts hand cards that left the hand
-	// for the board this turn (via PlaceHand, MergeHand). Used to
-	// compute the per-turn bonus at CompleteTurn; reset each turn.
+	// ActivePlayerIndex is the seat whose turn it is right now.
+	// 0 or 1 in two-player. Advances on CompleteTurn.
+	ActivePlayerIndex int `json:"active_player_index"`
+
+	// Scores is the per-player running total, one entry per seat.
+	// Updated at CompleteTurn: the outgoing player's cell gets
+	// this-turn's score added. Indexed identically to Hands.
+	Scores []int `json:"scores"`
+
+	// VictorAwarded flips to true the first time a player
+	// CompleteTurns with an empty hand. Later empty-hand turns
+	// classify as SuccessWithHandEmpty (5-card draw, 1000 bonus)
+	// rather than SuccessAsVictor (5-card draw, 1500 bonus).
+	VictorAwarded bool `json:"victor_awarded"`
+
+	// TurnStartBoardScore is the board score captured at the start
+	// of the current turn. Used to compute the "board delta"
+	// component of the turn score at CompleteTurn.
+	TurnStartBoardScore int `json:"turn_start_board_score"`
+
+	TurnIndex int `json:"turn_index"`
+
+	// CardsPlayedThisTurn counts hand cards that left the active
+	// player's hand for the board this turn (via PlaceHand,
+	// MergeHand). Used to classify CompleteTurn; reset each turn.
 	CardsPlayedThisTurn int `json:"cards_played_this_turn"`
+}
+
+// ActiveHand returns the hand belonging to the player whose turn
+// it is. All hand-card actions target this hand during replay.
+func (s State) ActiveHand() Hand {
+	return s.Hands[s.ActivePlayerIndex]
+}
+
+// withActiveHand returns a state whose active hand has been
+// replaced. Preserves immutability of the input state.
+func (s State) withActiveHand(h Hand) State {
+	hands := append([]Hand{}, s.Hands...)
+	hands[s.ActivePlayerIndex] = h
+	s.Hands = hands
+	return s
 }
 
 // InitialState produces the starting state with a deterministic
@@ -43,16 +77,19 @@ func InitialState() State {
 // so reconstructions always agree.
 func InitialStateWithSeed(seed int64) State {
 	board := InitialBoard()
-	hand := OpeningHand()
-	deck := remainingDeckAfter(board, hand)
+	hands := OpeningHands()
+	deck := remainingDeckAfterHands(board, hands)
 	if seed != 0 {
 		deck = shuffleDeckSeeded(deck, seed)
 	}
 	return State{
-		Board:   board,
-		Hand:    hand,
-		Deck:    deck,
-		Discard: []Card{},
+		Board:               board,
+		Hands:               hands,
+		Deck:                deck,
+		Discard:             []Card{},
+		ActivePlayerIndex:   0,
+		Scores:              make([]int, len(hands)),
+		TurnStartBoardScore: ScoreForStacks(board),
 	}
 }
 
@@ -73,7 +110,7 @@ func shuffleDeckSeeded(deck []Card, seed int64) []Card {
 // SAME draw order — critical for replay correctness. (Randomness
 // per session will come from a server-assigned seed later; for now
 // agent-side testing + solo play work cleanly with a fixed order.)
-func remainingDeckAfter(board []CardStack, hand Hand) []Card {
+func remainingDeckAfterHands(board []CardStack, hands []Hand) []Card {
 	full := BuildDeterministicDoubleDeck()
 	used := map[Card]int{}
 	for _, s := range board {
@@ -81,8 +118,10 @@ func remainingDeckAfter(board []CardStack, hand Hand) []Card {
 			used[bc.Card]++
 		}
 	}
-	for _, hc := range hand.HandCards {
-		used[hc.Card]++
+	for _, h := range hands {
+		for _, hc := range h.HandCards {
+			used[hc.Card]++
+		}
 	}
 	deck := make([]Card, 0, len(full))
 	for _, c := range full {
@@ -116,24 +155,12 @@ func ApplyAction(action WireAction, state State) State {
 	case MoveStackAction:
 		return applyMoveStack(a, state)
 
-	case DrawAction:
-		return applyDraw(state)
-
-	case DiscardAction:
-		return applyDiscard(a, state)
-
 	case CompleteTurnAction:
 		return applyCompleteTurn(state)
 
 	case UndoAction:
 		// Snapshot-based undo is deferred. For now a no-op so the
 		// wire accepts undo events without breaking replay.
-		return state
-
-	case PlayTrickAction:
-		// The action handler expands PlayTrick to TrickResult at
-		// submission time, so this case shouldn't normally fire
-		// during replay. If it ever does (old log, raw POST), no-op.
 		return state
 
 	case TrickResultAction:
@@ -145,7 +172,7 @@ func ApplyAction(action WireAction, state State) State {
 // --- Transition helpers ---
 //
 // Each helper preserves Deck / Discard / TurnIndex unless it's
-// specifically mutating one of them (Draw, Discard, CompleteTurn).
+// specifically mutating one of them (CompleteTurn).
 // The plays-per-turn counter bumps on PlaceHand and MergeHand.
 
 func applySplit(stackIdx, cardIdx int, state State) State {
@@ -192,7 +219,8 @@ func applyMergeHand(a MergeHandAction, state State) State {
 	if a.TargetStack < 0 || a.TargetStack >= len(state.Board) {
 		return state
 	}
-	hc := state.Hand.FindByCard(a.HandCard)
+	hand := state.ActiveHand()
+	hc := hand.FindByCard(a.HandCard)
 	if hc == nil {
 		return state
 	}
@@ -210,24 +238,23 @@ func applyMergeHand(a MergeHandAction, state State) State {
 	}
 	newBoard := removeStack(state.Board, target)
 	newBoard = append(newBoard, *merged)
-	out := state
+	out := state.withActiveHand(hand.RemoveHandCard(*hc))
 	out.Board = newBoard
-	out.Hand = state.Hand.RemoveHandCard(*hc)
 	out.CardsPlayedThisTurn = state.CardsPlayedThisTurn + 1
 	return out
 }
 
 func applyPlaceHand(a PlaceHandAction, state State) State {
-	hc := state.Hand.FindByCard(a.HandCard)
+	hand := state.ActiveHand()
+	hc := hand.FindByCard(a.HandCard)
 	if hc == nil {
 		return state
 	}
 	newStack := FromHandCard(*hc, a.Loc)
 	newBoard := append([]CardStack{}, state.Board...)
 	newBoard = append(newBoard, newStack)
-	out := state
+	out := state.withActiveHand(hand.RemoveHandCard(*hc))
 	out.Board = newBoard
-	out.Hand = state.Hand.RemoveHandCard(*hc)
 	out.CardsPlayedThisTurn = state.CardsPlayedThisTurn + 1
 	return out
 }
@@ -245,32 +272,26 @@ func applyMoveStack(a MoveStackAction, state State) State {
 	return out
 }
 
-// applyDraw pulls the top card off the deck, adds it to the hand
-// as FreshlyDrawn. Silent no-op if the deck is empty.
-func applyDraw(state State) State {
-	if len(state.Deck) == 0 {
-		return state
+// ageStack transitions each BoardCard's state one step closer to
+// "firm" at the turn boundary. Mirrors TS CardStack.aged_from_prior_turn.
+// Cards the active player just put down this turn were FreshlyPlayed;
+// after their CompleteTurn they become FreshlyPlayedByLastPlayer so
+// the INCOMING player sees them highlighted (opponent color). The
+// cycle before that is already FreshlyPlayedByLastPlayer — those
+// settle to FirmlyOnBoard.
+func ageStack(s CardStack) CardStack {
+	aged := make([]BoardCard, len(s.BoardCards))
+	for i, bc := range s.BoardCards {
+		next := bc.State
+		switch bc.State {
+		case FreshlyPlayed:
+			next = FreshlyPlayedByLastPlayer
+		case FreshlyPlayedByLastPlayer:
+			next = FirmlyOnBoard
+		}
+		aged[i] = BoardCard{Card: bc.Card, State: next}
 	}
-	drawn := state.Deck[0]
-	out := state
-	out.Deck = append([]Card{}, state.Deck[1:]...)
-	out.Hand = Hand{HandCards: append(append([]HandCard{}, state.Hand.HandCards...),
-		HandCard{Card: drawn, State: FreshlyDrawn},
-	)}
-	return out
-}
-
-// applyDiscard removes a card from the hand and pushes it onto the
-// discard pile. Silent no-op if the card isn't in hand.
-func applyDiscard(a DiscardAction, state State) State {
-	hc := state.Hand.FindByCard(a.HandCard)
-	if hc == nil {
-		return state
-	}
-	out := state
-	out.Hand = state.Hand.RemoveHandCard(*hc)
-	out.Discard = append(append([]Card{}, state.Discard...), a.HandCard)
-	return out
+	return NewCardStack(aged, s.Loc)
 }
 
 // applyTrickResult applies the board diff computed at submission
@@ -278,33 +299,101 @@ func applyDiscard(a DiscardAction, state State) State {
 // hand cards and non-trivial board transformations; the diff
 // captures all of it so replay is a single-step operation.
 func applyTrickResult(a TrickResultAction, state State) State {
-	out := state
 	newBoard := append([]CardStack{}, state.Board...)
 	for _, r := range a.StacksToRemove {
 		newBoard = removeStack(newBoard, r)
 	}
 	newBoard = append(newBoard, a.StacksToAdd...)
-	out.Board = newBoard
 
-	newHand := state.Hand
+	newHand := state.ActiveHand()
 	for _, c := range a.HandCardsReleased {
 		if hc := newHand.FindByCard(c); hc != nil {
 			newHand = newHand.RemoveHandCard(*hc)
 		}
 	}
-	out.Hand = newHand
+	out := state.withActiveHand(newHand)
+	out.Board = newBoard
 	out.CardsPlayedThisTurn = state.CardsPlayedThisTurn + len(a.HandCardsReleased)
 	return out
 }
 
-// applyCompleteTurn resets per-turn flags: every hand card returns
-// to HandNormal, CardsPlayedThisTurn resets to 0, TurnIndex++.
+// applyCompleteTurn finishes the outgoing player's turn. In order:
+//
+//  1. Classify the turn (SuccessButNeedsCards / SuccessAsVictor /
+//     SuccessWithHandEmpty / Success — Failure isn't reached here
+//     because the /actions gate rejects dirty boards upstream).
+//  2. Compute and bank the outgoing player's turn score.
+//  3. If the result awards a victor bonus, mark VictorAwarded so
+//     later empty-hand turns classify as plain SuccessWithHandEmpty.
+//  4. Reset the outgoing hand's per-turn card state, then draw N
+//     cards from the deck based on the result (0/3/5).
+//  5. Age board cards: FreshlyPlayed → FreshlyPlayedByLastPlayer,
+//     FreshlyPlayedByLastPlayer → FirmlyOnBoard. Mirror of TS
+//     Board.age_cards — so the incoming player sees the outgoing
+//     player's recent plays highlighted (lavender), and their own
+//     prior freshly-played cards settle to firm white.
+//  6. Advance TurnIndex, reset CardsPlayedThisTurn, cycle the seat,
+//     and capture a fresh TurnStartBoardScore for the incoming turn.
+//
+// Mirrors TS Player.end_turn + PlayerGroup.advance_turn.
 func applyCompleteTurn(state State) State {
-	out := state
-	out.Hand = state.Hand.ResetState()
-	out.TurnIndex = state.TurnIndex + 1
-	out.CardsPlayedThisTurn = 0
-	return out
+	outgoingIdx := state.ActivePlayerIndex
+	result := ClassifyTurnResult(state, state.VictorAwarded)
+
+	boardScore := ScoreForStacks(state.Board)
+	boardDelta := boardScore - state.TurnStartBoardScore
+	turnScore := boardDelta + ScoreForCardsPlayed(state.CardsPlayedThisTurn)
+	switch result {
+	case TurnResultSuccessAsVictor:
+		turnScore += 1000 + 500 // empty-hand + victor
+	case TurnResultSuccessWithHandEmpty:
+		turnScore += 1000
+	}
+
+	scores := append([]int{}, state.Scores...)
+	if outgoingIdx < len(scores) {
+		scores[outgoingIdx] += turnScore
+	}
+
+	outgoingHand := state.Hands[outgoingIdx].ResetState()
+	deck := append([]Card{}, state.Deck...)
+	var drawCount int
+	switch result {
+	case TurnResultSuccessButNeedsCards:
+		drawCount = 3
+	case TurnResultSuccessAsVictor, TurnResultSuccessWithHandEmpty:
+		drawCount = 5
+	}
+	for i := 0; i < drawCount && len(deck) > 0; i++ {
+		outgoingHand = outgoingHand.AddCards([]Card{deck[0]}, FreshlyDrawn)
+		deck = deck[1:]
+	}
+
+	hands := append([]Hand{}, state.Hands...)
+	hands[outgoingIdx] = outgoingHand
+
+	nextActive := outgoingIdx
+	if len(hands) > 0 {
+		nextActive = (outgoingIdx + 1) % len(hands)
+	}
+
+	agedBoard := make([]CardStack, len(state.Board))
+	for i, stk := range state.Board {
+		agedBoard[i] = ageStack(stk)
+	}
+
+	return State{
+		Board:               agedBoard,
+		Hands:               hands,
+		Deck:                deck,
+		Discard:             state.Discard,
+		ActivePlayerIndex:   nextActive,
+		Scores:              scores,
+		VictorAwarded:       state.VictorAwarded || result == TurnResultSuccessAsVictor,
+		TurnStartBoardScore: boardScore,
+		TurnIndex:           state.TurnIndex + 1,
+		CardsPlayedThisTurn: 0,
+	}
 }
 
 // removeStack returns a new slice with the first occurrence of

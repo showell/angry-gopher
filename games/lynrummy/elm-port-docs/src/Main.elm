@@ -1,4 +1,4 @@
-module Main exposing (main)
+port module Main exposing (main)
 
 {-| TEA bootstrap for the standalone LynRummy game.
 
@@ -12,15 +12,17 @@ import Browser
 import Browser.Dom
 import Browser.Events
 import Html exposing (Html, div)
-import Html.Attributes exposing (id, style)
+import Html.Attributes exposing (href, id, style)
 import Html.Events as Events
 import Http
 import Json.Decode as Decode exposing (Decoder)
 import LynRummy.BoardActions as BoardActions exposing (Side(..))
+import LynRummy.Card as Card exposing (Card)
 import LynRummy.CardStack as CardStack exposing (BoardLocation, CardStack, HandCard, stacksEqual)
 import LynRummy.Dealer
 import LynRummy.GestureArbitration as GA
 import LynRummy.Hand as Hand exposing (Hand)
+import LynRummy.PlayerTurn exposing (CompleteTurnResult(..))
 import LynRummy.Score as Score
 import LynRummy.View as View
 import LynRummy.WingOracle as WingOracle exposing (WingId)
@@ -33,34 +35,64 @@ import Task
 
 
 type alias Model =
-    { phase : Phase
-    , board : List CardStack
-    , hand : Hand
+    { board : List CardStack
+    , hands : List Hand
+    , activePlayerIndex : Int
     , drag : DragState
     , sessionId : Maybe Int
     , status : StatusMessage
     , score : Int
+    , scores : List Int
     , turnIndex : Int
-    , sessions : SessionsLoad
+    , hintedCards : List Card
+    , popup : Maybe PopupContent
     }
 
 
-type Phase
-    = Lobby
-    | Playing
+{-| Cheapest-possible popup for turn-boundary ceremony. One
+character speaks (admin), delivers a multi-line message, user
+clicks OK to dismiss + advance. The body is the full text —
+caller builds it with whatever narrative (you scored N, we'll
+deal M next turn, etc.). See `popupForTurnResult` for the
+5-branch casting.
+-}
+type alias PopupContent =
+    { admin : String
+    , body : String
+    }
 
 
-type SessionsLoad
-    = SessionsLoading
-    | SessionsLoaded (List SessionSummary)
-    | SessionsError
+{-| Active hand is whichever player's turn it is. All hand-card
+drag/drop uses this. Empty hand fallback keeps the view resilient
+if the server hasn't populated state yet.
+-}
+activeHand : Model -> Hand
+activeHand model =
+    case listAt model.activePlayerIndex model.hands of
+        Just h ->
+            h
+
+        Nothing ->
+            { handCards = [] }
 
 
-type alias SessionSummary =
-    { id : Int
-    , createdAt : Int
-    , label : String
-    , actionCount : Int
+{-| Returns a model with the active player's hand replaced.
+Used by local UI-side hand updates (e.g. drag-drop that removes
+a card before the server round-trip).
+-}
+setActiveHand : Hand -> Model -> Model
+setActiveHand newHand model =
+    { model
+        | hands =
+            List.indexedMap
+                (\i h ->
+                    if i == model.activePlayerIndex then
+                        newHand
+
+                    else
+                        h
+                )
+                model.hands
     }
 
 
@@ -105,41 +137,52 @@ boardDomId =
     "lynrummy-board"
 
 
-init : () -> ( Model, Cmd Msg )
-init _ =
-    ( { phase = Lobby
-      , board = LynRummy.Dealer.initialBoard
-      , hand = LynRummy.Dealer.openingHand
-      , drag = NotDragging
-      , sessionId = Nothing
-      , status = { text = "Pick a session or start a new game.", kind = Inform }
-      , score = 0
-      , turnIndex = 0
-      , sessions = SessionsLoading
-      }
-    , fetchSessionsList
-    )
+{-| Flags from the HTML harness. `initialSessionId` comes from
+the URL hash (e.g., "#12") — present on reload so the UI can
+resume the same game rather than dropping back to the lobby.
+-}
+type alias Flags =
+    { initialSessionId : Maybe Int }
 
 
-fetchSessionsList : Cmd Msg
-fetchSessionsList =
-    Http.get
-        { url = "/gopher/lynrummy-elm/api/sessions"
-        , expect = Http.expectJson SessionsListReceived sessionsDecoder
-        }
+{-| Port: updates window.location.hash to match the active
+session. Called whenever we learn which session we're on, so a
+reload finds the session again via the flags pathway.
+-}
+port setSessionHash : String -> Cmd msg
 
 
-sessionsDecoder : Decoder (List SessionSummary)
-sessionsDecoder =
-    Decode.field "sessions"
-        (Decode.list
-            (Decode.map4 SessionSummary
-                (Decode.field "id" Decode.int)
-                (Decode.field "created_at" Decode.int)
-                (Decode.field "label" Decode.string)
-                (Decode.field "action_count" Decode.int)
+init : Flags -> ( Model, Cmd Msg )
+init flags =
+    let
+        baseModel =
+            { board = LynRummy.Dealer.initialBoard
+            , hands = [ LynRummy.Dealer.openingHand, { handCards = [] } ]
+            , activePlayerIndex = 0
+            , drag = NotDragging
+            , sessionId = Nothing
+            , status = { text = "Starting game…", kind = Inform }
+            , score = 0
+            , scores = [ 0, 0 ]
+            , turnIndex = 0
+            , hintedCards = []
+            , popup = Nothing
+            }
+    in
+    case flags.initialSessionId of
+        Just sid ->
+            -- URL hash said we're resuming a specific game. Pull state.
+            ( { baseModel
+                | sessionId = Just sid
+                , status = { text = "Resuming session " ++ String.fromInt sid ++ "…", kind = Inform }
+              }
+            , fetchRemoteState sid
             )
-        )
+
+        Nothing ->
+            -- Bare /gopher/lynrummy-elm/ URL — auto-create a new game.
+            -- The lobby role is served by /gopher/game-lobby upstream.
+            ( baseModel, fetchNewSession )
 
 
 fetchNewSession : Cmd Msg
@@ -162,21 +205,27 @@ optimistic-apply shape isn't straightforward.
 -}
 type alias RemoteState =
     { board : List CardStack
-    , hand : Hand
+    , hands : List Hand
+    , activePlayerIndex : Int
+    , scores : List Int
     , turnIndex : Int
     }
+
+
+handDecoder : Decoder Hand
+handDecoder =
+    Decode.field "hand_cards" (Decode.list CardStack.handCardDecoder)
+        |> Decode.map (\cards -> { handCards = cards })
 
 
 remoteStateDecoder : Decoder RemoteState
 remoteStateDecoder =
     Decode.field "state"
-        (Decode.map3 RemoteState
+        (Decode.map5 RemoteState
             (Decode.field "board" (Decode.list CardStack.cardStackDecoder))
-            (Decode.field "hand"
-                (Decode.field "hand_cards" (Decode.list CardStack.handCardDecoder)
-                    |> Decode.map (\cards -> { handCards = cards })
-                )
-            )
+            (Decode.field "hands" (Decode.list handDecoder))
+            (Decode.field "active_player_index" Decode.int)
+            (Decode.field "scores" (Decode.list Decode.int))
             (Decode.field "turn_index" Decode.int)
         )
 
@@ -206,10 +255,39 @@ type Msg
     | ClickCompleteTurn
     | ClickUndo
     | StateRefreshed (Result Http.Error RemoteState)
-    | SessionsListReceived (Result Http.Error (List SessionSummary))
-    | ClickNewGame
-    | ClickResumeSession Int
-    | ClickBackToLobby
+    | ClickHint
+    | HintsReceived (Result Http.Error (List HintOption))
+    | CompleteTurnResponded (Result Http.Error CompleteTurnOutcome)
+    | PopupOk
+
+
+{-| The full CompleteTurn response payload. `turnScore` and
+`cardsDrawn` are only meaningful on success branches; Failure
+ignores them.
+-}
+type alias CompleteTurnOutcome =
+    { result : CompleteTurnResult
+    , turnScore : Int
+    , cardsDrawn : Int
+    }
+
+
+{-| A single hint option — already normalized across the three
+server arrays (hand_merges, stack_merges, trick_plays) into a
+consistent shape for display.
+
+  - `description` is a human-readable summary
+  - `handCards` are the cards to highlight in the hand (empty
+    for stack-to-stack merges)
+  - `resultScore` is the server-previewed board score if this
+    play is made (used to pick the best)
+
+-}
+type alias HintOption =
+    { description : String
+    , handCards : List Card
+    , resultScore : Int
+    }
 
 
 
@@ -272,7 +350,14 @@ update msg model =
             ( model, Cmd.none )
 
         SessionReceived (Ok sid) ->
-            ( { model | sessionId = Just sid }, Cmd.none )
+            -- Trust-server mode: after session creation, pull the
+            -- authoritative state so both hands are populated from
+            -- the server's dealer rather than the client's guess.
+            -- Also pin the session into the URL hash so a reload
+            -- resumes the same game instead of dropping to the lobby.
+            ( { model | sessionId = Just sid }
+            , Cmd.batch [ fetchRemoteState sid, setSessionHash (String.fromInt sid) ]
+            )
 
         SessionReceived (Err _) ->
             -- If the server can't hand us a session, actions stay
@@ -282,17 +367,40 @@ update msg model =
         ClickCompleteTurn ->
             case model.sessionId of
                 Just sid ->
-                    ( { model
-                        | status =
-                            { text = "Turn " ++ String.fromInt (model.turnIndex + 1) ++ " complete."
-                            , kind = Inform
-                            }
-                      }
-                    , Cmd.batch [ sendAction sid WA.CompleteTurn, fetchRemoteState sid ]
-                    )
+                    -- Server owns classification in trust-server mode.
+                    -- Don't fetchRemoteState in parallel — the GET can
+                    -- resolve before the POST commits, leaving the UI
+                    -- showing pre-CompleteTurn state. Chain: fetch
+                    -- only after the response lands.
+                    ( model, sendCompleteTurn sid )
 
                 Nothing ->
                     ( model, Cmd.none )
+
+        CompleteTurnResponded result ->
+            ( { model
+                | status = statusForCompleteTurn result
+                , popup = popupForCompleteTurn result
+              }
+            , Cmd.none
+            )
+
+        PopupOk ->
+            -- Ceremony: the popup's OK click is what advances the
+            -- visible state. Server already committed the
+            -- CompleteTurn when we sent it. Fetching state now pulls
+            -- the post-turn world (new active seat, replenished hand,
+            -- banked scores) and the view re-renders.
+            let
+                cmd =
+                    case model.sessionId of
+                        Just sid ->
+                            fetchRemoteState sid
+
+                        Nothing ->
+                            Cmd.none
+            in
+            ( { model | popup = Nothing }, cmd )
 
         ClickUndo ->
             case model.sessionId of
@@ -306,11 +414,12 @@ update msg model =
 
         StateRefreshed (Ok rs) ->
             ( { model
-                | phase = Playing
-                , board = rs.board
-                , hand = rs.hand
+                | board = rs.board
+                , hands = rs.hands
+                , activePlayerIndex = rs.activePlayerIndex
                 , turnIndex = rs.turnIndex
                 , score = Score.forStacks rs.board
+                , scores = rs.scores
               }
             , Cmd.none
             )
@@ -318,54 +427,17 @@ update msg model =
         StateRefreshed (Err _) ->
             ( model, Cmd.none )
 
-        SessionsListReceived (Ok list) ->
-            ( { model | sessions = SessionsLoaded list }, Cmd.none )
-
-        SessionsListReceived (Err _) ->
-            ( { model | sessions = SessionsError }, Cmd.none )
-
-        ClickNewGame ->
-            ( { model
-                | phase = Playing
-                , board = LynRummy.Dealer.initialBoard
-                , hand = LynRummy.Dealer.openingHand
-                , sessionId = Nothing
-                , turnIndex = 0
-                , score = Score.forStacks LynRummy.Dealer.initialBoard
-                , status =
-                    { text = "Begin game. Drag hand cards or board stacks onto the board."
-                    , kind = Inform
-                    }
-              }
-            , fetchNewSession
-            )
-
-        ClickResumeSession sid ->
-            ( { model
-                | phase = Playing
-                , sessionId = Just sid
-                , status = { text = "Resuming session " ++ String.fromInt sid ++ "…", kind = Inform }
-              }
-            , fetchRemoteState sid
-            )
-
-        ClickBackToLobby ->
-            ( { model
-                | phase = Lobby
-                , sessionId = Nothing
-                , sessions = SessionsLoading
-                , status = { text = "Pick a session or start a new game.", kind = Inform }
-              }
-            , fetchSessionsList
-            )
-
         BoardRectReceived result ->
             case ( model.drag, result ) of
                 ( Dragging info, Ok element ) ->
                     let
+                        -- Convert document coords (what Browser.Dom returns)
+                        -- to viewport coords (what mouse clientX/Y uses), so
+                        -- the cursor/rect subtraction stays correct even when
+                        -- the page is scrolled.
                         rect =
-                            { x = round element.element.x
-                            , y = round element.element.y
+                            { x = round (element.element.x - element.viewport.x)
+                            , y = round (element.element.y - element.viewport.y)
                             , width = round element.element.width
                             , height = round element.element.height
                             }
@@ -374,6 +446,49 @@ update msg model =
 
                 _ ->
                     ( model, Cmd.none )
+
+        ClickHint ->
+            -- Hints endpoint retired 2026-04-18 during rebuild. Show a
+            -- placeholder status rather than hitting the dead endpoint.
+            ( { model
+                | status =
+                    { text = "Hints are being rebuilt — stand by."
+                    , kind = Inform
+                    }
+              }
+            , Cmd.none
+            )
+
+        HintsReceived (Ok options) ->
+            case pickBestHint options of
+                Just best ->
+                    ( { model
+                        | hintedCards = best.handCards
+                        , status = { text = best.description, kind = Inform }
+                      }
+                    , Cmd.none
+                    )
+
+                Nothing ->
+                    ( { model
+                        | hintedCards = []
+                        , status =
+                            { text = "No hint available from the current tricks."
+                            , kind = Scold
+                            }
+                      }
+                    , Cmd.none
+                    )
+
+        HintsReceived (Err _) ->
+            ( { model
+                | status =
+                    { text = "Couldn't reach the server for hints."
+                    , kind = Scold
+                    }
+              }
+            , Cmd.none
+            )
 
 
 startBoardCardDrag :
@@ -413,7 +528,7 @@ startBoardCardDrag { stackIndex, cardIndex } clientPoint model =
 
 startHandDrag : Int -> Point -> Model -> ( Model, Cmd Msg )
 startHandDrag idx clientPoint model =
-    case ( model.drag, listAt idx model.hand.handCards ) of
+    case ( model.drag, listAt idx (activeHand model).handCards ) of
         ( NotDragging, Just handCard ) ->
             let
                 wings =
@@ -501,7 +616,7 @@ resolveGesture info model =
                     )
 
                 ( Just wing, FromHandCard handIdx ) ->
-                    case listAt handIdx model.hand.handCards of
+                    case listAt handIdx (activeHand model).handCards of
                         Just handCard ->
                             ( commitMerge wing info.source model
                             , Just
@@ -518,7 +633,7 @@ resolveGesture info model =
 
                 ( Nothing, FromHandCard handIdx ) ->
                     if cursorOverBoard info then
-                        case ( listAt handIdx model.hand.handCards, dropLoc info ) of
+                        case ( listAt handIdx (activeHand model).handCards, dropLoc info ) of
                             ( Just handCard, Just loc ) ->
                                 ( commitPlaceHandCard handIdx info model
                                 , Just (WA.PlaceHand { handCard = handCard.card, loc = loc })
@@ -578,6 +693,317 @@ sendAction sessionId action =
         , body = Http.jsonBody (WA.encode action)
         , expect = Http.expectWhatever ActionSent
         }
+
+
+{-| CompleteTurn needs the server's classification (one of five
+branches) to drive the status message, so unlike other actions it
+isn't fire-and-forget. A 200 with `turn_result:"success*"` is a
+completed turn; a 400 with `turn_result:"failure"` is the referee
+refusing a dirty board. We expose both paths to CompleteTurnResponded.
+-}
+sendCompleteTurn : Int -> Cmd Msg
+sendCompleteTurn sessionId =
+    Http.post
+        { url = "/gopher/lynrummy-elm/actions?session=" ++ String.fromInt sessionId
+        , body = Http.jsonBody (WA.encode WA.CompleteTurn)
+        , expect = Http.expectStringResponse CompleteTurnResponded decodeCompleteTurnResponse
+        }
+
+
+fetchHints : Int -> Cmd Msg
+fetchHints sessionId =
+    Http.get
+        { url = "/gopher/lynrummy-elm/sessions/" ++ String.fromInt sessionId ++ "/hints"
+        , expect = Http.expectJson HintsReceived hintsDecoder
+        }
+
+
+{-| The /hints endpoint returns three separate arrays
+(hand_merges, stack_merges, trick_plays) with slightly different
+shapes. This decoder normalizes them all into a flat list of
+HintOption values that share a common shape for display.
+-}
+hintsDecoder : Decoder (List HintOption)
+hintsDecoder =
+    Decode.map3
+        (\hm sm tp -> hm ++ sm ++ tp)
+        (Decode.field "hand_merges" (Decode.list handMergeHintDecoder)
+            |> Decode.maybe
+            |> Decode.map (Maybe.withDefault [])
+        )
+        (Decode.field "stack_merges" (Decode.list stackMergeHintDecoder)
+            |> Decode.maybe
+            |> Decode.map (Maybe.withDefault [])
+        )
+        (Decode.field "trick_plays" (Decode.list trickPlayHintDecoder)
+            |> Decode.maybe
+            |> Decode.map (Maybe.withDefault [])
+        )
+
+
+handMergeHintDecoder : Decoder HintOption
+handMergeHintDecoder =
+    Decode.map3
+        (\card target score ->
+            { description =
+                "Play " ++ Card.cardStr card ++ " onto stack #"
+                    ++ String.fromInt target ++ " (+" ++ String.fromInt score ++ ")"
+            , handCards = [ card ]
+            , resultScore = score
+            }
+        )
+        (Decode.field "hand_card" Card.cardDecoder)
+        (Decode.field "target_stack" Decode.int)
+        (Decode.field "result_score" Decode.int)
+
+
+stackMergeHintDecoder : Decoder HintOption
+stackMergeHintDecoder =
+    Decode.map3
+        (\src target score ->
+            { description =
+                "Merge stack #" ++ String.fromInt src
+                    ++ " onto stack #" ++ String.fromInt target
+                    ++ " (+" ++ String.fromInt score ++ ")"
+            , handCards = []
+            , resultScore = score
+            }
+        )
+        (Decode.field "source_stack" Decode.int)
+        (Decode.field "target_stack" Decode.int)
+        (Decode.field "result_score" Decode.int)
+
+
+trickPlayHintDecoder : Decoder HintOption
+trickPlayHintDecoder =
+    Decode.map4
+        (\trickId desc cards score ->
+            let
+                label =
+                    if String.isEmpty desc then
+                        trickId
+
+                    else
+                        desc
+            in
+            { description = label ++ " (+" ++ String.fromInt score ++ ")"
+            , handCards = cards
+            , resultScore = score
+            }
+        )
+        (Decode.field "trick_id" Decode.string)
+        (Decode.oneOf
+            [ Decode.field "description" Decode.string
+            , Decode.succeed ""
+            ]
+        )
+        (Decode.field "hand_cards" (Decode.list Card.cardDecoder))
+        (Decode.field "result_score" Decode.int)
+
+
+pickBestHint : List HintOption -> Maybe HintOption
+pickBestHint options =
+    case options of
+        [] ->
+            Nothing
+
+        first :: rest ->
+            Just (List.foldl (keepBetter) first rest)
+
+
+keepBetter : HintOption -> HintOption -> HintOption
+keepBetter candidate best =
+    if candidate.resultScore > best.resultScore then
+        candidate
+
+    else
+        best
+
+
+decodeCompleteTurnResponse : Http.Response String -> Result Http.Error CompleteTurnOutcome
+decodeCompleteTurnResponse response =
+    case response of
+        Http.BadUrl_ url ->
+            Err (Http.BadUrl url)
+
+        Http.Timeout_ ->
+            Err Http.Timeout
+
+        Http.NetworkError_ ->
+            Err Http.NetworkError
+
+        Http.BadStatus_ _ body ->
+            -- 400 with {"turn_result":"failure",...} is the dirty-board
+            -- rejection. Any other non-2xx is a real error.
+            case Decode.decodeString completeTurnOutcomeDecoder body of
+                Ok outcome ->
+                    Ok outcome
+
+                Err _ ->
+                    Err (Http.BadBody body)
+
+        Http.GoodStatus_ _ body ->
+            case Decode.decodeString completeTurnOutcomeDecoder body of
+                Ok outcome ->
+                    Ok outcome
+
+                Err decodeErr ->
+                    Err (Http.BadBody (Decode.errorToString decodeErr))
+
+
+completeTurnOutcomeDecoder : Decoder CompleteTurnOutcome
+completeTurnOutcomeDecoder =
+    Decode.map3 CompleteTurnOutcome
+        turnResultDecoder
+        (Decode.maybe (Decode.field "turn_score" Decode.int)
+            |> Decode.map (Maybe.withDefault 0)
+        )
+        (Decode.maybe (Decode.field "cards_drawn" Decode.int)
+            |> Decode.map (Maybe.withDefault 0)
+        )
+
+
+turnResultDecoder : Decoder CompleteTurnResult
+turnResultDecoder =
+    Decode.field "turn_result" Decode.string
+        |> Decode.andThen
+            (\s ->
+                case s of
+                    "success" ->
+                        Decode.succeed Success
+
+                    "success_but_needs_cards" ->
+                        Decode.succeed SuccessButNeedsCards
+
+                    "success_as_victor" ->
+                        Decode.succeed SuccessAsVictor
+
+                    "success_with_hand_emptied" ->
+                        Decode.succeed SuccessWithHandEmptied
+
+                    "failure" ->
+                        Decode.succeed Failure
+
+                    other ->
+                        Decode.fail ("unknown turn_result: " ++ other)
+            )
+
+
+statusForCompleteTurn : Result Http.Error CompleteTurnOutcome -> StatusMessage
+statusForCompleteTurn outcome =
+    case outcome of
+        Ok o ->
+            case o.result of
+                Success ->
+                    { text = "Turn complete. Board is growing!", kind = Celebrate }
+
+                SuccessButNeedsCards ->
+                    { text = "Turn complete, but you didn't play any cards.", kind = Inform }
+
+                SuccessAsVictor ->
+                    { text = "Hand emptied — victor!", kind = Celebrate }
+
+                SuccessWithHandEmptied ->
+                    { text = "Hand emptied — nice.", kind = Celebrate }
+
+                Failure ->
+                    { text = "Board isn't clean — undo your mistakes before ending the turn.", kind = Scold }
+
+        Err _ ->
+            { text = "Couldn't reach the server to complete the turn.", kind = Scold }
+
+
+{-| Picks the right character (Angry Cat / Oliver / Steve) and
+writes the per-branch narration. Matches the casting in
+angry-cat's game.ts: Angry Cat scolds dirty boards, Oliver
+sympathizes when no cards played, Steve celebrates everything
+else. The "will receive" framing keeps the UI on the pre-flip
+view until the user dismisses.
+-}
+popupForCompleteTurn : Result Http.Error CompleteTurnOutcome -> Maybe PopupContent
+popupForCompleteTurn result =
+    case result of
+        Ok outcome ->
+            Just (popupFromOutcome outcome)
+
+        Err _ ->
+            Just
+                { admin = "Angry Cat"
+                , body = "Couldn't reach the server to complete your turn."
+                }
+
+
+popupFromOutcome : CompleteTurnOutcome -> PopupContent
+popupFromOutcome { result, turnScore, cardsDrawn } =
+    case result of
+        Failure ->
+            { admin = "Angry Cat"
+            , body =
+                "The board is not clean!\n\n(nor is my litter box)\n\n"
+                    ++ "Use the Undo button if you need to."
+            }
+
+        SuccessButNeedsCards ->
+            { admin = "Oliver"
+            , body =
+                "Sorry you couldn't find a move.\n\n"
+                    ++ "I'm going back to my nap!\n\n"
+                    ++ "You scored "
+                    ++ String.fromInt turnScore
+                    ++ " points for your turn.\n\n"
+                    ++ "We have dealt you "
+                    ++ pluralize cardsDrawn "more card"
+                    ++ " for your next turn."
+            }
+
+        SuccessAsVictor ->
+            { admin = "Steve"
+            , body =
+                "You are the first person to play all their cards!\n\n"
+                    ++ "That earns you a 1500 point bonus.\n\n"
+                    ++ "You got "
+                    ++ String.fromInt turnScore
+                    ++ " points for this turn.\n\n"
+                    ++ "We have dealt you "
+                    ++ pluralize cardsDrawn "more card"
+                    ++ " for your next turn.\n\n"
+                    ++ "Keep winning!"
+            }
+
+        SuccessWithHandEmptied ->
+            { admin = "Steve"
+            , body =
+                "Good job!\n\n"
+                    ++ "You scored "
+                    ++ String.fromInt turnScore
+                    ++ " for this turn!\n\n"
+                    ++ "We gave you a bonus for emptying your hand.\n\n"
+                    ++ "We have dealt you "
+                    ++ pluralize cardsDrawn "more card"
+                    ++ " for your next turn."
+            }
+
+        Success ->
+            { admin = "Steve"
+            , body =
+                "The board is growing!\n\n"
+                    ++ "You receive "
+                    ++ String.fromInt turnScore
+                    ++ " points for this turn!"
+            }
+
+
+pluralize : Int -> String -> String
+pluralize n word =
+    String.fromInt n
+        ++ " "
+        ++ word
+        ++ (if n == 1 then
+                ""
+
+            else
+                "s"
+           )
 
 
 commitSplit : Int -> Int -> Model -> Model
@@ -640,15 +1066,18 @@ commitMerge wing source model =
                             clearDrag model
 
                 FromHandCard handIdx ->
-                    case listAt handIdx model.hand.handCards of
+                    case listAt handIdx (activeHand model).handCards of
                         Just handCard ->
                             case BoardActions.tryHandMerge target handCard wing.side of
                                 Just change ->
-                                    { model
-                                        | board = applyChange change model.board
-                                        , hand = Hand.removeHandCard handCard model.hand
-                                        , drag = NotDragging
-                                    }
+                                    model
+                                        |> setActiveHand (Hand.removeHandCard handCard (activeHand model))
+                                        |> (\m ->
+                                                { m
+                                                    | board = applyChange change m.board
+                                                    , drag = NotDragging
+                                                }
+                                           )
 
                                 Nothing ->
                                     clearDrag model
@@ -659,7 +1088,7 @@ commitMerge wing source model =
 
 commitPlaceHandCard : Int -> DragInfo -> Model -> Model
 commitPlaceHandCard handIdx info model =
-    case ( listAt handIdx model.hand.handCards, info.boardRect ) of
+    case ( listAt handIdx (activeHand model).handCards, info.boardRect ) of
         ( Just handCard, Just rect ) ->
             let
                 loc =
@@ -670,11 +1099,14 @@ commitPlaceHandCard handIdx info model =
                 change =
                     BoardActions.placeHandCard handCard loc
             in
-            { model
-                | board = applyChange change model.board
-                , hand = Hand.removeHandCard handCard model.hand
-                , drag = NotDragging
-            }
+            model
+                |> setActiveHand (Hand.removeHandCard handCard (activeHand model))
+                |> (\m ->
+                        { m
+                            | board = applyChange change m.board
+                            , drag = NotDragging
+                        }
+                   )
 
         _ ->
             clearDrag model
@@ -718,116 +1150,80 @@ view : Model -> Html Msg
 view model =
     div
         [ style "font-family" "system-ui, sans-serif" ]
-        (case model.phase of
-            Lobby ->
-                [ viewTopBar
-                , viewStatusBar model.status
-                , viewLobby model
-                ]
-
-            Playing ->
-                [ viewTopBar
-                , viewStatusBar model.status
-                , div
-                    [ style "padding" "20px"
-                    , style "display" "flex"
-                    , style "gap" "24px"
-                    , style "align-items" "flex-start"
-                    ]
-                    [ handColumn model
-                    , boardColumn model
-                    ]
-                , draggedOverlay model
-                ]
-        )
-
-
-viewLobby : Model -> Html Msg
-viewLobby model =
-    div
-        [ style "padding" "20px 40px"
-        , style "max-width" "720px"
-        ]
-        [ div
-            [ style "margin-bottom" "16px" ]
-            [ gameButton "Start new game" ClickNewGame ]
-        , Html.h2
-            [ style "color" View.navy
-            , style "margin-top" "24px"
+        [ viewTopBar
+        , viewStatusBar model.status
+        , div
+            [ style "padding" "20px"
+            , style "display" "flex"
+            , style "gap" "24px"
+            , style "align-items" "flex-start"
             ]
-            [ Html.text "Your sessions" ]
-        , viewSessionsList model.sessions
+            [ handColumn model
+            , boardColumn model
+            ]
+        , draggedOverlay model
+        , viewPopup model.popup
         ]
 
 
-viewSessionsList : SessionsLoad -> Html Msg
-viewSessionsList loaded =
-    case loaded of
-        SessionsLoading ->
-            div [ style "color" "#888" ] [ Html.text "Loading…" ]
+{-| Cheapest-possible popup rendering: fixed-position backdrop
+covering the viewport, centered white card with the admin's
+name, the body text (pre-wrapped to preserve newlines), and a
+single OK button. No focus trap, no ESC handler, no click-outside
+dismiss — just the OK button. Good enough for ceremony.
+-}
+viewPopup : Maybe PopupContent -> Html Msg
+viewPopup maybePopup =
+    case maybePopup of
+        Nothing ->
+            Html.text ""
 
-        SessionsError ->
-            div [ style "color" "red" ]
-                [ Html.text "Couldn't load sessions." ]
-
-        SessionsLoaded [] ->
-            div [ style "color" "#888" ]
-                [ Html.text "No sessions yet. Start a new game to get going." ]
-
-        SessionsLoaded sessions ->
-            Html.table
-                [ style "border-collapse" "collapse"
-                , style "width" "100%"
+        Just { admin, body } ->
+            div
+                [ style "position" "fixed"
+                , style "inset" "0"
+                , style "background-color" "rgba(0, 0, 0, 0.45)"
+                , style "display" "flex"
+                , style "align-items" "center"
+                , style "justify-content" "center"
+                , style "z-index" "2000"
                 ]
-                (Html.tr
-                    [ style "text-align" "left"
-                    , style "border-bottom" "1px solid #ddd"
+                [ div
+                    [ style "background" "white"
+                    , style "border" ("1px solid " ++ View.navy)
+                    , style "border-radius" "12px"
+                    , style "padding" "24px 28px"
+                    , style "max-width" "420px"
+                    , style "box-shadow" "0 10px 30px rgba(0, 0, 0, 0.25)"
                     ]
-                    [ Html.th [ style "padding" "6px 10px" ] [ Html.text "id" ]
-                    , Html.th [ style "padding" "6px 10px" ] [ Html.text "label" ]
-                    , Html.th [ style "padding" "6px 10px", style "text-align" "right" ]
-                        [ Html.text "actions" ]
-                    , Html.th [ style "padding" "6px 10px" ] []
+                    [ div
+                        [ style "font-weight" "bold"
+                        , style "color" View.navy
+                        , style "font-size" "15px"
+                        , style "margin-bottom" "10px"
+                        ]
+                        [ Html.text admin ]
+                    , Html.pre
+                        [ style "font-family" "inherit"
+                        , style "white-space" "pre-wrap"
+                        , style "margin" "0 0 18px 0"
+                        , style "font-size" "14px"
+                        , style "line-height" "1.45"
+                        ]
+                        [ Html.text body ]
+                    , Html.button
+                        [ Events.onClick PopupOk
+                        , style "background" View.navy
+                        , style "color" "white"
+                        , style "border" "none"
+                        , style "padding" "8px 20px"
+                        , style "border-radius" "4px"
+                        , style "cursor" "pointer"
+                        , style "font-size" "14px"
+                        ]
+                        [ Html.text "OK" ]
                     ]
-                    :: List.map viewSessionRow sessions
-                )
-
-
-viewSessionRow : SessionSummary -> Html Msg
-viewSessionRow s =
-    Html.tr
-        [ style "border-bottom" "1px solid #eee" ]
-        [ Html.td
-            [ style "padding" "6px 10px"
-            , style "color" View.navy
-            , style "font-variant-numeric" "tabular-nums"
-            ]
-            [ Html.text ("#" ++ String.fromInt s.id) ]
-        , Html.td
-            [ style "padding" "6px 10px"
-            , style "color" "#666"
-            ]
-            [ Html.text
-                (if String.isEmpty s.label then
-                    "—"
-
-                 else
-                    s.label
-                )
-            ]
-        , Html.td
-            [ style "padding" "6px 10px"
-            , style "text-align" "right"
-            , style "font-variant-numeric" "tabular-nums"
-            , style "color" "#888"
-            ]
-            [ Html.text (String.fromInt s.actionCount) ]
-        , Html.td
-            [ style "padding" "6px 10px"
-            , style "text-align" "right"
-            ]
-            [ gameButton "Resume" (ClickResumeSession s.id) ]
-        ]
+                ]
 
 
 viewTopBar : Html Msg
@@ -872,36 +1268,87 @@ handColumn model =
         , style "padding-right" "20px"
         , style "border-right" "1px gray solid"
         ]
-        [ viewPlayerHeader model
-        , View.viewHandHeading
-        , View.viewHand { attrsForCard = handCardAttrs model.drag } model.hand
-        , viewTurnControls
-        ]
-
-
-viewPlayerHeader : Model -> Html Msg
-viewPlayerHeader model =
-    div []
-        [ div
-            [ style "font-weight" "bold"
-            , style "font-size" "16px"
-            , style "color" View.navy
-            , style "margin-top" "12px"
-            ]
-            [ Html.text "You" ]
-        , div
-            [ style "color" "maroon"
-            , style "margin-bottom" "4px"
-            , style "margin-top" "4px"
-            ]
-            [ Html.text ("Score: " ++ String.fromInt model.score) ]
-        , div
+        (div
             [ style "color" "#666"
             , style "font-size" "13px"
-            , style "margin-bottom" "4px"
+            , style "margin-top" "12px"
             ]
             [ Html.text ("Turn " ++ String.fromInt (model.turnIndex + 1)) ]
+            :: List.indexedMap (viewPlayerRow model) model.hands
+        )
+
+
+{-| One player's row — name + score + either full interactive
+hand + turn controls (if active) or a card-count line (if not).
+Mirrors angry-cat's PhysicalPlayer.populate two-row layout: both
+players are always visible, but only the active one's hand faces
+are revealed.
+-}
+viewPlayerRow : Model -> Int -> Hand -> Html Msg
+viewPlayerRow model idx hand =
+    let
+        isActive =
+            idx == model.activePlayerIndex
+
+        playerName =
+            "Player " ++ String.fromInt (idx + 1)
+
+        nameSuffix =
+            if isActive then
+                " (your turn)"
+
+            else
+                ""
+
+        nameColor =
+            if isActive then
+                View.navy
+
+            else
+                "#666"
+    in
+    let
+        playerTotal =
+            case listAt idx model.scores of
+                Just n ->
+                    n
+
+                Nothing ->
+                    0
+    in
+    div
+        [ style "padding-bottom" "15px"
+        , style "margin-bottom" "12px"
+        , style "border-bottom" "1px #000080 solid"
         ]
+        (div
+            [ style "font-weight" "bold"
+            , style "font-size" "16px"
+            , style "color" nameColor
+            , style "margin-top" "8px"
+            ]
+            [ Html.text (playerName ++ nameSuffix) ]
+            :: div
+                [ style "color" "maroon"
+                , style "margin-bottom" "4px"
+                , style "margin-top" "4px"
+                ]
+                [ Html.text ("Score: " ++ String.fromInt playerTotal) ]
+            :: (if isActive then
+                    [ View.viewHandHeading
+                    , View.viewHand { attrsForCard = handCardAttrs model.drag model.hintedCards } hand
+                    , viewTurnControls
+                    ]
+
+                else
+                    [ div
+                        [ style "color" "#888"
+                        , style "font-size" "13px"
+                        ]
+                        [ Html.text (String.fromInt (List.length hand.handCards) ++ " cards") ]
+                    ]
+               )
+        )
 
 
 viewTurnControls : Html Msg
@@ -913,9 +1360,29 @@ viewTurnControls =
         , style "flex-wrap" "wrap"
         ]
         [ gameButton "Complete turn" ClickCompleteTurn
+        , gameButton "Hint" ClickHint
         , gameButton "Undo" ClickUndo
-        , gameButton "← Lobby" ClickBackToLobby
+        , gameLink "← Lobby" "/gopher/game-lobby"
         ]
+
+
+{-| Plain link styled like gameButton. Used for nav that exits
+the Elm app entirely (back to the Go-served lobby).
+-}
+gameLink : String -> String -> Html Msg
+gameLink label url =
+    Html.a
+        [ href url
+        , style "padding" "6px 12px"
+        , style "font-size" "14px"
+        , style "border" ("1px solid " ++ View.navy)
+        , style "background" "white"
+        , style "color" View.navy
+        , style "border-radius" "3px"
+        , style "cursor" "pointer"
+        , style "text-decoration" "none"
+        ]
+        [ Html.text label ]
 
 
 gameButton : String -> Msg -> Html Msg
@@ -936,7 +1403,7 @@ gameButton label msg =
 boardColumn : Model -> Html Msg
 boardColumn model =
     div
-        [ style "min-width" "560px" ]
+        [ style "min-width" "800px" ]
         [ View.viewBoardHeading
         , boardWithWings model
         ]
@@ -993,24 +1460,34 @@ cardMouseDown stackIdx cardIdx =
     ]
 
 
-handCardAttrs : DragState -> Int -> HandCard -> List (Html.Attribute Msg)
-handCardAttrs drag idx _ =
-    case drag of
-        NotDragging ->
-            [ Events.on "mousedown" (Decode.map (MouseDownOnHandCard idx) pointDecoder) ]
+handCardAttrs : DragState -> List Card -> Int -> HandCard -> List (Html.Attribute Msg)
+handCardAttrs drag hintedCards idx hc =
+    let
+        hintAttrs =
+            if List.any (\c -> c == hc.card) hintedCards then
+                [ style "background-color" "lightgreen" ]
 
-        Dragging info ->
-            case info.source of
-                FromHandCard sourceIdx ->
-                    if sourceIdx == idx then
-                        -- Dim the source card while dragging its floating copy.
-                        [ style "opacity" "0.35", style "pointer-events" "none" ]
+            else
+                []
+    in
+    hintAttrs
+        ++ (case drag of
+                NotDragging ->
+                    [ Events.on "mousedown" (Decode.map (MouseDownOnHandCard idx) pointDecoder) ]
 
-                    else
-                        [ style "pointer-events" "none" ]
+                Dragging info ->
+                    case info.source of
+                        FromHandCard sourceIdx ->
+                            if sourceIdx == idx then
+                                -- Dim the source card while dragging its floating copy.
+                                [ style "opacity" "0.35", style "pointer-events" "none" ]
 
-                FromBoardStack _ ->
-                    [ style "pointer-events" "none" ]
+                            else
+                                [ style "pointer-events" "none" ]
+
+                        FromBoardStack _ ->
+                            [ style "pointer-events" "none" ]
+           )
 
 
 viewWingAt : Model -> DragInfo -> WingId -> Maybe (Html Msg)
@@ -1087,7 +1564,7 @@ draggedOverlay model =
                             Html.text ""
 
                 FromHandCard idx ->
-                    case listAt idx model.hand.handCards of
+                    case listAt idx (activeHand model).handCards of
                         Just handCard ->
                             View.viewCardWithAttrs
                                 (floatingAttrs ++ [ style "background-color" "white" ])
@@ -1113,7 +1590,7 @@ listAt i xs =
 -- MAIN
 
 
-main : Program () Model Msg
+main : Program Flags Model Msg
 main =
     Browser.element
         { init = init

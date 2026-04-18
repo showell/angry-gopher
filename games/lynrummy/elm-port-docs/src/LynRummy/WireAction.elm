@@ -27,8 +27,6 @@ type WireAction
     | MergeHand { handCard : Card, targetStack : Int, side : Side }
     | PlaceHand { handCard : Card, loc : BoardLocation }
     | MoveStack { stackIndex : Int, newLoc : BoardLocation }
-    | Draw
-    | Discard { handCard : Card }
     | CompleteTurn
     | Undo
     | PlayTrick { trickId : String, handCards : List Card }
@@ -82,15 +80,6 @@ encode action =
                 [ ( "action", Encode.string "move_stack" )
                 , ( "stack_index", Encode.int p.stackIndex )
                 , ( "new_loc", encodeBoardLocation p.newLoc )
-                ]
-
-        Draw ->
-            Encode.object [ ( "action", Encode.string "draw" ) ]
-
-        Discard p ->
-            Encode.object
-                [ ( "action", Encode.string "discard" )
-                , ( "hand_card", Card.encodeCard p.handCard )
                 ]
 
         CompleteTurn ->
@@ -186,14 +175,6 @@ decoderForAction kind =
                 )
                 (Decode.field "stack_index" Decode.int)
                 (Decode.field "new_loc" boardLocationDecoder)
-
-        "draw" ->
-            Decode.succeed Draw
-
-        "discard" ->
-            Decode.map
-                (\handCard -> Discard { handCard = handCard })
-                (Decode.field "hand_card" Card.cardDecoder)
 
         "complete_turn" ->
             Decode.succeed CompleteTurn

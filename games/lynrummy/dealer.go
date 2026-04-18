@@ -150,10 +150,10 @@ var openingHandLabels = []string{
 	"7H", "8C", "4S", "9D", "QS", "KH", "JH", "6H", "TS", "5D", "8H", "3C", "2D", "9C", "6C",
 }
 
-// OpeningHand builds the canned 15-card opening hand. Mirrors the
-// Elm Dealer.openingHand. Uses DeckTwo so the 7H in the hand
-// doesn't collide with the 7H in the initial board's 6-run (which
-// uses DeckOne).
+// OpeningHand builds the canned 15-card opening hand for player 0.
+// Mirrors the Elm Dealer.openingHand. Uses DeckTwo so the 7H in
+// the hand doesn't collide with the 7H in the initial board's
+// 6-run (which uses DeckOne).
 func OpeningHand() Hand {
 	var cards []Card
 	for _, label := range openingHandLabels {
@@ -162,6 +162,30 @@ func OpeningHand() Hand {
 		cards = append(cards, c)
 	}
 	return EmptyHand().AddCards(cards, HandNormal)
+}
+
+// opening hand for player 1. Chosen from DeckOne cards that are
+// not already used by the initial board. No collisions with
+// player 0's hand (which is drawn from DeckTwo).
+var openingHandLabelsP1 = []string{
+	"4S", "5S", "9S", "6H", "9H", "TH", "4D", "5D",
+	"6D", "8D", "3C", "5C", "6C", "JC", "KC",
+}
+
+// OpeningHands returns both canned opening hands in order
+// [player0, player1]. The Elm client's canned opening hand
+// mirrors player 0; player 1 exists for two-player replay and
+// for cross-checking with the Python client.
+func OpeningHands() []Hand {
+	p0 := OpeningHand()
+	var cards1 []Card
+	for _, label := range openingHandLabelsP1 {
+		c := parseLabel(label)
+		c.OriginDeck = 0
+		cards1 = append(cards1, c)
+	}
+	p1 := EmptyHand().AddCards(cards1, HandNormal)
+	return []Hand{p0, p1}
 }
 
 // buildInitialBoard pulls the hard-coded stacks from the deck.

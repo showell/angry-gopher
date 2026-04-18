@@ -72,16 +72,6 @@ type MoveStackAction struct {
 
 func (MoveStackAction) ActionKind() string { return "move_stack" }
 
-type DrawAction struct{}
-
-func (DrawAction) ActionKind() string { return "draw" }
-
-type DiscardAction struct {
-	HandCard Card `json:"hand_card"`
-}
-
-func (DiscardAction) ActionKind() string { return "discard" }
-
 type CompleteTurnAction struct{}
 
 func (CompleteTurnAction) ActionKind() string { return "complete_turn" }
@@ -90,25 +80,14 @@ type UndoAction struct{}
 
 func (UndoAction) ActionKind() string { return "undo" }
 
-// PlayTrickAction is a client-emitted convenience: "execute the
-// multi-card trick identified by trick_id using these hand cards."
-// The server resolves it at submission time via tricks.FindPlay +
-// Play.Apply, and persists the resulting TrickResultAction (which
-// carries the board diff) instead. A PlayTrickAction never lives
-// in the action log; if one somehow does, replay treats it as a
-// no-op.
-type PlayTrickAction struct {
-	TrickID   string `json:"trick_id"`
-	HandCards []Card `json:"hand_cards"`
-}
-
-func (PlayTrickAction) ActionKind() string { return "play_trick" }
-
-// TrickResultAction is the server-side expansion of a PlayTrickAction.
-// It carries the board diff (stacks_to_remove + stacks_to_add) and
-// the hand cards released by the trick. Replay applies the diff
-// directly without needing to re-resolve the trick. This keeps the
-// replay engine free of tricks-package dependency.
+// TrickResultAction carries a board diff (stacks_to_remove +
+// stacks_to_add) and the hand cards released. Historically this
+// was the persisted form of a client-emitted PlayTrickAction (the
+// expansion via tricks.FindPlay was retired 2026-04-18 with the
+// hints/tricks rebuild). Retained as a self-contained diff shape
+// so existing session logs still replay cleanly without needing
+// the tricks package. A new hint system may or may not reuse this
+// action form.
 type TrickResultAction struct {
 	TrickID           string      `json:"trick_id"`
 	StacksToRemove    []CardStack `json:"stacks_to_remove"`
@@ -165,20 +144,6 @@ func (a MoveStackAction) MarshalJSON() ([]byte, error) {
 	}{Action: a.ActionKind(), alias: alias(a)})
 }
 
-func (a DrawAction) MarshalJSON() ([]byte, error) {
-	return json.Marshal(struct {
-		Action string `json:"action"`
-	}{Action: a.ActionKind()})
-}
-
-func (a DiscardAction) MarshalJSON() ([]byte, error) {
-	type alias DiscardAction
-	return json.Marshal(struct {
-		Action string `json:"action"`
-		alias
-	}{Action: a.ActionKind(), alias: alias(a)})
-}
-
 func (a CompleteTurnAction) MarshalJSON() ([]byte, error) {
 	return json.Marshal(struct {
 		Action string `json:"action"`
@@ -189,14 +154,6 @@ func (a UndoAction) MarshalJSON() ([]byte, error) {
 	return json.Marshal(struct {
 		Action string `json:"action"`
 	}{Action: a.ActionKind()})
-}
-
-func (a PlayTrickAction) MarshalJSON() ([]byte, error) {
-	type alias PlayTrickAction
-	return json.Marshal(struct {
-		Action string `json:"action"`
-		alias
-	}{Action: a.ActionKind(), alias: alias(a)})
 }
 
 func (a TrickResultAction) MarshalJSON() ([]byte, error) {
@@ -266,28 +223,11 @@ func DecodeWireAction(data []byte) (WireAction, error) {
 		}
 		return a, nil
 
-	case "draw":
-		return DrawAction{}, nil
-
-	case "discard":
-		var a DiscardAction
-		if err := strictUnmarshal(data, &a, "hand_card"); err != nil {
-			return nil, err
-		}
-		return a, nil
-
 	case "complete_turn":
 		return CompleteTurnAction{}, nil
 
 	case "undo":
 		return UndoAction{}, nil
-
-	case "play_trick":
-		var a PlayTrickAction
-		if err := strictUnmarshal(data, &a, "trick_id", "hand_cards"); err != nil {
-			return nil, err
-		}
-		return a, nil
 
 	case "trick_result":
 		var a TrickResultAction

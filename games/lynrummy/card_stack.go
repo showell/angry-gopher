@@ -118,6 +118,17 @@ func (s CardStack) Size() int {
 	return len(s.BoardCards)
 }
 
+// Contains reports whether the stack holds the given card
+// (by Card.Equals, ignoring per-card BoardCardState).
+func (s CardStack) Contains(c Card) bool {
+	for _, bc := range s.BoardCards {
+		if bc.Card.Equals(c) {
+			return true
+		}
+	}
+	return false
+}
+
 func (s CardStack) Equals(other CardStack) bool {
 	if s.Loc != other.Loc {
 		return false

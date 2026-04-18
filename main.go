@@ -21,7 +21,6 @@ import (
 	"angry-gopher/games/critters"
 	"angry-gopher/dm"
 	"angry-gopher/events"
-	"angry-gopher/games"
 	"angry-gopher/ratelimit"
 	"angry-gopher/respond"
 	"angry-gopher/users"
@@ -47,9 +46,6 @@ func buildMux() *http.ServeMux {
 
 	// --- Gopher-only API ---
 	mux.HandleFunc("/gopher/version", api(handleVersion))
-	mux.HandleFunc("/gopher/games/", api(games.HandleGameSub))
-	mux.HandleFunc("/gopher/games", api(games.HandleGames))
-	mux.HandleFunc("/gopher/plays/", api(games.HandlePlaysRoot))
 
 	// --- HTML views (Basic auth, no middleware) ---
 	// All pages registered from views.Pages (single source of truth).
@@ -78,7 +74,6 @@ func wireDB() {
 	auth.DB = DB
 	users.DB = DB
 	critters.DB = DB
-	games.DB = DB
 	dm.DB = DB
 	dm.RenderMarkdown = renderMarkdown
 	views.DB = DB

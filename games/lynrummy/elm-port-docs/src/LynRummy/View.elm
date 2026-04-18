@@ -28,7 +28,7 @@ are composed in `Main.elm` using these pieces.
 import Html exposing (Html, div, text)
 import Html.Attributes exposing (style)
 import LynRummy.Card as Card exposing (Card, CardColor(..), Suit)
-import LynRummy.CardStack as CardStack exposing (BoardCard, CardStack, HandCard, HandCardState(..))
+import LynRummy.CardStack as CardStack exposing (BoardCard, BoardCardState(..), CardStack, HandCard, HandCardState(..))
 import LynRummy.Hand exposing (Hand)
 
 
@@ -113,12 +113,17 @@ handlers for tracking whether the cursor is over the board).
 boardShellWith : List (Html.Attribute msg) -> List (Html msg) -> Html msg
 boardShellWith extraAttrs children =
     let
+        -- Match the server's DEFAULT_BOARD_BOUNDS (800×600) exactly.
+        -- Visible area = legal area, so users can't drop cards in
+        -- what looks like the board but gets geometry-rejected at
+        -- CompleteTurn.
         baseAttrs =
             [ style "background-color" "khaki"
             , style "border" ("1px solid " ++ navy)
             , style "border-radius" "15px"
             , style "position" "relative"
-            , style "height" "540px"
+            , style "width" "800px"
+            , style "height" "600px"
             , style "margin-top" "8px"
             ]
     in
@@ -202,8 +207,24 @@ viewBoardCardAt cardAttrs index bc =
 
             else
                 [ style "margin-left" "2px" ]
+
+        -- Colors stolen from TS game.ts: cyan for cards the current
+        -- active player just placed this turn (FreshlyPlayed),
+        -- lavender for cards the opponent placed last turn
+        -- (FreshlyPlayedByLastPlayer). FirmlyOnBoard inherits the
+        -- default white from viewPlayingCardWith.
+        stateAttrs =
+            case bc.state of
+                FreshlyPlayed ->
+                    [ style "background-color" "cyan" ]
+
+                FreshlyPlayedByLastPlayer ->
+                    [ style "background-color" "lavender" ]
+
+                FirmlyOnBoard ->
+                    []
     in
-    viewPlayingCardWith (marginAttrs ++ cardAttrs) bc.card
+    viewPlayingCardWith (marginAttrs ++ stateAttrs ++ cardAttrs) bc.card
 
 
 

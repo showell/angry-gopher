@@ -1,0 +1,40 @@
+{
+  "comments": [
+    {
+      "para_index": 23,
+      "author": "Steve",
+      "timestamp": "2026-04-18T13:51:31-04:00",
+      "text": "good enough working assumptions to start with"
+    },
+    {
+      "para_index": 29,
+      "author": "Steve",
+      "timestamp": "2026-04-18T13:52:10-04:00",
+      "text": "LGTM"
+    },
+    {
+      "para_index": 47,
+      "author": "Steve",
+      "timestamp": "2026-04-18T13:54:22-04:00",
+      "text": "Excellent point! I am pretty sure we can achieve this with the 7 tricks we have. You can cheat in two ways: iterate through a couple decks until you get lucky OR give yourself a bigger head start on the board."
+    },
+    {
+      "para_index": 65,
+      "author": "Steve",
+      "timestamp": "2026-04-18T13:56:59-04:00",
+      "text": "Just to be clear, players hints DO change after every card gets played from the hand to the board. But for now, hints don't carry state, which is what I think you are saying."
+    },
+    {
+      "para_index": 80,
+      "author": "Steve",
+      "timestamp": "2026-04-18T13:59:00-04:00",
+      "text": "From the very beginning of the process, have the mindset that these scenarios are useful data to mine.  An ambiguous hand leads automatically to a nice test fixture or an easy judgment call for Steve to make."
+    },
+    {
+      "para_index": 81,
+      "author": "Steve",
+      "timestamp": "2026-04-18T13:59:37-04:00",
+      "text": "Nope, keep it simple for now. I know exactly the nuance you are suggesting, but I am keeping it out of scope for v1."
+    }
+  ]
+}

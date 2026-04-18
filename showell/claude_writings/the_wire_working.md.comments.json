@@ -1,0 +1,22 @@
+{
+  "comments": [
+    {
+      "para_index": 13,
+      "author": "Steve",
+      "timestamp": "2026-04-18T04:13:18-04:00",
+      "text": "Excellent! We will exploit these properties in some sort of enumerate-and-bridge style in the future."
+    },
+    {
+      "para_index": 18,
+      "author": "Steve",
+      "timestamp": "2026-04-18T04:14:00-04:00",
+      "text": "Agreed, and this mostly your decision! Pat yourself on the back, Claude."
+    },
+    {
+      "para_index": 23,
+      "author": "Steve",
+      "timestamp": "2026-04-18T04:15:52-04:00",
+      "text": "This was possible under TS but not enforced. I was working under different constraints when I had the Zulip piece in the equation, so comparing TS to Elm is slightly unfair.  But I think Elm was a very helpful constraint. It lends itself to this kind of simplicity."
+    }
+  ]
+}

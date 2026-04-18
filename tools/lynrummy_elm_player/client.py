@@ -24,6 +24,41 @@ import urllib.error
 DEFAULT_BASE = "http://localhost:9000/gopher/lynrummy-elm"
 
 
+# Display convention mirroring the Elm client's View.viewHand:
+# suits displayed in this fixed order, each on its own row,
+# values sorted ascending within the suit. Source of truth is
+# LynRummy.Card.allSuits in elm-port-docs.
+_DISPLAY_SUIT_ORDER = [3, 2, 1, 0]  # Heart, Spade, Diamond, Club
+_SUIT_GLYPH = {0: "\u2663", 1: "\u2666", 2: "\u2660", 3: "\u2665"}
+_VAL_STR = {1: "A", 10: "T", 11: "J", 12: "Q", 13: "K"}
+
+
+def _value_str(v):
+    return _VAL_STR.get(v, str(v))
+
+
+def format_hand(hand_cards):
+    """Render a hand the way the Elm client renders it: one row
+    per non-empty suit in Heart-Spade-Diamond-Club order, values
+    sorted ascending within each suit. Returns a multi-line string.
+
+    `hand_cards` is the list of HandCard dicts from /state
+    (each has a nested `card` key).
+    """
+    by_suit = {}
+    for hc in hand_cards:
+        c = hc["card"]
+        by_suit.setdefault(c["suit"], []).append(c)
+    rows = []
+    for suit_idx in _DISPLAY_SUIT_ORDER:
+        cards = sorted(by_suit.get(suit_idx, []), key=lambda c: c["value"])
+        if not cards:
+            continue
+        labels = [_value_str(c["value"]) + _SUIT_GLYPH[suit_idx] for c in cards]
+        rows.append(" ".join(labels))
+    return "\n".join(rows)
+
+
 class Client:
     """Thin HTTP wrapper for the LynRummy Elm wire endpoints."""
 
@@ -90,33 +125,13 @@ class Client:
             {"action": "move_stack", "stack_index": stack_index, "new_loc": new_loc},
         )
 
-    def send_draw(self, session_id):
-        return self.send_action(session_id, {"action": "draw"})
-
-    def send_discard(self, session_id, *, hand_card):
-        return self.send_action(
-            session_id, {"action": "discard", "hand_card": hand_card}
-        )
-
     def send_complete_turn(self, session_id):
         return self.send_action(session_id, {"action": "complete_turn"})
 
     def send_undo(self, session_id):
         return self.send_action(session_id, {"action": "undo"})
 
-    def send_play_trick(self, session_id, *, trick_id, hand_cards):
-        """Send a play_trick action.
-
-        Server resolves it at submission time via the Go TrickBag
-        (FindPlay + Apply) and persists the expanded TrickResult
-        diff — so replay doesn't need to know about tricks.
-
-        hand_cards is a list of Card dicts (use card() to build them).
-        """
-        return self.send_action(
-            session_id,
-            {"action": "play_trick", "trick_id": trick_id, "hand_cards": hand_cards},
-        )
+    # send_play_trick retired 2026-04-18 with the hints/tricks rip.
 
     # --- Queries ---
 
@@ -128,15 +143,7 @@ class Client:
         """GET /sessions/<id>/score → board_score + hand_size + per_stack breakdown."""
         return self._get(f"{self.base}/sessions/{session_id}/score")
 
-    def get_hints(self, session_id):
-        """GET /sessions/<id>/hints → every legal merge available now.
-
-        Returns {"base_score", "hand_merges":[Hint...], "stack_merges":[Hint...]}.
-        Each Hint has kind, target_stack, side, result_score, trick_id,
-        plus either hand_card (for hand_merges) or source_stack
-        (for stack_merges).
-        """
-        return self._get(f"{self.base}/sessions/{session_id}/hints")
+    # get_hints retired 2026-04-18 with the hints/tricks rip; rebuild pending.
 
     def get_turn_log(self, session_id):
         """GET /sessions/<id>/turn-log → per-turn action history.
@@ -232,7 +239,7 @@ def demo():
     state = c.get_state(sid)
     score = c.get_score(sid)
     print(f"initial: {len(state['state']['board'])} stacks, "
-          f"{len(state['state']['hand']['hand_cards'])} hand cards, "
+          f"{len(state['state']['hands'][state['state']['active_player_index']]['hand_cards'])} hand cards, "
           f"score={score['board_score']}")
 
     # Merge 7H from the hand onto the 7S,7D,7C set. Find the 7S stack
@@ -246,7 +253,7 @@ def demo():
     state = c.get_state(sid)
     score = c.get_score(sid)
     print(f"after merge_hand 7H: {len(state['state']['board'])} stacks, "
-          f"{len(state['state']['hand']['hand_cards'])} hand cards, "
+          f"{len(state['state']['hands'][state['state']['active_player_index']]['hand_cards'])} hand cards, "
           f"score={score['board_score']}, seq={state['seq']}")
 
     # Now split the first spade run (KS,AS,2S,3S). Index may have

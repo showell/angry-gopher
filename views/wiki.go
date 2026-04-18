@@ -169,7 +169,10 @@ th { background: #000080; color: white; }
 	fmt.Fprintf(w, `<div class="wiki-path"><a href="/gopher/%s/%s/%s" target="_top">Open in full page ↗</a> · %s</div>`,
 		html.EscapeString(section), html.EscapeString(repo), html.EscapeString(sub), html.EscapeString(displayPath))
 	if strings.HasSuffix(sub, ".md") && RenderMarkdown != nil {
+		fmt.Fprint(w, `<div class="wiki-md">`)
 		fmt.Fprint(w, RenderMarkdown(string(body)))
+		fmt.Fprint(w, `</div>`)
+		fmt.Fprint(w, ArticleCommentsJS)
 	} else {
 		fmt.Fprint(w, `<pre style="white-space:pre-wrap">`)
 		fmt.Fprint(w, html.EscapeString(string(body)))
@@ -798,6 +801,7 @@ func wikiRender(w http.ResponseWriter, section, repo, sub, displayPath string) {
 		fmt.Fprint(w, `<div class="wiki-md">`)
 		fmt.Fprint(w, RenderMarkdown(string(body)))
 		fmt.Fprint(w, `</div>`)
+		fmt.Fprint(w, ArticleCommentsJS)
 	} else {
 		renderSourceWithLines(w, string(body))
 	}

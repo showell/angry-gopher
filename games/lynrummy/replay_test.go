@@ -36,7 +36,7 @@ func TestReplay_PlaceHandAddsToBoardRemovesFromHand(t *testing.T) {
 		PlaceHandAction{HandCard: card7H, Loc: Location{Top: 400, Left: 500}},
 		before,
 	)
-	if got, want := after.Hand.Size(), before.Hand.Size()-1; got != want {
+	if got, want := after.ActiveHand().Size(), before.ActiveHand().Size()-1; got != want {
 		t.Errorf("hand size: got %d, want %d", got, want)
 	}
 	if got, want := len(after.Board), len(before.Board)+1; got != want {
@@ -53,7 +53,7 @@ func TestReplay_MergeHand7HOnto7Set(t *testing.T) {
 		MergeHandAction{HandCard: card7H, TargetStack: 3, Side: RightSide},
 		before,
 	)
-	if got, want := after.Hand.Size(), before.Hand.Size()-1; got != want {
+	if got, want := after.ActiveHand().Size(), before.ActiveHand().Size()-1; got != want {
 		t.Errorf("hand size: got %d, want %d", got, want)
 	}
 	if got, want := len(after.Board), len(before.Board); got != want {
@@ -61,47 +61,10 @@ func TestReplay_MergeHand7HOnto7Set(t *testing.T) {
 	}
 }
 
-func TestReplay_TurnActions_Draw(t *testing.T) {
-	before := InitialState()
-	after := ApplyAction(DrawAction{}, before)
-	if got, want := after.Hand.Size(), before.Hand.Size()+1; got != want {
-		t.Errorf("hand size after draw: got %d, want %d", got, want)
-	}
-	if got, want := len(after.Deck), len(before.Deck)-1; got != want {
-		t.Errorf("deck size after draw: got %d, want %d", got, want)
-	}
-	newest := after.Hand.HandCards[len(after.Hand.HandCards)-1]
-	if newest.State != FreshlyDrawn {
-		t.Errorf("drawn card state: got %v, want FreshlyDrawn", newest.State)
-	}
-}
-
-func TestReplay_TurnActions_DrawEmptyDeckIsNoOp(t *testing.T) {
-	state := InitialState()
-	state.Deck = nil
-	after := ApplyAction(DrawAction{}, state)
-	if after.Hand.Size() != state.Hand.Size() {
-		t.Error("draw on empty deck should not change hand")
-	}
-}
-
-func TestReplay_TurnActions_Discard(t *testing.T) {
-	before := InitialState()
-	c7H := Card{Value: 7, Suit: Heart, OriginDeck: 1}
-	after := ApplyAction(DiscardAction{HandCard: c7H}, before)
-	if got, want := after.Hand.Size(), before.Hand.Size()-1; got != want {
-		t.Errorf("hand size after discard: got %d, want %d", got, want)
-	}
-	if len(after.Discard) != 1 || after.Discard[0] != c7H {
-		t.Errorf("discard pile: got %v, want [7H]", after.Discard)
-	}
-}
-
 func TestReplay_TurnActions_CompleteTurn(t *testing.T) {
 	state := InitialState()
-	state = ApplyAction(DrawAction{}, state)
 	state = ApplyAction(CompleteTurnAction{}, state)
-	for i, hc := range state.Hand.HandCards {
+	for i, hc := range state.ActiveHand().HandCards {
 		if hc.State != HandNormal {
 			t.Errorf("hand[%d] state after complete_turn: got %v, want HandNormal", i, hc.State)
 		}
@@ -159,7 +122,7 @@ func TestReplay_Undo_RevertsStateToBefore(t *testing.T) {
 		t.Errorf("board length mismatch after undo: got %d, want %d",
 			len(after.Board), len(before.Board))
 	}
-	if after.Hand.Size() != before.Hand.Size() {
+	if after.ActiveHand().Size() != before.ActiveHand().Size() {
 		t.Errorf("hand size mismatch after undo")
 	}
 }
@@ -180,38 +143,24 @@ func TestReplay_Undo_ThenDifferentAction(t *testing.T) {
 	}
 }
 
-func TestReplay_Undo_DrawCardGoesBackInDeck(t *testing.T) {
-	initial := InitialState()
-	log := []WireAction{DrawAction{}, UndoAction{}}
-	after := ReplayActions(log)
-	if after.Hand.Size() != initial.Hand.Size() {
-		t.Errorf("hand size after draw+undo: got %d, want %d",
-			after.Hand.Size(), initial.Hand.Size())
-	}
-	if len(after.Deck) != len(initial.Deck) {
-		t.Errorf("deck size after draw+undo: got %d, want %d",
-			len(after.Deck), len(initial.Deck))
-	}
-}
-
 func TestReplay_Undo_PastCompleteTurn(t *testing.T) {
 	// Undo CAN cross a CompleteTurn boundary in V1. If Steve
 	// decides the Elm client should block undoing past
 	// CompleteTurn, that's a validation layer we'd add here.
 	log := []WireAction{
-		DrawAction{},
+		SplitAction{StackIndex: 0, CardIndex: 2},
 		CompleteTurnAction{},
 		UndoAction{},
 	}
 	after := ReplayActions(log)
 	if after.TurnIndex != 0 {
-		t.Errorf("TurnIndex after draw+complete+undo: got %d, want 0", after.TurnIndex)
+		t.Errorf("TurnIndex after split+complete+undo: got %d, want 0", after.TurnIndex)
 	}
-	// The draw still stands; only the complete_turn was undone.
+	// The split still stands; only the complete_turn was undone.
 	initial := InitialState()
-	if after.Hand.Size() != initial.Hand.Size()+1 {
-		t.Errorf("hand size: got %d, want %d (drew one, undo only popped complete_turn)",
-			after.Hand.Size(), initial.Hand.Size()+1)
+	if len(after.Board) != len(initial.Board)+1 {
+		t.Errorf("board length: got %d, want %d (split stands, undo only popped complete_turn)",
+			len(after.Board), len(initial.Board)+1)
 	}
 }
 
@@ -238,8 +187,8 @@ func TestReplay_CardsPlayedThisTurn_Bump(t *testing.T) {
 func TestReplay_InitialDeckHasRemainingCards(t *testing.T) {
 	state := InitialState()
 	// Double deck = 104. Initial board has 4+4+3+3+3+6=23 cards.
-	// Hand has 15. So deck = 104 - 23 - 15 = 66.
-	if got, want := len(state.Deck), 66; got != want {
+	// Two hands of 15 each. So deck = 104 - 23 - 30 = 51.
+	if got, want := len(state.Deck), 51; got != want {
 		t.Errorf("initial deck size: got %d, want %d", got, want)
 	}
 }
@@ -270,7 +219,7 @@ func TestReplay_BadReferencesAreNoOps(t *testing.T) {
 			MergeHandAction{HandCard: notInHand, TargetStack: 3, Side: RightSide},
 			before,
 		)
-		if after.Hand.Size() != before.Hand.Size() {
+		if after.ActiveHand().Size() != before.ActiveHand().Size() {
 			t.Error("hand should be unchanged")
 		}
 		if len(after.Board) != len(before.Board) {
@@ -295,7 +244,7 @@ func TestReplay_InitialStateMatchesExpectedShape(t *testing.T) {
 	if got := len(state.Board); got != 6 {
 		t.Errorf("initial board: got %d stacks, want 6", got)
 	}
-	if got := state.Hand.Size(); got != 15 {
+	if got := state.ActiveHand().Size(); got != 15 {
 		t.Errorf("initial hand: got %d cards, want 15", got)
 	}
 }
@@ -316,7 +265,92 @@ func TestReplay_ReplayActionsIsFoldLeft(t *testing.T) {
 	if len(got.Board) != len(manual.Board) {
 		t.Errorf("board diverges: %d vs %d", len(got.Board), len(manual.Board))
 	}
-	if got.Hand.Size() != manual.Hand.Size() {
-		t.Errorf("hand diverges: %d vs %d", got.Hand.Size(), manual.Hand.Size())
+	if got.ActiveHand().Size() != manual.ActiveHand().Size() {
+		t.Errorf("hand diverges: %d vs %d", got.ActiveHand().Size(), manual.ActiveHand().Size())
 	}
+}
+
+// TestTwoPlayerTurnChange_ScoresAccumulatePerPlayer walks through
+// a minimal two-player exchange and verifies per-player scoring.
+//
+//   Turn 1 (P0): play QS onto the KS-AS-2S-3S spade run → 5-run.
+//   CompleteTurn. P0 gets +400. P1 still 0.
+//
+//   Turn 2 (P1): play 4S onto the QS-KS-AS-2S-3S run → 6-run.
+//   CompleteTurn. P1 gets +400. P0 unchanged.
+//
+// HARDCODED SCORES ARE INTENTIONAL. This test asserts exact
+// integers (400, 400) rather than computing them from board
+// deltas. If you change StackTypeValue / ScoreForCardsPlayed,
+// this test WILL fail — that's the point: it forces you to
+// re-examine per-player scoring whenever you touch the
+// arithmetic. Update the numbers here consciously.
+//
+// Math (for reviewers): each turn is a single 1-card PureRun
+// merge. Board delta +100 (PureRun grows by one card at 100
+// per card). Cards-played bonus 200 + 100·1² = 300. Total 400.
+func TestTwoPlayerTurnChange_ScoresAccumulatePerPlayer(t *testing.T) {
+	state := InitialState()
+
+	if state.ActivePlayerIndex != 0 {
+		t.Fatalf("expected P0 active initially, got %d", state.ActivePlayerIndex)
+	}
+	if state.Scores[0] != 0 || state.Scores[1] != 0 {
+		t.Fatalf("expected scores [0,0], got %v", state.Scores)
+	}
+	if got := ScoreForStacks(state.Board); got != 1760 {
+		t.Fatalf("initial board score: got %d, want 1760", got)
+	}
+
+	// --- Turn 1: P0 merges QS onto the left of the KS-holding stack ---
+	qs := Card{Value: 12, Suit: Spade, OriginDeck: 1} // P0 hand, DeckTwo
+	ks := Card{Value: 13, Suit: Spade, OriginDeck: 0} // initial board, DeckOne
+	state = ApplyAction(MergeHandAction{
+		HandCard:    qs,
+		TargetStack: stackHolding(state.Board, ks),
+		Side:        LeftSide,
+	}, state)
+	state = ApplyAction(CompleteTurnAction{}, state)
+
+	if got := state.Scores[0]; got != 400 {
+		t.Errorf("P0 score after turn 1: got %d, want 400", got)
+	}
+	if got := state.Scores[1]; got != 0 {
+		t.Errorf("P1 score after turn 1: got %d, want 0", got)
+	}
+	if state.ActivePlayerIndex != 1 {
+		t.Errorf("seat after P0's CompleteTurn: got %d, want 1", state.ActivePlayerIndex)
+	}
+
+	// --- Turn 2: P1 merges 4S onto the right of the stack now holding QS ---
+	fourS := Card{Value: 4, Suit: Spade, OriginDeck: 0} // P1 hand, DeckOne
+	state = ApplyAction(MergeHandAction{
+		HandCard:    fourS,
+		TargetStack: stackHolding(state.Board, qs),
+		Side:        RightSide,
+	}, state)
+	state = ApplyAction(CompleteTurnAction{}, state)
+
+	if got := state.Scores[0]; got != 400 {
+		t.Errorf("P0 score after turn 2 (should be unchanged): got %d, want 400", got)
+	}
+	if got := state.Scores[1]; got != 400 {
+		t.Errorf("P1 score after turn 2: got %d, want 400", got)
+	}
+	if state.ActivePlayerIndex != 0 {
+		t.Errorf("seat after P1's CompleteTurn: got %d, want 0", state.ActivePlayerIndex)
+	}
+}
+
+// stackHolding returns the index of the first stack that contains
+// the given card, or -1. Tests use this to reference a stack
+// across mutations — merges remove the target stack and append
+// the merged result, so raw indexes aren't stable across actions.
+func stackHolding(board []CardStack, target Card) int {
+	for i, s := range board {
+		if s.Contains(target) {
+			return i
+		}
+	}
+	return -1
 }

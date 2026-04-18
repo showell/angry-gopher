@@ -239,6 +239,21 @@ Context:
   functions?** We dodged the question. For future ports of
   stochastic code, how do we validate?
 
+- **Layout and colors carry more weight than they look like they
+  do** *(added 2026-04-18 mid-session by Steve)*. In an existing
+  app, layout and color decisions may have gone through many
+  iterations — the values that ended up in the code are not
+  arbitrary, they're the surviving residue of that iteration.
+  During a port, Claude defaulted to "reasonable-looking"
+  defaults (board too narrow, no FreshlyPlayed coloring) and
+  only corrected when Steve caught it live. Steve acknowledged
+  he didn't make the requirements explicit up front. Lesson
+  for next port: **extract layout constants and color values as
+  named requirements before writing any new visuals** — they're
+  cheap to pull from the source codebase once we know to look.
+  Future-ports principle: treat layout and colors as data the
+  source code owns, not styling choices the port gets to rethink.
+
 ---
 
 ## Action items I'd propose for the meeting

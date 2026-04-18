@@ -1,0 +1,10 @@
+{
+  "comments": [
+    {
+      "para_index": 74,
+      "author": "Steve",
+      "timestamp": "2026-04-18T11:59:33-04:00",
+      "text": "We will need a refinement to the Undo flow. In the TS game I don't even allow you to undo if your board state is clean. In fact, I don't even show the button if the board is clean.\n\nI want to relax this flow so that players can choose to undo even a \"clean\" move. But we should ask for confirmation first. A good UI thing to have in any program is a low-friction way to ask users yes-no questions. It's a pain to build it the first time, but then you will never regret it."
+    }
+  ]
+}
