@@ -70,7 +70,7 @@ suite =
                             Replay.initialState
 
                         card7H =
-                            { value = Seven, suit = Heart, originDeck = DeckOne }
+                            { value = Seven, suit = Heart, originDeck = DeckTwo }
 
                         after =
                             Replay.applyAction
@@ -92,7 +92,7 @@ suite =
 
                         -- Stack index 3 in the opening board is "7S,7D,7C"
                         card7H =
-                            { value = Seven, suit = Heart, originDeck = DeckOne }
+                            { value = Seven, suit = Heart, originDeck = DeckTwo }
 
                         after =
                             Replay.applyAction
@@ -119,7 +119,7 @@ suite =
                 \_ ->
                     let
                         anyCard =
-                            { value = Seven, suit = Heart, originDeck = DeckOne }
+                            { value = Seven, suit = Heart, originDeck = DeckTwo }
                     in
                     Replay.applyAction (Discard { handCard = anyCard }) Replay.initialState
                         |> Expect.equal Replay.initialState
@@ -149,7 +149,7 @@ suite =
                 \_ ->
                     let
                         notInHand =
-                            { value = Ace, suit = Spade, originDeck = DeckOne }
+                            { value = Ace, suit = Spade, originDeck = DeckTwo }
                     in
                     Replay.applyAction
                         (MergeHand

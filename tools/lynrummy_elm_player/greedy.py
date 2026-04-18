@@ -18,31 +18,61 @@ from client import Client, card
 
 
 def play_greedy(c, session_id, max_turns=50, verbose=True):
-    """Play until no legal merges remain or max_turns is hit.
+    """Play a solo game with explicit turn lifecycle.
 
-    Returns the list of (turn, action_dict, new_score) tuples.
+    Each turn:
+      1. Draw one card from the deck.
+      2. While legal merges exist, play the highest-result_score one.
+      3. Complete the turn.
+
+    Stops when the deck is empty AND no merges are available.
+    Returns a list of per-turn summaries.
     """
-    trace = []
-    for turn in range(1, max_turns + 1):
-        hints = c.get_hints(session_id)
-        # Go marshals nil slices as null, not [].
-        combined = (hints.get("hand_merges") or []) + (hints.get("stack_merges") or [])
-        if not combined:
+    summary = []
+    for turn_num in range(1, max_turns + 1):
+        state = c.get_state(session_id)
+        deck_size = len(state["state"].get("deck") or [])
+        if deck_size == 0 and _no_merges(c, session_id):
             if verbose:
-                print(f"  turn {turn}: no legal merges. stopping.")
+                print(f"  turn {turn_num}: deck empty + no merges. stopping.")
             break
 
-        best = max(combined, key=lambda h: h["result_score"])
-        action = _hint_to_action(best)
-        resp = c.send_action(session_id, action)
+        if deck_size > 0:
+            c.send_draw(session_id)
 
+        plays = 0
+        while True:
+            hints = c.get_hints(session_id)
+            combined = (hints.get("hand_merges") or []) + (hints.get("stack_merges") or [])
+            if not combined:
+                break
+            best = max(combined, key=lambda h: h["result_score"])
+            c.send_action(session_id, _hint_to_action(best))
+            plays += 1
+            if verbose:
+                print(f"  turn {turn_num}.{plays}: {_describe(best)}")
+
+        c.send_complete_turn(session_id)
         score = c.get_score(session_id)
-        trace.append((turn, action, score["board_score"]))
-
+        state = c.get_state(session_id)
+        summary.append({
+            "turn": turn_num,
+            "plays_made": plays,
+            "final_score": score["board_score"],
+            "hand_size_remaining": len(state["state"]["hand"]["hand_cards"]),
+            "deck_remaining": len(state["state"].get("deck") or []),
+        })
         if verbose:
-            print(f"  turn {turn}: {_describe(best)} → score={score['board_score']}")
+            print(f"  turn {turn_num}: {plays} plays → score={score['board_score']}, "
+                  f"hand={summary[-1]['hand_size_remaining']}, "
+                  f"deck={summary[-1]['deck_remaining']}")
 
-    return trace
+    return summary
+
+
+def _no_merges(c, session_id):
+    hints = c.get_hints(session_id)
+    return not ((hints.get("hand_merges") or []) + (hints.get("stack_merges") or []))
 
 
 def _hint_to_action(hint):
@@ -84,14 +114,15 @@ def main():
     initial = c.get_score(sid)
     print(f"session {sid}: initial score {initial['board_score']}")
 
-    trace = play_greedy(c, sid, max_turns=args.max_turns)
+    summary = play_greedy(c, sid, max_turns=args.max_turns)
 
     final = c.get_score(sid)
     state = c.get_state(sid)
     print()
-    print(f"played {len(trace)} turns")
+    print(f"played {len(summary)} turns")
     print(f"final score: {final['board_score']}")
-    print(f"hand size remaining: {state['state']['hand']['hand_cards'].__len__()}")
+    print(f"hand size remaining: {len(state['state']['hand']['hand_cards'])}")
+    print(f"deck remaining: {len(state['state'].get('deck') or [])}")
     print(f"browse: {args.base.rsplit('/', 1)[0]}/lynrummy-elm/sessions/{sid}")
 
 

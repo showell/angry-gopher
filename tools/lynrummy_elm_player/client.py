@@ -211,11 +211,12 @@ def demo():
           f"score={score['board_score']}")
 
     # Merge 7H from the hand onto the 7S,7D,7C set. Find the 7S stack
-    # by content rather than assuming an index.
+    # by content. Hand cards use DeckTwo (deck=1) to avoid collision
+    # with board cards in DeckOne.
     seven_set_idx = find_stack_containing(state, "7S")
     print(f"7-set is at stack index {seven_set_idx}")
     c.send_merge_hand(
-        sid, hand_card=card("7H"), target_stack=seven_set_idx, side="right"
+        sid, hand_card=card("7H", deck=1), target_stack=seven_set_idx, side="right"
     )
     state = c.get_state(sid)
     score = c.get_score(sid)

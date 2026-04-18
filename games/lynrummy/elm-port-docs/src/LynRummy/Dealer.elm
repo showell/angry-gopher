@@ -72,8 +72,11 @@ path.
 openingHand : Hand
 openingHand =
     let
+        -- Hand uses DeckTwo so 7H in the hand doesn't collide with
+        -- the 7H in the initial board's 6-run (DeckOne). Both-deck
+        -- sources are idiomatic in double-deck LynRummy.
         cards =
-            List.filterMap (\label -> Card.cardFromLabel label DeckOne) openingHandLabels
+            List.filterMap (\label -> Card.cardFromLabel label DeckTwo) openingHandLabels
     in
     Hand.addCards cards CardStack.HandNormal Hand.empty
 

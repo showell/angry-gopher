@@ -31,7 +31,7 @@ func TestReplay_MoveStackUpdatesLoc(t *testing.T) {
 
 func TestReplay_PlaceHandAddsToBoardRemovesFromHand(t *testing.T) {
 	before := InitialState()
-	card7H := Card{Value: 7, Suit: Heart, OriginDeck: 0}
+	card7H := Card{Value: 7, Suit: Heart, OriginDeck: 1}
 	after := ApplyAction(
 		PlaceHandAction{HandCard: card7H, Loc: Location{Top: 400, Left: 500}},
 		before,
@@ -48,7 +48,7 @@ func TestReplay_MergeHand7HOnto7Set(t *testing.T) {
 	// Opening board stack at index 3 is "7S,7D,7C" — a 7-set.
 	// Adding 7H from the hand (right side) makes it a 4-set.
 	before := InitialState()
-	card7H := Card{Value: 7, Suit: Heart, OriginDeck: 0}
+	card7H := Card{Value: 7, Suit: Heart, OriginDeck: 1}
 	after := ApplyAction(
 		MergeHandAction{HandCard: card7H, TargetStack: 3, Side: RightSide},
 		before,
@@ -61,27 +61,93 @@ func TestReplay_MergeHand7HOnto7Set(t *testing.T) {
 	}
 }
 
-func TestReplay_TurnLogicActionsAreNoOps(t *testing.T) {
+func TestReplay_TurnActions_Draw(t *testing.T) {
 	before := InitialState()
-	cases := []struct {
-		name   string
-		action WireAction
-	}{
-		{"draw", DrawAction{}},
-		{"discard", DiscardAction{HandCard: Card{Value: 7, Suit: Heart, OriginDeck: 0}}},
-		{"complete_turn", CompleteTurnAction{}},
-		{"undo", UndoAction{}},
+	after := ApplyAction(DrawAction{}, before)
+	if got, want := after.Hand.Size(), before.Hand.Size()+1; got != want {
+		t.Errorf("hand size after draw: got %d, want %d", got, want)
 	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			after := ApplyAction(tc.action, before)
-			if got := len(after.Board); got != len(before.Board) {
-				t.Errorf("board changed: got %d stacks, want %d", got, len(before.Board))
-			}
-			if got := after.Hand.Size(); got != before.Hand.Size() {
-				t.Errorf("hand changed: got %d cards, want %d", got, before.Hand.Size())
-			}
-		})
+	if got, want := len(after.Deck), len(before.Deck)-1; got != want {
+		t.Errorf("deck size after draw: got %d, want %d", got, want)
+	}
+	newest := after.Hand.HandCards[len(after.Hand.HandCards)-1]
+	if newest.State != FreshlyDrawn {
+		t.Errorf("drawn card state: got %v, want FreshlyDrawn", newest.State)
+	}
+}
+
+func TestReplay_TurnActions_DrawEmptyDeckIsNoOp(t *testing.T) {
+	state := InitialState()
+	state.Deck = nil
+	after := ApplyAction(DrawAction{}, state)
+	if after.Hand.Size() != state.Hand.Size() {
+		t.Error("draw on empty deck should not change hand")
+	}
+}
+
+func TestReplay_TurnActions_Discard(t *testing.T) {
+	before := InitialState()
+	c7H := Card{Value: 7, Suit: Heart, OriginDeck: 1}
+	after := ApplyAction(DiscardAction{HandCard: c7H}, before)
+	if got, want := after.Hand.Size(), before.Hand.Size()-1; got != want {
+		t.Errorf("hand size after discard: got %d, want %d", got, want)
+	}
+	if len(after.Discard) != 1 || after.Discard[0] != c7H {
+		t.Errorf("discard pile: got %v, want [7H]", after.Discard)
+	}
+}
+
+func TestReplay_TurnActions_CompleteTurn(t *testing.T) {
+	state := InitialState()
+	state = ApplyAction(DrawAction{}, state)
+	state = ApplyAction(CompleteTurnAction{}, state)
+	for i, hc := range state.Hand.HandCards {
+		if hc.State != HandNormal {
+			t.Errorf("hand[%d] state after complete_turn: got %v, want HandNormal", i, hc.State)
+		}
+	}
+	if state.TurnIndex != 1 {
+		t.Errorf("turn_index: got %d, want 1", state.TurnIndex)
+	}
+	if state.CardsPlayedThisTurn != 0 {
+		t.Errorf("cards_played_this_turn: got %d, want 0", state.CardsPlayedThisTurn)
+	}
+}
+
+func TestReplay_TurnActions_UndoIsNoOp(t *testing.T) {
+	before := InitialState()
+	after := ApplyAction(UndoAction{}, before)
+	if after.Hand.Size() != before.Hand.Size() {
+		t.Error("undo should be a no-op for now")
+	}
+}
+
+func TestReplay_CardsPlayedThisTurn_Bump(t *testing.T) {
+	state := InitialState()
+	c7H := Card{Value: 7, Suit: Heart, OriginDeck: 1}
+	state = ApplyAction(
+		MergeHandAction{HandCard: c7H, TargetStack: 3, Side: RightSide},
+		state,
+	)
+	if state.CardsPlayedThisTurn != 1 {
+		t.Errorf("after 1 merge_hand: got %d, want 1", state.CardsPlayedThisTurn)
+	}
+	c8C := Card{Value: 8, Suit: Club, OriginDeck: 1}
+	state = ApplyAction(
+		PlaceHandAction{HandCard: c8C, Loc: Location{Top: 400, Left: 500}},
+		state,
+	)
+	if state.CardsPlayedThisTurn != 2 {
+		t.Errorf("after merge+place: got %d, want 2", state.CardsPlayedThisTurn)
+	}
+}
+
+func TestReplay_InitialDeckHasRemainingCards(t *testing.T) {
+	state := InitialState()
+	// Double deck = 104. Initial board has 4+4+3+3+3+6=23 cards.
+	// Hand has 15. So deck = 104 - 23 - 15 = 66.
+	if got, want := len(state.Deck), 66; got != want {
+		t.Errorf("initial deck size: got %d, want %d", got, want)
 	}
 }
 

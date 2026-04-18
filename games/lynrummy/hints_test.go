@@ -12,7 +12,7 @@ func TestHints_HandMerges_InitialBoardOpeningHand(t *testing.T) {
 	// 7H from the opening hand should have legal merges against
 	// the 7-set (stack 3) on both sides (Left and Right — a set
 	// accepts either direction).
-	sevenH := Card{Value: 7, Suit: Heart, OriginDeck: 0}
+	sevenH := Card{Value: 7, Suit: Heart, OriginDeck: 1}
 	var sevenHHints []Hint
 	for _, h := range hints {
 		if h.HandCard != nil && *h.HandCard == sevenH {
@@ -53,7 +53,7 @@ func TestHints_ResultScoreMakesSense(t *testing.T) {
 
 	// Merging 7H onto the 7-set adds 60 (one more card in a
 	// set, each card worth 60). result_score should be base + 60.
-	sevenH := Card{Value: 7, Suit: Heart, OriginDeck: 0}
+	sevenH := Card{Value: 7, Suit: Heart, OriginDeck: 1}
 	for _, h := range hints {
 		if h.HandCard != nil && *h.HandCard == sevenH {
 			want := baseScore + 60

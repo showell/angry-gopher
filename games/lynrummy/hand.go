@@ -53,3 +53,14 @@ func (h Hand) FindByCard(c Card) *HandCard {
 	}
 	return nil
 }
+
+// ResetState returns a Hand with every card's state set to
+// HandNormal. Called at CompleteTurn to clear per-turn flags
+// (FreshlyDrawn, BackFromBoard). Mirrors Elm's Hand.resetState.
+func (h Hand) ResetState() Hand {
+	out := make([]HandCard, len(h.HandCards))
+	for i, hc := range h.HandCards {
+		out[i] = HandCard{Card: hc.Card, State: HandNormal}
+	}
+	return Hand{HandCards: out}
+}

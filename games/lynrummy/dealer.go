@@ -14,6 +14,19 @@ import "math/rand"
 
 // BuildDoubleDeck creates a shuffled 104-card double deck.
 func BuildDoubleDeck() []Card {
+	cards := BuildDeterministicDoubleDeck()
+	rand.Shuffle(len(cards), func(i, j int) {
+		cards[i], cards[j] = cards[j], cards[i]
+	})
+	return cards
+}
+
+// BuildDeterministicDoubleDeck returns the 104-card double deck
+// in a fixed canonical order (deck0 cards before deck1 cards, then
+// by suit, then by value). Used by remainingDeckAfter so that
+// session state is reproducible across /state calls — every replay
+// sees the same draw order.
+func BuildDeterministicDoubleDeck() []Card {
 	var cards []Card
 	for deck := 0; deck <= 1; deck++ {
 		for suit := 0; suit <= 3; suit++ {
@@ -26,9 +39,6 @@ func BuildDoubleDeck() []Card {
 			}
 		}
 	}
-	rand.Shuffle(len(cards), func(i, j int) {
-		cards[i], cards[j] = cards[j], cards[i]
-	})
 	return cards
 }
 
@@ -141,11 +151,15 @@ var openingHandLabels = []string{
 }
 
 // OpeningHand builds the canned 15-card opening hand. Mirrors the
-// Elm Dealer.openingHand.
+// Elm Dealer.openingHand. Uses DeckTwo so the 7H in the hand
+// doesn't collide with the 7H in the initial board's 6-run (which
+// uses DeckOne).
 func OpeningHand() Hand {
 	var cards []Card
 	for _, label := range openingHandLabels {
-		cards = append(cards, parseLabel(label))
+		c := parseLabel(label)
+		c.OriginDeck = 1
+		cards = append(cards, c)
 	}
 	return EmptyHand().AddCards(cards, HandNormal)
 }
