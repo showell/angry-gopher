@@ -1,8 +1,0 @@
-just_use games_replay.go
-
-# label: ONE_OFF
-# role: supports feature — canvas/SSE game replay scrubber + retroactive trick annotation
-
-Hand-written JS + retroactive trick annotation (calls tricks.Detect per
-move). Migration: non-CRUD; needs include_script + after_render escape
-hatches before DSL can fit.
