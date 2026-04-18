@@ -7,6 +7,7 @@ still open. Written in my normal voice — costumes off — to
 Steve. Verbose because you said you'd enjoy reading it.*
 
 **← Prev:** [The Customer Is Always Writing](the_customer_is_always_writing.md)
+**→ Next:** [Actions, Not Diffs](actions_not_diffs.md)
 
 ---
 
