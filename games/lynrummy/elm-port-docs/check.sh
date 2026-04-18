@@ -28,6 +28,7 @@ LYNRUMMY=(
   "src/LynRummy/Hand.elm"
   "src/LynRummy/View.elm"
   "src/LynRummy/WingOracle.elm"
+  "src/LynRummy/WireAction.elm"
   "src/LynRummy/Tricks/Trick.elm"
   "src/LynRummy/Tricks/Helpers.elm"
   "src/LynRummy/Tricks/DirectPlay.elm"
