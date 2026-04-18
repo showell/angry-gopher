@@ -256,7 +256,6 @@ type Msg
     | ClickUndo
     | StateRefreshed (Result Http.Error RemoteState)
     | ClickHint
-    | HintsReceived (Result Http.Error (List HintOption))
     | CompleteTurnResponded (Result Http.Error CompleteTurnOutcome)
     | PopupOk
 
@@ -269,24 +268,6 @@ type alias CompleteTurnOutcome =
     { result : CompleteTurnResult
     , turnScore : Int
     , cardsDrawn : Int
-    }
-
-
-{-| A single hint option — already normalized across the three
-server arrays (hand_merges, stack_merges, trick_plays) into a
-consistent shape for display.
-
-  - `description` is a human-readable summary
-  - `handCards` are the cards to highlight in the hand (empty
-    for stack-to-stack merges)
-  - `resultScore` is the server-previewed board score if this
-    play is made (used to pick the best)
-
--}
-type alias HintOption =
-    { description : String
-    , handCards : List Card
-    , resultScore : Int
     }
 
 
@@ -448,43 +429,14 @@ update msg model =
                     ( model, Cmd.none )
 
         ClickHint ->
-            -- Hints endpoint retired 2026-04-18 during rebuild. Show a
-            -- placeholder status rather than hitting the dead endpoint.
+            -- Retrofit pending: when the Elm client wires into the
+            -- new /hint endpoint, replace this placeholder with a
+            -- fetch + decode of `{suggestions:[]}` and render
+            -- suggestions[0].
             ( { model
                 | status =
-                    { text = "Hints are being rebuilt — stand by."
+                    { text = "Hints UI is being rebuilt — stand by."
                     , kind = Inform
-                    }
-              }
-            , Cmd.none
-            )
-
-        HintsReceived (Ok options) ->
-            case pickBestHint options of
-                Just best ->
-                    ( { model
-                        | hintedCards = best.handCards
-                        , status = { text = best.description, kind = Inform }
-                      }
-                    , Cmd.none
-                    )
-
-                Nothing ->
-                    ( { model
-                        | hintedCards = []
-                        , status =
-                            { text = "No hint available from the current tricks."
-                            , kind = Scold
-                            }
-                      }
-                    , Cmd.none
-                    )
-
-        HintsReceived (Err _) ->
-            ( { model
-                | status =
-                    { text = "Couldn't reach the server for hints."
-                    , kind = Scold
                     }
               }
             , Cmd.none
@@ -708,116 +660,6 @@ sendCompleteTurn sessionId =
         , body = Http.jsonBody (WA.encode WA.CompleteTurn)
         , expect = Http.expectStringResponse CompleteTurnResponded decodeCompleteTurnResponse
         }
-
-
-fetchHints : Int -> Cmd Msg
-fetchHints sessionId =
-    Http.get
-        { url = "/gopher/lynrummy-elm/sessions/" ++ String.fromInt sessionId ++ "/hints"
-        , expect = Http.expectJson HintsReceived hintsDecoder
-        }
-
-
-{-| The /hints endpoint returns three separate arrays
-(hand_merges, stack_merges, trick_plays) with slightly different
-shapes. This decoder normalizes them all into a flat list of
-HintOption values that share a common shape for display.
--}
-hintsDecoder : Decoder (List HintOption)
-hintsDecoder =
-    Decode.map3
-        (\hm sm tp -> hm ++ sm ++ tp)
-        (Decode.field "hand_merges" (Decode.list handMergeHintDecoder)
-            |> Decode.maybe
-            |> Decode.map (Maybe.withDefault [])
-        )
-        (Decode.field "stack_merges" (Decode.list stackMergeHintDecoder)
-            |> Decode.maybe
-            |> Decode.map (Maybe.withDefault [])
-        )
-        (Decode.field "trick_plays" (Decode.list trickPlayHintDecoder)
-            |> Decode.maybe
-            |> Decode.map (Maybe.withDefault [])
-        )
-
-
-handMergeHintDecoder : Decoder HintOption
-handMergeHintDecoder =
-    Decode.map3
-        (\card target score ->
-            { description =
-                "Play " ++ Card.cardStr card ++ " onto stack #"
-                    ++ String.fromInt target ++ " (+" ++ String.fromInt score ++ ")"
-            , handCards = [ card ]
-            , resultScore = score
-            }
-        )
-        (Decode.field "hand_card" Card.cardDecoder)
-        (Decode.field "target_stack" Decode.int)
-        (Decode.field "result_score" Decode.int)
-
-
-stackMergeHintDecoder : Decoder HintOption
-stackMergeHintDecoder =
-    Decode.map3
-        (\src target score ->
-            { description =
-                "Merge stack #" ++ String.fromInt src
-                    ++ " onto stack #" ++ String.fromInt target
-                    ++ " (+" ++ String.fromInt score ++ ")"
-            , handCards = []
-            , resultScore = score
-            }
-        )
-        (Decode.field "source_stack" Decode.int)
-        (Decode.field "target_stack" Decode.int)
-        (Decode.field "result_score" Decode.int)
-
-
-trickPlayHintDecoder : Decoder HintOption
-trickPlayHintDecoder =
-    Decode.map4
-        (\trickId desc cards score ->
-            let
-                label =
-                    if String.isEmpty desc then
-                        trickId
-
-                    else
-                        desc
-            in
-            { description = label ++ " (+" ++ String.fromInt score ++ ")"
-            , handCards = cards
-            , resultScore = score
-            }
-        )
-        (Decode.field "trick_id" Decode.string)
-        (Decode.oneOf
-            [ Decode.field "description" Decode.string
-            , Decode.succeed ""
-            ]
-        )
-        (Decode.field "hand_cards" (Decode.list Card.cardDecoder))
-        (Decode.field "result_score" Decode.int)
-
-
-pickBestHint : List HintOption -> Maybe HintOption
-pickBestHint options =
-    case options of
-        [] ->
-            Nothing
-
-        first :: rest ->
-            Just (List.foldl (keepBetter) first rest)
-
-
-keepBetter : HintOption -> HintOption -> HintOption
-keepBetter candidate best =
-    if candidate.resultScore > best.resultScore then
-        candidate
-
-    else
-        best
 
 
 decodeCompleteTurnResponse : Http.Response String -> Result Http.Error CompleteTurnOutcome
