@@ -114,11 +114,104 @@ func TestReplay_TurnActions_CompleteTurn(t *testing.T) {
 	}
 }
 
-func TestReplay_TurnActions_UndoIsNoOp(t *testing.T) {
+func TestReplay_EffectiveActions_UndoPopsLast(t *testing.T) {
+	log := []WireAction{
+		SplitAction{StackIndex: 0, CardIndex: 2},
+		UndoAction{},
+	}
+	eff := EffectiveActions(log)
+	if len(eff) != 0 {
+		t.Errorf("after split+undo: expected 0 effective actions, got %d", len(eff))
+	}
+}
+
+func TestReplay_EffectiveActions_MultipleUndos(t *testing.T) {
+	log := []WireAction{
+		SplitAction{StackIndex: 0, CardIndex: 2},
+		MoveStackAction{StackIndex: 0, NewLoc: Location{Top: 1, Left: 1}},
+		UndoAction{},
+		UndoAction{},
+	}
+	eff := EffectiveActions(log)
+	if len(eff) != 0 {
+		t.Errorf("after 2 ops + 2 undos: expected 0 effective actions, got %d", len(eff))
+	}
+}
+
+func TestReplay_EffectiveActions_UndoOnEmptyHistoryIsNoOp(t *testing.T) {
+	log := []WireAction{UndoAction{}, UndoAction{}}
+	eff := EffectiveActions(log)
+	if len(eff) != 0 {
+		t.Errorf("undo on empty history: expected 0, got %d", len(eff))
+	}
+}
+
+func TestReplay_Undo_RevertsStateToBefore(t *testing.T) {
+	// Full-round-trip: do an action, undo it, state matches
+	// initial.
 	before := InitialState()
-	after := ApplyAction(UndoAction{}, before)
+	log := []WireAction{
+		SplitAction{StackIndex: 0, CardIndex: 2},
+		UndoAction{},
+	}
+	after := ReplayActions(log)
+	if len(after.Board) != len(before.Board) {
+		t.Errorf("board length mismatch after undo: got %d, want %d",
+			len(after.Board), len(before.Board))
+	}
 	if after.Hand.Size() != before.Hand.Size() {
-		t.Error("undo should be a no-op for now")
+		t.Errorf("hand size mismatch after undo")
+	}
+}
+
+func TestReplay_Undo_ThenDifferentAction(t *testing.T) {
+	// Split, undo, then do a different split. Final state
+	// reflects only the second split.
+	log := []WireAction{
+		SplitAction{StackIndex: 0, CardIndex: 2},
+		UndoAction{},
+		SplitAction{StackIndex: 1, CardIndex: 2},
+	}
+	after := ReplayActions(log)
+	// One split → board grew by 1.
+	initial := InitialState()
+	if len(after.Board) != len(initial.Board)+1 {
+		t.Errorf("board length: got %d, want %d", len(after.Board), len(initial.Board)+1)
+	}
+}
+
+func TestReplay_Undo_DrawCardGoesBackInDeck(t *testing.T) {
+	initial := InitialState()
+	log := []WireAction{DrawAction{}, UndoAction{}}
+	after := ReplayActions(log)
+	if after.Hand.Size() != initial.Hand.Size() {
+		t.Errorf("hand size after draw+undo: got %d, want %d",
+			after.Hand.Size(), initial.Hand.Size())
+	}
+	if len(after.Deck) != len(initial.Deck) {
+		t.Errorf("deck size after draw+undo: got %d, want %d",
+			len(after.Deck), len(initial.Deck))
+	}
+}
+
+func TestReplay_Undo_PastCompleteTurn(t *testing.T) {
+	// Undo CAN cross a CompleteTurn boundary in V1. If Steve
+	// decides the Elm client should block undoing past
+	// CompleteTurn, that's a validation layer we'd add here.
+	log := []WireAction{
+		DrawAction{},
+		CompleteTurnAction{},
+		UndoAction{},
+	}
+	after := ReplayActions(log)
+	if after.TurnIndex != 0 {
+		t.Errorf("TurnIndex after draw+complete+undo: got %d, want 0", after.TurnIndex)
+	}
+	// The draw still stands; only the complete_turn was undone.
+	initial := InitialState()
+	if after.Hand.Size() != initial.Hand.Size()+1 {
+		t.Errorf("hand size: got %d, want %d (drew one, undo only popped complete_turn)",
+			after.Hand.Size(), initial.Hand.Size()+1)
 	}
 }
 

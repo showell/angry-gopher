@@ -263,10 +263,39 @@ func removeStack(board []CardStack, target CardStack) []CardStack {
 
 // ReplayActions walks the given action list from InitialState,
 // applying each in order, and returns the final state.
+// Undo actions are resolved during a preprocessing pass —
+// every Undo cancels the last non-Undo action, leaving history
+// intact but removing the action's effect. See
+// EffectiveActions for the rule.
 func ReplayActions(actions []WireAction) State {
 	state := InitialState()
-	for _, a := range actions {
+	for _, a := range EffectiveActions(actions) {
 		state = ApplyAction(a, state)
 	}
 	return state
+}
+
+// EffectiveActions resolves Undo actions against the raw log.
+// Each Undo cancels the most recent non-Undo action. Multiple
+// Undos pop multiple actions. An Undo with no history to cancel
+// is a no-op.
+//
+// Net effect: ReplayActions(InitialState, log) ==
+// fold(ApplyAction, InitialState, EffectiveActions(log)).
+//
+// This keeps the action log append-only (audit trail intact)
+// while letting undo semantically "remove" a prior action
+// from the game state.
+func EffectiveActions(actions []WireAction) []WireAction {
+	var stack []WireAction
+	for _, a := range actions {
+		if _, isUndo := a.(UndoAction); isUndo {
+			if len(stack) > 0 {
+				stack = stack[:len(stack)-1]
+			}
+			continue
+		}
+		stack = append(stack, a)
+	}
+	return stack
 }
