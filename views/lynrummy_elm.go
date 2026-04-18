@@ -9,10 +9,14 @@ package views
 
 import (
 	"fmt"
+	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"angry-gopher/games/lynrummy"
 )
 
 // ElmLynRummyDir is the repo-relative directory containing the
@@ -29,9 +33,36 @@ func HandleLynRummyElm(w http.ResponseWriter, r *http.Request) {
 		lynrummyElmPlay(w)
 	case "elm.js":
 		lynrummyElmJS(w)
+	case "actions":
+		lynrummyElmActions(w, r)
 	default:
 		http.NotFound(w, r)
 	}
+}
+
+// lynrummyElmActions receives a WireAction from the Elm client
+// and logs it server-side. V1 scaffolding: no game-ID, no auth,
+// no persistence to game_events (prod DB is nukable; see
+// project_db_is_nukable memory). Real persistence + broadcast
+// arrive with the multi-player work.
+func lynrummyElmActions(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "read body: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	action, err := lynrummy.DecodeWireAction(body)
+	if err != nil {
+		http.Error(w, "decode: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	log.Printf("lynrummy-elm action: kind=%s payload=%s", action.ActionKind(), body)
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	fmt.Fprint(w, `{"ok":true}`)
 }
 
 func lynrummyElmPlay(w http.ResponseWriter) {

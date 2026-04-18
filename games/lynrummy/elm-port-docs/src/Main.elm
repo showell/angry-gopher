@@ -14,6 +14,7 @@ import Browser.Events
 import Html exposing (Html, div)
 import Html.Attributes exposing (id, style)
 import Html.Events as Events
+import Http
 import Json.Decode as Decode exposing (Decoder)
 import LynRummy.BoardActions as BoardActions exposing (Side(..))
 import LynRummy.CardStack as CardStack exposing (BoardLocation, CardStack, HandCard, stacksEqual)
@@ -22,6 +23,7 @@ import LynRummy.GestureArbitration as GA
 import LynRummy.Hand as Hand exposing (Hand)
 import LynRummy.View as View
 import LynRummy.WingOracle as WingOracle exposing (WingId)
+import LynRummy.WireAction as WA exposing (WireAction)
 import Task
 
 
@@ -89,6 +91,7 @@ type Msg
     | WingEntered WingId
     | WingLeft WingId
     | BoardRectReceived (Result Browser.Dom.Error Browser.Dom.Element)
+    | ActionSent (Result Http.Error ())
 
 
 
@@ -144,6 +147,11 @@ update msg model =
 
                 NotDragging ->
                     ( model, Cmd.none )
+
+        ActionSent _ ->
+            -- V1: fire-and-forget. Errors are ignored; server-side
+            -- validation + broadcast arrive with multiplayer.
+            ( model, Cmd.none )
 
         BoardRectReceived result ->
             case ( model.drag, result ) of
@@ -241,30 +249,88 @@ handleMouseUp model =
             ( model, Cmd.none )
 
         Dragging info ->
-            -- Click takes precedence over drag, mirroring the TS
-            -- engine's process_pointerup logic.
-            case ( info.clickIntent, info.source ) of
-                ( Just cardIdx, FromBoardStack stackIdx ) ->
-                    ( commitSplit stackIdx cardIdx model, Cmd.none )
+            let
+                ( newModel, maybeAction ) =
+                    resolveGesture info model
 
-                _ ->
-                    case ( info.hoveredWing, info.source ) of
-                        ( Just wing, _ ) ->
-                            ( commitMerge wing info.source model, Cmd.none )
+                cmd =
+                    maybeAction
+                        |> Maybe.map sendAction
+                        |> Maybe.withDefault Cmd.none
+            in
+            ( newModel, cmd )
 
-                        ( Nothing, FromHandCard handIdx ) ->
-                            if cursorOverBoard info then
-                                ( commitPlaceHandCard handIdx info model, Cmd.none )
 
-                            else
-                                ( clearDrag model, Cmd.none )
+{-| Resolve a completed drag gesture into a (new model,
+optional WireAction to emit). Click precedence over drag
+mirrors the TS engine's process_pointerup logic: if
+clickIntent survived, it's a split; otherwise dispatch on
+(hoveredWing, source, cursorOverBoard).
+-}
+resolveGesture : DragInfo -> Model -> ( Model, Maybe WireAction )
+resolveGesture info model =
+    case ( info.clickIntent, info.source ) of
+        ( Just cardIdx, FromBoardStack stackIdx ) ->
+            ( commitSplit stackIdx cardIdx model
+            , Just (WA.Split { stackIndex = stackIdx, cardIndex = cardIdx })
+            )
 
-                        ( Nothing, FromBoardStack stackIdx ) ->
-                            if cursorOverBoard info then
-                                ( commitMoveStack stackIdx info model, Cmd.none )
+        _ ->
+            case ( info.hoveredWing, info.source ) of
+                ( Just wing, FromBoardStack sourceIdx ) ->
+                    ( commitMerge wing info.source model
+                    , Just
+                        (WA.MergeStack
+                            { sourceStack = sourceIdx
+                            , targetStack = wing.stackIndex
+                            , side = wing.side
+                            }
+                        )
+                    )
 
-                            else
-                                ( clearDrag model, Cmd.none )
+                ( Just wing, FromHandCard handIdx ) ->
+                    case listAt handIdx model.hand.handCards of
+                        Just handCard ->
+                            ( commitMerge wing info.source model
+                            , Just
+                                (WA.MergeHand
+                                    { handCard = handCard.card
+                                    , targetStack = wing.stackIndex
+                                    , side = wing.side
+                                    }
+                                )
+                            )
+
+                        Nothing ->
+                            ( clearDrag model, Nothing )
+
+                ( Nothing, FromHandCard handIdx ) ->
+                    if cursorOverBoard info then
+                        case ( listAt handIdx model.hand.handCards, dropLoc info ) of
+                            ( Just handCard, Just loc ) ->
+                                ( commitPlaceHandCard handIdx info model
+                                , Just (WA.PlaceHand { handCard = handCard.card, loc = loc })
+                                )
+
+                            _ ->
+                                ( clearDrag model, Nothing )
+
+                    else
+                        ( clearDrag model, Nothing )
+
+                ( Nothing, FromBoardStack stackIdx ) ->
+                    if cursorOverBoard info then
+                        case dropLoc info of
+                            Just loc ->
+                                ( commitMoveStack stackIdx info model
+                                , Just (WA.MoveStack { stackIndex = stackIdx, newLoc = loc })
+                                )
+
+                            Nothing ->
+                                ( clearDrag model, Nothing )
+
+                    else
+                        ( clearDrag model, Nothing )
 
 
 cursorOverBoard : DragInfo -> Bool
@@ -275,6 +341,31 @@ cursorOverBoard info =
 
         Nothing ->
             False
+
+
+{-| Board-relative drop location derived from cursor + grab
+offset + board rect. `Nothing` if the board rect hasn't
+arrived yet (race between drag-start and the Browser.Dom.getElement
+task completing).
+-}
+dropLoc : DragInfo -> Maybe BoardLocation
+dropLoc info =
+    info.boardRect
+        |> Maybe.map
+            (\rect ->
+                { left = info.cursor.x - info.grabOffset.x - rect.x
+                , top = info.cursor.y - info.grabOffset.y - rect.y
+                }
+            )
+
+
+sendAction : WireAction -> Cmd Msg
+sendAction action =
+    Http.post
+        { url = "/gopher/lynrummy-elm/actions"
+        , body = Http.jsonBody (WA.encode action)
+        , expect = Http.expectWhatever ActionSent
+        }
 
 
 commitSplit : Int -> Int -> Model -> Model
