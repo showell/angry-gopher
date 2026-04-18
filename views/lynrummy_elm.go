@@ -47,6 +47,9 @@ func HandleLynRummyElm(w http.ResponseWriter, r *http.Request) {
 	case strings.HasSuffix(sub, "/state") && strings.HasPrefix(sub, "sessions/"):
 		idStr := strings.TrimSuffix(strings.TrimPrefix(sub, "sessions/"), "/state")
 		lynrummyElmSessionState(w, idStr)
+	case strings.HasSuffix(sub, "/score") && strings.HasPrefix(sub, "sessions/"):
+		idStr := strings.TrimSuffix(strings.TrimPrefix(sub, "sessions/"), "/score")
+		lynrummyElmSessionScore(w, idStr)
 	case strings.HasPrefix(sub, "sessions/"):
 		lynrummyElmSessionDetail(w, strings.TrimPrefix(sub, "sessions/"))
 	default:
@@ -213,6 +216,17 @@ func lynrummyElmSessionDetail(w http.ResponseWriter, idStr string) {
 		return
 	}
 
+	// Replay first (opens + closes its own DB query). If we hold
+	// the outer rows open across a nested DB.Query, SQLite deadlocks
+	// on the shared connection.
+	state, ok, _ := replaySessionNoHTTP(id)
+	var currentScore int
+	var handSize int
+	if ok {
+		currentScore = lynrummy.ScoreForStacks(state.Board)
+		handSize = state.Hand.Size()
+	}
+
 	rows, err := DB.Query(
 		`SELECT seq, action_kind, action_json, created_at FROM lynrummy_elm_actions WHERE session_id = ? ORDER BY seq`,
 		id,
@@ -233,9 +247,11 @@ func lynrummyElmSessionDetail(w http.ResponseWriter, idStr string) {
 body { font-family: sans-serif; margin: 60px auto; max-width: 860px; padding: 0 24px; }
 h1 { color: #000080; margin-bottom: 4px; }
 .sub { color: #666; margin-bottom: 24px; font-size: 14px; }
+.stat { display: inline-block; margin-right: 24px; }
+.stat b { color: #000080; font-variant-numeric: tabular-nums; }
 nav { margin-bottom: 16px; font-size: 13px; }
 nav a { color: #000080; }
-table { border-collapse: collapse; width: 100%; }
+table { border-collapse: collapse; width: 100%%; }
 th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid #eee; vertical-align: top; }
 th { background: #f4f4ec; }
 td.seq { font-variant-numeric: tabular-nums; color: #888; }
@@ -247,8 +263,9 @@ td.payload { font-family: monospace; font-size: 12px; color: #444; }
 <nav><a href="/gopher/lynrummy-elm/sessions">← All sessions</a> &nbsp;·&nbsp; <a href="/gopher/lynrummy-elm/">Play</a></nav>
 <h1>Session #%d</h1>
 <p class="sub">Started %s%s</p>
+<p class="sub"><span class="stat">Board score <b>%d</b></span><span class="stat">Hand size <b>%d</b></span></p>
 <table><tr><th>seq</th><th>kind</th><th>payload</th></tr>`,
-		id, id, html.EscapeString(ts), labelSuffix(label))
+		id, id, html.EscapeString(ts), labelSuffix(label), currentScore, handSize)
 
 	anyRows := false
 	for rows.Next() {
@@ -287,56 +304,23 @@ func lynrummyElmSessionState(w http.ResponseWriter, idStr string) {
 		return
 	}
 
-	var exists int
-	if err := DB.QueryRow(`SELECT 1 FROM lynrummy_elm_sessions WHERE id = ?`, id).Scan(&exists); err != nil {
-		if err == sql.ErrNoRows {
-			http.NotFound(w, nil)
-			return
-		}
-		http.Error(w, "session lookup: "+err.Error(), http.StatusInternalServerError)
+	state, ok := replaySession(w, id)
+	if !ok {
 		return
 	}
 
-	rows, err := DB.Query(
-		`SELECT action_json FROM lynrummy_elm_actions WHERE session_id = ? ORDER BY seq`,
-		id,
-	)
-	if err != nil {
-		http.Error(w, "query actions: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	defer rows.Close()
-
-	var actions []lynrummy.WireAction
-	var seqCount int64
-	for rows.Next() {
-		var jsonBytes string
-		if err := rows.Scan(&jsonBytes); err != nil {
-			http.Error(w, "scan action: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		action, err := lynrummy.DecodeWireAction([]byte(jsonBytes))
-		if err != nil {
-			// One malformed row shouldn't poison the whole
-			// session; log + skip. (Format-lock tests should
-			// prevent this in practice.)
-			log.Printf("lynrummy-elm state: decode err=%v on session=%d json=%s",
-				err, id, jsonBytes)
-			continue
-		}
-		actions = append(actions, action)
-		seqCount++
-	}
-
-	state := lynrummy.ReplayActions(actions)
+	var seq int64
+	_ = DB.QueryRow(
+		`SELECT COALESCE(MAX(seq), 0) FROM lynrummy_elm_actions WHERE session_id = ?`, id,
+	).Scan(&seq)
 
 	payload := struct {
-		SessionID int64           `json:"session_id"`
-		Seq       int64           `json:"seq"`
-		State     lynrummy.State  `json:"state"`
+		SessionID int64          `json:"session_id"`
+		Seq       int64          `json:"seq"`
+		State     lynrummy.State `json:"state"`
 	}{
 		SessionID: id,
-		Seq:       seqCount,
+		Seq:       seq,
 		State:     state,
 	}
 	body, err := json.Marshal(payload)
@@ -346,6 +330,122 @@ func lynrummyElmSessionState(w http.ResponseWriter, idStr string) {
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Write(body)
+}
+
+// lynrummyElmSessionScore returns the current board-score for a
+// session, computed by replaying its action log + summing
+// ScoreForStack across the resulting board. Hand value is reported
+// as cards-remaining (real hand-score penalty requires turn logic
+// that isn't modeled yet). This is the agent's numeric window into
+// gameplay — "how much is the current board worth?"
+func lynrummyElmSessionScore(w http.ResponseWriter, idStr string) {
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil || id <= 0 {
+		http.NotFound(w, nil)
+		return
+	}
+
+	state, ok := replaySession(w, id)
+	if !ok {
+		return
+	}
+
+	boardScore := lynrummy.ScoreForStacks(state.Board)
+
+	// Per-stack breakdown helps the caller understand where points
+	// are coming from.
+	type stackEntry struct {
+		Index int    `json:"index"`
+		Size  int    `json:"size"`
+		Type  string `json:"type"`
+		Score int    `json:"score"`
+	}
+	entries := make([]stackEntry, 0, len(state.Board))
+	for i, s := range state.Board {
+		entries = append(entries, stackEntry{
+			Index: i,
+			Size:  s.Size(),
+			Type:  string(s.Type()),
+			Score: lynrummy.ScoreForStack(s),
+		})
+	}
+
+	payload := struct {
+		SessionID   int64        `json:"session_id"`
+		BoardScore  int          `json:"board_score"`
+		HandSize    int          `json:"hand_size"`
+		PerStack    []stackEntry `json:"per_stack"`
+	}{
+		SessionID:  id,
+		BoardScore: boardScore,
+		HandSize:   state.Hand.Size(),
+		PerStack:   entries,
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		http.Error(w, "marshal: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Write(body)
+}
+
+// replaySession is the HTTP-handler version: DB errors become
+// HTTP responses. Wraps replaySessionNoHTTP.
+func replaySession(w http.ResponseWriter, id int64) (lynrummy.State, bool) {
+	state, ok, err := replaySessionNoHTTP(id)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			http.NotFound(w, nil)
+		} else {
+			http.Error(w, "replay: "+err.Error(), http.StatusInternalServerError)
+		}
+		return lynrummy.State{}, false
+	}
+	if !ok {
+		http.NotFound(w, nil)
+		return lynrummy.State{}, false
+	}
+	return state, true
+}
+
+// replaySessionNoHTTP is the plain data-layer version. Returns
+// (state, ok, err). ok=false with nil err means "session not
+// found"; non-nil err means "DB problem."
+func replaySessionNoHTTP(id int64) (lynrummy.State, bool, error) {
+	var exists int
+	err := DB.QueryRow(`SELECT 1 FROM lynrummy_elm_sessions WHERE id = ?`, id).Scan(&exists)
+	if err == sql.ErrNoRows {
+		return lynrummy.State{}, false, nil
+	}
+	if err != nil {
+		return lynrummy.State{}, false, err
+	}
+
+	rows, err := DB.Query(
+		`SELECT action_json FROM lynrummy_elm_actions WHERE session_id = ? ORDER BY seq`,
+		id,
+	)
+	if err != nil {
+		return lynrummy.State{}, false, err
+	}
+	defer rows.Close()
+
+	var actions []lynrummy.WireAction
+	for rows.Next() {
+		var jsonBytes string
+		if err := rows.Scan(&jsonBytes); err != nil {
+			return lynrummy.State{}, false, err
+		}
+		action, err := lynrummy.DecodeWireAction([]byte(jsonBytes))
+		if err != nil {
+			log.Printf("lynrummy-elm replay: decode err=%v session=%d json=%s",
+				err, id, jsonBytes)
+			continue
+		}
+		actions = append(actions, action)
+	}
+	return lynrummy.ReplayActions(actions), true, nil
 }
 
 func lynrummyElmPlay(w http.ResponseWriter) {

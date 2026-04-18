@@ -110,6 +110,10 @@ class Client:
         """GET /sessions/<id>/state → reconstructed board + hand."""
         return self._get(f"{self.base}/sessions/{session_id}/state")
 
+    def get_score(self, session_id):
+        """GET /sessions/<id>/score → board_score + hand_size + per_stack breakdown."""
+        return self._get(f"{self.base}/sessions/{session_id}/score")
+
     # --- HTTP helpers ---
 
     def _get(self, url):
@@ -192,8 +196,10 @@ def demo():
     print(f"new session: {sid}")
 
     state = c.get_state(sid)
+    score = c.get_score(sid)
     print(f"initial: {len(state['state']['board'])} stacks, "
-          f"{len(state['state']['hand']['hand_cards'])} hand cards")
+          f"{len(state['state']['hand']['hand_cards'])} hand cards, "
+          f"score={score['board_score']}")
 
     # Merge 7H from the hand onto the 7S,7D,7C set. Find the 7S stack
     # by content rather than assuming an index.
@@ -203,8 +209,10 @@ def demo():
         sid, hand_card=card("7H"), target_stack=seven_set_idx, side="right"
     )
     state = c.get_state(sid)
+    score = c.get_score(sid)
     print(f"after merge_hand 7H: {len(state['state']['board'])} stacks, "
-          f"{len(state['state']['hand']['hand_cards'])} hand cards, seq={state['seq']}")
+          f"{len(state['state']['hand']['hand_cards'])} hand cards, "
+          f"score={score['board_score']}, seq={state['seq']}")
 
     # Now split the first spade run (KS,AS,2S,3S). Index may have
     # shifted from the merge — re-find it.
@@ -213,7 +221,9 @@ def demo():
     print(f"spade run is at stack index {spade_run_idx}")
     c.send_split(sid, stack_index=spade_run_idx, card_index=2)
     state = c.get_state(sid)
-    print(f"after split: {len(state['state']['board'])} stacks, seq={state['seq']}")
+    score = c.get_score(sid)
+    print(f"after split: {len(state['state']['board'])} stacks, "
+          f"score={score['board_score']}, seq={state['seq']}")
 
     print(f"browse: http://localhost:9000/gopher/lynrummy-elm/sessions/{sid}")
 
