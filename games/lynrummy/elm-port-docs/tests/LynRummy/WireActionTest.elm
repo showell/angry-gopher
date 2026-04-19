@@ -31,8 +31,6 @@ suite =
                 (PlaceHand { handCard = card8H, loc = { top = 140, left = 220 } })
             , roundTrip "move_stack"
                 (MoveStack { stackIndex = 5, newLoc = { top = 140, left = 220 } })
-            , roundTrip "draw" Draw
-            , roundTrip "discard" (Discard { handCard = card8H })
             , roundTrip "complete_turn" CompleteTurn
             , roundTrip "undo" Undo
             , roundTrip "play_trick"
@@ -62,11 +60,6 @@ suite =
                     WA.encode CompleteTurn
                         |> Encode.encode 0
                         |> Expect.equal """{"action":"complete_turn"}"""
-            , test "draw — bare tag" <|
-                \_ ->
-                    WA.encode Draw
-                        |> Encode.encode 0
-                        |> Expect.equal """{"action":"draw"}"""
             ]
         , describe "decode errors"
             [ test "unknown action tag is rejected" <|

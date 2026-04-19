@@ -17,17 +17,22 @@ import Html.Events as Events
 import Http
 import Json.Decode as Decode exposing (Decoder)
 import LynRummy.BoardActions as BoardActions exposing (Side(..))
+import LynRummy.BoardGeometry as BoardGeometry
 import LynRummy.Card as Card exposing (Card)
 import LynRummy.CardStack as CardStack exposing (BoardLocation, CardStack, HandCard, stacksEqual)
 import LynRummy.Dealer
+import LynRummy.Game as Game
 import LynRummy.GestureArbitration as GA
 import LynRummy.Hand as Hand exposing (Hand)
 import LynRummy.PlayerTurn exposing (CompleteTurnResult(..))
+import LynRummy.Referee as Referee
 import LynRummy.Score as Score
+import LynRummy.Tricks.Hint as Hint
 import LynRummy.View as View
 import LynRummy.WingOracle as WingOracle exposing (WingId)
 import LynRummy.WireAction as WA exposing (WireAction)
 import Task
+import Time
 
 
 
@@ -35,17 +40,43 @@ import Task
 
 
 type alias Model =
-    { board : List CardStack
+    { -- Game-state fields (shape of LynRummy.Game.GameState).
+      -- Changes to these flow through Game's pure transitions.
+      board : List CardStack
     , hands : List Hand
+    , scores : List Int
     , activePlayerIndex : Int
+    , turnIndex : Int
+    , deck : List Card
+    , cardsPlayedThisTurn : Int
+    , victorAwarded : Bool
+    , turnStartBoardScore : Int
+
+    -- UI-layer fields.
     , drag : DragState
     , sessionId : Maybe Int
     , status : StatusMessage
     , score : Int
-    , scores : List Int
-    , turnIndex : Int
     , hintedCards : List Card
     , popup : Maybe PopupContent
+    , actionLog : List WireAction
+    , replay : Maybe ReplayProgress
+    , replayBaseline : Maybe RemoteState
+    }
+
+
+{-| Replay progress: a walker over `actionLog` that ticks every
+500ms (see subscriptions). `step` is the index of the NEXT action
+to apply. When it reaches `List.length log`, replay stops and
+`replay` returns to `Nothing`.
+
+The walker doesn't track its own state — it just updates the
+live Model via `applyWireAction`, same as any other input source.
+"Capture the input, update the data structure, re-draw the view."
+-}
+type alias ReplayProgress =
+    { step : Int
+    , paused : Bool
     }
 
 
@@ -156,27 +187,38 @@ init : Flags -> ( Model, Cmd Msg )
 init flags =
     let
         baseModel =
-            { board = LynRummy.Dealer.initialBoard
-            , hands = [ LynRummy.Dealer.openingHand, { handCards = [] } ]
+            { -- Game-state fields.
+              board = LynRummy.Dealer.initialBoard
+            , hands = [ LynRummy.Dealer.openingHand, Hand.empty ]
+            , scores = [ 0, 0 ]
             , activePlayerIndex = 0
+            , turnIndex = 0
+            , deck = []
+            , cardsPlayedThisTurn = 0
+            , victorAwarded = False
+            , turnStartBoardScore = Score.forStacks LynRummy.Dealer.initialBoard
+
+            -- UI-layer fields.
             , drag = NotDragging
             , sessionId = Nothing
             , status = { text = "Starting game…", kind = Inform }
-            , score = 0
-            , scores = [ 0, 0 ]
-            , turnIndex = 0
+            , score = Score.forStacks LynRummy.Dealer.initialBoard
             , hintedCards = []
             , popup = Nothing
+            , actionLog = []
+            , replay = Nothing
+            , replayBaseline = Nothing
             }
     in
     case flags.initialSessionId of
         Just sid ->
-            -- URL hash said we're resuming a specific game. Pull state.
+            -- URL hash said we're resuming a specific game. Pull state
+            -- AND the action log so Instant Replay has something to walk.
             ( { baseModel
                 | sessionId = Just sid
                 , status = { text = "Resuming session " ++ String.fromInt sid ++ "…", kind = Inform }
               }
-            , fetchRemoteState sid
+            , Cmd.batch [ fetchRemoteState sid, fetchActionLog sid ]
             )
 
         Nothing ->
@@ -199,16 +241,22 @@ sessionIdDecoder =
     Decode.field "session_id" Decode.int
 
 
-{-| Authoritative state as the server computes it. Elm pulls this
-after special actions (CompleteTurn, Undo) where the local
-optimistic-apply shape isn't straightforward.
+{-| Authoritative game-state snapshot as the server computes it.
+Elm pulls this once on session bootstrap (new or resume); after
+that, all state updates flow through `applyWireAction` /
+`Game.applyCompleteTurn`. The shape carries every field
+required to reconstitute the autonomous game.
 -}
 type alias RemoteState =
     { board : List CardStack
     , hands : List Hand
-    , activePlayerIndex : Int
     , scores : List Int
+    , activePlayerIndex : Int
     , turnIndex : Int
+    , deck : List Card
+    , cardsPlayedThisTurn : Int
+    , victorAwarded : Bool
+    , turnStartBoardScore : Int
     }
 
 
@@ -221,12 +269,20 @@ handDecoder =
 remoteStateDecoder : Decoder RemoteState
 remoteStateDecoder =
     Decode.field "state"
-        (Decode.map5 RemoteState
+        (Decode.map8 RemoteState
             (Decode.field "board" (Decode.list CardStack.cardStackDecoder))
             (Decode.field "hands" (Decode.list handDecoder))
-            (Decode.field "active_player_index" Decode.int)
             (Decode.field "scores" (Decode.list Decode.int))
+            (Decode.field "active_player_index" Decode.int)
             (Decode.field "turn_index" Decode.int)
+            (Decode.field "deck" (Decode.list Card.cardDecoder))
+            (Decode.field "cards_played_this_turn" Decode.int)
+            (Decode.field "victor_awarded" Decode.bool)
+            |> Decode.andThen
+                (\partial ->
+                    Decode.map partial
+                        (Decode.field "turn_start_board_score" Decode.int)
+                )
         )
 
 
@@ -236,6 +292,59 @@ fetchRemoteState sid =
         { url = "/gopher/lynrummy-elm/sessions/" ++ String.fromInt sid ++ "/state"
         , expect = Http.expectJson StateRefreshed remoteStateDecoder
         }
+
+
+{-| Fetches the session's action log AND the pre-first-action
+initial state. Used on session bootstrap so the client has
+both the ammunition (log) and the baseline (initial state) to
+run a faithful replay from — without relying on hardcoded
+Dealer fixtures that may not match the session's actual
+seeded deal.
+-}
+fetchActionLog : Int -> Cmd Msg
+fetchActionLog sid =
+    Http.get
+        { url = "/gopher/lynrummy-elm/sessions/" ++ String.fromInt sid ++ "/actions"
+        , expect = Http.expectJson ActionLogFetched actionLogDecoder
+        }
+
+
+{-| Bundle returned by /sessions/:id/actions — the action log
+plus the session-specific initial-state snapshot.
+-}
+type alias ActionLogBundle =
+    { initialState : RemoteState
+    , actions : List WireAction
+    }
+
+
+actionLogDecoder : Decoder ActionLogBundle
+actionLogDecoder =
+    Decode.map2 ActionLogBundle
+        (Decode.field "initial_state" innerStateDecoder)
+        (Decode.field "actions" (Decode.list WA.decoder))
+
+
+{-| Same shape as the inner `state` field of /state's response,
+but as a top-level object (the /actions endpoint emits the
+initial-state record directly, not nested under "state").
+-}
+innerStateDecoder : Decoder RemoteState
+innerStateDecoder =
+    Decode.map8 RemoteState
+        (Decode.field "board" (Decode.list CardStack.cardStackDecoder))
+        (Decode.field "hands" (Decode.list handDecoder))
+        (Decode.field "scores" (Decode.list Decode.int))
+        (Decode.field "active_player_index" Decode.int)
+        (Decode.field "turn_index" Decode.int)
+        (Decode.field "deck" (Decode.list Card.cardDecoder))
+        (Decode.field "cards_played_this_turn" Decode.int)
+        (Decode.field "victor_awarded" Decode.bool)
+        |> Decode.andThen
+            (\partial ->
+                Decode.map partial
+                    (Decode.field "turn_start_board_score" Decode.int)
+            )
 
 
 
@@ -253,21 +362,31 @@ type Msg
     | ActionSent (Result Http.Error ())
     | SessionReceived (Result Http.Error Int)
     | ClickCompleteTurn
-    | ClickUndo
     | StateRefreshed (Result Http.Error RemoteState)
     | ClickHint
     | CompleteTurnResponded (Result Http.Error CompleteTurnOutcome)
     | PopupOk
+    | ClickInstantReplay
+    | ReplayTick Time.Posix
+    | ClickReplayPauseToggle
+    | ActionLogFetched (Result Http.Error ActionLogBundle)
 
 
-{-| The full CompleteTurn response payload. `turnScore` and
-`cardsDrawn` are only meaningful on success branches; Failure
-ignores them.
+{-| The full CompleteTurn response payload. `turnScore`,
+`cardsDrawn`, and `dealtCards` are only meaningful on success
+branches; Failure ignores them.
+
+`dealtCards` carries the EXACT cards the server dealt to the
+outgoing player. This lets the client commit the full turn
+transition in one round-trip — no follow-up /state fetch
+needed. The server is the source of deck truth; once we have
+the cards, the client is the source of everything else.
 -}
 type alias CompleteTurnOutcome =
     { result : CompleteTurnResult
     , turnScore : Int
     , cardsDrawn : Int
+    , dealtCards : List Card
     }
 
 
@@ -346,61 +465,213 @@ update msg model =
             ( model, Cmd.none )
 
         ClickCompleteTurn ->
-            case model.sessionId of
-                Just sid ->
-                    -- Server owns classification in trust-server mode.
-                    -- Don't fetchRemoteState in parallel — the GET can
-                    -- resolve before the POST commits, leaving the UI
-                    -- showing pre-CompleteTurn state. Chain: fetch
-                    -- only after the response lands.
-                    ( model, sendCompleteTurn sid )
+            -- Client-side referee: validate the board locally
+            -- first. If dirty, reject without a server round-trip
+            -- and show the error inline. If clean, log + send to
+            -- server for persistence. The server double-checks
+            -- (as a diagnostic), but the client doesn't need
+            -- permission — it owns the decision.
+            case Referee.validateTurnComplete model.board refereeBounds of
+                Err refErr ->
+                    ( { model
+                        | status =
+                            { text = "Board isn't clean: " ++ refErr.message
+                            , kind = Scold
+                            }
+                      }
+                    , Cmd.none
+                    )
 
-                Nothing ->
-                    ( model, Cmd.none )
+                Ok () ->
+                    case model.sessionId of
+                        Just sid ->
+                            ( { model | actionLog = model.actionLog ++ [ WA.CompleteTurn ] }
+                            , sendCompleteTurn sid
+                            )
+
+                        Nothing ->
+                            -- Offline mode: no persistence, just commit the transition.
+                            ( { model | actionLog = model.actionLog ++ [ WA.CompleteTurn ] }
+                                |> applyWireAction WA.CompleteTurn
+                            , Cmd.none
+                            )
 
         CompleteTurnResponded result ->
-            ( { model
-                | status = statusForCompleteTurn result
-                , popup = popupForCompleteTurn result
+            -- The server is the referee; its OK is a green light
+            -- saying "the board is clean, the turn is valid." On
+            -- OK we apply the FULL transition autonomously via
+            -- applyWireAction → Game.applyCompleteTurn, using the
+            -- client's own deck + score logic. On Err the
+            -- transition is skipped and the player fixes the
+            -- board. The popup is cosmetic and doesn't gate any
+            -- state.
+            --
+            -- Diagnostic: after the client draws from its own
+            -- deck, compare the cards it pulled against the
+            -- server's `dealt_cards`. A mismatch means client and
+            -- server have diverged — log so we can catch it
+            -- early. Under true autonomy the server's role on
+            -- CompleteTurn reduces to "sanity check that I am
+            -- not confused."
+            let
+                statusMsg =
+                    statusForCompleteTurn result
+
+                popupBody =
+                    popupForCompleteTurn result
+            in
+            case result of
+                Ok outcome ->
+                    let
+                        preDeckSize =
+                            List.length model.deck
+
+                        newModel =
+                            { model | status = statusMsg, popup = popupBody }
+                                |> applyWireAction WA.CompleteTurn
+
+                        postDeckSize =
+                            List.length newModel.deck
+
+                        clientDrewCount =
+                            preDeckSize - postDeckSize
+
+                        clientDrewCards =
+                            List.take clientDrewCount model.deck
+
+                        _ =
+                            if clientDrewCards == outcome.dealtCards then
+                                ()
+
+                            else
+                                let
+                                    _ =
+                                        Debug.log "CompleteTurn dealt-cards mismatch (client vs server)"
+                                            { client = clientDrewCards
+                                            , server = outcome.dealtCards
+                                            }
+                                in
+                                ()
+                    in
+                    ( newModel, Cmd.none )
+
+                Err _ ->
+                    ( { model | status = statusMsg, popup = popupBody }
+                    , Cmd.none
+                    )
+
+        PopupOk ->
+            -- Pure cosmetic dismiss. The turn transition already
+            -- committed in CompleteTurnResponded.
+            ( { model | popup = Nothing }, Cmd.none )
+
+        ClickInstantReplay ->
+            -- Rewind to the session's true pre-first-action state
+            -- (fetched from /actions on bootstrap). Falls back to
+            -- hardcoded Dealer fixtures only if the baseline never
+            -- arrived — e.g., a session that hasn't loaded yet.
+            let
+                rewound =
+                    case model.replayBaseline of
+                        Just baseline ->
+                            { model
+                                | board = baseline.board
+                                , hands = baseline.hands
+                                , scores = baseline.scores
+                                , activePlayerIndex = baseline.activePlayerIndex
+                                , turnIndex = baseline.turnIndex
+                                , deck = baseline.deck
+                                , cardsPlayedThisTurn = baseline.cardsPlayedThisTurn
+                                , victorAwarded = baseline.victorAwarded
+                                , turnStartBoardScore = baseline.turnStartBoardScore
+                                , score = Score.forStacks baseline.board
+                            }
+
+                        Nothing ->
+                            { model
+                                | board = LynRummy.Dealer.initialBoard
+                                , hands = [ LynRummy.Dealer.openingHand, Hand.empty ]
+                                , scores = [ 0, 0 ]
+                                , activePlayerIndex = 0
+                                , turnIndex = 0
+                                , deck = []
+                                , cardsPlayedThisTurn = 0
+                                , victorAwarded = False
+                                , turnStartBoardScore = Score.forStacks LynRummy.Dealer.initialBoard
+                                , score = Score.forStacks LynRummy.Dealer.initialBoard
+                            }
+            in
+            ( { rewound
+                | status = { text = "Replaying…", kind = Inform }
+                , replay = Just { step = 0, paused = False }
               }
             , Cmd.none
             )
 
-        PopupOk ->
-            -- Ceremony: the popup's OK click is what advances the
-            -- visible state. Server already committed the
-            -- CompleteTurn when we sent it. Fetching state now pulls
-            -- the post-turn world (new active seat, replenished hand,
-            -- banked scores) and the view re-renders.
-            let
-                cmd =
-                    case model.sessionId of
-                        Just sid ->
-                            fetchRemoteState sid
+        ReplayTick _ ->
+            case model.replay of
+                Nothing ->
+                    ( model, Cmd.none )
 
+                Just progress ->
+                    case listAt progress.step model.actionLog of
                         Nothing ->
-                            Cmd.none
-            in
-            ( { model | popup = Nothing }, cmd )
+                            -- Walked off the end: the final model state IS the
+                            -- authoritative state. Client owns its data — no
+                            -- server fetch needed.
+                            ( { model
+                                | replay = Nothing
+                                , status = { text = "Replay complete.", kind = Celebrate }
+                              }
+                            , Cmd.none
+                            )
 
-        ClickUndo ->
-            case model.sessionId of
-                Just sid ->
-                    ( { model | status = { text = "Undone.", kind = Inform } }
-                    , Cmd.batch [ sendAction sid WA.Undo, fetchRemoteState sid ]
+                        Just action ->
+                            -- Same update path a local gesture would take —
+                            -- the only thing replay mode changes is where the
+                            -- next action comes from.
+                            ( { model | replay = Just { progress | step = progress.step + 1 } }
+                                |> applyWireAction action
+                            , Cmd.none
+                            )
+
+        ClickReplayPauseToggle ->
+            case model.replay of
+                Just progress ->
+                    ( { model
+                        | replay =
+                            Just
+                                { progress | paused = not progress.paused }
+                      }
+                    , Cmd.none
                     )
 
                 Nothing ->
                     ( model, Cmd.none )
 
+        ActionLogFetched (Ok bundle) ->
+            ( { model
+                | actionLog = bundle.actions
+                , replayBaseline = Just bundle.initialState
+              }
+            , Cmd.none
+            )
+
+        ActionLogFetched (Err _) ->
+            ( model, Cmd.none )
+
         StateRefreshed (Ok rs) ->
             ( { model
                 | board = rs.board
                 , hands = rs.hands
+                , scores = rs.scores
                 , activePlayerIndex = rs.activePlayerIndex
                 , turnIndex = rs.turnIndex
+                , deck = rs.deck
+                , cardsPlayedThisTurn = rs.cardsPlayedThisTurn
+                , victorAwarded = rs.victorAwarded
+                , turnStartBoardScore = rs.turnStartBoardScore
                 , score = Score.forStacks rs.board
-                , scores = rs.scores
               }
             , Cmd.none
             )
@@ -429,18 +700,37 @@ update msg model =
                     ( model, Cmd.none )
 
         ClickHint ->
-            -- Retrofit pending: when the Elm client wires into the
-            -- new /hint endpoint, replace this placeholder with a
-            -- fetch + decode of `{suggestions:[]}` and render
-            -- suggestions[0].
-            ( { model
-                | status =
-                    { text = "Hints UI is being rebuilt — stand by."
-                    , kind = Inform
-                    }
-              }
-            , Cmd.none
-            )
+            -- Client-autonomous hint: ask the local Hint.buildSuggestions
+            -- composer for a ranked list of plays. Highlight the hand
+            -- cards that the top suggestion would consume. No server
+            -- call — the 7 trick detectors and the priority-order
+            -- orchestration are all ported.
+            let
+                suggestions =
+                    Hint.buildSuggestions (activeHand model) model.board
+            in
+            case suggestions of
+                first :: _ ->
+                    ( { model
+                        | hintedCards = first.handCards
+                        , status =
+                            { text = first.description
+                            , kind = Inform
+                            }
+                      }
+                    , Cmd.none
+                    )
+
+                [] ->
+                    ( { model
+                        | hintedCards = []
+                        , status =
+                            { text = "No hint — no obvious play for this hand on this board."
+                            , kind = Inform
+                            }
+                      }
+                    , Cmd.none
+                    )
 
 
 startBoardCardDrag :
@@ -523,93 +813,98 @@ handleMouseUp model =
 
         Dragging info ->
             let
-                ( afterResolve, maybeAction ) =
+                maybeAction =
                     resolveGesture info model
 
-                newModel =
-                    { afterResolve | score = Score.forStacks afterResolve.board }
+                modelAfterDragClear =
+                    clearDrag model
 
-                cmd =
-                    case ( maybeAction, newModel.sessionId ) of
+                modelAfterAction =
+                    case maybeAction of
+                        Just action ->
+                            applyWireAction action modelAfterDragClear
+
+                        Nothing ->
+                            modelAfterDragClear
+
+                ( finalModel, cmd ) =
+                    case ( maybeAction, modelAfterAction.sessionId ) of
                         ( Just action, Just sid ) ->
-                            sendAction sid action
+                            ( { modelAfterAction
+                                | actionLog = modelAfterAction.actionLog ++ [ action ]
+                              }
+                            , sendAction sid action
+                            )
 
                         _ ->
-                            Cmd.none
+                            ( modelAfterAction, Cmd.none )
             in
-            ( newModel, cmd )
+            ( finalModel, cmd )
 
 
-{-| Resolve a completed drag gesture into a (new model,
-optional WireAction to emit). Click precedence over drag
-mirrors the TS engine's process_pointerup logic: if
-clickIntent survived, it's a split; otherwise dispatch on
-(hoveredWing, source, cursorOverBoard).
+{-| Resolve a completed drag gesture into the WireAction (if
+any) it produces. Pure extraction — no state mutation. The
+actual model update flows through applyWireAction, same path
+as replay and (eventually) wire-received actions.
+
+Click precedence over drag mirrors the TS engine's
+process_pointerup logic: if clickIntent survived, it's a split;
+otherwise dispatch on (hoveredWing, source, cursorOverBoard).
 -}
-resolveGesture : DragInfo -> Model -> ( Model, Maybe WireAction )
+resolveGesture : DragInfo -> Model -> Maybe WireAction
 resolveGesture info model =
     case ( info.clickIntent, info.source ) of
         ( Just cardIdx, FromBoardStack stackIdx ) ->
-            ( commitSplit stackIdx cardIdx model
-            , Just (WA.Split { stackIndex = stackIdx, cardIndex = cardIdx })
-            )
+            Just (WA.Split { stackIndex = stackIdx, cardIndex = cardIdx })
 
         _ ->
             case ( info.hoveredWing, info.source ) of
                 ( Just wing, FromBoardStack sourceIdx ) ->
-                    ( commitMerge wing info.source model
-                    , Just
+                    Just
                         (WA.MergeStack
                             { sourceStack = sourceIdx
                             , targetStack = wing.stackIndex
                             , side = wing.side
                             }
                         )
-                    )
 
                 ( Just wing, FromHandCard handIdx ) ->
                     case listAt handIdx (activeHand model).handCards of
                         Just handCard ->
-                            ( commitMerge wing info.source model
-                            , Just
+                            Just
                                 (WA.MergeHand
                                     { handCard = handCard.card
                                     , targetStack = wing.stackIndex
                                     , side = wing.side
                                     }
                                 )
-                            )
 
                         Nothing ->
-                            ( clearDrag model, Nothing )
+                            Nothing
 
                 ( Nothing, FromHandCard handIdx ) ->
                     if cursorOverBoard info then
                         case ( listAt handIdx (activeHand model).handCards, dropLoc info ) of
                             ( Just handCard, Just loc ) ->
-                                ( commitPlaceHandCard handIdx info model
-                                , Just (WA.PlaceHand { handCard = handCard.card, loc = loc })
-                                )
+                                Just (WA.PlaceHand { handCard = handCard.card, loc = loc })
 
                             _ ->
-                                ( clearDrag model, Nothing )
+                                Nothing
 
                     else
-                        ( clearDrag model, Nothing )
+                        Nothing
 
                 ( Nothing, FromBoardStack stackIdx ) ->
                     if cursorOverBoard info then
                         case dropLoc info of
                             Just loc ->
-                                ( commitMoveStack stackIdx info model
-                                , Just (WA.MoveStack { stackIndex = stackIdx, newLoc = loc })
-                                )
+                                Just (WA.MoveStack { stackIndex = stackIdx, newLoc = loc })
 
                             Nothing ->
-                                ( clearDrag model, Nothing )
+                                Nothing
 
                     else
-                        ( clearDrag model, Nothing )
+                        Nothing
 
 
 cursorOverBoard : DragInfo -> Bool
@@ -695,13 +990,16 @@ decodeCompleteTurnResponse response =
 
 completeTurnOutcomeDecoder : Decoder CompleteTurnOutcome
 completeTurnOutcomeDecoder =
-    Decode.map3 CompleteTurnOutcome
+    Decode.map4 CompleteTurnOutcome
         turnResultDecoder
         (Decode.maybe (Decode.field "turn_score" Decode.int)
             |> Decode.map (Maybe.withDefault 0)
         )
         (Decode.maybe (Decode.field "cards_drawn" Decode.int)
             |> Decode.map (Maybe.withDefault 0)
+        )
+        (Decode.maybe (Decode.field "dealt_cards" (Decode.list Card.cardDecoder))
+            |> Decode.map (Maybe.withDefault [])
         )
 
 
@@ -749,7 +1047,7 @@ statusForCompleteTurn outcome =
                     { text = "Hand emptied — nice.", kind = Celebrate }
 
                 Failure ->
-                    { text = "Board isn't clean — undo your mistakes before ending the turn.", kind = Scold }
+                    { text = "Board isn't clean — tidy up before ending the turn.", kind = Scold }
 
         Err _ ->
             { text = "Couldn't reach the server to complete the turn.", kind = Scold }
@@ -782,7 +1080,7 @@ popupFromOutcome { result, turnScore, cardsDrawn } =
             { admin = "Angry Cat"
             , body =
                 "The board is not clean!\n\n(nor is my litter box)\n\n"
-                    ++ "Use the Undo button if you need to."
+                    ++ "Drag stacks back where they belong."
             }
 
         SuccessButNeedsCards ->
@@ -848,110 +1146,223 @@ pluralize n word =
            )
 
 
-commitSplit : Int -> Int -> Model -> Model
-commitSplit stackIdx cardIdx model =
-    { model
-        | board = GA.applySplit stackIdx cardIdx model.board
-        , drag = NotDragging
-    }
-
-
-commitMoveStack : Int -> DragInfo -> Model -> Model
-commitMoveStack stackIdx info model =
-    case ( listAt stackIdx model.board, info.boardRect ) of
-        ( Just stack, Just rect ) ->
-            let
-                newLoc =
-                    { left = info.cursor.x - info.grabOffset.x - rect.x
-                    , top = info.cursor.y - info.grabOffset.y - rect.y
-                    }
-
-                change =
-                    BoardActions.moveStack stack newLoc
-            in
-            { model
-                | board = applyChange change model.board
-                , drag = NotDragging
-            }
-
-        _ ->
-            clearDrag model
-
-
 clearDrag : Model -> Model
 clearDrag model =
     { model | drag = NotDragging }
 
 
-commitMerge : WingId -> DragSource -> Model -> Model
-commitMerge wing source model =
-    case listAt wing.stackIndex model.board of
-        Nothing ->
-            clearDrag model
-
-        Just target ->
-            case source of
-                FromBoardStack sourceIdx ->
-                    case listAt sourceIdx model.board of
-                        Just sourceStack ->
-                            case BoardActions.tryStackMerge target sourceStack wing.side of
-                                Just change ->
-                                    { model
-                                        | board = applyChange change model.board
-                                        , drag = NotDragging
-                                    }
-
-                                Nothing ->
-                                    clearDrag model
-
-                        Nothing ->
-                            clearDrag model
-
-                FromHandCard handIdx ->
-                    case listAt handIdx (activeHand model).handCards of
-                        Just handCard ->
-                            case BoardActions.tryHandMerge target handCard wing.side of
-                                Just change ->
-                                    model
-                                        |> setActiveHand (Hand.removeHandCard handCard (activeHand model))
-                                        |> (\m ->
-                                                { m
-                                                    | board = applyChange change m.board
-                                                    , drag = NotDragging
-                                                }
-                                           )
-
-                                Nothing ->
-                                    clearDrag model
-
-                        Nothing ->
-                            clearDrag model
-
-
-commitPlaceHandCard : Int -> DragInfo -> Model -> Model
-commitPlaceHandCard handIdx info model =
-    case ( listAt handIdx (activeHand model).handCards, info.boardRect ) of
-        ( Just handCard, Just rect ) ->
+{-| The single entry point for applying a validated WireAction
+to the model. Whether the action comes from a local gesture, a
+replay tick, or (eventually) a wire broadcast, this is how the
+state updates. "Capture the input, update the data structure,
+re-draw the view."
+-}
+applyWireAction : WireAction -> Model -> Model
+applyWireAction action model =
+    case action of
+        WA.Split { stackIndex, cardIndex } ->
             let
-                loc =
-                    { left = info.cursor.x - info.grabOffset.x - rect.x
-                    , top = info.cursor.y - info.grabOffset.y - rect.y
-                    }
+                newBoard =
+                    GA.applySplit stackIndex cardIndex model.board
+            in
+            { model | board = newBoard, score = Score.forStacks newBoard }
 
-                change =
-                    BoardActions.placeHandCard handCard loc
+        WA.MergeStack { sourceStack, targetStack, side } ->
+            case ( listAt sourceStack model.board, listAt targetStack model.board ) of
+                ( Just source, Just target ) ->
+                    case BoardActions.tryStackMerge target source side of
+                        Just change ->
+                            let
+                                newBoard =
+                                    applyChange change model.board
+                            in
+                            { model
+                                | board = newBoard
+                                , score = Score.forStacks newBoard
+                            }
+
+                        Nothing ->
+                            model
+
+                _ ->
+                    model
+
+        WA.MergeHand { handCard, targetStack, side } ->
+            applyHandOntoStack handCard targetStack side model
+                |> Game.noteCardsPlayed 1
+
+        WA.PlaceHand { handCard, loc } ->
+            applyPlaceHandCard handCard loc model
+                |> Game.noteCardsPlayed 1
+
+        WA.MoveStack { stackIndex, newLoc } ->
+            case listAt stackIndex model.board of
+                Just stack ->
+                    let
+                        change =
+                            BoardActions.moveStack stack newLoc
+
+                        newBoard =
+                            applyChange change model.board
+                    in
+                    { model | board = newBoard, score = Score.forStacks newBoard }
+
+                Nothing ->
+                    model
+
+        WA.CompleteTurn ->
+            -- Autonomous full transition: classify, bank score,
+            -- reset + draw cards, age board, flip seat, advance
+            -- turn, reset per-turn counters. Delegated to
+            -- Game.applyCompleteTurn — pure, deterministic from
+            -- the pre-turn state alone. No server-response data
+            -- required.
+            let
+                afterTurn =
+                    Game.applyCompleteTurn model
+
+                nextActive =
+                    afterTurn.activePlayerIndex
+
+                nextTurn =
+                    afterTurn.turnIndex
+            in
+            { afterTurn
+                | score = Score.forStacks afterTurn.board
+                , status =
+                    { text =
+                        "Turn "
+                            ++ String.fromInt (nextTurn + 1)
+                            ++ " — Player "
+                            ++ String.fromInt (nextActive + 1)
+                            ++ " to play."
+                    , kind = Celebrate
+                    }
+            }
+
+        WA.Undo ->
+            -- Deferred; V1 has no Undo button.
+            model
+
+        WA.PlayTrick _ ->
+            -- Server expands to TrickResult at receipt; a
+            -- PlayTrick in the log would be an upstream bug.
+            model
+
+        WA.TrickResult p ->
+            let
+                boardSansRemoved =
+                    List.foldl
+                        (\r b -> List.filter (\s -> not (stacksEqual s r)) b)
+                        model.board
+                        p.stacksToRemove
+
+                newBoard =
+                    boardSansRemoved ++ p.stacksToAdd
+
+                hand =
+                    activeHand model
+
+                newHand =
+                    List.foldl
+                        (\c h ->
+                            case findHandCard c h of
+                                Just hc ->
+                                    Hand.removeHandCard hc h
+
+                                Nothing ->
+                                    h
+                        )
+                        hand
+                        p.handCardsReleased
             in
             model
-                |> setActiveHand (Hand.removeHandCard handCard (activeHand model))
-                |> (\m ->
-                        { m
-                            | board = applyChange change m.board
-                            , drag = NotDragging
-                        }
-                   )
+                |> setActiveHand newHand
+                |> (\m -> { m | board = newBoard, score = Score.forStacks newBoard })
+                |> Game.noteCardsPlayed (List.length p.handCardsReleased)
 
-        _ ->
-            clearDrag model
+
+{-| Hand-card-onto-stack merge, with a synthetic fallback when
+the target hand doesn't contain the card (replay of a seat whose
+hand is server-dealt and not mirrored client-side). Board
+advances either way; hand only mutates when we have a real
+tracked HandCard to remove.
+-}
+applyHandOntoStack : Card -> Int -> Side -> Model -> Model
+applyHandOntoStack card targetStack side model =
+    case listAt targetStack model.board of
+        Just target ->
+            let
+                hand =
+                    activeHand model
+
+                ( hc, mutateHand ) =
+                    case findHandCard card hand of
+                        Just real ->
+                            ( real, True )
+
+                        Nothing ->
+                            ( { card = card, state = CardStack.HandNormal }, False )
+            in
+            case BoardActions.tryHandMerge target hc side of
+                Just change ->
+                    let
+                        newBoard =
+                            applyChange change model.board
+
+                        withBoard =
+                            { model | board = newBoard, score = Score.forStacks newBoard }
+                    in
+                    if mutateHand then
+                        setActiveHand (Hand.removeHandCard hc hand) withBoard
+
+                    else
+                        withBoard
+
+                Nothing ->
+                    model
+
+        Nothing ->
+            model
+
+
+applyPlaceHandCard : Card -> BoardLocation -> Model -> Model
+applyPlaceHandCard card loc model =
+    let
+        hand =
+            activeHand model
+
+        ( hc, mutateHand ) =
+            case findHandCard card hand of
+                Just real ->
+                    ( real, True )
+
+                Nothing ->
+                    ( { card = card, state = CardStack.HandNormal }, False )
+
+        change =
+            BoardActions.placeHandCard hc loc
+
+        newBoard =
+            applyChange change model.board
+
+        withBoard =
+            { model | board = newBoard, score = Score.forStacks newBoard }
+    in
+    if mutateHand then
+        setActiveHand (Hand.removeHandCard hc hand) withBoard
+
+    else
+        withBoard
+
+
+findHandCard : Card -> Hand -> Maybe HandCard
+findHandCard card hand =
+    hand.handCards
+        |> List.filter (\hc -> hc.card == card)
+        |> List.head
+
+
 
 
 applyChange : BoardActions.BoardChange -> List CardStack -> List CardStack
@@ -966,15 +1377,30 @@ applyChange change board =
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    case model.drag of
-        Dragging _ ->
-            Sub.batch
-                [ Browser.Events.onMouseMove (Decode.map MouseMove pointDecoder)
-                , Browser.Events.onMouseUp (Decode.succeed MouseUp)
-                ]
+    let
+        dragSubs =
+            case model.drag of
+                Dragging _ ->
+                    [ Browser.Events.onMouseMove (Decode.map MouseMove pointDecoder)
+                    , Browser.Events.onMouseUp (Decode.succeed MouseUp)
+                    ]
 
-        NotDragging ->
-            Sub.none
+                NotDragging ->
+                    []
+
+        replaySubs =
+            case model.replay of
+                Just progress ->
+                    if progress.paused then
+                        []
+
+                    else
+                        [ Time.every 500 ReplayTick ]
+
+                Nothing ->
+                    []
+    in
+    Sub.batch (dragSubs ++ replaySubs)
 
 
 pointDecoder : Decoder Point
@@ -1004,7 +1430,14 @@ view model =
             , boardColumn model
             ]
         , draggedOverlay model
-        , viewPopup model.popup
+        , viewPopup
+            (case model.replay of
+                Just _ ->
+                    Nothing
+
+                Nothing ->
+                    model.popup
+            )
         ]
 
 
@@ -1179,7 +1612,7 @@ viewPlayerRow model idx hand =
             :: (if isActive then
                     [ View.viewHandHeading
                     , View.viewHand { attrsForCard = handCardAttrs model.drag model.hintedCards } hand
-                    , viewTurnControls
+                    , viewTurnControls model
                     ]
 
                 else
@@ -1193,8 +1626,21 @@ viewPlayerRow model idx hand =
         )
 
 
-viewTurnControls : Html Msg
-viewTurnControls =
+viewTurnControls : Model -> Html Msg
+viewTurnControls model =
+    let
+        replayControl =
+            case model.replay of
+                Just progress ->
+                    if progress.paused then
+                        gameButton "Resume" ClickReplayPauseToggle
+
+                    else
+                        gameButton "Pause" ClickReplayPauseToggle
+
+                Nothing ->
+                    gameButton "Instant replay" ClickInstantReplay
+    in
     div
         [ style "margin-top" "12px"
         , style "display" "flex"
@@ -1203,7 +1649,7 @@ viewTurnControls =
         ]
         [ gameButton "Complete turn" ClickCompleteTurn
         , gameButton "Hint" ClickHint
-        , gameButton "Undo" ClickUndo
+        , replayControl
         , gameLink "← Lobby" "/gopher/game-lobby"
         ]
 
@@ -1427,6 +1873,16 @@ listAt : Int -> List a -> Maybe a
 listAt i xs =
     List.head (List.drop i xs)
 
+
+{-| Bounds the client's referee uses to validate end-of-turn
+layouts. Matches the server's constant (see
+`views/lynrummy_elm.go` — the CompleteTurn handler uses the
+same 800 × 600, margin 5). Kept in one place so both sides
+agree on what "clean" means.
+-}
+refereeBounds : BoardGeometry.BoardBounds
+refereeBounds =
+    { maxWidth = 800, maxHeight = 600, margin = 5 }
 
 
 -- MAIN

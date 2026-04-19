@@ -1,87 +1,83 @@
 # Main.elm — EARLY
 
-TEA bootstrap for the standalone LynRummy Elm game. Wires
-the model + Msg + update + view into `Browser.element`.
+TEA bootstrap for the standalone LynRummy Elm game. Wires the
+model, Msg, update, view, and subscriptions into
+`Browser.element`. Houses the drag/click gesture machinery and
+the dispatch loop that applies every validated WireAction
+through a single update function.
 
 ## Status
 
-- **Label:** EARLY. Active churn — most file edits during
-  port work land here. Stable shape but expanding scope.
-- **Source:** new Elm file (no 1:1 TS source). Conceptually
-  replaces `plugin.ts`'s host-bootstrap role.
+- **Label:** EARLY. Active churn — most file edits during the
+  autonomy-port work land here. The ambition is that Main.elm
+  holds only UI-layer state (drag, popup, replay progress) and
+  delegates all game-state transitions to `LynRummy.Game` via
+  its extensible-record shape.
 
 ## Current scope
 
-Model:
+Model fields:
 
-```
-Model = { board : List CardStack
-        , hand  : Hand
-        , drag  : DragState
-        }
-```
+- **Game-state fields** (shape of `LynRummy.Game.GameState`):
+  `board`, `hands`, `scores`, `activePlayerIndex`, `turnIndex`,
+  `deck`, `cardsPlayedThisTurn`, `victorAwarded`,
+  `turnStartBoardScore`.
+- **UI-layer fields:** `drag : DragState`, `popup`, `status`,
+  `hintedCards`, `sessionId`, `score` (running board total),
+  `actionLog`, `replay : Maybe ReplayProgress`.
 
-DragState carries `source` (`FromBoardStack Int` |
-`FromHandCard Int`), `cursor`, `originalCursor`,
-`grabOffset`, `wings`, `hoveredWing`, `overBoard`,
-`boardRect`, and `clickIntent : Maybe Int` (cardIndex within
-the source stack, only ever `Just _` when source is a board
-stack).
+Per the "one log, source-agnostic" invariant: every validated
+WireAction — local gesture, replay tick, or (future) wire
+receive — flows through `applyWireAction` before anything else
+touches the Model. "Capture the input, update the data
+structure, re-draw the view."
 
-Msg:
+## Msg and dispatch
 
-- `MouseDownOnBoardCard {stackIndex, cardIndex} Point` —
-  fired by per-card mousedown. Both drag and click intents
-  begin here; `clickIntent = Just cardIndex` is recorded
-  optimistically and may die during MouseMove.
-- `MouseDownOnHandCard Int Point` — hand-card drag start;
-  no click semantic, `clickIntent = Nothing`.
-- `MouseMove Point` — updates cursor; calls
-  `GestureArbitration.clickIntentAfterMove` to maybe-kill
-  the click intent.
-- `MouseUp` — click takes precedence: if `clickIntent` is
-  still `Just _` AND source is `FromBoardStack`, commits a
-  split via `GestureArbitration.applySplit`. Otherwise falls
-  through to wing-merge / place-as-singleton / snap-back
-  branches.
-- `WingEntered WingId` / `WingLeft WingId` — hover state on
-  drop targets.
-- `BoardEntered` / `BoardLeft` — track whether cursor is over
-  the board (for hand-card place-as-singleton on MouseUp).
-- `BoardRectReceived (Result … Element)` — `Browser.Dom.getElement`
-  resolves on hand-drag start; rect cached for later
-  cursor → board-relative coord translation.
+- `MouseDown*`, `MouseMove`, `MouseUp` — pointer gesture
+  machinery. MouseUp resolves to an optional WireAction and
+  runs it through `applyWireAction`.
+- `WingEntered` / `WingLeft` — hover state on drop targets.
+- `ClickCompleteTurn` — sends CompleteTurn to server (for
+  persistence + referee check). On Ok response, the transition
+  is committed autonomously via `Game.applyCompleteTurn` using
+  client-owned deck. The response's `dealt_cards` is compared
+  against the cards the client drew from its own deck as a
+  diagnostic (logs to console on divergence) — the server's
+  role on CompleteTurn is now "sanity-check me," not "tell me
+  what happened."
+- `ClickInstantReplay`, `ReplayTick`, `ClickReplayPauseToggle`
+  — replay walker controls.
+- `ActionSent`, `SessionReceived`, `StateRefreshed`,
+  `ActionLogFetched`, `CompleteTurnResponded`, `PopupOk` —
+  server round-trip handlers. `StateRefreshed` is the bootstrap
+  hydration path on session resume; otherwise state flows from
+  applyWireAction alone.
 
 ## Subscriptions
 
-`Browser.Events.onMouseMove` and `onMouseUp` are subscribed
-ONLY while `drag = Dragging _`. Idle-state subscription is
-empty.
+- `Browser.Events.onMouseMove` / `onMouseUp` — subscribed only
+  while `drag = Dragging _`.
+- `Time.every 500 ReplayTick` — subscribed only while
+  `replay = Just { paused = False }`.
 
 ## View composition
 
-- Two-column flex shell: hand column (min-width 220px) left,
-  board column (min-width 560px) right. Per memory
-  `feedback_hand_upper_left`.
-- `View.boardShellWith` carries `id="lynrummy-board"` for
-  `getElement`, plus mouseenter/leave handlers.
-- Each board card carries its own mousedown handler via
-  `View.viewStackWithCardAttrs`. The stack div itself has
-  no listener — the inversion described in
-  `showell/claude_writings/splitting_a_stack.md`.
-
-## Concession
-
-Click UI is sub-optimal (TS literal `1`-pixel threshold;
-fragile under jitter). Steve knows; preserved faithfully per
-the bar-for-done. See `LynRummy/GestureArbitration.claude`.
+- `viewTopBar` + `viewStatusBar` + flex shell:
+  hand column (left, min-width 240px) + board column (right).
+- `handColumn` renders the player panel: always P1 above P2,
+  active row shows cards + buttons, inactive shows "N cards".
+  Single `viewPlayerRow` function called for both seats — the
+  view is uniform across every Model-change source.
+- `viewPopup` overlays modal ceremony (turn-complete popup).
+  Suppressed during replay.
 
 ## Pointers
 
-- Hosted at `index.html` in this dir; built into `elm.js`
-  via `npx elm make src/Main.elm --output=elm.js` (run
-  automatically by `ops/start`).
-- Served through Gopher at
-  `http://localhost:9000/gopher/lynrummy-elm/`.
-- Standalone-served at `http://localhost:8788/` if a Python
-  http.server is running here.
+- Autonomy-core: `LynRummy.Game` (`Game.elm`) — `GameState`
+  record and `applyCompleteTurn` transition. Main embeds those
+  fields; changes to game state go through Game's functions.
+- Hosted at `index.html` in this dir; built into `elm.js` via
+  `npx elm make src/Main.elm --output=elm.js` (runs
+  automatically in `ops/start`).
+- Served through Gopher at `http://localhost:9000/gopher/lynrummy-elm/`.

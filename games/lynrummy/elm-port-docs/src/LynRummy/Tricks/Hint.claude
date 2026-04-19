@@ -1,0 +1,93 @@
+# Tricks/Hint.elm — EARLY
+
+Hint orchestration: composes the seven trick detectors into a
+ranked list of `Suggestion`s. Given a hand and a board, emits
+one representative play per firing trick in priority order.
+
+## Status
+
+- **Label:** EARLY. Port landed 2026-04-19 as part of the
+  client-autonomy work — the Elm client can now produce its
+  own hints without calling the server.
+- **Mirrors:** `games/lynrummy/tricks/hint.go` `BuildSuggestions`.
+  Same inputs (`(hand, board)`), same orchestration shape,
+  same priority order, same output semantics.
+
+## Public API
+
+- `Suggestion` — `{ rank, trickId, description, handCards }`.
+  Minimal shape matching Go's hint response. The Go-side
+  `action` field (a wire-format `SuggestedAct` ready to POST)
+  isn't ported here because the Elm client applies plays
+  locally via the trick module's `apply` function rather than
+  round-tripping through a wire action. If the client ever
+  needs wire-format output (e.g., broadcasting a suggestion to
+  another client), add it.
+- `hintPriorityOrder : List Trick` — the 7 tricks in order.
+  Same as Go's `HintPriorityOrder`:
+  1. `DirectPlay` — play a hand card onto the end of a stack.
+  2. `HandStacks` — hand already has a full set/run.
+  3. `PairPeel` — peel a board card to complete a pair.
+  4. `SplitForSet` — split two same-value cards into a set.
+  5. `PeelForRun` — peel to form a run.
+  6. `RbSwap` — swap in a red-black run context.
+  7. `LooseCardPlay` — move a card, then play.
+- `buildSuggestions : Hand -> List CardStack -> List Suggestion`
+  — `List.filterMap` over `(priorityIndex, trick)` pairs; each
+  firing trick contributes one Suggestion (its first Play).
+
+## Algorithm
+
+```
+for i, trick in hintPriorityOrder:
+    plays = trick.findPlays(hand, board)
+    if plays == []:
+        skip
+    first = head(plays)
+    emit { rank = i + 1
+         , trickId = trick.id
+         , description = trick.description
+         , handCards = map .card first.handCards
+         }
+```
+
+Output is priority-ordered (input was); ranks increase
+monotonically with gaps where tricks didn't fire.
+
+## What this module deliberately does NOT do
+
+- **No scoring / ranking of Suggestions.** Priority order is
+  the whole ranking. No "best score first" heuristic.
+- **No enumeration of alternate plays per trick.** Each firing
+  trick contributes exactly one Suggestion (the first Play).
+  Strategic agents that want alternates walk the tricks
+  themselves.
+- **No wire-format action.** Clients apply locally via
+  `Play.apply`. If wire-format output is needed for
+  multiplayer broadcast, add it.
+- **No I/O, no state.** Pure function of (hand, board).
+
+## Client/server parity
+
+Same problem both sides solve in isolation. No server-
+privileged inputs — hand and board are fully visible to the
+client. Confirmed with Steve 2026-04-19. A conformance test
+(`build_suggestions` DSL op) is planned next to pin the parity
+down against regressions.
+
+## Tests (`tests/LynRummy/HintTest.elm`)
+
+- Empty hand → no suggestions.
+- Opening hand vs opening board → first suggestion is
+  `direct_play`, rank 1, one hand card.
+- Ranks strictly monotonic in output order.
+
+## Pointers
+
+- Depends on: all 7 trick modules under `LynRummy.Tricks.*`.
+- Consumers: `Main.elm` (Hint button wiring), test suite.
+- Go counterpart: `games/lynrummy/tricks/hint.go`.
+- Server endpoint (online-mode fallback):
+  `/gopher/lynrummy-elm/sessions/:id/hint` — returns the same
+  shape computed by the Go `BuildSuggestions`. Client can use
+  either; offline mode uses this module.

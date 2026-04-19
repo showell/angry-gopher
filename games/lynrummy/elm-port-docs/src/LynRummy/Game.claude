@@ -1,0 +1,131 @@
+# Game.elm — EARLY
+
+The **autonomous core** of the LynRummy client: an open-record
+`GameState` + pure transitions that together run a complete
+game without any server. Any non-game state (UI drag, popups,
+replay progress) lives on the host model, which embeds the
+`GameState a` fields via Elm's extensible-record pattern.
+
+## Status
+
+- **Label:** EARLY. Introduced 2026-04-19 during the autonomy
+  port — pulling game logic out of the server-assisted flow
+  the Elm client grew up with. Expands as more transitions
+  get ported from `games/lynrummy/replay.go`.
+- **Mirrors:** `games/lynrummy/replay.go` — particularly
+  `applyCompleteTurn`. Elm glues primitives (`Score`,
+  `PlayerTurn`, `Hand`, `CardStack.agedFromPriorTurn`) into
+  composed transitions.
+
+## The `GameState a` shape (extensible record)
+
+All fields required for a full game:
+
+| field | type | purpose |
+|---|---|---|
+| `board` | `List CardStack` | The shared play surface: every stack, in order. |
+| `hands` | `List Hand` | One hand per seat (typically 2). Indexed by seat. |
+| `scores` | `List Int` | Banked per-seat totals. Indexed by seat. |
+| `activePlayerIndex` | `Int` | Whose turn it is. Index into `hands` / `scores`. |
+| `turnIndex` | `Int` | Monotonic turn counter. Starts at 0. |
+| `deck` | `List Card` | Remaining shuffled deck. Drawn from the front. |
+| `cardsPlayedThisTurn` | `Int` | Per-turn counter; resets on CompleteTurn. Used for scoring bonuses and for the SuccessButNeedsCards classification. |
+| `victorAwarded` | `Bool` | One-time latch. Flips to True the first time someone empties their hand. Subsequent empty-hand turns classify as `SuccessWithHandEmptied` instead of `SuccessAsVictor`. |
+| `turnStartBoardScore` | `Int` | Board score snapshot at turn start. Used for board-delta scoring (new cards played onto the board count for the active player, not prior contributors). |
+
+Extensibility: `GameState a` lets the host model carry extra
+fields (drag state, popup content, etc.) and still pass itself
+to these transitions without unwrapping.
+
+## Public API
+
+- `noteCardsPlayed : Int -> GameState a -> GameState a` —
+  increment `cardsPlayedThisTurn` by `n`. Call once per hand
+  card released during the turn: merge_hand (1), place_hand
+  (1), trick_result (length of `handCardsReleased`). Not
+  called for move_stack or split (those don't release hand
+  cards).
+- `applyCompleteTurn : GameState a -> GameState a` — the full
+  CompleteTurn transition. See algorithm below.
+
+## `applyCompleteTurn` algorithm
+
+Pure function; same output for same input every time. Steps in
+order:
+
+1. **Capture outgoing seat** — `outgoingIdx = state.activePlayerIndex`.
+2. **Compute current board score** via `Score.forStacks state.board`.
+3. **Build a `PlayerTurn` accumulator** with
+   `startingBoardScore = state.turnStartBoardScore` and
+   `cardsPlayedDuringTurn = state.cardsPlayedThisTurn`. This
+   lets us reuse `PlayerTurn.turnResult` for classification
+   and `PlayerTurn.getScore` for the banked turn delta.
+4. **Apply empty-hand / victor bonus** if the outgoing hand is
+   empty AND at least one card was played this turn. Bonus is
+   1000 for empty hand, +500 for victor (`victorAwarded = False`).
+5. **Classify** via `PlayerTurn.turnResult` →
+   one of `Success` / `SuccessButNeedsCards` /
+   `SuccessWithHandEmptied` / `SuccessAsVictor`.
+6. **Compute turn score** via `PlayerTurn.getScore boardScore`.
+7. **Determine draw count**:
+   - `SuccessButNeedsCards` → 3
+   - `SuccessAsVictor` or `SuccessWithHandEmptied` → 5
+   - `Success` → 0
+8. **Update outgoing hand**: reset every card's state to
+   `HandNormal` (`Hand.resetState`), then draw `drawCount`
+   cards from the front of the deck (`List.take drawCount`),
+   add them in `FreshlyDrawn` state. Remaining deck is
+   `List.drop drawCount`.
+9. **Age board cards**: every card's state steps one closer
+   to firm. `FreshlyPlayed → FreshlyPlayedByLastPlayer →
+   FirmlyOnBoard`. Delegated to `CardStack.agedFromPriorTurn`.
+10. **Bank score**: `scores[outgoingIdx] += turnScore`.
+11. **Flip seat**: `activePlayerIndex = (outgoingIdx + 1) mod nHands`.
+12. **Advance turn**: `turnIndex += 1`.
+13. **Reset per-turn fields**: `cardsPlayedThisTurn = 0`,
+    `turnStartBoardScore = boardScore` (the value captured in
+    step 2, which is both the outgoing player's end-of-turn
+    score and the incoming player's start-of-turn baseline).
+14. **Flip victor latch**: `victorAwarded = victorAwarded OR result == SuccessAsVictor`.
+
+## What this module deliberately does NOT do
+
+- **No I/O, no randomness.** The deck arrives pre-shuffled
+  from the caller. Shuffling lives elsewhere (server-side for
+  now; plausibly seeded client-side later).
+- **No UI fields.** Popup, drag state, replay progress — all
+  host-model concerns.
+- **No server coupling.** `applyCompleteTurn` computes the
+  full post-state from the pre-state alone. The server doesn't
+  need to send dealt cards, turn scores, or classifications
+  back to the client.
+- **No validation.** Dirty-board rejection is the referee's
+  job (`LynRummy.Referee`), invoked upstream by whoever is
+  dispatching the CompleteTurn. This module assumes the turn
+  is valid.
+- **No wire concerns.** Hand-card-release counting is explicit
+  via `noteCardsPlayed`; callers integrate it into their
+  applyWireAction dispatch.
+
+## Tests (`tests/LynRummy/GameTest.elm`)
+
+- Seat flip (0→1 and 1→0) and turn increment.
+- Classification via draw-count inference (each branch yields
+  a distinct draw-count, which is observable).
+- Deck-drawn-from-front behavior; leftover equals tail.
+- Score banking for each branch including victor + empty-hand
+  bonuses.
+- `victorAwarded` one-time latch behavior.
+- `cardsPlayedThisTurn` resets to 0.
+- `turnStartBoardScore` advances to the post-turn value.
+
+## Pointers
+
+- Upstream ports: `Score.elm`, `PlayerTurn.elm`, `Hand.elm`,
+  `CardStack.elm` (all already ported).
+- Go counterpart: `games/lynrummy/replay.go` —
+  `applyCompleteTurn` and helpers (`ageStack`,
+  `removeStack`).
+- Host: `Main.elm` embeds the `GameState` fields into
+  `Main.Model` and calls `Game.applyCompleteTurn` from
+  `applyWireAction WA.CompleteTurn`.

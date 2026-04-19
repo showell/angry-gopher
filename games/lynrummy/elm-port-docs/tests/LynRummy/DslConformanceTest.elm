@@ -19,6 +19,7 @@ import LynRummy.CardStack
 import LynRummy.Referee as Referee exposing (RefereeStage(..), refereeStageToString)
 import LynRummy.Tricks.DirectPlay
 import LynRummy.Tricks.HandStacks
+import LynRummy.Tricks.Hint as Hint
 import LynRummy.Tricks.LooseCardPlay
 import LynRummy.Tricks.PairPeel
 import LynRummy.Tricks.PeelForRun
@@ -57,151 +58,6 @@ deckIdentityMismatchInRemove =
                         Expect.fail ("stage: want " ++ "inventory" ++ ", got " ++ refereeStageToString err.stage)
                     else if not (String.contains "not on the board" err.message) then
                         Expect.fail ("message substring " ++ "not on the board" ++ " not found in " ++ err.message)
-                    else
-                        Expect.pass
-
-
-directPlayExtendsLooseCard : Test
-directPlayExtendsLooseCard =
-    test "direct_play_extends_loose_card" <|
-        \_ ->
-            let
-                hand =
-                    [ { card = { value = Six, suit = Heart, originDeck = DeckOne }, state = HandNormal } ]
-
-                board =
-                    [ { boardCards = [ { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 10, left = 50 } }
-                        ]
-
-                plays =
-                    LynRummy.Tricks.DirectPlay.trick.findPlays hand board
-            in
-            case plays of
-                [] ->
-                    Expect.fail "expected a play, got none"
-
-                play :: _ ->
-                    let
-                        ( gotBoard, gotHand ) =
-                            play.apply board
-
-                        wantHand =
-                            [ { card = { value = Six, suit = Heart, originDeck = DeckOne }, state = HandNormal } ]
-
-                        wantBoard =
-                            [ { boardCards = [ { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Heart, originDeck = DeckOne }, state = FreshlyPlayed } ], loc = { top = 10, left = 50 } }
-                            ]
-                    in
-                    if gotHand /= wantHand then
-                        Expect.fail ("hand mismatch:\n  want " ++ Debug.toString wantHand ++ "\n  got  " ++ Debug.toString gotHand)
-
-                    else if gotBoard /= wantBoard then
-                        Expect.fail ("board mismatch:\n  want " ++ Debug.toString wantBoard ++ "\n  got  " ++ Debug.toString gotBoard)
-
-                    else
-                        Expect.pass
-
-
-directPlayLeftExtendHeartRun : Test
-directPlayLeftExtendHeartRun =
-    test "direct_play_left_extend_heart_run" <|
-        \_ ->
-            let
-                hand =
-                    [ { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = HandNormal } ]
-
-                board =
-                    [ { boardCards = [ { card = { value = Three, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 10, left = 200 } }
-                        ]
-
-                plays =
-                    LynRummy.Tricks.DirectPlay.trick.findPlays hand board
-            in
-            case plays of
-                [] ->
-                    Expect.fail "expected a play, got none"
-
-                play :: _ ->
-                    let
-                        ( gotBoard, gotHand ) =
-                            play.apply board
-
-                        wantHand =
-                            [ { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = HandNormal } ]
-
-                        wantBoard =
-                            [ { boardCards = [ { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = FreshlyPlayed }, { card = { value = Three, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 10, left = 167 } }
-                            ]
-                    in
-                    if gotHand /= wantHand then
-                        Expect.fail ("hand mismatch:\n  want " ++ Debug.toString wantHand ++ "\n  got  " ++ Debug.toString gotHand)
-
-                    else if gotBoard /= wantBoard then
-                        Expect.fail ("board mismatch:\n  want " ++ Debug.toString wantBoard ++ "\n  got  " ++ Debug.toString gotBoard)
-
-                    else
-                        Expect.pass
-
-
-directPlayNoPlays : Test
-directPlayNoPlays =
-    test "direct_play_no_plays" <|
-        \_ ->
-            let
-                hand =
-                    [ { card = { value = Nine, suit = Diamond, originDeck = DeckOne }, state = HandNormal } ]
-
-                board =
-                    [ { boardCards = [ { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 10, left = 10 } }
-                        ]
-
-                plays =
-                    LynRummy.Tricks.DirectPlay.trick.findPlays hand board
-            in
-            if not (List.isEmpty plays) then
-                Expect.fail ("expected no plays, got " ++ String.fromInt (List.length plays))
-
-            else
-                Expect.pass
-
-
-directPlayRightExtendHeartRun : Test
-directPlayRightExtendHeartRun =
-    test "direct_play_right_extend_heart_run" <|
-        \_ ->
-            let
-                hand =
-                    [ { card = { value = Eight, suit = Heart, originDeck = DeckOne }, state = HandNormal } ]
-
-                board =
-                    [ { boardCards = [ { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 10, left = 10 } }
-                        ]
-
-                plays =
-                    LynRummy.Tricks.DirectPlay.trick.findPlays hand board
-            in
-            case plays of
-                [] ->
-                    Expect.fail "expected a play, got none"
-
-                play :: _ ->
-                    let
-                        ( gotBoard, gotHand ) =
-                            play.apply board
-
-                        wantHand =
-                            [ { card = { value = Eight, suit = Heart, originDeck = DeckOne }, state = HandNormal } ]
-
-                        wantBoard =
-                            [ { boardCards = [ { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Eight, suit = Heart, originDeck = DeckOne }, state = FreshlyPlayed } ], loc = { top = 10, left = 10 } }
-                            ]
-                    in
-                    if gotHand /= wantHand then
-                        Expect.fail ("hand mismatch:\n  want " ++ Debug.toString wantHand ++ "\n  got  " ++ Debug.toString gotHand)
-
-                    else if gotBoard /= wantBoard then
-                        Expect.fail ("board mismatch:\n  want " ++ Debug.toString wantBoard ++ "\n  got  " ++ Debug.toString gotBoard)
-
                     else
                         Expect.pass
 
@@ -286,107 +142,94 @@ geometryOverlap =
                         Expect.pass
 
 
-handStacksNoPlays : Test
-handStacksNoPlays =
-    test "hand_stacks_no_plays" <|
+hintDirectPlayWinsPriorityOnOpeningBoard : Test
+hintDirectPlayWinsPriorityOnOpeningBoard =
+    test "hint_direct_play_wins_priority_on_opening_board" <|
         \_ ->
             let
+                handCards =
+                    [ { card = { value = Seven, suit = Heart, originDeck = DeckTwo }, state = HandNormal } ]
+
                 hand =
-                    [ { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = HandNormal }, { card = { value = Two, suit = Diamond, originDeck = DeckOne }, state = HandNormal } ]
+                    { handCards = handCards }
 
                 board =
+                    [ { boardCards = [ { card = { value = King, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 70, left = 20 } }
+                        , { boardCards = [ { card = { value = Ten, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 160, left = 80 } }
+                        , { boardCards = [ { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 100, left = 140 } }
+                        , { boardCards = [ { card = { value = Seven, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 40, left = 200 } }
+                        , { boardCards = [ { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 130, left = 260 } }
+                        , { boardCards = [ { card = { value = Two, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 70, left = 320 } }
+                        ]
+
+                got =
+                    Hint.buildSuggestions hand board
+            in
+            if List.length got /= 1 then
+                Expect.fail ("suggestion count: want 1, got " ++ String.fromInt (List.length got))
+
+            else
+                let
+                    want0 =
+                        { trickId = "direct_play", handCards = [ { value = Seven, suit = Heart, originDeck = DeckTwo } ] }
+
+                in
+                Expect.all
+                    [ \_ -> List.drop 0 got |> List.head |> Maybe.map (\s -> { trickId = s.trickId, handCards = s.handCards }) |> Expect.equal (Just want0)
+                    ]
+                    ()
+
+
+hintEmptyHandNoSuggestions : Test
+hintEmptyHandNoSuggestions =
+    test "hint_empty_hand_no_suggestions" <|
+        \_ ->
+            let
+                handCards =
                     []
 
-                plays =
-                    LynRummy.Tricks.HandStacks.trick.findPlays hand board
+                hand =
+                    { handCards = handCards }
+
+                board =
+                    [ { boardCards = [ { card = { value = King, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 70, left = 20 } }
+                        , { boardCards = [ { card = { value = Ten, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 160, left = 80 } }
+                        , { boardCards = [ { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 100, left = 140 } }
+                        ]
+
+                got =
+                    Hint.buildSuggestions hand board
             in
-            if not (List.isEmpty plays) then
-                Expect.fail ("expected no plays, got " ++ String.fromInt (List.length plays))
+            if List.length got /= 0 then
+                Expect.fail ("suggestion count: want 0, got " ++ String.fromInt (List.length got))
 
             else
                 Expect.pass
 
 
-handStacksPureRun : Test
-handStacksPureRun =
-    test "hand_stacks_pure_run" <|
+hintNoPlaysForLonelyUnplayableCard : Test
+hintNoPlaysForLonelyUnplayableCard =
+    test "hint_no_plays_for_lonely_unplayable_card" <|
         \_ ->
             let
+                handCards =
+                    [ { card = { value = Nine, suit = Spade, originDeck = DeckOne }, state = HandNormal } ]
+
                 hand =
-                    [ { card = { value = Two, suit = Club, originDeck = DeckOne }, state = HandNormal }, { card = { value = Three, suit = Club, originDeck = DeckOne }, state = HandNormal }, { card = { value = Four, suit = Club, originDeck = DeckOne }, state = HandNormal } ]
+                    { handCards = handCards }
 
                 board =
-                    [ { boardCards = [ { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 10, left = 10 } }
+                    [ { boardCards = [ { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 70, left = 20 } }
                         ]
 
-                plays =
-                    LynRummy.Tricks.HandStacks.trick.findPlays hand board
+                got =
+                    Hint.buildSuggestions hand board
             in
-            case plays of
-                [] ->
-                    Expect.fail "expected a play, got none"
+            if List.length got /= 0 then
+                Expect.fail ("suggestion count: want 0, got " ++ String.fromInt (List.length got))
 
-                play :: _ ->
-                    let
-                        ( gotBoard, gotHand ) =
-                            play.apply board
-
-                        wantHand =
-                            [ { card = { value = Two, suit = Club, originDeck = DeckOne }, state = HandNormal }, { card = { value = Three, suit = Club, originDeck = DeckOne }, state = HandNormal }, { card = { value = Four, suit = Club, originDeck = DeckOne }, state = HandNormal } ]
-
-                        wantBoard =
-                            [ { boardCards = [ { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 10, left = 10 } }
-                            , { boardCards = [ { card = { value = Two, suit = Club, originDeck = DeckOne }, state = FreshlyPlayed }, { card = { value = Three, suit = Club, originDeck = DeckOne }, state = FreshlyPlayed }, { card = { value = Four, suit = Club, originDeck = DeckOne }, state = FreshlyPlayed } ], loc = { top = 0, left = 0 } }
-                            ]
-                    in
-                    if gotHand /= wantHand then
-                        Expect.fail ("hand mismatch:\n  want " ++ Debug.toString wantHand ++ "\n  got  " ++ Debug.toString gotHand)
-
-                    else if gotBoard /= wantBoard then
-                        Expect.fail ("board mismatch:\n  want " ++ Debug.toString wantBoard ++ "\n  got  " ++ Debug.toString gotBoard)
-
-                    else
-                        Expect.pass
-
-
-handStacksSet : Test
-handStacksSet =
-    test "hand_stacks_set" <|
-        \_ ->
-            let
-                hand =
-                    [ { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = HandNormal }, { card = { value = Seven, suit = Spade, originDeck = DeckOne }, state = HandNormal }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = HandNormal } ]
-
-                board =
-                    []
-
-                plays =
-                    LynRummy.Tricks.HandStacks.trick.findPlays hand board
-            in
-            case plays of
-                [] ->
-                    Expect.fail "expected a play, got none"
-
-                play :: _ ->
-                    let
-                        ( gotBoard, gotHand ) =
-                            play.apply board
-
-                        wantHand =
-                            [ { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = HandNormal }, { card = { value = Seven, suit = Spade, originDeck = DeckOne }, state = HandNormal }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = HandNormal } ]
-
-                        wantBoard =
-                            [ { boardCards = [ { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FreshlyPlayed }, { card = { value = Seven, suit = Spade, originDeck = DeckOne }, state = FreshlyPlayed }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = FreshlyPlayed } ], loc = { top = 0, left = 0 } }
-                            ]
-                    in
-                    if gotHand /= wantHand then
-                        Expect.fail ("hand mismatch:\n  want " ++ Debug.toString wantHand ++ "\n  got  " ++ Debug.toString gotHand)
-
-                    else if gotBoard /= wantBoard then
-                        Expect.fail ("board mismatch:\n  want " ++ Debug.toString wantBoard ++ "\n  got  " ++ Debug.toString gotBoard)
-
-                    else
-                        Expect.pass
+            else
+                Expect.pass
 
 
 inventoryCardFromNowhere : Test
@@ -415,49 +258,6 @@ inventoryCardFromNowhere =
                         Expect.pass
 
 
-looseCardPlay7HToHeartRun : Test
-looseCardPlay7HToHeartRun =
-    test "loose_card_play_7H_to_heart_run" <|
-        \_ ->
-            let
-                hand =
-                    [ { card = { value = Eight, suit = Heart, originDeck = DeckOne }, state = HandNormal } ]
-
-                board =
-                    [ { boardCards = [ { card = { value = Four, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 10, left = 10 } }
-                        , { boardCards = [ { card = { value = Seven, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 10, left = 200 } }
-                        ]
-
-                plays =
-                    LynRummy.Tricks.LooseCardPlay.trick.findPlays hand board
-            in
-            case plays of
-                [] ->
-                    Expect.fail "expected a play, got none"
-
-                play :: _ ->
-                    let
-                        ( gotBoard, gotHand ) =
-                            play.apply board
-
-                        wantHand =
-                            [ { card = { value = Eight, suit = Heart, originDeck = DeckOne }, state = HandNormal } ]
-
-                        wantBoard =
-                            [ { boardCards = [ { card = { value = Four, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FreshlyPlayed }, { card = { value = Eight, suit = Heart, originDeck = DeckOne }, state = FreshlyPlayed } ], loc = { top = 10, left = 10 } }
-                            , { boardCards = [ { card = { value = Seven, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 10, left = 200 } }
-                            ]
-                    in
-                    if gotHand /= wantHand then
-                        Expect.fail ("hand mismatch:\n  want " ++ Debug.toString wantHand ++ "\n  got  " ++ Debug.toString gotHand)
-
-                    else if gotBoard /= wantBoard then
-                        Expect.fail ("board mismatch:\n  want " ++ Debug.toString wantBoard ++ "\n  got  " ++ Debug.toString gotBoard)
-
-                    else
-                        Expect.pass
-
-
 midturnAllowsBogus : Test
 midturnAllowsBogus =
     test "midturn_allows_bogus" <|
@@ -477,201 +277,6 @@ midturnAllowsBogus =
 
                 Err err ->
                     Expect.fail (refereeStageToString err.stage ++ ": " ++ err.message)
-
-
-pairPeelRbFromPureRun : Test
-pairPeelRbFromPureRun =
-    test "pair_peel_rb_from_pure_run" <|
-        \_ ->
-            let
-                hand =
-                    [ { card = { value = Jack, suit = Spade, originDeck = DeckOne }, state = HandNormal }, { card = { value = Queen, suit = Heart, originDeck = DeckOne }, state = HandNormal } ]
-
-                board =
-                    [ { boardCards = [ { card = { value = Ten, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 10, left = 10 } }
-                        ]
-
-                plays =
-                    LynRummy.Tricks.PairPeel.trick.findPlays hand board
-            in
-            case plays of
-                [] ->
-                    Expect.fail "expected a play, got none"
-
-                play :: _ ->
-                    let
-                        ( gotBoard, gotHand ) =
-                            play.apply board
-
-                        wantHand =
-                            [ { card = { value = Jack, suit = Spade, originDeck = DeckOne }, state = HandNormal }, { card = { value = Queen, suit = Heart, originDeck = DeckOne }, state = HandNormal } ]
-
-                        wantBoard =
-                            [ { boardCards = [ { card = { value = Jack, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 10, left = 10 } }
-                            , { boardCards = [ { card = { value = Ten, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Spade, originDeck = DeckOne }, state = FreshlyPlayed }, { card = { value = Queen, suit = Heart, originDeck = DeckOne }, state = FreshlyPlayed } ], loc = { top = 0, left = 0 } }
-                            ]
-                    in
-                    if gotHand /= wantHand then
-                        Expect.fail ("hand mismatch:\n  want " ++ Debug.toString wantHand ++ "\n  got  " ++ Debug.toString gotHand)
-
-                    else if gotBoard /= wantBoard then
-                        Expect.fail ("board mismatch:\n  want " ++ Debug.toString wantBoard ++ "\n  got  " ++ Debug.toString gotBoard)
-
-                    else
-                        Expect.pass
-
-
-peelForRunRbTriple : Test
-peelForRunRbTriple =
-    test "peel_for_run_rb_triple" <|
-        \_ ->
-            let
-                hand =
-                    [ { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = HandNormal } ]
-
-                board =
-                    [ { boardCards = [ { card = { value = Four, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 10, left = 10 } }
-                        , { boardCards = [ { card = { value = Six, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 10, left = 200 } }
-                        ]
-
-                plays =
-                    LynRummy.Tricks.PeelForRun.trick.findPlays hand board
-            in
-            case plays of
-                [] ->
-                    Expect.fail "expected a play, got none"
-
-                play :: _ ->
-                    let
-                        ( gotBoard, gotHand ) =
-                            play.apply board
-
-                        wantHand =
-                            [ { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = HandNormal } ]
-
-                        wantBoard =
-                            [ { boardCards = [ { card = { value = Four, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 10, left = 10 } }
-                            , { boardCards = [ { card = { value = Six, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 10, left = 200 } }
-                            , { boardCards = [ { card = { value = Four, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FreshlyPlayed }, { card = { value = Six, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 0, left = 0 } }
-                            ]
-                    in
-                    if gotHand /= wantHand then
-                        Expect.fail ("hand mismatch:\n  want " ++ Debug.toString wantHand ++ "\n  got  " ++ Debug.toString gotHand)
-
-                    else if gotBoard /= wantBoard then
-                        Expect.fail ("board mismatch:\n  want " ++ Debug.toString wantBoard ++ "\n  got  " ++ Debug.toString gotBoard)
-
-                    else
-                        Expect.pass
-
-
-rbSwap5DIntoRbRun : Test
-rbSwap5DIntoRbRun =
-    test "rb_swap_5D_into_rb_run" <|
-        \_ ->
-            let
-                hand =
-                    [ { card = { value = Five, suit = Diamond, originDeck = DeckOne }, state = HandNormal } ]
-
-                board =
-                    [ { boardCards = [ { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Eight, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 10, left = 10 } }
-                        , { boardCards = [ { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 10, left = 200 } }
-                        ]
-
-                plays =
-                    LynRummy.Tricks.RbSwap.trick.findPlays hand board
-            in
-            case plays of
-                [] ->
-                    Expect.fail "expected a play, got none"
-
-                play :: _ ->
-                    let
-                        ( gotBoard, gotHand ) =
-                            play.apply board
-
-                        wantHand =
-                            [ { card = { value = Five, suit = Diamond, originDeck = DeckOne }, state = HandNormal } ]
-
-                        wantBoard =
-                            [ { boardCards = [ { card = { value = Five, suit = Diamond, originDeck = DeckOne }, state = FreshlyPlayed }, { card = { value = Six, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Eight, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 10, left = 10 } }
-                            , { boardCards = [ { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FreshlyPlayed } ], loc = { top = 10, left = 200 } }
-                            ]
-                    in
-                    if gotHand /= wantHand then
-                        Expect.fail ("hand mismatch:\n  want " ++ Debug.toString wantHand ++ "\n  got  " ++ Debug.toString gotHand)
-
-                    else if gotBoard /= wantBoard then
-                        Expect.fail ("board mismatch:\n  want " ++ Debug.toString wantBoard ++ "\n  got  " ++ Debug.toString gotBoard)
-
-                    else
-                        Expect.pass
-
-
-splitForSetEights : Test
-splitForSetEights =
-    test "split_for_set_eights" <|
-        \_ ->
-            let
-                hand =
-                    [ { card = { value = Eight, suit = Heart, originDeck = DeckOne }, state = HandNormal } ]
-
-                board =
-                    [ { boardCards = [ { card = { value = Five, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Eight, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 10, left = 10 } }
-                        , { boardCards = [ { card = { value = Five, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Eight, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 10, left = 200 } }
-                        ]
-
-                plays =
-                    LynRummy.Tricks.SplitForSet.trick.findPlays hand board
-            in
-            case plays of
-                [] ->
-                    Expect.fail "expected a play, got none"
-
-                play :: _ ->
-                    let
-                        ( gotBoard, gotHand ) =
-                            play.apply board
-
-                        wantHand =
-                            [ { card = { value = Eight, suit = Heart, originDeck = DeckOne }, state = HandNormal } ]
-
-                        wantBoard =
-                            [ { boardCards = [ { card = { value = Five, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 10, left = 10 } }
-                            , { boardCards = [ { card = { value = Five, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 10, left = 200 } }
-                            , { boardCards = [ { card = { value = Eight, suit = Heart, originDeck = DeckOne }, state = FreshlyPlayed }, { card = { value = Eight, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Eight, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 0, left = 0 } }
-                            ]
-                    in
-                    if gotHand /= wantHand then
-                        Expect.fail ("hand mismatch:\n  want " ++ Debug.toString wantHand ++ "\n  got  " ++ Debug.toString gotHand)
-
-                    else if gotBoard /= wantBoard then
-                        Expect.fail ("board mismatch:\n  want " ++ Debug.toString wantBoard ++ "\n  got  " ++ Debug.toString gotBoard)
-
-                    else
-                        Expect.pass
-
-
-splitForSetNoPlays : Test
-splitForSetNoPlays =
-    test "split_for_set_no_plays" <|
-        \_ ->
-            let
-                hand =
-                    [ { card = { value = Eight, suit = Heart, originDeck = DeckOne }, state = HandNormal } ]
-
-                board =
-                    [ { boardCards = [ { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 10, left = 10 } }
-                        ]
-
-                plays =
-                    LynRummy.Tricks.SplitForSet.trick.findPlays hand board
-            in
-            if not (List.isEmpty plays) then
-                Expect.fail ("expected no plays, got " ++ String.fromInt (List.length plays))
-
-            else
-                Expect.pass
 
 
 turnCompleteCleanBoard : Test
@@ -741,24 +346,14 @@ suite : Test
 suite =
     describe "DSL conformance"
         [ deckIdentityMismatchInRemove
-        , directPlayExtendsLooseCard
-        , directPlayLeftExtendHeartRun
-        , directPlayNoPlays
-        , directPlayRightExtendHeartRun
         , geometryCrowded
         , geometryOutOfBounds
         , geometryOverlap
-        , handStacksNoPlays
-        , handStacksPureRun
-        , handStacksSet
+        , hintDirectPlayWinsPriorityOnOpeningBoard
+        , hintEmptyHandNoSuggestions
+        , hintNoPlaysForLonelyUnplayableCard
         , inventoryCardFromNowhere
-        , looseCardPlay7HToHeartRun
         , midturnAllowsBogus
-        , pairPeelRbFromPureRun
-        , peelForRunRbTriple
-        , rbSwap5DIntoRbRun
-        , splitForSetEights
-        , splitForSetNoPlays
         , turnCompleteCleanBoard
         , turnCompleteRejectsIncomplete
         , validExtendRunWith8H

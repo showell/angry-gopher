@@ -26,6 +26,7 @@ LYNRUMMY=(
   "src/LynRummy/Dealer.elm"
   "src/LynRummy/GestureArbitration.elm"
   "src/LynRummy/Hand.elm"
+  "src/LynRummy/Game.elm"
   "src/LynRummy/Replay.elm"
   "src/LynRummy/View.elm"
   "src/LynRummy/WingOracle.elm"
@@ -39,6 +40,7 @@ LYNRUMMY=(
   "src/LynRummy/Tricks/RbSwap.elm"
   "src/LynRummy/Tricks/PairPeel.elm"
   "src/LynRummy/Tricks/LooseCardPlay.elm"
+  "src/LynRummy/Tricks/Hint.elm"
 )
 
 for m in "${LYNRUMMY[@]}"; do

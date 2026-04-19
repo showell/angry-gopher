@@ -8,6 +8,7 @@
 package views
 
 import (
+	"bytes"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -60,6 +61,9 @@ func HandleLynRummyElm(w http.ResponseWriter, r *http.Request) {
 	case strings.HasSuffix(sub, "/turn-log") && strings.HasPrefix(sub, "sessions/"):
 		idStr := strings.TrimSuffix(strings.TrimPrefix(sub, "sessions/"), "/turn-log")
 		lynrummyElmSessionTurnLog(w, idStr)
+	case strings.HasSuffix(sub, "/actions") && strings.HasPrefix(sub, "sessions/"):
+		idStr := strings.TrimSuffix(strings.TrimPrefix(sub, "sessions/"), "/actions")
+		lynrummyElmSessionActions(w, idStr)
 	case strings.HasPrefix(sub, "sessions/"):
 		lynrummyElmSessionDetail(w, strings.TrimPrefix(sub, "sessions/"))
 	default:
@@ -148,8 +152,14 @@ func lynrummyElmActions(w http.ResponseWriter, r *http.Request) {
 	// bogus / dup stacks) before a turn can end. After the gate,
 	// classify which variant of success this is so the client can
 	// surface a per-branch status message.
+	//
+	// We also return the EXACT cards the server just dealt to the
+	// outgoing player. Client applies the turn transition locally
+	// on response receipt — no follow-up /state fetch required.
+	// One round-trip, authoritative data in hand.
 	var turnResult lynrummy.CompleteTurnResult
 	var turnScore, cardsDrawn int
+	var dealtCards []lynrummy.Card
 	if _, isComplete := action.(lynrummy.CompleteTurnAction); isComplete {
 		state, ok, stateErr := replaySessionNoHTTP(sessionID)
 		if stateErr != nil {
@@ -173,18 +183,29 @@ func lynrummyElmActions(w http.ResponseWriter, r *http.Request) {
 		}
 		turnResult = lynrummy.ClassifyTurnResult(state, state.VictorAwarded)
 
-		// Narrate the promise: pre-compute turn_score + cards_drawn
-		// by applying the action to an in-memory copy. The real apply
-		// happens on the next /state replay; this copy just lets the
-		// client popup say "you scored N" and "we will deal M cards"
-		// before the UI visually flips seats.
+		// Apply the transition in-memory so we can report turn_score,
+		// cards_drawn, AND the exact cards dealt. The persisted apply
+		// happens on the next /state replay; this computation drives
+		// the client's single-round-trip transition.
 		outgoing := state.ActivePlayerIndex
 		post := lynrummy.ApplyAction(lynrummy.CompleteTurnAction{}, state)
 		if outgoing < len(post.Scores) && outgoing < len(state.Scores) {
 			turnScore = post.Scores[outgoing] - state.Scores[outgoing]
 		}
 		if outgoing < len(post.Hands) && outgoing < len(state.Hands) {
-			cardsDrawn = post.Hands[outgoing].Size() - state.Hands[outgoing].Size()
+			preHand := state.Hands[outgoing].HandCards
+			postHand := post.Hands[outgoing].HandCards
+			cardsDrawn = len(postHand) - len(preHand)
+			// New cards are the suffix — ApplyAction appends drawn
+			// cards to the outgoing hand in order. Belt-and-braces:
+			// take len(post) - len(pre) from the end regardless.
+			if cardsDrawn > 0 {
+				dealt := postHand[len(postHand)-cardsDrawn:]
+				dealtCards = make([]lynrummy.Card, len(dealt))
+				for i, hc := range dealt {
+					dealtCards[i] = hc.Card
+				}
+			}
 		}
 	}
 
@@ -212,9 +233,13 @@ func lynrummyElmActions(w http.ResponseWriter, r *http.Request) {
 		sessionID, nextSeq, action.ActionKind(), body)
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	if turnResult != "" {
+		dealtJSON, err := json.Marshal(dealtCards)
+		if err != nil {
+			dealtJSON = []byte("[]")
+		}
 		fmt.Fprintf(w,
-			`{"ok":true,"seq":%d,"turn_result":%q,"turn_score":%d,"cards_drawn":%d}`,
-			nextSeq, turnResult, turnScore, cardsDrawn)
+			`{"ok":true,"seq":%d,"turn_result":%q,"turn_score":%d,"cards_drawn":%d,"dealt_cards":%s}`,
+			nextSeq, turnResult, turnScore, cardsDrawn, dealtJSON)
 	} else {
 		fmt.Fprintf(w, `{"ok":true,"seq":%d}`, nextSeq)
 	}
@@ -555,6 +580,83 @@ func lynrummyElmSessionHint(w http.ResponseWriter, idStr string) {
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Write(body)
+}
+
+// lynrummyElmSessionActions returns the session's raw action log
+// as an ordered list of WireAction JSON blobs, plus the
+// pre-first-action initial state. This is what an Elm client
+// resuming a session fetches to populate its local `actionLog`
+// AND its replay-baseline snapshot — so Instant Replay has
+// something to rewind to that matches the session's actual
+// seeded deal (rather than the hardcoded Dealer fixtures).
+//
+// Response shape:
+//
+//	{
+//	  "session_id": N,
+//	  "initial_state": { board, hands, deck, ... },
+//	  "actions": [<raw WireAction JSON>...]
+//	}
+//
+// The `actions` entries are emitted verbatim from the database —
+// the same shape the server decodes via lynrummy.DecodeWireAction,
+// and the same shape the Elm client produces via WA.encode.
+// The `initial_state` is `lynrummy.InitialStateWithSeed(seed)` —
+// the authoritative pre-first-action snapshot.
+func lynrummyElmSessionActions(w http.ResponseWriter, idStr string) {
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil || id <= 0 {
+		http.NotFound(w, nil)
+		return
+	}
+
+	var seed int64
+	if err := DB.QueryRow(
+		`SELECT deck_seed FROM lynrummy_elm_sessions WHERE id = ?`, id,
+	).Scan(&seed); err != nil {
+		if err == sql.ErrNoRows {
+			http.NotFound(w, nil)
+			return
+		}
+		http.Error(w, "session lookup: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	initial := lynrummy.InitialStateWithSeed(seed)
+	initialJSON, err := json.Marshal(initial)
+	if err != nil {
+		http.Error(w, "marshal initial: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	rows, err := DB.Query(
+		`SELECT action_json FROM lynrummy_elm_actions WHERE session_id = ? ORDER BY seq`,
+		id,
+	)
+	if err != nil {
+		http.Error(w, "query actions: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer rows.Close()
+
+	var buf bytes.Buffer
+	fmt.Fprintf(&buf, `{"session_id":%d,"initial_state":%s,"actions":[`, id, initialJSON)
+	first := true
+	for rows.Next() {
+		var payload string
+		if err := rows.Scan(&payload); err != nil {
+			continue
+		}
+		if !first {
+			buf.WriteByte(',')
+		}
+		first = false
+		buf.WriteString(payload)
+	}
+	buf.WriteString("]}")
+
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Write(buf.Bytes())
 }
 
 // lynrummyElmSessionTurnLog walks the session's action log,

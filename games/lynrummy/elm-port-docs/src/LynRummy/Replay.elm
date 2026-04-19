@@ -8,9 +8,8 @@ module LynRummy.Replay exposing
 a `(board, hand)` state to produce the next state. This is the
 function the UI replay walker calls on each step.
 
-No-op for `Draw`, `Discard`, `CompleteTurn`, `Undo` — turn-logic
-isn't modeled yet. When it is, they'll get their own transitions
-here.
+No-op for `CompleteTurn`, `Undo`, `PlayTrick` — turn-logic isn't
+modeled here (and Undo is deliberately deferred in V1 replay).
 
 -}
 
@@ -56,19 +55,40 @@ applyAction action state =
                     state
 
         MergeHand { handCard, targetStack, side } ->
-            case ( listAt targetStack state.board, findHandCard handCard state.hand ) of
-                ( Just target, Just hc ) ->
+            case listAt targetStack state.board of
+                Just target ->
+                    let
+                        -- When the card isn't in the tracked hand — a
+                        -- replay of the opponent's turn whose hand was
+                        -- server-dealt and never sent client-side —
+                        -- fall back to a synthetic HandCard so the
+                        -- board still advances. Skip the hand-update
+                        -- step in that case (we aren't tracking that
+                        -- player's hand anyway).
+                        ( hc, mutateHand ) =
+                            case findHandCard handCard state.hand of
+                                Just real ->
+                                    ( real, True )
+
+                                Nothing ->
+                                    ( { card = handCard, state = CardStack.HandNormal }, False )
+                    in
                     case BoardActions.tryHandMerge target hc side of
                         Just change ->
                             { state
                                 | board = applyChange change state.board
-                                , hand = Hand.removeHandCard hc state.hand
+                                , hand =
+                                    if mutateHand then
+                                        Hand.removeHandCard hc state.hand
+
+                                    else
+                                        state.hand
                             }
 
                         Nothing ->
                             state
 
-                _ ->
+                Nothing ->
                     state
 
         PlaceHand { handCard, loc } ->
@@ -97,12 +117,6 @@ applyAction action state =
 
                 Nothing ->
                     state
-
-        Draw ->
-            state
-
-        Discard _ ->
-            state
 
         CompleteTurn ->
             state

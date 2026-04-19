@@ -2,8 +2,8 @@ module LynRummy.ReplayTest exposing (suite)
 
 {-| Tests for `LynRummy.Replay.applyAction`. Each action type
 gets a transition test; a longer test sequences several actions
-and checks end-state. Turn-logic actions (Draw / Discard /
-CompleteTurn / Undo) verify they are no-ops for now.
+and checks end-state. CompleteTurn / Undo verify they are
+no-ops here (turn-logic handled elsewhere).
 -}
 
 import Expect
@@ -110,20 +110,8 @@ suite =
                         ]
                         after
             ]
-        , describe "no-ops for turn-logic actions (not yet modeled)"
-            [ test "Draw is a no-op" <|
-                \_ ->
-                    Replay.applyAction Draw Replay.initialState
-                        |> Expect.equal Replay.initialState
-            , test "Discard is a no-op" <|
-                \_ ->
-                    let
-                        anyCard =
-                            { value = Seven, suit = Heart, originDeck = DeckTwo }
-                    in
-                    Replay.applyAction (Discard { handCard = anyCard }) Replay.initialState
-                        |> Expect.equal Replay.initialState
-            , test "CompleteTurn is a no-op" <|
+        , describe "no-ops for turn-logic actions (not modeled in Replay)"
+            [ test "CompleteTurn is a no-op" <|
                 \_ ->
                     Replay.applyAction CompleteTurn Replay.initialState
                         |> Expect.equal Replay.initialState

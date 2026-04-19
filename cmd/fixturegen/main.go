@@ -46,6 +46,15 @@ type Expectation struct {
 	BoardAfter    []Stack
 	Stage         string
 	MessageSubstr string
+	Suggestions   []ExpectedSuggestion // expect: suggestions
+}
+
+// ExpectedSuggestion — one row inside an `expect: suggestions`
+// block. Carries the trick_id we expect and the hand cards the
+// top Play should reference. Rank is inferred from list order.
+type ExpectedSuggestion struct {
+	TrickID   string
+	HandCards []Card
 }
 
 type Stack struct {
@@ -63,9 +72,9 @@ type Card struct {
 // --- Entry point ---
 
 const (
-	goOutPath  = "./lynrummy/tricks/dsl_conformance_test.go"
-	elmOutPath = "./elm-lynrummy/tests/LynRummy/DslConformanceTest.elm"
-	goPackage  = "./lynrummy/tricks/..."
+	goOutPath  = "./games/lynrummy/tricks/dsl_conformance_test.go"
+	elmOutPath = "./games/lynrummy/elm-port-docs/tests/LynRummy/DslConformanceTest.elm"
+	goPackage  = "./games/lynrummy/tricks/..."
 )
 
 func main() {
@@ -239,10 +248,37 @@ func goScenarioBody(sc Scenario) string {
 		goValidateMove(&b, sc, false)
 	case "validate_turn_complete":
 		goValidateMove(&b, sc, true)
+	case "build_suggestions":
+		goBuildSuggestions(&b, sc)
 	default:
 		fmt.Fprintf(&b, "\tt.Fatalf(%q)\n", "unknown op "+sc.Op)
 	}
 	return b.String()
+}
+
+// goBuildSuggestions emits a test that calls tricks.BuildSuggestions
+// with the scenario's hand + board, then asserts that the returned
+// list matches the `expect: suggestions` row-by-row (same length,
+// same trick_id in each row, same hand cards in each row).
+func goBuildSuggestions(b *strings.Builder, sc Scenario) {
+	fmt.Fprintf(b, "\thandCards := %s\n", goHandCards(sc.Hand))
+	fmt.Fprintf(b, "\thand := lynrummy.Hand{HandCards: handCards}\n")
+	fmt.Fprintf(b, "\tboard := %s\n", goStacksVar(sc.Board))
+	b.WriteString("\tgot := BuildSuggestions(hand, board)\n")
+
+	fmt.Fprintf(b, "\twantLen := %d\n", len(sc.Expect.Suggestions))
+	b.WriteString("\tif len(got) != wantLen {\n")
+	b.WriteString("\t\tt.Fatalf(\"suggestion count: want %d, got %d (%+v)\", wantLen, len(got), got)\n")
+	b.WriteString("\t}\n")
+	for i, sug := range sc.Expect.Suggestions {
+		fmt.Fprintf(b, "\tif got[%d].TrickID != %q {\n", i, sug.TrickID)
+		fmt.Fprintf(b, "\t\tt.Fatalf(\"suggestion[%d].trick_id: want %s, got %%q\", got[%d].TrickID)\n", i, sug.TrickID, i)
+		b.WriteString("\t}\n")
+		fmt.Fprintf(b, "\twantHand%d := %s\n", i, goRawCardsVar(sug.HandCards))
+		fmt.Fprintf(b, "\tif !rawCardsEqualDSL(got[%d].HandCards, wantHand%d) {\n", i, i)
+		fmt.Fprintf(b, "\t\tt.Fatalf(\"suggestion[%d].hand_cards: want %%v, got %%v\", wantHand%d, got[%d].HandCards)\n", i, i, i)
+		b.WriteString("\t}\n")
+	}
 }
 
 func goTrickFirstPlay(b *strings.Builder, sc Scenario) {
@@ -390,6 +426,7 @@ import LynRummy.CardStack
 import LynRummy.Referee as Referee exposing (RefereeStage(..), refereeStageToString)
 import LynRummy.Tricks.DirectPlay
 import LynRummy.Tricks.HandStacks
+import LynRummy.Tricks.Hint as Hint
 import LynRummy.Tricks.LooseCardPlay
 import LynRummy.Tricks.PairPeel
 import LynRummy.Tricks.PeelForRun
@@ -488,10 +525,59 @@ func elmScenarioBody(sc Scenario) string {
 		elmValidateMove(&b, sc, false)
 	case "validate_turn_complete":
 		elmValidateMove(&b, sc, true)
+	case "build_suggestions":
+		elmBuildSuggestions(&b, sc)
 	default:
 		fmt.Fprintf(&b, "            Expect.fail \"unknown op %s\"", sc.Op)
 	}
 	return b.String()
+}
+
+
+// elmBuildSuggestions emits a test body that calls
+// Hint.buildSuggestions and walks each expected row in order,
+// asserting trick_id + hand cards. Any mismatch short-circuits
+// via Expect.fail with a descriptive message.
+func elmBuildSuggestions(b *strings.Builder, sc Scenario) {
+	fmt.Fprintf(b, "            let\n                handCards =\n                    %s\n\n                hand =\n                    { handCards = handCards }\n\n                board =\n                    %s\n\n                got =\n                    Hint.buildSuggestions hand board\n            in\n",
+		elmHandCards(sc.Hand),
+		elmStacks(sc.Board, "                        "))
+
+	fmt.Fprintf(b, "            if List.length got /= %d then\n                Expect.fail (\"suggestion count: want %d, got \" ++ String.fromInt (List.length got))\n", len(sc.Expect.Suggestions), len(sc.Expect.Suggestions))
+	b.WriteString("\n            else\n")
+	if len(sc.Expect.Suggestions) == 0 {
+		// No per-row assertions needed; count check is sufficient.
+		b.WriteString("                Expect.pass")
+		return
+	}
+	b.WriteString("                let\n")
+	for i, sug := range sc.Expect.Suggestions {
+		fmt.Fprintf(b, "                    want%d =\n                        { trickId = %q, handCards = %s }\n\n",
+			i, sug.TrickID, elmRawCards(sug.HandCards))
+	}
+	b.WriteString("                in\n")
+	b.WriteString("                Expect.all\n                    [")
+	for i := range sc.Expect.Suggestions {
+		if i > 0 {
+			b.WriteString("\n                    ,")
+		}
+		fmt.Fprintf(b, " \\_ -> List.drop %d got |> List.head |> Maybe.map (\\s -> { trickId = s.trickId, handCards = s.handCards }) |> Expect.equal (Just want%d)", i, i)
+	}
+	b.WriteString("\n                    ]\n                    ()")
+}
+
+
+// elmRawCards renders a list of Card values (not HandCards).
+// Reuses elmCardLit per card.
+func elmRawCards(cs []Card) string {
+	if len(cs) == 0 {
+		return "[]"
+	}
+	var parts []string
+	for _, c := range cs {
+		parts = append(parts, elmCardLit(c))
+	}
+	return "[ " + strings.Join(parts, ", ") + " ]"
 }
 
 func elmTrickFirstPlay(b *strings.Builder, sc Scenario, trickVar string) {
@@ -803,11 +889,34 @@ func applyBlockField(sc *Scenario, key string, children []line, path string) err
 	return nil
 }
 
+func parseSuggestionRow(s string) (ExpectedSuggestion, error) {
+	// Format: "<trick_id>, <card card ...>"
+	// Or just "<trick_id>" for suggestions with no cards.
+	parts := strings.SplitN(s, ",", 2)
+	trickID := strings.TrimSpace(parts[0])
+	if trickID == "" {
+		return ExpectedSuggestion{}, fmt.Errorf("missing trick_id")
+	}
+	var cards []Card
+	if len(parts) == 2 {
+		rest := strings.TrimSpace(parts[1])
+		if rest != "" {
+			cs, err := parseCards(rest)
+			if err != nil {
+				return ExpectedSuggestion{}, err
+			}
+			cards = cs
+		}
+	}
+	return ExpectedSuggestion{TrickID: trickID, HandCards: cards}, nil
+}
+
+
 func parseExpectBlock(e *Expectation, children []line, path string) error {
 	i := 0
 	if e.Kind == "" && i < len(children) {
 		c := children[i].content
-		if !strings.Contains(c, ":") && (c == "ok" || c == "no_plays" || c == "play" || c == "error") {
+		if !strings.Contains(c, ":") && (c == "ok" || c == "no_plays" || c == "play" || c == "error" || c == "suggestions") {
 			e.Kind = c
 			i++
 		}
@@ -848,6 +957,12 @@ func parseExpectBlock(e *Expectation, children []line, path string) error {
 				e.Stage = val
 			case "message_contains":
 				e.MessageSubstr = val
+			case "suggestion":
+				sug, err := parseSuggestionRow(val)
+				if err != nil {
+					return fmt.Errorf("%s:%d: suggestion: %w", path, l.lineNum, err)
+				}
+				e.Suggestions = append(e.Suggestions, sug)
 			default:
 				return fmt.Errorf("%s:%d: unknown expect field %q", path, l.lineNum, key)
 			}
