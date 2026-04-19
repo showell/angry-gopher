@@ -174,7 +174,8 @@ func (p *pairPeelPlay) Apply(
 	sort.SliceStable(group, func(i, j int) bool {
 		return group[i].Card.Value < group[j].Card.Value
 	})
-	newStack := lynrummy.NewCardStack(group, dummyLoc)
+	loc := lynrummy.FindOpenLoc(out, len(group), placerBounds)
+	newStack := lynrummy.NewCardStack(group, loc)
 
 	// Belt-and-braces validity check.
 	st := newStack.Type()

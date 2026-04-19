@@ -1,0 +1,30 @@
+just_use auto_player.py
+
+# label: EARLY (auto-player)
+# role: agent tool — plays a full LynRummy session end-to-end via /hint
+
+Walks the /hint suggestions list and takes the FIRST one each
+turn, posting its action verbatim. When no hints fire, calls
+complete_turn and classifies the result. Exits on
+success_as_victor / success_with_hand_emptied, or after
+max-actions.
+
+Not an optimizer. Not "greedy." Mirrors a human playing the most
+obvious trick — which is the /hint endpoint's native contract
+(priority-ranked, simplest first).
+
+## Surface
+
+- `python3 tools/lynrummy_elm_player/auto_player.py` — fresh session.
+- `--session N` — resume an existing session (useful when Steve
+  creates a two-player game from the Elm UI and Claude joins as
+  the other seat).
+- `--max-actions N` — safety cap (default 200).
+
+## Pointers
+
+- Depends on: `client.py` (same dir), `/hint` + `/actions` + `/score`
+  endpoints in `views/lynrummy_elm.go`.
+- Replaces: the deleted `greedy.py` (commit ffb7a6a then bcaea72
+  rip). Score-maximizing was pivoted out when the hint system
+  simplified to priority-ordered suggestions.

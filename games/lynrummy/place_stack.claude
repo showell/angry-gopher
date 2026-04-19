@@ -1,0 +1,32 @@
+just_use place_stack.go
+
+# label: EARLY (collision-free placement)
+# role: encodes domain knowledge — board geometry
+
+Faithful Go port of `elm-port-docs/src/LynRummy/PlaceStack.elm`,
+which ports `angry-cat/src/lyn_rummy/game/place_stack.ts`.
+
+- `FindOpenLoc(existing, cardCount, bounds) Location` — sweeps a
+  row-major grid from (0,0) at 10px step, returns the first
+  (top, left) whose padded bounding box clears every existing
+  stack. Fallback: bottom-left corner.
+- `stackWidthForCount(n)` — mirrors Elm's `stackWidth`.
+
+## Why Go needed its own copy
+
+Tricks (`games/lynrummy/tricks/*`) create new stacks inside
+`Apply()` — loose peels, new sets, split halves. Before this
+module existed, those new stacks landed at `dummyLoc = (0,0)`,
+overlapping the top-left stack every time. The referee caught
+it (geometry stage), which killed `complete_turn` any turn a
+trick produced a fresh stack.
+
+## Pointers
+
+- Consumers: `games/lynrummy/tricks/helpers.go` (`pushNewStack`,
+  middle-of-run split branch), `games/lynrummy/tricks/pair_peel.go`
+  (new-pair construction).
+- Referee counterpart: `board_geometry.go` (`checkGeometry`).
+  Same `BoardBounds` struct; placer uses it to stay inside.
+- Not used by the Elm UI itself — the UI picks locations from
+  cursor position. This is server-side only.

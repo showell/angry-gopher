@@ -28,9 +28,6 @@ programmatically and observe the resulting state.
 
 ## Deferred
 
-- Scoring query (server doesn't compute it yet).
-- Hints query (server doesn't compute it yet).
-- Turn-state query (no turn state machine yet).
 - SSE listener (for receiving broadcasts from other players
   — multiplayer is deferred).
 
