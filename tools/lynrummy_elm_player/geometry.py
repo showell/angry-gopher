@@ -106,10 +106,35 @@ def out_of_bounds(stack):
     return l < 0 or t < 0 or r > BOARD_MAX_WIDTH or b > BOARD_MAX_HEIGHT
 
 
+def loc_clears_others(loc, card_count, board, exclude_indices=()):
+    """True if a stack of `card_count` cards anchored at `loc`
+    fits in bounds and doesn't overlap (padded by margin) any
+    stack in `board` except those whose indices are in
+    `exclude_indices`. Mirrors the referee's two checks:
+    bounds-in, and padded-overlap-free.
+    """
+    rect = (
+        loc["left"],
+        loc["top"],
+        loc["left"] + stack_width(card_count),
+        loc["top"] + CARD_HEIGHT,
+    )
+    if (rect[0] < 0 or rect[1] < 0 or
+            rect[2] > BOARD_MAX_WIDTH or rect[3] > BOARD_MAX_HEIGHT):
+        return False
+    padded = pad_rect(rect, BOARD_MARGIN)
+    for i, s in enumerate(board):
+        if i in exclude_indices:
+            continue
+        if rects_overlap(padded, stack_rect(s)):
+            return False
+    return True
+
+
 def find_violation(board):
     """Return the index of a stack that breaks the geometry rule,
-    or None. Checks out-of-bounds first, then pairwise overlap
-    (actual intersection, not "within margin crowding").
+    or None. Checks out-of-bounds first, then pairwise padded
+    overlap (the referee's "too close" / "actual overlap" combo).
 
     Returns the FIRST offending stack rather than a full report —
     callers iterate: fix one, re-check, repeat until stable.
@@ -120,8 +145,9 @@ def find_violation(board):
 
     rects = [stack_rect(s) for s in board]
     for i in range(len(rects)):
+        padded_i = pad_rect(rects[i], BOARD_MARGIN)
         for j in range(i + 1, len(rects)):
-            if rects_overlap(rects[i], rects[j]):
+            if rects_overlap(padded_i, rects[j]):
                 # Move the later-indexed stack — it's the one
                 # that was appended most recently by a trick or
                 # by a growing neighbor, so relocating it

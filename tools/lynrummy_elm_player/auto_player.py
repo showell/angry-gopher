@@ -18,7 +18,7 @@ import argparse
 import sys
 
 from client import Client
-from geometry import find_open_loc, find_violation
+from geometry import find_open_loc, find_violation, loc_clears_others
 
 
 # Turn results that end the game.
@@ -28,6 +28,67 @@ TERMINAL_RESULTS = {"success_as_victor", "success_with_hand_emptied"}
 # violation triggers at most a handful of move_stack actions; a
 # runaway loop means a bug, not legitimate work.
 MAX_SETTLE_STEPS = 20
+
+
+def pre_settle_merge(c, session_id, action, *, verbose=True):
+    """If the merge action's target cannot fit the merged result
+    at its current loc, pre-move the target to a fresh spot — the
+    human algorithm.
+
+    For merge_stack: tries the source stack's current loc first
+    (narratively: "the small stack stays where it is, the big one
+    comes over"). For merge_hand (or merge_stack where the source
+    loc won't fit either), falls back to find_open_loc.
+
+    No-op when the action isn't a merge, or when the current loc
+    already accommodates the growth.
+    """
+    kind = action["action"]
+    if kind not in ("merge_hand", "merge_stack"):
+        return
+
+    state = c.get_state(session_id)
+    board = state["state"]["board"]
+
+    target_idx = action["target_stack"]
+    target = board[target_idx]
+    target_size = len(target["board_cards"])
+
+    if kind == "merge_hand":
+        merged_size = target_size + 1
+        source_idx = None
+        source_loc = None
+        exclude = {target_idx}
+    else:
+        source_idx = action["source_stack"]
+        source = board[source_idx]
+        merged_size = target_size + len(source["board_cards"])
+        source_loc = source["loc"]
+        exclude = {target_idx, source_idx}
+
+    # Option A: current target loc accommodates the merged size.
+    if loc_clears_others(target["loc"], merged_size, board, exclude):
+        return
+
+    # Option B (merge_stack only): land the merged stack at the
+    # source's old loc. The source itself vanishes in the merge,
+    # so its footprint is free once the action lands.
+    if source_loc is not None and loc_clears_others(
+            source_loc, merged_size, board, exclude):
+        c.send_move_stack(session_id, stack_index=target_idx,
+                          new_loc=source_loc)
+        if verbose:
+            print(f"    pre-settle: merge target stack[{target_idx}] "
+                  f"→ source loc ({source_loc['left']},{source_loc['top']})")
+        return
+
+    # Option C: fresh loc via find_open_loc.
+    others = [s for i, s in enumerate(board) if i not in exclude]
+    fresh = find_open_loc(others, merged_size)
+    c.send_move_stack(session_id, stack_index=target_idx, new_loc=fresh)
+    if verbose:
+        print(f"    pre-settle: merge target stack[{target_idx}] "
+              f"→ fresh loc ({fresh['left']},{fresh['top']})")
 
 
 def settle(c, session_id, *, verbose=True):
@@ -75,6 +136,7 @@ def play_session(c, session_id, *, max_actions=200, verbose=True):
 
         if suggestions:
             first = suggestions[0]
+            pre_settle_merge(c, session_id, first["action"], verbose=verbose)
             c.send_action(session_id, first["action"])
             actions += 1
             if verbose:
