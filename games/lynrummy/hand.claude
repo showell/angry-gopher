@@ -22,10 +22,20 @@ lookup.
 
 - Elm's `removeHandCard` throws; Go's silently no-ops (same
   total-function contract as the Elm port adopted).
-- Elm has `resetState`; Go doesn't (no consumer yet — turn
-  logic isn't modeled on Go side yet either).
+- Naming: Elm uses `Hand.resetState`; Go uses method syntax
+  `Hand.ResetState()`. Same semantics — every card back to
+  `HandNormal`.
+
+## Turn-logic consumers (present)
+
+- `applyCompleteTurn` in `replay.go` calls
+  `ResetState()` on the outgoing player's hand before drawing
+  new cards. The "no turn logic on Go side yet" caveat was
+  true pre-bcaea72 (2026-04-18); turn logic is now fully
+  ported.
 
 ## Pointers
 
-- Used by `replay.go` — `State.Hand` is a Hand value.
+- Used by `replay.go` — `State.Hands []Hand` plus the
+  `ResetState` call in `applyCompleteTurn`.
 - Used by `dealer.go` — `OpeningHand()` returns a Hand.

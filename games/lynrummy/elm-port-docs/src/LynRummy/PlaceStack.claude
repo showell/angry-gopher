@@ -3,14 +3,12 @@
 Collision-free placement math for new stacks on the LynRummy
 board. When a move produces a NEW stack (split, peel, etc.),
 this module finds a top/left position that doesn't overlap
-any existing stack. Pure math. Faithful port of
-`angry-cat/src/lyn_rummy/game/place_stack.ts`.
+any existing stack. Pure math.
 
 ## Status
 
 - **Label:** WORKHORSE. Pure geometry; stable.
-- **Source:** `angry-cat/src/lyn_rummy/game/place_stack.ts` (138 LOC).
-- **Tests:** ported from `place_stack_test.ts`.
+- **Tests:** `tests/LynRummy/PlaceStackTest.elm`.
 
 ## Key invariants (preserved from TS)
 

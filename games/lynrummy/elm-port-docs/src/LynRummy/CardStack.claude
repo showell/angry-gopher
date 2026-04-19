@@ -1,0 +1,180 @@
+# CardStack.elm — WORKHORSE (ported, stable)
+
+The board's basic compound unit: a `CardStack` is a list of
+`BoardCard`s plus a `BoardLocation`. Every stack on the board
+is a value of this type.
+
+## Status
+
+- **Label:** WORKHORSE. Stable.
+- **Mirrors:** Go `card_stack.go` + `card_stack.claude`. Same
+  JSON wire shape, same split/merge geometry, same
+  two-equality discipline (see Card.claude).
+- **Divergences:** Elm↔TS, not Elm↔Go. Called out below.
+
+## Key exports
+
+- `CardStack` — `{ boardCards : List BoardCard, loc : BoardLocation }`.
+  Order within `boardCards` is meaningful (runs are sequential).
+- `BoardCard` — `{ card : Card, state : BoardCardState }`.
+- `HandCard` — `{ card : Card, state : HandCardState }`.
+- `BoardLocation` — `{ top : Int, left : Int }`. Pixel coords.
+- `BoardCardState(..)` — `FirmlyOnBoard | FreshlyPlayed |
+  FreshlyPlayedByLastPlayer`. Turn-accounting markers.
+- `HandCardState(..)` — `HandNormal | FreshlyDrawn |
+  BackFromBoard`.
+- Geometry: `cardWidth = 27`, `stackPitch = 33`,
+  `stackDisplayWidth`.
+- Queries: `size`, `stackCards`, `stackType` (derived via
+  `StackType.getStackType`), `stackStr`, `incomplete`,
+  `problematic`.
+- Aging: `boardCardAgedState`, `agedFromPriorTurn` — turn
+  transitions decay state markers.
+- Construction: `fromHandCard`, `fromShorthand` (parses
+  "AH,2H,3H" style).
+- Split: `split`, `leftSplit`, `rightSplit` — geometry
+  matters; see section below.
+- Merge: `maybeMerge`, `leftMerge`, `rightMerge`. All return
+  `Maybe` — refuse the merge if invalid.
+- Equality: `stacksEqual`, `locsEqual`, `boardCardSameCard`,
+  `handCardSameCard`.
+- Extraction: `canExtract` — can a trick legally pull a card
+  from this stack at a given index?
+- Encoders/decoders for all types.
+
+## The two equality concepts (LOAD-BEARING, mirrors Card.elm)
+
+1. **`stacksEqual`** — full identity: same cards in same
+   order (including `originDeck`) AND same `loc`. Used by the
+   referee's inventory check. Deliberately ignores
+   `BoardCard.state` (recency is turn-accounting, not
+   identity).
+2. **`boardCardSameCard` / `handCardSameCard`** — compare
+   only the underlying `Card`, ignoring state markers. Used
+   when asking "do these BoardCards wrap the same physical
+   card?"
+
+Why deck identity matters: on a double-deck board two 5♥'s
+exist. Inventory must distinguish them or a client can claim
+to remove 5♥(d0) while adding 5♥(d1) it never held.
+Full-identity equality keeps `stacks_to_remove` honest.
+
+## `stackType` is derived, not stored
+
+`stackType : CardStack -> CardStackType` calls
+`StackType.getStackType` on demand. No stored field — same
+Insight #5 as `Card.suitColor`: don't carry state that's a
+pure function of other state.
+
+Go picks the OPPOSITE strategy: `CardStack` caches
+`StackType` at `NewCardStack` time. The cache never crosses
+the wire (`MarshalJSON` drops it, `UnmarshalJSON`
+re-derives), so both ports produce identical bytes — the
+divergence is purely in-memory. If you edit either side's
+classification rules, both cache and derivation paths must
+agree or conformance will break.
+
+## Split geometry (why two paths?)
+
+The `split` function picks between `leftSplit` and
+`rightSplit` based on which half of the stack the split point
+lands in. The two paths produce DIFFERENT `loc` adjustments:
+
+- **`leftSplit`** — left half gets offset `-2`, top `-4`;
+  right half gets offset `leftCount * (cardWidth + 6) + 8`,
+  same top.
+- **`rightSplit`** — left half gets offset `-8`, same top;
+  right half gets `leftCount * (cardWidth + 6) + 4`, top `-4`.
+
+These are NOT arbitrary; the pattern is "the side closer to
+the user's split gesture gets the `top - 4` lift, the other
+side stays." Mirrors the TS source exactly. Breaking the
+asymmetry means the split animation reads wrong.
+
+`split` returns `[s]` unchanged if the stack has ≤1 card.
+Total function — TS throws here.
+
+## Merge refusal rules
+
+`maybeMerge s1 s2 loc` returns `Nothing` iff:
+1. `stacksEqual s1 s2` — can't merge a pile with itself, and
+   can't merge two physically-equal piles (never produces a
+   valid result).
+2. The combined stack is `problematic` (Bogus or Dup).
+
+`leftMerge self other` / `rightMerge self other` wrap
+`maybeMerge` with positioning: left merge puts `other` to the
+left of `self`; right merge puts `other` to the right.
+
+## `canExtract`: can a trick legally pull this card?
+
+`canExtract stack cardIdx` is the extraction-legality
+predicate consumed by trick builders:
+
+- **Set (4+)** — any card is extractable.
+- **PureRun / RedBlackRun, endpoints (idx 0 or n-1), n ≥ 4** —
+  peel-from-end is OK.
+- **PureRun / RedBlackRun, middle-peel** — `cardIdx ≥ 3` AND
+  `n - cardIdx - 1 ≥ 3`. Both halves must remain a valid
+  3-card run.
+- Otherwise — no extraction.
+
+Mirrors `card_stack.go` `CanExtract`. Changes here must land
+in both places simultaneously or trick suggestions drift.
+
+## `fromShorthand`: the TS `pull_from_deck` divergence
+
+TS's `pull_from_deck` mutated a `DeckRef`. Elm omits the
+deck-pool semantic — `fromShorthand` is a parse-and-build
+helper only. If uniqueness tracking is needed, callers own
+the deck state. See `OPEN_QUESTIONS.md` (Resolved, 2026-04-14)
+for rationale.
+
+## JSON wire shape (mirrors Go + TS)
+
+```
+{"card": {...Card...}, "state": 0|1|2}        // HandCard / BoardCard
+{"top": N, "left": N}                          // BoardLocation
+{"board_cards": [...], "loc": {...}}           // CardStack
+```
+
+State enums mirror TS implicit numerics: HandNormal=0,
+FreshlyDrawn=1, BackFromBoard=2; FirmlyOnBoard=0,
+FreshlyPlayed=1, FreshlyPlayedByLastPlayer=2.
+
+## Elm divergences from TS
+
+- `stackType` is a derived function (TS stores it).
+- `split` returns unchanged list for size ≤ 1 (TS throws).
+- `fromShorthand` doesn't mutate a deck.
+- `clone` is N/A (Elm values are immutable).
+- Enum-to-int is explicit functions (TS uses numeric enum
+  values).
+
+## Why cardWidth lives here (not in View.elm)
+
+Position is domain data — every `CardStack` carries a `loc`,
+and `split`/`merge` must produce correct positions as part of
+their semantic contract. Putting `cardWidth` in a View module
+would fragment "split produces correct geometry" across
+domain + view boundaries. Resolved 2026-04-14; see
+OPEN_QUESTIONS.md.
+
+## What this module deliberately does NOT do
+
+- **Stack classification logic.** Lives in `StackType.elm`.
+  `getStackType` is imported and called.
+- **Individual card semantics.** Lives in `Card.elm`.
+- **Referee accounting.** Consumes `stacksEqual` from here;
+  lives in `Referee.elm`.
+- **Rendering.** The loc + pitch info is used by `View.elm`,
+  but the rendering code itself is there.
+
+## Pointers
+
+- Go counterpart: `games/lynrummy/card_stack.go` +
+  `card_stack.claude`.
+- Consumers: `Game.elm`, `Referee.elm`, `Hand.elm`,
+  `View.elm`, every Trick module, `BoardActions.elm`,
+  `BoardPhysics.elm`. Basically everything.
+- Tests: `tests/LynRummy/CardStackTest.elm`.

@@ -5,18 +5,20 @@ just_use WireAction.elm
 
 Action-shaped wire format. Each `WireAction` value names what
 the player did (split, merge-stack, merge-hand, place-hand,
-move-stack, draw, discard, complete-turn, undo); receiver
-derives post-state by applying the action to prior state. No
-diff on the wire.
+move-stack, complete-turn, undo, play-trick, trick-result);
+receiver derives post-state by applying the action to prior
+state. No diff on the wire (except `TrickResult`, which
+persists the already-expanded board diff).
 
-Replaces the TS diff-based format (`stacks_to_remove` +
-`stacks_to_add` + inferred trick). See
-`showell/claude_writings/actions_not_diffs.md` for the
+See `showell/claude_writings/actions_not_diffs.md` for the
 rationale.
 
 ## Exposed surface
 
-- `type WireAction` — 9 constructors
+- `type WireAction` — 9 constructors: `Split`, `MergeStack`,
+  `MergeHand`, `PlaceHand`, `MoveStack`, `CompleteTurn`,
+  `Undo`, `PlayTrick`, `TrickResult`. No `Draw`/`Discard`
+  (LynRummy has no draw pile).
 - `encode : WireAction -> Json.Encode.Value`
 - `decoder : Json.Decode.Decoder WireAction`
 
@@ -28,10 +30,11 @@ rationale.
 {"action":"merge_hand","hand_card":C,"target_stack":I,"side":S}
 {"action":"place_hand","hand_card":C,"loc":L}
 {"action":"move_stack","stack_index":I,"new_loc":L}
-{"action":"draw"}
-{"action":"discard","hand_card":C}
 {"action":"complete_turn"}
 {"action":"undo"}
+{"action":"play_trick","trick_id":"...","hand_cards":[C,...]}
+{"action":"trick_result","trick_id":"...","stacks_to_remove":[...],
+                         "stacks_to_add":[...],"hand_cards_released":[C,...]}
 ```
 
 Where `S = "left" | "right"`, `C = encoded Card`, `L = {top, left}`.
@@ -39,6 +42,10 @@ Where `S = "left" | "right"`, `C = encoded Card`, `L = {top, left}`.
 Stacks are referenced by **positional index** in the board
 list (V1 choice). Hand cards are referenced by **content
 identity** (Card, not HandCard — wire doesn't carry state).
+
+`PlayTrick` is a submission-time convenience; the server
+expands it to `TrickResult` at receipt time and persists the
+latter. Replay logs contain `TrickResult`, not `PlayTrick`.
 
 ## Tests
 
@@ -52,12 +59,15 @@ identity** (Card, not HandCard — wire doesn't carry state).
 
 ## Pointers
 
-- Consumer: will be `Main.elm` (outbound on player actions)
-  and the Go server (inbound validation + persist). Neither
-  wired up yet.
-- Go counterpart: pending. Will mirror this shape via tagged
-  JSON; cross-language conformance tests live near
-  `games/lynrummy/conformance/` when written.
+- Consumers: `Main/Apply.elm` (outbound on player actions
+  via `Main/Wire.elm`), server route
+  `POST /gopher/lynrummy-elm/actions` (persists raw JSON
+  into `lynrummy_elm_actions`), `Replay.applyAction`
+  (folds the log to state).
+- Go counterpart: `games/lynrummy/wire_action.go` +
+  `wire_action.claude`. Same shape. Cross-language
+  conformance via `games/lynrummy/conformance/` scenarios
+  + format-lock tests on 4 representative shapes.
 - Depends on: `LynRummy.Card.encodeCard` / `cardDecoder`,
   `LynRummy.CardStack.encodeBoardLocation` /
   `boardLocationDecoder`, `LynRummy.BoardActions.Side`.

@@ -1,0 +1,66 @@
+# Tricks/Helpers.elm — WORKHORSE (trick-layer primitives)
+
+Shared board-mutation helpers used by every individual trick.
+Mirrors `games/lynrummy/tricks/helpers.go`.
+
+## Status
+
+- **Label:** WORKHORSE. Small, stable, heavily used.
+
+## Key exports
+
+- `dummyLoc : BoardLocation` — `{ top = 0, left = 0 }`. A
+  trick appends new stacks here; placement happens
+  client-side later.
+- `freshlyPlayed : HandCard -> BoardCard` — wraps a HandCard
+  as a `BoardCard { state = FreshlyPlayed }`.
+- `singleStackFromCard : Card -> CardStack` — wraps a raw
+  Card as a singleton stack at dummyLoc. Used when routing
+  non-hand cards (e.g., a kicked card) through merge
+  operations.
+- `pushNewStack : List CardStack -> List BoardCard -> List
+  CardStack` — append a new stack at dummyLoc.
+- `substituteInStack : CardStack -> Int -> BoardCard ->
+  CardStack` — replace card at position, preserve loc.
+- `replaceAt : Int -> a -> List a -> List a` — list-index
+  replace; no-op if out of range.
+- `extractCard : List CardStack -> Int -> Int -> (List
+  CardStack, Maybe BoardCard)` — the extraction primitive.
+
+## Why dummyLoc (not a computed placement)
+
+Tricks produce new stacks without committing to a location.
+The client owns final placement via `PlaceStack.findOpenLoc`
+applied post-trick. Baking placement into the trick would
+couple geometry to combinatorics; keeping it as dummyLoc
+keeps tricks pure-combinatorial.
+
+## `extractCard`: the legality oracle
+
+Three modes, matching `CardStack.canExtract`:
+
+1. **End peel** — size ≥ 4, first or last card.
+2. **Set peel** — size ≥ 4 SET, any middle position.
+3. **Middle peel** — run (PureRun or RedBlackRun), both
+   halves remain size ≥ 3 after extraction. Specifically
+   `cardIdx >= 3 && n - cardIdx - 1 >= 3`.
+
+Returns `(board, Nothing)` if extraction is illegal — the
+caller treats this as "trick doesn't apply here."
+
+**Middle peel leaves the right half at `dummyLoc`** —
+placement happens post-trick. The left half preserves the
+original stack's loc.
+
+## All return-new, no mutation
+
+Same discipline as the Go port: tricks compose atomically on
+a passed-in board and return a new board plus whatever they
+consumed. No side effects. The divergence from TS (which
+mutates in place) is deliberate.
+
+## Pointers
+
+- Go counterpart: `games/lynrummy/tricks/helpers.go`.
+- Depends on: `Card`, `CardStack`, `StackType`.
+- Consumers: every `Tricks/*` module.

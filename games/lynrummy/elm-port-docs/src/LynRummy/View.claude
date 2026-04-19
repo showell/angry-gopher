@@ -1,9 +1,7 @@
 # View.elm — EARLY
 
 HTML rendering primitives for a LynRummy board, hand, and
-cards. Faithful port of the `render_*` pure-drawing functions
-in `angry-cat/src/lyn_rummy/game/game.ts` (lines ~945-1180,
-plus hand-rendering functions).
+cards. Pure-drawing functions; no gesture handling here.
 
 ## Status
 

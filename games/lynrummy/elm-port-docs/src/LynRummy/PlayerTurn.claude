@@ -3,14 +3,12 @@
 Turn-level scoring and outcome-type tracking for LynRummy.
 Holds per-turn state (starting board score, cards played,
 empty-hand bonus, victory bonus) and computes the final turn
-score and result category. Faithful port of
-`angry-cat/src/lyn_rummy/game/player_turn.ts`.
+score and result category.
 
 ## Status
 
 - **Label:** WORKHORSE. Stable scoring rules.
-- **Source:** `angry-cat/src/lyn_rummy/game/player_turn.ts` (87 LOC).
-- **Tests:** ported from `player_turn_test.ts`.
+- **Tests:** `tests/LynRummy/PlayerTurnTest.elm`.
 
 ## Key invariants (preserved from TS)
 
@@ -38,8 +36,32 @@ score and result category. Faithful port of
   callers can pipe naturally (`turn |> getScore 100`).
 - CompleteTurnResult enum → Elm sum type with constructors.
 
+## Cross-language drift note: the "emptied on dirty board then tidied up" edge case
+
+Go's `turn_result.go` derives the classification from the
+post-CompleteTurn replay snapshot only — so "player emptied
+their hand mid-turn on a dirty board, then tidied up" is
+reported as victor-eligible (the board is clean at CompleteTurn
+time; Go can't see the mid-turn transient).
+
+Elm's PlayerTurn is accumulator-driven: `empty_hand_bonus` /
+`victory_bonus` mutate as moves happen. In principle
+`revokeEmptyHandBonuses` gives the caller a way to strip the
+bonuses mid-turn if the referee disallows an empty-hand
+state. Whether the Elm-side update code actually calls
+`revokeEmptyHandBonuses` on the mid-turn-dirty-board transient
+is not currently obvious from this sidecar — and Go
+deliberately doesn't. If parity on this edge case matters,
+verify via a targeted test; for V1 the edge case is rare
+enough that it's unlikely to fire in practice.
+
 ## Pointers
 
 - Depends on: `LynRummy.Score.forCardsPlayed`.
-- Consumer: game.ts (when ported) will hold a PlayerTurn
-  record per active turn and thread it through updates.
+- Consumer: `LynRummy.Game.applyCompleteTurn` constructs a
+  PlayerTurn from the current state, applies bonuses, and
+  reads `turnResult` / `getScore` for the transition. That's
+  the client-authoritative path (see `Game.claude`); the
+  server has its own parallel `turn_result.go` that consumes
+  the same `CompleteTurnResult` type via a snapshot-based
+  implementation.

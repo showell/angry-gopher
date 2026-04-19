@@ -1,0 +1,70 @@
+# Tricks/PairPeel.elm — WORKHORSE
+
+PAIR_PEEL: two hand cards form a pair (set-pair or run-pair)
+and a peelable board card completes the triplet into a valid
+3-stack.
+
+## Status
+
+- **Label:** WORKHORSE. Stable.
+- **Mirrors:** Go `games/lynrummy/tricks/pair_peel.go`.
+
+## The three pair shapes + their "needs"
+
+Given two distinct hand cards `a, b`:
+
+1. **Set pair** — same value, different suits. Needs: same
+   value, in any of the TWO remaining suits (both are
+   candidates).
+2. **Pure-run pair** — same suit, consecutive values. Needs:
+   `predecessor(lo)` OR `successor(hi)`, both in the same
+   suit. Up to two needs emitted.
+3. **Rb-run pair** — consecutive values, DIFFERENT colors.
+   Needs: `predecessor(lo)` in either opposite-color suit of
+   `lo`, OR `successor(hi)` in either opposite-color suit of
+   `hi`. Up to four candidate (value, suit) combinations.
+
+Any other pair shape: empty needs list → trick emits nothing
+for that pair.
+
+## Equality filter on hand pairs
+
+`handPairs` skips pairs where `cardsEqual a.card b.card` —
+same value + suit + originDeck. Double-deck dups can't pair
+with themselves.
+
+## Scan: extractable candidates only
+
+`scanBoardForNeed` filters with `canExtract` — only cards
+that can legally be peeled (see `CardStack.canExtract`) count.
+Cards sealed inside 3-card runs are invisible here.
+
+## Apply-time safety
+
+`applyPairPeel`:
+1. Re-reads the target card at `(si, ci)`; refuses if it
+   moved or isn't `canExtract`.
+2. Calls `extractCard` to peel.
+3. Sorts `[hca, hcb, extracted]` by card value, builds a new
+   stack at `dummyLoc`.
+4. Classifies the result; if `Bogus`, `Dup`, or `Incomplete`,
+   refuses.
+5. Otherwise, appends the new stack and returns the
+   consumed hand cards.
+
+The classification check in step 4 is belt-and-suspenders —
+`pairNeeds` should only emit valid combinations, but
+re-checking at apply time catches any drift.
+
+## Key exports
+
+- `trick : Trick` — `id = "pair_peel"`, description: "Peel a
+  board card to complete a pair in your hand."
+
+## Pointers
+
+- Go counterpart: `games/lynrummy/tricks/pair_peel.go`.
+- Depends on: `Card`, `CardStack.canExtract`, `StackType`
+  (`successor`/`predecessor`/`getStackType`),
+  `Tricks.Helpers.extractCard`.
+- Consumer: `Tricks.Hint.allTricks`.

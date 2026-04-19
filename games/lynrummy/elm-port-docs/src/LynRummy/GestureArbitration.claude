@@ -3,10 +3,9 @@ just_use GestureArbitration.elm
 # label: WORKHORSE (gesture-arbitration)
 # role: pure helpers — click-vs-drag arbitration during board interactions
 
-Pure-function port of the click-vs-drag arbitration logic from
-TS's `DragDropHelper` (`angry-cat/src/lyn_rummy/game/game.ts`,
-lines 2475-2672). Nothing in this module touches the DOM; the
-event flow itself lives in `Main.elm`.
+Pure-function port of the click-vs-drag arbitration logic
+(TS's `DragDropHelper`). Nothing in this module touches the
+DOM; the event flow itself lives in `Main.elm`.
 
 ## What's exported
 

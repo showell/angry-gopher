@@ -1,0 +1,78 @@
+# Tricks/RbSwap.elm — WORKHORSE (the "substitute trick")
+
+RB_SWAP: kick a same-value, same-color, different-suit card
+out of a red-black run and slot the hand card into its
+seat. The kicked card must find a home elsewhere (a pure run
+that accepts it, OR a not-yet-full set of the same value).
+
+Steve's name for this trick: **"substitute trick."**
+
+## Status
+
+- **Label:** WORKHORSE. Stable.
+- **Mirrors:** Go `games/lynrummy/tricks/rb_swap.go`.
+
+## Preconditions for a seat (findSeats)
+
+Given hand card `hc` and a red-black run `stack` at index
+`si`, look for position `ci` where `stack.boardCards[ci]`
+satisfies:
+- same value as `hc`
+- SAME color as `hc` (so the rb-run's color alternation
+  survives the swap)
+- DIFFERENT suit than `hc` (otherwise it's a no-op)
+
+Then confirm: substituting `hc` into that seat keeps the
+classification as `RedBlackRun`. Belt-and-suspenders — the
+constraints above should guarantee it, but a double-deck dup
+could sneak through.
+
+## Finding a home for the kicked card
+
+`findKickedHome` scans every other stack (skipping the swap
+site) and accepts the FIRST one that qualifies via
+`homeAccepts`:
+
+- **SET** — fewer than 4 cards, first card's value matches
+  kicked, AND the kicked suit isn't already present. The
+  kicked card appends.
+- **PURE RUN** — `leftMerge` OR `rightMerge` with the kicked
+  card as a singleton succeeds.
+- Anything else — rejected.
+
+First-match ordering is deterministic and matches Go.
+
+## Apply-time safety
+
+Four refusal points:
+1. `runStack` is no longer a `RedBlackRun` (drifted).
+2. The card at `runPos` is no longer the expected kicked
+   identity (value + suit + originDeck all check).
+3. `placeKicked` can't find a valid insertion on the home
+   stack (home may have changed).
+
+All four return `(board, [])`.
+
+## Kicked card state = FirmlyOnBoard
+
+When appending to a SET, the kicked card goes in as
+`FirmlyOnBoard` (not `FreshlyPlayed`). It's being moved
+within the board, not freshly played from hand. The hand
+card IS `FreshlyPlayed` at its new seat. This state
+distinction matters for turn-accounting aging (see
+`CardStack.boardCardAgedState`).
+
+## Key exports
+
+- `trick : Trick` — `id = "rb_swap"`, description:
+  "Substitute your card for a same-color one in an rb
+  run; the kicked card goes to a set or pure run."
+
+## Pointers
+
+- Go counterpart: `games/lynrummy/tricks/rb_swap.go`.
+- Depends on: `Card.suitColor`, `CardStack.stackType` +
+  `leftMerge`/`rightMerge`, `StackType`,
+  `Tricks.Helpers.substituteInStack` +
+  `singleStackFromCard`.
+- Consumer: `Tricks.Hint.allTricks`.

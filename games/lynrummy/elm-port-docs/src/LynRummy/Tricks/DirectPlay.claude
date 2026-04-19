@@ -1,0 +1,51 @@
+# Tricks/DirectPlay.elm — WORKHORSE (the simplest trick)
+
+DIRECT_PLAY: a hand card extends an existing board stack at
+one of its ends. The floor of the trick system — if nothing
+else is available, this one often is.
+
+## Status
+
+- **Label:** WORKHORSE. Stable, small.
+- **Mirrors:** Go `games/lynrummy/tricks/direct_play.go`.
+
+## What it finds
+
+For each hand card `hc` and each board stack `s`, tries
+`rightMerge s single` and `leftMerge s single`. If either
+works, emit a Play.
+
+## Priority: right merge first
+
+`mergeEitherSide` prefers right-merge when both would work.
+Matches the canonical convention — runs grow naturally
+rightward, so right-extend is the "default growth direction."
+Swapping the order changes which Play the Hint engine picks
+when multiple are valid for the same (hand-card, stack) pair.
+
+## Apply-time safety
+
+`applyDirectPlay` re-reads the stack at `targetIdx` and
+re-runs `mergeEitherSide`. If the board has drifted and the
+merge no longer validates, returns `(board, [])` — the
+standard "refusal" pattern (see `Trick.claude`).
+
+## Key exports
+
+- `trick : Trick` — the plugin value. `id = "direct_play"`,
+  description: "Play a hand card onto the end of a stack."
+
+## What this module deliberately does NOT do
+
+- **Extract from a stack.** End-peels are
+  `Tricks.PeelForRun` / `Tricks.PairPeel`.
+- **Handle hand-only groups.** That's `Tricks.HandStacks`.
+- **Choose the target.** Emit one Play per target; ranking is
+  the Hint engine's job.
+
+## Pointers
+
+- Go counterpart: `games/lynrummy/tricks/direct_play.go`.
+- Depends on: `CardStack.leftMerge`/`rightMerge`,
+  `Tricks.Helpers`, `Tricks.Trick`.
+- Consumer: `Tricks.Hint.allTricks`.

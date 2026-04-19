@@ -1,0 +1,62 @@
+# Tricks/SplitForSet.elm — WORKHORSE
+
+SPLIT_FOR_SET: a hand card of value V finds two extractable
+same-value, different-suit board cards, and the three
+together form a new 3-card set.
+
+## Status
+
+- **Label:** WORKHORSE. Stable.
+- **Mirrors:** Go `games/lynrummy/tricks/split_for_set.go`.
+
+## Algorithm
+
+For each hand card `hc`:
+1. Scan board for cards at `hc.value` with a DIFFERENT suit
+   AND `canExtract` at that position. Collect as candidates.
+2. If fewer than 2 candidates, skip.
+3. `pickTwoDistinctSuits` picks the FIRST two candidates
+   with distinct suits that AREN'T `hc.suit`. (Going first,
+   we skip candidates matching `hc.suit` — a set must have
+   three distinct suits.)
+4. Classify the trio `[hc.card, a.card, b.card]`. Accept
+   only if `Set`.
+
+## First-match ordering
+
+`pickTwoDistinctSuits` iterates candidates in board-scan
+order. This makes the output deterministic and matches Go.
+
+## Apply-time safety
+
+Two `relocate` + `extractCard` rounds, each refusing on any
+failure:
+1. Relocate target A; extract. Refuse on failure.
+2. Relocate target B on the updated board; extract. Refuse
+   on failure.
+
+Then push a new stack with `[freshlyPlayed hc, extA, extB]`
+at `dummyLoc`. Note: unlike `PeelForRun`, the stack
+construction here does NOT sort by value — sets don't care
+about order. Go matches.
+
+## Why B may fail after A extracted
+
+If target A was peeled from the middle of a run,
+`extractCard` splits the run into two halves. Target B might
+have been in a now-too-short half, losing `canExtract`
+eligibility. The re-relocate on `board2` catches this.
+
+## Key exports
+
+- `trick : Trick` — `id = "split_for_set"`, description:
+  "Take two same-value cards out of the board and form a
+  new set with your hand card."
+
+## Pointers
+
+- Go counterpart: `games/lynrummy/tricks/split_for_set.go`.
+- Depends on: `Card`, `CardStack.canExtract`,
+  `StackType.getStackType`,
+  `Tricks.Helpers.extractCard`/`pushNewStack`.
+- Consumer: `Tricks.Hint.allTricks`.

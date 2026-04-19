@@ -73,11 +73,15 @@ in list order. Both are pinned by the tests.
 
 ## Pointers
 
-- Consumer: not wired into the server yet (no handler reads
-  this). Next step: HTTP endpoint for player-action submission
-  that decodes via `DecodeWireAction`, validates, persists.
-- Deprecates: the diff-based `wire*` types in `events.go`
-  (see `stacks_to_remove`/`stacks_to_add`). Those stay for now
-  so the existing game-replay UI keeps working; they go away
-  when the clean cut is complete.
+- Consumer: `views/lynrummy_elm.go` handles
+  `POST /gopher/lynrummy-elm/actions` and decodes via
+  `DecodeWireAction`, persists the raw JSON in the
+  `lynrummy_elm_actions` table, and `replay.go`'s
+  `ReplayActionsSeeded` folds `ApplyAction` over the decoded
+  log to produce session state. Live since the wire-action
+  rewrite; no longer "not wired yet."
+- Supersedes: the diff-based `wire*` types in `events.go`
+  (`stacks_to_remove` / `stacks_to_add`). Those were load-bearing
+  for the legacy game-replay UI, which was ripped in bcaea72
+  (2026-04-18). Remaining `events.go` types are vestigial.
 - Depends on: `Card`, `Location` from this package.

@@ -1,14 +1,12 @@
 # Score.elm — WORKHORSE
 
 Scoring functions for LynRummy. Flat per-card formula: each
-card in a valid 3+ family is worth one stackTypeValue. Faithful
-port of `angry-cat/src/lyn_rummy/core/score.ts`.
+card in a valid 3+ family is worth one stackTypeValue.
 
 ## Status
 
 - **Label:** WORKHORSE. Pure arithmetic, stable, no expected
   churn.
-- **Source:** `angry-cat/src/lyn_rummy/core/score.ts` (51 LOC).
 - **Tests:** 20 in `tests/LynRummy/ScoreTest.elm`, all green.
 
 ## Key invariants (preserved from TS)

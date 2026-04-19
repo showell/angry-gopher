@@ -1,18 +1,45 @@
 just_use events.go
 
-# label: ELEGANT
-# role: encodes domain knowledge
+# label: VESTIGIAL
+# role: encodes domain knowledge — legacy diff-based host flow
 
-Cross-domain wire types + event replay. Only GameSetup is exported; the
-wire* structs are internal JSON plumbing that consumers never see directly
-— they call CheckEvent / ParseMoveEvent / ReconstructBoard.
+**Status note (2026-04-19):** this module is mostly legacy. The
+diff-based host flow it describes (`CheckEvent`,
+`ParseMoveEvent`, `ReconstructBoard`, the `wire*` types with
+`stacks_to_remove` / `stacks_to_add`) was load-bearing for
+the old game-replay UI that was ripped in bcaea72
+(2026-04-18). The current Elm LynRummy session flow is
+action-based: `WireAction` → `DecodeWireAction` →
+`lynrummy_elm_actions` table → `ReplayActionsSeeded` for
+replay.
 
-CheckEvent is the single entry point the Host (games package) calls:
-feed it all prior payloads + the new payload; it reconstructs the board,
-parses the move, and routes to the referee. Non-player-action events
-(advance-turn, undo) return nil (no ruling needed).
+Retain for now because `GameSetup` (exported) is still used by
+the dealer path, and because any remaining non-lyn-rummy
+consumers in the host (if any) would break on removal.
+Candidate for a scorched-earth cleanup pass when the retire
+list is audited.
 
-ReconstructBoard is deterministic replay: first payload must be a
-game_setup, subsequent player-action payloads apply stacks_to_remove /
-stacks_to_add in order. This is how the host maintains no in-memory game
-state — every ruling is recomputed from event_ids.
+## What still matters here
+
+- `GameSetup` — the "photo" the dealer returns. Pre-dates the
+  wire-action format but is still the shape that
+  `BuildDoubleDeck` / `DealFullGame` produce.
+- Package-internal helpers that happen to be co-located.
+
+## What is dead or dying
+
+- `CheckEvent`, `ParseMoveEvent`, `ReconstructBoard` — the
+  diff-based host dispatch. Not called from the new
+  Elm-session flow. If a consumer still calls it, that
+  consumer is on the ripped code path.
+- `wire*` diff structs (`wireBoardEvent`, `wireMoveEvent`,
+  etc.). Superseded by `WireAction` in `wire_action.go`.
+
+## Drift caveat
+
+The original sidecar described `CheckEvent` as "the single
+entry point the Host (games package) calls" — that host is
+the one that was ripped. Future-Claude investigating events.go
+should verify current consumers (`grep -rn 'CheckEvent\|ReconstructBoard'`)
+before changing anything; may turn out to have zero live
+call-sites and be fully deletable.

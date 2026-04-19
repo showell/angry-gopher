@@ -2,14 +2,12 @@
 
 Decision logic for card-merging and placement — what merges
 are possible and what is the resulting `BoardChange`. No DOM,
-no rendering. Faithful port of
-`angry-cat/src/lyn_rummy/game/board_actions.ts`.
+no rendering.
 
 ## Status
 
 - **Label:** WORKHORSE. Pure functions; stable decision rules.
-- **Source:** `angry-cat/src/lyn_rummy/game/board_actions.ts` (119 LOC).
-- **Tests:** ported from `board_actions_test.ts`.
+- **Tests:** `tests/LynRummy/BoardActionsTest.elm`.
 
 ## Key invariants (preserved from TS)
 

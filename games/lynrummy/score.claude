@@ -3,10 +3,9 @@ just_use score.go
 # label: WORKHORSE
 # role: domain — LynRummy scoring (Go side)
 
-Mirror of `elm-port-docs/src/LynRummy/Score.elm` (itself a port
-of `angry-cat/src/lyn_rummy/core/score.ts`). Flat per-card
-scoring: each card in a valid 3+ family is worth one
-stackTypeValue.
+Mirror of `elm-port-docs/src/LynRummy/Score.elm`. Flat
+per-card scoring: each card in a valid 3+ family is worth
+one stackTypeValue.
 
 ## Exposed surface
 

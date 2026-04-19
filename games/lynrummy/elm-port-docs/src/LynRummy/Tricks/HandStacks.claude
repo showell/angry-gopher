@@ -1,0 +1,65 @@
+# Tricks/HandStacks.elm — WORKHORSE
+
+HAND_STACKS: the hand already contains 3+ cards that form a
+complete set or run. Push the whole group onto the board as
+a new stack.
+
+## Status
+
+- **Label:** WORKHORSE. Stable.
+- **Mirrors:** Go `games/lynrummy/tricks/hand_stacks.go`.
+
+## What it finds
+
+Three orthogonal searches, results concatenated:
+
+1. **Sets** — group hand cards by value, take values with ≥3
+   distinct suits, confirm classification is `Set`.
+2. **Pure runs** — group by suit, find maximal
+   consecutive-value runs of length ≥ 3.
+3. **Red-black runs** — across all suits, find maximal
+   consecutive-value runs with alternating color of length
+   ≥ 3.
+
+## Emit order is LOAD-BEARING
+
+`findCandidateGroups` emits: sets (sorted by value via
+`Dict`), then pure runs (sorted by suit), then rb runs. Order
+must match Go exactly for fixture determinism —
+conformance tests pin the same sequence on both sides.
+
+## Dedupe by value
+
+Both `longestPureRuns` and `findRbRuns` call `dedupeByValue`
+first. In a double-deck hand, two 5♥s can't both sit in the
+same pure run (the run's stack-type classification would
+reject the dup). Dedupe happens pre-sort to keep consecutive
+detection honest.
+
+## `pickValidSet` — first-distinct-suit per value
+
+When the hand has multiple cards of the same value+suit
+(double-deck dup), we pick only the first encountered per
+suit. The classification check then confirms the picked trio
+(or more) is actually a valid Set. Without this, picking
+arbitrary cards could yield a Dup.
+
+## Apply-time safety
+
+`applyHandStacks` re-runs `isValidGroup` before committing,
+and pushes the group as `FreshlyPlayed` board cards at
+`dummyLoc`. If validation fails (shouldn't in practice since
+findPlays validated), returns `(board, [])`.
+
+## Key exports
+
+- `trick : Trick` — `id = "hand_stacks"`, description: "You
+  already have 3+ cards in your hand that form a set or
+  run!"
+
+## Pointers
+
+- Go counterpart: `games/lynrummy/tricks/hand_stacks.go`.
+- Depends on: `Card`, `CardStack`, `StackType.getStackType`,
+  `Tricks.Helpers`, `Dict`.
+- Consumer: `Tricks.Hint.allTricks`.

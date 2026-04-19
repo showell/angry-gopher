@@ -7,7 +7,9 @@ Owns stack-level types and operations. Three notable shapes:
 
 - **Cached stackType.** CardStack carries a cached StackType set by
   NewCardStack; MarshalJSON drops it and UnmarshalJSON re-derives it so
-  stale caches can never ride the wire.
+  stale caches can never ride the wire. (Elm side derives on demand —
+  `CardStack.stackType` is a function, not a stored field. Different
+  strategy, same wire shape because the field never travels anyway.)
 - **Location accepts floats.** Browsers ship fractional pixel positions
   (e.g. 401.9333…); UnmarshalJSON decodes via float64 and truncates to
   int, matching what checkGeometry would treat them as anyway. This is
