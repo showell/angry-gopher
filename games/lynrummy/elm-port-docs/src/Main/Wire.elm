@@ -34,13 +34,14 @@ Extracted 2026-04-19 from the pre-split `Main.elm` monolith.
 
 import Http
 import Json.Decode as Decode exposing (Decoder)
+import Json.Encode as Encode exposing (Value)
 import LynRummy.Card as Card
 import LynRummy.CardStack as CardStack
 import LynRummy.Hand exposing (Hand)
 import LynRummy.PlayerTurn exposing (CompleteTurnResult(..))
 import LynRummy.WireAction as WA exposing (WireAction)
 import Main.Msg exposing (Msg(..))
-import Main.State exposing (ActionLogBundle, CompleteTurnOutcome, RemoteState)
+import Main.State exposing (ActionLogBundle, ActionLogEntry, CompleteTurnOutcome, GesturePoint, RemoteState)
 
 
 
@@ -94,12 +95,17 @@ action EXCEPT CompleteTurn — merge_hand, merge_stack, split,
 move_stack, place_hand. Errors are currently ignored
 (`ActionSent` handler is a no-op); server-side validation +
 broadcast arrives with multiplayer.
+
+`maybeGesturePath` carries the behaviorist telemetry captured
+during the drag that produced `action` (see `Main.State.GesturePoint`).
+Pass `Nothing` for actions that didn't originate from a drag
+(button clicks, replay-emitted, etc.).
 -}
-sendAction : Int -> WireAction -> Cmd Msg
-sendAction sessionId action =
+sendAction : Int -> WireAction -> Maybe (List GesturePoint) -> Cmd Msg
+sendAction sessionId action maybeGesturePath =
     Http.post
         { url = "/gopher/lynrummy-elm/actions?session=" ++ String.fromInt sessionId
-        , body = Http.jsonBody (WA.encode action)
+        , body = Http.jsonBody (encodeEnvelope action maybeGesturePath)
         , expect = Http.expectWhatever ActionSent
         }
 
@@ -114,9 +120,47 @@ sendCompleteTurn : Int -> Cmd Msg
 sendCompleteTurn sessionId =
     Http.post
         { url = "/gopher/lynrummy-elm/actions?session=" ++ String.fromInt sessionId
-        , body = Http.jsonBody (WA.encode WA.CompleteTurn)
+        , body = Http.jsonBody (encodeEnvelope WA.CompleteTurn Nothing)
         , expect = Http.expectStringResponse CompleteTurnResponded decodeCompleteTurnResponse
         }
+
+
+
+-- ENVELOPE
+
+
+{-| Outbound POST body: `{"action": <WireAction>, "gesture_metadata": <optional>}`.
+Server decodes both sibling fields. Keeps the action JSON clean
+(no telemetry fields polluting `DecodeWireAction`) and leaves
+headroom for later telemetry kinds (click timings, undos) to
+drop in alongside `gesture_metadata` without touching
+WireAction's shape.
+-}
+encodeEnvelope : WireAction -> Maybe (List GesturePoint) -> Value
+encodeEnvelope action maybeGesturePath =
+    case maybeGesturePath of
+        Nothing ->
+            Encode.object [ ( "action", WA.encode action ) ]
+
+        Just [] ->
+            Encode.object [ ( "action", WA.encode action ) ]
+
+        Just path ->
+            Encode.object
+                [ ( "action", WA.encode action )
+                , ( "gesture_metadata"
+                  , Encode.object [ ( "path", Encode.list encodeGesturePoint path ) ]
+                  )
+                ]
+
+
+encodeGesturePoint : GesturePoint -> Value
+encodeGesturePoint p =
+    Encode.object
+        [ ( "t", Encode.float p.tMs )
+        , ( "x", Encode.int p.x )
+        , ( "y", Encode.int p.y )
+        ]
 
 
 
@@ -168,7 +212,34 @@ actionLogDecoder : Decoder ActionLogBundle
 actionLogDecoder =
     Decode.map2 ActionLogBundle
         (Decode.field "initial_state" innerStateDecoder)
-        (Decode.field "actions" (Decode.list WA.decoder))
+        (Decode.field "actions" (Decode.list actionLogEntryDecoder))
+
+
+{-| Each action in `/actions` comes as the same envelope shape
+as the inbound POST body:
+
+    {"action": <WireAction>, "gesture_metadata": <optional>}
+
+Gesture metadata is pulled into `gesturePath` when present;
+everything else the server stores (timing, viewport, etc. —
+future additions) is ignored at decode time since replay only
+needs the path for now.
+-}
+actionLogEntryDecoder : Decoder ActionLogEntry
+actionLogEntryDecoder =
+    Decode.map2 ActionLogEntry
+        (Decode.field "action" WA.decoder)
+        (Decode.maybe
+            (Decode.at [ "gesture_metadata", "path" ] (Decode.list gesturePointDecoder))
+        )
+
+
+gesturePointDecoder : Decoder GesturePoint
+gesturePointDecoder =
+    Decode.map3 (\t x y -> { tMs = t, x = x, y = y })
+        (Decode.field "t" Decode.float)
+        (Decode.field "x" Decode.int)
+        (Decode.field "y" Decode.int)
 
 
 

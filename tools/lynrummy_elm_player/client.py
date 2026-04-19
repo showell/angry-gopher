@@ -74,9 +74,20 @@ class Client:
 
     # --- Action submission (one method per WireAction constructor) ---
 
-    def send_action(self, session_id, action):
-        """POST /actions?session=<id> with the given WireAction body."""
-        body = json.dumps(action).encode("utf-8")
+    def send_action(self, session_id, action, gesture_metadata=None):
+        """POST /actions?session=<id>.
+
+        Body is an envelope:
+            {"action": <WireAction>, "gesture_metadata": <optional>}
+
+        Python callers never originate drags, so gesture_metadata
+        is None by default (human-only field). Pass a dict to
+        synthesize telemetry for testing.
+        """
+        envelope = {"action": action}
+        if gesture_metadata is not None:
+            envelope["gesture_metadata"] = gesture_metadata
+        body = json.dumps(envelope).encode("utf-8")
         return self._post(
             f"{self.base}/actions?session={session_id}",
             body,

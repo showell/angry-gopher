@@ -42,7 +42,7 @@ import Main.Gesture as Gesture
         )
 import Main.Msg exposing (Msg(..))
 import Main.View as View exposing (popupForCompleteTurn, statusForCompleteTurn, view)
-import Main.Wire as Wire exposing (fetchActionLog, fetchNewSession, fetchRemoteState, sendAction, sendCompleteTurn)
+import Main.Wire as Wire exposing (fetchActionLog, fetchNewSession, fetchRemoteState, sendCompleteTurn)
 import Main.State as State
     exposing
         ( ActionLogBundle
@@ -55,6 +55,7 @@ import Main.State as State
         , Point
         , PopupContent
         , RemoteState
+        , ReplayAnimation(..)
         , ReplayProgress
         , StatusKind(..)
         , StatusMessage
@@ -120,17 +121,25 @@ update msg model =
         MouseDownOnHandCard idx clientPoint ->
             startHandDrag idx clientPoint model
 
-        MouseMove pos ->
+        MouseMove pos tMs ->
             case model.drag of
                 Dragging info ->
                     let
                         nextIntent =
                             GA.clickIntentAfterMove info.originalCursor pos info.clickIntent
+
+                        nextPath =
+                            info.gesturePath
+                                ++ [ { tMs = tMs, x = pos.x, y = pos.y } ]
                     in
                     ( { model
                         | drag =
                             Dragging
-                                { info | cursor = pos, clickIntent = nextIntent }
+                                { info
+                                    | cursor = pos
+                                    , clickIntent = nextIntent
+                                    , gesturePath = nextPath
+                                }
                       }
                     , Cmd.none
                     )
@@ -321,36 +330,14 @@ update msg model =
             ( { rewound
                 | status = { text = "Replaying…", kind = Inform }
                 , replay = Just { step = 0, paused = False }
+                , replayAnim = NotAnimating
+                , drag = NotDragging
               }
             , Cmd.none
             )
 
-        ReplayTick _ ->
-            case model.replay of
-                Nothing ->
-                    ( model, Cmd.none )
-
-                Just progress ->
-                    case listAt progress.step model.actionLog of
-                        Nothing ->
-                            -- Walked off the end: the final model state IS the
-                            -- authoritative state. Client owns its data — no
-                            -- server fetch needed.
-                            ( { model
-                                | replay = Nothing
-                                , status = { text = "Replay complete.", kind = Celebrate }
-                              }
-                            , Cmd.none
-                            )
-
-                        Just action ->
-                            -- Same update path a local gesture would take —
-                            -- the only thing replay mode changes is where the
-                            -- next action comes from.
-                            ( { model | replay = Just { progress | step = progress.step + 1 } }
-                                |> applyWireAction action
-                            , Cmd.none
-                            )
+        ReplayFrame nowPosix ->
+            replayFrame (toFloat (Time.posixToMillis nowPosix)) model
 
         ClickReplayPauseToggle ->
             case model.replay of
@@ -368,7 +355,8 @@ update msg model =
 
         ActionLogFetched (Ok bundle) ->
             ( { model
-                | actionLog = bundle.actions
+                | actionLog = List.map .action bundle.actions
+                , replayGestures = List.map .gesturePath bundle.actions
                 , replayBaseline = Just bundle.initialState
               }
             , Cmd.none
@@ -468,7 +456,341 @@ update msg model =
 -- applyWireAction and helpers now live in Main.Apply.
 
 
+-- REPLAY ANIMATION
+
+
+{-| Core replay state machine. Three phases:
+
+  - **NotAnimating** — transient / step-start. Look up the
+    action for `progress.step`; if the step is past the end,
+    finish replay. If the action has a gesture path AND a
+    resolvable source (board stack or hand card), enter
+    `Animating`. Otherwise apply immediately and enter
+    `Beating` for the 1-second inter-action hold.
+  - **Animating** — interpolate the cursor along the captured
+    path. When elapsed reaches path duration, apply the
+    action, clear the drag, and enter `Beating`.
+  - **Beating** — hold for 1s between actions (intentionally
+    NOT the real-world inter-drag interval; the human was
+    thinking / interrupted / distracted, and replaying that
+    silence would be misleading).
+
+Runs one step per animation frame; no-op when paused.
+-}
+replayFrame : Float -> Model -> ( Model, Cmd Msg )
+replayFrame nowMs model =
+    case model.replay of
+        Nothing ->
+            ( model, Cmd.none )
+
+        Just progress ->
+            if progress.paused then
+                ( model, Cmd.none )
+
+            else
+                case model.replayAnim of
+                    NotAnimating ->
+                        case actionAndGestureAt progress.step model of
+                            Nothing ->
+                                ( { model
+                                    | replay = Nothing
+                                    , replayAnim = NotAnimating
+                                    , drag = NotDragging
+                                    , status = { text = "Replay complete.", kind = Celebrate }
+                                  }
+                                , Cmd.none
+                                )
+
+                            Just ( action, maybePath ) ->
+                                case buildReplayAnimation action maybePath model nowMs of
+                                    Just anim ->
+                                        let
+                                            cursor =
+                                                interpPath anim.path 0
+                                        in
+                                        ( { model
+                                            | replayAnim = Animating anim
+                                            , drag = animatedDragState anim cursor
+                                          }
+                                        , Cmd.none
+                                        )
+
+                                    Nothing ->
+                                        -- No animation available — apply immediately, beat.
+                                        let
+                                            modelAfter =
+                                                applyWireAction action model
+                                        in
+                                        ( { modelAfter
+                                            | replayAnim = Beating { untilMs = nowMs + 1000 }
+                                            , drag = NotDragging
+                                          }
+                                        , Cmd.none
+                                        )
+
+                    Animating anim ->
+                        let
+                            duration =
+                                pathDuration anim.path
+
+                            elapsed =
+                                nowMs - anim.startMs
+                        in
+                        if elapsed >= duration then
+                            let
+                                modelAfter =
+                                    applyWireAction anim.pendingAction { model | drag = NotDragging }
+                            in
+                            ( { modelAfter
+                                | replayAnim = Beating { untilMs = nowMs + 1000 }
+                              }
+                            , Cmd.none
+                            )
+
+                        else
+                            let
+                                cursor =
+                                    interpPath anim.path elapsed
+                            in
+                            ( { model | drag = animatedDragState anim cursor }
+                            , Cmd.none
+                            )
+
+                    Beating { untilMs } ->
+                        if nowMs >= untilMs then
+                            ( { model
+                                | replay = Just { progress | step = progress.step + 1 }
+                                , replayAnim = NotAnimating
+                              }
+                            , Cmd.none
+                            )
+
+                        else
+                            ( model, Cmd.none )
+
+
+actionAndGestureAt : Int -> Model -> Maybe ( WireAction, Maybe (List State.GesturePoint) )
+actionAndGestureAt step model =
+    case ( listAt step model.actionLog, listAt step model.replayGestures ) of
+        ( Just action, Just maybePath ) ->
+            Just ( action, maybePath )
+
+        ( Just action, Nothing ) ->
+            Just ( action, Nothing )
+
+        _ ->
+            Nothing
+
+
+{-| Build the per-step animation bundle from an action + its
+captured path. Returns Nothing when the action type isn't
+drag-backed, or when the source card can't be resolved on the
+current board/hand (shouldn't happen mid-replay, but total).
+
+The captured path has viewport coordinates for the cursor
+position. Grab offset is derived to match the ORIGINAL drag-
+start formulas (halfWidth + 20) so the floater sits where
+it would have during the real drag.
+-}
+buildReplayAnimation :
+    WireAction
+    -> Maybe (List State.GesturePoint)
+    -> Model
+    -> Float
+    -> Maybe
+        { startMs : Float
+        , path : List State.GesturePoint
+        , source : DragSource
+        , grabOffset : Point
+        , pendingAction : WireAction
+        }
+buildReplayAnimation action maybePath model nowMs =
+    case maybePath of
+        Nothing ->
+            Nothing
+
+        Just [] ->
+            Nothing
+
+        Just path ->
+            case dragSourceForAction action model of
+                Nothing ->
+                    Nothing
+
+                Just ( source, grabOffset ) ->
+                    Just
+                        { startMs = nowMs
+                        , path = path
+                        , source = source
+                        , grabOffset = grabOffset
+                        , pendingAction = action
+                        }
+
+
+{-| Resolve the DragSource + grabOffset for a WireAction against
+the current model state. Mirrors startBoardCardDrag /
+startHandDrag offsets so the replay floater matches what the
+human saw.
+-}
+dragSourceForAction : WireAction -> Model -> Maybe ( DragSource, Point )
+dragSourceForAction action model =
+    case action of
+        WA.Split p ->
+            boardStackSource p.stackIndex model
+
+        WA.MergeStack p ->
+            boardStackSource p.sourceStack model
+
+        WA.MoveStack p ->
+            boardStackSource p.stackIndex model
+
+        WA.MergeHand p ->
+            handCardSource p.handCard model
+
+        WA.PlaceHand p ->
+            handCardSource p.handCard model
+
+        _ ->
+            Nothing
+
+
+boardStackSource : Int -> Model -> Maybe ( DragSource, Point )
+boardStackSource stackIndex model =
+    listAt stackIndex model.board
+        |> Maybe.map
+            (\stack ->
+                ( FromBoardStack stackIndex
+                , { x = CardStack.stackDisplayWidth stack // 2, y = 20 }
+                )
+            )
+
+
+handCardSource : Card -> Model -> Maybe ( DragSource, Point )
+handCardSource card model =
+    let
+        hand =
+            activeHand model
+    in
+    handCardIndex card hand.handCards
+        |> Maybe.map
+            (\idx ->
+                ( FromHandCard idx
+                , { x = CardStack.stackPitch // 2, y = 20 }
+                )
+            )
+
+
+handCardIndex : Card -> List HandCard -> Maybe Int
+handCardIndex target cards =
+    let
+        go i xs =
+            case xs of
+                [] ->
+                    Nothing
+
+                hc :: rest ->
+                    if hc.card == target then
+                        Just i
+
+                    else
+                        go (i + 1) rest
+    in
+    go 0 cards
+
+
+pathDuration : List State.GesturePoint -> Float
+pathDuration path =
+    case ( List.head path, List.head (List.reverse path) ) of
+        ( Just first, Just last ) ->
+            last.tMs - first.tMs
+
+        _ ->
+            0
+
+
+{-| Linear-interpolate cursor position along the gesture path.
+`elapsedMs` is relative to the first point's timestamp. Clamps
+to first/last point at the bounds.
+-}
+interpPath : List State.GesturePoint -> Float -> Point
+interpPath path elapsedMs =
+    case path of
+        [] ->
+            { x = 0, y = 0 }
+
+        first :: _ ->
+            let
+                targetTs =
+                    first.tMs + elapsedMs
+            in
+            interpPathHelp first first path targetTs
+
+
+interpPathHelp : State.GesturePoint -> State.GesturePoint -> List State.GesturePoint -> Float -> Point
+interpPathHelp prev first remaining targetTs =
+    case remaining of
+        [] ->
+            { x = prev.x, y = prev.y }
+
+        curr :: rest ->
+            if curr.tMs >= targetTs then
+                if curr.tMs == prev.tMs then
+                    { x = curr.x, y = curr.y }
+
+                else
+                    let
+                        frac =
+                            (targetTs - prev.tMs) / (curr.tMs - prev.tMs)
+
+                        frac_ =
+                            clamp 0 1 frac
+                    in
+                    { x = round (toFloat prev.x + frac_ * toFloat (curr.x - prev.x))
+                    , y = round (toFloat prev.y + frac_ * toFloat (curr.y - prev.y))
+                    }
+
+            else
+                interpPathHelp curr first rest targetTs
+
+
+{-| Synthesize a DragState from an animation bundle + current
+cursor. Good enough for `draggedOverlay` to render the floater;
+the wings / hoveredWing / clickIntent fields don't matter during
+replay animation.
+-}
+animatedDragState :
+    { a | source : DragSource, grabOffset : Point }
+    -> Point
+    -> DragState
+animatedDragState anim cursor =
+    Dragging
+        { source = anim.source
+        , cursor = cursor
+        , originalCursor = cursor
+        , grabOffset = anim.grabOffset
+        , wings = []
+        , hoveredWing = Nothing
+        , boardRect = Nothing
+        , clickIntent = Nothing
+        , gesturePath = []
+        }
+
+
+
 -- SUBSCRIPTIONS
+
+
+{-| MouseMove decoder that captures both the cursor point and
+the `MouseEvent.timeStamp`. Used only during an active drag.
+The timestamp is performance.now()-style (ms since the document's
+time origin, fractional) and is recorded into the drag's
+gesturePath for behaviorist telemetry.
+-}
+mouseMoveDecoder : Decoder Msg
+mouseMoveDecoder =
+    Decode.map2 MouseMove
+        pointDecoder
+        (Decode.field "timeStamp" Decode.float)
 
 
 subscriptions : Model -> Sub Msg
@@ -477,7 +799,7 @@ subscriptions model =
         dragSubs =
             case model.drag of
                 Dragging _ ->
-                    [ Browser.Events.onMouseMove (Decode.map MouseMove pointDecoder)
+                    [ Browser.Events.onMouseMove mouseMoveDecoder
                     , Browser.Events.onMouseUp (Decode.succeed MouseUp)
                     ]
 
@@ -491,7 +813,11 @@ subscriptions model =
                         []
 
                     else
-                        [ Time.every 500 ReplayTick ]
+                        -- onAnimationFrame (~60fps) drives both the
+                        -- drag-path interpolation and the 1s beat
+                        -- between actions. One subscription, all
+                        -- phases.
+                        [ Browser.Events.onAnimationFrame ReplayFrame ]
 
                 Nothing ->
                     []

@@ -33,9 +33,15 @@ Types:
   `Scold`. Drives the status bar text + colour.
 - `DragState` — `NotDragging | Dragging DragInfo`.
 - `DragInfo` — cursor, original cursor, grab offset, wings,
-  hovered wing, boardRect, clickIntent, source.
+  hovered wing, boardRect, clickIntent, source, gesturePath.
 - `DragSource` — `FromBoardStack Int | FromHandCard Int`.
 - `Point` — `{ x, y }`.
+- `GesturePoint` — `{ tMs, x, y }`. Behaviorist telemetry
+  sample captured per `MouseMove` during a drag; the whole
+  list is POSTed alongside the resulting WireAction as
+  `gesture_metadata`. `tMs` is the `MouseEvent.timeStamp`
+  (performance.now-style, document-lifetime relative,
+  fractional ms).
 - `Flags` — `{ initialSessionId : Maybe Int }`. HTML harness
   input.
 - `RemoteState` — server's authoritative state snapshot

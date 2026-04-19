@@ -19,20 +19,23 @@ import Time
 {-| Four flavours of constructor, grouped here for scan-ability:
 
   - **Pointer gestures** — MouseDownOnBoardCard,
-    MouseDownOnHandCard, MouseMove, MouseUp, WingEntered,
-    WingLeft, BoardRectReceived.
+    MouseDownOnHandCard, MouseMove (carries MouseEvent
+    timeStamp for behaviorist telemetry), MouseUp,
+    WingEntered, WingLeft, BoardRectReceived.
   - **Button clicks** — ClickCompleteTurn, ClickHint,
     ClickInstantReplay, ClickReplayPauseToggle, PopupOk.
   - **HTTP responses** — ActionSent (fire-and-forget),
     SessionReceived, StateRefreshed,
     CompleteTurnResponded, ActionLogFetched.
-  - **Timer** — ReplayTick.
+  - **Timer** — ReplayFrame (fires via onAnimationFrame
+    during replay; drives drag re-animation + inter-action
+    beat).
 
 -}
 type Msg
     = MouseDownOnBoardCard { stackIndex : Int, cardIndex : Int } Point
     | MouseDownOnHandCard Int Point
-    | MouseMove Point
+    | MouseMove Point Float
     | MouseUp
     | WingEntered WingId
     | WingLeft WingId
@@ -45,6 +48,6 @@ type Msg
     | CompleteTurnResponded (Result Http.Error CompleteTurnOutcome)
     | PopupOk
     | ClickInstantReplay
-    | ReplayTick Time.Posix
+    | ReplayFrame Time.Posix
     | ClickReplayPauseToggle
     | ActionLogFetched (Result Http.Error ActionLogBundle)

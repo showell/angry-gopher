@@ -59,6 +59,12 @@ CREATE TABLE IF NOT EXISTS lynrummy_elm_actions (
     seq INTEGER NOT NULL,
     action_kind TEXT NOT NULL,
     action_json TEXT NOT NULL,
+    -- Behaviorist telemetry for drag-derived actions (Split,
+    -- MergeStack, MergeHand, PlaceHand, MoveStack). JSON blob with
+    -- raw pointer path, pointer type, viewport at drag start, and
+    -- devicePixelRatio. NULL for non-drag actions (CompleteTurn,
+    -- Undo, PlayTrick, TrickResult) and for pre-telemetry rows.
+    gesture_metadata TEXT,
     created_at INTEGER NOT NULL
 );
 

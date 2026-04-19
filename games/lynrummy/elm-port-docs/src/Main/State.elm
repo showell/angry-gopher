@@ -1,14 +1,17 @@
 module Main.State exposing
     ( ActionLogBundle
+    , ActionLogEntry
     , CompleteTurnOutcome
     , DragInfo
     , DragSource(..)
     , DragState(..)
     , Flags
+    , GesturePoint
     , Model
     , Point
     , PopupContent
     , RemoteState
+    , ReplayAnimation(..)
     , ReplayProgress
     , StatusKind(..)
     , StatusMessage
@@ -81,26 +84,58 @@ type alias Model =
     , hintedCards : List Card
     , popup : Maybe PopupContent
     , actionLog : List WireAction
+    , replayGestures : List (Maybe (List GesturePoint))
     , replay : Maybe ReplayProgress
+    , replayAnim : ReplayAnimation
     , replayBaseline : Maybe RemoteState
     }
 
 
-{-| Replay progress: a walker over `actionLog` that ticks every
-500ms (see subscriptions in Main). `step` is the index of the
-NEXT action to apply. When it reaches `List.length log`, replay
-stops and `replay` returns to `Nothing`.
+{-| Replay progress: a walker over `actionLog`. `step` is the
+index of the action to play NEXT. When it reaches
+`List.length log`, replay stops and `replay` returns to
+`Nothing`.
 
-The walker doesn't track its own state — it just updates the
-live Model via `applyWireAction`, same as any other input
-source. "Capture the input, update the data structure, re-draw
-the view."
-
+Subscription during replay is `Browser.Events.onAnimationFrame`
+(not a fixed Time.every tick) so drag animations can interpolate
+cursor position smoothly. See `replayAnim` for per-step
+animation state.
 -}
 type alias ReplayProgress =
     { step : Int
     , paused : Bool
     }
+
+
+{-| Per-step animation state for Instant Replay. Separated from
+`ReplayProgress` so the replay walker can be driven at real-time
+cadence (matching the captured gesture durations) for drag-
+derived actions, and a fixed 1-second "beat" between actions.
+
+Phases:
+
+  - **NotAnimating** — transient: between `step` increment and
+    the first animation frame of the new step. Replay init
+    enters here.
+  - **Animating** — a drag-derived action is replaying. The
+    cursor position is interpolated along `path` by
+    `(nowMs - startMs)`. When elapsed ≥ path duration, apply
+    the action and switch to `Beating`.
+  - **Beating** — holding a 1-second gap between actions.
+    When `nowMs ≥ untilMs`, advance `step` and return to
+    `NotAnimating`.
+
+-}
+type ReplayAnimation
+    = NotAnimating
+    | Animating
+        { startMs : Float
+        , path : List GesturePoint
+        , source : DragSource
+        , grabOffset : Point
+        , pendingAction : WireAction
+        }
+    | Beating { untilMs : Float }
 
 
 {-| Cheapest-possible popup for turn-boundary ceremony. One
@@ -139,6 +174,7 @@ type alias DragInfo =
     , hoveredWing : Maybe WingId
     , boardRect : Maybe GA.Rect
     , clickIntent : Maybe Int
+    , gesturePath : List GesturePoint
     }
 
 
@@ -149,6 +185,14 @@ type DragSource
 
 type alias Point =
     { x : Int, y : Int }
+
+
+{-| Behaviorist telemetry sample captured during a drag.
+`tMs` is the `MouseEvent.timeStamp` (performance.now-style,
+document-lifetime relative). `x`/`y` are viewport coords.
+-}
+type alias GesturePoint =
+    { tMs : Float, x : Int, y : Int }
 
 
 
@@ -189,11 +233,19 @@ type alias RemoteState =
 {-| Bundle returned by /sessions/:id/actions — the action log
 plus the session-specific initial-state snapshot. Initial state
 lets `ClickInstantReplay` rewind to the session's actual seeded
-deal instead of a hardcoded Dealer fixture.
+deal instead of a hardcoded Dealer fixture. Each action entry
+also carries any captured gesture telemetry, so replay can
+re-animate the original drag at real speed.
 -}
 type alias ActionLogBundle =
     { initialState : RemoteState
-    , actions : List WireAction
+    , actions : List ActionLogEntry
+    }
+
+
+type alias ActionLogEntry =
+    { action : WireAction
+    , gesturePath : Maybe (List GesturePoint)
     }
 
 
@@ -305,6 +357,8 @@ baseModel =
     , hintedCards = []
     , popup = Nothing
     , actionLog = []
+    , replayGestures = []
     , replay = Nothing
+    , replayAnim = NotAnimating
     , replayBaseline = Nothing
     }

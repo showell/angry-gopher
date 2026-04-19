@@ -123,6 +123,7 @@ startBoardCardDrag { stackIndex, cardIndex } clientPoint model =
                         , hoveredWing = Nothing
                         , boardRect = Nothing
                         , clickIntent = Just cardIndex
+                        , gesturePath = []
                         }
               }
             , fetchBoardRect
@@ -157,6 +158,7 @@ startHandDrag idx clientPoint model =
                         , hoveredWing = Nothing
                         , boardRect = Nothing
                         , clickIntent = Nothing
+                        , gesturePath = []
                         }
               }
             , fetchBoardRect
@@ -212,13 +214,23 @@ handleMouseUp model =
                         Nothing ->
                             modelAfterDragClear
 
+                gesturePathForLog =
+                    case info.gesturePath of
+                        [] ->
+                            Nothing
+
+                        path ->
+                            Just path
+
                 ( finalModel, cmd ) =
                     case ( maybeAction, modelAfterAction.sessionId ) of
                         ( Just action, Just sid ) ->
                             ( { modelAfterAction
                                 | actionLog = modelAfterAction.actionLog ++ [ action ]
+                                , replayGestures =
+                                    modelAfterAction.replayGestures ++ [ gesturePathForLog ]
                               }
-                            , Wire.sendAction sid action
+                            , Wire.sendAction sid action (Just info.gesturePath)
                             )
 
                         _ ->

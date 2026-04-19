@@ -129,9 +129,18 @@ func lynrummyElmActions(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "read body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	action, err := lynrummy.DecodeWireAction(body)
+	var env struct {
+		Action          json.RawMessage `json:"action"`
+		GestureMetadata json.RawMessage `json:"gesture_metadata,omitempty"`
+	}
+	if err := json.Unmarshal(body, &env); err != nil || len(env.Action) == 0 {
+		log.Printf("lynrummy-elm action: envelope parse err=%v body=%s", err, body)
+		http.Error(w, "expected envelope {action, gesture_metadata?}", http.StatusBadRequest)
+		return
+	}
+	action, err := lynrummy.DecodeWireAction(env.Action)
 	if err != nil {
-		log.Printf("lynrummy-elm action: decode err=%v body=%s", err, body)
+		log.Printf("lynrummy-elm action: decode err=%v action=%s", err, env.Action)
 		http.Error(w, "decode: "+err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -220,17 +229,21 @@ func lynrummyElmActions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var gestureArg interface{}
+	if len(env.GestureMetadata) > 0 && string(env.GestureMetadata) != "null" {
+		gestureArg = string(env.GestureMetadata)
+	}
 	if _, err := DB.Exec(
-		`INSERT INTO lynrummy_elm_actions (session_id, seq, action_kind, action_json, created_at) VALUES (?, ?, ?, ?, ?)`,
-		sessionID, nextSeq, action.ActionKind(), string(body), time.Now().Unix(),
+		`INSERT INTO lynrummy_elm_actions (session_id, seq, action_kind, action_json, gesture_metadata, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
+		sessionID, nextSeq, action.ActionKind(), string(env.Action), gestureArg, time.Now().Unix(),
 	); err != nil {
 		log.Printf("lynrummy-elm action: insert err=%v", err)
 		http.Error(w, "insert: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	log.Printf("lynrummy-elm action: session=%d seq=%d kind=%s payload=%s",
-		sessionID, nextSeq, action.ActionKind(), body)
+	log.Printf("lynrummy-elm action: session=%d seq=%d kind=%s payload=%s gesture=%d",
+		sessionID, nextSeq, action.ActionKind(), env.Action, len(env.GestureMetadata))
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	if turnResult != "" {
 		dealtJSON, err := json.Marshal(dealtCards)
@@ -630,7 +643,7 @@ func lynrummyElmSessionActions(w http.ResponseWriter, idStr string) {
 	}
 
 	rows, err := DB.Query(
-		`SELECT action_json FROM lynrummy_elm_actions WHERE session_id = ? ORDER BY seq`,
+		`SELECT action_json, gesture_metadata FROM lynrummy_elm_actions WHERE session_id = ? ORDER BY seq`,
 		id,
 	)
 	if err != nil {
@@ -639,19 +652,31 @@ func lynrummyElmSessionActions(w http.ResponseWriter, idStr string) {
 	}
 	defer rows.Close()
 
+	// Each action entry is an envelope-shaped object:
+	//   {"action": <WireAction>, "gesture_metadata": <nullable>}
+	// Same shape as the inbound POST body; keeps capture and
+	// replay on the same wire contract.
 	var buf bytes.Buffer
 	fmt.Fprintf(&buf, `{"session_id":%d,"initial_state":%s,"actions":[`, id, initialJSON)
 	first := true
 	for rows.Next() {
 		var payload string
-		if err := rows.Scan(&payload); err != nil {
+		var gesture sql.NullString
+		if err := rows.Scan(&payload, &gesture); err != nil {
 			continue
 		}
 		if !first {
 			buf.WriteByte(',')
 		}
 		first = false
+		buf.WriteByte('{')
+		buf.WriteString(`"action":`)
 		buf.WriteString(payload)
+		if gesture.Valid && gesture.String != "" {
+			buf.WriteString(`,"gesture_metadata":`)
+			buf.WriteString(gesture.String)
+		}
+		buf.WriteByte('}')
 	}
 	buf.WriteString("]}")
 
