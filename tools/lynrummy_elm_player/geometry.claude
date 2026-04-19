@@ -1,0 +1,34 @@
+just_use geometry.py
+
+# label: EARLY (client-side geometry)
+# role: agent tool — collision detection + open-spot placement
+
+Client-side LynRummy board geometry. Server (Go) produces
+logical board deltas at dummyLoc = (0,0); each client decides
+where stacks actually sit. Different humans have different
+tidying approaches; this module is one style (find first
+row-major open slot).
+
+## Surface
+
+- `find_open_loc(existing, card_count)` → `{top, left}`.
+  Grid-sweep from (0,0) in 10px steps; fallback to bottom-left
+  corner.
+- `stack_width(n)`, `stack_rect(stack)`, `rects_overlap(a, b)`,
+  `pad_rect(r, margin)` — pure geometry primitives.
+- `out_of_bounds(stack)` — True if stack extends past the
+  800×600 board.
+- `find_violation(board)` → index of the FIRST stack that breaks
+  the rule, or None. Callers iterate: fix one, re-check.
+
+## Why client-side
+
+The rule "no overlap, in bounds" is enforced by the Go referee
+at complete_turn. Who PICKS the locations is a client concern.
+The server's tricks put new stacks at (0,0) as a logical
+placeholder; this module is how the Python auto_player honours
+the rule.
+
+Consumer: `auto_player.py` (settle pass after each action).
+Referee counterpart: `games/lynrummy/board_geometry.go`
+(checkGeometry). Constants match.

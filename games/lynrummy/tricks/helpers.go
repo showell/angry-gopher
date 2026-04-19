@@ -5,17 +5,13 @@ package tricks
 
 import "angry-gopher/games/lynrummy"
 
-// placerBounds is the board region tricks must stay inside when
-// placing freshly-created stacks. Matches the referee's bounds
-// (views/lynrummy_elm.go complete_turn gate) so every placement
-// the tricks pick can survive ValidateTurnComplete.
-var placerBounds = lynrummy.BoardBounds{MaxWidth: 800, MaxHeight: 600, Margin: 5}
-
-// mergeScratchLoc is a throwaway Location for ephemeral stacks
-// that exist only as a merge argument and never reach the
-// returned board. The merge routines preserve the target stack's
-// loc, so the scratch value is invisible to callers.
-var mergeScratchLoc = lynrummy.Location{Top: 0, Left: 0}
+// dummyLoc is the placeholder location for a freshly-created stack
+// that a trick appends to the board. Matches TS's DUMMY_LOC.
+// Geometry is a client-side concern: the client (Python auto_player
+// or Elm UI) is responsible for issuing move_stack actions to put
+// new stacks in collision-free spots. The server just produces the
+// logical delta.
+var dummyLoc = lynrummy.Location{Top: 0, Left: 0}
 
 // freshlyPlayed wraps a HandCard's Card as a newly-placed
 // BoardCard. Mirrors TS's freshly_played helper.
@@ -23,14 +19,14 @@ func freshlyPlayed(hc lynrummy.HandCard) lynrummy.BoardCard {
 	return lynrummy.BoardCard{Card: hc.Card, State: lynrummy.FreshlyPlayed}
 }
 
-// singleStackFromCard wraps a raw Card as a singleton CardStack
-// used as a merge argument only — the caller merges it into a real
-// stack and throws the wrapper away, so the location is scratch.
-// Mirrors TS's single_stack_from_card.
+// singleStackFromCard wraps a raw Card as a singleton CardStack at
+// dummyLoc, used as a merge argument only — the caller merges it
+// into a real stack and throws the wrapper away, so the location
+// is never observed. Mirrors TS's single_stack_from_card.
 func singleStackFromCard(c lynrummy.Card) lynrummy.CardStack {
 	return lynrummy.NewCardStack(
 		[]lynrummy.BoardCard{{Card: c, State: lynrummy.FreshlyPlayed}},
-		mergeScratchLoc,
+		dummyLoc,
 	)
 }
 
@@ -48,19 +44,14 @@ func substituteInStack(
 	return lynrummy.NewCardStack(newCards, stack.Loc)
 }
 
-// pushNewStack appends a new CardStack to the board at a
-// collision-free Location computed via FindOpenLoc. Used by
-// tricks that produce "form a brand-new group" as their apply
-// behavior. Mirrors TS's push_new_stack, diverging only by
-// computing a real Location instead of DUMMY_LOC — required
-// after bcaea72 moved board-diff computation server-side, since
-// the auto-player no longer places stacks client-side.
+// pushNewStack appends a new CardStack (at dummyLoc) to the board.
+// Used by tricks that produce "form a brand-new group" as their
+// apply behavior. Mirrors TS's push_new_stack.
 func pushNewStack(
 	board []lynrummy.CardStack,
 	boardCards []lynrummy.BoardCard,
 ) []lynrummy.CardStack {
-	loc := lynrummy.FindOpenLoc(board, len(boardCards), placerBounds)
-	return append(board, lynrummy.NewCardStack(boardCards, loc))
+	return append(board, lynrummy.NewCardStack(boardCards, dummyLoc))
 }
 
 // extractCard removes the card at (stackIdx, cardIdx) from the
@@ -114,10 +105,9 @@ func extractCard(
 	if isRun && cardIdx >= 3 && (size-cardIdx-1) >= 3 {
 		left := lynrummy.NewCardStack(
 			append([]lynrummy.BoardCard{}, cards[:cardIdx]...), stack.Loc)
+		right := lynrummy.NewCardStack(
+			append([]lynrummy.BoardCard{}, cards[cardIdx+1:]...), dummyLoc)
 		out[stackIdx] = left
-		rightCards := append([]lynrummy.BoardCard{}, cards[cardIdx+1:]...)
-		rightLoc := lynrummy.FindOpenLoc(out, len(rightCards), placerBounds)
-		right := lynrummy.NewCardStack(rightCards, rightLoc)
 		out = append(out, right)
 		return out, cards[cardIdx], true
 	}
