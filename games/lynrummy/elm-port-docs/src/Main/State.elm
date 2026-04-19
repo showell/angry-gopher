@@ -1,0 +1,310 @@
+module Main.State exposing
+    ( ActionLogBundle
+    , CompleteTurnOutcome
+    , DragInfo
+    , DragSource(..)
+    , DragState(..)
+    , Flags
+    , Model
+    , Point
+    , PopupContent
+    , RemoteState
+    , ReplayProgress
+    , StatusKind(..)
+    , StatusMessage
+    , activeHand
+    , baseModel
+    , boardDomId
+    , setActiveHand
+    )
+
+{-| All application-wide data types and the initial Model.
+
+Extracted from the pre-split Main.elm monolith 2026-04-19 during
+the refactor that unwound "one big module" (an artifact of the
+original TS game's deployment constraint that no longer applies).
+
+This module is pure types + trivial helpers — no I/O, no
+rendering, no update logic, no Msg. Other Main.* modules import
+from here; it imports only the LynRummy domain primitives. That
+makes State a safe leaf: changes here ripple out, but nothing
+ripples in.
+
+-}
+
+import LynRummy.Card exposing (Card)
+import LynRummy.CardStack exposing (CardStack)
+import LynRummy.GestureArbitration as GA
+import LynRummy.Hand as Hand exposing (Hand)
+import LynRummy.PlayerTurn exposing (CompleteTurnResult)
+import LynRummy.Score as Score
+import LynRummy.WingOracle exposing (WingId)
+import LynRummy.WireAction exposing (WireAction)
+import LynRummy.Dealer
+
+
+
+-- MODEL
+
+
+{-| The full client state. Field groups:
+
+  - **Game-state fields** — shape of `LynRummy.Game.GameState`,
+    threaded through `Main.Apply.applyWireAction` and
+    `Game.applyCompleteTurn`. Changes here reflect real game
+    progression.
+  - **UI-layer fields** — drag state, popup, status, score
+    display, replay progress. These are the client's own
+    concerns that never cross the wire.
+
+The extensible-record pattern lets `Game.applyCompleteTurn`
+operate on Model directly without wrapping/unwrapping.
+
+-}
+type alias Model =
+    { -- Game-state fields.
+      board : List CardStack
+    , hands : List Hand
+    , scores : List Int
+    , activePlayerIndex : Int
+    , turnIndex : Int
+    , deck : List Card
+    , cardsPlayedThisTurn : Int
+    , victorAwarded : Bool
+    , turnStartBoardScore : Int
+
+    -- UI-layer fields.
+    , drag : DragState
+    , sessionId : Maybe Int
+    , status : StatusMessage
+    , score : Int
+    , hintedCards : List Card
+    , popup : Maybe PopupContent
+    , actionLog : List WireAction
+    , replay : Maybe ReplayProgress
+    , replayBaseline : Maybe RemoteState
+    }
+
+
+{-| Replay progress: a walker over `actionLog` that ticks every
+500ms (see subscriptions in Main). `step` is the index of the
+NEXT action to apply. When it reaches `List.length log`, replay
+stops and `replay` returns to `Nothing`.
+
+The walker doesn't track its own state — it just updates the
+live Model via `applyWireAction`, same as any other input
+source. "Capture the input, update the data structure, re-draw
+the view."
+
+-}
+type alias ReplayProgress =
+    { step : Int
+    , paused : Bool
+    }
+
+
+{-| Cheapest-possible popup for turn-boundary ceremony. One
+character speaks (admin), delivers a multi-line message, user
+clicks OK to dismiss + advance. The body is the full text —
+caller builds it with whatever narrative (you scored N, we'll
+deal M next turn, etc.).
+-}
+type alias PopupContent =
+    { admin : String
+    , body : String
+    }
+
+
+type alias StatusMessage =
+    { text : String, kind : StatusKind }
+
+
+type StatusKind
+    = Inform
+    | Celebrate
+    | Scold
+
+
+type DragState
+    = NotDragging
+    | Dragging DragInfo
+
+
+type alias DragInfo =
+    { source : DragSource
+    , cursor : Point
+    , originalCursor : Point
+    , grabOffset : Point
+    , wings : List WingId
+    , hoveredWing : Maybe WingId
+    , boardRect : Maybe GA.Rect
+    , clickIntent : Maybe Int
+    }
+
+
+type DragSource
+    = FromBoardStack Int
+    | FromHandCard Int
+
+
+type alias Point =
+    { x : Int, y : Int }
+
+
+
+-- FLAGS
+
+
+{-| Flags from the HTML harness. `initialSessionId` comes from
+the URL hash (e.g., "#12") — present on reload so the UI can
+resume the same game rather than dropping back to the lobby.
+-}
+type alias Flags =
+    { initialSessionId : Maybe Int }
+
+
+
+-- SERVER-RESPONSE DATA SHAPES
+
+
+{-| Authoritative game-state snapshot as the server computes it.
+Elm pulls this once on session bootstrap; after that, all state
+updates flow through `Main.Apply.applyWireAction` /
+`Game.applyCompleteTurn`. Shape carries every field required to
+reconstitute the autonomous game.
+-}
+type alias RemoteState =
+    { board : List CardStack
+    , hands : List Hand
+    , scores : List Int
+    , activePlayerIndex : Int
+    , turnIndex : Int
+    , deck : List Card
+    , cardsPlayedThisTurn : Int
+    , victorAwarded : Bool
+    , turnStartBoardScore : Int
+    }
+
+
+{-| Bundle returned by /sessions/:id/actions — the action log
+plus the session-specific initial-state snapshot. Initial state
+lets `ClickInstantReplay` rewind to the session's actual seeded
+deal instead of a hardcoded Dealer fixture.
+-}
+type alias ActionLogBundle =
+    { initialState : RemoteState
+    , actions : List WireAction
+    }
+
+
+{-| Full CompleteTurn response payload. `turnScore`,
+`cardsDrawn`, and `dealtCards` are only meaningful on success
+branches; Failure ignores them.
+
+`dealtCards` carries the EXACT cards the server dealt. Currently
+unused by the autonomous client (it draws from its own deck and
+uses these only as a diagnostic cross-check against divergence).
+
+-}
+type alias CompleteTurnOutcome =
+    { result : CompleteTurnResult
+    , turnScore : Int
+    , cardsDrawn : Int
+    , dealtCards : List Card
+    }
+
+
+
+-- DOM ID
+
+
+{-| CSS id of the board element. Used by Browser.Dom.getElement
+during drag-start to capture the board's viewport rect for
+cursor → board-relative coordinate math.
+-}
+boardDomId : String
+boardDomId =
+    "lynrummy-board"
+
+
+
+-- ACTIVE HAND
+
+
+{-| Active hand is whichever player's turn it is. All hand-card
+drag/drop uses this. Empty-hand fallback keeps the view
+resilient if state hasn't populated yet.
+-}
+activeHand : Model -> Hand
+activeHand model =
+    case listAt model.activePlayerIndex model.hands of
+        Just h ->
+            h
+
+        Nothing ->
+            Hand.empty
+
+
+{-| Returns a Model with the active player's hand replaced.
+Used by local UI-side hand updates (drag-drop that removes a
+card before the server round-trip).
+-}
+setActiveHand : Hand -> Model -> Model
+setActiveHand newHand model =
+    { model
+        | hands =
+            List.indexedMap
+                (\i h ->
+                    if i == model.activePlayerIndex then
+                        newHand
+
+                    else
+                        h
+                )
+                model.hands
+    }
+
+
+listAt : Int -> List a -> Maybe a
+listAt i xs =
+    List.head (List.drop i xs)
+
+
+
+-- INIT STATE
+
+
+{-| Starting Model. Game-state fields default to the hardcoded
+opening board + canned P1 hand + empty P2 hand; UI-layer fields
+default to quiescent / empty values.
+
+On session resume (URL hash), `Main.elm init` immediately fires
+`fetchRemoteState` + `fetchActionLog` which replace these
+defaults with the authoritative server snapshot and populate
+`replayBaseline` for the Instant Replay rewind target.
+
+-}
+baseModel : Model
+baseModel =
+    { -- Game-state fields.
+      board = LynRummy.Dealer.initialBoard
+    , hands = [ LynRummy.Dealer.openingHand, Hand.empty ]
+    , scores = [ 0, 0 ]
+    , activePlayerIndex = 0
+    , turnIndex = 0
+    , deck = []
+    , cardsPlayedThisTurn = 0
+    , victorAwarded = False
+    , turnStartBoardScore = Score.forStacks LynRummy.Dealer.initialBoard
+
+    -- UI-layer fields.
+    , drag = NotDragging
+    , sessionId = Nothing
+    , status = { text = "Starting game…", kind = Inform }
+    , score = Score.forStacks LynRummy.Dealer.initialBoard
+    , hintedCards = []
+    , popup = Nothing
+    , actionLog = []
+    , replay = Nothing
+    , replayBaseline = Nothing
+    }

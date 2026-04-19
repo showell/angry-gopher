@@ -1,0 +1,91 @@
+# Main/State.elm — EARLY
+
+Pure-types leaf module for the Elm client. Owns the `Model`
+shape, every supporting data type the rest of the app needs to
+pattern-match on, and the initial Model (`baseModel`). No I/O,
+no rendering, no Msg, no update logic.
+
+## Status
+
+- **Label:** EARLY. Extracted 2026-04-19 during the Main.elm
+  split — the first module to come out of the pre-split
+  monolith. This is the dependency leaf: other Main.* modules
+  import from here; nothing Main-side imports into here.
+- **Source:** refactored from the pre-split `Main.elm`; no
+  behavioural change vs the monolith.
+
+## Exports
+
+Types:
+
+- `Model` — the full client state. Two field groups visibly
+  commented: game-state (`board`, `hands`, `scores`,
+  `activePlayerIndex`, `turnIndex`, `deck`,
+  `cardsPlayedThisTurn`, `victorAwarded`,
+  `turnStartBoardScore`) and UI-layer (`drag`, `sessionId`,
+  `status`, `score`, `hintedCards`, `popup`, `actionLog`,
+  `replay`, `replayBaseline`).
+- `ReplayProgress` — `{ step, paused }`. Walker over
+  `actionLog` ticks every 500ms; `step` is the index of the
+  NEXT action to apply; `paused = True` halts ticks.
+- `PopupContent` — `{ admin, body }`. Turn-ceremony popup.
+- `StatusMessage` / `StatusKind` — `Inform` / `Celebrate` /
+  `Scold`. Drives the status bar text + colour.
+- `DragState` — `NotDragging | Dragging DragInfo`.
+- `DragInfo` — cursor, original cursor, grab offset, wings,
+  hovered wing, boardRect, clickIntent, source.
+- `DragSource` — `FromBoardStack Int | FromHandCard Int`.
+- `Point` — `{ x, y }`.
+- `Flags` — `{ initialSessionId : Maybe Int }`. HTML harness
+  input.
+- `RemoteState` — server's authoritative state snapshot
+  shape.
+- `ActionLogBundle` — `{ initialState, actions }`. The
+  /sessions/:id/actions response body.
+- `CompleteTurnOutcome` — the CompleteTurn response payload
+  (`result`, `turnScore`, `cardsDrawn`, `dealtCards`).
+
+Helpers + constants:
+
+- `activeHand : Model -> Hand` — hands[activePlayerIndex],
+  falling back to Hand.empty on out-of-range.
+- `setActiveHand : Hand -> Model -> Model` — replaces
+  hands[activePlayerIndex] with the given Hand.
+- `boardDomId = "lynrummy-board"` — CSS id used by
+  `Browser.Dom.getElement` on drag start.
+- `baseModel : Model` — initial Model; defaults to hardcoded
+  Dealer opening board + canned P1 hand + empty P2 hand.
+
+## Invariants
+
+- `hands` length equals the number of seats (2 for LynRummy).
+- `scores` length matches `hands` length.
+- `activePlayerIndex` is a valid index into both lists (0 or 1
+  in practice).
+- `turnIndex` starts at 0, monotonically increases.
+- `deck`, `cardsPlayedThisTurn`, `victorAwarded`,
+  `turnStartBoardScore` are the `GameState` fields
+  `Game.applyCompleteTurn` reads + writes. Layout matches
+  `LynRummy.Game.GameState`'s extensible record shape.
+- `baseModel`'s game-state fields are fine for a new session;
+  they get overwritten by `fetchRemoteState` on session resume
+  (the wire-field data is authoritative on bootstrap).
+
+## What this module deliberately does NOT expose
+
+- `Msg` — lives in `Main.elm` (app bootstrap).
+- Decoders for the response-shape types — live in
+  `Main.Wire`.
+- `Model`-mutating logic beyond setActiveHand — lives in
+  `Main.Apply` or in per-handler code in `Main.elm`.
+- Any Html/view code — lives in `Main.View`.
+
+## Dependencies
+
+Imports only `LynRummy.*` primitives: `Card`, `CardStack`,
+`GestureArbitration` (for Rect), `Hand`, `PlayerTurn` (for
+CompleteTurnResult), `Score` (for forStacks), `WingOracle`
+(for WingId), `WireAction`, `Dealer` (for hardcoded baseModel
+board/hand fallbacks).
+
+No dependency on any other Main.* module.

@@ -1,0 +1,66 @@
+# Main/Msg.elm — EARLY
+
+The `Msg` type: every way the Elm runtime can deliver an event
+to the update function. Extracted to its own module so that
+`Main.Wire`, `Main.Gesture`, `Main.View`, and `Main.elm` can
+reference Msg constructors without cyclic imports.
+
+## Status
+
+- **Label:** EARLY. Extracted 2026-04-19 during the Main.elm
+  split. Msg was in Main.elm when Main.elm was the whole app;
+  now it needs to be importable by the other split modules
+  that produce Cmd Msg or wire event handlers.
+
+## Exports
+
+- `Msg(..)` — all constructors exposed (the type is opaque
+  only if you want the handler module to be the sole producer,
+  which isn't our shape here).
+
+## Constructor groups
+
+**Pointer gestures (drag + wing detection):**
+- `MouseDownOnBoardCard { stackIndex, cardIndex } Point`
+- `MouseDownOnHandCard Int Point`
+- `MouseMove Point`
+- `MouseUp`
+- `WingEntered WingId`
+- `WingLeft WingId`
+- `BoardRectReceived (Result Browser.Dom.Error Browser.Dom.Element)`
+
+**Button clicks (top-bar + popup):**
+- `ClickCompleteTurn`
+- `ClickHint`
+- `ClickInstantReplay`
+- `ClickReplayPauseToggle`
+- `PopupOk`
+
+**HTTP responses:**
+- `ActionSent (Result Http.Error ())` — fire-and-forget
+  action submit; errors ignored today.
+- `SessionReceived (Result Http.Error Int)` — new-session
+  creation returned a session id.
+- `StateRefreshed (Result Http.Error RemoteState)` — /state
+  fetch came back.
+- `CompleteTurnResponded (Result Http.Error CompleteTurnOutcome)`
+  — CompleteTurn /actions POST returned.
+- `ActionLogFetched (Result Http.Error ActionLogBundle)` —
+  /actions GET came back with log + initial state.
+
+**Timer:**
+- `ReplayTick Time.Posix` — 500ms tick while replay is
+  active-and-not-paused.
+
+## Dependencies
+
+Imports `Main.State` for the response-shape types
+(`RemoteState`, `ActionLogBundle`, `CompleteTurnOutcome`, and
+`Point`). Plus `Browser.Dom`, `Http`, `Time`, and the
+`WingOracle.WingId` type.
+
+## What this module deliberately does NOT do
+
+- No handlers. `update` lives in `Main.elm`.
+- No Cmd production. HTTP and subscription producers live in
+  `Main.Wire` and `Main.elm`'s `subscriptions` function.

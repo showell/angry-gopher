@@ -1,0 +1,108 @@
+# Main/Apply.elm — EARLY
+
+The pure state-transition layer of the Elm client. Owns
+`applyWireAction` — the single entry point for applying a
+validated WireAction to the Model — plus the merge helpers and
+the `refereeBounds` constant.
+
+## Status
+
+- **Label:** EARLY. Extracted 2026-04-19 from the pre-split
+  `Main.elm` monolith. Pure functions only; no Msg, no I/O,
+  no rendering, no subscriptions.
+- **Mirror of invariant:** This is the client-side realization
+  of Steve's "one log, source-agnostic" principle. Every
+  validated move — from a local gesture, replay tick, or wire
+  broadcast — flows through this module.
+
+## Public API
+
+- `applyWireAction : WireAction -> Model -> Model` —
+  deterministic dispatch on action kind, nine branches (one per
+  WireAction constructor).
+- `applyChange : BoardActions.BoardChange -> List CardStack -> List CardStack`
+  — remove-then-append primitive used by the merge helpers
+  internally and by `WA.TrickResult`. Exposed because Gesture
+  / View code occasionally simulates board changes without
+  going through applyWireAction.
+- `findHandCard : Card -> Hand -> Maybe HandCard` — first-match
+  lookup by Card identity (value + suit + origin_deck).
+  Exposed because the merge helpers need a `Nothing` signal
+  when the hand doesn't contain the card (replay of an
+  untracked seat's hand).
+- `refereeBounds : BoardGeometry.BoardBounds` — the 800×600
+  with 5px margin constant. Shared between
+  `Main.ClickCompleteTurn` (referee pre-check) and any future
+  client-side geometry validation. Matches the server's
+  constant at `views/lynrummy_elm.go`.
+
+## applyWireAction branch-by-branch
+
+| Branch | Effect |
+|---|---|
+| `Split { stackIndex, cardIndex }` | Calls `GA.applySplit` on board. Recomputes `score`. |
+| `MergeStack { sourceStack, targetStack, side }` | `BoardActions.tryStackMerge`; on Just, `applyChange`; on Nothing, no-op. |
+| `MergeHand { handCard, targetStack, side }` | `applyHandOntoStack` + `Game.noteCardsPlayed 1`. |
+| `PlaceHand { handCard, loc }` | `applyPlaceHandCard` + `Game.noteCardsPlayed 1`. |
+| `MoveStack { stackIndex, newLoc }` | `BoardActions.moveStack` + `applyChange`. |
+| `CompleteTurn` | Delegates to `Game.applyCompleteTurn` (classify, bank, reset+draw, age, flip, advance), then updates UI-layer `score` + `status` ("Turn N — Player M to play."). |
+| `Undo` | No-op. V1 has no Undo button; action won't appear in logs we write. |
+| `PlayTrick _` | No-op. Server expands to TrickResult at receipt; a PlayTrick in the log would be an upstream bug. |
+| `TrickResult p` | Compound: remove `stacksToRemove` from board, append `stacksToAdd`, remove each card in `handCardsReleased` from the active hand, bump `cardsPlayedThisTurn` by `List.length handCardsReleased`. |
+
+## The synthetic-HandCard fallback
+
+For `MergeHand` / `PlaceHand`, the helpers call `findHandCard`
+first. On `Nothing`, they construct a synthetic
+`{ card, state = HandNormal }` and apply the *board* change
+anyway (skipping the hand-removal step). This is the
+mechanism that makes replay of an untracked seat's moves
+"advance the board but not the hand," which was important
+before we added the true-initial-state replay baseline. Still
+useful as defense against any other path where a hand isn't
+fully tracked.
+
+## Invariants preserved by applyWireAction
+
+- `score` stays `Score.forStacks board` after any board
+  change.
+- `hands[activePlayerIndex]` shrinks by exactly one card on
+  successful MergeHand / PlaceHand.
+- `cardsPlayedThisTurn` increments by the number of cards
+  released on MergeHand (1), PlaceHand (1), TrickResult (n).
+- `CompleteTurn` resets `cardsPlayedThisTurn = 0`, flips
+  `activePlayerIndex`, advances `turnIndex`, via delegation to
+  `Game.applyCompleteTurn`. All GameState-layer invariants are
+  Game's responsibility, not this module's.
+
+## Dependencies
+
+Imports:
+- `LynRummy.BoardActions` — `tryStackMerge`, `tryHandMerge`,
+  `placeHandCard`, `moveStack`.
+- `LynRummy.BoardGeometry` — `BoardBounds` type.
+- `LynRummy.Card` — Card type.
+- `LynRummy.CardStack` — BoardLocation, CardStack, HandCard,
+  stacksEqual.
+- `LynRummy.Game` — `noteCardsPlayed`, `applyCompleteTurn`.
+- `LynRummy.GestureArbitration` — `applySplit`.
+- `LynRummy.Hand` — Hand, removeHandCard.
+- `LynRummy.Score` — forStacks.
+- `LynRummy.WireAction` — `WireAction(..)`.
+- `Main.State` — Model, StatusKind, activeHand, setActiveHand.
+
+No inbound Main.* dependencies on this module should exist —
+only `Main.elm` imports it.
+
+## Tests
+
+Currently no dedicated `Main/ApplyTest.elm`. Coverage is
+indirect through:
+
+- `LynRummy.GameTest` exercises `Game.applyCompleteTurn` via
+  GameState directly.
+- `LynRummy.DslConformanceTest` exercises trick plays.
+- `auto_player.py` provides end-to-end smoke coverage.
+
+A dedicated test module is a candidate future investment —
+each branch's invariants would be trivially assertable.
