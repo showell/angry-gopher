@@ -1,0 +1,142 @@
+# Main/View.elm — EARLY
+
+The full view layer of the Elm client. One entry point (`view`)
+that composes every visible element, plus the turn-ceremony
+helpers that produce StatusMessage and PopupContent records.
+
+## Status
+
+- **Label:** EARLY. Extracted 2026-04-19 from the pre-split
+  `Main.elm` monolith. The biggest single chunk of the split —
+  Main.elm was mostly HTML.
+- **Stability:** The view *layer* is stable; individual styles
+  and copy are tuned continuously.
+
+## Public API
+
+- `view : Model -> Html Msg` — the top-level view composition.
+  Composes top bar, status bar, hand column, board column,
+  drag overlay, and popup (last is suppressed during replay).
+- `statusForCompleteTurn : Result err CompleteTurnOutcome ->
+  StatusMessage` — maps turn results to status-bar text and
+  colour kind. Used by the update function to write into
+  `model.status`.
+- `popupForCompleteTurn : Result err CompleteTurnOutcome ->
+  Maybe PopupContent` — maps turn results to the ceremony
+  popup content (admin character + body text). Used by the
+  update function to write into `model.popup`.
+
+## Visual structure
+
+```
+Html
+├── viewTopBar            "Welcome to Lyn Rummy!" banner
+├── viewStatusBar         per-status color + text
+├── div (two-column flex)
+│   ├── handColumn        turn # header + two viewPlayerRow
+│   │   ├── viewPlayerRow P1
+│   │   └── viewPlayerRow P2
+│   │       └── viewTurnControls   (shown for the active row)
+│   │           [ Complete turn / Hint / Replay / Lobby ]
+│   └── boardColumn
+│       └── boardWithWings
+│           ├── viewStackForBoard (×N)
+│           └── viewWingAt       (×M, during drag only)
+├── draggedOverlay        floating drag card (fixed-position)
+└── viewPopup             modal ceremony (suppressed in replay)
+```
+
+## Player row branch logic
+
+`viewPlayerRow` renders name + score always, then branches on
+`idx == model.activePlayerIndex`:
+
+- **Active row** — `View.viewHandHeading` + `View.viewHand`
+  with `Gesture.handCardAttrs` attrs (mousedown + dim + hint
+  highlight) + `viewTurnControls`.
+- **Inactive row** — just `"N cards"` text, no interaction.
+
+## Turn-controls buttons (per row state)
+
+| Situation | Buttons |
+|---|---|
+| Not replaying | Complete turn / Hint / Instant replay / Lobby |
+| Replaying, not paused | Complete turn / Hint / Pause / Lobby |
+| Replaying, paused | Complete turn / Hint / Resume / Lobby |
+
+## Board rendering
+
+- `boardColumn` wraps `View.viewBoardHeading` above `boardWithWings`.
+- `boardWithWings` calls `View.boardShellWith [id boardDomId]`
+  to produce the board frame (the `id` is what
+  `Browser.Dom.getElement` resolves during drag).
+- `boardChildren` = `stackNodes ++ wingNodes`. Wings appear
+  only while dragging (from `info.wings`).
+- `viewStackForBoard` hides the source stack when dragging it
+  from the board (the floating overlay shows it instead);
+  otherwise delegates to `View.viewStack` or
+  `View.viewStackWithCardAttrs` (for non-drag: per-card
+  mousedown to allow per-card click→split detection).
+- `viewWingAt` computes the wing's left edge from the target
+  stack's loc + width, paints `mergeableGreen` or
+  `mergeableHover`, attaches WingEntered / WingLeft events.
+
+## Popup rendering
+
+`viewPopup` is modal via `z-index: 2000` + full-viewport
+backdrop. Content: admin name in navy bold + body in pre-wrap +
+single OK button. No ESC, no click-outside, no focus trap. The
+popup is suppressed during replay per the
+"suppress-popups-in-replay" UX decision.
+
+## Ceremony character casting
+
+`popupFromOutcome` picks the admin character based on result:
+
+| Result | Admin | Tone |
+|---|---|---|
+| Failure | Angry Cat | "The board is not clean!" |
+| SuccessButNeedsCards | Oliver | "Sorry you couldn't find a move." |
+| SuccessAsVictor | Steve | "First person to play all their cards!" |
+| SuccessWithHandEmptied | Steve | "You emptied your hand!" |
+| Success | Steve | "The board is growing!" |
+
+The three Successes all speak as Steve because they're the
+positive cases. Angry Cat is the scold. Oliver is the
+apologetic friend (when the player couldn't play anything).
+
+## Drag overlay
+
+`draggedOverlay` renders the floating element that tracks the
+cursor during drag. Fixed-position, pointer-events disabled
+(so wings underneath still respond), z-index 1000. Branches
+on source type: `FromBoardStack` renders the full stack,
+`FromHandCard` renders just the card with a white background.
+
+## What this module deliberately does NOT do
+
+- State transitions. Everything here is `_ -> Html Msg` or
+  pure data functions.
+- HTTP. Ceremony helpers produce records that `update` writes
+  into Model; no calls.
+- Gesture resolution. That's `Main.Gesture`. This module just
+  attaches the mousedown events via `Gesture.handCardAttrs`
+  and `Gesture.cardMouseDown`.
+
+## Dependencies
+
+- `Html`, `Html.Attributes`, `Html.Events` — standard view.
+- `LynRummy.BoardActions` — `Side(..)` for wing placement.
+- `LynRummy.CardStack` — `CardStack`, `stackPitch`,
+  `stackDisplayWidth`.
+- `LynRummy.Hand` — `Hand` type.
+- `LynRummy.PlayerTurn` — `CompleteTurnResult(..)`.
+- `LynRummy.View` — domain-level primitives: `viewStack`,
+  `viewHand`, `viewWing`, `boardShellWith`, colour constants.
+- `LynRummy.WingOracle` — `WingId` type.
+- `Main.Gesture` — `handCardAttrs`, `cardMouseDown` for event
+  wiring.
+- `Main.Msg` — Msg constructors for onClick / onMouseEnter /
+  onMouseLeave.
+- `Main.State` — Model, PopupContent, StatusMessage + kind,
+  DragState + info, boardDomId, activeHand.

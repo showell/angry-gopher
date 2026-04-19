@@ -1,0 +1,110 @@
+# Main/Gesture.elm — EARLY
+
+The pointer-gesture layer of the Elm client. Owns every
+function that sits between a physical mousedown and the
+WireAction it eventually produces, plus the per-hand-card
+styling hook that renders the drag-affordance feedback.
+
+## Status
+
+- **Label:** EARLY. Extracted 2026-04-19 from the pre-split
+  `Main.elm` monolith. Cohesive unit — all the drag machinery
+  plus the helpers a view needs to wire mousedowns.
+
+## Public API
+
+- `startBoardCardDrag : {stackIndex, cardIndex} -> Point ->
+  Model -> (Model, Cmd Msg)` — begins a drag from a board
+  card. Computes wings via `WingOracle.wingsForStack`, sets
+  `clickIntent = Just cardIndex` (so an unmoved release
+  becomes a Split), fires `fetchBoardRect`.
+- `startHandDrag : Int -> Point -> Model -> (Model, Cmd Msg)`
+  — begins a drag from a hand card. Wings via
+  `WingOracle.wingsForHandCard`, `clickIntent = Nothing`
+  (hand cards have no split semantic).
+- `fetchBoardRect : Cmd Msg` — `Browser.Dom.getElement
+  boardDomId` → `Task.attempt BoardRectReceived`.
+- `handleMouseUp : Model -> (Model, Cmd Msg)` — resolves
+  gesture → clears drag → applies WireAction → appends to
+  actionLog → fires `sendAction`.
+- `clearDrag : Model -> Model` — `{ model | drag =
+  NotDragging }`.
+- `pointDecoder : Decoder Point` — `{clientX, clientY}` →
+  Point.
+- `cardMouseDown : Int -> Int -> List (Html.Attribute Msg)`
+  — mousedown handler for a board card; emits
+  `MouseDownOnBoardCard`.
+- `handCardAttrs : DragState -> List Card -> Int -> HandCard
+  -> List (Html.Attribute Msg)` — per-hand-card attribute
+  list: hint-green background + mousedown handler + drag-dim
+  opacity.
+
+## Gesture resolution (the central branch table)
+
+`resolveGesture` (not exported — internal helper for
+`handleMouseUp`) dispatches on `(clickIntent, source,
+hoveredWing, cursorOverBoard)`:
+
+| clickIntent | source | hoveredWing | overBoard | Result |
+|---|---|---|---|---|
+| Just cardIdx | FromBoardStack idx | — | — | `Split { stackIndex, cardIndex }` |
+| Nothing | FromBoardStack idx | Just wing | — | `MergeStack { source=idx, target=wing.stackIndex, side }` |
+| Nothing | FromHandCard idx | Just wing | — | `MergeHand { handCard, target=wing.stackIndex, side }` |
+| Nothing | FromHandCard idx | Nothing | True + loc | `PlaceHand { handCard, loc }` |
+| Nothing | FromBoardStack idx | Nothing | True + loc | `MoveStack { stackIndex, newLoc=loc }` |
+| any | any | any | drop before rect arrives | `Nothing` (gesture discarded) |
+
+## Click-vs-drag arbitration
+
+`clickIntent` starts as `Just cardIndex` for board-card drags
+(hand drags get `Nothing`). Each MouseMove feeds
+`GestureArbitration.clickIntentAfterMove` which kills the
+intent (flips to `Nothing`) once the cursor moves beyond a
+threshold. The call site for that is currently in
+`Main.elm`'s `MouseMove` handler (not in this module) because
+it's a one-liner that needs `info` unpacking anyway.
+
+## Drop-loc derivation
+
+`dropLoc info = info.boardRect |> Maybe.map (rect ->
+{left = cursor.x - grabOffset.x - rect.x, top = cursor.y -
+grabOffset.y - rect.y})`. Returns `Nothing` if the board rect
+hasn't arrived yet — the race between drag-start and
+`Browser.Dom.getElement` completing is benign but callers
+must handle `Nothing`.
+
+## handCardAttrs branches
+
+1. **Hint highlight** — if `hc.card` is in `hintedCards`, add
+   `background-color: lightgreen`.
+2. **Not dragging** — attach `MouseDownOnHandCard idx`.
+3. **Dragging, this is the source card** — `opacity: 0.35;
+   pointer-events: none` (dim the source, let the floater
+   show).
+4. **Dragging, any other card (hand or board source)** —
+   `pointer-events: none` (disable interaction during drag).
+
+## What this module deliberately does NOT do
+
+- **Subscriptions.** `Browser.Events.onMouseMove` /
+  `onMouseUp` subscribing is in `Main.elm`'s `subscriptions`.
+- **Inline MouseMove / MouseUp handlers.** Those live in
+  `Main.elm`'s `update` — they're short enough that factoring
+  out cost > benefit today.
+- **Wing rendering.** `viewWingAt` lives in `Main.View`.
+- **Drag floater rendering.** `draggedOverlay` lives in
+  `Main.View`.
+
+## Dependencies
+
+- `Browser.Dom`, `Browser.Events` — gesture primitives.
+- `Html`, `Html.Attributes`, `Html.Events` — view-side
+  styling.
+- `Json.Decode` — pointDecoder.
+- `LynRummy.Card`, `CardStack`, `GestureArbitration`, `Hand`,
+  `WingOracle`, `WireAction` — domain.
+- `Main.Apply` — applyWireAction in handleMouseUp.
+- `Main.Msg` — Msg constructors.
+- `Main.State` — Model, DragState, DragInfo, activeHand,
+  boardDomId.
+- `Main.Wire` — sendAction in handleMouseUp.
