@@ -1,0 +1,31 @@
+#!/bin/bash
+# Full-repo preflight: regenerate conformance fixtures, run
+# every test suite. Addresses the silent-failure risk — if any
+# target (Go tests, Elm tests, Python conformance) stops being
+# wired up, this script fails loudly instead of silently skipping.
+#
+# Steve ran this into in the 2026-04-20 rabbit hole: fixturegen's
+# Go output path pointed at a deleted directory, and nobody
+# noticed for two commits because the generator was never
+# re-invoked. Running `ops/check` regularly catches that class
+# of severed bridge on the next run.
+
+set -e
+
+REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$REPO_DIR"
+
+echo "==> fixturegen (DSL → Go + Elm + JSON, build-gated)"
+go run ./cmd/fixturegen ./games/lynrummy/conformance/scenarios/*.dsl
+
+echo "==> go test ./..."
+go test ./...
+
+echo "==> Elm tests"
+(cd games/lynrummy/elm-port-docs && ./check.sh)
+
+echo "==> Python conformance tests"
+python3 tools/lynrummy_elm_player/test_dsl_conformance.py
+
+echo
+echo "All preflight checks passed."

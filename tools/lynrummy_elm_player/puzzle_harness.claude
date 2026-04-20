@@ -1,0 +1,15 @@
+just_use puzzle_harness.py
+
+# label: EARLY
+# role: CLI for the puzzle-solving / decomposition harness
+
+Three commands: seed a puzzle as a new session, list puzzles,
+compare a session's recorded actions against a reference
+decomposition via `compare.py`. Used in two-party experiments
+where a human solves a puzzle in the Elm UI and Claude checks
+the resulting wire trace against an expected sequence.
+
+## Pointers
+
+- Depends on: `client.py`, `puzzles.py`, `compare.py`, `hints.py`.
+- Hits `/new-session` + `/actions` + `/state` endpoints.

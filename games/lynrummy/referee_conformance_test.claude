@@ -1,0 +1,24 @@
+just_use referee_conformance_test.go
+
+# label: GENERATED
+# role: emitted Go referee tests — do NOT hand-edit
+
+One Test_ function per scenario in `games/lynrummy/conformance/scenarios/referee.dsl`.
+Each test drives `ValidateGameMove` or `ValidateTurnComplete`
+and asserts the referee's `RefereeStage` + message substring
+against the DSL expectation.
+
+Regenerate after any DSL edit:
+
+    go run ./cmd/fixturegen ./games/lynrummy/conformance/scenarios/*.dsl
+
+Enumerate-and-bridge peer: the same DSL scenarios drive
+`games/lynrummy/elm-port-docs/tests/LynRummy/DslConformanceTest.elm`.
+Go and Elm referees must agree on every scenario; divergent
+pass/fail counts mean one side drifted.
+
+## TODO
+
+- No automatic check that fixturegen was re-run after a DSL edit
+  (pre-para-7 concern). A preflight script `ops/check` is the
+  planned fix.

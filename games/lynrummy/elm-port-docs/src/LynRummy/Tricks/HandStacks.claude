@@ -7,7 +7,7 @@ a new stack.
 ## Status
 
 - **Label:** WORKHORSE. Stable.
-- **Mirrors:** Go `games/lynrummy/tricks/hand_stacks.go`.
+- **Go counterpart ripped 2026-04-20** (`project_hints_are_client_side.md`).
 
 ## What it finds
 
@@ -59,7 +59,8 @@ findPlays validated), returns `(board, [])`.
 
 ## Pointers
 
-- Go counterpart: `games/lynrummy/tricks/hand_stacks.go`.
+- Python counterpart: `hints.hand_stacks` in
+  `tools/lynrummy_elm_player/hints.py` (emits primitives).
 - Depends on: `Card`, `CardStack`, `StackType.getStackType`,
   `Tricks.Helpers`, `Dict`.
 - Consumer: `Tricks.Hint.allTricks`.

@@ -1,0 +1,49 @@
+just_use hints.py
+
+# label: INTRICATE
+# role: Python-native trick emitters + hint orchestration
+
+Each trick function (direct_play, hand_stacks, pair_peel,
+split_for_set, peel_for_run, rb_swap, loose_card_play) takes
+(hand, board) and returns either None (didn't fire) or a list
+of primitive wire actions a human would physically perform to
+realize the trick. `build_suggestions` walks all seven in
+priority order and returns the firing ones.
+
+## The invariant
+
+Every primitive sequence a trick emits must leave every stack
+classifiable as a complete group (set / pure_run / rb_run). A
+sequence that produces any incomplete / bogus / dup stack is a
+bug — the harness at `test_dsl_conformance.py` catches violations
+via `hint_invariant` scenarios in `games/lynrummy/conformance/scenarios/tricks.dsl`.
+
+## Ordering discipline
+
+Primitive-order choices that affected invariant:
+  - Peels: monotonic (peel low → move → merge hand → peel high
+    → merge high onto pair).
+  - Merging two hand cards onto a target: sort by proximity-to-
+    target value first. Input order of hand cards is arbitrary.
+
+## Pointers
+
+- Consumers: `auto_player.py`, `test_dsl_conformance.py`.
+- Internal apply helpers (`_apply_split`, `_apply_merge_stack`, …)
+  are also imported by `compare.py` and the conformance runner.
+- Companion architecture: `project_hints_are_client_side.md`,
+  `feedback_wire_model_not_lossy.md`,
+  `feedback_inference_is_misplaced_work.md`.
+- Elm counterpart: `games/lynrummy/elm-port-docs/src/LynRummy/Tricks/`
+  (different API — Play.apply returns final board directly, no
+  primitive replay).
+
+## TODO
+
+- `loose_card_play` has no `hint_invariant` DSL scenario —
+  triggering it as top-priority requires a fragile state where
+  no higher-priority trick fires. Add cases as real gameplay
+  surfaces them.
+- Stress scenarios only cover two shapes today (reversed hand
+  order). More edge-case fixtures wanted: wraparound runs
+  (K-A-2), adjacency ambiguity, middle-peel from 7-card runs.

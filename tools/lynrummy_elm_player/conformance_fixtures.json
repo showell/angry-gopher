@@ -525,6 +525,75 @@
     }
   },
   {
+    "name": "hint_invariant_hand_stacks_pure_run_reversed_hand",
+    "desc": "Ordering stress. hand_stacks placing a 3-card pure run with hand given HIGH-to-LOW. Wrong-order merge would produce [7H,6H,5H] or a gap pair.",
+    "op": "hint_invariant",
+    "trick": "hand_stacks",
+    "hand": [
+      {
+        "card": {
+          "value": 7,
+          "suit": 3,
+          "origin_deck": 1
+        },
+        "state": 0
+      },
+      {
+        "card": {
+          "value": 6,
+          "suit": 3,
+          "origin_deck": 1
+        },
+        "state": 0
+      },
+      {
+        "card": {
+          "value": 5,
+          "suit": 3,
+          "origin_deck": 1
+        },
+        "state": 0
+      }
+    ],
+    "board": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 11,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 12,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 13,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 40,
+          "left": 40
+        }
+      }
+    ],
+    "expect": {
+      "kind": "invariant_holds"
+    }
+  },
+  {
     "name": "hint_invariant_hand_stacks_pure_run_three_card",
     "desc": "hand_stacks places a 3-card pure-run group from the hand as a new stack.",
     "op": "hint_invariant",
@@ -748,6 +817,75 @@
       {
         "card": {
           "value": 6,
+          "suit": 3,
+          "origin_deck": 1
+        },
+        "state": 0
+      }
+    ],
+    "board": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 7,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 8,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 9,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 10,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 40,
+          "left": 40
+        }
+      }
+    ],
+    "expect": {
+      "kind": "invariant_holds"
+    }
+  },
+  {
+    "name": "hint_invariant_pair_peel_run_pair_reversed_hand",
+    "desc": "Ordering stress. Same shape as pair_peel_run_pair_pure_edge, but hand is 6H', 5H' (order reversed). A fragile emitter might merge 6H before 5H, producing a gap pair.",
+    "op": "hint_invariant",
+    "trick": "pair_peel",
+    "hand": [
+      {
+        "card": {
+          "value": 6,
+          "suit": 3,
+          "origin_deck": 1
+        },
+        "state": 0
+      },
+      {
+        "card": {
+          "value": 5,
           "suit": 3,
           "origin_deck": 1
         },

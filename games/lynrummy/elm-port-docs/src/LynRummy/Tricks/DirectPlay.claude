@@ -7,7 +7,9 @@ else is available, this one often is.
 ## Status
 
 - **Label:** WORKHORSE. Stable, small.
-- **Mirrors:** Go `games/lynrummy/tricks/direct_play.go`.
+- **Go counterpart ripped 2026-04-20.** Hints are client-side
+  now (`project_hints_are_client_side.md`); this module stands
+  alone on the Elm side.
 
 ## What it finds
 
@@ -45,7 +47,9 @@ standard "refusal" pattern (see `Trick.claude`).
 
 ## Pointers
 
-- Go counterpart: `games/lynrummy/tricks/direct_play.go`.
+- Python counterpart: `hints.direct_play` in
+  `tools/lynrummy_elm_player/hints.py` (emits primitives, not
+  Plays — different API, same game logic).
 - Depends on: `CardStack.leftMerge`/`rightMerge`,
   `Tricks.Helpers`, `Tricks.Trick`.
-- Consumer: `Tricks.Hint.allTricks`.
+- Consumer: `Tricks.Hint.hintPriorityOrder`.

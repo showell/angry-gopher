@@ -10,7 +10,7 @@ Steve's name for this trick: **"substitute trick."**
 ## Status
 
 - **Label:** WORKHORSE. Stable.
-- **Mirrors:** Go `games/lynrummy/tricks/rb_swap.go`.
+- **Go counterpart ripped 2026-04-20** (`project_hints_are_client_side.md`).
 
 ## Preconditions for a seat (findSeats)
 
@@ -70,7 +70,8 @@ distinction matters for turn-accounting aging (see
 
 ## Pointers
 
-- Go counterpart: `games/lynrummy/tricks/rb_swap.go`.
+- Python counterpart: `hints.rb_swap` in
+  `tools/lynrummy_elm_player/hints.py`.
 - Depends on: `Card.suitColor`, `CardStack.stackType` +
   `leftMerge`/`rightMerge`, `StackType`,
   `Tricks.Helpers.substituteInStack` +

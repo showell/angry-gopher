@@ -151,3 +151,26 @@ scenario hint_invariant_rb_swap_middle_swap_clubs_home
     at (40,300): AC 2C 3C
     at (180,40): 9H TH JH
   expect: invariant_holds
+
+# --- Ordering stress: the Python bugs we found were wrong-order
+#     merges producing gap-pair stacks like [5H,7H,6H]. Reverse
+#     the hand order to pressure emitters that rely on input
+#     order rather than proximity-to-target.
+
+scenario hint_invariant_hand_stacks_pure_run_reversed_hand
+  desc: Ordering stress. hand_stacks placing a 3-card pure run with hand given HIGH-to-LOW. Wrong-order merge would produce [7H,6H,5H] or a gap pair.
+  op: hint_invariant
+  trick: hand_stacks
+  hand: 7H' 6H' 5H'
+  board:
+    at (40,40): JC QC KC
+  expect: invariant_holds
+
+scenario hint_invariant_pair_peel_run_pair_reversed_hand
+  desc: Ordering stress. Same shape as pair_peel_run_pair_pure_edge, but hand is 6H', 5H' (order reversed). A fragile emitter might merge 6H before 5H, producing a gap pair.
+  op: hint_invariant
+  trick: pair_peel
+  hand: 6H' 5H'
+  board:
+    at (40,40): 7H 8H 9H TH
+  expect: invariant_holds

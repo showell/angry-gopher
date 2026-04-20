@@ -1,31 +1,38 @@
 just_use auto_player.py
 
 # label: EARLY (auto-player)
-# role: agent tool — plays a full LynRummy session end-to-end via /hint
+# role: agent tool — drives a LynRummy session via Python-native hints
 
-Walks the /hint suggestions list and takes the FIRST one each
-turn, posting its action verbatim. When no hints fire, calls
-complete_turn. Terminates when the deck drops to DECK_LOW_WATER
-(≈10 cards) — not on "victory" events, which are per-turn
-bonuses in LynRummy, not game endpoints. See
-`project_lynrummy_game_end_condition.md`.
+Fetches state, calls `hints.build_suggestions(hand, board)`
+locally, takes the top suggestion's primitives and posts each
+verbatim to `/actions`. No /hint round-trip, no trick_result
+on the wire — every action is a primitive.
 
-Not an optimizer. Not "greedy." Mirrors a human playing the most
-obvious trick — which is the /hint endpoint's native contract
-(priority-ranked, simplest first).
+Settles after each turn via `geometry.find_violation` /
+`find_open_loc` when stacks overlap. Terminates when the deck
+drops below DECK_LOW_WATER (≈10 cards) — not on "victory"
+events, which are per-turn bonuses (see
+`project_lynrummy_game_end_condition.md`).
 
 ## Surface
 
 - `python3 tools/lynrummy_elm_player/auto_player.py` — fresh session.
-- `--session N` — resume an existing session (useful when Steve
-  creates a two-player game from the Elm UI and Claude joins as
-  the other seat).
+- `--session N` — resume an existing session.
 - `--max-actions N` — safety cap (default 200).
 
 ## Pointers
 
-- Depends on: `client.py` (same dir), `/hint` + `/actions` + `/score`
-  endpoints in `views/lynrummy_elm.go`.
-- Replaces: the deleted `greedy.py` (commit ffb7a6a then bcaea72
-  rip). Score-maximizing was pivoted out when the hint system
-  simplified to priority-ordered suggestions.
+- Depends on: `client.py`, `hints.py`, `geometry.py` (all same dir),
+  `/actions` + `/state` + `/score` endpoints in
+  `views/lynrummy_elm.go`.
+- Hints architecture: client-side per `project_hints_are_client_side.md`.
+  Go owns wire + referee; Python owns decomposition.
+
+## TODO
+
+- `settle()` papers over geometry violations; the real fix is
+  non-overlapping placement at emission time, not post-hoc
+  move_stack. Still papering as of 2026-04-20.
+- Python primitives emit no `gesture_metadata`, so agent moves
+  teleport in Instant Replay. Phase 3 synthesis (linear drag
+  from avg velocity) not started.

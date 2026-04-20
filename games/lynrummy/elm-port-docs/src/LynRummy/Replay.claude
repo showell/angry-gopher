@@ -21,9 +21,10 @@ step.
   session-specific baseline is provided.
 - `applyAction : WireAction -> State -> State` — the reducer.
 
-## The 9 WireAction branches
+## The 7 WireAction branches
 
-Mirrors `WireAction.elm` exactly. Handled:
+Mirrors `WireAction.elm` exactly (wire is primitives-only as of
+2026-04-20). Handled:
 - **`Split`** — delegates to `GestureArbitration.applySplit`.
 - **`MergeStack`** — looks up both stacks, tries
   `BoardActions.tryStackMerge`, applies the resulting
@@ -34,9 +35,6 @@ Mirrors `WireAction.elm` exactly. Handled:
 - **`PlaceHand`** — resolves the hand card, applies
   `BoardActions.placeHandCard`, removes from hand.
 - **`MoveStack`** — applies `BoardActions.moveStack`.
-- **`TrickResult`** — directly folds the persisted diff:
-  `board -= stacksToRemove`, `board += stacksToAdd`,
-  `hand -= handCardsReleased`. No trick-logic reconstruction.
 
 No-ops (intentional):
 - **`CompleteTurn`** — turn boundary, not physics. Replay
@@ -44,9 +42,6 @@ No-ops (intentional):
   concern.
 - **`Undo`** — deferred in V1 replay; if one ever shows up in
   a log, we no-op rather than crash.
-- **`PlayTrick`** — submission-time convenience on the Go
-  side. Server expands it to `TrickResult` before persisting.
-  If one leaks into a replayed log, no-op.
 
 ## LOAD-BEARING: opponent-hand fallback on `MergeHand`
 
@@ -75,8 +70,6 @@ silently corrupting the tracked player's hand when we mean
 - **Undo.** V1 treats Undo as no-op; if Undo is wanted in
   replay, it needs a bidirectional action representation
   that doesn't exist yet.
-- **PlayTrick expansion.** That happens server-side before
-  persistence; we only see `TrickResult`.
 - **Initial state from server.** `initialState` is the local
   fallback; the real session-specific baseline is loaded by
   `Main/Wire` from `/sessions/:id/actions` and fed in.

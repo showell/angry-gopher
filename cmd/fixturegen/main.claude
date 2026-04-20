@@ -1,13 +1,56 @@
 just_use main.go
 
 # label: TOOL
-# role: encodes domain knowledge
+# role: DSL → native test code / fixtures generator
 
-Compiler: LynRummy-conformance .dsl scenarios → native Go (and Elm) test
-code. Pipeline: parse → AST → text/template → goimports+gofmt → write →
-go build verify → idempotence check. Same codegen philosophy as crudgen —
-the DSL is the source of truth, the emitted .go is a build artifact.
+Compiles `games/lynrummy/conformance/scenarios/*.dsl` into three
+targets, each filtered by which ops that target can execute:
 
-Exported AST field names are load-bearing: text/template can only read
-exported identifiers. Renaming a field without updating the templates
-will produce silent empty sections.
+- **Go** (`games/lynrummy/referee_conformance_test.go`, package
+  `lynrummy`) — referee ops only: `validate_game_move`,
+  `validate_turn_complete`.
+- **Elm** (`games/lynrummy/elm-port-docs/tests/LynRummy/DslConformanceTest.elm`)
+  — every op, including `build_suggestions` and `hint_invariant`.
+- **JSON fixtures** (`tools/lynrummy_elm_player/conformance_fixtures.json`)
+  — hint ops for the Python runner. Python is interpreted so
+  there is no Python codegen; the runner reads the JSON at
+  runtime.
+
+Pipeline: parse → AST → text/template + JSON encode → writer →
+go build verify → idempotence check. Same codegen philosophy
+as crudgen: the DSL is the source of truth; all three outputs
+are build artifacts.
+
+## Supported scenario ops
+
+- `validate_game_move` / `validate_turn_complete` — referee
+  (Go + Elm).
+- `build_suggestions` — hint.buildSuggestions result rows
+  (Elm + Python).
+- `hint_invariant` — apply named trick's first play to the
+  board, assert every resulting stack classifies cleanly
+  (Elm + Python).
+- `trick_first_play` — legacy; Elm still honors it, Go no
+  longer has tricks.
+
+Route per op via `goSupportedOps` / `pythonSupportedOps` maps.
+Elm is unfiltered (target of record).
+
+## Idiom
+
+Exported AST field names are load-bearing: `text/template` can
+only read exported identifiers. Renaming without updating
+templates produces silent empty sections.
+
+Build-gate: `go build` runs against the generated file
+immediately after emission. Idempotence check: regen and
+byte-compare to the just-written bytes. Both fail fast.
+
+## TODO
+
+- No runtime-gate for the Python JSON fixtures: `py_compile`
+  against `test_dsl_conformance.py` would catch generator
+  schema drift. Wire that in along with a preflight `ops/check`
+  script.
+- Generator not currently part of `ops/start` or `check.sh`;
+  severed targets stay invisible until someone re-runs.

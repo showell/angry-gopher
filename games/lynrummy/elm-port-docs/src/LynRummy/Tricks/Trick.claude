@@ -7,7 +7,9 @@ types; the Hint engine collects them.
 ## Status
 
 - **Label:** WORKHORSE. Tiny, stable.
-- **Mirrors:** Go `games/lynrummy/tricks/trick.go`.
+- **Go counterpart ripped 2026-04-20** (`project_hints_are_client_side.md`).
+  This is now the single source of truth for the trick plugin
+  contract.
 
 ## Key exports
 
@@ -51,7 +53,5 @@ engine's priority ranking (see `Tricks/Hint.claude`).
 
 ## Pointers
 
-- Go counterpart: `trick.go` (uses interfaces instead of
-  records).
 - Consumers: every `Tricks/*` module; `Tricks.Hint` collects
   from all of them.

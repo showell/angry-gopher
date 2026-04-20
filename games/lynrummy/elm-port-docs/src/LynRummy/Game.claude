@@ -41,10 +41,9 @@ to these transitions without unwrapping.
 
 - `noteCardsPlayed : Int -> GameState a -> GameState a` —
   increment `cardsPlayedThisTurn` by `n`. Call once per hand
-  card released during the turn: merge_hand (1), place_hand
-  (1), trick_result (length of `handCardsReleased`). Not
-  called for move_stack or split (those don't release hand
-  cards).
+  card released during the turn: `merge_hand` (1), `place_hand`
+  (1). Not called for `move_stack`, `split`, or `undo` (those
+  don't release hand cards).
 - `applyCompleteTurn : GameState a -> GameState a` — the full
   CompleteTurn transition. See algorithm below.
 

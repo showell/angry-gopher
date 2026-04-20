@@ -1,7 +1,8 @@
 # Tricks/Helpers.elm — WORKHORSE (trick-layer primitives)
 
 Shared board-mutation helpers used by every individual trick.
-Mirrors `games/lynrummy/tricks/helpers.go`.
+Go counterpart ripped 2026-04-20 (see
+`project_hints_are_client_side.md`).
 
 ## Status
 
@@ -61,6 +62,5 @@ mutates in place) is deliberate.
 
 ## Pointers
 
-- Go counterpart: `games/lynrummy/tricks/helpers.go`.
 - Depends on: `Card`, `CardStack`, `StackType`.
 - Consumers: every `Tricks/*` module.

@@ -9,51 +9,57 @@ the next state. Stateless, pure, deterministic.
 
 ## Exposed surface
 
-- `type State struct { Board []CardStack; Hand Hand }`
-- `InitialState() State` — 6-stack opening board + 15-card
-  canned opening hand (matches Elm's Dealer.initialBoard +
-  Dealer.openingHand exactly).
+- `type State struct { Board []CardStack; Hands []Hand; ActivePlayerIndex int; ... }`
+- `InitialState() State` — 6-stack opening board + canned
+  opening hand (matches Elm's Dealer.initialBoard /
+  Dealer.openingHand).
+- `InitialStateWithSeed(seed int64) State` — randomized deal
+  for non-canonical scenarios.
 - `ApplyAction(action WireAction, state State) State` — applies
   one action; silent no-op on bad references or invalid merges.
-- `ReplayActions(actions []WireAction) State` — folds ApplyAction
-  over a list from InitialState.
+- `ReplayActionsSeeded(actions, seed) State` — folds ApplyAction
+  over a list, starting from the seeded opening.
 
 ## Behavior contract
 
-Matches the Elm Replay module byte-for-byte in transition
-semantics:
+Matches the Elm Replay module in transition semantics:
 
-- Split, MergeStack, MergeHand, PlaceHand, MoveStack produce
-  the expected (Board, Hand) mutations.
-- Draw / Discard / CompleteTurn / Undo are no-ops for now
-  (turn-logic not modeled). They'll get transitions when turn
-  flow lands.
+- Split, MergeStack, MergeHand, PlaceHand, MoveStack mutate
+  (Board, Hand) as expected.
+- CompleteTurn rotates `ActivePlayerIndex`, banks score,
+  distributes bonuses (via `applyCompleteTurn` →
+  `TurnResult*`), and pulls the next hand from the deck.
+- Undo rewinds the last within-turn action.
 - Out-of-bounds indices and not-in-hand card references are
-  silent no-ops — the same contract as the Elm side.
+  silent no-ops — same contract as the Elm side.
 
 ## Positional indices — important
 
 Wire actions carry positional `stack_index` relative to the
 board list at emit time. Every mutation (split / merge / place /
-move) shifts indices. Callers (human or scripted) that cache
-an index across mutations will hit stale references. The Python
-client has `find_stack_containing()` for content-based lookup;
-the Elm client's local state always reflects current indices
-because its event loop mutates atomically.
+move) shifts indices. Callers that cache an index across
+mutations hit stale references. Python uses
+`find_stack_containing()` for content-based lookup; Elm's local
+state always reflects current indices.
 
-This isn't a bug — it's the contract. The wire is a log of
-*what happened*, not *named entities over time*. Content-by-
-content is how introspecting consumers resolve references.
+The wire is a log of *what happened*, not *named entities over
+time*. Content-by-content is how introspecting consumers resolve
+references.
 
 ## Tests
 
 `replay_test.go` mirrors `tests/LynRummy/ReplayTest.elm`:
-transition-per-action-type, turn-action no-ops, bad-reference
-no-ops, sequenced actions, initial-state shape, ReplayActions
+transition-per-action-type, complete-turn semantics, bad-reference
+no-ops, sequenced actions, initial-state shape, ReplayActionsSeeded
 fold equivalence.
 
 ## Consumer endpoint
 
 `GET /gopher/lynrummy-elm/sessions/<id>/state` — the server
-response is literally `ReplayActions(actions_for_session)`.
-Python player uses this.
+response is `ReplayActionsSeeded(actions_for_session, seed)`.
+
+## TODO
+
+- `ApplyAction`'s no-op on malformed actions (silent) is a
+  deliberate match with Elm, but means client-side bugs don't
+  surface in the replay trace. Consider logging at minimum.

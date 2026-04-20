@@ -51,9 +51,9 @@ enforced minimum).
 
 The rule "no overlap, in bounds" is enforced by the Go referee
 at complete_turn. Who PICKS the locations is a client concern.
-The server's tricks put new stacks at (0,0) as a logical
+Python hint primitives emit `place_hand` with `(0,0)` as a
 placeholder; this module is how the Python auto_player honours
-the rule.
+the rule before posting.
 
 ## Anti-tidy guardrails
 

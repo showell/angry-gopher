@@ -18,13 +18,13 @@ the `refereeBounds` constant.
 ## Public API
 
 - `applyWireAction : WireAction -> Model -> Model` —
-  deterministic dispatch on action kind, nine branches (one per
-  WireAction constructor).
+  deterministic dispatch on action kind, seven branches (one per
+  WireAction constructor; wire is primitives-only as of
+  2026-04-20).
 - `applyChange : BoardActions.BoardChange -> List CardStack -> List CardStack`
   — remove-then-append primitive used by the merge helpers
-  internally and by `WA.TrickResult`. Exposed because Gesture
-  / View code occasionally simulates board changes without
-  going through applyWireAction.
+  internally. Exposed because Gesture / View code occasionally
+  simulates board changes without going through applyWireAction.
 - `findHandCard : Card -> Hand -> Maybe HandCard` — first-match
   lookup by Card identity (value + suit + origin_deck).
   Exposed because the merge helpers need a `Nothing` signal
@@ -47,8 +47,6 @@ the `refereeBounds` constant.
 | `MoveStack { stackIndex, newLoc }` | `BoardActions.moveStack` + `applyChange`. |
 | `CompleteTurn` | Delegates to `Game.applyCompleteTurn` (classify, bank, reset+draw, age, flip, advance), then updates UI-layer `score` + `status` ("Turn N — Player M to play."). |
 | `Undo` | No-op. V1 has no Undo button; action won't appear in logs we write. |
-| `PlayTrick _` | No-op. Server expands to TrickResult at receipt; a PlayTrick in the log would be an upstream bug. |
-| `TrickResult p` | Compound: remove `stacksToRemove` from board, append `stacksToAdd`, remove each card in `handCardsReleased` from the active hand, bump `cardsPlayedThisTurn` by `List.length handCardsReleased`. |
 
 ## The synthetic-HandCard fallback
 
@@ -69,7 +67,7 @@ fully tracked.
 - `hands[activePlayerIndex]` shrinks by exactly one card on
   successful MergeHand / PlaceHand.
 - `cardsPlayedThisTurn` increments by the number of cards
-  released on MergeHand (1), PlaceHand (1), TrickResult (n).
+  released on MergeHand (1) / PlaceHand (1).
 - `CompleteTurn` resets `cardsPlayedThisTurn = 0`, flips
   `activePlayerIndex`, advances `turnIndex`, via delegation to
   `Game.applyCompleteTurn`. All GameState-layer invariants are

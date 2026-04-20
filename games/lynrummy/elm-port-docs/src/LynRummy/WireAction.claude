@@ -5,20 +5,20 @@ just_use WireAction.elm
 
 Action-shaped wire format. Each `WireAction` value names what
 the player did (split, merge-stack, merge-hand, place-hand,
-move-stack, complete-turn, undo, play-trick, trick-result);
-receiver derives post-state by applying the action to prior
-state. No diff on the wire (except `TrickResult`, which
-persists the already-expanded board diff).
+move-stack, complete-turn, undo); receiver derives post-state
+by applying the action to prior state. No diff on the wire.
 
-See `showell/claude_writings/actions_not_diffs.md` for the
-rationale.
+Wire is primitives-only as of 2026-04-20. `TrickResult` (board
+diff) and `PlayTrick` (client convenience) were ripped when
+hints moved client-side (see `project_hints_are_client_side.md`).
+
+See `showell/claude_writings/actions_not_diffs.md` for rationale.
 
 ## Exposed surface
 
-- `type WireAction` — 9 constructors: `Split`, `MergeStack`,
+- `type WireAction` — 7 constructors: `Split`, `MergeStack`,
   `MergeHand`, `PlaceHand`, `MoveStack`, `CompleteTurn`,
-  `Undo`, `PlayTrick`, `TrickResult`. No `Draw`/`Discard`
-  (LynRummy has no draw pile).
+  `Undo`. No `Draw`/`Discard` (LynRummy has no draw pile).
 - `encode : WireAction -> Json.Encode.Value`
 - `decoder : Json.Decode.Decoder WireAction`
 
@@ -32,9 +32,6 @@ rationale.
 {"action":"move_stack","stack_index":I,"new_loc":L}
 {"action":"complete_turn"}
 {"action":"undo"}
-{"action":"play_trick","trick_id":"...","hand_cards":[C,...]}
-{"action":"trick_result","trick_id":"...","stacks_to_remove":[...],
-                         "stacks_to_add":[...],"hand_cards_released":[C,...]}
 ```
 
 Where `S = "left" | "right"`, `C = encoded Card`, `L = {top, left}`.
@@ -43,19 +40,14 @@ Stacks are referenced by **positional index** in the board
 list (V1 choice). Hand cards are referenced by **content
 identity** (Card, not HandCard — wire doesn't carry state).
 
-`PlayTrick` is a submission-time convenience; the server
-expands it to `TrickResult` at receipt time and persists the
-latter. Replay logs contain `TrickResult`, not `PlayTrick`.
-
 ## Tests
 
 `tests/LynRummy/WireActionTest.elm`:
 - Round-trip (encode → decode → equal) for every constructor.
-- Exact-JSON format tests for 4 representative shapes
-  (split / merge_stack / complete_turn / draw) to lock the
-  wire contract against accidental drift.
-- 4 decode-error tests (unknown tag, missing payload, bad
-  side value, missing action tag).
+- Exact-JSON format tests for representative shapes to lock
+  the wire contract against accidental drift.
+- Decode-error tests (unknown tag, missing payload, bad side
+  value, missing action tag).
 
 ## Pointers
 
@@ -67,7 +59,7 @@ latter. Replay logs contain `TrickResult`, not `PlayTrick`.
 - Go counterpart: `games/lynrummy/wire_action.go` +
   `wire_action.claude`. Same shape. Cross-language
   conformance via `games/lynrummy/conformance/` scenarios
-  + format-lock tests on 4 representative shapes.
+  + format-lock tests.
 - Depends on: `LynRummy.Card.encodeCard` / `cardDecoder`,
   `LynRummy.CardStack.encodeBoardLocation` /
   `boardLocationDecoder`, `LynRummy.BoardActions.Side`.

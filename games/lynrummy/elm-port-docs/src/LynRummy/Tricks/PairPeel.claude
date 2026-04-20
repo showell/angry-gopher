@@ -7,7 +7,7 @@ and a peelable board card completes the triplet into a valid
 ## Status
 
 - **Label:** WORKHORSE. Stable.
-- **Mirrors:** Go `games/lynrummy/tricks/pair_peel.go`.
+- **Go counterpart ripped 2026-04-20** (`project_hints_are_client_side.md`).
 
 ## The three pair shapes + their "needs"
 
@@ -63,7 +63,10 @@ re-checking at apply time catches any drift.
 
 ## Pointers
 
-- Go counterpart: `games/lynrummy/tricks/pair_peel.go`.
+- Python counterpart: `hints.pair_peel` in
+  `tools/lynrummy_elm_player/hints.py` (emits primitives).
+  Python had ordering bugs on this trick; Elm does not — see
+  `tricks.dsl` `hint_invariant_pair_peel_run_pair_reversed_hand`.
 - Depends on: `Card`, `CardStack.canExtract`, `StackType`
   (`successor`/`predecessor`/`getStackType`),
   `Tricks.Helpers.extractCard`.

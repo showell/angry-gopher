@@ -310,6 +310,43 @@ hintInvariantDirectPlayExtendPureRun =
                                 )
 
 
+hintInvariantHandStacksPureRunReversedHand : Test
+hintInvariantHandStacksPureRunReversedHand =
+    test "hint_invariant_hand_stacks_pure_run_reversed_hand" <|
+        \_ ->
+            let
+                handCards =
+                    [ { card = { value = Seven, suit = Heart, originDeck = DeckTwo }, state = HandNormal }, { card = { value = Six, suit = Heart, originDeck = DeckTwo }, state = HandNormal }, { card = { value = Five, suit = Heart, originDeck = DeckTwo }, state = HandNormal } ]
+
+                board =
+                    [ { boardCards = [ { card = { value = Jack, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 40, left = 40 } }
+                        ]
+
+                plays =
+                    LynRummy.Tricks.HandStacks.trick.findPlays handCards board
+            in
+            case plays of
+                [] ->
+                    Expect.fail "trick did not fire (no plays)"
+
+                play :: _ ->
+                    let
+                        ( afterBoard, _ ) =
+                            play.apply board
+                    in
+                    case firstIncompleteStack afterBoard of
+                        Nothing ->
+                            Expect.pass
+
+                        Just ( i, s ) ->
+                            Expect.fail
+                                ("stack "
+                                    ++ String.fromInt i
+                                    ++ " is incomplete after trick emission: "
+                                    ++ Debug.toString s
+                                )
+
+
 hintInvariantHandStacksPureRunThreeCard : Test
 hintInvariantHandStacksPureRunThreeCard =
     test "hint_invariant_hand_stacks_pure_run_three_card" <|
@@ -428,6 +465,43 @@ hintInvariantPairPeelRunPairPureEdge =
             let
                 handCards =
                     [ { card = { value = Five, suit = Heart, originDeck = DeckTwo }, state = HandNormal }, { card = { value = Six, suit = Heart, originDeck = DeckTwo }, state = HandNormal } ]
+
+                board =
+                    [ { boardCards = [ { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Eight, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Nine, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ten, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 40, left = 40 } }
+                        ]
+
+                plays =
+                    LynRummy.Tricks.PairPeel.trick.findPlays handCards board
+            in
+            case plays of
+                [] ->
+                    Expect.fail "trick did not fire (no plays)"
+
+                play :: _ ->
+                    let
+                        ( afterBoard, _ ) =
+                            play.apply board
+                    in
+                    case firstIncompleteStack afterBoard of
+                        Nothing ->
+                            Expect.pass
+
+                        Just ( i, s ) ->
+                            Expect.fail
+                                ("stack "
+                                    ++ String.fromInt i
+                                    ++ " is incomplete after trick emission: "
+                                    ++ Debug.toString s
+                                )
+
+
+hintInvariantPairPeelRunPairReversedHand : Test
+hintInvariantPairPeelRunPairReversedHand =
+    test "hint_invariant_pair_peel_run_pair_reversed_hand" <|
+        \_ ->
+            let
+                handCards =
+                    [ { card = { value = Six, suit = Heart, originDeck = DeckTwo }, state = HandNormal }, { card = { value = Five, suit = Heart, originDeck = DeckTwo }, state = HandNormal } ]
 
                 board =
                     [ { boardCards = [ { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Eight, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Nine, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ten, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 40, left = 40 } }
@@ -831,10 +905,12 @@ suite =
         , hintEmptyHandNoSuggestions
         , hintInvariantDirectPlayCompleteSet
         , hintInvariantDirectPlayExtendPureRun
+        , hintInvariantHandStacksPureRunReversedHand
         , hintInvariantHandStacksPureRunThreeCard
         , hintInvariantHandStacksRbRunThreeCard
         , hintInvariantHandStacksSetThreeOfAKind
         , hintInvariantPairPeelRunPairPureEdge
+        , hintInvariantPairPeelRunPairReversedHand
         , hintInvariantPairPeelSetPairEdge
         , hintInvariantPairPeelSetPairMiddle
         , hintInvariantPeelForRunRbEdges

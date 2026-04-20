@@ -10,7 +10,7 @@ them.
 
 - **Label:** WORKHORSE + INTRICATE. Composes multiple
   primitives; the reasoning chain is deep.
-- **Mirrors:** Go `games/lynrummy/tricks/loose_card_play.go`.
+- **Go counterpart ripped 2026-04-20** (`project_hints_are_client_side.md`).
 
 ## Preconditions (findPlays)
 
@@ -94,7 +94,9 @@ corrects the state.
 
 ## Pointers
 
-- Go counterpart: `games/lynrummy/tricks/loose_card_play.go`.
+- Python counterpart: `hints.loose_card_play` in
+  `tools/lynrummy_elm_player/hints.py` (emits primitives; no
+  DSL hint_invariant coverage yet — see TODO in hints.claude).
 - Depends on: `Card`, `CardStack` (stackType, canExtract,
   left/right merge), `StackType`, `Tricks.Helpers` (most of
   it).

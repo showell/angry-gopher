@@ -1,0 +1,36 @@
+just_use test_dsl_conformance.py
+
+# label: TOOL
+# role: Python runner for shared DSL conformance fixtures
+
+Reads `conformance_fixtures.json` (emitted by `cmd/fixturegen`
+from `games/lynrummy/conformance/scenarios/*.dsl`) and dispatches
+each scenario by op. No framework — plain Python asserts, one
+PASS/FAIL line per scenario.
+
+Python is interpreted, so this runner is the *only* Python test
+artifact; the JSON file is the compiled form of the DSL. No
+Python codegen.
+
+## Supported ops
+
+- `build_suggestions` — compares hints.build_suggestions output
+  to expected trick_id + hand_cards rows.
+- `hint_invariant` — calls the named emitter, applies its
+  primitives, asserts every resulting stack classifies as a
+  complete group (set / pure_run / rb_run).
+
+## Pointers
+
+- Enumerate-and-bridge cohort: same fixtures drive the Elm
+  generated `DslConformanceTest.elm` tests. Divergence across
+  languages surfaces as different pass/fail counts.
+- Regenerate fixtures: `go run ./cmd/fixturegen ./games/lynrummy/conformance/scenarios/*.dsl`.
+
+## TODO
+
+- Wire into a preflight / check script (`ops/check`) so this
+  never silently goes stale (para-7 concern from
+  `users/steve/general/loose_ends_at_pause.md`).
+- Once stable, retire the hand-written `test_hints_invariant.py`
+  — it's fully covered by the DSL conformance suite.

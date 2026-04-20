@@ -1,0 +1,11 @@
+just_use dsl.py
+
+# label: EARLY
+# role: render a primitive wire-action sequence in a compact notation
+
+Output-only. Turns a list of primitives (the kind hints.py emits)
+into a one-line-per-step human-readable form for debugging and
+essay inclusion. No parser — consumption is visual.
+
+Unrelated to `games/lynrummy/conformance/scenarios/*.dsl` (that
+DSL is parsed by `cmd/fixturegen`).
