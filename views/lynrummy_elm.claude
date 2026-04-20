@@ -1,6 +1,6 @@
 just_use lynrummy_elm.go
 
-# label: SPIKE (lynrummy-elm-integration)
+# label: SPIKE
 # role: supports feature — LynRummy Elm standalone client, reached through Gopher
 
 V1 (2026-04-17). Serves the compiled Elm LynRummy client from

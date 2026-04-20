@@ -1,122 +1,53 @@
-# Deployment Philosophy
+# Deployment
 
-**As-of:** 2026-04-15
-**Confidence:** Working — principles acted on daily; small ops surface so not every edge case is battle-tested.
+**As-of:** 2026-04-21
+**Confidence:** Working — small ops surface, single-host WSL2 setup.
 **Durability:** Stable until we deploy beyond Steve's WSL2 / single-host setup.
 
 ## Core principles
 
-**Safety over convenience.** The server requires explicit configuration
-for everything and will not assume defaults. If information is missing,
-it refuses to start and tells you exactly what to do. We would rather
-make the operator type one extra line than silently do the wrong thing.
+- **Safety over convenience.** No implicit defaults. Missing config →
+  refuse to start with actionable error.
+- **Data lives outside code.** DB + uploads under `~/AngryGopher/<mode>/`;
+  `rm -rf` the source tree without affecting data (and vice versa).
+- **Explicit modes.** `prod` (persistent) vs `demo` (recreated every start).
+  Startup banner tells you which.
 
-**Data lives outside code.** The database, uploaded files, and config
-files all live in a deployment directory (e.g. `~/AngryGopher/prod/`),
-completely separate from the source code. The code directory contains
-only source, build artifacts, and test files. You can `rm -rf` the
-code directory without affecting any data, and vice versa.
-
-**Explicit modes.** Every deployment is either `prod` (persistent,
-never reset) or `demo` (disposable, recreated on every start).
-There is no ambiguity about which mode you're in — the startup
-banner tells you.
-
-## Configuration
-
-Each deployment has a JSON config file:
+## Config
 
 ```json
-{
-    "mode": "prod",
-    "root": "/home/steve/AngryGopher/prod",
-    "port": 9000
-}
+{ "mode": "prod", "root": "/home/steve/AngryGopher/prod", "port": 9000 }
 ```
 
-| Field | Required | Description |
-|-------|----------|-------------|
-| `mode` | Yes | `"prod"` or `"demo"` |
-| `root` | Yes | Root directory for all deployment data |
-| `port` | Yes | Port to listen on |
-
-The server derives all paths from `root`:
+All fields required. Paths derived from `root`:
 - `{root}/gopher.db` — SQLite database
-- `{root}/uploads/` — uploaded files
+- `{root}/uploads/` — reserved (uploads are currently unused)
 
-Directories are auto-created on startup if they don't exist.
-
-## Starting the server
+## Starting
 
 ```bash
-# Production — opens existing database, never seeds or resets
-GOPHER_CONFIG=~/AngryGopher/prod.json ./gopher-server
-
-# Demo — destroys and recreates database with seed data
-GOPHER_CONFIG=~/AngryGopher/demo.json ./gopher-server
+GOPHER_CONFIG=~/AngryGopher/prod.json ./gopher-server   # persistent
+GOPHER_CONFIG=~/AngryGopher/demo.json ./gopher-server   # disposable
 ```
 
-Without `GOPHER_CONFIG`, the server refuses to start and prints
-a help message.
-
-## Demo mode
-
-Demo mode (`"mode": "demo"`) is for development and testing:
-- Destroys the database on every start
-- Seeds 4 users, 3 channels, 25 test messages
-- Creates a test image in the uploads directory
-- Safe to restart at any time — all data is disposable
-
-## Production mode
-
-Production mode (`"mode": "prod"`) is for real usage:
-- Opens the existing database (creates schema if first run)
-- Never seeds or resets — your data accumulates over time
-- Users are created by direct DB insert (Librarian role)
-- Channels are created via the Angry Cat admin plugin
+Demo mode destroys and recreates the DB on every start (seeds the
+two canonical users, Steve=1 and Claude=2).
 
 ## Backups
-
-The database is a single SQLite file. Back it up by copying:
 
 ```bash
 cp ~/AngryGopher/prod/gopher.db ~/AngryGopher/prod/backup_$(date +%Y%m%d).db
 ```
 
-Do this before schema migrations, risky changes, or periodically.
+Do this before schema changes.
 
-## Schema migrations
+## Schema
 
-For now, schema migrations are done manually. When we change the
-schema in code:
+Schema lives in `schema/schema.go` as the single source of truth.
+No migrations: when the schema changes, back up the prod DB, apply
+the diff by hand (ALTER TABLE) or re-seed, deploy new code.
 
-1. Back up the production database
-2. Write the migration SQL (ALTER TABLE, etc.)
-3. Run it against the database: `sqlite3 prod/gopher.db < migration.sql`
-4. Deploy the new code
+## Tests vs deployment
 
-We'll build a formal migration system when we have more than one
-production instance.
-
-## Automated tests
-
-Tests are completely separate from deployment. They use in-memory
-SQLite (`:memory:`), never touch the filesystem, and don't need
-a config file. Running `go test` has no effect on any deployment.
-
-## Directory layout
-
-```
-~/AngryGopher/
-    prod.json           Config for production
-    demo.json           Config for demo
-    prod/
-        gopher.db       Production database (persistent)
-        uploads/        Production uploaded files
-    demo/
-        gopher.db       Demo database (recreated on start)
-        uploads/        Demo uploaded files
-
-~/showell_repos/angry-gopher/
-    (source code only — no data)
-```
+Tests use `:memory:` SQLite. `go test` never touches a deployment
+directory or config file.

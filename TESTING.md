@@ -1,70 +1,41 @@
-# Testing Guide
+# Testing
 
-**As-of:** 2026-04-18
-**Confidence:** Working — numbers reflect today's suite after
-the Zulip-compliance and legacy-game-lobby rips.
+**As-of:** 2026-04-21
+**Confidence:** Working.
 
-## Running tests
+## Running
 
 ```bash
-go test ./...           # Full suite — ~3s cold, ~1s warm
-go test -short ./...    # Skip tagged long-runners — ~1.6s cold
-go test -count=1 ./...  # Bypass cache — always cold
+go test ./...           # full suite
+go test -short ./...    # skip tagged long-runners
+go test -count=1 ./...  # bypass cache
 ```
 
-## Size and shape
+Every test is sub-10ms. Cold builds are dominated by the
+`modernc.org/sqlite` compile (pure-Go transpiled C); warm
+iteration is ~1s.
 
-**104 tests across 4 packages** (`angry-gopher`,
-`games/lynrummy`, `games/lynrummy/tricks`, `ratelimit`).
+## Organization
 
-Every individual test is sub-10ms. No current test needs
-`-short` to hide it; the flag is preserved for future
-stress/integration tests that may grow loop counts during
-investigation.
+All tests in `package main` share `resetDB()` for fresh
+in-memory databases. Schema comes from `schema/schema.go` —
+tests never hand-write schema.
 
-## Go's build cache dominates wall time
+`resetDB()` applies the schema to a fresh `:memory:` DB, wires
+all package DB references, and seeds minimal users.
 
-The `modernc.org/sqlite` package (pure-Go, transpiled C) is the
-long pole on cold builds. Once Go's build cache is warm, the
-actual test execution is ~1s; cold builds add a few seconds for
-the compile step. Avoid `-count=1` for routine iteration — use
-it only when you need to bypass cached test results.
+## Stress/integration
 
-## Stress/integration pattern
-
-When investigating a race or contention bug, write the test
-with high loop counts. Once the investigation lands, **reduce
-the loop counts** to keep the routine suite fast. Parameterize
-via env var (e.g. `STRESS_MESSAGES=500`) if you want the
-cranked-up version still available.
-
-## Test organization
-
-All tests in `package main` (at the repo root) share `resetDB()`
-for fresh in-memory databases. Single source of schema truth is
-`schema/schema.go` — tests never hand-write schema.
-
-`resetDB()`:
-
-1. Fresh `:memory:` SQLite
-2. Applies `schema.Core`
-3. Wires all package DB references
-4. Resets rate limiter + presence
-5. Seeds minimal test users
-
-Tests that need extra state insert it after `resetDB()` via
-helpers (`sendMessage()`, `addRepo()`, etc.).
+When chasing a race, crank loop counts temporarily; reduce
+before merging. Parameterize via env var (e.g.
+`STRESS_MESSAGES=500`) if the cranked version is worth keeping
+around.
 
 ## One durable lesson
 
 **Single-connection deadlock from in-transaction queries.** A
-function called during a transaction must not issue its own DB
-queries. When a helper is used in multiple contexts (HTTP
-handler + inside a transaction), the DB access pattern must
-work for the most constrained context. Caching is the natural
-escape when the queried data changes rarely. Found via a
-markdown renderer that queried a config table from inside
-`HandleCreateChannel`'s transaction — hung for 60s under
-`MaxOpenConns(1)`.
-
-Others will accumulate here as we hit them.
+helper called during a DB transaction must not issue its own
+DB queries. Under `MaxOpenConns(1)` this hangs the process.
+When a helper is shared across handler + transaction contexts,
+its access pattern must match the most constrained context;
+caching is the usual escape.

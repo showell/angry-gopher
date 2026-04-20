@@ -1,6 +1,6 @@
 just_use events.go
 
-# label: VESTIGIAL
+# label: ELEGANT
 # role: encodes domain knowledge — legacy diff-based host flow
 
 **Status note (2026-04-19):** this module is mostly legacy. The

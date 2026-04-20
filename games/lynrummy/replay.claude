@@ -1,6 +1,6 @@
 just_use replay.go
 
-# label: WORKHORSE (replay-engine)
+# label: WORKHORSE
 # role: domain — server-authoritative state reconstruction from WireActions
 
 Mirror of `elm-port-docs/src/LynRummy/Replay.elm`. Takes a

@@ -7,13 +7,8 @@ needed — passthrough `just_use` directive). The label lives in a
 single `# label: LABEL_NAME` comment line inside the .claude.
 
 Re-run whenever labels change. Idempotent.
-
-The label assignments here are Claude's gut reactions from the
-2026-04-14 triage pass. Labels are advisory, not authoritative —
-edit freely.
 """
 
-import os
 import re
 from pathlib import Path
 from collections import defaultdict
@@ -22,10 +17,6 @@ REPO = Path("/home/steve/showell_repos/angry-gopher")
 
 # Label assignments per Go source file. Keys are repo-relative
 # paths. Files not listed here are left untouched.
-#
-# Canonical label set (13): WORKHORSE, TOOL, ELEGANT, CLEAN_INFRA,
-# INTRICATE, TINY, CANONICAL, SIMPLE, GENERATED, SCAFFOLD,
-# SPRAWLING, ONE_OFF, ROUTER.
 LABELS = {
     # Entry points + top-level wiring
     "main.go":             "ONE_OFF",
@@ -35,105 +26,75 @@ LABELS = {
     "admin_tables.go":     "WORKHORSE",
     "config.go":           "SIMPLE",
     "db.go":               "CANONICAL",
-    "markdown.go":         "CLEAN_INFRA",
-    "routes.go":           "SCAFFOLD",
 
-    # Auth / core packages
-    "auth/auth.go":                "TINY",
-    "channels/channels.go":        "WORKHORSE",
-    "dm/dm.go":                    "WORKHORSE",
-    "events/events.go":            "CANONICAL",
-    "flags/flags.go":              "WORKHORSE",
-    "games/games.go":              "WORKHORSE",
-    "games/plays.go":              "WORKHORSE",
-    "messages/messages.go":        "WORKHORSE",
-    "presence/presence.go":        "CLEAN_INFRA",
-    "ratelimit/ratelimit.go":      "CLEAN_INFRA",
-    "reactions/reactions.go":      "CLEAN_INFRA",
-    "respond/respond.go":          "TINY",
-    "schema/schema.go":            "CANONICAL",
-    "search/search.go":            "WORKHORSE",
-    "users/admin.go":              "WORKHORSE",
-    "users/users.go":              "WORKHORSE",
+    # Auth
+    "auth/auth.go":              "TINY",
+    "schema/schema.go":          "CANONICAL",
 
     # LynRummy domain
-    "lynrummy/board_geometry.go":       "ELEGANT",
-    "lynrummy/card.go":                 "ELEGANT",
-    "lynrummy/card_stack.go":           "ELEGANT",
-    "lynrummy/dealer.go":               "ELEGANT",
-    "lynrummy/events.go":               "ELEGANT",
-    "lynrummy/referee.go":              "ELEGANT",
-    "lynrummy/stack_type.go":           "ELEGANT",
-    "lynrummy/tricks/detect.go":        "SIMPLE",
-    "lynrummy/tricks/direct_play.go":   "SIMPLE",
-    "lynrummy/tricks/hand_stacks.go":   "INTRICATE",
-    "lynrummy/tricks/helpers.go":       "CLEAN_INFRA",
-    "lynrummy/tricks/loose_card_play.go": "INTRICATE",
-    "lynrummy/tricks/pair_peel.go":     "INTRICATE",
-    "lynrummy/tricks/peel_for_run.go":  "INTRICATE",
-    "lynrummy/tricks/rb_swap.go":       "INTRICATE",
-    "lynrummy/tricks/split_for_set.go": "INTRICATE",
-    "lynrummy/tricks/trick.go":         "TINY",
+    "games/lynrummy/board_geometry.go":     "ELEGANT",
+    "games/lynrummy/card.go":               "ELEGANT",
+    "games/lynrummy/card_stack.go":         "ELEGANT",
+    "games/lynrummy/dealer.go":             "ELEGANT",
+    "games/lynrummy/events.go":             "ELEGANT",
+    "games/lynrummy/hand.go":               "WORKHORSE",
+    "games/lynrummy/referee.go":            "ELEGANT",
+    "games/lynrummy/replay.go":             "WORKHORSE",
+    "games/lynrummy/score.go":              "WORKHORSE",
+    "games/lynrummy/stack_type.go":         "ELEGANT",
+    "games/lynrummy/turn_result.go":        "EARLY",
+    "games/lynrummy/wire_action.go":        "WORKHORSE",
+    "games/lynrummy/tricks/direct_play.go": "SIMPLE",
+    "games/lynrummy/tricks/hand_stacks.go": "INTRICATE",
+    "games/lynrummy/tricks/helpers.go":     "CLEAN_INFRA",
+    "games/lynrummy/tricks/hint.go":        "EARLY",
+    "games/lynrummy/tricks/loose_card_play.go": "INTRICATE",
+    "games/lynrummy/tricks/pair_peel.go":   "INTRICATE",
+    "games/lynrummy/tricks/peel_for_run.go": "INTRICATE",
+    "games/lynrummy/tricks/rb_swap.go":     "INTRICATE",
+    "games/lynrummy/tricks/split_for_set.go": "INTRICATE",
+    "games/lynrummy/tricks/trick.go":       "TINY",
 
     # Views
-    "views/channels.go":      "WORKHORSE",
-    "views/dm.go":            "WORKHORSE",
-    "views/games.go":         "WORKHORSE",
-    "views/games_replay.go":  "ONE_OFF",
-    "views/helpers.go":       "CANONICAL",
-    "views/messages.go":      "WORKHORSE",
-    "views/quicknav.go":      "TINY",
-    "views/recent.go":        "TINY",
-    "views/registry.go":      "CANONICAL",
-    "views/registry_generated.go": "GENERATED",
-    "views/search.go":        "WORKHORSE",
-    "views/sse.go":           "CANONICAL",
-    "views/starred.go":       "TINY",
-    "views/tour.go":          "TINY",
-    "views/unread.go":        "TINY",
-    "views/users.go":         "WORKHORSE",
+    "views/claude_landing.go":      "EARLY",
+    "views/games.go":               "WORKHORSE",
+    "views/helpers.go":              "CANONICAL",
+    "views/lynrummy_elm.go":         "SPIKE",
+    "views/quicknav.go":             "TINY",
+    "views/registry.go":             "CANONICAL",
+    "views/registry_generated.go":  "GENERATED",
+    "views/tour.go":                 "TINY",
+    "views/wiki.go":                 "EARLY",
 
     # Tools
-    "cmd/bench_cache/main.go":     "TOOL",
-    "cmd/bench_hydrate/main.go":   "TOOL",
-    "cmd/bench_or/main.go":        "TOOL",
-    "cmd/bench_planner/main.go":   "TOOL",
-    "cmd/bench_render/main.go":    "TOOL",
-    "cmd/bench_search/main.go":    "TOOL",
-    "cmd/bench_split/main.go":     "TOOL",
-    "cmd/bench_throughput/main.go": "TOOL",
-    "cmd/crudgen/main.go":         "SPRAWLING",
-    "cmd/db_query/main.go":        "TOOL",
-    "cmd/fixturegen/main.go":      "TOOL",
-    "cmd/gen_nav/main.go":         "TOOL",
-    "cmd/gen_test_data/main.go":   "TOOL",
-    "cmd/health_check/main.go":    "TOOL",
-    "cmd/import/main.go":          "ONE_OFF",
-    "cmd/stress/main.go":          "TOOL",
+    "cmd/crudgen/main.go":    "SPRAWLING",
+    "cmd/db_query/main.go":   "TOOL",
+    "cmd/fixturegen/main.go": "TOOL",
+    "cmd/reorg/main.go":      "VESTIGIAL",
 }
 
 LABEL_DESCRIPTIONS = {
-    "WORKHORSE":  "Ugly but productive. Don't polish, just modify. Edits are easy enough; aesthetic improvements rarely pay.",
-    "TOOL":       "Stand-alone utility, diagnostic, or benchmark. Low-stakes; edits ripple nowhere.",
+    "CANONICAL":  "Single source of truth for something other code depends on. Edits ripple widely.",
     "ELEGANT":    "Clean and exemplary. Match the style when editing. Use as an example for new work.",
     "CLEAN_INFRA": "Well-factored plumbing. Focused, small, self-contained. Don't bloat it.",
-    "INTRICATE":  "Algorithmically dense. Read carefully before editing; test rigorously.",
-    "TINY":       "So small the whole thing fits in your head. Edits are trivial; bugs are rare.",
-    "CANONICAL":  "Single source of truth for something other code depends on. Edits ripple widely.",
     "SIMPLE":     "Short and obvious. Like TINY but with a bit more going on.",
-    "GENERATED":  "Produced by a tool. Do NOT hand-edit; regenerate instead.",
-    "SCAFFOLD":   "Wires things together. Easy to miss a connection; trace carefully.",
-    "SPRAWLING":  "Big and still growing. Work-in-progress surface area; shape not settled.",
-    "ONE_OFF":    "Genuinely unique in this repo. No pattern to match; accept its idiosyncrasy.",
+    "TINY":       "So small the whole thing fits in your head. Edits are trivial; bugs are rare.",
+    "INTRICATE":  "Algorithmically dense. Read carefully before editing; test rigorously.",
+    "WORKHORSE":  "Ugly but productive. Don't polish, just modify.",
+    "EARLY":      "Kept but not yet stable — survived past SPIKE, still learning its shape.",
+    "SPIKE":      "New exploratory work. Expect churn; don't build on top of it yet.",
     "ROUTER":     "Top-level dispatcher. Delegates to sub-handlers; low logic density.",
+    "GENERATED":  "Produced by a tool. Do NOT hand-edit; regenerate instead.",
+    "TOOL":       "Stand-alone utility, diagnostic, or benchmark. Low-stakes.",
+    "SPRAWLING":  "Big and still growing. Work-in-progress surface area.",
+    "ONE_OFF":    "Genuinely unique in this repo. No pattern to match.",
+    "VESTIGIAL": "Kept for reference; not actively used. Safe to delete when the last reader is gone.",
 }
 
 LABEL_RE = re.compile(r"^#\s*label\s*:.*$", re.MULTILINE)
 
 
 def ensure_claude(go_path: Path, label: str) -> str:
-    """Create or update the .claude companion. Returns the action
-    taken: 'created', 'updated', or 'unchanged'."""
     claude_path = go_path.with_suffix(".claude")
     stem = go_path.name
 
@@ -150,7 +111,6 @@ def ensure_claude(go_path: Path, label: str) -> str:
         updated = LABEL_RE.sub(new_line, existing, count=1)
         claude_path.write_text(updated)
         return "updated"
-    # No label line yet. Append one.
     if existing and not existing.endswith("\n"):
         existing += "\n"
     existing += f"\n# label: {label}\n"
@@ -159,16 +119,15 @@ def ensure_claude(go_path: Path, label: str) -> str:
 
 
 def emit_index() -> str:
-    """Generate LABELS.md grouping files by label."""
     by_label: dict[str, list[str]] = defaultdict(list)
     for path, label in sorted(LABELS.items()):
         by_label[label].append(path)
 
     order = [
         "CANONICAL", "ELEGANT", "CLEAN_INFRA", "SIMPLE", "TINY",
-        "INTRICATE", "WORKHORSE",
-        "SCAFFOLD", "ROUTER", "GENERATED",
-        "TOOL", "SPRAWLING", "ONE_OFF",
+        "INTRICATE", "WORKHORSE", "EARLY", "SPIKE",
+        "ROUTER", "GENERATED",
+        "TOOL", "SPRAWLING", "ONE_OFF", "VESTIGIAL",
     ]
 
     out = []

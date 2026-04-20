@@ -1,6 +1,6 @@
 just_use main.go
 
-# label: VESTIGIAL (one-shot refactor tool)
+# label: VESTIGIAL
 # role: historical — Go-aware package mover
 
 Batch Go package mover. Reads a `REORG` script of

@@ -1,6 +1,6 @@
 just_use wire_action.go
 
-# label: WORKHORSE (wire-action-v2)
+# label: WORKHORSE
 # role: domain — action-shaped wire format (Go side)
 
 Go counterpart to `elm-port-docs/src/LynRummy/WireAction.elm`.
