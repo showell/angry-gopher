@@ -32,7 +32,6 @@ Prod DB at `~/AngryGopher/prod/gopher.db`.
 | Test running, timings, lessons | `TESTING.md` |
 | Per-file domain knowledge | `<file>.claude` sidecar next to any `.go` file |
 | Module-label index | `LABELS.md` (generated) |
-| LynRummy ↔ Elm port status | `games/lynrummy/ELM_TO_GO.md` |
 | Pattern catalog / design vocabulary | `GLOSSARY.md`, `BRIDGES.md` |
 | Agent-collaboration conventions | `~/showell_repos/claude-collab/agent_collab/` |
 
