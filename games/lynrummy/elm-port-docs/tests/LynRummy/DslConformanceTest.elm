@@ -17,6 +17,7 @@ import LynRummy.CardStack
         , HandCardState(..)
         )
 import LynRummy.Referee as Referee exposing (RefereeStage(..), refereeStageToString)
+import LynRummy.StackType as StackType
 import LynRummy.Tricks.DirectPlay
 import LynRummy.Tricks.HandStacks
 import LynRummy.Tricks.Hint as Hint
@@ -31,6 +32,33 @@ import Test exposing (Test, describe, test)
 standardBounds : BoardBounds
 standardBounds =
     { maxWidth = 800, maxHeight = 600, margin = 5 }
+
+
+-- Invariant check: every stack must classify as a complete group
+-- (Set, PureRun, or RedBlackRun). Anything else (Incomplete /
+-- Bogus / Dup) means the trick's emission broke the board.
+isCleanStack : CardStack -> Bool
+isCleanStack s =
+    case StackType.getStackType (List.map .card s.boardCards) of
+        StackType.Set ->
+            True
+
+        StackType.PureRun ->
+            True
+
+        StackType.RedBlackRun ->
+            True
+
+        _ ->
+            False
+
+
+firstIncompleteStack : List CardStack -> Maybe ( Int, CardStack )
+firstIncompleteStack stacks =
+    stacks
+        |> List.indexedMap Tuple.pair
+        |> List.filter (\( _, s ) -> not (isCleanStack s))
+        |> List.head
 
 
 
@@ -207,6 +235,456 @@ hintEmptyHandNoSuggestions =
                 Expect.pass
 
 
+hintInvariantDirectPlayCompleteSet : Test
+hintInvariantDirectPlayCompleteSet =
+    test "hint_invariant_direct_play_complete_set" <|
+        \_ ->
+            let
+                handCards =
+                    [ { card = { value = Five, suit = Diamond, originDeck = DeckTwo }, state = HandNormal } ]
+
+                board =
+                    [ { boardCards = [ { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 40, left = 40 } }
+                        ]
+
+                plays =
+                    LynRummy.Tricks.DirectPlay.trick.findPlays handCards board
+            in
+            case plays of
+                [] ->
+                    Expect.fail "trick did not fire (no plays)"
+
+                play :: _ ->
+                    let
+                        ( afterBoard, _ ) =
+                            play.apply board
+                    in
+                    case firstIncompleteStack afterBoard of
+                        Nothing ->
+                            Expect.pass
+
+                        Just ( i, s ) ->
+                            Expect.fail
+                                ("stack "
+                                    ++ String.fromInt i
+                                    ++ " is incomplete after trick emission: "
+                                    ++ Debug.toString s
+                                )
+
+
+hintInvariantDirectPlayExtendPureRun : Test
+hintInvariantDirectPlayExtendPureRun =
+    test "hint_invariant_direct_play_extend_pure_run" <|
+        \_ ->
+            let
+                handCards =
+                    [ { card = { value = Nine, suit = Diamond, originDeck = DeckTwo }, state = HandNormal } ]
+
+                board =
+                    [ { boardCards = [ { card = { value = Six, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Eight, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 40, left = 40 } }
+                        , { boardCards = [ { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 180, left = 40 } }
+                        ]
+
+                plays =
+                    LynRummy.Tricks.DirectPlay.trick.findPlays handCards board
+            in
+            case plays of
+                [] ->
+                    Expect.fail "trick did not fire (no plays)"
+
+                play :: _ ->
+                    let
+                        ( afterBoard, _ ) =
+                            play.apply board
+                    in
+                    case firstIncompleteStack afterBoard of
+                        Nothing ->
+                            Expect.pass
+
+                        Just ( i, s ) ->
+                            Expect.fail
+                                ("stack "
+                                    ++ String.fromInt i
+                                    ++ " is incomplete after trick emission: "
+                                    ++ Debug.toString s
+                                )
+
+
+hintInvariantHandStacksPureRunThreeCard : Test
+hintInvariantHandStacksPureRunThreeCard =
+    test "hint_invariant_hand_stacks_pure_run_three_card" <|
+        \_ ->
+            let
+                handCards =
+                    [ { card = { value = Five, suit = Heart, originDeck = DeckTwo }, state = HandNormal }, { card = { value = Six, suit = Heart, originDeck = DeckTwo }, state = HandNormal }, { card = { value = Seven, suit = Heart, originDeck = DeckTwo }, state = HandNormal } ]
+
+                board =
+                    [ { boardCards = [ { card = { value = Jack, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 40, left = 40 } }
+                        ]
+
+                plays =
+                    LynRummy.Tricks.HandStacks.trick.findPlays handCards board
+            in
+            case plays of
+                [] ->
+                    Expect.fail "trick did not fire (no plays)"
+
+                play :: _ ->
+                    let
+                        ( afterBoard, _ ) =
+                            play.apply board
+                    in
+                    case firstIncompleteStack afterBoard of
+                        Nothing ->
+                            Expect.pass
+
+                        Just ( i, s ) ->
+                            Expect.fail
+                                ("stack "
+                                    ++ String.fromInt i
+                                    ++ " is incomplete after trick emission: "
+                                    ++ Debug.toString s
+                                )
+
+
+hintInvariantHandStacksRbRunThreeCard : Test
+hintInvariantHandStacksRbRunThreeCard =
+    test "hint_invariant_hand_stacks_rb_run_three_card" <|
+        \_ ->
+            let
+                handCards =
+                    [ { card = { value = Five, suit = Heart, originDeck = DeckTwo }, state = HandNormal }, { card = { value = Six, suit = Club, originDeck = DeckTwo }, state = HandNormal }, { card = { value = Seven, suit = Heart, originDeck = DeckTwo }, state = HandNormal } ]
+
+                board =
+                    [ { boardCards = [ { card = { value = Jack, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 40, left = 40 } }
+                        ]
+
+                plays =
+                    LynRummy.Tricks.HandStacks.trick.findPlays handCards board
+            in
+            case plays of
+                [] ->
+                    Expect.fail "trick did not fire (no plays)"
+
+                play :: _ ->
+                    let
+                        ( afterBoard, _ ) =
+                            play.apply board
+                    in
+                    case firstIncompleteStack afterBoard of
+                        Nothing ->
+                            Expect.pass
+
+                        Just ( i, s ) ->
+                            Expect.fail
+                                ("stack "
+                                    ++ String.fromInt i
+                                    ++ " is incomplete after trick emission: "
+                                    ++ Debug.toString s
+                                )
+
+
+hintInvariantHandStacksSetThreeOfAKind : Test
+hintInvariantHandStacksSetThreeOfAKind =
+    test "hint_invariant_hand_stacks_set_three_of_a_kind" <|
+        \_ ->
+            let
+                handCards =
+                    [ { card = { value = Four, suit = Heart, originDeck = DeckTwo }, state = HandNormal }, { card = { value = Four, suit = Spade, originDeck = DeckTwo }, state = HandNormal }, { card = { value = Four, suit = Diamond, originDeck = DeckTwo }, state = HandNormal } ]
+
+                board =
+                    [ { boardCards = [ { card = { value = Jack, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 40, left = 40 } }
+                        ]
+
+                plays =
+                    LynRummy.Tricks.HandStacks.trick.findPlays handCards board
+            in
+            case plays of
+                [] ->
+                    Expect.fail "trick did not fire (no plays)"
+
+                play :: _ ->
+                    let
+                        ( afterBoard, _ ) =
+                            play.apply board
+                    in
+                    case firstIncompleteStack afterBoard of
+                        Nothing ->
+                            Expect.pass
+
+                        Just ( i, s ) ->
+                            Expect.fail
+                                ("stack "
+                                    ++ String.fromInt i
+                                    ++ " is incomplete after trick emission: "
+                                    ++ Debug.toString s
+                                )
+
+
+hintInvariantPairPeelRunPairPureEdge : Test
+hintInvariantPairPeelRunPairPureEdge =
+    test "hint_invariant_pair_peel_run_pair_pure_edge" <|
+        \_ ->
+            let
+                handCards =
+                    [ { card = { value = Five, suit = Heart, originDeck = DeckTwo }, state = HandNormal }, { card = { value = Six, suit = Heart, originDeck = DeckTwo }, state = HandNormal } ]
+
+                board =
+                    [ { boardCards = [ { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Eight, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Nine, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ten, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 40, left = 40 } }
+                        ]
+
+                plays =
+                    LynRummy.Tricks.PairPeel.trick.findPlays handCards board
+            in
+            case plays of
+                [] ->
+                    Expect.fail "trick did not fire (no plays)"
+
+                play :: _ ->
+                    let
+                        ( afterBoard, _ ) =
+                            play.apply board
+                    in
+                    case firstIncompleteStack afterBoard of
+                        Nothing ->
+                            Expect.pass
+
+                        Just ( i, s ) ->
+                            Expect.fail
+                                ("stack "
+                                    ++ String.fromInt i
+                                    ++ " is incomplete after trick emission: "
+                                    ++ Debug.toString s
+                                )
+
+
+hintInvariantPairPeelSetPairEdge : Test
+hintInvariantPairPeelSetPairEdge =
+    test "hint_invariant_pair_peel_set_pair_edge" <|
+        \_ ->
+            let
+                handCards =
+                    [ { card = { value = Five, suit = Heart, originDeck = DeckTwo }, state = HandNormal }, { card = { value = Five, suit = Spade, originDeck = DeckTwo }, state = HandNormal } ]
+
+                board =
+                    [ { boardCards = [ { card = { value = Five, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Eight, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 40, left = 40 } }
+                        ]
+
+                plays =
+                    LynRummy.Tricks.PairPeel.trick.findPlays handCards board
+            in
+            case plays of
+                [] ->
+                    Expect.fail "trick did not fire (no plays)"
+
+                play :: _ ->
+                    let
+                        ( afterBoard, _ ) =
+                            play.apply board
+                    in
+                    case firstIncompleteStack afterBoard of
+                        Nothing ->
+                            Expect.pass
+
+                        Just ( i, s ) ->
+                            Expect.fail
+                                ("stack "
+                                    ++ String.fromInt i
+                                    ++ " is incomplete after trick emission: "
+                                    ++ Debug.toString s
+                                )
+
+
+hintInvariantPairPeelSetPairMiddle : Test
+hintInvariantPairPeelSetPairMiddle =
+    test "hint_invariant_pair_peel_set_pair_middle" <|
+        \_ ->
+            let
+                handCards =
+                    [ { card = { value = Five, suit = Heart, originDeck = DeckTwo }, state = HandNormal }, { card = { value = Five, suit = Spade, originDeck = DeckTwo }, state = HandNormal } ]
+
+                board =
+                    [ { boardCards = [ { card = { value = Two, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Eight, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Nine, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 40, left = 40 } }
+                        ]
+
+                plays =
+                    LynRummy.Tricks.PairPeel.trick.findPlays handCards board
+            in
+            case plays of
+                [] ->
+                    Expect.fail "trick did not fire (no plays)"
+
+                play :: _ ->
+                    let
+                        ( afterBoard, _ ) =
+                            play.apply board
+                    in
+                    case firstIncompleteStack afterBoard of
+                        Nothing ->
+                            Expect.pass
+
+                        Just ( i, s ) ->
+                            Expect.fail
+                                ("stack "
+                                    ++ String.fromInt i
+                                    ++ " is incomplete after trick emission: "
+                                    ++ Debug.toString s
+                                )
+
+
+hintInvariantPeelForRunRbEdges : Test
+hintInvariantPeelForRunRbEdges =
+    test "hint_invariant_peel_for_run_rb_edges" <|
+        \_ ->
+            let
+                handCards =
+                    [ { card = { value = Ten, suit = Diamond, originDeck = DeckTwo }, state = HandNormal } ]
+
+                board =
+                    [ { boardCards = [ { card = { value = Six, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Eight, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Nine, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 40, left = 40 } }
+                        , { boardCards = [ { card = { value = Jack, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 40, left = 300 } }
+                        ]
+
+                plays =
+                    LynRummy.Tricks.PeelForRun.trick.findPlays handCards board
+            in
+            case plays of
+                [] ->
+                    Expect.fail "trick did not fire (no plays)"
+
+                play :: _ ->
+                    let
+                        ( afterBoard, _ ) =
+                            play.apply board
+                    in
+                    case firstIncompleteStack afterBoard of
+                        Nothing ->
+                            Expect.pass
+
+                        Just ( i, s ) ->
+                            Expect.fail
+                                ("stack "
+                                    ++ String.fromInt i
+                                    ++ " is incomplete after trick emission: "
+                                    ++ Debug.toString s
+                                )
+
+
+hintInvariantRbSwapMiddleSwapClubsHome : Test
+hintInvariantRbSwapMiddleSwapClubsHome =
+    test "hint_invariant_rb_swap_middle_swap_clubs_home" <|
+        \_ ->
+            let
+                handCards =
+                    [ { card = { value = Four, suit = Spade, originDeck = DeckTwo }, state = HandNormal } ]
+
+                board =
+                    [ { boardCards = [ { card = { value = Three, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 40, left = 40 } }
+                        , { boardCards = [ { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 40, left = 300 } }
+                        , { boardCards = [ { card = { value = Nine, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ten, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 180, left = 40 } }
+                        ]
+
+                plays =
+                    LynRummy.Tricks.RbSwap.trick.findPlays handCards board
+            in
+            case plays of
+                [] ->
+                    Expect.fail "trick did not fire (no plays)"
+
+                play :: _ ->
+                    let
+                        ( afterBoard, _ ) =
+                            play.apply board
+                    in
+                    case firstIncompleteStack afterBoard of
+                        Nothing ->
+                            Expect.pass
+
+                        Just ( i, s ) ->
+                            Expect.fail
+                                ("stack "
+                                    ++ String.fromInt i
+                                    ++ " is incomplete after trick emission: "
+                                    ++ Debug.toString s
+                                )
+
+
+hintInvariantSplitForSetBothEdges : Test
+hintInvariantSplitForSetBothEdges =
+    test "hint_invariant_split_for_set_both_edges" <|
+        \_ ->
+            let
+                handCards =
+                    [ { card = { value = Five, suit = Heart, originDeck = DeckTwo }, state = HandNormal } ]
+
+                board =
+                    [ { boardCards = [ { card = { value = Five, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Eight, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 40, left = 40 } }
+                        , { boardCards = [ { card = { value = Five, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Eight, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 40, left = 300 } }
+                        ]
+
+                plays =
+                    LynRummy.Tricks.SplitForSet.trick.findPlays handCards board
+            in
+            case plays of
+                [] ->
+                    Expect.fail "trick did not fire (no plays)"
+
+                play :: _ ->
+                    let
+                        ( afterBoard, _ ) =
+                            play.apply board
+                    in
+                    case firstIncompleteStack afterBoard of
+                        Nothing ->
+                            Expect.pass
+
+                        Just ( i, s ) ->
+                            Expect.fail
+                                ("stack "
+                                    ++ String.fromInt i
+                                    ++ " is incomplete after trick emission: "
+                                    ++ Debug.toString s
+                                )
+
+
+hintInvariantSplitForSetOneMiddleOneEdge : Test
+hintInvariantSplitForSetOneMiddleOneEdge =
+    test "hint_invariant_split_for_set_one_middle_one_edge" <|
+        \_ ->
+            let
+                handCards =
+                    [ { card = { value = Five, suit = Heart, originDeck = DeckTwo }, state = HandNormal } ]
+
+                board =
+                    [ { boardCards = [ { card = { value = Two, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Eight, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Nine, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 40, left = 40 } }
+                        , { boardCards = [ { card = { value = Five, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Eight, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 40, left = 400 } }
+                        ]
+
+                plays =
+                    LynRummy.Tricks.SplitForSet.trick.findPlays handCards board
+            in
+            case plays of
+                [] ->
+                    Expect.fail "trick did not fire (no plays)"
+
+                play :: _ ->
+                    let
+                        ( afterBoard, _ ) =
+                            play.apply board
+                    in
+                    case firstIncompleteStack afterBoard of
+                        Nothing ->
+                            Expect.pass
+
+                        Just ( i, s ) ->
+                            Expect.fail
+                                ("stack "
+                                    ++ String.fromInt i
+                                    ++ " is incomplete after trick emission: "
+                                    ++ Debug.toString s
+                                )
+
+
 hintNoPlaysForLonelyUnplayableCard : Test
 hintNoPlaysForLonelyUnplayableCard =
     test "hint_no_plays_for_lonely_unplayable_card" <|
@@ -351,6 +829,18 @@ suite =
         , geometryOverlap
         , hintDirectPlayWinsPriorityOnOpeningBoard
         , hintEmptyHandNoSuggestions
+        , hintInvariantDirectPlayCompleteSet
+        , hintInvariantDirectPlayExtendPureRun
+        , hintInvariantHandStacksPureRunThreeCard
+        , hintInvariantHandStacksRbRunThreeCard
+        , hintInvariantHandStacksSetThreeOfAKind
+        , hintInvariantPairPeelRunPairPureEdge
+        , hintInvariantPairPeelSetPairEdge
+        , hintInvariantPairPeelSetPairMiddle
+        , hintInvariantPeelForRunRbEdges
+        , hintInvariantRbSwapMiddleSwapClubsHome
+        , hintInvariantSplitForSetBothEdges
+        , hintInvariantSplitForSetOneMiddleOneEdge
         , hintNoPlaysForLonelyUnplayableCard
         , inventoryCardFromNowhere
         , midturnAllowsBogus

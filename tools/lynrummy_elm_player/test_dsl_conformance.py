@@ -10,6 +10,11 @@ scenario by op. No framework. Run directly:
 Supported ops:
   - build_suggestions: invoke hints.build_suggestions, compare
     trick_id + hand_cards row-by-row against `expect: suggestions`.
+  - hint_invariant: invoke the named trick's emitter, apply its
+    primitives to the input board, and assert every resulting
+    stack classifies as a complete group (set / pure_run /
+    rb_run). Any other result fails — an invariant-violating
+    emission is a bug.
 
 Python is interpreted, so there is no codegen step for these
 tests — the JSON file IS the source. Regenerate via:
@@ -67,8 +72,60 @@ def _run_build_suggestions(sc):
     return True, f"OK — {len(got)} suggestions"
 
 
+def _apply_primitives(board, prims):
+    board = hints._copy_board(board)
+    for p in prims:
+        kind = p["action"]
+        if kind == "split":
+            board = hints._apply_split(board, p["stack_index"], p["card_index"])
+        elif kind == "move_stack":
+            board = hints._apply_move(board, p["stack_index"], p["new_loc"])
+        elif kind == "merge_stack":
+            board = hints._apply_merge_stack(
+                board, p["source_stack"], p["target_stack"],
+                p.get("side", "right"))
+        elif kind == "merge_hand":
+            board = hints._apply_merge_hand(
+                board, p["target_stack"], p["hand_card"],
+                p.get("side", "right"))
+        elif kind == "place_hand":
+            board = hints._apply_place_hand(
+                board, p["hand_card"], p["loc"])
+    return board
+
+
+def _fmt_card(c):
+    vals = {1: "A", 10: "T", 11: "J", 12: "Q", 13: "K"}
+    return f"{vals.get(c['value'], str(c['value']))}{'CDSH'[c['suit']]}"
+
+
+def _fmt_stack(s):
+    return "[" + ",".join(_fmt_card(bc["card"]) for bc in s["board_cards"]) + "]"
+
+
+def _run_hint_invariant(sc):
+    trick_name = sc["trick"]
+    emitter = getattr(hints, trick_name, None)
+    if emitter is None:
+        return False, f"unknown trick {trick_name!r}"
+    prims = emitter(sc["hand"], sc["board"])
+    if prims is None:
+        return False, "emitter returned None (trick did not fire)"
+    try:
+        final = _apply_primitives(sc["board"], prims)
+    except (IndexError, KeyError) as e:
+        return False, f"simulation crashed: {type(e).__name__}: {e}"
+    for i, s in enumerate(final):
+        cards = [bc["card"] for bc in s["board_cards"]]
+        if hints._classify(cards) == "other":
+            return False, (f"stack {i} ({_fmt_stack(s)}) is incomplete "
+                           f"after {len(prims)} primitives")
+    return True, f"OK — {len(prims)} primitives, {len(final)} clean stacks"
+
+
 DISPATCH = {
     "build_suggestions": _run_build_suggestions,
+    "hint_invariant":    _run_hint_invariant,
 }
 
 

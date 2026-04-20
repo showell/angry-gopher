@@ -94,6 +94,7 @@ var goSupportedOps = map[string]bool{
 // JSON at run time and dispatches per op. No Python codegen.
 var pythonSupportedOps = map[string]bool{
 	"build_suggestions": true,
+	"hint_invariant":    true,
 }
 
 func main() {
@@ -400,6 +401,7 @@ import LynRummy.CardStack
         , HandCardState(..)
         )
 import LynRummy.Referee as Referee exposing (RefereeStage(..), refereeStageToString)
+import LynRummy.StackType as StackType
 import LynRummy.Tricks.DirectPlay
 import LynRummy.Tricks.HandStacks
 import LynRummy.Tricks.Hint as Hint
@@ -414,6 +416,33 @@ import Test exposing (Test, describe, test)
 standardBounds : BoardBounds
 standardBounds =
     { maxWidth = 800, maxHeight = 600, margin = 5 }
+
+
+-- Invariant check: every stack must classify as a complete group
+-- (Set, PureRun, or RedBlackRun). Anything else (Incomplete /
+-- Bogus / Dup) means the trick's emission broke the board.
+isCleanStack : CardStack -> Bool
+isCleanStack s =
+    case StackType.getStackType (List.map .card s.boardCards) of
+        StackType.Set ->
+            True
+
+        StackType.PureRun ->
+            True
+
+        StackType.RedBlackRun ->
+            True
+
+        _ ->
+            False
+
+
+firstIncompleteStack : List CardStack -> Maybe ( Int, CardStack )
+firstIncompleteStack stacks =
+    stacks
+        |> List.indexedMap Tuple.pair
+        |> List.filter (\( _, s ) -> not (isCleanStack s))
+        |> List.head
 
 {{range .}}
 
@@ -503,10 +532,50 @@ func elmScenarioBody(sc Scenario) string {
 		elmValidateMove(&b, sc, true)
 	case "build_suggestions":
 		elmBuildSuggestions(&b, sc)
+	case "hint_invariant":
+		trickVar, ok := elmPortedTricks[sc.Trick]
+		if !ok {
+			fmt.Fprintf(&b, "            Expect.fail \"unknown trick %s\"", sc.Trick)
+			return b.String()
+		}
+		elmHintInvariant(&b, sc, trickVar)
 	default:
 		fmt.Fprintf(&b, "            Expect.fail \"unknown op %s\"", sc.Op)
 	}
 	return b.String()
+}
+
+
+// elmHintInvariant emits a test body that runs the named trick
+// against the scenario's (hand, board), applies the first Play,
+// and asserts every resulting stack classifies as a complete
+// group. An Elm Play's `apply` returns (newBoard, consumedHand)
+// directly, so no primitive replay is needed.
+func elmHintInvariant(b *strings.Builder, sc Scenario, trickVar string) {
+	fmt.Fprintf(b, "            let\n                handCards =\n                    %s\n\n                board =\n                    %s\n\n                plays =\n                    %s.findPlays handCards board\n            in\n",
+		elmHandCards(sc.Hand),
+		elmStacks(sc.Board, "                        "),
+		trickVar)
+	b.WriteString(`            case plays of
+                [] ->
+                    Expect.fail "trick did not fire (no plays)"
+
+                play :: _ ->
+                    let
+                        ( afterBoard, _ ) =
+                            play.apply board
+                    in
+                    case firstIncompleteStack afterBoard of
+                        Nothing ->
+                            Expect.pass
+
+                        Just ( i, s ) ->
+                            Expect.fail
+                                ("stack "
+                                    ++ String.fromInt i
+                                    ++ " is incomplete after trick emission: "
+                                    ++ Debug.toString s
+                                )`)
 }
 
 
