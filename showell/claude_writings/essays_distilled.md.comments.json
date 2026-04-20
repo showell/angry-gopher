@@ -1,0 +1,28 @@
+{
+  "comments": [
+    {
+      "para_index": 3,
+      "author": "Steve",
+      "timestamp": "2026-04-20T07:38:00-04:00",
+      "text": "great, this is the process in action"
+    },
+    {
+      "para_index": 4,
+      "author": "Steve",
+      "timestamp": "2026-04-20T07:39:21-04:00",
+      "text": "Cool. We want to add sidecars for the .go files in claude-collab shortly after this. I realize the Go server for claude-collab was quire straightforward, so it didn't exactly illustrate this point inherently."
+    },
+    {
+      "para_index": 10,
+      "author": "Steve",
+      "timestamp": "2026-04-20T07:41:12-04:00",
+      "text": "We will definitely see this pattern play out with the social media coffee shop work."
+    },
+    {
+      "para_index": 12,
+      "author": "Steve",
+      "timestamp": "2026-04-20T07:42:49-04:00",
+      "text": "This is a particularly funny one, because at the end of the day, you became friends again with the wire! You noted that the wire IS the system language after all in your 3-languages essay. Let's try to reconcile these two things at the console."
+    }
+  ]
+}
