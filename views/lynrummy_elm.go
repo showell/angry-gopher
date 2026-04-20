@@ -82,14 +82,38 @@ func lynrummyElmNewSession(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+
+	// Optional body: {"label": "..."}. Empty-body POST (the Elm
+	// client path) leaves label as "". Label is a human-readable
+	// session handle — agents use it to distinguish their games
+	// from Steve's in the sessions list.
+	var label string
+	if r.ContentLength > 0 {
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			http.Error(w, "read body: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		if len(body) > 0 {
+			var req struct {
+				Label string `json:"label"`
+			}
+			if err := json.Unmarshal(body, &req); err != nil {
+				http.Error(w, "decode: "+err.Error(), http.StatusBadRequest)
+				return
+			}
+			label = req.Label
+		}
+	}
+
 	now := time.Now().Unix()
 	seed := now*1_000_003 + int64(mathRandInt63()) // monotonic + noise
 	if seed == 0 {
 		seed = 1 // zero means "no shuffle" downstream; force non-zero
 	}
 	res, err := DB.Exec(
-		`INSERT INTO lynrummy_elm_sessions (created_at, deck_seed) VALUES (?, ?)`,
-		now, seed,
+		`INSERT INTO lynrummy_elm_sessions (created_at, label, deck_seed) VALUES (?, ?, ?)`,
+		now, label, seed,
 	)
 	if err != nil {
 		http.Error(w, "insert session: "+err.Error(), http.StatusInternalServerError)
@@ -100,7 +124,7 @@ func lynrummyElmNewSession(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "lastinsertid: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	log.Printf("lynrummy-elm session: new id=%d seed=%d", id, seed)
+	log.Printf("lynrummy-elm session: new id=%d seed=%d label=%q", id, seed, label)
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	fmt.Fprintf(w, `{"session_id":%d}`, id)
 }

@@ -5,9 +5,10 @@ just_use auto_player.py
 
 Walks the /hint suggestions list and takes the FIRST one each
 turn, posting its action verbatim. When no hints fire, calls
-complete_turn and classifies the result. Exits on
-success_as_victor / success_with_hand_emptied, or after
-max-actions.
+complete_turn. Terminates when the deck drops to DECK_LOW_WATER
+(≈10 cards) — not on "victory" events, which are per-turn
+bonuses in LynRummy, not game endpoints. See
+`project_lynrummy_game_end_condition.md`.
 
 Not an optimizer. Not "greedy." Mirrors a human playing the most
 obvious trick — which is the /hint endpoint's native contract

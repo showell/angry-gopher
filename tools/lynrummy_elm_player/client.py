@@ -67,9 +67,21 @@ class Client:
 
     # --- Session lifecycle ---
 
-    def new_session(self):
-        """POST /new-session → returns integer session id."""
-        resp = self._post(f"{self.base}/new-session", b"")
+    def new_session(self, label=None):
+        """POST /new-session → returns integer session id.
+
+        `label` (optional) is a human-readable handle so an
+        agent's games are findable in the sessions list
+        without guessing ids. Empty/None → server stores "".
+        """
+        if label:
+            body = json.dumps({"label": label}).encode("utf-8")
+            resp = self._post(
+                f"{self.base}/new-session", body,
+                content_type="application/json",
+            )
+        else:
+            resp = self._post(f"{self.base}/new-session", b"")
         return resp["session_id"]
 
     # --- Action submission (one method per WireAction constructor) ---

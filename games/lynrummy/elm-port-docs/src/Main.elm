@@ -522,7 +522,7 @@ replayFrame nowMs model =
                                                 applyWireAction action model
                                         in
                                         ( { modelAfter
-                                            | replayAnim = Beating { untilMs = nowMs + 1000 }
+                                            | replayAnim = Beating { untilMs = nowMs + beatAfter action }
                                             , drag = NotDragging
                                           }
                                         , Cmd.none
@@ -696,6 +696,21 @@ handCardIndex target cards =
                         go (i + 1) rest
     in
     go 0 cards
+
+
+{-| Inter-action beat duration (ms). `CompleteTurn` gets extra
+time because a lot happens at once — hand refresh, score
+update, active-player swap, dealt cards appearing. A normal
+1-second beat reads as buggy at that boundary.
+-}
+beatAfter : WireAction -> Float
+beatAfter action =
+    case action of
+        WA.CompleteTurn ->
+            2500
+
+        _ ->
+            1000
 
 
 pathDuration : List State.GesturePoint -> Float

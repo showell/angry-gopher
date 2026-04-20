@@ -5,7 +5,7 @@ dummyLoc = (0, 0); clients (this Python auto_player, the Elm UI)
 decide where stacks actually sit. The referee enforces the
 "no overlap, in bounds" rule at complete_turn time.
 
-Different clients/humans may arrange stacks differently (Steve's
+Different clients/humans arrange stacks differently (Steve's
 observation: "human players have very different tidying
 approaches"). This module is one style — find the first
 row-major open slot.
@@ -27,8 +27,29 @@ BOARD_MAX_WIDTH = 800
 BOARD_MAX_HEIGHT = 600
 BOARD_MARGIN = 5
 
-# Placement-sweep granularity in pixels.
+# Placement-sweep granularity in pixels (fallback path only).
 PLACE_STEP = 10
+
+# Packing gaps — the size of the "breathing room" the agent
+# leaves between adjacent stacks. Asymmetric because stacks
+# extend horizontally, so touching rows feel cramped to a
+# human eye; touching columns feel comparatively fine. These
+# are bigger than BOARD_MARGIN: the referee enforces the
+# legal-minimum 5px, but a board packed at that margin reads
+# as robotic.
+PACK_GAP_X = 10
+PACK_GAP_Y = 22
+
+# Anti-alignment offset. A fixed +2px nudge applied to every
+# placement. Keeps output deterministic while breaking
+# pixel-perfect alignment with grid multiples — enough to make
+# the board not read as machine-tidied. Same inputs → same
+# output, always.
+ANTI_ALIGN_PX = 2
+
+# Starting anchor when the board is empty. Hand-feel default;
+# a little down-and-right from the top-left corner.
+BOARD_START = (24, 24)  # (left, top)
 
 
 def stack_width(card_count):
@@ -70,16 +91,76 @@ def find_open_loc(existing, card_count):
     """Return {"top","left"} for a new stack of `card_count` cards
     that does not overlap any stack in `existing`.
 
-    Sweeps row-major from (0, 0) in PLACE_STEP increments. Falls
-    back to bottom-left corner if nothing fits.
+    Packing-problem approach: scan top-left to bottom-right at
+    PLACE_STEP granularity with PACK_GAP_X / PACK_GAP_Y breathing
+    room, return the first valid position. This is first-fit
+    bin-packing — the classic "find a logical place as the eye
+    scans" heuristic humans use when organizing. Stacks tile
+    naturally without a grid because widths vary and gaps are
+    enforced, not aligned to a rule.
+
+    100% deterministic. Same board state → same placement.
+    No RNG, no hashing, no per-session variability.
+
+    Every placement is offset by ANTI_ALIGN_PX in both axes —
+    a fixed 2px nudge that breaks pixel-perfect alignment with
+    step multiples without introducing any non-determinism.
+
+    Falls back to the legal-margin grid sweep if no spot
+    satisfies the packing gap (board truly crowded).
 
     `existing` is a list of state-dict stacks.
     """
     new_w = stack_width(card_count)
     new_h = CARD_HEIGHT
-
     existing_rects = [stack_rect(s) for s in existing]
 
+    # Empty board → fixed starting anchor.
+    if not existing_rects:
+        left, top = BOARD_START
+        return _anti_align(left, top, new_w, new_h)
+
+    # First-fit scan at packing gap. Tighter step than the
+    # legal-margin fallback so the 2px anti-align offset
+    # actually lands off-grid.
+    step = 15
+    min_left = BOARD_MARGIN
+    min_top = BOARD_MARGIN
+    max_left = BOARD_MAX_WIDTH - new_w - BOARD_MARGIN
+    max_top = BOARD_MAX_HEIGHT - new_h - BOARD_MARGIN
+
+    top = min_top
+    while top <= max_top:
+        left = min_left
+        while left <= max_left:
+            padded = (
+                left - PACK_GAP_X,
+                top - PACK_GAP_Y,
+                left + new_w + PACK_GAP_X,
+                top + new_h + PACK_GAP_Y,
+            )
+            if not any(rects_overlap(padded, er) for er in existing_rects):
+                return _anti_align(left, top, new_w, new_h)
+            left += step
+        top += step
+
+    # Board too crowded for the packing gap — drop to legal margin.
+    return _grid_sweep_open_loc(existing_rects, new_w, new_h)
+
+
+def _anti_align(left, top, new_w, new_h):
+    """Apply the fixed ANTI_ALIGN_PX offset, clamped to bounds."""
+    jl = min(left + ANTI_ALIGN_PX, BOARD_MAX_WIDTH - new_w)
+    jt = min(top + ANTI_ALIGN_PX, BOARD_MAX_HEIGHT - new_h)
+    return {"top": jt, "left": jl}
+
+
+def _grid_sweep_open_loc(existing_rects, new_w, new_h):
+    """Deterministic row-major sweep at the legal (BOARD_MARGIN)
+    padding. Only used when packed-by-clearance can't satisfy
+    the human-style spacing — the board is crowded enough that
+    legal-minimum is the best we can do.
+    """
     top = 0
     while top + new_h <= BOARD_MAX_HEIGHT:
         left = 0
@@ -90,8 +171,7 @@ def find_open_loc(existing, card_count):
                 left + new_w + BOARD_MARGIN,
                 top + new_h + BOARD_MARGIN,
             )
-            collides = any(rects_overlap(candidate, er) for er in existing_rects)
-            if not collides:
+            if not any(rects_overlap(candidate, er) for er in existing_rects):
                 return {"top": top, "left": left}
             left += PLACE_STEP
         top += PLACE_STEP

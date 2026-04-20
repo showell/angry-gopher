@@ -15,19 +15,112 @@ If --session is omitted, creates a new session.
 """
 
 import argparse
+import datetime
 import sys
 
 from client import Client
 from geometry import find_open_loc, find_violation, loc_clears_others
 
 
-# Turn results that end the game.
-TERMINAL_RESULTS = {"success_as_victor", "success_with_hand_emptied"}
+# Game termination: deck running out, not a turn_result variant.
+# LynRummy doesn't end on "victory" — humans keep playing past
+# hand-emptied events; the middle game is the fun part. Real end
+# is when the deck is nearly exhausted. See
+# project_lynrummy_game_end_condition.md.
+DECK_LOW_WATER = 10
+
+# `failure` is the one turn_result that still stops the loop —
+# means the server refused a dirty-board complete_turn, which is
+# a bug state, not normal play.
+TERMINAL_RESULTS = {"failure"}
 
 # Cap per-action settle iterations defensively. In practice one
 # violation triggers at most a handful of move_stack actions; a
 # runaway loop means a bug, not legitimate work.
 MAX_SETTLE_STEPS = 20
+
+
+def plan_trick_result_locs(c, session_id, action, *, verbose=True):
+    """Mutate a trick_result action in place so each new stack in
+    stacks_to_add carries a pre-planned location instead of
+    dummyLoc. The human algorithm: plan where the new stack will
+    sit BEFORE executing; execute with location already decided.
+
+    Without this, stacks land at (0, 0) and the settle pass has
+    to clean up, which replay faithfully renders as a robotic
+    teleport-then-walk. With this, the trick places once, in the
+    right spot.
+
+    Planning is done against the board-after-removals so the new
+    stack doesn't conflict with something that's about to vanish.
+    Multiple sibling new stacks pack against each other, not
+    against dummyLoc collisions.
+
+    No-op for non-trick_result actions.
+    """
+    if action.get("action") != "trick_result":
+        return
+
+    stacks_to_add = action.get("stacks_to_add") or []
+    if not stacks_to_add:
+        return
+
+    state = c.get_state(session_id)
+    board = state["state"]["board"]
+
+    stacks_to_remove = action.get("stacks_to_remove") or []
+    planning_board = _board_after_removals(board, stacks_to_remove)
+    placed = list(planning_board)
+
+    for i, stack in enumerate(stacks_to_add):
+        card_count = len(stack.get("board_cards", []))
+        if card_count == 0:
+            continue
+        loc = find_open_loc(placed, card_count)
+        stack["loc"] = loc
+        # Include this placement so sibling new stacks pack
+        # against it.
+        placed.append(
+            {"loc": loc, "board_cards": stack["board_cards"]}
+        )
+        if verbose:
+            print(
+                f"    pre-plan: new stack ({card_count}c) "
+                f"→ ({loc['left']},{loc['top']})"
+            )
+
+
+def _board_after_removals(board, stacks_to_remove):
+    """Simulate the board state after a trick's stacks_to_remove
+    are applied. Match by (loc + cards) — the referee's
+    stacks_equal rule. First match wins for each target.
+    """
+    to_remove = set()
+    for target in stacks_to_remove:
+        for i, b in enumerate(board):
+            if i in to_remove:
+                continue
+            if _stacks_equal(b, target):
+                to_remove.add(i)
+                break
+    return [s for i, s in enumerate(board) if i not in to_remove]
+
+
+def _stacks_equal(a, b):
+    """Mirror Go referee's StacksEqual: same loc + pairwise card
+    identity (value + suit + origin_deck). BoardCard.state is
+    ignored — it's recency, not identity.
+    """
+    if a.get("loc") != b.get("loc"):
+        return False
+    a_cards = a.get("board_cards") or []
+    b_cards = b.get("board_cards") or []
+    if len(a_cards) != len(b_cards):
+        return False
+    for ac, bc in zip(a_cards, b_cards):
+        if ac.get("card") != bc.get("card"):
+            return False
+    return True
 
 
 def pre_settle_merge(c, session_id, action, *, verbose=True):
@@ -136,12 +229,19 @@ def play_session(c, session_id, *, max_actions=200, verbose=True):
 
         if suggestions:
             first = suggestions[0]
+            # Plan first, execute second — the human algorithm.
+            # Plan A: merge target needs a fresh home? Pre-move it.
+            # Plan B: trick produces new stacks? Pre-assign locs.
             pre_settle_merge(c, session_id, first["action"], verbose=verbose)
+            plan_trick_result_locs(c, session_id, first["action"], verbose=verbose)
             c.send_action(session_id, first["action"])
             actions += 1
             if verbose:
                 print(f"  act {actions}: {first['trick_id']} — "
                       f"{first['description']}")
+            # Settle stays as a defensive backstop — should no
+            # longer fire in the common case now that placements
+            # are planned.
             settle(c, session_id, verbose=verbose)
             continue
 
@@ -155,7 +255,22 @@ def play_session(c, session_id, *, max_actions=200, verbose=True):
                   f"(banked {resp.get('turn_score', 0)}, "
                   f"drew {resp.get('cards_drawn', 0)})")
 
+        # Hard stop only on referee rejection (dirty-board bug).
         if result in TERMINAL_RESULTS:
+            break
+
+        # Normal termination: deck ran low. LynRummy isn't won
+        # by emptying a hand — the game continues past victory
+        # events, scores accumulate, and it finishes when the
+        # deck is almost gone.
+        state_resp = c.get_state(session_id)
+        deck_size = len(state_resp.get("state", state_resp).get("deck", []))
+        if verbose:
+            print(f"    deck remaining: {deck_size}")
+        if deck_size <= DECK_LOW_WATER:
+            if verbose:
+                print(f"  deck at low water ({deck_size} ≤ "
+                      f"{DECK_LOW_WATER}); ending game.")
             break
 
     return {"actions": actions, "turns": turns,
@@ -166,13 +281,24 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--session", type=int, default=None,
                         help="Session id. Omitted → creates a new one.")
-    parser.add_argument("--max-actions", type=int, default=200)
+    parser.add_argument("--max-actions", type=int, default=300)
+    parser.add_argument(
+        "--label", default=None,
+        help="Session label. Omitted → 'claude autoplay <timestamp>'.",
+    )
     parser.add_argument("--base",
                         default="http://localhost:9000/gopher/lynrummy-elm")
     args = parser.parse_args()
 
     c = Client(base=args.base)
-    sid = args.session if args.session is not None else c.new_session()
+    if args.session is not None:
+        sid = args.session
+    else:
+        # Timestamped label so Steve can spot the agent's game
+        # in the sessions list without guessing ids.
+        stamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+        label = args.label or f"claude autoplay {stamp}"
+        sid = c.new_session(label=label)
 
     initial = c.get_score(sid)
     print(f"session {sid}: initial board_score {initial['board_score']}")

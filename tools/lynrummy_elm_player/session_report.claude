@@ -1,0 +1,62 @@
+just_use session_report.py
+
+# label: EARLY (agent-observation-v1)
+# role: human-readable session summary — the agent's "watch the game" surface
+
+Closes the observation loop started by the drag telemetry
+pipeline: given a session id, produce a readable report that
+combines the action log with per-drag behaviorist metrics. The
+agent's primary way to "see" a session without replaying it in
+a browser.
+
+Pure analysis — reads direct from SQLite. No HTTP. See
+`feedback_http_when_bridge.md` for the rule.
+
+## Surface
+
+- `format_text(session_id)` — CLI default. One line per action
+  with concise action payload description + drag metrics.
+- `format_json(session_id)` — structured output; consumers
+  that want programmatic data (later analysis scripts, reports,
+  comparisons across sessions).
+- `session_actions(session_id)` — generator yielding per-action
+  dicts `{seq, kind, action, gesture, created_at}`. The raw-ish
+  reader other analyses can build on.
+- `drag_metrics(gesture_dict)` — per-drag: duration_ms,
+  n_points, path_length, straight_line, ratio.
+
+## Drag metrics — what's measured
+
+Strictly behaviorist (see `feedback_behaviorist_scientist.md`):
+
+- **duration_ms** — `last.t - first.t` from the path.
+- **n_points** — sample count. Proportional to duration × event
+  rate.
+- **path_length** — sum of segment distances (viewport px).
+- **straight_line** — first-to-last Euclidean distance.
+- **ratio** — path_length / straight_line. 1.0 = ruler-
+  straight; >> 1.0 = curvy. Infinity if start==end.
+
+No attention, no intent, no hesitation, no inner state. If a
+metric wants to be "how confident was the drag," rename it.
+
+## CLI
+
+```
+python3 session_report.py <session_id>
+python3 session_report.py <session_id> --format=json
+python3 session_report.py <session_id> --db /path/to/gopher.db
+```
+
+DB path precedence: `--db` flag > `$GOPHER_DB` env var >
+`~/AngryGopher/prod/gopher.db`.
+
+## Pointers
+
+- Depends on: Python 3 stdlib only (sqlite3, json, math,
+  datetime). No requests, no bs4.
+- Producers: gesture telemetry capture
+  (`project_drag_telemetry_pipeline.md`).
+- Companion: `telemetry.py` (narrower, gesture-only reader).
+  This module duplicates minimal SQL; refactor to a shared
+  reader if analysis tools multiply.
