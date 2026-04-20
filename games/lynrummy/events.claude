@@ -1,45 +1,14 @@
 just_use events.go
 
-# label: ELEGANT
-# role: encodes domain knowledge — legacy diff-based host flow
+# label: TINY
+# role: holds the GameSetup "photo" struct — first event of every game
 
-**Status note (2026-04-19):** this module is mostly legacy. The
-diff-based host flow it describes (`CheckEvent`,
-`ParseMoveEvent`, `ReconstructBoard`, the `wire*` types with
-`stacks_to_remove` / `stacks_to_add`) was load-bearing for
-the old game-replay UI that was ripped in bcaea72
-(2026-04-18). The current Elm LynRummy session flow is
-action-based: `WireAction` → `DecodeWireAction` →
-`lynrummy_elm_actions` table → `ReplayActionsSeeded` for
-replay.
+Post-rip (2026-04-21) this file carries only `GameSetup`. The
+diff-based host dispatch (`CheckEvent`, `ParseMoveEvent`,
+`ReconstructBoard`, `wire*` internal types) was deleted after
+the grep showed zero live callers; the current session flow is
+action-based via `wire_action.go` and `replay.go`.
 
-Retain for now because `GameSetup` (exported) is still used by
-the dealer path, and because any remaining non-lyn-rummy
-consumers in the host (if any) would break on removal.
-Candidate for a scorched-earth cleanup pass when the retire
-list is audited.
-
-## What still matters here
-
-- `GameSetup` — the "photo" the dealer returns. Pre-dates the
-  wire-action format but is still the shape that
-  `BuildDoubleDeck` / `DealFullGame` produce.
-- Package-internal helpers that happen to be co-located.
-
-## What is dead or dying
-
-- `CheckEvent`, `ParseMoveEvent`, `ReconstructBoard` — the
-  diff-based host dispatch. Not called from the new
-  Elm-session flow. If a consumer still calls it, that
-  consumer is on the ripped code path.
-- `wire*` diff structs (`wireBoardEvent`, `wireMoveEvent`,
-  etc.). Superseded by `WireAction` in `wire_action.go`.
-
-## Drift caveat
-
-The original sidecar described `CheckEvent` as "the single
-entry point the Host (games package) calls" — that host is
-the one that was ripped. Future-Claude investigating events.go
-should verify current consumers (`grep -rn 'CheckEvent\|ReconstructBoard'`)
-before changing anything; may turn out to have zero live
-call-sites and be fully deletable.
+Kept here rather than in `card_stack.go` or `dealer.go`
+because `GameSetup` spans `Card` + `CardStack` + `Hands` +
+`Deck` and doesn't belong to any single domain type.
