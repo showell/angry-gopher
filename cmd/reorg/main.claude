@@ -37,7 +37,7 @@ REORG script format:
 ```
 # Comments and blank lines ignored.
 mv auth/ core/auth/
-mv ratelimit/ internal/ratelimit/
+mv games/lynrummy/ internal/lynrummy/
 ```
 
 Old and new import paths are inferred from the module name

@@ -1,7 +1,7 @@
 # TS → Elm porting handbook
 
 Concrete patterns and transformations for porting TypeScript
-code to Elm. Paired with `~/showell_repos/angry-gopher/agent_collab/PORTING_CHEAT_SHEET.md` (general
+code to Elm. Paired with `~/showell_repos/claude-collab/agent_collab/PORTING_CHEAT_SHEET.md` (general
 methodology); this doc is the specific answer sheet for this
 language pair. Extend as we learn more.
 
@@ -153,7 +153,7 @@ custom function you write.
 
 Wire-format lives at a clean *boundary* — between your domain
 types and the outside world. Boundaries deserve explicit
-treatment; see `~/showell_repos/angry-gopher/agent_collab/PORTING_CHEAT_SHEET.md` → "Find the
+treatment; see `~/showell_repos/claude-collab/agent_collab/PORTING_CHEAT_SHEET.md` → "Find the
 boundaries."
 
 | TS pattern | Elm equivalent | Notes |

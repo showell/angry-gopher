@@ -1,18 +1,14 @@
 just_use games.go
 
 # label: WORKHORSE
-# role: supports feature — game lobby (list + detail + event log + replay link)
+# role: supports feature — LynRummy launch pad + recent sessions list
 
-Migration to crudgen DSL: a full DSL draft sits at the bottom of this file
-(## prefix). Hand-written today because crudgen is missing:
-  - renderers: link_to_self, muted_or, user_link, user_link_or,
-    time_short, time_hms, custom
-  - view kinds: detail (query one row, heading/facts/forms/links)
-  - redirect template substitution (/gopher/...?id={id})
-  - primitives: facts, section, link, heading (with templates)
-  - sqlArgExpr nullif handling
-Once those land, strip the `just_use` line above and drop the `##` prefix
-from every line below; crudgen will take over.
+Minimal game lobby since the messaging stack + game-event system was
+ripped 2026-04-21 and critter studies 2026-04-20. A single hero tile
+links to /gopher/lynrummy-elm/, and a table lists the 10 most recent
+lynrummy_elm_sessions with action counts. Recent-session links use
+the #N hash, which the Elm client's init flag parses to resume the
+session directly.
 
 ## page games
 ##   path: /gopher/game-lobby

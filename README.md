@@ -51,8 +51,7 @@ unfamiliar code, read the sidecar first.
 
 ## LynRummy
 
-The project's main feature. See `games/lynrummy/ELM_TO_GO.md`
-for port status. Three roles inside Gopher:
+The project's main feature. Three roles inside Gopher:
 
 - **Dealer** (`lynrummy` package) — canned opening boards + canned
   two-player hands. Per-session seed makes replays reproducible.

@@ -63,8 +63,7 @@ Intentional Elm divergences:
   - `CARD_WIDTH` lives in this module by design — position is
     domain data (every `CardStack` carries a `loc`), so
     split/merge producing correct positions is domain work.
-    See `OPEN_QUESTIONS.md` (Resolved, 2026-04-14) for the
-    full rationale.
+    (Resolved 2026-04-14.)
 
 -}
 
@@ -138,7 +137,7 @@ type alias CardStack =
 Lives in this module deliberately: position is domain data
 (every `CardStack` carries a `loc`), and `split` / `merge`
 produce correct positions as part of their semantic contract.
-See `OPEN_QUESTIONS.md` (Resolved) for the rationale.
+(Resolved 2026-04-14.)
 -}
 cardWidth : Int
 cardWidth =

@@ -127,8 +127,7 @@ in both places simultaneously or trick suggestions drift.
 TS's `pull_from_deck` mutated a `DeckRef`. Elm omits the
 deck-pool semantic — `fromShorthand` is a parse-and-build
 helper only. If uniqueness tracking is needed, callers own
-the deck state. See `OPEN_QUESTIONS.md` (Resolved, 2026-04-14)
-for rationale.
+the deck state. Resolved 2026-04-14.
 
 ## JSON wire shape (mirrors Go + TS)
 
@@ -157,8 +156,7 @@ Position is domain data — every `CardStack` carries a `loc`,
 and `split`/`merge` must produce correct positions as part of
 their semantic contract. Putting `cardWidth` in a View module
 would fragment "split produces correct geometry" across
-domain + view boundaries. Resolved 2026-04-14; see
-OPEN_QUESTIONS.md.
+domain + view boundaries. Resolved 2026-04-14.
 
 ## What this module deliberately does NOT do
 

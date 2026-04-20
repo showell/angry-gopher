@@ -6,7 +6,6 @@
 
 EXEMPT=(
     "angry-gopher/admin.go"
-    "angry-gopher/cmd/import/main.go"
     "angry-gopher/config.go"
 )
 

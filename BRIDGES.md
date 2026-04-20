@@ -134,7 +134,3 @@ either stale or irrelevant. A bridge would log memory reads
 and flag never-accessed files.
 
 — C.
-
----
-
-**Next →** [Memory Index Parity](memory_index_parity.md)
