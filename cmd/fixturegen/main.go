@@ -12,6 +12,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"go/format"
 	"os"
@@ -72,9 +73,10 @@ type Card struct {
 // --- Entry point ---
 
 const (
-	goOutPath  = "./games/lynrummy/referee_conformance_test.go"
-	elmOutPath = "./games/lynrummy/elm-port-docs/tests/LynRummy/DslConformanceTest.elm"
-	goPackage  = "./games/lynrummy/..."
+	goOutPath   = "./games/lynrummy/referee_conformance_test.go"
+	elmOutPath  = "./games/lynrummy/elm-port-docs/tests/LynRummy/DslConformanceTest.elm"
+	jsonOutPath = "./tools/lynrummy_elm_player/conformance_fixtures.json"
+	goPackage   = "./games/lynrummy/..."
 )
 
 // goSupportedOps — the subset of scenario ops the Go emitter
@@ -85,6 +87,13 @@ const (
 var goSupportedOps = map[string]bool{
 	"validate_game_move":     true,
 	"validate_turn_complete": true,
+}
+
+// pythonSupportedOps — the subset of scenario ops the JSON
+// fixtures target. Python is interpreted: the runner reads the
+// JSON at run time and dispatches per op. No Python codegen.
+var pythonSupportedOps = map[string]bool{
+	"build_suggestions": true,
 }
 
 func main() {
@@ -120,6 +129,9 @@ func main() {
 	if err := emitElm(all, elmOutPath); err != nil {
 		die(fmt.Errorf("elm emit: %w", err))
 	}
+	if err := emitJSON(all, jsonOutPath); err != nil {
+		die(fmt.Errorf("json emit: %w", err))
+	}
 
 	// Build-gate: the real compiler tells us instantly if the
 	// generator produced invalid code.
@@ -133,7 +145,7 @@ func main() {
 		die(fmt.Errorf("regen not idempotent: %w", err))
 	}
 
-	fmt.Printf("Emitted %d scenarios → Go + Elm test files (built + idempotent).\n", len(all))
+	fmt.Printf("Emitted %d scenarios → Go + Elm test files + JSON fixtures (built + idempotent).\n", len(all))
 }
 
 func die(err error) {
@@ -181,12 +193,15 @@ func runGoBuild() error {
 }
 
 func checkIdempotence(all []Scenario) error {
-	// Read current bytes, regenerate, compare.
 	originalGo, err := os.ReadFile(goOutPath)
 	if err != nil {
 		return err
 	}
 	originalElm, err := os.ReadFile(elmOutPath)
+	if err != nil {
+		return err
+	}
+	originalJSON, err := os.ReadFile(jsonOutPath)
 	if err != nil {
 		return err
 	}
@@ -196,13 +211,20 @@ func checkIdempotence(all []Scenario) error {
 	if err := emitElm(all, elmOutPath); err != nil {
 		return err
 	}
+	if err := emitJSON(all, jsonOutPath); err != nil {
+		return err
+	}
 	afterGo, _ := os.ReadFile(goOutPath)
 	afterElm, _ := os.ReadFile(elmOutPath)
+	afterJSON, _ := os.ReadFile(jsonOutPath)
 	if !bytes.Equal(originalGo, afterGo) {
 		return fmt.Errorf("Go output differs on second regen")
 	}
 	if !bytes.Equal(originalElm, afterElm) {
 		return fmt.Errorf("Elm output differs on second regen")
+	}
+	if !bytes.Equal(originalJSON, afterJSON) {
+		return fmt.Errorf("JSON output differs on second regen")
 	}
 	return nil
 }
@@ -672,6 +694,135 @@ func elmBoardState(s int) string {
 // keep format import reachable so goimports doesn't strip it in
 // case we later use gofmt's Source directly
 var _ = format.Source
+
+// --- JSON emission (for Python, interpreted — no codegen) ---
+//
+// Python reads the JSON at runtime and dispatches per op. Only
+// scenarios whose op is in pythonSupportedOps are included; the
+// Go + Elm emitters handle the rest. Field names match the dict
+// shape hints.py already uses (value/suit/origin_deck/state).
+
+type jsonCard struct {
+	Value      int `json:"value"`
+	Suit       int `json:"suit"`
+	OriginDeck int `json:"origin_deck"`
+}
+
+type jsonBoardCard struct {
+	Card  jsonCard `json:"card"`
+	State int      `json:"state"`
+}
+
+type jsonHandCard struct {
+	Card  jsonCard `json:"card"`
+	State int      `json:"state"`
+}
+
+type jsonStack struct {
+	BoardCards []jsonBoardCard `json:"board_cards"`
+	Loc        jsonLoc         `json:"loc"`
+}
+
+type jsonLoc struct {
+	Top  int `json:"top"`
+	Left int `json:"left"`
+}
+
+type jsonSuggestion struct {
+	TrickID   string     `json:"trick_id"`
+	HandCards []jsonCard `json:"hand_cards"`
+}
+
+type jsonExpect struct {
+	Kind        string           `json:"kind"`
+	Suggestions []jsonSuggestion `json:"suggestions,omitempty"`
+}
+
+type jsonScenario struct {
+	Name   string         `json:"name"`
+	Desc   string         `json:"desc"`
+	Op     string         `json:"op"`
+	Trick  string         `json:"trick,omitempty"`
+	Hand   []jsonHandCard `json:"hand"`
+	Board  []jsonStack    `json:"board"`
+	Expect jsonExpect     `json:"expect"`
+}
+
+func emitJSON(scenarios []Scenario, outPath string) error {
+	var out []jsonScenario
+	for _, sc := range scenarios {
+		if !pythonSupportedOps[sc.Op] {
+			continue
+		}
+		out = append(out, toJSONScenario(sc))
+	}
+	if out == nil {
+		out = []jsonScenario{}
+	}
+	// Indent for humans — diffs should be readable.
+	bs, err := json.MarshalIndent(out, "", "  ")
+	if err != nil {
+		return err
+	}
+	bs = append(bs, '\n')
+	if err := os.MkdirAll(filepath.Dir(outPath), 0755); err != nil {
+		return err
+	}
+	return os.WriteFile(outPath, bs, 0644)
+}
+
+func toJSONScenario(sc Scenario) jsonScenario {
+	js := jsonScenario{
+		Name:  sc.Name,
+		Desc:  sc.Desc,
+		Op:    sc.Op,
+		Trick: sc.Trick,
+		Hand:  toJSONHand(sc.Hand),
+		Board: toJSONBoard(sc.Board),
+	}
+	js.Expect = jsonExpect{Kind: sc.Expect.Kind}
+	for _, es := range sc.Expect.Suggestions {
+		js.Expect.Suggestions = append(js.Expect.Suggestions, jsonSuggestion{
+			TrickID:   es.TrickID,
+			HandCards: toJSONCards(es.HandCards),
+		})
+	}
+	return js
+}
+
+func toJSONHand(cs []Card) []jsonHandCard {
+	out := make([]jsonHandCard, 0, len(cs))
+	for _, c := range cs {
+		out = append(out, jsonHandCard{
+			Card:  jsonCard{Value: c.Value, Suit: c.Suit, OriginDeck: c.Deck},
+			State: 0,
+		})
+	}
+	return out
+}
+
+func toJSONBoard(ss []Stack) []jsonStack {
+	out := make([]jsonStack, 0, len(ss))
+	for _, s := range ss {
+		bcs := make([]jsonBoardCard, 0, len(s.Cards))
+		for _, c := range s.Cards {
+			bcs = append(bcs, jsonBoardCard{
+				Card:  jsonCard{Value: c.Value, Suit: c.Suit, OriginDeck: c.Deck},
+				State: c.BoardState,
+			})
+		}
+		out = append(out, jsonStack{BoardCards: bcs, Loc: jsonLoc{Top: s.Top, Left: s.Left}})
+	}
+	return out
+}
+
+func toJSONCards(cs []Card) []jsonCard {
+	out := make([]jsonCard, 0, len(cs))
+	for _, c := range cs {
+		out = append(out, jsonCard{Value: c.Value, Suit: c.Suit, OriginDeck: c.Deck})
+	}
+	return out
+}
 
 // --- Parser (unchanged) ---
 

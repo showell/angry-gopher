@@ -1,0 +1,441 @@
+[
+  {
+    "name": "hint_direct_play_wins_priority_on_opening_board",
+    "desc": "With a hand that contains 7H', the opening board admits a direct_play (7H' onto the 7-set). Priority order means direct_play ranks first; other tricks may follow.",
+    "op": "build_suggestions",
+    "hand": [
+      {
+        "card": {
+          "value": 7,
+          "suit": 3,
+          "origin_deck": 1
+        },
+        "state": 0
+      }
+    ],
+    "board": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 13,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 2,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 70,
+          "left": 20
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 10,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 11,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 12,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 13,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 160,
+          "left": 80
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 2,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 100,
+          "left": 140
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 7,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 40,
+          "left": 200
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 1,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 130,
+          "left": 260
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 2,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 5,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 6,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 70,
+          "left": 320
+        }
+      }
+    ],
+    "expect": {
+      "kind": "suggestions",
+      "suggestions": [
+        {
+          "trick_id": "direct_play",
+          "hand_cards": [
+            {
+              "value": 7,
+              "suit": 3,
+              "origin_deck": 1
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "name": "hint_empty_hand_no_suggestions",
+    "desc": "An empty hand produces no suggestions regardless of board state.",
+    "op": "build_suggestions",
+    "hand": [],
+    "board": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 13,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 2,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 70,
+          "left": 20
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 10,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 11,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 12,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 13,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 160,
+          "left": 80
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 2,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 100,
+          "left": 140
+        }
+      }
+    ],
+    "expect": {
+      "kind": "suggestions"
+    }
+  },
+  {
+    "name": "hint_no_plays_for_lonely_unplayable_card",
+    "desc": "A hand that can't extend anything on this board yields no suggestions at all. 9S doesn't extend the short heart run or the 7-set, and there's no other trick geometry available.",
+    "op": "build_suggestions",
+    "hand": [
+      {
+        "card": {
+          "value": 9,
+          "suit": 2,
+          "origin_deck": 0
+        },
+        "state": 0
+      }
+    ],
+    "board": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 2,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 70,
+          "left": 20
+        }
+      }
+    ],
+    "expect": {
+      "kind": "suggestions"
+    }
+  }
+]
