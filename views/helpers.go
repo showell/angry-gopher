@@ -56,13 +56,14 @@ const AppChromeCSS = `
 `
 
 // AppChromeTop emits the global top bar. `current` should be one of
-// "games" / "docs" / "code" / "" (when not in any area).
+// "games" / "code" / "docs" / "claude" / "" (when not in any area).
 // Pass empty for the home page or un-tagged pages.
 func AppChromeTop(w http.ResponseWriter, current string) {
 	areas := []struct{ key, label, href string }{
+		{"games", "Games", "/gopher/game-lobby"},
 		{"code", "Code", "/gopher/code/"},
 		{"docs", "Docs", "/gopher/docs/"},
-		{"games", "Games", "/gopher/game-lobby"},
+		{"claude", "Claude", "/gopher/claude"},
 	}
 	fmt.Fprint(w, `<header class="app-top"><div class="app-top-home"><a href="/gopher/">← Gopher Home</a></div><div class="app-top-areas">`)
 	for _, a := range areas {
@@ -254,6 +255,15 @@ h1 { color: #000080; font-size: 34px; margin-bottom: 4px; }
 <div class="cards">
 
   <div class="card">
+    <h2><a href="/gopher/game-lobby">Games</a></h2>
+    <p>LynRummy, via the Elm client.</p>
+    <ul>
+      <li><a href="/gopher/lynrummy-elm/">Play</a></li>
+      <li><a href="/gopher/lynrummy-elm/sessions">Sessions</a></li>
+    </ul>
+  </div>
+
+  <div class="card">
     <h2><a href="/gopher/code/">Code</a></h2>
     <p>Browse source files and <code>.claude</code> sidecars across all tracked repos.</p>
     <ul>
@@ -264,19 +274,18 @@ h1 { color: #000080; font-size: 34px; margin-bottom: 4px; }
 
   <div class="card">
     <h2><a href="/gopher/docs/">Docs</a></h2>
-    <p>Curated markdown documentation — architecture, decisions, glossaries, testing notes.</p>
+    <p>Curated markdown — repo READMEs and architecture notes.</p>
     <ul>
-      <li><a href="/gopher/docs/">Docs home</a> <span class="muted">— repo READMEs</span></li>
-      <li><a href="/gopher/docs/gopher/README.md">Landmarks</a> <span class="muted">— README, TESTING, GLOSSARY, PATTERNS, BRIDGES</span></li>
+      <li><a href="/gopher/docs/">Docs home</a></li>
     </ul>
   </div>
 
   <div class="card">
-    <h2><a href="/gopher/game-lobby">Games</a></h2>
-    <p>Game hosting with a server-side referee. Play inside Angry Cat or on the CRUD pages.</p>
+    <h2><a href="/gopher/claude">Claude</a></h2>
+    <p>Collaboration patterns and the essay format live in <a href="https://github.com/showell/claude-collab">claude-collab</a>.</p>
     <ul>
-      <li><a href="/gopher/game-lobby">LynRummy</a> <span class="muted">— lobby + replay</span></li>
-      <li><a href="/gopher/lynrummy-elm/">LynRummy (Elm, standalone)</a> <span class="muted">— drag + wings; <a href="/gopher/lynrummy-elm/sessions">sessions</a></span></li>
+      <li><a href="http://localhost:9100">Local essay server</a> <span class="muted">— port 9100</span></li>
+      <li><a href="https://github.com/showell/claude-collab">GitHub README</a></li>
     </ul>
   </div>
 

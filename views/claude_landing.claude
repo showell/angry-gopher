@@ -1,0 +1,24 @@
+just_use claude_landing.go
+
+# label: EARLY
+# role: Gopher view — /gopher/claude; a two-card sub-landing
+#       that points out to the claude-collab repo
+
+Minimal sub-landing. Reached from the Claude card on the
+home page and from the top-bar Claude area. Contains no
+dynamic content — two cards with links to the local
+claude-collab essay server (port 9100) and to the
+claude-collab GitHub repo.
+
+Created 2026-04-21 after the ANCHOR_COMMENTS rip, which
+removed the older claude_landing.go that linked to the
+now-deleted Essays/Issues. The current file is a simple
+pointer-out now that the essay format lives in a separate
+repo.
+
+## Pointers
+
+- Consumer: routed in `views/registry.go` at `/gopher/claude`
+  and `/gopher/claude/`.
+- Related memory: `reference_port_convention.md` (9000 vs
+  9100).
