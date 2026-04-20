@@ -1,0 +1,18 @@
+#!/bin/bash
+# Pre-commit gate: run ops/check before any commit.
+#
+# The gate exists because we keep rediscovering silent-failure
+# bugs (severed fixturegen bridge, sidecar drift, stale generated
+# tests). The fix isn't discipline-by-wish — it's a gate nothing
+# can pass through without the checks running.
+#
+# One-time install (per clone):
+#   git config core.hooksPath ops/git-hooks
+#
+# If a hook ever needs bypassing, that is an emergency — do it
+# with explicit `git commit --no-verify` and know why.
+
+set -e
+
+REPO="$(git rev-parse --show-toplevel)"
+"$REPO/ops/check"

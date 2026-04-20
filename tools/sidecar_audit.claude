@@ -1,0 +1,39 @@
+just_use sidecar_audit.py
+
+# label: TOOL
+# role: drift detector — source files ↔ .claude sidecars
+
+Two checks:
+
+- **Coverage**: every non-test `*.go` / `*.py` / `*.elm` in the
+  tree has a sibling `*.claude` sidecar. Missing sidecars are
+  the single biggest silent-drift risk — new code accumulates
+  without domain notes and the next session can't navigate it.
+- **just_use target**: every sidecar's `just_use <file>` header
+  points at an existing file in the same directory. Orphaned
+  sidecars after renames / removals show up here.
+
+Exits 0 clean, 1 on drift. Wired into `ops/check` as part of
+the pre-commit preflight.
+
+## Surface
+
+- `python3 tools/sidecar_audit.py` — scan whole repo.
+
+## Known exemptions
+
+- Test runners (`test_*.py`, `*Test.elm`, `*_test.go`) — self-
+  describing via file docstrings.
+- Individual files listed in `EXEMPT_FILES` inside the script.
+  Keep that list short; each entry should be justified by a
+  comment next to it.
+
+## Pointers
+
+- Companion: `tools/apply_labels.py` (assigns labels to sidecars;
+  doesn't check coverage).
+- Semantic Go↔Elm drift is caught by the DSL conformance tests,
+  not a name-set comparator. The old `parity_check.py` was
+  retired 2026-04-20 because idiom differences (Elm
+  encode/decoder + camelCase module-stripped names vs Go
+  MarshalJSON + PascalCase) swamped any real signal.

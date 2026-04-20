@@ -1,0 +1,21 @@
+#!/bin/bash
+# Enable the tracked pre-commit hook for this clone.
+#
+# Run once per clone:
+#   ./ops/install-hooks
+#
+# This sets `core.hooksPath` to the tracked `ops/git-hooks/`
+# directory, so the pre-commit hook (which runs `ops/check`)
+# fires before every commit.
+#
+# To disable:
+#   git config --unset core.hooksPath
+
+set -e
+
+REPO="$(git rev-parse --show-toplevel)"
+cd "$REPO"
+
+git config core.hooksPath ops/git-hooks
+echo "Enabled: core.hooksPath = ops/git-hooks"
+echo "Pre-commit hook will run 'ops/check' before every commit."

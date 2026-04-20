@@ -15,6 +15,9 @@ set -e
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_DIR"
 
+echo "==> sidecar_audit (coverage + broken just_use targets)"
+python3 tools/sidecar_audit.py
+
 echo "==> fixturegen (DSL → Go + Elm + JSON, build-gated)"
 go run ./cmd/fixturegen ./games/lynrummy/conformance/scenarios/*.dsl
 
