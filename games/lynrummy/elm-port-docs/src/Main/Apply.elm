@@ -67,10 +67,8 @@ Branch behaviour summary:
     the full autonomous transition (classify, bank, deal,
     flip, age), then updates UI-layer `score` + `status`.
   - `Undo` — no-op (deferred; V1 has no Undo button).
-  - `PlayTrick` — no-op (server expands to TrickResult at
-    receipt; a PlayTrick in the log would be an upstream bug).
-  - `TrickResult` — compound: remove + add stacks and release
-    hand cards; count released cards toward the turn counter.
+  - `PlayTrick` — no-op (retired wire action; if one appears
+    in a log, ignore).
 
 -}
 applyWireAction : WireAction -> Model -> Model
@@ -155,38 +153,6 @@ applyWireAction action model =
 
         WA.PlayTrick _ ->
             model
-
-        WA.TrickResult p ->
-            let
-                boardSansRemoved =
-                    List.foldl
-                        (\r b -> List.filter (\s -> not (stacksEqual s r)) b)
-                        model.board
-                        p.stacksToRemove
-
-                newBoard =
-                    boardSansRemoved ++ p.stacksToAdd
-
-                hand =
-                    activeHand model
-
-                newHand =
-                    List.foldl
-                        (\c h ->
-                            case findHandCard c h of
-                                Just hc ->
-                                    Hand.removeHandCard hc h
-
-                                Nothing ->
-                                    h
-                        )
-                        hand
-                        p.handCardsReleased
-            in
-            model
-                |> setActiveHand newHand
-                |> (\m -> { m | board = newBoard, score = Score.forStacks newBoard })
-                |> Game.noteCardsPlayed (List.length p.handCardsReleased)
 
 
 

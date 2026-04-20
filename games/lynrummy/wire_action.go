@@ -80,23 +80,6 @@ type UndoAction struct{}
 
 func (UndoAction) ActionKind() string { return "undo" }
 
-// TrickResultAction carries a board diff (stacks_to_remove +
-// stacks_to_add) and the hand cards released. Historically this
-// was the persisted form of a client-emitted PlayTrickAction (the
-// expansion via tricks.FindPlay was retired 2026-04-18 with the
-// hints/tricks rebuild). Retained as a self-contained diff shape
-// so existing session logs still replay cleanly without needing
-// the tricks package. A new hint system may or may not reuse this
-// action form.
-type TrickResultAction struct {
-	TrickID           string      `json:"trick_id"`
-	StacksToRemove    []CardStack `json:"stacks_to_remove"`
-	StacksToAdd       []CardStack `json:"stacks_to_add"`
-	HandCardsReleased []Card      `json:"hand_cards_released"`
-}
-
-func (TrickResultAction) ActionKind() string { return "trick_result" }
-
 // --- Encode ---
 //
 // Each concrete type implements MarshalJSON to inject the
@@ -154,14 +137,6 @@ func (a UndoAction) MarshalJSON() ([]byte, error) {
 	return json.Marshal(struct {
 		Action string `json:"action"`
 	}{Action: a.ActionKind()})
-}
-
-func (a TrickResultAction) MarshalJSON() ([]byte, error) {
-	type alias TrickResultAction
-	return json.Marshal(struct {
-		Action string `json:"action"`
-		alias
-	}{Action: a.ActionKind(), alias: alias(a)})
 }
 
 // --- Decode ---
@@ -228,13 +203,6 @@ func DecodeWireAction(data []byte) (WireAction, error) {
 
 	case "undo":
 		return UndoAction{}, nil
-
-	case "trick_result":
-		var a TrickResultAction
-		if err := strictUnmarshal(data, &a, "trick_id", "stacks_to_remove", "stacks_to_add", "hand_cards_released"); err != nil {
-			return nil, err
-		}
-		return a, nil
 
 	default:
 		return nil, fmt.Errorf("wire action: unknown action %q", tag.Action)

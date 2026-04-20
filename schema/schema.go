@@ -33,14 +33,24 @@ CREATE TABLE IF NOT EXISTS lynrummy_elm_actions (
     seq INTEGER NOT NULL,
     action_kind TEXT NOT NULL,
     action_json TEXT NOT NULL,
-    -- Behaviorist telemetry for drag-derived actions (Split,
-    -- MergeStack, MergeHand, PlaceHand, MoveStack). JSON blob with
-    -- raw pointer path, pointer type, viewport at drag start, and
-    -- devicePixelRatio. NULL for non-drag actions (CompleteTurn,
-    -- Undo, PlayTrick, TrickResult) and for pre-telemetry rows.
+    -- Raw pointer telemetry for every primitive wire action
+    -- (split, merge_stack, merge_hand, place_hand, move_stack).
+    -- JSON blob with pointer path samples (t, x, y), pointer
+    -- type, viewport at drag start, devicePixelRatio. NULL for
+    -- non-pointer actions (complete_turn, undo).
     gesture_metadata TEXT,
     created_at INTEGER NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS idx_lynrummy_elm_actions_session ON lynrummy_elm_actions(session_id, seq);
+
+-- Puzzle sessions: sessions whose initial state is hand-crafted
+-- (not the dealer's deal). When a row is present for a session_id,
+-- replaySessionNoHTTP uses this JSON as the initial state instead
+-- of InitialStateWithSeed(deck_seed). Used by the decomposition
+-- harness to stage narrow test scenarios.
+CREATE TABLE IF NOT EXISTS lynrummy_puzzle_seeds (
+    session_id INTEGER PRIMARY KEY REFERENCES lynrummy_elm_sessions(id),
+    initial_state_json TEXT NOT NULL
+);
 `

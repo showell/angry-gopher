@@ -100,9 +100,10 @@ moves beyond the click threshold.
 startBoardCardDrag :
     { stackIndex : Int, cardIndex : Int }
     -> Point
+    -> Float
     -> Model
     -> ( Model, Cmd Msg )
-startBoardCardDrag { stackIndex, cardIndex } clientPoint model =
+startBoardCardDrag { stackIndex, cardIndex } clientPoint tMs model =
     case ( model.drag, listAt stackIndex model.board ) of
         ( NotDragging, Just stack ) ->
             let
@@ -123,7 +124,8 @@ startBoardCardDrag { stackIndex, cardIndex } clientPoint model =
                         , hoveredWing = Nothing
                         , boardRect = Nothing
                         , clickIntent = Just cardIndex
-                        , gesturePath = []
+                        , gesturePath =
+                            [ { tMs = tMs, x = clientPoint.x, y = clientPoint.y } ]
                         }
               }
             , fetchBoardRect
@@ -136,8 +138,8 @@ startBoardCardDrag { stackIndex, cardIndex } clientPoint model =
 {-| Start a drag from a hand card. No click intent — hand cards
 don't have a split semantic.
 -}
-startHandDrag : Int -> Point -> Model -> ( Model, Cmd Msg )
-startHandDrag idx clientPoint model =
+startHandDrag : Int -> Point -> Float -> Model -> ( Model, Cmd Msg )
+startHandDrag idx clientPoint tMs model =
     case ( model.drag, listAt idx (activeHand model).handCards ) of
         ( NotDragging, Just handCard ) ->
             let
@@ -158,7 +160,8 @@ startHandDrag idx clientPoint model =
                         , hoveredWing = Nothing
                         , boardRect = Nothing
                         , clickIntent = Nothing
-                        , gesturePath = []
+                        , gesturePath =
+                            [ { tMs = tMs, x = clientPoint.x, y = clientPoint.y } ]
                         }
               }
             , fetchBoardRect
@@ -192,16 +195,28 @@ path), appends to actionLog, and fires `sendAction` for
 persistence. If no sessionId is set (offline mode) the
 persistence step is skipped.
 -}
-handleMouseUp : Model -> ( Model, Cmd Msg )
-handleMouseUp model =
+handleMouseUp : Point -> Float -> Model -> ( Model, Cmd Msg )
+handleMouseUp releasePoint tMs model =
     case model.drag of
         NotDragging ->
             ( model, Cmd.none )
 
         Dragging info ->
             let
+                -- Append the mouseup point so the gesture path
+                -- captures the full gesture including the release.
+                -- For a pure click (no MouseMove), this is the
+                -- second sample after the mousedown seed — so
+                -- even clicks carry two-point telemetry.
+                fullPath =
+                    info.gesturePath
+                        ++ [ { tMs = tMs, x = releasePoint.x, y = releasePoint.y } ]
+
+                infoFull =
+                    { info | gesturePath = fullPath }
+
                 maybeAction =
-                    resolveGesture info model
+                    resolveGesture infoFull model
 
                 modelAfterDragClear =
                     clearDrag model
@@ -215,7 +230,7 @@ handleMouseUp model =
                             modelAfterDragClear
 
                 gesturePathForLog =
-                    case info.gesturePath of
+                    case fullPath of
                         [] ->
                             Nothing
 
@@ -230,7 +245,7 @@ handleMouseUp model =
                                 , replayGestures =
                                     modelAfterAction.replayGestures ++ [ gesturePathForLog ]
                               }
-                            , Wire.sendAction sid action (Just info.gesturePath)
+                            , Wire.sendAction sid action (Just fullPath)
                             )
 
                         _ ->
@@ -347,6 +362,19 @@ pointDecoder =
         (Decode.field "clientY" Decode.float)
 
 
+{-| Decoder for mousedown / mouseup events that also captures the
+`MouseEvent.timeStamp`. Same semantics as mouseMoveDecoder's
+timestamp (performance.now()-style, document-lifetime relative).
+Attached to every pointer-start event so splits — which involve
+no intervening MouseMove — still carry telemetry.
+-}
+pointAndTimeDecoder : Decoder ( Point, Float )
+pointAndTimeDecoder =
+    Decode.map2 Tuple.pair
+        pointDecoder
+        (Decode.field "timeStamp" Decode.float)
+
+
 
 -- VIEW-SIDE STYLING HOOKS
 
@@ -359,8 +387,10 @@ cardMouseDown : Int -> Int -> List (Html.Attribute Msg)
 cardMouseDown stackIdx cardIdx =
     [ Events.on "mousedown"
         (Decode.map
-            (MouseDownOnBoardCard { stackIndex = stackIdx, cardIndex = cardIdx })
-            pointDecoder
+            (\( p, t ) ->
+                MouseDownOnBoardCard { stackIndex = stackIdx, cardIndex = cardIdx } p t
+            )
+            pointAndTimeDecoder
         )
     ]
 
@@ -390,7 +420,12 @@ handCardAttrs drag hintedCards idx hc =
     hintAttrs
         ++ (case drag of
                 NotDragging ->
-                    [ Events.on "mousedown" (Decode.map (MouseDownOnHandCard idx) pointDecoder) ]
+                    [ Events.on "mousedown"
+                        (Decode.map
+                            (\( p, t ) -> MouseDownOnHandCard idx p t)
+                            pointAndTimeDecoder
+                        )
+                    ]
 
                 Dragging info ->
                     case info.source of

@@ -125,24 +125,8 @@ applyAction action state =
             state
 
         PlayTrick _ ->
-            -- Submission-time convenience; the server expands
-            -- PlayTrick to TrickResult at receipt time and persists
-            -- the latter. A PlayTrick should never end up in a
-            -- replayed log; if one does, no-op.
+            -- Retired wire action; no-op if one appears in a log.
             state
-
-        TrickResult p ->
-            let
-                boardSansRemoved =
-                    List.foldl removeStackOnce state.board p.stacksToRemove
-
-                newBoard =
-                    boardSansRemoved ++ p.stacksToAdd
-
-                newHand =
-                    List.foldl removeHandCardByContent state.hand p.handCardsReleased
-            in
-            { state | board = newBoard, hand = newHand }
 
 
 

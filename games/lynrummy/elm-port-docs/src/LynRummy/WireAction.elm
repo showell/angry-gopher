@@ -30,12 +30,6 @@ type WireAction
     | CompleteTurn
     | Undo
     | PlayTrick { trickId : String, handCards : List Card }
-    | TrickResult
-        { trickId : String
-        , stacksToRemove : List CardStack
-        , stacksToAdd : List CardStack
-        , handCardsReleased : List Card
-        }
 
 
 
@@ -93,15 +87,6 @@ encode action =
                 [ ( "action", Encode.string "play_trick" )
                 , ( "trick_id", Encode.string p.trickId )
                 , ( "hand_cards", Encode.list Card.encodeCard p.handCards )
-                ]
-
-        TrickResult p ->
-            Encode.object
-                [ ( "action", Encode.string "trick_result" )
-                , ( "trick_id", Encode.string p.trickId )
-                , ( "stacks_to_remove", Encode.list encodeCardStack p.stacksToRemove )
-                , ( "stacks_to_add", Encode.list encodeCardStack p.stacksToAdd )
-                , ( "hand_cards_released", Encode.list Card.encodeCard p.handCardsReleased )
                 ]
 
 
@@ -189,21 +174,6 @@ decoderForAction kind =
                 )
                 (Decode.field "trick_id" Decode.string)
                 (Decode.field "hand_cards" (Decode.list Card.cardDecoder))
-
-        "trick_result" ->
-            Decode.map4
-                (\trickId stacksToRemove stacksToAdd handCardsReleased ->
-                    TrickResult
-                        { trickId = trickId
-                        , stacksToRemove = stacksToRemove
-                        , stacksToAdd = stacksToAdd
-                        , handCardsReleased = handCardsReleased
-                        }
-                )
-                (Decode.field "trick_id" Decode.string)
-                (Decode.field "stacks_to_remove" (Decode.list cardStackDecoder))
-                (Decode.field "stacks_to_add" (Decode.list cardStackDecoder))
-                (Decode.field "hand_cards_released" (Decode.list Card.cardDecoder))
 
         other ->
             Decode.fail ("Unknown action: " ++ other)

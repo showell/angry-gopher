@@ -35,14 +35,6 @@ suite =
             , roundTrip "undo" Undo
             , roundTrip "play_trick"
                 (PlayTrick { trickId = "pair_peel", handCards = [ card8H, card8H ] })
-            , roundTrip "trick_result"
-                (TrickResult
-                    { trickId = "pair_peel"
-                    , stacksToRemove = []
-                    , stacksToAdd = []
-                    , handCardsReleased = [ card8H ]
-                    }
-                )
             ]
         , describe "JSON shape (locks the wire format)"
             [ test "split — tag + indices, nothing else" <|

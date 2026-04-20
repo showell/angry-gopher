@@ -1,6 +1,6 @@
 just_use events.go
 
-# label: TINY
+# label: ELEGANT
 # role: holds the GameSetup "photo" struct — first event of every game
 
 Post-rip (2026-04-21) this file carries only `GameSetup`. The

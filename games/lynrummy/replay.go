@@ -162,9 +162,6 @@ func ApplyAction(action WireAction, state State) State {
 		// Snapshot-based undo is deferred. For now a no-op so the
 		// wire accepts undo events without breaking replay.
 		return state
-
-	case TrickResultAction:
-		return applyTrickResult(a, state)
 	}
 	return state
 }
@@ -292,29 +289,6 @@ func ageStack(s CardStack) CardStack {
 		aged[i] = BoardCard{Card: bc.Card, State: next}
 	}
 	return NewCardStack(aged, s.Loc)
-}
-
-// applyTrickResult applies the board diff computed at submission
-// time + removes the released hand cards. Tricks often span 2+
-// hand cards and non-trivial board transformations; the diff
-// captures all of it so replay is a single-step operation.
-func applyTrickResult(a TrickResultAction, state State) State {
-	newBoard := append([]CardStack{}, state.Board...)
-	for _, r := range a.StacksToRemove {
-		newBoard = removeStack(newBoard, r)
-	}
-	newBoard = append(newBoard, a.StacksToAdd...)
-
-	newHand := state.ActiveHand()
-	for _, c := range a.HandCardsReleased {
-		if hc := newHand.FindByCard(c); hc != nil {
-			newHand = newHand.RemoveHandCard(*hc)
-		}
-	}
-	out := state.withActiveHand(newHand)
-	out.Board = newBoard
-	out.CardsPlayedThisTurn = state.CardsPlayedThisTurn + len(a.HandCardsReleased)
-	return out
 }
 
 // applyCompleteTurn finishes the outgoing player's turn. In order:

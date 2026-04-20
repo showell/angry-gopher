@@ -24,7 +24,6 @@ import (
 	"time"
 
 	"angry-gopher/games/lynrummy"
-	"angry-gopher/games/lynrummy/tricks"
 )
 
 // ElmLynRummyDir is the repo-relative directory containing the
@@ -45,6 +44,8 @@ func HandleLynRummyElm(w http.ResponseWriter, r *http.Request) {
 		lynrummyElmActions(w, r)
 	case sub == "new-session":
 		lynrummyElmNewSession(w, r)
+	case sub == "new-puzzle-session":
+		lynrummyElmNewPuzzleSession(w, r)
 	case sub == "sessions":
 		lynrummyElmSessionsList(w)
 	case sub == "api/sessions":
@@ -55,9 +56,6 @@ func HandleLynRummyElm(w http.ResponseWriter, r *http.Request) {
 	case strings.HasSuffix(sub, "/score") && strings.HasPrefix(sub, "sessions/"):
 		idStr := strings.TrimSuffix(strings.TrimPrefix(sub, "sessions/"), "/score")
 		lynrummyElmSessionScore(w, idStr)
-	case strings.HasSuffix(sub, "/hint") && strings.HasPrefix(sub, "sessions/"):
-		idStr := strings.TrimSuffix(strings.TrimPrefix(sub, "sessions/"), "/hint")
-		lynrummyElmSessionHint(w, idStr)
 	case strings.HasSuffix(sub, "/turn-log") && strings.HasPrefix(sub, "sessions/"):
 		idStr := strings.TrimSuffix(strings.TrimPrefix(sub, "sessions/"), "/turn-log")
 		lynrummyElmSessionTurnLog(w, idStr)
@@ -133,6 +131,74 @@ func lynrummyElmNewSession(w http.ResponseWriter, r *http.Request) {
 // math/rand.Int63 so we keep the import local.
 func mathRandInt63() int64 {
 	return mathRand.Int63()
+}
+
+// lynrummyElmNewPuzzleSession creates a session whose initial state
+// is hand-crafted (not the dealer's deal). Body is a JSON envelope:
+//
+//	{"label": "...", "initial_state": {...State JSON...}}
+//
+// The state is stored in lynrummy_puzzle_seeds; replaySessionNoHTTP
+// returns this state (plus any applied actions) when a row exists.
+// Used by the decomposition harness to stage narrow puzzles that
+// isolate one trick at a time.
+func lynrummyElmNewPuzzleSession(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "read body: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	var req struct {
+		Label        string          `json:"label"`
+		InitialState json.RawMessage `json:"initial_state"`
+	}
+	if err := json.Unmarshal(body, &req); err != nil {
+		http.Error(w, "decode: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	if len(req.InitialState) == 0 {
+		http.Error(w, "missing initial_state", http.StatusBadRequest)
+		return
+	}
+
+	// Validate that initial_state decodes into a lynrummy.State so
+	// we reject malformed puzzles at submit time (not at replay).
+	var state lynrummy.State
+	if err := json.Unmarshal(req.InitialState, &state); err != nil {
+		http.Error(w, "initial_state decode: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	now := time.Now().Unix()
+	// deck_seed is unused for puzzle sessions (the initial state is
+	// read from lynrummy_puzzle_seeds). Store 0 as a signal.
+	res, err := DB.Exec(
+		`INSERT INTO lynrummy_elm_sessions (created_at, label, deck_seed) VALUES (?, ?, 0)`,
+		now, req.Label,
+	)
+	if err != nil {
+		http.Error(w, "insert session: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	sessionID, err := res.LastInsertId()
+	if err != nil {
+		http.Error(w, "lastinsertid: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if _, err := DB.Exec(
+		`INSERT INTO lynrummy_puzzle_seeds (session_id, initial_state_json) VALUES (?, ?)`,
+		sessionID, string(req.InitialState),
+	); err != nil {
+		http.Error(w, "insert puzzle seed: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	log.Printf("lynrummy-elm puzzle session: new id=%d label=%q", sessionID, req.Label)
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	fmt.Fprintf(w, `{"session_id":%d}`, sessionID)
 }
 
 // lynrummyElmActions receives a WireAction from the Elm client
@@ -581,44 +647,6 @@ func lynrummyElmSessionScore(w http.ResponseWriter, idStr string) {
 	w.Write(body)
 }
 
-// lynrummyElmSessionHint walks the seven tricks in priority
-// order against the active player's (hand, board) and returns
-// one representative Suggestion per firing trick, ranked. The
-// client's common case is `suggestions[0]`; a strategic agent
-// can inspect deeper.
-//
-// Empty array = no trick fires ("no obvious play"). Never 404s
-// for a valid session.
-func lynrummyElmSessionHint(w http.ResponseWriter, idStr string) {
-	id, err := strconv.ParseInt(idStr, 10, 64)
-	if err != nil || id <= 0 {
-		http.NotFound(w, nil)
-		return
-	}
-	state, ok := replaySession(w, id)
-	if !ok {
-		return
-	}
-
-	suggestions := tricks.BuildSuggestions(state.ActiveHand(), state.Board)
-	if suggestions == nil {
-		suggestions = []tricks.Suggestion{}
-	}
-
-	payload := struct {
-		SessionID   int64                `json:"session_id"`
-		Suggestions []tricks.Suggestion  `json:"suggestions"`
-	}{SessionID: id, Suggestions: suggestions}
-
-	body, err := json.Marshal(payload)
-	if err != nil {
-		http.Error(w, "marshal: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.Write(body)
-}
-
 // lynrummyElmSessionActions returns the session's raw action log
 // as an ordered list of WireAction JSON blobs, plus the
 // pre-first-action initial state. This is what an Elm client
@@ -659,11 +687,26 @@ func lynrummyElmSessionActions(w http.ResponseWriter, idStr string) {
 		return
 	}
 
-	initial := lynrummy.InitialStateWithSeed(seed)
-	initialJSON, err := json.Marshal(initial)
-	if err != nil {
-		http.Error(w, "marshal initial: "+err.Error(), http.StatusInternalServerError)
+	// Puzzle sessions override the dealer-derived initial state
+	// (same branch as replaySessionNoHTTP). Without this, Instant
+	// Replay rewinds to the wrong board.
+	var initialJSON []byte
+	var puzzleJSON string
+	err = DB.QueryRow(
+		`SELECT initial_state_json FROM lynrummy_puzzle_seeds WHERE session_id = ?`, id,
+	).Scan(&puzzleJSON)
+	if err == sql.ErrNoRows {
+		initial := lynrummy.InitialStateWithSeed(seed)
+		initialJSON, err = json.Marshal(initial)
+		if err != nil {
+			http.Error(w, "marshal initial: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+	} else if err != nil {
+		http.Error(w, "puzzle seed lookup: "+err.Error(), http.StatusInternalServerError)
 		return
+	} else {
+		initialJSON = []byte(puzzleJSON)
 	}
 
 	rows, err := DB.Query(
@@ -857,6 +900,22 @@ func replaySessionNoHTTP(id int64) (lynrummy.State, bool, error) {
 		return lynrummy.State{}, false, err
 	}
 
+	// Puzzle sessions override the dealer-derived initial state.
+	var puzzleJSON string
+	err = DB.QueryRow(
+		`SELECT initial_state_json FROM lynrummy_puzzle_seeds WHERE session_id = ?`, id,
+	).Scan(&puzzleJSON)
+	var initial lynrummy.State
+	if err == sql.ErrNoRows {
+		initial = lynrummy.InitialStateWithSeed(seed)
+	} else if err != nil {
+		return lynrummy.State{}, false, err
+	} else {
+		if err := json.Unmarshal([]byte(puzzleJSON), &initial); err != nil {
+			return lynrummy.State{}, false, fmt.Errorf("puzzle state decode: %w", err)
+		}
+	}
+
 	rows, err := DB.Query(
 		`SELECT action_json FROM lynrummy_elm_actions WHERE session_id = ? ORDER BY seq`,
 		id,
@@ -880,7 +939,11 @@ func replaySessionNoHTTP(id int64) (lynrummy.State, bool, error) {
 		}
 		actions = append(actions, action)
 	}
-	return lynrummy.ReplayActionsSeeded(actions, seed), true, nil
+	state := initial
+	for _, a := range lynrummy.EffectiveActions(actions) {
+		state = lynrummy.ApplyAction(a, state)
+	}
+	return state, true, nil
 }
 
 func lynrummyElmPlay(w http.ResponseWriter) {

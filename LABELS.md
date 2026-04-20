@@ -24,35 +24,22 @@ Labels describe *developer experience*, not function — see
 - `games/lynrummy/referee.go`
 - `games/lynrummy/stack_type.go`
 
-## CLEAN_INFRA  (2)
+## CLEAN_INFRA  (1)
 *Well-factored plumbing. Focused, small, self-contained. Don't bloat it.*
 
 - `admin_auth.go`
-- `games/lynrummy/tricks/helpers.go`
 
-## SIMPLE  (2)
+## SIMPLE  (1)
 *Short and obvious. Like TINY but with a bit more going on.*
 
 - `config.go`
-- `games/lynrummy/tricks/direct_play.go`
 
-## TINY  (4)
+## TINY  (3)
 *So small the whole thing fits in your head. Edits are trivial; bugs are rare.*
 
 - `auth/auth.go`
-- `games/lynrummy/tricks/trick.go`
 - `views/quicknav.go`
 - `views/tour.go`
-
-## INTRICATE  (6)
-*Algorithmically dense. Read carefully before editing; test rigorously.*
-
-- `games/lynrummy/tricks/hand_stacks.go`
-- `games/lynrummy/tricks/loose_card_play.go`
-- `games/lynrummy/tricks/pair_peel.go`
-- `games/lynrummy/tricks/peel_for_run.go`
-- `games/lynrummy/tricks/rb_swap.go`
-- `games/lynrummy/tricks/split_for_set.go`
 
 ## WORKHORSE  (7)
 *Ugly but productive. Don't polish, just modify.*
@@ -65,10 +52,9 @@ Labels describe *developer experience*, not function — see
 - `games/lynrummy/wire_action.go`
 - `views/games.go`
 
-## EARLY  (4)
+## EARLY  (3)
 *Kept but not yet stable — survived past SPIKE, still learning its shape.*
 
-- `games/lynrummy/tricks/hint.go`
 - `games/lynrummy/turn_result.go`
 - `views/claude_landing.go`
 - `views/wiki.go`
@@ -111,5 +97,5 @@ Labels describe *developer experience*, not function — see
 
 ---
 
-Total labeled files: **44**
-Distinct labels in use: **15**
+Total labeled files: **34**
+Distinct labels in use: **14**

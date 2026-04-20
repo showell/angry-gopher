@@ -44,16 +44,6 @@ LABELS = {
     "games/lynrummy/stack_type.go":         "ELEGANT",
     "games/lynrummy/turn_result.go":        "EARLY",
     "games/lynrummy/wire_action.go":        "WORKHORSE",
-    "games/lynrummy/tricks/direct_play.go": "SIMPLE",
-    "games/lynrummy/tricks/hand_stacks.go": "INTRICATE",
-    "games/lynrummy/tricks/helpers.go":     "CLEAN_INFRA",
-    "games/lynrummy/tricks/hint.go":        "EARLY",
-    "games/lynrummy/tricks/loose_card_play.go": "INTRICATE",
-    "games/lynrummy/tricks/pair_peel.go":   "INTRICATE",
-    "games/lynrummy/tricks/peel_for_run.go": "INTRICATE",
-    "games/lynrummy/tricks/rb_swap.go":     "INTRICATE",
-    "games/lynrummy/tricks/split_for_set.go": "INTRICATE",
-    "games/lynrummy/tricks/trick.go":       "TINY",
 
     # Views
     "views/claude_landing.go":      "EARLY",

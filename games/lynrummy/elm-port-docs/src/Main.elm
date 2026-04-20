@@ -115,11 +115,11 @@ init flags =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        MouseDownOnBoardCard ref clientPoint ->
-            startBoardCardDrag ref clientPoint model
+        MouseDownOnBoardCard ref clientPoint tMs ->
+            startBoardCardDrag ref clientPoint tMs model
 
-        MouseDownOnHandCard idx clientPoint ->
-            startHandDrag idx clientPoint model
+        MouseDownOnHandCard idx clientPoint tMs ->
+            startHandDrag idx clientPoint tMs model
 
         MouseMove pos tMs ->
             case model.drag of
@@ -147,8 +147,8 @@ update msg model =
                 NotDragging ->
                     ( model, Cmd.none )
 
-        MouseUp ->
-            handleMouseUp model
+        MouseUp pos tMs ->
+            handleMouseUp pos tMs model
 
         WingEntered wing ->
             case model.drag of
@@ -808,6 +808,19 @@ mouseMoveDecoder =
         (Decode.field "timeStamp" Decode.float)
 
 
+{-| MouseUp decoder parallel to mouseMoveDecoder. Captures the
+release point + timeStamp so a pure click (mousedown → mouseup
+with no intervening move) still produces a two-sample gesture
+path: [down-point, up-point]. Keeps the wire model lossless
+for splits.
+-}
+mouseUpDecoder : Decoder Msg
+mouseUpDecoder =
+    Decode.map2 MouseUp
+        pointDecoder
+        (Decode.field "timeStamp" Decode.float)
+
+
 subscriptions : Model -> Sub Msg
 subscriptions model =
     let
@@ -815,7 +828,7 @@ subscriptions model =
             case model.drag of
                 Dragging _ ->
                     [ Browser.Events.onMouseMove mouseMoveDecoder
-                    , Browser.Events.onMouseUp (Decode.succeed MouseUp)
+                    , Browser.Events.onMouseUp mouseUpDecoder
                     ]
 
                 NotDragging ->

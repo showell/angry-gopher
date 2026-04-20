@@ -33,10 +33,10 @@ import Time
 
 -}
 type Msg
-    = MouseDownOnBoardCard { stackIndex : Int, cardIndex : Int } Point
-    | MouseDownOnHandCard Int Point
+    = MouseDownOnBoardCard { stackIndex : Int, cardIndex : Int } Point Float
+    | MouseDownOnHandCard Int Point Float
     | MouseMove Point Float
-    | MouseUp
+    | MouseUp Point Float
     | WingEntered WingId
     | WingLeft WingId
     | BoardRectReceived (Result Browser.Dom.Error Browser.Dom.Element)

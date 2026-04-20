@@ -166,15 +166,6 @@ class Client:
         """GET /sessions/<id>/score → board_score + hand_size + per_stack breakdown."""
         return self._get(f"{self.base}/sessions/{session_id}/score")
 
-    def get_hint(self, session_id):
-        """GET /sessions/<id>/hint → {session_id, suggestions:[...]}.
-
-        Each suggestion is one firing trick, priority-ordered
-        (simplest first). The suggestion's `action` field is a
-        ready-to-POST wire action — pass it straight to send_action.
-        """
-        return self._get(f"{self.base}/sessions/{session_id}/hint")
-
     def get_turn_log(self, session_id):
         """GET /sessions/<id>/turn-log → per-turn action history.
 
