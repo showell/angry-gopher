@@ -46,10 +46,7 @@ EXCLUDE_DIRS = {
 # Small, documented list so exclusions are visible.
 EXEMPT_FILES = {
     # Python test runners are self-describing via module docstring.
-    "tools/lynrummy_elm_player/test_hints_invariant.py",
     "tools/lynrummy_elm_player/test_dsl_conformance.py",
-    # apply_labels.py is a sibling tool script with module docstring.
-    # It HAS a sidecar, but listed here so its absence wouldn't flag.
 }
 
 

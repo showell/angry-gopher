@@ -17,8 +17,3 @@ Enumerate-and-bridge peer: the same DSL scenarios drive
 Go and Elm referees must agree on every scenario; divergent
 pass/fail counts mean one side drifted.
 
-## TODO
-
-- No automatic check that fixturegen was re-run after a DSL edit
-  (pre-para-7 concern). A preflight script `ops/check` is the
-  planned fix.

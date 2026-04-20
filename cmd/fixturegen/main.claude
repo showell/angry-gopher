@@ -50,7 +50,5 @@ byte-compare to the just-written bytes. Both fail fast.
 
 - No runtime-gate for the Python JSON fixtures: `py_compile`
   against `test_dsl_conformance.py` would catch generator
-  schema drift. Wire that in along with a preflight `ops/check`
-  script.
-- Generator not currently part of `ops/start` or `check.sh`;
-  severed targets stay invisible until someone re-runs.
+  schema drift. Low priority — `ops/check` runs the Python
+  runner itself so schema drift surfaces as a runtime error.

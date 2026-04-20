@@ -458,6 +458,44 @@ hintInvariantHandStacksSetThreeOfAKind =
                                 )
 
 
+hintInvariantLooseCardPlayPeelSetToRun : Test
+hintInvariantLooseCardPlayPeelSetToRun =
+    test "hint_invariant_loose_card_play_peel_set_to_run" <|
+        \_ ->
+            let
+                handCards =
+                    [ { card = { value = Three, suit = Club, originDeck = DeckTwo }, state = HandNormal } ]
+
+                board =
+                    [ { boardCards = [ { card = { value = Four, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 40, left = 40 } }
+                        , { boardCards = [ { card = { value = Five, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 40, left = 300 } }
+                        ]
+
+                plays =
+                    LynRummy.Tricks.LooseCardPlay.trick.findPlays handCards board
+            in
+            case plays of
+                [] ->
+                    Expect.fail "trick did not fire (no plays)"
+
+                play :: _ ->
+                    let
+                        ( afterBoard, _ ) =
+                            play.apply board
+                    in
+                    case firstIncompleteStack afterBoard of
+                        Nothing ->
+                            Expect.pass
+
+                        Just ( i, s ) ->
+                            Expect.fail
+                                ("stack "
+                                    ++ String.fromInt i
+                                    ++ " is incomplete after trick emission: "
+                                    ++ Debug.toString s
+                                )
+
+
 hintInvariantPairPeelRunPairPureEdge : Test
 hintInvariantPairPeelRunPairPureEdge =
     test "hint_invariant_pair_peel_run_pair_pure_edge" <|
@@ -909,6 +947,7 @@ suite =
         , hintInvariantHandStacksPureRunThreeCard
         , hintInvariantHandStacksRbRunThreeCard
         , hintInvariantHandStacksSetThreeOfAKind
+        , hintInvariantLooseCardPlayPeelSetToRun
         , hintInvariantPairPeelRunPairPureEdge
         , hintInvariantPairPeelRunPairReversedHand
         , hintInvariantPairPeelSetPairEdge

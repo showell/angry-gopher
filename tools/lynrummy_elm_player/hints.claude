@@ -40,10 +40,6 @@ Primitive-order choices that affected invariant:
 
 ## TODO
 
-- `loose_card_play` has no `hint_invariant` DSL scenario —
-  triggering it as top-priority requires a fragile state where
-  no higher-priority trick fires. Add cases as real gameplay
-  surfaces them.
 - Stress scenarios only cover two shapes today (reversed hand
   order). More edge-case fixtures wanted: wraparound runs
   (K-A-2), adjacency ambiguity, middle-peel from 7-card runs.

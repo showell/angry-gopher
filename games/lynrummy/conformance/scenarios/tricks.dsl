@@ -174,3 +174,13 @@ scenario hint_invariant_pair_peel_run_pair_reversed_hand
   board:
     at (40,40): 7H 8H 9H TH
   expect: invariant_holds
+
+scenario hint_invariant_loose_card_play_peel_set_to_run
+  desc: loose_card_play peels 4C from a 4-of-a-kind set and merges onto a 3-card pure clubs run, opening [4C,5C,6C,7C] as a home for the stranded 3C hand card on the next turn.
+  op: hint_invariant
+  trick: loose_card_play
+  hand: 3C'
+  board:
+    at (40,40):  4C 4D 4H 4S
+    at (40,300): 5C 6C 7C
+  expect: invariant_holds

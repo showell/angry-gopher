@@ -801,6 +801,99 @@
     }
   },
   {
+    "name": "hint_invariant_loose_card_play_peel_set_to_run",
+    "desc": "loose_card_play peels 4C from a 4-of-a-kind set and merges onto a 3-card pure clubs run, opening [4C,5C,6C,7C] as a home for the stranded 3C hand card on the next turn.",
+    "op": "hint_invariant",
+    "trick": "loose_card_play",
+    "hand": [
+      {
+        "card": {
+          "value": 3,
+          "suit": 0,
+          "origin_deck": 1
+        },
+        "state": 0
+      }
+    ],
+    "board": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 4,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 40,
+          "left": 40
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 5,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 6,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 40,
+          "left": 300
+        }
+      }
+    ],
+    "expect": {
+      "kind": "invariant_holds"
+    }
+  },
+  {
     "name": "hint_invariant_pair_peel_run_pair_pure_edge",
     "desc": "pair_peel peels from a 4-card pure run and forms a new pure run from the hand + peeled card. Order matters — closer-value hand card merges first.",
     "op": "hint_invariant",

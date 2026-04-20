@@ -27,10 +27,3 @@ Python codegen.
   languages surfaces as different pass/fail counts.
 - Regenerate fixtures: `go run ./cmd/fixturegen ./games/lynrummy/conformance/scenarios/*.dsl`.
 
-## TODO
-
-- Wire into a preflight / check script (`ops/check`) so this
-  never silently goes stale (para-7 concern from
-  `users/steve/general/loose_ends_at_pause.md`).
-- Once stable, retire the hand-written `test_hints_invariant.py`
-  — it's fully covered by the DSL conformance suite.
