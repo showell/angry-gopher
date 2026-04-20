@@ -1,8 +1,0 @@
-just_use main.go
-
-# label: TOOL
-# role: supports feature — triage CLI: hit /admin/health and flag anomalies
-
-Reads the JSON emitted by admin_ops.handleHealthCheck. Intended for "why
-does something feel off" moments — prints a quick summary rather than
-leaving you to eyeball the dashboard.

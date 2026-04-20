@@ -25,7 +25,7 @@ nohup npx vite --port 8000 > /tmp/angry-cat.log 2>&1 &
 
 # Wait for both to be ready.
 for i in $(seq 1 10); do
-    GOPHER=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:9000/api/v1/users 2>/dev/null || true)
+    GOPHER=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:9000/gopher/version 2>/dev/null || true)
     CAT=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/ 2>/dev/null || true)
     if [ "$GOPHER" = "200" ] && [ "$CAT" = "200" ]; then
         echo "Gopher: http://localhost:9000 (ready, prod)"

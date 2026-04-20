@@ -1,8 +1,0 @@
-just_use respond.go
-
-# label: TINY
-# role: supports feature — JSON response envelopes + HTTP helpers
-
-Zulip-shaped success/error envelopes ({result, msg, ...}). ParseFormBody
-is a small workaround: Go's ParseForm only auto-parses bodies on POST/PUT/
-PATCH, so for DELETE with a form body we temporarily swap Method to "POST".

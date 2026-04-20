@@ -1,57 +1,32 @@
-// Angry Gopher — a lightweight Zulip-compatible server backed by SQLite.
-//
-// Serves the Zulip API subset that Angry Cat needs, reading from the
-// local database. Fully standalone — no upstream Zulip connection.
+// Angry Gopher — HTTP server for the LynRummy Elm client, plus a
+// wiki/source browser and small admin surface. The older
+// Zulip-compatible messaging API (events, users, DMs, channels)
+// was ripped 2026-04-21; this is a LynRummy server now.
 
 package main
 
 import (
+	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"os"
-	"path/filepath"
-	"strconv"
-	"strings"
-	"sync"
 	"time"
 
 	"angry-gopher/auth"
-	"angry-gopher/events"
-	"angry-gopher/ratelimit"
-	"angry-gopher/respond"
-	"angry-gopher/users"
 	"angry-gopher/views"
 )
 
 func buildMux() *http.ServeMux {
 	mux := http.NewServeMux()
-	api := withMiddleware
 
-	// --- API ---
-	mux.HandleFunc("/api/v1/register", api(events.HandleRegister))
-	mux.HandleFunc("/api/v1/events", api(routeEvents))
-	mux.HandleFunc("/api/v1/users/me", api(routeOwnUser))
-	mux.HandleFunc("/api/v1/users/by_email", api(users.HandleGetUserByEmail))
-	mux.HandleFunc("/api/v1/users/", api(routeUserByID))
-	mux.HandleFunc("/api/v1/users", api(routeUsers))
-	mux.HandleFunc("/api/v1/settings", api(users.HandleUpdateSettings))
-	mux.HandleFunc("/api/v1/user_uploads/", api(handleUploadTempURL))
-	mux.HandleFunc("/api/v1/user_uploads", api(handleUpload))
+	mux.HandleFunc("/gopher/version", handleVersion)
 
-	// --- Gopher-only API ---
-	mux.HandleFunc("/gopher/version", api(handleVersion))
-
-	// --- HTML views (Basic auth, no middleware) ---
-	// All pages registered from views.Pages (single source of truth).
+	// HTML views (Basic auth, no middleware). Single source of truth.
 	views.RegisterPages(mux)
 
-	// --- Static assets ---
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("views/static"))))
 
-	// --- Admin & uploads ---
-	mux.HandleFunc("/user_uploads/", api(handleServeUpload))
 	mux.HandleFunc("/admin/login", handleAdminLogin)
 	mux.HandleFunc("/admin/health", handleHealthCheck)
 	mux.HandleFunc("/admin/", adminHandler)
@@ -60,7 +35,7 @@ func buildMux() *http.ServeMux {
 			http.Redirect(w, r, "/gopher/", http.StatusFound)
 			return
 		}
-		api(handleUnimplemented)(w, r)
+		http.NotFound(w, r)
 	})
 
 	return mux
@@ -68,9 +43,7 @@ func buildMux() *http.ServeMux {
 
 func wireDB() {
 	auth.DB = DB
-	users.DB = DB
 	views.DB = DB
-	views.RenderMarkdown = renderMarkdown
 }
 
 func main() {
@@ -119,7 +92,6 @@ Backup the production database:
 	}
 
 	serverConfig = config
-	uploadsDir = config.UploadsDir()
 
 	if config.IsDemo() {
 		os.Setenv("GOPHER_RESET_DB", "1")
@@ -138,25 +110,18 @@ Backup the production database:
 	fmt.Printf("Angry Gopher [%s mode]\n", config.Mode)
 	fmt.Printf("  Root:     %s\n", config.Root)
 	fmt.Printf("  Database: %s\n", config.DBPath())
-	fmt.Printf("  Uploads:  %s\n", config.UploadsDir())
 	fmt.Printf("  Listening on %s\n", config.ListenAddr())
 	fmt.Printf("  Admin UI: http://localhost:%d/admin/\n", config.Port)
-	events.StartReaper(90 * time.Second)
 	log.Fatal(http.ListenAndServe(config.ListenAddr(), mux))
 }
 
-// --- Gopher-only ---
-
 func handleVersion(w http.ResponseWriter, r *http.Request) {
-	respond.Success(w, map[string]interface{}{
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"result":  "success",
 		"version": "0.1",
 	})
 }
-
-// --- File uploads ---
-
-// Set by main() from the config. Tests don't use uploads.
-var uploadsDir string
 
 // Set by main() so the admin/ops dashboard can show server info.
 var serverConfig *ServerConfig
@@ -164,107 +129,3 @@ var serverConfig *ServerConfig
 // Set at build time via -ldflags "-X main.gitCommit=...".
 var gitCommit = "dev"
 var serverStartTime = time.Now()
-
-var (
-	nextUploadID   int
-	nextUploadIDMu sync.Mutex
-)
-
-func handleUpload(w http.ResponseWriter, r *http.Request) {
-	if r.Method != "POST" {
-		respond.Error(w, "Method not allowed")
-		return
-	}
-
-	file, header, err := r.FormFile("FILE")
-	if err != nil {
-		respond.Error(w, "Missing FILE field: "+err.Error())
-		return
-	}
-	defer file.Close()
-
-	nextUploadIDMu.Lock()
-	nextUploadID++
-	id := nextUploadID
-	nextUploadIDMu.Unlock()
-
-	dir := filepath.Join(uploadsDir, strconv.Itoa(id))
-	os.MkdirAll(dir, 0755)
-
-	dst, err := os.Create(filepath.Join(dir, header.Filename))
-	if err != nil {
-		respond.Error(w, "Failed to save file: "+err.Error())
-		return
-	}
-	defer dst.Close()
-	io.Copy(dst, file)
-
-	uri := fmt.Sprintf("/user_uploads/%d/%s", id, header.Filename)
-	log.Printf("[api] Uploaded %s (%d bytes)", uri, header.Size)
-
-	respond.Success(w, map[string]interface{}{"uri": uri})
-}
-
-func handleUploadTempURL(w http.ResponseWriter, r *http.Request) {
-	path := strings.TrimPrefix(r.URL.Path, "/api/v1")
-	respond.Success(w, map[string]interface{}{"url": path})
-}
-
-func handleServeUpload(w http.ResponseWriter, r *http.Request) {
-	rel := strings.TrimPrefix(r.URL.Path, "/user_uploads/")
-	filePath := filepath.Join(uploadsDir, rel)
-
-	if strings.Contains(rel, "..") {
-		http.NotFound(w, r)
-		return
-	}
-
-	http.ServeFile(w, r, filePath)
-}
-
-// --- Middleware ---
-
-func handleUnimplemented(w http.ResponseWriter, r *http.Request) {
-	if r.Method == "OPTIONS" {
-		w.WriteHeader(http.StatusOK)
-		return
-	}
-	log.Printf("[unimplemented] %s %s", r.Method, r.URL.Path)
-	respond.Error(w, fmt.Sprintf("Endpoint not implemented: %s %s", r.Method, r.URL.Path))
-}
-
-func withMiddleware(handler http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		origin := r.Header.Get("Origin")
-		if origin != "" {
-			w.Header().Set("Access-Control-Allow-Origin", origin)
-			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
-		}
-		if r.Method == "OPTIONS" {
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-		if strings.HasPrefix(r.URL.Path, "/api/") {
-			log.Printf("%s %s", r.Method, r.URL.Path)
-		}
-
-		// Rate limit authenticated users. Skip the check for event
-		// polling (passive listener) and unauthenticated requests.
-		isEventPoll := r.URL.Path == "/api/v1/events"
-		if !isEventPoll && r.Header.Get("Authorization") != "" {
-			userID := auth.Authenticate(r)
-			if userID != 0 && !ratelimit.Check(userID) {
-				w.Header().Set("Retry-After", "60")
-				w.WriteHeader(429)
-				respond.WriteJSON(w, map[string]interface{}{
-					"result": "error",
-					"msg":    "Rate limit exceeded",
-				})
-				return
-			}
-		}
-
-		handler(w, r)
-	}
-}

@@ -18,20 +18,13 @@ type PageDef struct {
 // Pages returns the ordered list of all CRUD pages.
 func GetPages() []PageDef {
 	hardcoded := []PageDef{
-	{
-		Path:     "/gopher/users",
-		NavLabel: "Users",
-		Title:    "Users",
-		Subtitle: "Everyone in your organization. Click a name to see their channels and start a DM.",
-		Handler:  HandleUsers,
-	},
-	{
-		Path:     "/gopher/game-lobby",
-		NavLabel: "Games",
-		Title:    "Games",
-		Subtitle: "Play LynRummy and other games with your team — right inside your chat app.",
-		Handler:  HandleGames,
-	},
+		{
+			Path:     "/gopher/game-lobby",
+			NavLabel: "Games",
+			Title:    "Games",
+			Subtitle: "Play LynRummy and other games with your team — right inside your chat app.",
+			Handler:  HandleGames,
+		},
 	}
 	return append(hardcoded, generatedPages...)
 }
@@ -46,8 +39,6 @@ func RegisterPages(mux *http.ServeMux) {
 	mux.HandleFunc("/gopher/nav", func(w http.ResponseWriter, r *http.Request) {
 		http.ServeFile(w, r, "views/static_nav.html")
 	})
-	mux.HandleFunc("/gopher/sse/messages", HandleSSEMessages)
-	mux.HandleFunc("/gopher/sse/events", HandleSSEEvents)
 	mux.HandleFunc("/gopher/claude", HandleClaudeLanding)
 	mux.HandleFunc("/gopher/claude/", HandleClaudeLanding)
 	mux.HandleFunc("/gopher/docs/", HandleDocs)

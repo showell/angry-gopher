@@ -6,12 +6,8 @@ package main
 import (
 	"database/sql"
 	"fmt"
-	"image"
-	"image/color"
-	"image/png"
 	"log"
 	"os"
-	"path/filepath"
 	"time"
 
 	"angry-gopher/schema"
@@ -73,32 +69,5 @@ func seedData(includeWelcome bool) {
 		DB.Exec(`INSERT OR IGNORE INTO users (id, full_name, created_at) VALUES (?, ?, ?)`,
 			u.id, u.fullName, now)
 	}
-
-	if includeWelcome {
-		seedTestImage()
-	}
-}
-
-func seedTestImage() {
-	if uploadsDir == "" {
-		return // tests don't use uploads
-	}
-	dir := filepath.Join(uploadsDir, "1")
-	os.MkdirAll(dir, 0755)
-
-	img := image.NewRGBA(image.Rect(0, 0, 64, 64))
-	teal := color.RGBA{0, 128, 128, 255}
-	for y := 0; y < 64; y++ {
-		for x := 0; x < 64; x++ {
-			img.Set(x, y, teal)
-		}
-	}
-
-	f, err := os.Create(filepath.Join(dir, "gopher.png"))
-	if err != nil {
-		log.Printf("Failed to create test image: %v", err)
-		return
-	}
-	defer f.Close()
-	png.Encode(f, img)
+	_ = includeWelcome
 }

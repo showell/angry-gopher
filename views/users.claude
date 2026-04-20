@@ -1,7 +1,0 @@
-just_use users.go
-
-# label: WORKHORSE
-# role: supports feature — user list (inline edit-own-name) + user detail (channels + DM link)
-
-Migration to DSL: ready after inline-form-in-list primitive, related-data
-section, and row-style conditional land in crudgen.
