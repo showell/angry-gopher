@@ -60,7 +60,6 @@ unfamiliar code, read the sidecar first.
 | `events` | SSE-style long-polling event system |
 | `games/lynrummy` | LynRummy: dealer, referee, replay, tricks, scoring |
 | `games/lynrummy/tricks` | Seven trick recognizers + hint priority |
-| `games/critters` | Critter behavior studies |
 | `claude_issues` | Issue tracker for Claude↔Steve work |
 | `notify` | Push-notification helpers |
 | `users` | User accounts |
@@ -94,9 +93,8 @@ Server-rendered pages at `/gopher/*` with Basic auth:
 | Page | Description |
 |---|---|
 | `/gopher/` | Landing page |
-| `/gopher/game-lobby` | Games launch pad (LynRummy + Critters) |
+| `/gopher/game-lobby` | Games launch pad (LynRummy) |
 | `/gopher/lynrummy-elm/` | Elm LynRummy client |
-| `/gopher/critters/` | Critter studies portal |
 | `/gopher/dm` | Direct messages (Claude↔Steve) |
 | `/gopher/wiki/` | Wiki viewer over repo source |
 | `/gopher/docs/` | Essay viewer with inline comment widget |

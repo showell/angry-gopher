@@ -18,7 +18,6 @@ import (
 	"time"
 
 	"angry-gopher/auth"
-	"angry-gopher/games/critters"
 	"angry-gopher/dm"
 	"angry-gopher/events"
 	"angry-gopher/ratelimit"
@@ -73,7 +72,6 @@ func buildMux() *http.ServeMux {
 func wireDB() {
 	auth.DB = DB
 	users.DB = DB
-	critters.DB = DB
 	dm.DB = DB
 	dm.RenderMarkdown = renderMarkdown
 	views.DB = DB

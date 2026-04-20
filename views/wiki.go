@@ -27,11 +27,10 @@ import (
 
 // wikiRepos maps a short repo name (used in URLs) to its filesystem
 // root. Order is the display order in the sidebar.
-var wikiRepoOrder = []string{"gopher", "elm-critters", "elm-lynrummy"}
+var wikiRepoOrder = []string{"gopher", "elm-lynrummy"}
 
 var wikiRepos = map[string]string{
 	"gopher":       "", // resolved to cwd lazily
-	"elm-critters": filepath.Join(os.Getenv("HOME"), "showell_repos/elm-critters"),
 	"elm-lynrummy": filepath.Join(os.Getenv("HOME"), "showell_repos/elm-lynrummy"),
 }
 
@@ -1042,8 +1041,7 @@ pre code { background: none; padding: 0; }
 <h3>Browse Gopher</h3>
 <ul>
 <li><a href="/gopher/%[1]s/gopher/tree/">All files</a></li>
-<li><a href="/gopher/%[1]s/gopher/tree/lynrummy">lynrummy/</a></li>
-<li><a href="/gopher/%[1]s/gopher/tree/critters">critters/</a></li>
+<li><a href="/gopher/%[1]s/gopher/tree/games">games/</a></li>
 <li><a href="/gopher/%[1]s/gopher/tree/views">views/</a></li>
 <li><a href="/gopher/%[1]s/gopher/tree/agent_collab">agent_collab/</a></li>
 <li><a href="/gopher/%[1]s/gopher/tree/cmd">cmd/</a></li>
@@ -1054,18 +1052,6 @@ pre code { background: none; padding: 0; }
 		} else {
 			fmt.Fprint(w, landmarks, tree)
 		}
-	}
-
-	if currentRepo == "elm-critters" {
-		fmt.Fprintf(w, `
-<h3>elm-critters</h3>
-<ul>
-<li><a href="/gopher/%[1]s/elm-critters/README.md">README</a></li>
-<li><a href="/gopher/%[1]s/elm-critters/src/Main.elm">Main.elm</a></li>
-<li><a href="/gopher/%[1]s/elm-critters/tree/">All files</a></li>
-</ul>
-<h3>Live product</h3>
-<ul><li><a href="/gopher/critters/">Critter studies portal</a></li></ul>`, html.EscapeString(section))
 	}
 
 	if currentRepo == "elm-lynrummy" {
@@ -1084,7 +1070,6 @@ pre code { background: none; padding: 0; }
 <h3>Products</h3>
 <ul>
 <li><a href="/gopher/">Gopher home</a></li>
-<li><a href="/gopher/critters/">Critter studies</a></li>
 <li><a href="/gopher/game-lobby">LynRummy</a></li>
 </ul>
 </aside>

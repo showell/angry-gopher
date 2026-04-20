@@ -8,9 +8,9 @@ import (
 )
 
 // HandleGames serves /gopher/game-lobby. Minimal launch-pad for
-// the playable Elm LynRummy client plus a pointer to the
-// Critter studies. No legacy game-event system; the Elm client
-// owns its own sessions via lynrummy_elm_sessions.
+// the playable Elm LynRummy client. No legacy game-event
+// system; the Elm client owns its own sessions via
+// lynrummy_elm_sessions.
 func HandleGames(w http.ResponseWriter, r *http.Request) {
 	userID := RequireAuth(w, r)
 	if userID == 0 {
@@ -27,12 +27,11 @@ func HandleGames(w http.ResponseWriter, r *http.Request) {
 	PageFooter(w)
 }
 
-// renderGamesHero is a two-tile hero: LynRummy (primary, big
-// Play button) and Critter studies (secondary pointer).
+// renderGamesHero: single-tile hero for LynRummy (the only
+// playable game). Critter studies were ripped 2026-04-20.
 func renderGamesHero(w http.ResponseWriter) {
 	fmt.Fprint(w, `<style>
-.games-hero { display:grid; grid-template-columns: 2fr 1fr; gap:20px; margin:20px 0 28px; }
-@media (max-width: 820px) { .games-hero { grid-template-columns: 1fr; } }
+.games-hero { margin:20px 0 28px; }
 .games-tile { border:1px solid #ccc; border-radius:8px; padding:22px; background:#fcfcf8;
               display:flex; flex-direction:column; }
 .games-tile h2 { margin:0 0 6px; font-size:22px; color:#000080; }
@@ -41,9 +40,6 @@ func renderGamesHero(w http.ResponseWriter) {
 .play-btn { display:inline-block; background:#000080; color:white; padding:12px 28px;
             border-radius:6px; text-decoration:none; font-weight:bold; font-size:16px; }
 .play-btn:hover { background:#0000a0; }
-.secondary-btn { display:inline-block; background:#666; color:white; padding:8px 18px;
-                 border-radius:5px; text-decoration:none; font-weight:bold; font-size:13px; }
-.secondary-btn:hover { background:#888; }
 .sessions-section { margin-top:28px; }
 .sessions-section h3 { color:#000080; margin:0 0 10px; font-size:18px; }
 .sessions-table { width:100%; border-collapse:collapse; font-size:14px; }
@@ -60,11 +56,6 @@ func renderGamesHero(w http.ResponseWriter) {
     <h2>LynRummy</h2>
     <p>Two-player rummy with a real referee. Drag cards from your hand to the board, build runs and sets, hit Complete Turn when you're happy with your play.</p>
     <div class="cta"><a class="play-btn" href="/gopher/lynrummy-elm/">Play LynRummy →</a></div>
-  </div>
-  <div class="games-tile">
-    <h2>Critter Studies</h2>
-    <p>Drag-and-drop behavioral games. Sort mice, group ducks, whatever the study calls for.</p>
-    <div class="cta"><a class="secondary-btn" href="/gopher/critters/">Open portal →</a></div>
   </div>
 </div>`)
 }

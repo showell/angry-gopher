@@ -31,17 +31,6 @@ CREATE TABLE IF NOT EXISTS dm_messages (
     timestamp INTEGER NOT NULL
 );
 
--- CRITTER_STUDIES: telemetry from Elm critter-study sessions.
-CREATE TABLE IF NOT EXISTS critter_sessions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    study TEXT NOT NULL,
-    label TEXT NOT NULL DEFAULT '',
-    saved_at TEXT NOT NULL,
-    payload TEXT NOT NULL
-);
-
-CREATE INDEX IF NOT EXISTS idx_critter_sessions_study ON critter_sessions(study, id DESC);
-
 -- LynRummy Elm client action log. V1 scaffolding: every page load
 -- gets a new session; actions posted to /gopher/lynrummy-elm/actions
 -- are stored with their WireAction JSON verbatim, sequenced per
