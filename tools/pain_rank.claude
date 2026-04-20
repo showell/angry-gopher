@@ -1,0 +1,42 @@
+just_use pain_rank.py
+
+# label: SPIKE (code-analysis tool)
+# role: agent tool — rank source files by composite pain score
+
+Cheap quantitative proxies for "probably annoying to work
+in," rank-normalized across files and combined as a weighted
+sum. Higher = more painful.
+
+## Metrics
+
+- `size` — total lines (tangled concerns).
+- `todo_count` — TODO/FIXME/HACK/XXX markers (self-labeled
+  pain).
+- `churn` — commits touching the file (bug magnet / hot
+  spot).
+- `err_density` — `if err != nil` lines / total lines (Go
+  boilerplate).
+- `escape_density` — `html.EscapeString`-like calls (view
+  boilerplate).
+
+## Status (TENTATIVE)
+
+Labeled SPIKE; run it occasionally as a triage lens. Haven't
+validated that current weights produce useful rankings on the
+post-refactor tree — the original balance was tuned against
+an older layout. Treat the output as a *direction*, not a
+scoreboard.
+
+## Surface
+
+- `python3 tools/pain_rank.py` — rank all source files.
+- `--top N` — show top N.
+- `--weights KEY=VAL,...` — override weight balance.
+
+Filters out generated files, vendored trees, `.min.js`, and
+tests by default.
+
+## Pointers
+
+- Related tool: `tools/feature_weight.py` (different lens,
+  feature-scoped rather than global).

@@ -1,0 +1,43 @@
+just_use sse_notify.go
+
+# label: SPIKE (ANCHOR_COMMENTS stack)
+# role: Gopher view — Server-Sent Events stream + bell widget
+
+Real-time notification channel so Steve's browser lights up
+when Claude posts something (wiki reply, DM) without a page
+reload. One SSE connection per open tab, multiplexed via
+`notify.Subscribe`.
+
+## Two exports
+
+- `HandleSSEClaudeActivity(w, r)` — routed at
+  `/gopher/sse/claude-activity`. Streams `notify.Event` JSON
+  as SSE `activity` events. Browser holds this open for the
+  lifetime of the tab.
+- `NotificationWidget` — HTML+JS string constant. Injected
+  into every page shell. Fixed top-right bell; hidden until
+  an `activity` event fires; click "open →" navigates to the
+  event's URL.
+
+## Why SSE (not WebSocket)
+
+One-way push from server → client is the only direction
+needed. SSE is simpler: no handshake protocol, no
+bidirectional framing, just a long-lived HTTP response that
+`EventSource` consumes natively.
+
+## Event shape (from `notify.Event`)
+
+JSON with `sender`, `kind`, `summary`, `snippet`, `url`.
+The widget renders `sender • kind` at the top, summary line,
+snippet body, and an "open →" link. Dismiss is client-only
+(closes the bell without side-effects).
+
+## Pointers
+
+- Publisher: `notify/` package — anywhere `notify.Publish(...)`
+  fires, this stream emits.
+- Part of: ANCHOR_COMMENTS stack
+  (`project_anchor_comments_stack.md`).
+- Injected by: page shell (`views/helpers.go` or similar) via
+  `NotificationWidget` concatenation.

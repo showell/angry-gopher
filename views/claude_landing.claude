@@ -1,0 +1,40 @@
+just_use claude_landing.go
+
+# label: SPIKE (ANCHOR_COMMENTS stack)
+# role: Gopher view — the /gopher/claude landing page
+
+One-page sub-landing that sits between Gopher's home and
+Claude-owned sub-tools (Essays, Issues). Two-card layout
+linking to:
+
+- `/gopher/essays` — Steve's long-form writing with inline
+  paragraph comments
+- `/gopher/claude-issues` — Issue tracker filed to
+  `claude_issues/NNN-slug.md`
+
+## Scope
+
+Trivial. 35 LOC. Pure rendering, no state, no forms. The
+whole reason this is its own file is that both Steve and
+Claude needed ONE URL they could bookmark for "Claude
+stuff."
+
+Handler: `HandleClaudeLanding` — routed at
+`/gopher/claude` and `/gopher/claude/`.
+
+## What this module deliberately does NOT do
+
+- Host any state (that's `claude_issues.go` and
+  `article_comments.go`).
+- Render essays themselves (that's elsewhere under
+  `views/`).
+- Own the notification bell (that's `sse_notify.go`,
+  injected site-wide via `NotificationWidget`).
+
+## Pointers
+
+- Part of: ANCHOR_COMMENTS stack (see
+  `project_anchor_comments_stack.md` in memory).
+- Siblings: `claude_issues.go`, `article_comments.go`,
+  `sse_notify.go`.
+- Injected by: `views/helpers.go` (page shell, home card).

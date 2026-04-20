@@ -1,0 +1,36 @@
+just_use player.py
+
+# label: VESTIGIAL (superseded by lynrummy_elm_player/client.py)
+# role: legacy — console LynRummy player, pre-Elm era
+
+The original Python LynRummy player, built to talk to the
+pre-Elm Angry Gopher game host. Polls game events, tracks
+board + hand locally, can send moves as any authenticated
+player. Used for spectating, advising, and console play.
+
+## Status (FIRM)
+
+VESTIGIAL. Replaced by `tools/lynrummy_elm_player/client.py`
+and `auto_player.py`, which talk to the Elm-era wire
+(`/gopher/lynrummy-elm/`). This file targets the pre-Elm
+game host. Likely does NOT work against the current server.
+
+Candidate for removal. Keeping the file rather than deleting
+preserves the console-UI pattern for anyone wanting a
+reference, but a fresh reader should NOT use it as a starting
+point.
+
+## Surface (historical)
+
+```
+python3 tools/lynrummy_player/player.py --game-id N \
+    --email EMAIL --api-key KEY [--host URL]
+```
+
+## Pointers
+
+- Successor: `tools/lynrummy_elm_player/client.py` +
+  `auto_player.py`.
+- Memory: `project_lynrummy_elm_port_status.md` — Elm port
+  is functionally complete; this pre-Elm client is the
+  opposite end of that transition.

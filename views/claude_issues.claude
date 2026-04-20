@@ -1,0 +1,59 @@
+just_use claude_issues.go
+
+# label: SPIKE (ANCHOR_COMMENTS stack)
+# role: Gopher view — file-backed issue tracker
+
+A lightweight issue tracker for things Steve has asked
+Claude to do. File-backed (no database): each issue lives at
+`claude_issues/NNN-slug.md` with a tiny frontmatter block +
+markdown body. The server reads these files on every
+request; Claude edits them as work progresses.
+
+## Why file-backed
+
+Two benefits:
+1. Steve can grep the tracker from the shell, or edit in
+   his editor, or browse via `/gopher/wiki/gopher/claude_issues/`.
+2. Git history IS the audit log. No separate events table.
+
+## Routes
+
+- `GET /gopher/claude-issues` — index page. Lists active
+  issues (open / in-progress) as a sortable table, plus the
+  last 10 shipped (done). Includes a `<details>` "File a new
+  issue" form at the top.
+- `POST /gopher/claude-issues` — from the inline form.
+  `handleNewIssue` allocates the next ID and writes a new
+  `claude_issues/NNN-slug.md` with open status. (Details in
+  `handleNewIssue` — not read in this sidecar pass.)
+- `GET /gopher/claude-issues/<id>` — detail page. Renders the
+  issue's markdown body via `RenderMarkdown` if available,
+  else a `<pre>`. Shows status badge + metadata + link to
+  the wiki view of the underlying file.
+
+## Frontmatter shape
+
+Each `NNN-slug.md` starts with `---`-delimited frontmatter:
+`id`, `title`, `status` (open / in-progress / done),
+`source`, `created`, `updated`. Parser: `parseClaudeIssue`.
+
+## Audience
+
+Steve first, Claude second. The status badges (`open`,
+`in-progress`, `done`) are visual cues for Steve scanning
+the list; Claude edits status as work moves.
+
+## Replaces
+
+The hand-maintained `FIXES.md` used to live in the wiki.
+Auto-maintained shipped-list here replaces it.
+
+## Pointers
+
+- Part of: ANCHOR_COMMENTS stack
+  (`project_anchor_comments_stack.md`).
+- Detail-page integration: `RenderMarkdown` function
+  injected from wiki renderer.
+- Status badge helper: `statusBadge(s)` (SPIKE issue #10 —
+  dedicated detail page).
+- Storage dir: `claude_issues/` at repo root.

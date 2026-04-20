@@ -1,0 +1,41 @@
+just_use spectator.py
+
+# label: EARLY (agent-side CRUD-HTML reader)
+# role: agent tool — read-only view of Gopher games via HTTP scrape
+
+Acts like a human browsing Gopher: HTTP Basic auth to the
+CRUD pages on port 9000, parses HTML with BeautifulSoup. No
+DB reach-around — the whole point is to validate the CRUD
+pages are readable (and by extension, agent-usable) per
+`project_crud_html_simplicity.md`.
+
+## Status (TENTATIVE)
+
+Labeled EARLY. The tool has been exercised in LynRummy
+contexts pre-refactor; post-refactor robustness unverified.
+The LynRummy UI is now Elm (not CRUD HTML), so this is more
+useful for non-LynRummy Gopher features (issues, wiki,
+etc.) than for the current LynRummy surface.
+
+## Auth
+
+Env vars `GOPHER_EMAIL` + `GOPHER_API_KEY`, or `--email` /
+`--api-key` flags. Base URL `GOPHER_BASE` (default
+`http://localhost:9000`).
+
+## Commands
+
+- `list` — show all visible games.
+- `show <id>` — show game detail + event log.
+
+## Relation to the HTTP-when-bridge rule
+
+`feedback_http_when_bridge.md` — this tool is HTTP-based
+because Gopher CRUD is the canonical agent interface for
+admin-style scrape. Good fit for the rule. One-way
+analytical tools (like `telemetry.py`) bypass HTTP.
+
+## Pointers
+
+- Memory: `project_crud_html_simplicity.md` (forcing
+  function for simple HTML).

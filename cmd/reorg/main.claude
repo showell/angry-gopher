@@ -1,0 +1,50 @@
+just_use main.go
+
+# label: VESTIGIAL (one-shot refactor tool)
+# role: historical — Go-aware package mover
+
+Batch Go package mover. Reads a `REORG` script of
+`mv src/ dst/` lines and executes them as Go-aware package
+moves: rewrites import paths across every `.go` file in the
+repo, updates `package` declarations, then moves the
+directories.
+
+## Status (FIRM)
+
+One-shot. Was built to support the 2026-early repo reorg
+that relocated LynRummy and other packages into their current
+nesting (`games/lynrummy/`, etc.). Not part of the regular
+agent toolkit.
+
+Kept for reference in case another reorg happens. If the
+Go layout needs another shuffle, start by reading this
+file's script format — but also audit the logic against
+current `go/ast` + `go modules` behavior since tooling moves
+fast.
+
+## Usage
+
+```
+# Dry-run (default):
+go run cmd/reorg/main.go REORG
+
+# Apply for real:
+go run cmd/reorg/main.go --execute REORG
+```
+
+REORG script format:
+
+```
+# Comments and blank lines ignored.
+mv auth/ core/auth/
+mv ratelimit/ internal/ratelimit/
+```
+
+Old and new import paths are inferred from the module name
+in `go.mod`.
+
+## Pointers
+
+- Entry point: `main.main()`.
+- Module layout as of today: see `go.mod` + the
+  `games/`, `tools/`, `views/` tree.

@@ -1,0 +1,45 @@
+just_use apply_labels.py
+
+# label: VESTIGIAL (label-triage bulk tool)
+# role: one-shot — bulk-write `# label:` comments into .claude sidecars
+
+Bulk writes per-file DX labels (WORKHORSE, ELEGANT, INTRICATE,
+etc.) into `.claude` sidecars across the repo, and emits a
+top-level `LABELS.md` index. Idempotent. Re-run when labels
+change.
+
+## Status (TENTATIVE)
+
+The label assignments in this file are Claude's gut reactions
+from the 2026-04-14 triage pass. As sidecars have been
+hand-authored at the raised-bar since, this tool may be of
+diminishing value — it overwrites the `# label:` comment in
+each `.claude` but leaves body content alone, so it's safe to
+re-run if you want consistent labels across a newly-added
+batch. It does NOT know about labels invented after 2026-04-14
+(SPIKE, EARLY, BUGGY, VESTIGIAL tiers all postdate this file).
+
+If you're here looking for the authoritative label for a given
+file, read the file's `.claude` directly — this script is not
+the source of truth.
+
+## Surface
+
+- `python3 tools/apply_labels.py` — rewrites labels per the
+  hardcoded `LABELS` map at the top, regenerates
+  `LABELS.md`.
+- The `LABELS` dict at the top of the file IS the label
+  assignment map for the snapshot. Edit there, re-run.
+
+## What it does NOT do
+
+- Validate that a labeled file still exists.
+- Compute labels from code metrics.
+- Respect any label tiers added after 2026-04-14.
+
+## Pointers
+
+- Generated artifact: `LABELS.md` at repo root.
+- Label-tier evolution: see memories
+  `feedback_spike_label_new_features.md`,
+  `feedback_early_label_tier.md`, `feedback_buggy_label.md`.

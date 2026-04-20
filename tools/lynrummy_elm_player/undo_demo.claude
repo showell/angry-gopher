@@ -1,0 +1,32 @@
+just_use undo_demo.py
+
+# label: EARLY (demo script)
+# role: agent tool — end-to-end smoke-test of the undo feature
+
+Small demonstration that exercises the undo feature: make a
+move, snapshot state, undo, snapshot state again, confirm
+the second snapshot matches the pre-move baseline.
+
+## Status (TENTATIVE)
+
+Haven't re-verified post-refactor + client-autonomy + action-
+envelope changes from 2026-04-19. The server-side undo is
+log-preprocessed (the action stays in the persisted log for
+audit; replay skips it + its target), and that mechanism is
+currently stable — but the demo script's POST shape may need
+the envelope update.
+
+## Usage
+
+```
+python3 tools/lynrummy_elm_player/undo_demo.py
+```
+
+Creates a fresh session, makes a move, prints before/after
+hand-size + board-score, issues undo, prints again.
+
+## Pointers
+
+- Depends on: `client.py` in the same dir.
+- Memory: `project_one_action_log.md` — undo uses the same
+  action log everything else does.
