@@ -1,7 +1,0 @@
-just_use dm.go
-
-# label: WORKHORSE
-# role: supports feature — DM conversation list + thread view + compose
-
-Migration to DSL: not a CRUD shape. Thread rendering + partial-load pattern
-would need richer primitives before crudgen could express it.

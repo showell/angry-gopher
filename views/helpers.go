@@ -56,11 +56,10 @@ const AppChromeCSS = `
 `
 
 // AppChromeTop emits the global top bar. `current` should be one of
-// "games" / "claude" / "docs" / "code" / "" (when not in any area).
+// "games" / "docs" / "code" / "" (when not in any area).
 // Pass empty for the home page or un-tagged pages.
 func AppChromeTop(w http.ResponseWriter, current string) {
 	areas := []struct{ key, label, href string }{
-		{"claude", "Claude", "/gopher/claude"},
 		{"code", "Code", "/gopher/code/"},
 		{"docs", "Docs", "/gopher/docs/"},
 		{"games", "Games", "/gopher/game-lobby"},
@@ -140,7 +139,6 @@ button:hover { background: #0000a0; }
 </style>
 </head><body>
 `)
-	fmt.Fprint(w, NotificationWidget)
 	AppChromeTop(w, area)
 	fmt.Fprintf(w, `<div class="app-body-wrap"><h1>%s</h1>`, html.EscapeString(title))
 }
@@ -254,15 +252,6 @@ h1 { color: #000080; font-size: 34px; margin-bottom: 4px; }
 	fmt.Fprint(w, `
 
 <div class="cards">
-
-  <div class="card">
-    <h2><a href="/gopher/claude">Claude</a></h2>
-    <p>Talk to Claude and see what he's working on. File issues; reply to DMs.</p>
-    <ul>
-      <li><a href="/gopher/essays">Essays</a> <span class="muted">— long-form writing with inline comments</span></li>
-      <li><a href="/gopher/claude-issues">Issues</a> <span class="muted">— active + recently shipped</span></li>
-    </ul>
-  </div>
 
   <div class="card">
     <h2><a href="/gopher/code/">Code</a></h2>

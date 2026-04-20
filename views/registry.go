@@ -19,13 +19,6 @@ type PageDef struct {
 func GetPages() []PageDef {
 	hardcoded := []PageDef{
 	{
-		Path:     "/gopher/dm",
-		NavLabel: "DMs",
-		Title:    "Direct Messages",
-		Subtitle: "Private 1:1 conversations.",
-		Handler:  HandleDM,
-	},
-	{
 		Path:     "/gopher/users",
 		NavLabel: "Users",
 		Title:    "Users",
@@ -55,14 +48,6 @@ func RegisterPages(mux *http.ServeMux) {
 	})
 	mux.HandleFunc("/gopher/sse/messages", HandleSSEMessages)
 	mux.HandleFunc("/gopher/sse/events", HandleSSEEvents)
-	mux.HandleFunc("/gopher/sse/claude-activity", HandleSSEClaudeActivity)
-	mux.HandleFunc("/gopher/article-comments", HandleArticleComments)
-	mux.HandleFunc("/gopher/claude-issues", HandleClaudeIssues)
-	mux.HandleFunc("/gopher/claude-issues/", HandleClaudeIssues)
-	mux.HandleFunc("/gopher/claude", HandleClaudeLanding)
-	mux.HandleFunc("/gopher/claude/", HandleClaudeLanding)
-	mux.HandleFunc("/gopher/essays", HandleEssays)
-	mux.HandleFunc("/gopher/essays/", HandleEssays)
 	mux.HandleFunc("/gopher/docs/", HandleDocs)
 	mux.HandleFunc("/gopher/docs", HandleDocs)
 	mux.HandleFunc("/gopher/code/", HandleCode)

@@ -16,21 +16,6 @@ CREATE TABLE IF NOT EXISTS message_content (
     html TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS dm_conversations (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id_1 INTEGER NOT NULL REFERENCES users(id),
-    user_id_2 INTEGER NOT NULL REFERENCES users(id),
-    UNIQUE(user_id_1, user_id_2)
-);
-
-CREATE TABLE IF NOT EXISTS dm_messages (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    conversation_id INTEGER NOT NULL REFERENCES dm_conversations(id),
-    sender_id INTEGER NOT NULL REFERENCES users(id),
-    content_id INTEGER NOT NULL REFERENCES message_content(content_id),
-    timestamp INTEGER NOT NULL
-);
-
 -- LynRummy Elm client action log. V1 scaffolding: every page load
 -- gets a new session; actions posted to /gopher/lynrummy-elm/actions
 -- are stored with their WireAction JSON verbatim, sequenced per

@@ -18,7 +18,6 @@ import (
 	"time"
 
 	"angry-gopher/auth"
-	"angry-gopher/dm"
 	"angry-gopher/events"
 	"angry-gopher/ratelimit"
 	"angry-gopher/respond"
@@ -38,8 +37,6 @@ func buildMux() *http.ServeMux {
 	mux.HandleFunc("/api/v1/users/", api(routeUserByID))
 	mux.HandleFunc("/api/v1/users", api(routeUsers))
 	mux.HandleFunc("/api/v1/settings", api(users.HandleUpdateSettings))
-	mux.HandleFunc("/api/v1/dm/conversations", api(dm.HandleConversations))
-	mux.HandleFunc("/api/v1/dm/messages", api(dm.HandleMessages))
 	mux.HandleFunc("/api/v1/user_uploads/", api(handleUploadTempURL))
 	mux.HandleFunc("/api/v1/user_uploads", api(handleUpload))
 
@@ -72,8 +69,6 @@ func buildMux() *http.ServeMux {
 func wireDB() {
 	auth.DB = DB
 	users.DB = DB
-	dm.DB = DB
-	dm.RenderMarkdown = renderMarkdown
 	views.DB = DB
 	views.RenderMarkdown = renderMarkdown
 }

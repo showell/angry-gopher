@@ -171,7 +171,6 @@ th { background: #000080; color: white; }
 		fmt.Fprint(w, `<div class="wiki-md">`)
 		fmt.Fprint(w, RenderMarkdown(string(body)))
 		fmt.Fprint(w, `</div>`)
-		fmt.Fprint(w, ArticleCommentsJS)
 	} else {
 		fmt.Fprint(w, `<pre style="white-space:pre-wrap">`)
 		fmt.Fprint(w, html.EscapeString(string(body)))
@@ -248,7 +247,6 @@ body { margin: 0; padding: 0; display: flex; flex-direction: column; min-height:
 ` + AppChromeCSS + `
 </style>
 </head><body>`)
-	fmt.Fprint(w, NotificationWidget)
 	AppChromeTop(w, "docs")
 	fmt.Fprint(w, `<div class="docs-layout">
 <div class="docs-searchbar">
@@ -463,7 +461,6 @@ body { margin: 0; padding: 0; display: flex; flex-direction: column; min-height:
 ` + AppChromeCSS + `
 </style>
 </head><body>`)
-	fmt.Fprint(w, NotificationWidget)
 	AppChromeTop(w, "code")
 	fmt.Fprint(w, `<div class="code-layout">
 <div class="code-searchbar">
@@ -800,7 +797,6 @@ func wikiRender(w http.ResponseWriter, section, repo, sub, displayPath string) {
 		fmt.Fprint(w, `<div class="wiki-md">`)
 		fmt.Fprint(w, RenderMarkdown(string(body)))
 		fmt.Fprint(w, `</div>`)
-		fmt.Fprint(w, ArticleCommentsJS)
 	} else {
 		renderSourceWithLines(w, string(body))
 	}
@@ -1003,7 +999,6 @@ pre code { background: none; padding: 0; }
 </script>
 </head><body>
 `)
-	fmt.Fprint(w, NotificationWidget)
 	AppChromeTop(w, section)
 	fmt.Fprint(w, `<div class="app-body-wiki">`)
 	fmt.Fprint(w, `<aside>`)
