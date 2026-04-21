@@ -1,0 +1,121 @@
+# Main/Replay/Space.elm — EARLY
+
+The spatial half of Instant Replay. Given a `WireAction` and the
+current Model, answer **where** the drag happens in the viewport.
+Companion to `Main/Replay/Time.elm`, which owns the FSM and
+clock.
+
+## Status
+
+- **Label:** EARLY. Extracted 2026-04-21 from `Main.elm` to
+  collect the scattered spatial helpers in one place. Stable
+  API but expect iteration as Split + MergeStack synthesis get
+  wired up.
+- **Shape:** Pure functions only. No Msg, no I/O, no
+  subscriptions, no DOM measurement. Callers pass in Model
+  state with board rects already measured.
+
+## The Time/Space split
+
+`Main.elm` had ~15 functions answering one of two questions:
+
+- **Time:** What step are we on? What phase? Has the beat
+  elapsed? When does the next step fire?
+- **Space:** Where does the drag start and end in the current
+  viewport? What's the path through time? How do the live
+  board/hand rects translate board-frame coords to pixels?
+
+This module owns the second question. Time depends on Space
+(it uses `buildReplayAnimation` + `animatedDragState` on each
+frame); Space has no dependency on Time.
+
+## Public API
+
+### Animation-record builders
+
+- `AnimationInfo` — type alias for the record a Time `Animating`
+  phase carries. Shape matches `State.ReplayAnimation.Animating`
+  exactly; Elm's structural typing unifies them.
+- `buildReplayAnimation : WireAction -> Maybe (List GesturePoint) -> Model -> Float -> Maybe AnimationInfo`
+  — entry point. Faithful path if available; otherwise delegates
+  to synthesis.
+- `synthesizedReplayAnimation : WireAction -> Model -> Float -> Maybe AnimationInfo`
+  — no captured path; synthesize endpoints + linear path.
+
+### Endpoint math
+
+- `syntheticEndpoints : WireAction -> Model -> Maybe (Point, Point)`
+  — synchronous endpoint resolution. Currently only `MoveStack`
+  lands here; `Split` / `MergeStack` return Nothing and fall
+  through to applyImmediate.
+- `pointInLiveViewport : Model -> { left, top } -> Point` —
+  board-frame → viewport via `model.replayBoardRect`, with
+  pinned-constant fallback (dev-console log on fallback).
+- `stackEdgeInLiveViewport : Model -> CardStack -> Side -> Point`
+  — left-edge or right-edge of a stack in viewport coords.
+
+### Path + interpolation
+
+- `dragMsPerPixel : Float` — human-drag velocity (5ms/px as of
+  2026-04-21). Tuned by feel.
+- `linearPath : Point -> Point -> Float -> List GesturePoint` —
+  12-sample straight line at `dragMsPerPixel`.
+- `pathDuration : List GesturePoint -> Float` — last.tMs −
+  first.tMs.
+- `interpPath : List GesturePoint -> Float -> Point` — linear
+  cursor interpolation clamped to bounds.
+
+### Drag-source resolution
+
+- `dragSourceForAction : WireAction -> Model -> Maybe (DragSource, Point)`
+  — mirrors the `startBoardCardDrag` / `startHandDrag` grab
+  offsets so the replay floater sits exactly where the human
+  saw it.
+- `handCardForAction : WireAction -> Maybe Card` — classifier:
+  does this action originate in the hand? (Used by Time to
+  decide whether a sync or async endpoint path applies.)
+
+### Render adapter
+
+- `animatedDragState : { source, grabOffset, ... } -> Point -> DragState`
+  — produces a `Dragging` record suitable for
+  `draggedOverlay`. Wings / hoveredWing / clickIntent are
+  stubbed because replay doesn't care about hover.
+
+## Rule for adding synthesis
+
+Every viewport coord produced here comes from
+`pointInLiveViewport` / `stackEdgeInLiveViewport` — both consult
+the DOM-measured `model.replayBoardRect`. Never compute from
+`BG.boardViewportLeft` / `boardViewportTop` directly; those
+constants are documentary fallbacks only. See the larger rule
+in `Main.claude`.
+
+Pinned-math shortcuts used to sneak past review here. 2026-04-20
+the "landing right, origin wrong" bug was caused by exactly
+that: a hand-origin synthesized via `HandLayout.cardCenterInViewport`
+(pinned math) paired with a DOM-measured target (live).
+Asymmetric authority → animation that lands perfectly but
+starts at the wrong place.
+
+## Dependencies
+
+Imports:
+
+- `LynRummy.BoardActions` — Side type for edge-side enum.
+- `LynRummy.BoardGeometry` — card/stack pitch constants, pinned
+  fallbacks.
+- `LynRummy.Card`, `LynRummy.CardStack` — domain.
+- `LynRummy.WireAction` — WireAction, pattern-matched.
+- `Main.State` — Model, Point, GesturePoint, DragSource, DragState,
+  activeHand.
+
+No Main.* dependency except State. No inbound dependency from
+live-play code (this module serves replay only).
+
+## Tests
+
+Covered indirectly via end-to-end replay smoke tests. A dedicated
+`Main/Replay/SpaceTest.elm` is a candidate future investment —
+`linearPath`, `interpPath`, `pathDuration`, `syntheticEndpoints`
+are all trivially assertable pure functions.

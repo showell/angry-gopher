@@ -2,173 +2,98 @@
 
 TEA bootstrap for the standalone LynRummy Elm game. Wires the
 model, Msg, update, view, and subscriptions into
-`Browser.element`. Houses the drag/click gesture machinery and
-the dispatch loop that applies every validated WireAction
-through a single update function.
+`Browser.element`. Post-extractions, Main.elm is thin: init,
+update-dispatch, the MouseMove/Up decoders, subscriptions, and
+the URL-path port.
 
 ## Status
 
-- **Label:** EARLY. Active churn — most file edits during the
-  autonomy-port work land here. The ambition is that Main.elm
-  holds only UI-layer state (drag, popup, replay progress) and
-  delegates all game-state transitions to `LynRummy.Game` via
-  its extensible-record shape.
+- **Label:** EARLY. Active churn but shrinking — replay
+  machinery (FSM + spatial synthesis) moved to
+  `Main/Replay/Time.elm` and `Main/Replay/Space.elm` on
+  2026-04-21. Game-state transitions already live in
+  `Main/Apply.elm`; rendering in `Main/View.elm`; pointer
+  gesture machinery in `Main/Gesture.elm`; HTTP in
+  `Main/Wire.elm`; types + initial model in `Main/State.elm`.
 
-## Current scope
+## Dispatch map
 
-Model fields:
+`update` dispatches on Msg. Most branches are one-liners that
+delegate to a helper module; the remaining inline branches are
+(a) tiny (MouseMove cursor bookkeeping, WingEntered/Left hover,
+PopupOk) or (b) tightly coupled to multiple Model fields
+(ClickCompleteTurn, CompleteTurnResponded, BoardRectReceived,
+ClickHint).
 
-- **Game-state fields** (shape of `LynRummy.Game.GameState`):
-  `board`, `hands`, `scores`, `activePlayerIndex`, `turnIndex`,
-  `deck`, `cardsPlayedThisTurn`, `victorAwarded`,
-  `turnStartBoardScore`.
-- **UI-layer fields:** `drag : DragState`, `popup`, `status`,
-  `hintedCards`, `sessionId`, `score` (running board total),
-  `actionLog`, `replay : Maybe ReplayProgress`.
+| Msg | Handler |
+|---|---|
+| `MouseDownOnBoardCard` / `MouseDownOnHandCard` | `Main.Gesture.start*` |
+| `MouseMove` | inline cursor + path bookkeeping |
+| `MouseUp` | `Main.Gesture.handleMouseUp` |
+| `WingEntered` / `WingLeft` | inline |
+| `ActionSent` | inline no-op (fire-and-forget) |
+| `SessionReceived` | inline — stash sid + pin URL |
+| `ClickCompleteTurn` | inline — referee pre-check + sendCompleteTurn |
+| `CompleteTurnResponded` | inline — `applyAction WA.CompleteTurn` + dealt-card diagnostic |
+| `PopupOk` | inline — popup dismiss |
+| `ClickInstantReplay` | `Main.Replay.Time.clickInstantReplay` |
+| `ReplayFrame` | `Main.Replay.Time.replayFrame` |
+| `ClickReplayPauseToggle` | `Main.Replay.Time.clickReplayPauseToggle` |
+| `HandCardRectReceived` | `Main.Replay.Time.handCardRectReceived` |
+| `BoardRectReceived` | inline — shared by live-drag AND replay |
+| `ActionLogFetched` | inline — stash actions + gestures + baseline |
+| `StateRefreshed` | inline — hydrate Model from server |
+| `ClickHint` | inline — `Hint.buildSuggestions` + highlight |
 
-Per the "one log, source-agnostic" invariant: every validated
-WireAction — local gesture, replay tick, or (future) wire
-receive — flows through `applyAction` before anything else
-touches the Model. "Capture the input, update the data
-structure, re-draw the view."
+`BoardRectReceived` stays inline because it has two consumers
+in the same Msg: the active live-drag (drop-target math) and
+the active replay (board-frame → viewport translation). Pulling
+it into one of the two contexts would hide the shared update.
 
-## Msg and dispatch
+## "One log, source-agnostic" invariant
 
-- `MouseDown*`, `MouseMove`, `MouseUp` — pointer gesture
-  machinery. MouseUp resolves to an optional WireAction and
-  runs it through `applyAction`.
-- `WingEntered` / `WingLeft` — hover state on drop targets.
-- `ClickCompleteTurn` — sends CompleteTurn to server (for
-  persistence + referee check). On Ok response, the transition
-  is committed autonomously via `Game.applyCompleteTurn` using
-  client-owned deck. The response's `dealt_cards` is compared
-  against the cards the client drew from its own deck as a
-  diagnostic (logs to console on divergence) — the server's
-  role on CompleteTurn is now "sanity-check me," not "tell me
-  what happened."
-- `ClickInstantReplay`, `ReplayTick`, `ClickReplayPauseToggle`
-  — replay walker controls.
-- `ActionSent`, `SessionReceived`, `StateRefreshed`,
-  `ActionLogFetched`, `CompleteTurnResponded`, `PopupOk` —
-  server round-trip handlers. `StateRefreshed` is the bootstrap
-  hydration path on session resume; otherwise state flows from
-  applyAction alone.
+Every validated WireAction — local gesture, replay tick, or
+(future) wire receive — flows through `applyAction` before
+anything else touches the Model. "Capture the input, update the
+data structure, re-draw the view."
 
 ## Subscriptions
 
 - `Browser.Events.onMouseMove` / `onMouseUp` — subscribed only
   while `drag = Dragging _`.
-- `Time.every 500 ReplayTick` — subscribed only while
-  `replay = Just { paused = False }`.
+- `Browser.Events.onAnimationFrame` → `ReplayFrame` — subscribed
+  only while `replay = Just { paused = False }`. Drives both the
+  drag-path interpolation and the beat phase.
 
-## View composition
+## Port
 
-- `viewTopBar` + `viewStatusBar` + flex shell:
-  hand column (left, min-width 240px) + board column (right).
-- `handColumn` renders the player panel: always P1 above P2,
-  active row shows cards + buttons, inactive shows "N cards".
-  Single `viewPlayerRow` function called for both seats — the
-  view is uniform across every Model-change source.
-- `viewPopup` overlays modal ceremony (turn-complete popup).
-  Suppressed during replay.
+- `setSessionPath : String -> Cmd msg` — writes the URL path
+  to `/gopher/lynrummy-elm/play/<sid>` whenever a session id is
+  known. Server-side rendering reads the path on reload and
+  resumes the same game instead of dropping to the lobby.
 
-## Replay synthesis (2026-04-21, STILL_EVOLVING)
+## Replay architecture
 
-`buildReplayAnimation` branches on whether a captured gesture
-path is present:
+The replay walker lives across two modules, split by concern:
 
-- **Faithful branch** — path non-empty → honor it. Plays back
-  the captured pointer trace at its recorded pace.
-- **Synthesized branch** — path missing → synthesize a linear
-  path using LIVE DOM measurement for every viewport coord
-  (`stackEdgeInLiveViewport`, `pointInLiveViewport`, and
-  the async hand-card DOM query). No pinned-viewport math
-  remains in this path. Duration = distance × `dragMsPerPixel`
-  (5 placeholder — tuned from 80 → 15 → 5 for feel).
+- `Main/Replay/Time.elm` — FSM, clock-driven Msg handlers,
+  inter-action beat durations. Owns the decision of "what
+  phase am I in and when do I transition."
+- `Main/Replay/Space.elm` — spatial synthesis: endpoints, path
+  interpolation, drag-source resolution, DOM-measured board /
+  hand rects. Owns the "where does the drag live in pixel
+  space" question.
 
-The distinction is DERIVED at replay time from presence of
-data, not tagged at capture time. Matches
-`feedback_record_facts_decide_later.md`: record presence,
-decide at execution.
-
-### The live board rect (B1 change, 2026-04-21)
-
-When `ClickInstantReplay` fires, Main issues a
-`Browser.Dom.getElement boardDomId` task. The result populates
-`model.replayBoardRect` (viewport-space x/y of the 800×600
-board div). `stackEdgeInLiveViewport` reads this rect to
-translate a stack's board-frame `loc` into current viewport
-coords — **not** the documentary `BoardGeometry.boardViewport*`
-constants. Those constants are now the fallback path (with
-a Debug.log warning) for the race where synthesis fires
-before the task returns.
-
-### The live hand-card rect (B1-extension, 2026-04-21)
-
-Hand-origin actions (`MergeHand`, `PlaceHand`) need the
-drag's starting viewport position. Instead of trusting
-`HandLayout.cardCenterInViewport` (pinned math that drifted),
-the replay state machine now:
-
-1. In `NotAnimating`, when about to animate a hand-origin
-   action with no Faithful path, `prepareReplayStep` issues
-   a `Browser.Dom.getElement (HandLayout.handCardDomId card)`
-   task paired with `Time.now`. Transitions to
-   `AwaitingHandRect`.
-2. When `HandCardRectReceived Ok` arrives, the measured
-   origin + DOM-measured target combine into an Animating
-   animation starting at the piped-through nowMs.
-3. On error, Debug.log to dev console and salvage via the
-   pinned-math fallback.
-
-Hand cards carry a stable DOM id in `View.viewPlacedHandCard`
-built via `HandLayout.handCardDomId`, disambiguated by deck.
-
-**Verified in B1:** live MergeHand replay target lands on the
-DOM-measured board rect regardless of what content flows
-above the board.
-
-**Verified in B1-extension (2026-04-21, session 24):**
-synthesized MergeHand animates from the hand card's actual
-rendered position to the board stack's actual rendered edge.
-Faithful/Simulated branching works in the same replay — a
-human-played move later in the log replays at its captured
-pace while Python's earlier merge_hand synthesizes at
-15ms/px.
-
-**Still in motion:**
-- `MoveStack` synthesis wired via `pointInLiveViewport`
-  (synchronous — both endpoints board-frame); not yet
-  exercised against a real agent game.
-- `Split`, `MergeStack` synthesis not yet wired; they
-  apply-immediately-and-beat.
+Space is pure; Time depends on Space; Main depends on both.
+See the companion sidecars for detail.
 
 ### Rule for adding synthesis to new primitives
 
-**Any viewport coord the replay synthesizer consumes must
-come from DOM measurement, not from a pinned constant.** If
-you add synthesis for `MoveStack` / `Split` / `MergeStack`:
-
-- For board-frame endpoints, use `stackEdgeInLiveViewport`
-  (which reads `model.replayBoardRect`). Do NOT add
-  `BoardGeometry.boardViewport*` to a `stack.loc` directly
-  anywhere in the synthesis path.
-- For anything else that needs a live viewport position of
-  a DOM element, follow the MergeHand pattern:
-  1. Give the element a stable DOM id.
-  2. Fire a `Browser.Dom.getElement` task paired with
-     `Time.now`.
-  3. Transition to an `AwaitingXRect` intermediate state.
-  4. A dedicated `XRectReceived` Msg completes the
-     transition into `Animating`, with a Debug.log-only
-     fallback on error.
-
-This came from the "landing right, origin wrong" bug
-(2026-04-21). The landing was right as soon as the board
-rect was DOM-measured; the origin was wrong precisely
-because it still trusted pinned math. Every piece of
-pinned-viewport math in this path is a latent instance of
-the same bug.
+Any viewport coord the replay synthesizer consumes must come
+from DOM measurement, not from a pinned constant. See
+`Main/Replay/Space.claude` § "Rule for adding synthesis" for
+the full rule and the 2026-04-21 "landing right, origin wrong"
+incident that motivated it.
 
 ## Pointers
 
@@ -184,14 +109,10 @@ the same bug.
 
 ## TODO
 
-- **Hand-origin DOM measurement (next slice).** Replace
-  `HandLayout.cardCenterInViewport` in `syntheticEndpoints`
-  with a DOM-measured lookup of each hand card's live rect.
-  Requires each rendered hand card to carry a stable DOM id
-  and a Task that fetches the rect at synthesis time.
-- Synthesized branch now covers `MergeHand`, `PlaceHand`,
-  `MoveStack`. Add `MergeStack`, `Split` — each uses
-  `pointInLiveViewport` / `stackEdgeInLiveViewport` for
-  board-frame endpoints.
-- `dragMsPerPixel` is a placeholder (5); Steve plans to
-  measure real human drag velocity.
+- Synthesized branch currently covers `MergeHand`, `PlaceHand`
+  (both via the async hand-rect DOM query), and `MoveStack`
+  (sync, board-frame endpoints). Still to wire: `MergeStack`,
+  `Split` — both use `Space.pointInLiveViewport` /
+  `stackEdgeInLiveViewport` for board-frame endpoints.
+- `dragMsPerPixel` is currently 5 (tuned by feel 2026-04-21).
+  Candidate for measuring against real human drag velocity.

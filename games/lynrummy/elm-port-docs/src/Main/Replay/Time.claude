@@ -1,0 +1,127 @@
+# Main/Replay/Time.elm — EARLY
+
+The temporal half of Instant Replay. Owns the FSM and its
+clock-driven Msg handlers. Companion to `Main/Replay/Space.elm`,
+which owns spatial synthesis.
+
+## Status
+
+- **Label:** EARLY. Extracted 2026-04-21 from `Main.elm` to
+  separate the "what step are we on" concerns from the "where
+  is the drag in pixels" concerns. Stable API.
+- **Shape:** Msg-producing handlers + the pure FSM tick.
+  Depends on Space; Space has no dependency here.
+
+## Why Time and Space
+
+`Main.elm` had ~20 functions answering either:
+
+- Time — which step, which phase, when does the next fire?
+- Space — where is the drag in the viewport?
+
+Collecting them into two modules makes the seam explicit:
+Space is pure pixel math; Time dispatches Msg based on phase
+transitions and calls Space to fill in the spatial pieces.
+
+## Public API
+
+### Msg handlers (called from Main.update)
+
+- `clickInstantReplay : Model -> ( Model, Cmd Msg )` — rewind to
+  the session's pre-first-action baseline (or hardcoded Dealer
+  fallback), seed the walker, kick off a DOM query for the live
+  board rect. Enters PreRoll phase.
+- `clickReplayPauseToggle : Model -> ( Model, Cmd Msg )` — flip
+  the paused bit on `model.replay`.
+- `replayFrame : Float -> Model -> ( Model, Cmd Msg )` — the
+  per-frame FSM dispatch. Called from `Main.update` on every
+  `Browser.Events.onAnimationFrame` tick during replay.
+- `handCardRectReceived : Result _ _ -> Model -> ( Model, Cmd Msg )`
+  — the async continuation for hand-origin actions. Paired with
+  `prepareReplayStep`'s `Browser.Dom.getElement` Task.
+
+Internal (not exported but load-bearing):
+
+- `prepareReplayStep` — NotAnimating → Animating / AwaitingHandRect
+  / Beating. Central decision point.
+- `actionAndGestureAt` — lookup for step N in `actionLog` +
+  `replayGestures`.
+- `beatAfter` — 2500ms for CompleteTurn, 1000ms for everything
+  else.
+
+## FSM phases
+
+| Phase | Entered when | Exits to |
+|---|---|---|
+| `PreRoll` | ClickInstantReplay | NotAnimating on 1s elapse |
+| `NotAnimating` | step advance | Animating / AwaitingHandRect / Beating (via prepareReplayStep) |
+| `Animating` | faithful path OR sync synthesis succeeded | Beating on path elapsed |
+| `AwaitingHandRect` | hand-origin synthesis, Task fired | Animating on HandCardRectReceived Ok; Beating on Err |
+| `Beating` | action applied | NotAnimating at step+1 on deadline |
+
+Walker exits replay when `actionAndGestureAt` returns Nothing
+(step index past end of actionLog).
+
+## Inter-action beats
+
+`beatAfter` returns 2500ms for `CompleteTurn` and 1000ms for
+everything else. CompleteTurn does a lot at once — hand refresh,
+score update, active-player swap, dealt cards appearing — and a
+standard 1s beat there reads as buggy. The value is tuned by
+feel; revisit if replay cadence changes.
+
+These are NOT the real-world inter-drag intervals. The human's
+between-action silence (thinking, interruption, distraction) is
+deliberately elided in replay; re-playing real silence reads as
+a stuck UI.
+
+## Capture-vs-synthesis branching
+
+`prepareReplayStep` has three branches:
+
+1. **Faithful path present** — `Space.buildReplayAnimation` with
+   the captured path. Synchronous build, immediately enter
+   Animating.
+2. **Hand-origin synthesis** — fire a `Browser.Dom.getElement`
+   Task for the hand card's live rect. Transition to
+   AwaitingHandRect; the rect arrives in
+   `handCardRectReceived`, which pairs it with the target (via
+   `Space.stackEdgeInLiveViewport` for MergeHand, pinned-math +
+   live-rect mix for PlaceHand's drop loc), synthesizes a
+   linear path, and enters Animating.
+3. **Board-origin synthesis** — `Space.buildReplayAnimation`
+   with Nothing for the path, which delegates to
+   `Space.synthesizedReplayAnimation`. Covers MoveStack today;
+   returns Nothing for Split / MergeStack (those apply
+   immediately and beat).
+
+The branching is derived at each frame — the action log itself
+doesn't tag which mode it's in. Earlier designs recorded
+`Captured` vs `Synthesized` on disk; that drifts as replay
+behavior evolves. Derived-at-playback wins.
+
+## Dependencies
+
+Imports:
+
+- `Browser.Dom` — DOM-element Task for hand-rect async.
+- `LynRummy.BoardGeometry` — pinned-constant fallbacks for
+  PlaceHand target.
+- `LynRummy.Dealer`, `LynRummy.Hand`, `LynRummy.Score` — for the
+  hardcoded-baseline branch of `clickInstantReplay`.
+- `LynRummy.HandLayout` — `handCardDomId` for the hand-rect
+  Task.
+- `LynRummy.WireAction` — WireAction, pattern-matched.
+- `Main.Apply` — `applyAction` for "apply immediately" + end-of-
+  animation transitions.
+- `Main.Msg` — Msg(..) for Cmd production + pattern binds.
+- `Main.Replay.Space` — all spatial math.
+- `Main.State` — Model, ReplayAnimation, DragState, StatusKind.
+- `Task`, `Time` — Task.attempt + Time.now / posixToMillis.
+
+## Tests
+
+End-to-end via `auto_player.py` + manual replay inspection.
+Per-phase unit coverage would be viable (each phase handler is
+pure) but not yet written. If replay behavior changes again,
+candidate investment.
