@@ -11,16 +11,25 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 
-# Resolve the elm binary once. Calling `npx --yes elm ...` in
-# a 30-iteration loop used to dominate this script (≈1.28s of
-# npx bootstrap per call, ≈37s of pure overhead). Direct
-# invocation of the cached binary is ≈0.05s per call.
-ELM_BIN="$(npx --yes which elm 2>/dev/null || true)"
+# Resolve cached binaries once. `npx --yes <cmd>` pays ≈1.3s of
+# package-resolution overhead EVERY invocation, even when cached;
+# direct calls are ≈0.05s for elm and ≈0.06s for elm-test. The
+# loop below runs elm ~30 times, so this matters.
+ELM_BIN="$(find ~/.npm/_npx -name elm -type f -path '*/bin/elm' 2>/dev/null | head -1)"
 if [ -z "${ELM_BIN:-}" ]; then
-  ELM_BIN="$(find ~/.npm/_npx -name elm -type f -path '*/bin/elm' 2>/dev/null | head -1)"
+  # Fallback: materialize the cache via npx. Costs ~1.3s so we
+  # avoid it on every run — the `find` above is instant and
+  # works as long as the cache has ever been warmed.
+  ELM_BIN="$(npx --yes which elm 2>/dev/null || true)"
 fi
 if [ -z "${ELM_BIN:-}" ] || [ ! -x "$ELM_BIN" ]; then
-  echo "Could not locate an elm binary via npx or ~/.npm/_npx." >&2
+  echo "Could not locate an elm binary under ~/.npm/_npx or via npx." >&2
+  exit 1
+fi
+
+ELM_TEST_BIN="$(find ~/.npm/_npx -name elm-test -type f -path '*/bin/elm-test' 2>/dev/null | head -1)"
+if [ -z "${ELM_TEST_BIN:-}" ] || [ ! -x "$ELM_TEST_BIN" ]; then
+  echo "Could not locate an elm-test binary under ~/.npm/_npx." >&2
   exit 1
 fi
 
@@ -65,6 +74,6 @@ echo "==> Building Main"
 "$ELM_BIN" make src/Main.elm --output=elm.js >/dev/null
 
 echo "==> Running LynRummy tests"
-npx --yes elm-test --compiler "$ELM_BIN" >/dev/null
+"$ELM_TEST_BIN" --compiler "$ELM_BIN" >/dev/null
 
 echo "All LynRummy modules compile and tests pass."
