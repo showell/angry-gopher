@@ -53,13 +53,16 @@ def synthesize(start, end, *, duration_ms=DEFAULT_DURATION_MS,
     t0_ms = time.time() * 1000
     if samples < 2:
         samples = 2
+    # x/y are stored as ints in the Elm decoder (pixel
+    # coordinates). Round per-sample so the Elm side can decode
+    # the path without falling back to "no animation available."
     path = []
     for i in range(samples):
         frac = i / (samples - 1)
         path.append({
             "t": t0_ms + frac * duration_ms,
-            "x": start[0] + (end[0] - start[0]) * frac,
-            "y": start[1] + (end[1] - start[1]) * frac,
+            "x": round(start[0] + (end[0] - start[0]) * frac),
+            "y": round(start[1] + (end[1] - start[1]) * frac),
         })
     return {
         "path": path,
