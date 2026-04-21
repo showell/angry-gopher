@@ -1,6 +1,6 @@
 // Replay primitives: apply a WireAction to a (board, hand) state
 // to produce the next state. Mirror of
-// elm/src/LynRummy/Reducer.elm.
+// elm/src/Game/Reducer.elm.
 //
 // This is the server's authoritative state-reconstruction function.
 // Given any action log, calling ApplyAction in sequence from

@@ -1,6 +1,6 @@
 // Tests for WireAction: round-trip, exact JSON shape, and
 // decode errors. Format-lock tests intentionally mirror
-// elm/tests/LynRummy/WireActionTest.elm — matching
+// elm/tests/Game/WireActionTest.elm — matching
 // expected JSON bytes across both sides is the
 // cross-language conformance check.
 

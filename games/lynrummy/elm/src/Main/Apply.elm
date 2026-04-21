@@ -11,18 +11,18 @@ broadcast. "Capture the input, update the data structure,
 re-draw the view."
 
 The (board, hand) half of each physics transition delegates to
-`LynRummy.Reducer.applyAction`. This module's job is the
+`Game.Reducer.applyAction`. This module's job is the
 Model-level wrapping: Score recomputation, the
 `cardsPlayedThisTurn` counter, and the full `CompleteTurn`
 transition via `Game.applyCompleteTurn`.
 
 -}
 
-import LynRummy.BoardGeometry as BoardGeometry
-import LynRummy.Game as Game
-import LynRummy.Reducer as Reducer
-import LynRummy.Score as Score
-import LynRummy.WireAction as WA exposing (WireAction)
+import Game.BoardGeometry as BoardGeometry
+import Game.Game as Game
+import Game.Reducer as Reducer
+import Game.Score as Score
+import Game.WireAction as WA exposing (WireAction)
 import Main.State exposing (Model, StatusKind(..), activeHand, setActiveHand)
 
 
@@ -91,7 +91,7 @@ applyAction action model =
 
 
 {-| Delegate the (board, hand) transition to
-`LynRummy.Reducer.applyAction`, then rebuild the Model with
+`Game.Reducer.applyAction`, then rebuild the Model with
 the UI-layer wrappers: Score recompute + active-hand
 write-back. Covers the five physics actions.
 

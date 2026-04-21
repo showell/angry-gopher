@@ -35,11 +35,11 @@ Extracted 2026-04-19 from the pre-split `Main.elm` monolith.
 import Http
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode exposing (Value)
-import LynRummy.Card as Card
-import LynRummy.CardStack as CardStack
-import LynRummy.Hand exposing (Hand)
-import LynRummy.PlayerTurn exposing (CompleteTurnResult(..))
-import LynRummy.WireAction as WA exposing (WireAction)
+import Game.Card as Card
+import Game.CardStack as CardStack
+import Game.Hand exposing (Hand)
+import Game.PlayerTurn exposing (CompleteTurnResult(..))
+import Game.WireAction as WA exposing (WireAction)
 import Main.Msg exposing (Msg(..))
 import Main.State exposing (ActionLogBundle, ActionLogEntry, CompleteTurnOutcome, GesturePoint, RemoteState)
 

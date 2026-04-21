@@ -11,7 +11,7 @@ Extracted 2026-04-19 from the pre-split `Main.elm` monolith.
 
 import Browser.Dom
 import Http
-import LynRummy.WingOracle exposing (WingId)
+import Game.WingOracle exposing (WingId)
 import Main.State exposing (ActionLogBundle, CompleteTurnOutcome, Point, RemoteState)
 import Time
 

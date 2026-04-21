@@ -9,7 +9,7 @@ gesture, a replay tick, or a wire broadcast.
 
 - **Label:** EARLY. Extracted 2026-04-19 from the pre-split
   `Main.elm` monolith. DRY'd 2026-04-21 against
-  `LynRummy.Reducer` after the two applyAction functions were
+  `Game.Reducer` after the two applyAction functions were
   found to duplicate most of the board+hand transition logic.
 - **Shape:** Pure. No Msg, no I/O, no rendering, no
   subscriptions.
@@ -25,7 +25,7 @@ where the action came from; it just applies it. Renamed to
 
 ## Design: Reducer owns physics, Apply owns Model plumbing
 
-`LynRummy.Reducer.applyAction` is the authoritative
+`Game.Reducer.applyAction` is the authoritative
 (board, hand) reducer. It handles the five physics actions
 (Split, MergeStack, MergeHand, PlaceHand, MoveStack),
 including the synthetic-HandCard fallback for replay of an
@@ -97,12 +97,12 @@ awareness.
 
 ## Dependencies
 
-- `LynRummy.BoardGeometry` — BoardBounds type for
+- `Game.BoardGeometry` — BoardBounds type for
   `refereeBounds`.
-- `LynRummy.Game` — `noteCardsPlayed`, `applyCompleteTurn`.
-- `LynRummy.Reducer` — `applyAction` for the physics half.
-- `LynRummy.Score` — `forStacks`.
-- `LynRummy.WireAction` — `WireAction(..)` for the dispatch.
+- `Game.Game` — `noteCardsPlayed`, `applyCompleteTurn`.
+- `Game.Reducer` — `applyAction` for the physics half.
+- `Game.Score` — `forStacks`.
+- `Game.WireAction` — `WireAction(..)` for the dispatch.
 - `Main.State` — Model, StatusKind, activeHand, setActiveHand.
 
 ## Tests
@@ -110,10 +110,10 @@ awareness.
 Currently no dedicated `Main/ApplyTest.elm`. Coverage is
 indirect:
 
-- `LynRummy.ReducerTest` covers the physics half directly via
+- `Game.ReducerTest` covers the physics half directly via
   `Reducer.applyAction`.
-- `LynRummy.GameTest` covers `Game.applyCompleteTurn`.
-- `LynRummy.DslConformanceTest` exercises end-to-end trick
+- `Game.GameTest` covers `Game.applyCompleteTurn`.
+- `Game.DslConformanceTest` exercises end-to-end trick
   plays.
 - `auto_player.py` provides end-to-end smoke coverage.
 

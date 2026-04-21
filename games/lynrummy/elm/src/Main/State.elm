@@ -35,15 +35,15 @@ ripples in.
 
 -}
 
-import LynRummy.Card exposing (Card)
-import LynRummy.CardStack exposing (CardStack)
-import LynRummy.GestureArbitration as GA
-import LynRummy.Hand as Hand exposing (Hand)
-import LynRummy.PlayerTurn exposing (CompleteTurnResult)
-import LynRummy.Score as Score
-import LynRummy.WingOracle exposing (WingId)
-import LynRummy.WireAction exposing (WireAction)
-import LynRummy.Dealer
+import Game.Card exposing (Card)
+import Game.CardStack exposing (CardStack)
+import Game.GestureArbitration as GA
+import Game.Hand as Hand exposing (Hand)
+import Game.PlayerTurn exposing (CompleteTurnResult)
+import Game.Score as Score
+import Game.WingOracle exposing (WingId)
+import Game.WireAction exposing (WireAction)
+import Game.Dealer
 
 
 
@@ -52,7 +52,7 @@ import LynRummy.Dealer
 
 {-| The full client state. Field groups:
 
-  - **Game-state fields** — shape of `LynRummy.Game.GameState`,
+  - **Game-state fields** — shape of `Game.Game.GameState`,
     threaded through `Main.Apply.applyAction` and
     `Game.applyCompleteTurn`. Changes here reflect real game
     progression.
@@ -354,21 +354,21 @@ defaults with the authoritative server snapshot and populate
 baseModel : Model
 baseModel =
     { -- Game-state fields.
-      board = LynRummy.Dealer.initialBoard
-    , hands = [ LynRummy.Dealer.openingHand, Hand.empty ]
+      board = Game.Dealer.initialBoard
+    , hands = [ Game.Dealer.openingHand, Hand.empty ]
     , scores = [ 0, 0 ]
     , activePlayerIndex = 0
     , turnIndex = 0
     , deck = []
     , cardsPlayedThisTurn = 0
     , victorAwarded = False
-    , turnStartBoardScore = Score.forStacks LynRummy.Dealer.initialBoard
+    , turnStartBoardScore = Score.forStacks Game.Dealer.initialBoard
 
     -- UI-layer fields.
     , drag = NotDragging
     , sessionId = Nothing
     , status = { text = "Starting game…", kind = Inform }
-    , score = Score.forStacks LynRummy.Dealer.initialBoard
+    , score = Score.forStacks Game.Dealer.initialBoard
     , hintedCards = []
     , popup = Nothing
     , actionLog = []

@@ -3,7 +3,7 @@ just_use replay.go
 # label: WORKHORSE
 # role: domain — server-authoritative state reconstruction from WireActions
 
-Mirror of `elm/src/LynRummy/Reducer.elm`. Takes a
+Mirror of `elm/src/Game/Reducer.elm`. Takes a
 `WireAction` and applies it to a `(Board, Hand)` state to produce
 the next state. Stateless, pure, deterministic.
 
@@ -48,7 +48,7 @@ references.
 
 ## Tests
 
-`replay_test.go` mirrors `tests/LynRummy/ReplayTest.elm`:
+`replay_test.go` mirrors `tests/Game/ReplayTest.elm`:
 transition-per-action-type, complete-turn semantics, bad-reference
 no-ops, sequenced actions, initial-state shape, ReplayActionsSeeded
 fold equivalence.

@@ -23,11 +23,11 @@ import Browser
 import Browser.Dom
 import Browser.Events
 import Json.Decode as Decode exposing (Decoder)
-import LynRummy.GestureArbitration as GA
-import LynRummy.Referee as Referee
-import LynRummy.Score as Score
-import LynRummy.Tricks.Hint as Hint
-import LynRummy.WireAction as WA
+import Game.GestureArbitration as GA
+import Game.Referee as Referee
+import Game.Score as Score
+import Game.Tricks.Hint as Hint
+import Game.WireAction as WA
 import Main.Apply as Apply exposing (applyAction, refereeBounds)
 import Main.Gesture as Gesture
     exposing

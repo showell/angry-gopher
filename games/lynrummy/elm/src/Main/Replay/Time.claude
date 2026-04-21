@@ -103,13 +103,13 @@ behavior evolves. Derived-at-playback wins.
 Imports:
 
 - `Browser.Dom` — DOM-element Task for hand-rect async.
-- `LynRummy.BoardGeometry` — pinned-constant fallbacks for
+- `Game.BoardGeometry` — pinned-constant fallbacks for
   PlaceHand target.
-- `LynRummy.Dealer`, `LynRummy.Hand`, `LynRummy.Score` — for the
+- `Game.Dealer`, `Game.Hand`, `Game.Score` — for the
   hardcoded-baseline branch of `clickInstantReplay`.
-- `LynRummy.HandLayout` — `handCardDomId` for the hand-rect
+- `Game.HandLayout` — `handCardDomId` for the hand-rect
   Task.
-- `LynRummy.WireAction` — WireAction, pattern-matched.
+- `Game.WireAction` — WireAction, pattern-matched.
 - `Main.Apply` — `applyAction` for "apply immediately" + end-of-
   animation transitions.
 - `Main.Msg` — Msg(..) for Cmd production + pattern binds.

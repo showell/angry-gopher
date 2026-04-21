@@ -1,0 +1,155 @@
+module Game.Reducer exposing
+    ( State
+    , applyAction
+    , initialState
+    )
+
+{-| Pure action reducer: take a `WireAction` and apply it to a
+`(board, hand)` state to produce the next state. Shared by both
+live-play action application and replay. Live-play callers wrap
+this with Model-level concerns (Score, cardsPlayedThisTurn) in
+`Main.Apply`; the replay walker calls it directly.
+
+No-op for `CompleteTurn` and `Undo` — turn-logic isn't
+modeled here (and Undo is deliberately deferred in V1 replay).
+
+-}
+
+import Game.BoardActions as BoardActions exposing (Side(..))
+import Game.Card exposing (Card)
+import Game.CardStack as CardStack exposing (CardStack, HandCard, stacksEqual)
+import Game.Dealer
+import Game.GestureArbitration as GA
+import Game.Hand as Hand exposing (Hand)
+import Game.WireAction exposing (WireAction(..))
+
+
+type alias State =
+    { board : List CardStack
+    , hand : Hand
+    }
+
+
+initialState : State
+initialState =
+    { board = Game.Dealer.initialBoard
+    , hand = Game.Dealer.openingHand
+    }
+
+
+applyAction : WireAction -> State -> State
+applyAction action state =
+    case action of
+        Split { stackIndex, cardIndex } ->
+            { state | board = GA.applySplit stackIndex cardIndex state.board }
+
+        MergeStack { sourceStack, targetStack, side } ->
+            case ( listAt sourceStack state.board, listAt targetStack state.board ) of
+                ( Just source, Just target ) ->
+                    case BoardActions.tryStackMerge target source side of
+                        Just change ->
+                            { state | board = applyChange change state.board }
+
+                        Nothing ->
+                            state
+
+                _ ->
+                    state
+
+        MergeHand { handCard, targetStack, side } ->
+            case listAt targetStack state.board of
+                Just target ->
+                    let
+                        -- When the card isn't in the tracked hand — a
+                        -- replay of the opponent's turn whose hand was
+                        -- server-dealt and never sent client-side —
+                        -- fall back to a synthetic HandCard so the
+                        -- board still advances. Skip the hand-update
+                        -- step in that case (we aren't tracking that
+                        -- player's hand anyway).
+                        ( hc, mutateHand ) =
+                            case findHandCard handCard state.hand of
+                                Just real ->
+                                    ( real, True )
+
+                                Nothing ->
+                                    ( { card = handCard, state = CardStack.HandNormal }, False )
+                    in
+                    case BoardActions.tryHandMerge target hc side of
+                        Just change ->
+                            { state
+                                | board = applyChange change state.board
+                                , hand =
+                                    if mutateHand then
+                                        Hand.removeHandCard hc state.hand
+
+                                    else
+                                        state.hand
+                            }
+
+                        Nothing ->
+                            state
+
+                Nothing ->
+                    state
+
+        PlaceHand { handCard, loc } ->
+            case findHandCard handCard state.hand of
+                Just hc ->
+                    let
+                        change =
+                            BoardActions.placeHandCard hc loc
+                    in
+                    { state
+                        | board = applyChange change state.board
+                        , hand = Hand.removeHandCard hc state.hand
+                    }
+
+                Nothing ->
+                    state
+
+        MoveStack { stackIndex, newLoc } ->
+            case listAt stackIndex state.board of
+                Just stack ->
+                    let
+                        change =
+                            BoardActions.moveStack stack newLoc
+                    in
+                    { state | board = applyChange change state.board }
+
+                Nothing ->
+                    state
+
+        CompleteTurn ->
+            state
+
+        Undo ->
+            state
+
+
+
+
+-- HELPERS
+
+
+listAt : Int -> List a -> Maybe a
+listAt i xs =
+    List.head (List.drop i xs)
+
+
+applyChange : BoardActions.BoardChange -> List CardStack -> List CardStack
+applyChange change board =
+    List.filter (\s -> not (List.any (stacksEqual s) change.stacksToRemove)) board
+        ++ change.stacksToAdd
+
+
+{-| Find a hand card by content identity (ignores state). The
+wire's `Card` references identify a hand card; the actual
+`HandCard` record on the board carries the mutable state that
+matters for rendering.
+-}
+findHandCard : Card -> Hand -> Maybe HandCard
+findHandCard card hand =
+    hand.handCards
+        |> List.filter (\hc -> CardStack.handCardSameCard hc { card = card, state = CardStack.HandNormal })
+        |> List.head

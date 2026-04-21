@@ -45,8 +45,8 @@ Html (position: fixed, covers the full viewport)
 The **pinned** layout (2026-04-21) anchors everything to
 **true viewport coordinates** via `position: fixed` on the
 outer container. No flow above the board — the constants in
-`LynRummy.BoardGeometry` (`boardViewportLeft`,
-`boardViewportTop`) and `LynRummy.HandLayout` (`handLeft`,
+`Game.BoardGeometry` (`boardViewportLeft`,
+`boardViewportTop`) and `Game.HandLayout` (`handLeft`,
 `handTop`) are the coordinates as the browser sees them,
 matching Python's `BOARD_VIEWPORT_LEFT/TOP`. The
 draggedOverlay (also `position: fixed`) reads the same frame,
@@ -142,14 +142,14 @@ on source type: `FromBoardStack` renders the full stack,
 ## Dependencies
 
 - `Html`, `Html.Attributes`, `Html.Events` — standard view.
-- `LynRummy.BoardActions` — `Side(..)` for wing placement.
-- `LynRummy.CardStack` — `CardStack`, `stackPitch`,
+- `Game.BoardActions` — `Side(..)` for wing placement.
+- `Game.CardStack` — `CardStack`, `stackPitch`,
   `stackDisplayWidth`.
-- `LynRummy.Hand` — `Hand` type.
-- `LynRummy.PlayerTurn` — `CompleteTurnResult(..)`.
-- `LynRummy.View` — domain-level primitives: `viewStack`,
+- `Game.Hand` — `Hand` type.
+- `Game.PlayerTurn` — `CompleteTurnResult(..)`.
+- `Game.View` — domain-level primitives: `viewStack`,
   `viewHand`, `viewWing`, `boardShellWith`, colour constants.
-- `LynRummy.WingOracle` — `WingId` type.
+- `Game.WingOracle` — `WingId` type.
 - `Main.Gesture` — `handCardAttrs`, `cardMouseDown` for event
   wiring.
 - `Main.Msg` — Msg constructors for onClick / onMouseEnter /

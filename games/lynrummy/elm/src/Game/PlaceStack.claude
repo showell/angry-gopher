@@ -1,0 +1,42 @@
+# PlaceStack.elm — WORKHORSE
+
+Collision-free placement math for new stacks on the LynRummy
+board. When a move produces a NEW stack (split, peel, etc.),
+this module finds a top/left position that doesn't overlap
+any existing stack. Pure math.
+
+## Status
+
+- **Label:** WORKHORSE. Pure geometry; stable.
+- **Tests:** `tests/Game/PlaceStackTest.elm`.
+
+## Key invariants (preserved from TS)
+
+- `stackWidth n = CARD_WIDTH + (n - 1) × CARD_PITCH` for n > 0;
+  0 for n ≤ 0. (CARD_WIDTH=27, CARD_PITCH=33.)
+- `CARD_HEIGHT = 40`.
+- `findOpenLoc` sweeps a grid of (top, left) candidates,
+  step-sized, returning the first that clears every existing
+  stack's bounding rectangle padded by `margin`.
+- Fallback when no fit: bottom-left corner (max(0, maxHeight - newHeight), 0).
+  Caller can re-check against existing stacks if it cares
+  about fallback detection.
+
+## Elm divergences from TS
+
+- TS nested `for` loops with early `break` on collision → Elm
+  recursive walk of a generated candidate list with
+  `List.any` for collision check.
+- TS `BoardBounds` type preserved as-is (record with
+  maxWidth, maxHeight, margin, step).
+- TS takes `JsonCardStack[]`; Elm takes `List CardStack` —
+  same two fields (loc, boardCards) are used, so no need for
+  a separate JSON shape. The placer only looks at `.loc` and
+  `.boardCards` length.
+
+## Pointers
+
+- Depends on: `CardStack.cardWidth`, `CardStack` record shape.
+- Consumer: game.ts-derived move-forging code (e.g., peel,
+  split) that creates a new stack and needs a non-overlapping
+  position.

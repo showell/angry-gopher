@@ -97,15 +97,15 @@ incident that motivated it.
 
 ## Pointers
 
-- Autonomy-core: `LynRummy.Game` (`Game.elm`) — `GameState`
+- Autonomy-core: `Game.Game` (`Game.elm`) — `GameState`
   record and `applyCompleteTurn` transition. Main embeds those
   fields; changes to game state go through Game's functions.
 - Hosted at `index.html` in this dir; built into `elm.js` via
   `npx elm make src/Main.elm --output=elm.js` (runs
   automatically in `ops/start`).
 - Served through Gopher at `http://localhost:9000/gopher/lynrummy-elm/`.
-- Pinned geometry: `LynRummy.BoardGeometry`,
-  `LynRummy.HandLayout`.
+- Pinned geometry: `Game.BoardGeometry`,
+  `Game.HandLayout`.
 
 ## TODO
 

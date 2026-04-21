@@ -44,13 +44,13 @@ rect live at replay time. See Main.claude.
 import Html exposing (Html, div)
 import Html.Attributes exposing (href, id, style)
 import Html.Events as Events
-import LynRummy.BoardActions exposing (Side(..))
-import LynRummy.BoardGeometry as BoardGeometry
-import LynRummy.CardStack as CardStack exposing (CardStack)
-import LynRummy.Hand exposing (Hand)
-import LynRummy.PlayerTurn exposing (CompleteTurnResult(..))
-import LynRummy.View as View
-import LynRummy.WingOracle exposing (WingId)
+import Game.BoardActions exposing (Side(..))
+import Game.BoardGeometry as BoardGeometry
+import Game.CardStack as CardStack exposing (CardStack)
+import Game.Hand exposing (Hand)
+import Game.PlayerTurn exposing (CompleteTurnResult(..))
+import Game.View as View
+import Game.WingOracle exposing (WingId)
 import Main.Gesture as Gesture
 import Main.Msg exposing (Msg(..))
 import Main.State as State

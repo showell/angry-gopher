@@ -89,8 +89,8 @@ error. Non-decodable 400 bodies degrade to `Http.BadBody`.
 
 Imports:
 - `Http`, `Json.Decode` — standard.
-- `LynRummy.Card`, `LynRummy.CardStack`, `LynRummy.Hand`,
-  `LynRummy.PlayerTurn`, `LynRummy.WireAction` — domain types
+- `Game.Card`, `Game.CardStack`, `Game.Hand`,
+  `Game.PlayerTurn`, `Game.WireAction` — domain types
   referenced in decoders.
 - `Main.Msg` — Msg constructors for response taggers.
 - `Main.State` — shared type aliases

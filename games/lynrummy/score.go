@@ -1,4 +1,4 @@
-// Scoring. Mirrors elm/src/LynRummy/Score.elm — which
+// Scoring. Mirrors elm/src/Game/Score.elm — which
 // mirrors angry-cat/src/lyn_rummy/core/score.ts.
 //
 // Flat per-card formula: each card in a valid 3+ family is worth

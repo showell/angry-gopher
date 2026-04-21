@@ -38,11 +38,11 @@ are we on, has the beat elapsed, when does the next step fire?
 
 -}
 
-import LynRummy.BoardActions as BoardActions
-import LynRummy.BoardGeometry as BG
-import LynRummy.Card exposing (Card)
-import LynRummy.CardStack as CardStack exposing (CardStack, HandCard)
-import LynRummy.WireAction as WA exposing (WireAction)
+import Game.BoardActions as BoardActions
+import Game.BoardGeometry as BG
+import Game.Card exposing (Card)
+import Game.CardStack as CardStack exposing (CardStack, HandCard)
+import Game.WireAction as WA exposing (WireAction)
 import Main.State as State
     exposing
         ( DragSource(..)

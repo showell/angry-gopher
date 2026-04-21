@@ -102,11 +102,11 @@ starts at the wrong place.
 
 Imports:
 
-- `LynRummy.BoardActions` — Side type for edge-side enum.
-- `LynRummy.BoardGeometry` — card/stack pitch constants, pinned
+- `Game.BoardActions` — Side type for edge-side enum.
+- `Game.BoardGeometry` — card/stack pitch constants, pinned
   fallbacks.
-- `LynRummy.Card`, `LynRummy.CardStack` — domain.
-- `LynRummy.WireAction` — WireAction, pattern-matched.
+- `Game.Card`, `Game.CardStack` — domain.
+- `Game.WireAction` — WireAction, pattern-matched.
 - `Main.State` — Model, Point, GesturePoint, DragSource, DragState,
   activeHand.
 

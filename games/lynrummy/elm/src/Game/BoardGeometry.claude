@@ -1,0 +1,145 @@
+# BoardGeometry.elm — WORKHORSE (protocol-level constraint)
+
+Pure geometric validation of the board: do all stacks fit
+within bounds, and does any pair overlap?
+
+Protocol-level check — runs before the referee engages with
+game logic. Treat it like well-formed syntax: if geometry
+fails, semantics is meaningless.
+
+## Status
+
+- **Label:** WORKHORSE. Stable rules, small module.
+- **Mirrors:** Go `board_geometry.go` + `board_geometry.claude`.
+  Both sides validate; the Go referee calls its
+  `checkGeometry` to reject moves whose resulting board would
+  push off-board or overlap. Default bounds (800×600, 5-unit
+  margin) originate Go-side.
+
+## Key exports
+
+- `BoardBounds` — `{ maxWidth, maxHeight, margin }`. Margin
+  is the minimum gap between any two stacks.
+- `GeometryErrorKind(..)` — `OutOfBounds | Overlap |
+  TooClose`.
+- `GeometryError` — `{ kind, message, stackIndices }`. The
+  indices point into the input stack list for the error UI.
+- `BoardGeometryStatus(..)` — `CleanlySpaced | Crowded |
+  Illegal`.
+- `validateBoardGeometry : List CardStack -> BoardBounds ->
+  List GeometryError` — returns all errors; empty means
+  clean.
+- `classifyBoardGeometry : List CardStack -> BoardBounds ->
+  BoardGeometryStatus` — three-way collapse of the error
+  list.
+- `stackWidth : Int -> Int` — `cardWidth + (n-1) *
+  cardPitch`, 0 for n ≤ 0.
+- `stackHeight`, `cardHeight = 40`.
+
+## Constants
+
+- `cardHeight = 40` px.
+- `cardPitch = cardWidth + 6 = 33` px (pulled from
+  `CardStack.cardWidth`).
+- `stackHeight = cardHeight`. Single row; no vertical
+  spread within a stack.
+- `boardViewportLeft = 280`, `boardViewportTop = 100` —
+  **documentary / fallback** coordinates of the board div's
+  top-left in the viewport. NOT authoritative as of
+  2026-04-21's B1 change: the replay synthesizer reads the
+  board's live viewport rect via `Browser.Dom.getElement`
+  and uses that for board-frame → viewport translation.
+  These constants remain for (a) documenting Python's
+  expectation in `games/lynrummy/python/geometry.py`
+  and (b) a fallback path (with `Debug.log` warning) if the
+  DOM query loses the race at replay start.
+
+### Rule for future edits
+
+Do not use `boardViewportLeft/Top` + `stack.loc` in any
+synthesis path that feeds the drag floater. Use
+`Main.stackEdgeInLiveViewport` instead; it reads the
+DOM-measured rect and falls back to these constants only
+as a salvage. See `Main.claude` for the general rule.
+
+## Viewport-translating helper
+
+- `stackEdgeInViewport : { loc, size } -> side -> { x, y }` —
+  returns the viewport (x, y) of a stack's left or right edge
+  (vertically centered). Used by the replay synthesizer to
+  target the drop point of a hand-to-board merge.
+
+## Two-step check
+
+Per-stack:
+1. **Bounds** — if any corner of the stack's rect falls
+   outside `(0, 0) → (maxWidth, maxHeight)`, produce an
+   `OutOfBounds` error.
+
+Per-pair (all n² / 2 pairs):
+2. **Overlap** — rects actually intersect.
+3. **TooClose** — within `margin` of each other (but don't
+   strictly overlap). Checked via `padRect margin a` vs `b`.
+
+Pairs produce at most one error per pair — overlap shadows
+too-close. Order: iterate head-by-head; for each head,
+compare to every remaining stack.
+
+## Classification rules
+
+`classifyBoardGeometry` collapses the error list:
+- Any `OutOfBounds` or `Overlap` → `Illegal`.
+- Only `TooClose` → `Crowded`.
+- No errors → `CleanlySpaced`.
+
+`Crowded` is important: the player's mid-turn placements are
+often crowded while they arrange cards, but the state is
+recoverable. `Illegal` is a harder failure.
+
+## TS's "crowded" kind → Elm's `TooClose`
+
+The TS source uses a string literal `"crowded"` for the error
+kind. Elm renames it to `TooClose` to avoid collision with
+the `BoardGeometryStatus.Crowded` constructor. Wire encoding
+still uses the TS string: `TooClose` ↔ `"crowded"`.
+
+## JSON wire shape
+
+```
+BoardBounds:  { "max_width": N, "max_height": N, "margin": N }
+GeometryError: {
+  "type": "out_of_bounds" | "overlap" | "crowded",
+  "message": "...",
+  "stack_indices": [N, ...]
+}
+```
+
+Wire strings match TS exactly (no `_v2` or `elm_` suffixes).
+
+## What this module deliberately does NOT do
+
+- **Where to place a stack.** Placement logic lives in
+  `PlaceStack.elm` + `Game.elm`. This module is
+  check-only.
+- **Semantics or inventory.** Referee's job.
+- **Stack dimensions beyond width/height.** Visual decoration
+  is a View concern.
+
+## Pointers
+
+- Consumed by: `Referee.validateGameMove`,
+  `Referee.validateTurnComplete`, `Main/Gesture` (while
+  previewing drops), `Main/View` (pinned board placement),
+  `Main.elm` replay synthesizer (target resolution via
+  `stackEdgeInViewport`).
+- Depends on: `CardStack.cardWidth`, `CardStack.size`.
+- Complement: `Game.HandLayout` — same pinning discipline
+  for the hand area. Together they define the full playable
+  viewport.
+- Tests: `tests/Game/BoardGeometryTest.elm`.
+
+## TODO
+
+- No automated check that Python's `BOARD_VIEWPORT_LEFT/TOP`
+  in `games/lynrummy/python/geometry.py` match the Elm
+  constants here. A preflight diff would catch drift.

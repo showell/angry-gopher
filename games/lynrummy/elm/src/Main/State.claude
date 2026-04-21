@@ -89,7 +89,7 @@ Helpers + constants:
 - `deck`, `cardsPlayedThisTurn`, `victorAwarded`,
   `turnStartBoardScore` are the `GameState` fields
   `Game.applyCompleteTurn` reads + writes. Layout matches
-  `LynRummy.Game.GameState`'s extensible record shape.
+  `Game.Game.GameState`'s extensible record shape.
 - `baseModel`'s game-state fields are fine for a new session;
   they get overwritten by `fetchRemoteState` on session resume
   (the wire-field data is authoritative on bootstrap).
@@ -105,7 +105,7 @@ Helpers + constants:
 
 ## Dependencies
 
-Imports only `LynRummy.*` primitives: `Card`, `CardStack`,
+Imports only `Game.*` primitives: `Card`, `CardStack`,
 `GestureArbitration` (for Rect), `Hand`, `PlayerTurn` (for
 CompleteTurnResult), `Score` (for forStacks), `WingOracle`
 (for WingId), `WireAction`, `Dealer` (for hardcoded baseModel

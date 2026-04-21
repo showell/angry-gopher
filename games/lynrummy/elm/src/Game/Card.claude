@@ -1,0 +1,105 @@
+# Card.elm — WORKHORSE (ported, stable)
+
+The atomic unit of LynRummy on the Elm side. `Card` is
+`{ value : CardValue, suit : Suit, originDeck : OriginDeck }`.
+Divergences from the TS origin are intentional and called
+out below.
+
+## Status
+
+- **Label:** WORKHORSE. Stable. The fundamental unit; changes
+  here ripple through every downstream module.
+- **Mirrors:** Go `card.go` + Go `card.claude`. Same JSON wire
+  shape (snake_case, numeric enums); same two-equality
+  discipline; same double-deck awareness. Divergences below
+  are Elm↔TS, not Elm↔Go.
+
+## Key exports
+
+- `Card` — record type `{ value, suit, originDeck }`.
+- `CardValue(..)` — 13 constructors `Ace .. King`.
+- `Suit(..)` — 4 constructors `Club | Diamond | Spade | Heart`.
+  Corresponding ints: Club=0, Diamond=1, Spade=2, Heart=3
+  (same as Go `card.go`).
+- `OriginDeck(..)` — `DeckOne | DeckTwo`. Int: DeckOne=0,
+  DeckTwo=1 (same as Go).
+- `CardColor(..)` — `Red | Black`. Derived, not stored.
+- Enumeration helpers — `allSuits`, `allCardValues`. Used by
+  deck builders; the iteration order is load-bearing for any
+  consumer that shuffles.
+- Parse helpers — `cardFromLabel` ("KS" → Card), `suitFromLabel`,
+  `valueFromLabel`. Return `Maybe`; TS source throws on bad
+  input, Elm favours total functions.
+- Encoders/decoders — `encodeCard`, `cardDecoder`. Wire shape:
+  `{"value":INT,"suit":INT,"origin_deck":INT}`.
+- `buildFullDoubleDeck : Random.Seed -> (List Card,
+  Random.Seed)` — 104-card Mulberry32-shuffled deck. Used by
+  Elm offline-mode Dealer.
+- Display helpers — `cardStr`, `valueStr`, `suitEmojiStr`.
+- Enum conversions — `cardValueToInt`, `intToCardValue`,
+  `suitToInt`, `intToSuit`, `originDeckToInt`,
+  `intToOriginDeck`. Used by wire decoders.
+
+## The two equality concepts (LOAD-BEARING)
+
+Deliberate design with two distinct comparison semantics:
+
+1. **Record `==`** — full identity: value + suit + originDeck.
+   "Is this the same physical card from the same deck?" The
+   referee's inventory check uses this (via `List.member`) to
+   detect duplicates.
+2. **`isPairOfDups : Card -> Card -> Bool`** — game-rule
+   equality: value + suit, ignores origin_deck. "Are these
+   two cards duplicates by game rules?" Two AHs (one from
+   each deck) are dups for the purposes of set-validity:
+   they're the SAME card-face, but different physical
+   cards.
+
+Using the wrong one either over-accepts (same-face as
+identical) or under-accepts (identical as different). Wire
+decoders that compare cards must pick the right concept.
+
+## CardColor is derived, not stored
+
+`suitColor : Suit -> CardColor` is a pure function:
+- `Club` / `Spade` → `Black`
+- `Diamond` / `Heart` → `Red`
+
+Card doesn't carry its own `color` field — that would be
+state duplicating a pure function of `suit`. The rule has one
+home (`suitColor`), and every color query goes through it.
+
+## Elm divergences from TS
+
+- `CardColor` is derived; TS stores it on the Card object.
+- Parsers return `Maybe`; TS throws.
+- PRNG lives in `Game.Random`; this module uses
+  `buildFullDoubleDeck` as the consumer.
+- Enum-to-int conversion is explicit (functions) rather than
+  implicit (numeric enum values in TS).
+
+## JSON wire shape
+
+```
+{"value": 1..13, "suit": 0..3, "origin_deck": 0|1}
+```
+
+Matches Go `card.go`'s JSON exactly. Cross-language parity
+confirmed by the DSL conformance scenarios and by
+`WireActionTest.elm` exact-JSON format tests.
+
+## What this module deliberately does NOT do
+
+- **Stack-level operations.** Live in `CardStack.elm`.
+- **Stack classification.** Lives in `StackType.elm` (even
+  `successor`/`predecessor` live there, not here — source-parity
+  choice).
+- **PRNG primitives.** `mulberry32` lives in `Random.elm`.
+
+## Pointers
+
+- Go counterpart: `games/lynrummy/card.go` + `card.claude`.
+- Consumers: `CardStack.elm`, `StackType.elm`, `Hand.elm`,
+  `Dealer.elm`, `WireAction.elm`, basically every downstream
+  module. Changes here are blast-radius-wide.
+- Tests: `tests/Game/CardTest.elm`.

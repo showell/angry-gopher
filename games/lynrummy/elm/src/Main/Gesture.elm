@@ -64,12 +64,12 @@ import Html
 import Html.Attributes exposing (style)
 import Html.Events as Events
 import Json.Decode as Decode exposing (Decoder)
-import LynRummy.Card exposing (Card)
-import LynRummy.CardStack as CardStack exposing (BoardLocation, HandCard)
-import LynRummy.GestureArbitration as GA
-import LynRummy.Hand exposing (Hand)
-import LynRummy.WingOracle as WingOracle
-import LynRummy.WireAction as WA exposing (WireAction)
+import Game.Card exposing (Card)
+import Game.CardStack as CardStack exposing (BoardLocation, HandCard)
+import Game.GestureArbitration as GA
+import Game.Hand exposing (Hand)
+import Game.WingOracle as WingOracle
+import Game.WireAction as WA exposing (WireAction)
 import Main.Apply as Apply
 import Main.Msg exposing (Msg(..))
 import Main.State as State

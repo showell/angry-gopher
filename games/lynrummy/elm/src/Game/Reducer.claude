@@ -1,0 +1,98 @@
+# Reducer.elm — WORKHORSE (pure action reducer)
+
+Renamed from `Replay.elm` 2026-04-21 because the name was
+misleading: this module is the shared pure reducer used by
+both live play AND replay, not a replay-specific thing.
+
+Given a `WireAction` and a `(board, hand)` state, produce the
+next state. That's it. Nothing UI-layer here.
+
+## Status
+
+- **Label:** WORKHORSE. Small, pure, stable.
+- **Role in one-action-log invariant:** `applyAction` is the
+  canonical fold over the Elm-side action log. Replay, undo
+  (future), and live-play walkers all advance state through
+  this one reducer.
+- **Sole owner of physics (2026-04-21):** `Main.Apply.applyAction`
+  used to re-implement the five physics branches. Post-DRY,
+  Apply delegates to this module and keeps only the Model-level
+  wrappers (Score, cardsPlayedThisTurn, CompleteTurn via Game,
+  status text).
+
+## Key exports
+
+- `State` — `{ board : List CardStack, hand : Hand }`.
+- `initialState : State` — dealt from `Dealer.initialBoard` +
+  `Dealer.openingHand`. Starting point for replay if no
+  session-specific baseline is provided.
+- `applyAction : WireAction -> State -> State` — the reducer.
+
+## The 7 WireAction branches
+
+Mirrors `WireAction.elm` exactly (wire is primitives-only as of
+2026-04-20). Handled:
+- **`Split`** — delegates to `GestureArbitration.applySplit`.
+- **`MergeStack`** — looks up both stacks, tries
+  `BoardActions.tryStackMerge`, applies the resulting
+  `BoardChange` or no-ops.
+- **`MergeHand`** — looks up target stack, resolves the hand
+  card (see "opponent-hand fallback" below), tries
+  `BoardActions.tryHandMerge`, applies or no-ops.
+- **`PlaceHand`** — resolves the hand card, applies
+  `BoardActions.placeHandCard`, removes from hand.
+- **`MoveStack`** — applies `BoardActions.moveStack`.
+
+No-ops (intentional):
+- **`CompleteTurn`** — turn boundary, not physics. Replay
+  here doesn't model turn-level score; that's a caller
+  concern.
+- **`Undo`** — deferred in V1 replay; if one ever shows up in
+  a log, we no-op rather than crash.
+
+## LOAD-BEARING: opponent-hand fallback on `MergeHand`
+
+When replaying a log that contains the OPPONENT's moves, the
+opponent's hand was dealt server-side and never sent to this
+client. The `handCard` reference in a `MergeHand` action
+names a card we don't have in `state.hand`.
+
+The fix: if `findHandCard` returns Nothing, fall back to a
+synthetic `HandCard { card = ..., state = HandNormal }` and
+skip the hand-update step (`mutateHand = False`). The board
+still advances; we just don't try to remove from a hand we
+never knew.
+
+Without this, replay of a two-player game breaks on every
+opponent `MergeHand`. The flag `mutateHand` is how we avoid
+silently corrupting the tracked player's hand when we mean
+"skip this update."
+
+## What this module deliberately does NOT do
+
+- **Turn-level scoring.** No-op on `CompleteTurn`. Caller
+  (Game.applyCompleteTurn) owns that.
+- **Referee validation.** Replay assumes the log was already
+  validated at recording time.
+- **Undo.** V1 treats Undo as no-op; if Undo is wanted in
+  replay, it needs a bidirectional action representation
+  that doesn't exist yet.
+- **Initial state from server.** `initialState` is the local
+  fallback; the real session-specific baseline is loaded by
+  `Main/Wire` from `/sessions/:id/actions` and fed in.
+
+## Internal helpers
+
+`removeStackOnce`, `removeHandCardByContent`, `listAt`,
+`applyChange`, `findHandCard` — ~6 LOC total. Post-DRY
+(2026-04-21), these live only here; `Main.Apply` no longer
+keeps its own copies. If another module ever needs the same
+primitives, promote to a shared helper then.
+
+## Pointers
+
+- Depends on: `WireAction`, `BoardActions`, `CardStack`,
+  `Hand`, `GestureArbitration`, `Dealer`, `Card`.
+- Consumer: `Main/Apply.applyAction` (wraps this with
+  Msg plumbing), `Main/State.replayBaseline` logic.
+- Tests: `tests/Game.ReducerTest.elm`.

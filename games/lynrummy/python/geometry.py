@@ -34,7 +34,7 @@ BOARD_MARGIN = 5
 #
 # If you change these, update `boardViewportLeft` /
 # `boardViewportTop` in
-# games/lynrummy/elm/src/LynRummy/BoardGeometry.elm
+# games/lynrummy/elm/src/Game/BoardGeometry.elm
 # to match.
 BOARD_VIEWPORT_LEFT = 300
 BOARD_VIEWPORT_TOP = 100

@@ -1,0 +1,153 @@
+# Referee.elm — WORKHORSE (the expert in the other room)
+
+Stateless move and turn validation. Given a proposed move and
+the current board, the referee returns Ok or an error — never
+mutates, never remembers.
+
+The mental model from the source: "the referee is like an
+expert in the other room. You show them the board and the
+proposed move, they give a ruling. They don't need to
+remember anything — the board is the state."
+
+## Status
+
+- **Label:** WORKHORSE. Stable protocol.
+- **Mirrors:** Go `referee.go` + `referee.claude`. Both
+  sides implement the four-stage referee; they're parallel
+  authorities, not client-authoritative-only. Game.claude
+  describes where each side's checks run in the request
+  flow.
+- **Stubs:** Protocol stage is a no-op in both ports; the
+  JSON layer itself catches malformed payloads.
+
+## Two entry points
+
+1. **`validateGameMove`** — rule on a single mid-turn move.
+   The board is ALLOWED to be messy (incomplete stacks,
+   splits in progress). Runs Protocol → Geometry →
+   Inventory. Semantics is deliberately skipped.
+2. **`validateTurnComplete`** — rule on end-of-turn. The
+   board must be clean. Runs Geometry → Semantics. No
+   inventory check (nothing was added).
+
+Neither enforces turn order, player identity, or moves per
+turn. Those are social rules, not physics — handled upstream.
+
+## The four stages
+
+- **Protocol** — well-formedness of the JSON. Currently
+  stubbed (`Ok ()`).
+- **Geometry** — stacks fit within `BoardBounds` and don't
+  overlap. Delegated to `BoardGeometry.validateBoardGeometry`.
+- **Semantics** — every stack on the board classifies as
+  `Set`, `PureRun`, or `RedBlackRun`. `Incomplete`, `Bogus`,
+  `Dup` all reject.
+- **Inventory** — cards are conserved.
+
+`validateGameMove` skips Semantics (messy mid-turn is OK);
+`validateTurnComplete` skips Protocol and Inventory (nothing
+being proposed, just the current board).
+
+## Inventory: what "cards conserved" means
+
+Three checks in sequence:
+
+1. **Pool consumption** — every card in `stacksToAdd` must
+   have a source. Sources are `stacksToRemove` ++
+   `handCardsPlayed`. Any added card that can't be matched to
+   the pool → error.
+2. **Every hand card placed** — after consumption, no
+   `handCardsPlayed` should remain in the leftover pool.
+   Declaring a hand card played but not placing it → error.
+3. **No board duplicates** — the resulting board must not
+   contain the same `Card` twice.
+
+Matching uses `Card` equality (value + suit + originDeck).
+`stacksEqual` is used when subtracting stacks from the board.
+Both are full-identity — double-deck cards are
+distinguishable, matching `Card.claude`'s two-equality
+discipline.
+
+## `computeBoardAfter`: the derivation
+
+```
+board_after = (board_before -- stacks_to_remove) ++ stacks_to_add
+```
+
+Subtraction uses `stacksEqual` (first-match). If any stack in
+`stacks_to_remove` isn't on the board, the whole derivation
+fails. Exposed so other code paths (hint preview, replay
+sanity) can ask "what would the board look like?" without
+running the full validator.
+
+## Key exports
+
+- `RefereeStage(..)` — `Protocol | Geometry | Semantics |
+  Inventory`.
+- `RefereeError` — `{ stage, message }`.
+- `RefereeMove` — `{ boardBefore, stacksToRemove,
+  stacksToAdd, handCardsPlayed }`.
+- `validateGameMove : RefereeMove -> BoardBounds -> Result
+  RefereeError ()`.
+- `validateTurnComplete : List CardStack -> BoardBounds ->
+  Result RefereeError ()`.
+- `computeBoardAfter : RefereeMove -> Result RefereeError
+  (List CardStack)`.
+- Encoders/decoders for all types, plus `encodeRefereeResult`
+  (wire-friendly Ok/Err envelope).
+
+## Elm divergences from TS
+
+- Returns `Result RefereeError ()` rather than TS's
+  `RefereeError | undefined`. `Ok ()` = valid.
+- Stage-based early-exit validators are `Result.andThen`
+  chains (insight #7).
+- `hand_cards_played` is non-optional `List` (TS: optional
+  field). Encoder omits when empty; decoder treats absence as
+  empty. On-the-wire shape identical.
+
+## JSON wire shape
+
+```
+RefereeMove:  {
+  "board_before": [...CardStack...],
+  "stacks_to_remove": [...],
+  "stacks_to_add": [...],
+  "hand_cards_played"?: [...HandCard...]    // omitted when empty
+}
+RefereeError: { "stage": "inventory", "message": "..." }
+RefereeResult: { "ok": true } | { "ok": false, "error": {...} }
+```
+
+The `encodeRefereeResult` / `refereeResultDecoder` wrapper is
+Elm-invented: TS's `undefined` doesn't survive JSON cleanly,
+so the result envelope makes success/failure explicit on the
+wire.
+
+## What this module deliberately does NOT do
+
+- **Turn order.** Not physics. Belongs upstream.
+- **Player identity.** Not physics. Belongs upstream.
+- **Geometry itself.** Delegated to `BoardGeometry.elm`.
+- **Stack classification.** Delegated to `StackType.getStackType`.
+- **Protocol-level JSON validation.** Currently stubbed;
+  future port target (`protocol_validation.ts`).
+
+## Open question: TooClose at the referee level
+
+Any `GeometryError` — including `TooClose` — currently
+rejects via `checkGeometry`. Whether `TooClose` should fail
+at the referee level or only warn is noted in
+`PORTING_NOTES.md`. Treat as settled-for-now; revisit if
+legitimate plays get rejected during gameplay.
+
+## Pointers
+
+- Go counterpart: `games/lynrummy/referee.go` +
+  `referee.claude`. Parallel implementation.
+- Depends on: `CardStack.stacksEqual`, `Card`,
+  `StackType.getStackType`, `BoardGeometry.validateBoardGeometry`.
+- Consumers: `Game.applyCompleteTurn` (calls
+  `validateTurnComplete` before transitioning), any trick
+  suggestion that wants to preview validity.
+- Tests: `tests/Game/RefereeTest.elm`.

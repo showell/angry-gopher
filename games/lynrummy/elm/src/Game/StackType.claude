@@ -1,0 +1,114 @@
+# StackType.elm — WORKHORSE, INTRICATE (the central judgement)
+
+Classification: given a list of cards, what kind of stack do
+they form? The source comment calls `getStackType` "THE MOST
+IMPORTANT FUNCTION OF THE GAME" — every meld legality
+decision, every trick suggestion, and every
+board-diff validation routes through this module.
+
+## Status
+
+- **Label:** WORKHORSE + INTRICATE. Stable rules, dense logic.
+- **Mirrors:** Go `stack_type.go` + `stack_type.claude`, TS
+  `stack_type.ts`. All three implement the same 6-way
+  classification.
+- **Divergences:** none behavioral. Module layout follows the
+  TS source deliberately (successor/predecessor live here,
+  not in Card.elm — source-parity choice).
+
+## Key exports
+
+- `CardStackType(..)` — 6 constructors: `Incomplete | Bogus |
+  Dup | Set | PureRun | RedBlackRun`.
+- `getStackType : List Card -> CardStackType` — the oracle.
+- `successor` / `predecessor : CardValue -> CardValue` — value
+  neighbors on the 13-cycle (K wraps to A).
+- `valueDistance : CardValue -> CardValue -> Int` — circular
+  distance on the 13-cycle. Max is 6.
+
+## The six classifications
+
+- **`Incomplete`** — 0 or 1 cards, OR exactly 2 cards that
+  would otherwise form a valid stack. Legal *in progress*,
+  not a valid meld.
+- **`Bogus`** — mixed types, or adjacent pairs that disagree
+  (e.g., one same-suit and one same-value). Illegal.
+- **`Dup`** — contains two cards with same value+suit. Illegal
+  for sets (and for any stack via the pair-check).
+- **`Set`** — 3+ same-value cards, all distinct face-suits.
+- **`PureRun`** — 3+ same-suit cards in successor order. K-A-2
+  is a valid PureRun (the 13-cycle wraps).
+- **`RedBlackRun`** — 3+ consecutive-value cards alternating
+  color. Suits can vary within a color.
+
+## `successor` wraps (K → A)
+
+This is LOAD-BEARING: `K♠, A♠, 2♠` is a valid PureRun. All
+run detection uses `successor` equality, not numeric comparison.
+
+## Algorithm (read this to understand `getStackType`)
+
+1. Length 0 or 1 → `Incomplete`.
+2. Classify the first pair via `cardPairStackType`:
+   - dup pair → `Dup`
+   - same value → `Set` (provisional)
+   - adjacent values → `PureRun` / `RedBlackRun` / `Bogus` by
+     suit/color
+   - else → `Bogus`
+3. Early-exit on `Bogus` or `Dup` from the first pair.
+4. Length exactly 2 with a non-problematic provisional →
+   `Incomplete` (legal-in-progress, not final).
+5. Provisional `Set` + any dup pair anywhere → `Dup`. (Set
+   cannot contain duplicates even though individual pairs
+   might classify as Set.)
+6. Every adjacent pair must classify as the same stack type
+   (`followsConsistentPattern`); otherwise → `Bogus`.
+7. Happy path: return the provisional type.
+
+The order of these checks matters. Reshuffling them
+produces correct-on-common-cases-wrong-on-edges drift.
+
+## `valueDistance` (for trick suggestions)
+
+Circular distance on the 13-cycle. `A↔A = 0`, `A↔K = A↔2 = 1`,
+`A↔Q = A↔3 = 2`, etc. Max is 6 (e.g., `2↔9`). Used by
+`Tricks.PeelForRun` / `Tricks.Hint` to prefer "close"
+substitutions.
+
+## Why `successor` / `predecessor` / `valueDistance` live here
+
+Source-parity with TS. They're intrinsic to `CardValue`, so
+they could live in `Card.elm`, but the TS source groups them
+with stack classification. See `Card.claude` ("What this
+module deliberately does NOT do") — during the port phase
+source parity beats Elm idiom.
+
+## The Dup-inside-Set subtle case
+
+Provisional `Set` classification comes from a pair check. A
+three-card list like `5♥(d0), 5♠, 5♥(d1)` would pass the
+pair check (first pair is same-value, second pair is
+same-value) but contains a dup (`5♥(d0)` and `5♥(d1)` are the
+same face-suit from different decks). Step 5 catches this
+AFTER the consistency check — a Set-wide dup scan overrides
+the provisional Set classification. Without this, a double-deck
+board would silently accept illegal sets.
+
+## What this module deliberately does NOT do
+
+- **Per-stack operations.** Lives in `CardStack.elm`.
+- **Per-card semantics.** Lives in `Card.elm` (suitColor,
+  enum conversions, encoders).
+- **Extraction legality.** Lives in `CardStack.canExtract`
+  (consumes `stackType` as input, adds the size/position rules
+  on top).
+- **Trick construction.** Lives in `Tricks/*` (consume this).
+
+## Pointers
+
+- Go counterpart: `games/lynrummy/stack_type.go` +
+  `stack_type.claude`.
+- Consumers: `CardStack.stackType`, `Referee`, every
+  `Tricks/*` module, `Hint`. If you edit this file, run the
+  full conformance suite — drift here is invisible locally.
+- Tests: `tests/Game/StackTypeTest.elm`.

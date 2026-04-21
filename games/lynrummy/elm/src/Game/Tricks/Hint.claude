@@ -1,0 +1,85 @@
+# Tricks/Hint.elm — EARLY
+
+Hint orchestration: composes the seven trick detectors into a
+ranked list of `Suggestion`s. Given a hand and a board, emits
+one representative play per firing trick in priority order.
+
+## Status
+
+- **Label:** EARLY. Landed 2026-04-19 during the client-
+  autonomy port. Elm computes hints locally; no server round-
+  trip.
+- **Mirrors:** no longer has a Go counterpart — the Go
+  `games/lynrummy/tricks/` package was ripped 2026-04-20 when
+  hints moved client-side per `project_hints_are_client_side.md`.
+  Python is the other hint backend; Python uses a different
+  (primitives-sequence) shape, so it's not a "port" of Elm's
+  Play.apply model.
+
+## Public API
+
+- `Suggestion` — `{ rank, trickId, description, handCards }`.
+- `hintPriorityOrder : List Trick` — the 7 tricks in order:
+  1. `DirectPlay` — play a hand card onto the end of a stack.
+  2. `HandStacks` — hand already has a full set/run.
+  3. `PairPeel` — peel a board card to complete a pair.
+  4. `SplitForSet` — split two same-value cards into a set.
+  5. `PeelForRun` — peel to form a run.
+  6. `RbSwap` — swap in a red-black run context.
+  7. `LooseCardPlay` — move a card, then play.
+- `buildSuggestions : Hand -> List CardStack -> List Suggestion`
+  — `List.filterMap` over `(priorityIndex, trick)` pairs; each
+  firing trick contributes one Suggestion (its first Play).
+
+## Algorithm
+
+```
+for i, trick in hintPriorityOrder:
+    plays = trick.findPlays(hand, board)
+    if plays == []:
+        skip
+    first = head(plays)
+    emit { rank = i + 1
+         , trickId = trick.id
+         , description = trick.description
+         , handCards = map .card first.handCards
+         }
+```
+
+Output is priority-ordered (input was); ranks increase
+monotonically with gaps where tricks didn't fire.
+
+## What this module deliberately does NOT do
+
+- **No scoring / ranking of Suggestions.** Priority order is
+  the whole ranking.
+- **No enumeration of alternate plays per trick.** Each firing
+  trick contributes exactly one Suggestion (the first Play).
+  Strategic agents that want alternates walk the tricks
+  themselves.
+- **No wire-format action.** Clients apply locally via
+  `Play.apply`. No `/hint` endpoint either (ripped with the
+  Go hint system).
+
+## Tests
+
+- `tests/Game/HintTest.elm` — priority ordering and rank
+  monotonicity.
+- `tests/Game/DslConformanceTest.elm` (generated from
+  `tricks.dsl`) — `build_suggestions` scenarios + 12
+  `hint_invariant` scenarios that apply each trick's first
+  Play and assert the board stays clean.
+
+## TODO
+
+- Port the Python hint-invariant ordering discipline into Elm
+  if a future regression surfaces (Play.apply's monolithic API
+  has so far avoided the ordering bugs Python hit). Currently
+  all 12 DSL hint_invariant scenarios pass on the Elm side.
+
+## Pointers
+
+- Depends on: all 7 trick modules under `Game.Tricks.*`.
+- Consumers: `Main.elm` (Hint button wiring), test suite.
+- Python counterpart: `games/lynrummy/python/hints.py`
+  (different API — returns primitives, not Plays).

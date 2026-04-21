@@ -46,4 +46,4 @@ splits the spade run, prints the browse URL.
   potentially a Python-based opponent bot.
 - Depends on: server endpoints in `views/lynrummy_elm.go`.
 - Wire format spec: `games/lynrummy/wire_action.go` +
-  `elm/src/LynRummy/WireAction.elm`.
+  `elm/src/Game/WireAction.elm`.

@@ -40,19 +40,19 @@ Starting points, organized by layer:
   `src/Main/Wire.claude` (wire deliveries + the
   action-log-entry decoder), and `src/Main/Msg.claude` (the
   unified Msg type).
-- **Integration.** `src/LynRummy/Referee.claude` (Elm's own
+- **Integration.** `src/Game/Referee.claude` (Elm's own
   referee — does NOT rely on the Go referee).
 - **Execution.** `src/Main/Apply.claude` (applyAction),
-  `src/LynRummy/Reducer.claude` (the pure action-log
-  reducer), `src/LynRummy/Game.claude` (turn transitions).
+  `src/Game/Reducer.claude` (the pure action-log
+  reducer), `src/Game/Game.claude` (turn transitions).
 - **Render.** `src/Main/View.claude` (top-level composition
-  + pinned layout), `src/LynRummy/View.claude` (rendering
-  primitives), `src/LynRummy/HandLayout.claude` and
-  `src/LynRummy/BoardGeometry.claude` (frame constants).
+  + pinned layout), `src/Game/View.claude` (rendering
+  primitives), `src/Game/HandLayout.claude` and
+  `src/Game/BoardGeometry.claude` (frame constants).
 
 ## Domain modules
 
-`src/LynRummy/` also holds the Elm port of the game's domain
+`src/Game/` also holds the Elm port of the game's domain
 types: `Card.claude`, `CardStack.claude`, `Hand.claude`,
 `Dealer.claude`, `StackType.claude`, etc. These mirror the
 Go package; each sidecar states where it stands relative to

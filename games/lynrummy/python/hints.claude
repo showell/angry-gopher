@@ -34,7 +34,7 @@ Primitive-order choices that affected invariant:
 - Companion architecture: `project_hints_are_client_side.md`,
   `feedback_wire_model_not_lossy.md`,
   `feedback_inference_is_misplaced_work.md`.
-- Elm counterpart: `games/lynrummy/elm/src/LynRummy/Tricks/`
+- Elm counterpart: `games/lynrummy/elm/src/Game/Tricks/`
   (different API — Play.apply returns final board directly, no
   primitive replay).
 

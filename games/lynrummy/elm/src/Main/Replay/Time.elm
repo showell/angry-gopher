@@ -34,12 +34,12 @@ the replay FSM + its Msg handlers in one module.
 -}
 
 import Browser.Dom
-import LynRummy.BoardGeometry as BG
-import LynRummy.HandLayout as HandLayout
-import LynRummy.Dealer
-import LynRummy.Hand as Hand
-import LynRummy.Score as Score
-import LynRummy.WireAction as WA exposing (WireAction)
+import Game.BoardGeometry as BG
+import Game.HandLayout as HandLayout
+import Game.Dealer
+import Game.Hand as Hand
+import Game.Score as Score
+import Game.WireAction as WA exposing (WireAction)
 import Main.Apply as Apply
 import Main.Msg exposing (Msg(..))
 import Main.Replay.Space as Space
@@ -88,16 +88,16 @@ clickInstantReplay model =
 
                 Nothing ->
                     { model
-                        | board = LynRummy.Dealer.initialBoard
-                        , hands = [ LynRummy.Dealer.openingHand, Hand.empty ]
+                        | board = Game.Dealer.initialBoard
+                        , hands = [ Game.Dealer.openingHand, Hand.empty ]
                         , scores = [ 0, 0 ]
                         , activePlayerIndex = 0
                         , turnIndex = 0
                         , deck = []
                         , cardsPlayedThisTurn = 0
                         , victorAwarded = False
-                        , turnStartBoardScore = Score.forStacks LynRummy.Dealer.initialBoard
-                        , score = Score.forStacks LynRummy.Dealer.initialBoard
+                        , turnStartBoardScore = Score.forStacks Game.Dealer.initialBoard
+                        , score = Score.forStacks Game.Dealer.initialBoard
                     }
     in
     ( { rewound

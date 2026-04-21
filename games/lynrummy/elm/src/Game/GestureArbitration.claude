@@ -1,0 +1,54 @@
+just_use GestureArbitration.elm
+
+# label: WORKHORSE (gesture-arbitration)
+# role: pure helpers — click-vs-drag arbitration during board interactions
+
+Pure-function port of the click-vs-drag arbitration logic
+(TS's `DragDropHelper`). Nothing in this module touches the
+DOM; the event flow itself lives in `Main.elm`.
+
+## What's exported
+
+- `Point` — `{ x : Int, y : Int }` (viewport coords).
+- `clickThreshold : Int` — squared-distance threshold above
+  which click intent dies. Direct port of TS literal `1`.
+- `distSquared : Point -> Point -> Int` — Euclidean squared
+  distance.
+- `clickIntentAfterMove : Point -> Point -> Maybe Int -> Maybe Int`
+  — given the original cursor, the current cursor, and the
+  current click intent, return the new click intent. Nothing
+  stays Nothing (death is permanent within a gesture); Just
+  survives iff cursor displacement is `<= clickThreshold`.
+- `applySplit : Int -> Int -> List CardStack -> List CardStack`
+  — replace the stack at `stackIndex` with the two halves
+  produced by `CardStack.split cardIndex`. No-op on out-of-
+  bounds, on empty board, and on 1-card stacks (CardStack.split
+  preserves them).
+
+## Why this exists
+
+Without this module, the arbitration logic would live entirely
+in `Main.elm`'s `update`, where elm-test can't reach it.
+Pulling the pure pieces into a named module gives us 21 unit
+tests over thresholds and split semantics
+(`tests/Game/GestureArbitrationTest.elm`) — most of the
+behavior worth verifying about the arbitration is verifiable
+here without booting a browser.
+
+## Concession (preserved from TS, by design)
+
+The TS click UI is not optimal. A user who jitters more than
+1 pixel between mousedown and mouseup turns their click into
+a drag. Steve knows this; the rule is "port it faithfully
+first, improve after the rest of the port lands." See
+`showell/claude_writings/the_bar_for_done.md`.
+
+## Pointers
+
+- Consumer: `Main.elm` (update branches for `MouseDownOnBoardCard`,
+  `MouseMove`, `MouseUp`).
+- TS reference: `DragDropHelper.enable_drag` and the surrounding
+  closure-captured state machine (`active_click_key`,
+  `dist_squared`, `process_pointerup`).
+- Maintainer-doc essay: `showell/claude_writings/reading_dragdrophelper.md`.
+- Plan essay: `showell/claude_writings/splitting_a_stack.md`.
