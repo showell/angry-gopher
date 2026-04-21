@@ -311,9 +311,8 @@ viewHand config hand =
     let
         -- Build the (row, col, originalIndex, handCard) grid
         -- by iterating suits in display order and sorting each
-        -- suit's cards by value. This is the SAME layout math
-        -- `HandLayout.cardCenterInViewport` assumes; we compute
-        -- it once here and pass row/col to the positioner.
+        -- suit's cards by value, then pass row/col to
+        -- `HandLayout.positionAt`.
         indexed =
             List.indexedMap Tuple.pair hand.handCards
 
