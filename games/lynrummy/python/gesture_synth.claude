@@ -22,19 +22,25 @@ layout is Elm's business, knowable only at replay time via
 and Elm synthesizes at replay time.
 
 Python DOES emit paths for intra-board actions where source
-and target are pinned on both sides — `move_stack` today.
-More (split / merge_stack / place_hand) to come when needed.
+and target are pinned on both sides — `move_stack` and
+`merge_stack` today. `split` waits on a target-loc policy (the
+wire doesn't carry one).
 
 This follows `feedback_record_facts_decide_later.md`: don't
 put speculative coordinates on the wire.
 
 ## Surface
 
-- `synthesize(start, end, samples)` — straight-line path in
-  viewport coords. Duration = distance × `DRAG_MS_PER_PIXEL`.
+- `synthesize(start, end, samples)` — ease-in-ease-out path in
+  viewport coords. Cosine ease on position, uniform time
+  spacing; slow start, peak velocity at the midpoint, slow
+  end. Duration = distance × `DRAG_MS_PER_PIXEL`.
 - `drag_endpoints(prim, board_before)` — return `(start, end)`
   in viewport coords, or None if Python can't honestly supply
   them.
+- `_stack_center`, `_stack_edge` — helpers shared by the
+  move_stack / merge_stack branches. Source of "grab center of
+  stack" and "drop on stack's left/right edge" points.
 
 ## Pointers
 
@@ -46,10 +52,10 @@ put speculative coordinates on the wire.
 
 ## TODO
 
-- Only `move_stack` endpoints implemented on the "yes I know
-  where both ends are" side. Add `split`, `merge_stack` when
-  those primitives start flowing through replay-visible
-  actions.
+- `split` endpoints not yet emitted — the wire carries no
+  target loc for Split, so synthesis needs either a wire
+  extension or a deterministic "where the halves land"
+  policy. Open question.
 - `DRAG_MS_PER_PIXEL = 5` is a settled value, not a pending
   measurement — perceived replay pace reads well at this
   setting (Steve, 2026-04-21). Kept in sync with Elm's

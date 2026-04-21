@@ -74,11 +74,56 @@ def test_drag_endpoints_returns_none_for_non_drag():
     return "non-drag primitives → None"
 
 
+def test_merge_stack_endpoints():
+    # Two stacks: source at (200, 20) size 3, target at (80, 320) size 4.
+    # Drag goes from source CENTER to target RIGHT-edge.
+    board = [_stack(200, 20, 3), _stack(80, 320, 4)]
+    prim = {"action": "merge_stack",
+            "source_stack": 0, "target_stack": 1, "side": "right"}
+    start, end = gesture_synth.drag_endpoints(prim, board)
+    # Source center = source_left + size*pitch/2, source_top + h/2.
+    assert start[0] == BOARD_VIEWPORT_LEFT + 200 + 3 * CARD_PITCH // 2
+    assert start[1] == BOARD_VIEWPORT_TOP + 20 + CARD_HEIGHT // 2
+    # Target right edge = target_left + size*pitch, target_top + h/2.
+    assert end[0] == BOARD_VIEWPORT_LEFT + 80 + 4 * CARD_PITCH
+    assert end[1] == BOARD_VIEWPORT_TOP + 320 + CARD_HEIGHT // 2
+
+    # Left side flips the edge.
+    prim_left = dict(prim, side="left")
+    _, end_left = gesture_synth.drag_endpoints(prim_left, board)
+    assert end_left[0] == BOARD_VIEWPORT_LEFT + 80, \
+        f"left edge: {end_left[0]}"
+    return f"merge_stack drag {start} -> {end}"
+
+
+def test_ease_curve_is_not_linear():
+    # 100 px straight-line path; a pure-linear curve would put
+    # the midpoint sample at x≈50. Our cosine ease also has the
+    # midpoint at 50 (by symmetry), so we check a non-mid
+    # sample. At frac=0.25, linear would put x=25; cosine-ease
+    # gives (1 - cos(π/4)) / 2 ≈ 0.146 → x≈15. That gap is the
+    # proof the path accelerates rather than cruising.
+    meta = gesture_synth.synthesize((0, 0), (100, 0), samples=5)
+    path = meta["path"]
+    quarter_x = path[1]["x"]  # frac = 1/4
+    linear_quarter = 25
+    assert quarter_x < linear_quarter, \
+        f"quarter sample should lag linear: {quarter_x} vs {linear_quarter}"
+    # Symmetric: three-quarter sample should LEAD linear.
+    three_q_x = path[3]["x"]
+    linear_three_q = 75
+    assert three_q_x > linear_three_q, \
+        f"three-quarter sample should lead linear: {three_q_x} vs {linear_three_q}"
+    return f"quarter={quarter_x} (<25), three-quarter={three_q_x} (>75)"
+
+
 TESTS = [
     test_path_shape,
     test_synthesize_duration_scales_with_distance,
     test_merge_hand_returns_none,
     test_move_stack_uses_viewport_coords,
+    test_merge_stack_endpoints,
+    test_ease_curve_is_not_linear,
     test_drag_endpoints_returns_none_for_non_drag,
 ]
 

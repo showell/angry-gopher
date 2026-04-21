@@ -26,6 +26,7 @@ put speculative coordinates on the wire.
         client.send_action(session_id, primitive)
 """
 
+import math
 import time
 
 from geometry import (
@@ -42,7 +43,7 @@ VIEWPORT = {
     "height": BOARD_VIEWPORT_TOP + BOARD_MAX_HEIGHT + 100,
 }
 
-DEFAULT_SAMPLES = 12
+DEFAULT_SAMPLES = 20
 
 # Drag velocity, ms per pixel. Tuned by feel 2026-04-21 (from
 # 80 → 15 → 5). 5 reads well when watching an agent game
@@ -58,12 +59,26 @@ def _distance(start, end):
     return (dx * dx + dy * dy) ** 0.5
 
 
+def _ease_in_out(frac):
+    """Cosine ease-in-ease-out. Zero derivative at both ends,
+    peak velocity at frac=0.5. Maps [0,1] to [0,1] with
+    f(0)=0, f(0.5)=0.5, f(1)=1 — so endpoints round-trip
+    exactly, tests that check first/last sample still pass."""
+    return (1 - math.cos(math.pi * frac)) / 2
+
+
 def synthesize(start, end, *, samples=DEFAULT_SAMPLES):
-    """Build a gesture_metadata envelope with a straight-line
+    """Build a gesture_metadata envelope with an ease-in-ease-out
     path from `start` to `end`. `start` and `end` are `(x, y)`
     tuples in VIEWPORT pixel coordinates. Duration is proportional
     to distance at `DRAG_MS_PER_PIXEL` — the drag takes longer
-    the farther it goes, matching human drag pacing."""
+    the farther it goes.
+
+    Samples are emitted at uniform time intervals with eased
+    position (slow start, peak velocity at the midpoint, slow
+    end). Elm linearly interpolates between samples at replay
+    time; 20 samples is enough for the curve to read smoothly
+    through the fast middle."""
     duration_ms = max(100, _distance(start, end) * DRAG_MS_PER_PIXEL)
     t0_ms = time.time() * 1000
     if samples < 2:
@@ -72,10 +87,11 @@ def synthesize(start, end, *, samples=DEFAULT_SAMPLES):
     path = []
     for i in range(samples):
         frac = i / (samples - 1)
+        pos = _ease_in_out(frac)
         path.append({
             "t": t0_ms + frac * duration_ms,
-            "x": round(start[0] + (end[0] - start[0]) * frac),
-            "y": round(start[1] + (end[1] - start[1]) * frac),
+            "x": round(start[0] + (end[0] - start[0]) * pos),
+            "y": round(start[1] + (end[1] - start[1]) * pos),
         })
     return {
         "path": path,
@@ -87,11 +103,31 @@ def synthesize(start, end, *, samples=DEFAULT_SAMPLES):
 
 def _stack_viewport_rect(stack):
     """Translate a board stack's internal loc into viewport
-    coords using the pinned board offset."""
+    coords (top-left corner of the stack's bounding box)."""
     return (
         BOARD_VIEWPORT_LEFT + stack["loc"]["left"],
         BOARD_VIEWPORT_TOP + stack["loc"]["top"],
     )
+
+
+def _stack_center(stack):
+    """Viewport point at the center of a stack's bounding box.
+    The "grab anywhere on the stack" start point for drags that
+    pick up a whole stack (MoveStack source, MergeStack source)."""
+    left, top = _stack_viewport_rect(stack)
+    size = len(stack["board_cards"])
+    return (left + size * CARD_PITCH // 2,
+            top + CARD_HEIGHT // 2)
+
+
+def _stack_edge(stack, side):
+    """Viewport point at a stack's left- or right-edge,
+    vertically centered. The drop-target point for actions that
+    merge onto a stack's side (MergeStack, MergeHand)."""
+    left, top = _stack_viewport_rect(stack)
+    size = len(stack["board_cards"])
+    edge_x = left + size * CARD_PITCH if side == "right" else left
+    return (edge_x, top + CARD_HEIGHT // 2)
 
 
 def drag_endpoints(prim, board_before):
@@ -110,19 +146,30 @@ def drag_endpoints(prim, board_before):
     kind = prim["action"]
 
     if kind == "move_stack":
-        src = board_before[prim["stack_index"]]
+        src_idx = prim["stack_index"]
+        if src_idx >= len(board_before):
+            return None
+        src = board_before[src_idx]
         new_loc = prim["new_loc"]
         size = len(src["board_cards"])
-        src_left, src_top = _stack_viewport_rect(src)
-        start = (src_left + size * CARD_PITCH // 2,
-                 src_top + CARD_HEIGHT // 2)
-        end_left = BOARD_VIEWPORT_LEFT + new_loc["left"]
-        end_top = BOARD_VIEWPORT_TOP + new_loc["top"]
-        end = (end_left + size * CARD_PITCH // 2,
-               end_top + CARD_HEIGHT // 2)
+        start = _stack_center(src)
+        end = (BOARD_VIEWPORT_LEFT + new_loc["left"] + size * CARD_PITCH // 2,
+               BOARD_VIEWPORT_TOP + new_loc["top"] + CARD_HEIGHT // 2)
+        return start, end
+
+    if kind == "merge_stack":
+        src_idx = prim["source_stack"]
+        tgt_idx = prim["target_stack"]
+        if src_idx >= len(board_before) or tgt_idx >= len(board_before):
+            return None
+        src = board_before[src_idx]
+        tgt = board_before[tgt_idx]
+        side = prim.get("side", "right")
+        start = _stack_center(src)
+        end = _stack_edge(tgt, side)
         return start, end
 
     # merge_hand / place_hand: hand origin unknowable to Python.
-    # split / merge_stack: intra-board but we don't yet need paths
-    # for them; add as downstream tricks surface the need.
+    # split: intra-board but the wire carries no target loc;
+    # add when Split synthesis policy is decided.
     return None
