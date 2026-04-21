@@ -29,30 +29,38 @@ helpers that produce StatusMessage and PopupContent records.
 ## Visual structure
 
 ```
-Html
-├── viewTopBar            "Welcome to Lyn Rummy!" banner
-├── viewStatusBar         per-status color + text
-├── div (position: relative, min-height: 900px)     ← pinned
-│   ├── div at (20, 20) width=240                   ← hand gutter
-│   │   └── handColumn    turn # header + player rows
-│   └── div at (boardViewportLeft, boardViewportTop)  ← pinned
-│       └── boardColumn
-│           └── boardWithWings
-│               ├── viewStackForBoard (×N)
-│               └── viewWingAt       (×M, during drag only)
-├── draggedOverlay        floating drag card (fixed-position)
-└── viewPopup             modal ceremony (suppressed in replay)
+Html (position: fixed, covers the full viewport)
+├── viewTopBar              @ viewport (0, 0),   32px tall
+├── viewStatusBar           @ viewport (0, 32),  32px tall
+├── handColumn gutter       @ viewport (20, 100), 240px wide
+├── boardColumn             @ viewport (boardViewportLeft,
+│                                       boardViewportTop)
+│   └── boardWithWings
+│       ├── viewStackForBoard (×N)
+│       └── viewWingAt       (×M, during drag only)
+├── draggedOverlay          floating drag card (fixed-pos)
+└── viewPopup               modal ceremony (suppressed in replay)
 ```
 
-The **pinned** layout (2026-04-21) replaced a flex-based
-two-column layout. The board's viewport coords are now
-declared constants in `LynRummy.BoardGeometry`
-(`boardViewportLeft`, `boardViewportTop`) which Python's
-`tools/lynrummy_elm_player/geometry.py` also honors, so
-Python agents and Elm compute the same viewport coord for
-every board stack. The hand gutter sits at (20, 20) with
-fixed width; its internal card placement is driven by
-`LynRummy.HandLayout`.
+The **pinned** layout (2026-04-21) anchors everything to
+**true viewport coordinates** via `position: fixed` on the
+outer container. No flow above the board — the constants in
+`LynRummy.BoardGeometry` (`boardViewportLeft`,
+`boardViewportTop`) and `LynRummy.HandLayout` (`handLeft`,
+`handTop`) are the coordinates as the browser sees them,
+matching Python's `BOARD_VIEWPORT_LEFT/TOP`. The
+draggedOverlay (also `position: fixed`) reads the same frame,
+so synthesized paths and real cursor drags land in exactly
+the positions their coords claim.
+
+## TODO
+
+- This view overlays the page-level `.app-nav` bar (from
+  the HTML page template above `#root`). Gopher back-links
+  ("← Gopher home", "Sessions", etc.) are currently hidden.
+  Add an in-Elm nav row INSIDE the pinned container when we
+  miss the links — or duck Elm below the page nav and shift
+  all constants by a shared `NAV_HEIGHT`.
 
 ## Player row branch logic
 

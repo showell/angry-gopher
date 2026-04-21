@@ -190,33 +190,52 @@ pluralize n word =
 
 view : Model -> Html Msg
 view model =
+    -- Pinned layout. Everything is absolute-positioned inside
+    -- a viewport-origin container. That way:
+    -- - BoardGeometry.boardViewport{Left,Top} match TRUE
+    --   viewport coords (no flow above shifting us down).
+    -- - HandLayout's handLeft/handTop also match TRUE viewport.
+    -- - The drag floater (position: fixed) and synthesized
+    --   paths operate in the same frame.
+    -- Overlays the page-level app-nav; a minimal nav rendered
+    -- inside the Elm view can be added later if we miss it.
     div
-        [ style "font-family" "system-ui, sans-serif" ]
-        [ viewTopBar
-        , viewStatusBar model.status
-        , -- Pinned layout: the board renders at
-          -- (boardViewportLeft, boardViewportTop) so Python
-          -- and Elm agree on every board stack's viewport
-          -- coord. Hand column flows on the left in the
-          -- space reserved by boardViewportLeft.
-          div
-            [ style "position" "relative"
-            , style "min-height" "900px"
+        [ style "font-family" "system-ui, sans-serif"
+        , style "position" "fixed"
+        , style "top" "0"
+        , style "left" "0"
+        , style "right" "0"
+        , style "bottom" "0"
+        , style "overflow" "auto"
+        , style "background" "#f4f4ec"
+        ]
+        [ div
+            [ style "position" "absolute"
+            , style "top" "0"
+            , style "left" "0"
+            , style "right" "0"
             ]
-            [ div
-                [ style "position" "absolute"
-                , style "top" "20px"
-                , style "left" "20px"
-                , style "width" (String.fromInt (BoardGeometry.boardViewportLeft - 40) ++ "px")
-                ]
-                [ handColumn model ]
-            , div
-                [ style "position" "absolute"
-                , style "top" (String.fromInt BoardGeometry.boardViewportTop ++ "px")
-                , style "left" (String.fromInt BoardGeometry.boardViewportLeft ++ "px")
-                ]
-                [ boardColumn model ]
+            [ viewTopBar ]
+        , div
+            [ style "position" "absolute"
+            , style "top" "32px"
+            , style "left" "0"
+            , style "right" "0"
             ]
+            [ viewStatusBar model.status ]
+        , div
+            [ style "position" "absolute"
+            , style "top" "100px"
+            , style "left" "20px"
+            , style "width" (String.fromInt (BoardGeometry.boardViewportLeft - 40) ++ "px")
+            ]
+            [ handColumn model ]
+        , div
+            [ style "position" "absolute"
+            , style "top" (String.fromInt BoardGeometry.boardViewportTop ++ "px")
+            , style "left" (String.fromInt BoardGeometry.boardViewportLeft ++ "px")
+            ]
+            [ boardColumn model ]
         , draggedOverlay model
         , viewPopup
             (case model.replay of
