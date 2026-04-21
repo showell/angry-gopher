@@ -88,6 +88,12 @@ type alias Model =
     , replay : Maybe ReplayProgress
     , replayAnim : ReplayAnimation
     , replayBaseline : Maybe RemoteState
+
+    -- Live DOM-measured board offset used by the replay
+    -- synthesizer to translate board-frame coords to current
+    -- viewport coords. Fetched via `Browser.Dom.getElement`
+    -- when replay starts; stays Nothing outside replay.
+    , replayBoardRect : Maybe { x : Int, y : Int }
     }
 
 
@@ -366,4 +372,5 @@ baseModel =
     , replay = Nothing
     , replayAnim = NotAnimating
     , replayBaseline = Nothing
+    , replayBoardRect = Nothing
     }

@@ -44,11 +44,15 @@ fails, semantics is meaningless.
 - `stackHeight = cardHeight`. Single row; no vertical
   spread within a stack.
 - `boardViewportLeft = 280`, `boardViewportTop = 100` —
-  **pinned** coordinates of the board div's top-left in the
-  viewport. Python's `geometry.py` holds matching constants
-  (`BOARD_VIEWPORT_LEFT`, `BOARD_VIEWPORT_TOP`) so both
-  sides compute the same viewport position for every stack.
-  If the layout shifts, update both sides together.
+  **documentary / fallback** coordinates of the board div's
+  top-left in the viewport. NOT authoritative as of
+  2026-04-21's B1 change: the replay synthesizer reads the
+  board's live viewport rect via `Browser.Dom.getElement`
+  and uses that for board-frame → viewport translation.
+  These constants remain for (a) documenting Python's
+  expectation in `tools/lynrummy_elm_player/geometry.py`
+  and (b) a fallback path (with `Debug.log` warning) if the
+  DOM query loses the race at replay start.
 
 ## Viewport-translating helper
 

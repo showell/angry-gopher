@@ -332,14 +332,24 @@ update msg model =
                 | status = { text = "Replaying…", kind = Inform }
                 , replay = Just { step = 0, paused = False }
                   -- PreRoll keeps the rewound starting board
-                  -- visible for ~200ms before the first action
+                  -- visible for ~1000ms before the first action
                   -- fires, so the viewer registers the initial
                   -- state. Unlike Beating, it does NOT advance
                   -- `step` on completion.
                 , replayAnim = PreRoll { untilMs = 0 }
                 , drag = NotDragging
+                , replayBoardRect = Nothing
               }
-            , Cmd.none
+              -- Kick off a DOM query for the board's live
+              -- viewport rect. The result arrives via
+              -- BoardRectReceived and populates
+              -- model.replayBoardRect before the first
+              -- animation frame; the replay synthesizer uses
+              -- that live rect (not a shared constant) to
+              -- translate board-frame coords into viewport
+              -- coords.
+            , Task.attempt BoardRectReceived
+                (Browser.Dom.getElement State.boardDomId)
             )
 
         ReplayFrame nowPosix ->
@@ -391,8 +401,8 @@ update msg model =
             ( model, Cmd.none )
 
         BoardRectReceived result ->
-            case ( model.drag, result ) of
-                ( Dragging info, Ok element ) ->
+            case result of
+                Ok element ->
                     let
                         -- Convert document coords (what Browser.Dom returns)
                         -- to viewport coords (what mouse clientX/Y uses), so
@@ -404,10 +414,42 @@ update msg model =
                             , width = round element.element.width
                             , height = round element.element.height
                             }
-                    in
-                    ( { model | drag = Dragging { info | boardRect = Just rect } }, Cmd.none )
 
-                _ ->
+                        -- Two consumers of the board rect live in the same
+                        -- Msg: an active live-drag (for drop-target math),
+                        -- and an active replay (for board-frame → viewport
+                        -- translation in synthesized paths). Update both.
+                        updatedDrag =
+                            case model.drag of
+                                Dragging info ->
+                                    Dragging { info | boardRect = Just rect }
+
+                                other ->
+                                    other
+
+                        replayOffset =
+                            case model.replay of
+                                Just _ ->
+                                    Just { x = rect.x, y = rect.y }
+
+                                Nothing ->
+                                    model.replayBoardRect
+                    in
+                    ( { model
+                        | drag = updatedDrag
+                        , replayBoardRect = replayOffset
+                      }
+                    , Cmd.none
+                    )
+
+                Err err ->
+                    -- Dev console: log the failure so future-Claude
+                    -- sees it. Replay synthesis will fall back to
+                    -- the documentary board-viewport constants.
+                    let
+                        _ =
+                            Debug.log "BoardRectReceived err" err
+                    in
                     ( model, Cmd.none )
 
         ClickHint ->
@@ -705,6 +747,21 @@ dragMsPerPixel =
 
 
 {-| Synthesize endpoints for a replay drag, in viewport coords.
+
+The target side uses the LIVE DOM-measured board rect
+(`model.replayBoardRect`, populated by a `Browser.Dom.getElement`
+task at replay start). This is the "measurement, not
+agreement" path — no shared viewport constants are
+authoritative here; we ask the browser where the board
+actually is. If the measurement hasn't arrived yet we fall
+back to the documentary constants and log to the dev console.
+
+The origin side (hand card) still uses the pinned
+`HandLayout.cardCenterInViewport`. That's a known rough edge —
+pinning the hand layout was part of the earlier attempt and
+still carries its own drift. B1's scope is just the target
+side; hand-origin DOM-measurement is a later step.
+
 -}
 syntheticEndpoints : WireAction -> Model -> Maybe ( Point, Point )
 syntheticEndpoints action model =
@@ -721,20 +778,50 @@ syntheticEndpoints action model =
                     listAt p.targetStack model.board
                         |> Maybe.map
                             (\stack ->
-                                BG.stackEdgeInViewport
-                                    { loc =
-                                        { left = stack.loc.left
-                                        , top = stack.loc.top
-                                        }
-                                    , size = CardStack.size stack
-                                    }
-                                    (sideString p.side)
+                                stackEdgeInLiveViewport model stack (sideString p.side)
                             )
             in
             Maybe.map2 Tuple.pair origin target
 
         _ ->
             Nothing
+
+
+{-| Translate a stack's board-frame loc into current-viewport
+coords using the live DOM-measured board rect. Falls back to
+the documentary `BoardGeometry.boardViewport{Left,Top}`
+constants with a dev-console warning if the measurement hasn't
+arrived yet.
+-}
+stackEdgeInLiveViewport : Model -> CardStack -> String -> Point
+stackEdgeInLiveViewport model stack side =
+    let
+        ( offsetX, offsetY ) =
+            case model.replayBoardRect of
+                Just rect ->
+                    ( rect.x, rect.y )
+
+                Nothing ->
+                    let
+                        _ =
+                            Debug.log "replay: no live board rect yet, using constants"
+                                ( BG.boardViewportLeft, BG.boardViewportTop )
+                    in
+                    ( BG.boardViewportLeft, BG.boardViewportTop )
+
+        size =
+            CardStack.size stack
+
+        edgeX =
+            if side == "right" then
+                stack.loc.left + size * BG.cardPitch
+
+            else
+                stack.loc.left
+    in
+    { x = offsetX + edgeX
+    , y = offsetY + stack.loc.top + BG.cardHeight // 2
+    }
 
 
 sideString : BoardActions.Side -> String

@@ -24,7 +24,12 @@ Types:
   `cardsPlayedThisTurn`, `victorAwarded`,
   `turnStartBoardScore`) and UI-layer (`drag`, `sessionId`,
   `status`, `score`, `hintedCards`, `popup`, `actionLog`,
-  `replay`, `replayBaseline`).
+  `replay`, `replayBaseline`, `replayBoardRect`).
+  - `replayBoardRect : Maybe { x, y }` — populated via
+    `Browser.Dom.getElement` at replay start. Live viewport
+    offset of the 800×600 board div. Used by the replay
+    synthesizer to translate board-frame coords into current
+    viewport coords. Nothing outside replay.
 - `ReplayProgress` — `{ step, paused }`. Walker over
   `actionLog` ticks every 500ms; `step` is the index of the
   NEXT action to apply; `paused = True` halts ticks.

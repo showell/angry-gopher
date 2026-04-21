@@ -72,7 +72,7 @@ structure, re-draw the view."
 - `viewPopup` overlays modal ceremony (turn-complete popup).
   Suppressed during replay.
 
-## Replay synthesis (2026-04-21, WIP)
+## Replay synthesis (2026-04-21, STILL_EVOLVING)
 
 `buildReplayAnimation` branches on whether a captured gesture
 path is present:
@@ -80,15 +80,39 @@ path is present:
 - **Faithful branch** — path non-empty → honor it. Plays back
   the captured pointer trace at its recorded pace.
 - **Synthesized branch** — path missing → synthesize a linear
-  path using pinned geometry. For `MergeHand`: origin =
-  `HandLayout.cardCenterInViewport`, target =
-  `BoardGeometry.stackEdgeInViewport`, duration = distance ×
-  `dragMsPerPixel` (80 for now).
+  path using LIVE DOM measurement for the target side
+  (`stackEdgeInLiveViewport`) and the pinned hand layout for
+  the origin side (`HandLayout.cardCenterInViewport`).
+  Duration = distance × `dragMsPerPixel` (80 placeholder).
 
 The distinction is DERIVED at replay time from presence of
 data, not tagged at capture time. Matches
 `feedback_record_facts_decide_later.md`: record presence,
 decide at execution.
+
+### The live board rect (B1 change, 2026-04-21)
+
+When `ClickInstantReplay` fires, Main issues a
+`Browser.Dom.getElement boardDomId` task. The result populates
+`model.replayBoardRect` (viewport-space x/y of the 800×600
+board div). `stackEdgeInLiveViewport` reads this rect to
+translate a stack's board-frame `loc` into current viewport
+coords — **not** the documentary `BoardGeometry.boardViewport*`
+constants. Those constants are now the fallback path (with
+a Debug.log warning) for the race where synthesis fires
+before the task returns.
+
+The hand-origin side is NOT yet DOM-measured — it still uses
+the pinned `HandLayout.cardCenterInViewport`. That's the next
+slice (B2 / follow-on); see TODO below.
+
+**Verified in B1:** live MergeHand replay target lands on the
+DOM-measured board rect regardless of what content flows
+above the board.
+
+**Still in motion:** hand origin (pinned math may drift when
+hand contents reflow); other primitives (MoveStack, Split,
+MergeStack, PlaceHand) don't have synthesis wired yet.
 
 ## Pointers
 
@@ -104,7 +128,13 @@ decide at execution.
 
 ## TODO
 
+- **Hand-origin DOM measurement (next slice).** Replace
+  `HandLayout.cardCenterInViewport` in `syntheticEndpoints`
+  with a DOM-measured lookup of each hand card's live rect.
+  Requires each rendered hand card to carry a stable DOM id
+  and a Task that fetches the rect at synthesis time.
 - Synthesized branch currently only covers `MergeHand`. Add
-  `PlaceHand`, `MoveStack`, `MergeStack`, `Split` as full-game
-  QA surfaces their need.
+  `PlaceHand`, `MoveStack`, `MergeStack`, `Split` — each uses
+  the same `stackEdgeInLiveViewport` pattern for board-frame
+  endpoints.
 - `dragMsPerPixel` is a placeholder (80); needs measurement.
