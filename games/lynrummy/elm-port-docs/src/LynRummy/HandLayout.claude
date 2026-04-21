@@ -48,6 +48,15 @@ replay time** (2026-04-21, B1 extension). `cardCenterInViewport`
 is no longer trusted by default; the replay path uses
 `handCardDomId` + `Browser.Dom.getElement`.
 
+### Rule for future edits
+
+Do not call `cardCenterInViewport` or `positionAt` from
+anywhere in a synthesis path that feeds the drag floater.
+Any viewport coord consumed by the replay synthesizer
+should come from a DOM measurement, not from pinned math.
+See `Main.claude` for the general rule and the pattern to
+follow when extending synthesis.
+
 ## Pointers
 
 - Complement: `BoardGeometry.boardViewportLeft` / `Top` pin

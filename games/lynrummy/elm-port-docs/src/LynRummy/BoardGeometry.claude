@@ -54,6 +54,14 @@ fails, semantics is meaningless.
   and (b) a fallback path (with `Debug.log` warning) if the
   DOM query loses the race at replay start.
 
+### Rule for future edits
+
+Do not use `boardViewportLeft/Top` + `stack.loc` in any
+synthesis path that feeds the drag floater. Use
+`Main.stackEdgeInLiveViewport` instead; it reads the
+DOM-measured rect and falls back to these constants only
+as a salvage. See `Main.claude` for the general rule.
+
 ## Viewport-translating helper
 
 - `stackEdgeInViewport : { loc, size } -> side -> { x, y }` —

@@ -133,6 +133,33 @@ above the board.
 - Other primitives (`MoveStack`, `Split`, `MergeStack`) don't
   have synthesis wired yet — they apply-immediately-and-beat.
 
+### Rule for adding synthesis to new primitives
+
+**Any viewport coord the replay synthesizer consumes must
+come from DOM measurement, not from a pinned constant.** If
+you add synthesis for `MoveStack` / `Split` / `MergeStack`:
+
+- For board-frame endpoints, use `stackEdgeInLiveViewport`
+  (which reads `model.replayBoardRect`). Do NOT add
+  `BoardGeometry.boardViewport*` to a `stack.loc` directly
+  anywhere in the synthesis path.
+- For anything else that needs a live viewport position of
+  a DOM element, follow the MergeHand pattern:
+  1. Give the element a stable DOM id.
+  2. Fire a `Browser.Dom.getElement` task paired with
+     `Time.now`.
+  3. Transition to an `AwaitingXRect` intermediate state.
+  4. A dedicated `XRectReceived` Msg completes the
+     transition into `Animating`, with a Debug.log-only
+     fallback on error.
+
+This came from the "landing right, origin wrong" bug
+(2026-04-21). The landing was right as soon as the board
+rect was DOM-measured; the origin was wrong precisely
+because it still trusted pinned math. Every piece of
+pinned-viewport math in this path is a latent instance of
+the same bug.
+
 ## Pointers
 
 - Autonomy-core: `LynRummy.Game` (`Game.elm`) — `GameState`
