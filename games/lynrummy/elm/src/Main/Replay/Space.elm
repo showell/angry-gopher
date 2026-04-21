@@ -176,6 +176,12 @@ syntheticEndpoints action model =
                 |> Maybe.map
                     (\stack ->
                         let
+                            center =
+                                stackCenterInLiveViewport model stack
+
+                            endLoc =
+                                pointInLiveViewport model p.newLoc
+
                             size =
                                 CardStack.size stack
 
@@ -184,20 +190,44 @@ syntheticEndpoints action model =
 
                             halfHeight =
                                 BG.cardHeight // 2
-
-                            startLoc =
-                                pointInLiveViewport model stack.loc
-
-                            endLoc =
-                                pointInLiveViewport model p.newLoc
                         in
-                        ( { x = startLoc.x + halfWidth, y = startLoc.y + halfHeight }
+                        ( center
                         , { x = endLoc.x + halfWidth, y = endLoc.y + halfHeight }
                         )
                     )
 
+        WA.MergeStack p ->
+            case ( listAt p.sourceStack model.board, listAt p.targetStack model.board ) of
+                ( Just source, Just target ) ->
+                    Just
+                        ( stackCenterInLiveViewport model source
+                        , stackEdgeInLiveViewport model target p.side
+                        )
+
+                _ ->
+                    Nothing
+
         _ ->
             Nothing
+
+
+{-| Viewport point of a stack's bounding-box center. Used as
+the drag-start point when the "grab" is conceptually from
+anywhere on the stack — MoveStack and MergeStack both use
+this as their start.
+-}
+stackCenterInLiveViewport : Model -> CardStack -> Point
+stackCenterInLiveViewport model stack =
+    let
+        anchor =
+            pointInLiveViewport model stack.loc
+
+        size =
+            CardStack.size stack
+    in
+    { x = anchor.x + size * BG.cardPitch // 2
+    , y = anchor.y + BG.cardHeight // 2
+    }
 
 
 {-| Translate a board-frame `{ left, top }` into the current

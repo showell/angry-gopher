@@ -45,12 +45,17 @@ frame); Space has no dependency on Time.
 ### Endpoint math
 
 - `syntheticEndpoints : WireAction -> Model -> Maybe (Point, Point)`
-  — synchronous endpoint resolution. Currently only `MoveStack`
-  lands here; `Split` / `MergeStack` return Nothing and fall
-  through to applyImmediate.
+  — synchronous endpoint resolution. Covers `MoveStack` (center
+  → new-loc center) and `MergeStack` (source center → target
+  edge on `side`). `Split` returns Nothing and falls through
+  to applyImmediate (wire carries no target loc for Split).
 - `pointInLiveViewport : Model -> { left, top } -> Point` —
   board-frame → viewport via `model.replayBoardRect`, with
   pinned-constant fallback (dev-console log on fallback).
+- `stackCenterInLiveViewport : Model -> CardStack -> Point` —
+  stack bounding-box center. Used as the drag-start point for
+  any "grab anywhere on the stack" action (MoveStack,
+  MergeStack).
 - `stackEdgeInLiveViewport : Model -> CardStack -> Side -> Point`
   — left-edge or right-edge of a stack in viewport coords.
 

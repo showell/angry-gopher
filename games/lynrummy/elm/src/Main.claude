@@ -110,7 +110,9 @@ incident that motivated it.
 ## TODO
 
 - Synthesized branch currently covers `MergeHand`, `PlaceHand`
-  (both via the async hand-rect DOM query), and `MoveStack`
-  (sync, board-frame endpoints). Still to wire: `MergeStack`,
-  `Split` — both use `Space.pointInLiveViewport` /
-  `stackEdgeInLiveViewport` for board-frame endpoints.
+  (both via the async hand-rect DOM query), and `MoveStack` +
+  `MergeStack` (sync, board-frame endpoints). Still to wire:
+  `Split` — blocked on an open question about where the two
+  split halves should land (wire doesn't carry a target loc
+  for Split today; synthesis needs a policy or a wire
+  extension).
