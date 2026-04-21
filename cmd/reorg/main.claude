@@ -1,50 +1,113 @@
 just_use main.go
 
-# label: VESTIGIAL
-# role: historical — Go-aware package mover
+# label: EARLY
+# role: tool — language-aware batch directory / module mover
 
-Batch Go package mover. Reads a `REORG` script of
-`mv src/ dst/` lines and executes them as Go-aware package
-moves: rewrites import paths across every `.go` file in the
-repo, updates `package` declarations, then moves the
-directories.
+Batch package / module mover. Reads a `REORG`-style script of
+move lines and executes them language-aware: rewrites imports
+and module declarations, then moves the directories.
 
-## Status (FIRM)
+## Status
 
-One-shot. Was built to support the 2026-early repo reorg
-that relocated LynRummy and other packages into their current
-nesting (`games/lynrummy/`, etc.). Not part of the regular
-agent toolkit.
-
-Kept for reference in case another reorg happens. If the
-Go layout needs another shuffle, start by reading this
-file's script format — but also audit the logic against
-current `go/ast` + `go modules` behavior since tooling moves
-fast.
+Graduated from VESTIGIAL → EARLY on 2026-04-21 when the tool was
+extended to handle Elm moves. Was built for the 2026-early Go
+reorg (relocating lynrummy/ and critters/ under games/). Now
+carries two verbs and has been exercised in anger for both Go
+and Elm renames.
 
 ## Usage
 
 ```
 # Dry-run (default):
-go run cmd/reorg/main.go REORG
+go run cmd/reorg/main.go SCRIPT
 
 # Apply for real:
-go run cmd/reorg/main.go --execute REORG
+go run cmd/reorg/main.go --execute SCRIPT
 ```
 
-REORG script format:
+Script grammar:
 
 ```
 # Comments and blank lines ignored.
+
+# Go move: rewrites import paths + package declarations
+# across every .go file in the repo.
 mv auth/ core/auth/
-mv games/lynrummy/ internal/lynrummy/
+
+# Elm move: rewrites `module X` + qualified `X.Y` references
+# across every .elm and .claude file under the Elm project.
+elm-mv games/lynrummy/elm/src/LynRummy/ games/lynrummy/elm/src/Game/
 ```
 
-Old and new import paths are inferred from the module name
-in `go.mod`.
+## Go semantics (`mv`)
+
+Needs a `go.mod` in the repo root (inferred module path).
+
+- For each move, scans every `.go` file for quoted imports matching
+  the old package path or any sub-package and records rewrites.
+- If the directory basename changed (e.g. `auth/ → core/newauth/`),
+  records `package X` → `package Y` rewrites for files in the
+  moved subtree.
+- On `--execute`: rewrites imports, moves directories, rewrites
+  package declarations, runs `go build ./...` to verify.
+
+## Elm semantics (`elm-mv`)
+
+No `go.mod` needed. The tool auto-detects the Elm project root by
+walking upward from the src path looking for `elm.json`.
+
+Source-directory detection:
+
+- Reads `source-directories` from `elm.json` (defaults to `src`).
+- Also treats `tests/` as a source-dir by elm-test convention,
+  if the directory exists.
+
+Old/new module prefix derivation:
+
+- Takes the path relative to the Elm source-dir and converts `/`
+  to `.`. So `src/LynRummy` → `LynRummy`; `src/Game/Tricks` →
+  `Game.Tricks`.
+- Both src and dst must live under the same Elm project, and
+  the computed prefixes must differ.
+
+Rewrite rules:
+
+- Scans every `.elm` and `.claude` file under the project root
+  (sidecars use module-qualified names the same as code).
+- Regex: `\b<oldPrefix>(\.\*|\.UpperCase[.Chain]*\b)` — matches
+  `OldPrefix.Card`, `OldPrefix.Tricks.Hint`, and `OldPrefix.*`
+  (the wildcard shorthand common in sidecars).
+- Bare `<oldPrefix>` without `.` follow-up (e.g. the word
+  "LynRummy" in prose) is NOT rewritten. Prose references to
+  the game's name survive.
+
+Dedup: when multiple Elm moves share a (root, oldPrefix,
+newPrefix) combo — e.g. `src/LynRummy → src/Game` paired with
+`tests/LynRummy → tests/Game` — the tool scans each unique combo
+once instead of producing duplicate rewrite rows.
+
+Verification: after executing, runs `./node_modules/.bin/elm
+make src/Main.elm --output=/dev/null` in the project root
+(falls back to `elm` on `$PATH` if no pinned local install).
+
+## What the tool does NOT do
+
+- Does NOT update references from outside the Elm project (Go
+  source comments mentioning `elm/src/LynRummy/X`, Python doc
+  strings, READMEs). Those are usually doc paths, not code
+  imports, and get high-false-positive risk if auto-rewritten.
+  Use `grep + sed` for the post-move sweep, reviewing each hit.
+- Does NOT update `cmd/fixturegen` or any other code generator
+  that emits Elm module references in string templates. Update
+  those by hand before re-running the generator.
+- Does NOT handle single-file Elm renames (e.g. renaming
+  `Game/Game.elm` to `Game/Turn.elm` which would only change
+  one module name's last segment). That would need a different
+  verb — not built.
 
 ## Pointers
 
 - Entry point: `main.main()`.
-- Module layout as of today: see `go.mod` + the
-  `games/`, `tools/`, `views/` tree.
+- REORG script format documented in the `main.go` header comment.
+- The tool was exercised on 2026-04-21 for the `LynRummy → Game`
+  rename under games/lynrummy/elm/.
