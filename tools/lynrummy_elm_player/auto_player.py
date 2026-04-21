@@ -156,7 +156,7 @@ def main():
     print(f"turns completed: {summary['turns']}")
     print(f"final turn_result: {summary['final_turn_result']}")
     print(f"final board_score: {final['board_score']}")
-    print(f"browse: http://localhost:9000/gopher/lynrummy-elm/#{sid}")
+    print(f"browse: http://localhost:9000/gopher/lynrummy-elm/play/{sid}")
 
 
 if __name__ == "__main__":

@@ -61,8 +61,9 @@ func renderGamesHero(w http.ResponseWriter) {
 }
 
 // renderRecentSessions lists the 10 most recent Elm LynRummy
-// sessions. Each links to /gopher/lynrummy-elm/#N which the
-// Elm client's init flag parses to resume that session directly.
+// sessions. Each links to /gopher/lynrummy-elm/play/N — the
+// server renders the Elm client with session N baked into the
+// init flag, so the URL is reload-safe.
 func renderRecentSessions(w http.ResponseWriter) {
 	rows, err := DB.Query(`
 		SELECT s.id, s.created_at, s.label,
@@ -99,7 +100,7 @@ func renderRecentSessions(w http.ResponseWriter) {
 		}
 		fmt.Fprintf(w,
 			`<tr><td>%d</td><td>%s</td><td>%s</td><td class="n">%d</td>`+
-				`<td><a href="/gopher/lynrummy-elm/#%d">Resume →</a></td></tr>`,
+				`<td><a href="/gopher/lynrummy-elm/play/%d">Resume →</a></td></tr>`,
 			id, html.EscapeString(ts), labelCell, n, id,
 		)
 	}

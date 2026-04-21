@@ -50,6 +50,17 @@ func HandleLynRummyElm(w http.ResponseWriter, r *http.Request) {
 		lynrummyElmSessionsList(w)
 	case sub == "api/sessions":
 		lynrummyElmSessionsJSON(w)
+	case strings.HasPrefix(sub, "play/"):
+		// /gopher/lynrummy-elm/play/<id> — load the Elm client
+		// with session <id> pinned server-side. Reload-safe
+		// replacement for the old #<id> URL fragment.
+		idStr := strings.TrimPrefix(sub, "play/")
+		id, err := strconv.ParseInt(strings.TrimRight(idStr, "/"), 10, 64)
+		if err != nil || id <= 0 {
+			http.NotFound(w, r)
+			return
+		}
+		lynrummyElmPlayWithSession(w, id)
 	case strings.HasSuffix(sub, "/state") && strings.HasPrefix(sub, "sessions/"):
 		idStr := strings.TrimSuffix(strings.TrimPrefix(sub, "sessions/"), "/state")
 		lynrummyElmSessionState(w, idStr)
@@ -947,8 +958,21 @@ func replaySessionNoHTTP(id int64) (lynrummy.State, bool, error) {
 }
 
 func lynrummyElmPlay(w http.ResponseWriter) {
+	lynrummyElmPlayWithSession(w, 0)
+}
+
+// lynrummyElmPlayWithSession renders the play page with the
+// session id baked into the initial flags. `sessionID == 0`
+// means "launcher mode" — Elm boots fresh.
+func lynrummyElmPlayWithSession(w http.ResponseWriter, sessionID int64) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	fmt.Fprint(w, `<!doctype html>
+	var flag string
+	if sessionID > 0 {
+		flag = fmt.Sprintf("%d", sessionID)
+	} else {
+		flag = "null"
+	}
+	fmt.Fprintf(w, `<!doctype html>
 <html><head><meta charset="utf-8"><title>LynRummy (Elm)</title>
 <style>
   body { margin: 0; font-family: sans-serif; background: #f4f4ec; }
@@ -968,22 +992,23 @@ func lynrummyElmPlay(w http.ResponseWriter) {
 <div id="root"></div>
 <script src="/gopher/lynrummy-elm/elm.js"></script>
 <script>
-  // URL hash like "#12" pins the active session. On reload, Elm
-  // resumes that session; on back-to-lobby, the port clears the
-  // hash.
-  var sidMatch = /^#(\d+)$/.exec(window.location.hash);
-  var initialSessionId = sidMatch ? parseInt(sidMatch[1], 10) : null;
+  // The session id is baked into the URL path
+  // (/gopher/lynrummy-elm/play/<id>) and rendered server-side
+  // into initialSessionId. Reload-safe — unlike the old #<id>
+  // fragment which required JS-side parsing and was brittle.
+  var initialSessionId = %s;
   var app = Elm.Main.init({
     node: document.getElementById("root"),
     flags: { initialSessionId: initialSessionId },
   });
   app.ports.setSessionHash.subscribe(function(sid) {
-    var hash = sid === "" ? "" : "#" + sid;
-    history.replaceState(null, "", window.location.pathname + window.location.search + hash);
+    var url = sid === "" ? "/gopher/lynrummy-elm/"
+                         : "/gopher/lynrummy-elm/play/" + sid;
+    history.replaceState(null, "", url);
   });
 </script>
 </div>
-</body></html>`)
+</body></html>`, flag)
 }
 
 func lynrummyElmJS(w http.ResponseWriter) {
