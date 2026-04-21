@@ -22,6 +22,7 @@ import sys
 
 from client import Client
 import hints
+import gesture_synth
 
 
 # Game termination: deck running out, not a turn_result variant.
@@ -33,6 +34,28 @@ DECK_LOW_WATER = 10
 # `failure` is the one turn_result that stops the loop — means the
 # server refused a dirty-board complete_turn.
 TERMINAL_RESULTS = {"failure"}
+
+
+def _apply_locally(board, prim):
+    """Mirror of what the server does to a board when it receives
+    this primitive, so gesture_synth sees the correct state for
+    the NEXT primitive in the same trick."""
+    kind = prim["action"]
+    if kind == "merge_hand":
+        return hints._apply_merge_hand(
+            board, prim["target_stack"], prim["hand_card"],
+            prim.get("side", "right"))
+    if kind == "merge_stack":
+        return hints._apply_merge_stack(
+            board, prim["source_stack"], prim["target_stack"],
+            prim.get("side", "right"))
+    if kind == "move_stack":
+        return hints._apply_move(board, prim["stack_index"], prim["new_loc"])
+    if kind == "split":
+        return hints._apply_split(board, prim["stack_index"], prim["card_index"])
+    if kind == "place_hand":
+        return hints._apply_place_hand(board, prim["hand_card"], prim["loc"])
+    return board
 
 
 def play_session(c, session_id, *, max_actions=300, verbose=True):
@@ -52,15 +75,24 @@ def play_session(c, session_id, *, max_actions=300, verbose=True):
             prims = top["primitives"]
             if verbose:
                 print(f"  trick: {trick_id} ({len(prims)} primitives)")
+            # Maintain a local board that advances per-primitive
+            # so gesture synthesis can compute drag endpoints
+            # from the correct pre-primitive state without a
+            # round-trip to /state.
+            local = hints._copy_board(board)
             for prim in prims:
+                endpoints = gesture_synth.drag_endpoints(prim, local)
+                meta = (gesture_synth.synthesize(*endpoints)
+                        if endpoints is not None else None)
                 try:
-                    c.send_action(session_id, prim)
+                    c.send_action(session_id, prim, gesture_metadata=meta)
                 except RuntimeError as e:
                     if verbose:
                         print(f"  send failed: {e}")
                     return {"actions": actions, "turns": turns,
                             "final_turn_result": "send_error"}
                 actions += 1
+                local = _apply_locally(local, prim)
             continue
 
         # No more suggestions — try complete_turn.

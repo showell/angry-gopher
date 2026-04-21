@@ -30,5 +30,8 @@ echo "==> Elm tests"
 echo "==> Python conformance tests"
 python3 tools/lynrummy_elm_player/test_dsl_conformance.py
 
+echo "==> Gesture-synth unit tests"
+python3 tools/lynrummy_elm_player/test_gesture_synth.py
+
 echo
 echo "All preflight checks passed."

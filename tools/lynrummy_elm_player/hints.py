@@ -268,24 +268,53 @@ def _fix_geometry(sim, prims):
 # ============================================================
 
 def direct_play(hand, board):
+    """Find a hand card that extends a valid stack on the board.
+    Returns the primitive sequence that realizes the play, or
+    None if no card extends anything."""
     for hc in hand:
         card = hc["card"]
         for si, s in enumerate(board):
             for side in ("right", "left"):
                 result = _try_merge_hand(s, card, side)
-                if result is None:
+                if result is None or _classify(result) == "other":
                     continue
-                # Must extend to a valid (non-Incomplete) stack.
-                if _classify(result) == "other":
-                    continue
-                prims = [{"action": "merge_hand",
-                          "hand_card": card,
-                          "target_stack": si,
-                          "side": side}]
-                sim = _apply_merge_hand(_copy_board(board), si, card, side)
-                _fix_geometry(sim, prims)
-                return prims
+                return _emit_direct_play(board, si, card, side)
     return None
+
+
+def _emit_direct_play(board, target_idx, hand_card, side):
+    """Physical execution of a direct_play. Final stack =
+    target + hand_card. Decision: does the target's current loc
+    fit the grown stack? If yes, merge in place. If not, move
+    target to a fitting open loc first, then merge.
+
+    One spatial decision per trick: where does the final stack
+    live. Everything else follows."""
+    target = board[target_idx]
+    final_size = len(target["board_cards"]) + 1
+
+    # Try merging in place; if the grown stack sits cleanly
+    # on the board, that's the destination.
+    merged_in_place = _apply_merge_hand(
+        _copy_board(board), target_idx, hand_card, side)
+    if find_violation(merged_in_place) is None:
+        return [{"action": "merge_hand", "hand_card": hand_card,
+                 "target_stack": target_idx, "side": side}]
+
+    # Grown stack wouldn't fit at target's current loc. Pick a
+    # destination sized for the final stack, move target there,
+    # then merge.
+    others = [s for i, s in enumerate(board) if i != target_idx]
+    new_loc = find_open_loc(others, card_count=final_size)
+    moved = _apply_move(_copy_board(board), target_idx, new_loc)
+    # After _apply_move the moved stack is the last entry.
+    new_idx = len(moved) - 1
+    return [
+        {"action": "move_stack", "stack_index": target_idx,
+         "new_loc": new_loc},
+        {"action": "merge_hand", "hand_card": hand_card,
+         "target_stack": new_idx, "side": side},
+    ]
 
 
 def _try_merge_hand(stack, hand_card, side):

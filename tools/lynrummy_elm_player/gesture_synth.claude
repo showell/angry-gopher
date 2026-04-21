@@ -1,0 +1,40 @@
+just_use gesture_synth.py
+
+# label: EARLY
+# role: synthesize pointer-path telemetry for Python primitives
+
+The Elm client captures real mouse drags; Python primitives
+carry no physical telemetry by default, so Instant Replay sees
+a teleport. This module builds a plausible linear-drag
+`gesture_metadata` envelope per primitive.
+
+Not behavior-accurate. Python has no DOM, no real events. The
+goal is "pseudo-realistic": the replay watcher sees motion
+along a path rather than jumping.
+
+## Surface
+
+- `synthesize(start, end, duration_ms, samples)` — straight-line
+  path, matching the Elm envelope shape
+  (`{path, pointer_type, viewport, device_pixel_ratio}`).
+- `drag_endpoints(prim, board_before)` — return `(start, end)`
+  for a primitive given the board state at emission time, or
+  None for primitives that don't involve a drag.
+
+## Pointers
+
+- Consumer: `auto_player.py` (attaches gesture_metadata to each
+  primitive send).
+- Complement: `telemetry.py` (read-side; dumps stored paths
+  per session).
+- Memory: `feedback_wire_model_not_lossy.md` — every physical
+  event must produce a reconstructable wire record.
+
+## TODO
+
+- Only `merge_hand` and `move_stack` endpoints implemented.
+  Add `split`, `merge_stack`, `place_hand` as subsequent tricks
+  need them.
+- Hand origin is a fixed point (no per-card position tracking).
+  If the replay's hand-zone visuals feel wrong, swap to a
+  hand-layout approximation.
