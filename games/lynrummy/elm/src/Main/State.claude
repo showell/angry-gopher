@@ -41,8 +41,10 @@ New `ReplayAnimation` variant (2026-04-21 B1 extension):
   error). No user-visible effect — the frame count is one
   at most in practice.
 - `ReplayProgress` — `{ step, paused }`. Walker over
-  `actionLog` ticks every 500ms; `step` is the index of the
-  NEXT action to apply; `paused = True` halts ticks.
+  `actionLog` (a `List ActionLogEntry`), advanced on every
+  `onAnimationFrame` tick via the FSM in `Main.Replay.Time`;
+  `step` is the index of the NEXT entry to apply;
+  `paused = True` halts ticks.
 - `PopupContent` — `{ admin, body }`. Turn-ceremony popup.
 - `StatusMessage` / `StatusKind` — `Inform` / `Celebrate` /
   `Scold`. Drives the status bar text + colour.

@@ -83,8 +83,7 @@ type alias Model =
     , score : Int
     , hintedCards : List Card
     , popup : Maybe PopupContent
-    , actionLog : List WireAction
-    , replayGestures : List (Maybe (List GesturePoint))
+    , actionLog : List ActionLogEntry
     , replay : Maybe ReplayProgress
     , replayAnim : ReplayAnimation
     , replayBaseline : Maybe RemoteState
@@ -373,7 +372,6 @@ baseModel =
     , hintedCards = []
     , popup = Nothing
     , actionLog = []
-    , replayGestures = []
     , replay = Nothing
     , replayAnim = NotAnimating
     , replayBaseline = Nothing

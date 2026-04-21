@@ -148,7 +148,7 @@ replayFrame nowMs model =
             else
                 case model.replayAnim of
                     NotAnimating ->
-                        case actionAndGestureAt progress.step model of
+                        case listAt progress.step model.actionLog of
                             Nothing ->
                                 ( { model
                                     | replay = Nothing
@@ -159,8 +159,8 @@ replayFrame nowMs model =
                                 , Cmd.none
                                 )
 
-                            Just ( action, maybePath ) ->
-                                prepareReplayStep action maybePath model nowMs
+                            Just entry ->
+                                prepareReplayStep entry.action entry.gesturePath model nowMs
 
                     Animating anim ->
                         let
@@ -231,19 +231,6 @@ replayFrame nowMs model =
 
                         else
                             ( model, Cmd.none )
-
-
-actionAndGestureAt : Int -> Model -> Maybe ( WireAction, Maybe (List State.GesturePoint) )
-actionAndGestureAt step model =
-    case ( listAt step model.actionLog, listAt step model.replayGestures ) of
-        ( Just action, Just maybePath ) ->
-            Just ( action, maybePath )
-
-        ( Just action, Nothing ) ->
-            Just ( action, Nothing )
-
-        _ ->
-            Nothing
 
 
 

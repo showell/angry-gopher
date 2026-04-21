@@ -181,15 +181,19 @@ update msg model =
                     )
 
                 Ok () ->
+                    let
+                        completeTurnEntry =
+                            { action = WA.CompleteTurn, gesturePath = Nothing }
+                    in
                     case model.sessionId of
                         Just sid ->
-                            ( { model | actionLog = model.actionLog ++ [ WA.CompleteTurn ] }
+                            ( { model | actionLog = model.actionLog ++ [ completeTurnEntry ] }
                             , sendCompleteTurn sid
                             )
 
                         Nothing ->
                             -- Offline mode: no persistence, just commit the transition.
-                            ( { model | actionLog = model.actionLog ++ [ WA.CompleteTurn ] }
+                            ( { model | actionLog = model.actionLog ++ [ completeTurnEntry ] }
                                 |> applyAction WA.CompleteTurn
                             , Cmd.none
                             )
@@ -277,8 +281,7 @@ update msg model =
 
         ActionLogFetched (Ok bundle) ->
             ( { model
-                | actionLog = List.map .action bundle.actions
-                , replayGestures = List.map .gesturePath bundle.actions
+                | actionLog = bundle.actions
                 , replayBaseline = Just bundle.initialState
               }
             , Cmd.none

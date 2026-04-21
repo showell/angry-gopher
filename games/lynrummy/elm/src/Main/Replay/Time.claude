@@ -44,8 +44,6 @@ Internal (not exported but load-bearing):
 
 - `prepareReplayStep` — NotAnimating → Animating / AwaitingHandRect
   / Beating. Central decision point.
-- `actionAndGestureAt` — lookup for step N in `actionLog` +
-  `replayGestures`.
 - `beatAfter` — 2500ms for CompleteTurn, 1000ms for everything
   else.
 
@@ -59,8 +57,8 @@ Internal (not exported but load-bearing):
 | `AwaitingHandRect` | hand-origin synthesis, Task fired | Animating on HandCardRectReceived Ok; Beating on Err |
 | `Beating` | action applied | NotAnimating at step+1 on deadline |
 
-Walker exits replay when `actionAndGestureAt` returns Nothing
-(step index past end of actionLog).
+Walker exits replay when `listAt step model.actionLog` returns
+Nothing (step index past end of actionLog).
 
 ## Inter-action beats
 

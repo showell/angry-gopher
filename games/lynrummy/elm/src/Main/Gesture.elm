@@ -240,11 +240,11 @@ handleMouseUp releasePoint tMs model =
                 ( finalModel, cmd ) =
                     case ( maybeAction, modelAfterAction.sessionId ) of
                         ( Just action, Just sid ) ->
-                            ( { modelAfterAction
-                                | actionLog = modelAfterAction.actionLog ++ [ action ]
-                                , replayGestures =
-                                    modelAfterAction.replayGestures ++ [ gesturePathForLog ]
-                              }
+                            let
+                                entry =
+                                    { action = action, gesturePath = gesturePathForLog }
+                            in
+                            ( { modelAfterAction | actionLog = modelAfterAction.actionLog ++ [ entry ] }
                             , Wire.sendAction sid action (Just fullPath)
                             )
 
