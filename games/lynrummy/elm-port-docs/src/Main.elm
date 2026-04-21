@@ -959,12 +959,12 @@ synthesizedReplayAnimation action model nowMs =
 
 
 {-| Drag duration scales with distance at roughly human
-velocity. 15ms/px is the current setting (down from 80);
-feels closer to how Steve actually drags.
+velocity. 5ms/px as of 2026-04-21 afternoon (from 80 → 15
+→ 5). Real human drag speed per Steve's feel.
 -}
 dragMsPerPixel : Float
 dragMsPerPixel =
-    15
+    5
 
 
 {-| Synthesize endpoints for a replay drag, in viewport

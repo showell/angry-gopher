@@ -84,7 +84,7 @@ path is present:
   (`stackEdgeInLiveViewport`, `pointInLiveViewport`, and
   the async hand-card DOM query). No pinned-viewport math
   remains in this path. Duration = distance × `dragMsPerPixel`
-  (15 placeholder — tuned from 80 for feel).
+  (5 placeholder — tuned from 80 → 15 → 5 for feel).
 
 The distinction is DERIVED at replay time from presence of
 data, not tagged at capture time. Matches
@@ -193,5 +193,5 @@ the same bug.
   `MoveStack`. Add `MergeStack`, `Split` — each uses
   `pointInLiveViewport` / `stackEdgeInLiveViewport` for
   board-frame endpoints.
-- `dragMsPerPixel` is a placeholder (15); Steve plans to
+- `dragMsPerPixel` is a placeholder (5); Steve plans to
   measure real human drag velocity.
