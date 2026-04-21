@@ -3,13 +3,17 @@ module LynRummy.BoardGeometry exposing
     , BoardGeometryStatus(..)
     , GeometryError
     , GeometryErrorKind(..)
+    , boardViewportLeft
+    , boardViewportTop
     , boardBoundsDecoder
     , cardHeight
+    , cardPitch
     , classifyBoardGeometry
     , encodeBoardBounds
     , encodeGeometryError
     , geometryErrorDecoder
     , geometryErrorKindToString
+    , stackEdgeInViewport
     , stackHeight
     , stackWidth
     , stringToGeometryErrorKind
@@ -54,6 +58,50 @@ cardHeight =
 cardPitch : Int
 cardPitch =
     cardWidth + 6
+
+
+{-| Where the 800×600 board div sits in the viewport. Pinned
+so that Python (which has no DOM) and Elm agree on the
+viewport coordinate of every board stack: viewport = loc +
+(boardViewportLeft, boardViewportTop).
+
+If you change these, update `geometry.py` to match.
+-}
+boardViewportLeft : Int
+boardViewportLeft =
+    280
+
+
+boardViewportTop : Int
+boardViewportTop =
+    100
+
+
+{-| Viewport (x, y) point of the `side` edge of a stack sitting
+at its `loc`. Used for drag-animation targets: "where does a
+hand card land when merged onto this stack?" Vertical center
+is the middle of the card row.
+
+  - `side = "right"`: rightmost edge of the stack (where a
+    right-merge card sits on top of).
+  - `side = "left"`: leftmost edge (for left-merge).
+-}
+stackEdgeInViewport :
+    { loc : { left : Int, top : Int }, size : Int }
+    -> String
+    -> { x : Int, y : Int }
+stackEdgeInViewport stack side =
+    let
+        edgeX =
+            if side == "right" then
+                stack.loc.left + stack.size * cardPitch
+
+            else
+                stack.loc.left
+    in
+    { x = boardViewportLeft + edgeX
+    , y = boardViewportTop + stack.loc.top + cardHeight // 2
+    }
 
 
 stackHeight : Int

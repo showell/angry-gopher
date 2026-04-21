@@ -1,0 +1,38 @@
+# HandLayout.elm — TINY
+
+Pinned hand layout. Hand cards render at absolute positions
+computed from suit-row index + within-row index. Makes each
+card's viewport position a pure function of hand contents +
+card identity — no DOM lookup needed at replay time.
+
+## Why pinned
+
+Python-originated actions carry no hand-origin coords (Python
+has no DOM). At replay time, Elm needs to animate a drag FROM
+the hand card TO the pinned board target. Pinning lets Elm
+locate "where is the 7H right now" synchronously from pure
+data, no Task/getElement ceremony.
+
+## Key exports
+
+- `cardCenterInViewport : Card -> List HandCard -> Maybe Point`
+  — the viewport (x, y) of the card's center. Returns Nothing
+  if the card isn't in the hand.
+- `handLeft`, `handTop`, `suitRowHeight` — layout constants
+  shared between the hand renderer and replay synthesizer.
+
+## Layout
+
+Suit rows in `Card.allSuits` order (Heart, Spade, Diamond,
+Club). Within a row, cards are sorted by value ascending.
+Horizontal pitch = `BoardGeometry.cardPitch`. Vertical pitch
+= `suitRowHeight` = `cardHeight + 12`.
+
+## Pointers
+
+- Consumer: `Main.View` renders each card at `cardCenterInViewport`
+  coords.
+- Consumer: `Main.elm` replay synthesizer reads the same coords
+  as the drag origin for hand-to-board actions.
+- Complement: `BoardGeometry.boardViewportLeft` / `Top` pin the
+  board; the two modules together pin the whole playable area.

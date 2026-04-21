@@ -8,7 +8,7 @@ synthetic gesture generator. Run directly:
 import sys
 
 import gesture_synth
-from geometry import CARD_PITCH, CARD_HEIGHT
+from geometry import CARD_PITCH, CARD_HEIGHT, BOARD_VIEWPORT_LEFT, BOARD_VIEWPORT_TOP
 
 
 def _stack(left, top, size):
@@ -20,7 +20,9 @@ def _stack(left, top, size):
 
 
 def test_path_shape():
-    meta = gesture_synth.synthesize((10, 20), (100, 200), samples=5, duration_ms=100)
+    # 100 pixels diagonal at 80ms/px (default) = 8000ms. We set
+    # samples=5 to keep the test fast; duration is derived.
+    meta = gesture_synth.synthesize((10, 20), (100, 200), samples=5)
     assert meta["pointer_type"] == "synthetic"
     assert meta["device_pixel_ratio"] == 1.0
     path = meta["path"]
@@ -33,44 +35,40 @@ def test_path_shape():
     return "path well-formed"
 
 
-def test_merge_hand_right_endpoint():
+def test_synthesize_duration_scales_with_distance():
+    short = gesture_synth.synthesize((0, 0), (10, 0), samples=2)
+    long = gesture_synth.synthesize((0, 0), (100, 0), samples=2)
+    dt_short = short["path"][-1]["t"] - short["path"][0]["t"]
+    dt_long = long["path"][-1]["t"] - long["path"][0]["t"]
+    assert dt_long > dt_short, \
+        f"longer drag should take longer: {dt_short} vs {dt_long}"
+    return f"short={dt_short:.0f}ms long={dt_long:.0f}ms"
+
+
+def test_merge_hand_returns_none():
     board = [_stack(40, 40, 3)]
     prim = {"action": "merge_hand", "target_stack": 0, "side": "right",
             "hand_card": {"value": 9, "suit": 1, "origin_deck": 1}}
-    start, end = gesture_synth.drag_endpoints(prim, board)
-    # Right-side drop lands at the target's right edge:
-    # target's left + target_size * CARD_PITCH.
-    expected_x = 40 + 3 * CARD_PITCH
-    expected_y = 40 + CARD_HEIGHT // 2
-    assert end == (expected_x, expected_y), f"end={end}, want {(expected_x, expected_y)}"
-    # Start should be near hand area (y below the board).
-    assert start[1] > 40, f"hand origin should be below board row: {start}"
-    return f"right-merge end at {end}"
+    assert gesture_synth.drag_endpoints(prim, board) is None, \
+        "merge_hand origin is unknowable to Python; must return None"
+    return "hand-origin → None"
 
 
-def test_merge_hand_left_endpoint():
-    board = [_stack(40, 40, 3)]
-    prim = {"action": "merge_hand", "target_stack": 0, "side": "left",
-            "hand_card": {"value": 9, "suit": 1, "origin_deck": 1}}
-    _, end = gesture_synth.drag_endpoints(prim, board)
-    # Left-side drop lands at the target's left edge.
-    assert end[0] == 40, f"left-merge end.x = {end[0]}, want 40"
-    return f"left-merge end at {end}"
-
-
-def test_move_stack_endpoints():
+def test_move_stack_uses_viewport_coords():
     board = [_stack(100, 50, 4)]
     prim = {"action": "move_stack", "stack_index": 0,
             "new_loc": {"left": 400, "top": 200}}
     start, end = gesture_synth.drag_endpoints(prim, board)
-    # Drag from stack center to new-loc center.
-    assert start[0] == 100 + 4 * CARD_PITCH // 2
-    assert end[0] == 400 + 4 * CARD_PITCH // 2
+    # Start = viewport offset + source loc center.
+    assert start[0] == BOARD_VIEWPORT_LEFT + 100 + 4 * CARD_PITCH // 2
+    assert start[1] == BOARD_VIEWPORT_TOP + 50 + CARD_HEIGHT // 2
+    # End = viewport offset + new_loc center.
+    assert end[0] == BOARD_VIEWPORT_LEFT + 400 + 4 * CARD_PITCH // 2
+    assert end[1] == BOARD_VIEWPORT_TOP + 200 + CARD_HEIGHT // 2
     return f"move_stack drag {start} -> {end}"
 
 
 def test_drag_endpoints_returns_none_for_non_drag():
-    # complete_turn, undo etc.
     assert gesture_synth.drag_endpoints({"action": "complete_turn"}, []) is None
     assert gesture_synth.drag_endpoints({"action": "undo"}, []) is None
     return "non-drag primitives → None"
@@ -78,9 +76,9 @@ def test_drag_endpoints_returns_none_for_non_drag():
 
 TESTS = [
     test_path_shape,
-    test_merge_hand_right_endpoint,
-    test_merge_hand_left_endpoint,
-    test_move_stack_endpoints,
+    test_synthesize_duration_scales_with_distance,
+    test_merge_hand_returns_none,
+    test_move_stack_uses_viewport_coords,
     test_drag_endpoints_returns_none_for_non_drag,
 ]
 

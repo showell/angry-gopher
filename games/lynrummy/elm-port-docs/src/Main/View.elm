@@ -41,6 +41,7 @@ import Html exposing (Html, div)
 import Html.Attributes exposing (href, id, style)
 import Html.Events as Events
 import LynRummy.BoardActions exposing (Side(..))
+import LynRummy.BoardGeometry as BoardGeometry
 import LynRummy.CardStack as CardStack exposing (CardStack)
 import LynRummy.Hand exposing (Hand)
 import LynRummy.PlayerTurn exposing (CompleteTurnResult(..))
@@ -193,14 +194,28 @@ view model =
         [ style "font-family" "system-ui, sans-serif" ]
         [ viewTopBar
         , viewStatusBar model.status
-        , div
-            [ style "padding" "20px"
-            , style "display" "flex"
-            , style "gap" "24px"
-            , style "align-items" "flex-start"
+        , -- Pinned layout: the board renders at
+          -- (boardViewportLeft, boardViewportTop) so Python
+          -- and Elm agree on every board stack's viewport
+          -- coord. Hand column flows on the left in the
+          -- space reserved by boardViewportLeft.
+          div
+            [ style "position" "relative"
+            , style "min-height" "900px"
             ]
-            [ handColumn model
-            , boardColumn model
+            [ div
+                [ style "position" "absolute"
+                , style "top" "20px"
+                , style "left" "20px"
+                , style "width" (String.fromInt (BoardGeometry.boardViewportLeft - 40) ++ "px")
+                ]
+                [ handColumn model ]
+            , div
+                [ style "position" "absolute"
+                , style "top" (String.fromInt BoardGeometry.boardViewportTop ++ "px")
+                , style "left" (String.fromInt BoardGeometry.boardViewportLeft ++ "px")
+                ]
+                [ boardColumn model ]
             ]
         , draggedOverlay model
         , viewPopup

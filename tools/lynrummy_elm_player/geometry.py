@@ -27,6 +27,18 @@ BOARD_MAX_WIDTH = 800
 BOARD_MAX_HEIGHT = 600
 BOARD_MARGIN = 5
 
+# Where the 800x600 board div sits in the viewport. Pinned so
+# that Python (which has no DOM) and Elm agree on the viewport
+# coordinate of every board stack: viewport = stack.loc +
+# (BOARD_VIEWPORT_LEFT, BOARD_VIEWPORT_TOP).
+#
+# If you change these, update `boardViewportLeft` /
+# `boardViewportTop` in
+# games/lynrummy/elm-port-docs/src/LynRummy/BoardGeometry.elm
+# to match.
+BOARD_VIEWPORT_LEFT = 280
+BOARD_VIEWPORT_TOP = 100
+
 # Placement-sweep granularity in pixels (fallback path only).
 PLACE_STEP = 10
 

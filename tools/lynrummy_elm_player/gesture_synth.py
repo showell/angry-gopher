@@ -1,61 +1,71 @@
 """
-gesture_synth — build a plausible pointer-path envelope for a
-Python-originated primitive.
+gesture_synth — build a pointer-path envelope for a Python-
+originated primitive, in viewport coordinates that Elm can
+honor at replay time.
 
-The Elm client captures real mouse telemetry for every drag and
-posts it alongside the WireAction. Python primitives carry no
-physical telemetry by default — so the Instant Replay sees a
-teleport. This module fills that gap by synthesizing a
-straight-line drag with timing samples, enough to render as
-visible motion.
+**Rule:** Python only synthesizes a path for primitives whose
+endpoints Python actually KNOWS in viewport coords. That means
+intra-board moves (source and target both pinned by the
+shared board geometry). Hand origins aren't pinned — they live
+in Elm's DOM — so Python doesn't speculate about them. For
+hand-originated actions (merge_hand, place_hand), Python
+returns None and Elm synthesizes at replay time from its own
+DOM knowledge.
 
-Not behavior-accurate: Python has no DOM, no real pointer
-events. The goal is *pseudo-realistic* — a replay watcher sees
-a stack move along a path rather than jumping.
+This follows the "record facts, decide later" principle: don't
+put speculative coordinates on the wire.
 
 ## Usage
 
     from gesture_synth import synthesize, drag_endpoints
-    start, end = drag_endpoints(primitive, board_before)
-    meta = synthesize(start, end)
-    client.send_action(session_id, primitive, gesture_metadata=meta)
+    endpoints = drag_endpoints(primitive, board_before)
+    if endpoints is not None:
+        meta = synthesize(*endpoints)
+        client.send_action(session_id, primitive, gesture_metadata=meta)
+    else:
+        client.send_action(session_id, primitive)
 """
 
 import time
 
-from geometry import CARD_PITCH, CARD_HEIGHT, BOARD_MAX_WIDTH, BOARD_MAX_HEIGHT
+from geometry import (
+    CARD_PITCH, CARD_HEIGHT,
+    BOARD_MAX_WIDTH, BOARD_MAX_HEIGHT,
+    BOARD_VIEWPORT_LEFT, BOARD_VIEWPORT_TOP,
+)
 
-# Approximate viewport. The Elm app sizes itself to the parent;
-# these values match the board-area bounds plus the hand area
-# below, which is roughly one card row deep per suit.
-VIEWPORT = {"width": BOARD_MAX_WIDTH, "height": BOARD_MAX_HEIGHT + 240}
+# Canonical viewport. Large enough to contain the pinned board
+# plus a generous hand area. Elm renders at these coords; Python
+# generates paths in the same frame.
+VIEWPORT = {
+    "width": BOARD_VIEWPORT_LEFT + BOARD_MAX_WIDTH + 40,
+    "height": BOARD_VIEWPORT_TOP + BOARD_MAX_HEIGHT + 100,
+}
 
-# Approximate hand-card "home" zone. Hand cards are rendered in
-# a flow layout below the board — a real drag originates from
-# whichever card the human picked up. Python doesn't track per-
-# card screen positions; we use a single fixed point near the
-# center of the hand area as the synthetic origin. Good enough
-# for "you see a drag starting from the hand region."
-HAND_ORIGIN_X = 300
-HAND_ORIGIN_Y = BOARD_MAX_HEIGHT + 100
-
-DEFAULT_DURATION_MS = 300
 DEFAULT_SAMPLES = 12
 
+# Drag velocity. Placeholder — Steve will measure real human
+# velocity soon. Exaggerated slowness is acceptable for now.
+DRAG_MS_PER_PIXEL = 80
 
-def synthesize(start, end, *, duration_ms=DEFAULT_DURATION_MS,
-               samples=DEFAULT_SAMPLES):
+
+def _distance(start, end):
+    dx = end[0] - start[0]
+    dy = end[1] - start[1]
+    return (dx * dx + dy * dy) ** 0.5
+
+
+def synthesize(start, end, *, samples=DEFAULT_SAMPLES):
     """Build a gesture_metadata envelope with a straight-line
     path from `start` to `end`. `start` and `end` are `(x, y)`
-    tuples in CSS pixel coordinates. `duration_ms` controls the
-    total drag time; `samples` is the number of intermediate
-    points (including endpoints)."""
+    tuples in VIEWPORT pixel coordinates. Duration is proportional
+    to distance at `DRAG_MS_PER_PIXEL` — the drag takes longer
+    the farther it goes, matching human drag pacing."""
+    duration_ms = max(100, _distance(start, end) * DRAG_MS_PER_PIXEL)
     t0_ms = time.time() * 1000
     if samples < 2:
         samples = 2
-    # x/y are stored as ints in the Elm decoder (pixel
-    # coordinates). Round per-sample so the Elm side can decode
-    # the path without falling back to "no animation available."
+    # x/y are stored as ints in the Elm decoder. Round per-sample.
     path = []
     for i in range(samples):
         frac = i / (samples - 1)
@@ -72,39 +82,44 @@ def synthesize(start, end, *, duration_ms=DEFAULT_DURATION_MS,
     }
 
 
-def drag_endpoints(prim, board_before):
-    """Compute the (start, end) pixel coords for a primitive's
-    drag, given the board state BEFORE the primitive applies.
+def _stack_viewport_rect(stack):
+    """Translate a board stack's internal loc into viewport
+    coords using the pinned board offset."""
+    return (
+        BOARD_VIEWPORT_LEFT + stack["loc"]["left"],
+        BOARD_VIEWPORT_TOP + stack["loc"]["top"],
+    )
 
-    Returns None for primitives that don't involve a drag
-    (complete_turn, undo)."""
+
+def drag_endpoints(prim, board_before):
+    """Compute `(start, end)` viewport coords for a primitive's
+    drag, or None if Python can't honestly supply them.
+
+    Hand-origin actions (merge_hand, place_hand) return None:
+    Python doesn't know where hand cards sit in the viewport.
+    Elm synthesizes those at replay time from its own DOM
+    knowledge. Don't speculate here.
+
+    Intra-board actions have pinned endpoints on both sides,
+    so Python can emit a faithful path in shared viewport
+    coords.
+    """
     kind = prim["action"]
-    if kind == "merge_hand":
-        target = board_before[prim["target_stack"]]
-        loc = target["loc"]
-        target_size = len(target["board_cards"])
-        # The hand card is dragged from the hand zone to the
-        # target's merge edge. Right-side: dropped at the right
-        # edge of the target. Left-side: at the left edge.
-        if prim.get("side", "right") == "right":
-            end_x = loc["left"] + target_size * CARD_PITCH
-        else:
-            end_x = loc["left"]
-        end_y = loc["top"] + CARD_HEIGHT // 2
-        return (HAND_ORIGIN_X, HAND_ORIGIN_Y), (end_x, end_y)
 
     if kind == "move_stack":
         src = board_before[prim["stack_index"]]
         new_loc = prim["new_loc"]
         size = len(src["board_cards"])
-        # Drag is from the stack's center to the new loc's center.
-        start = (src["loc"]["left"] + size * CARD_PITCH // 2,
-                 src["loc"]["top"] + CARD_HEIGHT // 2)
-        end = (new_loc["left"] + size * CARD_PITCH // 2,
-               new_loc["top"] + CARD_HEIGHT // 2)
+        src_left, src_top = _stack_viewport_rect(src)
+        start = (src_left + size * CARD_PITCH // 2,
+                 src_top + CARD_HEIGHT // 2)
+        end_left = BOARD_VIEWPORT_LEFT + new_loc["left"]
+        end_top = BOARD_VIEWPORT_TOP + new_loc["top"]
+        end = (end_left + size * CARD_PITCH // 2,
+               end_top + CARD_HEIGHT // 2)
         return start, end
 
-    # Other primitive kinds: add endpoints as subsequent tricks
-    # need them (split, merge_stack, place_hand). For now return
-    # None — the caller falls back to no gesture_metadata.
+    # merge_hand / place_hand: hand origin unknowable to Python.
+    # split / merge_stack: intra-board but we don't yet need paths
+    # for them; add as downstream tricks surface the need.
     return None
