@@ -24,7 +24,7 @@ Responsibilities:
     one-liner inline there. Wing hover updates are also inline.
   - **End drag** — `handleMouseUp` resolves the gesture into
     a `Maybe WireAction` via `resolveGesture`, clears the drag
-    state, applies the action through `Main.Apply.applyWireAction`,
+    state, applies the action through `Main.Apply.applyAction`,
     appends to `actionLog`, and fires `Main.Wire.sendAction` for
     persistence.
   - **Styling hooks** — `handCardAttrs` produces the per-hand-card
@@ -190,7 +190,7 @@ fetchBoardRect =
 
 {-| Handle MouseUp. Extracts the WireAction (if any) from the
 current drag, clears the drag state, applies the action through
-`Main.Apply.applyWireAction` (the single source-agnostic update
+`Main.Apply.applyAction` (the single source-agnostic update
 path), appends to actionLog, and fires `sendAction` for
 persistence. If no sessionId is set (offline mode) the
 persistence step is skipped.
@@ -224,7 +224,7 @@ handleMouseUp releasePoint tMs model =
                 modelAfterAction =
                     case maybeAction of
                         Just action ->
-                            Apply.applyWireAction action modelAfterDragClear
+                            Apply.applyAction action modelAfterDragClear
 
                         Nothing ->
                             modelAfterDragClear
@@ -256,7 +256,7 @@ handleMouseUp releasePoint tMs model =
 
 {-| Resolve a completed drag gesture into the WireAction (if
 any) it produces. Pure — no state mutation. The actual model
-update flows through `Main.Apply.applyWireAction`, same path as
+update flows through `Main.Apply.applyAction`, same path as
 replay and (eventually) wire-received actions.
 
 Click precedence over drag mirrors the TS engine's

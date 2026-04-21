@@ -1,13 +1,13 @@
 module Main.Apply exposing
-    ( applyChange
-    , applyWireAction
+    ( applyAction
+    , applyChange
     , findHandCard
     , refereeBounds
     )
 
 {-| The pure state-transition layer of the Elm client.
-`applyWireAction` is the single entry point for applying a
-validated WireAction to the Model — same function whether the
+`applyAction` is the single entry point for applying a
+validated action to the Model — same function whether the
 input came from a local gesture, a replay tick, or a wire
 broadcast. "Capture the input, update the data structure,
 re-draw the view."
@@ -69,8 +69,8 @@ Branch behaviour summary:
   - `Undo` — no-op (deferred; V1 has no Undo button).
 
 -}
-applyWireAction : WireAction -> Model -> Model
-applyWireAction action model =
+applyAction : WireAction -> Model -> Model
+applyAction action model =
     case action of
         WA.Split { stackIndex, cardIndex } ->
             let

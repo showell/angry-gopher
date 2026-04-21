@@ -53,7 +53,7 @@ import LynRummy.Dealer
 {-| The full client state. Field groups:
 
   - **Game-state fields** — shape of `LynRummy.Game.GameState`,
-    threaded through `Main.Apply.applyWireAction` and
+    threaded through `Main.Apply.applyAction` and
     `Game.applyCompleteTurn`. Changes here reflect real game
     progression.
   - **UI-layer fields** — drag state, popup, status, score
@@ -229,7 +229,7 @@ type alias Flags =
 
 {-| Authoritative game-state snapshot as the server computes it.
 Elm pulls this once on session bootstrap; after that, all state
-updates flow through `Main.Apply.applyWireAction` /
+updates flow through `Main.Apply.applyAction` /
 `Game.applyCompleteTurn`. Shape carries every field required to
 reconstitute the autonomous game.
 -}

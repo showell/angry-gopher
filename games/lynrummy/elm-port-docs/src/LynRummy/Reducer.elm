@@ -1,4 +1,4 @@
-module LynRummy.Replay exposing
+module LynRummy.Reducer exposing
     ( State
     , applyAction
     , initialState

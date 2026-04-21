@@ -103,7 +103,7 @@ must handle `Nothing`.
 - `Json.Decode` — pointDecoder.
 - `LynRummy.Card`, `CardStack`, `GestureArbitration`, `Hand`,
   `WingOracle`, `WireAction` — domain.
-- `Main.Apply` — applyWireAction in handleMouseUp.
+- `Main.Apply` — applyAction in handleMouseUp.
 - `Main.Msg` — Msg constructors.
 - `Main.State` — Model, DragState, DragInfo, activeHand,
   boardDomId.

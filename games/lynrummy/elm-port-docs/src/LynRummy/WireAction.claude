@@ -55,7 +55,7 @@ identity** (Card, not HandCard — wire doesn't carry state).
 - Consumers: `Main/Apply.elm` (outbound on player actions
   via `Main/Wire.elm`), server route
   `POST /gopher/lynrummy-elm/actions` (persists raw JSON
-  into `lynrummy_elm_actions`), `Replay.applyAction`
+  into `lynrummy_elm_actions`), `Reducer.applyAction`
   (folds the log to state).
 - Go counterpart: `games/lynrummy/wire_action.go` +
   `wire_action.claude`. Same shape. Cross-language

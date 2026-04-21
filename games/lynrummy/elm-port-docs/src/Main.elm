@@ -31,7 +31,7 @@ import LynRummy.Score as Score
 import LynRummy.Tricks.Hint as Hint
 import LynRummy.WingOracle as WingOracle exposing (WingId)
 import LynRummy.WireAction as WA exposing (WireAction)
-import Main.Apply as Apply exposing (applyChange, applyWireAction, findHandCard, refereeBounds)
+import Main.Apply as Apply exposing (applyAction, applyChange, findHandCard, refereeBounds)
 import Main.Gesture as Gesture
     exposing
         ( clearDrag
@@ -220,7 +220,7 @@ update msg model =
                         Nothing ->
                             -- Offline mode: no persistence, just commit the transition.
                             ( { model | actionLog = model.actionLog ++ [ WA.CompleteTurn ] }
-                                |> applyWireAction WA.CompleteTurn
+                                |> applyAction WA.CompleteTurn
                             , Cmd.none
                             )
 
@@ -228,7 +228,7 @@ update msg model =
             -- The server is the referee; its OK is a green light
             -- saying "the board is clean, the turn is valid." On
             -- OK we apply the FULL transition autonomously via
-            -- applyWireAction → Game.applyCompleteTurn, using the
+            -- applyAction → Game.applyCompleteTurn, using the
             -- client's own deck + score logic. On Err the
             -- transition is skipped and the player fixes the
             -- board. The popup is cosmetic and doesn't gate any
@@ -256,7 +256,7 @@ update msg model =
 
                         newModel =
                             { model | status = statusMsg, popup = popupBody }
-                                |> applyWireAction WA.CompleteTurn
+                                |> applyAction WA.CompleteTurn
 
                         postDeckSize =
                             List.length newModel.deck
@@ -527,7 +527,7 @@ update msg model =
                             -- immediately and beat.
                             let
                                 modelAfter =
-                                    applyWireAction ctx.action model
+                                    applyAction ctx.action model
                             in
                             ( { modelAfter
                                 | replayAnim = Beating { untilMs = nowMs + beatAfter ctx.action }
@@ -548,7 +548,7 @@ update msg model =
                             Debug.log "HandCardRectReceived err" err
 
                         modelAfter =
-                            applyWireAction ctx.action model
+                            applyAction ctx.action model
                     in
                     ( { modelAfter
                         | replayAnim = Beating { untilMs = 1000 }
@@ -611,7 +611,7 @@ update msg model =
 -- clearDrag is in Main.Gesture.
 
 
--- applyWireAction and helpers now live in Main.Apply.
+-- applyAction and helpers now live in Main.Apply.
 
 
 -- REPLAY ANIMATION
@@ -673,7 +673,7 @@ replayFrame nowMs model =
                         if elapsed >= duration then
                             let
                                 modelAfter =
-                                    applyWireAction anim.pendingAction { model | drag = NotDragging }
+                                    applyAction anim.pendingAction { model | drag = NotDragging }
                             in
                             ( { modelAfter
                                 | replayAnim = Beating { untilMs = nowMs + 1000 }
@@ -789,7 +789,7 @@ prepareReplayStep action maybePath model nowMs =
         applyImmediate =
             let
                 modelAfter =
-                    applyWireAction action model
+                    applyAction action model
             in
             ( { modelAfter
                 | replayAnim = Beating { untilMs = nowMs + beatAfter action }

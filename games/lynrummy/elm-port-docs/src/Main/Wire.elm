@@ -65,7 +65,7 @@ fetchNewSession =
 {-| Fetch the authoritative game state for a session. Called
 once on session bootstrap (new session OR resume via URL hash)
 to hydrate the client's Model. After that, all state changes
-flow through `Main.Apply.applyWireAction` — this endpoint is
+flow through `Main.Apply.applyAction` — this endpoint is
 not consulted again during play.
 -}
 fetchRemoteState : Int -> Cmd Msg

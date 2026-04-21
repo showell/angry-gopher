@@ -1,6 +1,6 @@
-module LynRummy.ReplayTest exposing (suite)
+module LynRummy.ReducerTest exposing (suite)
 
-{-| Tests for `LynRummy.Replay.applyAction`. Each action type
+{-| Tests for `LynRummy.Reducer.applyAction`. Each action type
 gets a transition test; a longer test sequences several actions
 and checks end-state. CompleteTurn / Undo verify they are
 no-ops here (turn-logic handled elsewhere).
@@ -11,23 +11,23 @@ import LynRummy.BoardActions exposing (Side(..))
 import LynRummy.Card exposing (Card, CardValue(..), OriginDeck(..), Suit(..))
 import LynRummy.CardStack exposing (CardStack, HandCardState(..))
 import LynRummy.Hand as Hand
-import LynRummy.Replay as Replay
+import LynRummy.Reducer as Reducer
 import LynRummy.WireAction exposing (WireAction(..))
 import Test exposing (Test, describe, test)
 
 
 suite : Test
 suite =
-    describe "Replay.applyAction"
+    describe "Reducer.applyAction"
         [ describe "Split"
             [ test "splits stack 0 (KS,AS,2S,3S) at index 2 → two stacks replace one" <|
                 \_ ->
                     let
                         before =
-                            Replay.initialState
+                            Reducer.initialState
 
                         after =
-                            Replay.applyAction
+                            Reducer.applyAction
                                 (Split { stackIndex = 0, cardIndex = 2 })
                                 before
                     in
@@ -42,9 +42,9 @@ suite =
                             { top = 300, left = 400 }
 
                         after =
-                            Replay.applyAction
+                            Reducer.applyAction
                                 (MoveStack { stackIndex = 0, newLoc = newLoc })
-                                Replay.initialState
+                                Reducer.initialState
 
                         movedLoc =
                             after.board
@@ -67,13 +67,13 @@ suite =
                 \_ ->
                     let
                         before =
-                            Replay.initialState
+                            Reducer.initialState
 
                         card7H =
                             { value = Seven, suit = Heart, originDeck = DeckTwo }
 
                         after =
-                            Replay.applyAction
+                            Reducer.applyAction
                                 (PlaceHand { handCard = card7H, loc = { top = 400, left = 500 } })
                                 before
                     in
@@ -88,14 +88,14 @@ suite =
                 \_ ->
                     let
                         before =
-                            Replay.initialState
+                            Reducer.initialState
 
                         -- Stack index 3 in the opening board is "7S,7D,7C"
                         card7H =
                             { value = Seven, suit = Heart, originDeck = DeckTwo }
 
                         after =
-                            Replay.applyAction
+                            Reducer.applyAction
                                 (MergeHand
                                     { handCard = card7H
                                     , targetStack = 3
@@ -113,56 +113,56 @@ suite =
         , describe "no-ops for turn-logic actions (not modeled in Replay)"
             [ test "CompleteTurn is a no-op" <|
                 \_ ->
-                    Replay.applyAction CompleteTurn Replay.initialState
-                        |> Expect.equal Replay.initialState
+                    Reducer.applyAction CompleteTurn Reducer.initialState
+                        |> Expect.equal Reducer.initialState
             , test "Undo is a no-op (snapshots come later)" <|
                 \_ ->
-                    Replay.applyAction Undo Replay.initialState
-                        |> Expect.equal Replay.initialState
+                    Reducer.applyAction Undo Reducer.initialState
+                        |> Expect.equal Reducer.initialState
             ]
         , describe "silent pass-through on invalid references"
             [ test "Split on nonexistent stack index is a no-op" <|
                 \_ ->
-                    Replay.applyAction
+                    Reducer.applyAction
                         (Split { stackIndex = 99, cardIndex = 0 })
-                        Replay.initialState
-                        |> Expect.equal Replay.initialState
+                        Reducer.initialState
+                        |> Expect.equal Reducer.initialState
             , test "MoveStack on nonexistent stack index is a no-op" <|
                 \_ ->
-                    Replay.applyAction
+                    Reducer.applyAction
                         (MoveStack { stackIndex = 99, newLoc = { top = 10, left = 10 } })
-                        Replay.initialState
-                        |> Expect.equal Replay.initialState
+                        Reducer.initialState
+                        |> Expect.equal Reducer.initialState
             , test "MergeHand with a card not in hand is a no-op" <|
                 \_ ->
                     let
                         notInHand =
                             { value = Ace, suit = Spade, originDeck = DeckTwo }
                     in
-                    Replay.applyAction
+                    Reducer.applyAction
                         (MergeHand
                             { handCard = notInHand
                             , targetStack = 3
                             , side = Right
                             }
                         )
-                        Replay.initialState
-                        |> Expect.equal Replay.initialState
+                        Reducer.initialState
+                        |> Expect.equal Reducer.initialState
             ]
         , describe "sequenced actions"
             [ test "split then move applies in order" <|
                 \_ ->
                     let
                         start =
-                            Replay.initialState
+                            Reducer.initialState
 
                         step1 =
-                            Replay.applyAction
+                            Reducer.applyAction
                                 (Split { stackIndex = 0, cardIndex = 2 })
                                 start
 
                         step2 =
-                            Replay.applyAction
+                            Reducer.applyAction
                                 (MoveStack
                                     { stackIndex = 0
                                     , newLoc = { top = 500, left = 400 }

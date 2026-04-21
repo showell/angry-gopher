@@ -31,8 +31,8 @@ Starting points, organized by layer:
   unified Msg type).
 - **Integration.** `src/LynRummy/Referee.claude` (Elm's own
   referee — does NOT rely on the Go referee).
-- **Execution.** `src/Main/Apply.claude` (applyWireAction),
-  `src/LynRummy/Replay.claude` (the pure action-log
+- **Execution.** `src/Main/Apply.claude` (applyAction),
+  `src/LynRummy/Reducer.claude` (the pure action-log
   reducer), `src/LynRummy/Game.claude` (turn transitions).
 - **Render.** `src/Main/View.claude` (top-level composition
   + pinned layout), `src/LynRummy/View.claude` (rendering

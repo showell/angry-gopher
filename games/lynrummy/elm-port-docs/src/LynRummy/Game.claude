@@ -104,7 +104,7 @@ order:
   is valid.
 - **No wire concerns.** Hand-card-release counting is explicit
   via `noteCardsPlayed`; callers integrate it into their
-  applyWireAction dispatch.
+  applyAction dispatch.
 
 ## Tests (`tests/LynRummy/GameTest.elm`)
 
@@ -127,4 +127,4 @@ order:
   `removeStack`).
 - Host: `Main.elm` embeds the `GameState` fields into
   `Main.Model` and calls `Game.applyCompleteTurn` from
-  `applyWireAction WA.CompleteTurn`.
+  `applyAction WA.CompleteTurn`.

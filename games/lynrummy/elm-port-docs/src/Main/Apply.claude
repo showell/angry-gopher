@@ -1,9 +1,18 @@
 # Main/Apply.elm — EARLY
 
 The pure state-transition layer of the Elm client. Owns
-`applyWireAction` — the single entry point for applying a
-validated WireAction to the Model — plus the merge helpers and
+`applyAction` — the single entry point for applying a
+validated action to the Model — plus the merge helpers and
 the `refereeBounds` constant.
+
+## Name audit (2026-04-21)
+
+Previously named `applyWireAction`; the "Wire" prefix was
+leaking a serialization concern. The function doesn't care
+where the action came from; it just applies it. Renamed to
+`applyAction` so the Model-level applier and the pure
+`Reducer.applyAction` now share a shape (both dispatch on
+`WireAction`, both disambiguated by their module qualifier).
 
 ## Status
 
@@ -17,7 +26,7 @@ the `refereeBounds` constant.
 
 ## Public API
 
-- `applyWireAction : WireAction -> Model -> Model` —
+- `applyAction : WireAction -> Model -> Model` —
   deterministic dispatch on action kind, seven branches (one
   per WireAction constructor). Wire is primitives-only;
   `TrickResult` was ripped 2026-04-20 and `PlayTrick`
@@ -25,7 +34,7 @@ the `refereeBounds` constant.
 - `applyChange : BoardActions.BoardChange -> List CardStack -> List CardStack`
   — remove-then-append primitive used by the merge helpers
   internally. Exposed because Gesture / View code occasionally
-  simulates board changes without going through applyWireAction.
+  simulates board changes without going through applyAction.
 - `findHandCard : Card -> Hand -> Maybe HandCard` — first-match
   lookup by Card identity (value + suit + origin_deck).
   Exposed because the merge helpers need a `Nothing` signal
@@ -37,7 +46,7 @@ the `refereeBounds` constant.
   client-side geometry validation. Matches the server's
   constant at `views/lynrummy_elm.go`.
 
-## applyWireAction branch-by-branch
+## applyAction branch-by-branch
 
 | Branch | Effect |
 |---|---|
@@ -61,7 +70,7 @@ before we added the true-initial-state replay baseline. Still
 useful as defense against any other path where a hand isn't
 fully tracked.
 
-## Invariants preserved by applyWireAction
+## Invariants preserved by applyAction
 
 - `score` stays `Score.forStacks board` after any board
   change.

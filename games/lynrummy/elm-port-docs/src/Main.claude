@@ -28,7 +28,7 @@ Model fields:
 
 Per the "one log, source-agnostic" invariant: every validated
 WireAction — local gesture, replay tick, or (future) wire
-receive — flows through `applyWireAction` before anything else
+receive — flows through `applyAction` before anything else
 touches the Model. "Capture the input, update the data
 structure, re-draw the view."
 
@@ -36,7 +36,7 @@ structure, re-draw the view."
 
 - `MouseDown*`, `MouseMove`, `MouseUp` — pointer gesture
   machinery. MouseUp resolves to an optional WireAction and
-  runs it through `applyWireAction`.
+  runs it through `applyAction`.
 - `WingEntered` / `WingLeft` — hover state on drop targets.
 - `ClickCompleteTurn` — sends CompleteTurn to server (for
   persistence + referee check). On Ok response, the transition
@@ -52,7 +52,7 @@ structure, re-draw the view."
   `ActionLogFetched`, `CompleteTurnResponded`, `PopupOk` —
   server round-trip handlers. `StateRefreshed` is the bootstrap
   hydration path on session resume; otherwise state flows from
-  applyWireAction alone.
+  applyAction alone.
 
 ## Subscriptions
 

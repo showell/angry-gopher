@@ -1,17 +1,23 @@
-# Replay.elm — WORKHORSE (pure action folder)
+# Reducer.elm — WORKHORSE (pure action reducer)
 
-Pure primitive for replaying an action log. Given a
-`WireAction` and a `(board, hand)` state, produce the next
-state. The UI's replay walker calls `applyAction` once per
-step.
+Renamed from `Replay.elm` 2026-04-21 because the name was
+misleading: this module is the shared pure reducer used by
+both live play AND replay, not a replay-specific thing.
+
+Given a `WireAction` and a `(board, hand)` state, produce the
+next state. That's it. Nothing UI-layer here.
 
 ## Status
 
 - **Label:** WORKHORSE. Small, pure, stable.
 - **Role in one-action-log invariant:** `applyAction` is the
   canonical fold over the Elm-side action log. Replay, undo
-  (future), and instant-replay UI all walk the same log
-  through this one reducer.
+  (future), and live-play walkers all advance state through
+  this one reducer.
+- **Known tech debt:** `Main.Apply.applyAction` (UI-model
+  level) re-implements much of this. Candidate for a DRY pass
+  — the Model-level applier could delegate the state-transition
+  half to this module. Not done today; out of cleanup scope.
 
 ## Key exports
 
@@ -86,6 +92,6 @@ duplication grows.
 
 - Depends on: `WireAction`, `BoardActions`, `CardStack`,
   `Hand`, `GestureArbitration`, `Dealer`, `Card`.
-- Consumer: `Main/Apply.applyWireAction` (wraps this with
+- Consumer: `Main/Apply.applyAction` (wraps this with
   Msg plumbing), `Main/State.replayBaseline` logic.
-- Tests: `tests/LynRummy/ReplayTest.elm`.
+- Tests: `tests/LynRummy.ReducerTest.elm`.
