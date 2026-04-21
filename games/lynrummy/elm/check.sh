@@ -11,6 +11,19 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 
+# Resolve the elm binary once. Calling `npx --yes elm ...` in
+# a 30-iteration loop used to dominate this script (≈1.28s of
+# npx bootstrap per call, ≈37s of pure overhead). Direct
+# invocation of the cached binary is ≈0.05s per call.
+ELM_BIN="$(npx --yes which elm 2>/dev/null || true)"
+if [ -z "${ELM_BIN:-}" ]; then
+  ELM_BIN="$(find ~/.npm/_npx -name elm -type f -path '*/bin/elm' 2>/dev/null | head -1)"
+fi
+if [ -z "${ELM_BIN:-}" ] || [ ! -x "$ELM_BIN" ]; then
+  echo "Could not locate an elm binary via npx or ~/.npm/_npx." >&2
+  exit 1
+fi
+
 LYNRUMMY=(
   "src/LynRummy/Random.elm"
   "src/LynRummy/Card.elm"
@@ -45,19 +58,13 @@ LYNRUMMY=(
 
 for m in "${LYNRUMMY[@]}"; do
   echo "==> Type-checking $m standalone"
-  npx --yes elm make "$m" --output=/dev/null >/dev/null
+  "$ELM_BIN" make "$m" --output=/dev/null >/dev/null
 done
 
 echo "==> Building Main"
-npx --yes elm make src/Main.elm --output=elm.js >/dev/null
+"$ELM_BIN" make src/Main.elm --output=elm.js >/dev/null
 
 echo "==> Running LynRummy tests"
-# elm-test can't auto-discover elm when installed via npx; pass
-# the compiler path explicitly.
-ELM_BIN="$(npx --yes which elm 2>/dev/null || true)"
-if [ -z "${ELM_BIN:-}" ]; then
-  ELM_BIN="$(find ~/.npm/_npx -name elm -type f -path '*/bin/elm' 2>/dev/null | head -1)"
-fi
 npx --yes elm-test --compiler "$ELM_BIN" >/dev/null
 
 echo "All LynRummy modules compile and tests pass."
