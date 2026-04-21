@@ -44,9 +44,12 @@ VIEWPORT = {
 
 DEFAULT_SAMPLES = 12
 
-# Drag velocity. Placeholder — Steve will measure real human
-# velocity soon. Exaggerated slowness is acceptable for now.
-DRAG_MS_PER_PIXEL = 80
+# Drag velocity, ms per pixel. Tuned by feel 2026-04-21 (from
+# 80 → 15 → 5). 5 reads well when watching an agent game
+# replay — the perceived pace is the target, not a measurement
+# of real human mouse speed. Kept in sync with Elm's
+# `dragMsPerPixel` in `Main/Replay/Space.elm`.
+DRAG_MS_PER_PIXEL = 5
 
 
 def _distance(start, end):

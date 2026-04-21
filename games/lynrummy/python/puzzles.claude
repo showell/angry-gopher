@@ -9,12 +9,11 @@ Source stacks are ≥4 (end-peel) or ≥7 (middle-peel); kick-home
 stacks for rb_swap are ≥3 and of a valid type.
 
 Helpers: `card`, `hand_card`, `board_card`, `stack`, `hand`,
-`base_state`. Adopted by `test_hints_invariant.py` (legacy) and
-the puzzle-harness CLI.
+`base_state`. Consumed by the puzzle-harness CLI.
 
 ## Pointers
 
-- Consumers: `puzzle_harness.py`, `test_hints_invariant.py`.
+- Consumer: `puzzle_harness.py`.
 - DSL fixtures live in `games/lynrummy/conformance/scenarios/*.dsl`;
   that path is the canonical cross-language source. `puzzles.py`
   is kept for ad-hoc Python-only development — not authoritative.

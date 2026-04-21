@@ -50,5 +50,7 @@ put speculative coordinates on the wire.
   where both ends are" side. Add `split`, `merge_stack` when
   those primitives start flowing through replay-visible
   actions.
-- `DRAG_MS_PER_PIXEL = 80` is a placeholder. Steve plans to
-  measure actual human drag velocity and replace.
+- `DRAG_MS_PER_PIXEL = 5` is a settled value, not a pending
+  measurement — perceived replay pace reads well at this
+  setting (Steve, 2026-04-21). Kept in sync with Elm's
+  `dragMsPerPixel`.

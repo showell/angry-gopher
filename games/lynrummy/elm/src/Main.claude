@@ -114,5 +114,3 @@ incident that motivated it.
   (sync, board-frame endpoints). Still to wire: `MergeStack`,
   `Split` — both use `Space.pointInLiveViewport` /
   `stackEdgeInLiveViewport` for board-frame endpoints.
-- `dragMsPerPixel` is currently 5 (tuned by feel 2026-04-21).
-  Candidate for measuring against real human drag velocity.

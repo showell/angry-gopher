@@ -10,18 +10,18 @@ server for later witness.
 
 ## Before reading the Python code
 
-Start with
-[`../../games/lynrummy/ARCHITECTURE.md`](../../games/lynrummy/ARCHITECTURE.md)
-— the system-wide LynRummy architecture document. The
-sections on **each actor owns its own view**, **constraints
-must be real not artificial** (the "Python has no DOM but
-KNOWS geometry" point), and the **two coordinate frames**
-(board frame vs. viewport) are directly load-bearing for why
-this subtree is shaped the way it is.
+Start with [`../ARCHITECTURE.md`](../ARCHITECTURE.md) — the
+system-wide Lyn Rummy architecture document. The sections on
+**each actor owns its own view**, **constraints must be real
+not artificial** (the "Python has no DOM but KNOWS geometry"
+point), and the **two coordinate frames** (board frame
+vs. viewport) are directly load-bearing for why this subtree
+is shaped the way it is.
 
 ## Then — read sidecars
 
-Every `.py` file here has a sibling `.claude` sidecar.
+Every `.py` file here has a sibling `.claude` sidecar (tests
+excluded — `sidecar_audit` skips `test_*.py` by convention).
 Ordered by "load-bearing first":
 
 - `hints.claude` — per-trick emitters + the hint
@@ -45,7 +45,8 @@ Ordered by "load-bearing first":
   `cmd/fixturegen`.
 - `telemetry.claude` — the read-side of the DB's gesture
   capture. Analysis, not gameplay.
-- `sidecar_audit.claude` — tooling (repo-wide coverage check).
+- Repo-wide tooling at `../../../tools/sidecar_audit.{claude,py}`
+  — drift + coverage check across all sidecars.
 
 ## The DSL conformance bridge
 

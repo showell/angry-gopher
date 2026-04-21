@@ -56,8 +56,9 @@ frame); Space has no dependency on Time.
 
 ### Path + interpolation
 
-- `dragMsPerPixel : Float` — human-drag velocity (5ms/px as of
-  2026-04-21). Tuned by feel.
+- `dragMsPerPixel : Float` — 5 ms/px, settled by feel for
+  perceived replay pace. Kept in sync with Python's
+  `DRAG_MS_PER_PIXEL`.
 - `linearPath : Point -> Point -> Float -> List GesturePoint` —
   12-sample straight line at `dragMsPerPixel`.
 - `pathDuration : List GesturePoint -> Float` — last.tMs −

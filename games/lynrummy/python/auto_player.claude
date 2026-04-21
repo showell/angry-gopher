@@ -32,6 +32,10 @@ are per-turn bonuses (see
 
 ## TODO
 
-- Python primitives emit no `gesture_metadata`, so agent moves
-  teleport in Instant Replay. Phase 3 synthesis (linear drag
-  from avg velocity) not started.
+- Synthesis covers `move_stack` today via `gesture_synth`;
+  hand-origin primitives (`merge_hand`, `place_hand`) and
+  `split` / `merge_stack` still teleport in replay because
+  `drag_endpoints` honestly returns None when Python doesn't
+  know both endpoints. Elm's async DOM-measurement pipeline
+  covers hand-origin synthesis at replay time; intra-board
+  ones are a candidate for widening `gesture_synth`.

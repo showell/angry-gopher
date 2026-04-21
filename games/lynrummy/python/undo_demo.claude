@@ -7,14 +7,15 @@ Small demonstration that exercises the undo feature: make a
 move, snapshot state, undo, snapshot state again, confirm
 the second snapshot matches the pre-move baseline.
 
-## Status (TENTATIVE)
+## Status
 
-Haven't re-verified post-refactor + client-autonomy + action-
-envelope changes from 2026-04-19. The server-side undo is
-log-preprocessed (the action stays in the persisted log for
-audit; replay skips it + its target), and that mechanism is
-currently stable — but the demo script's POST shape may need
-the envelope update.
+Verified working end-to-end 2026-04-21 against the live
+prod server: merge_hand → split → undo → undo → baseline
+restored; action log retains all 4 entries (audit trail
+intact). The server-side undo is log-preprocessed — the
+action stays in the persisted log, but replay skips it +
+its target — and the demo uses the current envelope shape
+via `client.send_undo`.
 
 ## Usage
 

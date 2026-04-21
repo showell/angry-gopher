@@ -252,9 +252,12 @@ stackEdgeInLiveViewport model stack side =
 -- PATH + INTERPOLATION
 
 
-{-| Drag duration scales with distance at roughly human
-velocity. 5ms/px as of 2026-04-21 afternoon (from 80 → 15
-→ 5). Real human drag speed per Steve's feel.
+{-| Drag duration scales with distance at 5 ms/px (tuned by
+feel 2026-04-21, from 80 → 15 → 5). Target is perceived
+replay pace when watching an agent game, not a measurement
+of real human mouse speed. Kept in sync with Python's
+`DRAG_MS_PER_PIXEL` in `games/lynrummy/python/gesture_synth.py`
+so captured and synthesized paths replay at the same pace.
 -}
 dragMsPerPixel : Float
 dragMsPerPixel =
