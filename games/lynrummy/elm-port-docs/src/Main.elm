@@ -452,6 +452,126 @@ update msg model =
                     in
                     ( model, Cmd.none )
 
+        HandCardRectReceived result ->
+            case ( model.replayAnim, result ) of
+                ( AwaitingHandRect ctx, Ok ( element, posix ) ) ->
+                    let
+                        nowMs =
+                            toFloat (Time.posixToMillis posix)
+
+                        originX =
+                            round
+                                (element.element.x
+                                    - element.viewport.x
+                                    + element.element.width
+                                    / 2
+                                )
+
+                        originY =
+                            round
+                                (element.element.y
+                                    - element.viewport.y
+                                    + element.element.height
+                                    / 2
+                                )
+
+                        origin =
+                            { x = originX, y = originY }
+
+                        maybeTarget =
+                            case ctx.action of
+                                WA.MergeHand p ->
+                                    listAt p.targetStack model.board
+                                        |> Maybe.map
+                                            (\stack ->
+                                                stackEdgeInLiveViewport model stack (sideString p.side)
+                                            )
+
+                                WA.PlaceHand p ->
+                                    Just
+                                        { x = (model.replayBoardRect |> Maybe.map .x |> Maybe.withDefault BG.boardViewportLeft)
+                                            + p.loc.left
+                                        , y = (model.replayBoardRect |> Maybe.map .y |> Maybe.withDefault BG.boardViewportTop)
+                                            + p.loc.top
+                                            + BG.cardHeight
+                                            // 2
+                                        }
+
+                                _ ->
+                                    Nothing
+                    in
+                    case maybeTarget of
+                        Just target ->
+                            let
+                                anim =
+                                    { startMs = nowMs
+                                    , path = linearPath origin target nowMs
+                                    , source = ctx.source
+                                    , grabOffset = ctx.grabOffset
+                                    , pendingAction = ctx.action
+                                    }
+
+                                cursor =
+                                    interpPath anim.path 0
+                            in
+                            ( { model
+                                | replayAnim = Animating anim
+                                , drag = animatedDragState anim cursor
+                              }
+                            , Cmd.none
+                            )
+
+                        Nothing ->
+                            -- Target resolution failed; apply
+                            -- immediately and beat.
+                            let
+                                modelAfter =
+                                    applyWireAction ctx.action model
+                            in
+                            ( { modelAfter
+                                | replayAnim = Beating { untilMs = nowMs + beatAfter ctx.action }
+                                , drag = NotDragging
+                              }
+                            , Cmd.none
+                            )
+
+                ( AwaitingHandRect ctx, Err err ) ->
+                    -- Dev console only. Fall through to the pinned-
+                    -- math origin as a best-effort salvage.
+                    let
+                        _ =
+                            Debug.log "HandCardRectReceived err" err
+                    in
+                    case buildReplayAnimation ctx.action Nothing model 0 of
+                        Just anim ->
+                            let
+                                cursor =
+                                    interpPath anim.path 0
+                            in
+                            ( { model
+                                | replayAnim = Animating anim
+                                , drag = animatedDragState anim cursor
+                              }
+                            , Cmd.none
+                            )
+
+                        Nothing ->
+                            let
+                                modelAfter =
+                                    applyWireAction ctx.action model
+                            in
+                            ( { modelAfter
+                                | replayAnim = Beating { untilMs = 1000 }
+                                , drag = NotDragging
+                              }
+                            , Cmd.none
+                            )
+
+                _ ->
+                    -- Msg arrived outside AwaitingHandRect state —
+                    -- ignore.
+                    ( model, Cmd.none )
+
         ClickHint ->
             -- Client-autonomous hint: ask the local Hint.buildSuggestions
             -- composer for a ranked list of plays. Highlight the hand
@@ -550,31 +670,7 @@ replayFrame nowMs model =
                                 )
 
                             Just ( action, maybePath ) ->
-                                case buildReplayAnimation action maybePath model nowMs of
-                                    Just anim ->
-                                        let
-                                            cursor =
-                                                interpPath anim.path 0
-                                        in
-                                        ( { model
-                                            | replayAnim = Animating anim
-                                            , drag = animatedDragState anim cursor
-                                          }
-                                        , Cmd.none
-                                        )
-
-                                    Nothing ->
-                                        -- No animation available — apply immediately, beat.
-                                        let
-                                            modelAfter =
-                                                applyWireAction action model
-                                        in
-                                        ( { modelAfter
-                                            | replayAnim = Beating { untilMs = nowMs + beatAfter action }
-                                            , drag = NotDragging
-                                          }
-                                        , Cmd.none
-                                        )
+                                prepareReplayStep action maybePath model nowMs
 
                     Animating anim ->
                         let
@@ -616,6 +712,15 @@ replayFrame nowMs model =
                         else
                             ( model, Cmd.none )
 
+                    AwaitingHandRect _ ->
+                        -- Nothing to do on a replay frame while we
+                        -- wait for the DOM to report the hand card's
+                        -- live rect. The HandCardRectReceived Msg
+                        -- handler will transition us to Animating as
+                        -- soon as the Task completes — typically the
+                        -- very next frame.
+                        ( model, Cmd.none )
+
                     PreRoll { untilMs } ->
                         if untilMs == 0 then
                             -- Lazy-initialize the deadline on the
@@ -646,6 +751,122 @@ actionAndGestureAt step model =
 
         ( Just action, Nothing ) ->
             Just ( action, Nothing )
+
+        _ ->
+            Nothing
+
+
+{-| Transition from NotAnimating into the right next replay
+state, given an action and its captured gesture path (if any).
+
+Three cases:
+
+  - **Faithful path present.** Build Animating synchronously
+    and go.
+  - **Synthesis needed, hand origin required (MergeHand /
+    PlaceHand).** Fire a `Browser.Dom.getElement` Task for
+    the hand card's DOM id. Transition to AwaitingHandRect
+    carrying the action; the HandCardRectReceived handler
+    will complete the build when the rect arrives. This is
+    how the replay synthesizer gets pixel-accurate hand
+    origins without trusting the pinned layout math.
+  - **Synthesis needed, no hand origin (or action isn't
+    drag-backed).** Fall through to the old synchronous
+    path via `buildReplayAnimation`; if it can't produce an
+    animation, apply the action immediately and Beat.
+
+-}
+prepareReplayStep :
+    WireAction
+    -> Maybe (List State.GesturePoint)
+    -> Model
+    -> Float
+    -> ( Model, Cmd Msg )
+prepareReplayStep action maybePath model nowMs =
+    let
+        startAnimating anim =
+            let
+                cursor =
+                    interpPath anim.path 0
+            in
+            ( { model
+                | replayAnim = Animating anim
+                , drag = animatedDragState anim cursor
+              }
+            , Cmd.none
+            )
+
+        applyImmediate =
+            let
+                modelAfter =
+                    applyWireAction action model
+            in
+            ( { modelAfter
+                | replayAnim = Beating { untilMs = nowMs + beatAfter action }
+                , drag = NotDragging
+              }
+            , Cmd.none
+            )
+    in
+    case maybePath of
+        Just (p :: rest) ->
+            -- Faithful path — build synchronously.
+            case buildReplayAnimation action maybePath model nowMs of
+                Just anim ->
+                    startAnimating anim
+
+                Nothing ->
+                    applyImmediate
+
+        _ ->
+            -- Synthesis needed. For hand-origin actions we
+            -- DOM-measure the card's live rect; for anything
+            -- else the buildReplayAnimation path handles it.
+            case handCardForAction action of
+                Just handCard ->
+                    case dragSourceForAction action model of
+                        Nothing ->
+                            applyImmediate
+
+                        Just ( source, grabOffset ) ->
+                            ( { model
+                                | replayAnim =
+                                    AwaitingHandRect
+                                        { action = action
+                                        , source = source
+                                        , grabOffset = grabOffset
+                                        }
+                              }
+                            , Task.attempt HandCardRectReceived
+                                (Task.map2 Tuple.pair
+                                    (Browser.Dom.getElement
+                                        (HandLayout.handCardDomId handCard)
+                                    )
+                                    Time.now
+                                )
+                            )
+
+                Nothing ->
+                    case buildReplayAnimation action maybePath model nowMs of
+                        Just anim ->
+                            startAnimating anim
+
+                        Nothing ->
+                            applyImmediate
+
+
+{-| Extract the hand card referenced by a hand-origin wire
+action, for DOM-id lookup. Returns Nothing for actions that
+don't originate in the hand.
+-}
+handCardForAction : WireAction -> Maybe Card
+handCardForAction action =
+    case action of
+        WA.MergeHand p ->
+            Just p.handCard
+
+        WA.PlaceHand p ->
+            Just p.handCard
 
         _ ->
             Nothing

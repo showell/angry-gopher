@@ -1,5 +1,6 @@
 module LynRummy.HandLayout exposing
     ( cardCenterInViewport
+    , handCardDomId
     , handLeft
     , handTop
     , positionAt
@@ -22,7 +23,7 @@ drag from there to the pinned board target.
 -}
 
 import LynRummy.BoardGeometry as BG
-import LynRummy.Card as Card exposing (Card, Suit)
+import LynRummy.Card as Card exposing (Card, OriginDeck(..), Suit)
 import LynRummy.CardStack exposing (HandCard)
 
 
@@ -112,6 +113,28 @@ cardCenterInViewport card handCards =
 
         _ ->
             Nothing
+
+
+{-| Stable DOM id for a hand card. Used by the replay
+synthesizer to fetch the card's LIVE viewport rect via
+`Browser.Dom.getElement`. Deck is disambiguated in the id so
+the double-deck's two copies of (say) 7H each get a distinct
+DOM node.
+-}
+handCardDomId : Card -> String
+handCardDomId card =
+    "hand-card-v"
+        ++ String.fromInt (Card.cardValueToInt card.value)
+        ++ "-s"
+        ++ String.fromInt (Card.suitToInt card.suit)
+        ++ "-d"
+        ++ (case card.originDeck of
+                DeckOne ->
+                    "1"
+
+                DeckTwo ->
+                    "2"
+           )
 
 
 indexOf : Card -> List HandCard -> Maybe Int

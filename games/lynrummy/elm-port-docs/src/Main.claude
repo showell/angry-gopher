@@ -102,17 +102,36 @@ constants. Those constants are now the fallback path (with
 a Debug.log warning) for the race where synthesis fires
 before the task returns.
 
-The hand-origin side is NOT yet DOM-measured — it still uses
-the pinned `HandLayout.cardCenterInViewport`. That's the next
-slice (B2 / follow-on); see TODO below.
+### The live hand-card rect (B1-extension, 2026-04-21)
+
+Hand-origin actions (`MergeHand`, `PlaceHand`) need the
+drag's starting viewport position. Instead of trusting
+`HandLayout.cardCenterInViewport` (pinned math that drifted),
+the replay state machine now:
+
+1. In `NotAnimating`, when about to animate a hand-origin
+   action with no Faithful path, `prepareReplayStep` issues
+   a `Browser.Dom.getElement (HandLayout.handCardDomId card)`
+   task paired with `Time.now`. Transitions to
+   `AwaitingHandRect`.
+2. When `HandCardRectReceived Ok` arrives, the measured
+   origin + DOM-measured target combine into an Animating
+   animation starting at the piped-through nowMs.
+3. On error, Debug.log to dev console and salvage via the
+   pinned-math fallback.
+
+Hand cards carry a stable DOM id in `View.viewPlacedHandCard`
+built via `HandLayout.handCardDomId`, disambiguated by deck.
 
 **Verified in B1:** live MergeHand replay target lands on the
 DOM-measured board rect regardless of what content flows
 above the board.
 
-**Still in motion:** hand origin (pinned math may drift when
-hand contents reflow); other primitives (MoveStack, Split,
-MergeStack, PlaceHand) don't have synthesis wired yet.
+**Still in motion:**
+- Hand-origin DOM measurement is wired for `MergeHand` and
+  `PlaceHand`. Needs exercise with a fresh agent session.
+- Other primitives (`MoveStack`, `Split`, `MergeStack`) don't
+  have synthesis wired yet — they apply-immediately-and-beat.
 
 ## Pointers
 

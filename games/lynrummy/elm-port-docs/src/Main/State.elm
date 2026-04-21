@@ -147,6 +147,11 @@ type ReplayAnimation
         }
     | Beating { untilMs : Float }
     | PreRoll { untilMs : Float }
+    | AwaitingHandRect
+        { action : WireAction
+        , source : DragSource
+        , grabOffset : Point
+        }
 
 
 {-| Cheapest-possible popup for turn-boundary ceremony. One

@@ -40,6 +40,7 @@ type Msg
     | WingEntered WingId
     | WingLeft WingId
     | BoardRectReceived (Result Browser.Dom.Error Browser.Dom.Element)
+    | HandCardRectReceived (Result Browser.Dom.Error ( Browser.Dom.Element, Time.Posix ))
     | ActionSent (Result Http.Error ())
     | SessionReceived (Result Http.Error Int)
     | ClickCompleteTurn

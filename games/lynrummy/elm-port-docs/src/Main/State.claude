@@ -30,6 +30,16 @@ Types:
     offset of the 800×600 board div. Used by the replay
     synthesizer to translate board-frame coords into current
     viewport coords. Nothing outside replay.
+
+New `ReplayAnimation` variant (2026-04-21 B1 extension):
+
+- `AwaitingHandRect { action, source, grabOffset }` —
+  intermediate state while the replay synthesizer is waiting
+  on a `Browser.Dom.getElement` for a hand card's live
+  viewport rect. Transitions to `Animating` when the
+  `HandCardRectReceived` Msg arrives (or falls back on
+  error). No user-visible effect — the frame count is one
+  at most in practice.
 - `ReplayProgress` — `{ step, paused }`. Walker over
   `actionLog` ticks every 500ms; `step` is the index of the
   NEXT action to apply; `paused = True` halts ticks.

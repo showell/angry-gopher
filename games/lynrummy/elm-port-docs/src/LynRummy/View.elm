@@ -26,7 +26,7 @@ are composed in `Main.elm` using these pieces.
 -}
 
 import Html exposing (Html, div, text)
-import Html.Attributes exposing (style)
+import Html.Attributes exposing (id, style)
 import LynRummy.BoardGeometry as BG
 import LynRummy.Card as Card exposing (Card, CardColor(..), Suit)
 import LynRummy.CardStack as CardStack exposing (BoardCard, BoardCardState(..), CardStack, HandCard, HandCardState(..))
@@ -369,6 +369,11 @@ viewPlacedHandCard config slot =
             , style "left" (String.fromInt localLeft ++ "px")
             , style "cursor" "grab"
             , style "background-color" (handCardBgColor slot.handCard)
+            , -- Stable DOM id so the replay synthesizer can
+              -- fetch the card's LIVE viewport rect via
+              -- Browser.Dom.getElement, rather than trusting
+              -- pinned math.
+              id (HandLayout.handCardDomId slot.handCard.card)
             ]
     in
     viewPlayingCardWith

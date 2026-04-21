@@ -28,21 +28,25 @@ Club). Within a row, cards are sorted by value ascending.
 Horizontal pitch = `BoardGeometry.cardPitch`. Vertical pitch
 = `suitRowHeight` = `cardHeight + 12`.
 
-## Two functions, two audiences
+## Three functions, different audiences
 
 - `positionAt : { row, col } -> { x, y }` — **total**. Used by
   `LynRummy.View.viewHand` during iteration, where `row` and
   `col` are computed from the hand's contents as we walk it.
   No `Maybe`: the caller already has the grid indices.
 - `cardCenterInViewport : Card -> List HandCard -> Maybe Point`
-  — **partial**. Used by `Main.elm` replay synthesis where
-  the input is a `Card` reference (from a wire action) and
-  the answer may legitimately be Nothing (card no longer in
-  hand, e.g., subsequent action already played it).
+  — **partial**. Pinned-math claim of a card's viewport
+  center. Kept as a fallback path only; the authoritative
+  source is now DOM measurement (see below).
+- `handCardDomId : Card -> String` — stable DOM id the
+  replay synthesizer uses with `Browser.Dom.getElement` to
+  fetch a hand card's LIVE viewport rect. Disambiguates
+  double-deck copies via the originDeck suffix.
 
-Both consult the same pinned math via `positionAt`, so the
-renderer and the replay synthesizer agree on where every card
-sits.
+**The DOM is now authoritative for hand-card positions at
+replay time** (2026-04-21, B1 extension). `cardCenterInViewport`
+is no longer trusted by default; the replay path uses
+`handCardDomId` + `Browser.Dom.getElement`.
 
 ## Pointers
 
