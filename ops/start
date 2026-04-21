@@ -15,8 +15,8 @@ go build -ldflags "-X main.gitCommit=$COMMIT" -o gopher-server .
 # Compile the standalone Elm LynRummy client so Gopher can serve elm.js
 # from games/lynrummy/elm/. Non-fatal if it fails — the
 # handler returns a helpful 404 pointing at the rebuild command.
-(cd games/lynrummy/elm && npx --yes elm make src/Main.elm --output=elm.js >/dev/null 2>&1) \
-    || echo "Warning: Elm LynRummy build failed; /gopher/lynrummy-elm/ will 404 on elm.js"
+(cd games/lynrummy/elm && ./node_modules/.bin/elm make src/Main.elm --output=elm.js >/dev/null 2>&1) \
+    || echo "Warning: Elm LynRummy build failed; /gopher/lynrummy-elm/ will 404 on elm.js (try \`npm install\` in games/lynrummy/elm/)"
 
 GOPHER_CONFIG=~/AngryGopher/prod.json nohup ./gopher-server > /tmp/angry-gopher.log 2>&1 &
 

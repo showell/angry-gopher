@@ -7,6 +7,17 @@ with a browser-based presentation layer. It captures live
 gestures, runs its own referee, keeps its own action log,
 renders the board + hand, and replays stored logs.
 
+## First-time setup
+
+```
+npm install   # pins elm + elm-test locally; see package.json
+```
+
+That materializes `./node_modules/.bin/elm` and
+`./node_modules/.bin/elm-test`, which `./check.sh` and
+`ops/start` invoke directly (no `npx` bootstrap tax). The
+`node_modules/` dir is gitignored.
+
 ## Before reading the Elm code
 
 Start with

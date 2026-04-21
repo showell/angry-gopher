@@ -4,32 +4,22 @@
 # regardless of which host shell imports it.
 #
 # Host shell (Main.elm + gesture studies) was ripped
-# 2026-04-17 — only the durable model remains here; the
-# playable game will be built fresh on top of these modules.
+# 2026-04-17 — only the durable model remains here.
 
 set -euo pipefail
 
 cd "$(dirname "$0")"
 
-# Resolve cached binaries once. `npx --yes <cmd>` pays ≈1.3s of
-# package-resolution overhead EVERY invocation, even when cached;
-# direct calls are ≈0.05s for elm and ≈0.06s for elm-test. The
-# loop below runs elm ~30 times, so this matters.
-ELM_BIN="$(find ~/.npm/_npx -name elm -type f -path '*/bin/elm' 2>/dev/null | head -1)"
-if [ -z "${ELM_BIN:-}" ]; then
-  # Fallback: materialize the cache via npx. Costs ~1.3s so we
-  # avoid it on every run — the `find` above is instant and
-  # works as long as the cache has ever been warmed.
-  ELM_BIN="$(npx --yes which elm 2>/dev/null || true)"
-fi
-if [ -z "${ELM_BIN:-}" ] || [ ! -x "$ELM_BIN" ]; then
-  echo "Could not locate an elm binary under ~/.npm/_npx or via npx." >&2
-  exit 1
-fi
+# elm + elm-test are pinned as devDependencies of this project.
+# They live in ./node_modules/.bin/ after `npm install`. Calling
+# them directly skips the ~1.3s-per-call bootstrap tax that
+# `npx --yes` used to charge on every invocation — the loop
+# below runs elm ~30 times, so this matters.
+ELM_BIN="./node_modules/.bin/elm"
+ELM_TEST_BIN="./node_modules/.bin/elm-test"
 
-ELM_TEST_BIN="$(find ~/.npm/_npx -name elm-test -type f -path '*/bin/elm-test' 2>/dev/null | head -1)"
-if [ -z "${ELM_TEST_BIN:-}" ] || [ ! -x "$ELM_TEST_BIN" ]; then
-  echo "Could not locate an elm-test binary under ~/.npm/_npx." >&2
+if [ ! -x "$ELM_BIN" ] || [ ! -x "$ELM_TEST_BIN" ]; then
+  echo "elm / elm-test not found in ./node_modules/.bin/. Run \`npm install\` in $(pwd)." >&2
   exit 1
 fi
 

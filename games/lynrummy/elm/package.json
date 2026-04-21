@@ -1,0 +1,13 @@
+{
+  "name": "lynrummy-elm-client",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Elm client for the Angry Gopher LynRummy game. Pinned tooling only — no JS source lives here.",
+  "scripts": {
+    "check": "./check.sh"
+  },
+  "devDependencies": {
+    "elm": "^0.19.1-6",
+    "elm-test": "^0.19.1-revision17"
+  }
+}
