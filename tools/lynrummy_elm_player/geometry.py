@@ -31,14 +31,16 @@ BOARD_MARGIN = 5
 PLACE_STEP = 10
 
 # Packing gaps — the size of the "breathing room" the agent
-# leaves between adjacent stacks. Asymmetric because stacks
-# extend horizontally, so touching rows feel cramped to a
-# human eye; touching columns feel comparatively fine. These
-# are bigger than BOARD_MARGIN: the referee enforces the
-# legal-minimum 5px, but a board packed at that margin reads
-# as robotic.
-PACK_GAP_X = 10
-PACK_GAP_Y = 22
+# leaves between adjacent stacks. Bigger than BOARD_MARGIN:
+# the referee enforces the legal-minimum 5px, but a board
+# packed at that margin reads as robotic AND leaves adjacent
+# stacks looking ambiguous (is that one stack or two?).
+#
+# Tuned to roughly one card width — close enough to CARD_WIDTH
+# that an empty gap reads as "a card could fit there" but not
+# so wide that the board sprawls.
+PACK_GAP_X = 30
+PACK_GAP_Y = 30
 
 # Anti-alignment offset. A fixed +2px nudge applied to every
 # placement. Keeps output deterministic while breaking
