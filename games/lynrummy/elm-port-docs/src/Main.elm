@@ -577,9 +577,12 @@ replayFrame nowMs model =
                         if untilMs == 0 then
                             -- Lazy-initialize the deadline on the
                             -- first frame so the pre-roll lasts
-                            -- a real ~200ms regardless of when
+                            -- a real ~1500ms regardless of when
                             -- the first ReplayFrame tick arrives.
-                            ( { model | replayAnim = PreRoll { untilMs = nowMs + 200 } }
+                            -- Exaggerated duration for now so the
+                            -- initial board is unmistakably visible
+                            -- before the first drag fires.
+                            ( { model | replayAnim = PreRoll { untilMs = nowMs + 1500 } }
                             , Cmd.none
                             )
 
