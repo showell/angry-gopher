@@ -49,9 +49,17 @@ Card:
 Hand:
 
 - `viewHand : { attrsForCard : Int -> HandCard -> List Attribute } -> Hand -> Html msg`
-  — renders the hand sorted into rows of 4 suits in display
-  order (Heart / Spade / Diamond / Club), each row sorted by
-  value ascending. Faithful to TS `PhysicalHand.populate`.
+  — renders the hand at **pinned absolute positions** (not
+  flow / margin layout). Per-card position comes from
+  `HandLayout.positionAt { row, col }` where `row` is the
+  suit's index in `Card.allSuits` and `col` is the position
+  within that suit (sorted by value ascending).
+  The container is `position: relative`; each card is
+  `position: absolute` at a computed local (top, left) derived
+  from its viewport center minus the container origin.
+  This makes each card's viewport position a pure function of
+  the hand's contents — no DOM measurement needed for replay
+  synthesis.
 
 Wing:
 
@@ -79,6 +87,14 @@ Wing:
 - Depends on: `LynRummy.Card.cardColor` /
   `valueDisplayStr` / `suitEmojiStr`,
   `LynRummy.CardStack.incomplete`,
-  `LynRummy.Hand`.
+  `LynRummy.Hand`,
+  `LynRummy.BoardGeometry` (cardPitch, cardHeight),
+  `LynRummy.HandLayout` (pinned hand layout).
 - TS reference: game.ts ~945-1180 (rendering primitives),
   ~1568-1602 (hand population).
+
+## TODO
+
+- The hand container width is hardcoded to `240 - 20 = 220`
+  px. Should follow a shared constant (HandLayout or a hand
+  column width). Small local cleanup.

@@ -32,19 +32,27 @@ helpers that produce StatusMessage and PopupContent records.
 Html
 ├── viewTopBar            "Welcome to Lyn Rummy!" banner
 ├── viewStatusBar         per-status color + text
-├── div (two-column flex)
-│   ├── handColumn        turn # header + two viewPlayerRow
-│   │   ├── viewPlayerRow P1
-│   │   └── viewPlayerRow P2
-│   │       └── viewTurnControls   (shown for the active row)
-│   │           [ Complete turn / Hint / Replay / Lobby ]
-│   └── boardColumn
-│       └── boardWithWings
-│           ├── viewStackForBoard (×N)
-│           └── viewWingAt       (×M, during drag only)
+├── div (position: relative, min-height: 900px)     ← pinned
+│   ├── div at (20, 20) width=240                   ← hand gutter
+│   │   └── handColumn    turn # header + player rows
+│   └── div at (boardViewportLeft, boardViewportTop)  ← pinned
+│       └── boardColumn
+│           └── boardWithWings
+│               ├── viewStackForBoard (×N)
+│               └── viewWingAt       (×M, during drag only)
 ├── draggedOverlay        floating drag card (fixed-position)
 └── viewPopup             modal ceremony (suppressed in replay)
 ```
+
+The **pinned** layout (2026-04-21) replaced a flex-based
+two-column layout. The board's viewport coords are now
+declared constants in `LynRummy.BoardGeometry`
+(`boardViewportLeft`, `boardViewportTop`) which Python's
+`tools/lynrummy_elm_player/geometry.py` also honors, so
+Python agents and Elm compute the same viewport coord for
+every board stack. The hand gutter sits at (20, 20) with
+fixed width; its internal card placement is driven by
+`LynRummy.HandLayout`.
 
 ## Player row branch logic
 

@@ -72,6 +72,24 @@ structure, re-draw the view."
 - `viewPopup` overlays modal ceremony (turn-complete popup).
   Suppressed during replay.
 
+## Replay synthesis (2026-04-21, WIP)
+
+`buildReplayAnimation` branches on whether a captured gesture
+path is present:
+
+- **Faithful branch** — path non-empty → honor it. Plays back
+  the captured pointer trace at its recorded pace.
+- **Synthesized branch** — path missing → synthesize a linear
+  path using pinned geometry. For `MergeHand`: origin =
+  `HandLayout.cardCenterInViewport`, target =
+  `BoardGeometry.stackEdgeInViewport`, duration = distance ×
+  `dragMsPerPixel` (80 for now).
+
+The distinction is DERIVED at replay time from presence of
+data, not tagged at capture time. Matches
+`feedback_record_facts_decide_later.md`: record presence,
+decide at execution.
+
 ## Pointers
 
 - Autonomy-core: `LynRummy.Game` (`Game.elm`) — `GameState`
@@ -81,3 +99,12 @@ structure, re-draw the view."
   `npx elm make src/Main.elm --output=elm.js` (runs
   automatically in `ops/start`).
 - Served through Gopher at `http://localhost:9000/gopher/lynrummy-elm/`.
+- Pinned geometry: `LynRummy.BoardGeometry`,
+  `LynRummy.HandLayout`.
+
+## TODO
+
+- Synthesized branch currently only covers `MergeHand`. Add
+  `PlaceHand`, `MoveStack`, `MergeStack`, `Split` as full-game
+  QA surfaces their need.
+- `dragMsPerPixel` is a placeholder (80); needs measurement.

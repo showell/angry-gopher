@@ -17,13 +17,14 @@ import Html.Events as Events
 import Http
 import Json.Decode as Decode exposing (Decoder)
 import LynRummy.BoardActions as BoardActions exposing (Side(..))
-import LynRummy.BoardGeometry as BoardGeometry
+import LynRummy.BoardGeometry as BG
 import LynRummy.Card as Card exposing (Card)
 import LynRummy.CardStack as CardStack exposing (BoardLocation, CardStack, HandCard, stacksEqual)
 import LynRummy.Dealer
 import LynRummy.Game as Game
 import LynRummy.GestureArbitration as GA
 import LynRummy.Hand as Hand exposing (Hand)
+import LynRummy.HandLayout as HandLayout
 import LynRummy.PlayerTurn exposing (CompleteTurnResult(..))
 import LynRummy.Referee as Referee
 import LynRummy.Score as Score
@@ -577,12 +578,12 @@ replayFrame nowMs model =
                         if untilMs == 0 then
                             -- Lazy-initialize the deadline on the
                             -- first frame so the pre-roll lasts
-                            -- a real ~1500ms regardless of when
+                            -- a real 1000ms regardless of when
                             -- the first ReplayFrame tick arrives.
-                            -- Exaggerated duration for now so the
-                            -- initial board is unmistakably visible
-                            -- before the first drag fires.
-                            ( { model | replayAnim = PreRoll { untilMs = nowMs + 1500 } }
+                            -- "Order of a second between major
+                            -- events" matches the between-action
+                            -- Beating duration.
+                            ( { model | replayAnim = PreRoll { untilMs = nowMs + 1000 } }
                             , Cmd.none
                             )
 
@@ -631,14 +632,8 @@ buildReplayAnimation :
         , pendingAction : WireAction
         }
 buildReplayAnimation action maybePath model nowMs =
-    case maybePath of
-        Nothing ->
-            Nothing
-
-        Just [] ->
-            Nothing
-
-        Just path ->
+    let
+        faithful path =
             case dragSourceForAction action model of
                 Nothing ->
                     Nothing
@@ -651,6 +646,140 @@ buildReplayAnimation action maybePath model nowMs =
                         , grabOffset = grabOffset
                         , pendingAction = action
                         }
+    in
+    case maybePath of
+        Just (p :: rest) ->
+            -- Faithful path available — honor it.
+            faithful (p :: rest)
+
+        _ ->
+            -- No path (Python agent, DB hydration, etc.).
+            -- Synthesize from pinned geometry + hand layout.
+            synthesizedReplayAnimation action model nowMs
+
+
+{-| Build an Animating record for an action with no captured
+gesture path. Looks up the drag endpoints from pinned geometry
+(shared with Python) and synthesizes a linear pointer path
+at human-scale velocity.
+-}
+synthesizedReplayAnimation :
+    WireAction
+    -> Model
+    -> Float
+    ->
+        Maybe
+            { startMs : Float
+            , path : List State.GesturePoint
+            , source : DragSource
+            , grabOffset : Point
+            , pendingAction : WireAction
+            }
+synthesizedReplayAnimation action model nowMs =
+    case dragSourceForAction action model of
+        Nothing ->
+            Nothing
+
+        Just ( source, grabOffset ) ->
+            case syntheticEndpoints action model of
+                Nothing ->
+                    Nothing
+
+                Just ( startPt, endPt ) ->
+                    Just
+                        { startMs = nowMs
+                        , path = linearPath startPt endPt nowMs
+                        , source = source
+                        , grabOffset = grabOffset
+                        , pendingAction = action
+                        }
+
+
+{-| Drag duration scales with distance at roughly human
+velocity. Placeholder 80ms/px until we measure Steve's real
+speed.
+-}
+dragMsPerPixel : Float
+dragMsPerPixel =
+    80
+
+
+{-| Synthesize endpoints for a replay drag, in viewport coords.
+-}
+syntheticEndpoints : WireAction -> Model -> Maybe ( Point, Point )
+syntheticEndpoints action model =
+    case action of
+        WA.MergeHand p ->
+            let
+                hand =
+                    activeHand model
+
+                origin =
+                    HandLayout.cardCenterInViewport p.handCard hand.handCards
+
+                target =
+                    listAt p.targetStack model.board
+                        |> Maybe.map
+                            (\stack ->
+                                BG.stackEdgeInViewport
+                                    { loc =
+                                        { left = stack.loc.left
+                                        , top = stack.loc.top
+                                        }
+                                    , size = CardStack.size stack
+                                    }
+                                    (sideString p.side)
+                            )
+            in
+            Maybe.map2 Tuple.pair origin target
+
+        _ ->
+            Nothing
+
+
+sideString : BoardActions.Side -> String
+sideString side =
+    case side of
+        BoardActions.Left ->
+            "left"
+
+        BoardActions.Right ->
+            "right"
+
+
+{-| Build a straight-line path from `start` to `end` with
+roughly 12 samples, duration proportional to distance at
+`dragMsPerPixel`.
+-}
+linearPath : Point -> Point -> Float -> List State.GesturePoint
+linearPath start end nowMs =
+    let
+        dx =
+            toFloat (end.x - start.x)
+
+        dy =
+            toFloat (end.y - start.y)
+
+        dist =
+            sqrt (dx * dx + dy * dy)
+
+        duration =
+            max 100 (dist * dragMsPerPixel)
+
+        samples =
+            12
+
+        step i =
+            let
+                frac =
+                    toFloat i / toFloat (samples - 1)
+            in
+            { tMs = nowMs + frac * duration
+            , x = round (toFloat start.x + dx * frac)
+            , y = round (toFloat start.y + dy * frac)
+            }
+    in
+    List.range 0 (samples - 1) |> List.map step
 
 
 {-| Resolve the DragSource + grabOffset for a WireAction against

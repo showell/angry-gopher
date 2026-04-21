@@ -28,11 +28,36 @@ Club). Within a row, cards are sorted by value ascending.
 Horizontal pitch = `BoardGeometry.cardPitch`. Vertical pitch
 = `suitRowHeight` = `cardHeight + 12`.
 
+## Two functions, two audiences
+
+- `positionAt : { row, col } -> { x, y }` — **total**. Used by
+  `LynRummy.View.viewHand` during iteration, where `row` and
+  `col` are computed from the hand's contents as we walk it.
+  No `Maybe`: the caller already has the grid indices.
+- `cardCenterInViewport : Card -> List HandCard -> Maybe Point`
+  — **partial**. Used by `Main.elm` replay synthesis where
+  the input is a `Card` reference (from a wire action) and
+  the answer may legitimately be Nothing (card no longer in
+  hand, e.g., subsequent action already played it).
+
+Both consult the same pinned math via `positionAt`, so the
+renderer and the replay synthesizer agree on where every card
+sits.
+
 ## Pointers
 
-- Consumer: `Main.View` renders each card at `cardCenterInViewport`
-  coords.
-- Consumer: `Main.elm` replay synthesizer reads the same coords
-  as the drag origin for hand-to-board actions.
-- Complement: `BoardGeometry.boardViewportLeft` / `Top` pin the
-  board; the two modules together pin the whole playable area.
+- Complement: `BoardGeometry.boardViewportLeft` / `Top` pin
+  the board; the two modules together pin the whole playable
+  area.
+- Memory: `feedback_shouldnt_happen_is_a_smell.md` — the
+  two-function split followed from applying the principle
+  that "shouldn't happen by construction" is usually a type
+  mismatch.
+
+## TODO
+
+- Constants (`handLeft`, `handTop`, `suitRowHeight`) are
+  hardcoded for the current layout. If the top bar / status
+  bar heights change, update them. No preflight check yet
+  that they stay consistent with the Elm page layout around
+  them.

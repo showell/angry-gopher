@@ -69,3 +69,20 @@ Things this module deliberately does NOT do:
 Consumer: `auto_player.py` (settle pass after each action).
 Referee counterpart: `games/lynrummy/board_geometry.go`
 (checkGeometry). Constants match.
+
+## Pinned viewport constants (2026-04-21)
+
+- `BOARD_VIEWPORT_LEFT = 280`, `BOARD_VIEWPORT_TOP = 100` —
+  where the 800×600 board div sits in the viewport. Python
+  and Elm agree; Elm's matching constants live in
+  `LynRummy.BoardGeometry.boardViewport{Left,Top}`.
+
+Used by `gesture_synth.drag_endpoints` to emit pointer paths
+in the same frame Elm renders. If the Elm layout shifts
+(nav/status bar heights change), update both sides.
+
+## TODO
+
+- No preflight that Python's `BOARD_VIEWPORT_LEFT/TOP` match
+  Elm's `boardViewport{Left,Top}`. A simple grep-or-sidecar-
+  audit step would catch drift.

@@ -43,6 +43,19 @@ fails, semantics is meaningless.
   `CardStack.cardWidth`).
 - `stackHeight = cardHeight`. Single row; no vertical
   spread within a stack.
+- `boardViewportLeft = 280`, `boardViewportTop = 100` —
+  **pinned** coordinates of the board div's top-left in the
+  viewport. Python's `geometry.py` holds matching constants
+  (`BOARD_VIEWPORT_LEFT`, `BOARD_VIEWPORT_TOP`) so both
+  sides compute the same viewport position for every stack.
+  If the layout shifts, update both sides together.
+
+## Viewport-translating helper
+
+- `stackEdgeInViewport : { loc, size } -> side -> { x, y }` —
+  returns the viewport (x, y) of a stack's left or right edge
+  (vertically centered). Used by the replay synthesizer to
+  target the drop point of a hand-to-board merge.
 
 ## Two-step check
 
@@ -104,6 +117,17 @@ Wire strings match TS exactly (no `_v2` or `elm_` suffixes).
 
 - Consumed by: `Referee.validateGameMove`,
   `Referee.validateTurnComplete`, `Main/Gesture` (while
-  previewing drops).
+  previewing drops), `Main/View` (pinned board placement),
+  `Main.elm` replay synthesizer (target resolution via
+  `stackEdgeInViewport`).
 - Depends on: `CardStack.cardWidth`, `CardStack.size`.
+- Complement: `LynRummy.HandLayout` — same pinning discipline
+  for the hand area. Together they define the full playable
+  viewport.
 - Tests: `tests/LynRummy/BoardGeometryTest.elm`.
+
+## TODO
+
+- No automated check that Python's `BOARD_VIEWPORT_LEFT/TOP`
+  in `tools/lynrummy_elm_player/geometry.py` match the Elm
+  constants here. A preflight diff would catch drift.

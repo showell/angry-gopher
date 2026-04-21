@@ -27,9 +27,11 @@ are composed in `Main.elm` using these pieces.
 
 import Html exposing (Html, div, text)
 import Html.Attributes exposing (style)
+import LynRummy.BoardGeometry as BG
 import LynRummy.Card as Card exposing (Card, CardColor(..), Suit)
 import LynRummy.CardStack as CardStack exposing (BoardCard, BoardCardState(..), CardStack, HandCard, HandCardState(..))
 import LynRummy.Hand exposing (Hand)
+import LynRummy.HandLayout as HandLayout
 
 
 
@@ -307,52 +309,71 @@ viewHand :
     -> Html msg
 viewHand config hand =
     let
+        -- Build the (row, col, originalIndex, handCard) grid
+        -- by iterating suits in display order and sorting each
+        -- suit's cards by value. This is the SAME layout math
+        -- `HandLayout.cardCenterInViewport` assumes; we compute
+        -- it once here and pass row/col to the positioner.
         indexed =
             List.indexedMap Tuple.pair hand.handCards
+
+        rows =
+            List.indexedMap
+                (\rowIdx suit ->
+                    indexed
+                        |> List.filter (\( _, hc ) -> hc.card.suit == suit)
+                        |> List.sortBy (\( _, hc ) -> Card.cardValueToInt hc.card.value)
+                        |> List.indexedMap
+                            (\colIdx ( origIdx, hc ) ->
+                                { row = rowIdx
+                                , col = colIdx
+                                , handIndex = origIdx
+                                , handCard = hc
+                                }
+                            )
+                )
+                Card.allSuits
+                |> List.concat
+
+        containerHeight =
+            4 * HandLayout.suitRowHeight
     in
     div
-        [ style "margin-top" "10px" ]
-        (List.filterMap (viewSuitRow config indexed) Card.allSuits)
+        [ style "position" "relative"
+        , style "width" (String.fromInt (240 - 20) ++ "px")
+        , style "height" (String.fromInt containerHeight ++ "px")
+        ]
+        (List.map (viewPlacedHandCard config) rows)
 
 
-viewSuitRow :
+viewPlacedHandCard :
     { attrsForCard : Int -> HandCard -> List (Html.Attribute msg) }
-    -> List ( Int, HandCard )
-    -> Suit
-    -> Maybe (Html msg)
-viewSuitRow config indexed suit =
+    -> { row : Int, col : Int, handIndex : Int, handCard : HandCard }
+    -> Html msg
+viewPlacedHandCard config slot =
     let
-        suitCards =
-            indexed
-                |> List.filter (\( _, hc ) -> hc.card.suit == suit)
-                |> List.sortBy (\( _, hc ) -> Card.cardValueToInt hc.card.value)
-    in
-    if List.isEmpty suitCards then
-        Nothing
+        -- Center position (viewport), then convert to container-
+        -- local top-left.
+        center =
+            HandLayout.positionAt { row = slot.row, col = slot.col }
 
-    else
-        Just <|
-            div
-                [ style "padding-bottom" "10px" ]
-                (List.map
-                    (\( idx, hc ) -> viewHandCard (config.attrsForCard idx hc) hc)
-                    suitCards
-                )
+        localLeft =
+            center.x - HandLayout.handLeft - BG.cardPitch // 2
 
+        localTop =
+            center.y - HandLayout.handTop - BG.cardHeight // 2
 
-viewHandCard : List (Html.Attribute msg) -> HandCard -> Html msg
-viewHandCard extraAttrs hc =
-    let
-        bgColor =
-            handCardBgColor hc
-
-        handAttrs =
-            [ style "margin" "3px"
+        positionedAttrs =
+            [ style "position" "absolute"
+            , style "top" (String.fromInt localTop ++ "px")
+            , style "left" (String.fromInt localLeft ++ "px")
             , style "cursor" "grab"
-            , style "background-color" bgColor
+            , style "background-color" (handCardBgColor slot.handCard)
             ]
     in
-    viewPlayingCardWith (handAttrs ++ extraAttrs) hc.card
+    viewPlayingCardWith
+        (positionedAttrs ++ config.attrsForCard slot.handIndex slot.handCard)
+        slot.handCard.card
 
 
 {-| Background color per HandCardState. Faithful port of

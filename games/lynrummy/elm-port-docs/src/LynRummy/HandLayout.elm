@@ -2,6 +2,7 @@ module LynRummy.HandLayout exposing
     ( cardCenterInViewport
     , handLeft
     , handTop
+    , positionAt
     , suitRowHeight
     , suitRowIndex
     )
@@ -71,14 +72,25 @@ suitRowIndex suit =
     go 0 Card.allSuits
 
 
-{-| Viewport (x, y) of the CENTER of the given card within the
+{-| Viewport (x, y) of the center of a card at grid position
+`{ row, col }`. Total function: both rendering and replay use
+the same pinned math.
+-}
+positionAt : { row : Int, col : Int } -> { x : Int, y : Int }
+positionAt { row, col } =
+    { x = handLeft + col * BG.cardPitch + (BG.cardPitch // 2)
+    , y = handTop + row * suitRowHeight + (BG.cardHeight // 2)
+    }
+
+
+{-| Viewport (x, y) of the center of the given card within the
 current hand's rendered layout. Returns Nothing if the card
 isn't in the hand.
 
-The pinned layout: per-suit rows in `Card.allSuits` order,
-cards within a row sorted by value ascending, packed at
-`BG.cardPitch` horizontally. Each card gets its own absolute
-(left, top).
+Use at sites that don't already know where the card lives —
+e.g., replay synthesis resolving a wire-action reference.
+Rendering should iterate the hand and use `positionAt`
+directly with the row/col it computed.
 -}
 cardCenterInViewport : Card -> List HandCard -> Maybe { x : Int, y : Int }
 cardCenterInViewport card handCards =
@@ -96,10 +108,7 @@ cardCenterInViewport card handCards =
     in
     case ( row >= 0, col ) of
         ( True, Just c ) ->
-            Just
-                { x = handLeft + c * BG.cardPitch + (BG.cardPitch // 2)
-                , y = handTop + row * suitRowHeight + (BG.cardHeight // 2)
-                }
+            Just (positionAt { row = row, col = c })
 
         _ ->
             Nothing

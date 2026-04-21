@@ -2,39 +2,53 @@ just_use gesture_synth.py
 
 # label: EARLY
 # role: synthesize pointer-path telemetry for Python primitives
+#       WHEN PYTHON HONESTLY KNOWS BOTH ENDPOINTS
 
-The Elm client captures real mouse drags; Python primitives
-carry no physical telemetry by default, so Instant Replay sees
-a teleport. This module builds a plausible linear-drag
-`gesture_metadata` envelope per primitive.
+The Elm client captures real mouse drags. Python primitives
+don't come from mouse events, so a replay of a Python-driven
+game wouldn't see any drag animation without synthesized
+pointer paths.
 
-Not behavior-accurate. Python has no DOM, no real events. The
-goal is "pseudo-realistic": the replay watcher sees motion
-along a path rather than jumping.
+This module builds those paths — but only for actions whose
+endpoints Python actually knows in the **pinned viewport
+frame** (shared with Elm via `BOARD_VIEWPORT_LEFT/TOP`).
+
+## The rule (2026-04-21)
+
+Python does NOT speculate about hand-card positions. Hand
+layout is Elm's business, knowable only at replay time via
+`LynRummy.HandLayout`. For hand-origin actions
+(`merge_hand`, `place_hand`), `drag_endpoints` returns None
+and Elm synthesizes at replay time.
+
+Python DOES emit paths for intra-board actions where source
+and target are pinned on both sides — `move_stack` today.
+More (split / merge_stack / place_hand) to come when needed.
+
+This follows `feedback_record_facts_decide_later.md`: don't
+put speculative coordinates on the wire.
 
 ## Surface
 
-- `synthesize(start, end, duration_ms, samples)` — straight-line
-  path, matching the Elm envelope shape
-  (`{path, pointer_type, viewport, device_pixel_ratio}`).
+- `synthesize(start, end, samples)` — straight-line path in
+  viewport coords. Duration = distance × `DRAG_MS_PER_PIXEL`.
 - `drag_endpoints(prim, board_before)` — return `(start, end)`
-  for a primitive given the board state at emission time, or
-  None for primitives that don't involve a drag.
+  in viewport coords, or None if Python can't honestly supply
+  them.
 
 ## Pointers
 
-- Consumer: `auto_player.py` (attaches gesture_metadata to each
-  primitive send).
-- Complement: `telemetry.py` (read-side; dumps stored paths
-  per session).
-- Memory: `feedback_wire_model_not_lossy.md` — every physical
-  event must produce a reconstructable wire record.
+- Consumer: `auto_player.py` (attaches gesture_metadata only
+  when `drag_endpoints` returns non-None).
+- Complement: `telemetry.py` (read-side).
+- Shared constants: `geometry.py` `BOARD_VIEWPORT_LEFT/TOP`
+  must match Elm's `LynRummy.BoardGeometry.boardViewport{Left,Top}`.
 
 ## TODO
 
-- Only `merge_hand` and `move_stack` endpoints implemented.
-  Add `split`, `merge_stack`, `place_hand` as subsequent tricks
-  need them.
-- Hand origin is a fixed point (no per-card position tracking).
-  If the replay's hand-zone visuals feel wrong, swap to a
-  hand-layout approximation.
+- Only `move_stack` endpoints implemented on the "yes I know
+  where both ends are" side. Add `split`, `merge_stack` when
+  those primitives start flowing through replay-visible
+  actions.
+- `DRAG_MS_PER_PIXEL = 80` is a placeholder. Steve plans to
+  measure actual human drag velocity and replace.
