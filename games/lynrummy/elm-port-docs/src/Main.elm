@@ -329,7 +329,13 @@ update msg model =
             in
             ( { rewound
                 | status = { text = "Replaying…", kind = Inform }
-                , replay = Just { step = 0, paused = False }
+                  -- Negative step means "haven't started the
+                  -- first action yet." replayFrame treats step
+                  -- < 0 as a pre-roll: show the rewound board
+                  -- for ~200ms so viewers register the starting
+                  -- state, then advance to step 0 and animate
+                  -- the first action normally.
+                , replay = Just { step = -1, paused = False }
                 , replayAnim = NotAnimating
                 , drag = NotDragging
               }
@@ -486,6 +492,17 @@ replayFrame nowMs model =
         Just progress ->
             if progress.paused then
                 ( model, Cmd.none )
+
+            else if progress.step < 0 then
+                -- Pre-roll: show the rewound starting board for
+                -- ~200ms before the first action fires, so the
+                -- viewer registers the initial state.
+                ( { model
+                    | replay = Just { progress | step = 0 }
+                    , replayAnim = Beating { untilMs = nowMs + 200 }
+                  }
+                , Cmd.none
+                )
 
             else
                 case model.replayAnim of
