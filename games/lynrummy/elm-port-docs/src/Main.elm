@@ -959,63 +959,68 @@ synthesizedReplayAnimation action model nowMs =
 
 
 {-| Drag duration scales with distance at roughly human
-velocity. Placeholder 80ms/px until we measure Steve's real
-speed.
+velocity. 15ms/px is the current setting (down from 80);
+feels closer to how Steve actually drags.
 -}
 dragMsPerPixel : Float
 dragMsPerPixel =
-    80
+    15
 
 
-{-| Synthesize endpoints for a replay drag, in viewport coords.
+{-| Synthesize endpoints for a replay drag, in viewport
+coords. Only used for SYNCHRONOUS synthesis paths — actions
+whose both endpoints can be resolved from the DOM-measured
+board rect already in `model.replayBoardRect`.
 
-The target side uses the LIVE DOM-measured board rect
-(`model.replayBoardRect`, populated by a `Browser.Dom.getElement`
-task at replay start). This is the "measurement, not
-agreement" path — no shared viewport constants are
-authoritative here; we ask the browser where the board
-actually is. If the measurement hasn't arrived yet we fall
-back to the documentary constants and log to the dev console.
+Hand-origin actions (`MergeHand`, `PlaceHand`) are NOT
+handled here — they require an async DOM query for the hand
+card's live rect (see `prepareReplayStep`).
 
-The origin side (hand card) still uses the pinned
-`HandLayout.cardCenterInViewport`. That's a known rough edge —
-pinning the hand layout was part of the earlier attempt and
-still carries its own drift. B1's scope is just the target
-side; hand-origin DOM-measurement is a later step.
+Every viewport coord returned here comes from the live
+board rect via `pointInLiveViewport` / `stackEdgeInLiveViewport`
+— no direct use of pinned viewport constants. See the
+"Rule for adding synthesis" in `Main.claude`.
 
 -}
 syntheticEndpoints : WireAction -> Model -> Maybe ( Point, Point )
 syntheticEndpoints action model =
     case action of
-        WA.MergeHand p ->
-            let
-                hand =
-                    activeHand model
+        WA.MoveStack p ->
+            listAt p.stackIndex model.board
+                |> Maybe.map
+                    (\stack ->
+                        let
+                            size =
+                                CardStack.size stack
 
-                origin =
-                    HandLayout.cardCenterInViewport p.handCard hand.handCards
+                            halfWidth =
+                                size * BG.cardPitch // 2
 
-                target =
-                    listAt p.targetStack model.board
-                        |> Maybe.map
-                            (\stack ->
-                                stackEdgeInLiveViewport model stack (sideString p.side)
-                            )
-            in
-            Maybe.map2 Tuple.pair origin target
+                            halfHeight =
+                                BG.cardHeight // 2
+
+                            startLoc =
+                                pointInLiveViewport model stack.loc
+
+                            endLoc =
+                                pointInLiveViewport model p.newLoc
+                        in
+                        ( { x = startLoc.x + halfWidth, y = startLoc.y + halfHeight }
+                        , { x = endLoc.x + halfWidth, y = endLoc.y + halfHeight }
+                        )
+                    )
 
         _ ->
             Nothing
 
 
-{-| Translate a stack's board-frame loc into current-viewport
-coords using the live DOM-measured board rect. Falls back to
-the documentary `BoardGeometry.boardViewport{Left,Top}`
-constants with a dev-console warning if the measurement hasn't
-arrived yet.
+{-| Translate a board-frame `{ left, top }` into the current
+viewport frame using the live DOM-measured board rect. Falls
+back to documentary constants (with a dev-console log) if the
+measurement hasn't arrived.
 -}
-stackEdgeInLiveViewport : Model -> CardStack -> String -> Point
-stackEdgeInLiveViewport model stack side =
+pointInLiveViewport : Model -> { left : Int, top : Int } -> Point
+pointInLiveViewport model loc =
     let
         ( offsetX, offsetY ) =
             case model.replayBoardRect of
@@ -1029,20 +1034,31 @@ stackEdgeInLiveViewport model stack side =
                                 ( BG.boardViewportLeft, BG.boardViewportTop )
                     in
                     ( BG.boardViewportLeft, BG.boardViewportTop )
+    in
+    { x = offsetX + loc.left, y = offsetY + loc.top }
 
+
+{-| Viewport point of a stack's left- or right-edge,
+vertically centered. Uses the live DOM-measured board rect
+(via `pointInLiveViewport`).
+-}
+stackEdgeInLiveViewport : Model -> CardStack -> String -> Point
+stackEdgeInLiveViewport model stack side =
+    let
         size =
             CardStack.size stack
 
-        edgeX =
+        edgeLeft =
             if side == "right" then
                 stack.loc.left + size * BG.cardPitch
 
             else
                 stack.loc.left
+
+        anchor =
+            pointInLiveViewport model { left = edgeLeft, top = stack.loc.top }
     in
-    { x = offsetX + edgeX
-    , y = offsetY + stack.loc.top + BG.cardHeight // 2
-    }
+    { x = anchor.x, y = anchor.y + BG.cardHeight // 2 }
 
 
 sideString : BoardActions.Side -> String

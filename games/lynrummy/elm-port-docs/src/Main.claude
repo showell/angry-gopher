@@ -80,10 +80,11 @@ path is present:
 - **Faithful branch** — path non-empty → honor it. Plays back
   the captured pointer trace at its recorded pace.
 - **Synthesized branch** — path missing → synthesize a linear
-  path using LIVE DOM measurement for the target side
-  (`stackEdgeInLiveViewport`) and the pinned hand layout for
-  the origin side (`HandLayout.cardCenterInViewport`).
-  Duration = distance × `dragMsPerPixel` (80 placeholder).
+  path using LIVE DOM measurement for every viewport coord
+  (`stackEdgeInLiveViewport`, `pointInLiveViewport`, and
+  the async hand-card DOM query). No pinned-viewport math
+  remains in this path. Duration = distance × `dragMsPerPixel`
+  (15 placeholder — tuned from 80 for feel).
 
 The distinction is DERIVED at replay time from presence of
 data, not tagged at capture time. Matches
@@ -127,11 +128,20 @@ built via `HandLayout.handCardDomId`, disambiguated by deck.
 DOM-measured board rect regardless of what content flows
 above the board.
 
+**Verified in B1-extension (2026-04-21, session 24):**
+synthesized MergeHand animates from the hand card's actual
+rendered position to the board stack's actual rendered edge.
+Faithful/Simulated branching works in the same replay — a
+human-played move later in the log replays at its captured
+pace while Python's earlier merge_hand synthesizes at
+15ms/px.
+
 **Still in motion:**
-- Hand-origin DOM measurement is wired for `MergeHand` and
-  `PlaceHand`. Needs exercise with a fresh agent session.
-- Other primitives (`MoveStack`, `Split`, `MergeStack`) don't
-  have synthesis wired yet — they apply-immediately-and-beat.
+- `MoveStack` synthesis wired via `pointInLiveViewport`
+  (synchronous — both endpoints board-frame); not yet
+  exercised against a real agent game.
+- `Split`, `MergeStack` synthesis not yet wired; they
+  apply-immediately-and-beat.
 
 ### Rule for adding synthesis to new primitives
 
@@ -179,8 +189,9 @@ the same bug.
   with a DOM-measured lookup of each hand card's live rect.
   Requires each rendered hand card to carry a stable DOM id
   and a Task that fetches the rect at synthesis time.
-- Synthesized branch currently only covers `MergeHand`. Add
-  `PlaceHand`, `MoveStack`, `MergeStack`, `Split` — each uses
-  the same `stackEdgeInLiveViewport` pattern for board-frame
-  endpoints.
-- `dragMsPerPixel` is a placeholder (80); needs measurement.
+- Synthesized branch now covers `MergeHand`, `PlaceHand`,
+  `MoveStack`. Add `MergeStack`, `Split` — each uses
+  `pointInLiveViewport` / `stackEdgeInLiveViewport` for
+  board-frame endpoints.
+- `dragMsPerPixel` is a placeholder (15); Steve plans to
+  measure real human drag velocity.

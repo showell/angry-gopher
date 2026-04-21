@@ -36,7 +36,7 @@ BOARD_MARGIN = 5
 # `boardViewportTop` in
 # games/lynrummy/elm-port-docs/src/LynRummy/BoardGeometry.elm
 # to match.
-BOARD_VIEWPORT_LEFT = 280
+BOARD_VIEWPORT_LEFT = 300
 BOARD_VIEWPORT_TOP = 100
 
 # Placement-sweep granularity in pixels (fallback path only).

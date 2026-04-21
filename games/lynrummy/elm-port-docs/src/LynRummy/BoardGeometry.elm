@@ -69,7 +69,7 @@ If you change these, update `geometry.py` to match.
 -}
 boardViewportLeft : Int
 boardViewportLeft =
-    280
+    300
 
 
 boardViewportTop : Int
