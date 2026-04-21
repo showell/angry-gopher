@@ -19,7 +19,7 @@ The top-level entry point is `build_suggestions(hand, board)`.
 Each per-trick function returns one primitive sequence or None.
 """
 
-from geometry import find_open_loc
+from geometry import find_open_loc, find_violation, CARD_PITCH
 
 
 # ============================================================
@@ -122,13 +122,31 @@ def _find_stack(board, card):
 
 
 def _apply_split(board, si, ci):
+    """Mirror Go's CardStack.Split loc rules: the two halves get
+    distinct locations derived from the source loc + leftCount *
+    CARD_PITCH + small nudges. Left and right use different rules
+    depending on whether the split point is in the first or
+    second half of the stack."""
     stack = board[si]
     size = len(stack["board_cards"])
-    left_count = ci + 1 if ci + 1 <= size // 2 else ci
+    src_left = stack["loc"]["left"]
+    src_top = stack["loc"]["top"]
+    if ci + 1 <= size // 2:
+        # leftSplit: left stays high/left, right hops right + 8.
+        left_count = ci + 1
+        left_loc = {"top": src_top - 4, "left": src_left - 2}
+        right_loc = {"top": src_top,
+                     "left": src_left + left_count * CARD_PITCH + 8}
+    else:
+        # rightSplit: left nudges left -8, right hops right + 4.
+        left_count = ci
+        left_loc = {"top": src_top, "left": src_left - 8}
+        right_loc = {"top": src_top - 4,
+                     "left": src_left + left_count * CARD_PITCH + 4}
     left = {"board_cards": stack["board_cards"][:left_count],
-            "loc": dict(stack["loc"])}
+            "loc": left_loc}
     right = {"board_cards": stack["board_cards"][left_count:],
-             "loc": dict(stack["loc"])}
+             "loc": right_loc}
     return board[:si] + board[si + 1:] + [left, right]
 
 
@@ -140,10 +158,16 @@ def _apply_move(board, si, new_loc):
 
 def _apply_merge_stack(board, src, tgt, side):
     s, t = board[src], board[tgt]
-    new_cards = (list(s["board_cards"]) + list(t["board_cards"])
-                 if side == "left"
-                 else list(t["board_cards"]) + list(s["board_cards"]))
-    merged = {"board_cards": new_cards, "loc": dict(t["loc"])}
+    if side == "left":
+        new_cards = list(s["board_cards"]) + list(t["board_cards"])
+        # Match Go's LeftMerge: the merged stack's left edge shifts
+        # left by the width of the incoming cards.
+        loc = {"left": t["loc"]["left"] - CARD_PITCH * len(s["board_cards"]),
+               "top":  t["loc"]["top"]}
+    else:
+        new_cards = list(t["board_cards"]) + list(s["board_cards"])
+        loc = dict(t["loc"])
+    merged = {"board_cards": new_cards, "loc": loc}
     hi, lo = sorted((src, tgt), reverse=True)
     out = list(board)
     del out[hi]; del out[lo]
@@ -153,10 +177,14 @@ def _apply_merge_stack(board, src, tgt, side):
 def _apply_merge_hand(board, target_idx, hand_card, side):
     t = board[target_idx]
     wrapper = {"card": hand_card, "state": 0}
-    new_cards = ([wrapper] + list(t["board_cards"])
-                 if side == "left"
-                 else list(t["board_cards"]) + [wrapper])
-    merged = {"board_cards": new_cards, "loc": dict(t["loc"])}
+    if side == "left":
+        new_cards = [wrapper] + list(t["board_cards"])
+        loc = {"left": t["loc"]["left"] - CARD_PITCH,
+               "top":  t["loc"]["top"]}
+    else:
+        new_cards = list(t["board_cards"]) + [wrapper]
+        loc = dict(t["loc"])
+    merged = {"board_cards": new_cards, "loc": loc}
     return board[:target_idx] + board[target_idx + 1:] + [merged]
 
 
@@ -195,8 +223,7 @@ def _emit_peel(sim, target_card, target_ci):
         prims.append({"action": "split", "stack_index": stack_idx,
                       "card_index": target_ci + 1})
         sim = _apply_split(sim, stack_idx, target_ci + 1)
-        # Re-locate the stack now containing the target (it's the
-        # second-to-last appended after the split).
+        # Re-locate the stack now containing the target.
         left_idx = _find_stack(sim, target_card)
         left_size = len(sim[left_idx]["board_cards"])
         tail_ci = left_size - 1
@@ -205,6 +232,35 @@ def _emit_peel(sim, target_card, target_ci):
         sim = _apply_split(sim, left_idx, tail_ci)
 
     return prims, sim
+
+
+def _fix_geometry(sim, prims):
+    """Append move_stack primitives until the simulated board has
+    no geometry violations (no overlap, all in bounds).
+
+    Called at the end of each trick's emission. The trick's sim
+    at this point holds the FINAL shape each stack will have —
+    so `find_open_loc` sees correct sizes when picking fresh
+    spots, avoiding the growth bug where a stack was placed when
+    small and then merged to overflow its neighbor.
+
+    Every move_stack emitted here is part of the trick's primitive
+    sequence — so applying the sequence reproduces the clean final
+    board.
+    """
+    while True:
+        bad_idx = find_violation(sim)
+        if bad_idx is None:
+            return sim
+        stack = sim[bad_idx]
+        others = [s for i, s in enumerate(sim) if i != bad_idx]
+        new_loc = find_open_loc(others, card_count=len(stack["board_cards"]))
+        prims.append({
+            "action": "move_stack",
+            "stack_index": bad_idx,
+            "new_loc": new_loc,
+        })
+        sim = _apply_move(sim, bad_idx, new_loc)
 
 
 # ============================================================
@@ -222,10 +278,13 @@ def direct_play(hand, board):
                 # Must extend to a valid (non-Incomplete) stack.
                 if _classify(result) == "other":
                     continue
-                return [{"action": "merge_hand",
-                         "hand_card": card,
-                         "target_stack": si,
-                         "side": side}]
+                prims = [{"action": "merge_hand",
+                          "hand_card": card,
+                          "target_stack": si,
+                          "side": side}]
+                sim = _apply_merge_hand(_copy_board(board), si, card, side)
+                _fix_geometry(sim, prims)
+                return prims
     return None
 
 
@@ -266,6 +325,7 @@ def hand_stacks(hand, board):
                       "side": "right"})
         sim = _apply_merge_hand(sim, target_idx, c, "right")
         target_idx = len(sim) - 1
+    _fix_geometry(sim, prims)
     return prims
 
 
@@ -512,7 +572,9 @@ def _emit_peel_for_run(board, target_low, ci_low, target_high, ci_high,
     dst_idx = _find_stack(sim, target_low)
     prims.append({"action": "merge_stack", "source_stack": high_idx,
                   "target_stack": dst_idx, "side": "right"})
+    sim = _apply_merge_stack(sim, high_idx, dst_idx, "right")
 
+    _fix_geometry(sim, prims)
     return prims
 
 
@@ -587,7 +649,9 @@ def _emit_extract_and_merge_one_hand(board, target_a, ci_a,
         hand_side = "right"
     prims.append({"action": "merge_hand", "hand_card": hand_card,
                   "target_stack": dst, "side": hand_side})
+    sim = _apply_merge_hand(sim, dst, hand_card, hand_side)
 
+    _fix_geometry(sim, prims)
     return prims
 
 
@@ -626,6 +690,7 @@ def _emit_extract_and_merge_two_hand(board, target, ci,
         prims.append({"action": "merge_hand", "hand_card": hc,
                       "target_stack": t_idx, "side": side})
         sim = _apply_merge_hand(sim, t_idx, hc, side)
+    _fix_geometry(sim, prims)
     return prims
 
 
@@ -784,6 +849,9 @@ def _emit_rb_swap(board, run_si, run_ci, kicked, swap_in, home):
     prims.append({"action": "merge_stack",
                   "source_stack": kicked_idx,
                   "target_stack": home_now, "side": home_side})
+    sim = _apply_merge_stack(sim, kicked_idx, home_now, home_side)
+
+    _fix_geometry(sim, prims)
     return prims
 
 
@@ -918,8 +986,11 @@ def _emit_loose_move(board, src_si, src_ci, peeled, dst_si,
                 continue
             prims.append({"action": "merge_hand", "hand_card": hand_card,
                           "target_stack": i, "side": test_side})
+            sim = _apply_merge_hand(sim, i, hand_card, test_side)
+            _fix_geometry(sim, prims)
             return prims
     # Shouldn't reach here given the caller's stranded-card check.
+    _fix_geometry(sim, prims)
     return prims
 
 

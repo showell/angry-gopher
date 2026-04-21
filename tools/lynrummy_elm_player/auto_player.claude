@@ -8,10 +8,12 @@ locally, takes the top suggestion's primitives and posts each
 verbatim to `/actions`. No /hint round-trip, no trick_result
 on the wire — every action is a primitive.
 
-Settles after each turn via `geometry.find_violation` /
-`find_open_loc` when stacks overlap. Terminates when the deck
-drops below DECK_LOW_WATER (≈10 cards) — not on "victory"
-events, which are per-turn bonuses (see
+Emission is correct-by-construction: `hints.py` runs a
+`_fix_geometry` post-pass at the end of each trick so the
+primitive sequence lands on a geometrically clean board. No
+settle() belt. Terminates when the deck drops below
+DECK_LOW_WATER (≈10 cards) — not on "victory" events, which
+are per-turn bonuses (see
 `project_lynrummy_game_end_condition.md`).
 
 ## Surface
@@ -30,9 +32,6 @@ events, which are per-turn bonuses (see
 
 ## TODO
 
-- `settle()` papers over geometry violations; the real fix is
-  non-overlapping placement at emission time, not post-hoc
-  move_stack. Still papering as of 2026-04-20.
 - Python primitives emit no `gesture_metadata`, so agent moves
   teleport in Instant Replay. Phase 3 synthesis (linear drag
   from avg velocity) not started.

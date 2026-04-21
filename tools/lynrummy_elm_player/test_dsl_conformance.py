@@ -13,8 +13,9 @@ Supported ops:
   - hint_invariant: invoke the named trick's emitter, apply its
     primitives to the input board, and assert every resulting
     stack classifies as a complete group (set / pure_run /
-    rb_run). Any other result fails — an invariant-violating
-    emission is a bug.
+    rb_run) AND that the board is geometrically clean (every
+    stack in bounds, no padded-overlap). Any other result fails
+    — an invariant-violating emission is a bug.
 
 Python is interpreted, so there is no codegen step for these
 tests — the JSON file IS the source. Regenerate via:
@@ -27,6 +28,7 @@ import sys
 from pathlib import Path
 
 import hints
+from geometry import find_violation
 
 FIXTURES_PATH = Path(__file__).parent / "conformance_fixtures.json"
 
@@ -120,6 +122,12 @@ def _run_hint_invariant(sc):
         if hints._classify(cards) == "other":
             return False, (f"stack {i} ({_fmt_stack(s)}) is incomplete "
                            f"after {len(prims)} primitives")
+    bad_idx = find_violation(final)
+    if bad_idx is not None:
+        bad = final[bad_idx]
+        return False, (f"stack {bad_idx} ({_fmt_stack(bad)}) at "
+                       f"({bad['loc']['left']},{bad['loc']['top']}) "
+                       f"violates geometry after {len(prims)} primitives")
     return True, f"OK — {len(prims)} primitives, {len(final)} clean stacks"
 
 

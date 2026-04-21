@@ -21,38 +21,7 @@ import datetime
 import sys
 
 from client import Client
-from geometry import find_open_loc, find_violation
 import hints
-
-
-MAX_SETTLE_STEPS = 20
-
-
-def settle(c, session_id, *, verbose=True):
-    """After a trick lands, the resulting board may have
-    stacks that are geometrically too close or overlapping —
-    especially as multiple stacks at the same row accumulate
-    across turns. Move the offending stack to a fresh open
-    spot. Defensive; usually a no-op."""
-    for _ in range(MAX_SETTLE_STEPS):
-        state = c.get_state(session_id)["state"]
-        board = state["board"]
-        idx = find_violation(board)
-        if idx is None:
-            return
-        offending = board[idx]
-        others = [s for i, s in enumerate(board) if i != idx]
-        new_loc = find_open_loc(others, len(offending["board_cards"]))
-        c.send_action(session_id, {
-            "action": "move_stack",
-            "stack_index": idx,
-            "new_loc": new_loc,
-        })
-        if verbose:
-            print(f"    settle: stack[{idx}] "
-                  f"({offending['loc']['left']:.0f},{offending['loc']['top']:.0f}) "
-                  f"→ ({new_loc['left']},{new_loc['top']})")
-    raise RuntimeError(f"settle did not converge after {MAX_SETTLE_STEPS} steps")
 
 
 # Game termination: deck running out, not a turn_result variant.
@@ -92,7 +61,6 @@ def play_session(c, session_id, *, max_actions=300, verbose=True):
                     return {"actions": actions, "turns": turns,
                             "final_turn_result": "send_error"}
                 actions += 1
-            settle(c, session_id, verbose=verbose)
             continue
 
         # No more suggestions — try complete_turn.
