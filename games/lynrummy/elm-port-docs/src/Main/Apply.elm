@@ -67,8 +67,6 @@ Branch behaviour summary:
     the full autonomous transition (classify, bank, deal,
     flip, age), then updates UI-layer `score` + `status`.
   - `Undo` — no-op (deferred; V1 has no Undo button).
-  - `PlayTrick` — no-op (retired wire action; if one appears
-    in a log, ignore).
 
 -}
 applyWireAction : WireAction -> Model -> Model
@@ -149,9 +147,6 @@ applyWireAction action model =
             }
 
         WA.Undo ->
-            model
-
-        WA.PlayTrick _ ->
             model
 
 

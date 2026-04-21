@@ -76,7 +76,7 @@ error. Non-decodable 400 bodies degrade to `Http.BadBody`.
 
 ## What this module deliberately does NOT do
 
-- **Ports.** `setSessionHash` lives in `Main.elm` (only
+- **Ports.** `setSessionPath` lives in `Main.elm` (only
   port-modules may declare ports).
 - **State updates.** Response bodies arrive as typed values;
   the update function in `Main.elm` applies them to the Model.

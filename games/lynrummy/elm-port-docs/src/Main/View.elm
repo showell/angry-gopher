@@ -19,21 +19,25 @@ only "action" is the Msg constructors emitted by user events.
 ## Visual structure
 
 ```
-Html
-├── viewTopBar            // "Welcome to Lyn Rummy!" banner
-├── viewStatusBar         // per-status color + text
-├── div (two-column)
-│   ├── handColumn        // turn #, two viewPlayerRow
-│   │   ├── viewPlayerRow P1   // name + score + hand (if active) OR "N cards"
-│   │   └── viewPlayerRow P2
-│   │       └── viewTurnControls   // Complete turn / Hint / Replay / Lobby
-│   └── boardColumn
-│       └── boardWithWings
-│           ├── viewStackForBoard (×N)   // each stack on the board
-│           └── viewWingAt       (×M)   // drop-target wings, only while dragging
-├── draggedOverlay        // floating drag card (fixed-position)
-└── viewPopup             // modal ceremony (suppressed during replay)
+Html (position: fixed, covers viewport)
+├── viewTopBar              // at viewport (0, 0), 32px tall
+├── viewStatusBar           // at viewport (0, 32), 32px tall
+├── handColumn gutter       // at viewport (20, 100), 240px wide
+│   ├── turn #
+│   └── viewPlayerRow × 2   // name + score + hand (if active) OR "N cards"
+│       └── viewTurnControls  // Complete turn / Hint / Replay / Lobby
+├── boardColumn             // at (boardViewportLeft, boardViewportTop)
+│   └── boardWithWings
+│       ├── viewStackForBoard (×N)
+│       └── viewWingAt       (×M, during drag only)
+├── draggedOverlay          // floating drag card (fixed-position)
+└── viewPopup               // modal ceremony (suppressed during replay)
 ```
+
+Note: boardViewportLeft/Top are the DOCUMENTARY values of
+the board's viewport position. The drag floater and replay
+synthesizer don't rely on them — they DOM-measure the board
+rect live at replay time. See Main.claude.
 
 -}
 
@@ -190,13 +194,14 @@ pluralize n word =
 
 view : Model -> Html Msg
 view model =
-    -- Pinned layout. Everything is absolute-positioned inside
-    -- a viewport-origin container. That way:
-    -- - BoardGeometry.boardViewport{Left,Top} match TRUE
-    --   viewport coords (no flow above shifting us down).
-    -- - HandLayout's handLeft/handTop also match TRUE viewport.
-    -- - The drag floater (position: fixed) and synthesized
-    --   paths operate in the same frame.
+    -- Viewport-origin container. All children are
+    -- absolute-positioned, no flow above the board to shift
+    -- things around. This is a rendering discipline; the
+    -- replay synthesizer does NOT trust the pinned viewport
+    -- constants — it DOM-measures the board and hand cards
+    -- at replay time (see Main.claude "Rule for adding
+    -- synthesis"). The fixed outer div gives the drag floater
+    -- (position: fixed) a stable frame.
     -- Overlays the page-level app-nav; a minimal nav rendered
     -- inside the Elm view can be added later if we miss it.
     div

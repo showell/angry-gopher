@@ -33,8 +33,6 @@ suite =
                 (MoveStack { stackIndex = 5, newLoc = { top = 140, left = 220 } })
             , roundTrip "complete_turn" CompleteTurn
             , roundTrip "undo" Undo
-            , roundTrip "play_trick"
-                (PlayTrick { trickId = "pair_peel", handCards = [ card8H, card8H ] })
             ]
         , describe "JSON shape (locks the wire format)"
             [ test "split — tag + indices, nothing else" <|

@@ -8,9 +8,10 @@ the player did (split, merge-stack, merge-hand, place-hand,
 move-stack, complete-turn, undo); receiver derives post-state
 by applying the action to prior state. No diff on the wire.
 
-Wire is primitives-only as of 2026-04-20. `TrickResult` (board
-diff) and `PlayTrick` (client convenience) were ripped when
-hints moved client-side (see `project_hints_are_client_side.md`).
+Wire is primitives-only. `TrickResult` (board diff) was
+ripped on 2026-04-20 and `PlayTrick` (client convenience)
+was ripped on 2026-04-21 when hints moved client-side (see
+`project_hints_are_client_side.md`).
 
 See `showell/claude_writings/actions_not_diffs.md` for rationale.
 

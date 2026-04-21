@@ -74,11 +74,12 @@ import Time
 -- in Main.State. Initial Model is State.baseModel.
 
 
-{-| Port: updates window.location.hash to match the active
-session. Called whenever we learn which session we're on, so a
-reload finds the session again via the flags pathway.
+{-| Port: updates the URL path to `/gopher/lynrummy-elm/play/<sid>`
+to match the active session. Called whenever we learn which
+session we're on, so a reload finds the session again via
+server-side rendering of `flags.initialSessionId` from the path.
 -}
-port setSessionHash : String -> Cmd msg
+port setSessionPath : String -> Cmd msg
 
 
 init : Flags -> ( Model, Cmd Msg )
@@ -183,7 +184,7 @@ update msg model =
             -- Also pin the session into the URL hash so a reload
             -- resumes the same game instead of dropping to the lobby.
             ( { model | sessionId = Just sid }
-            , Cmd.batch [ fetchRemoteState sid, setSessionHash (String.fromInt sid) ]
+            , Cmd.batch [ fetchRemoteState sid, setSessionPath (String.fromInt sid) ]
             )
 
         SessionReceived (Err _) ->
@@ -536,36 +537,25 @@ update msg model =
                             )
 
                 ( AwaitingHandRect ctx, Err err ) ->
-                    -- Dev console only. Fall through to the pinned-
-                    -- math origin as a best-effort salvage.
+                    -- DOM query failed (very unusual — the hand
+                    -- card is rendered and its id is stable).
+                    -- No synthesis fallback exists for hand-origin
+                    -- actions: we can't honestly produce a drag
+                    -- path without the card's live rect. Apply
+                    -- the action immediately and beat.
                     let
                         _ =
                             Debug.log "HandCardRectReceived err" err
-                    in
-                    case buildReplayAnimation ctx.action Nothing model 0 of
-                        Just anim ->
-                            let
-                                cursor =
-                                    interpPath anim.path 0
-                            in
-                            ( { model
-                                | replayAnim = Animating anim
-                                , drag = animatedDragState anim cursor
-                              }
-                            , Cmd.none
-                            )
 
-                        Nothing ->
-                            let
-                                modelAfter =
-                                    applyWireAction ctx.action model
-                            in
-                            ( { modelAfter
-                                | replayAnim = Beating { untilMs = 1000 }
-                                , drag = NotDragging
-                              }
-                            , Cmd.none
-                            )
+                        modelAfter =
+                            applyWireAction ctx.action model
+                    in
+                    ( { modelAfter
+                        | replayAnim = Beating { untilMs = 1000 }
+                        , drag = NotDragging
+                      }
+                    , Cmd.none
+                    )
 
                 _ ->
                     -- Msg arrived outside AwaitingHandRect state —
@@ -917,14 +907,20 @@ buildReplayAnimation action maybePath model nowMs =
 
         _ ->
             -- No path (Python agent, DB hydration, etc.).
-            -- Synthesize from pinned geometry + hand layout.
+            -- Synthesize synchronously where possible. Hand-
+            -- origin actions return Nothing from here; they
+            -- are handled via `prepareReplayStep`'s async
+            -- DOM-query path.
             synthesizedReplayAnimation action model nowMs
 
 
 {-| Build an Animating record for an action with no captured
-gesture path. Looks up the drag endpoints from pinned geometry
-(shared with Python) and synthesizes a linear pointer path
-at human-scale velocity.
+gesture path. Resolves drag endpoints via `syntheticEndpoints`
+(live DOM-measured board rect) and synthesizes a linear pointer
+path at human-scale velocity. Only covers actions whose
+endpoints are BOTH board-frame and can be resolved synchronously
+— hand-origin actions go through the async `AwaitingHandRect`
+path in `prepareReplayStep` instead.
 -}
 synthesizedReplayAnimation :
     WireAction

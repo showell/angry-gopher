@@ -1001,7 +1001,7 @@ func lynrummyElmPlayWithSession(w http.ResponseWriter, sessionID int64) {
     node: document.getElementById("root"),
     flags: { initialSessionId: initialSessionId },
   });
-  app.ports.setSessionHash.subscribe(function(sid) {
+  app.ports.setSessionPath.subscribe(function(sid) {
     var url = sid === "" ? "/gopher/lynrummy-elm/"
                          : "/gopher/lynrummy-elm/play/" + sid;
     history.replaceState(null, "", url);

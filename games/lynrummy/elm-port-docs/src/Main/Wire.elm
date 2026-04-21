@@ -23,7 +23,7 @@ Extracted 2026-04-19 from the pre-split `Main.elm` monolith.
   server's referee verdict on CompleteTurn. Nothing here is
   treated as authoritative beyond that boundary; the autonomous
   transition runs locally in `Main.Apply`.
-- **No ports here.** `setSessionHash` lives in `Main.elm` (only
+- **No ports here.** `setSessionPath` lives in `Main.elm` (only
   port-modules may declare ports).
 - **Decoders match server emission exactly.** If a field shape
   changes on the server, the decoder here must change; if it

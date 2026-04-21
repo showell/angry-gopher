@@ -29,7 +29,6 @@ type WireAction
     | MoveStack { stackIndex : Int, newLoc : BoardLocation }
     | CompleteTurn
     | Undo
-    | PlayTrick { trickId : String, handCards : List Card }
 
 
 
@@ -81,13 +80,6 @@ encode action =
 
         Undo ->
             Encode.object [ ( "action", Encode.string "undo" ) ]
-
-        PlayTrick p ->
-            Encode.object
-                [ ( "action", Encode.string "play_trick" )
-                , ( "trick_id", Encode.string p.trickId )
-                , ( "hand_cards", Encode.list Card.encodeCard p.handCards )
-                ]
 
 
 encodeSide : Side -> Value
@@ -166,14 +158,6 @@ decoderForAction kind =
 
         "undo" ->
             Decode.succeed Undo
-
-        "play_trick" ->
-            Decode.map2
-                (\trickId handCards ->
-                    PlayTrick { trickId = trickId, handCards = handCards }
-                )
-                (Decode.field "trick_id" Decode.string)
-                (Decode.field "hand_cards" (Decode.list Card.cardDecoder))
 
         other ->
             Decode.fail ("Unknown action: " ++ other)

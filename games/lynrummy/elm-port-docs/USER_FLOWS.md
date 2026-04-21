@@ -34,8 +34,8 @@ verified ("button exists and fires Msg X"), it's a step.
 3. Server: POST /new-session creates a fresh session with a
    deck seed, returns `{session_id}`. ✅
 4. Client: `SessionReceived` sets sessionId, fires
-   setSessionHash port + fetchRemoteState. ✅
-5. URL hash updates to `#<sid>`. ✅
+   setSessionPath port + fetchRemoteState. ✅
+5. URL path updates to `/gopher/lynrummy-elm/play/<sid>`. ✅
 6. Server: GET /state returns initial board + both hands + seat 0. ✅
 7. Client: StateRefreshed populates hands/board/scores/active. ✅
 8. UI shows two-row player layout, Player 1 active with 15
@@ -46,17 +46,17 @@ verified ("button exists and fires Msg X"), it's a step.
 1. User sees list of sessions in lobby with Resume buttons. ✅
 2. User clicks Resume for session N. ✅
 3. Client: `ClickResumeSession sid` fires. Model phase →
-   Playing, sessionId set, fetchRemoteState + setSessionHash. ✅
-4. URL hash updates to `#<sid>`. ✅
+   Playing, sessionId set, fetchRemoteState + setSessionPath. ✅
+4. URL path updates to `/gopher/lynrummy-elm/play/<sid>`. ✅
 5. Server: GET /state replays action log, returns current state. ✅
 6. Client populates UI — active hand + scores reflect progress. ✅
 
 ### 3. Reload a game in progress
 
 1. User hits browser reload while playing session N. ✅
-2. Page reloads; URL hash is still `#<sid>`. ✅
-3. Harness script parses hash, passes `initialSessionId: N`
-   as Elm flag. ✅
+2. Page reloads; URL path is still `/gopher/lynrummy-elm/play/N`. ✅
+3. Go server parses the path and bakes `initialSessionId: N`
+   into the Elm flag in the rendered HTML. ✅
 4. Elm init: phase → Playing, sessionId set, fetchRemoteState +
    fetchSessionsList. ✅
 5. UI resumes at current state. ✅
@@ -67,8 +67,8 @@ verified ("button exists and fires Msg X"), it's a step.
 
 1. User clicks "← Lobby" button in turn controls. ✅
 2. Client: `ClickBackToLobby` fires. Phase → Lobby, sessionId
-   cleared, fetchSessionsList + setSessionHash "" (clear hash). ✅
-3. URL hash clears. ✅
+   cleared, fetchSessionsList + setSessionPath "" (clear path). ✅
+3. URL resets to `/gopher/lynrummy-elm/`. ✅
 4. UI shows lobby with session list. ✅
 
 ---

@@ -28,6 +28,12 @@ reference Msg constructors without cyclic imports.
 - `WingEntered WingId`
 - `WingLeft WingId`
 - `BoardRectReceived (Result Browser.Dom.Error Browser.Dom.Element)`
+  — Task result for live-drag and replay board-rect lookup.
+- `HandCardRectReceived (Result Browser.Dom.Error (Browser.Dom.Element, Time.Posix))`
+  — Task result for replay-time DOM lookup of a hand card's
+  live viewport rect, paired with `Time.now` so the
+  animation's startMs is accurate. Only meaningful when
+  `model.replayAnim` is `AwaitingHandRect`.
 
 **Button clicks (top-bar + popup):**
 - `ClickCompleteTurn`

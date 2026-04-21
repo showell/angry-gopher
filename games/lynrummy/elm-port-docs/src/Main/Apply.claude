@@ -18,9 +18,10 @@ the `refereeBounds` constant.
 ## Public API
 
 - `applyWireAction : WireAction -> Model -> Model` —
-  deterministic dispatch on action kind, seven branches (one per
-  WireAction constructor; wire is primitives-only as of
-  2026-04-20).
+  deterministic dispatch on action kind, seven branches (one
+  per WireAction constructor). Wire is primitives-only;
+  `TrickResult` was ripped 2026-04-20 and `PlayTrick`
+  (last non-primitive) followed 2026-04-21.
 - `applyChange : BoardActions.BoardChange -> List CardStack -> List CardStack`
   — remove-then-append primitive used by the merge helpers
   internally. Exposed because Gesture / View code occasionally

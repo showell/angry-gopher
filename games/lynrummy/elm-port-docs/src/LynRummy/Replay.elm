@@ -8,7 +8,7 @@ module LynRummy.Replay exposing
 a `(board, hand)` state to produce the next state. This is the
 function the UI replay walker calls on each step.
 
-No-op for `CompleteTurn`, `Undo`, `PlayTrick` — turn-logic isn't
+No-op for `CompleteTurn` and `Undo` — turn-logic isn't
 modeled here (and Undo is deliberately deferred in V1 replay).
 
 -}
@@ -124,9 +124,6 @@ applyAction action state =
         Undo ->
             state
 
-        PlayTrick _ ->
-            -- Retired wire action; no-op if one appears in a log.
-            state
 
 
 
