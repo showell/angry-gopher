@@ -4,9 +4,11 @@ module LynRummy.Reducer exposing
     , initialState
     )
 
-{-| Pure replay primitives: take a `WireAction` and apply it to
-a `(board, hand)` state to produce the next state. This is the
-function the UI replay walker calls on each step.
+{-| Pure action reducer: take a `WireAction` and apply it to a
+`(board, hand)` state to produce the next state. Shared by both
+live-play action application and replay. Live-play callers wrap
+this with Model-level concerns (Score, cardsPlayedThisTurn) in
+`Main.Apply`; the replay walker calls it directly.
 
 No-op for `CompleteTurn` and `Undo` — turn-logic isn't
 modeled here (and Undo is deliberately deferred in V1 replay).
@@ -127,23 +129,7 @@ applyAction action state =
 
 
 
--- HELPERS (local; duplicated across Main.elm and here. ~6 LOC
--- total; cheaper than coupling the modules for now.)
-
-
-removeStackOnce : CardStack -> List CardStack -> List CardStack
-removeStackOnce target board =
-    List.filter (\s -> not (stacksEqual s target)) board
-
-
-removeHandCardByContent : Card -> Hand -> Hand
-removeHandCardByContent card hand =
-    case findHandCard card hand of
-        Just hc ->
-            Hand.removeHandCard hc hand
-
-        Nothing ->
-            hand
+-- HELPERS
 
 
 listAt : Int -> List a -> Maybe a

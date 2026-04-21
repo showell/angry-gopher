@@ -14,10 +14,11 @@ next state. That's it. Nothing UI-layer here.
   canonical fold over the Elm-side action log. Replay, undo
   (future), and live-play walkers all advance state through
   this one reducer.
-- **Known tech debt:** `Main.Apply.applyAction` (UI-model
-  level) re-implements much of this. Candidate for a DRY pass
-  — the Model-level applier could delegate the state-transition
-  half to this module. Not done today; out of cleanup scope.
+- **Sole owner of physics (2026-04-21):** `Main.Apply.applyAction`
+  used to re-implement the five physics branches. Post-DRY,
+  Apply delegates to this module and keeps only the Model-level
+  wrappers (Score, cardsPlayedThisTurn, CompleteTurn via Game,
+  status text).
 
 ## Key exports
 
@@ -80,13 +81,13 @@ silently corrupting the tracked player's hand when we mean
   fallback; the real session-specific baseline is loaded by
   `Main/Wire` from `/sessions/:id/actions` and fed in.
 
-## Helpers duplicated from Main.elm
+## Internal helpers
 
 `removeStackOnce`, `removeHandCardByContent`, `listAt`,
-`applyChange`, `findHandCard` — ~6 LOC total. Duplicated
-rather than coupling the modules for now. Marked candidate
-for a shared `LynRummy.State` helper module if the
-duplication grows.
+`applyChange`, `findHandCard` — ~6 LOC total. Post-DRY
+(2026-04-21), these live only here; `Main.Apply` no longer
+keeps its own copies. If another module ever needs the same
+primitives, promote to a shared helper then.
 
 ## Pointers
 

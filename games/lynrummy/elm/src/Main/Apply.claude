@@ -1,9 +1,18 @@
 # Main/Apply.elm — EARLY
 
-The pure state-transition layer of the Elm client. Owns
-`applyAction` — the single entry point for applying a
-validated action to the Model — plus the merge helpers and
-the `refereeBounds` constant.
+The Model-level state-transition layer. `applyAction` is the
+single entry point for applying a validated action to the
+Model — same function whether the input came from a local
+gesture, a replay tick, or a wire broadcast.
+
+## Status
+
+- **Label:** EARLY. Extracted 2026-04-19 from the pre-split
+  `Main.elm` monolith. DRY'd 2026-04-21 against
+  `LynRummy.Reducer` after the two applyAction functions were
+  found to duplicate most of the board+hand transition logic.
+- **Shape:** Pure. No Msg, no I/O, no rendering, no
+  subscriptions.
 
 ## Name audit (2026-04-21)
 
@@ -14,61 +23,53 @@ where the action came from; it just applies it. Renamed to
 `Reducer.applyAction` now share a shape (both dispatch on
 `WireAction`, both disambiguated by their module qualifier).
 
-## Status
+## Design: Reducer owns physics, Apply owns Model plumbing
 
-- **Label:** EARLY. Extracted 2026-04-19 from the pre-split
-  `Main.elm` monolith. Pure functions only; no Msg, no I/O,
-  no rendering, no subscriptions.
-- **Mirror of invariant:** This is the client-side realization
-  of Steve's "one log, source-agnostic" principle. Every
-  validated move — from a local gesture, replay tick, or wire
-  broadcast — flows through this module.
+`LynRummy.Reducer.applyAction` is the authoritative
+(board, hand) reducer. It handles the five physics actions
+(Split, MergeStack, MergeHand, PlaceHand, MoveStack),
+including the synthetic-HandCard fallback for replay of an
+untracked seat's hand.
+
+`Main.Apply.applyAction` delegates each physics action to
+Reducer, then wraps the result with Model-level UI fields:
+
+- `score = Score.forStacks post.board` — the running total.
+- `setActiveHand post.hand ...` — writes the (possibly
+  updated) active-player hand back into the `hands : List Hand`
+  structure.
+- `cardsPlayedThisTurn += 1` for MergeHand / PlaceHand only.
+
+The two actions Reducer can't handle live here inline:
+
+- `CompleteTurn` — delegates to `Game.applyCompleteTurn`
+  (classify, bank, deal, flip, age), then updates UI-layer
+  `score` + `status`.
+- `Undo` — no-op. V1 has no Undo button; action won't appear
+  in logs we write.
 
 ## Public API
 
-- `applyAction : WireAction -> Model -> Model` —
-  deterministic dispatch on action kind, seven branches (one
-  per WireAction constructor). Wire is primitives-only;
-  `TrickResult` was ripped 2026-04-20 and `PlayTrick`
-  (last non-primitive) followed 2026-04-21.
-- `applyChange : BoardActions.BoardChange -> List CardStack -> List CardStack`
-  — remove-then-append primitive used by the merge helpers
-  internally. Exposed because Gesture / View code occasionally
-  simulates board changes without going through applyAction.
-- `findHandCard : Card -> Hand -> Maybe HandCard` — first-match
-  lookup by Card identity (value + suit + origin_deck).
-  Exposed because the merge helpers need a `Nothing` signal
-  when the hand doesn't contain the card (replay of an
-  untracked seat's hand).
+- `applyAction : WireAction -> Model -> Model` — the
+  dispatcher. Exhaustive over the 7 WireAction variants so the
+  compiler catches drift if a new variant is added.
 - `refereeBounds : BoardGeometry.BoardBounds` — the 800×600
   with 5px margin constant. Shared between
   `Main.ClickCompleteTurn` (referee pre-check) and any future
   client-side geometry validation. Matches the server's
   constant at `views/lynrummy_elm.go`.
 
-## applyAction branch-by-branch
+Internal helpers:
 
-| Branch | Effect |
-|---|---|
-| `Split { stackIndex, cardIndex }` | Calls `GA.applySplit` on board. Recomputes `score`. |
-| `MergeStack { sourceStack, targetStack, side }` | `BoardActions.tryStackMerge`; on Just, `applyChange`; on Nothing, no-op. |
-| `MergeHand { handCard, targetStack, side }` | `applyHandOntoStack` + `Game.noteCardsPlayed 1`. |
-| `PlaceHand { handCard, loc }` | `applyPlaceHandCard` + `Game.noteCardsPlayed 1`. |
-| `MoveStack { stackIndex, newLoc }` | `BoardActions.moveStack` + `applyChange`. |
-| `CompleteTurn` | Delegates to `Game.applyCompleteTurn` (classify, bank, reset+draw, age, flip, advance), then updates UI-layer `score` + `status` ("Turn N — Player M to play."). |
-| `Undo` | No-op. V1 has no Undo button; action won't appear in logs we write. |
+- `applyPhysics` — threads (board, hand) through Reducer,
+  rebuilds the Model with Score + active-hand updates.
+  Idempotent on Reducer no-ops (bad target stack etc.): same
+  board, same hand, same score.
+- `applyCompleteTurn` — Game delegation + status text.
 
-## The synthetic-HandCard fallback
-
-For `MergeHand` / `PlaceHand`, the helpers call `findHandCard`
-first. On `Nothing`, they construct a synthetic
-`{ card, state = HandNormal }` and apply the *board* change
-anyway (skipping the hand-removal step). This is the
-mechanism that makes replay of an untracked seat's moves
-"advance the board but not the hand," which was important
-before we added the true-initial-state replay baseline. Still
-useful as defense against any other path where a hand isn't
-fully tracked.
+No other helpers — `applyChange`, `findHandCard`, the merge
+glue, and the synthetic-HandCard fallback all live in Reducer
+now, where they're closer to the transition they serve.
 
 ## Invariants preserved by applyAction
 
@@ -76,41 +77,46 @@ fully tracked.
   change.
 - `hands[activePlayerIndex]` shrinks by exactly one card on
   successful MergeHand / PlaceHand.
-- `cardsPlayedThisTurn` increments by the number of cards
-  released on MergeHand (1) / PlaceHand (1).
+- `cardsPlayedThisTurn` increments by 1 on MergeHand /
+  PlaceHand (regardless of whether Reducer no-ops — matches
+  pre-DRY behavior; see "Pre-DRY quirk" below).
 - `CompleteTurn` resets `cardsPlayedThisTurn = 0`, flips
   `activePlayerIndex`, advances `turnIndex`, via delegation to
-  `Game.applyCompleteTurn`. All GameState-layer invariants are
+  `Game.applyCompleteTurn`. GameState-layer invariants are
   Game's responsibility, not this module's.
+
+### Pre-DRY quirk (preserved)
+
+On a MergeHand whose target stack doesn't exist (or whose
+tryHandMerge returns Nothing), the board + hand stay the same
+but `cardsPlayedThisTurn` still increments. This matches the
+pre-DRY behavior exactly — `applyHandOntoStack` returned
+`model` unchanged but the pipeline `|> Game.noteCardsPlayed 1`
+ran afterward. Not a bug worth fixing today; flagged here for
+awareness.
 
 ## Dependencies
 
-Imports:
-- `LynRummy.BoardActions` — `tryStackMerge`, `tryHandMerge`,
-  `placeHandCard`, `moveStack`.
-- `LynRummy.BoardGeometry` — `BoardBounds` type.
-- `LynRummy.Card` — Card type.
-- `LynRummy.CardStack` — BoardLocation, CardStack, HandCard,
-  stacksEqual.
+- `LynRummy.BoardGeometry` — BoardBounds type for
+  `refereeBounds`.
 - `LynRummy.Game` — `noteCardsPlayed`, `applyCompleteTurn`.
-- `LynRummy.GestureArbitration` — `applySplit`.
-- `LynRummy.Hand` — Hand, removeHandCard.
-- `LynRummy.Score` — forStacks.
-- `LynRummy.WireAction` — `WireAction(..)`.
+- `LynRummy.Reducer` — `applyAction` for the physics half.
+- `LynRummy.Score` — `forStacks`.
+- `LynRummy.WireAction` — `WireAction(..)` for the dispatch.
 - `Main.State` — Model, StatusKind, activeHand, setActiveHand.
-
-No inbound Main.* dependencies on this module should exist —
-only `Main.elm` imports it.
 
 ## Tests
 
 Currently no dedicated `Main/ApplyTest.elm`. Coverage is
-indirect through:
+indirect:
 
-- `LynRummy.GameTest` exercises `Game.applyCompleteTurn` via
-  GameState directly.
-- `LynRummy.DslConformanceTest` exercises trick plays.
+- `LynRummy.ReducerTest` covers the physics half directly via
+  `Reducer.applyAction`.
+- `LynRummy.GameTest` covers `Game.applyCompleteTurn`.
+- `LynRummy.DslConformanceTest` exercises end-to-end trick
+  plays.
 - `auto_player.py` provides end-to-end smoke coverage.
 
-A dedicated test module is a candidate future investment —
-each branch's invariants would be trivially assertable.
+A dedicated test module could assert the Model-level wrappers
+(Score recompute, setActiveHand, noteCardsPlayed increment,
+CompleteTurn status text) but isn't written yet.

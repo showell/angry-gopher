@@ -1,7 +1,5 @@
 module Main.Apply exposing
     ( applyAction
-    , applyChange
-    , findHandCard
     , refereeBounds
     )
 
@@ -12,20 +10,17 @@ input came from a local gesture, a replay tick, or a wire
 broadcast. "Capture the input, update the data structure,
 re-draw the view."
 
-Extracted 2026-04-19 from the pre-split `Main.elm` during the
-refactor that unwound the monolith. Pure: no I/O, no Msg, no
-rendering, no subscriptions. Its only external effects are
-producing new Model values.
+The (board, hand) half of each physics transition delegates to
+`LynRummy.Reducer.applyAction`. This module's job is the
+Model-level wrapping: Score recomputation, the
+`cardsPlayedThisTurn` counter, and the full `CompleteTurn`
+transition via `Game.applyCompleteTurn`.
 
 -}
 
-import LynRummy.BoardActions as BoardActions exposing (Side(..))
 import LynRummy.BoardGeometry as BoardGeometry
-import LynRummy.Card exposing (Card)
-import LynRummy.CardStack as CardStack exposing (BoardLocation, CardStack, HandCard, stacksEqual)
 import LynRummy.Game as Game
-import LynRummy.GestureArbitration as GA
-import LynRummy.Hand as Hand exposing (Hand)
+import LynRummy.Reducer as Reducer
 import LynRummy.Score as Score
 import LynRummy.WireAction as WA exposing (WireAction)
 import Main.State exposing (Model, StatusKind(..), activeHand, setActiveHand)
@@ -47,223 +42,99 @@ refereeBounds =
 
 
 
--- APPLY WIRE ACTION
+-- APPLY ACTION
 
 
-{-| Apply a validated WireAction to the Model. Dispatches on
-the action kind; each branch produces a new Model.
+{-| Apply a validated WireAction to the Model. Exhaustive
+dispatch over the seven variants.
 
-Branch behaviour summary:
-
-  - `Split` — split a board stack in two at `cardIndex`.
-  - `MergeStack` — try cross-stack merge via
-    `BoardActions.tryStackMerge`; succeeds or no-ops.
-  - `MergeHand` — hand card onto a board stack, counts toward
+  - `Split`, `MergeStack`, `MoveStack` — board-only physics.
+  - `MergeHand`, `PlaceHand` — board + hand physics; each
+    releases one hand card, so increment
     `cardsPlayedThisTurn`.
-  - `PlaceHand` — hand card as a new stack at a loc, counts
-    toward `cardsPlayedThisTurn`.
-  - `MoveStack` — reposition a stack; no card movement.
-  - `CompleteTurn` — delegates to `Game.applyCompleteTurn` for
-    the full autonomous transition (classify, bank, deal,
-    flip, age), then updates UI-layer `score` + `status`.
-  - `Undo` — no-op (deferred; V1 has no Undo button).
+  - `CompleteTurn` — full autonomous turn transition via
+    `Game.applyCompleteTurn`, then UI-layer `score` + `status`.
+  - `Undo` — no-op (V1 has no Undo button; deferred).
+
+The physics branches all share `applyPhysics`: delegate the
+(board, hand) transition to `Reducer.applyAction`, then thread
+the result back through the Model.
 
 -}
 applyAction : WireAction -> Model -> Model
 applyAction action model =
     case action of
-        WA.Split { stackIndex, cardIndex } ->
-            let
-                newBoard =
-                    GA.applySplit stackIndex cardIndex model.board
-            in
-            { model | board = newBoard, score = Score.forStacks newBoard }
+        WA.Split _ ->
+            applyPhysics action model
 
-        WA.MergeStack { sourceStack, targetStack, side } ->
-            case ( listAt sourceStack model.board, listAt targetStack model.board ) of
-                ( Just source, Just target ) ->
-                    case BoardActions.tryStackMerge target source side of
-                        Just change ->
-                            let
-                                newBoard =
-                                    applyChange change model.board
-                            in
-                            { model
-                                | board = newBoard
-                                , score = Score.forStacks newBoard
-                            }
+        WA.MergeStack _ ->
+            applyPhysics action model
 
-                        Nothing ->
-                            model
+        WA.MergeHand _ ->
+            applyPhysics action model |> Game.noteCardsPlayed 1
 
-                _ ->
-                    model
+        WA.PlaceHand _ ->
+            applyPhysics action model |> Game.noteCardsPlayed 1
 
-        WA.MergeHand { handCard, targetStack, side } ->
-            applyHandOntoStack handCard targetStack side model
-                |> Game.noteCardsPlayed 1
-
-        WA.PlaceHand { handCard, loc } ->
-            applyPlaceHandCard handCard loc model
-                |> Game.noteCardsPlayed 1
-
-        WA.MoveStack { stackIndex, newLoc } ->
-            case listAt stackIndex model.board of
-                Just stack ->
-                    let
-                        change =
-                            BoardActions.moveStack stack newLoc
-
-                        newBoard =
-                            applyChange change model.board
-                    in
-                    { model | board = newBoard, score = Score.forStacks newBoard }
-
-                Nothing ->
-                    model
+        WA.MoveStack _ ->
+            applyPhysics action model
 
         WA.CompleteTurn ->
-            let
-                afterTurn =
-                    Game.applyCompleteTurn model
-
-                nextActive =
-                    afterTurn.activePlayerIndex
-
-                nextTurn =
-                    afterTurn.turnIndex
-            in
-            { afterTurn
-                | score = Score.forStacks afterTurn.board
-                , status =
-                    { text =
-                        "Turn "
-                            ++ String.fromInt (nextTurn + 1)
-                            ++ " — Player "
-                            ++ String.fromInt (nextActive + 1)
-                            ++ " to play."
-                    , kind = Celebrate
-                    }
-            }
+            applyCompleteTurn model
 
         WA.Undo ->
             model
 
 
 
--- MERGE HELPERS
+-- PHYSICS
 
 
-{-| Hand-card-onto-stack merge, with a synthetic fallback when
-the target hand doesn't contain the card (replay of a seat
-whose hand is server-dealt and not mirrored client-side). Board
-advances either way; hand only mutates when we have a real
-tracked HandCard to remove.
+{-| Delegate the (board, hand) transition to
+`LynRummy.Reducer.applyAction`, then rebuild the Model with
+the UI-layer wrappers: Score recompute + active-hand
+write-back. Covers the five physics actions.
+
+No-ops (bad target stack, bad hand card reference) land back
+here with `post` equal to the input `pre`, so the writes are
+idempotent — same board, same hand, same score.
+
 -}
-applyHandOntoStack : Card -> Int -> Side -> Model -> Model
-applyHandOntoStack card targetStack side model =
-    case listAt targetStack model.board of
-        Just target ->
-            let
-                hand =
-                    activeHand model
-
-                ( hc, mutateHand ) =
-                    case findHandCard card hand of
-                        Just real ->
-                            ( real, True )
-
-                        Nothing ->
-                            ( { card = card, state = CardStack.HandNormal }, False )
-            in
-            case BoardActions.tryHandMerge target hc side of
-                Just change ->
-                    let
-                        newBoard =
-                            applyChange change model.board
-
-                        withBoard =
-                            { model | board = newBoard, score = Score.forStacks newBoard }
-                    in
-                    if mutateHand then
-                        setActiveHand (Hand.removeHandCard hc hand) withBoard
-
-                    else
-                        withBoard
-
-                Nothing ->
-                    model
-
-        Nothing ->
-            model
-
-
-applyPlaceHandCard : Card -> BoardLocation -> Model -> Model
-applyPlaceHandCard card loc model =
+applyPhysics : WireAction -> Model -> Model
+applyPhysics action model =
     let
-        hand =
-            activeHand model
+        pre =
+            { board = model.board, hand = activeHand model }
 
-        ( hc, mutateHand ) =
-            case findHandCard card hand of
-                Just real ->
-                    ( real, True )
-
-                Nothing ->
-                    ( { card = card, state = CardStack.HandNormal }, False )
-
-        change =
-            BoardActions.placeHandCard hc loc
-
-        newBoard =
-            applyChange change model.board
-
-        withBoard =
-            { model | board = newBoard, score = Score.forStacks newBoard }
+        post =
+            Reducer.applyAction action pre
     in
-    if mutateHand then
-        setActiveHand (Hand.removeHandCard hc hand) withBoard
-
-    else
-        withBoard
-
-
-
--- BOARD UPDATE + HAND LOOKUP
-
-
-{-| Remove-then-add semantics for a `BoardActions.BoardChange`
-against a board. Stacks in `stacksToRemove` (matched by
-`stacksEqual`) are filtered out; `stacksToAdd` is appended at
-the end. Positional shift is intentional — merged stacks end
-up as the last element, which lets downstream code find "just
-changed" stacks at a predictable position.
--}
-applyChange : BoardActions.BoardChange -> List CardStack -> List CardStack
-applyChange change board =
-    List.filter (\s -> not (List.any (stacksEqual s) change.stacksToRemove)) board
-        ++ change.stacksToAdd
-
-
-{-| Find a hand card whose Card identity (value + suit +
-origin_deck) matches. First match wins. Returns `Nothing` when
-the hand doesn't contain the card — which happens legitimately
-during replay of a seat whose hand is server-dealt and not
-mirrored client-side. Callers use `Nothing` as a signal to
-build a synthetic HandCard and apply the board change without
-touching the hand.
--}
-findHandCard : Card -> Hand -> Maybe HandCard
-findHandCard card hand =
-    hand.handCards
-        |> List.filter (\hc -> hc.card == card)
-        |> List.head
+    setActiveHand post.hand
+        { model
+            | board = post.board
+            , score = Score.forStacks post.board
+        }
 
 
 
--- INTERNAL
+-- COMPLETE TURN
 
 
-listAt : Int -> List a -> Maybe a
-listAt i xs =
-    List.head (List.drop i xs)
+applyCompleteTurn : Model -> Model
+applyCompleteTurn model =
+    let
+        afterTurn =
+            Game.applyCompleteTurn model
+    in
+    { afterTurn
+        | score = Score.forStacks afterTurn.board
+        , status =
+            { text =
+                "Turn "
+                    ++ String.fromInt (afterTurn.turnIndex + 1)
+                    ++ " — Player "
+                    ++ String.fromInt (afterTurn.activePlayerIndex + 1)
+                    ++ " to play."
+            , kind = Celebrate
+            }
+    }
