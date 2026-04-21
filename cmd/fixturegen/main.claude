@@ -9,9 +9,9 @@ targets, each filtered by which ops that target can execute:
 - **Go** (`games/lynrummy/referee_conformance_test.go`, package
   `lynrummy`) — referee ops only: `validate_game_move`,
   `validate_turn_complete`.
-- **Elm** (`games/lynrummy/elm-port-docs/tests/LynRummy/DslConformanceTest.elm`)
+- **Elm** (`games/lynrummy/elm/tests/LynRummy/DslConformanceTest.elm`)
   — every op, including `build_suggestions` and `hint_invariant`.
-- **JSON fixtures** (`tools/lynrummy_elm_player/conformance_fixtures.json`)
+- **JSON fixtures** (`games/lynrummy/python/conformance_fixtures.json`)
   — hint ops for the Python runner. Python is interpreted so
   there is no Python codegen; the runner reads the JSON at
   runtime.

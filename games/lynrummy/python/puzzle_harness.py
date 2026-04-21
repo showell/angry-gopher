@@ -9,10 +9,10 @@ Three commands:
 
 Typical flow:
 
-  python3 tools/lynrummy_elm_player/puzzle_harness.py --list
-  python3 tools/lynrummy_elm_player/puzzle_harness.py --play hand_stacks_basic
+  python3 games/lynrummy/python/puzzle_harness.py --list
+  python3 games/lynrummy/python/puzzle_harness.py --play hand_stacks_basic
   # Steve opens the URL, solves it.
-  python3 tools/lynrummy_elm_player/puzzle_harness.py --compare hand_stacks_basic --session 7
+  python3 games/lynrummy/python/puzzle_harness.py --compare hand_stacks_basic --session 7
 """
 
 import argparse

@@ -413,9 +413,9 @@ them plainly here so they're not only implicit:
 ### Subsystem landing pages
 
 - [`./README.md`](./README.md) — Go subsystem.
-- [`./elm-port-docs/README.md`](./elm-port-docs/README.md) —
+- [`./elm/README.md`](./elm/README.md) —
   Elm UI subsystem.
-- [`../../tools/lynrummy_elm_player/README.md`](../../tools/lynrummy_elm_player/README.md)
+- [`./python/README.md`](./python/README.md)
   — Python agent subsystem.
 
 Each subsystem README lists the load-bearing sidecars in
@@ -431,7 +431,7 @@ sidecars.
 - [`../../GLOSSARY.md`](../../GLOSSARY.md) — vocabulary.
   If the architecture doc reaches for a term you don't know,
   check the glossary.
-- [`./elm-port-docs/USER_FLOWS.md`](./elm-port-docs/USER_FLOWS.md)
+- [`./elm/USER_FLOWS.md`](./elm/USER_FLOWS.md)
   — enumerated Elm-client user flows. Read this when planning
   a UX change.
 
@@ -471,7 +471,7 @@ redundancy with other surfaces (memories, sidecars) is
 deliberate and fine.
 - Where to find the details: sidecars, memories, the subtree
   READMEs we still need to write (Go-side `games/lynrummy`
-  + Python-side `tools/lynrummy_elm_player`).
+  + Python-side `games/lynrummy/python`).
 - A useful example per cross-language contract. Don't repeat
   facts sidecars already carry — point at the sidecar, but
   explain how the over-arching principles apply in that one

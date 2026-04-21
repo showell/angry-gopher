@@ -48,7 +48,7 @@ standard "refusal" pattern (see `Trick.claude`).
 ## Pointers
 
 - Python counterpart: `hints.direct_play` in
-  `tools/lynrummy_elm_player/hints.py` (emits primitives, not
+  `games/lynrummy/python/hints.py` (emits primitives, not
   Plays — different API, same game logic).
 - Depends on: `CardStack.leftMerge`/`rightMerge`,
   `Tricks.Helpers`, `Tricks.Trick`.

@@ -6,7 +6,7 @@ skips it + its target, so downstream queries see the pre-move
 state.
 
 Usage:
-    python3 tools/lynrummy_elm_player/undo_demo.py
+    python3 games/lynrummy/python/undo_demo.py
 """
 
 import sys

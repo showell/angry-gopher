@@ -81,5 +81,5 @@ monotonically with gaps where tricks didn't fire.
 
 - Depends on: all 7 trick modules under `LynRummy.Tricks.*`.
 - Consumers: `Main.elm` (Hint button wiring), test suite.
-- Python counterpart: `tools/lynrummy_elm_player/hints.py`
+- Python counterpart: `games/lynrummy/python/hints.py`
   (different API — returns primitives, not Plays).

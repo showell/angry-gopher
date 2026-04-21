@@ -64,7 +64,7 @@ re-checking at apply time catches any drift.
 ## Pointers
 
 - Python counterpart: `hints.pair_peel` in
-  `tools/lynrummy_elm_player/hints.py` (emits primitives).
+  `games/lynrummy/python/hints.py` (emits primitives).
   Python had ordering bugs on this trick; Elm does not — see
   `tricks.dsl` `hint_invariant_pair_peel_run_pair_reversed_hand`.
 - Depends on: `Card`, `CardStack.canExtract`, `StackType`

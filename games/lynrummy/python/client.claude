@@ -34,7 +34,7 @@ programmatically and observe the resulting state.
 ## Running
 
 ```
-python3 tools/lynrummy_elm_player/client.py
+python3 games/lynrummy/python/client.py
 ```
 
 Runs a demo: creates a session, merges 7H onto the 7-set,
@@ -46,4 +46,4 @@ splits the spade run, prints the browse URL.
   potentially a Python-based opponent bot.
 - Depends on: server endpoints in `views/lynrummy_elm.go`.
 - Wire format spec: `games/lynrummy/wire_action.go` +
-  `elm-port-docs/src/LynRummy/WireAction.elm`.
+  `elm/src/LynRummy/WireAction.elm`.

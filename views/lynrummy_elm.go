@@ -1,5 +1,5 @@
 // LynRummy Elm client view. Serves the compiled Elm app from
-// games/lynrummy/elm-port-docs/ through Gopher. Standalone
+// games/lynrummy/elm/ through Gopher. Standalone
 // client in V1 — no server round-trip, no auth, no real
 // game state. Just "Steve can reach the new client via the
 // Gopher URL."
@@ -29,7 +29,7 @@ import (
 // ElmLynRummyDir is the repo-relative directory containing the
 // Elm source + compiled elm.js. Set by main; default assumes
 // Gopher runs from the angry-gopher repo root.
-var ElmLynRummyDir = "games/lynrummy/elm-port-docs"
+var ElmLynRummyDir = "games/lynrummy/elm"
 
 // HandleLynRummyElm dispatches /gopher/lynrummy-elm/*.
 func HandleLynRummyElm(w http.ResponseWriter, r *http.Request) {
@@ -986,7 +986,7 @@ func lynrummyElmPlayWithSession(w http.ResponseWriter, sessionID int64) {
   <a href="/gopher/">← Gopher home</a>
   <a href="/gopher/game-lobby">Game lobby</a>
   <a href="/gopher/lynrummy-elm/sessions">Sessions</a>
-  <a href="/gopher/wiki/gopher/games/lynrummy/elm-port-docs/">Elm source</a>
+  <a href="/gopher/wiki/gopher/games/lynrummy/elm/">Elm source</a>
 </div>
 <div class="app-main">
 <div id="root"></div>

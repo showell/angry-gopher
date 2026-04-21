@@ -13,7 +13,7 @@ pulled from deck 1 before dealing. Designer-chosen starting
 position, not random. Parsed via the "KS", "TD" short labels
 so the designer intent stays readable.
 
-Mirrors `elm-port-docs/src/LynRummy/Dealer.elm` (a newer,
+Mirrors `elm/src/LynRummy/Dealer.elm` (a newer,
 denser sidecar lives there — consult it for the full
 algorithm including step-by-step deal logic and card
 conservation invariants).

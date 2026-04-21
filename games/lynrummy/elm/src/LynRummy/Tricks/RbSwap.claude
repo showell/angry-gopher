@@ -71,7 +71,7 @@ distinction matters for turn-accounting aging (see
 ## Pointers
 
 - Python counterpart: `hints.rb_swap` in
-  `tools/lynrummy_elm_player/hints.py`.
+  `games/lynrummy/python/hints.py`.
 - Depends on: `Card.suitColor`, `CardStack.stackType` +
   `leftMerge`/`rightMerge`, `StackType`,
   `Tricks.Helpers.substituteInStack` +

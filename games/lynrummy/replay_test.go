@@ -1,5 +1,5 @@
 // Tests for ApplyAction. Mirrors
-// elm-port-docs/tests/LynRummy/ReplayTest.elm — one transition
+// elm/tests/LynRummy/ReducerTest.elm — one transition
 // test per action type, no-op checks for turn-logic actions,
 // silent-pass-through on bad references, and a sequenced-actions
 // end-to-end.

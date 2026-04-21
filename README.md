@@ -61,9 +61,9 @@ The project's main feature. Three roles inside Gopher:
   recognizers walked in simplest-first priority order; each
   firing trick yields one representative suggestion.
 
-The Elm client lives at `games/lynrummy/elm-port-docs/` and is
+The Elm client lives at `games/lynrummy/elm/` and is
 served via `/gopher/lynrummy-elm/`. A Python agent-side client
-is at `tools/lynrummy_elm_player/`.
+is at `games/lynrummy/python/`.
 
 ## HTML views
 

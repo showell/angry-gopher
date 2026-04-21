@@ -13,7 +13,7 @@ at that point this plan forks.
 - **Replay (Elm)** — `Main.elm` `replayFrame` state machine animates drags
   at real-captured speed via `onAnimationFrame`, with a fixed 1-second
   inter-action beat (think-time deliberately discarded).
-- **Read (Python)** — `tools/lynrummy_elm_player/telemetry.py` reads
+- **Read (Python)** — `games/lynrummy/python/telemetry.py` reads
   directly from SQLite; HTTP bypassed for analysis data.
 
 Validation gate: Instant Replay at real speed. If a replay doesn't feel
@@ -118,7 +118,7 @@ without peering into the subject's head:
   outbound capture: does the re-animation look like what actually
   happened? Yes = capture is faithful. No = data is suspect and the bug
   is in the capture pipe.
-- Python reads the session post-hoc via `tools/lynrummy_elm_player/telemetry.py`.
+- Python reads the session post-hoc via `games/lynrummy/python/telemetry.py`.
 
 ## Replay as validation gate
 

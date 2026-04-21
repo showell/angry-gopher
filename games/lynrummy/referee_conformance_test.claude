@@ -13,7 +13,7 @@ Regenerate after any DSL edit:
     go run ./cmd/fixturegen ./games/lynrummy/conformance/scenarios/*.dsl
 
 Enumerate-and-bridge peer: the same DSL scenarios drive
-`games/lynrummy/elm-port-docs/tests/LynRummy/DslConformanceTest.elm`.
+`games/lynrummy/elm/tests/LynRummy/DslConformanceTest.elm`.
 Go and Elm referees must agree on every scenario; divergent
 pass/fail counts mean one side drifted.
 

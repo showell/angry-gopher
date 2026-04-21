@@ -46,7 +46,7 @@ EXCLUDE_DIRS = {
 # Small, documented list so exclusions are visible.
 EXEMPT_FILES = {
     # Python test runners are self-describing via module docstring.
-    "tools/lynrummy_elm_player/test_dsl_conformance.py",
+    "games/lynrummy/python/test_dsl_conformance.py",
 }
 
 

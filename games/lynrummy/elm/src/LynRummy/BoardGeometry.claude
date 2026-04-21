@@ -50,7 +50,7 @@ fails, semantics is meaningless.
   board's live viewport rect via `Browser.Dom.getElement`
   and uses that for board-frame → viewport translation.
   These constants remain for (a) documenting Python's
-  expectation in `tools/lynrummy_elm_player/geometry.py`
+  expectation in `games/lynrummy/python/geometry.py`
   and (b) a fallback path (with `Debug.log` warning) if the
   DOM query loses the race at replay start.
 
@@ -141,5 +141,5 @@ Wire strings match TS exactly (no `_v2` or `elm_` suffixes).
 ## TODO
 
 - No automated check that Python's `BOARD_VIEWPORT_LEFT/TOP`
-  in `tools/lynrummy_elm_player/geometry.py` match the Elm
+  in `games/lynrummy/python/geometry.py` match the Elm
   constants here. A preflight diff would catch drift.

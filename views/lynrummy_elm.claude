@@ -4,7 +4,7 @@ just_use lynrummy_elm.go
 # role: supports feature — LynRummy Elm standalone client, reached through Gopher
 
 V1 (2026-04-17). Serves the compiled Elm LynRummy client from
-games/lynrummy/elm-port-docs/. Two routes:
+games/lynrummy/elm/. Two routes:
 
 - `/gopher/lynrummy-elm/` — HTML mount page with Gopher nav chrome.
 - `/gopher/lynrummy-elm/elm.js` — serves the compiled bundle from

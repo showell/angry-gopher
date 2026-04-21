@@ -3,7 +3,7 @@ just_use replay.go
 # label: WORKHORSE
 # role: domain — server-authoritative state reconstruction from WireActions
 
-Mirror of `elm-port-docs/src/LynRummy/Replay.elm`. Takes a
+Mirror of `elm/src/LynRummy/Reducer.elm`. Takes a
 `WireAction` and applies it to a `(Board, Hand)` state to produce
 the next state. Stateless, pure, deterministic.
 

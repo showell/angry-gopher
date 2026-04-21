@@ -128,7 +128,7 @@ func pullCard(deck []Card, target Card) []Card {
 }
 
 // InitialBoard builds the canonical opening board directly (no
-// deck threading). Mirrors elm-port-docs/src/LynRummy/Dealer.elm's
+// deck threading). Mirrors elm/src/LynRummy/Dealer.elm's
 // initialBoard. Used during session replay where we want the
 // starting board state without a shuffled deck.
 func InitialBoard() []CardStack {
@@ -144,7 +144,7 @@ func InitialBoard() []CardStack {
 }
 
 // openingHandLabels is the canned 15-card hand used by the Elm
-// client. Mirrors elm-port-docs/src/LynRummy/Dealer.elm's
+// client. Mirrors elm/src/LynRummy/Dealer.elm's
 // openingHandLabels exactly — same cards, same order.
 var openingHandLabels = []string{
 	"7H", "8C", "4S", "9D", "QS", "KH", "JH", "6H", "TS", "5D", "8H", "3C", "2D", "9C", "6C",

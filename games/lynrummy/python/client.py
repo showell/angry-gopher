@@ -27,7 +27,7 @@ DEFAULT_BASE = "http://localhost:9000/gopher/lynrummy-elm"
 # Display convention mirroring the Elm client's View.viewHand:
 # suits displayed in this fixed order, each on its own row,
 # values sorted ascending within the suit. Source of truth is
-# LynRummy.Card.allSuits in elm-port-docs.
+# LynRummy.Card.allSuits in games/lynrummy/elm/.
 _DISPLAY_SUIT_ORDER = [3, 2, 1, 0]  # Heart, Spade, Diamond, Club
 _SUIT_GLYPH = {0: "\u2663", 1: "\u2666", 2: "\u2660", 3: "\u2665"}
 _VAL_STR = {1: "A", 10: "T", 11: "J", 12: "Q", 13: "K"}

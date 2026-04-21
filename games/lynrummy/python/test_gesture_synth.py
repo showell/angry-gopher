@@ -2,7 +2,7 @@
 test_gesture_synth.py — plain-Python assertions for the
 synthetic gesture generator. Run directly:
 
-    python3 tools/lynrummy_elm_player/test_gesture_synth.py
+    python3 games/lynrummy/python/test_gesture_synth.py
 """
 
 import sys

@@ -1,4 +1,4 @@
-// Hand type and operations. Mirrors elm-port-docs/src/LynRummy/Hand.elm.
+// Hand type and operations. Mirrors elm/src/LynRummy/Hand.elm.
 
 package lynrummy
 

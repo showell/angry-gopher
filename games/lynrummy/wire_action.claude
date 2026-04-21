@@ -3,7 +3,7 @@ just_use wire_action.go
 # label: WORKHORSE
 # role: domain — action-shaped wire format (Go side)
 
-Go counterpart to `elm-port-docs/src/LynRummy/WireAction.elm`.
+Go counterpart to `elm/src/LynRummy/WireAction.elm`.
 Each `WireAction` value names what the player did, rather than
 the mechanical diff. Receiver applies the action to prior state
 to derive the post-state.

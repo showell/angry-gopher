@@ -3,7 +3,7 @@ just_use hand.go
 # label: WORKHORSE
 # role: domain — Hand type + operations (Go side)
 
-Mirror of `elm-port-docs/src/LynRummy/Hand.elm`. Holds a list
+Mirror of `elm/src/LynRummy/Hand.elm`. Holds a list
 of HandCards; supports add, remove, query, and content-based
 lookup.
 

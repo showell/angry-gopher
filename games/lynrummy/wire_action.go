@@ -3,7 +3,7 @@
 // that resulted. Receiver derives post-state by applying the
 // action to the prior state.
 //
-// Mirrors elm-port-docs/src/LynRummy/WireAction.elm. JSON shape is
+// Mirrors elm/src/LynRummy/WireAction.elm. JSON shape is
 // the canonical wire contract; both sides round-trip identical
 // bytes for identical values.
 //

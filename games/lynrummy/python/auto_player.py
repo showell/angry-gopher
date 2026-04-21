@@ -13,7 +13,7 @@ No /hint round-trip, no trick_result on the wire, no
 decomposition. Every action sent is a primitive.
 
 Usage:
-    python3 tools/lynrummy_elm_player/auto_player.py [--session N] [--max-actions N]
+    python3 games/lynrummy/python/auto_player.py [--session N] [--max-actions N]
 """
 
 import argparse

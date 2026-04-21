@@ -56,7 +56,7 @@ eligibility. The re-relocate on `board2` catches this.
 ## Pointers
 
 - Python counterpart: `hints.split_for_set` in
-  `tools/lynrummy_elm_player/hints.py`.
+  `games/lynrummy/python/hints.py`.
 - Depends on: `Card`, `CardStack.canExtract`,
   `StackType.getStackType`,
   `Tricks.Helpers.extractCard`/`pushNewStack`.

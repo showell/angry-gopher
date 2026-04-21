@@ -3,7 +3,7 @@ just_use score.go
 # label: WORKHORSE
 # role: domain — LynRummy scoring (Go side)
 
-Mirror of `elm-port-docs/src/LynRummy/Score.elm`. Flat
+Mirror of `elm/src/LynRummy/Score.elm`. Flat
 per-card scoring: each card in a valid 3+ family is worth
 one stackTypeValue.
 

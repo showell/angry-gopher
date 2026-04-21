@@ -74,8 +74,8 @@ type Card struct {
 
 const (
 	goOutPath   = "./games/lynrummy/referee_conformance_test.go"
-	elmOutPath  = "./games/lynrummy/elm-port-docs/tests/LynRummy/DslConformanceTest.elm"
-	jsonOutPath = "./tools/lynrummy_elm_player/conformance_fixtures.json"
+	elmOutPath  = "./games/lynrummy/elm/tests/LynRummy/DslConformanceTest.elm"
+	jsonOutPath = "./games/lynrummy/python/conformance_fixtures.json"
 	goPackage   = "./games/lynrummy/..."
 )
 

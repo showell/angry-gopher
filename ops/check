@@ -25,13 +25,13 @@ echo "==> go test ./..."
 go test ./...
 
 echo "==> Elm tests"
-(cd games/lynrummy/elm-port-docs && ./check.sh)
+(cd games/lynrummy/elm && ./check.sh)
 
 echo "==> Python conformance tests"
-python3 tools/lynrummy_elm_player/test_dsl_conformance.py
+python3 games/lynrummy/python/test_dsl_conformance.py
 
 echo "==> Gesture-synth unit tests"
-python3 tools/lynrummy_elm_player/test_gesture_synth.py
+python3 games/lynrummy/python/test_gesture_synth.py
 
 echo
 echo "All preflight checks passed."

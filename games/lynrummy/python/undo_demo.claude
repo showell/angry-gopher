@@ -19,7 +19,7 @@ the envelope update.
 ## Usage
 
 ```
-python3 tools/lynrummy_elm_player/undo_demo.py
+python3 games/lynrummy/python/undo_demo.py
 ```
 
 Creates a fresh session, makes a move, prints before/after

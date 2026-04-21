@@ -5,7 +5,7 @@ Reads conformance_fixtures.json (emitted by cmd/fixturegen from
 games/lynrummy/conformance/scenarios/*.dsl) and dispatches each
 scenario by op. No framework. Run directly:
 
-    python3 tools/lynrummy_elm_player/test_dsl_conformance.py
+    python3 games/lynrummy/python/test_dsl_conformance.py
 
 Supported ops:
   - build_suggestions: invoke hints.build_suggestions, compare
