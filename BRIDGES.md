@@ -46,25 +46,43 @@ wired.
 
 **Full bridges in place.**
 
-- *LynRummy referee triple.* Three independent implementations
-  of the scoring/validation rules, forced to agree via tests.
-  Canonical example, lives outside the Gopher tree but
-  referenced here because it shaped the instinct.
-- *Reading list ↔ Gopher comment JSON.* As of this afternoon,
-  both the reading-list static site and the Gopher server
-  render the same `.md` + `.md.comments.json` pair. The JSON
-  is the single source of truth; two renderers exist. This is
-  a bridge — if either rendering drifts, comments would display
-  differently and we'd notice.
+- *DSL conformance harness (Lyn Rummy, 2026-04).* The canonical
+  full bridge in this repo today. Scenarios in
+  `games/lynrummy/conformance/scenarios/*.dsl` compile via
+  `cmd/fixturegen` into three independent test suites:
+  Go (`referee_conformance_test.go`), Elm
+  (`games/lynrummy/elm/tests/Game/DslConformanceTest.elm`), and
+  Python (via `conformance_fixtures.json` consumed by
+  `test_dsl_conformance.py`). All three must agree scenario-
+  by-scenario; divergent pass/fail counts surface as the
+  bridge failing. This is the Lyn Rummy referee triple, now
+  living inside Gopher.
+- *Reading list ↔ Gopher comment JSON.* As of 2026-04-16, both
+  the reading-list static site and the Gopher server render
+  the same `.md` + `.md.comments.json` pair. The JSON is the
+  single source of truth; two renderers exist. If either
+  rendering drifts, comments would display differently and we'd
+  notice.
+- *Memory index ↔ memory files.* A PostToolUse hook now
+  compares `MEMORY.md` entries against `ls memory/*.md` and
+  flags orphans immediately after any write under `memory/`.
+  Graduated from the "wanted" list below on 2026-04 and is
+  currently load-bearing — surfaced two index drifts during
+  today's session.
 
 **Half bridges that could become full.**
 
 - *Sidecar ↔ source.* Every `.claude` sidecar is supposed to be
-  an always-up-to-date brief of its source file. Right now
-  the bridge is manually maintained; there's no automated
-  check that labels, maturity, and summaries are in sync. A
-  full bridge would be a script that diffs the sidecar claim
-  against the source and flags discrepancies.
+  an always-up-to-date brief of its source file.
+  `tools/sidecar_audit.py` now covers PART of this: it verifies
+  every source file has a sidecar (coverage) and that each
+  sidecar's `just_use` target points at an existing file
+  (orphan check). What the script still does NOT verify is the
+  CONTENT: labels, maturity summaries, API descriptions can
+  still drift from the source silently. A full bridge would
+  parse structured claims (label, exposed API, dependencies)
+  and diff against the code. (See also TOP_DOWN_SWEEP as the
+  human-in-the-loop half.)
 - *STRUCTURE DSL ↔ filesystem layout.* The DSL describes the
   directory structure; the filesystem realizes it. Nothing
   enforces agreement. A full bridge would be a linter that
@@ -86,13 +104,6 @@ them are two-afternoon tasks, not two-week ones.
 These are places where the redundancy-as-asset pattern would
 pay for itself even if the product never grows.
 
-**Memory index ↔ memory files.** `MEMORY.md` claims to
-enumerate every memory file. Drift happens whenever a memory
-is added, renamed, or removed. The current manual invariant
-is "update MEMORY.md when you add a file." A bridge would be
-a script that diffs the index against `ls memory/*.md` and
-flags missing entries or stale pointers.
-
 **Essay queue ↔ shipped files.** The `QUEUE.md` in
 `claude_writings` lists essays and their status. A bridge
 would diff the "shipped" rows against actual `.md` files in
@@ -107,11 +118,11 @@ otherwise caught (if at all) by accident months later.
 Harder to prescribe without knowing where the product goes.
 But a few conditional proposals.
 
-**If LynRummy-in-Gopher becomes a real product:** the referee
-triple needs to survive the port from its current location
-into Gopher. The three implementations need to ride together.
-This is the bridge you must not break — splitting them across
-repos without a shared test suite would destroy the asset.
+**Lyn Rummy-in-Gopher became the product.** The referee
+triple did survive — it now lives at the top of "full bridges
+in place" above, as the DSL conformance harness. The three
+implementations ride together; splitting them across repos
+without the shared DSL harness would destroy the asset.
 
 **If the critter studies generalize:** each study has a
 protocol (what the subject does) and an analysis (what we

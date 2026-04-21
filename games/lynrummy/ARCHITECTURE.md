@@ -1,4 +1,4 @@
-# LynRummy architecture
+# Lyn Rummy architecture
 
 **Status:** `STILL_EVOLVING`. The principles are stable;
 specifics may lag or lead the code. If you spot a discrepancy
@@ -6,15 +6,15 @@ between this doc and the running code, the principles win as
 intent; update the doc or the code accordingly.
 
 This is what future-Claude reads when asked to make a change
-somewhere in the LynRummy tree and isn't sure how the pieces
+somewhere in the Lyn Rummy tree and isn't sure how the pieces
 fit together. It exists because every day we worked on this
 without it, we paid a tax.
 
-The scope is LynRummy specifically. Angry Gopher — the broader
-Go server that hosts LynRummy — only shows up as context when
-a LynRummy concern crosses into it.
+The scope is Lyn Rummy specifically. Angry Gopher — the broader
+Go server that hosts it — only shows up as context when a
+Lyn Rummy concern crosses into it.
 
-## What LynRummy is
+## What Lyn Rummy is
 
 A two-player card game. The rules are domain-specific; they're
 not this document's subject. The mechanics matter here only
@@ -23,7 +23,7 @@ score turns, render a shared physical board, let a human drag
 cards around, let an agent play convincingly too.
 
 One important piece of context: Steve wrote a working
-LynRummy implementation in TypeScript before this codebase
+Lyn Rummy implementation in TypeScript before this codebase
 existed. That means he brings both domain knowledge (what a
 move means, what "feels right" at the table) and
 implementation experience (which problems are fundamental and
@@ -33,7 +33,7 @@ implementation and carried over.
 
 ## The mission
 
-The product is roughly: **a human plays LynRummy through the
+The product is roughly: **a human plays Lyn Rummy through the
 Elm UI, against a Python agent, and can watch the agent's
 moves unfold through the same UI in a way that reads as
 another player playing — not as a machine logging primitives
@@ -62,7 +62,7 @@ about replay fidelity traces back to this constraint.
 ## Events are the system
 
 Before we list components, the most important framing: a
-LynRummy game, whether autonomous or human-played, is a
+Lyn Rummy game, whether autonomous or human-played, is a
 **manifestation of events**. Each event is a deliberate
 choice — a human's drag of a card, an agent's decision to
 peel a 5D and merge it — and each event must be represented
@@ -142,11 +142,11 @@ actually required.
   which runs its own referee, appends to the session's
   coordination log in SQLite, and serves the log back on
   demand. The server also owns the dealer — opening deal +
-  deck seed — but only because dealing requires coordination
-  when two players share a session. In a fully solo setup,
-  dealing can live client-side; the server owns it here
-  because two actors must start from the same cards. The
-  server does NOT decide which events are smart, does NOT
+  deck seed — because when two actors share a session they
+  must start from the same cards. In a fully solo setup,
+  dealing could live client-side; it lives on the server
+  because coordinated play was always on the horizon.
+  The server does NOT decide which events are smart, does NOT
   synthesize gestures, and does NOT help clients render.
 - **Elm UI.** A complete player that happens to have a
   browser-based presentation layer. Originates events from
@@ -329,8 +329,20 @@ environment matches the current environment, play back the
 raw path — maximum fidelity, the human's actual drag
 faithfully rendered. If the environment has drifted, fall
 back to synthesizing a drag from the durable layer — correct
-but no longer pixel-faithful. A stamp next to the path tells
-future-Elm which case it's in.
+but no longer pixel-faithful.
+
+**Current state (2026-04-21):** replay branches purely on
+path **presence**: `Just (p :: rest)` → faithful playback,
+`Nothing` → synthesize. Python's synthesizer does emit a
+partial stamp (`pointer_type: "synthetic"`, viewport,
+device_pixel_ratio) alongside its paths, and Elm-captured
+paths do not yet carry an analogous "captured under these
+environmental conditions" stamp. **PLANNED:** both sides
+emit a stamp, and replay reads it to decide faithful vs.
+fallback when the environment has drifted. Without the
+stamp-reader, a window-resize before replay currently
+produces a faithful-looking playback aimed at stale viewport
+coords.
 
 This is what resolves the cross-language geometry debate. The
 durable layer is what the Python agent can speak to (it knows
@@ -462,19 +474,14 @@ this doc can't carry without becoming a reference manual.
 
 ## Parking status
 
-Parked `STILL_EVOLVING` at 2026-04-21. The principles are
-stable as of this version; the specifics — especially around
-two-way coordination and the layout pinning — will refine as
-we exercise them in real work. Update this document whenever
-a conversation produces a durable architectural insight;
-redundancy with other surfaces (memories, sidecars) is
-deliberate and fine.
-- Where to find the details: sidecars, memories, the subtree
-  READMEs we still need to write (Go-side `games/lynrummy`
-  + Python-side `games/lynrummy/python`).
-- A useful example per cross-language contract. Don't repeat
-  facts sidecars already carry — point at the sidecar, but
-  explain how the over-arching principles apply in that one
-  example.
+Parked `STILL_EVOLVING`, last swept 2026-04-21 (TOP_DOWN_SWEEP
+from this doc). The principles are stable as of this version;
+the specifics — especially around two-way coordination and
+the replay stamp-reader — will refine as we exercise them in
+real work.
 
-Stop here — ready for your read and reply.
+Update this document whenever a conversation produces a
+durable architectural insight. Redundancy with other surfaces
+(memories, sidecars) is deliberate and fine — this doc's job
+is the over-arching principles; sidecars and memories carry
+the specifics and the examples.

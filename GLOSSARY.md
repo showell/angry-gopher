@@ -26,7 +26,7 @@ Terms for how Steve and Claude work together. These shape process, not product.
 
 | Term | Meaning |
 |---|---|
-| **Kitchen-table test** | Asking "would this feel right at an actual card table?" — LynRummy's UX tie-breaker. |
+| **Kitchen-table test** | Asking "would this feel right at an actual card table?" — Lyn Rummy's UX tie-breaker. |
 | **Rip** | Delete code fearlessly — removing an un-earning feature is a first-class skill, not a regret. |
 | **Consolidate knowledge** | The post-iteration exercise of promoting durable artifacts (sidecars, memories, essays, glossary entries, git tags) from a completed push of work. Done *in the flow*, not later — it both compresses what we just learned and pre-loads future-us. Named 2026-04-17 by Steve on the Writing the Sidecars essay. Canonical label for these exercises in commit messages and in-session framing. |
 | **Ebb and flow** | The oscillating rhythm of our iteration: add complexity for realism and framing; scale back to study a single interaction; re-introduce the complexity. Neither pole alone is the answer — the study needs realistic conditions to matter, the tuning needs stripped-down conditions to move fast. Named 2026-04-17 on *Two Directions* (chosen from ~12 candidates including *breathing*, *pole-flipping*, *lab and field*). Canonical term in commit messages and in-session framing for iteration-phase work. |

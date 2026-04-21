@@ -1,8 +1,8 @@
-# LynRummy — Go subsystem
+# Lyn Rummy — Go subsystem
 
 **Status:** `STILL_EVOLVING` (stub). Expect this to grow.
 
-This subtree holds the Go-side LynRummy code that runs inside
+This subtree holds the Go-side Lyn Rummy code that runs inside
 Angry Gopher: domain types (Card, CardStack, Hand, etc.),
 dealer, referee, replay, scoring, the primitives-only wire
 format, and the server-side rendezvous point for multi-actor
@@ -11,7 +11,7 @@ sessions.
 ## Before reading the Go code
 
 Start with [`ARCHITECTURE.md`](./ARCHITECTURE.md) — the
-system-wide LynRummy architecture document. It explains the
+system-wide Lyn Rummy architecture document. It explains the
 event-driven model, the per-actor log story, and where the Go
 subsystem fits relative to the Elm UI and Python agent.
 
