@@ -329,14 +329,13 @@ update msg model =
             in
             ( { rewound
                 | status = { text = "Replaying…", kind = Inform }
-                  -- Negative step means "haven't started the
-                  -- first action yet." replayFrame treats step
-                  -- < 0 as a pre-roll: show the rewound board
-                  -- for ~200ms so viewers register the starting
-                  -- state, then advance to step 0 and animate
-                  -- the first action normally.
-                , replay = Just { step = -1, paused = False }
-                , replayAnim = NotAnimating
+                , replay = Just { step = 0, paused = False }
+                  -- PreRoll keeps the rewound starting board
+                  -- visible for ~200ms before the first action
+                  -- fires, so the viewer registers the initial
+                  -- state. Unlike Beating, it does NOT advance
+                  -- `step` on completion.
+                , replayAnim = PreRoll { untilMs = 0 }
                 , drag = NotDragging
               }
             , Cmd.none
@@ -493,17 +492,6 @@ replayFrame nowMs model =
             if progress.paused then
                 ( model, Cmd.none )
 
-            else if progress.step < 0 then
-                -- Pre-roll: show the rewound starting board for
-                -- ~200ms before the first action fires, so the
-                -- viewer registers the initial state.
-                ( { model
-                    | replay = Just { progress | step = 0 }
-                    , replayAnim = Beating { untilMs = nowMs + 200 }
-                  }
-                , Cmd.none
-                )
-
             else
                 case model.replayAnim of
                     NotAnimating ->
@@ -579,6 +567,24 @@ replayFrame nowMs model =
                                 | replay = Just { progress | step = progress.step + 1 }
                                 , replayAnim = NotAnimating
                               }
+                            , Cmd.none
+                            )
+
+                        else
+                            ( model, Cmd.none )
+
+                    PreRoll { untilMs } ->
+                        if untilMs == 0 then
+                            -- Lazy-initialize the deadline on the
+                            -- first frame so the pre-roll lasts
+                            -- a real ~200ms regardless of when
+                            -- the first ReplayFrame tick arrives.
+                            ( { model | replayAnim = PreRoll { untilMs = nowMs + 200 } }
+                            , Cmd.none
+                            )
+
+                        else if nowMs >= untilMs then
+                            ( { model | replayAnim = NotAnimating }
                             , Cmd.none
                             )
 
