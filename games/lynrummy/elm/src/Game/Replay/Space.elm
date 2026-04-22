@@ -4,6 +4,7 @@ module Game.Replay.Space exposing
     , boardStackSource
     , dragMsPerPixel
     , dragSourceForAction
+    , elementCenterInViewport
     , handCardForAction
     , handCardSource
     , interpPath
@@ -33,6 +34,7 @@ are we on, has the beat elapsed, when does the next step fire?
 
 -}
 
+import Browser.Dom
 import Game.BoardActions as BoardActions
 import Game.BoardGeometry as BG
 import Game.Card exposing (Card)
@@ -75,6 +77,33 @@ type alias AnimationInfo =
 
 
 -- VIEWPORT TRANSLATION (hand-origin target synthesis only)
+
+
+{-| Convert a `Browser.Dom.Element` to its center `Point` in
+viewport coords. Subtracts `viewport.x/y` so the result is
+relative to the browser viewport (matching mouse
+`clientX/Y`), not document coords. Used by both hand-origin
+Animate modules to locate the captured hand card's live
+center from the DOM rect the `Browser.Dom.getElement` Task
+returned.
+-}
+elementCenterInViewport : Browser.Dom.Element -> Point
+elementCenterInViewport element =
+    { x =
+        round
+            (element.element.x
+                - element.viewport.x
+                + element.element.width
+                / 2
+            )
+    , y =
+        round
+            (element.element.y
+                - element.viewport.y
+                + element.element.height
+                / 2
+            )
+    }
 
 
 {-| Translate a board-frame `{ left, top }` into the current

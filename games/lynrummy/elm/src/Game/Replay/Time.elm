@@ -35,14 +35,17 @@ the replay FSM + its Msg handlers in one module.
 
 import Browser.Dom
 import Game.BoardGeometry as BG
+import Game.Card
 import Game.CardStack as CardStack
 import Game.HandLayout as HandLayout
 import Game.Score as Score
 import Game.WireAction as WA exposing (WireAction)
 import Main.Apply as Apply
 import Main.Msg exposing (Msg(..))
+import Game.Replay.AnimateMergeHand as AnimateMergeHand
 import Game.Replay.AnimateMergeStack as AnimateMergeStack
 import Game.Replay.AnimateMoveStack as AnimateMoveStack
+import Game.Replay.AnimatePlaceHand as AnimatePlaceHand
 import Game.Replay.AnimateSplit as AnimateSplit
 import Game.Replay.Space as Space
 import Main.State as State
@@ -312,29 +315,24 @@ prepareReplayStep action maybePath frame model nowMs =
                     applyImmediate
 
         _ ->
-            case Space.handCardForAction action of
-                Just handCard ->
-                    case Space.dragSourceForAction action model of
-                        Nothing ->
-                            applyImmediate
-
-                        Just ( source, grabOffset ) ->
-                            ( { model
-                                | replayAnim =
-                                    AwaitingHandRect
-                                        { action = action
-                                        , source = source
-                                        , grabOffset = grabOffset
-                                        }
-                              }
-                            , Task.attempt HandCardRectReceived
-                                (Task.map2 Tuple.pair
-                                    (Browser.Dom.getElement
-                                        (HandLayout.handCardDomId handCard)
-                                    )
-                                    Time.now
-                                )
+            case prepareHandAnim action model of
+                Just result ->
+                    ( { model
+                        | replayAnim =
+                            AwaitingHandRect
+                                { action = action
+                                , source = result.source
+                                , grabOffset = result.grabOffset
+                                }
+                      }
+                    , Task.attempt HandCardRectReceived
+                        (Task.map2 Tuple.pair
+                            (Browser.Dom.getElement
+                                (HandLayout.handCardDomId result.handCardToMeasure)
                             )
+                            Time.now
+                        )
+                    )
 
                 Nothing ->
                     let
@@ -395,56 +393,14 @@ handCardRectReceived result model =
                     toFloat (Time.posixToMillis posix)
 
                 origin =
-                    { x =
-                        round
-                            (element.element.x
-                                - element.viewport.x
-                                + element.element.width
-                                / 2
-                            )
-                    , y =
-                        round
-                            (element.element.y
-                                - element.viewport.y
-                                + element.element.height
-                                / 2
-                            )
-                    }
+                    Space.elementCenterInViewport element
 
-                maybeTarget =
-                    case ctx.action of
-                        WA.MergeHand p ->
-                            CardStack.findStack p.target model.board
-                                |> Maybe.map
-                                    (\stack ->
-                                        Space.stackEdgeInLiveViewport model stack p.side
-                                    )
-
-                        WA.PlaceHand p ->
-                            Just
-                                { x = (model.replayBoardRect |> Maybe.map .x |> Maybe.withDefault BG.boardViewportLeft)
-                                    + p.loc.left
-                                , y = (model.replayBoardRect |> Maybe.map .y |> Maybe.withDefault BG.boardViewportTop)
-                                    + p.loc.top
-                                    + BG.cardHeight
-                                    // 2
-                                }
-
-                        _ ->
-                            Nothing
+                maybeAnim =
+                    finishHandAnim ctx.action origin nowMs ctx.source ctx.grabOffset model
             in
-            case maybeTarget of
-                Just target ->
+            case maybeAnim of
+                Just anim ->
                     let
-                        anim =
-                            { startMs = nowMs
-                            , path = Space.linearPath origin target nowMs
-                            , source = ctx.source
-                            , grabOffset = ctx.grabOffset
-                            , pathFrame = ViewportFrame
-                            , pendingAction = ctx.action
-                            }
-
                         cursor =
                             Space.interpPath anim.path 0
                     in
@@ -537,6 +493,78 @@ startBoardAnim action path frame model nowMs =
 
         WA.MoveStack payload ->
             AnimateMoveStack.start payload path frame model nowMs
+
+        _ ->
+            Nothing
+
+
+{-| Dispatch the synchronous phase 1 of hand-origin replay to
+the matching per-primitive Animate module. Nothing means the
+action isn't hand-origin (shouldn't reach this helper) or the
+hand card can't be resolved on the current model.
+-}
+prepareHandAnim : WireAction -> Model -> Maybe HandPrepareResult
+prepareHandAnim action model =
+    case action of
+        WA.MergeHand payload ->
+            AnimateMergeHand.prepare payload model
+                |> Maybe.map prepareResultFromMergeHand
+
+        WA.PlaceHand payload ->
+            AnimatePlaceHand.prepare payload model
+                |> Maybe.map prepareResultFromPlaceHand
+
+        _ ->
+            Nothing
+
+
+{-| Unified shape for Time's AwaitingHandRect bookkeeping.
+The per-primitive Animate modules define their own typed
+PrepareResult; we lift both into this common record for
+the FSM.
+-}
+type alias HandPrepareResult =
+    { source : State.DragSource
+    , grabOffset : State.Point
+    , handCardToMeasure : Game.Card.Card
+    }
+
+
+prepareResultFromMergeHand : AnimateMergeHand.PrepareResult -> HandPrepareResult
+prepareResultFromMergeHand r =
+    { source = r.source
+    , grabOffset = r.grabOffset
+    , handCardToMeasure = r.handCardToMeasure
+    }
+
+
+prepareResultFromPlaceHand : AnimatePlaceHand.PrepareResult -> HandPrepareResult
+prepareResultFromPlaceHand r =
+    { source = r.source
+    , grabOffset = r.grabOffset
+    , handCardToMeasure = r.handCardToMeasure
+    }
+
+
+{-| Dispatch the async phase 2 of hand-origin replay. Given
+the measured viewport origin and the stashed context, forward
+to the matching Animate module to build the AnimationInfo.
+-}
+finishHandAnim :
+    WireAction
+    -> State.Point
+    -> Float
+    -> State.DragSource
+    -> State.Point
+    -> Model
+    -> Maybe Space.AnimationInfo
+finishHandAnim action origin nowMs source grabOffset model =
+    case action of
+        WA.MergeHand payload ->
+            AnimateMergeHand.finish payload origin nowMs source grabOffset model
+
+        WA.PlaceHand payload ->
+            AnimatePlaceHand.finish payload origin nowMs source grabOffset model
 
         _ ->
             Nothing
