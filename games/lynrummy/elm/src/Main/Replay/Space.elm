@@ -307,35 +307,13 @@ dragSourceForAction action model =
 
 boardStackSource : CardStack -> Model -> Maybe ( DragSource, Point )
 boardStackSource ref model =
-    findStackIndex ref model.board
-        |> Maybe.andThen
-            (\idx ->
-                listAt idx model.board
-                    |> Maybe.map
-                        (\stack ->
-                            ( FromBoardStack idx
-                            , { x = CardStack.stackDisplayWidth stack // 2, y = 20 }
-                            )
-                        )
+    CardStack.findStack ref model.board
+        |> Maybe.map
+            (\stack ->
+                ( FromBoardStack stack
+                , { x = CardStack.stackDisplayWidth stack // 2, y = 20 }
+                )
             )
-
-
-findStackIndex : CardStack -> List CardStack -> Maybe Int
-findStackIndex ref board =
-    let
-        go i xs =
-            case xs of
-                [] ->
-                    Nothing
-
-                s :: rest ->
-                    if CardStack.stacksEqual ref s then
-                        Just i
-
-                    else
-                        go (i + 1) rest
-    in
-    go 0 board
 
 
 handCardSource : Card -> Model -> Maybe ( DragSource, Point )
@@ -343,32 +321,18 @@ handCardSource card model =
     let
         hand =
             activeHand model
+
+        present =
+            List.any (\hc -> hc.card == card) hand.handCards
     in
-    handCardIndex card hand.handCards
-        |> Maybe.map
-            (\idx ->
-                ( FromHandCard idx
-                , { x = CardStack.stackPitch // 2, y = 20 }
-                )
+    if present then
+        Just
+            ( FromHandCard card
+            , { x = CardStack.stackPitch // 2, y = 20 }
             )
 
-
-handCardIndex : Card -> List HandCard -> Maybe Int
-handCardIndex target cards =
-    let
-        go i xs =
-            case xs of
-                [] ->
-                    Nothing
-
-                hc :: rest ->
-                    if hc.card == target then
-                        Just i
-
-                    else
-                        go (i + 1) rest
-    in
-    go 0 cards
+    else
+        Nothing
 
 
 {-| Extract the hand card referenced by a hand-origin wire
@@ -420,9 +384,3 @@ animatedDragState anim cursor =
 
 
 
--- INTERNAL
-
-
-listAt : Int -> List a -> Maybe a
-listAt i xs =
-    List.head (List.drop i xs)

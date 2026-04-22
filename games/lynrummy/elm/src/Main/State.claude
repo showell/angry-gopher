@@ -58,7 +58,11 @@ New `ReplayAnimation` variant (2026-04-21 B1 extension):
 - `DragInfo` — cursor, original cursor, grab offset, wings,
   hovered wing, boardRect, clickIntent, source, gesturePath,
   pathFrame.
-- `DragSource` — `FromBoardStack Int | FromHandCard Int`.
+- `DragSource` — `FromBoardStack CardStack | FromHandCard Card`.
+  Content-based, not positional. Matches the wire format's
+  CardStack refs so the same representation flows from
+  mousedown through mouseup through /actions — no "index in
+  memory, value on the wire" split.
 - `PathFrame` — `BoardFrame | ViewportFrame`. Determines which
   DOM parent the drag floater renders under: `BoardFrame`
   renders as a board-div child (CSS handles board→viewport

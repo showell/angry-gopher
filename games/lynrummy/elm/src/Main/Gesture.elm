@@ -67,7 +67,7 @@ import Html.Events as Events
 import Json.Decode as Decode exposing (Decoder)
 import Game.BoardGeometry as BG
 import Game.Card exposing (Card)
-import Game.CardStack as CardStack exposing (BoardLocation, HandCard)
+import Game.CardStack as CardStack exposing (BoardLocation, CardStack, HandCard)
 import Game.GestureArbitration as GA
 import Game.Hand exposing (Hand)
 import Game.WingOracle as WingOracle
@@ -102,17 +102,17 @@ a *potential* split click; `GestureArbitration.clickIntentAfterMove`
 moves beyond the click threshold.
 -}
 startBoardCardDrag :
-    { stackIndex : Int, cardIndex : Int }
+    { stack : CardStack, cardIndex : Int }
     -> Point
     -> Float
     -> Model
     -> ( Model, Cmd Msg )
-startBoardCardDrag { stackIndex, cardIndex } clientPoint tMs model =
-    case ( model.drag, listAt stackIndex model.board ) of
-        ( NotDragging, Just stack ) ->
+startBoardCardDrag { stack, cardIndex } clientPoint tMs model =
+    case model.drag of
+        NotDragging ->
             let
                 wings =
-                    WingOracle.wingsForStack stackIndex model.board
+                    WingOracle.wingsForStack stack model.board
 
                 halfWidth =
                     CardStack.stackDisplayWidth stack // 2
@@ -120,7 +120,7 @@ startBoardCardDrag { stackIndex, cardIndex } clientPoint tMs model =
             ( { model
                 | drag =
                     Dragging
-                        { source = FromBoardStack stackIndex
+                        { source = FromBoardStack stack
                         , cursor = clientPoint
                         , originalCursor = clientPoint
                         , grabOffset = { x = halfWidth, y = 20 }
@@ -136,16 +136,16 @@ startBoardCardDrag { stackIndex, cardIndex } clientPoint tMs model =
             , fetchBoardRect
             )
 
-        _ ->
+        Dragging _ ->
             ( model, Cmd.none )
 
 
 {-| Start a drag from a hand card. No click intent — hand cards
 don't have a split semantic.
 -}
-startHandDrag : Int -> Point -> Float -> Model -> ( Model, Cmd Msg )
-startHandDrag idx clientPoint tMs model =
-    case ( model.drag, listAt idx (activeHand model).handCards ) of
+startHandDrag : Card -> Point -> Float -> Model -> ( Model, Cmd Msg )
+startHandDrag card clientPoint tMs model =
+    case ( model.drag, findHandCard card (activeHand model).handCards ) of
         ( NotDragging, Just handCard ) ->
             let
                 wings =
@@ -157,7 +157,7 @@ startHandDrag idx clientPoint tMs model =
             ( { model
                 | drag =
                     Dragging
-                        { source = FromHandCard idx
+                        { source = FromHandCard card
                         , cursor = clientPoint
                         , originalCursor = clientPoint
                         , grabOffset = { x = halfWidth, y = 20 }
@@ -175,6 +175,11 @@ startHandDrag idx clientPoint tMs model =
 
         _ ->
             ( model, Cmd.none )
+
+
+findHandCard : Card -> List HandCard -> Maybe HandCard
+findHandCard target cards =
+    List.filter (\hc -> hc.card == target) cards |> List.head
 
 
 {-| Fire a `Browser.Dom.getElement` Task to capture the board's
@@ -209,15 +214,6 @@ handleMouseUp releasePoint tMs model =
 
         Dragging info ->
             let
-                _ =
-                    Debug.log "[mouseup]"
-                        { source = info.source
-                        , hoveredWing = info.hoveredWing
-                        , clickIntent = info.clickIntent
-                        , cursor = info.cursor
-                        }
-            in
-            let
                 -- Append the mouseup point so the gesture path
                 -- captures the full gesture including the release.
                 -- For a pure click (no MouseMove), this is the
@@ -243,7 +239,7 @@ handleMouseUp releasePoint tMs model =
                                 |> Apply.commit
 
                         Nothing ->
-                            case droppedOffBoardScold infoFull model of
+                            case droppedOffBoardScold infoFull of
                                 Just status ->
                                     { modelAfterDragClear | status = status }
 
@@ -364,70 +360,58 @@ split; otherwise dispatch on `(hoveredWing, source,
 cursorOverBoard)`.
 -}
 resolveGesture : DragInfo -> Model -> Maybe WireAction
-resolveGesture info model =
+resolveGesture info _ =
     case ( info.clickIntent, info.source ) of
-        ( Just cardIdx, FromBoardStack stackIdx ) ->
-            listAt stackIdx model.board
-                |> Maybe.map
-                    (\stack -> WA.Split { stack = stack, cardIndex = cardIdx })
+        ( Just cardIdx, FromBoardStack stack ) ->
+            Just (WA.Split { stack = stack, cardIndex = cardIdx })
 
         _ ->
             case ( info.hoveredWing, info.source ) of
-                ( Just wing, FromBoardStack sourceIdx ) ->
-                    case ( listAt sourceIdx model.board, listAt wing.stackIndex model.board ) of
-                        ( Just source, Just target ) ->
-                            Just
-                                (WA.MergeStack
-                                    { source = source
-                                    , target = target
-                                    , side = wing.side
-                                    }
-                                )
+                ( Just wing, FromBoardStack source ) ->
+                    Just
+                        (WA.MergeStack
+                            { source = source
+                            , target = wing.target
+                            , side = wing.side
+                            }
+                        )
 
-                        _ ->
-                            Nothing
+                ( Just wing, FromHandCard card ) ->
+                    Just
+                        (WA.MergeHand
+                            { handCard = card
+                            , target = wing.target
+                            , side = wing.side
+                            }
+                        )
 
-                ( Just wing, FromHandCard handIdx ) ->
-                    case ( listAt handIdx (activeHand model).handCards, listAt wing.stackIndex model.board ) of
-                        ( Just handCard, Just target ) ->
-                            Just
-                                (WA.MergeHand
-                                    { handCard = handCard.card
-                                    , target = target
-                                    , side = wing.side
-                                    }
-                                )
-
-                        _ ->
-                            Nothing
-
-                ( Nothing, FromHandCard handIdx ) ->
+                ( Nothing, FromHandCard card ) ->
                     if cursorOverBoard info then
-                        case ( listAt handIdx (activeHand model).handCards, dropLoc info ) of
-                            ( Just handCard, Just loc ) ->
+                        case dropLoc info of
+                            Just loc ->
                                 if dropFootprintInBounds 1 loc then
-                                    Just (WA.PlaceHand { handCard = handCard.card, loc = loc })
+                                    Just (WA.PlaceHand { handCard = card, loc = loc })
 
                                 else
                                     Nothing
 
-                            _ ->
+                            Nothing ->
                                 Nothing
 
                     else
                         Nothing
 
-                ( Nothing, FromBoardStack stackIdx ) ->
+                ( Nothing, FromBoardStack stack ) ->
                     if cursorOverBoard info then
-                        case ( listAt stackIdx model.board, dropLoc info ) of
-                            ( Just stack, Just loc ) ->
+                        case dropLoc info of
+                            Just loc ->
                                 if dropFootprintInBounds (CardStack.size stack) loc then
                                     Just (WA.MoveStack { stack = stack, newLoc = loc })
 
                                 else
                                     Nothing
 
-                            _ ->
+                            Nothing ->
                                 Nothing
 
                     else
@@ -489,8 +473,8 @@ at mouseup — a slip past the corner typically ends with the
 cursor technically just outside the widget, and we still want
 to explain why the stack snapped back.
 -}
-droppedOffBoardScold : DragInfo -> Model -> Maybe State.StatusMessage
-droppedOffBoardScold info model =
+droppedOffBoardScold : DragInfo -> Maybe State.StatusMessage
+droppedOffBoardScold info =
     let
         footprintCheck cardCount =
             case dropLoc info of
@@ -509,13 +493,8 @@ droppedOffBoardScold info model =
                     Nothing
     in
     case info.source of
-        FromBoardStack stackIdx ->
-            case listAt stackIdx model.board of
-                Just stack ->
-                    footprintCheck (CardStack.size stack)
-
-                Nothing ->
-                    Nothing
+        FromBoardStack stack ->
+            footprintCheck (CardStack.size stack)
 
         FromHandCard _ ->
             footprintCheck 1
@@ -555,15 +534,16 @@ pointAndTimeDecoder =
 
 
 {-| Mousedown handler for a board card. Emits
-`MouseDownOnBoardCard` with the clicked stack + card index,
+`MouseDownOnBoardCard` carrying the CardStack the card lives in
+and the card's position within that stack (needed for Split),
 which flows into update → `startBoardCardDrag`.
 -}
-cardMouseDown : Int -> Int -> List (Html.Attribute Msg)
-cardMouseDown stackIdx cardIdx =
+cardMouseDown : CardStack -> Int -> List (Html.Attribute Msg)
+cardMouseDown stack cardIdx =
     [ Events.on "mousedown"
         (Decode.map
             (\( p, t ) ->
-                MouseDownOnBoardCard { stackIndex = stackIdx, cardIndex = cardIdx } p t
+                MouseDownOnBoardCard { stack = stack, cardIndex = cardIdx } p t
             )
             pointAndTimeDecoder
         )
@@ -576,14 +556,14 @@ cardMouseDown stackIdx cardIdx =
     `hintedCards`, paint it light green (nudges the player
     toward the top Hint suggestion).
 2.  **Mousedown hook** — when not dragging, attach the
-    `MouseDownOnHandCard idx` event.
+    `MouseDownOnHandCard` event with the Card value.
 3.  **Drag dim** — while dragging, dim the source card and
     disable pointer events everywhere (so the floater is the
     only visible / interactive piece).
 
 -}
-handCardAttrs : DragState -> List Card -> Int -> HandCard -> List (Html.Attribute Msg)
-handCardAttrs drag hintedCards idx hc =
+handCardAttrs : DragState -> List Card -> HandCard -> List (Html.Attribute Msg)
+handCardAttrs drag hintedCards hc =
     let
         hintAttrs =
             if List.any (\c -> c == hc.card) hintedCards then
@@ -597,16 +577,15 @@ handCardAttrs drag hintedCards idx hc =
                 NotDragging ->
                     [ Events.on "mousedown"
                         (Decode.map
-                            (\( p, t ) -> MouseDownOnHandCard idx p t)
+                            (\( p, t ) -> MouseDownOnHandCard hc.card p t)
                             pointAndTimeDecoder
                         )
                     ]
 
                 Dragging info ->
                     case info.source of
-                        FromHandCard sourceIdx ->
-                            if sourceIdx == idx then
-                                -- Dim the source card while dragging its floating copy.
+                        FromHandCard sourceCard ->
+                            if sourceCard == hc.card then
                                 [ style "opacity" "0.35", style "pointer-events" "none" ]
 
                             else
@@ -615,12 +594,3 @@ handCardAttrs drag hintedCards idx hc =
                         FromBoardStack _ ->
                             [ style "pointer-events" "none" ]
            )
-
-
-
--- INTERNAL
-
-
-listAt : Int -> List a -> Maybe a
-listAt i xs =
-    List.head (List.drop i xs)

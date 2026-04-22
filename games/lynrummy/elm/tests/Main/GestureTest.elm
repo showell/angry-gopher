@@ -5,32 +5,25 @@ that decides which `WireAction` (if any) a completed drag
 should emit — given the DragInfo at mouseup and the current
 Model.
 
-These are the "step 4" tests from the wing-hit walkthrough
-(`users/steve/general/wing_hit_walkthrough.md`). They do NOT
-cover the DOM-delegated hit-test that sets `hoveredWing` in
-the first place — that's the part we can't reach without a
-real browser. These tests assume `hoveredWing` has its value
-and check that the action the resolver produces is the right
-shape.
+DragSource and WingId carry content refs (CardStack, Card),
+not array positions. These tests construct DragInfos with
+real stack/card values and assert the emitted action.
 
-Added 2026-04-22 in response to the silent-merge-failure bug.
+Added 2026-04-22. Updated the same day to the content-ref
+drag model.
 
 -}
 
 import Expect
 import Game.BoardActions exposing (Side(..))
-import Game.Card exposing (OriginDeck(..))
+import Game.Card exposing (Card, CardValue(..), OriginDeck(..), Suit(..))
 import Game.CardStack as CardStack exposing (BoardLocation, CardStack, HandCard, HandCardState(..))
-import Game.Dealer
-import Game.Hand as Hand
-import Game.Score as Score
 import Game.WireAction as WA
 import Main.Gesture as Gesture
 import Main.State as State
     exposing
         ( DragInfo
         , DragSource(..)
-        , DragState(..)
         , Model
         , PathFrame(..)
         )
@@ -61,10 +54,6 @@ boardRect =
     { x = 300, y = 100, width = 800, height = 600 }
 
 
-{-| A Model with a two-stack board and an active hand for hand-
-origin tests. The board's viewport rect lives on `DragInfo`,
-not the Model itself — `dropLoc` computes from there.
--}
 modelWith : List CardStack -> List HandCard -> Model
 modelWith board hand =
     let
@@ -75,14 +64,9 @@ modelWith board hand =
         { base | board = board }
 
 
-{-| Construct a DragInfo that's "ready to release" — cursor
-placed at a board-frame spot (converted to viewport via the
-standard rect offset), boardRect set, no surviving clickIntent.
-Caller supplies source + hoveredWing + any extras.
--}
 dragInfo :
     { source : DragSource
-    , hoveredWing : Maybe { stackIndex : Int, side : Side }
+    , hoveredWing : Maybe { target : CardStack, side : Side }
     , cursorBoard : { x : Int, y : Int }
     }
     -> DragInfo
@@ -124,7 +108,7 @@ suiteSplit =
 
                     info =
                         dragInfo
-                            { source = FromBoardStack 0
+                            { source = FromBoardStack stack
                             , hoveredWing = Nothing
                             , cursorBoard = { x = 25, y = 25 }
                             }
@@ -142,7 +126,7 @@ suiteSplit =
 suiteMergeStack : Test
 suiteMergeStack =
     describe "resolveGesture — board-stack + hoveredWing yields MergeStack"
-        [ test "234 + 567 right-wing merge (Steve's repro scenario)" <|
+        [ test "234 dragged onto 567's left wing (Steve's repro)" <|
             \_ ->
                 let
                     source234 =
@@ -156,8 +140,8 @@ suiteMergeStack =
 
                     info =
                         dragInfo
-                            { source = FromBoardStack 0
-                            , hoveredWing = Just { stackIndex = 1, side = Left }
+                            { source = FromBoardStack source234
+                            , hoveredWing = Just { target = target567, side = Left }
                             , cursorBoard = { x = 290, y = 220 }
                             }
                 in
@@ -171,7 +155,7 @@ suiteMergeStack =
                                 }
                             )
                         )
-        , test "dropping 567 onto 234's right wing produces MergeStack" <|
+        , test "567 dropped onto 234's right wing produces MergeStack" <|
             \_ ->
                 let
                     target234 =
@@ -185,8 +169,8 @@ suiteMergeStack =
 
                     info =
                         dragInfo
-                            { source = FromBoardStack 1
-                            , hoveredWing = Just { stackIndex = 0, side = Right }
+                            { source = FromBoardStack source567
+                            , hoveredWing = Just { target = target234, side = Right }
                             , cursorBoard = { x = 200, y = 220 }
                             }
                 in
@@ -216,8 +200,9 @@ suiteMergeHand =
                     target =
                         stackAt "3C,4D,5C" (at 100 200)
 
+                    card6H : Card
                     card6H =
-                        { value = Game.Card.Six, suit = Game.Card.Heart, originDeck = DeckOne }
+                        { value = Six, suit = Heart, originDeck = DeckOne }
 
                     handCard =
                         { card = card6H, state = HandNormal }
@@ -227,8 +212,8 @@ suiteMergeHand =
 
                     info =
                         dragInfo
-                            { source = FromHandCard 0
-                            , hoveredWing = Just { stackIndex = 0, side = Right }
+                            { source = FromHandCard card6H
+                            , hoveredWing = Just { target = target, side = Right }
                             , cursorBoard = { x = 200, y = 220 }
                             }
                 in
@@ -263,7 +248,7 @@ suiteMoveStack =
 
                     info =
                         dragInfo
-                            { source = FromBoardStack 0
+                            { source = FromBoardStack stack
                             , hoveredWing = Nothing
                             , cursorBoard = { x = 400, y = 300 }
                             }
@@ -288,11 +273,9 @@ suiteMoveStack =
                     model =
                         modelWith [ stack ] []
 
-                    -- cursorBoard = (0, 0) means loc = (0, 0) with grabOffset=0,
-                    -- which fits — so push it NEGATIVE by using a grab offset.
                     info =
                         dragInfo
-                            { source = FromBoardStack 0
+                            { source = FromBoardStack stack
                             , hoveredWing = Nothing
                             , cursorBoard = { x = 5, y = 5 }
                             }
@@ -313,8 +296,9 @@ suitePlaceHand =
         [ test "drops produce PlaceHand with board-frame loc" <|
             \_ ->
                 let
+                    card6H : Card
                     card6H =
-                        { value = Game.Card.Six, suit = Game.Card.Heart, originDeck = DeckOne }
+                        { value = Six, suit = Heart, originDeck = DeckOne }
 
                     handCard =
                         { card = card6H, state = HandNormal }
@@ -324,7 +308,7 @@ suitePlaceHand =
 
                     info =
                         dragInfo
-                            { source = FromHandCard 0
+                            { source = FromHandCard card6H
                             , hoveredWing = Nothing
                             , cursorBoard = { x = 450, y = 350 }
                             }

@@ -11,6 +11,8 @@ Extracted 2026-04-19 from the pre-split `Main.elm` monolith.
 
 import Browser.Dom
 import Http
+import Game.Card exposing (Card)
+import Game.CardStack exposing (CardStack)
 import Game.WingOracle exposing (WingId)
 import Main.State exposing (ActionLogBundle, CompleteTurnOutcome, Point, RemoteState)
 import Time
@@ -33,8 +35,8 @@ import Time
 
 -}
 type Msg
-    = MouseDownOnBoardCard { stackIndex : Int, cardIndex : Int } Point Float
-    | MouseDownOnHandCard Int Point Float
+    = MouseDownOnBoardCard { stack : CardStack, cardIndex : Int } Point Float
+    | MouseDownOnHandCard Card Point Float
     | MouseMove Point Float
     | MouseUp Point Float
     | WingEntered WingId

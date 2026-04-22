@@ -123,10 +123,6 @@ update msg model =
             handleMouseUp pos tMs model
 
         WingEntered wing ->
-            let
-                _ =
-                    Debug.log "[wing]" ( "entered", wing )
-            in
             case model.drag of
                 Dragging info ->
                     ( { model | drag = Dragging { info | hoveredWing = Just wing } }, Cmd.none )
@@ -135,10 +131,6 @@ update msg model =
                     ( model, Cmd.none )
 
         WingLeft wing ->
-            let
-                _ =
-                    Debug.log "[wing]" ( "left", wing )
-            in
             case model.drag of
                 Dragging info ->
                     if info.hoveredWing == Just wing then

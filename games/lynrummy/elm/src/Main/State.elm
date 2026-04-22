@@ -210,9 +210,17 @@ type alias DragInfo =
     }
 
 
+{-| What the user picked up at mousedown. Content-based, not
+positional: a board-stack drag carries the CardStack value it
+started from; a hand-card drag carries the Card. This mirrors
+the wire format's CardStack refs — one model for identifying
+stacks/cards everywhere, not "index in the middle of the drag
+lifecycle, value on the wire." See `feedback_record_facts_decide_later.md`
+and the STATUS_BAR-era discussion on competing representations.
+-}
 type DragSource
-    = FromBoardStack Int
-    | FromHandCard Int
+    = FromBoardStack CardStack
+    | FromHandCard Card
 
 
 type alias Point =

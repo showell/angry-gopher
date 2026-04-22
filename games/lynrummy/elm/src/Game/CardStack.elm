@@ -187,15 +187,18 @@ stackStr s =
         |> String.join ","
 
 
-{-| CardStack equality for referee accounting. Two stacks
-compare equal iff:
+{-| Strict stack identity: same `loc` (integer-exact) AND same
+cards in the same order. `BoardCard.state` (recency) is
+intentionally ignored — that's turn-accounting, not identity.
 
-  - their cards are identical pairwise — same `value`, `suit`,
-    AND `originDeck`, in the same order, AND
-  - their `loc` values are equal.
-
-`BoardCard.state` (recency) is *intentionally ignored* —
-that's turn-accounting, not identity.
+Location-first and exact: `loc` is checked before cards, both
+for short-circuit speed and because no two stacks can share a
+location on a legal board (overlap is forbidden by the
+referee). Card ordering is preserved and compared directly —
+AH-AD-AS and AD-AH-AS are NOT the same stack. The system
+requires one canonical representation of every stack on the
+wire; treating re-orderings as equal invites quiet
+disagreement between actors.
 
 Why deck identity matters: on a double-deck board there are
 two 5♥'s — 5♥(d0) and 5♥(d1). They look identical to the
@@ -208,7 +211,7 @@ keeps `stacks_to_remove` honest.
 -}
 stacksEqual : CardStack -> CardStack -> Bool
 stacksEqual a b =
-    locsEqual a.loc b.loc && cardsEqualMultiset a.boardCards b.boardCards
+    locsEqual a.loc b.loc && cardsEqualInOrder a.boardCards b.boardCards
 
 
 {-| Find the stack in `board` that matches `ref` via `stacksEqual`.
@@ -223,44 +226,21 @@ findStack ref board =
         |> List.head
 
 
-{-| True when two BoardCard lists carry the same cards as a
-multiset (order-independent). `state` flags are ignored —
-they're turn-accounting, not identity.
-
-Multiset rather than sequence equality so two clients that
-independently form the same logical group in different visual
-orders still read as the same stack. See `games/lynrummy/WIRE.md`.
+{-| True when two BoardCard lists carry the same cards in the
+same order. `state` flags are ignored (turn-accounting, not
+identity).
 -}
-cardsEqualMultiset : List BoardCard -> List BoardCard -> Bool
-cardsEqualMultiset xs ys =
-    if List.length xs /= List.length ys then
-        False
+cardsEqualInOrder : List BoardCard -> List BoardCard -> Bool
+cardsEqualInOrder xs ys =
+    case ( xs, ys ) of
+        ( [], [] ) ->
+            True
 
-    else
-        let
-            removeFirst target list =
-                case list of
-                    [] ->
-                        Nothing
+        ( x :: xrest, y :: yrest ) ->
+            x.card == y.card && cardsEqualInOrder xrest yrest
 
-                    h :: rest ->
-                        if h.card == target.card then
-                            Just rest
-
-                        else
-                            Maybe.map ((::) h) (removeFirst target rest)
-        in
-        case xs of
-            [] ->
-                True
-
-            x :: rest ->
-                case removeFirst x ys of
-                    Just remaining ->
-                        cardsEqualMultiset rest remaining
-
-                    Nothing ->
-                        False
+        _ ->
+            False
 
 
 locsEqual : BoardLocation -> BoardLocation -> Bool

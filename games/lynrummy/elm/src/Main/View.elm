@@ -530,12 +530,12 @@ boardChildren : Model -> List (Html Msg)
 boardChildren model =
     let
         stackNodes =
-            List.indexedMap (viewStackForBoard model.drag) model.board
+            List.map (viewStackForBoard model.drag) model.board
 
         wingNodes =
             case model.drag of
                 Dragging info ->
-                    List.filterMap (viewWingAt model info) info.wings
+                    List.map (viewWingAt info) info.wings
 
                 NotDragging ->
                     []
@@ -551,13 +551,13 @@ boardChildren model =
     stackNodes ++ wingNodes ++ boardOverlayNodes
 
 
-viewStackForBoard : DragState -> Int -> CardStack -> Html Msg
-viewStackForBoard drag stackIdx stack =
+viewStackForBoard : DragState -> CardStack -> Html Msg
+viewStackForBoard drag stack =
     case drag of
         Dragging info ->
             case info.source of
-                FromBoardStack sourceIdx ->
-                    if sourceIdx == stackIdx then
+                FromBoardStack source ->
+                    if CardStack.stacksEqual source stack then
                         Html.text ""
 
                     else
@@ -567,41 +567,35 @@ viewStackForBoard drag stackIdx stack =
                     View.viewStack stack
 
         NotDragging ->
-            View.viewStackWithCardAttrs (Gesture.cardMouseDown stackIdx) stack
+            View.viewStackWithCardAttrs (Gesture.cardMouseDown stack) stack
 
 
-viewWingAt : Model -> DragInfo -> WingId -> Maybe (Html Msg)
-viewWingAt model info wing =
-    case listAt wing.stackIndex model.board of
-        Just target ->
-            let
-                rect =
-                    WingOracle.wingBoardRect wing target
+viewWingAt : DragInfo -> WingId -> Html Msg
+viewWingAt info wing =
+    let
+        rect =
+            WingOracle.wingBoardRect wing
 
-                hovering =
-                    info.hoveredWing == Just wing
+        hovering =
+            info.hoveredWing == Just wing
 
-                bgColor =
-                    if hovering then
-                        View.mergeableHover
+        bgColor =
+            if hovering then
+                View.mergeableHover
 
-                    else
-                        View.mergeableGreen
-            in
-            Just <|
-                View.viewWing
-                    { top = rect.top
-                    , left = rect.left
-                    , width = rect.width
-                    , bgColor = bgColor
-                    , extraAttrs =
-                        [ Events.onMouseEnter (WingEntered wing)
-                        , Events.onMouseLeave (WingLeft wing)
-                        ]
-                    }
-
-        Nothing ->
-            Nothing
+            else
+                View.mergeableGreen
+    in
+    View.viewWing
+        { top = rect.top
+        , left = rect.left
+        , width = rect.width
+        , bgColor = bgColor
+        , extraAttrs =
+            [ Events.onMouseEnter (WingEntered wing)
+            , Events.onMouseLeave (WingLeft wing)
+            ]
+        }
 
 
 {-| Top-level drag overlay. Renders ONLY when the active drag's
@@ -654,7 +648,7 @@ and `left` come from cursor − grabOffset regardless. The cursor
 values are in whichever frame the overlay is mounted in.
 -}
 renderDraggedFloater : Model -> DragInfo -> List (Html.Attribute Msg) -> Html Msg
-renderDraggedFloater model info positioningAttrs =
+renderDraggedFloater _ info positioningAttrs =
     let
         x =
             info.cursor.x - info.grabOffset.x
@@ -671,23 +665,13 @@ renderDraggedFloater model info positioningAttrs =
                    ]
     in
     case info.source of
-        FromBoardStack idx ->
-            case listAt idx model.board of
-                Just source ->
-                    View.viewStackWithAttrs floatingAttrs source
+        FromBoardStack source ->
+            View.viewStackWithAttrs floatingAttrs source
 
-                Nothing ->
-                    Html.text ""
-
-        FromHandCard idx ->
-            case listAt idx (activeHand model).handCards of
-                Just handCard ->
-                    View.viewCardWithAttrs
-                        (floatingAttrs ++ [ style "background-color" "white" ])
-                        handCard.card
-
-                Nothing ->
-                    Html.text ""
+        FromHandCard card ->
+            View.viewCardWithAttrs
+                (floatingAttrs ++ [ style "background-color" "white" ])
+                card
 
 
 

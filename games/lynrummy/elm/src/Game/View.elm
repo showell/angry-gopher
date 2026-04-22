@@ -304,29 +304,21 @@ so Main.elm can dispatch `MouseDownOnHandCard index` cleanly.
 
 -}
 viewHand :
-    { attrsForCard : Int -> HandCard -> List (Html.Attribute msg) }
+    { attrsForCard : HandCard -> List (Html.Attribute msg) }
     -> Hand
     -> Html msg
 viewHand config hand =
     let
-        -- Build the (row, col, originalIndex, handCard) grid
-        -- by iterating suits in display order and sorting each
-        -- suit's cards by value, then pass row/col to
-        -- `HandLayout.positionAt`.
-        indexed =
-            List.indexedMap Tuple.pair hand.handCards
-
         rows =
             List.indexedMap
                 (\rowIdx suit ->
-                    indexed
-                        |> List.filter (\( _, hc ) -> hc.card.suit == suit)
-                        |> List.sortBy (\( _, hc ) -> Card.cardValueToInt hc.card.value)
+                    hand.handCards
+                        |> List.filter (\hc -> hc.card.suit == suit)
+                        |> List.sortBy (\hc -> Card.cardValueToInt hc.card.value)
                         |> List.indexedMap
-                            (\colIdx ( origIdx, hc ) ->
+                            (\colIdx hc ->
                                 { row = rowIdx
                                 , col = colIdx
-                                , handIndex = origIdx
                                 , handCard = hc
                                 }
                             )
@@ -346,13 +338,11 @@ viewHand config hand =
 
 
 viewPlacedHandCard :
-    { attrsForCard : Int -> HandCard -> List (Html.Attribute msg) }
-    -> { row : Int, col : Int, handIndex : Int, handCard : HandCard }
+    { attrsForCard : HandCard -> List (Html.Attribute msg) }
+    -> { row : Int, col : Int, handCard : HandCard }
     -> Html msg
 viewPlacedHandCard config slot =
     let
-        -- Center position (viewport), then convert to container-
-        -- local top-left.
         center =
             HandLayout.positionAt { row = slot.row, col = slot.col }
 
@@ -368,15 +358,11 @@ viewPlacedHandCard config slot =
             , style "left" (String.fromInt localLeft ++ "px")
             , style "cursor" "grab"
             , style "background-color" (handCardBgColor slot.handCard)
-            , -- Stable DOM id so the replay synthesizer can
-              -- fetch the card's LIVE viewport rect via
-              -- Browser.Dom.getElement, rather than trusting
-              -- pinned math.
-              id (HandLayout.handCardDomId slot.handCard.card)
+            , id (HandLayout.handCardDomId slot.handCard.card)
             ]
     in
     viewPlayingCardWith
-        (positionedAttrs ++ config.attrsForCard slot.handIndex slot.handCard)
+        (positionedAttrs ++ config.attrsForCard slot.handCard)
         slot.handCard.card
 
 

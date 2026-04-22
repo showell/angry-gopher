@@ -24,15 +24,19 @@ hand-source paths are deliberately kept as two separate
 functions; they are two similar things, not one parametrized
 thing.
 
+`WingId` identifies its target by CardStack value, matching
+the wire format and the Main.State drag model. One
+representation everywhere.
+
 -}
 
 import Game.BoardActions as BoardActions exposing (Side(..))
 import Game.BoardGeometry as BG
-import Game.CardStack as CardStack exposing (CardStack, HandCard)
+import Game.CardStack as CardStack exposing (CardStack, HandCard, stacksEqual)
 
 
 type alias WingId =
-    { stackIndex : Int
+    { target : CardStack
     , side : Side
     }
 
@@ -43,21 +47,14 @@ type alias WingId =
 
 {-| Wings for a board stack being dragged.
 -}
-wingsForStack : Int -> List CardStack -> List WingId
-wingsForStack sourceIndex board =
-    case listAt sourceIndex board of
-        Nothing ->
-            []
-
-        Just source ->
-            board
-                |> List.indexedMap Tuple.pair
-                |> List.concatMap (stackWingsForTarget sourceIndex source)
+wingsForStack : CardStack -> List CardStack -> List WingId
+wingsForStack source board =
+    List.concatMap (stackWingsForTarget source) board
 
 
-stackWingsForTarget : Int -> CardStack -> ( Int, CardStack ) -> List WingId
-stackWingsForTarget sourceIndex source ( targetIndex, target ) =
-    if targetIndex == sourceIndex then
+stackWingsForTarget : CardStack -> CardStack -> List WingId
+stackWingsForTarget source target =
+    if stacksEqual target source then
         []
 
     else
@@ -65,7 +62,7 @@ stackWingsForTarget sourceIndex source ( targetIndex, target ) =
             leftWing =
                 case BoardActions.tryStackMerge target source Left of
                     Just _ ->
-                        [ { stackIndex = targetIndex, side = Left } ]
+                        [ { target = target, side = Left } ]
 
                     Nothing ->
                         []
@@ -73,7 +70,7 @@ stackWingsForTarget sourceIndex source ( targetIndex, target ) =
             rightWing =
                 case BoardActions.tryStackMerge target source Right of
                     Just _ ->
-                        [ { stackIndex = targetIndex, side = Right } ]
+                        [ { target = target, side = Right } ]
 
                     Nothing ->
                         []
@@ -89,18 +86,16 @@ stackWingsForTarget sourceIndex source ( targetIndex, target ) =
 -}
 wingsForHandCard : HandCard -> List CardStack -> List WingId
 wingsForHandCard handCard board =
-    board
-        |> List.indexedMap Tuple.pair
-        |> List.concatMap (handCardWingsForTarget handCard)
+    List.concatMap (handCardWingsForTarget handCard) board
 
 
-handCardWingsForTarget : HandCard -> ( Int, CardStack ) -> List WingId
-handCardWingsForTarget handCard ( targetIndex, target ) =
+handCardWingsForTarget : HandCard -> CardStack -> List WingId
+handCardWingsForTarget handCard target =
     let
         leftWing =
             case BoardActions.tryHandMerge target handCard Left of
                 Just _ ->
-                    [ { stackIndex = targetIndex, side = Left } ]
+                    [ { target = target, side = Left } ]
 
                 Nothing ->
                     []
@@ -108,7 +103,7 @@ handCardWingsForTarget handCard ( targetIndex, target ) =
         rightWing =
             case BoardActions.tryHandMerge target handCard Right of
                 Just _ ->
-                    [ { stackIndex = targetIndex, side = Right } ]
+                    [ { target = target, side = Right } ]
 
                 Nothing ->
                     []
@@ -129,28 +124,19 @@ hit-test) can ask the question without a DOM.
 `left`/`top` are board-frame pixels; `width` is one card pitch;
 `height` is `BG.cardHeight`.
 -}
-wingBoardRect : WingId -> CardStack -> { left : Int, top : Int, width : Int, height : Int }
-wingBoardRect wing target =
+wingBoardRect : WingId -> { left : Int, top : Int, width : Int, height : Int }
+wingBoardRect wing =
     let
         left =
             case wing.side of
                 Left ->
-                    target.loc.left - CardStack.stackPitch
+                    wing.target.loc.left - CardStack.stackPitch
 
                 Right ->
-                    target.loc.left + CardStack.stackDisplayWidth target
+                    wing.target.loc.left + CardStack.stackDisplayWidth wing.target
     in
     { left = left
-    , top = target.loc.top
+    , top = wing.target.loc.top
     , width = CardStack.stackPitch
     , height = BG.cardHeight
     }
-
-
-
--- HELPERS
-
-
-listAt : Int -> List a -> Maybe a
-listAt i xs =
-    List.head (List.drop i xs)
