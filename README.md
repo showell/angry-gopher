@@ -1,6 +1,6 @@
 # Angry Gopher
 
-**As-of:** 2026-04-21
+**As-of:** 2026-04-22
 **Confidence:** Working.
 **Durability:** Architecture stable; LynRummy-specific surface
 is the active work area.

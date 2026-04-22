@@ -109,7 +109,14 @@ This has four direct consequences:
   log in memory, plays moves against its own referee, never
   round-trips. Same for the Python agent in autonomous mode —
   Python plays a complete game locally and only talks to the
-  server if someone else needs to see the result.
+  server if someone else needs to see the result. This
+  became load-bearing true in the Elm client on 2026-04-22
+  (ELM_AUTONOMY_AUDIT): during a new-game session, the only
+  wire calls are outbound writes (`fetchNewSession` once,
+  `sendAction` per action, `sendCompleteTurn` per turn — all
+  fire-and-forget except the last, which waits purely for a
+  divergence-monitor payload). Zero inbound state reads
+  after bootstrap.
 - **Each client is its own gatekeeper.** Elm has its OWN
   referee module; it cannot rely on the Go referee to reject
   invalid moves, because in autonomous mode Go isn't in the
@@ -564,11 +571,17 @@ this doc can't carry without becoming a reference manual.
 
 ## Parking status
 
-Parked `STILL_EVOLVING`, last swept 2026-04-21 (TOP_DOWN_SWEEP
-from this doc). The principles are stable as of this version;
-the specifics — especially around two-way coordination and
-the replay stamp-reader — will refine as we exercise them in
-real work.
+Parked `STILL_EVOLVING`, last swept 2026-04-22 (END_OF_DAY_SWEEP
+after ELM_AUTONOMY_AUDIT landed its three rips: CompleteTurn
+wire-gate, dual-fetch bootstrap consolidation, and the dead
+/state wire-read). The principles are stable as of this
+version; the specifics — especially around two-way
+coordination and the replay stamp-reader — will refine as
+we exercise them in real work.
+
+Two-player mechanics are still immature (coordinated
+sessions have been exercised out-of-band at best); expect
+that surface to move as real two-way play gets shaken out.
 
 Update this document whenever a conversation produces a
 durable architectural insight. Redundancy with other surfaces
