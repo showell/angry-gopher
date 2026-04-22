@@ -146,12 +146,17 @@ update msg model =
 
         SessionReceived (Ok sid) ->
             -- Trust-server mode: after session creation, pull the
-            -- authoritative state so both hands are populated from
-            -- the server's dealer rather than the client's guess.
-            -- Also pin the session into the URL so a reload
-            -- resumes the same game instead of dropping to the lobby.
+            -- authoritative state AND the action log so both hands
+            -- are populated from the server's dealer AND Instant
+            -- Replay has a baseline to rewind to. Also pin the
+            -- session into the URL so a reload resumes the same
+            -- game instead of dropping to the lobby.
             ( { model | sessionId = Just sid }
-            , Cmd.batch [ fetchRemoteState sid, setSessionPath (String.fromInt sid) ]
+            , Cmd.batch
+                [ fetchRemoteState sid
+                , fetchActionLog sid
+                , setSessionPath (String.fromInt sid)
+                ]
             )
 
         SessionReceived (Err _) ->

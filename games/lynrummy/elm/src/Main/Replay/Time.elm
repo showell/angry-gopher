@@ -37,8 +37,6 @@ import Browser.Dom
 import Game.BoardGeometry as BG
 import Game.CardStack as CardStack
 import Game.HandLayout as HandLayout
-import Game.Dealer
-import Game.Hand as Hand
 import Game.Score as Score
 import Game.WireAction as WA exposing (WireAction)
 import Main.Apply as Apply
@@ -60,21 +58,30 @@ import Time
 -- CLICK HANDLER: INSTANT REPLAY
 
 
-{-| Handle `ClickInstantReplay`: rewind the Model to the session's
-true pre-first-action baseline (or the hardcoded Dealer fallback
-if the baseline hasn't arrived yet), seed the replay walker, and
-kick off a DOM query for the live board rect.
+{-| Handle `ClickInstantReplay`: rewind the Model to the
+session's true pre-first-action baseline, seed the replay
+walker, and kick off a DOM query for the live board rect.
 
 The PreRoll phase keeps the rewound board on screen briefly so
 the viewer registers the starting state before action 0 fires.
 
+Requires a baseline. The baseline is populated at session
+bootstrap by `fetchActionLog` (both on new-session and
+URL-resume paths), so it's expected to be present. If it
+isn't — e.g. if the user clicks Replay before the fetch
+resolves — the click no-ops rather than rewinding to an
+invented state. Better silent no-op than replaying a lie.
+
 -}
 clickInstantReplay : Model -> ( Model, Cmd Msg )
 clickInstantReplay model =
-    let
-        rewound =
-            case model.replayBaseline of
-                Just baseline ->
+    case model.replayBaseline of
+        Nothing ->
+            ( model, Cmd.none )
+
+        Just baseline ->
+            let
+                rewound =
                     { model
                         | board = baseline.board
                         , hands = baseline.hands
@@ -87,31 +94,17 @@ clickInstantReplay model =
                         , turnStartBoardScore = baseline.turnStartBoardScore
                         , score = Score.forStacks baseline.board
                     }
-
-                Nothing ->
-                    { model
-                        | board = Game.Dealer.initialBoard
-                        , hands = [ Game.Dealer.openingHand, Hand.empty ]
-                        , scores = [ 0, 0 ]
-                        , activePlayerIndex = 0
-                        , turnIndex = 0
-                        , deck = []
-                        , cardsPlayedThisTurn = 0
-                        , victorAwarded = False
-                        , turnStartBoardScore = Score.forStacks Game.Dealer.initialBoard
-                        , score = Score.forStacks Game.Dealer.initialBoard
-                    }
-    in
-    ( { rewound
-        | status = { text = "Replaying…", kind = Inform }
-        , replay = Just { step = 0, paused = False }
-        , replayAnim = PreRoll { untilMs = 0 }
-        , drag = NotDragging
-        , replayBoardRect = Nothing
-      }
-    , Task.attempt BoardRectReceived
-        (Browser.Dom.getElement State.boardDomId)
-    )
+            in
+            ( { rewound
+                | status = { text = "Replaying…", kind = Inform }
+                , replay = Just { step = 0, paused = False }
+                , replayAnim = PreRoll { untilMs = 0 }
+                , drag = NotDragging
+                , replayBoardRect = Nothing
+              }
+            , Task.attempt BoardRectReceived
+                (Browser.Dom.getElement State.boardDomId)
+            )
 
 
 

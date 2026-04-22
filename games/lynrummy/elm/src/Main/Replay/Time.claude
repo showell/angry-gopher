@@ -27,10 +27,14 @@ transitions and calls Space to fill in the spatial pieces.
 
 ### Msg handlers (called from Main.update)
 
-- `clickInstantReplay : Model -> ( Model, Cmd Msg )` — rewind to
-  the session's pre-first-action baseline (or hardcoded Dealer
-  fallback), seed the walker, kick off a DOM query for the live
-  board rect. Enters PreRoll phase.
+- `clickInstantReplay : Model -> ( Model, Cmd Msg )` — rewind
+  to the session's pre-first-action baseline
+  (`model.replayBaseline`), seed the walker, kick off a DOM
+  query for the live board rect. Enters PreRoll phase. No-op
+  if the baseline hasn't arrived yet — the earlier
+  Dealer-hardcoded fallback fabricated P2's hand (`Hand.empty`)
+  and produced replays that didn't match the actual game;
+  ripped 2026-04-22.
 - `clickReplayPauseToggle : Model -> ( Model, Cmd Msg )` — flip
   the paused bit on `model.replay`.
 - `replayFrame : Float -> Model -> ( Model, Cmd Msg )` — the
@@ -106,8 +110,8 @@ Imports:
 - `Browser.Dom` — DOM-element Task for hand-rect async.
 - `Game.BoardGeometry` — pinned-constant fallbacks for
   PlaceHand target.
-- `Game.Dealer`, `Game.Hand`, `Game.Score` — for the
-  hardcoded-baseline branch of `clickInstantReplay`.
+- `Game.Score` — `forStacks` to recompute the running score
+  after rewinding to the baseline.
 - `Game.HandLayout` — `handCardDomId` for the hand-rect
   Task.
 - `Game.WireAction` — WireAction, pattern-matched.
