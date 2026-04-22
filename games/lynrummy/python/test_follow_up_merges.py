@@ -111,10 +111,43 @@ def test_merge_applies_with_shifting_indices():
             ok, reason or "")
 
 
+def test_overflow_triggers_move_first():
+    """A merged stack that would overflow the board edge should
+    trigger a move_stack of the target before the merge — same
+    "plan around the eventual stack" pattern as _plan_merge_hand.
+    The match picks side="left" (5-10 in value order), which
+    shifts the merged loc LEFT by src_width*CARD_PITCH from
+    tgt.left. Putting tgt at left=20 makes the merged stack's
+    left edge land at -79, which violates BOARD_MARGIN."""
+    board = [
+        _stack([(5, H), (6, H), (7, H)], {"top": 100, "left": 600}),
+        _stack([(8, H), (9, H), (10, H)], {"top": 200, "left": 20}),
+    ]
+    prims = strategy.find_follow_up_merges(board)
+    kinds = [p["action"] for p in prims]
+    _assert("overflow near edge triggers pre-merge move_stack",
+            kinds == ["move_stack", "merge_stack"],
+            f"got {kinds}")
+    # And the final board should have no geometry violation.
+    from geometry import find_violation
+    sim = strategy._copy_board(board)
+    for p in prims:
+        if p["action"] == "move_stack":
+            sim = strategy._apply_move(sim, p["stack_index"], p["new_loc"])
+        elif p["action"] == "merge_stack":
+            sim = strategy._apply_merge_stack(
+                sim, p["source_stack"], p["target_stack"],
+                p.get("side", "right"))
+    _assert("post-plan board has no geometry violation",
+            find_violation(sim) is None,
+            f"violation at idx {find_violation(sim)}")
+
+
 if __name__ == "__main__":
     test_two_pure_runs_chain()
     test_three_set_plus_single_extends()
     test_disjoint_groups_no_merge()
     test_two_independent_merges()
     test_merge_applies_with_shifting_indices()
-    print("\n5/5 passed")
+    test_overflow_triggers_move_first()
+    print("\n7/7 passed")

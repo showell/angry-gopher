@@ -272,6 +272,71 @@ def _fix_geometry(sim, prims):
         sim = _apply_move(sim, bad_idx, new_loc)
 
 
+def _plan_merge_stack(sim, src_idx, tgt_idx, side):
+    """Emit primitives for merging sim[src_idx] onto sim[tgt_idx]
+    on `side`, with pre-flight geometry planning. Parallel to
+    `_plan_merge_hand` — same algorithm, applied to a board-
+    to-board merge instead of a hand-card-to-board merge.
+
+    Try merge-in-place first. If the merged stack fits without
+    a bounds or overlap violation, emit just the merge. Otherwise
+    find a hole sized for the EVENTUAL merged stack, move the
+    target there first (accounting for the side-specific shift:
+    a left-merge shifts the merged stack's top-left left by
+    src_width * CARD_PITCH), then emit the merge. That way every
+    intermediate frame in replay stays geometrically clean.
+
+    Returns (primitives, sim_after).
+    """
+    src = sim[src_idx]
+    tgt = sim[tgt_idx]
+    final_size = len(src["board_cards"]) + len(tgt["board_cards"])
+
+    # Merge-in-place if it stays legal. This is the common case
+    # when the follow-up scan finds two stacks already close
+    # enough that the merged stack fits at the target's current
+    # loc — just drag source onto target's wing.
+    merged_in_place = _apply_merge_stack(
+        _copy_board(sim), src_idx, tgt_idx, side)
+    if find_violation(merged_in_place) is None:
+        return (
+            [{"action": "merge_stack", "source_stack": src_idx,
+              "target_stack": tgt_idx, "side": side}],
+            merged_in_place,
+        )
+
+    # Eventual stack overflows at target's current loc. Find a
+    # hole sized for the final merged stack, accounting for the
+    # side-specific shift.
+    others = [s for i, s in enumerate(sim)
+              if i != src_idx and i != tgt_idx]
+    final_loc = find_open_loc(others, card_count=final_size)
+    src_width = len(src["board_cards"]) * CARD_PITCH
+    if side == "left":
+        tgt_loc = {"left": final_loc["left"] + src_width,
+                   "top": final_loc["top"]}
+    else:
+        tgt_loc = final_loc
+
+    # Move target first. _apply_move uses remove-and-append
+    # semantics, so target ends up at len-1 and any index > tgt_idx
+    # shifts down by 1. Source's post-move index depends on
+    # whether it was before or after target in the original list.
+    moved = _apply_move(_copy_board(sim), tgt_idx, tgt_loc)
+    new_tgt_idx = len(moved) - 1
+    new_src_idx = src_idx if src_idx < tgt_idx else src_idx - 1
+    merged = _apply_merge_stack(moved, new_src_idx, new_tgt_idx, side)
+    return (
+        [
+            {"action": "move_stack", "stack_index": tgt_idx,
+             "new_loc": tgt_loc},
+            {"action": "merge_stack", "source_stack": new_src_idx,
+             "target_stack": new_tgt_idx, "side": side},
+        ],
+        merged,
+    )
+
+
 def _plan_merge_hand(sim, target_idx, hand_card, side):
     """Emit primitives for merging `hand_card` onto `sim[target_idx]`
     on `side`, with pre-flight geometry planning.
@@ -1207,7 +1272,12 @@ def find_follow_up_merges(board):
 
     # Apply each pair in order, looking up current indices via
     # signature so the emitted primitives are correct against
-    # the evolving sim state.
+    # the evolving sim state. Delegates the per-pair physical
+    # execution to `_plan_merge_stack`: in-place merge when the
+    # merged stack fits at the target's current loc, otherwise
+    # a move_stack (of the target) to a hole sized for the
+    # eventual stack, THEN the merge. Same algorithm as
+    # `_plan_merge_hand` for hand-to-board merges.
     prims = []
     sim = _copy_board(board)
     for src_sig, tgt_sig, side in pairs:
@@ -1215,13 +1285,8 @@ def find_follow_up_merges(board):
         cur_tgt = _stack_index_by_sig(sim, tgt_sig)
         if cur_src is None or cur_tgt is None:
             continue
-        prims.append({
-            "action": "merge_stack",
-            "source_stack": cur_src,
-            "target_stack": cur_tgt,
-            "side": side,
-        })
-        sim = _apply_merge_stack(sim, cur_src, cur_tgt, side)
+        step_prims, sim = _plan_merge_stack(sim, cur_src, cur_tgt, side)
+        prims.extend(step_prims)
     return prims
 
 
