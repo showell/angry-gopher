@@ -413,26 +413,51 @@ viewPlayerRow model idx hand =
 
                 Nothing ->
                     0
+
+        turnDelta =
+            model.score - model.turnStartBoardScore
+
+        turnDeltaText =
+            if turnDelta >= 0 then
+                "+" ++ String.fromInt turnDelta
+
+            else
+                String.fromInt turnDelta
+
+        turnDeltaLine =
+            if isActive then
+                [ div
+                    [ style "color" "#555"
+                    , style "font-size" "13px"
+                    , style "margin-bottom" "6px"
+                    ]
+                    [ Html.text ("Turn: " ++ turnDeltaText) ]
+                ]
+
+            else
+                []
     in
     div
         [ style "padding-bottom" "15px"
         , style "margin-bottom" "12px"
         , style "border-bottom" "1px #000080 solid"
         ]
-        (div
+        ([ div
             [ style "font-weight" "bold"
             , style "font-size" "16px"
             , style "color" nameColor
             , style "margin-top" "8px"
             ]
             [ Html.text (playerName ++ nameSuffix) ]
-            :: div
-                [ style "color" "maroon"
-                , style "margin-bottom" "4px"
-                , style "margin-top" "4px"
-                ]
-                [ Html.text ("Score: " ++ String.fromInt playerTotal) ]
-            :: (if isActive then
+         , div
+            [ style "color" "maroon"
+            , style "margin-bottom" "4px"
+            , style "margin-top" "4px"
+            ]
+            [ Html.text ("Score: " ++ String.fromInt playerTotal) ]
+         ]
+            ++ turnDeltaLine
+            ++ (if isActive then
                     [ View.viewHandHeading
                     , View.viewHand { attrsForCard = Gesture.handCardAttrs model.drag model.hintedCards } hand
                     , viewTurnControls model
