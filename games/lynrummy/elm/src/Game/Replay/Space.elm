@@ -1,10 +1,11 @@
 module Game.Replay.Space exposing
     ( AnimationInfo
     , animatedDragState
-    , buildReplayAnimation
+    , boardStackSource
     , dragMsPerPixel
     , dragSourceForAction
     , handCardForAction
+    , handCardSource
     , interpPath
     , linearPath
     , pathDuration
@@ -70,45 +71,6 @@ type alias AnimationInfo =
     , pathFrame : PathFrame
     , pendingAction : WireAction
     }
-
-
-
--- BUILD
-
-
-{-| Build the per-step animation bundle from an action + its
-captured path. Returns Nothing only when the source card can't
-be resolved on the current board/hand — a contract violation
-(the replay state and the wire's CardStack refs have drifted
-apart), but total so the FSM can recover.
-
-The server enforces that intra-board actions carry a path
-(see `views/lynrummy_elm.go`'s `requiresGestureMetadata`), so
-this function is always called with a non-empty path for
-drag-backed actions. Hand-origin actions without a path take
-the async DOM-measurement branch in `Game.Replay.Time`
-instead.
-
--}
-buildReplayAnimation :
-    WireAction
-    -> List State.GesturePoint
-    -> PathFrame
-    -> Model
-    -> Float
-    -> Maybe AnimationInfo
-buildReplayAnimation action path frame model nowMs =
-    dragSourceForAction action model
-        |> Maybe.map
-            (\( source, grabOffset ) ->
-                { startMs = nowMs
-                , path = path
-                , source = source
-                , grabOffset = grabOffset
-                , pathFrame = frame
-                , pendingAction = action
-                }
-            )
 
 
 

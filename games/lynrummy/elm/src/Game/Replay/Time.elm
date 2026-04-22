@@ -41,6 +41,9 @@ import Game.Score as Score
 import Game.WireAction as WA exposing (WireAction)
 import Main.Apply as Apply
 import Main.Msg exposing (Msg(..))
+import Game.Replay.AnimateMergeStack as AnimateMergeStack
+import Game.Replay.AnimateMoveStack as AnimateMoveStack
+import Game.Replay.AnimateSplit as AnimateSplit
 import Game.Replay.Space as Space
 import Main.State as State
     exposing
@@ -301,7 +304,7 @@ prepareReplayStep action maybePath frame model nowMs =
     in
     case maybePath of
         Just (p :: rest) ->
-            case Space.buildReplayAnimation action (p :: rest) frame model nowMs of
+            case startBoardAnim action (p :: rest) frame model nowMs of
                 Just anim ->
                     startAnimating anim
 
@@ -509,6 +512,34 @@ beatAfter action =
 
 
 -- INTERNAL
+
+
+{-| Dispatch a board-origin wire action to its per-operation
+Animate module. Nothing means the action is hand-origin (or an
+unsupported kind); the caller falls back to the async DOM
+measurement path or `applyImmediate`. One branch per
+synchronous board-drag primitive.
+-}
+startBoardAnim :
+    WireAction
+    -> List State.GesturePoint
+    -> PathFrame
+    -> Model
+    -> Float
+    -> Maybe Space.AnimationInfo
+startBoardAnim action path frame model nowMs =
+    case action of
+        WA.Split payload ->
+            AnimateSplit.start payload path frame model nowMs
+
+        WA.MergeStack payload ->
+            AnimateMergeStack.start payload path frame model nowMs
+
+        WA.MoveStack payload ->
+            AnimateMoveStack.start payload path frame model nowMs
+
+        _ ->
+            Nothing
 
 
 listAt : Int -> List a -> Maybe a

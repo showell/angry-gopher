@@ -1,0 +1,55 @@
+# Game/Replay/AnimateSplit.elm — EARLY
+
+Replay animation driver for the Split primitive. One of three
+synchronous board-drag animators (with `AnimateMergeStack` and
+`AnimateMoveStack`) split off from the former `prepareReplayStep`
+in 2026-04-22's REFACTOR_ELM_REPLAY B1/Axis X.
+
+## Status
+
+- **Label:** EARLY. Pattern-establishing extraction — three
+  Animate modules look very similar today (each takes a typed
+  payload, resolves a DragSource, bundles an AnimationInfo).
+  The point isn't DRY; the point is each primitive has a
+  named home so future divergence (Split specifically may
+  grow a "cleaving" animation eventually) lands cleanly.
+
+## Interface
+
+```elm
+start :
+    { stack : CardStack, cardIndex : Int }  -- Split payload
+    -> List State.GesturePoint                -- captured path
+    -> PathFrame
+    -> Model
+    -> Float                                  -- nowMs
+    -> Maybe Space.AnimationInfo
+```
+
+Returns Nothing only when the source stack can't be resolved
+against the current board — a contract violation that the
+replay FSM recovers from via `applyImmediate`.
+
+## Contract assumption
+
+The captured `path` is always non-empty here: the server's
+`requiresGestureMetadata` gate enforces that intra-board
+actions ship with gesture samples. Hand-origin primitives
+(MergeHand, PlaceHand) take the async DOM-measurement path
+via `AwaitingHandRect` in `Game.Replay.Time` instead.
+
+## Dependencies
+
+- `Game.Replay.Space` — for `boardStackSource` (DragSource +
+  grabOffset resolution) and the `AnimationInfo` type.
+- `Game.WireAction` — for the `WA.Split` wrapper used in the
+  emitted animation's `pendingAction` field.
+- `Main.State` — for `Model`, `PathFrame`, `GesturePoint`.
+
+## Pointers
+
+- Called from `Game.Replay.Time.startBoardAnim`'s
+  `WA.Split payload ->` branch.
+- Companion modules: `AnimateMergeStack`, `AnimateMoveStack`.
+- REFACTOR_ELM_REPLAY B1 proposal:
+  `~/showell_repos/claude-steve/REFACTOR_ELM_REPLAY_B1.md`.
