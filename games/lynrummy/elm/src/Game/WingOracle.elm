@@ -1,5 +1,6 @@
 module Game.WingOracle exposing
     ( WingId
+    , wingBoardRect
     , wingsForHandCard
     , wingsForStack
     )
@@ -26,6 +27,7 @@ thing.
 -}
 
 import Game.BoardActions as BoardActions exposing (Side(..))
+import Game.BoardGeometry as BG
 import Game.CardStack as CardStack exposing (CardStack, HandCard)
 
 
@@ -112,6 +114,37 @@ handCardWingsForTarget handCard ( targetIndex, target ) =
                     []
     in
     leftWing ++ rightWing
+
+
+
+-- WING RECT (board-frame)
+
+
+{-| Board-frame rectangle the named wing renders into.
+Derived from the target stack's loc + which side the wing sits
+on, in the same math `Main.View.viewWingAt` uses at render
+time. Kept pure and exposed so tests (and a future computed
+hit-test) can ask the question without a DOM.
+
+`left`/`top` are board-frame pixels; `width` is one card pitch;
+`height` is `BG.cardHeight`.
+-}
+wingBoardRect : WingId -> CardStack -> { left : Int, top : Int, width : Int, height : Int }
+wingBoardRect wing target =
+    let
+        left =
+            case wing.side of
+                Left ->
+                    target.loc.left - CardStack.stackPitch
+
+                Right ->
+                    target.loc.left + CardStack.stackDisplayWidth target
+    in
+    { left = left
+    , top = target.loc.top
+    , width = CardStack.stackPitch
+    , height = BG.cardHeight
+    }
 
 
 

@@ -5,6 +5,7 @@ module Main.Gesture exposing
     , handCardAttrs
     , handleMouseUp
     , pointDecoder
+    , resolveGesture
     , startBoardCardDrag
     , startHandDrag
     )
@@ -207,6 +208,15 @@ handleMouseUp releasePoint tMs model =
             ( model, Cmd.none )
 
         Dragging info ->
+            let
+                _ =
+                    Debug.log "[mouseup]"
+                        { source = info.source
+                        , hoveredWing = info.hoveredWing
+                        , clickIntent = info.clickIntent
+                        , cursor = info.cursor
+                        }
+            in
             let
                 -- Append the mouseup point so the gesture path
                 -- captures the full gesture including the release.

@@ -50,7 +50,7 @@ import Game.CardStack as CardStack exposing (CardStack)
 import Game.Hand exposing (Hand)
 import Game.PlayerTurn exposing (CompleteTurnResult(..))
 import Game.View as View
-import Game.WingOracle exposing (WingId)
+import Game.WingOracle as WingOracle exposing (WingId)
 import Main.Gesture as Gesture
 import Main.Msg exposing (Msg(..))
 import Main.State as State
@@ -575,19 +575,8 @@ viewWingAt model info wing =
     case listAt wing.stackIndex model.board of
         Just target ->
             let
-                pitch =
-                    CardStack.stackPitch
-
-                stackW =
-                    CardStack.stackDisplayWidth target
-
-                wingLeft =
-                    case wing.side of
-                        Left ->
-                            target.loc.left - pitch
-
-                        Right ->
-                            target.loc.left + stackW
+                rect =
+                    WingOracle.wingBoardRect wing target
 
                 hovering =
                     info.hoveredWing == Just wing
@@ -601,9 +590,9 @@ viewWingAt model info wing =
             in
             Just <|
                 View.viewWing
-                    { top = target.loc.top
-                    , left = wingLeft
-                    , width = pitch
+                    { top = rect.top
+                    , left = rect.left
+                    , width = rect.width
                     , bgColor = bgColor
                     , extraAttrs =
                         [ Events.onMouseEnter (WingEntered wing)
