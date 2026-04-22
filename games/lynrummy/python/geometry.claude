@@ -66,16 +66,18 @@ Things this module deliberately does NOT do:
 - Per-session jitter, RNG, or hidden state — breaks replay
   and confounds behaviorist comparisons across sessions.
 
-Consumer: `auto_player.py` (settle pass after each action).
-Referee counterpart: `games/lynrummy/board_geometry.go`
-(checkGeometry). Constants match.
+Consumer: `hints.py` via `_plan_merge_hand` (pre-flight check
+per emitted merge_hand) and `_fix_geometry` (safety net at
+end of trick). Referee counterpart:
+`games/lynrummy/board_geometry.go` (checkGeometry). Constants
+match.
 
-## Pinned viewport constants (2026-04-21)
+## Pinned viewport constants
 
-- `BOARD_VIEWPORT_LEFT = 280`, `BOARD_VIEWPORT_TOP = 100` —
+- `BOARD_VIEWPORT_LEFT = 300`, `BOARD_VIEWPORT_TOP = 100` —
   where the 800×600 board div sits in the viewport. Python
   and Elm agree; Elm's matching constants live in
-  `LynRummy.BoardGeometry.boardViewport{Left,Top}`.
+  `Game.BoardGeometry.boardViewport{Left,Top}`.
 
 Used by `gesture_synth.drag_endpoints` to emit pointer paths
 in the same frame Elm renders. If the Elm layout shifts

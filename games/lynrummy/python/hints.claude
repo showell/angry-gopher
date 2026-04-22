@@ -26,6 +26,28 @@ Primitive-order choices that affected invariant:
   - Merging two hand cards onto a target: sort by proximity-to-
     target value first. Input order of hand cards is arbitrary.
 
+## Plan-then-execute for merge_hand (2026-04-22)
+
+Every emitted `merge_hand` goes through `_plan_merge_hand(sim,
+target_idx, hand_card, side)`. The helper does what humans do:
+looks for a hole sized for the EVENTUAL stack (len(target) + 1,
+not len(target)), accounts for the side-specific offset (a
+left-merge shifts the stack's top-left by −CARD_PITCH), and
+emits `move_stack` BEFORE `merge_hand` when merging-in-place
+would violate bounds. Every intermediate frame in replay is
+geometrically clean.
+
+Before the helper existed, tricks emitted `merge_hand`
+directly and `_fix_geometry` appended a fix-up `move_stack`
+at end-of-trick. The final state was legal, but the replay
+showed ugly intermediate frames (cards partly off-board
+between the merge and the fix). `_fix_geometry` stays as a
+last-ditch safety net for merge_stack / split cases — should
+rarely fire now that merge_hand is pre-planned.
+
+Regression test: `test_plan_merge_hand.py` covers left-edge +
+left-merge, right-edge + right-merge, and the in-place case.
+
 ## Pointers
 
 - Consumers: `auto_player.py`, `test_dsl_conformance.py`.

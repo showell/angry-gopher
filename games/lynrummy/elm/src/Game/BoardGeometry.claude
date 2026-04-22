@@ -43,7 +43,7 @@ fails, semantics is meaningless.
   `CardStack.cardWidth`).
 - `stackHeight = cardHeight`. Single row; no vertical
   spread within a stack.
-- `boardViewportLeft = 280`, `boardViewportTop = 100` —
+- `boardViewportLeft = 300`, `boardViewportTop = 100` —
   **documentary / fallback** coordinates of the board div's
   top-left in the viewport. NOT authoritative as of
   2026-04-21's B1 change: the replay synthesizer reads the

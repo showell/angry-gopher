@@ -8,13 +8,15 @@ locally, takes the top suggestion's primitives and posts each
 verbatim to `/actions`. No /hint round-trip, no trick_result
 on the wire — every action is a primitive.
 
-Emission is correct-by-construction: `hints.py` runs a
-`_fix_geometry` post-pass at the end of each trick so the
-primitive sequence lands on a geometrically clean board. No
-settle() belt. Terminates when the deck drops below
-DECK_LOW_WATER (≈10 cards) — not on "victory" events, which
-are per-turn bonuses (see
-`project_lynrummy_game_end_condition.md`).
+Emission is correct-by-construction: every `merge_hand` in
+`hints.py` is routed through `_plan_merge_hand`, which looks
+for a hole sized for the EVENTUAL stack and emits `move_stack`
+BEFORE `merge_hand` when needed — so every intermediate frame
+in replay is geometrically clean, not just the final state.
+`_fix_geometry` stays as a last-ditch safety net. No settle()
+belt. Terminates when the deck drops below DECK_LOW_WATER
+(≈10 cards) — not on "victory" events, which are per-turn
+bonuses (see `project_lynrummy_game_end_condition.md`).
 
 ## Surface
 
