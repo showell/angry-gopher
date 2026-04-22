@@ -50,13 +50,16 @@ put speculative coordinates on the wire.
 - Shared constants: `geometry.py` `BOARD_VIEWPORT_LEFT/TOP`
   must match Elm's `LynRummy.BoardGeometry.boardViewport{Left,Top}`.
 
-## TODO
+## Notes
 
-- `split` endpoints not yet emitted — the wire carries no
-  target loc for Split, so synthesis needs either a wire
-  extension or a deterministic "where the halves land"
-  policy. Open question.
+- `split` synthesizes a short downward drag anchored at
+  `card_index` within the source stack (travel of one
+  `CARD_HEIGHT`). The wire carries no target loc for Split —
+  the server chooses where the halves land — so the drag
+  expresses only the physical act of "pulling" the card off.
 - `DRAG_MS_PER_PIXEL = 5` is a settled value, not a pending
   measurement — perceived replay pace reads well at this
-  setting (Steve, 2026-04-21). Kept in sync with Elm's
-  `dragMsPerPixel`.
+  setting (Steve, 2026-04-21). Decoupled from Elm's own
+  `dragMsPerPixel = 2` (Elm honors Python-captured paces
+  verbatim; that constant governs only Elm's hand-origin
+  synthesis).
