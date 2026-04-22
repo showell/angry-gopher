@@ -255,16 +255,20 @@ func TestReplay_BadReferencesAreNoOps(t *testing.T) {
 		}
 	})
 
-	t.Run("merge_stack: cards in swapped order still match (multiset equality)", func(t *testing.T) {
-		// Reverse the 7-set's card order. Same multiset, same loc,
-		// so the reducer treats it as the same stack and the merge
-		// proceeds.
+	t.Run("merge_stack: cards in swapped order are a different stack (strict identity)", func(t *testing.T) {
+		// Reverse the 7-set's card order. Stack identity is
+		// loc + cards-in-order, so a reordered copy is NOT
+		// the same stack. FindStack should return nil and the
+		// reducer should no-op the merge (board unchanged).
 		reordered := stackAt(before, 3)
 		cards := append([]BoardCard{}, reordered.BoardCards...)
 		for i, j := 0, len(cards)-1; i < j; i, j = i+1, j-1 {
 			cards[i], cards[j] = cards[j], cards[i]
 		}
 		reordered.BoardCards = cards
+		if FindStack(before.Board, reordered) != nil {
+			t.Error("FindStack should NOT match a reordered stack (strict identity)")
+		}
 		after := ApplyAction(
 			MergeStackAction{
 				Source: stackAt(before, 0),
@@ -273,19 +277,10 @@ func TestReplay_BadReferencesAreNoOps(t *testing.T) {
 			},
 			before,
 		)
-		// A merge that's geometrically invalid will still no-op,
-		// but the important check here is that FindStack LOCATED
-		// the target despite the reordering. So what we assert:
-		// either the merge succeeded (board shrank by 1) or was
-		// rejected by the merge-legality check (board unchanged).
-		// The test fails only if FindStack returned nil and the
-		// action silently didn't try — but that's indistinguishable
-		// from a rejected merge at this layer. Instead, verify
-		// FindStack directly:
-		if FindStack(before.Board, reordered) == nil {
-			t.Error("FindStack should match a reordered stack by multiset")
+		if len(after.Board) != len(before.Board) {
+			t.Errorf("board should be unchanged on reordered-target merge; len before=%d after=%d",
+				len(before.Board), len(after.Board))
 		}
-		_ = after
 	})
 }
 

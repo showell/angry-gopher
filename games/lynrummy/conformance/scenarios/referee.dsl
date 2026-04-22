@@ -103,3 +103,17 @@ scenario geometry_crowded
   expect: error
     stage: geometry
     message_contains: too close
+
+scenario identity_reorder_breaks_match
+  desc: A set on the board is referenced in stacks_to_remove with cards in a different order. Stacks are identified by loc + cards-in-order, so the reordered copy is NOT the same stack — referee rejects at inventory stage. Exercises the strict-order rule end-to-end; sets are the natural case since their player-visible form has no canonical order.
+  op: validate_game_move
+  board_before:
+    at (100,100): 5H 5C 5S
+  stacks_to_remove:
+    at (100,100): 5C 5S 5H
+  stacks_to_add:
+    at (100,100): 5C 5S 5H 5D*
+  hand_cards_played: 5D
+  expect: error
+    stage: inventory
+    message_contains: not on the board

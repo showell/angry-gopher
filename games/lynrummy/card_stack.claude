@@ -3,17 +3,26 @@ just_use card_stack.go
 # label: ELEGANT
 # role: encodes domain knowledge
 
-Owns stack-level types and operations. Three notable shapes:
+Owns stack-level types and operations. Four notable shapes:
 
 - **Cached stackType.** CardStack carries a cached StackType set by
   NewCardStack; MarshalJSON drops it and UnmarshalJSON re-derives it so
   stale caches can never ride the wire. (Elm side derives on demand —
   `CardStack.stackType` is a function, not a stored field. Different
   strategy, same wire shape because the field never travels anyway.)
-- **Location accepts floats.** Browsers ship fractional pixel positions
-  (e.g. 401.9333…); UnmarshalJSON decodes via float64 and truncates to
-  int, matching what checkGeometry would treat them as anyway. This is
-  the fractional-pixel rule in wire form.
+- **Location is integer-only.** UnmarshalJSON decodes `top` / `left`
+  into `int` directly; any float value on the wire fails decode. The
+  older tolerance for fractional-pixel positions (Cat's legacy drag UI)
+  is gone — canonical wire form is exact, and silent truncation of
+  floats would mask sender bugs. See
+  `feedback_no_indices_no_floats_in_drag.md`.
+- **Strict stack identity.** `CardStack.Equals` compares same `Loc` AND
+  same cards in the same order (`cardsEqualInOrder`). `BoardCard.State`
+  is ignored (turn-accounting, not identity). Sequence equality — not
+  multiset — so `[AC, AD, AS]` and `[AD, AC, AS]` at the same loc are
+  different stacks. Conformance locked in
+  `games/lynrummy/conformance/scenarios/referee.dsl`
+  (`identity_reorder_breaks_match`).
 - **maybeMerge allows incomplete (2-card) results.** Mid-turn boards
   legitimately contain partial stacks en route to a run or set; only
   Bogus and Dup are rejected. Semantics (no Incomplete at rest) are

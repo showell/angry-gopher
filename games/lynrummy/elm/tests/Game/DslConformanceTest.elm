@@ -822,6 +822,34 @@ hintNoPlaysForLonelyUnplayableCard =
                 Expect.pass
 
 
+identityReorderBreaksMatch : Test
+identityReorderBreaksMatch =
+    test "identity_reorder_breaks_match" <|
+        \_ ->
+            let
+                move =
+                    { boardBefore = [ { boardCards = [ { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 100, left = 100 } }
+                        ]
+                    , stacksToRemove = [ { boardCards = [ { card = { value = Five, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 100, left = 100 } }
+                        ]
+                    , stacksToAdd = [ { boardCards = [ { card = { value = Five, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Diamond, originDeck = DeckOne }, state = FreshlyPlayed } ], loc = { top = 100, left = 100 } }
+                        ]
+                    , handCardsPlayed = [ { card = { value = Five, suit = Diamond, originDeck = DeckOne }, state = HandNormal } ]
+                    }
+            in
+            case Referee.validateGameMove move standardBounds of
+                Ok _ ->
+                    Expect.fail ("expected error at stage " ++ "inventory" ++ ", got ok")
+
+                Err err ->
+                    if refereeStageToString err.stage /= "inventory" then
+                        Expect.fail ("stage: want " ++ "inventory" ++ ", got " ++ refereeStageToString err.stage)
+                    else if not (String.contains "not on the board" err.message) then
+                        Expect.fail ("message substring " ++ "not on the board" ++ " not found in " ++ err.message)
+                    else
+                        Expect.pass
+
+
 inventoryCardFromNowhere : Test
 inventoryCardFromNowhere =
     test "inventory_card_from_nowhere" <|
@@ -957,6 +985,7 @@ suite =
         , hintInvariantSplitForSetBothEdges
         , hintInvariantSplitForSetOneMiddleOneEdge
         , hintNoPlaysForLonelyUnplayableCard
+        , identityReorderBreaksMatch
         , inventoryCardFromNowhere
         , midturnAllowsBogus
         , turnCompleteCleanBoard

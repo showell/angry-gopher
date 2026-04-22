@@ -63,55 +63,26 @@ func TestMaybeMergeAcceptsTwoCardIncomplete(t *testing.T) {
 //
 // This test locks in the correct behavior: a JSON loc with
 // fractional values must decode to int via truncation.
-func TestLocationUnmarshalAcceptsFractional(t *testing.T) {
-	data := []byte(`{"top": 153.2000123, "left": 401.9333190917969}`)
+// Integer-loc wire contract: Location unmarshals integers;
+// floats are rejected. The older tolerance (truncate floats
+// coming from Cat's drag UI) is gone — canonical wire form is
+// int-only, and any sender regression should fail loudly at
+// decode time. See `feedback_no_indices_no_floats_in_drag.md`.
+func TestLocationUnmarshalAcceptsIntegers(t *testing.T) {
+	data := []byte(`{"top": 10, "left": 20}`)
 	var loc Location
 	if err := json.Unmarshal(data, &loc); err != nil {
-		t.Fatalf("unmarshal failed: %v", err)
-	}
-	if loc.Top != 153 {
-		t.Errorf("Top: got %d, want 153", loc.Top)
-	}
-	if loc.Left != 401 {
-		t.Errorf("Left: got %d, want 401", loc.Left)
-	}
-
-	// Integer coords still work (backward compat).
-	data2 := []byte(`{"top": 10, "left": 20}`)
-	var loc2 Location
-	if err := json.Unmarshal(data2, &loc2); err != nil {
 		t.Fatalf("int unmarshal failed: %v", err)
 	}
-	if loc2.Top != 10 || loc2.Left != 20 {
-		t.Errorf("int path broken: got (%d, %d)", loc2.Top, loc2.Left)
+	if loc.Top != 10 || loc.Left != 20 {
+		t.Errorf("int path broken: got (%d, %d)", loc.Top, loc.Left)
 	}
 }
 
-// Regression: a CardStack with fractional loc round-trips through
-// JSON (via custom UnmarshalJSON) and behaves correctly.
-//
-// End-to-end coverage: parse a wire-format stack with float loc,
-// verify the domain CardStack is usable by merge operations.
-func TestCardStackJSONWithFractionalLoc(t *testing.T) {
-	data := []byte(`{
-		"board_cards": [
-			{"card": {"value": 7, "suit": 3, "origin_deck": 0}, "state": 0}
-		],
-		"loc": {"top": 153.2000, "left": 401.9333}
-	}`)
-	var s CardStack
-	if err := json.Unmarshal(data, &s); err != nil {
-		t.Fatalf("unmarshal: %v", err)
-	}
-	if s.Loc.Top != 153 || s.Loc.Left != 401 {
-		t.Fatalf("loc: got (%d, %d), want (153, 401)", s.Loc.Top, s.Loc.Left)
-	}
-	// Merge still works on a stack decoded from fractional loc.
-	other := NewCardStack([]BoardCard{
-		{Card: Card{Value: 8, Suit: Heart, OriginDeck: 0}, State: FreshlyPlayed},
-	}, Location{Top: 0, Left: 0})
-	merged := s.RightMerge(other)
-	if merged == nil {
-		t.Fatal("RightMerge on fractional-loc-decoded stack returned nil")
+func TestLocationUnmarshalRejectsFractional(t *testing.T) {
+	data := []byte(`{"top": 153.2, "left": 401.9}`)
+	var loc Location
+	if err := json.Unmarshal(data, &loc); err == nil {
+		t.Fatalf("want error for fractional coords; got ok (Top=%d, Left=%d)", loc.Top, loc.Left)
 	}
 }

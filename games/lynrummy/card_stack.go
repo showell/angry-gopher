@@ -44,21 +44,22 @@ type Location struct {
 	Left int `json:"left"`
 }
 
-// UnmarshalJSON accepts either integer or floating-point
-// coordinates on the wire. Cat's drag-and-drop UI sends floats
-// (e.g. 401.9333190917969); the dealer and the referee work in
-// ints. Truncating on decode mirrors what the referee's geometry
-// check would treat them as anyway.
+// UnmarshalJSON accepts integer coordinates only. Floats are
+// rejected. The old tolerance was for Cat's legacy UI (which
+// is gone); the live senders (Elm + Python) ship ints, and
+// the canonical wire form is int-only. Fail loudly if any
+// future sender regresses. See
+// `feedback_no_indices_no_floats_in_drag.md`.
 func (l *Location) UnmarshalJSON(data []byte) error {
 	var raw struct {
-		Top  float64 `json:"top"`
-		Left float64 `json:"left"`
+		Top  int `json:"top"`
+		Left int `json:"left"`
 	}
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return err
 	}
-	l.Top = int(raw.Top)
-	l.Left = int(raw.Left)
+	l.Top = raw.Top
+	l.Left = raw.Left
 	return nil
 }
 
@@ -129,44 +130,40 @@ func (s CardStack) Contains(c Card) bool {
 	return false
 }
 
-// Equals compares two CardStacks: same loc AND same cards as
-// a **multiset** (card-order-independent). Mirrors Elm's
-// `CardStack.stacksEqual`. BoardCard state (per-card "recency"
-// markers) is ignored — identity is about the cards present,
-// not turn-accounting.
+// Equals compares two CardStacks for strict identity: same
+// `Loc` AND same cards in the same order. `BoardCard.State`
+// (per-card recency markers) is ignored — identity is the
+// cards and where they sit, not turn-accounting.
 //
-// Multiset rather than sequence equality so two clients that
-// independently form the same logical group in different card
-// orders still read as the same stack. See
-// `games/lynrummy/WIRE.md`.
+// The canonical representation of a stack on the wire is
+// exact: two senders producing the same logical group in
+// different visual orders produce different stack
+// identities, and the referee's inventory check will flag
+// the mismatch. See `games/lynrummy/WIRE.md` § "Equality
+// rule" and `feedback_no_indices_no_floats_in_drag.md`.
 func (s CardStack) Equals(other CardStack) bool {
 	if s.Loc != other.Loc {
 		return false
 	}
-	return cardsEqualMultiset(s.BoardCards, other.BoardCards)
+	return cardsEqualInOrder(s.BoardCards, other.BoardCards)
 }
 
 // stacksEqual compares card contents only (ignoring location).
-// Used inside merge to prevent merging a stack with a same-card
-// pile. Mirrors Elm's CardStack.stacksEqual.
+// Used inside merge to prevent merging a stack with a
+// same-card pile. Same strict-order rule as Equals.
 func stacksEqual(a, b CardStack) bool {
-	return cardsEqualMultiset(a.BoardCards, b.BoardCards)
+	return cardsEqualInOrder(a.BoardCards, b.BoardCards)
 }
 
-// cardsEqualMultiset returns true when the two BoardCard
-// slices carry the same cards regardless of order. Ignores
+// cardsEqualInOrder returns true when the two BoardCard
+// slices carry the same cards in the same order. Ignores
 // per-card BoardCardState.
-func cardsEqualMultiset(a, b []BoardCard) bool {
+func cardsEqualInOrder(a, b []BoardCard) bool {
 	if len(a) != len(b) {
 		return false
 	}
-	counts := map[Card]int{}
-	for _, bc := range a {
-		counts[bc.Card]++
-	}
-	for _, bc := range b {
-		counts[bc.Card]--
-		if counts[bc.Card] < 0 {
+	for i := range a {
+		if a[i].Card != b[i].Card {
 			return false
 		}
 	}

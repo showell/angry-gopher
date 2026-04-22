@@ -85,6 +85,25 @@ func Test_geometry_overlap(t *testing.T) {
 	}
 }
 
+// A set on the board is referenced in stacks_to_remove with cards in a different order. Stacks are identified by loc + cards-in-order, so the reordered copy is NOT the same stack — referee rejects at inventory stage. Exercises the strict-order rule end-to-end; sets are the natural case since their player-visible form has no canonical order.
+func Test_identity_reorder_breaks_match(t *testing.T) {
+	bounds := BoardBounds{MaxWidth: 800, MaxHeight: 600, Margin: 5}
+	boardBefore := []CardStack{NewCardStack([]BoardCard{{Card: Card{Value: 5, Suit: Heart, OriginDeck: 0}, State: FirmlyOnBoard}, {Card: Card{Value: 5, Suit: Club, OriginDeck: 0}, State: FirmlyOnBoard}, {Card: Card{Value: 5, Suit: Spade, OriginDeck: 0}, State: FirmlyOnBoard}}, Location{Top: 100, Left: 100})}
+	stacksToRemove := []CardStack{NewCardStack([]BoardCard{{Card: Card{Value: 5, Suit: Club, OriginDeck: 0}, State: FirmlyOnBoard}, {Card: Card{Value: 5, Suit: Spade, OriginDeck: 0}, State: FirmlyOnBoard}, {Card: Card{Value: 5, Suit: Heart, OriginDeck: 0}, State: FirmlyOnBoard}}, Location{Top: 100, Left: 100})}
+	stacksToAdd := []CardStack{NewCardStack([]BoardCard{{Card: Card{Value: 5, Suit: Club, OriginDeck: 0}, State: FirmlyOnBoard}, {Card: Card{Value: 5, Suit: Spade, OriginDeck: 0}, State: FirmlyOnBoard}, {Card: Card{Value: 5, Suit: Heart, OriginDeck: 0}, State: FirmlyOnBoard}, {Card: Card{Value: 5, Suit: Diamond, OriginDeck: 0}, State: FreshlyPlayed}}, Location{Top: 100, Left: 100})}
+	hand := []Card{Card{Value: 5, Suit: Diamond, OriginDeck: 0}}
+	got := ValidateGameMove(Move{BoardBefore: boardBefore, StacksToRemove: stacksToRemove, StacksToAdd: stacksToAdd, HandCardsPlayed: hand}, bounds)
+	if got == nil {
+		t.Fatal("expected error at stage \"inventory\", got ok")
+	}
+	if got.Stage != "inventory" {
+		t.Fatalf("stage: want \"inventory\", got %q", got.Stage)
+	}
+	if !strings.Contains(got.Message, "not on the board") {
+		t.Fatalf("message: want substring \"not on the board\", got %q", got.Message)
+	}
+}
+
 // Player adds cards to the board that weren't in removed stacks or declared hand.
 func Test_inventory_card_from_nowhere(t *testing.T) {
 	bounds := BoardBounds{MaxWidth: 800, MaxHeight: 600, Margin: 5}

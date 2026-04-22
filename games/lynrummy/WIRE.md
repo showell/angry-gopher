@@ -91,16 +91,18 @@ Board-frame coordinate pair. Origin is the board's top-left.
 { "top": 20, "left": 40 }
 ```
 
-Accepts both integer and floating-point on decode (Cat's old
-drag UI sent floats; referee truncates).
+Integer-only. Floats are rejected at decode. The canonical
+wire form is exact; any sender regressing to floats fails
+loudly.
 
 ### `CardStack`
 
 Full contents of a board stack. When an action references a
 stack, it **embeds the full CardStack object** — cards + loc —
 rather than a positional index. Server resolves via
-`FindStack(board, ref)` which matches on card-multiset + loc.
-See the "Why CardStack, not an index" section at the bottom.
+`FindStack(board, ref)` which matches on exact loc AND cards
+in the same order. See the "Why CardStack, not an index"
+section at the bottom.
 
 ```json
 {
@@ -266,21 +268,15 @@ Three benefits stacking:
    stale state, and the action is rejected at the wire
    boundary — no silent corruption.
 
-### Equality rule (cross-language, in-flux)
+### Equality rule
 
-Stack identity is **same loc AND same cards in same order**.
-No multiset tolerance. The canonical representation on the
-wire is exact: `[2C, 3D, 4C] @ (100, 200)` and
-`[2C, 3D, 4C] @ (100, 200)` match; `[3D, 2C, 4C] @ (100, 200)`
-does not. See `feedback_no_indices_no_floats_in_drag.md` for
-the rationale — one canonical form per concept; treating
-re-orderings as equal invites silent drift between actors.
-
-**Status 2026-04-22:** Elm enforces this rule (commit
-`5bfe02a`). Go's `CardStack.Equals` / `FindStack` still uses
-multiset equality from an earlier iteration; Python's
-equivalents inherit Go's shape. Aligning Go + Python is the
-`INTEGER_LOCS` mini-project (deferred) — in practice the
-mismatch doesn't bite today because the canonical wire form
-always matches exactly, but relying on that rather than
-enforcing it is a known debt.
+Stack identity is **same loc (integer-exact) AND same cards
+in the same order**. No multiset tolerance. The canonical
+representation on the wire is exact: `[2C, 3D, 4C] @
+(100, 200)` and `[2C, 3D, 4C] @ (100, 200)` match; `[3D, 2C,
+4C] @ (100, 200)` does not. Enforced in Elm
+(`Game.CardStack.stacksEqual`) and Go (`CardStack.Equals`);
+conformance covered by the `identity_reorder_breaks_match`
+scenario in `games/lynrummy/conformance/scenarios/referee.dsl`.
+See `feedback_no_indices_no_floats_in_drag.md` for the
+rationale.
