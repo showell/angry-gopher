@@ -487,7 +487,7 @@ droppedOffBoardScold info model =
                     if not (dropFootprintInBounds cardCount loc) then
                         Just
                             { text =
-                                "Dropped off the board — try again with room for the whole stack."
+                                "Don't knock cards off the board, please. You're not a cat!"
                             , kind = Scold
                             }
 
