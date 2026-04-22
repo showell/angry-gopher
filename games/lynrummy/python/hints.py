@@ -238,15 +238,13 @@ def _fix_geometry(sim, prims):
     """Append move_stack primitives until the simulated board has
     no geometry violations (no overlap, all in bounds).
 
-    Called at the end of each trick's emission. The trick's sim
-    at this point holds the FINAL shape each stack will have —
-    so `find_open_loc` sees correct sizes when picking fresh
-    spots, avoiding the growth bug where a stack was placed when
-    small and then merged to overflow its neighbor.
-
-    Every move_stack emitted here is part of the trick's primitive
-    sequence — so applying the sequence reproduces the clean final
-    board.
+    Called at the end of each trick's emission as a safety net.
+    Ideally rare — the trick emitters pre-plan via
+    `_plan_merge_hand`, so intermediate frames stay clean during
+    replay. A `_fix_geometry` move that appears AFTER a merge
+    produces a visually broken intermediate frame (card partly
+    off-board between the merge and the fix), which is why
+    pre-planning is preferred wherever possible.
     """
     while True:
         bad_idx = find_violation(sim)
@@ -261,6 +259,59 @@ def _fix_geometry(sim, prims):
             "new_loc": new_loc,
         })
         sim = _apply_move(sim, bad_idx, new_loc)
+
+
+def _plan_merge_hand(sim, target_idx, hand_card, side):
+    """Emit primitives for merging `hand_card` onto `sim[target_idx]`
+    on `side`, with pre-flight geometry planning.
+
+    Humans plan this merge around the EVENTUAL stack: "the 6H
+    goes to the left of the 789rb, so the final 4-card run is
+    6-7-8-9." They look for a hole that fits the final stack,
+    not the current one, and account for the side-specific
+    offset (a left-merge shifts the stack's top-left by
+    -CARD_PITCH). If the merge-in-place would violate bounds,
+    move the target FIRST, then merge — so every frame in the
+    replay shows a geometrically clean board.
+
+    Returns (primitives, sim_after).
+    """
+    target = sim[target_idx]
+    final_size = len(target["board_cards"]) + 1
+
+    # Merge-in-place if it stays legal.
+    merged_in_place = _apply_merge_hand(
+        _copy_board(sim), target_idx, hand_card, side)
+    if find_violation(merged_in_place) is None:
+        return (
+            [{"action": "merge_hand", "hand_card": hand_card,
+              "target_stack": target_idx, "side": side}],
+            merged_in_place,
+        )
+
+    # Pre-flight: find a hole sized for the EVENTUAL stack,
+    # then translate back to the target's pre-merge loc so that
+    # after the side-specific shift the final stack lands there.
+    others = [s for i, s in enumerate(sim) if i != target_idx]
+    final_loc = find_open_loc(others, card_count=final_size)
+    if side == "left":
+        target_loc = {"left": final_loc["left"] + CARD_PITCH,
+                      "top": final_loc["top"]}
+    else:
+        target_loc = final_loc
+
+    moved = _apply_move(_copy_board(sim), target_idx, target_loc)
+    new_idx = len(moved) - 1
+    merged = _apply_merge_hand(moved, new_idx, hand_card, side)
+    return (
+        [
+            {"action": "move_stack", "stack_index": target_idx,
+             "new_loc": target_loc},
+            {"action": "merge_hand", "hand_card": hand_card,
+             "target_stack": new_idx, "side": side},
+        ],
+        merged,
+    )
 
 
 # ============================================================
@@ -283,38 +334,12 @@ def direct_play(hand, board):
 
 
 def _emit_direct_play(board, target_idx, hand_card, side):
-    """Physical execution of a direct_play. Final stack =
-    target + hand_card. Decision: does the target's current loc
-    fit the grown stack? If yes, merge in place. If not, move
-    target to a fitting open loc first, then merge.
-
-    One spatial decision per trick: where does the final stack
-    live. Everything else follows."""
-    target = board[target_idx]
-    final_size = len(target["board_cards"]) + 1
-
-    # Try merging in place; if the grown stack sits cleanly
-    # on the board, that's the destination.
-    merged_in_place = _apply_merge_hand(
-        _copy_board(board), target_idx, hand_card, side)
-    if find_violation(merged_in_place) is None:
-        return [{"action": "merge_hand", "hand_card": hand_card,
-                 "target_stack": target_idx, "side": side}]
-
-    # Grown stack wouldn't fit at target's current loc. Pick a
-    # destination sized for the final stack, move target there,
-    # then merge.
-    others = [s for i, s in enumerate(board) if i != target_idx]
-    new_loc = find_open_loc(others, card_count=final_size)
-    moved = _apply_move(_copy_board(board), target_idx, new_loc)
-    # After _apply_move the moved stack is the last entry.
-    new_idx = len(moved) - 1
-    return [
-        {"action": "move_stack", "stack_index": target_idx,
-         "new_loc": new_loc},
-        {"action": "merge_hand", "hand_card": hand_card,
-         "target_stack": new_idx, "side": side},
-    ]
+    """Physical execution of a direct_play. Delegates the whole
+    "does the eventual stack fit?" decision to `_plan_merge_hand`,
+    which merges in place when legal and otherwise moves the
+    target first to a hole sized for the final stack."""
+    prims, _sim = _plan_merge_hand(board, target_idx, hand_card, side)
+    return prims
 
 
 def _try_merge_hand(stack, hand_card, side):
@@ -348,11 +373,8 @@ def hand_stacks(hand, board):
     sim = _apply_place_hand(_copy_board(board), first, loc)
     target_idx = len(sim) - 1
     for c in rest:
-        prims.append({"action": "merge_hand",
-                      "hand_card": c,
-                      "target_stack": target_idx,
-                      "side": "right"})
-        sim = _apply_merge_hand(sim, target_idx, c, "right")
+        step_prims, sim = _plan_merge_hand(sim, target_idx, c, "right")
+        prims.extend(step_prims)
         target_idx = len(sim) - 1
     _fix_geometry(sim, prims)
     return prims
@@ -588,9 +610,8 @@ def _emit_peel_for_run(board, target_low, ci_low, target_high, ci_high,
 
     # 3. Merge hand card onto low (right) — forms [low, mid].
     low_idx = _find_stack(sim, target_low)
-    prims.append({"action": "merge_hand", "hand_card": hand_card,
-                  "target_stack": low_idx, "side": "right"})
-    sim = _apply_merge_hand(sim, low_idx, hand_card, "right")
+    step_prims, sim = _plan_merge_hand(sim, low_idx, hand_card, "right")
+    prims.extend(step_prims)
 
     # 4. Peel high.
     peel_prims, sim = _emit_peel(sim, target_high, ci_high)
@@ -676,9 +697,8 @@ def _emit_extract_and_merge_one_hand(board, target_a, ci_a,
             hand_side = "right"  # middle — value already bracketed
     else:
         hand_side = "right"
-    prims.append({"action": "merge_hand", "hand_card": hand_card,
-                  "target_stack": dst, "side": hand_side})
-    sim = _apply_merge_hand(sim, dst, hand_card, hand_side)
+    step_prims, sim = _plan_merge_hand(sim, dst, hand_card, hand_side)
+    prims.extend(step_prims)
 
     _fix_geometry(sim, prims)
     return prims
@@ -716,9 +736,8 @@ def _emit_extract_and_merge_two_hand(board, target, ci,
     for hc in ordered:
         t_idx = _find_stack(sim, target)
         side = _merge_side_for_run(sim[t_idx], hc, target)
-        prims.append({"action": "merge_hand", "hand_card": hc,
-                      "target_stack": t_idx, "side": side})
-        sim = _apply_merge_hand(sim, t_idx, hc, side)
+        step_prims, sim = _plan_merge_hand(sim, t_idx, hc, side)
+        prims.extend(step_prims)
     _fix_geometry(sim, prims)
     return prims
 
@@ -846,23 +865,20 @@ def _emit_rb_swap(board, run_si, run_ci, kicked, swap_in, home):
         # Remnant = right_cards. Swap_in goes to the LEFT of it.
         anchor = right_cards[0]
         r_idx = _find_stack(sim, anchor)
-        prims.append({"action": "merge_hand", "hand_card": swap_in,
-                      "target_stack": r_idx, "side": "left"})
-        sim = _apply_merge_hand(sim, r_idx, swap_in, "left")
+        step_prims, sim = _plan_merge_hand(sim, r_idx, swap_in, "left")
+        prims.extend(step_prims)
     elif at_right_edge:
         anchor = left_cards[-1]
         r_idx = _find_stack(sim, anchor)
-        prims.append({"action": "merge_hand", "hand_card": swap_in,
-                      "target_stack": r_idx, "side": "right"})
-        sim = _apply_merge_hand(sim, r_idx, swap_in, "right")
+        step_prims, sim = _plan_merge_hand(sim, r_idx, swap_in, "right")
+        prims.extend(step_prims)
     else:
         # Middle case: merge swap_in onto the right of the left
         # remnant, then merge the right remnant onto it.
         left_anchor = left_cards[-1]
         left_idx = _find_stack(sim, left_anchor)
-        prims.append({"action": "merge_hand", "hand_card": swap_in,
-                      "target_stack": left_idx, "side": "right"})
-        sim = _apply_merge_hand(sim, left_idx, swap_in, "right")
+        step_prims, sim = _plan_merge_hand(sim, left_idx, swap_in, "right")
+        prims.extend(step_prims)
         # Merge right remnant.
         right_anchor = right_cards[0]
         right_idx = _find_stack(sim, right_anchor)
@@ -1013,9 +1029,8 @@ def _emit_loose_move(board, src_si, src_ci, peeled, dst_si,
             result = _try_merge_hand(s, hand_card, test_side)
             if result is None or _classify(result) == "other":
                 continue
-            prims.append({"action": "merge_hand", "hand_card": hand_card,
-                          "target_stack": i, "side": test_side})
-            sim = _apply_merge_hand(sim, i, hand_card, test_side)
+            step_prims, sim = _plan_merge_hand(sim, i, hand_card, test_side)
+            prims.extend(step_prims)
             _fix_geometry(sim, prims)
             return prims
     # Shouldn't reach here given the caller's stranded-card check.

@@ -33,5 +33,8 @@ python3 games/lynrummy/python/test_dsl_conformance.py
 echo "==> Gesture-synth unit tests"
 python3 games/lynrummy/python/test_gesture_synth.py
 
+echo "==> Plan-merge-hand unit tests"
+python3 games/lynrummy/python/test_plan_merge_hand.py
+
 echo
 echo "All preflight checks passed."
