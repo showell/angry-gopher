@@ -135,6 +135,11 @@ Server decodes both sibling fields. Keeps the action JSON clean
 headroom for later telemetry kinds (click timings, undos) to
 drop in alongside `gesture_metadata` without touching
 WireAction's shape.
+
+When a gesture path is present, emit the full metadata shape in
+parity with Python's synthesizer: `path`, `path_frame`,
+`pointer_type`. Elm-captured samples are in viewport coords
+(that's what the browser reports) and come from a real mouse.
 -}
 encodeEnvelope : WireAction -> Maybe (List GesturePoint) -> Value
 encodeEnvelope action maybeGesturePath =
@@ -149,7 +154,11 @@ encodeEnvelope action maybeGesturePath =
             Encode.object
                 [ ( "action", WA.encode action )
                 , ( "gesture_metadata"
-                  , Encode.object [ ( "path", Encode.list encodeGesturePoint path ) ]
+                  , Encode.object
+                        [ ( "path", Encode.list encodeGesturePoint path )
+                        , ( "path_frame", Encode.string "viewport" )
+                        , ( "pointer_type", Encode.string "mouse" )
+                        ]
                   )
                 ]
 
