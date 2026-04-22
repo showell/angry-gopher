@@ -183,7 +183,10 @@ update msg model =
                 Ok () ->
                     let
                         completeTurnEntry =
-                            { action = WA.CompleteTurn, gesturePath = Nothing }
+                            { action = WA.CompleteTurn
+                            , gesturePath = Nothing
+                            , pathFrame = State.ViewportFrame
+                            }
                     in
                     case model.sessionId of
                         Just sid ->

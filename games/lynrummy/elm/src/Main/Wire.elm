@@ -41,7 +41,7 @@ import Game.Hand exposing (Hand)
 import Game.PlayerTurn exposing (CompleteTurnResult(..))
 import Game.WireAction as WA exposing (WireAction)
 import Main.Msg exposing (Msg(..))
-import Main.State exposing (ActionLogBundle, ActionLogEntry, CompleteTurnOutcome, GesturePoint, RemoteState)
+import Main.State exposing (ActionLogBundle, ActionLogEntry, CompleteTurnOutcome, GesturePoint, PathFrame(..), RemoteState)
 
 
 
@@ -218,20 +218,46 @@ actionLogDecoder =
 {-| Each action in `/actions` comes as the same envelope shape
 as the inbound POST body:
 
-    {"action": <WireAction>, "gesture_metadata": <optional>}
+    {"action": <WireAction>,
+     "gesture_metadata": {"path": [...], "path_frame": "board"|"viewport"}}
 
 Gesture metadata is pulled into `gesturePath` when present;
-everything else the server stores (timing, viewport, etc. —
-future additions) is ignored at decode time since replay only
-needs the path for now.
+`path_frame` tags the coordinate frame those samples live in
+(board = intra-board drag, translated at capture time so CSS
+handles board→viewport at render time; viewport = hand-origin
+or pre-translation live capture). Missing `path_frame`
+defaults to viewport (back-compat with earlier captures that
+didn't carry the tag).
 -}
 actionLogEntryDecoder : Decoder ActionLogEntry
 actionLogEntryDecoder =
-    Decode.map2 ActionLogEntry
+    Decode.map3 ActionLogEntry
         (Decode.field "action" WA.decoder)
         (Decode.maybe
             (Decode.at [ "gesture_metadata", "path" ] (Decode.list gesturePointDecoder))
         )
+        (Decode.oneOf
+            [ Decode.at [ "gesture_metadata", "path_frame" ] pathFrameDecoder
+            , Decode.succeed ViewportFrame
+            ]
+        )
+
+
+pathFrameDecoder : Decoder PathFrame
+pathFrameDecoder =
+    Decode.string
+        |> Decode.andThen
+            (\s ->
+                case s of
+                    "board" ->
+                        Decode.succeed BoardFrame
+
+                    "viewport" ->
+                        Decode.succeed ViewportFrame
+
+                    other ->
+                        Decode.fail ("Unknown path_frame: " ++ other)
+            )
 
 
 gesturePointDecoder : Decoder GesturePoint

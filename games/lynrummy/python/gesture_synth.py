@@ -29,19 +29,7 @@ put speculative coordinates on the wire.
 import math
 import time
 
-from geometry import (
-    CARD_PITCH, CARD_HEIGHT,
-    BOARD_MAX_WIDTH, BOARD_MAX_HEIGHT,
-    BOARD_VIEWPORT_LEFT, BOARD_VIEWPORT_TOP,
-)
-
-# Canonical viewport. Large enough to contain the pinned board
-# plus a generous hand area. Elm renders at these coords; Python
-# generates paths in the same frame.
-VIEWPORT = {
-    "width": BOARD_VIEWPORT_LEFT + BOARD_MAX_WIDTH + 40,
-    "height": BOARD_VIEWPORT_TOP + BOARD_MAX_HEIGHT + 100,
-}
+from geometry import CARD_PITCH, CARD_HEIGHT
 
 DEFAULT_SAMPLES = 20
 
@@ -67,13 +55,19 @@ def _ease_in_out(frac):
     return (1 - math.cos(math.pi * frac)) / 2
 
 
-def synthesize(start, end, *, samples=DEFAULT_SAMPLES):
+def synthesize(start, end, *, samples=DEFAULT_SAMPLES, path_frame="board"):
     """Build a gesture_metadata envelope with an ease-in-ease-out
     path from `start` to `end`. `start` and `end` are `(x, y)`
-    tuples in VIEWPORT pixel coordinates. Duration is proportional
-    to distance at `DRAG_MS_PER_PIXEL` — the drag takes longer
-    the farther it goes.
+    tuples in the coordinate frame named by `path_frame`:
 
+      - `"board"` — board-frame coords, origin at the board's
+        top-left. Use for intra-board drags.
+      - `"viewport"` — viewport-frame coords. Only valid for
+        drags that CROSS the board widget boundary (hand→board).
+        Python doesn't emit this frame today; Python only
+        synthesizes intra-board drags.
+
+    Duration is proportional to distance at `DRAG_MS_PER_PIXEL`.
     Samples are emitted at uniform time intervals with eased
     position (slow start, peak velocity at the midpoint, slow
     end). Elm linearly interpolates between samples at replay
@@ -83,7 +77,6 @@ def synthesize(start, end, *, samples=DEFAULT_SAMPLES):
     t0_ms = time.time() * 1000
     if samples < 2:
         samples = 2
-    # x/y are stored as ints in the Elm decoder. Round per-sample.
     path = []
     for i in range(samples):
         frac = i / (samples - 1)
@@ -95,39 +88,27 @@ def synthesize(start, end, *, samples=DEFAULT_SAMPLES):
         })
     return {
         "path": path,
+        "path_frame": path_frame,
         "pointer_type": "synthetic",
-        "viewport": VIEWPORT,
-        "device_pixel_ratio": 1.0,
     }
 
 
-def _stack_viewport_rect(stack):
-    """Translate a board stack's internal loc into viewport
-    coords (top-left corner of the stack's bounding box)."""
-    return (
-        BOARD_VIEWPORT_LEFT + stack["loc"]["left"],
-        BOARD_VIEWPORT_TOP + stack["loc"]["top"],
-    )
-
-
 def _stack_center(stack):
-    """Viewport point at the center of a stack's bounding box.
-    The "grab anywhere on the stack" start point for drags that
-    pick up a whole stack (MoveStack source, MergeStack source)."""
-    left, top = _stack_viewport_rect(stack)
+    """Board-frame point at the center of a stack's bounding
+    box. The "grab anywhere on the stack" start point for drags
+    that pick up a whole stack."""
     size = len(stack["board_cards"])
-    return (left + size * CARD_PITCH // 2,
-            top + CARD_HEIGHT // 2)
+    return (stack["loc"]["left"] + size * CARD_PITCH // 2,
+            stack["loc"]["top"] + CARD_HEIGHT // 2)
 
 
 def _stack_edge(stack, side):
-    """Viewport point at a stack's left- or right-edge,
+    """Board-frame point at a stack's left- or right-edge,
     vertically centered. The drop-target point for actions that
-    merge onto a stack's side (MergeStack, MergeHand)."""
-    left, top = _stack_viewport_rect(stack)
+    merge onto a stack's side."""
     size = len(stack["board_cards"])
-    edge_x = left + size * CARD_PITCH if side == "right" else left
-    return (edge_x, top + CARD_HEIGHT // 2)
+    edge_x = stack["loc"]["left"] + (size * CARD_PITCH if side == "right" else 0)
+    return (edge_x, stack["loc"]["top"] + CARD_HEIGHT // 2)
 
 
 def drag_endpoints(prim, board_before):
@@ -153,8 +134,8 @@ def drag_endpoints(prim, board_before):
         new_loc = prim["new_loc"]
         size = len(src["board_cards"])
         start = _stack_center(src)
-        end = (BOARD_VIEWPORT_LEFT + new_loc["left"] + size * CARD_PITCH // 2,
-               BOARD_VIEWPORT_TOP + new_loc["top"] + CARD_HEIGHT // 2)
+        end = (new_loc["left"] + size * CARD_PITCH // 2,
+               new_loc["top"] + CARD_HEIGHT // 2)
         return start, end
 
     if kind == "merge_stack":

@@ -8,7 +8,7 @@ synthetic gesture generator. Run directly:
 import sys
 
 import gesture_synth
-from geometry import CARD_PITCH, CARD_HEIGHT, BOARD_VIEWPORT_LEFT, BOARD_VIEWPORT_TOP
+from geometry import CARD_PITCH, CARD_HEIGHT
 
 
 def _stack(left, top, size):
@@ -20,19 +20,17 @@ def _stack(left, top, size):
 
 
 def test_path_shape():
-    # 100 pixels diagonal at 80ms/px (default) = 8000ms. We set
-    # samples=5 to keep the test fast; duration is derived.
     meta = gesture_synth.synthesize((10, 20), (100, 200), samples=5)
     assert meta["pointer_type"] == "synthetic"
-    assert meta["device_pixel_ratio"] == 1.0
+    assert meta["path_frame"] == "board", \
+        f"expected board-frame; got {meta['path_frame']}"
     path = meta["path"]
     assert len(path) == 5, f"want 5 samples, got {len(path)}"
     assert path[0]["x"] == 10 and path[0]["y"] == 20
     assert path[-1]["x"] == 100 and path[-1]["y"] == 200
-    # Monotonic time.
     for a, b in zip(path, path[1:]):
         assert b["t"] > a["t"], f"time not monotonic: {a['t']} -> {b['t']}"
-    return "path well-formed"
+    return "path well-formed (board frame)"
 
 
 def test_synthesize_duration_scales_with_distance():
@@ -54,17 +52,18 @@ def test_merge_hand_returns_none():
     return "hand-origin → None"
 
 
-def test_move_stack_uses_viewport_coords():
+def test_move_stack_uses_board_frame_coords():
+    # Board frame: origin at the board's top-left. Python emits
+    # board-frame coords; Elm renders the floater as a child of
+    # the board div so CSS handles board→viewport for free.
     board = [_stack(100, 50, 4)]
     prim = {"action": "move_stack", "stack_index": 0,
             "new_loc": {"left": 400, "top": 200}}
     start, end = gesture_synth.drag_endpoints(prim, board)
-    # Start = viewport offset + source loc center.
-    assert start[0] == BOARD_VIEWPORT_LEFT + 100 + 4 * CARD_PITCH // 2
-    assert start[1] == BOARD_VIEWPORT_TOP + 50 + CARD_HEIGHT // 2
-    # End = viewport offset + new_loc center.
-    assert end[0] == BOARD_VIEWPORT_LEFT + 400 + 4 * CARD_PITCH // 2
-    assert end[1] == BOARD_VIEWPORT_TOP + 200 + CARD_HEIGHT // 2
+    assert start[0] == 100 + 4 * CARD_PITCH // 2
+    assert start[1] == 50 + CARD_HEIGHT // 2
+    assert end[0] == 400 + 4 * CARD_PITCH // 2
+    assert end[1] == 200 + CARD_HEIGHT // 2
     return f"move_stack drag {start} -> {end}"
 
 
@@ -75,24 +74,19 @@ def test_drag_endpoints_returns_none_for_non_drag():
 
 
 def test_merge_stack_endpoints():
-    # Two stacks: source at (200, 20) size 3, target at (80, 320) size 4.
-    # Drag goes from source CENTER to target RIGHT-edge.
+    # Board-frame endpoints: source CENTER → target RIGHT-edge.
     board = [_stack(200, 20, 3), _stack(80, 320, 4)]
     prim = {"action": "merge_stack",
             "source_stack": 0, "target_stack": 1, "side": "right"}
     start, end = gesture_synth.drag_endpoints(prim, board)
-    # Source center = source_left + size*pitch/2, source_top + h/2.
-    assert start[0] == BOARD_VIEWPORT_LEFT + 200 + 3 * CARD_PITCH // 2
-    assert start[1] == BOARD_VIEWPORT_TOP + 20 + CARD_HEIGHT // 2
-    # Target right edge = target_left + size*pitch, target_top + h/2.
-    assert end[0] == BOARD_VIEWPORT_LEFT + 80 + 4 * CARD_PITCH
-    assert end[1] == BOARD_VIEWPORT_TOP + 320 + CARD_HEIGHT // 2
+    assert start[0] == 200 + 3 * CARD_PITCH // 2
+    assert start[1] == 20 + CARD_HEIGHT // 2
+    assert end[0] == 80 + 4 * CARD_PITCH
+    assert end[1] == 320 + CARD_HEIGHT // 2
 
-    # Left side flips the edge.
     prim_left = dict(prim, side="left")
     _, end_left = gesture_synth.drag_endpoints(prim_left, board)
-    assert end_left[0] == BOARD_VIEWPORT_LEFT + 80, \
-        f"left edge: {end_left[0]}"
+    assert end_left[0] == 80, f"left edge: {end_left[0]}"
     return f"merge_stack drag {start} -> {end}"
 
 
@@ -121,7 +115,7 @@ TESTS = [
     test_path_shape,
     test_synthesize_duration_scales_with_distance,
     test_merge_hand_returns_none,
-    test_move_stack_uses_viewport_coords,
+    test_move_stack_uses_board_frame_coords,
     test_merge_stack_endpoints,
     test_ease_curve_is_not_linear,
     test_drag_endpoints_returns_none_for_non_drag,

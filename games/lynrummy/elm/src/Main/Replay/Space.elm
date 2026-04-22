@@ -17,21 +17,17 @@ module Main.Replay.Space exposing
 {-| The spatial half of Instant Replay.
 
 Given a `WireAction` + the current Model, answer **where** the
-drag happened in the viewport: where did the cursor start, where
-did it go, how long should the interpolation take? Also builds
-the `AnimationInfo` record that the Time FSM carries through
-its `Animating` phase.
+drag happened — AND in **which frame**. The board is a self-
+contained widget; for intra-board drags, coords live in
+board frame and the floater is rendered as a DOM child of the
+board div so CSS handles board→viewport for free. Hand-origin
+drags cross the board widget boundary and use viewport coords;
+for those we DOM-measure at replay time.
 
 Pure functions only — no Msg, no I/O, no subscriptions, no
 DOM measurement of its own. Callers in `Main.Replay.Time` (and
 in `Main.elm` for the async HandCardRectReceived continuation)
-feed in Model state and already-measured board / hand rects;
-this module does the math.
-
-Extracted 2026-04-21 from `Main.elm` alongside the Time module,
-to collect ~15 scattered helpers that all answer the same
-question: "given an action, where does its drag live in pixel
-space?"
+feed in Model state; this module does the math.
 
 See `Main.Replay.Time` for the companion clock half: which step
 are we on, has the beat elapsed, when does the next step fire?
@@ -48,6 +44,7 @@ import Main.State as State
         ( DragSource(..)
         , DragState(..)
         , Model
+        , PathFrame(..)
         , Point
         , activeHand
         )
@@ -58,9 +55,10 @@ import Main.State as State
 
 
 {-| The bundle a Time-phase `Animating` carries through its life:
-where the drag starts, its interpolation path, which DragSource
-drives the floater rendering, the pointer-to-card offset, and
-the action to apply once the interpolation ends.
+where the drag starts, its interpolation path (in the frame
+named by `pathFrame`), which DragSource drives the floater
+rendering, the pointer-to-card offset, and the action to apply
+once the interpolation ends.
 
 Same shape as the record inside `State.ReplayAnimation.Animating`
 — Elm's structural record typing unifies them.
@@ -71,6 +69,7 @@ type alias AnimationInfo =
     , path : List State.GesturePoint
     , source : DragSource
     , grabOffset : Point
+    , pathFrame : PathFrame
     , pendingAction : WireAction
     }
 
@@ -80,23 +79,24 @@ type alias AnimationInfo =
 
 
 {-| Build the per-step animation bundle from an action + its
-captured path. Returns Nothing when the action type isn't
-drag-backed, or when the source card can't be resolved on the
-current board/hand (shouldn't happen mid-replay, but total).
+captured path + the captured path's frame. Returns Nothing when
+the action type isn't drag-backed, or when the source card
+can't be resolved on the current board/hand (shouldn't happen
+mid-replay, but total).
 
-The captured path has viewport coordinates for the cursor
-position. Grab offset is derived to match the ORIGINAL drag-
-start formulas (halfWidth + 20) so the floater sits where
-it would have during the real drag.
+If no captured path exists, falls through to
+`synthesizedReplayAnimation` which emits board-frame endpoints
+for intra-board actions.
 
 -}
 buildReplayAnimation :
     WireAction
     -> Maybe (List State.GesturePoint)
+    -> PathFrame
     -> Model
     -> Float
     -> Maybe AnimationInfo
-buildReplayAnimation action maybePath model nowMs =
+buildReplayAnimation action maybePath frame model nowMs =
     let
         faithful path =
             case dragSourceForAction action model of
@@ -109,6 +109,7 @@ buildReplayAnimation action maybePath model nowMs =
                         , path = path
                         , source = source
                         , grabOffset = grabOffset
+                        , pathFrame = frame
                         , pendingAction = action
                         }
     in
@@ -120,13 +121,11 @@ buildReplayAnimation action maybePath model nowMs =
             synthesizedReplayAnimation action model nowMs
 
 
-{-| Build an Animating record for an action with no captured
-gesture path. Resolves drag endpoints via `syntheticEndpoints`
-(live DOM-measured board rect) and synthesizes a linear pointer
-path at human-scale velocity. Only covers actions whose
-endpoints are BOTH board-frame and can be resolved synchronously
-— hand-origin actions go through the async `AwaitingHandRect`
-path in `Main.Replay.Time.prepareReplayStep` instead.
+{-| Synthesize an Animating bundle for an intra-board action
+with no captured path. Emits **board-frame** endpoints via
+`syntheticEndpoints` (reading stack locs directly — no viewport
+translation). The frame is always `BoardFrame`; the floater
+renders as a board-div child and CSS does the rest.
 -}
 synthesizedReplayAnimation : WireAction -> Model -> Float -> Maybe AnimationInfo
 synthesizedReplayAnimation action model nowMs =
@@ -145,27 +144,23 @@ synthesizedReplayAnimation action model nowMs =
                         , path = linearPath startPt endPt nowMs
                         , source = source
                         , grabOffset = grabOffset
+                        , pathFrame = BoardFrame
                         , pendingAction = action
                         }
 
 
 
--- ENDPOINTS
+-- ENDPOINTS (board frame for intra-board; viewport for hand-origin)
 
 
-{-| Synthesize endpoints for a replay drag, in viewport
-coords. Only used for SYNCHRONOUS synthesis paths — actions
-whose both endpoints can be resolved from the DOM-measured
-board rect already in `model.replayBoardRect`.
+{-| Synthesize board-frame endpoints for an intra-board replay
+drag. Only used for the synchronous-synthesis fallback when no
+captured `gesture_metadata` exists.
 
-Hand-origin actions (`MergeHand`, `PlaceHand`) are NOT
-handled here — they require an async DOM query for the hand
-card's live rect (see `Main.Replay.Time.prepareReplayStep`).
-
-Every viewport coord returned here comes from the live
-board rect via `pointInLiveViewport` / `stackEdgeInLiveViewport`
-— no direct use of pinned viewport constants. See the
-"Rule for adding synthesis" in `Main.claude`.
+Hand-origin actions (`MergeHand`, `PlaceHand`) are NOT handled
+here — they need an async DOM query for the hand card's live
+viewport rect and are wired through `Main.Replay.Time`'s
+`AwaitingHandRect` path.
 
 -}
 syntheticEndpoints : WireAction -> Model -> Maybe ( Point, Point )
@@ -176,12 +171,6 @@ syntheticEndpoints action model =
                 |> Maybe.map
                     (\stack ->
                         let
-                            center =
-                                stackCenterInLiveViewport model stack
-
-                            endLoc =
-                                pointInLiveViewport model p.newLoc
-
                             size =
                                 CardStack.size stack
 
@@ -191,8 +180,12 @@ syntheticEndpoints action model =
                             halfHeight =
                                 BG.cardHeight // 2
                         in
-                        ( center
-                        , { x = endLoc.x + halfWidth, y = endLoc.y + halfHeight }
+                        ( { x = stack.loc.left + halfWidth
+                          , y = stack.loc.top + halfHeight
+                          }
+                        , { x = p.newLoc.left + halfWidth
+                          , y = p.newLoc.top + halfHeight
+                          }
                         )
                     )
 
@@ -200,8 +193,8 @@ syntheticEndpoints action model =
             case ( listAt p.sourceStack model.board, listAt p.targetStack model.board ) of
                 ( Just source, Just target ) ->
                     Just
-                        ( stackCenterInLiveViewport model source
-                        , stackEdgeInLiveViewport model target p.side
+                        ( stackCenterBoardFrame source
+                        , stackEdgeBoardFrame target p.side
                         )
 
                 _ ->
@@ -211,29 +204,48 @@ syntheticEndpoints action model =
             Nothing
 
 
-{-| Viewport point of a stack's bounding-box center. Used as
-the drag-start point when the "grab" is conceptually from
-anywhere on the stack — MoveStack and MergeStack both use
-this as their start.
+{-| Board-frame point at a stack's bounding-box center. The
+"grab anywhere on the stack" start point used by MoveStack and
+MergeStack synthesis.
 -}
-stackCenterInLiveViewport : Model -> CardStack -> Point
-stackCenterInLiveViewport model stack =
+stackCenterBoardFrame : CardStack -> Point
+stackCenterBoardFrame stack =
     let
-        anchor =
-            pointInLiveViewport model stack.loc
-
         size =
             CardStack.size stack
     in
-    { x = anchor.x + size * BG.cardPitch // 2
-    , y = anchor.y + BG.cardHeight // 2
+    { x = stack.loc.left + size * BG.cardPitch // 2
+    , y = stack.loc.top + BG.cardHeight // 2
     }
+
+
+{-| Board-frame point at a stack's left- or right-edge,
+vertically centered. The drop-target point used by MergeStack
+synthesis (source-center → target-edge-on-side).
+-}
+stackEdgeBoardFrame : CardStack -> BoardActions.Side -> Point
+stackEdgeBoardFrame stack side =
+    let
+        size =
+            CardStack.size stack
+
+        edgeLeft =
+            case side of
+                BoardActions.Right ->
+                    stack.loc.left + size * BG.cardPitch
+
+                BoardActions.Left ->
+                    stack.loc.left
+    in
+    { x = edgeLeft, y = stack.loc.top + BG.cardHeight // 2 }
 
 
 {-| Translate a board-frame `{ left, top }` into the current
 viewport frame using the live DOM-measured board rect. Falls
 back to documentary constants (with a dev-console log) if the
-measurement hasn't arrived.
+measurement hasn't arrived. Kept exposed because the hand-
+origin target resolution in `Main.Replay.Time.handCardRectReceived`
+still needs to land a PlaceHand drop in viewport frame.
 -}
 pointInLiveViewport : Model -> { left : Int, top : Int } -> Point
 pointInLiveViewport model loc =
@@ -254,49 +266,42 @@ pointInLiveViewport model loc =
     { x = offsetX + loc.left, y = offsetY + loc.top }
 
 
-{-| Viewport point of a stack's left- or right-edge,
-vertically centered. Uses the live DOM-measured board rect
-(via `pointInLiveViewport`).
+{-| Viewport point of a stack's left- or right-edge, vertically
+centered. Used by `handCardRectReceived` in Time: hand-origin
+drags cross the board widget boundary, so their target must be
+in viewport frame.
 -}
 stackEdgeInLiveViewport : Model -> CardStack -> BoardActions.Side -> Point
 stackEdgeInLiveViewport model stack side =
     let
-        size =
-            CardStack.size stack
-
-        edgeLeft =
-            case side of
-                BoardActions.Right ->
-                    stack.loc.left + size * BG.cardPitch
-
-                BoardActions.Left ->
-                    stack.loc.left
-
-        anchor =
-            pointInLiveViewport model { left = edgeLeft, top = stack.loc.top }
+        boardEdge =
+            stackEdgeBoardFrame stack side
     in
-    { x = anchor.x, y = anchor.y + BG.cardHeight // 2 }
+    pointInLiveViewport model { left = boardEdge.x, top = boardEdge.y - BG.cardHeight // 2 }
+        |> (\anchor -> { x = anchor.x, y = anchor.y + BG.cardHeight // 2 })
 
 
 
 -- PATH + INTERPOLATION
 
 
-{-| Drag duration scales with distance at 5 ms/px (tuned by
-feel 2026-04-21, from 80 → 15 → 5). Target is perceived
-replay pace when watching an agent game, not a measurement
-of real human mouse speed. Kept in sync with Python's
-`DRAG_MS_PER_PIXEL` in `games/lynrummy/python/gesture_synth.py`
-so captured and synthesized paths replay at the same pace.
+{-| Drag duration scales with distance at 2 ms/px (Steve,
+2026-04-21: settled pace for perceived replay readability now
+that the eased synthesis carries shape information). Decoupled
+from Python's `DRAG_MS_PER_PIXEL` — Python-captured paths carry
+their pace in their tMs values and Elm honors them verbatim;
+this constant governs ONLY Elm's own synthesis (hand-origin
+linearPath target construction).
 -}
 dragMsPerPixel : Float
 dragMsPerPixel =
-    5
+    2
 
 
-{-| Build a straight-line path from `start` to `end` with
-roughly 12 samples, duration proportional to distance at
-`dragMsPerPixel`.
+{-| Build a straight-line path from `start` to `end`, duration
+proportional to distance at `dragMsPerPixel`. The returned
+samples' coordinate frame matches `start` and `end`'s frame —
+the caller is responsible for being consistent.
 -}
 linearPath : Point -> Point -> Float -> List State.GesturePoint
 linearPath start end nowMs =
@@ -481,12 +486,15 @@ handCardForAction action =
 
 
 {-| Synthesize a DragState from an animation bundle + current
-cursor. Good enough for `draggedOverlay` to render the floater;
+cursor. Good enough for the drag overlay to render the floater;
 the wings / hoveredWing / clickIntent fields don't matter during
-replay animation.
+replay animation. The `pathFrame` from the anim is carried into
+the DragInfo so the View layer can pick the right rendering
+parent (board child for BoardFrame; viewport overlay for
+ViewportFrame).
 -}
 animatedDragState :
-    { a | source : DragSource, grabOffset : Point }
+    { a | source : DragSource, grabOffset : Point, pathFrame : PathFrame }
     -> Point
     -> DragState
 animatedDragState anim cursor =
@@ -500,6 +508,7 @@ animatedDragState anim cursor =
         , boardRect = Nothing
         , clickIntent = Nothing
         , gesturePath = []
+        , pathFrame = anim.pathFrame
         }
 
 

@@ -47,6 +47,7 @@ import Main.State as State
     exposing
         ( DragState(..)
         , Model
+        , PathFrame(..)
         , ReplayAnimation(..)
         , StatusKind(..)
         )
@@ -160,7 +161,7 @@ replayFrame nowMs model =
                                 )
 
                             Just entry ->
-                                prepareReplayStep entry.action entry.gesturePath model nowMs
+                                prepareReplayStep entry.action entry.gesturePath entry.pathFrame model nowMs
 
                     Animating anim ->
                         let
@@ -260,10 +261,11 @@ Three cases:
 prepareReplayStep :
     WireAction
     -> Maybe (List State.GesturePoint)
+    -> PathFrame
     -> Model
     -> Float
     -> ( Model, Cmd Msg )
-prepareReplayStep action maybePath model nowMs =
+prepareReplayStep action maybePath frame model nowMs =
     let
         startAnimating anim =
             let
@@ -291,7 +293,7 @@ prepareReplayStep action maybePath model nowMs =
     in
     case maybePath of
         Just (p :: rest) ->
-            case Space.buildReplayAnimation action maybePath model nowMs of
+            case Space.buildReplayAnimation action maybePath frame model nowMs of
                 Just anim ->
                     startAnimating anim
 
@@ -324,7 +326,7 @@ prepareReplayStep action maybePath model nowMs =
                             )
 
                 Nothing ->
-                    case Space.buildReplayAnimation action maybePath model nowMs of
+                    case Space.buildReplayAnimation action maybePath frame model nowMs of
                         Just anim ->
                             startAnimating anim
 
@@ -404,6 +406,7 @@ handCardRectReceived result model =
                             , path = Space.linearPath origin target nowMs
                             , source = ctx.source
                             , grabOffset = ctx.grabOffset
+                            , pathFrame = ViewportFrame
                             , pendingAction = ctx.action
                             }
 

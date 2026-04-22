@@ -60,6 +60,7 @@ import Main.State as State
         , DragSource(..)
         , DragState(..)
         , Model
+        , PathFrame(..)
         , PopupContent
         , StatusKind(..)
         , StatusMessage
@@ -538,8 +539,16 @@ boardChildren model =
 
                 NotDragging ->
                     []
+
+        boardOverlayNodes =
+            case boardDragOverlay model of
+                Just node ->
+                    [ node ]
+
+                Nothing ->
+                    []
     in
-    stackNodes ++ wingNodes
+    stackNodes ++ wingNodes ++ boardOverlayNodes
 
 
 viewStackForBoard : DragState -> Int -> CardStack -> Html Msg
@@ -606,46 +615,90 @@ viewWingAt model info wing =
             Nothing
 
 
+{-| Top-level drag overlay. Renders ONLY when the active drag's
+path frame is ViewportFrame (hand-origin drags, or pre-
+translation live-captured board drags). `position: fixed` over
+the whole viewport. BoardFrame drags render via
+`boardDragOverlay` inside the board-shell instead, where CSS
+does the board→viewport math for free.
+-}
 draggedOverlay : Model -> Html Msg
 draggedOverlay model =
     case model.drag of
         Dragging info ->
-            let
-                x =
-                    info.cursor.x - info.grabOffset.x
+            case info.pathFrame of
+                ViewportFrame ->
+                    renderDraggedFloater model info [ style "position" "fixed" ]
 
-                y =
-                    info.cursor.y - info.grabOffset.y
-
-                floatingAttrs =
-                    [ style "position" "fixed"
-                    , style "top" (String.fromInt y ++ "px")
-                    , style "left" (String.fromInt x ++ "px")
-                    , style "pointer-events" "none"
-                    , style "z-index" "1000"
-                    ]
-            in
-            case info.source of
-                FromBoardStack idx ->
-                    case listAt idx model.board of
-                        Just source ->
-                            View.viewStackWithAttrs floatingAttrs source
-
-                        Nothing ->
-                            Html.text ""
-
-                FromHandCard idx ->
-                    case listAt idx (activeHand model).handCards of
-                        Just handCard ->
-                            View.viewCardWithAttrs
-                                (floatingAttrs ++ [ style "background-color" "white" ])
-                                handCard.card
-
-                        Nothing ->
-                            Html.text ""
+                BoardFrame ->
+                    Html.text ""
 
         NotDragging ->
             Html.text ""
+
+
+{-| Board-level drag overlay. Renders as a DOM child of the
+board shell (which is `position: relative`) with
+`position: absolute` + board-frame coords. Active only when
+the drag's path frame is BoardFrame (intra-board replay today;
+intra-board live drags after the Tier 2 capture-time
+translation).
+-}
+boardDragOverlay : Model -> Maybe (Html Msg)
+boardDragOverlay model =
+    case model.drag of
+        Dragging info ->
+            case info.pathFrame of
+                BoardFrame ->
+                    Just (renderDraggedFloater model info [ style "position" "absolute" ])
+
+                ViewportFrame ->
+                    Nothing
+
+        NotDragging ->
+            Nothing
+
+
+{-| Shared floater renderer. The caller supplies the positioning
+mode (`fixed` for viewport, `absolute` for board child); `top`
+and `left` come from cursor − grabOffset regardless. The cursor
+values are in whichever frame the overlay is mounted in.
+-}
+renderDraggedFloater : Model -> DragInfo -> List (Html.Attribute Msg) -> Html Msg
+renderDraggedFloater model info positioningAttrs =
+    let
+        x =
+            info.cursor.x - info.grabOffset.x
+
+        y =
+            info.cursor.y - info.grabOffset.y
+
+        floatingAttrs =
+            positioningAttrs
+                ++ [ style "top" (String.fromInt y ++ "px")
+                   , style "left" (String.fromInt x ++ "px")
+                   , style "pointer-events" "none"
+                   , style "z-index" "1000"
+                   ]
+    in
+    case info.source of
+        FromBoardStack idx ->
+            case listAt idx model.board of
+                Just source ->
+                    View.viewStackWithAttrs floatingAttrs source
+
+                Nothing ->
+                    Html.text ""
+
+        FromHandCard idx ->
+            case listAt idx (activeHand model).handCards of
+                Just handCard ->
+                    View.viewCardWithAttrs
+                        (floatingAttrs ++ [ style "background-color" "white" ])
+                        handCard.card
+
+                Nothing ->
+                    Html.text ""
 
 
 

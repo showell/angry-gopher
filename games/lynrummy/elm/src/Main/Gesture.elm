@@ -78,6 +78,7 @@ import Main.State as State
         , DragSource(..)
         , DragState(..)
         , Model
+        , PathFrame(..)
         , Point
         , activeHand
         , boardDomId
@@ -126,6 +127,7 @@ startBoardCardDrag { stackIndex, cardIndex } clientPoint tMs model =
                         , clickIntent = Just cardIndex
                         , gesturePath =
                             [ { tMs = tMs, x = clientPoint.x, y = clientPoint.y } ]
+                        , pathFrame = ViewportFrame
                         }
               }
             , fetchBoardRect
@@ -162,6 +164,7 @@ startHandDrag idx clientPoint tMs model =
                         , clickIntent = Nothing
                         , gesturePath =
                             [ { tMs = tMs, x = clientPoint.x, y = clientPoint.y } ]
+                        , pathFrame = ViewportFrame
                         }
               }
             , fetchBoardRect
@@ -242,7 +245,10 @@ handleMouseUp releasePoint tMs model =
                         ( Just action, Just sid ) ->
                             let
                                 entry =
-                                    { action = action, gesturePath = gesturePathForLog }
+                                    { action = action
+                                    , gesturePath = gesturePathForLog
+                                    , pathFrame = ViewportFrame
+                                    }
                             in
                             ( { modelAfterAction | actionLog = modelAfterAction.actionLog ++ [ entry ] }
                             , Wire.sendAction sid action (Just fullPath)
