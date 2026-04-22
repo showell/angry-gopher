@@ -102,9 +102,12 @@ matching Python's `BOARD_VIEWPORT_LEFT/TOP`.
   otherwise delegates to `View.viewStack` or
   `View.viewStackWithCardAttrs` (for non-drag: per-card
   mousedown to allow per-card click→split detection).
-- `viewWingAt` computes the wing's left edge from the target
-  stack's loc + width, paints `mergeableGreen` or
-  `mergeableHover`, attaches WingEntered / WingLeft events.
+- `viewWingAt` paints `mergeableGreen` normally or
+  `mergeableHover` when `info.hoveredWing == Just wing`.
+  Wing position comes from `WingOracle.wingBoardRect`. No
+  DOM event handlers are attached — wing hover is computed
+  in Elm via `Main.Gesture.floaterOverWing` and written into
+  `info.hoveredWing` directly on each MouseMove.
 
 ## Popup rendering
 
@@ -161,7 +164,6 @@ on source type: `FromBoardStack` renders the full stack,
 - `Game.WingOracle` — `WingId` type.
 - `Main.Gesture` — `handCardAttrs`, `cardMouseDown` for event
   wiring.
-- `Main.Msg` — Msg constructors for onClick / onMouseEnter /
-  onMouseLeave.
+- `Main.Msg` — Msg constructors for button onClick handlers.
 - `Main.State` — Model, PopupContent, StatusMessage + kind,
   DragState + info, boardDomId, activeHand.

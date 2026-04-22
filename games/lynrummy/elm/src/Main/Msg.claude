@@ -20,13 +20,13 @@ reference Msg constructors without cyclic imports.
 
 ## Constructor groups
 
-**Pointer gestures (drag + wing detection):**
-- `MouseDownOnBoardCard { stackIndex, cardIndex } Point`
-- `MouseDownOnHandCard Int Point`
-- `MouseMove Point`
-- `MouseUp`
-- `WingEntered WingId`
-- `WingLeft WingId`
+**Pointer gestures (drag):**
+- `MouseDownOnBoardCard { stack : CardStack, cardIndex : Int } Point Float`
+  — stack by content ref; cardIndex is the position within
+  the stack, needed by Split.
+- `MouseDownOnHandCard Card Point Float`
+- `MouseMove Point Float`
+- `MouseUp Point Float`
 - `BoardRectReceived (Result Browser.Dom.Error Browser.Dom.Element)`
   — Task result for live-drag and replay board-rect lookup.
 - `HandCardRectReceived (Result Browser.Dom.Error (Browser.Dom.Element, Time.Posix))`
@@ -34,6 +34,12 @@ reference Msg constructors without cyclic imports.
   live viewport rect, paired with `Time.now` so the
   animation's startMs is accurate. Only meaningful when
   `model.replayAnim` is `AwaitingHandRect`.
+
+Wing hover is NOT a Msg. Wing detection is computed in Elm
+on each `MouseMove` via `Main.Gesture.floaterOverWing`; no
+DOM `mouseenter`/`mouseleave` events are consumed. See
+`Main/Gesture.claude` for the "compute, don't delegate"
+discipline.
 
 **Button clicks (top-bar + popup):**
 - `ClickCompleteTurn`
@@ -62,8 +68,8 @@ reference Msg constructors without cyclic imports.
 
 Imports `Main.State` for the response-shape types
 (`RemoteState`, `ActionLogBundle`, `CompleteTurnOutcome`, and
-`Point`). Plus `Browser.Dom`, `Http`, `Time`, and the
-`WingOracle.WingId` type.
+`Point`). Plus `Browser.Dom`, `Http`, `Time`, `Game.Card`,
+and `Game.CardStack`.
 
 ## What this module deliberately does NOT do
 

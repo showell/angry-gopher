@@ -262,12 +262,25 @@ Three benefits stacking:
 
 3. **Built-in divergence check.** The server compares the
    client-sent CardStack against what it has on the board via
-   `FindStack` (multiset cards + loc). A mismatch means the
-   client was operating on stale state, and the action is
-   rejected at the wire boundary — no silent corruption.
+   `FindStack`. A mismatch means the client was operating on
+   stale state, and the action is rejected at the wire
+   boundary — no silent corruption.
 
-`FindStack` matches by card **multiset** rather than sequence:
-two clients that independently form the same logical group in
-different visual orders still read as the same stack. Sequence
-equality would be a stricter check and is possible if needed
-later — multiset is the defensive, forgiving choice.
+### Equality rule (cross-language, in-flux)
+
+Stack identity is **same loc AND same cards in same order**.
+No multiset tolerance. The canonical representation on the
+wire is exact: `[2C, 3D, 4C] @ (100, 200)` and
+`[2C, 3D, 4C] @ (100, 200)` match; `[3D, 2C, 4C] @ (100, 200)`
+does not. See `feedback_no_indices_no_floats_in_drag.md` for
+the rationale — one canonical form per concept; treating
+re-orderings as equal invites silent drift between actors.
+
+**Status 2026-04-22:** Elm enforces this rule (commit
+`5bfe02a`). Go's `CardStack.Equals` / `FindStack` still uses
+multiset equality from an earlier iteration; Python's
+equivalents inherit Go's shape. Aligning Go + Python is the
+`INTEGER_LOCS` mini-project (deferred) — in practice the
+mismatch doesn't bite today because the canonical wire form
+always matches exactly, but relying on that rather than
+enforcing it is a known debt.

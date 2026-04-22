@@ -9,11 +9,17 @@ to render during a drag.
 
 ## Exposed surface
 
-- `type alias WingId = { stackIndex : Int, side : Side }`
-- `wingsForStack : Int -> List CardStack -> List WingId` —
-  enumerates wings for a board-stack drag source.
+- `type alias WingId = { target : CardStack, side : Side }` —
+  content-based; target is the stack value itself, not a
+  positional index.
+- `wingsForStack : CardStack -> List CardStack -> List WingId`
+  — enumerates wings for a board-stack drag source.
 - `wingsForHandCard : HandCard -> List CardStack -> List WingId`
   — enumerates wings for a hand-card drag source.
+- `wingBoardRect : WingId -> { left, top, width, height }` —
+  pure board-frame rect the wing renders into. Used both by
+  `Main.View.viewWingAt` at render time and by
+  `Main.Gesture.floaterOverWing` for the hit-test.
 
 ## Calling convention
 
@@ -37,8 +43,11 @@ and RIGHT" rule applied to source type.
 
 ## Pointers
 
-- Consumer: `Main.elm` startBoardCardDrag / startHandDrag.
+- Consumers: `Main.Gesture.startBoardCardDrag` /
+  `startHandDrag` (build the wings list at drag start);
+  `Main.Gesture.floaterOverWing` (hit-test on MouseMove);
+  `Main.View.viewWingAt` (render).
 - Depends on: `BoardActions.tryStackMerge` /
   `BoardActions.tryHandMerge` (faithful TS port).
-- Tests: indirect via Main; direct unit tests would be cheap
-  if a regression ever surfaces.
+- Tests: `tests/Game/WingOracleTest.elm` covers wingsForStack
+  correctness + wingBoardRect math.
