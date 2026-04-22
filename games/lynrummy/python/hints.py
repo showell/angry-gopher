@@ -1104,6 +1104,3 @@ def build_suggestions(hand, board):
     return out
 
 
-def first_play(hand, board):
-    suggestions = build_suggestions(hand, board)
-    return suggestions[0]["primitives"] if suggestions else None

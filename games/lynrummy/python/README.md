@@ -14,9 +14,33 @@ Start with [`../ARCHITECTURE.md`](../ARCHITECTURE.md) — the
 system-wide Lyn Rummy architecture document. The sections on
 **each actor owns its own view**, **constraints must be real
 not artificial** (the "Python has no DOM but KNOWS geometry"
-point), and the **two coordinate frames** (board frame
-vs. viewport) are directly load-bearing for why this subtree
-is shaped the way it is.
+point), **two coordinate frames** (board frame vs. viewport),
+and **agents plan then execute** are all directly load-bearing
+for why this subtree is shaped the way it is.
+
+## The Python agent's stance — plan, then execute
+
+The agent mimics a human's small-scale spatial planning.
+Before emitting a trick's primitive sequence, it simulates
+the final board and every intermediate state, and pre-plans
+geometry corrections upstream — not after. `hints.py`'s
+`_plan_merge_hand` is the canonical implementation of this
+discipline: it's called by every trick that emits
+`merge_hand`, and if the in-place merge would spill off the
+board it emits `move_stack` BEFORE the merge, sized for the
+eventual stack.
+
+Concrete examples of what this buys us:
+- The replay shows a coherent sequence of human-plausible
+  moves, not "ugly in the middle, fine at the end."
+- Scope of planning stays shallow (2–3 logical board
+  changes, up to 6–7 primitives) — well within what a
+  human does in their head. Multi-trick lookahead is a
+  different layer (see
+  `project_board_consolidation_scanner.md`).
+- `_fix_geometry` stays as a last-ditch safety net; it
+  should rarely fire, and when it does it's a signal that
+  the trick-specific emitter needs a plan upgrade.
 
 ## Then — read sidecars
 

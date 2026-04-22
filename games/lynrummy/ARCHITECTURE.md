@@ -386,6 +386,43 @@ If you're writing code that speaks coordinates on the wire
 and you're not SURE which frame you're in, stop. That's where
 today's layout drift came from.
 
+## Agents plan, then execute
+
+A load-bearing discipline for the Python agent — and any
+future agent — worth stating as its own principle: **plan
+the whole move in your head before emitting the primitives.**
+
+Humans are good at small-scale spatial planning. Our
+lookahead is shallow, but we easily hold two or three
+logical board changes in mind, count cards ("the final
+stack is 4 wide"), do single-digit arithmetic ("12px of
+headroom on the left"), and reason spatially. A trick that
+needs 6–7 physical primitives to realize is within
+comfortable human planning range.
+
+The agent mimics this. Before emitting the primitive
+sequence for a trick, it **simulates the final board
+state**, checks that every intermediate state (not just the
+last one) is geometrically clean, and only then emits. If a
+simulated merge would spill over a board boundary, the
+emitter plans a `move_stack` *upstream* of the merge — not
+a corrective move appended at the end. The replay shows a
+coherent sequence of human-plausible moves, not "ugly in
+the middle, fine at the end."
+
+The concrete mechanism is in `python/hints.py`'s
+`_plan_merge_hand` helper: it simulates a merge_hand, and if
+in-place would violate bounds, finds a hole sized for the
+EVENTUAL stack (accounting for side-specific offset: a
+left-merge shifts the top-left by −CARD_PITCH) and emits
+`move_stack` before `merge_hand`. Every `merge_hand`
+emission in every trick routes through it. `_fix_geometry`
+remains as a last-ditch safety net; it should rarely fire.
+
+Planning horizon is a single trick. Multi-trick lookahead
+— "if I peel X now, a hand card plays later" — is a
+different intelligence layer, not within this rule's scope.
+
 ## Design principles woven through
 
 Several standing principles show up repeatedly above; stating
@@ -419,6 +456,11 @@ them plainly here so they're not only implicit:
   paths replay pixel-faithfully when the environment
   matches; board-frame logical facts survive any
   environment.
+- **Plan, then execute.** Agents simulate a full move
+  mentally before emitting its primitive sequence, and
+  pre-plan geometry corrections upstream rather than
+  appending them downstream. See the dedicated section
+  above.
 
 ## Where to find more
 
