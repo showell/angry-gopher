@@ -1,4 +1,4 @@
-module Main.Replay.Space exposing
+module Game.Replay.Space exposing
     ( AnimationInfo
     , animatedDragState
     , buildReplayAnimation
@@ -23,11 +23,11 @@ drags cross the board widget boundary and use viewport coords;
 for those we DOM-measure at replay time.
 
 Pure functions only — no Msg, no I/O, no subscriptions, no
-DOM measurement of its own. Callers in `Main.Replay.Time` (and
+DOM measurement of its own. Callers in `Game.Replay.Time` (and
 in `Main.elm` for the async HandCardRectReceived continuation)
 feed in Model state; this module does the math.
 
-See `Main.Replay.Time` for the companion clock half: which step
+See `Game.Replay.Time` for the companion clock half: which step
 are we on, has the beat elapsed, when does the next step fire?
 
 -}
@@ -86,7 +86,7 @@ The server enforces that intra-board actions carry a path
 (see `views/lynrummy_elm.go`'s `requiresGestureMetadata`), so
 this function is always called with a non-empty path for
 drag-backed actions. Hand-origin actions without a path take
-the async DOM-measurement branch in `Main.Replay.Time`
+the async DOM-measurement branch in `Game.Replay.Time`
 instead.
 
 -}
@@ -119,7 +119,7 @@ buildReplayAnimation action path frame model nowMs =
 viewport frame using the live DOM-measured board rect. Falls
 back to documentary constants (with a dev-console log) if the
 measurement hasn't arrived. Used by
-`Main.Replay.Time.handCardRectReceived` to land a PlaceHand
+`Game.Replay.Time.handCardRectReceived` to land a PlaceHand
 drop target in viewport frame.
 -}
 pointInLiveViewport : Model -> { left : Int, top : Int } -> Point

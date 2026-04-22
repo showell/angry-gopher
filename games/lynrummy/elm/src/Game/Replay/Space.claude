@@ -1,8 +1,8 @@
-# Main/Replay/Space.elm — EARLY
+# Game/Replay/Space.elm — EARLY
 
 The spatial half of Instant Replay. Given a `WireAction` and the
 current Model, answer **where** the drag happens in the viewport.
-Companion to `Main/Replay/Time.elm`, which owns the FSM and
+Companion to `Game/Replay/Time.elm`, which owns the FSM and
 clock.
 
 ## Status
@@ -117,6 +117,6 @@ live-play code (this module serves replay only).
 ## Tests
 
 Covered indirectly via end-to-end replay smoke tests. A dedicated
-`Main/Replay/SpaceTest.elm` is a candidate future investment —
+`Game/Replay/SpaceTest.elm` is a candidate future investment —
 `linearPath`, `interpPath`, `pathDuration` are all trivially
 assertable pure functions.

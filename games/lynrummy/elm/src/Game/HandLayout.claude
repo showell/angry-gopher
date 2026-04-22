@@ -35,7 +35,7 @@ synthesis pipeline was switched to live DOM measurement via
 Do not synthesize a hand-card's viewport position from the
 constants here. Any viewport coord consumed by the replay
 drag floater must come from a DOM measurement. See
-`Main.claude` and `Main/Replay/Space.claude` for the general
+`Main.claude` and `Game/Replay/Space.claude` for the general
 rule and the pattern to follow when extending synthesis.
 
 ## Pointers
@@ -44,7 +44,7 @@ rule and the pattern to follow when extending synthesis.
   the board; the two modules together pin the whole playable
   area for the renderer.
 - Consumer (render): `Game.View.viewHand`.
-- Consumer (DOM id only): `Main.Replay.Time.prepareReplayStep`.
+- Consumer (DOM id only): `Game.Replay.Time.prepareReplayStep`.
 
 ## TODO
 

@@ -10,8 +10,8 @@ trivial or delegate to a helper module:
   - **State transitions** — `Main.Apply.applyAction`.
   - **HTTP** — `Main.Wire` (fetch*, sendAction, sendCompleteTurn).
   - **Rendering** — `Main.View`.
-  - **Replay FSM + clock** — `Main.Replay.Time`.
-  - **Replay spatial synthesis** — `Main.Replay.Space`.
+  - **Replay FSM + clock** — `Game.Replay.Time`.
+  - **Replay spatial synthesis** — `Game.Replay.Space`.
   - **Model types + initial model** — `Main.State`.
 
 What's left here is the wiring: init, update-dispatch, the
@@ -38,7 +38,7 @@ import Main.Gesture as Gesture
         , startHandDrag
         )
 import Main.Msg exposing (Msg(..))
-import Main.Replay.Time as ReplayTime
+import Game.Replay.Time as ReplayTime
 import Main.State as State
     exposing
         ( ActionLogBundle

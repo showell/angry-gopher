@@ -10,7 +10,7 @@ the URL-path port.
 
 - **Label:** EARLY. Active churn but shrinking — replay
   machinery (FSM + spatial synthesis) moved to
-  `Main/Replay/Time.elm` and `Main/Replay/Space.elm` on
+  `Game/Replay/Time.elm` and `Game/Replay/Space.elm` on
   2026-04-21. Game-state transitions already live in
   `Main/Apply.elm`; rendering in `Main/View.elm`; pointer
   gesture machinery in `Main/Gesture.elm`; HTTP in
@@ -36,10 +36,10 @@ ClickHint).
 | `ClickCompleteTurn` | inline — referee pre-check + `applyAction WA.CompleteTurn` + fire-and-forget `sendCompleteTurn` |
 | `CompleteTurnResponded` | inline — divergence monitor (transition already applied locally on click) |
 | `PopupOk` | inline — popup dismiss |
-| `ClickInstantReplay` | `Main.Replay.Time.clickInstantReplay` |
-| `ReplayFrame` | `Main.Replay.Time.replayFrame` |
-| `ClickReplayPauseToggle` | `Main.Replay.Time.clickReplayPauseToggle` |
-| `HandCardRectReceived` | `Main.Replay.Time.handCardRectReceived` |
+| `ClickInstantReplay` | `Game.Replay.Time.clickInstantReplay` |
+| `ReplayFrame` | `Game.Replay.Time.replayFrame` |
+| `ClickReplayPauseToggle` | `Game.Replay.Time.clickReplayPauseToggle` |
+| `HandCardRectReceived` | `Game.Replay.Time.handCardRectReceived` |
 | `BoardRectReceived` | inline — shared by live-drag AND replay |
 | `ActionLogFetched` | inline — `bootstrapFromBundle` (seed Model from `initialState`, fold actions through reducer) |
 | `ClickHint` | inline — `Hint.buildSuggestions` + highlight |
@@ -80,10 +80,10 @@ data structure, re-draw the view."
 
 The replay walker lives across two modules, split by concern:
 
-- `Main/Replay/Time.elm` — FSM, clock-driven Msg handlers,
+- `Game/Replay/Time.elm` — FSM, clock-driven Msg handlers,
   inter-action beat durations. Owns the decision of "what
   phase am I in and when do I transition."
-- `Main/Replay/Space.elm` — spatial synthesis: endpoints, path
+- `Game/Replay/Space.elm` — spatial synthesis: endpoints, path
   interpolation, drag-source resolution, DOM-measured board /
   hand rects. Owns the "where does the drag live in pixel
   space" question.
@@ -95,7 +95,7 @@ See the companion sidecars for detail.
 
 Any viewport coord the replay synthesizer consumes must come
 from DOM measurement, not from a pinned constant. See
-`Main/Replay/Space.claude` § "Rule for adding synthesis" for
+`Game/Replay/Space.claude` § "Rule for adding synthesis" for
 the full rule and the 2026-04-21 "landing right, origin wrong"
 incident that motivated it.
 

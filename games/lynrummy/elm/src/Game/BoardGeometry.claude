@@ -58,7 +58,7 @@ fails, semantics is meaningless.
 
 Do not use `boardViewportLeft/Top` + `stack.loc` in any
 synthesis path that feeds the drag floater. Use
-`Main.Replay.Space.stackEdgeInLiveViewport` instead; it reads
+`Game.Replay.Space.stackEdgeInLiveViewport` instead; it reads
 the DOM-measured rect and falls back to these constants only
 as a salvage. See `Main.claude` for the general rule.
 

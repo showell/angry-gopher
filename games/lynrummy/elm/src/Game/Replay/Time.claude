@@ -1,7 +1,7 @@
-# Main/Replay/Time.elm — EARLY
+# Game/Replay/Time.elm — EARLY
 
 The temporal half of Instant Replay. Owns the FSM and its
-clock-driven Msg handlers. Companion to `Main/Replay/Space.elm`,
+clock-driven Msg handlers. Companion to `Game/Replay/Space.elm`,
 which owns spatial synthesis.
 
 ## Status
@@ -121,7 +121,7 @@ Imports:
   replay lifecycle messages ("Replaying…" / "Replay complete.")
   rather than flicker through every action's celebrate/scold.
 - `Main.Msg` — Msg(..) for Cmd production + pattern binds.
-- `Main.Replay.Space` — all spatial math.
+- `Game.Replay.Space` — all spatial math.
 - `Main.State` — Model, ReplayAnimation, DragState, StatusKind.
 - `Task`, `Time` — Task.attempt + Time.now / posixToMillis.
 

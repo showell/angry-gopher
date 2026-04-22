@@ -42,7 +42,7 @@ New `ReplayAnimation` variant (2026-04-21 B1 extension):
   at most in practice.
 - `ReplayProgress` — `{ step, paused }`. Walker over
   `actionLog` (a `List ActionLogEntry`), advanced on every
-  `onAnimationFrame` tick via the FSM in `Main.Replay.Time`;
+  `onAnimationFrame` tick via the FSM in `Game.Replay.Time`;
   `step` is the index of the NEXT entry to apply;
   `paused = True` halts ticks.
 - `PopupContent` — `{ admin, body }`. Turn-ceremony popup.

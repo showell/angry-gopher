@@ -1,0 +1,8 @@
+# REFACTOR_ELM_REPLAY — phase A
+#
+# Move the replay machinery out of Main/Replay/ into Game/Replay/
+# so it becomes a peer of the other Game.* modules and, post-
+# refactor, a reusable component for BOARD_LAB. No semantic
+# change in this step — just the module-path rename.
+
+elm-mv games/lynrummy/elm/src/Main/Replay/ games/lynrummy/elm/src/Game/Replay/

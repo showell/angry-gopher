@@ -1,4 +1,4 @@
-module Main.Replay.Time exposing
+module Game.Replay.Time exposing
     ( clickInstantReplay
     , clickReplayPauseToggle
     , handCardRectReceived
@@ -24,7 +24,7 @@ Phases, same as the `ReplayAnimation` sum type in `Main.State`:
     CompleteTurn, since a lot happens at once). Not the
     real-world inter-drag pause — that would read as buggy.
 
-Companion to `Main.Replay.Space`, which owns the spatial
+Companion to `Game.Replay.Space`, which owns the spatial
 synthesis (endpoints, paths, interpolation). This module
 depends on Space; Space has no dependency here.
 
@@ -41,7 +41,7 @@ import Game.Score as Score
 import Game.WireAction as WA exposing (WireAction)
 import Main.Apply as Apply
 import Main.Msg exposing (Msg(..))
-import Main.Replay.Space as Space
+import Game.Replay.Space as Space
 import Main.State as State
     exposing
         ( DragState(..)
