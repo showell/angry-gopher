@@ -64,6 +64,7 @@ import Html
 import Html.Attributes exposing (style)
 import Html.Events as Events
 import Json.Decode as Decode exposing (Decoder)
+import Game.BoardGeometry as BG
 import Game.Card exposing (Card)
 import Game.CardStack as CardStack exposing (BoardLocation, HandCard)
 import Game.GestureArbitration as GA
@@ -80,6 +81,7 @@ import Main.State as State
         , Model
         , PathFrame(..)
         , Point
+        , StatusKind(..)
         , activeHand
         , boardDomId
         )
@@ -230,7 +232,12 @@ handleMouseUp releasePoint tMs model =
                             Apply.applyAction action modelAfterDragClear
 
                         Nothing ->
-                            modelAfterDragClear
+                            case droppedOffBoardScold infoFull model of
+                                Just status ->
+                                    { modelAfterDragClear | status = status }
+
+                                Nothing ->
+                                    modelAfterDragClear
 
                 maybeGesture =
                     case maybeAction of
@@ -387,7 +394,11 @@ resolveGesture info model =
                     if cursorOverBoard info then
                         case ( listAt handIdx (activeHand model).handCards, dropLoc info ) of
                             ( Just handCard, Just loc ) ->
-                                Just (WA.PlaceHand { handCard = handCard.card, loc = loc })
+                                if dropFootprintInBounds 1 loc then
+                                    Just (WA.PlaceHand { handCard = handCard.card, loc = loc })
+
+                                else
+                                    Nothing
 
                             _ ->
                                 Nothing
@@ -399,7 +410,11 @@ resolveGesture info model =
                     if cursorOverBoard info then
                         case ( listAt stackIdx model.board, dropLoc info ) of
                             ( Just stack, Just loc ) ->
-                                Just (WA.MoveStack { stack = stack, newLoc = loc })
+                                if dropFootprintInBounds (CardStack.size stack) loc then
+                                    Just (WA.MoveStack { stack = stack, newLoc = loc })
+
+                                else
+                                    Nothing
 
                             _ ->
                                 Nothing
@@ -432,6 +447,66 @@ dropLoc info =
                 , top = info.cursor.y - info.grabOffset.y - rect.y
                 }
             )
+
+
+{-| True iff a stack of `cardCount` cards placed at `loc` fits
+entirely within the board's bounds. Used to gate MoveStack and
+PlaceHand wire-emission so drops that would put a stack off the
+board (e.g. dragged past the top-left corner) snap back instead
+of shipping negative or overflowing coords to the server.
+
+Follows the "invalid drops snap back" rule — the gesture is
+discarded, and the source card returns to where it was picked
+up. No silent clamping.
+-}
+dropFootprintInBounds : Int -> BoardLocation -> Bool
+dropFootprintInBounds cardCount loc =
+    let
+        bounds =
+            Apply.refereeBounds
+    in
+    (loc.left >= 0)
+        && (loc.top >= 0)
+        && (loc.left + BG.stackWidth cardCount <= bounds.maxWidth)
+        && (loc.top + BG.cardHeight <= bounds.maxHeight)
+
+
+{-| If the drag was released with the cursor over the board but
+the resulting stack footprint would spill off the board, return
+a scold `StatusMessage`. Otherwise `Nothing` — we don't scold
+for cancels (drop off-board on purpose) or for rejected merges
+onto a wing, which silently snap back.
+-}
+droppedOffBoardScold : DragInfo -> Model -> Maybe State.StatusMessage
+droppedOffBoardScold info model =
+    let
+        footprintCheck cardCount =
+            case dropLoc info of
+                Just loc ->
+                    if cursorOverBoard info && not (dropFootprintInBounds cardCount loc) then
+                        Just
+                            { text =
+                                "Dropped off the board — try again with room for the whole stack."
+                            , kind = Scold
+                            }
+
+                    else
+                        Nothing
+
+                Nothing ->
+                    Nothing
+    in
+    case info.source of
+        FromBoardStack stackIdx ->
+            case listAt stackIdx model.board of
+                Just stack ->
+                    footprintCheck (CardStack.size stack)
+
+                Nothing ->
+                    Nothing
+
+        FromHandCard _ ->
+            footprintCheck 1
 
 
 clearDrag : Model -> Model
