@@ -36,5 +36,8 @@ python3 games/lynrummy/python/test_gesture_synth.py
 echo "==> Plan-merge-hand unit tests"
 python3 games/lynrummy/python/test_plan_merge_hand.py
 
+echo "==> Follow-up merge unit tests"
+python3 games/lynrummy/python/test_follow_up_merges.py
+
 echo
 echo "All preflight checks passed."

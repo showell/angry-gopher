@@ -138,6 +138,23 @@ def _apply_locally(board, prim):
     return board
 
 
+def _send_one(c, session_id, prim, local, verbose):
+    """Send one primitive + synthesize its drag path, advance
+    the local board, return the new board. Returns None on
+    send error (caller reports and aborts)."""
+    endpoints = gesture_synth.drag_endpoints(prim, local)
+    meta = (gesture_synth.synthesize(*endpoints)
+            if endpoints is not None else None)
+    wire = _to_wire_shape(prim, local)
+    try:
+        c.send_action(session_id, wire, gesture_metadata=meta)
+    except RuntimeError as e:
+        if verbose:
+            print(f"  send failed: {e}")
+        return None
+    return _apply_locally(local, prim)
+
+
 def play_session(c, session_id, *, max_actions=300, verbose=True):
     actions = 0
     turns = 0
@@ -160,19 +177,26 @@ def play_session(c, session_id, *, max_actions=300, verbose=True):
             # round-trip to /state.
             local = strategy._copy_board(board)
             for prim in prims:
-                endpoints = gesture_synth.drag_endpoints(prim, local)
-                meta = (gesture_synth.synthesize(*endpoints)
-                        if endpoints is not None else None)
-                wire = _to_wire_shape(prim, local)
-                try:
-                    c.send_action(session_id, wire, gesture_metadata=meta)
-                except RuntimeError as e:
-                    if verbose:
-                        print(f"  send failed: {e}")
+                local = _send_one(c, session_id, prim, local, verbose)
+                if local is None:
                     return {"actions": actions, "turns": turns,
                             "final_turn_result": "send_error"}
                 actions += 1
-                local = _apply_locally(local, prim)
+
+            # Follow-up merges: orthogonal to the trick. Whatever
+            # stacks the play just left on the board, scan for
+            # merge partners that didn't exist pre-play. Not all
+            # plays open up merges; when they do, a human would
+            # spot and take them immediately.
+            follow_ups = strategy.find_follow_up_merges(local)
+            if follow_ups and verbose:
+                print(f"  follow-up merges: {len(follow_ups)}")
+            for prim in follow_ups:
+                local = _send_one(c, session_id, prim, local, verbose)
+                if local is None:
+                    return {"actions": actions, "turns": turns,
+                            "final_turn_result": "send_error"}
+                actions += 1
             continue
 
         # No more suggestions — try complete_turn.

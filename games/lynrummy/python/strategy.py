@@ -1136,3 +1136,102 @@ def choose_play(hand, board):
     return plays[0] if plays else None
 
 
+# ============================================================
+# Follow-up merge — orthogonal to tricks.
+#
+# After a trick fires, the board has at least one "new" stack.
+# New stacks can have intra-board merge partners that didn't
+# exist pre-trick. This function scans the board and emits
+# merge_stack primitives for any pair that combines into a
+# valid complete group.
+#
+# Not a trick: it doesn't consume hand cards, has no place in
+# the priority order, and runs unconditionally after any play
+# that changed the board. "Merging stacks is just something
+# you should do."
+# ============================================================
+
+
+def _stack_sig(stack):
+    """Hashable signature of a stack's card sequence. Used to
+    locate a stack in a later board state after indices have
+    shifted (merges remove two stacks and append one)."""
+    return tuple(
+        (bc["card"]["value"], bc["card"]["suit"], bc["card"]["origin_deck"])
+        for bc in stack["board_cards"]
+    )
+
+
+def _stack_index_by_sig(board, sig):
+    for i, s in enumerate(board):
+        if _stack_sig(s) == sig:
+            return i
+    return None
+
+
+def find_follow_up_merges(board):
+    """Scan every pair of stacks; for each pair that forms a
+    valid complete group (set / pure_run / rb_run) when merged
+    on either side, emit a merge_stack primitive. Returns a
+    list of primitives.
+
+    V1: single pass, no cascade. Each stack participates in at
+    most one merge per call — a freshly-merged stack doesn't
+    get re-scanned for further partners in the same call. If
+    two independent pairs both merge cleanly, both are emitted.
+
+    Scan is quadratic but N is small (~10 stacks). Pair
+    selection is deterministic: iterate src in ascending order,
+    take the first tgt that merges cleanly.
+    """
+    # Collect independent mergeable pairs on the initial board.
+    consumed = set()
+    pairs = []  # [(src_sig, tgt_sig, side)]
+    n = len(board)
+    for src in range(n):
+        if src in consumed:
+            continue
+        src_cards = [bc["card"] for bc in board[src]["board_cards"]]
+        for tgt in range(n):
+            if tgt == src or tgt in consumed:
+                continue
+            tgt_cards = [bc["card"] for bc in board[tgt]["board_cards"]]
+            matched_side = _pair_merge_side(src_cards, tgt_cards)
+            if matched_side is not None:
+                pairs.append((_stack_sig(board[src]),
+                              _stack_sig(board[tgt]),
+                              matched_side))
+                consumed.add(src)
+                consumed.add(tgt)
+                break
+
+    # Apply each pair in order, looking up current indices via
+    # signature so the emitted primitives are correct against
+    # the evolving sim state.
+    prims = []
+    sim = _copy_board(board)
+    for src_sig, tgt_sig, side in pairs:
+        cur_src = _stack_index_by_sig(sim, src_sig)
+        cur_tgt = _stack_index_by_sig(sim, tgt_sig)
+        if cur_src is None or cur_tgt is None:
+            continue
+        prims.append({
+            "action": "merge_stack",
+            "source_stack": cur_src,
+            "target_stack": cur_tgt,
+            "side": side,
+        })
+        sim = _apply_merge_stack(sim, cur_src, cur_tgt, side)
+    return prims
+
+
+def _pair_merge_side(src_cards, tgt_cards):
+    """If src+tgt merge cleanly on some side, return that side.
+    Returns None if neither side produces a complete group."""
+    for side in ("left", "right"):
+        combined = (src_cards + tgt_cards) if side == "left" else (tgt_cards + src_cards)
+        if _classify(combined) in ("set", "pure_run", "rb_run"):
+            return side
+    return None
+
+
