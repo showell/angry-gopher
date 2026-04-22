@@ -68,7 +68,7 @@ matches the TS original:
 | Split | — | "Be careful with splitting!…" | Scold |
 | PlaceHand | — | "On the board!" | Inform |
 | MoveStack | — | "Moved!" | Inform |
-| MergeStack / MergeHand | final size ≥ 3, clean board | "Combined! Clean board!" | Celebrate |
+| MergeStack / MergeHand | final size ≥ 3, clean board | "Combined! Clean board! Your board delta for this turn is N." | Celebrate |
 | MergeStack / MergeHand | final size ≥ 3, not clean | "Combined!" | Celebrate |
 | MergeStack / MergeHand | final size < 3 | "Nice, but where's the third card?" | Scold |
 | CompleteTurn | — | "Turn N — Player M to play." | Celebrate |
