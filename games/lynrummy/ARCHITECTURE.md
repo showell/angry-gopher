@@ -440,11 +440,12 @@ pure Elm.
 This is a stronger form of "own the whole system": not just
 put facts on the wire, but derive answers from state you
 already have rather than round-tripping through a different
-machine to get them back. Particularly important when that
-other machine is opaque or unreliable. See
-`feedback_compute_dont_delegate.md` and the lessons essay
-at `~/showell_repos/claude-collab/users/steve/general/
-wing_bug_lessons.md`.
+machine to get them back. Especially important when that
+other machine is opaque or unreliable — but the simplicity
+and testability wins apply even when delegation would be
+reliable. The round-trip has a cost; the self-reliant
+compute almost always wins. See
+`feedback_compute_dont_delegate.md`.
 
 ## One representation per concept
 
