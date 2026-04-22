@@ -60,7 +60,7 @@ findPlays validated), returns `(board, [])`.
 ## Pointers
 
 - Python counterpart: `hints.hand_stacks` in
-  `games/lynrummy/python/hints.py` (emits primitives).
+  `games/lynrummy/python/strategy.py` (emits primitives).
 - Depends on: `Card`, `CardStack`, `StackType.getStackType`,
   `Tricks.Helpers`, `Dict`.
 - Consumer: `Tricks.Hint.allTricks`.

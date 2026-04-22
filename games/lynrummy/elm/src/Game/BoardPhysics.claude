@@ -43,7 +43,7 @@ that uses them.
 
 ## Pointers
 
-- Consumer: `Game.Tricks.PairPeel`, `Tricks.PeelForRun`,
+- Consumer: `Game.Strategy.PairPeel`, `Tricks.PeelForRun`,
   `Tricks.SplitForSet`, `Tricks.LooseCardPlay` all call
   `canExtract` indirectly — the trick tests are the
   ecological-validity evidence that this module's behavior

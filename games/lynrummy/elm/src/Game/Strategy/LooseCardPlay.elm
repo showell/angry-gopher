@@ -1,4 +1,4 @@
-module Game.Tricks.LooseCardPlay exposing (trick)
+module Game.Strategy.LooseCardPlay exposing (trick)
 
 {-| LOOSE_CARD_PLAY: move one board card from its stack onto
 another stack, then play a hand card that the new arrangement
@@ -20,7 +20,7 @@ import Game.CardStack
         , stackType
         )
 import Game.StackType exposing (CardStackType(..))
-import Game.Tricks.Helpers
+import Game.Strategy.Helpers
     exposing
         ( dummyLoc
         , extractCard
@@ -28,7 +28,7 @@ import Game.Tricks.Helpers
         , replaceAt
         , singleStackFromCard
         )
-import Game.Tricks.Trick exposing (Play, Trick)
+import Game.Strategy.Trick exposing (Play, Trick)
 
 
 trick : Trick

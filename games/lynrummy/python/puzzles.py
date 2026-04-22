@@ -3,7 +3,7 @@ Puzzle catalog for the human-play harness. Each puzzle is a
 minimal board + hand designed to fire exactly one trick under
 the correct LynRummy rules (CanExtract-respecting,
 invariant-preserving). A human solves the puzzle in the Elm UI;
-`hints.py` independently produces its own primitive sequence
+`strategy.py` independently produces its own primitive sequence
 for the same initial state; the comparator (compare.py)
 validates that the two sequences are equivalent under the
 arbitrariness axes (card order, merge side, loc, etc.).
@@ -79,7 +79,7 @@ def base_state(board, active_hand, other_hand=None, deck=None):
 
 # --- Puzzles ---------------------------------------------------
 # Each is the minimal scenario for its target trick, designed so
-# hints.build_suggestions returns that trick as the top (or only)
+# strategy.build_suggestions returns that trick as the top (or only)
 # firing one.
 
 PUZZLES = {

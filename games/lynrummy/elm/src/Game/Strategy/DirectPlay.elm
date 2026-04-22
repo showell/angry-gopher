@@ -1,4 +1,4 @@
-module Game.Tricks.DirectPlay exposing (trick)
+module Game.Strategy.DirectPlay exposing (trick)
 
 {-| DIRECT_PLAY: a hand card extends an existing board stack at
 one of its ends. The simplest trick.
@@ -15,8 +15,8 @@ import Game.CardStack
         , leftMerge
         , rightMerge
         )
-import Game.Tricks.Helpers exposing (dummyLoc, replaceAt)
-import Game.Tricks.Trick exposing (Play, Trick)
+import Game.Strategy.Helpers exposing (dummyLoc, replaceAt)
+import Game.Strategy.Trick exposing (Play, Trick)
 
 
 trick : Trick

@@ -1,4 +1,4 @@
-module Game.Tricks.Trick exposing (Play, Trick)
+module Game.Strategy.Trick exposing (Play, Trick)
 
 {-| Trick + Play types. Mirrors
 `angry-gopher/lynrummy/tricks/trick.go`.

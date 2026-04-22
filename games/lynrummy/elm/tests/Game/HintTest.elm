@@ -1,6 +1,6 @@
 module Game.HintTest exposing (suite)
 
-{-| Tests for Game.Tricks.Hint.buildSuggestions. Mirrors
+{-| Tests for Game.Strategy.Hint.buildSuggestions. Mirrors
 the Go-side `games/lynrummy/tricks/hint_test.go`.
 
 Structure:
@@ -20,13 +20,13 @@ import Expect
 import Game.Card exposing (Card)
 import Game.Dealer as Dealer
 import Game.Hand as Hand
-import Game.Tricks.Hint as Hint
+import Game.Strategy.Hint as Hint
 import Test exposing (Test, describe, test)
 
 
 suite : Test
 suite =
-    describe "Game.Tricks.Hint.buildSuggestions"
+    describe "Game.Strategy.Hint.buildSuggestions"
         [ emptyHand
         , openingHandDirectPlayFirst
         , priorityOrderMonotonic

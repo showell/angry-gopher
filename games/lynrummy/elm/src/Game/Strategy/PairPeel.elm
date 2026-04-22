@@ -1,4 +1,4 @@
-module Game.Tricks.PairPeel exposing (trick)
+module Game.Strategy.PairPeel exposing (trick)
 
 {-| PAIR_PEEL: two hand cards form a pair (set-pair or run-pair)
 and a peelable board card completes the triplet.
@@ -24,8 +24,8 @@ import Game.CardStack
         , stackType
         )
 import Game.StackType exposing (CardStackType(..), getStackType, predecessor, successor)
-import Game.Tricks.Helpers exposing (dummyLoc, extractCard, freshlyPlayed)
-import Game.Tricks.Trick exposing (Play, Trick)
+import Game.Strategy.Helpers exposing (dummyLoc, extractCard, freshlyPlayed)
+import Game.Strategy.Trick exposing (Play, Trick)
 
 
 trick : Trick

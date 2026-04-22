@@ -22,7 +22,7 @@ import urllib.request
 import urllib.error
 
 import puzzles
-import hints
+import strategy
 import dsl
 from compare import compare
 
@@ -46,23 +46,23 @@ def _http_post(url, body):
 
 
 def _derive_expected(puzzle_spec):
-    """Ask hints.py for the top-ranked trick's primitive sequence
+    """Ask strategy.py for the top-ranked trick's primitive sequence
     at the puzzle's initial state. If target_trick doesn't match
     what fires first, we surface that as a mismatch."""
     state = puzzle_spec["initial_state"]
     hand = state["hands"][state["active_player_index"]]["hand_cards"]
     board = state["board"]
-    suggestions = hints.build_suggestions(hand, board)
+    suggestions = strategy.build_suggestions(hand, board)
     want = puzzle_spec["target_trick"]
     for s in suggestions:
         if s["trick_id"] == want:
             return s["primitives"]
     if suggestions:
         raise RuntimeError(
-            f"puzzle target_trick={want!r} but hints.py returned "
+            f"puzzle target_trick={want!r} but strategy.py returned "
             f"{[s['trick_id'] for s in suggestions]!r}"
         )
-    raise RuntimeError(f"hints.py returned no suggestions for {want!r}")
+    raise RuntimeError(f"strategy.py returned no suggestions for {want!r}")
 
 
 def _fmt_primitive(p):

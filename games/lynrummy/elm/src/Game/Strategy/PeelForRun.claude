@@ -62,7 +62,7 @@ hand card consumed.
 ## Pointers
 
 - Python counterpart: `hints.peel_for_run` in
-  `games/lynrummy/python/hints.py`. Python had a gap-pair
+  `games/lynrummy/python/strategy.py`. Python had a gap-pair
   bug on this trick; Elm does not.
 - Depends on: `Card`, `CardStack.canExtract`,
   `StackType.successor`/`predecessor`/`getStackType`,

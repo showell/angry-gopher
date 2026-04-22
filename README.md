@@ -46,10 +46,14 @@ unfamiliar code, read the sidecar first.
 | Package | Role |
 |---|---|
 | `auth` | HTTP Basic auth |
-| `games/lynrummy` | LynRummy: dealer, referee, replay, tricks, scoring |
-| `games/lynrummy/tricks` | Seven trick recognizers + hint priority |
+| `games/lynrummy` | LynRummy: dealer, referee, replay, scoring |
 | `schema` | Single source of truth for all DB tables |
 | `views` | HTML pages (server-rendered) |
+
+Strategy (trick recognizers + hint priority) lives in the
+clients: Elm at `games/lynrummy/elm/src/Game/Strategy/`,
+Python at `games/lynrummy/python/strategy.py`. Go owns only
+wire + referee.
 
 ## LynRummy
 
@@ -59,9 +63,12 @@ The project's main feature. Three roles inside Gopher:
   two-player hands. Per-session seed makes replays reproducible.
 - **Referee** (`lynrummy` package) — validates turn completion via
   protocol/geometry/semantics/inventory checks. Stateless.
-- **Hint system** (`lynrummy/tricks` package) — seven trick
-  recognizers walked in simplest-first priority order; each
-  firing trick yields one representative suggestion.
+- **Strategy layer** (client-side) — seven trick recognizers
+  walked in simplest-first priority order; each firing trick
+  yields one representative suggestion. Elm at
+  `games/lynrummy/elm/src/Game/Strategy/`; Python at
+  `games/lynrummy/python/strategy.py`. Server has no opinion
+  on which plays are smart.
 
 The Elm client lives at `games/lynrummy/elm/` and is
 served via `/gopher/lynrummy-elm/`. A Python agent-side client

@@ -14,7 +14,7 @@ Python codegen.
 
 ## Supported ops
 
-- `build_suggestions` — compares hints.build_suggestions output
+- `build_suggestions` — compares strategy.build_suggestions output
   to expected trick_id + hand_cards rows.
 - `hint_invariant` — calls the named emitter, applies its
   primitives, asserts every resulting stack classifies as a

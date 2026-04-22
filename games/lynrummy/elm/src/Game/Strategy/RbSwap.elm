@@ -1,4 +1,4 @@
-module Game.Tricks.RbSwap exposing (trick)
+module Game.Strategy.RbSwap exposing (trick)
 
 {-| RB_SWAP ("substitute trick"): kick a same-value, same-color,
 different-suit card out of an rb run and slot the hand card into
@@ -21,14 +21,14 @@ import Game.CardStack
         , stackType
         )
 import Game.StackType exposing (CardStackType(..), getStackType)
-import Game.Tricks.Helpers
+import Game.Strategy.Helpers
     exposing
         ( freshlyPlayed
         , replaceAt
         , singleStackFromCard
         , substituteInStack
         )
-import Game.Tricks.Trick exposing (Play, Trick)
+import Game.Strategy.Trick exposing (Play, Trick)
 
 
 trick : Trick

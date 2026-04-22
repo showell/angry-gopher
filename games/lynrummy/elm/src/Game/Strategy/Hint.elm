@@ -1,4 +1,4 @@
-module Game.Tricks.Hint exposing
+module Game.Strategy.Hint exposing
     ( Suggestion
     , buildSuggestions
     , hintPriorityOrder
@@ -25,14 +25,14 @@ deeper.
 import Game.Card exposing (Card)
 import Game.CardStack exposing (CardStack, HandCard)
 import Game.Hand exposing (Hand)
-import Game.Tricks.DirectPlay as DirectPlay
-import Game.Tricks.HandStacks as HandStacks
-import Game.Tricks.LooseCardPlay as LooseCardPlay
-import Game.Tricks.PairPeel as PairPeel
-import Game.Tricks.PeelForRun as PeelForRun
-import Game.Tricks.RbSwap as RbSwap
-import Game.Tricks.SplitForSet as SplitForSet
-import Game.Tricks.Trick exposing (Trick)
+import Game.Strategy.DirectPlay as DirectPlay
+import Game.Strategy.HandStacks as HandStacks
+import Game.Strategy.LooseCardPlay as LooseCardPlay
+import Game.Strategy.PairPeel as PairPeel
+import Game.Strategy.PeelForRun as PeelForRun
+import Game.Strategy.RbSwap as RbSwap
+import Game.Strategy.SplitForSet as SplitForSet
+import Game.Strategy.Trick exposing (Trick)
 
 
 {-| One actionable hint. `rank` is the trick's position in the

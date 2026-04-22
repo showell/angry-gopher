@@ -3,13 +3,13 @@ just_use auto_player.py
 # label: EARLY (auto-player)
 # role: agent tool — drives a LynRummy session via Python-native hints
 
-Fetches state, calls `hints.build_suggestions(hand, board)`
+Fetches state, calls `strategy.build_suggestions(hand, board)`
 locally, takes the top suggestion's primitives and posts each
 verbatim to `/actions`. No /hint round-trip, no trick_result
 on the wire — every action is a primitive.
 
 Emission is correct-by-construction: every `merge_hand` in
-`hints.py` is routed through `_plan_merge_hand`, which looks
+`strategy.py` is routed through `_plan_merge_hand`, which looks
 for a hole sized for the EVENTUAL stack and emits `move_stack`
 BEFORE `merge_hand` when needed — so every intermediate frame
 in replay is geometrically clean, not just the final state.
@@ -26,7 +26,7 @@ bonuses (see `project_lynrummy_game_end_condition.md`).
 
 ## Pointers
 
-- Depends on: `client.py`, `hints.py`, `geometry.py` (all same dir),
+- Depends on: `client.py`, `strategy.py`, `geometry.py` (all same dir),
   `/actions` + `/state` + `/score` endpoints in
   `views/lynrummy_elm.go`.
 - Hints architecture: client-side per `project_hints_are_client_side.md`.

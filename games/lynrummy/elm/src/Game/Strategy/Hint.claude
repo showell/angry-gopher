@@ -79,7 +79,7 @@ monotonically with gaps where tricks didn't fire.
 
 ## Pointers
 
-- Depends on: all 7 trick modules under `Game.Tricks.*`.
+- Depends on: all 7 trick modules under `Game.Strategy.*`.
 - Consumers: `Main.elm` (Hint button wiring), test suite.
-- Python counterpart: `games/lynrummy/python/hints.py`
+- Python counterpart: `games/lynrummy/python/strategy.py`
   (different API — returns primitives, not Plays).

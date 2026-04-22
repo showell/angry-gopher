@@ -1,0 +1,8 @@
+# STRATEGY_RENAME — rename Elm Game.Tricks.* → Game.Strategy.*
+#
+# Tricks + Hint jointly constitute the STRATEGY layer of the
+# Elm client (per our 2026-04-22 conversational vocabulary).
+# The container rename reflects that; the modules inside
+# (Trick, Hint, DirectPlay, etc.) keep their names.
+
+elm-mv games/lynrummy/elm/src/Game/Tricks/ games/lynrummy/elm/src/Game/Strategy/

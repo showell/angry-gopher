@@ -1,6 +1,6 @@
 """
 test_plan_merge_hand.py — assertions for the pre-flight
-geometry-planning helper in `hints._plan_merge_hand`.
+geometry-planning helper in `strategy._plan_merge_hand`.
 
 Regression target: the "6H partly off the board" bug, where a
 left-merge onto a stack near the left edge of the board used
@@ -15,7 +15,7 @@ Run directly:
 
 import sys
 
-import hints
+import strategy
 from geometry import CARD_PITCH, find_violation
 
 
@@ -42,7 +42,7 @@ def test_left_merge_near_left_edge_moves_first():
     six_h = _card(6, 3)
     sim = [_stack(5, 200, [seven_h, eight_s, nine_h])]
 
-    prims, sim_after = hints._plan_merge_hand(sim, 0, six_h, "left")
+    prims, sim_after = strategy._plan_merge_hand(sim, 0, six_h, "left")
 
     assert len(prims) == 2, \
         f"expected move_stack + merge_hand; got {len(prims)} prims"
@@ -63,7 +63,7 @@ def test_right_merge_with_room_merges_in_place():
     six = _card(5, 0)
     sim = [_stack(100, 200, cards)]
 
-    prims, sim_after = hints._plan_merge_hand(sim, 0, six, "right")
+    prims, sim_after = strategy._plan_merge_hand(sim, 0, six, "right")
 
     assert len(prims) == 1, \
         f"expected in-place merge; got {len(prims)} prims"
@@ -84,7 +84,7 @@ def test_right_merge_near_right_edge_moves_first():
     far_right = BOARD_MAX_WIDTH - 3 * CARD_PITCH - BOARD_MARGIN
     sim = [_stack(far_right, 200, cards)]
 
-    prims, sim_after = hints._plan_merge_hand(sim, 0, five, "right")
+    prims, sim_after = strategy._plan_merge_hand(sim, 0, five, "right")
 
     assert len(prims) == 2, \
         f"expected move_stack + merge_hand; got {len(prims)} prims"

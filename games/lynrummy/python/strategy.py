@@ -1,12 +1,12 @@
 """
-Python-native hints. Each hint function inspects the current
-board and hand, decides whether a human-style play exists, and
-returns the sequence of primitive wire actions a human would
-physically perform. No trick_result, no compound form, no
-downstream inference — the consumer POSTs each primitive
-directly.
+Python-native STRATEGY layer: trick recognizers + hint priority
+walker. Each trick function inspects the current board and hand,
+decides whether a human-style play exists, and returns the
+sequence of primitive wire actions a human would physically
+perform. No trick_result, no compound form, no downstream
+inference — the consumer POSTs each primitive directly.
 
-Priority order (simplest-first) matches Go's HintPriorityOrder:
+Priority order (simplest-first):
   1. direct_play
   2. hand_stacks
   3. pair_peel
@@ -17,6 +17,9 @@ Priority order (simplest-first) matches Go's HintPriorityOrder:
 
 The top-level entry point is `build_suggestions(hand, board)`.
 Each per-trick function returns one primitive sequence or None.
+
+Renamed from hints.py 2026-04-22 (STRATEGY_RENAME) to name the
+layer honestly — tricks + hint priority jointly are strategy.
 """
 
 from geometry import find_open_loc, find_violation, CARD_PITCH

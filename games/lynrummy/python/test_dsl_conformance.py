@@ -1,5 +1,5 @@
 """
-test_dsl_conformance.py — run DSL scenarios against Python hints.
+test_dsl_conformance.py — run DSL scenarios against Python strategy.
 
 Reads conformance_fixtures.json (emitted by cmd/fixturegen from
 games/lynrummy/conformance/scenarios/*.dsl) and dispatches each
@@ -8,7 +8,7 @@ scenario by op. No framework. Run directly:
     python3 games/lynrummy/python/test_dsl_conformance.py
 
 Supported ops:
-  - build_suggestions: invoke hints.build_suggestions, compare
+  - build_suggestions: invoke strategy.build_suggestions, compare
     trick_id + hand_cards row-by-row against `expect: suggestions`.
   - hint_invariant: invoke the named trick's emitter, apply its
     primitives to the input board, and assert every resulting
@@ -27,7 +27,7 @@ import json
 import sys
 from pathlib import Path
 
-import hints
+import strategy
 from geometry import find_violation
 
 FIXTURES_PATH = Path(__file__).parent / "conformance_fixtures.json"
@@ -53,7 +53,7 @@ def _card_eq(a, b):
 def _run_build_suggestions(sc):
     hand = sc["hand"]
     board = sc["board"]
-    got = hints.build_suggestions(hand, board)
+    got = strategy.build_suggestions(hand, board)
     want = sc["expect"].get("suggestions", [])
     if len(got) != len(want):
         return False, (f"suggestion count: want {len(want)}, got "
@@ -75,23 +75,23 @@ def _run_build_suggestions(sc):
 
 
 def _apply_primitives(board, prims):
-    board = hints._copy_board(board)
+    board = strategy._copy_board(board)
     for p in prims:
         kind = p["action"]
         if kind == "split":
-            board = hints._apply_split(board, p["stack_index"], p["card_index"])
+            board = strategy._apply_split(board, p["stack_index"], p["card_index"])
         elif kind == "move_stack":
-            board = hints._apply_move(board, p["stack_index"], p["new_loc"])
+            board = strategy._apply_move(board, p["stack_index"], p["new_loc"])
         elif kind == "merge_stack":
-            board = hints._apply_merge_stack(
+            board = strategy._apply_merge_stack(
                 board, p["source_stack"], p["target_stack"],
                 p.get("side", "right"))
         elif kind == "merge_hand":
-            board = hints._apply_merge_hand(
+            board = strategy._apply_merge_hand(
                 board, p["target_stack"], p["hand_card"],
                 p.get("side", "right"))
         elif kind == "place_hand":
-            board = hints._apply_place_hand(
+            board = strategy._apply_place_hand(
                 board, p["hand_card"], p["loc"])
     return board
 
@@ -107,7 +107,7 @@ def _fmt_stack(s):
 
 def _run_hint_invariant(sc):
     trick_name = sc["trick"]
-    emitter = getattr(hints, trick_name, None)
+    emitter = getattr(strategy, trick_name, None)
     if emitter is None:
         return False, f"unknown trick {trick_name!r}"
     prims = emitter(sc["hand"], sc["board"])
@@ -119,7 +119,7 @@ def _run_hint_invariant(sc):
         return False, f"simulation crashed: {type(e).__name__}: {e}"
     for i, s in enumerate(final):
         cards = [bc["card"] for bc in s["board_cards"]]
-        if hints._classify(cards) == "other":
+        if strategy._classify(cards) == "other":
             return False, (f"stack {i} ({_fmt_stack(s)}) is incomplete "
                            f"after {len(prims)} primitives")
     bad_idx = find_violation(final)

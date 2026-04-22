@@ -1,4 +1,4 @@
-module Game.Tricks.Helpers exposing
+module Game.Strategy.Helpers exposing
     ( dummyLoc
     , extractCard
     , freshlyPlayed

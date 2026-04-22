@@ -402,14 +402,14 @@ import Game.CardStack
         )
 import Game.Referee as Referee exposing (RefereeStage(..), refereeStageToString)
 import Game.StackType as StackType
-import Game.Tricks.DirectPlay
-import Game.Tricks.HandStacks
-import Game.Tricks.Hint as Hint
-import Game.Tricks.LooseCardPlay
-import Game.Tricks.PairPeel
-import Game.Tricks.PeelForRun
-import Game.Tricks.RbSwap
-import Game.Tricks.SplitForSet
+import Game.Strategy.DirectPlay
+import Game.Strategy.HandStacks
+import Game.Strategy.Hint as Hint
+import Game.Strategy.LooseCardPlay
+import Game.Strategy.PairPeel
+import Game.Strategy.PeelForRun
+import Game.Strategy.RbSwap
+import Game.Strategy.SplitForSet
 import Test exposing (Test, describe, test)
 
 
@@ -505,16 +505,16 @@ func elmTestName(s string) string {
 
 // elmPortedTricks records which TS/Go tricks have a fully-ported
 // Elm counterpart. Expand as more land in
-// games/lynrummy/elm/src/Game/Tricks/. Scenarios for unported
+// games/lynrummy/elm/src/Game/Strategy/. Scenarios for unported
 // tricks stay as Expect.pass placeholders.
 var elmPortedTricks = map[string]string{
-	"direct_play":     "Game.Tricks.DirectPlay.trick",
-	"hand_stacks":     "Game.Tricks.HandStacks.trick",
-	"loose_card_play": "Game.Tricks.LooseCardPlay.trick",
-	"pair_peel":       "Game.Tricks.PairPeel.trick",
-	"peel_for_run":    "Game.Tricks.PeelForRun.trick",
-	"rb_swap":         "Game.Tricks.RbSwap.trick",
-	"split_for_set":   "Game.Tricks.SplitForSet.trick",
+	"direct_play":     "Game.Strategy.DirectPlay.trick",
+	"hand_stacks":     "Game.Strategy.HandStacks.trick",
+	"loose_card_play": "Game.Strategy.LooseCardPlay.trick",
+	"pair_peel":       "Game.Strategy.PairPeel.trick",
+	"peel_for_run":    "Game.Strategy.PeelForRun.trick",
+	"rb_swap":         "Game.Strategy.RbSwap.trick",
+	"split_for_set":   "Game.Strategy.SplitForSet.trick",
 }
 
 func elmScenarioBody(sc Scenario) string {

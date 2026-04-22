@@ -1,7 +1,7 @@
-just_use hints.py
+just_use strategy.py
 
 # label: INTRICATE
-# role: Python-native trick emitters + hint orchestration
+# role: Python-native STRATEGY layer — trick emitters + hint orchestration
 
 Each trick function (direct_play, hand_stacks, pair_peel,
 split_for_set, peel_for_run, rb_swap, loose_card_play) takes
@@ -56,7 +56,7 @@ left-merge, right-edge + right-merge, and the in-place case.
 - Companion architecture: `project_hints_are_client_side.md`,
   `feedback_wire_model_not_lossy.md`,
   `feedback_inference_is_misplaced_work.md`.
-- Elm counterpart: `games/lynrummy/elm/src/Game/Tricks/`
+- Elm counterpart: `games/lynrummy/elm/src/Game/Strategy/`
   (different API — Play.apply returns final board directly, no
   primitive replay).
 

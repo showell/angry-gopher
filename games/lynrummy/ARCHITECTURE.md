@@ -417,7 +417,7 @@ a corrective move appended at the end. The replay shows a
 coherent sequence of human-plausible moves, not "ugly in
 the middle, fine at the end."
 
-The concrete mechanism is in `python/hints.py`'s
+The concrete mechanism is in `python/strategy.py`'s
 `_plan_merge_hand` helper: it simulates a merge_hand, and if
 in-place would violate bounds, finds a hole sized for the
 EVENTUAL stack (accounting for side-specific offset: a

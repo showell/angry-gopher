@@ -1,4 +1,4 @@
-module Game.Tricks.PeelForRun exposing (trick)
+module Game.Strategy.PeelForRun exposing (trick)
 
 {-| PEEL_FOR_RUN: a hand card of value V finds two extractable
 board cards at values V-1 and V+1 such that the three form a
@@ -17,8 +17,8 @@ import Game.StackType
         , predecessor
         , successor
         )
-import Game.Tricks.Helpers exposing (extractCard, freshlyPlayed, pushNewStack)
-import Game.Tricks.Trick exposing (Play, Trick)
+import Game.Strategy.Helpers exposing (extractCard, freshlyPlayed, pushNewStack)
+import Game.Strategy.Trick exposing (Play, Trick)
 
 
 trick : Trick

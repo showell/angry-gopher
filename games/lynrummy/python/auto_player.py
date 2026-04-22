@@ -1,10 +1,11 @@
 """
 auto_player.py — drive an Elm-backed LynRummy session using the
-Python-native `hints` module.
+Python-native `strategy` module (trick recognizers + hint
+priority).
 
 Loop:
   - Fetch current state.
-  - Ask hints.build_suggestions for firing tricks.
+  - Ask strategy.build_suggestions for firing tricks.
   - Take the top suggestion, send each of its primitives verbatim.
   - When no suggestions fire, attempt complete_turn.
   - Stop on referee rejection, deck-low-water, or max_actions.
@@ -27,7 +28,7 @@ import datetime
 import sys
 
 from client import Client, card, find_stack_containing
-import hints
+import strategy
 import gesture_synth
 
 
@@ -81,7 +82,7 @@ def do_cosmetic_opener(c, session_id, *, verbose=True):
 
 def _to_wire_shape(prim, board):
     """Translate an internal index-based primitive to the
-    CardStack-ref wire shape the server expects. hints.py + the
+    CardStack-ref wire shape the server expects. strategy.py + the
     local _apply_locally mirror still use the internal shape;
     translation is localized to the send boundary."""
     kind = prim["action"]
@@ -121,19 +122,19 @@ def _apply_locally(board, prim):
     the NEXT primitive in the same trick."""
     kind = prim["action"]
     if kind == "merge_hand":
-        return hints._apply_merge_hand(
+        return strategy._apply_merge_hand(
             board, prim["target_stack"], prim["hand_card"],
             prim.get("side", "right"))
     if kind == "merge_stack":
-        return hints._apply_merge_stack(
+        return strategy._apply_merge_stack(
             board, prim["source_stack"], prim["target_stack"],
             prim.get("side", "right"))
     if kind == "move_stack":
-        return hints._apply_move(board, prim["stack_index"], prim["new_loc"])
+        return strategy._apply_move(board, prim["stack_index"], prim["new_loc"])
     if kind == "split":
-        return hints._apply_split(board, prim["stack_index"], prim["card_index"])
+        return strategy._apply_split(board, prim["stack_index"], prim["card_index"])
     if kind == "place_hand":
-        return hints._apply_place_hand(board, prim["hand_card"], prim["loc"])
+        return strategy._apply_place_hand(board, prim["hand_card"], prim["loc"])
     return board
 
 
@@ -147,7 +148,7 @@ def play_session(c, session_id, *, max_actions=300, verbose=True):
         hand = state["hands"][state["active_player_index"]]["hand_cards"]
         board = state["board"]
 
-        suggestions = hints.build_suggestions(hand, board)
+        suggestions = strategy.build_suggestions(hand, board)
         if suggestions:
             top = suggestions[0]
             trick_id = top["trick_id"]
@@ -158,7 +159,7 @@ def play_session(c, session_id, *, max_actions=300, verbose=True):
             # so gesture synthesis can compute drag endpoints
             # from the correct pre-primitive state without a
             # round-trip to /state.
-            local = hints._copy_board(board)
+            local = strategy._copy_board(board)
             for prim in prims:
                 endpoints = gesture_synth.drag_endpoints(prim, local)
                 meta = (gesture_synth.synthesize(*endpoints)

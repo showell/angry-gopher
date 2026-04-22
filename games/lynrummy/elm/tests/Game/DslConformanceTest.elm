@@ -18,14 +18,14 @@ import Game.CardStack
         )
 import Game.Referee as Referee exposing (RefereeStage(..), refereeStageToString)
 import Game.StackType as StackType
-import Game.Tricks.DirectPlay
-import Game.Tricks.HandStacks
-import Game.Tricks.Hint as Hint
-import Game.Tricks.LooseCardPlay
-import Game.Tricks.PairPeel
-import Game.Tricks.PeelForRun
-import Game.Tricks.RbSwap
-import Game.Tricks.SplitForSet
+import Game.Strategy.DirectPlay
+import Game.Strategy.HandStacks
+import Game.Strategy.Hint as Hint
+import Game.Strategy.LooseCardPlay
+import Game.Strategy.PairPeel
+import Game.Strategy.PeelForRun
+import Game.Strategy.RbSwap
+import Game.Strategy.SplitForSet
 import Test exposing (Test, describe, test)
 
 
@@ -248,7 +248,7 @@ hintInvariantDirectPlayCompleteSet =
                         ]
 
                 plays =
-                    Game.Tricks.DirectPlay.trick.findPlays handCards board
+                    Game.Strategy.DirectPlay.trick.findPlays handCards board
             in
             case plays of
                 [] ->
@@ -286,7 +286,7 @@ hintInvariantDirectPlayExtendPureRun =
                         ]
 
                 plays =
-                    Game.Tricks.DirectPlay.trick.findPlays handCards board
+                    Game.Strategy.DirectPlay.trick.findPlays handCards board
             in
             case plays of
                 [] ->
@@ -323,7 +323,7 @@ hintInvariantHandStacksPureRunReversedHand =
                         ]
 
                 plays =
-                    Game.Tricks.HandStacks.trick.findPlays handCards board
+                    Game.Strategy.HandStacks.trick.findPlays handCards board
             in
             case plays of
                 [] ->
@@ -360,7 +360,7 @@ hintInvariantHandStacksPureRunThreeCard =
                         ]
 
                 plays =
-                    Game.Tricks.HandStacks.trick.findPlays handCards board
+                    Game.Strategy.HandStacks.trick.findPlays handCards board
             in
             case plays of
                 [] ->
@@ -397,7 +397,7 @@ hintInvariantHandStacksRbRunThreeCard =
                         ]
 
                 plays =
-                    Game.Tricks.HandStacks.trick.findPlays handCards board
+                    Game.Strategy.HandStacks.trick.findPlays handCards board
             in
             case plays of
                 [] ->
@@ -434,7 +434,7 @@ hintInvariantHandStacksSetThreeOfAKind =
                         ]
 
                 plays =
-                    Game.Tricks.HandStacks.trick.findPlays handCards board
+                    Game.Strategy.HandStacks.trick.findPlays handCards board
             in
             case plays of
                 [] ->
@@ -472,7 +472,7 @@ hintInvariantLooseCardPlayPeelSetToRun =
                         ]
 
                 plays =
-                    Game.Tricks.LooseCardPlay.trick.findPlays handCards board
+                    Game.Strategy.LooseCardPlay.trick.findPlays handCards board
             in
             case plays of
                 [] ->
@@ -509,7 +509,7 @@ hintInvariantPairPeelRunPairPureEdge =
                         ]
 
                 plays =
-                    Game.Tricks.PairPeel.trick.findPlays handCards board
+                    Game.Strategy.PairPeel.trick.findPlays handCards board
             in
             case plays of
                 [] ->
@@ -546,7 +546,7 @@ hintInvariantPairPeelRunPairReversedHand =
                         ]
 
                 plays =
-                    Game.Tricks.PairPeel.trick.findPlays handCards board
+                    Game.Strategy.PairPeel.trick.findPlays handCards board
             in
             case plays of
                 [] ->
@@ -583,7 +583,7 @@ hintInvariantPairPeelSetPairEdge =
                         ]
 
                 plays =
-                    Game.Tricks.PairPeel.trick.findPlays handCards board
+                    Game.Strategy.PairPeel.trick.findPlays handCards board
             in
             case plays of
                 [] ->
@@ -620,7 +620,7 @@ hintInvariantPairPeelSetPairMiddle =
                         ]
 
                 plays =
-                    Game.Tricks.PairPeel.trick.findPlays handCards board
+                    Game.Strategy.PairPeel.trick.findPlays handCards board
             in
             case plays of
                 [] ->
@@ -658,7 +658,7 @@ hintInvariantPeelForRunRbEdges =
                         ]
 
                 plays =
-                    Game.Tricks.PeelForRun.trick.findPlays handCards board
+                    Game.Strategy.PeelForRun.trick.findPlays handCards board
             in
             case plays of
                 [] ->
@@ -697,7 +697,7 @@ hintInvariantRbSwapMiddleSwapClubsHome =
                         ]
 
                 plays =
-                    Game.Tricks.RbSwap.trick.findPlays handCards board
+                    Game.Strategy.RbSwap.trick.findPlays handCards board
             in
             case plays of
                 [] ->
@@ -735,7 +735,7 @@ hintInvariantSplitForSetBothEdges =
                         ]
 
                 plays =
-                    Game.Tricks.SplitForSet.trick.findPlays handCards board
+                    Game.Strategy.SplitForSet.trick.findPlays handCards board
             in
             case plays of
                 [] ->
@@ -773,7 +773,7 @@ hintInvariantSplitForSetOneMiddleOneEdge =
                         ]
 
                 plays =
-                    Game.Tricks.SplitForSet.trick.findPlays handCards board
+                    Game.Strategy.SplitForSet.trick.findPlays handCards board
             in
             case plays of
                 [] ->

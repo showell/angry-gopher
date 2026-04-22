@@ -95,7 +95,7 @@ corrects the state.
 ## Pointers
 
 - Python counterpart: `hints.loose_card_play` in
-  `games/lynrummy/python/hints.py` (emits primitives; no
+  `games/lynrummy/python/strategy.py` (emits primitives; no
   DSL hint_invariant coverage yet — see TODO in hints.claude).
 - Depends on: `Card`, `CardStack` (stackType, canExtract,
   left/right merge), `StackType`, `Tricks.Helpers` (most of

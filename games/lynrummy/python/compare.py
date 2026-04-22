@@ -12,7 +12,7 @@ Exposed:
     compare(expected, actual, initial_state) -> Report
 """
 
-from hints import (_apply_split, _apply_move, _apply_merge_stack,
+from strategy import (_apply_split, _apply_move, _apply_merge_stack,
                    _apply_merge_hand, _apply_place_hand,
                    _copy_board, _card_eq)
 

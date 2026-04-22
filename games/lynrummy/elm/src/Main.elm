@@ -27,7 +27,7 @@ import Game.Game as Game
 import Game.GestureArbitration as GA
 import Game.Referee as Referee
 import Game.Score as Score
-import Game.Tricks.Hint as Hint
+import Game.Strategy.Hint as Hint
 import Game.WireAction as WA
 import Main.Apply as Apply exposing (applyAction, refereeBounds)
 import Main.Gesture as Gesture
