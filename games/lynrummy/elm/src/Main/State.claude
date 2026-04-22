@@ -80,12 +80,20 @@ New `ReplayAnimation` variant (2026-04-21 B1 extension):
   fractional ms).
 - `Flags` — `{ initialSessionId : Maybe Int }`. HTML harness
   input.
-- `RemoteState` — server's authoritative state snapshot
-  shape.
+- `RemoteState` — shape used for the bundle's `initialState`
+  (see `ActionLogBundle`) and for `model.replayBaseline`
+  (the Instant Replay rewind target). Was the body of the
+  standalone `/state` wire-read until that call was ripped
+  2026-04-22 (ELM_AUTONOMY_AUDIT); the type stayed because
+  the bundle still carries the same shape.
 - `ActionLogBundle` — `{ initialState, actions }`. The
-  /sessions/:id/actions response body.
-- `CompleteTurnOutcome` — the CompleteTurn response payload
-  (`result`, `turnScore`, `cardsDrawn`, `dealtCards`).
+  /sessions/:id/actions response body. Bootstrap fold:
+  `initialState` seeds the Model; `actions` is threaded
+  through `Main.Apply.applyAction` to reach current state.
+- `CompleteTurnOutcome` lives in `Game.Game`, not here —
+  moved 2026-04-22 because the type is the domain-level
+  result of `Game.applyCompleteTurn`, produced locally
+  and also happens to match the wire response shape.
 
 Helpers + constants:
 
@@ -110,8 +118,9 @@ Helpers + constants:
   `Game.applyCompleteTurn` reads + writes. Layout matches
   `Game.Game.GameState`'s extensible record shape.
 - `baseModel`'s game-state fields are fine for a new session;
-  they get overwritten by `fetchRemoteState` on session resume
-  (the wire-field data is authoritative on bootstrap).
+  they get overwritten on session resume by
+  `bootstrapFromBundle` — seed from `ActionLogBundle.initialState`
+  then fold the bundle's actions through the local reducer.
 
 ## What this module deliberately does NOT expose
 

@@ -1,6 +1,6 @@
 # Main/Wire.elm — EARLY
 
-The client-side HTTP surface. Five outbound calls + the
+The client-side HTTP surface. Four outbound calls + the
 decoders that shape server responses. Each call produces
 `Cmd Msg` tagged with the matching `Main.Msg` constructor.
 
@@ -8,16 +8,21 @@ decoders that shape server responses. Each call produces
 
 - **Label:** EARLY. Extracted 2026-04-19 from the pre-split
   `Main.elm` monolith during the refactor that restored
-  module boundaries.
+  module boundaries. `fetchRemoteState` and the `/state`
+  wire-read were ripped 2026-04-22 (ELM_AUTONOMY_AUDIT) —
+  Elm derives current state locally from `initialState +
+  action log` instead.
 - **Server counterpart:** `views/lynrummy_elm.go` —
-  `HandleLynRummyElm` and the per-endpoint handlers.
+  `HandleLynRummyElm` and the per-endpoint handlers. The
+  `/state` endpoint is still served because Python
+  `auto_player.py` reads it; only the Elm client stopped
+  calling it.
 
 ## Endpoints + call flow
 
 | Call | Method + URL | Tagger | Body shape returned |
 |---|---|---|---|
 | `fetchNewSession` | `POST /gopher/lynrummy-elm/new-session` | `SessionReceived` | `{session_id: Int}` |
-| `fetchRemoteState` | `GET /gopher/lynrummy-elm/sessions/:id/state` | `StateRefreshed` | `{session_id, seq, state: RemoteState}` |
 | `fetchActionLog` | `GET /gopher/lynrummy-elm/sessions/:id/actions` | `ActionLogFetched` | `{session_id, initial_state: RemoteState, actions: [WireAction]}` |
 | `sendAction` | `POST /gopher/lynrummy-elm/actions?session=:id` | `ActionSent` (whatever) | `{ok, seq}` |
 | — accepts optional gesture: `Maybe { path, frame : PathFrame }`. Caller passes translated board-frame path for intra-board drags; `Nothing` for hand-origin drags (hand origins always replay via live DOM measurement) and non-drag actions. | | | |
@@ -27,21 +32,24 @@ decoders that shape server responses. Each call produces
 
 This module is the HTTP surface; it is NOT the source of truth
 for game state. The client is authoritative for the game state
-per the post-port cleanup (2026-04-19). These calls are used
-only for:
+per the post-port cleanup (2026-04-19, reinforced by
+ELM_AUTONOMY_AUDIT 2026-04-22). These calls are used only for:
 
-- **Bootstrap** — fetchNewSession + fetchRemoteState +
-  fetchActionLog on session open. Once the client has both the
-  current state and the initial-state baseline + action log,
-  it drives the game locally.
-- **Persistence** — sendAction fires-and-forgets so the server
-  can replay the session later. No state change depends on the
-  response.
-- **Referee gate** — sendCompleteTurn requires a response
-  because the server is the referee for "board is clean."
-  Response payload also carries `dealt_cards` which the client
-  uses ONLY as a diagnostic comparison against its locally
-  drawn cards.
+- **Bootstrap** — `fetchNewSession` + `fetchActionLog` on
+  session open. The `/actions` bundle carries both
+  `initial_state` and the action log; Elm folds the log
+  through the local reducer to reach current state. One wire
+  read, one source of truth.
+- **Persistence** — `sendAction` fires-and-forgets so the
+  server can replay the session later. No state change
+  depends on the response.
+- **Diagnostic cross-check** — `sendCompleteTurn` still
+  waits on the response, but only because the server's
+  `turn_result`/`dealt_cards` payload is useful as a
+  divergence monitor against Elm's locally-computed
+  `CompleteTurnOutcome`. Elm applies the transition
+  immediately via `Game.applyCompleteTurn`; the server's
+  200/400 is not gating.
 
 ## Decoder details
 
@@ -52,9 +60,9 @@ only for:
   `scores`, `active_player_index`, `turn_index`, `deck`,
   `cards_played_this_turn`, `victor_awarded`,
   `turn_start_board_score`). Uses `Decode.map8 |> andThen` to
-  handle 9 fields (one past `map8`'s limit).
-- `remoteStateDecoder` — wraps `innerStateDecoder` under a
-  `state` key (for /state's envelope).
+  handle 9 fields (one past `map8`'s limit). Still used by
+  `actionLogDecoder` to decode the bundle's `initial_state`
+  even after the standalone /state wire-read was ripped.
 - `actionLogDecoder` — `{initial_state: innerStateDecoder,
   actions: List WireAction}` via `WA.decoder`.
 - `completeTurnOutcomeDecoder` — 4 fields
@@ -95,4 +103,12 @@ Imports:
   referenced in decoders.
 - `Main.Msg` — Msg constructors for response taggers.
 - `Main.State` — shared type aliases
-  (`RemoteState`, `ActionLogBundle`, `CompleteTurnOutcome`).
+  (`RemoteState`, `ActionLogBundle`, `GesturePoint`,
+  `PathFrame`). `RemoteState` is still load-bearing —
+  used for the bundle's `initialState` and for
+  `model.replayBaseline`.
+- `Game.Game` — `CompleteTurnOutcome` lives here now
+  (moved out of `Main.State` 2026-04-22, since it's the
+  domain-level result of a CompleteTurn transition, not a
+  wire-framing concern). Both the local call and the wire
+  response land in the same type.

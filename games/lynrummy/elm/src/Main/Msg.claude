@@ -53,23 +53,30 @@ discipline.
   action submit; errors ignored today.
 - `SessionReceived (Result Http.Error Int)` — new-session
   creation returned a session id.
-- `StateRefreshed (Result Http.Error RemoteState)` — /state
-  fetch came back.
 - `CompleteTurnResponded (Result Http.Error CompleteTurnOutcome)`
-  — CompleteTurn /actions POST returned.
+  — CompleteTurn /actions POST returned. Elm has already
+  applied the transition locally by the time this fires;
+  the payload is a divergence monitor, not a gate.
 - `ActionLogFetched (Result Http.Error ActionLogBundle)` —
-  /actions GET came back with log + initial state.
+  /actions GET came back with log + initial state. This is
+  the one-time bootstrap wire read; Elm folds the actions
+  through the local reducer to reach current state.
+
+No `StateRefreshed`. The `/state` wire-read was ripped
+2026-04-22 (ELM_AUTONOMY_AUDIT) — Elm no longer asks the
+server for a current-state snapshot.
 
 **Timer:**
-- `ReplayTick Time.Posix` — 500ms tick while replay is
-  active-and-not-paused.
+- `ReplayFrame Time.Posix` — fires via
+  `Browser.Events.onAnimationFrame` during replay. Drives
+  drag re-animation and inter-action beat.
 
 ## Dependencies
 
-Imports `Main.State` for the response-shape types
-(`RemoteState`, `ActionLogBundle`, `CompleteTurnOutcome`, and
-`Point`). Plus `Browser.Dom`, `Http`, `Time`, `Game.Card`,
-and `Game.CardStack`.
+Imports `Main.State` for `ActionLogBundle` and `Point`,
+`Game.Game` for `CompleteTurnOutcome` (moved there from
+`Main.State` 2026-04-22). Plus `Browser.Dom`, `Http`, `Time`,
+`Game.Card`, and `Game.CardStack`.
 
 ## What this module deliberately does NOT do
 

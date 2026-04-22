@@ -14,7 +14,7 @@ import Http
 import Game.Card exposing (Card)
 import Game.CardStack exposing (CardStack)
 import Game.Game exposing (CompleteTurnOutcome)
-import Main.State exposing (ActionLogBundle, Point, RemoteState)
+import Main.State exposing (ActionLogBundle, Point)
 import Time
 
 
@@ -29,8 +29,8 @@ import Time
   - **Button clicks** — ClickCompleteTurn, ClickHint,
     ClickInstantReplay, ClickReplayPauseToggle, PopupOk.
   - **HTTP responses** — ActionSent (fire-and-forget),
-    SessionReceived, StateRefreshed,
-    CompleteTurnResponded, ActionLogFetched.
+    SessionReceived, CompleteTurnResponded,
+    ActionLogFetched.
   - **Timer** — ReplayFrame (fires via onAnimationFrame
     during replay; drives drag re-animation + inter-action
     beat).
@@ -46,7 +46,6 @@ type Msg
     | ActionSent (Result Http.Error ())
     | SessionReceived (Result Http.Error Int)
     | ClickCompleteTurn
-    | StateRefreshed (Result Http.Error RemoteState)
     | ClickHint
     | CompleteTurnResponded (Result Http.Error CompleteTurnOutcome)
     | PopupOk

@@ -378,9 +378,11 @@ opening board + canned P1 hand + empty P2 hand; UI-layer fields
 default to quiescent / empty values.
 
 On session resume (URL hash), `Main.elm init` immediately fires
-`fetchRemoteState` + `fetchActionLog` which replace these
-defaults with the authoritative server snapshot and populate
-`replayBaseline` for the Instant Replay rewind target.
+`fetchActionLog` which replaces these defaults: the bundle's
+`initialState` seeds the board/hands/deck/..., the action log
+is folded through the local reducer to reach current state,
+and `initialState` is also stashed in `replayBaseline` for the
+Instant Replay rewind target.
 
 -}
 baseModel : Model

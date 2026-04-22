@@ -252,25 +252,6 @@ update msg model =
         ActionLogFetched (Err _) ->
             ( model, Cmd.none )
 
-        StateRefreshed (Ok rs) ->
-            ( { model
-                | board = rs.board
-                , hands = rs.hands
-                , scores = rs.scores
-                , activePlayerIndex = rs.activePlayerIndex
-                , turnIndex = rs.turnIndex
-                , deck = rs.deck
-                , cardsPlayedThisTurn = rs.cardsPlayedThisTurn
-                , victorAwarded = rs.victorAwarded
-                , turnStartBoardScore = rs.turnStartBoardScore
-                , score = Score.forStacks rs.board
-              }
-            , Cmd.none
-            )
-
-        StateRefreshed (Err _) ->
-            ( model, Cmd.none )
-
         BoardRectReceived result ->
             case result of
                 Ok element ->

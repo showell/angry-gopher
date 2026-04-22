@@ -33,17 +33,21 @@ ClickHint).
 | `WingEntered` / `WingLeft` | inline |
 | `ActionSent` | inline no-op (fire-and-forget) |
 | `SessionReceived` | inline — stash sid + pin URL |
-| `ClickCompleteTurn` | inline — referee pre-check + sendCompleteTurn |
-| `CompleteTurnResponded` | inline — `applyAction WA.CompleteTurn` + dealt-card diagnostic |
+| `ClickCompleteTurn` | inline — referee pre-check + `applyAction WA.CompleteTurn` + fire-and-forget `sendCompleteTurn` |
+| `CompleteTurnResponded` | inline — divergence monitor (transition already applied locally on click) |
 | `PopupOk` | inline — popup dismiss |
 | `ClickInstantReplay` | `Main.Replay.Time.clickInstantReplay` |
 | `ReplayFrame` | `Main.Replay.Time.replayFrame` |
 | `ClickReplayPauseToggle` | `Main.Replay.Time.clickReplayPauseToggle` |
 | `HandCardRectReceived` | `Main.Replay.Time.handCardRectReceived` |
 | `BoardRectReceived` | inline — shared by live-drag AND replay |
-| `ActionLogFetched` | inline — stash actions + gestures + baseline |
-| `StateRefreshed` | inline — hydrate Model from server |
+| `ActionLogFetched` | inline — `bootstrapFromBundle` (seed Model from `initialState`, fold actions through reducer) |
 | `ClickHint` | inline — `Hint.buildSuggestions` + highlight |
+
+`StateRefreshed` was removed 2026-04-22 (ELM_AUTONOMY_AUDIT).
+Elm no longer wire-reads current state; bootstrap seeds from
+the action-log bundle's `initialState` and derives current
+state by folding actions through the local reducer.
 
 `BoardRectReceived` stays inline because it has two consumers
 in the same Msg: the active live-drag (drop-target math) and

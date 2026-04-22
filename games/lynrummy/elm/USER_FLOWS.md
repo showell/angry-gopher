@@ -34,10 +34,14 @@ verified ("button exists and fires Msg X"), it's a step.
 3. Server: POST /new-session creates a fresh session with a
    deck seed, returns `{session_id}`. ✅
 4. Client: `SessionReceived` sets sessionId, fires
-   setSessionPath port + fetchRemoteState. ✅
+   setSessionPath port + fetchActionLog. ✅
 5. URL path updates to `/gopher/lynrummy-elm/play/<sid>`. ✅
-6. Server: GET /state returns initial board + both hands + seat 0. ✅
-7. Client: StateRefreshed populates hands/board/scores/active. ✅
+6. Server: GET /sessions/:id/actions returns
+   `{initial_state, actions: []}` for the freshly-seeded deck. ✅
+7. Client: `ActionLogFetched` runs `bootstrapFromBundle` —
+   seeds Model from `initial_state`, folds the (empty) log
+   through the local reducer, stashes `initial_state` as
+   `replayBaseline`. ✅
 8. UI shows two-row player layout, Player 1 active with 15
    cards face-up, Player 2 with "15 cards" line. ✅
 
@@ -46,10 +50,14 @@ verified ("button exists and fires Msg X"), it's a step.
 1. User sees list of sessions in lobby with Resume buttons. ✅
 2. User clicks Resume for session N. ✅
 3. Client: `ClickResumeSession sid` fires. Model phase →
-   Playing, sessionId set, fetchRemoteState + setSessionPath. ✅
+   Playing, sessionId set, fetchActionLog + setSessionPath. ✅
 4. URL path updates to `/gopher/lynrummy-elm/play/<sid>`. ✅
-5. Server: GET /state replays action log, returns current state. ✅
-6. Client populates UI — active hand + scores reflect progress. ✅
+5. Server: GET /sessions/:id/actions returns
+   `{initial_state, actions: [...]}`. ✅
+6. Client: `bootstrapFromBundle` seeds Model from
+   `initial_state` then folds every action through
+   `Main.Apply.applyAction` to reach current state.
+   UI reflects progress. ✅
 
 ### 3. Reload a game in progress
 
@@ -57,7 +65,7 @@ verified ("button exists and fires Msg X"), it's a step.
 2. Page reloads; URL path is still `/gopher/lynrummy-elm/play/N`. ✅
 3. Go server parses the path and bakes `initialSessionId: N`
    into the Elm flag in the rendered HTML. ✅
-4. Elm init: phase → Playing, sessionId set, fetchRemoteState +
+4. Elm init: phase → Playing, sessionId set, fetchActionLog +
    fetchSessionsList. ✅
 5. UI resumes at current state. ✅
 6. Ephemeral state (hint highlights, popup, status message) is
@@ -127,35 +135,35 @@ verified ("button exists and fires Msg X"), it's a step.
 ### 10. Complete turn (ceremony flow — the big one)
 
 1. User clicks "Complete turn" button. ✅
-2. Client: `ClickCompleteTurn` fires `sendCompleteTurn sid`. ✅
-3. Server: replays, runs ValidateTurnComplete gate, classifies,
-   banks turn_score, draws 0/3/5 cards, cycles seat. ✅
-4. Server response: `{ok, seq, turn_result, turn_score, cards_drawn}`
-   (or 400 `{ok:false, turn_result:"failure", ...}`). ✅
-5. Client: `CompleteTurnResponded` sets
-   `popup = Just (popupFromOutcome outcome)` and a status-bar
-   message. ✅
-6. Popup appears with the correct character and future-tense
-   narration:
+2. Client: local referee pre-check, then
+   `applyAction WA.CompleteTurn` runs
+   `Game.applyCompleteTurn` locally — seat cycles, hands
+   refill, score banks, popup + status generated from the
+   local `CompleteTurnOutcome`. ✅
+3. Client: `sendCompleteTurn sid` fires fire-and-forget so
+   the server persists the action. ✅
+4. Server: replays, runs ValidateTurnComplete gate,
+   classifies, banks turn_score, draws 0/3/5 cards, cycles
+   seat, returns
+   `{ok, seq, turn_result, turn_score, cards_drawn, dealt_cards}`
+   (or 400 on failure). ✅
+5. Client: `CompleteTurnResponded` logs the server's
+   outcome as a divergence monitor against the locally-
+   computed one. UI already reflects the local outcome. ✅
+6. Popup (set in step 2) appears with the correct
+   character and future-tense narration:
    - dirty board → Angry Cat scolds ✅
    - no cards played → Oliver sympathizes ✅
    - regular / hand-emptied / victor → Steve celebrates ✅
-7. UI visual state does NOT flip yet — still shows outgoing
-   player's view. ✅
-8. User clicks OK on the popup. ✅
-9. Client: `PopupOk` clears popup, fires `fetchRemoteState`. ✅
-10. Server: returns post-turn state. ✅
-11. Client updates active seat, hands, scores. UI flips. ✅
+7. User clicks OK on the popup. ✅
+8. Client: `PopupOk` clears popup. UI now shows incoming
+   player's view (already flipped in step 2). ✅
 
 ### 11. Undo last action
 
-1. User clicks "Undo" button. ✅
-2. Client: `ClickUndo` → `sendAction sid WA.Undo` + fetchRemoteState. 🟡
-   (Note: no popup, no status message beyond "Undone." — could
-   grow ceremony later)
-3. Server: persists an Undo action. Replay's EffectiveActions
-   cancels the last non-Undo action. ✅
-4. Client refetches state, UI reverts. ✅
+Undo is deferred — V1 has no Undo button. The `WA.Undo`
+variant exists in the wire format and `Main.Apply.applyAction`
+handles it as a no-op for now.
 
 ### 12. Get a hint
 

@@ -1,13 +1,12 @@
 module Main.Wire exposing
     ( fetchActionLog
     , fetchNewSession
-    , fetchRemoteState
     , sendAction
     , sendCompleteTurn
     )
 
 {-| HTTP surface between the Elm client and the Gopher server.
-Five outbound calls, plus the decoders that shape the inbound
+Four outbound calls, plus the decoders that shape the inbound
 responses. Each function produces `Cmd Msg` tagged with the
 appropriate `Main.Msg` constructor so the `update` function
 picks it up at the right branch.
@@ -16,13 +15,14 @@ Extracted 2026-04-19 from the pre-split `Main.elm` monolith.
 
 ## Design invariants
 
-- **Client is authoritative on game state.** These calls are
-  for persistence (sendAction, sendCompleteTurn), bootstrap
-  (fetchNewSession, fetchRemoteState, fetchActionLog), and the
-  one piece the client currently can't derive locally — the
-  server's referee verdict on CompleteTurn. Nothing here is
-  treated as authoritative beyond that boundary; the autonomous
-  transition runs locally in `Main.Apply`.
+- **Client is authoritative on game state.** Elm derives
+  current state locally from (initial_state + action log);
+  these calls are for persistence (sendAction,
+  sendCompleteTurn), session creation (fetchNewSession),
+  and the one-time bootstrap fetch of the action log
+  (fetchActionLog). No runtime wire read of current state;
+  the server's responses on CompleteTurn are diagnostic,
+  not gating.
 - **No ports here.** `setSessionPath` lives in `Main.elm` (only
   port-modules may declare ports).
 - **Decoders match server emission exactly.** If a field shape
@@ -63,25 +63,11 @@ fetchNewSession =
         }
 
 
-{-| Fetch the authoritative game state for a session. Called
-once on session bootstrap (new session OR resume via URL hash)
-to hydrate the client's Model. After that, all state changes
-flow through `Main.Apply.applyAction` — this endpoint is
-not consulted again during play.
--}
-fetchRemoteState : Int -> Cmd Msg
-fetchRemoteState sid =
-    Http.get
-        { url = "/gopher/lynrummy-elm/sessions/" ++ String.fromInt sid ++ "/state"
-        , expect = Http.expectJson StateRefreshed remoteStateDecoder
-        }
-
-
 {-| Fetch the session's action log AND the pre-first-action
-initial state. Used on session bootstrap so the client has both
-the ammunition (log) and the baseline (initial state) to run a
-faithful replay from — without relying on hardcoded Dealer
-fixtures that may not match the session's actual seeded deal.
+initial state. The one-time bootstrap wire read: Elm uses
+`initialState` + `actions` to reconstruct current state
+locally via `Main.bootstrapFromBundle`. No separate /state
+fetch; Elm owns derivation.
 -}
 fetchActionLog : Int -> Cmd Msg
 fetchActionLog sid =
@@ -205,17 +191,9 @@ handDecoder =
         |> Decode.map (\cards -> { handCards = cards })
 
 
-{-| The /state endpoint returns `{session_id, seq, state: {...}}`.
-The `state` object is the full game-state snapshot.
--}
-remoteStateDecoder : Decoder RemoteState
-remoteStateDecoder =
-    Decode.field "state" innerStateDecoder
-
-
-{-| Same shape as the inner `state` field of /state, but shared
-with the /actions endpoint (which emits the initial-state
-record at top level rather than nested).
+{-| The game-state record as the server ships it in
+`initial_state` (inside the /actions bundle). Used by
+`actionLogDecoder` to hydrate `ActionLogBundle.initialState`.
 -}
 innerStateDecoder : Decoder RemoteState
 innerStateDecoder =
