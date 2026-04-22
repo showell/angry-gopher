@@ -41,7 +41,8 @@ import Game.Hand exposing (Hand)
 import Game.PlayerTurn exposing (CompleteTurnResult(..))
 import Game.WireAction as WA exposing (WireAction)
 import Main.Msg exposing (Msg(..))
-import Main.State exposing (ActionLogBundle, ActionLogEntry, CompleteTurnOutcome, GesturePoint, PathFrame(..), RemoteState)
+import Game.Game exposing (CompleteTurnOutcome)
+import Main.State exposing (ActionLogBundle, ActionLogEntry, GesturePoint, PathFrame(..), RemoteState)
 
 
 

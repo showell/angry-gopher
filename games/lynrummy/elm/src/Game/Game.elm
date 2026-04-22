@@ -1,5 +1,6 @@
 module Game.Game exposing
-    ( GameState
+    ( CompleteTurnOutcome
+    , GameState
     , applyCompleteTurn
     , noteCardsPlayed
     )
@@ -59,6 +60,22 @@ noteCardsPlayed n state =
     { state | cardsPlayedThisTurn = state.cardsPlayedThisTurn + n }
 
 
+{-| What `applyCompleteTurn` produced, beyond the new state:
+the outgoing player's classified result, the points they
+banked, the cards they drew. All locally computed — no wire
+round-trip. The server's /complete-turn response is a
+projection of the same shape (and will diverge only if the
+client and server disagree on the game's history, which
+should never happen).
+-}
+type alias CompleteTurnOutcome =
+    { result : CompleteTurnResult
+    , turnScore : Int
+    , cardsDrawn : Int
+    , dealtCards : List Card
+    }
+
+
 {-| The full CompleteTurn transition, deterministic from the
 pre-turn state alone. Produces the post-turn state.
 
@@ -80,7 +97,7 @@ No I/O, no randomness — the deck is drawn in order. Callers
 who want shuffling seed it before passing it in.
 
 -}
-applyCompleteTurn : GameState a -> GameState a
+applyCompleteTurn : GameState a -> ( GameState a, CompleteTurnOutcome )
 applyCompleteTurn state =
     let
         outgoingIdx =
@@ -139,23 +156,23 @@ applyCompleteTurn state =
                     0
 
         -- Outgoing player: reset card states, then draw.
-        ( newOutgoingHand, remainingDeck ) =
+        ( newOutgoingHand, remainingDeck, drawnCards ) =
             case listAt outgoingIdx state.hands of
                 Just h ->
                     let
                         reset =
                             Hand.resetState h
 
-                        ( drawnCards, leftover ) =
+                        ( cards, leftover ) =
                             takeDeck drawCount state.deck
 
                         afterDraw =
-                            Hand.addCards drawnCards FreshlyDrawn reset
+                            Hand.addCards cards FreshlyDrawn reset
                     in
-                    ( afterDraw, leftover )
+                    ( afterDraw, leftover, cards )
 
                 Nothing ->
-                    ( { handCards = [] }, state.deck )
+                    ( { handCards = [] }, state.deck, [] )
 
         newHands =
             List.indexedMap
@@ -187,18 +204,28 @@ applyCompleteTurn state =
 
         nextActive =
             modBy nHands (outgoingIdx + 1)
+
+        newState =
+            { state
+                | board = agedBoard
+                , hands = newHands
+                , deck = remainingDeck
+                , scores = newScores
+                , activePlayerIndex = nextActive
+                , turnIndex = state.turnIndex + 1
+                , cardsPlayedThisTurn = 0
+                , turnStartBoardScore = boardScore
+                , victorAwarded = state.victorAwarded || result == SuccessAsVictor
+            }
+
+        outcome =
+            { result = result
+            , turnScore = turnScore
+            , cardsDrawn = drawCount
+            , dealtCards = drawnCards
+            }
     in
-    { state
-        | board = agedBoard
-        , hands = newHands
-        , deck = remainingDeck
-        , scores = newScores
-        , activePlayerIndex = nextActive
-        , turnIndex = state.turnIndex + 1
-        , cardsPlayedThisTurn = 0
-        , turnStartBoardScore = boardScore
-        , victorAwarded = state.victorAwarded || result == SuccessAsVictor
-    }
+    ( newState, outcome )
 
 
 

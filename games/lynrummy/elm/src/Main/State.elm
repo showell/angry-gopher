@@ -2,7 +2,6 @@ module Main.State exposing
     ( ActionLogBundle
     , ActionLogEntry
     , ActionOutcome
-    , CompleteTurnOutcome
     , DragInfo
     , DragSource(..)
     , DragState(..)
@@ -311,23 +310,6 @@ type alias ActionLogEntry =
     { action : WireAction
     , gesturePath : Maybe (List GesturePoint)
     , pathFrame : PathFrame
-    }
-
-
-{-| Full CompleteTurn response payload. `turnScore`,
-`cardsDrawn`, and `dealtCards` are only meaningful on success
-branches; Failure ignores them.
-
-`dealtCards` carries the EXACT cards the server dealt. Currently
-unused by the autonomous client (it draws from its own deck and
-uses these only as a diagnostic cross-check against divergence).
-
--}
-type alias CompleteTurnOutcome =
-    { result : CompleteTurnResult
-    , turnScore : Int
-    , cardsDrawn : Int
-    , dealtCards : List Card
     }
 
 

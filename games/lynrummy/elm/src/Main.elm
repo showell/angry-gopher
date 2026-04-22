@@ -23,6 +23,7 @@ import Browser
 import Browser.Dom
 import Browser.Events
 import Json.Decode as Decode exposing (Decoder)
+import Game.Game as Game
 import Game.GestureArbitration as GA
 import Game.Referee as Referee
 import Game.Score as Score
@@ -165,12 +166,11 @@ update msg model =
             ( model, Cmd.none )
 
         ClickCompleteTurn ->
-            -- Client-side referee: validate the board locally
-            -- first. If dirty, reject without a server round-trip
-            -- and show the error inline. If clean, log + send to
-            -- server for persistence. The server double-checks
-            -- (as a diagnostic), but the client doesn't need
-            -- permission — it owns the decision.
+            -- Client-side referee is authoritative. Validate
+            -- locally; if dirty, reject inline. If clean, apply
+            -- the transition immediately and fire-and-forget
+            -- the wire call for persistence — no round-trip
+            -- gate. Elm owns the game.
             case Referee.validateTurnComplete model.board refereeBounds of
                 Err refErr ->
                     ( { model
@@ -189,89 +189,39 @@ update msg model =
                             , gesturePath = Nothing
                             , pathFrame = State.ViewportFrame
                             }
-                    in
-                    case model.sessionId of
-                        Just sid ->
-                            ( { model | actionLog = model.actionLog ++ [ completeTurnEntry ] }
-                            , sendCompleteTurn sid
-                            )
 
-                        Nothing ->
-                            -- Offline mode: no persistence, just commit the transition.
-                            ( { model | actionLog = model.actionLog ++ [ completeTurnEntry ] }
-                                |> applyAction WA.CompleteTurn
-                                |> Apply.commit
-                            , Cmd.none
-                            )
+                        withEntry =
+                            { model | actionLog = model.actionLog ++ [ completeTurnEntry ] }
 
-        CompleteTurnResponded result ->
-            -- The server is the referee; its OK is a green light
-            -- saying "the board is clean, the turn is valid." On
-            -- OK we apply the FULL transition autonomously via
-            -- applyAction → Game.applyCompleteTurn, using the
-            -- client's own deck + score logic. On Err the
-            -- transition is skipped and the player fixes the
-            -- board. The popup is cosmetic and doesn't gate any
-            -- state.
-            --
-            -- Diagnostic: after the client draws from its own
-            -- deck, compare the cards it pulled against the
-            -- server's `dealt_cards`. A mismatch means client and
-            -- server have diverged — log so we can catch it
-            -- early. Under true autonomy the server's role on
-            -- CompleteTurn reduces to "sanity check that I am
-            -- not confused."
-            let
-                statusMsg =
-                    statusForCompleteTurn result
-
-                popupBody =
-                    popupForCompleteTurn result
-            in
-            case result of
-                Ok outcome ->
-                    let
-                        preDeckSize =
-                            List.length model.deck
-
-                        applied =
-                            applyAction WA.CompleteTurn { model | popup = popupBody }
-
-                        postModel =
-                            applied.model
+                        ( afterTurn, turnOutcome ) =
+                            Game.applyCompleteTurn withEntry
 
                         newModel =
-                            { postModel | status = statusMsg }
+                            { afterTurn
+                                | score = Score.forStacks afterTurn.board
+                                , status = statusForCompleteTurn (Ok turnOutcome)
+                                , popup = popupForCompleteTurn (Ok turnOutcome)
+                            }
 
-                        postDeckSize =
-                            List.length newModel.deck
+                        persistCmd =
+                            case model.sessionId of
+                                Just sid ->
+                                    sendCompleteTurn sid
 
-                        clientDrewCount =
-                            preDeckSize - postDeckSize
-
-                        clientDrewCards =
-                            List.take clientDrewCount model.deck
-
-                        _ =
-                            if clientDrewCards == outcome.dealtCards then
-                                ()
-
-                            else
-                                let
-                                    _ =
-                                        Debug.log "CompleteTurn dealt-cards mismatch (client vs server)"
-                                            { client = clientDrewCards
-                                            , server = outcome.dealtCards
-                                            }
-                                in
-                                ()
+                                Nothing ->
+                                    Cmd.none
                     in
-                    ( newModel, Cmd.none )
+                    ( newModel, persistCmd )
 
-                Err _ ->
-                    ( { model | status = statusMsg, popup = popupBody }
-                    , Cmd.none
-                    )
+        CompleteTurnResponded result ->
+            -- Server response is diagnostic only — the turn has
+            -- already been applied locally. Log to dev console
+            -- so a divergence (should never happen) surfaces.
+            let
+                _ =
+                    Debug.log "[CompleteTurn server response]" result
+            in
+            ( model, Cmd.none )
 
         PopupOk ->
             -- Pure cosmetic dismiss. The turn transition already

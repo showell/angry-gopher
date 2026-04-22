@@ -53,10 +53,10 @@ import Game.View as View
 import Game.WingOracle as WingOracle exposing (WingId)
 import Main.Gesture as Gesture
 import Main.Msg exposing (Msg(..))
+import Game.Game exposing (CompleteTurnOutcome)
 import Main.State as State
     exposing
-        ( CompleteTurnOutcome
-        , DragInfo
+        ( DragInfo
         , DragSource(..)
         , DragState(..)
         , Model

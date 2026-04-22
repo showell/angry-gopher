@@ -175,7 +175,7 @@ applyPhysics action model =
 applyCompleteTurn : Model -> ActionOutcome
 applyCompleteTurn model =
     let
-        afterTurn =
+        ( afterTurn, _ ) =
             Game.applyCompleteTurn model
 
         withScore =

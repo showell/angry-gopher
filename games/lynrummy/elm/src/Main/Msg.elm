@@ -13,7 +13,8 @@ import Browser.Dom
 import Http
 import Game.Card exposing (Card)
 import Game.CardStack exposing (CardStack)
-import Main.State exposing (ActionLogBundle, CompleteTurnOutcome, Point, RemoteState)
+import Game.Game exposing (CompleteTurnOutcome)
+import Main.State exposing (ActionLogBundle, Point, RemoteState)
 import Time
 
 

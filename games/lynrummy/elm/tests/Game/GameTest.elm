@@ -29,6 +29,16 @@ import Game.Hand as Hand
 import Test exposing (Test, describe, test)
 
 
+{-| Thin wrapper for tests that only care about the post-turn
+state. `Game.applyCompleteTurn` returns
+`(GameState, CompleteTurnOutcome)`; most tests here only
+inspect the state.
+-}
+applyTurn : GameState a -> GameState a
+applyTurn =
+    Tuple.first << Game.applyCompleteTurn
+
+
 
 -- SHARED FIXTURES
 
@@ -108,19 +118,19 @@ seatAndTurn =
         [ test "seat flips 0 → 1" <|
             \_ ->
                 { baseState | cardsPlayedThisTurn = 0 }
-                    |> Game.applyCompleteTurn
+                    |> applyTurn
                     |> .activePlayerIndex
                     |> Expect.equal 1
         , test "seat flips 1 → 0" <|
             \_ ->
                 { baseState | activePlayerIndex = 1, cardsPlayedThisTurn = 0 }
-                    |> Game.applyCompleteTurn
+                    |> applyTurn
                     |> .activePlayerIndex
                     |> Expect.equal 0
         , test "turnIndex 0 → 1" <|
             \_ ->
                 { baseState | cardsPlayedThisTurn = 0 }
-                    |> Game.applyCompleteTurn
+                    |> applyTurn
                     |> .turnIndex
                     |> Expect.equal 1
         ]
@@ -134,13 +144,13 @@ cardsPlayedBranches =
         [ test "0 cards played → SuccessButNeedsCards (draws 3)" <|
             \_ ->
                 { baseState | deck = deckOfThree, cardsPlayedThisTurn = 0 }
-                    |> Game.applyCompleteTurn
+                    |> applyTurn
                     |> (\s -> s.hands |> List.head |> Maybe.map Hand.size)
                     |> Expect.equal (Just (1 + 3))
         , test "played cards, hand non-empty → Success (draws 0)" <|
             \_ ->
                 { baseState | deck = deckOfThree, cardsPlayedThisTurn = 2 }
-                    |> Game.applyCompleteTurn
+                    |> applyTurn
                     |> (\s -> s.hands |> List.head |> Maybe.map Hand.size)
                     |> Expect.equal (Just 1)
         , test "played cards, hand empty, no prior victor → SuccessAsVictor (draws 5)" <|
@@ -151,7 +161,7 @@ cardsPlayedBranches =
                     , cardsPlayedThisTurn = 3
                     , victorAwarded = False
                 }
-                    |> Game.applyCompleteTurn
+                    |> applyTurn
                     |> (\s -> s.hands |> List.head |> Maybe.map Hand.size)
                     |> Expect.equal (Just 5)
         , test "played cards, hand empty, prior victor → SuccessWithHandEmptied (draws 5)" <|
@@ -162,7 +172,7 @@ cardsPlayedBranches =
                     , cardsPlayedThisTurn = 3
                     , victorAwarded = True
                 }
-                    |> Game.applyCompleteTurn
+                    |> applyTurn
                     |> (\s -> s.hands |> List.head |> Maybe.map Hand.size)
                     |> Expect.equal (Just 5)
         ]
@@ -174,13 +184,13 @@ deckDrawBranches =
         [ test "Success: deck untouched" <|
             \_ ->
                 { baseState | deck = deckOfThree, cardsPlayedThisTurn = 2 }
-                    |> Game.applyCompleteTurn
+                    |> applyTurn
                     |> .deck
                     |> Expect.equal deckOfThree
         , test "SuccessButNeedsCards: top 3 drawn" <|
             \_ ->
                 { baseState | deck = deckOfFive, cardsPlayedThisTurn = 0 }
-                    |> Game.applyCompleteTurn
+                    |> applyTurn
                     |> .deck
                     |> Expect.equal (List.drop 3 deckOfFive)
         ]
@@ -192,14 +202,14 @@ scoringBranches =
         [ test "Success: banks cards-played bonus only (0 board score)" <|
             \_ ->
                 { baseState | cardsPlayedThisTurn = 2 }
-                    |> Game.applyCompleteTurn
+                    |> applyTurn
                     |> .scores
                     -- forCardsPlayed 2 = 200 + 100*4 = 600
                     |> Expect.equal [ 600, 0 ]
         , test "SuccessButNeedsCards: banks nothing (cardsPlayed = 0)" <|
             \_ ->
                 { baseState | deck = deckOfThree, cardsPlayedThisTurn = 0 }
-                    |> Game.applyCompleteTurn
+                    |> applyTurn
                     |> .scores
                     |> Expect.equal [ 0, 0 ]
         , test "SuccessAsVictor: banks cards-played + 1000 empty-hand + 500 victor" <|
@@ -210,7 +220,7 @@ scoringBranches =
                     , cardsPlayedThisTurn = 3
                     , victorAwarded = False
                 }
-                    |> Game.applyCompleteTurn
+                    |> applyTurn
                     |> .scores
                     -- forCardsPlayed 3 = 200 + 900 = 1100; +1000 empty; +500 victor
                     |> Expect.equal [ 2600, 0 ]
@@ -222,7 +232,7 @@ scoringBranches =
                     , cardsPlayedThisTurn = 3
                     , victorAwarded = True
                 }
-                    |> Game.applyCompleteTurn
+                    |> applyTurn
                     |> .scores
                     |> Expect.equal [ 2100, 0 ]
         ]
@@ -239,19 +249,19 @@ victorAwardedOnce =
                     , cardsPlayedThisTurn = 3
                     , victorAwarded = False
                 }
-                    |> Game.applyCompleteTurn
+                    |> applyTurn
                     |> .victorAwarded
                     |> Expect.equal True
         , test "stays True once set" <|
             \_ ->
                 { baseState | cardsPlayedThisTurn = 2, victorAwarded = True }
-                    |> Game.applyCompleteTurn
+                    |> applyTurn
                     |> .victorAwarded
                     |> Expect.equal True
         , test "stays False on non-victor branches" <|
             \_ ->
                 { baseState | cardsPlayedThisTurn = 2, victorAwarded = False }
-                    |> Game.applyCompleteTurn
+                    |> applyTurn
                     |> .victorAwarded
                     |> Expect.equal False
         ]
@@ -262,7 +272,7 @@ cardsPlayedResets =
     test "cardsPlayedThisTurn resets to 0" <|
         \_ ->
             { baseState | cardsPlayedThisTurn = 5 }
-                |> Game.applyCompleteTurn
+                |> applyTurn
                 |> .cardsPlayedThisTurn
                 |> Expect.equal 0
 
@@ -272,6 +282,6 @@ turnStartBoardScoreAdvances =
     test "turnStartBoardScore advances to post-turn board score (still 0 in these fixtures)" <|
         \_ ->
             { baseState | cardsPlayedThisTurn = 2, turnStartBoardScore = 0 }
-                |> Game.applyCompleteTurn
+                |> applyTurn
                 |> .turnStartBoardScore
                 |> Expect.equal 0
