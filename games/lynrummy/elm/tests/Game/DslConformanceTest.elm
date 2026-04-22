@@ -18,9 +18,9 @@ import Game.CardStack
         )
 import Game.Referee as Referee exposing (RefereeStage(..), refereeStageToString)
 import Game.StackType as StackType
+import Game.Strategy.Hint as Hint
 import Game.Strategy.DirectPlay
 import Game.Strategy.HandStacks
-import Game.Strategy.Hint as Hint
 import Game.Strategy.LooseCardPlay
 import Game.Strategy.PairPeel
 import Game.Strategy.PeelForRun

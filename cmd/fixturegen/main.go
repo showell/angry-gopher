@@ -18,6 +18,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"text/template"
@@ -402,15 +403,9 @@ import Game.CardStack
         )
 import Game.Referee as Referee exposing (RefereeStage(..), refereeStageToString)
 import Game.StackType as StackType
-import Game.Strategy.DirectPlay
-import Game.Strategy.HandStacks
 import Game.Strategy.Hint as Hint
-import Game.Strategy.LooseCardPlay
-import Game.Strategy.PairPeel
-import Game.Strategy.PeelForRun
-import Game.Strategy.RbSwap
-import Game.Strategy.SplitForSet
-import Test exposing (Test, describe, test)
+{{range elmTrickModules}}import Game.Strategy.{{.}}
+{{end}}import Test exposing (Test, describe, test)
 
 
 standardBounds : BoardBounds
@@ -463,9 +458,10 @@ suite =
 
 func emitElm(scenarios []Scenario, outPath string) error {
 	t := template.New("elm").Funcs(template.FuncMap{
-		"elmTestFn":       elmTestFn,
-		"elmScenarioBody": elmScenarioBody,
-		"quote":           func(s string) string { return `"` + s + `"` },
+		"elmTestFn":        elmTestFn,
+		"elmScenarioBody":  elmScenarioBody,
+		"elmTrickModules":  elmTrickModules,
+		"quote":            func(s string) string { return `"` + s + `"` },
 	})
 	if _, err := t.Parse(elmTemplate); err != nil {
 		return err
@@ -503,18 +499,78 @@ func elmTestName(s string) string {
 	return buf.String()
 }
 
-// elmPortedTricks records which TS/Go tricks have a fully-ported
-// Elm counterpart. Expand as more land in
-// games/lynrummy/elm/src/Game/Strategy/. Scenarios for unported
-// tricks stay as Expect.pass placeholders.
-var elmPortedTricks = map[string]string{
-	"direct_play":     "Game.Strategy.DirectPlay.trick",
-	"hand_stacks":     "Game.Strategy.HandStacks.trick",
-	"loose_card_play": "Game.Strategy.LooseCardPlay.trick",
-	"pair_peel":       "Game.Strategy.PairPeel.trick",
-	"peel_for_run":    "Game.Strategy.PeelForRun.trick",
-	"rb_swap":         "Game.Strategy.RbSwap.trick",
-	"split_for_set":   "Game.Strategy.SplitForSet.trick",
+// elmPortedTricks records which tricks have a fully-ported Elm
+// counterpart. Auto-discovered from
+// games/lynrummy/elm/src/Game/Strategy/*.elm — a trick module is
+// one that `exposing (trick)` exactly. Scenarios for unported
+// tricks (Python-only, for now) stay as Expect.pass placeholders.
+//
+// PascalCase filename → snake_case trick id. Add a new trick
+// module + register it in Hint.priorityOrder, and it picks up
+// here automatically.
+var elmPortedTricks = discoverElmTricks()
+
+var elmStrategyDir = "games/lynrummy/elm/src/Game/Strategy"
+
+// elmTrickExposingRE matches `module Game.Strategy.X exposing (trick)`
+// tolerating whitespace variation around the parentheses. Modules
+// that expose anything other than just `trick` (Hint, Trick,
+// Helpers) are deliberately skipped.
+var elmTrickExposingRE = regexp.MustCompile(`(?m)^module\s+Game\.Strategy\.\w+\s+exposing\s*\(\s*trick\s*\)`)
+
+func discoverElmTricks() map[string]string {
+	out := map[string]string{}
+	entries, err := os.ReadDir(elmStrategyDir)
+	if err != nil {
+		return out
+	}
+	for _, e := range entries {
+		name := e.Name()
+		if !strings.HasSuffix(name, ".elm") {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(elmStrategyDir, name))
+		if err != nil {
+			continue
+		}
+		if !elmTrickExposingRE.Match(data) {
+			continue
+		}
+		mod := strings.TrimSuffix(name, ".elm")
+		out[pascalToSnake(mod)] = "Game.Strategy." + mod + ".trick"
+	}
+	return out
+}
+
+// elmTrickModules returns the PascalCase module names of every
+// discovered Elm trick, sorted — used to generate the import
+// block in the conformance test.
+func elmTrickModules() []string {
+	var mods []string
+	for _, v := range elmPortedTricks {
+		// v is "Game.Strategy.X.trick"; take the X.
+		parts := strings.Split(v, ".")
+		if len(parts) >= 3 {
+			mods = append(mods, parts[2])
+		}
+	}
+	sort.Strings(mods)
+	return mods
+}
+
+func pascalToSnake(s string) string {
+	var b strings.Builder
+	for i, r := range s {
+		if r >= 'A' && r <= 'Z' {
+			if i > 0 {
+				b.WriteByte('_')
+			}
+			b.WriteRune(r - 'A' + 'a')
+		} else {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
 }
 
 func elmScenarioBody(sc Scenario) string {

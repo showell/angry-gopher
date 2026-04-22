@@ -23,42 +23,15 @@ if [ ! -x "$ELM_BIN" ] || [ ! -x "$ELM_TEST_BIN" ]; then
   exit 1
 fi
 
-LYNRUMMY=(
-  "src/Game/Random.elm"
-  "src/Game/Card.elm"
-  "src/Game/StackType.elm"
-  "src/Game/CardStack.elm"
-  "src/Game/BoardGeometry.elm"
-  "src/Game/Referee.elm"
-  "src/Game/Score.elm"
-  "src/Game/BoardPhysics.elm"
-  "src/Game/PlayerTurn.elm"
-  "src/Game/BoardActions.elm"
-  "src/Game/PlaceStack.elm"
-  "src/Game/Dealer.elm"
-  "src/Game/GestureArbitration.elm"
-  "src/Game/Hand.elm"
-  "src/Game/Game.elm"
-  "src/Game/Reducer.elm"
-  "src/Game/View.elm"
-  "src/Game/WingOracle.elm"
-  "src/Game/WireAction.elm"
-  "src/Game/Strategy/Trick.elm"
-  "src/Game/Strategy/Helpers.elm"
-  "src/Game/Strategy/DirectPlay.elm"
-  "src/Game/Strategy/HandStacks.elm"
-  "src/Game/Strategy/SplitForSet.elm"
-  "src/Game/Strategy/PeelForRun.elm"
-  "src/Game/Strategy/RbSwap.elm"
-  "src/Game/Strategy/PairPeel.elm"
-  "src/Game/Strategy/LooseCardPlay.elm"
-  "src/Game/Strategy/Hint.elm"
-)
-
-for m in "${LYNRUMMY[@]}"; do
+# Type-check every .elm under src/Game/ standalone. Glob-driven
+# so new modules (tricks, domain types) are picked up without
+# editing this script. src/Main/ is excluded intentionally — Main
+# modules are exercised by the full `elm make src/Main.elm`
+# build below.
+while IFS= read -r m; do
   echo "==> Type-checking $m standalone"
   "$ELM_BIN" make "$m" --output=/dev/null >/dev/null
-done
+done < <(find src/Game -name '*.elm' | sort)
 
 echo "==> Building Main"
 "$ELM_BIN" make src/Main.elm --output=elm.js >/dev/null
