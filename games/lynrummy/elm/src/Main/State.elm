@@ -1,6 +1,7 @@
 module Main.State exposing
     ( ActionLogBundle
     , ActionLogEntry
+    , ActionOutcome
     , CompleteTurnOutcome
     , DragInfo
     , DragSource(..)
@@ -169,6 +170,19 @@ type alias PopupContent =
 
 type alias StatusMessage =
     { text : String, kind : StatusKind }
+
+
+{-| What `Main.Apply.applyAction` returns: the post-action Model
+plus the status message describing what just happened. The
+message is generated at the same point the mutation is
+performed, colocated with the physics — no separate "diff the
+boards to figure out what happened" classifier. Callers decide
+whether to use the status (human actions do; replay ignores).
+-}
+type alias ActionOutcome =
+    { model : Model
+    , status : StatusMessage
+    }
 
 
 type StatusKind

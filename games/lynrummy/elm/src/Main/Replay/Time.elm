@@ -175,7 +175,7 @@ replayFrame nowMs model =
                         if elapsed >= duration then
                             let
                                 modelAfter =
-                                    Apply.applyAction anim.pendingAction { model | drag = NotDragging }
+                                    (Apply.applyAction anim.pendingAction { model | drag = NotDragging }).model
                             in
                             ( { modelAfter
                                 | replayAnim = Beating { untilMs = nowMs + 1000 }
@@ -297,7 +297,7 @@ prepareReplayStep action maybePath frame model nowMs =
         applyImmediate =
             let
                 modelAfter =
-                    Apply.applyAction action model
+                    (Apply.applyAction action model).model
             in
             ( { modelAfter
                 | replayAnim = Beating { untilMs = nowMs + beatAfter action }
@@ -462,7 +462,7 @@ handCardRectReceived result model =
                 Nothing ->
                     let
                         modelAfter =
-                            Apply.applyAction ctx.action model
+                            (Apply.applyAction ctx.action model).model
                     in
                     ( { modelAfter
                         | replayAnim = Beating { untilMs = nowMs + beatAfter ctx.action }
@@ -482,7 +482,7 @@ handCardRectReceived result model =
                     Debug.log "HandCardRectReceived err" err
 
                 modelAfter =
-                    Apply.applyAction ctx.action model
+                    (Apply.applyAction ctx.action model).model
             in
             ( { modelAfter
                 | replayAnim = Beating { untilMs = 1000 }

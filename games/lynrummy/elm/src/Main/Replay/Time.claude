@@ -112,7 +112,10 @@ Imports:
   Task.
 - `Game.WireAction` — WireAction, pattern-matched.
 - `Main.Apply` — `applyAction` for "apply immediately" + end-of-
-  animation transitions.
+  animation transitions. Replay reads `outcome.model` and
+  ignores `outcome.status` — the status bar stays on its own
+  replay lifecycle messages ("Replaying…" / "Replay complete.")
+  rather than flicker through every action's celebrate/scold.
 - `Main.Msg` — Msg(..) for Cmd production + pattern binds.
 - `Main.Replay.Space` — all spatial math.
 - `Main.State` — Model, ReplayAnimation, DragState, StatusKind.

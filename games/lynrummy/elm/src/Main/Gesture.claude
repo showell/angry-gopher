@@ -25,9 +25,13 @@ styling hook that renders the drag-affordance feedback.
 - `fetchBoardRect : Cmd Msg` — `Browser.Dom.getElement
   boardDomId` → `Task.attempt BoardRectReceived`.
 - `handleMouseUp : Model -> (Model, Cmd Msg)` — resolves
-  gesture → clears drag → applies WireAction → decides what
-  gesture (if any) to ship via `gestureForAction` → appends
-  to actionLog → fires `sendAction`.
+  gesture → clears drag → applies WireAction via
+  `Apply.applyAction |> Apply.commit` (outcome's status
+  becomes the new status bar text) → decides what gesture
+  (if any) to ship via `gestureForAction` → appends to
+  actionLog → fires `sendAction`. For rejected gestures, may
+  instead write the off-board scold status via
+  `droppedOffBoardScold`.
 - `clearDrag : Model -> Model` — `{ model | drag =
   NotDragging }`.
 - `pointDecoder : Decoder Point` — `{clientX, clientY}` →

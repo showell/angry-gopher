@@ -1,5 +1,6 @@
 module Main.Apply exposing
     ( applyAction
+    , commit
     , refereeBounds
     )
 
@@ -10,20 +11,39 @@ input came from a local gesture, a replay tick, or a wire
 broadcast. "Capture the input, update the data structure,
 re-draw the view."
 
+Each call returns an `ActionOutcome`: the new Model alongside
+the `StatusMessage` that describes what just happened. The
+status is generated at the same point the mutation is
+performed — colocated with the physics, not inferred
+post-hoc by a separate classifier. Callers decide whether to
+use the status (human actions do; replay ignores).
+
 The (board, hand) half of each physics transition delegates to
 `Game.Reducer.applyAction`. This module's job is the
 Model-level wrapping: Score recomputation, the
-`cardsPlayedThisTurn` counter, and the full `CompleteTurn`
-transition via `Game.applyCompleteTurn`.
+`cardsPlayedThisTurn` counter, the full `CompleteTurn`
+transition via `Game.applyCompleteTurn`, and the per-action
+status message.
 
 -}
 
 import Game.BoardGeometry as BoardGeometry
+import Game.Card
+import Game.CardStack as CardStack exposing (CardStack)
 import Game.Game as Game
 import Game.Reducer as Reducer
 import Game.Score as Score
+import Game.StackType as StackType
 import Game.WireAction as WA exposing (WireAction)
-import Main.State exposing (Model, StatusKind(..), activeHand, setActiveHand)
+import Main.State as State
+    exposing
+        ( ActionOutcome
+        , Model
+        , StatusKind(..)
+        , StatusMessage
+        , activeHand
+        , setActiveHand
+        )
 
 
 
@@ -46,14 +66,16 @@ refereeBounds =
 
 
 {-| Apply a validated WireAction to the Model. Exhaustive
-dispatch over the seven variants.
+dispatch over the seven variants. Each branch returns an
+`ActionOutcome` — the new Model plus the status message that
+describes the outcome — generated at the point of mutation.
 
   - `Split`, `MergeStack`, `MoveStack` — board-only physics.
   - `MergeHand`, `PlaceHand` — board + hand physics; each
     releases one hand card, so increment
     `cardsPlayedThisTurn`.
   - `CompleteTurn` — full autonomous turn transition via
-    `Game.applyCompleteTurn`, then UI-layer `score` + `status`.
+    `Game.applyCompleteTurn`.
   - `Undo` — no-op (V1 has no Undo button; deferred).
 
 The physics branches all share `applyPhysics`: delegate the
@@ -61,29 +83,47 @@ The physics branches all share `applyPhysics`: delegate the
 the result back through the Model.
 
 -}
-applyAction : WireAction -> Model -> Model
+applyAction : WireAction -> Model -> ActionOutcome
 applyAction action model =
     case action of
         WA.Split _ ->
-            applyPhysics action model
+            { model = applyPhysics action model
+            , status = splitStatus
+            }
 
         WA.MergeStack _ ->
-            applyPhysics action model
+            let
+                next =
+                    applyPhysics action model
+            in
+            { model = next
+            , status = mergeStatus next.board
+            }
 
         WA.MergeHand _ ->
-            applyPhysics action model |> Game.noteCardsPlayed 1
+            let
+                next =
+                    applyPhysics action model |> Game.noteCardsPlayed 1
+            in
+            { model = next
+            , status = mergeStatus next.board
+            }
 
         WA.PlaceHand _ ->
-            applyPhysics action model |> Game.noteCardsPlayed 1
+            { model = applyPhysics action model |> Game.noteCardsPlayed 1
+            , status = placeHandStatus
+            }
 
         WA.MoveStack _ ->
-            applyPhysics action model
+            { model = applyPhysics action model
+            , status = moveStackStatus
+            }
 
         WA.CompleteTurn ->
             applyCompleteTurn model
 
         WA.Undo ->
-            model
+            { model = model, status = undoStatus }
 
 
 
@@ -120,21 +160,130 @@ applyPhysics action model =
 -- COMPLETE TURN
 
 
-applyCompleteTurn : Model -> Model
+applyCompleteTurn : Model -> ActionOutcome
 applyCompleteTurn model =
     let
         afterTurn =
             Game.applyCompleteTurn model
+
+        withScore =
+            { afterTurn | score = Score.forStacks afterTurn.board }
     in
-    { afterTurn
-        | score = Score.forStacks afterTurn.board
-        , status =
-            { text =
-                "Turn "
-                    ++ String.fromInt (afterTurn.turnIndex + 1)
-                    ++ " — Player "
-                    ++ String.fromInt (afterTurn.activePlayerIndex + 1)
-                    ++ " to play."
-            , kind = Celebrate
-            }
+    { model = withScore
+    , status =
+        { text =
+            "Turn "
+                ++ String.fromInt (afterTurn.turnIndex + 1)
+                ++ " — Player "
+                ++ String.fromInt (afterTurn.activePlayerIndex + 1)
+                ++ " to play."
+        , kind = Celebrate
+        }
     }
+
+
+
+-- OUTCOME CONSUMPTION
+
+
+{-| Collapse an `ActionOutcome` to a Model by writing the
+outcome's status into the Model's status field. The standard
+way human-driven callers "accept" an outcome. Replay callers,
+which want to keep their own status text ("Replaying…"), skip
+this and take `outcome.model` directly.
+-}
+commit : ActionOutcome -> Model
+commit outcome =
+    let
+        m =
+            outcome.model
+    in
+    { m | status = outcome.status }
+
+
+
+-- STATUS MESSAGES
+--
+-- Lifted from angry-cat/src/lyn_rummy/game/game.ts:2044-2076.
+-- Kept verbatim so feel matches the TS original. Each message
+-- is built from post-mutation model data that the applyAction
+-- branch above has in hand when it calls these helpers — no
+-- post-hoc board-diffing.
+
+
+splitStatus : StatusMessage
+splitStatus =
+    { text = "Be careful with splitting! Splits only pay off when you get more cards on the board or make prettier piles."
+    , kind = Scold
+    }
+
+
+placeHandStatus : StatusMessage
+placeHandStatus =
+    { text = "On the board!", kind = Inform }
+
+
+moveStackStatus : StatusMessage
+moveStackStatus =
+    { text = "Moved!", kind = Inform }
+
+
+undoStatus : StatusMessage
+undoStatus =
+    { text = "Undone.", kind = Inform }
+
+
+{-| The merge outcome depends on the size of the newly-merged
+stack (always the last entry of the post board, by reducer
+convention) and whether the whole post board is clean.
+-}
+mergeStatus : List CardStack -> StatusMessage
+mergeStatus postBoard =
+    case List.reverse postBoard of
+        [] ->
+            { text = "Merged.", kind = Inform }
+
+        mergedStack :: _ ->
+            if CardStack.size mergedStack < 3 then
+                { text = "Nice, but where's the third card?", kind = Scold }
+
+            else if isCleanBoard postBoard then
+                { text = "Combined! Clean board!", kind = Celebrate }
+
+            else
+                { text = "Combined!", kind = Celebrate }
+
+
+{-| Every stack classifies as a valid group (Set / PureRun /
+RedBlackRun). Mirrors the TS `CurrentBoard.is_clean()`.
+-}
+isCleanBoard : List CardStack -> Bool
+isCleanBoard board =
+    List.all (stackCards >> StackType.getStackType >> isCompleteType) board
+
+
+stackCards : CardStack -> List Game.Card.Card
+stackCards stack =
+    List.map .card stack.boardCards
+
+
+isCompleteType : StackType.CardStackType -> Bool
+isCompleteType t =
+    case t of
+        StackType.Set ->
+            True
+
+        StackType.PureRun ->
+            True
+
+        StackType.RedBlackRun ->
+            True
+
+        StackType.Incomplete ->
+            False
+
+        StackType.Bogus ->
+            False
+
+        StackType.Dup ->
+            False

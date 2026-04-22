@@ -230,6 +230,7 @@ handleMouseUp releasePoint tMs model =
                     case maybeAction of
                         Just action ->
                             Apply.applyAction action modelAfterDragClear
+                                |> Apply.commit
 
                         Nothing ->
                             case droppedOffBoardScold infoFull model of

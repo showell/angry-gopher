@@ -198,6 +198,7 @@ update msg model =
                             -- Offline mode: no persistence, just commit the transition.
                             ( { model | actionLog = model.actionLog ++ [ completeTurnEntry ] }
                                 |> applyAction WA.CompleteTurn
+                                |> Apply.commit
                             , Cmd.none
                             )
 
@@ -231,9 +232,14 @@ update msg model =
                         preDeckSize =
                             List.length model.deck
 
+                        applied =
+                            applyAction WA.CompleteTurn { model | popup = popupBody }
+
+                        postModel =
+                            applied.model
+
                         newModel =
-                            { model | status = statusMsg, popup = popupBody }
-                                |> applyAction WA.CompleteTurn
+                            { postModel | status = statusMsg }
 
                         postDeckSize =
                             List.length newModel.deck

@@ -48,6 +48,12 @@ New `ReplayAnimation` variant (2026-04-21 B1 extension):
 - `PopupContent` — `{ admin, body }`. Turn-ceremony popup.
 - `StatusMessage` / `StatusKind` — `Inform` / `Celebrate` /
   `Scold`. Drives the status bar text + colour.
+- `ActionOutcome` — `{ model : Model, status : StatusMessage }`.
+  The return type of `Main.Apply.applyAction`: the post-action
+  Model plus the message describing what happened, generated
+  at the point of mutation. Lets callers choose whether to
+  apply the outcome's status (human actions do; replay keeps
+  its own "Replaying…" and ignores).
 - `DragState` — `NotDragging | Dragging DragInfo`.
 - `DragInfo` — cursor, original cursor, grab offset, wings,
   hovered wing, boardRect, clickIntent, source, gesturePath,

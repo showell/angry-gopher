@@ -39,20 +39,62 @@ Reducer, then wraps the result with Model-level UI fields:
   updated) active-player hand back into the `hands : List Hand`
   structure.
 - `cardsPlayedThisTurn += 1` for MergeHand / PlaceHand only.
+- A per-action `StatusMessage` (see "Status messages are an
+  output" below).
 
 The two actions Reducer can't handle live here inline:
 
 - `CompleteTurn` — delegates to `Game.applyCompleteTurn`
-  (classify, bank, deal, flip, age), then updates UI-layer
-  `score` + `status`.
+  (classify, bank, deal, flip, age), then produces the
+  turn-start celebrate message.
 - `Undo` — no-op. V1 has no Undo button; action won't appear
   in logs we write.
 
+## Status messages are an output (2026-04-22)
+
+`applyAction` returns `ActionOutcome = { model, status }`, not
+just a Model. The per-action message is generated at the point
+of mutation — the branch that performs the MergeHand physics
+also builds its `StatusMessage`, reading from the freshly-
+computed post-board. No separate classifier diffing pre/post to
+guess what happened.
+
+Messages lifted verbatim from
+`angry-cat/src/lyn_rummy/game/game.ts:2044-2076` so the feel
+matches the TS original:
+
+| Action | Condition | Text | Kind |
+|---|---|---|---|
+| Split | — | "Be careful with splitting!…" | Scold |
+| PlaceHand | — | "On the board!" | Inform |
+| MoveStack | — | "Moved!" | Inform |
+| MergeStack / MergeHand | final size ≥ 3, clean board | "Combined! Clean board!" | Celebrate |
+| MergeStack / MergeHand | final size ≥ 3, not clean | "Combined!" | Celebrate |
+| MergeStack / MergeHand | final size < 3 | "Nice, but where's the third card?" | Scold |
+| CompleteTurn | — | "Turn N — Player M to play." | Celebrate |
+| Undo | — | "Undone." | Inform |
+
+Clean-board detection uses `Game.StackType.getStackType` —
+every stack must classify as Set / PureRun / RedBlackRun.
+
+Callers pick how to consume the outcome:
+
+- `Apply.commit : ActionOutcome -> Model` writes the outcome's
+  status into the Model. Standard path for human actions.
+- Callers that want to override the status (Main.elm's online
+  CompleteTurn uses `statusForCompleteTurn` instead) read
+  `outcome.model` directly and set their own status.
+- Replay callers read `outcome.model` and ignore
+  `outcome.status` — they keep their own lifecycle messages
+  ("Replaying…", "Replay complete.").
+
 ## Public API
 
-- `applyAction : WireAction -> Model -> Model` — the
+- `applyAction : WireAction -> Model -> ActionOutcome` — the
   dispatcher. Exhaustive over the 7 WireAction variants so the
   compiler catches drift if a new variant is added.
+- `commit : ActionOutcome -> Model` — collapse an outcome into
+  a Model by writing the outcome's status.
 - `refereeBounds : BoardGeometry.BoardBounds` — the 800×600
   with 5px margin constant. Shared between
   `Main.ClickCompleteTurn` (referee pre-check) and any future
@@ -66,6 +108,11 @@ Internal helpers:
   Idempotent on Reducer no-ops (bad target stack etc.): same
   board, same hand, same score.
 - `applyCompleteTurn` — Game delegation + status text.
+- `mergeStatus` / `splitStatus` / `placeHandStatus` /
+  `moveStackStatus` / `undoStatus` — the per-action message
+  builders. Colocated so each branch of applyAction produces
+  its message right next to the mutation that earned it.
+- `isCleanBoard` — every stack classifies as a valid group.
 
 No other helpers — `applyChange`, `findHandCard`, the merge
 glue, and the synthetic-HandCard fallback all live in Reducer
@@ -99,11 +146,14 @@ awareness.
 
 - `Game.BoardGeometry` — BoardBounds type for
   `refereeBounds`.
+- `Game.Card`, `Game.CardStack` — domain types.
 - `Game.Game` — `noteCardsPlayed`, `applyCompleteTurn`.
 - `Game.Reducer` — `applyAction` for the physics half.
 - `Game.Score` — `forStacks`.
+- `Game.StackType` — `getStackType` for clean-board detection.
 - `Game.WireAction` — `WireAction(..)` for the dispatch.
-- `Main.State` — Model, StatusKind, activeHand, setActiveHand.
+- `Main.State` — Model, ActionOutcome, StatusKind,
+  StatusMessage, activeHand, setActiveHand.
 
 ## Tests
 
