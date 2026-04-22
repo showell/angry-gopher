@@ -423,6 +423,44 @@ Planning horizon is a single trick. Multi-trick lookahead
 — "if I peel X now, a hand card plays later" — is a
 different intelligence layer, not within this rule's scope.
 
+## Compute answers you own; don't delegate
+
+A related discipline that lives at the Elm boundary: when
+the client RENDERS a piece of state, it should COMPUTE
+answers about that state directly, not ask the browser (or
+any other opaque system) to tell it back. The 2026-04-22
+board-to-board merge bug taught this the hard way — we had
+`onMouseEnter` / `onMouseLeave` asking the DOM "is the
+cursor over the wing?" when we already knew the floater's
+rect and every wing's rect. DOM event delivery was
+intermittent; the computation was trivial and owned. The
+fix was to replace the delegation with `floaterOverWing`,
+pure Elm.
+
+This is a stronger form of "own the whole system": not just
+put facts on the wire, but derive answers from state you
+already have rather than round-tripping through a different
+machine to get them back. Particularly important when that
+other machine is opaque or unreliable. See
+`feedback_compute_dont_delegate.md` and the lessons essay
+at `~/showell_repos/claude-collab/users/steve/general/
+wing_bug_lessons.md`.
+
+## One representation per concept
+
+Related: the drag state carried array indices for stacks
+(`FromBoardStack Int`) even after the wire moved to
+content-based `CardStack` refs. Having two models
+simultaneously — positional in memory, content-based on the
+wire — was the worst kind of drift: nothing forced them to
+agree, and when they disagreed the bug was silent.
+
+The fix was uniform content refs everywhere, integer-exact
+coords on `loc`, and strict `stacksEqual` (same loc AND
+same cards in same order — no multiset tolerance). Pick
+one canonical representation per concept; enforce it end
+to end. See `feedback_no_indices_no_floats_in_drag.md`.
+
 ## Design principles woven through
 
 Several standing principles show up repeatedly above; stating
@@ -461,6 +499,15 @@ them plainly here so they're not only implicit:
   pre-plan geometry corrections upstream rather than
   appending them downstream. See the dedicated section
   above.
+- **Compute answers you own.** If a piece of state is
+  yours to render or generate, derive answers about it
+  directly. Don't ask an opaque system (DOM, server,
+  external store) to tell you back what you already know.
+- **One representation per concept.** Don't let two models
+  for the same thing co-exist — positional and content-based
+  refs for the same stacks, float and int for the same
+  location, multiset and ordered equality for the same
+  stack. Pick one canonical form; enforce it end to end.
 
 ## Where to find more
 
