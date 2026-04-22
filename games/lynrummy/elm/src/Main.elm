@@ -41,7 +41,8 @@ import Main.Msg exposing (Msg(..))
 import Main.Replay.Time as ReplayTime
 import Main.State as State
     exposing
-        ( DragState(..)
+        ( ActionLogBundle
+        , DragState(..)
         , Flags
         , Model
         , StatusKind(..)
@@ -49,7 +50,7 @@ import Main.State as State
         , baseModel
         )
 import Main.View as View exposing (popupForCompleteTurn, statusForCompleteTurn, view)
-import Main.Wire as Wire exposing (fetchActionLog, fetchNewSession, fetchRemoteState, sendCompleteTurn)
+import Main.Wire as Wire exposing (fetchActionLog, fetchNewSession, sendCompleteTurn)
 import Task
 import Time
 
@@ -66,13 +67,15 @@ init : Flags -> ( Model, Cmd Msg )
 init flags =
     case flags.initialSessionId of
         Just sid ->
-            -- URL said we're resuming a specific game. Pull state
-            -- AND the action log so Instant Replay has something to walk.
+            -- URL said we're resuming a specific game. One
+            -- wire read: the action log, which carries the
+            -- initial state + every action since. Elm
+            -- reconstructs current state locally from there.
             ( { baseModel
                 | sessionId = Just sid
                 , status = { text = "Resuming session " ++ String.fromInt sid ++ "…", kind = Inform }
               }
-            , Cmd.batch [ fetchRemoteState sid, fetchActionLog sid ]
+            , fetchActionLog sid
             )
 
         Nothing ->
@@ -146,16 +149,14 @@ update msg model =
             ( model, Cmd.none )
 
         SessionReceived (Ok sid) ->
-            -- Trust-server mode: after session creation, pull the
-            -- authoritative state AND the action log so both hands
-            -- are populated from the server's dealer AND Instant
-            -- Replay has a baseline to rewind to. Also pin the
-            -- session into the URL so a reload resumes the same
-            -- game instead of dropping to the lobby.
+            -- Session created server-side. One wire read for
+            -- the initial-state bundle (zero actions yet); Elm
+            -- reconstructs state locally from there. Also pin
+            -- the session into the URL so a reload resumes
+            -- the same game instead of dropping to the lobby.
             ( { model | sessionId = Just sid }
             , Cmd.batch
-                [ fetchRemoteState sid
-                , fetchActionLog sid
+                [ fetchActionLog sid
                 , setSessionPath (String.fromInt sid)
                 ]
             )
@@ -241,12 +242,12 @@ update msg model =
             ReplayTime.handCardRectReceived result model
 
         ActionLogFetched (Ok bundle) ->
-            ( { model
-                | actionLog = bundle.actions
-                , replayBaseline = Just bundle.initialState
-              }
-            , Cmd.none
-            )
+            -- Single bootstrap: the fetched bundle carries the
+            -- initial state AND every action applied since. Seed
+            -- the model from initial_state, walk each action
+            -- through the reducer to reach current state, done.
+            -- Elm is now authoritative; no further wire reads.
+            ( bootstrapFromBundle bundle model, Cmd.none )
 
         ActionLogFetched (Err _) ->
             ( model, Cmd.none )
@@ -416,6 +417,43 @@ subscriptions model =
                     []
     in
     Sub.batch (dragSubs ++ replaySubs)
+
+
+
+-- BOOTSTRAP
+
+
+{-| Seed the model from an ActionLogBundle and walk every
+action through the local reducer to reach current state.
+Single source of truth: no separate /state fetch, no
+derivable information re-requested from the wire.
+-}
+bootstrapFromBundle : ActionLogBundle -> Model -> Model
+bootstrapFromBundle bundle model =
+    let
+        initial =
+            bundle.initialState
+
+        atInitial =
+            { model
+                | board = initial.board
+                , hands = initial.hands
+                , scores = initial.scores
+                , activePlayerIndex = initial.activePlayerIndex
+                , turnIndex = initial.turnIndex
+                , deck = initial.deck
+                , cardsPlayedThisTurn = initial.cardsPlayedThisTurn
+                , victorAwarded = initial.victorAwarded
+                , turnStartBoardScore = initial.turnStartBoardScore
+                , score = Score.forStacks initial.board
+                , actionLog = bundle.actions
+                , replayBaseline = Just initial
+            }
+    in
+    List.foldl
+        (\entry m -> .model (applyAction entry.action m))
+        atInitial
+        bundle.actions
 
 
 
