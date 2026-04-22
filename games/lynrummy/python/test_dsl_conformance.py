@@ -8,8 +8,13 @@ scenario by op. No framework. Run directly:
     python3 games/lynrummy/python/test_dsl_conformance.py
 
 Supported ops:
-  - build_suggestions: invoke strategy.build_suggestions, compare
+  - build_suggestions: invoke strategy.enumerate_plays, compare
     trick_id + hand_cards row-by-row against `expect: suggestions`.
+    (The DSL op name stays `build_suggestions` because the
+    concept is shared with Elm, where the output feeds the
+    human-facing hint surface; Python's internal function is
+    `enumerate_plays` since the agent doesn't suggest, it
+    enumerates.)
   - hint_invariant: invoke the named trick's emitter, apply its
     primitives to the input board, and assert every resulting
     stack classifies as a complete group (set / pure_run /
@@ -53,7 +58,7 @@ def _card_eq(a, b):
 def _run_build_suggestions(sc):
     hand = sc["hand"]
     board = sc["board"]
-    got = strategy.build_suggestions(hand, board)
+    got = strategy.enumerate_plays(hand, board)
     want = sc["expect"].get("suggestions", [])
     if len(got) != len(want):
         return False, (f"suggestion count: want {len(want)}, got "

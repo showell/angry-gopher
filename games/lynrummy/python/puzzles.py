@@ -79,7 +79,7 @@ def base_state(board, active_hand, other_hand=None, deck=None):
 
 # --- Puzzles ---------------------------------------------------
 # Each is the minimal scenario for its target trick, designed so
-# strategy.build_suggestions returns that trick as the top (or only)
+# strategy.enumerate_plays returns that trick as the top (or only)
 # firing one.
 
 PUZZLES = {

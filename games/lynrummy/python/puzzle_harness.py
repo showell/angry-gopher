@@ -52,7 +52,7 @@ def _derive_expected(puzzle_spec):
     state = puzzle_spec["initial_state"]
     hand = state["hands"][state["active_player_index"]]["hand_cards"]
     board = state["board"]
-    suggestions = strategy.build_suggestions(hand, board)
+    suggestions = strategy.enumerate_plays(hand, board)
     want = puzzle_spec["target_trick"]
     for s in suggestions:
         if s["trick_id"] == want:

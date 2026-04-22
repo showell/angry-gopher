@@ -14,8 +14,11 @@ Python codegen.
 
 ## Supported ops
 
-- `build_suggestions` — compares strategy.build_suggestions output
-  to expected trick_id + hand_cards rows.
+- `build_suggestions` — compares strategy.enumerate_plays output
+  to expected trick_id + hand_cards rows. (DSL op name stays
+  `build_suggestions` — shared concept with Elm, where it feeds
+  the human-facing hint surface. Python's function is
+  `enumerate_plays` since the agent doesn't suggest.)
 - `hint_invariant` — calls the named emitter, applies its
   primitives, asserts every resulting stack classifies as a
   complete group (set / pure_run / rb_run).

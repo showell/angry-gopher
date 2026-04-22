@@ -7,8 +7,10 @@ Each trick function (direct_play, hand_stacks, pair_peel,
 split_for_set, peel_for_run, rb_swap, loose_card_play) takes
 (hand, board) and returns either None (didn't fire) or a list
 of primitive wire actions a human would physically perform to
-realize the trick. `build_suggestions` walks all seven in
-priority order and returns the firing ones.
+realize the trick. `enumerate_plays` walks all seven in
+priority order and returns the firing ones. `choose_play` is a
+thin wrapper that returns the top firing one (or None) — what
+the agent's turn loop uses.
 
 ## The invariant
 

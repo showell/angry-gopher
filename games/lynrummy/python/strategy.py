@@ -15,7 +15,15 @@ Priority order (simplest-first):
   6. rb_swap
   7. loose_card_play
 
-The top-level entry point is `build_suggestions(hand, board)`.
+Two top-level entry points:
+
+  - `enumerate_plays(hand, board)` — every firing trick in
+    priority order, returned as `[{trick_id, primitives}, ...]`.
+    Used by the DSL conformance runner and puzzle harness.
+  - `choose_play(hand, board)` — the agent's next-play decision.
+    Returns the top firing trick or `None`. Used by the
+    auto-player. Thin wrapper over `enumerate_plays`.
+
 Each per-trick function returns one primitive sequence or None.
 
 Renamed from hints.py 2026-04-22 (STRATEGY_RENAME) to name the
@@ -1087,10 +1095,17 @@ def _invariant_clean(board, prims):
     return True, None
 
 
-def build_suggestions(hand, board):
+def enumerate_plays(hand, board):
     """Return list of {trick_id, primitives} — one per firing trick
     in priority order whose emission actually leaves a clean board.
-    A trick that would violate the invariant is refused entirely."""
+    A trick that would violate the invariant is refused entirely.
+
+    Used by the agent (via `choose_play`) and by the DSL
+    conformance runner (which tests the full enumeration against
+    scenario expectations — the DSL op name stays
+    `build_suggestions` because the concept is shared with Elm,
+    where the output feeds a human-facing hint surface).
+    """
     out = []
     for name, fn in TRICK_ORDER:
         prims = fn(hand, board)
@@ -1105,5 +1120,19 @@ def build_suggestions(hand, board):
             continue
         out.append({"trick_id": name, "primitives": prims})
     return out
+
+
+def choose_play(hand, board):
+    """The agent's next-play decision. Returns the top firing
+    trick's `{trick_id, primitives}` dict, or `None` if no trick
+    fires.
+
+    Thin wrapper over `enumerate_plays` — this is what the
+    auto-player uses in its turn loop. Named to reflect what the
+    Python side does (pick a play) as opposed to what Elm does
+    (build hint suggestions for a human to choose from).
+    """
+    plays = enumerate_plays(hand, board)
+    return plays[0] if plays else None
 
 

@@ -3,10 +3,10 @@ just_use auto_player.py
 # label: EARLY (auto-player)
 # role: agent tool — drives a LynRummy session via Python-native hints
 
-Fetches state, calls `strategy.build_suggestions(hand, board)`
-locally, takes the top suggestion's primitives and posts each
-verbatim to `/actions`. No /hint round-trip, no trick_result
-on the wire — every action is a primitive.
+Fetches state, calls `strategy.choose_play(hand, board)`
+locally, and posts each primitive of the chosen play verbatim
+to `/actions`. No /hint round-trip, no trick_result on the
+wire — every action is a primitive.
 
 Emission is correct-by-construction: every `merge_hand` in
 `strategy.py` is routed through `_plan_merge_hand`, which looks

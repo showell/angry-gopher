@@ -5,8 +5,8 @@ priority).
 
 Loop:
   - Fetch current state.
-  - Ask strategy.build_suggestions for firing tricks.
-  - Take the top suggestion, send each of its primitives verbatim.
+  - Ask strategy.choose_play for the next play.
+  - Send each of its primitives verbatim.
   - When no suggestions fire, attempt complete_turn.
   - Stop on referee rejection, deck-low-water, or max_actions.
 
@@ -148,11 +148,10 @@ def play_session(c, session_id, *, max_actions=300, verbose=True):
         hand = state["hands"][state["active_player_index"]]["hand_cards"]
         board = state["board"]
 
-        suggestions = strategy.build_suggestions(hand, board)
-        if suggestions:
-            top = suggestions[0]
-            trick_id = top["trick_id"]
-            prims = top["primitives"]
+        play = strategy.choose_play(hand, board)
+        if play:
+            trick_id = play["trick_id"]
+            prims = play["primitives"]
             if verbose:
                 print(f"  trick: {trick_id} ({len(prims)} primitives)")
             # Maintain a local board that advances per-primitive
