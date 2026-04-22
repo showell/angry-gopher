@@ -58,16 +58,18 @@ fails, semantics is meaningless.
 
 Do not use `boardViewportLeft/Top` + `stack.loc` in any
 synthesis path that feeds the drag floater. Use
-`Main.stackEdgeInLiveViewport` instead; it reads the
-DOM-measured rect and falls back to these constants only
+`Main.Replay.Space.stackEdgeInLiveViewport` instead; it reads
+the DOM-measured rect and falls back to these constants only
 as a salvage. See `Main.claude` for the general rule.
 
 ## Viewport-translating helper
 
 - `stackEdgeInViewport : { loc, size } -> side -> { x, y }` —
   returns the viewport (x, y) of a stack's left or right edge
-  (vertically centered). Used by the replay synthesizer to
-  target the drop point of a hand-to-board merge.
+  (vertically centered). **Currently unused** — replay synthesis
+  uses `Main.Replay.Space.stackEdgeInLiveViewport` (DOM-measured)
+  instead of pinned constants. Kept as a documentary fallback
+  shape; candidate for rip if nothing needs it.
 
 ## Two-step check
 
@@ -129,9 +131,9 @@ Wire strings match TS exactly (no `_v2` or `elm_` suffixes).
 
 - Consumed by: `Referee.validateGameMove`,
   `Referee.validateTurnComplete`, `Main/Gesture` (while
-  previewing drops), `Main/View` (pinned board placement),
-  `Main.elm` replay synthesizer (target resolution via
-  `stackEdgeInViewport`).
+  previewing drops), `Main/View` (pinned board placement).
+  Replay synthesis lives in `Main/Replay/Space.elm` and uses
+  DOM-measured coords, not `stackEdgeInViewport`.
 - Depends on: `CardStack.cardWidth`, `CardStack.size`.
 - Complement: `Game.HandLayout` — same pinning discipline
   for the hand area. Together they define the full playable

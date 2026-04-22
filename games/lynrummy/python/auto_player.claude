@@ -30,12 +30,15 @@ are per-turn bonuses (see
 - Hints architecture: client-side per `project_hints_are_client_side.md`.
   Go owns wire + referee; Python owns decomposition.
 
-## TODO
+## Gesture coverage
 
-- Synthesis covers `move_stack` today via `gesture_synth`;
-  hand-origin primitives (`merge_hand`, `place_hand`) and
-  `split` / `merge_stack` still teleport in replay because
-  `drag_endpoints` honestly returns None when Python doesn't
-  know both endpoints. Elm's async DOM-measurement pipeline
-  covers hand-origin synthesis at replay time; intra-board
-  ones are a candidate for widening `gesture_synth`.
+- Intra-board primitives (`split`, `merge_stack`, `move_stack`)
+  ship with a synthesized eased path via `gesture_synth`. The
+  server REQUIRES `gesture_metadata.path` for these and returns
+  400 without it — see `views/lynrummy_elm.go`'s
+  `requiresGestureMetadata`.
+- Hand-origin primitives (`merge_hand`, `place_hand`) send no
+  path — `drag_endpoints` returns None because Python doesn't
+  know where hand cards sit in the viewport. Elm DOM-measures
+  the hand card's live rect at replay time via
+  `Browser.Dom.getElement` and synthesizes from there.

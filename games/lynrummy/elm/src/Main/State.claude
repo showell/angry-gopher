@@ -50,8 +50,17 @@ New `ReplayAnimation` variant (2026-04-21 B1 extension):
   `Scold`. Drives the status bar text + colour.
 - `DragState` — `NotDragging | Dragging DragInfo`.
 - `DragInfo` — cursor, original cursor, grab offset, wings,
-  hovered wing, boardRect, clickIntent, source, gesturePath.
+  hovered wing, boardRect, clickIntent, source, gesturePath,
+  pathFrame.
 - `DragSource` — `FromBoardStack Int | FromHandCard Int`.
+- `PathFrame` — `BoardFrame | ViewportFrame`. Determines which
+  DOM parent the drag floater renders under: `BoardFrame`
+  renders as a board-div child (CSS handles board→viewport
+  translation); `ViewportFrame` renders at the top level with
+  `position: fixed`. Python emits `BoardFrame` for intra-board
+  synthesized paths; hand-origin drags (Elm captures + replay
+  synthesizes) use `ViewportFrame` because they cross the
+  board widget boundary.
 - `Point` — `{ x, y }`.
 - `GesturePoint` — `{ tMs, x, y }`. Behaviorist telemetry
   sample captured per `MouseMove` during a drag; the whole

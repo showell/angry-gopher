@@ -37,10 +37,22 @@ Html (position: fixed, covers the full viewport)
 │                                       boardViewportTop)
 │   └── boardWithWings
 │       ├── viewStackForBoard (×N)
-│       └── viewWingAt       (×M, during drag only)
-├── draggedOverlay          floating drag card (fixed-pos)
+│       ├── viewWingAt       (×M, during drag only)
+│       └── boardDragOverlay (BoardFrame drags only, pos:absolute)
+├── draggedOverlay          ViewportFrame drags only (pos:fixed)
 └── viewPopup               modal ceremony (suppressed in replay)
 ```
+
+Two drag-floater renderings, chosen by `DragInfo.pathFrame`:
+- `BoardFrame` — renders as a child of the board div
+  (`boardDragOverlay`) with `position: absolute`. CSS handles
+  the board→viewport translation automatically. Used for
+  intra-board drags (Python-synthesized or human-captured on
+  the board).
+- `ViewportFrame` — renders at the top level
+  (`draggedOverlay`) with `position: fixed` + viewport coords.
+  Used for hand-origin drags that cross the board widget
+  boundary.
 
 The **pinned** layout (2026-04-21) anchors everything to
 **true viewport coordinates** via `position: fixed` on the
@@ -48,10 +60,7 @@ outer container. No flow above the board — the constants in
 `Game.BoardGeometry` (`boardViewportLeft`,
 `boardViewportTop`) and `Game.HandLayout` (`handLeft`,
 `handTop`) are the coordinates as the browser sees them,
-matching Python's `BOARD_VIEWPORT_LEFT/TOP`. The
-draggedOverlay (also `position: fixed`) reads the same frame,
-so synthesized paths and real cursor drags land in exactly
-the positions their coords claim.
+matching Python's `BOARD_VIEWPORT_LEFT/TOP`.
 
 ## TODO
 
