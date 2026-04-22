@@ -395,7 +395,7 @@ baseModel =
     -- UI-layer fields.
     , drag = NotDragging
     , sessionId = Nothing
-    , status = { text = "Starting game…", kind = Inform }
+    , status = { text = "You may begin moving.", kind = Inform }
     , score = Score.forStacks Game.Dealer.initialBoard
     , hintedCards = []
     , popup = Nothing

@@ -471,11 +471,12 @@ dropFootprintInBounds cardCount loc =
         && (loc.top + BG.cardHeight <= bounds.maxHeight)
 
 
-{-| If the drag was released with the cursor over the board but
-the resulting stack footprint would spill off the board, return
-a scold `StatusMessage`. Otherwise `Nothing` — we don't scold
-for cancels (drop off-board on purpose) or for rejected merges
-onto a wing, which silently snap back.
+{-| If the drag resolved to a drop-loc whose stack footprint
+would spill off the board, return a scold `StatusMessage`. The
+check doesn't require the cursor to still be over the board
+at mouseup — a slip past the corner typically ends with the
+cursor technically just outside the widget, and we still want
+to explain why the stack snapped back.
 -}
 droppedOffBoardScold : DragInfo -> Model -> Maybe State.StatusMessage
 droppedOffBoardScold info model =
@@ -483,7 +484,7 @@ droppedOffBoardScold info model =
         footprintCheck cardCount =
             case dropLoc info of
                 Just loc ->
-                    if cursorOverBoard info && not (dropFootprintInBounds cardCount loc) then
+                    if not (dropFootprintInBounds cardCount loc) then
                         Just
                             { text =
                                 "Dropped off the board — try again with room for the whole stack."
