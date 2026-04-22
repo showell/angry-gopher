@@ -33,12 +33,15 @@ from geometry import CARD_PITCH, CARD_HEIGHT
 
 DEFAULT_SAMPLES = 20
 
-# Drag velocity, ms per pixel. Tuned by feel 2026-04-21 (from
-# 80 → 15 → 5). 5 reads well when watching an agent game
-# replay — the perceived pace is the target, not a measurement
-# of real human mouse speed. Kept in sync with Elm's
-# `dragMsPerPixel` in `Main/Replay/Space.elm`.
-DRAG_MS_PER_PIXEL = 5
+# Drag velocity, ms per pixel. Tuned by feel: 80 → 15 → 5
+# (2026-04-21) → 2.5 (2026-04-22). At 2.5 the intra-board
+# drag snaps across the board at a fluent-human pace — still
+# decipherable motion, no more slow-plodding feel. The pace
+# is perceptual, not a measurement of real human mouse speed.
+# Elm's equivalent `dragMsPerPixel` in `Main/Replay/Space.elm`
+# is a separate constant (for hand-origin synthesized drags
+# during replay) and is not in lockstep with this one.
+DRAG_MS_PER_PIXEL = 2.5
 
 
 def _distance(start, end):
