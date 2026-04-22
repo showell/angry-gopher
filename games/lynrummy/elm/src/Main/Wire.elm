@@ -96,16 +96,20 @@ move_stack, place_hand. Errors are currently ignored
 (`ActionSent` handler is a no-op); server-side validation +
 broadcast arrives with multiplayer.
 
-`maybeGesturePath` carries the behaviorist telemetry captured
-during the drag that produced `action` (see `Main.State.GesturePoint`).
-Pass `Nothing` for actions that didn't originate from a drag
-(button clicks, replay-emitted, etc.).
+`maybeGesture` carries the captured drag telemetry for the
+wire. Pass `Nothing` for actions that didn't originate from a
+drag (button clicks, replay-emitted, etc.) AND for hand-origin
+drags (merge_hand, place_hand) — those always replay via
+live DOM measurement, so shipping a captured path just serves
+as dead weight. Intra-board drags pass `Just { path, frame =
+BoardFrame }` after translating viewport samples to board
+frame at the send boundary.
 -}
-sendAction : Int -> WireAction -> Maybe (List GesturePoint) -> Cmd Msg
-sendAction sessionId action maybeGesturePath =
+sendAction : Int -> WireAction -> Maybe { path : List GesturePoint, frame : PathFrame } -> Cmd Msg
+sendAction sessionId action maybeGesture =
     Http.post
         { url = "/gopher/lynrummy-elm/actions?session=" ++ String.fromInt sessionId
-        , body = Http.jsonBody (encodeEnvelope action maybeGesturePath)
+        , body = Http.jsonBody (encodeEnvelope action maybeGesture)
         , expect = Http.expectWhatever ActionSent
         }
 
@@ -125,6 +129,16 @@ sendCompleteTurn sessionId =
         }
 
 
+pathFrameString : PathFrame -> String
+pathFrameString frame =
+    case frame of
+        BoardFrame ->
+            "board"
+
+        ViewportFrame ->
+            "viewport"
+
+
 
 -- ENVELOPE
 
@@ -136,31 +150,34 @@ headroom for later telemetry kinds (click timings, undos) to
 drop in alongside `gesture_metadata` without touching
 WireAction's shape.
 
-When a gesture path is present, emit the full metadata shape in
+When a gesture is present, emit the full metadata shape in
 parity with Python's synthesizer: `path`, `path_frame`,
-`pointer_type`. Elm-captured samples are in viewport coords
-(that's what the browser reports) and come from a real mouse.
+`pointer_type`. The caller has already translated the path's
+samples into the named frame (typically `BoardFrame` for
+intra-board drags — see `Main.Gesture.handleMouseUp`).
 -}
-encodeEnvelope : WireAction -> Maybe (List GesturePoint) -> Value
-encodeEnvelope action maybeGesturePath =
-    case maybeGesturePath of
+encodeEnvelope : WireAction -> Maybe { path : List GesturePoint, frame : PathFrame } -> Value
+encodeEnvelope action maybeGesture =
+    case maybeGesture of
         Nothing ->
             Encode.object [ ( "action", WA.encode action ) ]
 
-        Just [] ->
-            Encode.object [ ( "action", WA.encode action ) ]
+        Just { path, frame } ->
+            case path of
+                [] ->
+                    Encode.object [ ( "action", WA.encode action ) ]
 
-        Just path ->
-            Encode.object
-                [ ( "action", WA.encode action )
-                , ( "gesture_metadata"
-                  , Encode.object
-                        [ ( "path", Encode.list encodeGesturePoint path )
-                        , ( "path_frame", Encode.string "viewport" )
-                        , ( "pointer_type", Encode.string "mouse" )
+                _ ->
+                    Encode.object
+                        [ ( "action", WA.encode action )
+                        , ( "gesture_metadata"
+                          , Encode.object
+                                [ ( "path", Encode.list encodeGesturePoint path )
+                                , ( "path_frame", Encode.string (pathFrameString frame) )
+                                , ( "pointer_type", Encode.string "mouse" )
+                                ]
+                          )
                         ]
-                  )
-                ]
 
 
 encodeGesturePoint : GesturePoint -> Value

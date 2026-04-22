@@ -44,12 +44,18 @@ degradation: every intra-board replay either runs the
 captured path faithfully or the action was never accepted in
 the first place.
 
-`gesture_metadata` is optional for actions that have no
-pointer-path story the sender can honestly supply:
-`complete_turn`, and the hand-origin actions (`merge_hand`,
-`place_hand` — Python doesn't know viewport pixels for hand
-cards). Elm synthesizes hand-origin drags at replay time from
-its own DOM measurements.
+`gesture_metadata` is **never** shipped for hand-origin
+actions (`merge_hand`, `place_hand`). Neither sender ships a
+captured path: Python doesn't know viewport pixels for hand
+cards, and Elm — which could theoretically ship the human's
+real viewport-frame path — deliberately doesn't. The viewport
+path would be stale after any window resize / DPR change,
+whereas Elm's replay can always synthesize from a fresh live
+DOM measurement of the hand card's current rect. One
+consistent replay path, regardless of sender.
+
+`complete_turn` and `undo` also ship without
+`gesture_metadata`.
 
 `complete_turn` has its own endpoint:
 
@@ -222,7 +228,7 @@ DOM).
 | Field         | Meaning |
 |---|---|
 | `path`        | Ordered samples. Each has `t` (unix-ms, float), `x`, `y` (ints). |
-| `path_frame`  | `"board"` (origin at board top-left) or `"viewport"` (origin at browser top-left). Python emits `"board"` for intra-board drags. Elm-captured live drags emit `"viewport"`. Elm's replay renders a board-frame path as a DOM child of the board; CSS does the board→viewport math. Missing field ⇒ `"viewport"` by default (back-compat with pre-stamp rows). |
+| `path_frame`  | `"board"` (origin at board top-left) or `"viewport"` (origin at browser top-left). Both senders emit `"board"` for intra-board drags: Python synthesizes in board frame directly; Elm captures viewport samples and translates them at send time by subtracting the live board rect. Board-frame paths are env-durable — viewport size, DPR, or monitor can change between capture and replay and the path still lands correctly. `"viewport"` only appears as a defensive fallback when the board rect wasn't measured in time; not expected in normal traffic. |
 | `pointer_type`| `"synthetic"` (Python-generated) or `"mouse"` (Elm-captured human drag). Informational. |
 
 ## Coordinate frames — summary

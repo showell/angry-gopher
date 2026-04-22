@@ -232,13 +232,13 @@ handleMouseUp releasePoint tMs model =
                         Nothing ->
                             modelAfterDragClear
 
-                gesturePathForLog =
-                    case fullPath of
-                        [] ->
-                            Nothing
+                maybeGesture =
+                    case maybeAction of
+                        Just action ->
+                            gestureForAction action info.boardRect fullPath
 
-                        path ->
-                            Just path
+                        Nothing ->
+                            Nothing
 
                 ( finalModel, cmd ) =
                     case ( maybeAction, modelAfterAction.sessionId ) of
@@ -246,18 +246,93 @@ handleMouseUp releasePoint tMs model =
                             let
                                 entry =
                                     { action = action
-                                    , gesturePath = gesturePathForLog
-                                    , pathFrame = ViewportFrame
+                                    , gesturePath = Maybe.map .path maybeGesture
+                                    , pathFrame =
+                                        Maybe.map .frame maybeGesture
+                                            |> Maybe.withDefault ViewportFrame
                                     }
                             in
                             ( { modelAfterAction | actionLog = modelAfterAction.actionLog ++ [ entry ] }
-                            , Wire.sendAction sid action (Just fullPath)
+                            , Wire.sendAction sid action maybeGesture
                             )
 
                         _ ->
                             ( modelAfterAction, Cmd.none )
             in
             ( finalModel, cmd )
+
+
+{-| Decide what gesture (if any) ships alongside this action,
+and in what frame.
+
+Hand-origin actions (`MergeHand`, `PlaceHand`) ALWAYS ship
+pathless — Elm's replay resolves hand origins via live DOM
+measurement regardless of sender, so a captured viewport-frame
+path would be dead weight (and stale after any window resize
+anyway). This matches Python's behavior.
+
+Intra-board actions (`Split`, `MergeStack`, `MoveStack`) ship a
+board-frame path: subtract the live board rect's viewport
+offset from each viewport-captured sample, producing coords
+that are invariant under any future viewport/DPR/monitor
+change. The board's internal geometry is fixed (800×600); only
+its position in the viewport can drift, and that's exactly what
+the rect subtraction absorbs.
+
+If the board rect hasn't arrived yet (a `fetchBoardRect` race
+that effectively can't happen in practice — the Task resolves
+in one frame and real drags span many), fall back to viewport
+frame untranslated. Server still accepts; replay will read the
+frame tag and render accordingly.
+-}
+gestureForAction :
+    WireAction
+    -> Maybe GA.Rect
+    -> List State.GesturePoint
+    -> Maybe { path : List State.GesturePoint, frame : PathFrame }
+gestureForAction action maybeBoardRect path =
+    case action of
+        WA.MergeHand _ ->
+            Nothing
+
+        WA.PlaceHand _ ->
+            Nothing
+
+        WA.Split _ ->
+            Just (intraBoardGesture maybeBoardRect path)
+
+        WA.MergeStack _ ->
+            Just (intraBoardGesture maybeBoardRect path)
+
+        WA.MoveStack _ ->
+            Just (intraBoardGesture maybeBoardRect path)
+
+        WA.CompleteTurn ->
+            Nothing
+
+        WA.Undo ->
+            Nothing
+
+
+intraBoardGesture :
+    Maybe GA.Rect
+    -> List State.GesturePoint
+    -> { path : List State.GesturePoint, frame : PathFrame }
+intraBoardGesture maybeBoardRect path =
+    case maybeBoardRect of
+        Just rect ->
+            { path = List.map (translateToBoard rect) path, frame = BoardFrame }
+
+        Nothing ->
+            { path = path, frame = ViewportFrame }
+
+
+translateToBoard : GA.Rect -> State.GesturePoint -> State.GesturePoint
+translateToBoard rect p =
+    { tMs = p.tMs
+    , x = p.x - rect.x
+    , y = p.y - rect.y
+    }
 
 
 {-| Resolve a completed drag gesture into the WireAction (if

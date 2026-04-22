@@ -20,6 +20,7 @@ decoders that shape server responses. Each call produces
 | `fetchRemoteState` | `GET /gopher/lynrummy-elm/sessions/:id/state` | `StateRefreshed` | `{session_id, seq, state: RemoteState}` |
 | `fetchActionLog` | `GET /gopher/lynrummy-elm/sessions/:id/actions` | `ActionLogFetched` | `{session_id, initial_state: RemoteState, actions: [WireAction]}` |
 | `sendAction` | `POST /gopher/lynrummy-elm/actions?session=:id` | `ActionSent` (whatever) | `{ok, seq}` |
+| — accepts optional gesture: `Maybe { path, frame : PathFrame }`. Caller passes translated board-frame path for intra-board drags; `Nothing` for hand-origin drags (hand origins always replay via live DOM measurement) and non-drag actions. | | | |
 | `sendCompleteTurn` | `POST /gopher/lynrummy-elm/actions?session=:id` (CompleteTurn body) | `CompleteTurnResponded` | `{ok, seq, turn_result, turn_score, cards_drawn, dealt_cards}` OR 400 `{ok:false, turn_result:"failure", ...}` |
 
 ## Client-authority invariants

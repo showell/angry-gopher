@@ -25,8 +25,9 @@ styling hook that renders the drag-affordance feedback.
 - `fetchBoardRect : Cmd Msg` — `Browser.Dom.getElement
   boardDomId` → `Task.attempt BoardRectReceived`.
 - `handleMouseUp : Model -> (Model, Cmd Msg)` — resolves
-  gesture → clears drag → applies WireAction → appends to
-  actionLog → fires `sendAction`.
+  gesture → clears drag → applies WireAction → decides what
+  gesture (if any) to ship via `gestureForAction` → appends
+  to actionLog → fires `sendAction`.
 - `clearDrag : Model -> Model` — `{ model | drag =
   NotDragging }`.
 - `pointDecoder : Decoder Point` — `{clientX, clientY}` →
@@ -63,6 +64,34 @@ intent (flips to `Nothing`) once the cursor moves beyond a
 threshold. The call site for that is currently in
 `Main.elm`'s `MouseMove` handler (not in this module) because
 it's a one-liner that needs `info` unpacking anyway.
+
+## Gesture shipping rule (2026-04-22)
+
+`gestureForAction` decides what rides alongside the WireAction:
+
+- **Hand-origin actions** (`MergeHand`, `PlaceHand`) — always
+  `Nothing`. Elm's replay resolves hand origins via live DOM
+  measurement regardless of sender; a captured viewport-frame
+  path would be stale after any window resize and is never
+  consulted at replay time. Matches Python.
+- **Intra-board actions** (`Split`, `MergeStack`, `MoveStack`)
+  — `Just { path, frame = BoardFrame }`. Viewport-captured
+  samples get the live board rect's `(x, y)` subtracted at
+  send time, producing env-durable board-frame coords. The
+  board's internal geometry is fixed (800×600); only its
+  viewport position can drift, and rect subtraction absorbs
+  that drift exactly.
+- **Fallback** — if `info.boardRect` never arrived (a
+  `fetchBoardRect` race that effectively doesn't happen in
+  practice), ship the untranslated path tagged as
+  `ViewportFrame`. Server accepts; replay reads the frame tag
+  and still renders correctly in the matching env.
+- **Other actions** (`CompleteTurn`, `Undo`) — `Nothing`.
+
+The invariant this preserves: **every intra-board action on
+the wire carries a path that's faithful to replay forever,
+regardless of future viewport or DPR changes.** Matches the
+architecture doc's "durable always" rule.
 
 ## Drop-loc derivation
 
