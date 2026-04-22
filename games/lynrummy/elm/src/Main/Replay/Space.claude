@@ -36,34 +36,29 @@ frame); Space has no dependency on Time.
 - `AnimationInfo` — type alias for the record a Time `Animating`
   phase carries. Shape matches `State.ReplayAnimation.Animating`
   exactly; Elm's structural typing unifies them.
-- `buildReplayAnimation : WireAction -> Maybe (List GesturePoint) -> Model -> Float -> Maybe AnimationInfo`
-  — entry point. Faithful path if available; otherwise delegates
-  to synthesis.
-- `synthesizedReplayAnimation : WireAction -> Model -> Float -> Maybe AnimationInfo`
-  — no captured path; synthesize endpoints + linear path.
+- `buildReplayAnimation : WireAction -> List GesturePoint -> PathFrame -> Model -> Float -> Maybe AnimationInfo`
+  — wrap a captured path in the bundle a Time `Animating` needs.
+  Returns Nothing only if `dragSourceForAction` can't resolve
+  the source stack/card on the current board (a contract
+  violation — server rejects intra-board actions without a
+  path, so we always have one).
 
 ### Endpoint math
 
-- `syntheticEndpoints : WireAction -> Model -> Maybe (Point, Point)`
-  — synchronous endpoint resolution. Covers `MoveStack` (center
-  → new-loc center) and `MergeStack` (source center → target
-  edge on `side`). `Split` returns Nothing and falls through
-  to applyImmediate (wire carries no target loc for Split).
 - `pointInLiveViewport : Model -> { left, top } -> Point` —
   board-frame → viewport via `model.replayBoardRect`, with
   pinned-constant fallback (dev-console log on fallback).
-- `stackCenterInLiveViewport : Model -> CardStack -> Point` —
-  stack bounding-box center. Used as the drag-start point for
-  any "grab anywhere on the stack" action (MoveStack,
-  MergeStack).
 - `stackEdgeInLiveViewport : Model -> CardStack -> Side -> Point`
   — left-edge or right-edge of a stack in viewport coords.
+  Used only by `handCardRectReceived` to land a MergeHand target;
+  intra-board drags live entirely in board frame.
 
 ### Path + interpolation
 
-- `dragMsPerPixel : Float` — 5 ms/px, settled by feel for
-  perceived replay pace. Kept in sync with Python's
-  `DRAG_MS_PER_PIXEL`.
+- `dragMsPerPixel : Float` — 2 ms/px, for Elm's own synthesis
+  (hand-origin target path construction). Decoupled from
+  Python's `DRAG_MS_PER_PIXEL`: Python-captured paths carry
+  their pace in their `tMs` values and Elm honors them verbatim.
 - `linearPath : Point -> Point -> Float -> List GesturePoint` —
   12-sample straight line at `dragMsPerPixel`.
 - `pathDuration : List GesturePoint -> Float` — last.tMs −
@@ -123,5 +118,5 @@ live-play code (this module serves replay only).
 
 Covered indirectly via end-to-end replay smoke tests. A dedicated
 `Main/Replay/SpaceTest.elm` is a candidate future investment —
-`linearPath`, `interpPath`, `pathDuration`, `syntheticEndpoints`
-are all trivially assertable pure functions.
+`linearPath`, `interpPath`, `pathDuration` are all trivially
+assertable pure functions.

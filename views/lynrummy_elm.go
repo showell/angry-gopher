@@ -245,6 +245,22 @@ func lynrummyElmActions(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "decode: "+err.Error(), http.StatusBadRequest)
 		return
 	}
+
+	// Intra-board actions must carry a gesture path. Every
+	// client originates these from a physical drag (human) or
+	// synthesizes one (agent); a missing path means a bug in
+	// the client, not a legit omission. Rejecting here keeps
+	// replay consumers off a "silently apply-immediately" path
+	// that reads as "the board teleported."
+	if requiresGestureMetadata(action) && !envelopeHasPath(env.GestureMetadata) {
+		kind := action.ActionKind()
+		log.Printf("lynrummy-elm action: missing gesture_metadata.path for %s", kind)
+		http.Error(w,
+			"gesture_metadata.path is required for intra-board actions ("+kind+")",
+			http.StatusBadRequest)
+		return
+	}
+
 	sessionIDStr := r.URL.Query().Get("session")
 	sessionIDForExpand, _ := strconv.ParseInt(sessionIDStr, 10, 64)
 
@@ -1020,4 +1036,44 @@ func lynrummyElmJS(w http.ResponseWriter) {
 	}
 	w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
 	w.Write(data)
+}
+
+// requiresGestureMetadata reports whether an incoming
+// WireAction's envelope MUST carry gesture_metadata.path. True
+// for every intra-board action (split / merge_stack / move_stack):
+// a client that emitted one of these without a drag path is
+// almost certainly buggy, and replay consumers would otherwise
+// read the result as a silent teleport.
+//
+// False for hand-origin actions (merge_hand / place_hand) —
+// those are synthesized by Elm at replay time from a live DOM
+// measurement of the hand card, so Python / scripted clients
+// legitimately don't carry a path for them.
+//
+// False for turn-logic actions (complete_turn / undo).
+func requiresGestureMetadata(action lynrummy.WireAction) bool {
+	switch action.(type) {
+	case lynrummy.SplitAction,
+		lynrummy.MergeStackAction,
+		lynrummy.MoveStackAction:
+		return true
+	}
+	return false
+}
+
+// envelopeHasPath returns true when the envelope's
+// gesture_metadata field holds an object with a non-empty
+// "path" array. Empty body / null / empty array all return
+// false so the reject message surfaces clearly.
+func envelopeHasPath(raw json.RawMessage) bool {
+	if len(raw) == 0 || string(raw) == "null" {
+		return false
+	}
+	var obj struct {
+		Path []json.RawMessage `json:"path"`
+	}
+	if err := json.Unmarshal(raw, &obj); err != nil {
+		return false
+	}
+	return len(obj.Path) > 0
 }

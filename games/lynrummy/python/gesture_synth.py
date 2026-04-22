@@ -155,7 +155,24 @@ def drag_endpoints(prim, board_before):
         end = _stack_edge(tgt, side)
         return start, end
 
+    if kind == "split":
+        # Split has no target loc on the wire (the server chooses
+        # where the split halves go). The gesture expresses the
+        # physical act: drag the card AT card_index down to "pull"
+        # it off. Short travel, enough for the eye to register a
+        # split rather than a teleport.
+        src_idx = prim["stack_index"]
+        card_idx = prim["card_index"]
+        if src_idx >= len(board_before):
+            return None
+        src = board_before[src_idx]
+        anchor_x = (src["loc"]["left"]
+                    + card_idx * CARD_PITCH
+                    + CARD_PITCH // 2)
+        anchor_y = src["loc"]["top"] + CARD_HEIGHT // 2
+        return (anchor_x, anchor_y), (anchor_x, anchor_y + CARD_HEIGHT)
+
     # merge_hand / place_hand: hand origin unknowable to Python.
-    # split: intra-board but the wire carries no target loc;
-    # add when Split synthesis policy is decided.
+    # Elm synthesizes these at replay time via async DOM
+    # measurement of the live hand-card rect.
     return None

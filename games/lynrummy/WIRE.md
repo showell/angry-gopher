@@ -36,9 +36,20 @@ kinds later without touching action shapes.
 }
 ```
 
-`gesture_metadata` is optional; it's omitted for actions that
-have no pointer-path story (`complete_turn`, any action the
-Python agent doesn't synthesize a drag for).
+`gesture_metadata` is **required** for intra-board actions
+(`split`, `merge_stack`, `move_stack`) — the server rejects
+them with 400 if `gesture_metadata.path` is missing or empty.
+This keeps "Elm has no path to replay" from being a silent
+degradation: every intra-board replay either runs the
+captured path faithfully or the action was never accepted in
+the first place.
+
+`gesture_metadata` is optional for actions that have no
+pointer-path story the sender can honestly supply:
+`complete_turn`, and the hand-origin actions (`merge_hand`,
+`place_hand` — Python doesn't know viewport pixels for hand
+cards). Elm synthesizes hand-origin drags at replay time from
+its own DOM measurements.
 
 `complete_turn` has its own endpoint:
 
@@ -190,12 +201,11 @@ End-of-turn signal. No per-action fields.
 
 ## Gesture metadata (sibling of `action`)
 
-Optional telemetry describing the drag that produced the
-action. Python emits it for intra-board actions where it
-honestly knows both endpoints (`move_stack`, `merge_stack`);
-omitted for hand-origin actions (`merge_hand`, `place_hand` —
-Python doesn't know where hand cards sit in the viewport; Elm
-synthesizes those at replay time from its own DOM).
+Required for intra-board actions (`split`, `merge_stack`,
+`move_stack`); omitted for hand-origin actions (`merge_hand`,
+`place_hand` — sender doesn't know where hand cards sit in the
+viewport; Elm synthesizes those at replay time from its own
+DOM).
 
 ```json
 {

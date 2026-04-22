@@ -53,7 +53,7 @@ Internal (not exported but load-bearing):
 |---|---|---|
 | `PreRoll` | ClickInstantReplay | NotAnimating on 1s elapse |
 | `NotAnimating` | step advance | Animating / AwaitingHandRect / Beating (via prepareReplayStep) |
-| `Animating` | faithful path OR sync synthesis succeeded | Beating on path elapsed |
+| `Animating` | faithful path bundled | Beating on path elapsed |
 | `AwaitingHandRect` | hand-origin synthesis, Task fired | Animating on HandCardRectReceived Ok; Beating on Err |
 | `Beating` | action applied | NotAnimating at step+1 on deadline |
 
@@ -75,28 +75,29 @@ a stuck UI.
 
 ## Capture-vs-synthesis branching
 
-`prepareReplayStep` has three branches:
+`prepareReplayStep` has two branches:
 
 1. **Faithful path present** — `Space.buildReplayAnimation` with
    the captured path. Synchronous build, immediately enter
-   Animating.
+   Animating. Intra-board actions (Split / MergeStack /
+   MoveStack) ALWAYS hit this branch: the server rejects them
+   without `gesture_metadata.path` (see
+   `views/lynrummy_elm.go`'s `requiresGestureMetadata`). Both
+   humans and Python agents synthesize a path before send.
 2. **Hand-origin synthesis** — fire a `Browser.Dom.getElement`
    Task for the hand card's live rect. Transition to
    AwaitingHandRect; the rect arrives in
    `handCardRectReceived`, which pairs it with the target (via
    `Space.stackEdgeInLiveViewport` for MergeHand, pinned-math +
    live-rect mix for PlaceHand's drop loc), synthesizes a
-   linear path, and enters Animating.
-3. **Board-origin synthesis** — `Space.buildReplayAnimation`
-   with Nothing for the path, which delegates to
-   `Space.synthesizedReplayAnimation`. Covers MoveStack today;
-   returns Nothing for Split / MergeStack (those apply
-   immediately and beat).
+   linear path, and enters Animating. Hand origins live in the
+   DOM, which no sender knows at action time, so the path
+   requirement doesn't apply to them.
 
-The branching is derived at each frame — the action log itself
-doesn't tag which mode it's in. Earlier designs recorded
-`Captured` vs `Synthesized` on disk; that drifts as replay
-behavior evolves. Derived-at-playback wins.
+Anything else — an intra-board action reaching here without a
+path — is a server-contract violation; `Debug.log "[replay]
+FATAL..."` surfaces it and we `applyImmediate` so the game
+state still advances.
 
 ## Dependencies
 

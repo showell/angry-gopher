@@ -10,8 +10,6 @@ module Main.Replay.Space exposing
     , pathDuration
     , pointInLiveViewport
     , stackEdgeInLiveViewport
-    , synthesizedReplayAnimation
-    , syntheticEndpoints
     )
 
 {-| The spatial half of Instant Replay.
@@ -79,173 +77,50 @@ type alias AnimationInfo =
 
 
 {-| Build the per-step animation bundle from an action + its
-captured path + the captured path's frame. Returns Nothing when
-the action type isn't drag-backed, or when the source card
-can't be resolved on the current board/hand (shouldn't happen
-mid-replay, but total).
+captured path. Returns Nothing only when the source card can't
+be resolved on the current board/hand — a contract violation
+(the replay state and the wire's CardStack refs have drifted
+apart), but total so the FSM can recover.
 
-If no captured path exists, falls through to
-`synthesizedReplayAnimation` which emits board-frame endpoints
-for intra-board actions.
+The server enforces that intra-board actions carry a path
+(see `views/lynrummy_elm.go`'s `requiresGestureMetadata`), so
+this function is always called with a non-empty path for
+drag-backed actions. Hand-origin actions without a path take
+the async DOM-measurement branch in `Main.Replay.Time`
+instead.
 
 -}
 buildReplayAnimation :
     WireAction
-    -> Maybe (List State.GesturePoint)
+    -> List State.GesturePoint
     -> PathFrame
     -> Model
     -> Float
     -> Maybe AnimationInfo
-buildReplayAnimation action maybePath frame model nowMs =
-    let
-        faithful path =
-            case dragSourceForAction action model of
-                Nothing ->
-                    Nothing
-
-                Just ( source, grabOffset ) ->
-                    Just
-                        { startMs = nowMs
-                        , path = path
-                        , source = source
-                        , grabOffset = grabOffset
-                        , pathFrame = frame
-                        , pendingAction = action
-                        }
-    in
-    case maybePath of
-        Just (p :: rest) ->
-            faithful (p :: rest)
-
-        _ ->
-            synthesizedReplayAnimation action model nowMs
-
-
-{-| Synthesize an Animating bundle for an intra-board action
-with no captured path. Emits **board-frame** endpoints via
-`syntheticEndpoints` (reading stack locs directly — no viewport
-translation). The frame is always `BoardFrame`; the floater
-renders as a board-div child and CSS does the rest.
--}
-synthesizedReplayAnimation : WireAction -> Model -> Float -> Maybe AnimationInfo
-synthesizedReplayAnimation action model nowMs =
-    case dragSourceForAction action model of
-        Nothing ->
-            Nothing
-
-        Just ( source, grabOffset ) ->
-            case syntheticEndpoints action model of
-                Nothing ->
-                    Nothing
-
-                Just ( startPt, endPt ) ->
-                    Just
-                        { startMs = nowMs
-                        , path = linearPath startPt endPt nowMs
-                        , source = source
-                        , grabOffset = grabOffset
-                        , pathFrame = BoardFrame
-                        , pendingAction = action
-                        }
+buildReplayAnimation action path frame model nowMs =
+    dragSourceForAction action model
+        |> Maybe.map
+            (\( source, grabOffset ) ->
+                { startMs = nowMs
+                , path = path
+                , source = source
+                , grabOffset = grabOffset
+                , pathFrame = frame
+                , pendingAction = action
+                }
+            )
 
 
 
--- ENDPOINTS (board frame for intra-board; viewport for hand-origin)
-
-
-{-| Synthesize board-frame endpoints for an intra-board replay
-drag. Only used for the synchronous-synthesis fallback when no
-captured `gesture_metadata` exists.
-
-Hand-origin actions (`MergeHand`, `PlaceHand`) are NOT handled
-here — they need an async DOM query for the hand card's live
-viewport rect and are wired through `Main.Replay.Time`'s
-`AwaitingHandRect` path.
-
--}
-syntheticEndpoints : WireAction -> Model -> Maybe ( Point, Point )
-syntheticEndpoints action model =
-    case action of
-        WA.MoveStack p ->
-            CardStack.findStack p.stack model.board
-                |> Maybe.map
-                    (\stack ->
-                        let
-                            size =
-                                CardStack.size stack
-
-                            halfWidth =
-                                size * BG.cardPitch // 2
-
-                            halfHeight =
-                                BG.cardHeight // 2
-                        in
-                        ( { x = stack.loc.left + halfWidth
-                          , y = stack.loc.top + halfHeight
-                          }
-                        , { x = p.newLoc.left + halfWidth
-                          , y = p.newLoc.top + halfHeight
-                          }
-                        )
-                    )
-
-        WA.MergeStack p ->
-            case ( CardStack.findStack p.source model.board, CardStack.findStack p.target model.board ) of
-                ( Just source, Just target ) ->
-                    Just
-                        ( stackCenterBoardFrame source
-                        , stackEdgeBoardFrame target p.side
-                        )
-
-                _ ->
-                    Nothing
-
-        _ ->
-            Nothing
-
-
-{-| Board-frame point at a stack's bounding-box center. The
-"grab anywhere on the stack" start point used by MoveStack and
-MergeStack synthesis.
--}
-stackCenterBoardFrame : CardStack -> Point
-stackCenterBoardFrame stack =
-    let
-        size =
-            CardStack.size stack
-    in
-    { x = stack.loc.left + size * BG.cardPitch // 2
-    , y = stack.loc.top + BG.cardHeight // 2
-    }
-
-
-{-| Board-frame point at a stack's left- or right-edge,
-vertically centered. The drop-target point used by MergeStack
-synthesis (source-center → target-edge-on-side).
--}
-stackEdgeBoardFrame : CardStack -> BoardActions.Side -> Point
-stackEdgeBoardFrame stack side =
-    let
-        size =
-            CardStack.size stack
-
-        edgeLeft =
-            case side of
-                BoardActions.Right ->
-                    stack.loc.left + size * BG.cardPitch
-
-                BoardActions.Left ->
-                    stack.loc.left
-    in
-    { x = edgeLeft, y = stack.loc.top + BG.cardHeight // 2 }
+-- VIEWPORT TRANSLATION (hand-origin target synthesis only)
 
 
 {-| Translate a board-frame `{ left, top }` into the current
 viewport frame using the live DOM-measured board rect. Falls
 back to documentary constants (with a dev-console log) if the
-measurement hasn't arrived. Kept exposed because the hand-
-origin target resolution in `Main.Replay.Time.handCardRectReceived`
-still needs to land a PlaceHand drop in viewport frame.
+measurement hasn't arrived. Used by
+`Main.Replay.Time.handCardRectReceived` to land a PlaceHand
+drop target in viewport frame.
 -}
 pointInLiveViewport : Model -> { left : Int, top : Int } -> Point
 pointInLiveViewport model loc =
@@ -274,11 +149,21 @@ in viewport frame.
 stackEdgeInLiveViewport : Model -> CardStack -> BoardActions.Side -> Point
 stackEdgeInLiveViewport model stack side =
     let
-        boardEdge =
-            stackEdgeBoardFrame stack side
+        size =
+            CardStack.size stack
+
+        edgeLeft =
+            case side of
+                BoardActions.Right ->
+                    stack.loc.left + size * BG.cardPitch
+
+                BoardActions.Left ->
+                    stack.loc.left
+
+        anchor =
+            pointInLiveViewport model { left = edgeLeft, top = stack.loc.top }
     in
-    pointInLiveViewport model { left = boardEdge.x, top = boardEdge.y - BG.cardHeight // 2 }
-        |> (\anchor -> { x = anchor.x, y = anchor.y + BG.cardHeight // 2 })
+    { x = anchor.x, y = anchor.y + BG.cardHeight // 2 }
 
 
 

@@ -242,21 +242,26 @@ replayFrame nowMs model =
 {-| Transition from NotAnimating into the right next replay
 state, given an action and its captured gesture path (if any).
 
-Three cases:
+Two cases:
 
   - **Faithful path present.** Build Animating synchronously
-    and go.
-  - **Synthesis needed, hand origin required (MergeHand /
-    PlaceHand).** Fire a `Browser.Dom.getElement` Task for
-    the hand card's DOM id. Transition to AwaitingHandRect
-    carrying the action; the `handCardRectReceived` handler
-    completes the build when the rect arrives. This is how
-    the replay synthesizer gets pixel-accurate hand origins
-    without trusting the pinned layout math.
-  - **Synthesis needed, no hand origin (or action isn't
-    drag-backed).** Fall through to the old synchronous
-    path via `Space.buildReplayAnimation`; if it can't produce
-    an animation, apply the action immediately and Beat.
+    and go. Intra-board actions (Split / MergeStack /
+    MoveStack) ALWAYS hit this branch — the server rejects
+    those without `gesture_metadata.path` (see
+    `views/lynrummy_elm.go`'s `requiresGestureMetadata`), so
+    a captured path is guaranteed here.
+  - **No path, hand origin (MergeHand / PlaceHand).** Fire a
+    `Browser.Dom.getElement` Task for the hand card's DOM id
+    and transition to AwaitingHandRect; the
+    `handCardRectReceived` handler completes the build when
+    the rect arrives. This is the only synthesis path: hand
+    origins live in the DOM, not in board coords Python can
+    supply, so we measure at replay time.
+
+Any other combination (intra-board action without a path, or
+a non-drag action) is impossible by server contract. If it
+happens, the `Debug.log` shouts "FATAL" and we `applyImmediate`
+so the game state stays consistent.
 
 -}
 prepareReplayStep :
@@ -268,6 +273,15 @@ prepareReplayStep :
     -> ( Model, Cmd Msg )
 prepareReplayStep action maybePath frame model nowMs =
     let
+        _ =
+            Debug.log "[replay]"
+                { branch = prepareBranch action maybePath
+                , frame = frame
+                , pathSamples = Maybe.map List.length maybePath
+                , pathDurationMs =
+                    Maybe.map Space.pathDuration maybePath
+                }
+
         startAnimating anim =
             let
                 cursor =
@@ -294,7 +308,7 @@ prepareReplayStep action maybePath frame model nowMs =
     in
     case maybePath of
         Just (p :: rest) ->
-            case Space.buildReplayAnimation action maybePath frame model nowMs of
+            case Space.buildReplayAnimation action (p :: rest) frame model nowMs of
                 Just anim ->
                     startAnimating anim
 
@@ -327,12 +341,36 @@ prepareReplayStep action maybePath frame model nowMs =
                             )
 
                 Nothing ->
-                    case Space.buildReplayAnimation action maybePath frame model nowMs of
-                        Just anim ->
-                            startAnimating anim
+                    let
+                        _ =
+                            Debug.log
+                                "[replay] FATAL: no path for non-hand action — server should have rejected"
+                                action
+                    in
+                    applyImmediate
 
-                        Nothing ->
-                            applyImmediate
+
+{-| Classify which prepareReplayStep branch an action will take.
+Purely for the Debug.log at the top of prepareReplayStep — lets
+the browser console say "faithful / hand-origin-async / FATAL"
+so we can see what the replay engine actually chose.
+-}
+prepareBranch : WireAction -> Maybe (List State.GesturePoint) -> String
+prepareBranch action maybePath =
+    case maybePath of
+        Just (_ :: _) ->
+            "faithful (captured path)"
+
+        _ ->
+            case action of
+                WA.MergeHand _ ->
+                    "hand-origin async DOM measure"
+
+                WA.PlaceHand _ ->
+                    "hand-origin async DOM measure"
+
+                _ ->
+                    "FATAL: intra-board with no path (server bug)"
 
 
 
