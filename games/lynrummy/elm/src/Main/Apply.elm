@@ -27,7 +27,7 @@ status message.
 
 -}
 
-import Game.BoardGeometry as BoardGeometry
+import Game.BoardGeometry as BoardGeometry exposing (BoardGeometryStatus(..))
 import Game.Card
 import Game.CardStack as CardStack exposing (CardStack)
 import Game.Game as Game
@@ -87,8 +87,12 @@ applyAction : WireAction -> Model -> ActionOutcome
 applyAction action model =
     case action of
         WA.Split _ ->
-            { model = applyPhysics action model
-            , status = splitStatus
+            let
+                next =
+                    applyPhysics action model
+            in
+            { model = next
+            , status = withTidinessOverlay model next splitStatus
             }
 
         WA.MergeStack _ ->
@@ -97,7 +101,7 @@ applyAction action model =
                     applyPhysics action model
             in
             { model = next
-            , status = mergeStatus next.board
+            , status = withTidinessOverlay model next (mergeStatus next.board)
             }
 
         WA.MergeHand _ ->
@@ -106,17 +110,25 @@ applyAction action model =
                     applyPhysics action model |> Game.noteCardsPlayed 1
             in
             { model = next
-            , status = mergeStatus next.board
+            , status = withTidinessOverlay model next (mergeStatus next.board)
             }
 
         WA.PlaceHand _ ->
-            { model = applyPhysics action model |> Game.noteCardsPlayed 1
-            , status = placeHandStatus
+            let
+                next =
+                    applyPhysics action model |> Game.noteCardsPlayed 1
+            in
+            { model = next
+            , status = withTidinessOverlay model next placeHandStatus
             }
 
         WA.MoveStack _ ->
-            { model = applyPhysics action model
-            , status = moveStackStatus
+            let
+                next =
+                    applyPhysics action model
+            in
+            { model = next
+            , status = withTidinessOverlay model next moveStackStatus
             }
 
         WA.CompleteTurn ->
@@ -231,6 +243,36 @@ moveStackStatus =
 undoStatus : StatusMessage
 undoStatus =
     { text = "Undone.", kind = Inform }
+
+
+{-| Layer the board-tidiness overlay onto the primary action
+status. If a CROWDED board became CLEANLY_SPACED, celebrate
+the recovery; if the action left the board in a CROWDED state
+(regardless of where it came from), scold. Otherwise the
+primary message stands.
+
+Mirrors the post-hook in angry-cat's
+`process_and_push_player_action`. Overlay OVERRIDES the
+primary message when it fires, matching the TS order-of-
+operations.
+-}
+withTidinessOverlay : Model -> Model -> StatusMessage -> StatusMessage
+withTidinessOverlay pre post primary =
+    case
+        ( BoardGeometry.classifyBoardGeometry pre.board refereeBounds
+        , BoardGeometry.classifyBoardGeometry post.board refereeBounds
+        )
+    of
+        ( Crowded, CleanlySpaced ) ->
+            { text = "Nice and tidy!", kind = Celebrate }
+
+        ( _, Crowded ) ->
+            { text = "Board is getting tight — try spacing stacks out!"
+            , kind = Scold
+            }
+
+        _ ->
+            primary
 
 
 {-| The merge outcome depends on the size of the newly-merged

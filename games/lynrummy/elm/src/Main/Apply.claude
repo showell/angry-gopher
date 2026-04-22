@@ -77,6 +77,19 @@ matches the TS original:
 Clean-board detection uses `Game.StackType.getStackType` —
 every stack must classify as Set / PureRun / RedBlackRun.
 
+On top of the primary message, a **tidiness overlay** can
+override it when the board's geometry status changes:
+
+| Pre | Post | Overlay text | Kind |
+|---|---|---|---|
+| Crowded | CleanlySpaced | "Nice and tidy!" | Celebrate |
+| — | Crowded | "Board is getting tight — try spacing stacks out!" | Scold |
+
+Any other (pre, post) pair leaves the primary message alone.
+Classification via `Game.BoardGeometry.classifyBoardGeometry`
+against `refereeBounds`. Mirrors angry-cat's post-hook in
+`process_and_push_player_action`.
+
 Callers pick how to consume the outcome:
 
 - `Apply.commit : ActionOutcome -> Model` writes the outcome's
