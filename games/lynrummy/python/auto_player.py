@@ -26,7 +26,7 @@ import argparse
 import datetime
 import sys
 
-from client import Client, find_stack_containing
+from client import Client, card, find_stack_containing
 import hints
 import gesture_synth
 
@@ -42,32 +42,41 @@ DECK_LOW_WATER = 10
 TERMINAL_RESULTS = {"failure"}
 
 
-# Cosmetic-opener config. See module docstring for why.
-COSMETIC_OPENER = {
-    "source_index": 5,
-    "target_loc": {"left": 310, "top": 20},
-    "ms_per_pixel": 10,
-}
+# Cosmetic-opener config. See module docstring. Three moves
+# sliding tableau stacks into fresh spots; each is cued by a
+# card it contains (stable under the reducer's reordering), so
+# the sequence plays cleanly one after another.
+COSMETIC_OPENERS = [
+    {"label": "2C", "loc": {"left": 310, "top": 20}},   # 6-run →top-right
+    {"label": "2H", "loc": {"left": 560, "top": 200}},  # heart trio → right
+    {"label": "AC", "loc": {"left": 560, "top": 340}},  # ace trio → right
+]
+OPENER_MS_PER_PIXEL = 10
 
 
 def do_cosmetic_opener(c, session_id, *, verbose=True):
-    """Send the one cosmetic first move. See module docstring."""
-    state = c.get_state(session_id)["state"]
-    board = state["board"]
-    src_idx = COSMETIC_OPENER["source_index"]
-    src = board[src_idx]
-    prim = {
-        "action": "move_stack",
-        "stack_index": src_idx,
-        "new_loc": COSMETIC_OPENER["target_loc"],
-    }
-    start, end = gesture_synth.drag_endpoints(prim, board)
-    meta = gesture_synth.synthesize(
-        start, end, ms_per_pixel=COSMETIC_OPENER["ms_per_pixel"])
-    if verbose:
-        print(f"  opener: move_stack {src['loc']} → "
-              f"{COSMETIC_OPENER['target_loc']}")
-    c.send_action(session_id, _to_wire_shape(prim, board), gesture_metadata=meta)
+    """Send the three cosmetic first moves. See module docstring."""
+    for spec in COSMETIC_OPENERS:
+        state = c.get_state(session_id)
+        src_idx = find_stack_containing(state, spec["label"])
+        if src_idx is None:
+            if verbose:
+                print(f"  opener skipped: no stack containing {spec['label']}")
+            continue
+        board = state["state"]["board"]
+        src = board[src_idx]
+        prim = {
+            "action": "move_stack",
+            "stack_index": src_idx,
+            "new_loc": spec["loc"],
+        }
+        start, end = gesture_synth.drag_endpoints(prim, board)
+        meta = gesture_synth.synthesize(
+            start, end, ms_per_pixel=OPENER_MS_PER_PIXEL)
+        if verbose:
+            print(f"  opener: move_stack [{spec['label']}'s stack] "
+                  f"{src['loc']} → {spec['loc']}")
+        c.send_action(session_id, _to_wire_shape(prim, board), gesture_metadata=meta)
 
 
 def _to_wire_shape(prim, board):
