@@ -28,6 +28,8 @@ Prod DB at `~/AngryGopher/prod/gopher.db`.
 | Looking for… | Read |
 |---|---|
 | LynRummy game (Elm client) | http://localhost:9000/gopher/lynrummy-elm/ |
+| LynRummy Go subsystem + architecture | [`games/lynrummy/README.md`](games/lynrummy/README.md) → [`ARCHITECTURE.md`](games/lynrummy/ARCHITECTURE.md) |
+| LynRummy wire format | [`games/lynrummy/WIRE.md`](games/lynrummy/WIRE.md) |
 | Deploy / modes / backups | `DEPLOYMENT.md` |
 | Test running, timings, lessons | `TESTING.md` |
 | Per-file domain knowledge | `<file>.claude` sidecar next to any `.go` file |
