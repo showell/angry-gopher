@@ -17,9 +17,8 @@ modeled here (and Undo is deliberately deferred in V1 replay).
 
 import Game.BoardActions as BoardActions exposing (Side(..))
 import Game.Card exposing (Card)
-import Game.CardStack as CardStack exposing (CardStack, HandCard, stacksEqual)
+import Game.CardStack as CardStack exposing (CardStack, HandCard, findStack, stacksEqual)
 import Game.Dealer
-import Game.GestureArbitration as GA
 import Game.Hand as Hand exposing (Hand)
 import Game.WireAction exposing (WireAction(..))
 
@@ -40,13 +39,22 @@ initialState =
 applyAction : WireAction -> State -> State
 applyAction action state =
     case action of
-        Split { stackIndex, cardIndex } ->
-            { state | board = GA.applySplit stackIndex cardIndex state.board }
+        Split { stack, cardIndex } ->
+            case findStack stack state.board of
+                Just real ->
+                    { state
+                        | board =
+                            List.filter (not << stacksEqual real) state.board
+                                ++ CardStack.split cardIndex real
+                    }
 
-        MergeStack { sourceStack, targetStack, side } ->
-            case ( listAt sourceStack state.board, listAt targetStack state.board ) of
-                ( Just source, Just target ) ->
-                    case BoardActions.tryStackMerge target source side of
+                Nothing ->
+                    state
+
+        MergeStack { source, target, side } ->
+            case ( findStack source state.board, findStack target state.board ) of
+                ( Just realSource, Just realTarget ) ->
+                    case BoardActions.tryStackMerge realTarget realSource side of
                         Just change ->
                             { state | board = applyChange change state.board }
 
@@ -56,9 +64,9 @@ applyAction action state =
                 _ ->
                     state
 
-        MergeHand { handCard, targetStack, side } ->
-            case listAt targetStack state.board of
-                Just target ->
+        MergeHand { handCard, target, side } ->
+            case findStack target state.board of
+                Just realTarget ->
                     let
                         -- When the card isn't in the tracked hand — a
                         -- replay of the opponent's turn whose hand was
@@ -75,7 +83,7 @@ applyAction action state =
                                 Nothing ->
                                     ( { card = handCard, state = CardStack.HandNormal }, False )
                     in
-                    case BoardActions.tryHandMerge target hc side of
+                    case BoardActions.tryHandMerge realTarget hc side of
                         Just change ->
                             { state
                                 | board = applyChange change state.board
@@ -108,12 +116,12 @@ applyAction action state =
                 Nothing ->
                     state
 
-        MoveStack { stackIndex, newLoc } ->
-            case listAt stackIndex state.board of
-                Just stack ->
+        MoveStack { stack, newLoc } ->
+            case findStack stack state.board of
+                Just real ->
                     let
                         change =
-                            BoardActions.moveStack stack newLoc
+                            BoardActions.moveStack real newLoc
                     in
                     { state | board = applyChange change state.board }
 
@@ -130,11 +138,6 @@ applyAction action state =
 
 
 -- HELPERS
-
-
-listAt : Int -> List a -> Maybe a
-listAt i xs =
-    List.head (List.drop i xs)
 
 
 applyChange : BoardActions.BoardChange -> List CardStack -> List CardStack

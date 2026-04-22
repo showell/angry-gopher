@@ -48,14 +48,18 @@ def _distance(start, end):
 
 
 def _ease_in_out(frac):
-    """Cosine ease-in-ease-out. Zero derivative at both ends,
-    peak velocity at frac=0.5. Maps [0,1] to [0,1] with
-    f(0)=0, f(0.5)=0.5, f(1)=1 — so endpoints round-trip
-    exactly, tests that check first/last sample still pass."""
-    return (1 - math.cos(math.pi * frac)) / 2
+    """Quintic smootherstep: 6f⁵ − 15f⁴ + 10f³. Peak derivative
+    1.875 at f=0.5 (vs cosine's π/2 ≈ 1.57), zero derivative at
+    both ends AND zero second derivative there. Result: a more
+    pronounced plateau at start/end and a quicker rush through
+    the middle than cosine. Endpoints still land exactly (f(0)=0,
+    f(1)=1) so tests that check first/last sample still pass."""
+    f3 = frac * frac * frac
+    return f3 * (frac * (frac * 6 - 15) + 10)
 
 
-def synthesize(start, end, *, samples=DEFAULT_SAMPLES, path_frame="board"):
+def synthesize(start, end, *, samples=DEFAULT_SAMPLES, path_frame="board",
+               ms_per_pixel=None):
     """Build a gesture_metadata envelope with an ease-in-ease-out
     path from `start` to `end`. `start` and `end` are `(x, y)`
     tuples in the coordinate frame named by `path_frame`:
@@ -73,7 +77,8 @@ def synthesize(start, end, *, samples=DEFAULT_SAMPLES, path_frame="board"):
     end). Elm linearly interpolates between samples at replay
     time; 20 samples is enough for the curve to read smoothly
     through the fast middle."""
-    duration_ms = max(100, _distance(start, end) * DRAG_MS_PER_PIXEL)
+    pace = ms_per_pixel if ms_per_pixel is not None else DRAG_MS_PER_PIXEL
+    duration_ms = max(100, _distance(start, end) * pace)
     t0_ms = time.time() * 1000
     if samples < 2:
         samples = 2

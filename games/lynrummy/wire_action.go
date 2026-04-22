@@ -35,25 +35,33 @@ type WireAction interface {
 
 // --- Concrete action types ---
 
+// Stack references on the wire are FULL CardStack objects,
+// not list indices. The server's helper `FindStack` matches
+// client-sent stacks against the current board by card-
+// multiset + loc. Using the domain's existing CardStack shape
+// avoids inventing a parallel type AND carries enough detail
+// for a human to eyeball the raw JSON in the actions table.
+// See `games/lynrummy/WIRE.md` for the rationale and examples.
+
 type SplitAction struct {
-	StackIndex int `json:"stack_index"`
-	CardIndex  int `json:"card_index"`
+	Stack     CardStack `json:"stack"`
+	CardIndex int       `json:"card_index"`
 }
 
 func (SplitAction) ActionKind() string { return "split" }
 
 type MergeStackAction struct {
-	SourceStack int  `json:"source_stack"`
-	TargetStack int  `json:"target_stack"`
-	Side        Side `json:"side"`
+	Source CardStack `json:"source"`
+	Target CardStack `json:"target"`
+	Side   Side      `json:"side"`
 }
 
 func (MergeStackAction) ActionKind() string { return "merge_stack" }
 
 type MergeHandAction struct {
-	HandCard    Card `json:"hand_card"`
-	TargetStack int  `json:"target_stack"`
-	Side        Side `json:"side"`
+	HandCard Card      `json:"hand_card"`
+	Target   CardStack `json:"target"`
+	Side     Side      `json:"side"`
 }
 
 func (MergeHandAction) ActionKind() string { return "merge_hand" }
@@ -66,8 +74,8 @@ type PlaceHandAction struct {
 func (PlaceHandAction) ActionKind() string { return "place_hand" }
 
 type MoveStackAction struct {
-	StackIndex int      `json:"stack_index"`
-	NewLoc     Location `json:"new_loc"`
+	Stack  CardStack `json:"stack"`
+	NewLoc Location  `json:"new_loc"`
 }
 
 func (MoveStackAction) ActionKind() string { return "move_stack" }
@@ -159,14 +167,14 @@ func DecodeWireAction(data []byte) (WireAction, error) {
 	switch tag.Action {
 	case "split":
 		var a SplitAction
-		if err := strictUnmarshal(data, &a, "stack_index", "card_index"); err != nil {
+		if err := strictUnmarshal(data, &a, "stack", "card_index"); err != nil {
 			return nil, err
 		}
 		return a, nil
 
 	case "merge_stack":
 		var a MergeStackAction
-		if err := strictUnmarshal(data, &a, "source_stack", "target_stack", "side"); err != nil {
+		if err := strictUnmarshal(data, &a, "source", "target", "side"); err != nil {
 			return nil, err
 		}
 		if err := validateSide(a.Side); err != nil {
@@ -176,7 +184,7 @@ func DecodeWireAction(data []byte) (WireAction, error) {
 
 	case "merge_hand":
 		var a MergeHandAction
-		if err := strictUnmarshal(data, &a, "hand_card", "target_stack", "side"); err != nil {
+		if err := strictUnmarshal(data, &a, "hand_card", "target", "side"); err != nil {
 			return nil, err
 		}
 		if err := validateSide(a.Side); err != nil {
@@ -193,7 +201,7 @@ func DecodeWireAction(data []byte) (WireAction, error) {
 
 	case "move_stack":
 		var a MoveStackAction
-		if err := strictUnmarshal(data, &a, "stack_index", "new_loc"); err != nil {
+		if err := strictUnmarshal(data, &a, "stack", "new_loc"); err != nil {
 			return nil, err
 		}
 		return a, nil
@@ -212,7 +220,7 @@ func DecodeWireAction(data []byte) (WireAction, error) {
 // strictUnmarshal decodes into dest and verifies the named
 // required fields are present in the raw JSON. JSON's default
 // "zero value on missing" silently accepts {"action":"split"}
-// as a valid Split with stack_index=0 and card_index=0, which
+// as a valid Split with stack={} and card_index=0, which
 // would hide real bugs. This checker rejects it.
 func strictUnmarshal(data []byte, dest interface{}, required ...string) error {
 	if err := json.Unmarshal(data, dest); err != nil {

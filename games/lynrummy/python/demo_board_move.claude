@@ -1,0 +1,31 @@
+just_use demo_board_move.py
+
+# label: EARLY
+# role: tight-feedback harness for tuning board-to-board drag physics
+
+A one-move demo that creates a fresh session, executes a single
+long-diagonal `move_stack` with an exaggerated-pace eased path,
+and prints the replay URL. Purpose: let Steve eyeball the drag
+physics in isolation instead of inside the noise of a full
+40-action agent game.
+
+## Surface
+
+- `python3 games/lynrummy/python/demo_board_move.py`
+- `--pace N` — ms per pixel (higher = slower / more
+  exaggerated). Defaults to 10.
+
+## Parameters (tuned by feel)
+
+- Source: stack index 5 in the initial board (the 2C-3D-4C-
+  5H-6S-7H 6-run).
+- Target: board-frame `(500, 450)` — bottom-right corner,
+  clear of all initial stacks.
+- Distance: ~608 px diagonal.
+
+## Pointers
+
+- `gesture_synth.synthesize` — accepts `ms_per_pixel` kwarg for
+  the demo to override the production default.
+- `auto_player.py` — has its own cosmetic opener with a
+  similar shape but baked into every new session.

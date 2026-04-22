@@ -167,7 +167,7 @@ syntheticEndpoints : WireAction -> Model -> Maybe ( Point, Point )
 syntheticEndpoints action model =
     case action of
         WA.MoveStack p ->
-            listAt p.stackIndex model.board
+            CardStack.findStack p.stack model.board
                 |> Maybe.map
                     (\stack ->
                         let
@@ -190,7 +190,7 @@ syntheticEndpoints action model =
                     )
 
         WA.MergeStack p ->
-            case ( listAt p.sourceStack model.board, listAt p.targetStack model.board ) of
+            case ( CardStack.findStack p.source model.board, CardStack.findStack p.target model.board ) of
                 ( Just source, Just target ) ->
                     Just
                         ( stackCenterBoardFrame source
@@ -402,13 +402,13 @@ dragSourceForAction : WireAction -> Model -> Maybe ( DragSource, Point )
 dragSourceForAction action model =
     case action of
         WA.Split p ->
-            boardStackSource p.stackIndex model
+            boardStackSource p.stack model
 
         WA.MergeStack p ->
-            boardStackSource p.sourceStack model
+            boardStackSource p.source model
 
         WA.MoveStack p ->
-            boardStackSource p.stackIndex model
+            boardStackSource p.stack model
 
         WA.MergeHand p ->
             handCardSource p.handCard model
@@ -420,15 +420,37 @@ dragSourceForAction action model =
             Nothing
 
 
-boardStackSource : Int -> Model -> Maybe ( DragSource, Point )
-boardStackSource stackIndex model =
-    listAt stackIndex model.board
-        |> Maybe.map
-            (\stack ->
-                ( FromBoardStack stackIndex
-                , { x = CardStack.stackDisplayWidth stack // 2, y = 20 }
-                )
+boardStackSource : CardStack -> Model -> Maybe ( DragSource, Point )
+boardStackSource ref model =
+    findStackIndex ref model.board
+        |> Maybe.andThen
+            (\idx ->
+                listAt idx model.board
+                    |> Maybe.map
+                        (\stack ->
+                            ( FromBoardStack idx
+                            , { x = CardStack.stackDisplayWidth stack // 2, y = 20 }
+                            )
+                        )
             )
+
+
+findStackIndex : CardStack -> List CardStack -> Maybe Int
+findStackIndex ref board =
+    let
+        go i xs =
+            case xs of
+                [] ->
+                    Nothing
+
+                s :: rest ->
+                    if CardStack.stacksEqual ref s then
+                        Just i
+
+                    else
+                        go (i + 1) rest
+    in
+    go 0 board
 
 
 handCardSource : Card -> Model -> Maybe ( DragSource, Point )

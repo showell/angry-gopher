@@ -129,30 +129,44 @@ func (s CardStack) Contains(c Card) bool {
 	return false
 }
 
+// Equals compares two CardStacks: same loc AND same cards as
+// a **multiset** (card-order-independent). Mirrors Elm's
+// `CardStack.stacksEqual`. BoardCard state (per-card "recency"
+// markers) is ignored — identity is about the cards present,
+// not turn-accounting.
+//
+// Multiset rather than sequence equality so two clients that
+// independently form the same logical group in different card
+// orders still read as the same stack. See
+// `games/lynrummy/WIRE.md`.
 func (s CardStack) Equals(other CardStack) bool {
 	if s.Loc != other.Loc {
 		return false
 	}
-	if len(s.BoardCards) != len(other.BoardCards) {
-		return false
-	}
-	for i := range s.BoardCards {
-		if !s.BoardCards[i].Card.Equals(other.BoardCards[i].Card) {
-			return false
-		}
-	}
-	return true
+	return cardsEqualMultiset(s.BoardCards, other.BoardCards)
 }
 
-// stacksEqual compares by cards only (ignoring location). Used
-// inside merge to prevent merging a stack with itself or with a
-// same-card pile. Mirrors Elm's CardStack.stacksEqual.
+// stacksEqual compares card contents only (ignoring location).
+// Used inside merge to prevent merging a stack with a same-card
+// pile. Mirrors Elm's CardStack.stacksEqual.
 func stacksEqual(a, b CardStack) bool {
-	if len(a.BoardCards) != len(b.BoardCards) {
+	return cardsEqualMultiset(a.BoardCards, b.BoardCards)
+}
+
+// cardsEqualMultiset returns true when the two BoardCard
+// slices carry the same cards regardless of order. Ignores
+// per-card BoardCardState.
+func cardsEqualMultiset(a, b []BoardCard) bool {
+	if len(a) != len(b) {
 		return false
 	}
-	for i := range a.BoardCards {
-		if !a.BoardCards[i].Card.Equals(b.BoardCards[i].Card) {
+	counts := map[Card]int{}
+	for _, bc := range a {
+		counts[bc.Card]++
+	}
+	for _, bc := range b {
+		counts[bc.Card]--
+		if counts[bc.Card] < 0 {
 			return false
 		}
 	}

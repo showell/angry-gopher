@@ -274,31 +274,38 @@ resolveGesture : DragInfo -> Model -> Maybe WireAction
 resolveGesture info model =
     case ( info.clickIntent, info.source ) of
         ( Just cardIdx, FromBoardStack stackIdx ) ->
-            Just (WA.Split { stackIndex = stackIdx, cardIndex = cardIdx })
+            listAt stackIdx model.board
+                |> Maybe.map
+                    (\stack -> WA.Split { stack = stack, cardIndex = cardIdx })
 
         _ ->
             case ( info.hoveredWing, info.source ) of
                 ( Just wing, FromBoardStack sourceIdx ) ->
-                    Just
-                        (WA.MergeStack
-                            { sourceStack = sourceIdx
-                            , targetStack = wing.stackIndex
-                            , side = wing.side
-                            }
-                        )
-
-                ( Just wing, FromHandCard handIdx ) ->
-                    case listAt handIdx (activeHand model).handCards of
-                        Just handCard ->
+                    case ( listAt sourceIdx model.board, listAt wing.stackIndex model.board ) of
+                        ( Just source, Just target ) ->
                             Just
-                                (WA.MergeHand
-                                    { handCard = handCard.card
-                                    , targetStack = wing.stackIndex
+                                (WA.MergeStack
+                                    { source = source
+                                    , target = target
                                     , side = wing.side
                                     }
                                 )
 
-                        Nothing ->
+                        _ ->
+                            Nothing
+
+                ( Just wing, FromHandCard handIdx ) ->
+                    case ( listAt handIdx (activeHand model).handCards, listAt wing.stackIndex model.board ) of
+                        ( Just handCard, Just target ) ->
+                            Just
+                                (WA.MergeHand
+                                    { handCard = handCard.card
+                                    , target = target
+                                    , side = wing.side
+                                    }
+                                )
+
+                        _ ->
                             Nothing
 
                 ( Nothing, FromHandCard handIdx ) ->
@@ -315,11 +322,11 @@ resolveGesture info model =
 
                 ( Nothing, FromBoardStack stackIdx ) ->
                     if cursorOverBoard info then
-                        case dropLoc info of
-                            Just loc ->
-                                Just (WA.MoveStack { stackIndex = stackIdx, newLoc = loc })
+                        case ( listAt stackIdx model.board, dropLoc info ) of
+                            ( Just stack, Just loc ) ->
+                                Just (WA.MoveStack { stack = stack, newLoc = loc })
 
-                            Nothing ->
+                            _ ->
                                 Nothing
 
                     else

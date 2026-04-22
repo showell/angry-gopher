@@ -32,13 +32,13 @@ def main():
     state = c.get_state(sid)
     seven_set = find_stack_containing(state, "7S")
     c.send_merge_hand(sid, hand_card=card("7H", deck=1),
-                      target_stack=seven_set, side="right")
+                      target=state["state"]["board"][seven_set], side="right")
     snap("after merge_hand 7H")
 
-    # Action 2: split stack 0 (the K-A-2-3 spade run) at index 2.
+    # Action 2: split the K-A-2-3 spade run at index 2.
     state = c.get_state(sid)
     spade_run = find_stack_containing(state, "KS")
-    c.send_split(sid, stack_index=spade_run, card_index=2)
+    c.send_split(sid, stack=state["state"]["board"][spade_run], card_index=2)
     snap("after split KS")
 
     # Undo the split.

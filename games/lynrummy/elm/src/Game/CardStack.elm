@@ -18,6 +18,7 @@ module Game.CardStack exposing
     , encodeBoardLocation
     , encodeCardStack
     , encodeHandCard
+    , findStack
     , fromHandCard
     , fromShorthand
     , handCardDecoder
@@ -207,20 +208,59 @@ keeps `stacks_to_remove` honest.
 -}
 stacksEqual : CardStack -> CardStack -> Bool
 stacksEqual a b =
-    locsEqual a.loc b.loc && cardsEqualInOrder a.boardCards b.boardCards
+    locsEqual a.loc b.loc && cardsEqualMultiset a.boardCards b.boardCards
 
 
-cardsEqualInOrder : List BoardCard -> List BoardCard -> Bool
-cardsEqualInOrder xs ys =
-    case ( xs, ys ) of
-        ( [], [] ) ->
-            True
+{-| Find the stack in `board` that matches `ref` via `stacksEqual`.
+The wire-layer resolver — client sends a CardStack reference,
+server finds the current matching board stack at apply time.
+Returns Nothing if no stack matches.
+-}
+findStack : CardStack -> List CardStack -> Maybe CardStack
+findStack ref board =
+    board
+        |> List.filter (stacksEqual ref)
+        |> List.head
 
-        ( x :: xrest, y :: yrest ) ->
-            x.card == y.card && cardsEqualInOrder xrest yrest
 
-        _ ->
-            False
+{-| True when two BoardCard lists carry the same cards as a
+multiset (order-independent). `state` flags are ignored —
+they're turn-accounting, not identity.
+
+Multiset rather than sequence equality so two clients that
+independently form the same logical group in different visual
+orders still read as the same stack. See `games/lynrummy/WIRE.md`.
+-}
+cardsEqualMultiset : List BoardCard -> List BoardCard -> Bool
+cardsEqualMultiset xs ys =
+    if List.length xs /= List.length ys then
+        False
+
+    else
+        let
+            removeFirst target list =
+                case list of
+                    [] ->
+                        Nothing
+
+                    h :: rest ->
+                        if h.card == target.card then
+                            Just rest
+
+                        else
+                            Maybe.map ((::) h) (removeFirst target rest)
+        in
+        case xs of
+            [] ->
+                True
+
+            x :: rest ->
+                case removeFirst x ys of
+                    Just remaining ->
+                        cardsEqualMultiset rest remaining
+
+                    Nothing ->
+                        False
 
 
 locsEqual : BoardLocation -> BoardLocation -> Bool

@@ -136,12 +136,14 @@ func remainingDeckAfterHands(board []CardStack, hands []Hand) []Card {
 
 // ApplyAction applies a single WireAction to the given state and
 // returns the resulting state. Returns the state unchanged if the
-// action refers to indices or hand cards that aren't present (the
-// same silent-pass-through contract as the Elm side).
+// action's CardStack reference doesn't resolve to a current stack
+// (silent-pass-through contract; LIVE callers should pre-check
+// via FindStack and reject mismatched actions at the wire
+// boundary rather than letting them silently no-op).
 func ApplyAction(action WireAction, state State) State {
 	switch a := action.(type) {
 	case SplitAction:
-		return applySplit(a.StackIndex, a.CardIndex, state)
+		return applySplit(a.Stack, a.CardIndex, state)
 
 	case MergeStackAction:
 		return applyMergeStack(a, state)
@@ -166,19 +168,36 @@ func ApplyAction(action WireAction, state State) State {
 	return state
 }
 
+// FindStack returns a pointer to the board stack that matches
+// the given reference: CardStack.Equals (multiset cards + loc).
+// Nil if no such stack exists.
+//
+// This is the resolver that replaces every "stack_index" wire
+// field. Callers (LIVE POST handlers, the ApplyAction branches
+// below) use this to go from the client's declared CardStack to
+// the current board stack at apply time.
+func FindStack(board []CardStack, ref CardStack) *CardStack {
+	for i := range board {
+		if board[i].Equals(ref) {
+			return &board[i]
+		}
+	}
+	return nil
+}
+
 // --- Transition helpers ---
 //
 // Each helper preserves Deck / Discard / TurnIndex unless it's
 // specifically mutating one of them (CompleteTurn).
 // The plays-per-turn counter bumps on PlaceHand and MergeHand.
 
-func applySplit(stackIdx, cardIdx int, state State) State {
-	if stackIdx < 0 || stackIdx >= len(state.Board) {
+func applySplit(ref CardStack, cardIdx int, state State) State {
+	stack := FindStack(state.Board, ref)
+	if stack == nil {
 		return state
 	}
-	stack := state.Board[stackIdx]
 	newStacks := stack.Split(cardIdx)
-	newBoard := removeStack(state.Board, stack)
+	newBoard := removeStack(state.Board, *stack)
 	newBoard = append(newBoard, newStacks...)
 	out := state
 	out.Board = newBoard
@@ -186,26 +205,23 @@ func applySplit(stackIdx, cardIdx int, state State) State {
 }
 
 func applyMergeStack(a MergeStackAction, state State) State {
-	if a.SourceStack < 0 || a.SourceStack >= len(state.Board) {
+	source := FindStack(state.Board, a.Source)
+	target := FindStack(state.Board, a.Target)
+	if source == nil || target == nil || source == target {
 		return state
 	}
-	if a.TargetStack < 0 || a.TargetStack >= len(state.Board) {
-		return state
-	}
-	source := state.Board[a.SourceStack]
-	target := state.Board[a.TargetStack]
 	var merged *CardStack
 	switch a.Side {
 	case LeftSide:
-		merged = target.LeftMerge(source)
+		merged = target.LeftMerge(*source)
 	case RightSide:
-		merged = target.RightMerge(source)
+		merged = target.RightMerge(*source)
 	}
 	if merged == nil {
 		return state
 	}
-	newBoard := removeStack(state.Board, source)
-	newBoard = removeStack(newBoard, target)
+	newBoard := removeStack(state.Board, *source)
+	newBoard = removeStack(newBoard, *target)
 	newBoard = append(newBoard, *merged)
 	out := state
 	out.Board = newBoard
@@ -213,7 +229,8 @@ func applyMergeStack(a MergeStackAction, state State) State {
 }
 
 func applyMergeHand(a MergeHandAction, state State) State {
-	if a.TargetStack < 0 || a.TargetStack >= len(state.Board) {
+	target := FindStack(state.Board, a.Target)
+	if target == nil {
 		return state
 	}
 	hand := state.ActiveHand()
@@ -221,7 +238,6 @@ func applyMergeHand(a MergeHandAction, state State) State {
 	if hc == nil {
 		return state
 	}
-	target := state.Board[a.TargetStack]
 	sourceStack := FromHandCard(*hc, Location{Top: -1, Left: -1})
 	var merged *CardStack
 	switch a.Side {
@@ -233,7 +249,7 @@ func applyMergeHand(a MergeHandAction, state State) State {
 	if merged == nil {
 		return state
 	}
-	newBoard := removeStack(state.Board, target)
+	newBoard := removeStack(state.Board, *target)
 	newBoard = append(newBoard, *merged)
 	out := state.withActiveHand(hand.RemoveHandCard(*hc))
 	out.Board = newBoard
@@ -257,12 +273,12 @@ func applyPlaceHand(a PlaceHandAction, state State) State {
 }
 
 func applyMoveStack(a MoveStackAction, state State) State {
-	if a.StackIndex < 0 || a.StackIndex >= len(state.Board) {
+	old := FindStack(state.Board, a.Stack)
+	if old == nil {
 		return state
 	}
-	old := state.Board[a.StackIndex]
 	moved := NewCardStack(old.BoardCards, a.NewLoc)
-	newBoard := removeStack(state.Board, old)
+	newBoard := removeStack(state.Board, *old)
 	newBoard = append(newBoard, moved)
 	out := state
 	out.Board = newBoard

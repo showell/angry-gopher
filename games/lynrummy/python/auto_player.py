@@ -9,6 +9,12 @@ Loop:
   - When no suggestions fire, attempt complete_turn.
   - Stop on referee rejection, deck-low-water, or max_actions.
 
+Every session opens with a **cosmetic first move** — the
+initial 6-card 2-7 run slides up next to the KA23 spade
+run. Not strategic; it exists so replays start with a
+clean, visible intra-board drag that also cues the viewer
+"replay is live, game starts now."
+
 No /hint round-trip, no trick_result on the wire, no
 decomposition. Every action sent is a primitive.
 
@@ -20,13 +26,13 @@ import argparse
 import datetime
 import sys
 
-from client import Client
+from client import Client, find_stack_containing
 import hints
 import gesture_synth
 
 
 # Game termination: deck running out, not a turn_result variant.
-# LynRummy doesn't end on "victory" — humans keep playing past
+# Lyn Rummy doesn't end on "victory" — humans keep playing past
 # hand-emptied events; the middle game is the fun part. Real end
 # is when the deck is nearly exhausted.
 DECK_LOW_WATER = 10
@@ -34,6 +40,70 @@ DECK_LOW_WATER = 10
 # `failure` is the one turn_result that stops the loop — means the
 # server refused a dirty-board complete_turn.
 TERMINAL_RESULTS = {"failure"}
+
+
+# Cosmetic-opener config. See module docstring for why.
+COSMETIC_OPENER = {
+    "source_index": 5,
+    "target_loc": {"left": 310, "top": 20},
+    "ms_per_pixel": 10,
+}
+
+
+def do_cosmetic_opener(c, session_id, *, verbose=True):
+    """Send the one cosmetic first move. See module docstring."""
+    state = c.get_state(session_id)["state"]
+    board = state["board"]
+    src_idx = COSMETIC_OPENER["source_index"]
+    src = board[src_idx]
+    prim = {
+        "action": "move_stack",
+        "stack_index": src_idx,
+        "new_loc": COSMETIC_OPENER["target_loc"],
+    }
+    start, end = gesture_synth.drag_endpoints(prim, board)
+    meta = gesture_synth.synthesize(
+        start, end, ms_per_pixel=COSMETIC_OPENER["ms_per_pixel"])
+    if verbose:
+        print(f"  opener: move_stack {src['loc']} → "
+              f"{COSMETIC_OPENER['target_loc']}")
+    c.send_action(session_id, _to_wire_shape(prim, board), gesture_metadata=meta)
+
+
+def _to_wire_shape(prim, board):
+    """Translate an internal index-based primitive to the
+    CardStack-ref wire shape the server expects. hints.py + the
+    local _apply_locally mirror still use the internal shape;
+    translation is localized to the send boundary."""
+    kind = prim["action"]
+    if kind == "split":
+        return {
+            "action": "split",
+            "stack": board[prim["stack_index"]],
+            "card_index": prim["card_index"],
+        }
+    if kind == "merge_stack":
+        return {
+            "action": "merge_stack",
+            "source": board[prim["source_stack"]],
+            "target": board[prim["target_stack"]],
+            "side": prim.get("side", "right"),
+        }
+    if kind == "merge_hand":
+        return {
+            "action": "merge_hand",
+            "hand_card": prim["hand_card"],
+            "target": board[prim["target_stack"]],
+            "side": prim.get("side", "right"),
+        }
+    if kind == "move_stack":
+        return {
+            "action": "move_stack",
+            "stack": board[prim["stack_index"]],
+            "new_loc": prim["new_loc"],
+        }
+    # place_hand, complete_turn, undo pass through unchanged.
+    return prim
 
 
 def _apply_locally(board, prim):
@@ -84,8 +154,9 @@ def play_session(c, session_id, *, max_actions=300, verbose=True):
                 endpoints = gesture_synth.drag_endpoints(prim, local)
                 meta = (gesture_synth.synthesize(*endpoints)
                         if endpoints is not None else None)
+                wire = _to_wire_shape(prim, local)
                 try:
-                    c.send_action(session_id, prim, gesture_metadata=meta)
+                    c.send_action(session_id, wire, gesture_metadata=meta)
                 except RuntimeError as e:
                     if verbose:
                         print(f"  send failed: {e}")
@@ -147,6 +218,8 @@ def main():
 
     initial = c.get_score(sid)
     print(f"session {sid}: initial board_score {initial['board_score']}")
+
+    do_cosmetic_opener(c, sid)
 
     summary = play_session(c, sid, max_actions=args.max_actions)
 

@@ -65,7 +65,7 @@ func TestScore_SplitPreservesTotal(t *testing.T) {
 	// Apply a split that keeps both halves valid: split the
 	// 2C,3D,4C,5H,6S,7H 6-run at index 2 → 3-run + 3-run (both
 	// valid red/black alternating runs).
-	state := ApplyAction(SplitAction{StackIndex: 5, CardIndex: 2}, State{Board: initial, Hands: []Hand{EmptyHand(), EmptyHand()}})
+	state := ApplyAction(SplitAction{Stack: initial[5], CardIndex: 2}, State{Board: initial, Hands: []Hand{EmptyHand(), EmptyHand()}})
 	after := ScoreForStacks(state.Board)
 
 	if before != after {

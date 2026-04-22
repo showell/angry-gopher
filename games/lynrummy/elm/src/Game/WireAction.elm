@@ -4,13 +4,16 @@ module Game.WireAction exposing
     , encode
     )
 
-{-| Action-shaped wire format for the LynRummy port. Each
+{-| Action-shaped wire format for the Lyn Rummy port. Each
 value of `WireAction` names a thing the player did, rather
 than the mechanical diff that resulted. Receiver derives the
 post-state by applying the action to the known prior state.
 
-See `showell/claude_writings/actions_not_diffs.md` for the
-rationale and the Go-side counterpart plan.
+Stacks are referenced by their **full ordered card list**
+(`cards`, `source_cards`, `target_cards`), not by positional
+index. Cards are globally unique in the double deck, so a card
+list identifies a stack unambiguously AND stays stable under
+the reducer's reordering. See `games/lynrummy/WIRE.md`.
 
 -}
 
@@ -22,11 +25,11 @@ import Game.CardStack exposing (BoardLocation, CardStack, boardLocationDecoder, 
 
 
 type WireAction
-    = Split { stackIndex : Int, cardIndex : Int }
-    | MergeStack { sourceStack : Int, targetStack : Int, side : Side }
-    | MergeHand { handCard : Card, targetStack : Int, side : Side }
+    = Split { stack : CardStack, cardIndex : Int }
+    | MergeStack { source : CardStack, target : CardStack, side : Side }
+    | MergeHand { handCard : Card, target : CardStack, side : Side }
     | PlaceHand { handCard : Card, loc : BoardLocation }
-    | MoveStack { stackIndex : Int, newLoc : BoardLocation }
+    | MoveStack { stack : CardStack, newLoc : BoardLocation }
     | CompleteTurn
     | Undo
 
@@ -41,15 +44,15 @@ encode action =
         Split p ->
             Encode.object
                 [ ( "action", Encode.string "split" )
-                , ( "stack_index", Encode.int p.stackIndex )
+                , ( "stack", encodeCardStack p.stack )
                 , ( "card_index", Encode.int p.cardIndex )
                 ]
 
         MergeStack p ->
             Encode.object
                 [ ( "action", Encode.string "merge_stack" )
-                , ( "source_stack", Encode.int p.sourceStack )
-                , ( "target_stack", Encode.int p.targetStack )
+                , ( "source", encodeCardStack p.source )
+                , ( "target", encodeCardStack p.target )
                 , ( "side", encodeSide p.side )
                 ]
 
@@ -57,7 +60,7 @@ encode action =
             Encode.object
                 [ ( "action", Encode.string "merge_hand" )
                 , ( "hand_card", Card.encodeCard p.handCard )
-                , ( "target_stack", Encode.int p.targetStack )
+                , ( "target", encodeCardStack p.target )
                 , ( "side", encodeSide p.side )
                 ]
 
@@ -71,7 +74,7 @@ encode action =
         MoveStack p ->
             Encode.object
                 [ ( "action", Encode.string "move_stack" )
-                , ( "stack_index", Encode.int p.stackIndex )
+                , ( "stack", encodeCardStack p.stack )
                 , ( "new_loc", encodeBoardLocation p.newLoc )
                 ]
 
@@ -107,36 +110,28 @@ decoderForAction kind =
     case kind of
         "split" ->
             Decode.map2
-                (\stackIndex cardIndex ->
-                    Split { stackIndex = stackIndex, cardIndex = cardIndex }
+                (\stack cardIndex ->
+                    Split { stack = stack, cardIndex = cardIndex }
                 )
-                (Decode.field "stack_index" Decode.int)
+                (Decode.field "stack" cardStackDecoder)
                 (Decode.field "card_index" Decode.int)
 
         "merge_stack" ->
             Decode.map3
-                (\sourceStack targetStack side ->
-                    MergeStack
-                        { sourceStack = sourceStack
-                        , targetStack = targetStack
-                        , side = side
-                        }
+                (\source target side ->
+                    MergeStack { source = source, target = target, side = side }
                 )
-                (Decode.field "source_stack" Decode.int)
-                (Decode.field "target_stack" Decode.int)
+                (Decode.field "source" cardStackDecoder)
+                (Decode.field "target" cardStackDecoder)
                 (Decode.field "side" sideDecoder)
 
         "merge_hand" ->
             Decode.map3
-                (\handCard targetStack side ->
-                    MergeHand
-                        { handCard = handCard
-                        , targetStack = targetStack
-                        , side = side
-                        }
+                (\handCard target side ->
+                    MergeHand { handCard = handCard, target = target, side = side }
                 )
                 (Decode.field "hand_card" Card.cardDecoder)
-                (Decode.field "target_stack" Decode.int)
+                (Decode.field "target" cardStackDecoder)
                 (Decode.field "side" sideDecoder)
 
         "place_hand" ->
@@ -147,10 +142,10 @@ decoderForAction kind =
 
         "move_stack" ->
             Decode.map2
-                (\stackIndex newLoc ->
-                    MoveStack { stackIndex = stackIndex, newLoc = newLoc }
+                (\stack newLoc ->
+                    MoveStack { stack = stack, newLoc = newLoc }
                 )
-                (Decode.field "stack_index" Decode.int)
+                (Decode.field "stack" cardStackDecoder)
                 (Decode.field "new_loc" boardLocationDecoder)
 
         "complete_turn" ->

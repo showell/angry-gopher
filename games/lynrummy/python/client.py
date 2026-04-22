@@ -11,7 +11,7 @@ Example:
     c = Client()
     sid = c.new_session()
     print(c.get_state(sid))
-    c.send_split(sid, stack_index=0, card_index=2)
+    c.send_split(sid, stack=c.get_state(sid)["state"]["board"][0], card_index=2)
     print(c.get_state(sid))
 """
 
@@ -106,32 +106,32 @@ class Client:
             content_type="application/json",
         )
 
-    def send_split(self, session_id, *, stack_index, card_index):
+    def send_split(self, session_id, *, stack, card_index):
         return self.send_action(
             session_id,
-            {"action": "split", "stack_index": stack_index, "card_index": card_index},
+            {"action": "split", "stack": stack, "card_index": card_index},
         )
 
-    def send_merge_stack(self, session_id, *, source_stack, target_stack, side):
+    def send_merge_stack(self, session_id, *, source, target, side):
         _check_side(side)
         return self.send_action(
             session_id,
             {
                 "action": "merge_stack",
-                "source_stack": source_stack,
-                "target_stack": target_stack,
+                "source": source,
+                "target": target,
                 "side": side,
             },
         )
 
-    def send_merge_hand(self, session_id, *, hand_card, target_stack, side):
+    def send_merge_hand(self, session_id, *, hand_card, target, side):
         _check_side(side)
         return self.send_action(
             session_id,
             {
                 "action": "merge_hand",
                 "hand_card": hand_card,
-                "target_stack": target_stack,
+                "target": target,
                 "side": side,
             },
         )
@@ -142,10 +142,10 @@ class Client:
             {"action": "place_hand", "hand_card": hand_card, "loc": loc},
         )
 
-    def send_move_stack(self, session_id, *, stack_index, new_loc):
+    def send_move_stack(self, session_id, *, stack, new_loc):
         return self.send_action(
             session_id,
-            {"action": "move_stack", "stack_index": stack_index, "new_loc": new_loc},
+            {"action": "move_stack", "stack": stack, "new_loc": new_loc},
         )
 
     def send_complete_turn(self, session_id):
@@ -269,7 +269,10 @@ def demo():
     seven_set_idx = find_stack_containing(state, "7S")
     print(f"7-set is at stack index {seven_set_idx}")
     c.send_merge_hand(
-        sid, hand_card=card("7H", deck=1), target_stack=seven_set_idx, side="right"
+        sid,
+        hand_card=card("7H", deck=1),
+        target=state["state"]["board"][seven_set_idx],
+        side="right",
     )
     state = c.get_state(sid)
     score = c.get_score(sid)
@@ -277,12 +280,12 @@ def demo():
           f"{len(state['state']['hands'][state['state']['active_player_index']]['hand_cards'])} hand cards, "
           f"score={score['board_score']}, seq={state['seq']}")
 
-    # Now split the first spade run (KS,AS,2S,3S). Index may have
-    # shifted from the merge — re-find it.
+    # Now split the first spade run (KS,AS,2S,3S). Re-query state
+    # because the prior merge may have reordered stacks.
     state = c.get_state(sid)
     spade_run_idx = find_stack_containing(state, "KS")
     print(f"spade run is at stack index {spade_run_idx}")
-    c.send_split(sid, stack_index=spade_run_idx, card_index=2)
+    c.send_split(sid, stack=state["state"]["board"][spade_run_idx], card_index=2)
     state = c.get_state(sid)
     score = c.get_score(sid)
     print(f"after split: {len(state['state']['board'])} stacks, "

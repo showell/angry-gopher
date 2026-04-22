@@ -35,6 +35,7 @@ the replay FSM + its Msg handlers in one module.
 
 import Browser.Dom
 import Game.BoardGeometry as BG
+import Game.CardStack as CardStack
 import Game.HandLayout as HandLayout
 import Game.Dealer
 import Game.Hand as Hand
@@ -379,7 +380,7 @@ handCardRectReceived result model =
                 maybeTarget =
                     case ctx.action of
                         WA.MergeHand p ->
-                            listAt p.targetStack model.board
+                            CardStack.findStack p.target model.board
                                 |> Maybe.map
                                     (\stack ->
                                         Space.stackEdgeInLiveViewport model stack p.side
