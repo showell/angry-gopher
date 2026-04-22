@@ -214,6 +214,15 @@ handleMouseUp releasePoint tMs model =
 
         Dragging info ->
             let
+                _ =
+                    Debug.log "[mouseup]"
+                        { source = info.source
+                        , hoveredWing = info.hoveredWing
+                        , clickIntent = info.clickIntent
+                        , cursor = info.cursor
+                        }
+            in
+            let
                 -- Append the mouseup point so the gesture path
                 -- captures the full gesture including the release.
                 -- For a pure click (no MouseMove), this is the
