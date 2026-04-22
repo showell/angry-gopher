@@ -103,16 +103,33 @@ update msg model =
                         nextPath =
                             info.gesturePath
                                 ++ [ { tMs = tMs, x = pos.x, y = pos.y } ]
+
+                        nextInfo =
+                            { info
+                                | cursor = pos
+                                , clickIntent = nextIntent
+                                , gesturePath = nextPath
+                            }
+
+                        hoveredWing =
+                            Gesture.floaterOverWing nextInfo
+
+                        withHover =
+                            { nextInfo | hoveredWing = hoveredWing }
+
+                        statusAfterMove =
+                            if hoveredWing /= info.hoveredWing then
+                                case hoveredWing of
+                                    Just _ ->
+                                        Gesture.wingHoverStatus
+
+                                    Nothing ->
+                                        model.status
+
+                            else
+                                model.status
                     in
-                    ( { model
-                        | drag =
-                            Dragging
-                                { info
-                                    | cursor = pos
-                                    , clickIntent = nextIntent
-                                    , gesturePath = nextPath
-                                }
-                      }
+                    ( { model | drag = Dragging withHover, status = statusAfterMove }
                     , Cmd.none
                     )
 
@@ -121,34 +138,6 @@ update msg model =
 
         MouseUp pos tMs ->
             handleMouseUp pos tMs model
-
-        WingEntered wing ->
-            let
-                _ =
-                    Debug.log "[wing]" ( "entered", wing )
-            in
-            case model.drag of
-                Dragging info ->
-                    ( { model | drag = Dragging { info | hoveredWing = Just wing } }, Cmd.none )
-
-                NotDragging ->
-                    ( model, Cmd.none )
-
-        WingLeft wing ->
-            let
-                _ =
-                    Debug.log "[wing]" ( "left", wing )
-            in
-            case model.drag of
-                Dragging info ->
-                    if info.hoveredWing == Just wing then
-                        ( { model | drag = Dragging { info | hoveredWing = Nothing } }, Cmd.none )
-
-                    else
-                        ( model, Cmd.none )
-
-                NotDragging ->
-                    ( model, Cmd.none )
 
         ActionSent _ ->
             -- V1: fire-and-forget. Errors are ignored; server-side

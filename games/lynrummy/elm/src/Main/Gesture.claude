@@ -59,6 +59,33 @@ hoveredWing, cursorOverBoard)`:
 | Nothing | FromBoardStack idx | Nothing | True + loc | `MoveStack { stackIndex, newLoc=loc }` |
 | any | any | any | drop before rect arrives | `Nothing` (gesture discarded) |
 
+## Wing hover detection (2026-04-22)
+
+Wing hover is computed in Elm on every `MouseMove`, not
+dispatched by DOM `mouseenter`/`mouseleave` events. The check
+is **floater-rect vs wing-rect overlap** — the player's mental
+model is the visible floater landing adjacent to the target,
+not a naked cursor crossing an invisible hit-zone. See
+`floaterOverWing`.
+
+The old DOM-event path was unreliable in practice (sometimes
+fired, sometimes didn't; no predictable pattern). We already
+know where we render the floater and where we render the
+wings — asking the DOM is a needless extra moving part. One
+source of truth: Elm math.
+
+On each `MouseMove`, `Main.elm`'s update:
+1. Updates `info.cursor` + `info.gesturePath` + `info.clickIntent`.
+2. Calls `Gesture.floaterOverWing` with the updated info.
+3. Writes the result into `info.hoveredWing`.
+4. On transition into a new hovered wing, writes
+   `Gesture.wingHoverStatus` ("Drop stack to complete merge.")
+   to the status bar.
+
+`resolveGesture` at mouseup reads `info.hoveredWing` directly.
+Since hoveredWing was set by the same computation the user
+saw, the drop decision matches the mental model.
+
 ## Click-vs-drag arbitration
 
 `clickIntent` starts as `Just cardIndex` for board-card drags

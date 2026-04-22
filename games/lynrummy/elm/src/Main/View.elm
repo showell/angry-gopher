@@ -591,10 +591,7 @@ viewWingAt info wing =
         , left = rect.left
         , width = rect.width
         , bgColor = bgColor
-        , extraAttrs =
-            [ Events.onMouseEnter (WingEntered wing)
-            , Events.onMouseLeave (WingLeft wing)
-            ]
+        , extraAttrs = []
         }
 
 

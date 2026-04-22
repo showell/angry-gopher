@@ -2,12 +2,14 @@ module Main.Gesture exposing
     ( cardMouseDown
     , clearDrag
     , fetchBoardRect
+    , floaterOverWing
     , handCardAttrs
     , handleMouseUp
     , pointDecoder
     , resolveGesture
     , startBoardCardDrag
     , startHandDrag
+    , wingHoverStatus
     )
 
 {-| The pointer-gesture layer: everything between a physical
@@ -435,6 +437,94 @@ cursorOverBoard info =
 
         Nothing ->
             False
+
+
+{-| Purely geometric "which wing does the dragged floater
+overlap?" The drop decision is about **what the player sees** —
+the floater's visible rect — not where a naked cursor happens
+to be. So the hit-test is floater-rect vs wing-rect overlap,
+not cursor-in-wing.
+
+Independent of the browser's DOM hit-test. Called from every
+MouseMove so the wing highlight + status message track the
+floater in real time; also the authoritative check at drop
+time via `resolveGesture`.
+-}
+floaterOverWing : DragInfo -> Maybe WingOracle.WingId
+floaterOverWing info =
+    case info.boardRect of
+        Nothing ->
+            Nothing
+
+        Just rect ->
+            let
+                floater =
+                    floaterBoardRect info rect
+            in
+            info.wings
+                |> List.filter (\wing -> overlaps floater (WingOracle.wingBoardRect wing))
+                |> List.head
+
+
+{-| The floater's footprint in board-frame coords. The
+floater's top-left sits at `cursor - grabOffset` in viewport
+coords; subtracting the board rect puts it in board frame.
+Width depends on the dragged source (a 3-card stack is wider
+than a hand card).
+-}
+floaterBoardRect :
+    DragInfo
+    -> { x : Int, y : Int, width : Int, height : Int }
+    -> { left : Int, top : Int, width : Int, height : Int }
+floaterBoardRect info rect =
+    let
+        width =
+            case info.source of
+                FromBoardStack stack ->
+                    CardStack.stackDisplayWidth stack
+
+                FromHandCard _ ->
+                    CardStack.stackPitch
+    in
+    { left = info.cursor.x - info.grabOffset.x - rect.x
+    , top = info.cursor.y - info.grabOffset.y - rect.y
+    , width = width
+    , height = BG.cardHeight
+    }
+
+
+overlaps :
+    { left : Int, top : Int, width : Int, height : Int }
+    -> { left : Int, top : Int, width : Int, height : Int }
+    -> Bool
+overlaps a b =
+    let
+        aRight =
+            a.left + a.width
+
+        aBottom =
+            a.top + a.height
+
+        bRight =
+            b.left + b.width
+
+        bBottom =
+            b.top + b.height
+    in
+    (a.left < bRight)
+        && (aRight > b.left)
+        && (a.top < bBottom)
+        && (aBottom > b.top)
+
+
+{-| Status message to show while hovering a wing (a drop here
+would fire a merge). Distinct from the primary action messages
+in `Main.Apply` — that machinery fires on mouseup; this fires
+mid-drag.
+-}
+wingHoverStatus : State.StatusMessage
+wingHoverStatus =
+    { text = "Drop stack to complete merge.", kind = Inform }
 
 
 {-| Board-relative drop location derived from cursor + grab

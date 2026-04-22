@@ -20,6 +20,7 @@ import Game.Card exposing (Card, CardValue(..), OriginDeck(..), Suit(..))
 import Game.CardStack as CardStack exposing (BoardLocation, CardStack, HandCard, HandCardState(..))
 import Game.WireAction as WA
 import Main.Gesture as Gesture
+import Game.WingOracle as WingOracle
 import Main.State as State
     exposing
         ( DragInfo
@@ -328,15 +329,90 @@ suitePlaceHand =
 
 
 
+-- FLOATER OVER WING
+
+
+suiteFloaterOverWing : Test
+suiteFloaterOverWing =
+    describe "floaterOverWing — the authoritative hit-test"
+        [ test "floater fully overlapping a right wing registers as hovering" <|
+            \_ ->
+                let
+                    source =
+                        stackAt "2C,3D,4C" (at 20 20)
+
+                    target =
+                        stackAt "5H,6S,7H" (at 300 20)
+
+                    wing =
+                        { target = target, side = Right }
+
+                    -- Board cursor placed so the 3-card floater sits
+                    -- on top of `wing` (which is one pitch wide at
+                    -- the right of the target).
+                    rect =
+                        WingOracle.wingBoardRect wing
+
+                    cursorBoardX =
+                        rect.left + (rect.width // 2) + (CardStack.stackDisplayWidth source // 2)
+
+                    cursorBoardY =
+                        rect.top + (rect.height // 2) + 20
+
+                    info =
+                        dragInfo
+                            { source = FromBoardStack source
+                            , hoveredWing = Nothing
+                            , cursorBoard = { x = cursorBoardX, y = cursorBoardY }
+                            }
+                            |> (\i ->
+                                    { i
+                                        | wings = [ wing ]
+                                        , grabOffset =
+                                            { x = CardStack.stackDisplayWidth source // 2
+                                            , y = 20
+                                            }
+                                    }
+                               )
+                in
+                Gesture.floaterOverWing info
+                    |> Expect.equal (Just wing)
+        , test "floater far from any wing returns Nothing" <|
+            \_ ->
+                let
+                    source =
+                        stackAt "2C,3D,4C" (at 20 20)
+
+                    target =
+                        stackAt "5H,6S,7H" (at 300 20)
+
+                    wing =
+                        { target = target, side = Right }
+
+                    info =
+                        dragInfo
+                            { source = FromBoardStack source
+                            , hoveredWing = Nothing
+                            , cursorBoard = { x = 50, y = 400 }
+                            }
+                            |> (\i -> { i | wings = [ wing ] })
+                in
+                Gesture.floaterOverWing info
+                    |> Expect.equal Nothing
+        ]
+
+
+
 -- MAIN SUITE
 
 
 suite : Test
 suite =
-    describe "Main.Gesture.resolveGesture"
+    describe "Main.Gesture"
         [ suiteSplit
         , suiteMergeStack
         , suiteMergeHand
         , suiteMoveStack
         , suitePlaceHand
+        , suiteFloaterOverWing
         ]

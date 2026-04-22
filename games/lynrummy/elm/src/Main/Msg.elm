@@ -13,7 +13,6 @@ import Browser.Dom
 import Http
 import Game.Card exposing (Card)
 import Game.CardStack exposing (CardStack)
-import Game.WingOracle exposing (WingId)
 import Main.State exposing (ActionLogBundle, CompleteTurnOutcome, Point, RemoteState)
 import Time
 
@@ -23,7 +22,9 @@ import Time
   - **Pointer gestures** — MouseDownOnBoardCard,
     MouseDownOnHandCard, MouseMove (carries MouseEvent
     timeStamp for behaviorist telemetry), MouseUp,
-    WingEntered, WingLeft, BoardRectReceived.
+    BoardRectReceived. Wing hover is NOT a Msg — wing
+    detection is computed in Elm on every MouseMove from the
+    floater's rect, not dispatched by DOM events.
   - **Button clicks** — ClickCompleteTurn, ClickHint,
     ClickInstantReplay, ClickReplayPauseToggle, PopupOk.
   - **HTTP responses** — ActionSent (fire-and-forget),
@@ -39,8 +40,6 @@ type Msg
     | MouseDownOnHandCard Card Point Float
     | MouseMove Point Float
     | MouseUp Point Float
-    | WingEntered WingId
-    | WingLeft WingId
     | BoardRectReceived (Result Browser.Dom.Error Browser.Dom.Element)
     | HandCardRectReceived (Result Browser.Dom.Error ( Browser.Dom.Element, Time.Posix ))
     | ActionSent (Result Http.Error ())
