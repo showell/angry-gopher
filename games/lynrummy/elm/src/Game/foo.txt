@@ -1,0 +1,6 @@
+GestureArbitration.claude:a drag. Steve knows this; the rule is "port it faithfully
+GestureArbitration.elm:NOTE: Steve knows as a developer and player that the click UI
+Replay/Space.elm:{-| Drag duration scales with distance at 2 ms/px (Steve,
+Strategy/RbSwap.claude:Steve's name for this trick: **"substitute trick."**
+View.claude:  Steve flagged as ugly in his own code. Stacks stay stable.
+WingOracle.claude:parameterized thing. Mirrors Steve's "strong concept of LEFT

@@ -27,8 +27,9 @@ SQLite.
 
 import Browser
 import Dict exposing (Dict)
-import Html exposing (Html, div, h1, h2, p, text)
-import Html.Attributes exposing (style)
+import Html exposing (Html, button, div, h1, h2, input, label, p, text)
+import Html.Attributes exposing (disabled, placeholder, style, type_, value)
+import Html.Events exposing (onClick, onInput)
 import Http
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
@@ -59,7 +60,9 @@ type alias Puzzle =
 
 
 type alias Model =
-    { catalog : CatalogState
+    { userName : String
+    , started : Bool
+    , catalog : CatalogState
     , panels : Dict String Panel
     }
 
@@ -89,7 +92,9 @@ type Panel
 
 
 type Msg
-    = CatalogFetched (Result Http.Error (List Puzzle))
+    = UpdateName String
+    | SubmitName
+    | CatalogFetched (Result Http.Error (List Puzzle))
     | PuzzleSessionCreated String (Result Http.Error Int)
     | PlayMsg String MainMsg.Msg
 
@@ -128,8 +133,12 @@ main =
 
 init : () -> ( Model, Cmd Msg )
 init () =
-    ( { catalog = CatalogLoading, panels = Dict.empty }
-    , fetchCatalog
+    ( { userName = ""
+      , started = False
+      , catalog = CatalogLoading
+      , panels = Dict.empty
+      }
+    , Cmd.none
     )
 
 
@@ -140,6 +149,16 @@ init () =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
+        UpdateName s ->
+            ( { model | userName = s }, Cmd.none )
+
+        SubmitName ->
+            if String.trim model.userName == "" then
+                ( model, Cmd.none )
+
+            else
+                ( { model | started = True }, fetchCatalog )
+
         CatalogFetched (Ok puzzles) ->
             let
                 initialPanels =
@@ -148,7 +167,7 @@ update msg model =
                         |> Dict.fromList
             in
             ( { model | catalog = CatalogLoaded puzzles, panels = initialPanels }
-            , Cmd.batch (List.map createPuzzleSession puzzles)
+            , Cmd.batch (List.map (createPuzzleSession model.userName) puzzles)
             )
 
         CatalogFetched (Err err) ->
@@ -241,20 +260,31 @@ fetchCatalog =
         }
 
 
-createPuzzleSession : Puzzle -> Cmd Msg
-createPuzzleSession puzzle =
+createPuzzleSession : String -> Puzzle -> Cmd Msg
+createPuzzleSession userName puzzle =
     Http.post
         { url = "/gopher/lynrummy-elm/new-puzzle-session"
-        , body = Http.jsonBody (encodePuzzleRequest puzzle)
+        , body = Http.jsonBody (encodePuzzleRequest userName puzzle)
         , expect =
             Http.expectJson (PuzzleSessionCreated puzzle.name) sessionIdDecoder
         }
 
 
-encodePuzzleRequest : Puzzle -> Encode.Value
-encodePuzzleRequest puzzle =
+encodePuzzleRequest : String -> Puzzle -> Encode.Value
+encodePuzzleRequest userName puzzle =
+    let
+        trimmed =
+            String.trim userName
+
+        label =
+            if trimmed == "" then
+                "board-lab: " ++ puzzle.title
+
+            else
+                "board-lab: " ++ puzzle.title ++ " [by " ++ trimmed ++ "]"
+    in
     Encode.object
-        [ ( "label", Encode.string ("board-lab: " ++ puzzle.title) )
+        [ ( "label", Encode.string label )
         , ( "puzzle_name", Encode.string puzzle.name )
         , ( "initial_state", puzzle.initialState )
         ]
@@ -288,8 +318,60 @@ view model =
                 )
             ]
          ]
-            ++ viewCatalog model
+            ++ (if model.started then
+                    viewCatalog model
+
+                else
+                    [ viewNameGate model ]
+               )
         )
+
+
+viewNameGate : Model -> Html Msg
+viewNameGate model =
+    let
+        trimmed =
+            String.trim model.userName
+
+        canStart =
+            trimmed /= ""
+    in
+    div
+        [ style "border" "1px solid #ccc"
+        , style "border-radius" "6px"
+        , style "padding" "20px"
+        , style "margin-top" "28px"
+        , style "background" "#fafafa"
+        ]
+        [ p []
+            [ text
+                ("Your name will be included in the session labels so "
+                    ++ "we can tell your attempts apart from others' when "
+                    ++ "we study the captures later."
+                )
+            ]
+        , label [ style "display" "block", style "margin-bottom" "12px" ]
+            [ text "Your name: "
+            , input
+                [ type_ "text"
+                , value model.userName
+                , onInput UpdateName
+                , placeholder "first name is fine"
+                , style "font-size" "15px"
+                , style "padding" "4px 8px"
+                , style "margin-left" "8px"
+                , style "min-width" "200px"
+                ]
+                []
+            ]
+        , button
+            [ onClick SubmitName
+            , disabled (not canStart)
+            , style "padding" "8px 20px"
+            , style "font-size" "14px"
+            ]
+            [ text "Start" ]
+        ]
 
 
 viewCatalog : Model -> List (Html Msg)
