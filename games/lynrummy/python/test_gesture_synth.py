@@ -56,14 +56,13 @@ def test_move_stack_uses_board_frame_coords():
     # Board frame: origin at the board's top-left. Python emits
     # board-frame coords; Elm renders the floater as a child of
     # the board div so CSS handles board→viewport for free.
+    # Grab = source top-left; drop = new_loc top-left.
     board = [_stack(100, 50, 4)]
     prim = {"action": "move_stack", "stack_index": 0,
             "new_loc": {"left": 400, "top": 200}}
     start, end = gesture_synth.drag_endpoints(prim, board)
-    assert start[0] == 100 + 4 * CARD_PITCH // 2
-    assert start[1] == 50 + CARD_HEIGHT // 2
-    assert end[0] == 400 + 4 * CARD_PITCH // 2
-    assert end[1] == 200 + CARD_HEIGHT // 2
+    assert start == (100, 50), f"grab (source top-left): {start}"
+    assert end == (400, 200), f"drop (new_loc top-left): {end}"
     return f"move_stack drag {start} -> {end}"
 
 
@@ -74,19 +73,26 @@ def test_drag_endpoints_returns_none_for_non_drag():
 
 
 def test_merge_stack_endpoints():
-    # Board-frame endpoints: source CENTER → target RIGHT-edge.
+    # Corner-based endpoints. Grab = source top-left. Drop =
+    # where source's top-left lands flush against the target.
+    # Plus a fixed 2-px realism jitter (+2 horizontal,
+    # -2 vertical).
     board = [_stack(200, 20, 3), _stack(80, 320, 4)]
     prim = {"action": "merge_stack",
             "source_stack": 0, "target_stack": 1, "side": "right"}
     start, end = gesture_synth.drag_endpoints(prim, board)
-    assert start[0] == 200 + 3 * CARD_PITCH // 2
-    assert start[1] == 20 + CARD_HEIGHT // 2
-    assert end[0] == 80 + 4 * CARD_PITCH
-    assert end[1] == 320 + CARD_HEIGHT // 2
+    assert start == (200, 20), f"start (source top-left): {start}"
+
+    expected_y = 320 - 2
+    expected_right_x = 80 + 4 * CARD_PITCH + 2
+    assert end == (expected_right_x, expected_y), \
+        f"right merge end: expected {(expected_right_x, expected_y)}, got {end}"
 
     prim_left = dict(prim, side="left")
     _, end_left = gesture_synth.drag_endpoints(prim_left, board)
-    assert end_left[0] == 80, f"left edge: {end_left[0]}"
+    expected_left_x = 80 - 3 * CARD_PITCH + 2
+    assert end_left == (expected_left_x, expected_y), \
+        f"left merge end: expected {(expected_left_x, expected_y)}, got {end_left}"
     return f"merge_stack drag {start} -> {end}"
 
 

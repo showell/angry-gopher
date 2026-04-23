@@ -140,10 +140,11 @@ def drag_endpoints(prim, board_before):
             return None
         src = board_before[src_idx]
         new_loc = prim["new_loc"]
-        size = len(src["board_cards"])
-        start = _stack_center(src)
-        end = (new_loc["left"] + size * CARD_PITCH // 2,
-               new_loc["top"] + CARD_HEIGHT // 2)
+        # Corners: grab = source top-left, drop = new_loc
+        # top-left. The stack's top-left IS the loc coordinate
+        # by construction, so no width math is needed.
+        start = (src["loc"]["left"], src["loc"]["top"])
+        end = (new_loc["left"], new_loc["top"])
         return start, end
 
     if kind == "merge_stack":
@@ -154,8 +155,25 @@ def drag_endpoints(prim, board_before):
         src = board_before[src_idx]
         tgt = board_before[tgt_idx]
         side = prim.get("side", "right")
-        start = _stack_center(src)
-        end = _stack_edge(tgt, side)
+        # Work in corners. The grab point is the source's
+        # top-left; the drop point is the top-left position
+        # where the source lands flush against the target.
+        #   right merge → source.top-left lands at target's
+        #                 top-right corner.
+        #   left merge  → source.top-left lands at
+        #                 (target.left - source.width,
+        #                  target.top).
+        # Steve 2026-04-23: land board-to-board merges nearly
+        # perfectly — humans miss because of mouse control, agent
+        # shouldn't. Small deterministic jitter (2 px) keeps it
+        # from looking machine-sharp without being inaccurate.
+        start = (src["loc"]["left"], src["loc"]["top"])
+        tgt_right = tgt["loc"]["left"] + len(tgt["board_cards"]) * CARD_PITCH
+        if side == "right":
+            drop_x = tgt_right
+        else:
+            drop_x = tgt["loc"]["left"] - len(src["board_cards"]) * CARD_PITCH
+        end = (drop_x + 2, tgt["loc"]["top"] - 2)
         return start, end
 
     # split: no gesture path. Splits are CLICKS in the UI —
