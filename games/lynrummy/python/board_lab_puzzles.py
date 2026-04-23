@@ -391,6 +391,496 @@ def _no_room_at_the_top():
     )
 
 
+# --- Crowded-target batch (2026-04-23) -------------------------
+#
+# 25 puzzles built around the fundamental crowding problem: the
+# target stack has a neighbor on the growth side, and the move
+# can't happen in place. The escape is always to pre-move either
+# the target, the blocking neighbor, or (when applicable) to
+# pick a different legal target.
+#
+# Coordinate conventions used below:
+#   - 3-card stack width = 93 px; 4-card = 126 px.
+#   - A neighbor at gap=30 px from a 3-card target's right edge
+#     makes a 4-card merge overflow (target ends at +126,
+#     neighbor starts at +123) — forcing a pre-move.
+#   - Rows at top=120 / 240 / 400 give three clear bands.
+#
+# Puzzles are designed so the RELEVANT crowding is on the
+# growth side of the target. Far-corner stacks are
+# distractors, not obstacles.
+
+
+def _crowded_merge_hand_right():
+    return puzzle(
+        name="crowded_merge_hand_right",
+        title="Merge-hand with right-blocked target",
+        description=(
+            "Hand has 7C. The target 4C-5C-6C has a 3-set of 8s "
+            "sitting just to its right — close enough that the "
+            "4-card merged run would overlap."
+        ),
+        board=[
+            stack("4C 5C 6C", at=(120, 200)),
+            stack("8D 8H 8S", at=(120, 323)),
+        ],
+        player_hand=hand("7C"),
+    )
+
+
+def _crowded_merge_hand_left():
+    return puzzle(
+        name="crowded_merge_hand_left",
+        title="Merge-hand with left-blocked target",
+        description=(
+            "Hand has 9D. The target TD-JD-QD wants an 8D on its "
+            "left, but a set of 2s is already there."
+        ),
+        board=[
+            stack("2C 2H 2S", at=(120, 170)),
+            stack("TD JD QD", at=(120, 293)),
+        ],
+        player_hand=hand("9D"),
+    )
+
+
+def _crowded_merge_hand_wedged():
+    return puzzle(
+        name="crowded_merge_hand_wedged",
+        title="Merge-hand with target wedged both sides",
+        description=(
+            "Hand has 5S. The 6S-7S-8S target is sandwiched "
+            "between neighbors on both sides. Either direction of "
+            "growth would overlap something."
+        ),
+        board=[
+            stack("KC KD KH", at=(120, 200)),
+            stack("6S 7S 8S", at=(120, 323)),
+            stack("AC AD AH", at=(120, 446)),
+        ],
+        player_hand=hand("5S"),
+    )
+
+
+def _crowded_follow_up_right():
+    return puzzle(
+        name="crowded_follow_up_right",
+        title="Follow-up merge, right-blocked",
+        description=(
+            "Two heart fragments on the board — 2H-3H-4H and "
+            "5H-6H-7H — should chain into one. The target on the "
+            "left is blocked on its right by a set of Queens."
+        ),
+        board=[
+            stack("2H 3H 4H", at=(120, 100)),
+            stack("QC QD QS", at=(120, 223)),
+            stack("5H 6H 7H", at=(280, 450)),
+        ],
+        player_hand=hand(""),
+    )
+
+
+def _crowded_follow_up_left():
+    return puzzle(
+        name="crowded_follow_up_left",
+        title="Follow-up merge, left-blocked",
+        description=(
+            "Two spade fragments should chain: 2S-3S-4S and "
+            "5S-6S-7S. The low-end target has a set of Queens "
+            "to its left, so the growing stack can't shift "
+            "that way."
+        ),
+        board=[
+            stack("QC QD QH", at=(120, 200)),
+            stack("2S 3S 4S", at=(120, 323)),
+            stack("5S 6S 7S", at=(280, 500)),
+        ],
+        player_hand=hand(""),
+    )
+
+
+def _crowded_follow_up_wedge():
+    return puzzle(
+        name="crowded_follow_up_wedge",
+        title="Follow-up merge with wedged receiver",
+        description=(
+            "Two diamond fragments (2D-3D-4D and 5D-6D-7D) want "
+            "to chain into one 6-card run. The receiver on the "
+            "main row is fenced in on both sides — it has to "
+            "move before it can absorb anything."
+        ),
+        board=[
+            stack("8C 8H 8S", at=(120, 200)),
+            stack("5D 6D 7D", at=(120, 323)),
+            stack("9C 9H 9S", at=(120, 446)),
+            stack("2D 3D 4D", at=(280, 100)),
+        ],
+        player_hand=hand(""),
+    )
+
+
+def _crowded_direct_play_right():
+    return puzzle(
+        name="crowded_direct_play_right",
+        title="Direct play, right-blocked",
+        description=(
+            "Hand has TS. The 7S-8S-9S run sits at mid-board; a "
+            "set of 3s sits a hand-width to the right, so "
+            "dropping TS onto the end in place would overlap."
+        ),
+        board=[
+            stack("7S 8S 9S", at=(160, 250)),
+            stack("3C 3D 3H", at=(160, 373)),
+        ],
+        player_hand=hand("TS"),
+    )
+
+
+def _crowded_direct_play_left():
+    return puzzle(
+        name="crowded_direct_play_left",
+        title="Direct play, left-blocked",
+        description=(
+            "Hand has AD. The AS-AH-AC set is ready to accept a "
+            "fourth Ace — but it sits just to the right of a "
+            "short run. Extending to the left isn't on."
+        ),
+        board=[
+            stack("5C 6C 7C", at=(180, 200)),
+            stack("AS AH AC", at=(180, 323)),
+        ],
+        player_hand=hand("AD"),
+    )
+
+
+def _crowded_direct_play_alt_target():
+    return puzzle(
+        name="crowded_direct_play_alt_target",
+        title="Direct play with a clean alternative",
+        description=(
+            "Hand has 6H. Two legal targets exist: a heart run "
+            "5H-4H-3H at the top (crowded by a K-set) and a "
+            "different heart pairing 6C-6D-6S at the bottom "
+            "(wide open). Pick where to play."
+        ),
+        board=[
+            stack("3H 4H 5H", at=(120, 150)),
+            stack("KC KD KH", at=(120, 273)),
+            stack("6C 6D 6S", at=(380, 300)),
+        ],
+        player_hand=hand("6H"),
+    )
+
+
+def _crowded_pair_peel_receiver():
+    return puzzle(
+        name="crowded_pair_peel_receiver",
+        title="Pair peel, receiver crowded",
+        description=(
+            "Hand has two 7s. Peel 7C from a 4-card club run and "
+            "merge with the pair for a 3-set of 7s. The 7s-pair "
+            "receiver has a neighbor on its right."
+        ),
+        board=[
+            stack("5C 6C 7C 8C", at=(120, 200)),
+            stack("TD TH TS", at=(300, 373)),
+        ],
+        player_hand=hand("7H 7S"),
+    )
+
+
+def _crowded_pair_peel_donor_wedged():
+    return puzzle(
+        name="crowded_pair_peel_donor_wedged",
+        title="Pair peel, donor wedged",
+        description=(
+            "Hand has 4H and 4S. The 4C we want to peel sits at "
+            "the end of a spade run, which is wedged between "
+            "neighbors — moving the run first may be easier "
+            "than trying to land the new 4-set beside it."
+        ),
+        board=[
+            stack("2S 3S 4S 5S 6S", at=(120, 200)),
+            stack("8C 8D 8H", at=(280, 100)),
+            stack("QC QD QH", at=(280, 360)),
+        ],
+        player_hand=hand("4C 4D"),
+    )
+
+
+def _crowded_peel_for_run_target_blocked():
+    return puzzle(
+        name="crowded_peel_for_run_target_blocked",
+        title="Peel-for-run, run target blocked",
+        description=(
+            "Hand has 9D and TD. Peel JD off the 4-set of Jacks "
+            "and merge into a diamond run. The 9-T-J receiver "
+            "will want room on the right, but a K-set is already "
+            "there."
+        ),
+        board=[
+            stack("JC JD JH JS", at=(120, 200)),
+            stack("KC KD KH", at=(320, 250)),
+            stack("5H 5D 5S", at=(420, 500)),
+        ],
+        player_hand=hand("9D TD"),
+    )
+
+
+def _crowded_peel_for_run_left_blocked():
+    return puzzle(
+        name="crowded_peel_for_run_left_blocked",
+        title="Peel-for-run, left-blocked landing",
+        description=(
+            "Hand has QH and KH. Peel JH off a 4-set of Jacks "
+            "and build J-Q-K of hearts. The natural landing "
+            "zone for the run has a set of 2s pinning its "
+            "left side."
+        ),
+        board=[
+            stack("JC JD JH JS", at=(120, 200)),
+            stack("2C 2D 2H", at=(320, 200)),
+        ],
+        player_hand=hand("QH KH"),
+    )
+
+
+def _crowded_split_for_set_target_blocked():
+    return puzzle(
+        name="crowded_split_for_set_target_blocked",
+        title="Split-for-set, set-target crowded",
+        description=(
+            "Hand has 5H and 5D. Split 5C out of a long club run "
+            "to form a set of 5s with the pair. The set target "
+            "(hand pair) sits near a distractor stack on the "
+            "right."
+        ),
+        board=[
+            stack("2C 3C 4C 5C 6C 7C 8C", at=(120, 100)),
+            stack("KC KD KH", at=(300, 400)),
+        ],
+        player_hand=hand("5H 5D"),
+    )
+
+
+def _crowded_split_for_set_left_blocked():
+    return puzzle(
+        name="crowded_split_for_set_left_blocked",
+        title="Split-for-set, hand pair left-blocked",
+        description=(
+            "Hand has 6C and 6D. A 7-card heart run sits on "
+            "the board; split 6H out of the middle to form a "
+            "set of 6s with the pair. The hand-pair target has "
+            "a distractor on its LEFT this time."
+        ),
+        board=[
+            stack("KC KD KS", at=(320, 150)),
+            stack("3H 4H 5H 6H 7H 8H 9H", at=(120, 100)),
+        ],
+        player_hand=hand("6C 6D"),
+    )
+
+
+def _crowded_rb_swap_receiver():
+    return puzzle(
+        name="crowded_rb_swap_receiver",
+        title="Red-black swap, receiver crowded",
+        description=(
+            "Hand has 5D. A red-black run 3D-4C-5H wants an "
+            "extension but needs a swap to accept 5D cleanly. "
+            "The receiving run has a neighbor pinning its "
+            "right side."
+        ),
+        board=[
+            stack("3D 4C 5H", at=(160, 200)),
+            stack("9C 9D 9S", at=(160, 323)),
+        ],
+        player_hand=hand("5D 6C"),
+    )
+
+
+def _crowded_twin_runs_one_crowded():
+    return puzzle(
+        name="crowded_twin_runs_one_crowded",
+        title="Twin runs, one crowded",
+        description=(
+            "Hand has 8C. Two club-run targets exist: 5C-6C-7C "
+            "(top, crowded by a set on its right) and a "
+            "separate 9C-TC-JC (bottom, open). Both will "
+            "accept the 8C."
+        ),
+        board=[
+            stack("5C 6C 7C", at=(120, 100)),
+            stack("4D 4H 4S", at=(120, 223)),
+            stack("9C TC JC", at=(320, 400)),
+        ],
+        player_hand=hand("8C"),
+    )
+
+
+def _crowded_twin_sets_one_crowded():
+    return puzzle(
+        name="crowded_twin_sets_one_crowded",
+        title="Twin sets, one crowded",
+        description=(
+            "Hand has 3D. Two 3-sets sit on the board: one at "
+            "top-left with a neighbor blocking its right; one "
+            "at bottom-right in open space."
+        ),
+        board=[
+            stack("3C 3H 3S", at=(120, 100)),
+            stack("8C 8D 8H", at=(120, 223)),
+            stack("3C 3H 3S", at=(380, 500)),
+        ],
+        player_hand=hand("3D"),
+    )
+
+
+def _crowded_set_vs_run_pick_clean():
+    return puzzle(
+        name="crowded_set_vs_run_pick_clean",
+        title="Set or run, pick the clean one",
+        description=(
+            "Hand has 7H. You could extend the crowded "
+            "4H-5H-6H heart run (its right side is blocked) or "
+            "join the spacious 7C-7S-7D set in open space. "
+            "Either is legal — which reads as cleaner?"
+        ),
+        board=[
+            stack("4H 5H 6H", at=(120, 200)),
+            stack("KC KD KH", at=(120, 323)),
+            stack("7C 7S 7D", at=(380, 400)),
+        ],
+        player_hand=hand("7H"),
+    )
+
+
+def _crowded_double_shove():
+    return puzzle(
+        name="crowded_double_shove",
+        title="Two stacks in the way",
+        description=(
+            "Hand has 5H. The 2H-3H-4H target's right is "
+            "blocked by two distractors in a row. Clearing "
+            "room for the 4-card merge means moving both "
+            "blocking stacks."
+        ),
+        board=[
+            stack("2H 3H 4H", at=(120, 100)),
+            stack("8C 8D 8S", at=(120, 223)),
+            stack("JC JD JS", at=(120, 346)),
+        ],
+        player_hand=hand("5H"),
+    )
+
+
+def _crowded_cascade_merge():
+    return puzzle(
+        name="crowded_cascade_merge",
+        title="Cascade merge",
+        description=(
+            "Hand has 5D. Merging it onto the 6D-7D-8D run "
+            "makes a 5-6-7-8 chunk that then chains with the "
+            "2D-3D-4D fragment. Both merges happen this turn; "
+            "the second depends on the first."
+        ),
+        board=[
+            stack("2D 3D 4D", at=(120, 100)),
+            stack("6D 7D 8D", at=(320, 300)),
+            stack("KS KD KH", at=(320, 500)),
+        ],
+        player_hand=hand("5D"),
+    )
+
+
+def _crowded_block_behind_block():
+    return puzzle(
+        name="crowded_block_behind_block",
+        title="Block behind block",
+        description=(
+            "Hand has 9S. The 6S-7S-8S target needs room on "
+            "its right, but the neighbor that's in the way "
+            "has ITS OWN neighbor — you can't just shove the "
+            "first one over."
+        ),
+        board=[
+            stack("6S 7S 8S", at=(120, 150)),
+            stack("4C 4D 4H", at=(120, 273)),
+            stack("TD TH TS", at=(120, 396)),
+        ],
+        player_hand=hand("9S"),
+    )
+
+
+def _crowded_merge_into_big_stack():
+    return puzzle(
+        name="crowded_merge_into_big_stack",
+        title="Big stack meets neighbor",
+        description=(
+            "Hand has 8D. The 3D-4D-5D-6D-7D 5-card run is "
+            "already wide — adding 8D makes it 6 cards (192 "
+            "px). A queen-set sits close on the right."
+        ),
+        board=[
+            stack("3D 4D 5D 6D 7D", at=(120, 100)),
+            stack("QC QH QS", at=(120, 289)),
+        ],
+        player_hand=hand("8D"),
+    )
+
+
+def _crowded_tight_gap_right():
+    return puzzle(
+        name="crowded_tight_gap_right",
+        title="Tight gap, right-blocked",
+        description=(
+            "Hand has 8H. The 5H-6H-7H target has a neighbor "
+            "very close on its right — barely legal, visually "
+            "tight. Is there room for the 4-card merge, or not?"
+        ),
+        board=[
+            stack("5H 6H 7H", at=(120, 200)),
+            stack("9C 9D 9S", at=(120, 308)),
+        ],
+        player_hand=hand("8H"),
+    )
+
+
+def _crowded_loose_card_receiver_blocked():
+    return puzzle(
+        name="crowded_loose_card_receiver_blocked",
+        title="Loose card, crowded receiver",
+        description=(
+            "Hand has KD. The K-set target is already 3 cards "
+            "(KC-KH-KS) — ready for a fourth King. But its "
+            "right neighbor leaves no room to grow."
+        ),
+        board=[
+            stack("KC KH KS", at=(160, 250)),
+            stack("5C 5D 5H", at=(160, 373)),
+        ],
+        player_hand=hand("KD"),
+    )
+
+
+def _crowded_hand_stacks():
+    return puzzle(
+        name="crowded_hand_stacks",
+        title="Hand set into crowded row",
+        description=(
+            "Hand has 6C, 6D, and 6S. Landing the set next to "
+            "an existing row on the board is the natural move, "
+            "but the obvious slot is walled in by neighbors."
+        ),
+        board=[
+            stack("JC JD JH", at=(120, 150)),
+            stack("9C 9D 9S", at=(120, 273)),
+            stack("3C 3D 3H", at=(120, 396)),
+        ],
+        player_hand=hand("6C 6D 6S"),
+    )
+
+
 def catalog():
     """Ordered list of board-lab puzzles. Order matters — it's the
     order panels appear on the page. New puzzles are appended
@@ -415,6 +905,33 @@ def catalog():
         _interfering_neighbor(),
         _packed_row(),
         _no_room_at_the_top(),
+        # Crowded-target batch (2026-04-23).
+        _crowded_merge_hand_right(),
+        _crowded_merge_hand_left(),
+        _crowded_merge_hand_wedged(),
+        _crowded_follow_up_right(),
+        _crowded_follow_up_left(),
+        _crowded_follow_up_wedge(),
+        _crowded_direct_play_right(),
+        _crowded_direct_play_left(),
+        _crowded_direct_play_alt_target(),
+        _crowded_pair_peel_receiver(),
+        _crowded_pair_peel_donor_wedged(),
+        _crowded_peel_for_run_target_blocked(),
+        _crowded_peel_for_run_left_blocked(),
+        _crowded_split_for_set_target_blocked(),
+        _crowded_split_for_set_left_blocked(),
+        _crowded_rb_swap_receiver(),
+        _crowded_twin_runs_one_crowded(),
+        _crowded_twin_sets_one_crowded(),
+        _crowded_set_vs_run_pick_clean(),
+        _crowded_double_shove(),
+        _crowded_cascade_merge(),
+        _crowded_block_behind_block(),
+        _crowded_merge_into_big_stack(),
+        _crowded_tight_gap_right(),
+        _crowded_loose_card_receiver_blocked(),
+        _crowded_hand_stacks(),
     ]
     _validate_catalog(puzzles)
     return puzzles
