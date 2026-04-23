@@ -101,6 +101,20 @@ type alias Model =
     -- Play instances on one page don't collide on
     -- `Browser.Dom.getElement`.
     , gameId : String
+
+    -- True when this Play instance lives inside a BOARD_LAB
+    -- puzzle panel — suppresses the Complete Turn button and
+    -- the "← Lobby" link in the turn-controls row. Puzzles are
+    -- always within-a-turn; surfacing Complete Turn would mean
+    -- nothing. Main app sets this False.
+    , hideTurnControls : Bool
+
+    -- True when this Play instance is displaying a pre-captured
+    -- session (e.g. the lab's agent-review mode). Gestures are
+    -- ignored so the viewer can't accidentally contaminate the
+    -- captured session's action log. Only Instant Replay + the
+    -- rendered board/hand surface work.
+    , readonly : Bool
     }
 
 
@@ -420,4 +434,6 @@ baseModel =
     , replayBaseline = Nothing
     , replayBoardRect = Nothing
     , gameId = "default"
+    , hideTurnControls = False
+    , readonly = False
     }

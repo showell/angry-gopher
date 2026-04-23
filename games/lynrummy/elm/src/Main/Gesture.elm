@@ -110,36 +110,40 @@ startBoardCardDrag :
     -> Model
     -> ( Model, Cmd Msg )
 startBoardCardDrag { stack, cardIndex } clientPoint tMs model =
-    case model.drag of
-        NotDragging ->
-            let
-                wings =
-                    WingOracle.wingsForStack stack model.board
+    if model.readonly then
+        ( model, Cmd.none )
 
-                halfWidth =
-                    CardStack.stackDisplayWidth stack // 2
-            in
-            ( { model
-                | drag =
-                    Dragging
-                        { source = FromBoardStack stack
-                        , cursor = clientPoint
-                        , originalCursor = clientPoint
-                        , grabOffset = { x = halfWidth, y = 20 }
-                        , wings = wings
-                        , hoveredWing = Nothing
-                        , boardRect = Nothing
-                        , clickIntent = Just cardIndex
-                        , gesturePath =
-                            [ { tMs = tMs, x = clientPoint.x, y = clientPoint.y } ]
-                        , pathFrame = ViewportFrame
-                        }
-              }
-            , fetchBoardRect model.gameId
-            )
+    else
+        case model.drag of
+            NotDragging ->
+                let
+                    wings =
+                        WingOracle.wingsForStack stack model.board
 
-        Dragging _ ->
-            ( model, Cmd.none )
+                    halfWidth =
+                        CardStack.stackDisplayWidth stack // 2
+                in
+                ( { model
+                    | drag =
+                        Dragging
+                            { source = FromBoardStack stack
+                            , cursor = clientPoint
+                            , originalCursor = clientPoint
+                            , grabOffset = { x = halfWidth, y = 20 }
+                            , wings = wings
+                            , hoveredWing = Nothing
+                            , boardRect = Nothing
+                            , clickIntent = Just cardIndex
+                            , gesturePath =
+                                [ { tMs = tMs, x = clientPoint.x, y = clientPoint.y } ]
+                            , pathFrame = ViewportFrame
+                            }
+                  }
+                , fetchBoardRect model.gameId
+                )
+
+            Dragging _ ->
+                ( model, Cmd.none )
 
 
 {-| Start a drag from a hand card. No click intent — hand cards
@@ -147,6 +151,15 @@ don't have a split semantic.
 -}
 startHandDrag : Card -> Point -> Float -> Model -> ( Model, Cmd Msg )
 startHandDrag card clientPoint tMs model =
+    if model.readonly then
+        ( model, Cmd.none )
+
+    else
+        handDragAllowed card clientPoint tMs model
+
+
+handDragAllowed : Card -> Point -> Float -> Model -> ( Model, Cmd Msg )
+handDragAllowed card clientPoint tMs model =
     case ( model.drag, findHandCard card (activeHand model).handCards ) of
         ( NotDragging, Just handCard ) ->
             let

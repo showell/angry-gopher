@@ -59,13 +59,24 @@ type alias Puzzle =
 -- MODEL
 
 
+{-| Lab mode — driven by the URL path + mode flag from the
+HTML harness. Play mode is the default; Review mode shows
+the latest agent attempt per puzzle, read-only.
+-}
+type LabMode
+    = PlayMode
+    | ReviewMode
+
+
 type alias Model =
-    { userName : String
+    { mode : LabMode
+    , userName : String
     , started : Bool
     , finished : Bool
     , catalog : CatalogState
     , panels : Dict String Panel
     , annotations : Dict String AnnotationState
+    , agentSessions : Dict String Int
     }
 
 
@@ -116,6 +127,7 @@ type Msg
     | SubmitName
     | ClickFinish
     | CatalogFetched (Result Http.Error (List Puzzle))
+    | AgentSessionsFetched (Result Http.Error (Dict String Int))
     | PuzzleSessionCreated String (Result Http.Error Int)
     | PlayMsg String MainMsg.Msg
     | UpdateAnnotation String String
@@ -145,7 +157,11 @@ puzzleDecoder =
 -- MAIN
 
 
-main : Program () Model Msg
+type alias Flags =
+    { mode : String }
+
+
+main : Program Flags Model Msg
 main =
     Browser.element
         { init = init
@@ -155,17 +171,37 @@ main =
         }
 
 
-init : () -> ( Model, Cmd Msg )
-init () =
-    ( { userName = ""
-      , started = False
-      , finished = False
-      , catalog = CatalogLoading
-      , panels = Dict.empty
-      , annotations = Dict.empty
-      }
-    , Cmd.none
-    )
+init : Flags -> ( Model, Cmd Msg )
+init flags =
+    let
+        mode =
+            if flags.mode == "review" then
+                ReviewMode
+
+            else
+                PlayMode
+
+        baseModel =
+            { mode = mode
+            , userName = ""
+            , started = False
+            , finished = False
+            , catalog = CatalogLoading
+            , panels = Dict.empty
+            , annotations = Dict.empty
+            , agentSessions = Dict.empty
+            }
+    in
+    case mode of
+        PlayMode ->
+            ( baseModel, Cmd.none )
+
+        ReviewMode ->
+            -- No name gate in review mode — the viewer isn't
+            -- creating sessions, just inspecting existing ones.
+            ( { baseModel | userName = "reviewer", started = True }
+            , Cmd.batch [ fetchCatalog, fetchAgentSessions ]
+            )
 
 
 emptyAnnotation : AnnotationState
@@ -205,13 +241,29 @@ update msg model =
                     puzzles
                         |> List.map (\p -> ( p.name, Creating ))
                         |> Dict.fromList
+
+                m =
+                    { model | catalog = CatalogLoaded puzzles, panels = initialPanels }
             in
-            ( { model | catalog = CatalogLoaded puzzles, panels = initialPanels }
-            , Cmd.batch (List.map (createPuzzleSession model.userName) puzzles)
-            )
+            case model.mode of
+                PlayMode ->
+                    ( m
+                    , Cmd.batch (List.map (createPuzzleSession model.userName) puzzles)
+                    )
+
+                ReviewMode ->
+                    hydrateReviewIfReady m
 
         CatalogFetched (Err err) ->
             ( { model | catalog = CatalogFailed (httpErrorToString err) }
+            , Cmd.none
+            )
+
+        AgentSessionsFetched (Ok sessions) ->
+            hydrateReviewIfReady { model | agentSessions = sessions }
+
+        AgentSessionsFetched (Err _) ->
+            ( { model | catalog = CatalogFailed "agent sessions fetch failed" }
             , Cmd.none
             )
 
@@ -408,6 +460,60 @@ sendAnnotation userName puzzleName body =
                 )
         , expect = Http.expectWhatever (AnnotationSent puzzleName)
         }
+
+
+fetchAgentSessions : Cmd Msg
+fetchAgentSessions =
+    Http.get
+        { url = "/gopher/board-lab/agent-sessions"
+        , expect = Http.expectJson AgentSessionsFetched agentSessionsDecoder
+        }
+
+
+agentSessionsDecoder : Decoder (Dict String Int)
+agentSessionsDecoder =
+    Decode.field "sessions" (Decode.dict Decode.int)
+
+
+{-| Once both catalog AND agentSessions are in, construct a
+Play instance per puzzle (ReviewSession mode) and wire it
+into panels. Called from either handler when the second
+response arrives. Safe to call with incomplete data — just
+no-ops until both pieces are present.
+-}
+hydrateReviewIfReady : Model -> ( Model, Cmd Msg )
+hydrateReviewIfReady model =
+    case ( model.mode, model.catalog ) of
+        ( ReviewMode, CatalogLoaded puzzles ) ->
+            if Dict.isEmpty model.agentSessions then
+                ( model, Cmd.none )
+
+            else
+                let
+                    addPuzzle p ( panels, cmds ) =
+                        case Dict.get p.name model.agentSessions of
+                            Just sid ->
+                                let
+                                    ( playModel, cmd ) =
+                                        Play.init (Play.ReviewSession sid)
+                                in
+                                ( Dict.insert p.name (Playing playModel) panels
+                                , Cmd.map (PlayMsg p.name) cmd :: cmds
+                                )
+
+                            Nothing ->
+                                -- No agent attempt for this puzzle —
+                                -- panel stays in Creating (empty)
+                                -- so the gallery entry is visible.
+                                ( panels, cmds )
+
+                    ( newPanels, newCmds ) =
+                        List.foldl addPuzzle ( model.panels, [] ) puzzles
+                in
+                ( { model | panels = newPanels }, Cmd.batch newCmds )
+
+        _ ->
+            ( model, Cmd.none )
 
 
 

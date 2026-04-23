@@ -497,6 +497,20 @@ viewTurnControls model =
 
                 Nothing ->
                     gameButton "Instant replay" ClickInstantReplay
+
+        children =
+            if model.hideTurnControls then
+                -- BOARD_LAB puzzle context: no turn end, no lobby.
+                [ gameButton "Hint" ClickHint
+                , replayControl
+                ]
+
+            else
+                [ gameButton "Complete turn" ClickCompleteTurn
+                , gameButton "Hint" ClickHint
+                , replayControl
+                , gameLink "← Lobby" "/gopher/game-lobby"
+                ]
     in
     div
         [ style "margin-top" "12px"
@@ -504,11 +518,7 @@ viewTurnControls model =
         , style "gap" "8px"
         , style "flex-wrap" "wrap"
         ]
-        [ gameButton "Complete turn" ClickCompleteTurn
-        , gameButton "Hint" ClickHint
-        , replayControl
-        , gameLink "← Lobby" "/gopher/game-lobby"
-        ]
+        children
 
 
 gameLink : String -> String -> Html Msg

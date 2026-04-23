@@ -89,6 +89,12 @@ type Config
     = NewSession
     | ResumeSession Int
     | PuzzleSession Int
+      -- Review an existing agent or human session in read-only
+      -- mode. Same fetch path as PuzzleSession (load action log
+      -- from the server), but gestures are ignored so the viewer
+      -- can't accidentally contaminate the captured log. Used by
+      -- BOARD_LAB's agent-review mode.
+    | ReviewSession Int
 
 
 
@@ -137,8 +143,23 @@ init config =
             ( { baseModel
                 | sessionId = Just sid
                 , gameId = String.fromInt sid
+                , hideTurnControls = True
                 , status =
                     { text = "Puzzle " ++ String.fromInt sid ++ " loaded."
+                    , kind = Inform
+                    }
+              }
+            , fetchActionLog sid
+            )
+
+        ReviewSession sid ->
+            ( { baseModel
+                | sessionId = Just sid
+                , gameId = "review-" ++ String.fromInt sid
+                , hideTurnControls = True
+                , readonly = True
+                , status =
+                    { text = "Session " ++ String.fromInt sid ++ " loaded — click Instant replay to watch."
                     , kind = Inform
                     }
               }
