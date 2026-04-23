@@ -672,30 +672,6 @@ def _split_with_vertical_neighbor():
     )
 
 
-def _peel_for_run_derived_overflow():
-    # Peel JD off a J-set and merge with hand 9D+TD for
-    # 9-T-J. The derived 3-card run needs a spacious home —
-    # the space right next to the J-set is filled, so the
-    # new run has to land somewhere else.
-    return puzzle(
-        name="peel_for_run_derived_overflow",
-        title="Peel-for-run, derived run can't land adjacent",
-        description=(
-            "Hand has 9D and TD. Peel JD off the 4-set of "
-            "Jacks to build a 9-T-J diamond run. A set of "
-            "Kings and a set of 5s fill the space next to "
-            "the J-set — the new run has to land away from "
-            "its donor."
-        ),
-        board=[
-            stack("JC JD JH JS", at=(120, 200)),
-            stack("KC KD KS", at=(120, 334)),
-            stack("5C 5D 5S", at=(120, 442)),
-        ],
-        player_hand=hand("9D TD"),
-    )
-
-
 def _neighbor_as_candidate():
     # The "blocker" right next to the target is actually a
     # merge partner, not an obstacle — a 4H-5H-6H target has
@@ -768,6 +744,48 @@ def _wedge_needs_vertical_move():
     )
 
 
+def _peel_for_run_red_herrings():
+    # Variation of #23 with red-herring clutter around the
+    # target. Same trick (peel JD off J-set, build 9-T-J
+    # diamond run with hand), but the board is noisy enough
+    # that the pre-move "find a 4-side-clear home for the
+    # J-set" scan has to hunt past distractors. Lower rows
+    # stay open so a legal landing exists.
+    return puzzle(
+        name="peel_for_run_red_herrings",
+        title="Peel-for-run, red-herring clutter",
+        description=(
+            "Hand has 9D and TD. Peel JD off the 4-set of "
+            "Jacks and build a 9-T-J diamond run. The J-set "
+            "is surrounded on three sides by distractor sets "
+            "— you need to find a clear spot for the J-set "
+            "BEFORE the split so the extracted card has room."
+        ),
+        board=[
+            # Row 1 (top=30): six 3-sets packed across the top.
+            stack("2C 2D 2S", at=(30, 30)),
+            stack("3C 3D 3H", at=(30, 150)),
+            stack("4C 4H 4S", at=(30, 270)),
+            stack("5C 5D 5S", at=(30, 390)),
+            stack("6D 6H 6S", at=(30, 510)),
+            stack("7C 7D 7H", at=(30, 630)),
+            # Row 2 (top=120): J-set wedged between left/right
+            # distractors.
+            stack("8H 8D 8S", at=(120, 30)),
+            stack("JC JD JH JS", at=(120, 150)),
+            stack("QC QH QS", at=(120, 300)),
+            # Row 3 (top=210): more distractors, but thinning out.
+            stack("AD AH AS", at=(210, 50)),
+            stack("KC KH KS", at=(210, 250)),
+            stack("9C 9H 9S", at=(210, 450)),
+            # Row 4 (top=300): one more to test the scan doesn't
+            # stop at the first opening.
+            stack("TC TH TS", at=(300, 100)),
+        ],
+        player_hand=hand("9D TD"),
+    )
+
+
 def catalog():
     """Ordered list of board-lab puzzles. Order matters — it's the
     order panels appear on the page. New puzzles are appended
@@ -806,24 +824,35 @@ def catalog():
         _both_targets_crowded(),
         _big_stack_footprint_overflow(),
         _split_with_vertical_neighbor(),
-        _peel_for_run_derived_overflow(),
         _neighbor_as_candidate(),
         _middle_target_two_candidates(),
         _wedge_needs_vertical_move(),
     ]
     _validate_catalog(puzzles)
+    # Prefix each title with its 1-indexed catalog position so
+    # Steve can refer to puzzles by number in annotations
+    # ("#7 was unexpected") and I can resolve that back to the
+    # panel without eyeballing the gallery.
+    for i, p in enumerate(puzzles, start=1):
+        p["title"] = f"#{i}. {p['title']}"
     return puzzles
 
 
 def _validate_catalog(puzzles):
-    """Each puzzle's initial state must pass the referee's
-    geometry check (no out-of-bounds stacks, no too-close
-    neighbors). Raises on first violation with a pointer at
-    the offending puzzle."""
-    # Deferred import so `agent_board_lab.py`-style callers
-    # don't pay the geometry module's import cost on
-    # startup if they never touch the catalog.
+    """Each puzzle must (a) pass the referee's geometry check
+    and (b) have a trick or follow-up merge the agent actually
+    recognizes. (b) exists because BOARD_LAB studies spatial
+    EXECUTION of tricks the agent would play — a puzzle the
+    agent can't even fire is out of scope and would waste
+    Steve's play time. Added after one such puzzle shipped,
+    got played, and generated ~30 minutes of useless
+    annotation. Raises on first violation."""
+    # Deferred imports so `agent_board_lab.py`-style callers
+    # don't pay geometry/strategy import costs on startup if
+    # they never touch the catalog.
     from geometry import find_violation
+    import strategy
+
     for p in puzzles:
         board = p["initial_state"]["board"]
         bad = find_violation(board)
@@ -833,6 +862,21 @@ def _validate_catalog(puzzles):
                 f"state — stack {bad} violates geometry. "
                 f"Check loc values against BOARD_MARGIN and "
                 f"neighbor gaps."
+            )
+        hand = [hc["card"] if "card" in hc else hc
+                for hc in p["initial_state"]["hands"][0]["hand_cards"]]
+        hand_wrapped = p["initial_state"]["hands"][0]["hand_cards"]
+        play = strategy.choose_play(hand_wrapped, board)
+        follow_ups = strategy.find_follow_up_merges(board)
+        if play is None and not follow_ups:
+            raise ValueError(
+                f"Puzzle {p['name']!r} has no trick the agent "
+                f"recognizes — neither choose_play nor "
+                f"find_follow_up_merges fires on the initial "
+                f"state. Either rework the hand/board so a "
+                f"known trick applies, or drop the puzzle; "
+                f"BOARD_LAB studies spatial EXECUTION of "
+                f"agent-playable tricks, not missing tricks."
             )
 
 
