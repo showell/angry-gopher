@@ -68,17 +68,15 @@ type alias Demo =
 type alias Model =
     { demos : List Demo
     , slots : Dict String Slot
-    , activeTitle : Maybe String
     }
 
 
-{-| Per-puzzle slot state. At most one slot is `Playing` at a
-time (single-active constraint); the rest are Idle / Creating
-/ Failed.
+{-| Per-puzzle slot state. Each puzzle's session is created on
+page load (Creating) and swaps to Playing as soon as the
+server returns the session id. Failed is the http-error case.
 -}
 type Slot
-    = Idle
-    | Creating
+    = Creating
     | Playing MainState.Model
     | Failed String
 
@@ -88,8 +86,7 @@ type Slot
 
 
 type Msg
-    = ClickPlay Demo
-    | PuzzleSessionCreated String (Result Http.Error Int)
+    = PuzzleSessionCreated String (Result Http.Error Int)
     | PlayMsg String MainMsg.Msg
 
 
@@ -260,11 +257,14 @@ main =
 
 init : () -> ( Model, Cmd Msg )
 init () =
-    ( { demos = demos
-      , slots = Dict.empty
-      , activeTitle = Nothing
-      }
-    , Cmd.none
+    let
+        initialSlots =
+            demos
+                |> List.map (\d -> ( d.title, Creating ))
+                |> Dict.fromList
+    in
+    ( { demos = demos, slots = initialSlots }
+    , Cmd.batch (List.map createPuzzleSession demos)
     )
 
 
@@ -275,25 +275,6 @@ init () =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        ClickPlay demo ->
-            -- Close any previously active puzzle; mark this one
-            -- Creating; POST to create the puzzle session.
-            let
-                slotsCleared =
-                    case model.activeTitle of
-                        Just prev ->
-                            Dict.insert prev Idle model.slots
-
-                        Nothing ->
-                            model.slots
-
-                slots =
-                    Dict.insert demo.title Creating slotsCleared
-            in
-            ( { model | slots = slots, activeTitle = Just demo.title }
-            , createPuzzleSession demo
-            )
-
         PuzzleSessionCreated title (Ok sessionId) ->
             let
                 ( playModel, playCmd ) =
@@ -308,7 +289,6 @@ update msg model =
         PuzzleSessionCreated title (Err err) ->
             ( { model
                 | slots = Dict.insert title (Failed (httpErrorToString err)) model.slots
-                , activeTitle = Nothing
               }
             , Cmd.none
             )
@@ -355,17 +335,17 @@ httpErrorToString err =
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    case model.activeTitle of
-        Just title ->
-            case Dict.get title model.slots of
-                Just (Playing p) ->
-                    Sub.map (PlayMsg title) (Play.subscriptions p)
+    Dict.toList model.slots
+        |> List.filterMap
+            (\( title, slot ) ->
+                case slot of
+                    Playing p ->
+                        Just (Sub.map (PlayMsg title) (Play.subscriptions p))
 
-                _ ->
-                    Sub.none
-
-        Nothing ->
-            Sub.none
+                    _ ->
+                        Nothing
+            )
+        |> Sub.batch
 
 
 
@@ -429,7 +409,7 @@ sessionIdDecoder =
 view : Model -> Html Msg
 view model =
     div
-        [ style "max-width" "1000px"
+        [ style "max-width" "1200px"
         , style "margin" "0 auto"
         , style "padding" "24px"
         , style "font-family" "sans-serif"
@@ -437,10 +417,11 @@ view model =
         ([ h1 [] [ text "BOARD_LAB" ]
          , p []
             [ text
-                ("A gallery of hand-crafted LynRummy puzzles. "
-                    ++ "Click Play on one; the puzzle opens in place. "
-                    ++ "Your drags get captured into SQLite so the "
-                    ++ "Python agent can study your spatial choices."
+                ("A gallery of hand-crafted LynRummy puzzles. Each "
+                    ++ "loads ready to play. Scroll down after solving "
+                    ++ "one to reach the next. Drags get captured into "
+                    ++ "SQLite so the Python agent can study your "
+                    ++ "spatial choices."
                 )
             ]
          ]
@@ -453,7 +434,7 @@ viewDemo model demo =
     let
         slot =
             Dict.get demo.title model.slots
-                |> Maybe.withDefault Idle
+                |> Maybe.withDefault Creating
     in
     div
         [ style "border" "1px solid #ccc"
@@ -462,82 +443,31 @@ viewDemo model demo =
         , style "margin-top" "28px"
         , style "background" "#fafafa"
         ]
-        ([ h2 [ style "margin-top" "0" ] [ text demo.title ]
-         , p [] [ text demo.description ]
-         ]
-            ++ viewSlotBody demo slot
-        )
+        [ h2 [ style "margin-top" "0" ] [ text demo.title ]
+        , p [] [ text demo.description ]
+        , viewSlotBody demo slot
+        ]
 
 
-viewSlotBody : Demo -> Slot -> List (Html Msg)
+viewSlotBody : Demo -> Slot -> Html Msg
 viewSlotBody demo slot =
     case slot of
         Playing p ->
-            [ div
+            div
                 [ style "margin-top" "12px" ]
                 [ Html.map (PlayMsg demo.title) (Play.view p) ]
-            ]
 
-        _ ->
-            [ previewRow demo slot ]
-
-
-previewRow : Demo -> Slot -> Html Msg
-previewRow demo slot =
-    let
-        ( buttonLabel, buttonDisabled ) =
-            case slot of
-                Idle ->
-                    ( "Play this puzzle", False )
-
-                Creating ->
-                    ( "Opening…", True )
-
-                Failed _ ->
-                    ( "Retry", False )
-
-                Playing _ ->
-                    ( "Playing…", True )
-
-        errorRow =
-            case slot of
-                Failed reason ->
-                    [ div
-                        [ style "margin-top" "8px"
-                        , style "color" "#a00"
-                        , style "font-size" "13px"
-                        ]
-                        [ text ("Error: " ++ reason) ]
-                    ]
-
-                _ ->
-                    []
-    in
-    div
-        [ style "display" "flex"
-        , style "align-items" "flex-start"
-        , style "gap" "24px"
-        , style "margin-top" "12px"
-        ]
-        [ div
-            [ style "flex" "0 0 auto" ]
-            ([ View.viewHand { attrsForCard = \_ -> [] } demo.initial.hand
-             , div
-                [ style "margin-top" "12px" ]
-                [ button
-                    [ disabled buttonDisabled
-                    , onClick (ClickPlay demo)
-                    , style "padding" "6px 12px"
-                    , style "font-size" "14px"
-                    ]
-                    [ text buttonLabel ]
+        Creating ->
+            div
+                [ style "margin-top" "12px"
+                , style "color" "#666"
+                , style "font-style" "italic"
                 ]
-             ]
-                ++ errorRow
-            )
-        , div
-            [ style "flex" "1 1 auto" ]
-            [ View.boardShell
-                (List.map View.viewStack demo.initial.board)
-            ]
-        ]
+                [ text "Loading puzzle…" ]
+
+        Failed reason ->
+            div
+                [ style "margin-top" "12px"
+                , style "color" "#a00"
+                ]
+                [ text ("Could not load puzzle: " ++ reason) ]
