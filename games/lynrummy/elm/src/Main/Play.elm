@@ -495,7 +495,17 @@ bootstrapFromBundle bundle model =
                 , replayBaseline = Just initial
             }
     in
-    List.foldl
-        (\entry m -> .model (applyAction entry.action m))
+    -- Readonly (BOARD_LAB agent-review) mode: leave the Model
+    -- at the initial state. The reviewer sees the puzzle's
+    -- starting position on load; clicking Instant Replay walks
+    -- the action log from there. For normal play (resume-game,
+    -- new-session), fold the log forward so the Model matches
+    -- the server's current state.
+    if model.readonly then
         atInitial
-        bundle.actions
+
+    else
+        List.foldl
+            (\entry m -> .model (applyAction entry.action m))
+            atInitial
+            bundle.actions
