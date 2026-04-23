@@ -300,25 +300,37 @@ def _interfering_neighbor():
     # Direct-play (the simplest trick) made spatial: merging
     # 9H onto the 6H-7H-8H run in place would make it 4 cards
     # wide and overlap the 4-set just to its right. Forces a
-    # pre-move even though there's no trick complexity. Tests
-    # whether the agent recognizes the eventual overflow
-    # against a NEIGHBOR, not against the board edge.
+    # pre-move even though there's no trick complexity.
+    #
+    # Design math for the gap between the two stacks (target's
+    # right edge to neighbor's left edge):
+    #   - >= 10 for visual distinguishability (the referee's
+    #     min-gap is actually 5, but that reads as overlap to
+    #     humans; gap >= 20 looks genuinely separate).
+    #   - < (card_width + 2*margin) = 37 so no new card stack
+    #     could be legally inserted between — the neighbor
+    #     isn't just visually tight, it's spatially committed.
+    #   - < (card_pitch + 2*margin) = 43 so the EVENTUAL
+    #     4-card merged stack overflows the neighbor, making
+    #     the pre-move mandatory.
+    # gap = 30 satisfies all three.
     return puzzle(
         name="interfering_neighbor",
         title="Interfering neighbor",
         description=(
             "Hand has 9H. The 6H-7H-8H run sits in the middle of "
-            "the board with a 3-set of 4s packed right next to it "
-            "— close enough that merging 9H onto the run in place "
-            "would overlap the 4s. Even this simple direct-play "
-            "needs a pre-move when the neighbor's in the way."
+            "the board with a 3-set of 4s a card-width away on "
+            "its right — clearly distinguishable as two stacks, "
+            "but too close for a merged 4-card run to fit in "
+            "place. Even this simple direct-play needs a pre-move "
+            "when the neighbor's in the way."
         ),
         board=[
             stack("6H 7H 8H", at=(120, 300)),
-            # 6H-7H-8H right edge = 300+93 = 393. 4-set at 400 =
-            # gap of 7 (legal). Merged 4-card right edge = 426,
-            # overlaps the 4-set at 400-493.
-            stack("4C 4H 4D", at=(120, 400)),
+            # Target right edge = 300+93 = 393. Neighbor at 423.
+            # gap = 30 (legal, visually clear, can't host a card,
+            # merge overflows).
+            stack("4C 4H 4D", at=(120, 423)),
         ],
         player_hand=hand("9H"),
     )
@@ -384,8 +396,14 @@ def catalog():
     order panels appear on the page. New puzzles are appended
     rather than interleaved so the corpus grows by accretion;
     sessions captured against old ordering still match by
-    `puzzle_name`."""
-    return [
+    `puzzle_name`.
+
+    Validates that every puzzle's initial state passes the
+    referee's geometry rule. Illegal states used to ship
+    quietly (the new-puzzle-session endpoint only
+    structurally-decodes); this catches them at build time so
+    drift is impossible."""
+    puzzles = [
         _pair_peel(),
         _tight_right_edge(),
         _split_for_set(),
@@ -398,6 +416,29 @@ def catalog():
         _packed_row(),
         _no_room_at_the_top(),
     ]
+    _validate_catalog(puzzles)
+    return puzzles
+
+
+def _validate_catalog(puzzles):
+    """Each puzzle's initial state must pass the referee's
+    geometry check (no out-of-bounds stacks, no too-close
+    neighbors). Raises on first violation with a pointer at
+    the offending puzzle."""
+    # Deferred import so `agent_board_lab.py`-style callers
+    # don't pay the geometry module's import cost on
+    # startup if they never touch the catalog.
+    from geometry import find_violation
+    for p in puzzles:
+        board = p["initial_state"]["board"]
+        bad = find_violation(board)
+        if bad is not None:
+            raise ValueError(
+                f"Puzzle {p['name']!r} has an illegal initial "
+                f"state — stack {bad} violates geometry. "
+                f"Check loc values against BOARD_MARGIN and "
+                f"neighbor gaps."
+            )
 
 
 def to_json():
