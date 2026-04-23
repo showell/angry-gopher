@@ -37,4 +37,4 @@ start :
 
 - Called from `Game.Replay.Time.startBoardAnim`'s
   `WA.MoveStack payload ->` branch.
-- Companion modules: `AnimateSplit`, `AnimateMergeStack`.
+- Companion modules: `AnimateMergeStack`.

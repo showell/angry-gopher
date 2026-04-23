@@ -46,7 +46,6 @@ import Game.Replay.AnimateMergeHand as AnimateMergeHand
 import Game.Replay.AnimateMergeStack as AnimateMergeStack
 import Game.Replay.AnimateMoveStack as AnimateMoveStack
 import Game.Replay.AnimatePlaceHand as AnimatePlaceHand
-import Game.Replay.AnimateSplit as AnimateSplit
 import Game.Replay.Space as Space
 import Main.State as State
     exposing
@@ -485,8 +484,16 @@ startBoardAnim :
     -> Maybe Space.AnimationInfo
 startBoardAnim action path frame model nowMs =
     case action of
-        WA.Split payload ->
-            AnimateSplit.start payload path frame model nowMs
+        WA.Split _ ->
+            -- Splits are CLICKS in the live UI — a single event
+            -- producing a single redraw. The server's
+            -- requiresGestureMetadata gate forces a gesture path
+            -- onto them for telemetry, but replay should not
+            -- animate that fake drag: no floater, no cursor interp,
+            -- just apply + beat, matching the live UI's
+            -- click-responds-with-redraw simplicity. Returning
+            -- Nothing drops the action into `applyImmediate`.
+            Nothing
 
         WA.MergeStack payload ->
             AnimateMergeStack.start payload path frame model nowMs

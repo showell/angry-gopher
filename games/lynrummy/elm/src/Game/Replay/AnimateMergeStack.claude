@@ -42,4 +42,4 @@ against the current board.
 
 - Called from `Game.Replay.Time.startBoardAnim`'s
   `WA.MergeStack payload ->` branch.
-- Companion modules: `AnimateSplit`, `AnimateMoveStack`.
+- Companion modules: `AnimateMoveStack`.
