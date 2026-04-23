@@ -1,28 +1,32 @@
 module Main exposing (main)
 
-{-| BOARD_LAB — a single-page Elm app that will host a long
-vertical list of curated LynRummy boards, each paired with
-a "Show me" button that plays back the Python strategy's
-solution for that board.
+{-| BOARD_LAB — a single-page Elm app that hosts a vertical
+list of curated LynRummy puzzles. Each puzzle has a "Play"
+button that creates a fresh puzzle session in the main Gopher
+backend and redirects into the familiar lynrummy-elm client,
+where Steve plays the puzzle and every drag gets captured
+by the existing gesture-telemetry pipeline. Python can then
+read those solutions out of SQLite to study Steve's spatial
+choices.
 
-BOARD_LAB is always within-a-turn — no dealer, no deck, no
-seat cycling, no turn-end ceremony. The demo state collapses
-to `{ board, hand }` and each demo is a hand-crafted static
-literal. This skeleton defines one such demo and renders it.
+Always within-a-turn — each puzzle is a closed
+`{ board, hand }` state with no deck, no dealer, no turn
+cycling. The hand goes on the left of the board (per
+2026-04-23 layout feedback) alongside the Play button.
 
 Known ugly / unfinished (TODO_BOARD_LAB):
 
-  - Hand rendering wired, but the student-vs-opponent layout
-    of the main app is gone — we just show the one hand below
-    the board.
-  - No "Show me" button wiring; button renders but no-ops.
-  - No Python-replay fetch.
-  - One hardcoded demo. Multiple demos + the `List Demo`
-    shape come in a follow-up commit.
+  - One hardcoded puzzle. A `List Demo` + scroll layout
+    follows once the Play wiring is validated.
+  - No replay-viewer for captured solutions yet.
+  - No "agent tried this puzzle too" side-by-side.
+  - No error-banner for HTTP failure beyond disabling
+    the button.
 
 -}
 
 import Browser
+import Browser.Navigation as Nav
 import Game.Card as Card exposing (Card, CardValue(..), OriginDeck(..), Suit(..))
 import Game.CardStack as CardStack
     exposing
@@ -36,25 +40,22 @@ import Game.Hand exposing (Hand)
 import Game.View as View
 import Html exposing (Html, button, div, h1, h2, p, text)
 import Html.Attributes exposing (disabled, style)
+import Html.Events exposing (onClick)
+import Http
+import Json.Decode as Decode
+import Json.Encode as Encode
 
 
 
 -- LAB STATE
 
 
-{-| BOARD_LAB's whole-game state. Two fields, both owned by
-the demo author. No deck, no opponent, no turn index.
--}
 type alias LabState =
     { board : List CardStack
     , hand : Hand
     }
 
 
-{-| A demo: metadata + starting state. Each one is a
-hand-crafted static literal — the lab doesn't inherit
-"opening board" from the main game's Dealer.
--}
 type alias Demo =
     { title : String
     , description : String
@@ -63,7 +64,32 @@ type alias Demo =
 
 
 
--- CARD CONSTRUCTORS (TO KEEP THE DEMO LITERALS READABLE)
+-- MODEL
+
+
+type PlayState
+    = Idle
+    | Creating
+    | Failed String
+
+
+type alias Model =
+    { demo : Demo
+    , play : PlayState
+    }
+
+
+
+-- MSG
+
+
+type Msg
+    = ClickPlay
+    | PuzzleSessionCreated (Result Http.Error Int)
+
+
+
+-- CARD CONSTRUCTORS (to keep the demo literals readable)
 
 
 d1 : CardValue -> Suit -> Card
@@ -89,9 +115,8 @@ skeletonDemo : Demo
 skeletonDemo =
     { title = "Direct play"
     , description =
-        "Student has a 9H in hand and a 6H-7H-8H run on the "
-            ++ "board. The obvious move: extend the run by "
-            ++ "merging 9H onto its right side."
+        "Hand has 9H. Board has 6H-7H-8H. Merge 9H onto the "
+            ++ "right side to extend the run."
     , initial =
         { board =
             [ { boardCards =
@@ -114,38 +139,170 @@ skeletonDemo =
 -- MAIN
 
 
-main : Program () () ()
+main : Program () Model Msg
 main =
-    Browser.sandbox
-        { init = ()
-        , update = \_ model -> model
+    Browser.element
+        { init = init
+        , update = update
         , view = view
+        , subscriptions = \_ -> Sub.none
         }
 
 
-view : () -> Html ()
-view () =
+init : () -> ( Model, Cmd Msg )
+init () =
+    ( { demo = skeletonDemo, play = Idle }, Cmd.none )
+
+
+update : Msg -> Model -> ( Model, Cmd Msg )
+update msg model =
+    case msg of
+        ClickPlay ->
+            ( { model | play = Creating }
+            , createPuzzleSession model.demo
+            )
+
+        PuzzleSessionCreated (Ok sessionId) ->
+            ( model
+            , Nav.load
+                ("/gopher/lynrummy-elm/play/" ++ String.fromInt sessionId)
+            )
+
+        PuzzleSessionCreated (Err err) ->
+            ( { model | play = Failed (httpErrorToString err) }
+            , Cmd.none
+            )
+
+
+httpErrorToString : Http.Error -> String
+httpErrorToString err =
+    case err of
+        Http.BadUrl s ->
+            "bad URL: " ++ s
+
+        Http.Timeout ->
+            "timeout"
+
+        Http.NetworkError ->
+            "network error"
+
+        Http.BadStatus code ->
+            "bad status: " ++ String.fromInt code
+
+        Http.BadBody s ->
+            "bad body: " ++ s
+
+
+
+-- HTTP
+
+
+createPuzzleSession : Demo -> Cmd Msg
+createPuzzleSession demo =
+    Http.post
+        { url = "/gopher/lynrummy-elm/new-puzzle-session"
+        , body = Http.jsonBody (encodePuzzleRequest demo)
+        , expect = Http.expectJson PuzzleSessionCreated sessionIdDecoder
+        }
+
+
+encodePuzzleRequest : Demo -> Encode.Value
+encodePuzzleRequest demo =
+    Encode.object
+        [ ( "label", Encode.string ("board-lab: " ++ demo.title) )
+        , ( "initial_state", encodeInitialState demo.initial )
+        ]
+
+
+encodeInitialState : LabState -> Encode.Value
+encodeInitialState s =
+    Encode.object
+        [ ( "board", Encode.list CardStack.encodeCardStack s.board )
+        , ( "hands"
+          , Encode.list encodeHand [ s.hand, { handCards = [] } ]
+          )
+        , ( "deck", Encode.list Card.encodeCard [] )
+        , ( "discard", Encode.list Card.encodeCard [] )
+        , ( "active_player_index", Encode.int 0 )
+        , ( "scores", Encode.list Encode.int [ 0, 0 ] )
+        , ( "victor_awarded", Encode.bool False )
+        , ( "turn_start_board_score", Encode.int 0 )
+        , ( "turn_index", Encode.int 0 )
+        , ( "cards_played_this_turn", Encode.int 0 )
+        ]
+
+
+encodeHand : Hand -> Encode.Value
+encodeHand h =
+    Encode.object
+        [ ( "hand_cards"
+          , Encode.list CardStack.encodeHandCard h.handCards
+          )
+        ]
+
+
+sessionIdDecoder : Decode.Decoder Int
+sessionIdDecoder =
+    Decode.field "session_id" Decode.int
+
+
+
+-- VIEW
+
+
+view : Model -> Html Msg
+view model =
     div
         [ style "max-width" "1000px"
         , style "margin" "0 auto"
         , style "padding" "24px"
         , style "font-family" "sans-serif"
         ]
-        [ h1 [] [ text "BOARD_LAB — skeleton" ]
+        [ h1 [] [ text "BOARD_LAB" ]
         , p []
             [ text
-                ("A long page of curated LynRummy boards will live here. "
-                    ++ "V1 renders one demo below using the main app's "
-                    ++ "Game.View primitives — proof that the shared-source "
-                    ++ "wiring works."
+                ("A gallery of hand-crafted LynRummy puzzles. "
+                    ++ "Click Play on one to open it in the main client "
+                    ++ "— your drags get captured as a solution. Python "
+                    ++ "can read those solutions out of SQLite to study "
+                    ++ "your spatial choices."
                 )
             ]
-        , viewDemo skeletonDemo
+        , viewDemo model
         ]
 
 
-viewDemo : Demo -> Html ()
-viewDemo demo =
+viewDemo : Model -> Html Msg
+viewDemo model =
+    let
+        demo =
+            model.demo
+
+        ( buttonLabel, buttonDisabled ) =
+            case model.play of
+                Idle ->
+                    ( "Play this puzzle", False )
+
+                Creating ->
+                    ( "Opening…", True )
+
+                Failed _ ->
+                    ( "Retry", False )
+
+        maybeError =
+            case model.play of
+                Failed reason ->
+                    [ div
+                        [ style "margin-top" "8px"
+                        , style "color" "#a00"
+                        , style "font-size" "13px"
+                        ]
+                        [ text ("Error: " ++ reason) ]
+                    ]
+
+                _ ->
+                    []
+    in
     div
         [ style "border" "1px solid #ccc"
         , style "border-radius" "6px"
@@ -153,20 +310,34 @@ viewDemo demo =
         , style "margin-top" "20px"
         , style "background" "#fafafa"
         ]
-        [ h2 [ style "margin-top" "0" ] [ text demo.title ]
-        , p [] [ text demo.description ]
-        , View.boardShell
-            (List.map View.viewStack demo.initial.board)
-        , div
-            [ style "margin-top" "16px" ]
-            [ View.viewHand { attrsForCard = \_ -> [] } demo.initial.hand ]
-        , div
-            [ style "margin-top" "16px" ]
-            [ button
-                [ disabled True
-                , style "padding" "6px 12px"
-                , style "font-size" "14px"
-                ]
-                [ text "Show me (stub)" ]
+        ([ h2 [ style "margin-top" "0" ] [ text demo.title ]
+         , p [] [ text demo.description ]
+         , div
+            [ style "display" "flex"
+            , style "align-items" "flex-start"
+            , style "gap" "24px"
+            , style "margin-top" "12px"
             ]
-        ]
+            [ div
+                [ style "flex" "0 0 auto" ]
+                [ View.viewHand { attrsForCard = \_ -> [] } demo.initial.hand
+                , div
+                    [ style "margin-top" "12px" ]
+                    [ button
+                        [ disabled buttonDisabled
+                        , onClick ClickPlay
+                        , style "padding" "6px 12px"
+                        , style "font-size" "14px"
+                        ]
+                        [ text buttonLabel ]
+                    ]
+                ]
+            , div
+                [ style "flex" "1 1 auto" ]
+                [ View.boardShell
+                    (List.map View.viewStack demo.initial.board)
+                ]
+            ]
+         ]
+            ++ maybeError
+        )
