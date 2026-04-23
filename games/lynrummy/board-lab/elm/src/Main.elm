@@ -1,4 +1,4 @@
-module Main exposing (main)
+port module Main exposing (main)
 
 {-| BOARD_LAB — a single-page Elm app that hosts a vertical
 list of curated LynRummy puzzles. Each puzzle has a "Play"
@@ -26,7 +26,6 @@ Known ugly / unfinished (TODO_BOARD_LAB):
 -}
 
 import Browser
-import Browser.Navigation as Nav
 import Game.Card as Card exposing (Card, CardValue(..), OriginDeck(..), Suit(..))
 import Game.CardStack as CardStack
     exposing
@@ -41,6 +40,7 @@ import Game.View as View
 import Html exposing (Html, button, div, h1, h2, p, text)
 import Html.Attributes exposing (disabled, style)
 import Html.Events exposing (onClick)
+import Dict exposing (Dict)
 import Http
 import Json.Decode as Decode
 import Json.Encode as Encode
@@ -74,8 +74,8 @@ type PlayState
 
 
 type alias Model =
-    { demo : Demo
-    , play : PlayState
+    { demos : List Demo
+    , playStates : Dict String PlayState
     }
 
 
@@ -84,8 +84,19 @@ type alias Model =
 
 
 type Msg
-    = ClickPlay
-    | PuzzleSessionCreated (Result Http.Error Int)
+    = ClickPlay Demo
+    | PuzzleSessionCreated String (Result Http.Error Int)
+
+
+
+-- PORTS
+
+
+{-| Open a URL in a new browser tab. Fired after the puzzle
+session is created, so the student lands in the main client
+without leaving the lab page.
+-}
+port openInNewTab : String -> Cmd msg
 
 
 
@@ -108,29 +119,137 @@ inHand c =
 
 
 
--- ONE DEMO (skeleton)
+-- DEMO CONSTRUCTORS
 
 
-skeletonDemo : Demo
-skeletonDemo =
-    { title = "Direct play"
+st : Int -> Int -> List Card -> CardStack
+st top left cards =
+    { boardCards = List.map onBoard cards
+    , loc = { top = top, left = left }
+    }
+
+
+hd : List Card -> Hand
+hd cards =
+    { handCards = List.map inHand cards }
+
+
+
+-- PUZZLES
+
+
+demos : List Demo
+demos =
+    [ pairPeelDemo
+    , moveStackCrowdedDemo
+    , splitForSetDemo
+    , peelForRunDemo
+    , followUpMergeDemo
+    ]
+
+
+pairPeelDemo : Demo
+pairPeelDemo =
+    { title = "Pair peel"
     , description =
-        "Hand has 9H. Board has 6H-7H-8H. Merge 9H onto the "
-            ++ "right side to extend the run."
+        "Hand has two 3s. The board has a 4-card pure club run "
+            ++ "with 3C at one end. Peel the 3C off the run and "
+            ++ "merge it with your pair to form a 3-set of 3s."
     , initial =
         { board =
-            [ { boardCards =
-                    [ onBoard (d1 Six Heart)
-                    , onBoard (d1 Seven Heart)
-                    , onBoard (d1 Eight Heart)
-                    ]
-              , loc = { top = 80, left = 120 }
-              }
+            [ st 100
+                200
+                [ d1 Three Club
+                , d1 Four Club
+                , d1 Five Club
+                , d1 Six Club
+                ]
             ]
-        , hand =
-            { handCards =
-                [ inHand (d1 Nine Heart) ]
-            }
+        , hand = hd [ d1 Three Spade, d1 Three Diamond ]
+        }
+    }
+
+
+moveStackCrowdedDemo : Demo
+moveStackCrowdedDemo =
+    { title = "MoveStack in crowded place"
+    , description =
+        "Hand has 9H. The board has your target run (6H-7H-8H) "
+            ++ "packed near the right edge, with two other stacks "
+            ++ "eating up the obvious relocation spots. Find a "
+            ++ "clean way to reposition before merging."
+    , initial =
+        { board =
+            [ st 80 640 [ d1 Six Heart, d1 Seven Heart, d1 Eight Heart ]
+            , st 80 400 [ d1 Five Club, d1 Five Diamond, d1 Five Spade ]
+            , st 260 100 [ d1 Two Spade, d1 Three Spade, d1 Four Spade ]
+            ]
+        , hand = hd [ d1 Nine Heart ]
+        }
+    }
+
+
+splitForSetDemo : Demo
+splitForSetDemo =
+    { title = "Split for set"
+    , description =
+        "Hand has 5H and 5D. The board has a 7-card pure club "
+            ++ "run with 5C in the middle. Extract 5C via a mid-run "
+            ++ "split and merge the three 5s into a set."
+    , initial =
+        { board =
+            [ st 100
+                100
+                [ d1 Two Club
+                , d1 Three Club
+                , d1 Four Club
+                , d1 Five Club
+                , d1 Six Club
+                , d1 Seven Club
+                , d1 Eight Club
+                ]
+            ]
+        , hand = hd [ d1 Five Heart, d1 Five Diamond ]
+        }
+    }
+
+
+peelForRunDemo : Demo
+peelForRunDemo =
+    { title = "Peel for run"
+    , description =
+        "Hand has 8S and 9S. The board has a 4-set of 7s. Peel "
+            ++ "7S off the set (leaving a valid 3-set behind) and "
+            ++ "merge with 8S-9S to form a pure run."
+    , initial =
+        { board =
+            [ st 100
+                180
+                [ d1 Seven Spade
+                , d1 Seven Heart
+                , d1 Seven Diamond
+                , d1 Seven Club
+                ]
+            ]
+        , hand = hd [ d1 Eight Spade, d1 Nine Spade ]
+        }
+    }
+
+
+followUpMergeDemo : Demo
+followUpMergeDemo =
+    { title = "Follow-up merge (chained runs)"
+    , description =
+        "Hand has 6H. Two heart runs sit on the board: 3H-4H-5H "
+            ++ "and 7H-8H-9H. Merging 6H onto the low run makes "
+            ++ "it 3-4-5-6 — which now chains with 7-8-9. Two "
+            ++ "merges, one turn."
+    , initial =
+        { board =
+            [ st 80 120 [ d1 Three Heart, d1 Four Heart, d1 Five Heart ]
+            , st 260 480 [ d1 Seven Heart, d1 Eight Heart, d1 Nine Heart ]
+            ]
+        , hand = hd [ d1 Six Heart ]
         }
     }
 
@@ -151,25 +270,28 @@ main =
 
 init : () -> ( Model, Cmd Msg )
 init () =
-    ( { demo = skeletonDemo, play = Idle }, Cmd.none )
+    ( { demos = demos, playStates = Dict.empty }, Cmd.none )
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        ClickPlay ->
-            ( { model | play = Creating }
-            , createPuzzleSession model.demo
+        ClickPlay demo ->
+            ( { model | playStates = Dict.insert demo.title Creating model.playStates }
+            , createPuzzleSession demo
             )
 
-        PuzzleSessionCreated (Ok sessionId) ->
+        PuzzleSessionCreated _ (Ok sessionId) ->
             ( model
-            , Nav.load
+            , openInNewTab
                 ("/gopher/lynrummy-elm/play/" ++ String.fromInt sessionId)
             )
 
-        PuzzleSessionCreated (Err err) ->
-            ( { model | play = Failed (httpErrorToString err) }
+        PuzzleSessionCreated title (Err err) ->
+            ( { model
+                | playStates =
+                    Dict.insert title (Failed (httpErrorToString err)) model.playStates
+              }
             , Cmd.none
             )
 
@@ -202,7 +324,8 @@ createPuzzleSession demo =
     Http.post
         { url = "/gopher/lynrummy-elm/new-puzzle-session"
         , body = Http.jsonBody (encodePuzzleRequest demo)
-        , expect = Http.expectJson PuzzleSessionCreated sessionIdDecoder
+        , expect =
+            Http.expectJson (PuzzleSessionCreated demo.title) sessionIdDecoder
         }
 
 
@@ -258,8 +381,8 @@ view model =
         , style "padding" "24px"
         , style "font-family" "sans-serif"
         ]
-        [ h1 [] [ text "BOARD_LAB" ]
-        , p []
+        ([ h1 [] [ text "BOARD_LAB" ]
+         , p []
             [ text
                 ("A gallery of hand-crafted LynRummy puzzles. "
                     ++ "Click Play on one to open it in the main client "
@@ -268,18 +391,20 @@ view model =
                     ++ "your spatial choices."
                 )
             ]
-        , viewDemo model
-        ]
+         ]
+            ++ List.map (viewDemo model) model.demos
+        )
 
 
-viewDemo : Model -> Html Msg
-viewDemo model =
+viewDemo : Model -> Demo -> Html Msg
+viewDemo model demo =
     let
-        demo =
-            model.demo
+        state =
+            Dict.get demo.title model.playStates
+                |> Maybe.withDefault Idle
 
         ( buttonLabel, buttonDisabled ) =
-            case model.play of
+            case state of
                 Idle ->
                     ( "Play this puzzle", False )
 
@@ -290,7 +415,7 @@ viewDemo model =
                     ( "Retry", False )
 
         maybeError =
-            case model.play of
+            case state of
                 Failed reason ->
                     [ div
                         [ style "margin-top" "8px"
@@ -307,7 +432,7 @@ viewDemo model =
         [ style "border" "1px solid #ccc"
         , style "border-radius" "6px"
         , style "padding" "16px"
-        , style "margin-top" "20px"
+        , style "margin-top" "28px"
         , style "background" "#fafafa"
         ]
         ([ h2 [ style "margin-top" "0" ] [ text demo.title ]
@@ -325,7 +450,7 @@ viewDemo model =
                     [ style "margin-top" "12px" ]
                     [ button
                         [ disabled buttonDisabled
-                        , onClick ClickPlay
+                        , onClick (ClickPlay demo)
                         , style "padding" "6px 12px"
                         , style "font-size" "14px"
                         ]

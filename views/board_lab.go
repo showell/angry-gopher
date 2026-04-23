@@ -58,7 +58,12 @@ func boardLabPage(w http.ResponseWriter) {
 <div id="root"></div>
 <script src="/gopher/board-lab/elm.js"></script>
 <script>
-  Elm.Main.init({ node: document.getElementById("root") });
+  var app = Elm.Main.init({ node: document.getElementById("root") });
+  // Opens the main lynrummy-elm puzzle session in a new tab so
+  // the lab page stays available for the next puzzle.
+  app.ports.openInNewTab.subscribe(function(url) {
+    window.open(url, "_blank");
+  });
 </script>
 </body></html>`)
 }
