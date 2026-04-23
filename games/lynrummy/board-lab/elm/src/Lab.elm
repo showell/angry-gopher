@@ -322,19 +322,35 @@ update msg model =
 
                 trimmed =
                     String.trim current.text
-            in
-            if trimmed == "" then
-                ( model, Cmd.none )
 
-            else
-                ( { model
-                    | annotations =
-                        Dict.insert name
-                            { current | status = Sending }
-                            model.annotations
-                  }
-                , sendAnnotation model.userName name trimmed
-                )
+                maybeSid =
+                    case Dict.get name model.panels of
+                        Just (Playing p) ->
+                            p.sessionId
+
+                        _ ->
+                            Nothing
+            in
+            case ( trimmed, maybeSid ) of
+                ( "", _ ) ->
+                    ( model, Cmd.none )
+
+                ( _, Nothing ) ->
+                    -- No session yet — can't anchor the reply.
+                    -- Shouldn't happen in practice (the textarea
+                    -- is only reachable once a panel is Playing),
+                    -- but guard rather than ship a 0 session_id.
+                    ( model, Cmd.none )
+
+                ( _, Just sid ) ->
+                    ( { model
+                        | annotations =
+                            Dict.insert name
+                                { current | status = Sending }
+                                model.annotations
+                      }
+                    , sendAnnotation sid model.userName name trimmed
+                    )
 
         AnnotationSent name (Ok ()) ->
             ( { model
@@ -446,14 +462,15 @@ sessionIdDecoder =
     Decode.field "session_id" Decode.int
 
 
-sendAnnotation : String -> String -> String -> Cmd Msg
-sendAnnotation userName puzzleName body =
+sendAnnotation : Int -> String -> String -> String -> Cmd Msg
+sendAnnotation sessionId userName puzzleName body =
     Http.post
         { url = "/gopher/board-lab/annotate"
         , body =
             Http.jsonBody
                 (Encode.object
-                    [ ( "puzzle_name", Encode.string puzzleName )
+                    [ ( "session_id", Encode.int sessionId )
+                    , ( "puzzle_name", Encode.string puzzleName )
                     , ( "user_name", Encode.string userName )
                     , ( "body", Encode.string body )
                     ]

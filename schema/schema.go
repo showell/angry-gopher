@@ -70,16 +70,18 @@ CREATE INDEX IF NOT EXISTS idx_lynrummy_puzzle_seeds_name ON lynrummy_puzzle_see
 -- off"). One textarea per panel, same shape as the essay
 -- comment surface in claude-collab.
 --
--- Puzzle-level scoping — annotations attach to the puzzle,
--- not a specific session. Multiple annotations from the
--- same or different users accumulate. user_name lets us
--- filter by who wrote it.
+-- session_id is the canonical anchor — an annotation is a
+-- reply to one specific play, not the puzzle in general.
+-- Puzzle name can be derived from the session via
+-- lynrummy_puzzle_seeds; stored denormalized here for easy
+-- tail-reading and to survive hypothetical seed-row loss.
 CREATE TABLE IF NOT EXISTS board_lab_annotations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id INTEGER NOT NULL,
     puzzle_name TEXT NOT NULL,
     user_name TEXT NOT NULL,
     body TEXT NOT NULL,
     created_at INTEGER NOT NULL
 );
-CREATE INDEX IF NOT EXISTS idx_board_lab_annotations_puzzle ON board_lab_annotations(puzzle_name);
+CREATE INDEX IF NOT EXISTS idx_board_lab_annotations_session ON board_lab_annotations(session_id);
 `

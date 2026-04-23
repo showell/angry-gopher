@@ -22,6 +22,10 @@ Usage:
         # show every solution to that puzzle
     python3 games/lynrummy/python/study.py --all
         # dump every puzzle's sessions
+    python3 games/lynrummy/python/study.py --feedback N
+        # N most-recent annotated plays: puzzle + reply + actions,
+        # one markdown block each. Single entry point so
+        # "Steve played, read the replies" doesn't spray SQL.
 """
 
 import argparse
@@ -220,6 +224,38 @@ def _show_divergences(by_actor, conn):
         print(f"    first move loc:  HUMAN={h_loc}  AGENT={a_loc}")
 
 
+def _show_feedback(conn, n):
+    """Dump the N most-recent annotated plays — one annotation per
+    block, with the puzzle it's anchored to and the primitives
+    that were played. One SQL for the headers, one per session
+    to fetch actions; no N² cross-product. Designed so the
+    entire collect-it-all-for-analysis step is a single
+    command invocation instead of a SQL dig."""
+    c = conn.cursor()
+    c.execute(
+        """SELECT a.session_id, a.puzzle_name, a.user_name,
+                  a.body, a.created_at
+           FROM board_lab_annotations a
+           ORDER BY a.created_at DESC
+           LIMIT ?""",
+        (n,),
+    )
+    rows = c.fetchall()
+    if not rows:
+        print("No annotations.")
+        return
+
+    for sid, puzzle_name, user_name, body, _ts in rows:
+        actions = _fetch_actions(conn, sid)
+        print(f"\n## {puzzle_name} — session {sid} — {user_name}")
+        print(f"\n  reply: {body}")
+        if not actions:
+            print("  actions: (none)")
+            continue
+        for a in actions:
+            print(_primitive_summary(a["kind"], a["action"], a["gesture"]))
+
+
 def _show_index(conn):
     """Tabulate puzzles with session counts per actor."""
     c = conn.cursor()
@@ -252,11 +288,17 @@ def main():
                              "prints the puzzle index.")
     parser.add_argument("--all", action="store_true",
                         help="Dump every puzzle's sessions.")
+    parser.add_argument("--feedback", type=int, metavar="N", default=None,
+                        help="Last N annotated plays: reply + actions.")
     parser.add_argument("--db", default=DEFAULT_DB,
                         help=f"Path to gopher.db (default: {DEFAULT_DB})")
     args = parser.parse_args()
 
     conn = sqlite3.connect(args.db)
+
+    if args.feedback is not None:
+        _show_feedback(conn, args.feedback)
+        return 0
 
     if args.all:
         sessions = _fetch_sessions(conn)

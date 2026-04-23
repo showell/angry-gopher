@@ -94,10 +94,11 @@ func boardLabJS(w http.ResponseWriter) {
 	w.Write(data)
 }
 
-// boardLabAnnotate accepts POST {puzzle_name, user_name, body}
-// and appends a row to `board_lab_annotations`. Puzzle-level
-// scoping — annotations accumulate on the puzzle regardless
-// of which player or agent attempt provoked them.
+// boardLabAnnotate accepts POST {session_id, puzzle_name,
+// user_name, body} and appends a row to
+// `board_lab_annotations`. Session-scoped — every annotation
+// is a reply to one specific play. puzzle_name is stored
+// alongside so the log tails cleanly without a JOIN on read.
 func boardLabAnnotate(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -109,6 +110,7 @@ func boardLabAnnotate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
+		SessionID  int64  `json:"session_id"`
 		PuzzleName string `json:"puzzle_name"`
 		UserName   string `json:"user_name"`
 		Body       string `json:"body"`
@@ -120,14 +122,14 @@ func boardLabAnnotate(w http.ResponseWriter, r *http.Request) {
 	req.PuzzleName = strings.TrimSpace(req.PuzzleName)
 	req.UserName = strings.TrimSpace(req.UserName)
 	req.Body = strings.TrimSpace(req.Body)
-	if req.PuzzleName == "" || req.Body == "" {
-		http.Error(w, "puzzle_name and body are required",
+	if req.SessionID == 0 || req.PuzzleName == "" || req.Body == "" {
+		http.Error(w, "session_id, puzzle_name and body are required",
 			http.StatusBadRequest)
 		return
 	}
 	if _, err := DB.Exec(
-		`INSERT INTO board_lab_annotations (puzzle_name, user_name, body, created_at) VALUES (?, ?, ?, ?)`,
-		req.PuzzleName, req.UserName, req.Body, time.Now().Unix(),
+		`INSERT INTO board_lab_annotations (session_id, puzzle_name, user_name, body, created_at) VALUES (?, ?, ?, ?, ?)`,
+		req.SessionID, req.PuzzleName, req.UserName, req.Body, time.Now().Unix(),
 	); err != nil {
 		http.Error(w, "insert: "+err.Error(),
 			http.StatusInternalServerError)
