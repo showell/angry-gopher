@@ -28,8 +28,18 @@ port setSessionPath : String -> Cmd msg
 
 
 init : Flags -> ( Model, Cmd Msg )
-init =
-    Play.init
+init flags =
+    Play.init (configFromFlags flags)
+
+
+configFromFlags : Flags -> Play.Config
+configFromFlags flags =
+    case flags.initialSessionId of
+        Just sid ->
+            Play.ResumeSession sid
+
+        Nothing ->
+            Play.NewSession
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )

@@ -1,5 +1,6 @@
 module Main.Play exposing
-    ( Output(..)
+    ( Config(..)
+    , Output(..)
     , init
     , subscriptions
     , update
@@ -64,6 +65,33 @@ import Html exposing (Html)
 
 
 
+-- CONFIG
+
+
+{-| Bootstrap shapes Play can start in. Each one maps to a
+different init Cmd, but the resulting Model shape is the
+same.
+
+  - `NewSession` — no session yet; fire `fetchNewSession` and
+    wait for the server to allocate one. Used by the main
+    app's default landing page.
+  - `ResumeSession sid` — URL says we're resuming session
+    `sid`; fetch its action log and reconstruct state.
+  - `PuzzleSession sid` — BOARD_LAB created a puzzle session
+    (hand-crafted initial state stored in
+    `lynrummy_puzzle_seeds`). Same bootstrap as resume; the
+    distinct variant exists so the status message and
+    eventually-different UI can reflect "this is a puzzle,
+    not a saved game" without inspecting stored data.
+
+-}
+type Config
+    = NewSession
+    | ResumeSession Int
+    | PuzzleSession Int
+
+
+
 -- OUTPUT
 
 
@@ -82,14 +110,17 @@ type Output
 -- INIT
 
 
-{-| Boot state from HTML flags. `initialSessionId == Just sid`
-means we're resuming a specific session; fetch its action log.
-Otherwise create a fresh session.
+{-| Boot state from a Config. Each variant fires its own Cmd;
+the resulting Model shape is the same (an empty baseModel
+that the bundle fetch will hydrate once it arrives).
 -}
-init : Flags -> ( Model, Cmd Msg )
-init flags =
-    case flags.initialSessionId of
-        Just sid ->
+init : Config -> ( Model, Cmd Msg )
+init config =
+    case config of
+        NewSession ->
+            ( baseModel, fetchNewSession )
+
+        ResumeSession sid ->
             ( { baseModel
                 | sessionId = Just sid
                 , status =
@@ -101,8 +132,16 @@ init flags =
             , fetchActionLog sid
             )
 
-        Nothing ->
-            ( baseModel, fetchNewSession )
+        PuzzleSession sid ->
+            ( { baseModel
+                | sessionId = Just sid
+                , status =
+                    { text = "Puzzle " ++ String.fromInt sid ++ " loaded."
+                    , kind = Inform
+                    }
+              }
+            , fetchActionLog sid
+            )
 
 
 
