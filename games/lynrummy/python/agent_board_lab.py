@@ -155,39 +155,60 @@ def play_puzzle(client, puzzle, verbose=True):
         print(f"   session: {session_id}")
 
     play = strategy.choose_play(hand, board)
-    if play is None:
-        if verbose:
-            print("   no play fires; skipping")
-        return {"puzzle": puzzle["name"], "session": session_id,
-                "primary": None, "follow_ups": 0, "sent": 0}
-
-    if verbose:
-        print(f"   primary: {play['trick_id']} "
-              f"({len(play['primitives'])} primitives)")
-
     sent = 0
-    for prim in play["primitives"]:
-        new_board = _send_one(client, session_id, prim, board, verbose)
-        if new_board is None:
-            return {"puzzle": puzzle["name"], "session": session_id,
-                    "primary": play["trick_id"], "follow_ups": 0,
-                    "sent": sent, "error": "send failed"}
-        board = new_board
-        sent += 1
+    primary_id = None
 
-    follow_ups = strategy.find_follow_up_merges(board)
-    if follow_ups and verbose:
-        print(f"   follow-up merges: {len(follow_ups)}")
-    for prim in follow_ups:
-        new_board = _send_one(client, session_id, prim, board, verbose)
-        if new_board is None:
+    if play is None:
+        # No hand-card trick fires — but the whole puzzle might BE
+        # a pure on-board follow-up merge (e.g. two fragments that
+        # chain directly). Check that before giving up; otherwise
+        # puzzles with no hand involvement at all come back
+        # empty-handed even though a legal merge was sitting
+        # right there.
+        if verbose:
+            print("   no hand-card play; checking initial follow-ups")
+    else:
+        primary_id = play["trick_id"]
+        if verbose:
+            print(f"   primary: {primary_id} "
+                  f"({len(play['primitives'])} primitives)")
+        for prim in play["primitives"]:
+            new_board = _send_one(client, session_id, prim, board, verbose)
+            if new_board is None:
+                return {"puzzle": puzzle["name"], "session": session_id,
+                        "primary": primary_id, "follow_ups": 0,
+                        "sent": sent, "error": "send failed"}
+            board = new_board
+            sent += 1
+
+    # `find_follow_up_merges` is single-pass — after two
+    # fragments chain, a third that chains with the result
+    # needs another scan to be seen. Loop until the board
+    # stops yielding new merges. This is the "opportunistic,
+    # not pre-planned" shape Steve called out in puzzle #14:
+    # one obvious local win, execute, re-view.
+    total_follow_ups = 0
+    while True:
+        follow_ups = strategy.find_follow_up_merges(board)
+        if not follow_ups:
             break
-        board = new_board
-        sent += 1
+        if verbose:
+            print(f"   follow-up merges: {len(follow_ups)}")
+        progressed = False
+        for prim in follow_ups:
+            new_board = _send_one(client, session_id, prim, board, verbose)
+            if new_board is None:
+                break
+            board = new_board
+            sent += 1
+            total_follow_ups += 1
+            progressed = True
+        if not progressed:
+            break
 
     return {"puzzle": puzzle["name"], "session": session_id,
-            "primary": play["trick_id"],
-            "follow_ups": len(follow_ups), "sent": sent}
+            "primary": primary_id,
+            "follow_ups": total_follow_ups, "sent": sent}
 
 
 def main():
