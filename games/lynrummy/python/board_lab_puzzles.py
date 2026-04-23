@@ -193,15 +193,118 @@ def _follow_up_merge():
     }
 
 
+def _corner_blocked():
+    # Designed 2026-04-23 after observing that the agent's
+    # find_open_loc always returns (7, 7) when a pre-move is
+    # needed. Pre-placing a 3-set of 2s right at the corner
+    # (loc 10, 10) forces the scan to land somewhere else.
+    # Study signal: does the degraded choice still read as
+    # "human-like"?
+    return {
+        "name": "corner_blocked",
+        "title": "Corner blocked",
+        "description": (
+            "Hand has 9H. The 6H-7H-8H run at the right edge "
+            "needs a pre-move before it can absorb the 9H — just "
+            "like 'Tight right edge' — but the top-left corner is "
+            "already occupied by a 3-set of 2s. Where does the "
+            "moved run land this time?"
+        ),
+        "initial_state": _state(
+            board=[
+                _stack(10, 10,
+                       _card(2, C), _card(2, H), _card(2, D)),
+                _stack(80, 695,
+                       _card(6, H), _card(7, H), _card(8, H)),
+                _stack(260, 400,
+                       _card(5, C), _card(5, H), _card(5, D)),
+            ],
+            hand=_hand(_card(9, H)),
+        ),
+    }
+
+
+def _multi_corner_blocked():
+    # Stress test: every "obvious" open spot is occupied.
+    # Top-left, top-right, left-mid, middle-mid. The pre-move
+    # must land in one of the narrow gaps. Agent's row-major
+    # scan gets to pick between several awkward spots. Human
+    # almost certainly picks the gap that feels balanced — a
+    # clear study signal.
+    return {
+        "name": "multi_corner_blocked",
+        "title": "Multi-corner blocked",
+        "description": (
+            "Hand has 9H. Same merge shape as 'Tight right edge' "
+            "— 6H-7H-8H at the right needs a pre-move before 9H "
+            "lands — but every corner and left-side edge already "
+            "has a stack parked there. Find the least-awkward "
+            "gap for the run's new home."
+        ),
+        "initial_state": _state(
+            board=[
+                _stack(10, 10,
+                       _card(2, C), _card(2, H), _card(2, D)),
+                _stack(10, 640,
+                       _card(10, C), _card(10, H), _card(10, D)),
+                _stack(220, 10,
+                       _card(4, C), _card(4, H), _card(4, D)),
+                _stack(220, 380,
+                       _card(11, C), _card(11, H), _card(11, D)),
+                _stack(80, 695,
+                       _card(6, H), _card(7, H), _card(8, H)),
+            ],
+            hand=_hand(_card(9, H)),
+        ),
+    }
+
+
+def _wide_eventual():
+    # A 5-card run on the board wants one more card. The
+    # merged stack will be 6 cards (192 px wide). Pre-placing
+    # so that the EVENTUAL stack fits — not just the
+    # current 5-card form — is the kind of lookahead
+    # `_plan_merge_hand` exists for. Human's landing pad has
+    # to be genuinely spacious; the corner can't absorb 192 px
+    # wide without margin work.
+    return {
+        "name": "wide_eventual",
+        "title": "Wide eventual",
+        "description": (
+            "Hand has 8H. The 3H-4H-5H-6H-7H run is already 5 "
+            "cards wide and sits pinned against the right edge. "
+            "Adding 8H makes it a 6-card stack (192 px). The "
+            "pre-move has to land somewhere big enough for the "
+            "EVENTUAL stack, not just the current one."
+        ),
+        "initial_state": _state(
+            board=[
+                _stack(80, 625,
+                       _card(3, H), _card(4, H), _card(5, H),
+                       _card(6, H), _card(7, H)),
+                _stack(280, 260,
+                       _card(12, C), _card(12, H), _card(12, D)),
+            ],
+            hand=_hand(_card(8, H)),
+        ),
+    }
+
+
 def catalog():
     """Ordered list of board-lab puzzles. Order matters — it's the
-    order panels appear on the page."""
+    order panels appear on the page. New puzzles are appended
+    rather than interleaved so the corpus grows by accretion;
+    sessions captured against old ordering still match by
+    `puzzle_name`."""
     return [
         _pair_peel(),
         _tight_right_edge(),
         _split_for_set(),
         _peel_for_run(),
         _follow_up_merge(),
+        _corner_blocked(),
+        _multi_corner_blocked(),
+        _wide_eventual(),
     ]
 
 
