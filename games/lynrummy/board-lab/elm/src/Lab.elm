@@ -255,6 +255,7 @@ encodePuzzleRequest : Puzzle -> Encode.Value
 encodePuzzleRequest puzzle =
     Encode.object
         [ ( "label", Encode.string ("board-lab: " ++ puzzle.title) )
+        , ( "puzzle_name", Encode.string puzzle.name )
         , ( "initial_state", puzzle.initialState )
         ]
 

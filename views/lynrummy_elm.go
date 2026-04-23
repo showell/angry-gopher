@@ -165,6 +165,7 @@ func lynrummyElmNewPuzzleSession(w http.ResponseWriter, r *http.Request) {
 	}
 	var req struct {
 		Label        string          `json:"label"`
+		PuzzleName   string          `json:"puzzle_name"`
 		InitialState json.RawMessage `json:"initial_state"`
 	}
 	if err := json.Unmarshal(body, &req); err != nil {
@@ -200,9 +201,15 @@ func lynrummyElmNewPuzzleSession(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "lastinsertid: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+	var puzzleNameArg interface{}
+	if req.PuzzleName == "" {
+		puzzleNameArg = nil
+	} else {
+		puzzleNameArg = req.PuzzleName
+	}
 	if _, err := DB.Exec(
-		`INSERT INTO lynrummy_puzzle_seeds (session_id, initial_state_json) VALUES (?, ?)`,
-		sessionID, string(req.InitialState),
+		`INSERT INTO lynrummy_puzzle_seeds (session_id, initial_state_json, puzzle_name) VALUES (?, ?, ?)`,
+		sessionID, string(req.InitialState), puzzleNameArg,
 	); err != nil {
 		http.Error(w, "insert puzzle seed: "+err.Error(), http.StatusInternalServerError)
 		return
