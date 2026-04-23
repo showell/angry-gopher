@@ -228,7 +228,29 @@ def _emit_peel(sim, target_card, target_ci):
                       "card_index": target_ci})
         sim = _apply_split(sim, stack_idx, target_ci)
     else:
-        # Middle: two splits. First peel the right tail, target
+        # Middle: two splits. Per Steve's 2026-04-23 rule —
+        # always pre-move the donor stack to a 4-side-clear
+        # area before a mid-stack split, because the extracted
+        # card's bump distance is unpredictable and can spawn
+        # cards into neighbors. For other operations we don't
+        # bother with pre-clearing; splits are the exception.
+        # find_open_loc's PACK_GAP (30×30) already exceeds the
+        # requested clearance (~card_width horizontal,
+        # ~half-card-height vertical).
+        others = [s for i, s in enumerate(sim) if i != stack_idx]
+        donor_size = stack_size
+        new_loc = find_open_loc(others, card_count=donor_size)
+        cur_loc = sim[stack_idx]["loc"]
+        if new_loc != cur_loc:
+            prims.append({"action": "move_stack", "stack_index": stack_idx,
+                          "new_loc": new_loc})
+            sim = _apply_move(sim, stack_idx, new_loc)
+            # _apply_move removes-and-appends, shifting indices.
+            # Re-locate the donor by card identity before emitting
+            # the splits.
+            stack_idx = _find_stack(sim, target_card)
+
+        # Now the two splits. First peel the right tail, target
         # ends up as the last card of the left piece; then split
         # that piece at its new last position.
         prims.append({"action": "split", "stack_index": stack_idx,
