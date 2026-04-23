@@ -1,0 +1,39 @@
+just_use study.py
+
+# label: TOOL (board-lab)
+# role: read BOARD_LAB sessions for analysis
+
+Reads `lynrummy_puzzle_seeds` + `lynrummy_elm_actions` and
+prints every human+agent attempt at a named puzzle. One
+primitive per line with the spatial facts that matter:
+cards involved, pre-move landing loc, merge side, drag
+endpoint coords, sample count.
+
+A short `--- divergences ---` block at the bottom of each
+puzzle flags primitive-count mismatches, kind-sequence
+mismatches, and first-move landing-loc differences. Points
+the analyst at where to look without claiming judgment.
+
+## Usage
+
+    python3 games/lynrummy/python/study.py
+        # puzzle index: table of puzzle_names with session counts
+    python3 games/lynrummy/python/study.py tight_right_edge
+        # every attempt at one puzzle, side by side
+    python3 games/lynrummy/python/study.py --all
+        # dump every puzzle's sessions
+
+## First-use finding
+
+Surfaced the `find_open_loc → (7, 7)` weakness on 2026-04-23:
+agent consistently lands pre-moves at the top-left corner,
+human lands at `y ≈ 94-116`. See
+`claude-steve/board_lab_analysis.md` for the writeup and
+candidate fix.
+
+## Pointers
+
+- DB source: `~/AngryGopher/prod/gopher.db` (override with
+  `--db PATH`).
+- Capture side: `agent_board_lab.py` writes agent rows;
+  BOARD_LAB's Elm Lab writes human rows.

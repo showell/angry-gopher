@@ -69,6 +69,18 @@ Ordered by "load-bearing first":
   `cmd/fixturegen`.
 - `telemetry.claude` — the read-side of the DB's gesture
   capture. Analysis, not gameplay.
+- `board_lab_puzzles.py` — canonical puzzle catalog for
+  BOARD_LAB. `python3 board_lab_puzzles.py --write ...`
+  produces the JSON that Go serves at
+  `/gopher/board-lab/puzzles`. Single source of truth.
+- `agent_board_lab.py` — runs the strategy engine against
+  every puzzle in the catalog and persists a session per
+  puzzle (label `"agent: <title>"`), so agent attempts
+  land alongside human attempts keyed by `puzzle_name`.
+- `study.py` — reads the captured sessions for a named
+  puzzle and prints each attempt's primitives with a
+  divergence summary. Use this to see where human and
+  agent choices diverge on the same scenario.
 - Repo-wide tooling at `../../../tools/sidecar_audit.{claude,py}`
   — drift + coverage check across all sidecars.
 

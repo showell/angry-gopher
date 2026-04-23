@@ -66,6 +66,31 @@ replay). Atomic step granularity with ✅/🟡/❌ status. Read
 this when planning a UX change; write here FIRST when adding
 a new flow.
 
+## Embeddable-component design goal
+
+The app is structured so `Main.Play` can be embedded into
+hosts other than `Main.elm` (for example BOARD_LAB's
+`games/lynrummy/board-lab/elm/src/Lab.elm`, where each
+puzzle panel embeds its own `Play.Model`). The split:
+
+- **`Main.Play`** — the embeddable component. Exposes
+  `Config` (NewSession / ResumeSession / PuzzleSession),
+  `Model`, `Msg`, `Output`, plus `init / update / view /
+  subscriptions`.
+- **`Main.elm`** — thin harness (~70 lines): owns the
+  URL-pinning port, `Browser.element` boot, and the
+  viewport-filling outer shell. Routes Play's Output
+  into port calls.
+- **`Main.State.Model.gameId`** — per-instance id used by
+  `State.boardDomIdFor` so multiple Play instances can
+  coexist on one page without DOM collisions.
+
+When adding a new surface that might embed Play (tutorial
+host, side-by-side agent-vs-human viewer, etc.), import
+`Main.Play` directly and follow the Lab.elm pattern.
+Game.Replay follows the same shape (extracted earlier via
+REFACTOR_ELM_REPLAY).
+
 ## Port history
 
 [`PORTING_NOTES.md`](./PORTING_NOTES.md) and

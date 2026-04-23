@@ -41,6 +41,18 @@ repo root for the generated label index):
 - `events.claude` — what's left of `events.go` after the
   2026-04-20 rip. Currently vestigial.
 
+## Subsystems inside `games/lynrummy/`
+
+- `elm/` — the human-facing client (Main.Play + Game.* +
+  Main.* harness). Served at `/gopher/lynrummy-elm/`.
+- `python/` — agent tools (strategy + auto_player + board-
+  lab harness + conformance runner).
+- `board-lab/` — curated puzzle gallery (added 2026-04-23).
+  Elm sub-app at `board-lab/elm/` importing Main.Play from
+  `elm/src/Main/`; Python puzzle catalog at
+  `../python/board_lab_puzzles.py`. Served at
+  `/gopher/board-lab/`.
+
 ## Tests
 
 - `go test ./games/lynrummy/...` runs the Go suite.

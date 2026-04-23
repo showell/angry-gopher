@@ -1,6 +1,6 @@
 # Angry Gopher
 
-**As-of:** 2026-04-22
+**As-of:** 2026-04-23
 **Confidence:** Working.
 **Durability:** Architecture stable; LynRummy-specific surface
 is the active work area.
@@ -74,6 +74,16 @@ The Elm client lives at `games/lynrummy/elm/` and is
 served via `/gopher/lynrummy-elm/`. A Python agent-side client
 is at `games/lynrummy/python/`.
 
+**BOARD_LAB** (`games/lynrummy/board-lab/`) is the study
+instrument: a gallery of curated puzzles served at
+`/gopher/board-lab/`, where a human plays inline and the
+Python agent plays the same catalog via
+`agent_board_lab.py`. Both sides' attempts land in
+SQLite keyed by `puzzle_name`, so `study.py` can read
+them side-by-side. The Elm Lab app embeds one
+`Main.Play` component per puzzle panel — proving the
+"Elm components should be easy to embed" design goal.
+
 ## HTML views
 
 Server-rendered pages at `/gopher/*` with Basic auth:
@@ -83,6 +93,7 @@ Server-rendered pages at `/gopher/*` with Basic auth:
 | `/gopher/` | Landing page |
 | `/gopher/game-lobby` | Games launch pad (LynRummy) |
 | `/gopher/lynrummy-elm/` | Elm LynRummy client |
+| `/gopher/board-lab/` | Curated puzzle gallery (study instrument) |
 | `/gopher/wiki/` | Wiki viewer over repo source |
 | `/gopher/docs/` | Markdown essay viewer |
 | `/gopher/code/` | Code browser |

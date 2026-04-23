@@ -569,15 +569,77 @@ carries standalone notes. A few load-bearing ones:
 The memory system is comprehensive; use it for specifics
 this doc can't carry without becoming a reference manual.
 
+## Elm components should be easy to embed
+
+Design goal surfaced 2026-04-23 while building BOARD_LAB.
+When a feature earns a second surface (e.g. the main play
+surface AND a gallery of curated puzzle panels each with
+their own play instance), the Elm app's architecture
+should make that cheap:
+
+- **Extract the whole-app logic into a component module**
+  (`Main.Play`, `Game.Replay`) with init/update/view/
+  subscriptions + a typed `Output` union for the few things
+  the host legitimately needs.
+- **Shrink the top-level `Main.elm` to a thin harness** —
+  ports, `Browser.element` boot, routing Output into host
+  concerns (URL pinning, navigation), and whatever outer
+  wrapper matches the host's layout.
+- **Per-instance DOM ids.** The component carries a
+  `gameId : String` (or similar) so multiple instances
+  can coexist without DOM collisions.
+- **`position: relative` + fixed size on the component's
+  outer div.** The host decides where the component lives
+  in the page.
+- **Fixed-position overlays are fine.** Drag floaters,
+  popups, modals stay viewport-level — consistent across
+  hosts.
+
+Two successful applications of this pattern within a week
+(REFACTOR_ELM_REPLAY for Game.Replay, REFACTOR_EMBEDDABLE_PLAY
+for Main.Play) validate it as a principle. BOARD_LAB embeds
+Main.Play without forking code.
+
+For new Elm features: if it could plausibly show up in more
+than one host context, design it as a component from the
+start. The "is this a component or the whole app?" question
+should bias toward component.
+
+## BOARD_LAB as study instrument
+
+BOARD_LAB (`/gopher/board-lab/`, added 2026-04-23) is the
+apparatus the Lyn Rummy project uses to observe human and
+agent play on the SAME curated puzzle and compare them:
+
+- Python catalog: `games/lynrummy/python/board_lab_puzzles.py`
+  defines named puzzles (stable ids like
+  `tight_right_edge`). Built to JSON by `ops/start`; Go
+  serves it at `/gopher/board-lab/puzzles`.
+- Elm gallery: a panel per puzzle, auto-creating its
+  puzzle session on page load. Human plays inline; drags
+  capture via the normal telemetry pipeline.
+- Agent attempts: `python3 games/lynrummy/python/agent_board_lab.py`
+  iterates the catalog and posts one agent session per
+  puzzle.
+- DB correlation: `lynrummy_puzzle_seeds.puzzle_name`
+  carries the catalog id. `SELECT ... WHERE puzzle_name =
+  ?` enumerates every human + agent attempt.
+- Analysis: `python3 games/lynrummy/python/study.py
+  <puzzle_name>` prints every attempt's primitives with
+  a divergence summary.
+
+The apparatus lets us name concrete divergences between
+human and agent and feed them back into the agent's
+spatial strategy. First use (2026-04-23) surfaced the
+`find_open_loc → (7,7)` corner-dump as the agent's #1
+spatial weakness.
+
 ## Parking status
 
-Parked `STILL_EVOLVING`, last swept 2026-04-22 (END_OF_DAY_SWEEP
-after ELM_AUTONOMY_AUDIT landed its three rips: CompleteTurn
-wire-gate, dual-fetch bootstrap consolidation, and the dead
-/state wire-read). The principles are stable as of this
-version; the specifics — especially around two-way
-coordination and the replay stamp-reader — will refine as
-we exercise them in real work.
+Parked `STILL_EVOLVING`, last swept 2026-04-23
+(TOP_DOWN_SWEEP after BOARD_LAB concept proof). The
+principles are stable; new surfaces (BOARD_LAB,
+embeddable-components design goal) are documented above.
 
 Two-player mechanics are still immature (coordinated
 sessions have been exercised out-of-band at best); expect
