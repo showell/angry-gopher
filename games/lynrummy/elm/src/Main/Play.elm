@@ -123,6 +123,7 @@ init config =
         ResumeSession sid ->
             ( { baseModel
                 | sessionId = Just sid
+                , gameId = String.fromInt sid
                 , status =
                     { text =
                         "Resuming session " ++ String.fromInt sid ++ "…"
@@ -135,6 +136,7 @@ init config =
         PuzzleSession sid ->
             ( { baseModel
                 | sessionId = Just sid
+                , gameId = String.fromInt sid
                 , status =
                     { text = "Puzzle " ++ String.fromInt sid ++ " loaded."
                     , kind = Inform

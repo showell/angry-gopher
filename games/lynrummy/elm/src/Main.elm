@@ -14,7 +14,8 @@ the port stays a host concern instead of living inside Play.
 -}
 
 import Browser
-import Html exposing (Html)
+import Html exposing (Html, div)
+import Html.Attributes exposing (style)
 import Main.Msg exposing (Msg)
 import Main.Play as Play
 import Main.State exposing (Flags, Model)
@@ -62,8 +63,20 @@ update msg model =
 
 
 view : Model -> Html Msg
-view =
-    Play.view
+view model =
+    -- Viewport-filling shell for the main app. Play.view itself
+    -- is embeddable (a 1100x700 `position: relative` box); here
+    -- we center and scroll it inside the full browser viewport.
+    div
+        [ style "position" "fixed"
+        , style "top" "0"
+        , style "left" "0"
+        , style "right" "0"
+        , style "bottom" "0"
+        , style "overflow" "auto"
+        , style "background" "#f4f4ec"
+        ]
+        [ Play.view model ]
 
 
 subscriptions : Model -> Sub Msg

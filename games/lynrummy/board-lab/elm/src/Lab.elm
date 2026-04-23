@@ -1,31 +1,26 @@
-port module Main exposing (main)
+module Lab exposing (main)
 
-{-| BOARD_LAB — a single-page Elm app that hosts a vertical
-list of curated LynRummy puzzles. Each puzzle has a "Play"
-button that creates a fresh puzzle session in the main Gopher
-backend and redirects into the familiar lynrummy-elm client,
-where Steve plays the puzzle and every drag gets captured
-by the existing gesture-telemetry pipeline. Python can then
-read those solutions out of SQLite to study Steve's spatial
-choices.
+{-| BOARD_LAB — a single-page gallery of curated LynRummy
+puzzles. Each card has a Play button that creates a fresh
+puzzle session on the server and embeds a `Main.Play`
+instance in-place so Steve plays within the gallery (no
+redirect, no new tab). Drags get captured by the normal
+gesture-telemetry pipeline into SQLite.
 
-Always within-a-turn — each puzzle is a closed
-`{ board, hand }` state with no deck, no dealer, no turn
-cycling. The hand goes on the left of the board (per
-2026-04-23 layout feedback) alongside the Play button.
+Single-active-puzzle constraint in V1: clicking Play on a
+new puzzle closes whatever was currently active. This
+avoids `Browser.Dom.getElement "lynrummy-board"` DOM-id
+collisions across multiple simultaneous Play instances.
+Relaxing this requires per-instance DOM ids — a follow-up.
 
-Known ugly / unfinished (TODO_BOARD_LAB):
-
-  - One hardcoded puzzle. A `List Demo` + scroll layout
-    follows once the Play wiring is validated.
-  - No replay-viewer for captured solutions yet.
-  - No "agent tried this puzzle too" side-by-side.
-  - No error-banner for HTTP failure beyond disabling
-    the button.
+Always within-a-turn: lab state per puzzle is just
+`{ board, hand }`, no deck/dealer/turn cycling. The hand
+sits left of the board (2026-04-23 layout).
 
 -}
 
 import Browser
+import Dict exposing (Dict)
 import Game.Card as Card exposing (Card, CardValue(..), OriginDeck(..), Suit(..))
 import Game.CardStack as CardStack
     exposing
@@ -40,10 +35,13 @@ import Game.View as View
 import Html exposing (Html, button, div, h1, h2, p, text)
 import Html.Attributes exposing (disabled, style)
 import Html.Events exposing (onClick)
-import Dict exposing (Dict)
 import Http
 import Json.Decode as Decode
 import Json.Encode as Encode
+import Main.Msg as MainMsg
+import Main.Play as Play
+import Main.State as MainState
+import Main.View as MainView
 
 
 
@@ -67,16 +65,22 @@ type alias Demo =
 -- MODEL
 
 
-type PlayState
-    = Idle
-    | Creating
-    | Failed String
-
-
 type alias Model =
     { demos : List Demo
-    , playStates : Dict String PlayState
+    , slots : Dict String Slot
+    , activeTitle : Maybe String
     }
+
+
+{-| Per-puzzle slot state. At most one slot is `Playing` at a
+time (single-active constraint); the rest are Idle / Creating
+/ Failed.
+-}
+type Slot
+    = Idle
+    | Creating
+    | Playing MainState.Model
+    | Failed String
 
 
 
@@ -86,21 +90,11 @@ type alias Model =
 type Msg
     = ClickPlay Demo
     | PuzzleSessionCreated String (Result Http.Error Int)
+    | PlayMsg String MainMsg.Msg
 
 
 
--- PORTS
-
-
-{-| Open a URL in a new browser tab. Fired after the puzzle
-session is created, so the student lands in the main client
-without leaving the lab page.
--}
-port openInNewTab : String -> Cmd msg
-
-
-
--- CARD CONSTRUCTORS (to keep the demo literals readable)
+-- CARD CONSTRUCTORS (to keep demo literals readable)
 
 
 d1 : CardValue -> Suit -> Card
@@ -116,10 +110,6 @@ onBoard c =
 inHand : Card -> HandCard
 inHand c =
     { card = c, state = HandNormal }
-
-
-
--- DEMO CONSTRUCTORS
 
 
 st : Int -> Int -> List Card -> CardStack
@@ -264,36 +254,80 @@ main =
         { init = init
         , update = update
         , view = view
-        , subscriptions = \_ -> Sub.none
+        , subscriptions = subscriptions
         }
 
 
 init : () -> ( Model, Cmd Msg )
 init () =
-    ( { demos = demos, playStates = Dict.empty }, Cmd.none )
+    ( { demos = demos
+      , slots = Dict.empty
+      , activeTitle = Nothing
+      }
+    , Cmd.none
+    )
+
+
+
+-- UPDATE
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         ClickPlay demo ->
-            ( { model | playStates = Dict.insert demo.title Creating model.playStates }
+            -- Close any previously active puzzle; mark this one
+            -- Creating; POST to create the puzzle session.
+            let
+                slotsCleared =
+                    case model.activeTitle of
+                        Just prev ->
+                            Dict.insert prev Idle model.slots
+
+                        Nothing ->
+                            model.slots
+
+                slots =
+                    Dict.insert demo.title Creating slotsCleared
+            in
+            ( { model | slots = slots, activeTitle = Just demo.title }
             , createPuzzleSession demo
             )
 
-        PuzzleSessionCreated _ (Ok sessionId) ->
-            ( model
-            , openInNewTab
-                ("/gopher/lynrummy-elm/play/" ++ String.fromInt sessionId)
+        PuzzleSessionCreated title (Ok sessionId) ->
+            let
+                ( playModel, playCmd ) =
+                    Play.init (Play.PuzzleSession sessionId)
+            in
+            ( { model
+                | slots = Dict.insert title (Playing playModel) model.slots
+              }
+            , Cmd.map (PlayMsg title) playCmd
             )
 
         PuzzleSessionCreated title (Err err) ->
             ( { model
-                | playStates =
-                    Dict.insert title (Failed (httpErrorToString err)) model.playStates
+                | slots = Dict.insert title (Failed (httpErrorToString err)) model.slots
+                , activeTitle = Nothing
               }
             , Cmd.none
             )
+
+        PlayMsg title pmsg ->
+            case Dict.get title model.slots of
+                Just (Playing p) ->
+                    let
+                        ( p2, c, _ ) =
+                            Play.update pmsg p
+                    in
+                    ( { model
+                        | slots = Dict.insert title (Playing p2) model.slots
+                      }
+                    , Cmd.map (PlayMsg title) c
+                    )
+
+                _ ->
+                    ( model, Cmd.none )
 
 
 httpErrorToString : Http.Error -> String
@@ -313,6 +347,25 @@ httpErrorToString err =
 
         Http.BadBody s ->
             "bad body: " ++ s
+
+
+
+-- SUBSCRIPTIONS
+
+
+subscriptions : Model -> Sub Msg
+subscriptions model =
+    case model.activeTitle of
+        Just title ->
+            case Dict.get title model.slots of
+                Just (Playing p) ->
+                    Sub.map (PlayMsg title) (Play.subscriptions p)
+
+                _ ->
+                    Sub.none
+
+        Nothing ->
+            Sub.none
 
 
 
@@ -385,10 +438,9 @@ view model =
          , p []
             [ text
                 ("A gallery of hand-crafted LynRummy puzzles. "
-                    ++ "Click Play on one to open it in the main client "
-                    ++ "— your drags get captured as a solution. Python "
-                    ++ "can read those solutions out of SQLite to study "
-                    ++ "your spatial choices."
+                    ++ "Click Play on one; the puzzle opens in place. "
+                    ++ "Your drags get captured into SQLite so the "
+                    ++ "Python agent can study your spatial choices."
                 )
             ]
          ]
@@ -399,12 +451,42 @@ view model =
 viewDemo : Model -> Demo -> Html Msg
 viewDemo model demo =
     let
-        state =
-            Dict.get demo.title model.playStates
+        slot =
+            Dict.get demo.title model.slots
                 |> Maybe.withDefault Idle
+    in
+    div
+        [ style "border" "1px solid #ccc"
+        , style "border-radius" "6px"
+        , style "padding" "16px"
+        , style "margin-top" "28px"
+        , style "background" "#fafafa"
+        ]
+        ([ h2 [ style "margin-top" "0" ] [ text demo.title ]
+         , p [] [ text demo.description ]
+         ]
+            ++ viewSlotBody demo slot
+        )
 
+
+viewSlotBody : Demo -> Slot -> List (Html Msg)
+viewSlotBody demo slot =
+    case slot of
+        Playing p ->
+            [ div
+                [ style "margin-top" "12px" ]
+                [ Html.map (PlayMsg demo.title) (Play.view p) ]
+            ]
+
+        _ ->
+            [ previewRow demo slot ]
+
+
+previewRow : Demo -> Slot -> Html Msg
+previewRow demo slot =
+    let
         ( buttonLabel, buttonDisabled ) =
-            case state of
+            case slot of
                 Idle ->
                     ( "Play this puzzle", False )
 
@@ -414,8 +496,11 @@ viewDemo model demo =
                 Failed _ ->
                     ( "Retry", False )
 
-        maybeError =
-            case state of
+                Playing _ ->
+                    ( "Playing…", True )
+
+        errorRow =
+            case slot of
                 Failed reason ->
                     [ div
                         [ style "margin-top" "8px"
@@ -429,40 +514,30 @@ viewDemo model demo =
                     []
     in
     div
-        [ style "border" "1px solid #ccc"
-        , style "border-radius" "6px"
-        , style "padding" "16px"
-        , style "margin-top" "28px"
-        , style "background" "#fafafa"
+        [ style "display" "flex"
+        , style "align-items" "flex-start"
+        , style "gap" "24px"
+        , style "margin-top" "12px"
         ]
-        ([ h2 [ style "margin-top" "0" ] [ text demo.title ]
-         , p [] [ text demo.description ]
-         , div
-            [ style "display" "flex"
-            , style "align-items" "flex-start"
-            , style "gap" "24px"
-            , style "margin-top" "12px"
-            ]
-            [ div
-                [ style "flex" "0 0 auto" ]
-                [ View.viewHand { attrsForCard = \_ -> [] } demo.initial.hand
-                , div
-                    [ style "margin-top" "12px" ]
-                    [ button
-                        [ disabled buttonDisabled
-                        , onClick (ClickPlay demo)
-                        , style "padding" "6px 12px"
-                        , style "font-size" "14px"
-                        ]
-                        [ text buttonLabel ]
+        [ div
+            [ style "flex" "0 0 auto" ]
+            ([ View.viewHand { attrsForCard = \_ -> [] } demo.initial.hand
+             , div
+                [ style "margin-top" "12px" ]
+                [ button
+                    [ disabled buttonDisabled
+                    , onClick (ClickPlay demo)
+                    , style "padding" "6px 12px"
+                    , style "font-size" "14px"
                     ]
+                    [ text buttonLabel ]
                 ]
-            , div
-                [ style "flex" "1 1 auto" ]
-                [ View.boardShell
-                    (List.map View.viewStack demo.initial.board)
-                ]
+             ]
+                ++ errorRow
+            )
+        , div
+            [ style "flex" "1 1 auto" ]
+            [ View.boardShell
+                (List.map View.viewStack demo.initial.board)
             ]
-         ]
-            ++ maybeError
-        )
+        ]

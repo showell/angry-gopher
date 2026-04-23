@@ -20,7 +20,7 @@ go build -ldflags "-X main.gitCommit=$COMMIT" -o gopher-server .
 
 # Compile the BOARD_LAB Elm app — shares the LynRummy Elm's pinned
 # elm binary via a sibling-relative path.
-(cd games/lynrummy/board-lab/elm && ../../elm/node_modules/.bin/elm make src/Main.elm --output=elm.js >/dev/null 2>&1) \
+(cd games/lynrummy/board-lab/elm && ../../elm/node_modules/.bin/elm make src/Lab.elm --output=elm.js >/dev/null 2>&1) \
     || echo "Warning: BOARD_LAB Elm build failed; /gopher/board-lab/ will 404 on elm.js"
 
 GOPHER_CONFIG=~/AngryGopher/prod.json nohup ./gopher-server > /tmp/angry-gopher.log 2>&1 &

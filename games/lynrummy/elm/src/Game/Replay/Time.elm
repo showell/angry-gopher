@@ -109,7 +109,7 @@ clickInstantReplay model =
                 , replayBoardRect = Nothing
               }
             , Task.attempt BoardRectReceived
-                (Browser.Dom.getElement State.boardDomId)
+                (Browser.Dom.getElement (State.boardDomIdFor model.gameId))
             )
 
 

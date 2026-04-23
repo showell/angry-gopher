@@ -65,7 +65,7 @@ import Main.State as State
         , StatusKind(..)
         , StatusMessage
         , activeHand
-        , boardDomId
+        , boardDomIdFor
         )
 
 
@@ -195,24 +195,23 @@ pluralize n word =
 
 view : Model -> Html Msg
 view model =
-    -- Viewport-origin container. All children are
-    -- absolute-positioned, no flow above the board to shift
-    -- things around. This is a rendering discipline; the
-    -- replay synthesizer does NOT trust the pinned viewport
-    -- constants — it DOM-measures the board and hand cards
-    -- at replay time (see Main.claude "Rule for adding
-    -- synthesis"). The fixed outer div gives the drag floater
-    -- (position: fixed) a stable frame.
-    -- Overlays the page-level app-nav; a minimal nav rendered
-    -- inside the Elm view can be added later if we miss it.
+    -- Embeddable container. `position: relative` makes this div
+    -- the positioning context for its absolute-positioned
+    -- children (top-bar, status-bar, hand column, board column).
+    -- Host wraps this (Main.elm wraps in a viewport-filling
+    -- shell for the main app; Lab.elm places it inside a
+    -- puzzle card). The drag floater and popup stay
+    -- `position: fixed` since they're viewport-level overlays
+    -- — consistent across hosts.
+    --
+    -- Fixed width/height give absolute children a well-defined
+    -- frame and prevent the div from collapsing in normal flow.
     div
         [ style "font-family" "system-ui, sans-serif"
-        , style "position" "fixed"
-        , style "top" "0"
-        , style "left" "0"
-        , style "right" "0"
-        , style "bottom" "0"
-        , style "overflow" "auto"
+        , style "position" "relative"
+        , style "width" "1100px"
+        , style "height" "700px"
+        , style "overflow" "hidden"
         , style "background" "#f4f4ec"
         ]
         [ div
@@ -548,7 +547,7 @@ boardColumn model =
 
 boardWithWings : Model -> Html Msg
 boardWithWings model =
-    View.boardShellWith [ id boardDomId ] (boardChildren model)
+    View.boardShellWith [ id (boardDomIdFor model.gameId) ] (boardChildren model)
 
 
 boardChildren : Model -> List (Html Msg)

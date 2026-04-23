@@ -86,7 +86,7 @@ import Main.State as State
         , Point
         , StatusKind(..)
         , activeHand
-        , boardDomId
+        , boardDomIdFor
         )
 import Main.Wire as Wire
 import Task
@@ -135,7 +135,7 @@ startBoardCardDrag { stack, cardIndex } clientPoint tMs model =
                         , pathFrame = ViewportFrame
                         }
               }
-            , fetchBoardRect
+            , fetchBoardRect model.gameId
             )
 
         Dragging _ ->
@@ -172,7 +172,7 @@ startHandDrag card clientPoint tMs model =
                         , pathFrame = ViewportFrame
                         }
               }
-            , fetchBoardRect
+            , fetchBoardRect model.gameId
             )
 
         _ ->
@@ -191,9 +191,9 @@ returns `Nothing` — callers that need the loc have to wait.
 Race with drag duration is benign in practice (task resolves in
 a tick).
 -}
-fetchBoardRect : Cmd Msg
-fetchBoardRect =
-    Browser.Dom.getElement boardDomId
+fetchBoardRect : String -> Cmd Msg
+fetchBoardRect gameId =
+    Browser.Dom.getElement (boardDomIdFor gameId)
         |> Task.attempt BoardRectReceived
 
 

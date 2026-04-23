@@ -15,7 +15,7 @@ if [ ! -x "$ELM_BIN" ]; then
   exit 1
 fi
 
-echo "==> Building BOARD_LAB Main"
-"$ELM_BIN" make src/Main.elm --output=elm.js >/dev/null
+echo "==> Building BOARD_LAB Lab"
+"$ELM_BIN" make src/Lab.elm --output=elm.js >/dev/null
 
 echo "BOARD_LAB compiled."
