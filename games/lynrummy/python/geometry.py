@@ -66,6 +66,20 @@ ANTI_ALIGN_PX = 2
 BOARD_START = (24, 24)  # (left, top)
 
 
+# Preferred scan origin on a non-empty board — tuned 2026-04-23
+# from BOARD_LAB human captures (Steve, Joshua, Emma). Humans
+# don't land pre-moves near the (0, 0) corner; they favor a
+# zone with some inset on both axes. (50, 90) is the lower-left
+# edge of the observed landing cluster, chosen so the row-major
+# scan hits it first before walking rightward/downward.
+#
+# "Toward the hand" — the hand column sits off the board to
+# its left, so minimizing the upcoming hand-card drag means
+# preferring LOW x among valid candidates. Scanning left-to-right
+# from left=50 honors that while staying clear of the margin.
+HUMAN_PREFERRED_ORIGIN = (50, 90)  # (left, top)
+
+
 def stack_width(card_count):
     """Pixel width of a stack with n cards. 0 for n <= 0."""
     if card_count <= 0:
@@ -105,23 +119,23 @@ def find_open_loc(existing, card_count):
     """Return {"top","left"} for a new stack of `card_count` cards
     that does not overlap any stack in `existing`.
 
-    Packing-problem approach: scan top-left to bottom-right at
-    PLACE_STEP granularity with PACK_GAP_X / PACK_GAP_Y breathing
-    room, return the first valid position. This is first-fit
-    bin-packing — the classic "find a logical place as the eye
-    scans" heuristic humans use when organizing. Stacks tile
-    naturally without a grid because widths vary and gaps are
-    enforced, not aligned to a rule.
+    Human-biased placement (2026-04-23 update, driven by
+    BOARD_LAB captures from three humans). The scan starts at
+    `HUMAN_PREFERRED_ORIGIN` — a zone humans actually use —
+    instead of the raw board margin. Rationale:
+
+      - Humans don't land pre-moves at (7, 7). Captured data
+        shows landing locs in the `y ≈ 60-120`, `x ≈ 40-500`
+        band, never in the extreme top-left corner.
+      - The hand column sits off the board to its LEFT in
+        viewport frame, so pre-moves that shorten the
+        hand-card's upcoming drag live toward LOW x in
+        board frame. Scanning left-to-right from a
+        non-corner origin hits that zone first.
+      - Everything else (first-fit, PACK_GAP breathing room,
+        ANTI_ALIGN nudge, crowded-fallback) stays the same.
 
     100% deterministic. Same board state → same placement.
-    No RNG, no hashing, no per-session variability.
-
-    Every placement is offset by ANTI_ALIGN_PX in both axes —
-    a fixed 2px nudge that breaks pixel-perfect alignment with
-    step multiples without introducing any non-determinism.
-
-    Falls back to the legal-margin grid sweep if no spot
-    satisfies the packing gap (board truly crowded).
 
     `existing` is a list of state-dict stacks.
     """
@@ -138,11 +152,36 @@ def find_open_loc(existing, card_count):
     # legal-margin fallback so the 2px anti-align offset
     # actually lands off-grid.
     step = 15
+    origin_left, origin_top = HUMAN_PREFERRED_ORIGIN
     min_left = BOARD_MARGIN
     min_top = BOARD_MARGIN
     max_left = BOARD_MAX_WIDTH - new_w - BOARD_MARGIN
     max_top = BOARD_MAX_HEIGHT - new_h - BOARD_MARGIN
 
+    # Clamp the preferred origin in case a future
+    # HUMAN_PREFERRED_ORIGIN is too close to the right/bottom
+    # edge for the requested stack size.
+    start_left = min(max(origin_left, min_left), max_left)
+    start_top = min(max(origin_top, min_top), max_top)
+
+    top = start_top
+    while top <= max_top:
+        left = start_left
+        while left <= max_left:
+            padded = (
+                left - PACK_GAP_X,
+                top - PACK_GAP_Y,
+                left + new_w + PACK_GAP_X,
+                top + new_h + PACK_GAP_Y,
+            )
+            if not any(rects_overlap(padded, er) for er in existing_rects):
+                return _anti_align(left, top, new_w, new_h)
+            left += step
+        top += step
+
+    # Preferred-zone scan exhausted — widen to the whole
+    # board (including the top-left corner) before falling
+    # through to the legal-margin crowded fallback.
     top = min_top
     while top <= max_top:
         left = min_left
