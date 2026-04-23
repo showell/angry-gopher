@@ -4,40 +4,50 @@ module Main.View exposing
     , view
     )
 
-{-| The entire view layer of the Elm client. One entry point
-(`view`) that composes the top bar, status bar, hand column,
-board column, drag overlay, and popup. Plus the turn-ceremony
-helpers (`statusForCompleteTurn`, `popupForCompleteTurn`)
-that produce the status/popup records update writes into
-Model.
+{-| The game-surface view layer — composes the top bar, status
+bar, hand column, board column, drag overlay, and popup into
+an **embeddable** 1100×700 div (`position: relative`). The
+main app's Main.elm wraps this in a viewport-filling outer
+shell; BOARD_LAB's Lab.elm places it directly inside each
+puzzle panel.
 
-Extracted 2026-04-19 from the pre-split `Main.elm` monolith.
-No I/O, no state transitions — every function here is
-`_ -> Html Msg` or `_ -> StatusMessage / PopupContent`. The
-only "action" is the Msg constructors emitted by user events.
+Plus the turn-ceremony helpers (`statusForCompleteTurn`,
+`popupForCompleteTurn`) that produce the status/popup records
+update writes into Model.
+
+Extracted 2026-04-19 from the pre-split `Main.elm` monolith;
+rewritten as embeddable 2026-04-23
+(REFACTOR_EMBEDDABLE_PLAY phase III).
 
 ## Visual structure
 
 ```
-Html (position: fixed, covers viewport)
-├── viewTopBar              // at viewport (0, 0), 32px tall
-├── viewStatusBar           // at viewport (0, 32), 32px tall
-├── handColumn gutter       // at viewport (20, 100), 240px wide
+Html (position: relative, 1100×700, embeddable)
+├── viewTopBar              // at (0, 0), 32px tall
+├── viewStatusBar           // at (0, 32), 32px tall
+├── handColumn gutter       // at (20, 100), 240px wide
 │   ├── turn #
 │   └── viewPlayerRow × 2   // name + score + hand (if active) OR "N cards"
 │       └── viewTurnControls  // Complete turn / Hint / Replay / Lobby
 ├── boardColumn             // at (boardViewportLeft, boardViewportTop)
-│   └── boardWithWings
+│   └── boardWithWings      // id = `boardDomIdFor model.gameId`
 │       ├── viewStackForBoard (×N)
 │       └── viewWingAt       (×M, during drag only)
-├── draggedOverlay          // floating drag card (fixed-position)
-└── viewPopup               // modal ceremony (suppressed during replay)
+├── draggedOverlay          // floating drag card (position: fixed)
+└── viewPopup               // modal ceremony (position: fixed)
 ```
 
-Note: boardViewportLeft/Top are the DOCUMENTARY values of
-the board's viewport position. The drag floater and replay
-synthesizer don't rely on them — they DOM-measure the board
-rect live at replay time. See Main.claude.
+The drag floater and popup stay `position: fixed` — they're
+viewport-level overlays that work the same whether the view
+is inside the main app's viewport shell or inside a lab
+panel on a scrolling page.
+
+Note: `boardViewportLeft/Top` name the DOCUMENTARY position
+inside this embeddable frame. The drag floater and replay
+synthesizer DOM-measure the board's LIVE rect per drag /
+per replay-start. When the Play surface sits inside a lab
+panel on a scrolling page, live measurement is what keeps
+drag math honest.
 
 -}
 
@@ -65,7 +75,7 @@ import Main.State as State
         , StatusKind(..)
         , StatusMessage
         , activeHand
-        , boardDomId
+        , boardDomIdFor
         )
 
 
@@ -195,24 +205,23 @@ pluralize n word =
 
 view : Model -> Html Msg
 view model =
-    -- Viewport-origin container. All children are
-    -- absolute-positioned, no flow above the board to shift
-    -- things around. This is a rendering discipline; the
-    -- replay synthesizer does NOT trust the pinned viewport
-    -- constants — it DOM-measures the board and hand cards
-    -- at replay time (see Main.claude "Rule for adding
-    -- synthesis"). The fixed outer div gives the drag floater
-    -- (position: fixed) a stable frame.
-    -- Overlays the page-level app-nav; a minimal nav rendered
-    -- inside the Elm view can be added later if we miss it.
+    -- Embeddable container. `position: relative` makes this div
+    -- the positioning context for its absolute-positioned
+    -- children (top-bar, status-bar, hand column, board column).
+    -- Host wraps this (Main.elm wraps in a viewport-filling
+    -- shell for the main app; Lab.elm places it inside a
+    -- puzzle card). The drag floater and popup stay
+    -- `position: fixed` since they're viewport-level overlays
+    -- — consistent across hosts.
+    --
+    -- Fixed width/height give absolute children a well-defined
+    -- frame and prevent the div from collapsing in normal flow.
     div
         [ style "font-family" "system-ui, sans-serif"
-        , style "position" "fixed"
-        , style "top" "0"
-        , style "left" "0"
-        , style "right" "0"
-        , style "bottom" "0"
-        , style "overflow" "auto"
+        , style "position" "relative"
+        , style "width" "1100px"
+        , style "height" "700px"
+        , style "overflow" "hidden"
         , style "background" "#f4f4ec"
         ]
         [ div
@@ -548,7 +557,7 @@ boardColumn model =
 
 boardWithWings : Model -> Html Msg
 boardWithWings model =
-    View.boardShellWith [ id boardDomId ] (boardChildren model)
+    View.boardShellWith [ id (boardDomIdFor model.gameId) ] (boardChildren model)
 
 
 boardChildren : Model -> List (Html Msg)

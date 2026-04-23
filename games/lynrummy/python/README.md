@@ -23,7 +23,7 @@ for why this subtree is shaped the way it is.
 The agent mimics a human's small-scale spatial planning.
 Before emitting a trick's primitive sequence, it simulates
 the final board and every intermediate state, and pre-plans
-geometry corrections upstream — not after. `hints.py`'s
+geometry corrections upstream — not after. `strategy.py`'s
 `_plan_merge_hand` is the canonical implementation of this
 discipline: it's called by every trick that emits
 `merge_hand`, and if the in-place merge would spill off the

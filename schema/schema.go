@@ -48,9 +48,19 @@ CREATE INDEX IF NOT EXISTS idx_lynrummy_elm_actions_session ON lynrummy_elm_acti
 -- (not the dealer's deal). When a row is present for a session_id,
 -- replaySessionNoHTTP uses this JSON as the initial state instead
 -- of InitialStateWithSeed(deck_seed). Used by the decomposition
--- harness to stage narrow test scenarios.
+-- harness to stage narrow test scenarios AND by BOARD_LAB.
+--
+-- puzzle_name is the stable machine id of a catalog puzzle (e.g.
+-- "tight_right_edge"). NULL for ad-hoc puzzles that aren't in a
+-- catalog (e.g. the Python decomposition harness). For BOARD_LAB
+-- sessions this is the key linking every solution — human or
+-- agent — to the same named puzzle, so SELECT * FROM
+-- lynrummy_puzzle_seeds WHERE puzzle_name = ... enumerates
+-- attempts for analysis.
 CREATE TABLE IF NOT EXISTS lynrummy_puzzle_seeds (
     session_id INTEGER PRIMARY KEY REFERENCES lynrummy_elm_sessions(id),
-    initial_state_json TEXT NOT NULL
+    initial_state_json TEXT NOT NULL,
+    puzzle_name TEXT
 );
+CREATE INDEX IF NOT EXISTS idx_lynrummy_puzzle_seeds_name ON lynrummy_puzzle_seeds(puzzle_name);
 `

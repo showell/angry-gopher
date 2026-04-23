@@ -18,7 +18,7 @@ module Main.State exposing
     , StatusMessage
     , activeHand
     , baseModel
-    , boardDomId
+    , boardDomIdFor
     , setActiveHand
     )
 
@@ -94,6 +94,13 @@ type alias Model =
     -- viewport coords. Fetched via `Browser.Dom.getElement`
     -- when replay starts; stays Nothing outside replay.
     , replayBoardRect : Maybe { x : Int, y : Int }
+
+    -- Per-instance identity. The main app uses "default"; each
+    -- lab-embedded Play gets the puzzle's session id stringified.
+    -- Drives the board DOM id (via `boardDomIdFor`) so multiple
+    -- Play instances on one page don't collide on
+    -- `Browser.Dom.getElement`.
+    , gameId : String
     }
 
 
@@ -317,13 +324,15 @@ type alias ActionLogEntry =
 -- DOM ID
 
 
-{-| CSS id of the board element. Used by Browser.Dom.getElement
-during drag-start to capture the board's viewport rect for
-cursor → board-relative coordinate math.
+{-| CSS id of the board element for a given game id. Per-
+instance so multiple Play instances on one page don't collide
+on `Browser.Dom.getElement`. The main app uses `gameId =
+"default"`; each lab-embedded Play gets its puzzle session
+id stringified.
 -}
-boardDomId : String
-boardDomId =
-    "lynrummy-board"
+boardDomIdFor : String -> String
+boardDomIdFor gameId =
+    "lynrummy-board-" ++ gameId
 
 
 
@@ -410,4 +419,5 @@ baseModel =
     , replayAnim = NotAnimating
     , replayBaseline = Nothing
     , replayBoardRect = Nothing
+    , gameId = "default"
     }
