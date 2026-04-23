@@ -67,15 +67,15 @@ type alias Demo =
 
 type alias Model =
     { demos : List Demo
-    , slots : Dict String Slot
+    , panels : Dict String Panel
     }
 
 
-{-| Per-puzzle slot state. Each puzzle's session is created on
+{-| Per-puzzle panel state. Each puzzle's session is created on
 page load (Creating) and swaps to Playing as soon as the
 server returns the session id. Failed is the http-error case.
 -}
-type Slot
+type Panel
     = Creating
     | Playing MainState.Model
     | Failed String
@@ -258,12 +258,12 @@ main =
 init : () -> ( Model, Cmd Msg )
 init () =
     let
-        initialSlots =
+        initialPanels =
             demos
                 |> List.map (\d -> ( d.title, Creating ))
                 |> Dict.fromList
     in
-    ( { demos = demos, slots = initialSlots }
+    ( { demos = demos, panels = initialPanels }
     , Cmd.batch (List.map createPuzzleSession demos)
     )
 
@@ -281,27 +281,27 @@ update msg model =
                     Play.init (Play.PuzzleSession sessionId)
             in
             ( { model
-                | slots = Dict.insert title (Playing playModel) model.slots
+                | panels = Dict.insert title (Playing playModel) model.panels
               }
             , Cmd.map (PlayMsg title) playCmd
             )
 
         PuzzleSessionCreated title (Err err) ->
             ( { model
-                | slots = Dict.insert title (Failed (httpErrorToString err)) model.slots
+                | panels = Dict.insert title (Failed (httpErrorToString err)) model.panels
               }
             , Cmd.none
             )
 
         PlayMsg title pmsg ->
-            case Dict.get title model.slots of
+            case Dict.get title model.panels of
                 Just (Playing p) ->
                     let
                         ( p2, c, _ ) =
                             Play.update pmsg p
                     in
                     ( { model
-                        | slots = Dict.insert title (Playing p2) model.slots
+                        | panels = Dict.insert title (Playing p2) model.panels
                       }
                     , Cmd.map (PlayMsg title) c
                     )
@@ -335,10 +335,10 @@ httpErrorToString err =
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    Dict.toList model.slots
+    Dict.toList model.panels
         |> List.filterMap
-            (\( title, slot ) ->
-                case slot of
+            (\( title, panel ) ->
+                case panel of
                     Playing p ->
                         Just (Sub.map (PlayMsg title) (Play.subscriptions p))
 
@@ -432,8 +432,8 @@ view model =
 viewDemo : Model -> Demo -> Html Msg
 viewDemo model demo =
     let
-        slot =
-            Dict.get demo.title model.slots
+        panel =
+            Dict.get demo.title model.panels
                 |> Maybe.withDefault Creating
     in
     div
@@ -445,13 +445,13 @@ viewDemo model demo =
         ]
         [ h2 [ style "margin-top" "0" ] [ text demo.title ]
         , p [] [ text demo.description ]
-        , viewSlotBody demo slot
+        , viewPanelBody demo panel
         ]
 
 
-viewSlotBody : Demo -> Slot -> Html Msg
-viewSlotBody demo slot =
-    case slot of
+viewPanelBody : Demo -> Panel -> Html Msg
+viewPanelBody demo panel =
+    case panel of
         Playing p ->
             div
                 [ style "margin-top" "12px" ]
