@@ -27,20 +27,10 @@ SQLite.
 
 import Browser
 import Dict exposing (Dict)
-import Game.Card as Card exposing (Card, CardValue(..), OriginDeck(..), Suit(..))
-import Game.CardStack as CardStack
-    exposing
-        ( BoardCard
-        , BoardCardState(..)
-        , CardStack
-        , HandCard
-        , HandCardState(..)
-        )
-import Game.Hand exposing (Hand)
 import Html exposing (Html, div, h1, h2, p, text)
 import Html.Attributes exposing (style)
 import Http
-import Json.Decode as Decode
+import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
 import Main.Msg as MainMsg
 import Main.Play as Play
@@ -51,16 +41,16 @@ import Main.State as MainState
 -- LAB STATE
 
 
-type alias LabState =
-    { board : List CardStack
-    , hand : Hand
-    }
-
-
-type alias Demo =
-    { title : String
+{-| A puzzle as received from the catalog endpoint. The
+`initialState` is opaque JSON (we forward it verbatim to
+`new-puzzle-session` rather than decode-and-re-encode — keeps
+Python canonical and Elm out of the state-shape business).
+-}
+type alias Puzzle =
+    { name : String
+    , title : String
     , description : String
-    , initial : LabState
+    , initialState : Encode.Value
     }
 
 
@@ -69,9 +59,19 @@ type alias Demo =
 
 
 type alias Model =
-    { demos : List Demo
+    { catalog : CatalogState
     , panels : Dict String Panel
     }
+
+
+{-| Top-level catalog fetch state. Until the catalog lands, we
+have nothing to render; on error we surface it at the page
+level rather than per-panel.
+-}
+type CatalogState
+    = CatalogLoading
+    | CatalogLoaded (List Puzzle)
+    | CatalogFailed String
 
 
 {-| Per-puzzle panel state. Each puzzle's session is created on
@@ -89,161 +89,27 @@ type Panel
 
 
 type Msg
-    = PuzzleSessionCreated String (Result Http.Error Int)
+    = CatalogFetched (Result Http.Error (List Puzzle))
+    | PuzzleSessionCreated String (Result Http.Error Int)
     | PlayMsg String MainMsg.Msg
 
 
 
--- CARD CONSTRUCTORS (to keep demo literals readable)
+-- CATALOG DECODE
 
 
-d1 : CardValue -> Suit -> Card
-d1 v s =
-    { value = v, suit = s, originDeck = DeckOne }
+catalogDecoder : Decoder (List Puzzle)
+catalogDecoder =
+    Decode.field "puzzles" (Decode.list puzzleDecoder)
 
 
-onBoard : Card -> BoardCard
-onBoard c =
-    { card = c, state = FirmlyOnBoard }
-
-
-inHand : Card -> HandCard
-inHand c =
-    { card = c, state = HandNormal }
-
-
-st : Int -> Int -> List Card -> CardStack
-st top left cards =
-    { boardCards = List.map onBoard cards
-    , loc = { top = top, left = left }
-    }
-
-
-hd : List Card -> Hand
-hd cards =
-    { handCards = List.map inHand cards }
-
-
-
--- PUZZLES
-
-
-demos : List Demo
-demos =
-    [ pairPeelDemo
-    , moveStackCrowdedDemo
-    , splitForSetDemo
-    , peelForRunDemo
-    , followUpMergeDemo
-    ]
-
-
-pairPeelDemo : Demo
-pairPeelDemo =
-    { title = "Pair peel"
-    , description =
-        "Hand has two 3s. The board has a 4-card pure club run "
-            ++ "with 3C at one end. Peel the 3C off the run and "
-            ++ "merge it with your pair to form a 3-set of 3s."
-    , initial =
-        { board =
-            [ st 100
-                200
-                [ d1 Three Club
-                , d1 Four Club
-                , d1 Five Club
-                , d1 Six Club
-                ]
-            ]
-        , hand = hd [ d1 Three Spade, d1 Three Diamond ]
-        }
-    }
-
-
-moveStackCrowdedDemo : Demo
-moveStackCrowdedDemo =
-    { title = "Tight right edge"
-    , description =
-        "Hand has 9H. The 6H-7H-8H run sits hard against the "
-            ++ "right edge — dropping 9H onto it in place would "
-            ++ "push the merged stack off the board. You need to "
-            ++ "MoveStack the run to a clearer spot first, then "
-            ++ "merge. Two other stacks sit on the board too, so "
-            ++ "the choice of where to move is a spatial call."
-    , initial =
-        { board =
-            [ st 80 695 [ d1 Six Heart, d1 Seven Heart, d1 Eight Heart ]
-            , st 80 400 [ d1 Five Club, d1 Five Diamond, d1 Five Spade ]
-            , st 280 100 [ d1 Two Spade, d1 Three Spade, d1 Four Spade ]
-            ]
-        , hand = hd [ d1 Nine Heart ]
-        }
-    }
-
-
-splitForSetDemo : Demo
-splitForSetDemo =
-    { title = "Split for set"
-    , description =
-        "Hand has 5H and 5D. The board has a 7-card pure club "
-            ++ "run with 5C in the middle. Extract 5C via a mid-run "
-            ++ "split and merge the three 5s into a set."
-    , initial =
-        { board =
-            [ st 100
-                100
-                [ d1 Two Club
-                , d1 Three Club
-                , d1 Four Club
-                , d1 Five Club
-                , d1 Six Club
-                , d1 Seven Club
-                , d1 Eight Club
-                ]
-            ]
-        , hand = hd [ d1 Five Heart, d1 Five Diamond ]
-        }
-    }
-
-
-peelForRunDemo : Demo
-peelForRunDemo =
-    { title = "Peel for run"
-    , description =
-        "Hand has 8S and 9S. The board has a 4-set of 7s. Peel "
-            ++ "7S off the set (leaving a valid 3-set behind) and "
-            ++ "merge with 8S-9S to form a pure run."
-    , initial =
-        { board =
-            [ st 100
-                180
-                [ d1 Seven Spade
-                , d1 Seven Heart
-                , d1 Seven Diamond
-                , d1 Seven Club
-                ]
-            ]
-        , hand = hd [ d1 Eight Spade, d1 Nine Spade ]
-        }
-    }
-
-
-followUpMergeDemo : Demo
-followUpMergeDemo =
-    { title = "Follow-up merge (chained runs)"
-    , description =
-        "Hand has 6H. Two heart runs sit on the board: 3H-4H-5H "
-            ++ "and 7H-8H-9H. Merging 6H onto the low run makes "
-            ++ "it 3-4-5-6 — which now chains with 7-8-9. Two "
-            ++ "merges, one turn."
-    , initial =
-        { board =
-            [ st 80 120 [ d1 Three Heart, d1 Four Heart, d1 Five Heart ]
-            , st 260 480 [ d1 Seven Heart, d1 Eight Heart, d1 Nine Heart ]
-            ]
-        , hand = hd [ d1 Six Heart ]
-        }
-    }
+puzzleDecoder : Decoder Puzzle
+puzzleDecoder =
+    Decode.map4 Puzzle
+        (Decode.field "name" Decode.string)
+        (Decode.field "title" Decode.string)
+        (Decode.field "description" Decode.string)
+        (Decode.field "initial_state" Decode.value)
 
 
 
@@ -262,14 +128,8 @@ main =
 
 init : () -> ( Model, Cmd Msg )
 init () =
-    let
-        initialPanels =
-            demos
-                |> List.map (\d -> ( d.title, Creating ))
-                |> Dict.fromList
-    in
-    ( { demos = demos, panels = initialPanels }
-    , Cmd.batch (List.map createPuzzleSession demos)
+    ( { catalog = CatalogLoading, panels = Dict.empty }
+    , fetchCatalog
     )
 
 
@@ -280,35 +140,51 @@ init () =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        PuzzleSessionCreated title (Ok sessionId) ->
+        CatalogFetched (Ok puzzles) ->
+            let
+                initialPanels =
+                    puzzles
+                        |> List.map (\p -> ( p.name, Creating ))
+                        |> Dict.fromList
+            in
+            ( { model | catalog = CatalogLoaded puzzles, panels = initialPanels }
+            , Cmd.batch (List.map createPuzzleSession puzzles)
+            )
+
+        CatalogFetched (Err err) ->
+            ( { model | catalog = CatalogFailed (httpErrorToString err) }
+            , Cmd.none
+            )
+
+        PuzzleSessionCreated name (Ok sessionId) ->
             let
                 ( playModel, playCmd ) =
                     Play.init (Play.PuzzleSession sessionId)
             in
             ( { model
-                | panels = Dict.insert title (Playing playModel) model.panels
+                | panels = Dict.insert name (Playing playModel) model.panels
               }
-            , Cmd.map (PlayMsg title) playCmd
+            , Cmd.map (PlayMsg name) playCmd
             )
 
-        PuzzleSessionCreated title (Err err) ->
+        PuzzleSessionCreated name (Err err) ->
             ( { model
-                | panels = Dict.insert title (Failed (httpErrorToString err)) model.panels
+                | panels = Dict.insert name (Failed (httpErrorToString err)) model.panels
               }
             , Cmd.none
             )
 
-        PlayMsg title pmsg ->
-            case Dict.get title model.panels of
+        PlayMsg name pmsg ->
+            case Dict.get name model.panels of
                 Just (Playing p) ->
                     let
                         ( p2, c, _ ) =
                             Play.update pmsg p
                     in
                     ( { model
-                        | panels = Dict.insert title (Playing p2) model.panels
+                        | panels = Dict.insert name (Playing p2) model.panels
                       }
-                    , Cmd.map (PlayMsg title) c
+                    , Cmd.map (PlayMsg name) c
                     )
 
                 _ ->
@@ -342,10 +218,10 @@ subscriptions : Model -> Sub Msg
 subscriptions model =
     Dict.toList model.panels
         |> List.filterMap
-            (\( title, panel ) ->
+            (\( name, panel ) ->
                 case panel of
                     Playing p ->
-                        Just (Sub.map (PlayMsg title) (Play.subscriptions p))
+                        Just (Sub.map (PlayMsg name) (Play.subscriptions p))
 
                     _ ->
                         Nothing
@@ -357,48 +233,29 @@ subscriptions model =
 -- HTTP
 
 
-createPuzzleSession : Demo -> Cmd Msg
-createPuzzleSession demo =
-    Http.post
-        { url = "/gopher/lynrummy-elm/new-puzzle-session"
-        , body = Http.jsonBody (encodePuzzleRequest demo)
-        , expect =
-            Http.expectJson (PuzzleSessionCreated demo.title) sessionIdDecoder
+fetchCatalog : Cmd Msg
+fetchCatalog =
+    Http.get
+        { url = "/gopher/board-lab/puzzles"
+        , expect = Http.expectJson CatalogFetched catalogDecoder
         }
 
 
-encodePuzzleRequest : Demo -> Encode.Value
-encodePuzzleRequest demo =
+createPuzzleSession : Puzzle -> Cmd Msg
+createPuzzleSession puzzle =
+    Http.post
+        { url = "/gopher/lynrummy-elm/new-puzzle-session"
+        , body = Http.jsonBody (encodePuzzleRequest puzzle)
+        , expect =
+            Http.expectJson (PuzzleSessionCreated puzzle.name) sessionIdDecoder
+        }
+
+
+encodePuzzleRequest : Puzzle -> Encode.Value
+encodePuzzleRequest puzzle =
     Encode.object
-        [ ( "label", Encode.string ("board-lab: " ++ demo.title) )
-        , ( "initial_state", encodeInitialState demo.initial )
-        ]
-
-
-encodeInitialState : LabState -> Encode.Value
-encodeInitialState s =
-    Encode.object
-        [ ( "board", Encode.list CardStack.encodeCardStack s.board )
-        , ( "hands"
-          , Encode.list encodeHand [ s.hand, { handCards = [] } ]
-          )
-        , ( "deck", Encode.list Card.encodeCard [] )
-        , ( "discard", Encode.list Card.encodeCard [] )
-        , ( "active_player_index", Encode.int 0 )
-        , ( "scores", Encode.list Encode.int [ 0, 0 ] )
-        , ( "victor_awarded", Encode.bool False )
-        , ( "turn_start_board_score", Encode.int 0 )
-        , ( "turn_index", Encode.int 0 )
-        , ( "cards_played_this_turn", Encode.int 0 )
-        ]
-
-
-encodeHand : Hand -> Encode.Value
-encodeHand h =
-    Encode.object
-        [ ( "hand_cards"
-          , Encode.list CardStack.encodeHandCard h.handCards
-          )
+        [ ( "label", Encode.string ("board-lab: " ++ puzzle.title) )
+        , ( "initial_state", puzzle.initialState )
         ]
 
 
@@ -430,15 +287,34 @@ view model =
                 )
             ]
          ]
-            ++ List.map (viewDemo model) model.demos
+            ++ viewCatalog model
         )
 
 
-viewDemo : Model -> Demo -> Html Msg
-viewDemo model demo =
+viewCatalog : Model -> List (Html Msg)
+viewCatalog model =
+    case model.catalog of
+        CatalogLoading ->
+            [ div
+                [ style "margin-top" "24px", style "color" "#666" ]
+                [ text "Loading catalog…" ]
+            ]
+
+        CatalogFailed reason ->
+            [ div
+                [ style "margin-top" "24px", style "color" "#a00" ]
+                [ text ("Could not load puzzle catalog: " ++ reason) ]
+            ]
+
+        CatalogLoaded puzzles ->
+            List.map (viewPuzzle model) puzzles
+
+
+viewPuzzle : Model -> Puzzle -> Html Msg
+viewPuzzle model puzzle =
     let
         panel =
-            Dict.get demo.title model.panels
+            Dict.get puzzle.name model.panels
                 |> Maybe.withDefault Creating
     in
     div
@@ -448,19 +324,19 @@ viewDemo model demo =
         , style "margin-top" "28px"
         , style "background" "#fafafa"
         ]
-        [ h2 [ style "margin-top" "0" ] [ text demo.title ]
-        , p [] [ text demo.description ]
-        , viewPanelBody demo panel
+        [ h2 [ style "margin-top" "0" ] [ text puzzle.title ]
+        , p [] [ text puzzle.description ]
+        , viewPanelBody puzzle panel
         ]
 
 
-viewPanelBody : Demo -> Panel -> Html Msg
-viewPanelBody demo panel =
+viewPanelBody : Puzzle -> Panel -> Html Msg
+viewPanelBody puzzle panel =
     case panel of
         Playing p ->
             div
                 [ style "margin-top" "12px" ]
-                [ Html.map (PlayMsg demo.title) (Play.view p) ]
+                [ Html.map (PlayMsg puzzle.name) (Play.view p) ]
 
         Creating ->
             div

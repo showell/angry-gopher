@@ -23,6 +23,12 @@ go build -ldflags "-X main.gitCommit=$COMMIT" -o gopher-server .
 (cd games/lynrummy/board-lab/elm && ../../elm/node_modules/.bin/elm make src/Lab.elm --output=elm.js >/dev/null 2>&1) \
     || echo "Warning: BOARD_LAB Elm build failed; /gopher/board-lab/ will 404 on elm.js"
 
+# Regenerate the BOARD_LAB puzzle catalog from Python canonical
+# source. The resulting JSON is served at /gopher/board-lab/puzzles.
+python3 games/lynrummy/python/board_lab_puzzles.py \
+    --write games/lynrummy/board-lab/puzzles.json 2>/dev/null \
+    || echo "Warning: BOARD_LAB puzzle catalog write failed; /gopher/board-lab/puzzles will 404"
+
 GOPHER_CONFIG=~/AngryGopher/prod.json nohup ./gopher-server > /tmp/angry-gopher.log 2>&1 &
 
 cd "$CAT_DIR"

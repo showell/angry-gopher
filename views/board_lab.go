@@ -34,6 +34,8 @@ func HandleBoardLab(w http.ResponseWriter, r *http.Request) {
 		boardLabPage(w)
 	case "elm.js":
 		boardLabJS(w)
+	case "puzzles":
+		boardLabPuzzles(w)
 	default:
 		http.NotFound(w, r)
 	}
@@ -71,5 +73,27 @@ func boardLabJS(w http.ResponseWriter) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+	w.Write(data)
+}
+
+// boardLabPuzzles serves the Python-generated puzzle catalog.
+// The JSON file is written by
+// `games/lynrummy/python/board_lab_puzzles.py --write ...`
+// as part of `ops/start`. If the file is missing (generator
+// didn't run, e.g. fresh checkout), the response is a helpful
+// 404 pointing at the command.
+func boardLabPuzzles(w http.ResponseWriter) {
+	// Catalog lives alongside the Elm project root, one level
+	// above `elm/` so it's not confused with elm build output.
+	path := filepath.Join(filepath.Dir(ElmBoardLabDir), "puzzles.json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		http.Error(w, "puzzles.json not found — run "+
+			"`python3 games/lynrummy/python/board_lab_puzzles.py "+
+			"--write games/lynrummy/board-lab/puzzles.json`",
+			http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Write(data)
 }
