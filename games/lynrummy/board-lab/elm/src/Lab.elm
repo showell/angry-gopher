@@ -27,8 +27,8 @@ SQLite.
 
 import Browser
 import Dict exposing (Dict)
-import Html exposing (Html, button, div, h1, h2, input, label, p, text)
-import Html.Attributes exposing (disabled, placeholder, style, type_, value)
+import Html exposing (Html, button, div, h1, h2, input, label, p, text, textarea)
+import Html.Attributes exposing (disabled, placeholder, rows, style, type_, value)
 import Html.Events exposing (onClick, onInput)
 import Http
 import Json.Decode as Decode exposing (Decoder)
@@ -65,7 +65,26 @@ type alias Model =
     , finished : Bool
     , catalog : CatalogState
     , panels : Dict String Panel
+    , annotations : Dict String AnnotationState
     }
+
+
+{-| Per-puzzle annotation textarea state. Keyed by puzzle
+name, mirroring `panels`. Tracks the current textarea
+contents plus the most-recent send status so the UI can
+show "sent" / "sending…" / error messages inline.
+-}
+type alias AnnotationState =
+    { text : String
+    , status : SendStatus
+    }
+
+
+type SendStatus
+    = NotSent
+    | Sending
+    | Sent
+    | SendFailed String
 
 
 {-| Top-level catalog fetch state. Until the catalog lands, we
@@ -99,6 +118,9 @@ type Msg
     | CatalogFetched (Result Http.Error (List Puzzle))
     | PuzzleSessionCreated String (Result Http.Error Int)
     | PlayMsg String MainMsg.Msg
+    | UpdateAnnotation String String
+    | SendAnnotation String
+    | AnnotationSent String (Result Http.Error ())
 
 
 
@@ -140,9 +162,21 @@ init () =
       , finished = False
       , catalog = CatalogLoading
       , panels = Dict.empty
+      , annotations = Dict.empty
       }
     , Cmd.none
     )
+
+
+emptyAnnotation : AnnotationState
+emptyAnnotation =
+    { text = "", status = NotSent }
+
+
+getAnnotation : String -> Model -> AnnotationState
+getAnnotation puzzleName model =
+    Dict.get puzzleName model.annotations
+        |> Maybe.withDefault emptyAnnotation
 
 
 
@@ -214,6 +248,65 @@ update msg model =
 
                 _ ->
                     ( model, Cmd.none )
+
+        UpdateAnnotation name text ->
+            let
+                current =
+                    getAnnotation name model
+            in
+            ( { model
+                | annotations =
+                    Dict.insert name
+                        { current | text = text, status = NotSent }
+                        model.annotations
+              }
+            , Cmd.none
+            )
+
+        SendAnnotation name ->
+            let
+                current =
+                    getAnnotation name model
+
+                trimmed =
+                    String.trim current.text
+            in
+            if trimmed == "" then
+                ( model, Cmd.none )
+
+            else
+                ( { model
+                    | annotations =
+                        Dict.insert name
+                            { current | status = Sending }
+                            model.annotations
+                  }
+                , sendAnnotation model.userName name trimmed
+                )
+
+        AnnotationSent name (Ok ()) ->
+            ( { model
+                | annotations =
+                    Dict.insert name
+                        { text = "", status = Sent }
+                        model.annotations
+              }
+            , Cmd.none
+            )
+
+        AnnotationSent name (Err err) ->
+            let
+                current =
+                    getAnnotation name model
+            in
+            ( { model
+                | annotations =
+                    Dict.insert name
+                        { current | status = SendFailed (httpErrorToString err) }
+                        model.annotations
+              }
+            , Cmd.none
+            )
 
 
 httpErrorToString : Http.Error -> String
@@ -299,6 +392,22 @@ encodePuzzleRequest userName puzzle =
 sessionIdDecoder : Decode.Decoder Int
 sessionIdDecoder =
     Decode.field "session_id" Decode.int
+
+
+sendAnnotation : String -> String -> String -> Cmd Msg
+sendAnnotation userName puzzleName body =
+    Http.post
+        { url = "/gopher/board-lab/annotate"
+        , body =
+            Http.jsonBody
+                (Encode.object
+                    [ ( "puzzle_name", Encode.string puzzleName )
+                    , ( "user_name", Encode.string userName )
+                    , ( "body", Encode.string body )
+                    ]
+                )
+        , expect = Http.expectWhatever (AnnotationSent puzzleName)
+        }
 
 
 
@@ -459,7 +568,79 @@ viewPuzzle model puzzle =
         [ h2 [ style "margin-top" "0" ] [ text puzzle.title ]
         , p [] [ text puzzle.description ]
         , viewPanelBody puzzle panel
+        , viewAnnotation puzzle (getAnnotation puzzle.name model)
         ]
+
+
+viewAnnotation : Puzzle -> AnnotationState -> Html Msg
+viewAnnotation puzzle ann =
+    let
+        canSend =
+            String.trim ann.text /= "" && ann.status /= Sending
+
+        statusRow =
+            case ann.status of
+                NotSent ->
+                    text ""
+
+                Sending ->
+                    statusText "#555" "sending…"
+
+                Sent ->
+                    statusText "#060" "sent"
+
+                SendFailed reason ->
+                    statusText "#a00" ("failed: " ++ reason)
+    in
+    div
+        [ style "margin-top" "16px"
+        , style "padding-top" "12px"
+        , style "border-top" "1px solid #ddd"
+        ]
+        [ label
+            [ style "display" "block"
+            , style "font-size" "13px"
+            , style "color" "#555"
+            , style "margin-bottom" "6px"
+            ]
+            [ text "Notes on this puzzle (mouse slips, agent behavior, anything weird):" ]
+        , textarea
+            [ value ann.text
+            , onInput (UpdateAnnotation puzzle.name)
+            , rows 3
+            , placeholder "e.g. 'mouse slip on seq 2' or 'agent's landing loc feels off'"
+            , style "width" "100%"
+            , style "box-sizing" "border-box"
+            , style "font-family" "inherit"
+            , style "font-size" "14px"
+            , style "padding" "6px"
+            ]
+            []
+        , div
+            [ style "margin-top" "8px"
+            , style "display" "flex"
+            , style "align-items" "center"
+            , style "gap" "12px"
+            ]
+            [ button
+                [ onClick (SendAnnotation puzzle.name)
+                , disabled (not canSend)
+                , style "padding" "6px 16px"
+                , style "font-size" "13px"
+                ]
+                [ text "Send" ]
+            , statusRow
+            ]
+        ]
+
+
+statusText : String -> String -> Html Msg
+statusText color msg =
+    div
+        [ style "font-size" "13px"
+        , style "color" color
+        ]
+        [ text msg ]
 
 
 viewPanelBody : Puzzle -> Panel -> Html Msg

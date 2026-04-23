@@ -14,11 +14,14 @@
 package views
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // ElmBoardLabDir — compiled elm.js location. Mirrors
@@ -36,6 +39,8 @@ func HandleBoardLab(w http.ResponseWriter, r *http.Request) {
 		boardLabJS(w)
 	case "puzzles":
 		boardLabPuzzles(w)
+	case "annotate":
+		boardLabAnnotate(w, r)
 	default:
 		http.NotFound(w, r)
 	}
@@ -74,6 +79,49 @@ func boardLabJS(w http.ResponseWriter) {
 	}
 	w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
 	w.Write(data)
+}
+
+// boardLabAnnotate accepts POST {puzzle_name, user_name, body}
+// and appends a row to `board_lab_annotations`. Puzzle-level
+// scoping — annotations accumulate on the puzzle regardless
+// of which player or agent attempt provoked them.
+func boardLabAnnotate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "read body: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	var req struct {
+		PuzzleName string `json:"puzzle_name"`
+		UserName   string `json:"user_name"`
+		Body       string `json:"body"`
+	}
+	if err := json.Unmarshal(body, &req); err != nil {
+		http.Error(w, "decode: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	req.PuzzleName = strings.TrimSpace(req.PuzzleName)
+	req.UserName = strings.TrimSpace(req.UserName)
+	req.Body = strings.TrimSpace(req.Body)
+	if req.PuzzleName == "" || req.Body == "" {
+		http.Error(w, "puzzle_name and body are required",
+			http.StatusBadRequest)
+		return
+	}
+	if _, err := DB.Exec(
+		`INSERT INTO board_lab_annotations (puzzle_name, user_name, body, created_at) VALUES (?, ?, ?, ?)`,
+		req.PuzzleName, req.UserName, req.Body, time.Now().Unix(),
+	); err != nil {
+		http.Error(w, "insert: "+err.Error(),
+			http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	w.Write([]byte(`{"ok":true}`))
 }
 
 // boardLabPuzzles serves the Python-generated puzzle catalog.

@@ -63,4 +63,23 @@ CREATE TABLE IF NOT EXISTS lynrummy_puzzle_seeds (
     puzzle_name TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_lynrummy_puzzle_seeds_name ON lynrummy_puzzle_seeds(puzzle_name);
+
+-- BOARD_LAB annotations. A human playing or evaluating a
+-- puzzle may want to jot context about a specific attempt
+-- (e.g. "mouse slip on seq 2", "agent's landing loc feels
+-- off"). One textarea per panel, same shape as the essay
+-- comment surface in claude-collab.
+--
+-- Puzzle-level scoping — annotations attach to the puzzle,
+-- not a specific session. Multiple annotations from the
+-- same or different users accumulate. user_name lets us
+-- filter by who wrote it.
+CREATE TABLE IF NOT EXISTS board_lab_annotations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    puzzle_name TEXT NOT NULL,
+    user_name TEXT NOT NULL,
+    body TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_board_lab_annotations_puzzle ON board_lab_annotations(puzzle_name);
 `
