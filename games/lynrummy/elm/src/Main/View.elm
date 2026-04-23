@@ -599,16 +599,25 @@ viewStackForBoard : DragState -> CardStack -> Html Msg
 viewStackForBoard drag stack =
     case drag of
         Dragging info ->
-            case info.source of
-                FromBoardStack source ->
+            case ( info.source, info.clickIntent ) of
+                ( FromBoardStack source, Nothing ) ->
+                    -- Drag confirmed (click intent dropped).
+                    -- Hide the source stack; the floater takes over.
                     if CardStack.stacksEqual source stack then
                         Html.text ""
 
                     else
                         View.viewStack stack
 
-                FromHandCard _ ->
-                    View.viewStack stack
+                _ ->
+                    -- Either a hand-card drag, or a board-source
+                    -- still in the click-intent window (mousedown
+                    -- without enough movement yet). In both cases
+                    -- render the stack normally — no floater
+                    -- visuals engage until drag is confirmed, so
+                    -- clicks (splits) cause a single redraw on
+                    -- release with no intermediate flash.
+                    View.viewStackWithCardAttrs (Gesture.cardMouseDown stack) stack
 
         NotDragging ->
             View.viewStackWithCardAttrs (Gesture.cardMouseDown stack) stack
@@ -650,12 +659,21 @@ draggedOverlay : Model -> Html Msg
 draggedOverlay model =
     case model.drag of
         Dragging info ->
-            case info.pathFrame of
-                ViewportFrame ->
-                    renderDraggedFloater model info [ style "position" "fixed" ]
+            if info.clickIntent /= Nothing then
+                -- Mousedown without confirmed drag: no floater
+                -- yet. Prevents the click→drag ambiguous window
+                -- from showing the source-stack-jumping-to-
+                -- cursor-minus-grabOffset flash that splits
+                -- would otherwise produce.
+                Html.text ""
 
-                BoardFrame ->
-                    Html.text ""
+            else
+                case info.pathFrame of
+                    ViewportFrame ->
+                        renderDraggedFloater model info [ style "position" "fixed" ]
+
+                    BoardFrame ->
+                        Html.text ""
 
         NotDragging ->
             Html.text ""
@@ -672,12 +690,18 @@ boardDragOverlay : Model -> Maybe (Html Msg)
 boardDragOverlay model =
     case model.drag of
         Dragging info ->
-            case info.pathFrame of
-                BoardFrame ->
-                    Just (renderDraggedFloater model info [ style "position" "absolute" ])
+            if info.clickIntent /= Nothing then
+                -- Click intent still live — see draggedOverlay
+                -- for rationale.
+                Nothing
 
-                ViewportFrame ->
-                    Nothing
+            else
+                case info.pathFrame of
+                    BoardFrame ->
+                        Just (renderDraggedFloater model info [ style "position" "absolute" ])
+
+                    ViewportFrame ->
+                        Nothing
 
         NotDragging ->
             Nothing

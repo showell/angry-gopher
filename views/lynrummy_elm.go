@@ -1047,10 +1047,18 @@ func lynrummyElmJS(w http.ResponseWriter) {
 
 // requiresGestureMetadata reports whether an incoming
 // WireAction's envelope MUST carry gesture_metadata.path. True
-// for every intra-board action (split / merge_stack / move_stack):
-// a client that emitted one of these without a drag path is
-// almost certainly buggy, and replay consumers would otherwise
-// read the result as a silent teleport.
+// for actions whose UI is a DRAG (merge_stack / move_stack):
+// client-captured samples carry the motion that replay needs
+// to faithfully re-animate. A client emitting these without
+// a path is almost certainly buggy and replay would read the
+// result as a silent teleport.
+//
+// False for splits. Splits are CLICKS in the UI — a single
+// event producing a single redraw. The replay applies them
+// immediately without animating a drag, so capturing a fake
+// drag path serves no one. Removed 2026-04-23 when the
+// replay side stopped animating split paths; the server gate
+// caught up.
 //
 // False for hand-origin actions (merge_hand / place_hand) —
 // those are synthesized by Elm at replay time from a live DOM
@@ -1060,8 +1068,7 @@ func lynrummyElmJS(w http.ResponseWriter) {
 // False for turn-logic actions (complete_turn / undo).
 func requiresGestureMetadata(action lynrummy.WireAction) bool {
 	switch action.(type) {
-	case lynrummy.SplitAction,
-		lynrummy.MergeStackAction,
+	case lynrummy.MergeStackAction,
 		lynrummy.MoveStackAction:
 		return true
 	}
