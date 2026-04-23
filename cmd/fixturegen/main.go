@@ -290,7 +290,7 @@ func goScenarioBody(sc Scenario) string {
 }
 
 func goValidateMove(b *strings.Builder, sc Scenario, turnComplete bool) {
-	b.WriteString("\tbounds := BoardBounds{MaxWidth: 800, MaxHeight: 600, Margin: 5}\n")
+	b.WriteString("\tbounds := BoardBounds{MaxWidth: 800, MaxHeight: 600, Margin: 7}\n")
 	var call string
 	if turnComplete {
 		fmt.Fprintf(b, "\tboard := %s\n", goStacksVar(sc.Board))
@@ -410,7 +410,7 @@ import Game.Strategy.Hint as Hint
 
 standardBounds : BoardBounds
 standardBounds =
-    { maxWidth = 800, maxHeight = 600, margin = 5 }
+    { maxWidth = 800, maxHeight = 600, margin = 7 }
 
 
 -- Invariant check: every stack must classify as a complete group

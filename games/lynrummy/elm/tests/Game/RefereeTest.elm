@@ -59,7 +59,7 @@ import Test exposing (Test, describe, test)
 
 bounds : BoardBounds
 bounds =
-    { maxWidth = 800, maxHeight = 600, margin = 5 }
+    { maxWidth = 800, maxHeight = 600, margin = 7 }
 
 
 card : CardValue -> Suit -> OriginDeck -> Card

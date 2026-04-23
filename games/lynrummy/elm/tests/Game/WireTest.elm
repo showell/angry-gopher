@@ -109,7 +109,7 @@ sampleStack =
 
 sampleBounds : BoardBounds
 sampleBounds =
-    { maxWidth = 800, maxHeight = 600, margin = 5 }
+    { maxWidth = 800, maxHeight = 600, margin = 7 }
 
 
 sampleGeometryError : GeometryError
@@ -359,7 +359,7 @@ shapeAssertions =
         , test "BoardBounds uses snake_case max_width / max_height" <|
             \_ ->
                 Expect.equal
-                    """{"max_width":800,"max_height":600,"margin":5}"""
+                    """{"max_width":800,"max_height":600,"margin":7}"""
                     (Encode.encode 0 (encodeBoardBounds sampleBounds))
         , test "RefereeMove omits hand_cards_played when empty" <|
             \_ ->

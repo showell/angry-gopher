@@ -11,7 +11,7 @@ import (
 
 // Client's stacks_to_remove has the wrong originDeck; must not match the board stack (fabrication guard).
 func Test_deck_identity_mismatch_in_remove(t *testing.T) {
-	bounds := BoardBounds{MaxWidth: 800, MaxHeight: 600, Margin: 5}
+	bounds := BoardBounds{MaxWidth: 800, MaxHeight: 600, Margin: 7}
 	boardBefore := []CardStack{NewCardStack([]BoardCard{{Card: Card{Value: 5, Suit: Heart, OriginDeck: 0}, State: FirmlyOnBoard}, {Card: Card{Value: 6, Suit: Heart, OriginDeck: 0}, State: FirmlyOnBoard}, {Card: Card{Value: 7, Suit: Heart, OriginDeck: 0}, State: FirmlyOnBoard}}, Location{Top: 10, Left: 10})}
 	stacksToRemove := []CardStack{NewCardStack([]BoardCard{{Card: Card{Value: 5, Suit: Heart, OriginDeck: 1}, State: FirmlyOnBoard}, {Card: Card{Value: 6, Suit: Heart, OriginDeck: 1}, State: FirmlyOnBoard}, {Card: Card{Value: 7, Suit: Heart, OriginDeck: 1}, State: FirmlyOnBoard}}, Location{Top: 10, Left: 10})}
 	stacksToAdd := []CardStack{NewCardStack([]BoardCard{{Card: Card{Value: 5, Suit: Heart, OriginDeck: 1}, State: FirmlyOnBoard}, {Card: Card{Value: 6, Suit: Heart, OriginDeck: 1}, State: FirmlyOnBoard}, {Card: Card{Value: 7, Suit: Heart, OriginDeck: 1}, State: FirmlyOnBoard}, {Card: Card{Value: 8, Suit: Heart, OriginDeck: 1}, State: FreshlyPlayed}}, Location{Top: 10, Left: 10})}
@@ -30,7 +30,7 @@ func Test_deck_identity_mismatch_in_remove(t *testing.T) {
 
 // Two stacks within BoardBounds.margin (5px) but not overlapping.
 func Test_geometry_crowded(t *testing.T) {
-	bounds := BoardBounds{MaxWidth: 800, MaxHeight: 600, Margin: 5}
+	bounds := BoardBounds{MaxWidth: 800, MaxHeight: 600, Margin: 7}
 	boardBefore := []CardStack(nil)
 	stacksToRemove := []CardStack(nil)
 	stacksToAdd := []CardStack{NewCardStack([]BoardCard{{Card: Card{Value: 1, Suit: Heart, OriginDeck: 0}, State: FreshlyPlayed}}, Location{Top: 10, Left: 10}), NewCardStack([]BoardCard{{Card: Card{Value: 2, Suit: Spade, OriginDeck: 0}, State: FreshlyPlayed}}, Location{Top: 10, Left: 40})}
@@ -49,7 +49,7 @@ func Test_geometry_crowded(t *testing.T) {
 
 // Stack whose right edge exceeds MaxWidth is rejected.
 func Test_geometry_out_of_bounds(t *testing.T) {
-	bounds := BoardBounds{MaxWidth: 800, MaxHeight: 600, Margin: 5}
+	bounds := BoardBounds{MaxWidth: 800, MaxHeight: 600, Margin: 7}
 	boardBefore := []CardStack(nil)
 	stacksToRemove := []CardStack(nil)
 	stacksToAdd := []CardStack{NewCardStack([]BoardCard{{Card: Card{Value: 1, Suit: Heart, OriginDeck: 0}, State: FreshlyPlayed}}, Location{Top: 10, Left: 790})}
@@ -68,7 +68,7 @@ func Test_geometry_out_of_bounds(t *testing.T) {
 
 // Two stacks at the same coordinates actually overlap.
 func Test_geometry_overlap(t *testing.T) {
-	bounds := BoardBounds{MaxWidth: 800, MaxHeight: 600, Margin: 5}
+	bounds := BoardBounds{MaxWidth: 800, MaxHeight: 600, Margin: 7}
 	boardBefore := []CardStack(nil)
 	stacksToRemove := []CardStack(nil)
 	stacksToAdd := []CardStack{NewCardStack([]BoardCard{{Card: Card{Value: 1, Suit: Heart, OriginDeck: 0}, State: FreshlyPlayed}}, Location{Top: 10, Left: 10}), NewCardStack([]BoardCard{{Card: Card{Value: 2, Suit: Spade, OriginDeck: 0}, State: FreshlyPlayed}}, Location{Top: 10, Left: 10})}
@@ -87,7 +87,7 @@ func Test_geometry_overlap(t *testing.T) {
 
 // A set on the board is referenced in stacks_to_remove with cards in a different order. Stacks are identified by loc + cards-in-order, so the reordered copy is NOT the same stack — referee rejects at inventory stage. Exercises the strict-order rule end-to-end; sets are the natural case since their player-visible form has no canonical order.
 func Test_identity_reorder_breaks_match(t *testing.T) {
-	bounds := BoardBounds{MaxWidth: 800, MaxHeight: 600, Margin: 5}
+	bounds := BoardBounds{MaxWidth: 800, MaxHeight: 600, Margin: 7}
 	boardBefore := []CardStack{NewCardStack([]BoardCard{{Card: Card{Value: 5, Suit: Heart, OriginDeck: 0}, State: FirmlyOnBoard}, {Card: Card{Value: 5, Suit: Club, OriginDeck: 0}, State: FirmlyOnBoard}, {Card: Card{Value: 5, Suit: Spade, OriginDeck: 0}, State: FirmlyOnBoard}}, Location{Top: 100, Left: 100})}
 	stacksToRemove := []CardStack{NewCardStack([]BoardCard{{Card: Card{Value: 5, Suit: Club, OriginDeck: 0}, State: FirmlyOnBoard}, {Card: Card{Value: 5, Suit: Spade, OriginDeck: 0}, State: FirmlyOnBoard}, {Card: Card{Value: 5, Suit: Heart, OriginDeck: 0}, State: FirmlyOnBoard}}, Location{Top: 100, Left: 100})}
 	stacksToAdd := []CardStack{NewCardStack([]BoardCard{{Card: Card{Value: 5, Suit: Club, OriginDeck: 0}, State: FirmlyOnBoard}, {Card: Card{Value: 5, Suit: Spade, OriginDeck: 0}, State: FirmlyOnBoard}, {Card: Card{Value: 5, Suit: Heart, OriginDeck: 0}, State: FirmlyOnBoard}, {Card: Card{Value: 5, Suit: Diamond, OriginDeck: 0}, State: FreshlyPlayed}}, Location{Top: 100, Left: 100})}
@@ -106,7 +106,7 @@ func Test_identity_reorder_breaks_match(t *testing.T) {
 
 // Player adds cards to the board that weren't in removed stacks or declared hand.
 func Test_inventory_card_from_nowhere(t *testing.T) {
-	bounds := BoardBounds{MaxWidth: 800, MaxHeight: 600, Margin: 5}
+	bounds := BoardBounds{MaxWidth: 800, MaxHeight: 600, Margin: 7}
 	boardBefore := []CardStack(nil)
 	stacksToRemove := []CardStack(nil)
 	stacksToAdd := []CardStack{NewCardStack([]BoardCard{{Card: Card{Value: 1, Suit: Heart, OriginDeck: 0}, State: FreshlyPlayed}, {Card: Card{Value: 2, Suit: Heart, OriginDeck: 0}, State: FreshlyPlayed}, {Card: Card{Value: 3, Suit: Heart, OriginDeck: 0}, State: FreshlyPlayed}}, Location{Top: 10, Left: 10})}
@@ -125,7 +125,7 @@ func Test_inventory_card_from_nowhere(t *testing.T) {
 
 // Mid-turn boards may contain incomplete/bogus stacks; ValidateGameMove doesn't check semantics.
 func Test_midturn_allows_bogus(t *testing.T) {
-	bounds := BoardBounds{MaxWidth: 800, MaxHeight: 600, Margin: 5}
+	bounds := BoardBounds{MaxWidth: 800, MaxHeight: 600, Margin: 7}
 	boardBefore := []CardStack(nil)
 	stacksToRemove := []CardStack(nil)
 	stacksToAdd := []CardStack{NewCardStack([]BoardCard{{Card: Card{Value: 1, Suit: Heart, OriginDeck: 0}, State: FreshlyPlayed}, {Card: Card{Value: 5, Suit: Club, OriginDeck: 0}, State: FreshlyPlayed}, {Card: Card{Value: 13, Suit: Diamond, OriginDeck: 0}, State: FreshlyPlayed}}, Location{Top: 10, Left: 10})}
@@ -138,7 +138,7 @@ func Test_midturn_allows_bogus(t *testing.T) {
 
 // Every stack on the board is a valid group (run + set, well-spaced).
 func Test_turn_complete_clean_board(t *testing.T) {
-	bounds := BoardBounds{MaxWidth: 800, MaxHeight: 600, Margin: 5}
+	bounds := BoardBounds{MaxWidth: 800, MaxHeight: 600, Margin: 7}
 	board := []CardStack{NewCardStack([]BoardCard{{Card: Card{Value: 1, Suit: Heart, OriginDeck: 0}, State: FirmlyOnBoard}, {Card: Card{Value: 2, Suit: Heart, OriginDeck: 0}, State: FirmlyOnBoard}, {Card: Card{Value: 3, Suit: Heart, OriginDeck: 0}, State: FirmlyOnBoard}}, Location{Top: 10, Left: 10}), NewCardStack([]BoardCard{{Card: Card{Value: 13, Suit: Club, OriginDeck: 0}, State: FirmlyOnBoard}, {Card: Card{Value: 13, Suit: Diamond, OriginDeck: 0}, State: FirmlyOnBoard}, {Card: Card{Value: 13, Suit: Spade, OriginDeck: 0}, State: FirmlyOnBoard}}, Location{Top: 10, Left: 200})}
 	got := ValidateTurnComplete(board, bounds)
 	if got != nil {
@@ -148,7 +148,7 @@ func Test_turn_complete_clean_board(t *testing.T) {
 
 // Two-card stack fine mid-turn but rejected at turn-complete.
 func Test_turn_complete_rejects_incomplete(t *testing.T) {
-	bounds := BoardBounds{MaxWidth: 800, MaxHeight: 600, Margin: 5}
+	bounds := BoardBounds{MaxWidth: 800, MaxHeight: 600, Margin: 7}
 	board := []CardStack{NewCardStack([]BoardCard{{Card: Card{Value: 1, Suit: Heart, OriginDeck: 0}, State: FirmlyOnBoard}, {Card: Card{Value: 2, Suit: Heart, OriginDeck: 0}, State: FirmlyOnBoard}}, Location{Top: 10, Left: 10})}
 	got := ValidateTurnComplete(board, bounds)
 	if got == nil {
@@ -164,7 +164,7 @@ func Test_turn_complete_rejects_incomplete(t *testing.T) {
 
 // Player extends a 5H-6H-7H run by playing 8H from hand.
 func Test_valid_extend_run_with_8H(t *testing.T) {
-	bounds := BoardBounds{MaxWidth: 800, MaxHeight: 600, Margin: 5}
+	bounds := BoardBounds{MaxWidth: 800, MaxHeight: 600, Margin: 7}
 	boardBefore := []CardStack{NewCardStack([]BoardCard{{Card: Card{Value: 5, Suit: Heart, OriginDeck: 0}, State: FirmlyOnBoard}, {Card: Card{Value: 6, Suit: Heart, OriginDeck: 0}, State: FirmlyOnBoard}, {Card: Card{Value: 7, Suit: Heart, OriginDeck: 0}, State: FirmlyOnBoard}}, Location{Top: 10, Left: 10})}
 	stacksToRemove := []CardStack{NewCardStack([]BoardCard{{Card: Card{Value: 5, Suit: Heart, OriginDeck: 0}, State: FirmlyOnBoard}, {Card: Card{Value: 6, Suit: Heart, OriginDeck: 0}, State: FirmlyOnBoard}, {Card: Card{Value: 7, Suit: Heart, OriginDeck: 0}, State: FirmlyOnBoard}}, Location{Top: 10, Left: 10})}
 	stacksToAdd := []CardStack{NewCardStack([]BoardCard{{Card: Card{Value: 5, Suit: Heart, OriginDeck: 0}, State: FirmlyOnBoard}, {Card: Card{Value: 6, Suit: Heart, OriginDeck: 0}, State: FirmlyOnBoard}, {Card: Card{Value: 7, Suit: Heart, OriginDeck: 0}, State: FirmlyOnBoard}, {Card: Card{Value: 8, Suit: Heart, OriginDeck: 0}, State: FreshlyPlayed}}, Location{Top: 10, Left: 10})}

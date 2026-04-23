@@ -4,7 +4,7 @@ import "testing"
 
 // --- Helpers ---
 
-var bounds = BoardBounds{MaxWidth: 800, MaxHeight: 600, Margin: 5}
+var bounds = BoardBounds{MaxWidth: 800, MaxHeight: 600, Margin: 7}
 
 func bc(value int, suit Suit, deck int) BoardCard {
 	return BoardCard{Card: Card{Value: value, Suit: suit, OriginDeck: deck}, State: 0}

@@ -58,7 +58,7 @@ server agree on what "clean" means.
 -}
 refereeBounds : BoardGeometry.BoardBounds
 refereeBounds =
-    { maxWidth = 800, maxHeight = 600, margin = 5 }
+    { maxWidth = 800, maxHeight = 600, margin = 7 }
 
 
 

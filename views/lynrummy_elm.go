@@ -304,7 +304,7 @@ func lynrummyElmActions(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "session not found", http.StatusNotFound)
 			return
 		}
-		bounds := lynrummy.BoardBounds{MaxWidth: 800, MaxHeight: 600, Margin: 5}
+		bounds := lynrummy.BoardBounds{MaxWidth: 800, MaxHeight: 600, Margin: 7}
 		if refErr := lynrummy.ValidateTurnComplete(state.Board, bounds); refErr != nil {
 			log.Printf("lynrummy-elm action: complete_turn rejected session=%d stage=%s msg=%s",
 				sessionID, refErr.Stage, refErr.Message)

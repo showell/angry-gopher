@@ -31,7 +31,7 @@ import Test exposing (Test, describe, test)
 
 standardBounds : BoardBounds
 standardBounds =
-    { maxWidth = 800, maxHeight = 600, margin = 5 }
+    { maxWidth = 800, maxHeight = 600, margin = 7 }
 
 
 -- Invariant check: every stack must classify as a complete group

@@ -23,9 +23,15 @@ CARD_HEIGHT = 40
 
 # Board region. Match the referee's bounds in
 # views/lynrummy_elm.go (ValidateTurnComplete call site).
+# Margin bumped 5 → 7 on 2026-04-23 (CROWDED_BOARDS) after
+# BOARD_LAB captures revealed that gap=7 between stacks
+# reads as overlap to humans even though the old
+# gap-must-be-at-least-5 rule accepted it. Keep in sync
+# with Elm's Main.Apply.refereeBounds + Go's uses of
+# BoardBounds{Margin: 7}.
 BOARD_MAX_WIDTH = 800
 BOARD_MAX_HEIGHT = 600
-BOARD_MARGIN = 5
+BOARD_MARGIN = 7
 
 # Where the 800x600 board div sits in the viewport. Pinned so
 # that Python (which has no DOM) and Elm agree on the viewport
