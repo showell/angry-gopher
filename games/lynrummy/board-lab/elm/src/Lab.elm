@@ -62,6 +62,7 @@ type alias Puzzle =
 type alias Model =
     { userName : String
     , started : Bool
+    , finished : Bool
     , catalog : CatalogState
     , panels : Dict String Panel
     }
@@ -94,6 +95,7 @@ type Panel
 type Msg
     = UpdateName String
     | SubmitName
+    | ClickFinish
     | CatalogFetched (Result Http.Error (List Puzzle))
     | PuzzleSessionCreated String (Result Http.Error Int)
     | PlayMsg String MainMsg.Msg
@@ -135,6 +137,7 @@ init : () -> ( Model, Cmd Msg )
 init () =
     ( { userName = ""
       , started = False
+      , finished = False
       , catalog = CatalogLoading
       , panels = Dict.empty
       }
@@ -158,6 +161,9 @@ update msg model =
 
             else
                 ( { model | started = True }, fetchCatalog )
+
+        ClickFinish ->
+            ( { model | finished = True }, Cmd.none )
 
         CatalogFetched (Ok puzzles) ->
             let
@@ -318,13 +324,56 @@ view model =
                 )
             ]
          ]
-            ++ (if model.started then
-                    viewCatalog model
+            ++ (if model.finished then
+                    [ viewFinishedMessage model ]
+
+                else if model.started then
+                    viewCatalog model ++ [ viewFinishButton ]
 
                 else
                     [ viewNameGate model ]
                )
         )
+
+
+viewFinishButton : Html Msg
+viewFinishButton =
+    div
+        [ style "margin-top" "40px"
+        , style "padding-top" "20px"
+        , style "border-top" "1px solid #ddd"
+        , style "text-align" "center"
+        ]
+        [ button
+            [ onClick ClickFinish
+            , style "padding" "12px 32px"
+            , style "font-size" "16px"
+            , style "background" "#000080"
+            , style "color" "white"
+            , style "border" "none"
+            , style "border-radius" "6px"
+            , style "cursor" "pointer"
+            ]
+            [ text "Finish" ]
+        ]
+
+
+viewFinishedMessage : Model -> Html Msg
+viewFinishedMessage model =
+    div
+        [ style "margin-top" "40px"
+        , style "padding" "32px"
+        , style "background" "#f0f8f0"
+        , style "border" "1px solid #9c9"
+        , style "border-radius" "8px"
+        , style "text-align" "center"
+        , style "font-size" "18px"
+        ]
+        [ p [ style "margin" "0 0 8px 0", style "font-weight" "bold" ]
+            [ text ("Thanks, " ++ String.trim model.userName ++ "! You are helping science!") ]
+        , p [ style "margin" "0", style "font-size" "14px", style "color" "#555" ]
+            [ text "(you may reload the browser to play again)" ]
+        ]
 
 
 viewNameGate : Model -> Html Msg
