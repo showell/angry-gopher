@@ -101,8 +101,11 @@ Helpers + constants:
   falling back to Hand.empty on out-of-range.
 - `setActiveHand : Hand -> Model -> Model` — replaces
   hands[activePlayerIndex] with the given Hand.
-- `boardDomId = "lynrummy-board"` — CSS id used by
-  `Browser.Dom.getElement` on drag start.
+- `boardDomIdFor : String -> String` — per-gameId board
+  DOM id (`"lynrummy-board-" ++ gameId`). Used by
+  `Browser.Dom.getElement` on drag start and at replay
+  start. Per-instance so multiple Play instances on one
+  page (BOARD_LAB) don't collide.
 - `baseModel : Model` — initial Model; defaults to hardcoded
   Dealer opening board + canned P1 hand + empty P2 hand.
 

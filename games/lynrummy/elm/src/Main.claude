@@ -1,122 +1,50 @@
 # Main.elm — EARLY
 
-TEA bootstrap for the standalone LynRummy Elm game. Wires the
-model, Msg, update, view, and subscriptions into
-`Browser.element`. Post-extractions, Main.elm is thin: init,
-update-dispatch, the MouseMove/Up decoders, subscriptions, and
-the URL-path port.
+Thin port-owning harness around `Main.Play`. Wires
+`Browser.element` with Play's init/update/view/subscriptions;
+owns the URL-pinning port (only port modules may declare
+ports); wraps Play's embeddable view in a viewport-filling
+shell so the main app looks full-screen.
 
 ## Status
 
-- **Label:** EARLY. Active churn but shrinking — replay
-  machinery (FSM + spatial synthesis) moved to
-  `Game/Replay/Time.elm` and `Game/Replay/Space.elm` on
-  2026-04-21. Game-state transitions already live in
-  `Main/Apply.elm`; rendering in `Main/View.elm`; pointer
-  gesture machinery in `Main/Gesture.elm`; HTTP in
-  `Main/Wire.elm`; types + initial model in `Main/State.elm`.
+- **Label:** EARLY. Slim by design after
+  REFACTOR_EMBEDDABLE_PLAY (2026-04-23). Below ~70 lines and
+  should stay that way — if Main.elm starts growing, the
+  weight probably belongs inside Play or further down the
+  stack.
 
-## Dispatch map
+## Responsibilities
 
-`update` dispatches on Msg. Most branches are one-liners that
-delegate to a helper module; the remaining inline branches are
-(a) tiny (MouseMove cursor bookkeeping, WingEntered/Left hover,
-PopupOk) or (b) tightly coupled to multiple Model fields
-(ClickCompleteTurn, CompleteTurnResponded, BoardRectReceived,
-ClickHint).
+Everything here is host-level:
 
-| Msg | Handler |
-|---|---|
-| `MouseDownOnBoardCard` / `MouseDownOnHandCard` | `Main.Gesture.start*` |
-| `MouseMove` | inline cursor + path bookkeeping |
-| `MouseUp` | `Main.Gesture.handleMouseUp` |
-| `WingEntered` / `WingLeft` | inline |
-| `ActionSent` | inline no-op (fire-and-forget) |
-| `SessionReceived` | inline — stash sid + pin URL |
-| `ClickCompleteTurn` | inline — referee pre-check + `applyAction WA.CompleteTurn` + fire-and-forget `sendCompleteTurn` |
-| `CompleteTurnResponded` | inline — divergence monitor (transition already applied locally on click) |
-| `PopupOk` | inline — popup dismiss |
-| `ClickInstantReplay` | `Game.Replay.Time.clickInstantReplay` |
-| `ReplayFrame` | `Game.Replay.Time.replayFrame` |
-| `ClickReplayPauseToggle` | `Game.Replay.Time.clickReplayPauseToggle` |
-| `HandCardRectReceived` | `Game.Replay.Time.handCardRectReceived` |
-| `BoardRectReceived` | inline — shared by live-drag AND replay |
-| `ActionLogFetched` | inline — `bootstrapFromBundle` (seed Model from `initialState`, fold actions through reducer) |
-| `ClickHint` | inline — `Hint.buildSuggestions` + highlight |
+- `port setSessionPath : String -> Cmd msg` — updates the URL
+  path to `/gopher/lynrummy-elm/play/<sid>` when Play emits
+  `SessionChanged`. Reloads resume the same session via
+  server-rendered `initialSessionId` in the page flags.
+- `Browser.element` boot.
+- `configFromFlags` — maps `Flags` (from HTML) to a
+  `Play.Config`:
+  - `initialSessionId == Just sid` → `ResumeSession sid`
+  - `Nothing` → `NewSession`
+- Viewport-filling outer div — fixed-to-viewport, scroll,
+  background — wrapping `Play.view`. BOARD_LAB skips this
+  wrapper; puzzle panels scroll normally in the gallery.
+- Routing `Play.Output` through the port. `NoOutput` is a
+  plain `(model, cmd)` pass-through.
 
-`StateRefreshed` was removed 2026-04-22 (ELM_AUTONOMY_AUDIT).
-Elm no longer wire-reads current state; bootstrap seeds from
-the action-log bundle's `initialState` and derives current
-state by folding actions through the local reducer.
+## What NOT to put here
 
-`BoardRectReceived` stays inline because it has two consumers
-in the same Msg: the active live-drag (drop-target math) and
-the active replay (board-frame → viewport translation). Pulling
-it into one of the two contexts would hide the shared update.
-
-## "One log, source-agnostic" invariant
-
-Every validated WireAction — local gesture, replay tick, or
-(future) wire receive — flows through `applyAction` before
-anything else touches the Model. "Capture the input, update the
-data structure, re-draw the view."
-
-## Subscriptions
-
-- `Browser.Events.onMouseMove` / `onMouseUp` — subscribed only
-  while `drag = Dragging _`.
-- `Browser.Events.onAnimationFrame` → `ReplayFrame` — subscribed
-  only while `replay = Just { paused = False }`. Drives both the
-  drag-path interpolation and the beat phase.
-
-## Port
-
-- `setSessionPath : String -> Cmd msg` — writes the URL path
-  to `/gopher/lynrummy-elm/play/<sid>` whenever a session id is
-  known. Server-side rendering reads the path on reload and
-  resumes the same game instead of dropping to the lobby.
-
-## Replay architecture
-
-The replay walker lives across two modules, split by concern:
-
-- `Game/Replay/Time.elm` — FSM, clock-driven Msg handlers,
-  inter-action beat durations. Owns the decision of "what
-  phase am I in and when do I transition."
-- `Game/Replay/Space.elm` — spatial synthesis: endpoints, path
-  interpolation, drag-source resolution, DOM-measured board /
-  hand rects. Owns the "where does the drag live in pixel
-  space" question.
-
-Space is pure; Time depends on Space; Main depends on both.
-See the companion sidecars for detail.
-
-### Rule for adding synthesis to new primitives
-
-Any viewport coord the replay synthesizer consumes must come
-from DOM measurement, not from a pinned constant. See
-`Game/Replay/Space.claude` § "Rule for adding synthesis" for
-the full rule and the 2026-04-21 "landing right, origin wrong"
-incident that motivated it.
+Anything that pertains to gameplay, session bootstrap, drag,
+replay, or rendering. That all lives in `Main.Play` (and its
+submodules). Main.elm should remain a harness you can replace
+with a different host (e.g., Lab.elm) without losing
+functionality.
 
 ## Pointers
 
-- Autonomy-core: `Game.Game` (`Game.elm`) — `GameState`
-  record and `applyCompleteTurn` transition. Main embeds those
-  fields; changes to game state go through Game's functions.
-- Hosted at `index.html` in this dir; built into `elm.js` via
-  `npx elm make src/Main.elm --output=elm.js` (runs
-  automatically in `ops/start`).
-- Served through Gopher at `http://localhost:9000/gopher/lynrummy-elm/`.
-- Pinned geometry: `Game.BoardGeometry`,
-  `Game.HandLayout`.
-
-## TODO
-
-- Synthesized branch currently covers `MergeHand`, `PlaceHand`
-  (both via the async hand-rect DOM query), and `MoveStack` +
-  `MergeStack` (sync, board-frame endpoints). Still to wire:
-  `Split` — blocked on an open question about where the two
-  split halves should land (wire doesn't carry a target loc
-  for Split today; synthesis needs a policy or a wire
-  extension).
+- `Main.Play` — the embeddable component (everything the
+  main app actually does).
+- `games/lynrummy/board-lab/elm/src/Lab.elm` — the lab's
+  host; shows that Main.Play is embeddable.
+- Proposal: `~/showell_repos/claude-steve/REFACTOR_EMBEDDABLE_PLAY.md`.

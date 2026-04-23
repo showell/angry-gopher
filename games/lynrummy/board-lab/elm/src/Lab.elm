@@ -1,21 +1,27 @@
 module Lab exposing (main)
 
 {-| BOARD_LAB — a single-page gallery of curated LynRummy
-puzzles. Each card has a Play button that creates a fresh
-puzzle session on the server and embeds a `Main.Play`
-instance in-place so Steve plays within the gallery (no
-redirect, no new tab). Drags get captured by the normal
-gesture-telemetry pipeline into SQLite.
+puzzles. Each panel auto-creates a puzzle session on page
+load and embeds a `Main.Play` instance in place. You play
+within the gallery — drag a card, the gesture goes through
+the normal telemetry pipeline into SQLite, scroll down to
+the next puzzle.
 
-Single-active-puzzle constraint in V1: clicking Play on a
-new puzzle closes whatever was currently active. This
-avoids `Browser.Dom.getElement "lynrummy-board"` DOM-id
-collisions across multiple simultaneous Play instances.
-Relaxing this requires per-instance DOM ids — a follow-up.
+Per-panel gameId (the puzzle session's id stringified)
+disambiguates DOM ids so multiple Play instances coexist on
+one page. Board DOM ids are per-gameId via
+`State.boardDomIdFor`; hand-card DOM ids are shared across
+instances (collision is harmless for live play since hand
+cards are identified by mouse position, not DOM lookup —
+only replay inside a single panel measures hand-card DOM
+rects).
 
-Always within-a-turn: lab state per puzzle is just
-`{ board, hand }`, no deck/dealer/turn cycling. The hand
-sits left of the board (2026-04-23 layout).
+Always within-a-turn: each puzzle's lab-level state is just
+`{ board, hand }` — no deck, no dealer, no turn cycling.
+Puzzle catalog lives here as Elm literals; a follow-up will
+pull from a Python-canonical catalog so agent and human
+solutions to the same named puzzle can be correlated via
+SQLite.
 
 -}
 
@@ -31,17 +37,14 @@ import Game.CardStack as CardStack
         , HandCardState(..)
         )
 import Game.Hand exposing (Hand)
-import Game.View as View
-import Html exposing (Html, button, div, h1, h2, p, text)
-import Html.Attributes exposing (disabled, style)
-import Html.Events exposing (onClick)
+import Html exposing (Html, div, h1, h2, p, text)
+import Html.Attributes exposing (style)
 import Http
 import Json.Decode as Decode
 import Json.Encode as Encode
 import Main.Msg as MainMsg
 import Main.Play as Play
 import Main.State as MainState
-import Main.View as MainView
 
 
 
@@ -159,17 +162,19 @@ pairPeelDemo =
 
 moveStackCrowdedDemo : Demo
 moveStackCrowdedDemo =
-    { title = "MoveStack in crowded place"
+    { title = "Tight right edge"
     , description =
-        "Hand has 9H. The board has your target run (6H-7H-8H) "
-            ++ "packed near the right edge, with two other stacks "
-            ++ "eating up the obvious relocation spots. Find a "
-            ++ "clean way to reposition before merging."
+        "Hand has 9H. The 6H-7H-8H run sits hard against the "
+            ++ "right edge — dropping 9H onto it in place would "
+            ++ "push the merged stack off the board. You need to "
+            ++ "MoveStack the run to a clearer spot first, then "
+            ++ "merge. Two other stacks sit on the board too, so "
+            ++ "the choice of where to move is a spatial call."
     , initial =
         { board =
-            [ st 80 640 [ d1 Six Heart, d1 Seven Heart, d1 Eight Heart ]
+            [ st 80 695 [ d1 Six Heart, d1 Seven Heart, d1 Eight Heart ]
             , st 80 400 [ d1 Five Club, d1 Five Diamond, d1 Five Spade ]
-            , st 260 100 [ d1 Two Spade, d1 Three Spade, d1 Four Spade ]
+            , st 280 100 [ d1 Two Spade, d1 Three Spade, d1 Four Spade ]
             ]
         , hand = hd [ d1 Nine Heart ]
         }

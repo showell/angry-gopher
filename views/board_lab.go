@@ -1,15 +1,15 @@
 // BOARD_LAB — a standalone Elm app that hosts a vertical list
-// of curated LynRummy boards for study/tutorial. Always
-// within-a-turn: no dealer, no deck, no turn cycling. Each
-// demo is a static `(board, hand)` literal in Elm.
+// of curated LynRummy puzzles. Always within-a-turn: no dealer,
+// no deck, no turn cycling. Each panel auto-creates a puzzle
+// session on page load and embeds a Main.Play instance via the
+// existing /gopher/lynrummy-elm/new-puzzle-session endpoint.
 //
 // label: SPIKE (board-lab)
 //
-// V1 surface is minimal: serve the page + compiled elm.js.
-// The "Show me" button will eventually POST to a new endpoint
-// that runs Python's strategy.choose_play + find_follow_up_merges
-// + gesture_synth on the demo's initial state and returns the
-// primitive+gesture sequence for Elm's replay walker.
+// Go surface here is minimal: serve the page (HTML chrome +
+// bootstrap script) and the compiled elm.js. All puzzle-session
+// creation + action persistence reuses the lynrummy-elm
+// endpoints — no new Go endpoints added for the lab.
 
 package views
 

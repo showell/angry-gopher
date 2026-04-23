@@ -1,0 +1,73 @@
+# Lab.elm — SPIKE (board-lab)
+
+BOARD_LAB's top-level Elm app. Renders a vertical gallery of
+hand-crafted LynRummy puzzle panels, each embedding an
+independent `Main.Play` instance so Steve plays multiple
+puzzles on one scrolling page.
+
+## Status
+
+- **Label:** SPIKE (board-lab). Active development 2026-04-22
+  onward. Panels auto-create their puzzle session on page
+  load and swap straight to the Play surface when the
+  session id returns. No Play button; no single-active
+  gating. DOM-id collisions for hand-card replay are a
+  known limitation (see below).
+
+## Shape
+
+Lab keeps a `Dict String Panel` keyed by puzzle title.
+Each Panel cycles `Creating → Playing Model` (or
+`Creating → Failed reason` on server error). Msg routing
+uses `PlayMsg title pmsg` so a drag in panel A never
+touches panel B's Model.
+
+Subscriptions fan out via `Sub.batch`: every Playing
+panel contributes its own `Play.subscriptions`. Elm
+deduplicates Browser.Events subscriptions by source, so
+e.g. one onMouseMove sub is shared across panels; the
+dispatch splits via the wrapped `PlayMsg title` tag.
+
+Multi-active coexistence is safe for live play: board
+DOM ids are per-gameId via `State.boardDomIdFor`. Hand
+card DOM ids are NOT per-gameId; that matters only when
+Instant Replay is used inside a panel (AnimateMergeHand's
+Browser.Dom.getElement). For live gesture capture
+(what Lab is for), hand cards identify by mouse click
+coordinates, not DOM id — so the collision is harmless.
+
+## Puzzle catalog
+
+Five panels today, each defined as an Elm literal:
+
+1. **Pair peel**
+2. **Tight right edge** — forces a MoveStack before a
+   hand-card merge due to bounds overflow
+3. **Split for set** — mid-run extraction
+4. **Peel for run** — peel from a 4-set
+5. **Follow-up merge (chained runs)** — primary merge
+   plus a stack-to-stack follow-up
+
+The catalog is currently embedded in Lab.elm. Planned
+move: pull from Python's `puzzles.py` as canonical source
+(with a build step that writes a JSON catalog and a Go
+endpoint serving it) so agent-runs and human-runs on the
+same named puzzle can be correlated in SQLite.
+
+## Dependencies
+
+- `Main.Play` — the embeddable component (Browser symlink
+  at `src/Game` replaced by source-directory sharing in
+  `elm.json`: `../../elm/src` is a second source root).
+- `Main.State`, `Main.Msg` — via re-export.
+- `Game.Card`, `Game.CardStack`, `Game.Hand` — domain types
+  used when constructing Demo literals.
+
+## Pointers
+
+- Served at `http://localhost:9000/gopher/board-lab/`.
+- Go handler: `views/board_lab.go`.
+- Build: `games/lynrummy/board-lab/elm/check.sh` (also
+  wired into `ops/start`).
+- Pre-experiment doc:
+  `~/showell_repos/claude-steve/board_lab_pre_experiment.md`.

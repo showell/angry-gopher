@@ -4,40 +4,50 @@ module Main.View exposing
     , view
     )
 
-{-| The entire view layer of the Elm client. One entry point
-(`view`) that composes the top bar, status bar, hand column,
-board column, drag overlay, and popup. Plus the turn-ceremony
-helpers (`statusForCompleteTurn`, `popupForCompleteTurn`)
-that produce the status/popup records update writes into
-Model.
+{-| The game-surface view layer — composes the top bar, status
+bar, hand column, board column, drag overlay, and popup into
+an **embeddable** 1100×700 div (`position: relative`). The
+main app's Main.elm wraps this in a viewport-filling outer
+shell; BOARD_LAB's Lab.elm places it directly inside each
+puzzle panel.
 
-Extracted 2026-04-19 from the pre-split `Main.elm` monolith.
-No I/O, no state transitions — every function here is
-`_ -> Html Msg` or `_ -> StatusMessage / PopupContent`. The
-only "action" is the Msg constructors emitted by user events.
+Plus the turn-ceremony helpers (`statusForCompleteTurn`,
+`popupForCompleteTurn`) that produce the status/popup records
+update writes into Model.
+
+Extracted 2026-04-19 from the pre-split `Main.elm` monolith;
+rewritten as embeddable 2026-04-23
+(REFACTOR_EMBEDDABLE_PLAY phase III).
 
 ## Visual structure
 
 ```
-Html (position: fixed, covers viewport)
-├── viewTopBar              // at viewport (0, 0), 32px tall
-├── viewStatusBar           // at viewport (0, 32), 32px tall
-├── handColumn gutter       // at viewport (20, 100), 240px wide
+Html (position: relative, 1100×700, embeddable)
+├── viewTopBar              // at (0, 0), 32px tall
+├── viewStatusBar           // at (0, 32), 32px tall
+├── handColumn gutter       // at (20, 100), 240px wide
 │   ├── turn #
 │   └── viewPlayerRow × 2   // name + score + hand (if active) OR "N cards"
 │       └── viewTurnControls  // Complete turn / Hint / Replay / Lobby
 ├── boardColumn             // at (boardViewportLeft, boardViewportTop)
-│   └── boardWithWings
+│   └── boardWithWings      // id = `boardDomIdFor model.gameId`
 │       ├── viewStackForBoard (×N)
 │       └── viewWingAt       (×M, during drag only)
-├── draggedOverlay          // floating drag card (fixed-position)
-└── viewPopup               // modal ceremony (suppressed during replay)
+├── draggedOverlay          // floating drag card (position: fixed)
+└── viewPopup               // modal ceremony (position: fixed)
 ```
 
-Note: boardViewportLeft/Top are the DOCUMENTARY values of
-the board's viewport position. The drag floater and replay
-synthesizer don't rely on them — they DOM-measure the board
-rect live at replay time. See Main.claude.
+The drag floater and popup stay `position: fixed` — they're
+viewport-level overlays that work the same whether the view
+is inside the main app's viewport shell or inside a lab
+panel on a scrolling page.
+
+Note: `boardViewportLeft/Top` name the DOCUMENTARY position
+inside this embeddable frame. The drag floater and replay
+synthesizer DOM-measure the board's LIVE rect per drag /
+per replay-start. When the Play surface sits inside a lab
+panel on a scrolling page, live measurement is what keeps
+drag math honest.
 
 -}
 
