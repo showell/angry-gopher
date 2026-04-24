@@ -302,33 +302,31 @@ def _looses(board):
 
 
 def _try_extract(board, shapes, verbs=("peel", "pluck")):
-    """Yield (line, new_board, extracted_card, taboo_partners)
-    for every legal extraction whose card matches `shapes`.
-    `taboo_partners` is the set of cards the extracted card
-    may no longer rejoin (only populated for steals — peel
-    and pluck leave the remnant legal, so no estrangement)."""
+    """Yield (verb_name, extracted_card, source_stack, new_board,
+    taboo_partners) for every legal extraction whose card
+    matches `shapes`."""
     for si, stack in enumerate(board):
         if len(stack) <= 1:
             continue
-        source_labels = " ".join(label(x) for x in stack)
+        source = list(stack)
         for ci, c in enumerate(stack):
             if (c[0], c[1]) not in shapes:
                 continue
             if "peel" in verbs and _can_peel(stack, ci):
-                yield f"peel {label(c)}", peel(board, c), c, frozenset()
+                yield "peel", c, source, peel(board, c), frozenset()
             elif "pluck" in verbs and _can_pluck(stack, ci):
-                yield f"pluck {label(c)}", pluck(board, c), c, frozenset()
+                yield "pluck", c, source, pluck(board, c), frozenset()
             elif "steal" in verbs and _can_steal(stack, ci):
                 partners = frozenset(x for x in stack if x != c)
-                yield (f"steal {label(c)} from {source_labels}",
-                       steal(board, c), c, partners)
+                yield "steal", c, source, steal(board, c), partners
 
 
 def _try_extend(board, taboo=None):
-    """Yield (line, new_board). Extend targets are restricted
-    to trouble stacks. A loose may not rejoin a stack that
-    contains any of its taboo cards (cards it was estranged
-    from via a prior steal)."""
+    """Yield (loose_card, target_stack, side, new_board,
+    result_stack). Extend targets are restricted to trouble
+    stacks. A loose may not rejoin a stack that contains any
+    of its taboo cards (cards it was estranged from via a
+    prior steal)."""
     taboo = taboo or {}
 
     def is_trouble(s):
@@ -356,62 +354,107 @@ def _try_extend(board, taboo=None):
                             break
                         result_legal = classify(s2) != "other"
                         priority = 0 if result_legal else 1
-                        options.append((priority,
-                                        _line_extend(c, old_target, s2, side),
-                                        new))
+                        options.append(
+                            (priority, c, old_target, side, new, list(s2)))
                         break
     options.sort(key=lambda x: x[0])
-    for _, line, new in options:
-        yield line, new
+    for _, c, tgt, side, new, result in options:
+        yield c, tgt, side, new, result
 
 
-def beginner_plan(board):
-    """Returns list of (line, board_after) — at most 4 lines
-    (two extract+extend pairs). A beginner tolerates at most
-    two sacrifices of stability; past that, the mental load
-    is intermediate-level. Returns None if no 4-line plan
-    terminates with a clean board.
+def beginner_plan(board, *, max_compound=6, max_nodes=200_000,
+                  max_seconds=10.0, verbose=False):
+    """Returns list of (line, board_after) — the SHORTEST plan
+    using up to `max_compound` compound moves. Returns None if
+    no plan terminates within node/time budgets.
 
-    Search is a bounded tree: at each of the two iterations,
-    try every (extract, extend) pair. Accept the first full
-    plan whose final board has no trouble stacks."""
-    def search(board, steps, budget, taboo):
+    Uses iterative deepening (IDDFS): try depth=1 first, then
+    2, then 3, etc. Returns the first plan found, which is
+    guaranteed to be shortest. DFS skeleton at each depth
+    keeps memory linear; cumulative cost is dominated by the
+    final depth.
+
+    Safety nets:
+      - max_compound: depth cap
+      - max_nodes: total search-node count across all depths
+      - max_seconds: wall-clock cap across all depths
+      - per-depth visited cache: skip seen board states
+    """
+    import time
+
+    state = {"nodes": 0, "deadline": time.time() + max_seconds}
+
+    def _board_sig(board):
+        return tuple(sorted(tuple(sorted(s)) for s in board))
+
+    def search(board, steps, budget, taboo, visited):
+        state["nodes"] += 1
+        if state["nodes"] > max_nodes:
+            return None
+        if time.time() > state["deadline"]:
+            return None
         if not trouble(board):
             return steps
         if budget == 0:
             return None
-        # Preference ladder — always prefer extend to sacrifice,
-        # prefer peel to steal. Direct neighbors only.
-        for line, after in _try_extend(board, taboo):
-            found = search(after, steps + [(line, after)],
-                           budget, taboo)
-            if found is not None:
-                return found
+        sig = _board_sig(board)
+        if sig in visited:
+            return None
+        visited.add(sig)
+
         direct = neighbor_shapes(board)
         tiers = [
             (direct, ("peel", "pluck")),
             (direct, ("steal",)),
         ]
         for shapes, verbs in tiers:
-            for pp_line, after_pp, stolen, partners in _try_extract(
-                    board, shapes, verbs):
-                # Augment taboo for steals: the stolen card is
-                # estranged (deck-aware) from its former stackmates.
+            for verb_name, ext_card, source, after_pp, partners \
+                    in _try_extract(board, shapes, verbs):
                 new_taboo = taboo
                 if partners:
                     new_taboo = dict(taboo)
-                    new_taboo[stolen] = new_taboo.get(
-                        stolen, frozenset()) | partners
-                for ext_line, after in _try_extend(after_pp, new_taboo):
+                    new_taboo[ext_card] = new_taboo.get(
+                        ext_card, frozenset()) | partners
+                for loose, _tgt, _side, after, result in \
+                        _try_extend(after_pp, new_taboo):
+                    line = _compound_line(
+                        verb_name, ext_card, source, result)
                     found = search(after,
-                                   steps + [(pp_line, after_pp),
-                                            (ext_line, after)],
-                                   budget - 1, new_taboo)
+                                   steps + [(line, after)],
+                                   budget - 1, new_taboo, visited)
                     if found is not None:
                         return found
         return None
 
-    return search(board, [], budget=4, taboo={})
+    start = time.time()
+    plan = None
+    for depth_limit in range(1, max_compound + 1):
+        plan = search(board, [], depth_limit, {}, set())
+        if plan is not None:
+            break
+        if (state["nodes"] > max_nodes
+                or time.time() > state["deadline"]):
+            break
+    elapsed = time.time() - start
+    if verbose:
+        if plan:
+            status = f"solved at depth {len(plan)}"
+        elif state["nodes"] > max_nodes:
+            status = "exhausted (nodes)"
+        elif time.time() > state["deadline"]:
+            status = "exhausted (time)"
+        else:
+            status = "stuck"
+        print(f"  [search] nodes={state['nodes']:>6}  "
+              f"time={elapsed:.2f}s  {status}")
+    return plan
+
+
+def _compound_line(verb_name, ext_card, source, result):
+    """`peel-pull 5C from 5C 6C 7C 8C 9C TC to 5C 6C` etc."""
+    src = " ".join(label(x) for x in source)
+    res = " ".join(label(x) for x in result)
+    return f"{verb_name}-pull {label(ext_card)} from {src} to {res}"
 
 
 # --- Harness ---
