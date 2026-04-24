@@ -72,21 +72,20 @@ finish :
     -> Model
     -> Maybe Space.AnimationInfo
 finish payload origin nowMs source grabOffset model =
-    let
-        viewportLoc =
-            Space.pointInLiveViewport model
-                { left = payload.loc.left, top = payload.loc.top }
-
-        target =
-            { x = viewportLoc.x
-            , y = viewportLoc.y + BG.cardHeight // 2
-            }
-    in
-    Just
-        { startMs = nowMs
-        , path = Space.linearPath origin target nowMs
-        , source = source
-        , grabOffset = grabOffset
-        , pathFrame = ViewportFrame
-        , pendingAction = WA.PlaceHand payload
-        }
+    Space.pointInLiveViewport model
+        { left = payload.loc.left, top = payload.loc.top }
+        |> Maybe.map
+            (\viewportLoc ->
+                { startMs = nowMs
+                , path =
+                    Space.linearPath origin
+                        { x = viewportLoc.x
+                        , y = viewportLoc.y + BG.cardHeight // 2
+                        }
+                        nowMs
+                , source = source
+                , grabOffset = grabOffset
+                , pathFrame = ViewportFrame
+                , pendingAction = WA.PlaceHand payload
+                }
+            )

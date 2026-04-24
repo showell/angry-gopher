@@ -99,17 +99,17 @@ finish :
     -> Maybe Space.AnimationInfo
 finish payload origin nowMs source grabOffset model =
     CardStack.findStack payload.target model.board
-        |> Maybe.map
+        |> Maybe.andThen
             (\stack ->
-                { startMs = nowMs
-                , path =
-                    Space.linearPath
-                        origin
-                        (Space.stackEdgeInLiveViewport model stack payload.side)
-                        nowMs
-                , source = source
-                , grabOffset = grabOffset
-                , pathFrame = ViewportFrame
-                , pendingAction = WA.MergeHand payload
-                }
+                Space.stackEdgeInLiveViewport model stack payload.side
+                    |> Maybe.map
+                        (\edge ->
+                            { startMs = nowMs
+                            , path = Space.linearPath origin edge nowMs
+                            , source = source
+                            , grabOffset = grabOffset
+                            , pathFrame = ViewportFrame
+                            , pendingAction = WA.MergeHand payload
+                            }
+                        )
             )

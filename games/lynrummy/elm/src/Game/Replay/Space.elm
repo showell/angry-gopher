@@ -107,37 +107,30 @@ elementCenterInViewport element =
 
 
 {-| Translate a board-frame `{ left, top }` into the current
-viewport frame using the live DOM-measured board rect. Falls
-back to documentary constants (with a dev-console log) if the
-measurement hasn't arrived. Used by
-`Game.Replay.Time.handCardRectReceived` to land a PlaceHand
-drop target in viewport frame.
+viewport frame using the live DOM-measured board rect.
+Returns `Nothing` if the rect hasn't arrived yet — callers
+handle absence explicitly. (Previously had a silent
+documentary-constants fallback with a Debug.log; removed
+2026-04-23 because "works most of the time, silently
+degrades otherwise" is the canonical smell for hidden
+bugs.)
 -}
-pointInLiveViewport : Model -> { left : Int, top : Int } -> Point
+pointInLiveViewport : Model -> { left : Int, top : Int } -> Maybe Point
 pointInLiveViewport model loc =
-    let
-        ( offsetX, offsetY ) =
-            case model.replayBoardRect of
-                Just rect ->
-                    ( rect.x, rect.y )
-
-                Nothing ->
-                    let
-                        _ =
-                            Debug.log "replay: no live board rect yet, using constants"
-                                ( BG.boardViewportLeft, BG.boardViewportTop )
-                    in
-                    ( BG.boardViewportLeft, BG.boardViewportTop )
-    in
-    { x = offsetX + loc.left, y = offsetY + loc.top }
+    model.replayBoardRect
+        |> Maybe.map
+            (\rect ->
+                { x = rect.x + loc.left, y = rect.y + loc.top }
+            )
 
 
 {-| Viewport point of a stack's left- or right-edge, vertically
-centered. Used by `handCardRectReceived` in Time: hand-origin
-drags cross the board widget boundary, so their target must be
-in viewport frame.
+centered. Returns `Nothing` if the live board rect isn't ready.
+Used by `handCardRectReceived` in Time: hand-origin drags
+cross the board widget boundary, so their target must be in
+viewport frame.
 -}
-stackEdgeInLiveViewport : Model -> CardStack -> BoardActions.Side -> Point
+stackEdgeInLiveViewport : Model -> CardStack -> BoardActions.Side -> Maybe Point
 stackEdgeInLiveViewport model stack side =
     let
         size =
@@ -150,11 +143,10 @@ stackEdgeInLiveViewport model stack side =
 
                 BoardActions.Left ->
                     stack.loc.left
-
-        anchor =
-            pointInLiveViewport model { left = edgeLeft, top = stack.loc.top }
     in
-    { x = anchor.x, y = anchor.y + BG.cardHeight // 2 }
+    pointInLiveViewport model { left = edgeLeft, top = stack.loc.top }
+        |> Maybe.map
+            (\anchor -> { x = anchor.x, y = anchor.y + BG.cardHeight // 2 })
 
 
 
@@ -222,20 +214,22 @@ pathDuration path =
 
 {-| Linear-interpolate cursor position along the gesture path.
 `elapsedMs` is relative to the first point's timestamp. Clamps
-to first/last point at the bounds.
+to first/last point at the bounds. Returns `Nothing` for an
+empty path — callers must handle (treat as "animation done"
+or skip).
 -}
-interpPath : List State.GesturePoint -> Float -> Point
+interpPath : List State.GesturePoint -> Float -> Maybe Point
 interpPath path elapsedMs =
     case path of
         [] ->
-            { x = 0, y = 0 }
+            Nothing
 
         first :: _ ->
             let
                 targetTs =
                     first.tMs + elapsedMs
             in
-            interpPathHelp first path targetTs
+            Just (interpPathHelp first path targetTs)
 
 
 interpPathHelp : State.GesturePoint -> List State.GesturePoint -> Float -> Point

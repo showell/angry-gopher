@@ -182,13 +182,19 @@ replayFrame nowMs model =
                             )
 
                         else
-                            let
-                                cursor =
-                                    Space.interpPath anim.path elapsed
-                            in
-                            ( { model | drag = Space.animatedDragState anim cursor }
-                            , Cmd.none
-                            )
+                            case Space.interpPath anim.path elapsed of
+                                Just cursor ->
+                                    ( { model | drag = Space.animatedDragState anim cursor }
+                                    , Cmd.none
+                                    )
+
+                                Nothing ->
+                                    -- Empty path means nothing to
+                                    -- interpolate; treat as animation
+                                    -- complete and move on.
+                                    ( { model | replayAnim = Beating { untilMs = nowMs + 1000 } }
+                                    , Cmd.none
+                                    )
 
                     Beating { untilMs } ->
                         if nowMs >= untilMs then
@@ -271,26 +277,20 @@ prepareReplayStep :
     -> ( Model, Cmd Msg )
 prepareReplayStep action maybePath frame model nowMs =
     let
-        _ =
-            Debug.log "[replay]"
-                { branch = prepareBranch action maybePath
-                , frame = frame
-                , pathSamples = Maybe.map List.length maybePath
-                , pathDurationMs =
-                    Maybe.map Space.pathDuration maybePath
-                }
-
         startAnimating anim =
-            let
-                cursor =
-                    Space.interpPath anim.path 0
-            in
-            ( { model
-                | replayAnim = Animating anim
-                , drag = Space.animatedDragState anim cursor
-              }
-            , Cmd.none
-            )
+            case Space.interpPath anim.path 0 of
+                Just cursor ->
+                    ( { model
+                        | replayAnim = Animating anim
+                        , drag = Space.animatedDragState anim cursor
+                      }
+                    , Cmd.none
+                    )
+
+                Nothing ->
+                    -- Empty-path guard: AnimationInfo without a
+                    -- path can't animate. Apply immediately.
+                    applyImmediate
 
         applyImmediate =
             let
@@ -334,36 +334,7 @@ prepareReplayStep action maybePath frame model nowMs =
                     )
 
                 Nothing ->
-                    let
-                        _ =
-                            Debug.log
-                                "[replay] FATAL: no path for non-hand action — server should have rejected"
-                                action
-                    in
                     applyImmediate
-
-
-{-| Classify which prepareReplayStep branch an action will take.
-Purely for the Debug.log at the top of prepareReplayStep — lets
-the browser console say "faithful / hand-origin-async / FATAL"
-so we can see what the replay engine actually chose.
--}
-prepareBranch : WireAction -> Maybe (List State.GesturePoint) -> String
-prepareBranch action maybePath =
-    case maybePath of
-        Just (_ :: _) ->
-            "faithful (captured path)"
-
-        _ ->
-            case action of
-                WA.MergeHand _ ->
-                    "hand-origin async DOM measure"
-
-                WA.PlaceHand _ ->
-                    "hand-origin async DOM measure"
-
-                _ ->
-                    "FATAL: intra-board with no path (server bug)"
 
 
 
@@ -397,20 +368,8 @@ handCardRectReceived result model =
                 maybeAnim =
                     finishHandAnim ctx.action origin nowMs ctx.source ctx.grabOffset model
             in
-            case maybeAnim of
-                Just anim ->
-                    let
-                        cursor =
-                            Space.interpPath anim.path 0
-                    in
-                    ( { model
-                        | replayAnim = Animating anim
-                        , drag = Space.animatedDragState anim cursor
-                      }
-                    , Cmd.none
-                    )
-
-                Nothing ->
+            let
+                applyNow =
                     let
                         modelAfter =
                             (Apply.applyAction ctx.action model).model
@@ -421,6 +380,23 @@ handCardRectReceived result model =
                       }
                     , Cmd.none
                     )
+            in
+            case maybeAnim of
+                Just anim ->
+                    case Space.interpPath anim.path 0 of
+                        Just cursor ->
+                            ( { model
+                                | replayAnim = Animating anim
+                                , drag = Space.animatedDragState anim cursor
+                              }
+                            , Cmd.none
+                            )
+
+                        Nothing ->
+                            applyNow
+
+                Nothing ->
+                    applyNow
 
         ( AwaitingHandRect ctx, Err err ) ->
             -- DOM query failed (very unusual — the hand card is
