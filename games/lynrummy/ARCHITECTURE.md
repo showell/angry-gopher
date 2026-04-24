@@ -626,20 +626,32 @@ agent play on the SAME curated puzzle and compare them:
   ?` enumerates every human + agent attempt.
 - Analysis: `python3 games/lynrummy/python/study.py
   <puzzle_name>` prints every attempt's primitives with
-  a divergence summary.
+  a divergence summary. `--feedback N` is the one-shot
+  path for "what did the human annotate on the N most
+  recent plays?" — single query, markdown output, no ad-
+  hoc SQL. Annotations carry a `session_id` anchor so
+  each reply ties to a specific play (added
+  2026-04-23).
 
 The apparatus lets us name concrete divergences between
 human and agent and feed them back into the agent's
-spatial strategy. First use (2026-04-23) surfaced the
-`find_open_loc → (7,7)` corner-dump as the agent's #1
-spatial weakness.
+spatial strategy. Surfaced weaknesses: the original
+`find_open_loc → (7,7)` corner-dump was fixed by
+shifting `HUMAN_PREFERRED_ORIGIN` to (50, 90). Current
+known gap is the row-major scan bias — on a packed top
+row the scan can land the agent far-right on that row
+before trying a lower open row; fix queued as
+`FIND_OPEN_LOC_COLUMN_MAJOR`.
 
 ## Parking status
 
-Parked `STILL_EVOLVING`, last swept 2026-04-23
-(TOP_DOWN_SWEEP after BOARD_LAB concept proof). The
-principles are stable; new surfaces (BOARD_LAB,
-embeddable-components design goal) are documented above.
+Parked `STILL_EVOLVING`, last swept 2026-04-23 evening
+(TOP_DOWN_SWEEP after a full day of BOARD_LAB refinement —
+margin 5→7, 25-puzzle v2 catalog, session-scoped
+annotations, agent mid-stack-split pre-move rule, Replay
+hygiene pass). The principles are stable; new surfaces
+(BOARD_LAB, embeddable-components design goal) are
+documented above.
 
 Two-player mechanics are still immature (coordinated
 sessions have been exercised out-of-band at best); expect
