@@ -140,11 +140,19 @@ def drag_endpoints(prim, board_before):
             return None
         src = board_before[src_idx]
         new_loc = prim["new_loc"]
-        # Corners: grab = source top-left, drop = new_loc
-        # top-left. The stack's top-left IS the loc coordinate
-        # by construction, so no width math is needed.
-        start = (src["loc"]["left"], src["loc"]["top"])
-        end = (new_loc["left"], new_loc["top"])
+        size = len(src["board_cards"])
+        # Path points are CURSOR positions (the renderer draws
+        # the floater at cursor - grabOffset, where grabOffset
+        # for a board stack is roughly the stack's half-width
+        # + 20 from the top). So start/end must be where the
+        # cursor IS at each phase, not where the stack corner
+        # is. Cursor at start = source.top-left + grab-offset =
+        # source.center-ish. Cursor at end = new_loc +
+        # grab-offset.
+        start = (src["loc"]["left"] + size * CARD_PITCH // 2,
+                 src["loc"]["top"] + CARD_HEIGHT // 2)
+        end = (new_loc["left"] + size * CARD_PITCH // 2,
+               new_loc["top"] + CARD_HEIGHT // 2)
         return start, end
 
     if kind == "merge_stack":
@@ -155,25 +163,29 @@ def drag_endpoints(prim, board_before):
         src = board_before[src_idx]
         tgt = board_before[tgt_idx]
         side = prim.get("side", "right")
-        # Work in corners. The grab point is the source's
-        # top-left; the drop point is the top-left position
-        # where the source lands flush against the target.
-        #   right merge → source.top-left lands at target's
-        #                 top-right corner.
-        #   left merge  → source.top-left lands at
-        #                 (target.left - source.width,
-        #                  target.top).
-        # Steve 2026-04-23: land board-to-board merges nearly
-        # perfectly — humans miss because of mouse control, agent
-        # shouldn't. Small deterministic jitter (2 px) keeps it
-        # from looking machine-sharp without being inaccurate.
-        start = (src["loc"]["left"], src["loc"]["top"])
-        tgt_right = tgt["loc"]["left"] + len(tgt["board_cards"]) * CARD_PITCH
+        src_size = len(src["board_cards"])
+        tgt_size = len(tgt["board_cards"])
+        # Path points are CURSOR positions, renderer offsets by
+        # grabOffset to place the floater. For the source stack
+        # to LAND FLUSH against the target (per Steve 2026-04-23
+        # — nail board-to-board merges, only miss by a couple
+        # pixels for realism), the source's top-left at end
+        # must be (target.right, target.top) for a right-merge
+        # or (target.left - source.width, target.top) for a
+        # left-merge. Cursor at end = floater.top-left +
+        # grab-offset.
+        src_half_width = src_size * CARD_PITCH // 2
+        start = (src["loc"]["left"] + src_half_width,
+                 src["loc"]["top"] + CARD_HEIGHT // 2)
+        tgt_right = tgt["loc"]["left"] + tgt_size * CARD_PITCH
         if side == "right":
-            drop_x = tgt_right
+            floater_left = tgt_right
         else:
-            drop_x = tgt["loc"]["left"] - len(src["board_cards"]) * CARD_PITCH
-        end = (drop_x + 2, tgt["loc"]["top"] - 2)
+            floater_left = tgt["loc"]["left"] - src_size * CARD_PITCH
+        # Fixed 2-px jitter so the landing doesn't look
+        # machine-pixel-perfect.
+        end = (floater_left + src_half_width + 2,
+               tgt["loc"]["top"] + CARD_HEIGHT // 2 - 2)
         return start, end
 
     # split: no gesture path. Splits are CLICKS in the UI —
