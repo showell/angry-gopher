@@ -155,13 +155,21 @@ PURGE_LEGACY_PUZZLE_HARNESS.
 
 ## The DSL conformance bridge
 
-Python + Elm both exercise the same hint / invariant /
-build-suggestions scenarios, defined once in
-`games/lynrummy/conformance/scenarios/*.dsl` and compiled by
-`cmd/fixturegen` into Python JSON fixtures + Elm Elm-test
-files. Central cross-language bridge per `BRIDGES.md`.
-**Caveat:** the hint-scenarios half is coupled to the
-trick engine and will change as that's phased out.
+Python + Elm both exercise the same scenarios, defined once
+in `games/lynrummy/conformance/scenarios/*.dsl` and compiled
+by `cmd/fixturegen` into Python JSON fixtures + Elm
+Elm-test files. Central cross-language bridge per
+`BRIDGES.md`. Three scenario files today:
+
+- `referee.dsl` — referee ops (Go + Elm).
+- `tricks.dsl` — hint/trick invariants (Elm + Python;
+  retiring with the trick engine).
+- `planner.dsl` — `enumerate_moves` over the four-bucket
+  state. Python today; Elm gains live assertions when the
+  BFS planner ports.
+
+`test_dsl_conformance.py` is the Python runner — 24/24
+scenarios pass as of 2026-04-25.
 
 ## Test contracts
 
@@ -177,8 +185,9 @@ The Python suite (run each test file directly) covers:
   pre-flight planner.
 - `test_follow_up_merges.py` — 7 tests for the post-trick
   follow-up scan.
-- `test_dsl_conformance.py` — 18 cross-language hint
-  scenarios (compiled from the conformance DSL).
+- `test_dsl_conformance.py` — 24 cross-language scenarios
+  compiled from the conformance DSL (referee + hint +
+  planner).
 - `test_gesture_synth.py` — 7 tests for drag-path synthesis.
 
 These are the snapshots the upcoming Elm port will mirror.

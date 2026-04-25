@@ -1,6 +1,7 @@
 # Lyn Rummy — Go subsystem
 
-**Status:** `STILL_EVOLVING` (stub). Expect this to grow.
+**Status:** `WORKHORSE` for the referee + wire path; the
+older trick engine + hint scenarios are retiring.
 
 This subtree holds the Go-side Lyn Rummy code that runs inside
 Angry Gopher: domain types (Card, CardStack, Hand, etc.),
@@ -61,9 +62,24 @@ repo root for the generated label index):
   `conformance/scenarios/`. Don't hand-edit. See
   `cmd/fixturegen/main.claude` for the pipeline.
 
-## TODO (stub-level)
+## Conformance DSL
+
+The DSL under `conformance/scenarios/` is the cross-language
+contract. Three scenario files compile to all three targets
+via `cmd/fixturegen`:
+
+- `referee.dsl` — referee ops (Go + Elm tests).
+- `tricks.dsl` — hint/trick invariants (Elm + Python; will
+  retire as the trick engine retires).
+- `planner.dsl` — `enumerate_moves` op for the four-bucket
+  BFS planner (Python today; Elm stubs until the planner
+  ports).
+
+See `cmd/fixturegen/main.claude` for the codegen pipeline
+and `python/test_dsl_conformance.py` for the Python runner.
+
+## TODO
 
 - Document the `/gopher/lynrummy-elm/*` HTTP surface (lives in
   `views/lynrummy_elm.go`, not in this package).
-- Expand the "load-bearing first" reading order once the
-  subsystem stabilizes again.
+- Retire the trick engine once the BFS planner ports to Elm.

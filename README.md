@@ -50,10 +50,18 @@ unfamiliar code, read the sidecar first.
 | `schema` | Single source of truth for all DB tables |
 | `views` | HTML pages (server-rendered) |
 
-Strategy (trick recognizers + hint priority) lives in the
-clients: Elm at `games/lynrummy/elm/src/Game/Strategy/`,
-Python at `games/lynrummy/python/strategy.py`. Go owns only
-wire + referee.
+Strategy lives in the clients, never in Go. Go owns only
+wire + referee. The Python side currently houses two
+strategic engines:
+
+- `games/lynrummy/python/bfs_solver.py` — the four-bucket BFS
+  planner (current strategic brain, milestone 2026-04-25).
+- `games/lynrummy/python/strategy.py` — older trick
+  recognizers + hint priority (legacy, retiring).
+
+Elm currently mirrors the older trick engine at
+`games/lynrummy/elm/src/Game/Strategy/`. The BFS planner
+will port to Elm next.
 
 ## LynRummy
 
@@ -63,12 +71,14 @@ The project's main feature. Three roles inside Gopher:
   two-player hands. Per-session seed makes replays reproducible.
 - **Referee** (`lynrummy` package) — validates turn completion via
   protocol/geometry/semantics/inventory checks. Stateless.
-- **Strategy layer** (client-side) — seven trick recognizers
-  walked in simplest-first priority order; each firing trick
-  yields one representative suggestion. Elm at
-  `games/lynrummy/elm/src/Game/Strategy/`; Python at
-  `games/lynrummy/python/strategy.py`. Server has no opinion
-  on which plays are smart.
+- **Strategy layer** (client-side) — Python-side current
+  brain is the four-bucket BFS planner
+  (`games/lynrummy/python/bfs_solver.py`). The older
+  seven-trick recognizer engine
+  (`games/lynrummy/python/strategy.py`,
+  `games/lynrummy/elm/src/Game/Strategy/`) is still wired
+  but retiring. Server has no opinion on which plays are
+  smart.
 
 The Elm client lives at `games/lynrummy/elm/` and is
 served via `/gopher/lynrummy-elm/`. A Python agent-side client

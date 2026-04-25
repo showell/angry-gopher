@@ -98,6 +98,18 @@ REFACTOR_ELM_REPLAY).
 the TS → Elm port. Process reflections, mapping references.
 Not current-work references.
 
+## Upcoming: agent-library port
+
+The Python four-bucket BFS planner
+(`../python/bfs_solver.py` and friends) is queued for an
+Elm port — see Steve's MAJOR_GOAL kickoff 2026-04-25. Once
+landed, the Elm UI gains agent-level hints and geometry
+planning natively. The
+`enumerate_moves` conformance scenarios in
+`../conformance/scenarios/planner.dsl` already emit Elm
+test stubs (`Expect.pass`); those become live assertions
+when the planner module lands.
+
 ## TODO (stub-level)
 
 - Document the replay state machine (`PreRoll` / `Animating`
@@ -105,3 +117,4 @@ Not current-work references.
   distinction.
 - Document the pinned-viewport discipline explicitly once the
   layout pivot lands.
+- Land the BFS-planner port (see § Upcoming above).
