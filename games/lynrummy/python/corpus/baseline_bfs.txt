@@ -1,0 +1,33 @@
+corpus_v2 baseline: bfs_solver max_trouble_outer=10, max_states=200000
+ sid  trouble depth   wall
+ 108     QD:1     3  0.01s
+ 110       TC     5  0.00s
+ 112       3C     2  0.00s
+ 114       6D     5  0.01s
+ 116       JS     5  0.00s
+ 118     QC:1     4  0.02s
+ 120     JC:1     6  1.50s
+ 122     TH:1     6  0.65s
+ 124     6S:1     3  0.00s
+ 126     5C:1     7  0.03s
+ 128       5S     3  0.00s
+ 130       JH    14  0.55s
+ 132       QC     2  0.00s
+ 134     6H:1     2  0.00s
+ 136       5D     3  0.00s
+ 138     TC:1     2  0.00s
+ 140       JH     3  0.00s
+ 142     8H:1     2  0.00s
+ 144     5C:1     2  0.00s
+ 146     AC:1     7  0.06s
+ 148       2D     2  0.00s
+
+total wall: 2.8s
+depth distribution:
+  2: 7
+  3: 5
+  4: 1
+  5: 3
+  6: 2
+  7: 2
+  14: 1
