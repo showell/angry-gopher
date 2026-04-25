@@ -238,6 +238,123 @@ def _enumerate_moves(state):
                 }
                 yield desc, (nh, nt, ng_final, nc)
 
+    # Move type (d): SHIFT — when an end-card of a length-3
+    # pure/rb run would normally be steal-pulled (sacrificing
+    # the 2-partial remnant), scan HELPER for a peel-eligible
+    # donor with the right replacement card. The run shifts:
+    # peel donor's P, push P onto source's other end, pop
+    # the stolen card. Source stays length-3 legal; donor
+    # stays legal; the popped card absorbs onto trouble like
+    # a steal-pull would. NO sacrifice.
+    for bucket, idx, target in absorbers:
+        shapes = set()
+        for c in target:
+            shapes |= neighbors(c)
+        for src_idx, source in enumerate(helper):
+            if len(source) != 3:
+                continue
+            kind = classify(source)
+            if kind not in ("pure_run", "rb_run"):
+                continue
+            for which_end in (0, 2):
+                stolen = source[which_end]
+                if (stolen[0], stolen[1]) not in shapes:
+                    continue
+                # Compute replacement card requirement at the
+                # OPPOSITE end of source.
+                if which_end == 2:
+                    anchor = source[0]
+                    p_value = 13 if anchor[0] == 1 else anchor[0] - 1
+                else:
+                    anchor = source[2]
+                    p_value = 1 if anchor[0] == 13 else anchor[0] + 1
+                anchor_red = anchor[1] in b.RED
+                if kind == "pure_run":
+                    needed_suits = (anchor[1],)
+                else:
+                    needed_suits = tuple(
+                        s for s in range(4)
+                        if (s in b.RED) != anchor_red)
+                # Scan HELPER for a peel-eligible donor with P.
+                for donor_idx, donor in enumerate(helper):
+                    if donor_idx == src_idx:
+                        continue
+                    donor_kind = classify(donor)
+                    donor_n = len(donor)
+                    p_card = None
+                    new_donor = None
+                    if donor_kind == "set" and donor_n >= 4:
+                        for ci, c in enumerate(donor):
+                            if (c[0] == p_value
+                                    and c[1] in needed_suits):
+                                p_card = c
+                                new_donor = [x for x in donor
+                                             if x != c]
+                                break
+                    elif (donor_kind in ("pure_run", "rb_run")
+                            and donor_n >= 4):
+                        for ci in (0, donor_n - 1):
+                            c = donor[ci]
+                            if (c[0] == p_value
+                                    and c[1] in needed_suits):
+                                p_card = c
+                                if ci == 0:
+                                    new_donor = donor[1:]
+                                else:
+                                    new_donor = donor[:-1]
+                                break
+                    if p_card is None:
+                        continue
+                    # Build the shifted source.
+                    if which_end == 2:
+                        new_source = [p_card, source[0], source[1]]
+                    else:
+                        new_source = [source[1], source[2], p_card]
+                    # Sanity: new_source must classify same kind.
+                    if classify(new_source) != kind:
+                        continue
+                    # Absorb the stolen card onto target.
+                    for absorb_side in ("right", "left"):
+                        if absorb_side == "right":
+                            merged = list(target) + [stolen]
+                        else:
+                            merged = [stolen] + list(target)
+                        if not partial_ok(merged):
+                            continue
+                        nh = ([s for i, s in enumerate(helper)
+                               if i != src_idx and i != donor_idx]
+                              + [new_source, new_donor])
+                        if bucket == "trouble":
+                            nt_base = [s for i, s in enumerate(trouble)
+                                       if i != idx]
+                            ng = list(growing)
+                        else:
+                            nt_base = list(trouble)
+                            ng = [s for i, s in enumerate(growing)
+                                  if i != idx]
+                        if classify(merged) != "other":
+                            nc = complete + [merged]
+                            ng_final = ng
+                            graduated = True
+                        else:
+                            nc = list(complete)
+                            ng_final = ng + [merged]
+                            graduated = False
+                        desc = {
+                            "type": "shift",
+                            "source": list(source),
+                            "donor": list(donor),
+                            "stolen": stolen,
+                            "p_card": p_card,
+                            "new_source": new_source,
+                            "new_donor": new_donor,
+                            "target_before": list(target),
+                            "target_bucket_before": bucket,
+                            "merged": merged,
+                            "graduated": graduated,
+                        }
+                        yield desc, (nh, nt_base, ng_final, nc)
+
     # Move type (c): splice — insert a TROUBLE singleton
     # into a HELPER pure/rb run length 4+. The run splits
     # around the inserted card; both halves must be legal
@@ -347,6 +464,21 @@ def describe_move(desc):
         return (f"{verb} {ec} from HELPER [{src}], "
                 f"absorb onto {bucket} [{tb}] → "
                 f"[{result}]{graduated}{spawned}")
+    if desc["type"] == "shift":
+        src = _stack_label(desc["source"])
+        donor = _stack_label(desc["donor"])
+        p = label_d(desc["p_card"])
+        stolen = label_d(desc["stolen"])
+        new_src = _stack_label(desc["new_source"])
+        new_donor = _stack_label(desc["new_donor"])
+        bucket = desc["target_bucket_before"]
+        tb = _stack_label(desc["target_before"])
+        merged = _stack_label(desc["merged"])
+        graduated = " [→COMPLETE]" if desc["graduated"] else ""
+        return (f"shift HELPER [{src}] using [{p}] from "
+                f"[{donor}] → new HELPER [{new_src}] + "
+                f"[{new_donor}]; pop [{stolen}] onto "
+                f"{bucket} [{tb}] → [{merged}]{graduated}")
     if desc["type"] == "splice":
         loose = label_d(desc["loose"])
         src = _stack_label(desc["source"])
