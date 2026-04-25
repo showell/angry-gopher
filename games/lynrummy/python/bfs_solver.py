@@ -301,35 +301,26 @@ def describe_move(desc):
     return str(desc)
 
 
-def solve(board, *, max_states=10000, verbose=True):
-    """BFS solve. board is a flat list of stacks."""
-    helper = []
-    trouble = []
-    for s in board:
-        if classify(s) == "other":
-            trouble.append(s)
-        else:
-            helper.append(s)
-    growing = []
-    complete = []
-    initial = (helper, trouble, growing, complete)
-
+def _bfs_with_cap(initial, max_trouble, *, max_states, verbose):
+    """Inner BFS bounded by max_trouble. States whose trouble
+    count exceeds max_trouble never enter the frontier."""
     seen = {_state_sig(*initial)}
     counter = count()
     frontier = []
+    init_tc = _trouble_count(initial[1], initial[2])
+    if init_tc > max_trouble:
+        return None, 0, 0  # initial already exceeds cap
     heapq.heappush(frontier,
-                   (_trouble_count(trouble, growing),
-                    next(counter), initial, []))
-
+                   (init_tc, next(counter), initial, []))
     expansions = 0
+    over_cap = 0
     while frontier:
         tc, _, state, program = heapq.heappop(frontier)
         helper, trouble, growing, complete = state
         expansions += 1
-
         if verbose:
-            print(f"\n[expansion #{expansions}] "
-                  f"T={tc} frontier={len(frontier)} "
+            print(f"\n[#{expansions}] T={tc} "
+                  f"frontier={len(frontier)} "
                   f"program={len(program)}-line")
             print(f"  HELPER  ({len(helper)} stacks)")
             print(f"  TROUBLE ({len(trouble)} stacks): "
@@ -343,39 +334,68 @@ def solve(board, *, max_states=10000, verbose=True):
                               for s in complete))
             for i, line in enumerate(program, 1):
                 print(f"  {i}. {line}")
-
         if _victory(trouble, growing):
-            if verbose:
-                print(f"\nVICTORY in {len(program)} lines, "
-                      f"{expansions} expansions, "
-                      f"{len(seen)} states seen.")
-            return program
-
-        moves_enumerated = 0
-        moves_pushed = 0
+            return program, expansions, len(seen)
+        enumerated = 0
+        pushed = 0
         for desc, new_state in _enumerate_moves(state):
-            moves_enumerated += 1
+            enumerated += 1
+            new_tc = _trouble_count(new_state[1], new_state[2])
+            if new_tc > max_trouble:
+                over_cap += 1
+                continue
             sig = _state_sig(*new_state)
             if sig in seen:
                 continue
             seen.add(sig)
-            line = describe_move(desc)
-            new_program = program + [line]
-            new_tc = _trouble_count(new_state[1], new_state[2])
             heapq.heappush(frontier,
-                           (new_tc, next(counter),
-                            new_state, new_program))
-            moves_pushed += 1
-
+                           (new_tc, next(counter), new_state,
+                            program + [describe_move(desc)]))
+            pushed += 1
         if verbose:
-            print(f"  → {moves_enumerated} moves enumerated, "
-                  f"{moves_pushed} pushed to frontier "
-                  f"({moves_enumerated - moves_pushed} deduped)")
-
+            print(f"  → {enumerated} moves, {pushed} pushed, "
+                  f"{enumerated - pushed} dropped "
+                  f"(dedup or over-cap)")
         if expansions >= max_states:
             if verbose:
-                print(f"\nEXHAUSTED max_states={max_states}")
-            return None
+                print(f"  EXHAUSTED max_states={max_states}")
+            return None, expansions, len(seen)
+    return None, expansions, len(seen)
+
+
+def solve(board, *, max_trouble_outer=8, max_states=10000,
+          verbose=True):
+    """Outer iterative-deepening on max_trouble. Inner BFS
+    runs with the cap; if it exhausts without finding a
+    solution, bump the cap by 1 and retry. The hope: caps
+    below the puzzle's true peak trouble fail FAST (the
+    frontier dies quickly because most moves exceed the cap)."""
+    helper = []
+    trouble = []
+    for s in board:
+        if classify(s) == "other":
+            trouble.append(s)
+        else:
+            helper.append(s)
+    initial = (helper, trouble, [], [])
+
+    total_expansions = 0
+    for cap in range(1, max_trouble_outer + 1):
+        if verbose:
+            print(f"\n========== outer pass: max_trouble={cap} "
+                  f"==========")
+        plan, expansions, seen = _bfs_with_cap(
+            initial, cap, max_states=max_states, verbose=verbose)
+        total_expansions += expansions
+        if plan is not None:
+            if verbose:
+                print(f"\nVICTORY at cap={cap} in {len(plan)} "
+                      f"lines, total expansions across passes: "
+                      f"{total_expansions}")
+            return plan
+        if verbose:
+            print(f"  → cap={cap} exhausted "
+                  f"({expansions} expansions, {seen} states)")
     return None
 
 
