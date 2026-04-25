@@ -36,8 +36,9 @@ def s2b(state):
 
 
 def render_board(stacks):
+    sorted_stacks = sorted(stacks, key=lambda s: s[0][0])
     return "\n".join(
-        " ".join(b.label_d(c) for c in s) for s in stacks)
+        " ".join(b.label_d(c) for c in s) for s in sorted_stacks)
 
 
 def main():
