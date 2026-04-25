@@ -19,7 +19,9 @@ appends one).
 """
 
 import bfs_solver as bs
+import geometry
 import primitives
+import strategy
 
 
 def step_to_primitives(desc, board):
@@ -52,39 +54,57 @@ def step_to_primitives(desc, board):
 
 # --- helpers --------------------------------------------------
 
-def _split_after(sim, stack_content, k):
-    """Emit a split primitive that puts the first `k` cards of
+def _plan_split_after(sim, stack_content, k):
+    """Plan a split that puts the first `k` cards of
     `stack_content` into the left half and the rest into the
-    right half. Translates to the underlying primitive
-    `card_index` via the leftSplit/rightSplit convention in
-    `strategy._apply_split` (left_count = ci+1 for ci+1 <= n//2;
-    left_count = ci otherwise). Returns (prim, new_sim)."""
+    right half. For end splits (k == 1 or k == n-1) emits one
+    primitive. For INTERIOR splits the donor is pre-moved into
+    a 4-side-clear region first per Steve's 2026-04-23 rule —
+    the bump distances after a mid-stack split are
+    unpredictable and can spawn pieces into neighbors.
+
+    Returns (prims, new_sim)."""
     n = len(stack_content)
     if not 1 <= k <= n - 1:
         raise ValueError(
             f"split-after k={k} out of range for n={n}")
-    # Choose ci so left_count == k.
+
+    out = []
+    interior = k != 1 and k != n - 1
+    if interior:
+        si = primitives.find_stack_index(sim, stack_content)
+        others = [s for i, s in enumerate(sim) if i != si]
+        new_loc = geometry.find_open_loc(others, card_count=n)
+        cur_loc = sim[si]["loc"]
+        if new_loc != cur_loc:
+            move = {"action": "move_stack",
+                    "stack_index": si, "new_loc": new_loc}
+            out.append(move)
+            sim = primitives.apply_locally(sim, move)
+
+    # Choose ci so left_count == k (per strategy._apply_split's
+    # leftSplit/rightSplit convention).
     if k <= n // 2:
-        ci = k - 1  # leftSplit
+        ci = k - 1
     else:
-        ci = k      # rightSplit
+        ci = k
     si = primitives.find_stack_index(sim, stack_content)
-    prim = {"action": "split", "stack_index": si, "card_index": ci}
-    return prim, primitives.apply_locally(sim, prim)
+    split = {"action": "split", "stack_index": si,
+             "card_index": ci}
+    out.append(split)
+    return out, primitives.apply_locally(sim, split)
 
 
-def _merge(sim, source_content, target_content, side):
-    """Emit a merge_stack primitive matching by content,
-    advance `sim`, return (prim, new_sim)."""
+def _plan_merge(sim, source_content, target_content, side):
+    """Plan a content-addressed merge_stack with pre-flight
+    geometry — delegates to `strategy._plan_merge_stack`
+    which tries merge-in-place first and otherwise pre-moves
+    the target into a hole sized for the EVENTUAL stack.
+
+    Returns (prims, new_sim)."""
     src = primitives.find_stack_index(sim, source_content)
     tgt = primitives.find_stack_index(sim, target_content)
-    prim = {
-        "action": "merge_stack",
-        "source_stack": src,
-        "target_stack": tgt,
-        "side": side,
-    }
-    return prim, primitives.apply_locally(sim, prim)
+    return strategy._plan_merge_stack(sim, src, tgt, side)
 
 
 # --- extract + absorb ----------------------------------------
@@ -101,21 +121,21 @@ def _isolate_card(sim, stack_content, ci, kind):
 
     if ci == 0 and n > 1:
         # Split off the first card: left=[s[0]], right=s[1:].
-        prim, sim = _split_after(sim, stack_content, 1)
-        out.append(prim)
+        prims, sim = _plan_split_after(sim, stack_content, 1)
+        out.extend(prims)
         return out, sim, [ext_card], [list(stack_content[1:])]
     if ci == n - 1 and n > 1:
         # Split off the last card: left=s[:-1], right=[s[-1]].
-        prim, sim = _split_after(sim, stack_content, n - 1)
-        out.append(prim)
+        prims, sim = _plan_split_after(sim, stack_content, n - 1)
+        out.extend(prims)
         return out, sim, [ext_card], [list(stack_content[:-1])]
     # Interior: split after ci → [s[:ci]], [s[ci:]]. Then split
     # [s[ci:]] after 1 → [s[ci]] + [s[ci+1:]].
-    prim, sim = _split_after(sim, stack_content, ci)
-    out.append(prim)
+    prims, sim = _plan_split_after(sim, stack_content, ci)
+    out.extend(prims)
     right_chunk = list(stack_content[ci:])
-    prim, sim = _split_after(sim, right_chunk, 1)
-    out.append(prim)
+    prims, sim = _plan_split_after(sim, right_chunk, 1)
+    out.extend(prims)
     return out, sim, [ext_card], [
         list(stack_content[:ci]),
         list(stack_content[ci + 1:]),
@@ -155,9 +175,9 @@ def _extract_absorb(desc, board):
         if kind == "set" and len(remnants) == 2:
             left_chunk, tail_chunk = remnants
             # Merge tail_chunk onto left_chunk's right end.
-            prim, sim = _merge(sim, tail_chunk, left_chunk,
-                               "right")
-            out.append(prim)
+            prims, sim = _plan_merge(sim, tail_chunk, left_chunk,
+                                     "right")
+            out.extend(prims)
 
     elif verb == "steal" and kind in ("pure_run", "rb_run"):
         # End-steal of length-3 run: ci is 0 or 2.
@@ -167,11 +187,11 @@ def _extract_absorb(desc, board):
 
     elif verb == "steal" and kind == "set":
         # Dismantle length-3 set into 3 singletons.
-        prim, sim = _split_after(sim, source, 1)
-        out.append(prim)
+        prims, sim = _plan_split_after(sim, source, 1)
+        out.extend(prims)
         # Now [source[0]] and [source[1], source[2]] exist.
-        prim, sim = _split_after(sim, list(source[1:]), 1)
-        out.append(prim)
+        prims, sim = _plan_split_after(sim, list(source[1:]), 1)
+        out.extend(prims)
         # Now three singletons: [source[0]], [source[1]],
         # [source[2]]. Identify the desired one by content.
         ext_singleton = [ext_card]
@@ -181,8 +201,8 @@ def _extract_absorb(desc, board):
             f"verb {verb!r} kind {kind!r}")
 
     # Merge ext_card singleton onto target.
-    prim, sim = _merge(sim, ext_singleton, target_before, side)
-    out.append(prim)
+    prims, sim = _plan_merge(sim, ext_singleton, target_before, side)
+    out.extend(prims)
     return out
 
 
@@ -194,9 +214,9 @@ def _free_pull(desc, board):
     loose = desc["loose"]
     target_before = list(desc["target_before"])
     side = desc["side"]
-    sim = list(board)
-    prim, _sim = _merge(sim, [loose], target_before, side)
-    return [prim]
+    prims, _sim = _plan_merge(list(board), [loose],
+                              target_before, side)
+    return prims
 
 
 def _push(desc, board):
@@ -206,9 +226,9 @@ def _push(desc, board):
     trouble_before = list(desc["trouble_before"])
     target_before = list(desc["target_before"])
     side = desc["side"]
-    sim = list(board)
-    prim, _sim = _merge(sim, trouble_before, target_before, side)
-    return [prim]
+    prims, _sim = _plan_merge(list(board), trouble_before,
+                              target_before, side)
+    return prims
 
 
 # --- splice --------------------------------------------------
@@ -226,22 +246,18 @@ def _splice(desc, board):
     right = list(desc["right_result"])
 
     sim = list(board)
-    prim, sim = _split_after(sim, src, k)
-    out = [prim]
+    prims, sim = _plan_split_after(sim, src, k)
+    out = list(prims)
 
     # After split: [src[:k]] and [src[k:]] both on board.
     # `side == "left"`  : loose joins LEFT half  → left = src[:k] + [loose]
     # `side == "right"` : loose joins RIGHT half → right = [loose] + src[k:]
     if side == "left":
-        # Merge loose onto src[:k] right.
-        prim, sim = _merge(sim, [loose], list(src[:k]), "right")
+        prims, sim = _plan_merge(sim, [loose], list(src[:k]), "right")
     else:
-        # Merge loose onto src[k:] left.
-        prim, sim = _merge(sim, [loose], list(src[k:]), "left")
-    out.append(prim)
+        prims, sim = _plan_merge(sim, [loose], list(src[k:]), "left")
+    out.extend(prims)
 
-    # Sanity: the resulting halves should match desc.
-    # (No-op if the merge sides are correctly chosen.)
     _ = (left, right)
     return out
 
@@ -272,30 +288,24 @@ def _shift(desc, board):
     out.extend(prims)
     if kind == "set" and len(donor_remnants) == 2:
         left_chunk, tail_chunk = donor_remnants
-        prim, sim = _merge(sim, tail_chunk, left_chunk, "right")
-        out.append(prim)
+        prims, sim = _plan_merge(sim, tail_chunk, left_chunk, "right")
+        out.extend(prims)
 
     # 2. Split source to isolate the stolen card.
     if which_end == 2:
-        # Stolen at right end; split source after 2 →
-        # [source[:2]] + [stolen].
-        prim, sim = _split_after(sim, source, 2)
-        out.append(prim)
+        prims, sim = _plan_split_after(sim, source, 2)
+        out.extend(prims)
         source_remainder = list(source[:2])
-        # Merge p onto remainder LEFT → [p, a, b].
-        prim, sim = _merge(sim, [p_card], source_remainder, "left")
-        out.append(prim)
+        prims, sim = _plan_merge(sim, [p_card], source_remainder, "left")
+        out.extend(prims)
     else:
-        # Stolen at left end; split source after 1 →
-        # [stolen] + [source[1:]].
-        prim, sim = _split_after(sim, source, 1)
-        out.append(prim)
+        prims, sim = _plan_split_after(sim, source, 1)
+        out.extend(prims)
         source_remainder = list(source[1:])
-        # Merge p onto remainder RIGHT → [b, c, p].
-        prim, sim = _merge(sim, [p_card], source_remainder, "right")
-        out.append(prim)
+        prims, sim = _plan_merge(sim, [p_card], source_remainder, "right")
+        out.extend(prims)
 
     # 3. Merge stolen onto target.
-    prim, sim = _merge(sim, [stolen], target_before, side)
-    out.append(prim)
+    prims, sim = _plan_merge(sim, [stolen], target_before, side)
+    out.extend(prims)
     return out

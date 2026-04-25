@@ -37,12 +37,23 @@ across a multi-step trick.
 
 ## Convention: split-after semantics
 
-`_split_after(sim, stack_content, k)` translates "the first
-`k` cards go to the left half" into the right `card_index`
-parameter. The underlying `strategy._apply_split` uses a
-leftSplit/rightSplit branch where `left_count = ci+1` (left)
-or `ci` (right) depending on which half the click falls in;
-the helper hides that asymmetry from callers.
+`_plan_split_after(sim, stack_content, k)` translates "the
+first `k` cards go to the left half" into the right
+`card_index` parameter. The underlying `strategy._apply_split`
+uses a leftSplit/rightSplit branch where `left_count = ci+1`
+(left) or `ci` (right) depending on which half the click
+falls in; the helper hides that asymmetry from callers.
+
+## Convention: pre-flight planning, never post-hoc tidy
+
+Every merge routes through `strategy._plan_merge_stack`
+(merge-in-place when legal; otherwise pre-move target into a
+hole sized for the EVENTUAL stack). Every interior split
+pre-moves the donor into a 4-side-clear region first per
+Steve's 2026-04-23 rule. End splits don't pre-move — the
+nudge distance stays bounded. There is NO end-of-step tidy
+sweep — intermediate frames must stay geometrically clean
+all the way through the trick.
 
 ## Pointers
 
