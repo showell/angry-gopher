@@ -267,16 +267,25 @@ def peel(board, c):
 
 
 def steal(board, c):
-    """Same mechanic as a run-edge peel, but applied when the
-    remnant is illegal (length 2). Caller justifies the mess
-    by a later extend that repairs or reuses the orphan."""
+    """Run steal: leaves a length-2 partial remnant.
+    Set steal: fully dismantles the 3-set — the two
+    non-stolen cards become individual singletons (rather
+    than a 2-set partial). The mental model: with the third
+    card gone there's no realistic path back to a set, so
+    the partial framing is misleading."""
     si, ci = _find(board, c)
     stack = board[si]
-    new = [s[:] for s in board]
-    if ci == 0:
-        new[si] = stack[1:]
+    kind = classify(stack)
+    new = [s[:] for i, s in enumerate(board) if i != si]
+    if kind == "set":
+        for x in stack:
+            if x != c:
+                new.append([x])
     else:
-        new[si] = stack[:-1]
+        if ci == 0:
+            new.append(stack[1:])
+        else:
+            new.append(stack[:-1])
     new.append([c])
     return new
 
