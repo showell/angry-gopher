@@ -67,15 +67,25 @@ class Client:
 
     # --- Session lifecycle ---
 
-    def new_session(self, label=None):
+    def new_session(self, label=None, initial_state=None):
         """POST /new-session → returns integer session id.
 
         `label` (optional) is a human-readable handle so an
         agent's games are findable in the sessions list
         without guessing ids. Empty/None → server stores "".
+
+        `initial_state` (optional) is a full State dict. When
+        supplied, the server stores it as the session's starting
+        point and skips its own dealer — useful for Python agents
+        that want a randomized deal. See dealer.py.
         """
+        payload = {}
         if label:
-            body = json.dumps({"label": label}).encode("utf-8")
+            payload["label"] = label
+        if initial_state is not None:
+            payload["initial_state"] = initial_state
+        if payload:
+            body = json.dumps(payload).encode("utf-8")
             resp = self._post(
                 f"{self.base}/new-session", body,
                 content_type="application/json",

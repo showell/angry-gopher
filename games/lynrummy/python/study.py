@@ -24,8 +24,8 @@ Usage:
         # dump every puzzle's sessions
     python3 games/lynrummy/python/study.py --feedback N
         # N most-recent annotated plays: puzzle + reply + actions,
-        # one markdown block each. Single entry point so
-        # "Steve played, read the replies" doesn't spray SQL.
+        # one markdown block each. Single-query entry point for
+        # "read the latest replies."
 """
 
 import argparse

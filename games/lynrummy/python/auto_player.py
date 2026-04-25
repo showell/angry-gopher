@@ -25,11 +25,91 @@ Usage:
 
 import argparse
 import datetime
+import json
+import os
 import sys
+import urllib.error
+import urllib.request
 
 from client import Client, card, find_stack_containing
+import dealer
 import strategy
 import gesture_synth
+
+
+# Stuck-turn capture. When the agent finds no play past
+# `STUCK_CAPTURE_AFTER_TURNS` complete turns, snapshot the
+# state and pause. `stuck_turns.jsonl` is durable across a
+# game or two; Steve curates candidate puzzles from it.
+STUCK_LOG_PATH = os.path.expanduser(
+    "~/AngryGopher/prod/stuck_turns.jsonl"
+)
+STUCK_CAPTURE_AFTER_TURNS = 4
+
+
+def _capture_stuck_turn(session_id, state, turns_completed):
+    """Append a stuck-turn record to the side log. Returns the
+    record for the caller to print."""
+    active = state["active_player_index"]
+    record = {
+        "session_id": session_id,
+        "turns_completed": turns_completed,
+        "active_player_index": active,
+        "board": state["board"],
+        "hand": state["hands"][active]["hand_cards"],
+        "captured_at": datetime.datetime.now().isoformat(),
+    }
+    os.makedirs(os.path.dirname(STUCK_LOG_PATH), exist_ok=True)
+    with open(STUCK_LOG_PATH, "a") as f:
+        f.write(json.dumps(record) + "\n")
+    return record
+
+
+def _create_puzzle_from_stuck(client, state, turns_completed,
+                              source_session_id):
+    """Create a fresh puzzle session whose initial_state is the
+    captured stuck state. Gives Steve a clean URL with Instant
+    Replay scoped to his moves only — the source auto_player
+    session's 60+ setup actions would otherwise be replayed
+    every time.
+
+    Puzzles have no deck (see lynrummyElmNewPuzzleSession
+    server-side rule), so we zero it out here.
+    """
+    puzzle_state = dict(state)
+    puzzle_state["deck"] = []
+    active = state["active_player_index"]
+    hand_cards = state["hands"][active]["hand_cards"]
+    stamp = datetime.datetime.now().strftime("%H%M%S")
+    # Derive a name that's readable in the URL and unique per
+    # capture. Prefix with source session so replays are traceable
+    # back to the trajectory that produced the stuck state.
+    label_bits = [_hand_label(hc["card"]) for hc in hand_cards[:3]]
+    hand_tag = "_".join(label_bits) if label_bits else "empty"
+    puzzle_name = f"stuck_s{source_session_id}_t{turns_completed}_{hand_tag}_{stamp}"
+    body = json.dumps({
+        "label": f"auto-stuck from session {source_session_id}",
+        "puzzle_name": puzzle_name,
+        "initial_state": puzzle_state,
+    }).encode("utf-8")
+    req = urllib.request.Request(
+        f"{client.base}/new-puzzle-session",
+        data=body,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req) as resp:
+            data = json.loads(resp.read())
+    except urllib.error.HTTPError as e:
+        return None, f"{e.code}: {e.read().decode('utf-8', 'replace')}"
+    return data["session_id"], puzzle_name
+
+
+def _hand_label(c):
+    rank = {1: "A", 11: "J", 12: "Q", 13: "K"}.get(c["value"], str(c["value"]))
+    suit = {0: "C", 1: "D", 2: "S", 3: "H"}.get(c["suit"], "?")
+    return f"{rank}{suit}"
 
 
 # Game termination: deck running out, not a turn_result variant.
@@ -159,6 +239,7 @@ def play_session(c, session_id, *, max_actions=300, verbose=True):
     actions = 0
     turns = 0
     last_result = None
+    last_result_puzzle_sid = None
 
     while actions < max_actions:
         state = c.get_state(session_id)["state"]
@@ -199,7 +280,37 @@ def play_session(c, session_id, *, max_actions=300, verbose=True):
                 actions += 1
             continue
 
-        # No more suggestions — try complete_turn.
+        # No play fires. If the hand has unplayed cards past
+        # the capture threshold, this is a puzzle candidate:
+        # snapshot and pause. A hand with zero cards isn't
+        # stuck — the player played everything; complete_turn
+        # is the right move.
+        if turns >= STUCK_CAPTURE_AFTER_TURNS and len(hand) > 0:
+            record = _capture_stuck_turn(session_id, state, turns)
+            if verbose:
+                print(
+                    f"  STUCK at turn {turns} "
+                    f"(active={record['active_player_index']}, "
+                    f"board={len(record['board'])} stacks, "
+                    f"hand={len(record['hand'])} cards). "
+                    f"Captured to {STUCK_LOG_PATH}."
+                )
+            # Spin off a fresh puzzle session so Instant Replay
+            # in the browser shows only the solver's moves.
+            puzzle_sid, puzzle_name_or_err = _create_puzzle_from_stuck(
+                c, state, turns, session_id)
+            if puzzle_sid is None:
+                if verbose:
+                    print(f"  puzzle-session create failed: "
+                          f"{puzzle_name_or_err}")
+            else:
+                if verbose:
+                    print(f"  puzzle session {puzzle_sid} "
+                          f"(name: {puzzle_name_or_err})")
+            last_result = "stuck_captured"
+            last_result_puzzle_sid = puzzle_sid
+            break
+
         try:
             resp = c.send_complete_turn(session_id)
         except RuntimeError as e:
@@ -228,7 +339,8 @@ def play_session(c, session_id, *, max_actions=300, verbose=True):
             break
 
     return {"actions": actions, "turns": turns,
-            "final_turn_result": last_result}
+            "final_turn_result": last_result,
+            "puzzle_session_id": last_result_puzzle_sid}
 
 
 def main():
@@ -247,12 +359,22 @@ def main():
     else:
         stamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
         label = args.label or f"claude py-hints {stamp}"
-        sid = c.new_session(label=label)
+        # Python deals its own initial state so each new game
+        # explores different hand/deck draws. Server's dealer has
+        # a fixed opening board + fixed opening hands; relying on
+        # it converges every self-play game to the same stuck
+        # states. See dealer.py + RANDOM_VS_DETERMINISTIC.
+        sid = c.new_session(label=label, initial_state=dealer.deal())
 
     initial = c.get_score(sid)
     print(f"session {sid}: initial board_score {initial['board_score']}")
 
-    do_cosmetic_opener(c, sid)
+    # Skip the cosmetic opener when resuming a session — the
+    # opener assumes an untouched dealer board, and the pre-baked
+    # move_stack locations will collide with whatever layout the
+    # session has already drifted into.
+    if args.session is None:
+        do_cosmetic_opener(c, sid)
 
     summary = play_session(c, sid, max_actions=args.max_actions)
 
@@ -263,6 +385,10 @@ def main():
     print(f"final turn_result: {summary['final_turn_result']}")
     print(f"final board_score: {final['board_score']}")
     print(f"browse: http://localhost:9000/gopher/lynrummy-elm/play/{sid}")
+    if summary.get("puzzle_session_id"):
+        psid = summary["puzzle_session_id"]
+        print(f"puzzle: http://localhost:9000/gopher/lynrummy-elm/play/{psid}"
+              " (fresh session — Instant Replay scoped to solver's moves)")
 
 
 if __name__ == "__main__":

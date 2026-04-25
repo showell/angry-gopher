@@ -82,21 +82,30 @@ func HandleLynRummyElm(w http.ResponseWriter, r *http.Request) {
 
 // lynrummyElmNewSession creates a fresh session row and returns
 // its id. Called by the Elm client on boot; client stores the id
-// and includes it with every subsequent action POST. A
-// per-session deck seed is generated here; replays use it so
-// each session has its own shuffled deck order — deterministic
-// within a session, different across sessions.
+// and includes it with every subsequent action POST.
+//
+// Two variants of the body:
+//
+//   - Default (Elm client): empty body OR {"label": "..."}. The
+//     server generates a deck_seed and the initial state is
+//     `InitialStateWithSeed(deck_seed)` (hardcoded opening
+//     board + hands, shuffled deck).
+//
+//   - Client-dealt: {"label": "...", "initial_state": {...State...}}.
+//     The client supplies the fully dealt initial state. Stored
+//     in `lynrummy_puzzle_seeds` (same mechanism as a puzzle
+//     session but with NULL puzzle_name) so replay recovers
+//     the exact state. deck_seed is set to 0 as a "no server
+//     deal" signal. Used by Python agents that want randomized
+//     dealing without colluding on a shared fixture.
 func lynrummyElmNewSession(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	// Optional body: {"label": "..."}. Empty-body POST (the Elm
-	// client path) leaves label as "". Label is a human-readable
-	// session handle — agents use it to distinguish their games
-	// from Steve's in the sessions list.
 	var label string
+	var initialStateRaw json.RawMessage
 	if r.ContentLength > 0 {
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
@@ -105,20 +114,35 @@ func lynrummyElmNewSession(w http.ResponseWriter, r *http.Request) {
 		}
 		if len(body) > 0 {
 			var req struct {
-				Label string `json:"label"`
+				Label        string          `json:"label"`
+				InitialState json.RawMessage `json:"initial_state"`
 			}
 			if err := json.Unmarshal(body, &req); err != nil {
 				http.Error(w, "decode: "+err.Error(), http.StatusBadRequest)
 				return
 			}
 			label = req.Label
+			initialStateRaw = req.InitialState
+		}
+	}
+
+	// Validate client-supplied state up-front so bad payloads are
+	// caught at submit time, not at replay.
+	if len(initialStateRaw) > 0 {
+		var state lynrummy.State
+		if err := json.Unmarshal(initialStateRaw, &state); err != nil {
+			http.Error(w, "initial_state decode: "+err.Error(), http.StatusBadRequest)
+			return
 		}
 	}
 
 	now := time.Now().Unix()
-	seed := now*1_000_003 + int64(mathRandInt63()) // monotonic + noise
-	if seed == 0 {
-		seed = 1 // zero means "no shuffle" downstream; force non-zero
+	var seed int64
+	if len(initialStateRaw) == 0 {
+		seed = now*1_000_003 + int64(mathRandInt63()) // monotonic + noise
+		if seed == 0 {
+			seed = 1 // zero means "no shuffle" downstream; force non-zero
+		}
 	}
 	res, err := DB.Exec(
 		`INSERT INTO lynrummy_elm_sessions (created_at, label, deck_seed) VALUES (?, ?, ?)`,
@@ -133,7 +157,19 @@ func lynrummyElmNewSession(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "lastinsertid: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	log.Printf("lynrummy-elm session: new id=%d seed=%d label=%q", id, seed, label)
+
+	if len(initialStateRaw) > 0 {
+		if _, err := DB.Exec(
+			`INSERT INTO lynrummy_puzzle_seeds (session_id, initial_state_json, puzzle_name) VALUES (?, ?, NULL)`,
+			id, string(initialStateRaw),
+		); err != nil {
+			http.Error(w, "insert client-dealt state: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		log.Printf("lynrummy-elm session: new id=%d (client-dealt) label=%q", id, label)
+	} else {
+		log.Printf("lynrummy-elm session: new id=%d seed=%d label=%q", id, seed, label)
+	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	fmt.Fprintf(w, `{"session_id":%d}`, id)
 }
@@ -144,15 +180,26 @@ func mathRandInt63() int64 {
 	return mathRand.Int63()
 }
 
-// lynrummyElmNewPuzzleSession creates a session whose initial state
-// is hand-crafted (not the dealer's deal). Body is a JSON envelope:
+// lynrummyElmNewPuzzleSession creates a session whose initial
+// state is hand-crafted — a puzzle in the BOARD_LAB sense. Body
+// is a JSON envelope:
 //
-//	{"label": "...", "initial_state": {...State JSON...}}
+//	{"label": "...", "puzzle_name": "...", "initial_state": {...State JSON...}}
 //
-// The state is stored in lynrummy_puzzle_seeds; replaySessionNoHTTP
-// returns this state (plus any applied actions) when a row exists.
-// Used by the decomposition harness to stage narrow puzzles that
-// isolate one trick at a time.
+// All three fields are required. Puzzles are, by definition,
+// authored or discovered — the server never generates one.
+//
+// Puzzles have no dealer and no deck: the initial state must
+// ship with `deck: []` (or no deck field). Turn-complete on a
+// puzzle session simply re-scores the board and advances the
+// turn index; no draws happen because there's nothing to draw.
+// If a caller submits a non-empty deck, we reject — the
+// protocol is stricter than applyCompleteTurn's natural
+// behavior so the invariant is visible at the boundary.
+//
+// For randomized *full-game* sessions (Python-dealt), use
+// `/new-session` with an `initial_state` field instead. That
+// path keeps the deck and full turn mechanics.
 func lynrummyElmNewPuzzleSession(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -172,22 +219,29 @@ func lynrummyElmNewPuzzleSession(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "decode: "+err.Error(), http.StatusBadRequest)
 		return
 	}
+	if req.PuzzleName == "" {
+		http.Error(w, "missing puzzle_name (required for puzzle sessions)", http.StatusBadRequest)
+		return
+	}
 	if len(req.InitialState) == 0 {
 		http.Error(w, "missing initial_state", http.StatusBadRequest)
 		return
 	}
 
-	// Validate that initial_state decodes into a lynrummy.State so
-	// we reject malformed puzzles at submit time (not at replay).
+	// Validate that initial_state decodes into a lynrummy.State
+	// and that it obeys the puzzle constraint of having no deck.
 	var state lynrummy.State
 	if err := json.Unmarshal(req.InitialState, &state); err != nil {
 		http.Error(w, "initial_state decode: "+err.Error(), http.StatusBadRequest)
 		return
 	}
+	if len(state.Deck) > 0 {
+		http.Error(w, "puzzles must not include a deck (puzzles don't deal)", http.StatusBadRequest)
+		return
+	}
 
 	now := time.Now().Unix()
-	// deck_seed is unused for puzzle sessions (the initial state is
-	// read from lynrummy_puzzle_seeds). Store 0 as a signal.
+	// deck_seed is unused for puzzle sessions. Store 0 as a signal.
 	res, err := DB.Exec(
 		`INSERT INTO lynrummy_elm_sessions (created_at, label, deck_seed) VALUES (?, ?, 0)`,
 		now, req.Label,
@@ -201,20 +255,14 @@ func lynrummyElmNewPuzzleSession(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "lastinsertid: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	var puzzleNameArg interface{}
-	if req.PuzzleName == "" {
-		puzzleNameArg = nil
-	} else {
-		puzzleNameArg = req.PuzzleName
-	}
 	if _, err := DB.Exec(
 		`INSERT INTO lynrummy_puzzle_seeds (session_id, initial_state_json, puzzle_name) VALUES (?, ?, ?)`,
-		sessionID, string(req.InitialState), puzzleNameArg,
+		sessionID, string(req.InitialState), req.PuzzleName,
 	); err != nil {
 		http.Error(w, "insert puzzle seed: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	log.Printf("lynrummy-elm puzzle session: new id=%d label=%q", sessionID, req.Label)
+	log.Printf("lynrummy-elm puzzle session: new id=%d label=%q puzzle=%q", sessionID, req.Label, req.PuzzleName)
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	fmt.Fprintf(w, `{"session_id":%d}`, sessionID)
 }

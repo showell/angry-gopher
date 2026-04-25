@@ -1,29 +1,22 @@
 #!/usr/bin/env python3
 """
 agent_board_lab.py — run the Python strategy against every
-BOARD_LAB catalog puzzle and persist its solution alongside
+BOARD_LAB catalog puzzle and persist each solution alongside
 human attempts.
 
-For each puzzle in the catalog:
-  1. POST a new puzzle session labeled "agent: <title>" with
-     the same initial_state and puzzle_name a human session
-     would use, so agent + human attempts land keyed to the
-     same puzzle_name in lynrummy_puzzle_seeds.
-  2. Run strategy.choose_play on (hand, board). If a play
-     fires, send its primitives with gesture telemetry
-     synthesized via gesture_synth.
-  3. Run strategy.find_follow_up_merges on the resulting
-     board and send any follow-up merge_stack primitives too.
-  4. Stop when choose_play returns None (no more plays) or
-     after one primary trick + follow-ups — whichever comes
-     first. Unlike auto_player's full-game loop, this plays
-     the puzzle the same way a human in BOARD_LAB would:
-     one visible turn's worth of moves.
+For each puzzle:
+  1. POST a new session labeled `agent: <title>` with the
+     same `initial_state` and `puzzle_name` a human session
+     uses. Agent + human attempts share the `puzzle_name`
+     key in `lynrummy_puzzle_seeds`.
+  2. Run `strategy.choose_play`; send its primitives with
+     synthesized gesture telemetry.
+  3. Iterate `strategy.find_follow_up_merges` until the board
+     stops yielding chainable pairs.
 
-Produces a row per catalog puzzle in lynrummy_puzzle_seeds
-with puzzle_name set, plus one or more rows in
-lynrummy_elm_actions per session. Ready for the analysis
-script (next) to compare against human attempts.
+Produces one `lynrummy_puzzle_seeds` row and one or more
+`lynrummy_elm_actions` rows per session. `study.py` reads
+both sides' attempts for comparison.
 
 Usage:
     python3 games/lynrummy/python/agent_board_lab.py
@@ -64,9 +57,9 @@ def _new_puzzle_session(client, label, puzzle_name, initial_state):
 
 
 def _to_wire_shape(prim, board):
-    """Translate an internal index-based primitive to the
-    CardStack-ref wire shape the server expects. Same mapping
-    as auto_player.py's local helper — kept inline here so the
+    """Translate an index-based strategy primitive into the
+    CardStack-ref wire shape the server expects. Mirrors
+    `auto_player.py`'s local helper; kept inline so this
     harness stays self-contained."""
     kind = prim["action"]
     if kind == "split":
@@ -159,12 +152,9 @@ def play_puzzle(client, puzzle, verbose=True):
     primary_id = None
 
     if play is None:
-        # No hand-card trick fires — but the whole puzzle might BE
-        # a pure on-board follow-up merge (e.g. two fragments that
-        # chain directly). Check that before giving up; otherwise
-        # puzzles with no hand involvement at all come back
-        # empty-handed even though a legal merge was sitting
-        # right there.
+        # No hand-card trick fires. The puzzle may still have
+        # an on-board follow-up merge waiting; fall through to
+        # the follow-up loop below.
         if verbose:
             print("   no hand-card play; checking initial follow-ups")
     else:
@@ -181,12 +171,12 @@ def play_puzzle(client, puzzle, verbose=True):
             board = new_board
             sent += 1
 
-    # `find_follow_up_merges` is single-pass — after two
-    # fragments chain, a third that chains with the result
-    # needs another scan to be seen. Loop until the board
-    # stops yielding new merges. This is the "opportunistic,
-    # not pre-planned" shape Steve called out in puzzle #14:
-    # one obvious local win, execute, re-view.
+    # `find_follow_up_merges` is single-pass — a third
+    # fragment that chains with a fresh merge result needs
+    # another scan to be seen. Loop until the board stops
+    # yielding new merges. Matches the "opportunistic, not
+    # pre-planned" human pattern: execute an obvious local
+    # win, re-view, repeat.
     total_follow_ups = 0
     while True:
         follow_ups = strategy.find_follow_up_merges(board)
