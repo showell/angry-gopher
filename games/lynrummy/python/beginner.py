@@ -378,15 +378,15 @@ def _compound_pull_line(verb, ext_card, source, trouble_before, result):
 
 
 def _compound_push_line(verb, ext_card, source, target_before, result):
-    """`2C 3C 4C peel-pushes 2C 3C 4C [5C] {-5C- 5H 5S}` —
-    target-before (a LEGAL stack) is the subject; the
-    helper is extracted from `source` and pushed onto the
-    target. Same shape as the pull line, just `-pushes`
-    instead of `-pulls` and the absorber was already legal."""
-    tb = _stack_label(target_before)
+    """`peel-pushes 2C 3C 4C [5C] {-5C- 5H 5S}` — the result
+    shows the legal target with the helper bracketed where
+    it landed; the source braces show where the helper came
+    from with the extracted card struck. No leading subject:
+    the target prefix in the result already names the
+    absorber."""
     res = _stack_with_marker(result, ext_card, "[{}]")
     src = _stack_with_marker(source, ext_card, "-{}-")
-    return f"{tb} {verb}-pushes {res} {{{src}}}"
+    return f"{verb}-pushes {res} {{{src}}}"
 
 
 def _looses(board):
@@ -468,9 +468,13 @@ def _try_pushes(board, taboo=None, only_loose=None):
 
 
 def _push_line(loose, target_before, result):
-    return (f"{label_d(loose)} pushes-onto "
-            f"{_stack_with_marker(result, loose, '[{}]')} "
-            f"{{{_stack_label(target_before)}}}")
+    """`pushes-onto [AH] 2H 3H 4H` — the bracket marks where
+    the loose landed; the unbracketed cards are the target's
+    pre-existing cards. No leading subject (would repeat the
+    bracket) and no source braces (would repeat the result
+    minus bracket)."""
+    return (f"pushes-onto "
+            f"{_stack_with_marker(result, loose, '[{}]')}")
 
 
 def _stack_with_block(stack, block_size, side):
@@ -490,11 +494,12 @@ def _stack_with_block(stack, block_size, side):
 
 
 def _push_merge_line(source_partial, target_before, side, result):
-    """`2C:1 3C 4C push-merges 2C:1 3C 4C [5C 6C]` —
-    target-before (legal) is the subject; the whole 2-partial
-    source is bracketed where it landed in the result."""
+    """`push-merges 2C:1 3C 4C [5C 6C]` — the result shows
+    the legal target with the absorbed 2-partial bracketed
+    as a contiguous block; no leading subject (would repeat
+    the target prefix in the result)."""
     block_size = len(source_partial)
-    return (f"{_stack_label(target_before)} push-merges "
+    return (f"push-merges "
             f"{_stack_with_block(result, block_size, side)}")
 
 
