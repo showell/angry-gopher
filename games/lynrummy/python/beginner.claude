@@ -1,0 +1,111 @@
+just_use beginner.py
+
+# label: INTRICATE
+# role: Python-native PLANNER — beginner-level puzzle solver
+
+The strategic brain for single-card stuck states. Given a
+board with one or more "trouble" stacks (anything that
+doesn't classify as set / pure_run / rb_run), search for a
+shortest sequence of pulls + pushes that drives trouble
+count to zero — within the cognitive budget of a beginner.
+
+## The vocabulary
+
+Trouble cards are the actors. They PULL helpers in or PUSH
+themselves into existing legal structure. The DSL puts the
+trouble stack first as the subject:
+
+  6C:1 steal-pulls [5C] 6C:1 {-5C- 6C 7C}
+  5C 6C:1 peel-pulls [4C] 5C 6C:1 {-4C- 4D 4S 4H}
+  8C pushes-onto 8D 8S 8H [8C] {8D 8S 8H}
+
+Helper card is in `[brackets]` where it landed; source
+remnant in `{braces}` with the extracted card `-struck-`.
+Deck-1 cards carry a `:1` suffix to disambiguate dups.
+
+### Pull verbs (axis: source-side consequence)
+
+| verb  | source remnant         | cost |
+|-------|------------------------|------|
+| peel  | still legal (length 4+ end-pull, or 4+ set) | 0 |
+| pluck | both halves still legal (deep middle of long run) | 0 |
+| yank  | one short partial (1 or 2) + one legal sub-run | +1 or +2 |
+| steal | length-3 stack end-pull → 2-partial remnant | +2 |
+
+`peel` vs `pluck` differ only on position (end vs middle) —
+purely evocative, the algorithm collapses them.
+
+### Push verbs (proposed, partially landed)
+
+A loose orphan moves INTO an existing legal stack such that
+the result remains legal. Currently implemented:
+- **push-onto-set / push-onto-run END**: 3-set absorbs a
+  4th of the missing suit; legal run grows by one card on
+  an end. Tier 0b in the search; Δ trouble = −1, no
+  source-side disruption.
+
+Not yet implemented: SPLICE (insert into long-run middle),
+SWAP (two-card type-converter trade).
+
+## The search
+
+Iterative deepening DFS (IDDFS) on number of compound moves.
+At each depth limit, search tries:
+
+- **Tier 0a** — free pull (existing loose absorbed by some
+  trouble stack). No budget cost.
+- **Tier 0b** — free push (existing loose lands on a legal
+  stack, result legal). No budget cost.
+- **Tier 1** — peel/pluck extract + pull. Budget −1.
+- **Tier 2** — yank extract + pull. Budget −1.
+- **Tier 3** — steal extract + pull. Budget −1.
+
+Returns the first plan found (shortest by IDDFS). Safety
+nets: max_compound depth cap (default 6), max_nodes
+(200k), max_seconds (10s), per-depth visited cache.
+
+## The taboo cycle-detector
+
+When yank or steal fires, the extracted card carries a
+deck-aware taboo set: it may not rejoin its former
+stackmates. Without taboo, search cycles between steal-then-
+restore-the-same-card. Deck-aware so 5C:1 can still join a
+6C:0 even when 5C's taboo includes 6C of its original
+stack.
+
+## Coverage today
+
+- 52/52 canonical 4/8 D2-card sweep solved.
+- Push gate test (orphan onto existing 3-set) solves in 1
+  step.
+- Real-game stalls: ~65% rescue rate on hunts (measured
+  pre-push; expected to rise).
+- Plan length averages 1.5–2 compounds on canonical board;
+  3 compounds typical on harder boards; 4+ rare.
+
+Regression harness: `beginner_corpus.py` (canonical sweep +
+gap cases). Pipe to file, `git diff` to compare runs.
+
+## Pointers
+
+- Companion architecture: `project_hints_are_client_side.md`
+  (beginner.py is the Python-side hint logic post-trick-engine
+  abandonment), `feedback_compound_move_budget.md`,
+  `feedback_pull_vs_push.md`,
+  `feedback_evocative_verbs_chunk.md`,
+  `feedback_abundance_heuristic.md` (a hypothesis the
+  planner doesn't yet model).
+- Hunt drivers: `complex_hunt.py`, `deep_hunt.py`,
+  `one_card_hunt.py`. They drive auto_player to a stall and
+  call `beginner_plan` to see if the stall is a "Steve-level
+  puzzle" (both engines stuck = sweet spot).
+- Corpus: `beginner_corpus.py`.
+
+## TODO
+
+- SPLICE / push-into-middle (closes the depth-3 cases on
+  canonical sweep).
+- Singleton-vs-pair tier branching (Steve's framing:
+  singletons prefer push, pairs prefer pull).
+- Abundance heuristic: bias extracts toward over-represented
+  values.
