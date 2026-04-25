@@ -1,0 +1,83 @@
+just_use bfs_solver.py
+
+# label: WORKHORSE
+# role: four-bucket BFS planner — the new strategic brain
+
+Solves single-card-trouble puzzles. State is a 4-tuple
+`(HELPER, TROUBLE, GROWING, COMPLETE)`:
+
+- HELPER: original board's complete stacks. Source for
+  every extract.
+- TROUBLE: orphaned cards (singletons or 2-partials) not
+  yet committed to a build.
+- GROWING: committed builds. Sealed: no extracts, no
+  push-merges, no splits. Only further absorption.
+- COMPLETE: graduated GROWING stacks. Sealed forever.
+
+Two move types (must touch trouble):
+- (a) Absorb a neighbor into TROUBLE/GROWING. Source:
+  HELPER extract or TROUBLE singleton.
+- (b) Push TROUBLE singleton/2-partial onto a HELPER
+  stack such that result stays legal.
+
+## The search
+
+Pure BFS-by-length with outer iterative-deepening on a
+max_trouble cap. cap=1, 2, 3, ... until plan found. Lower
+caps fail fast because every move that exceeds the cap
+gets dropped before entering the frontier. The cap that
+matches the puzzle's true peak trouble is the first to
+return a plan.
+
+## Why this shape
+
+- Bucket transitions encode COMMITMENT directly. Pulling a
+  card onto trouble seals the build into GROWING. No
+  per-card taboo dict needed.
+- Peak trouble (the cap that found the plan) is a
+  first-class output. Surfaces a metric beginner.py never
+  exposed.
+- BFS-by-length finds the shortest plan within the cap.
+
+## Instrumentation
+
+Verbose mode emits a narration line per BFS expansion:
+state of all four buckets, accumulated program lines, count
+of moves enumerated/pushed/dropped. Reads like a human
+narrating their thinking.
+
+```python
+solve(board, max_trouble_outer=10, verbose=True)
+```
+
+## Corpus baseline (2026-04-25)
+
+`corpus/baseline_bfs.txt`:
+
+```
+total wall: 2.8s
+21/21 solved, 0 stuck
+depth distribution: 2:7, 3:5, 4:1, 5:3, 6:2, 7:2, 14:1
+```
+
+Compared to `beginner.py` (3.6s, 1 stuck): 0.8s faster,
+solves all puzzles, two found shorter plans, two slightly
+longer (length-vs-peak-trouble trade-off).
+
+## Pointers
+
+- `project_four_bucket_solver.md` — durable design summary.
+- `feedback_sealing_via_growing.md` — the sealing
+  invariant.
+- `feedback_two_axis_blur.md` — why neither plan length
+  nor peak trouble is the truth on its own.
+- `claude-steve/random018.md` — design spec.
+- `claude-steve/random019.md` — milestone essay.
+
+## TODO
+
+- Investigate the four plan-length regressions vs
+  beginner.py one at a time (see `feedback_two_axis_blur`).
+- Memoize across cap iterations.
+- Decide eventually whether to retire `beginner.py` or
+  keep both as comparable baselines.

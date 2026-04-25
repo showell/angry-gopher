@@ -23,7 +23,14 @@ load-bearing for why this subtree is shaped the way it is.
 
 The Python agent has two pieces of strategy code:
 
-- **`beginner.py` — the planner**, current strategic brain.
+- **`bfs_solver.py` — the four-bucket BFS planner**,
+  current strategic brain (milestone 2026-04-25). State is
+  HELPER / TROUBLE / GROWING / COMPLETE; pure BFS-by-length
+  with iterative max-trouble cap. 21/21 corpus solved,
+  ~25% faster than beginner.py. See `bfs_solver.claude`.
+
+- **`beginner.py` — the IDDFS planner**, prior strategic
+  brain.
   Trouble-driven search using PULL verbs (peel / pluck / yank
   / steal) and PUSH verbs (onto-set, onto-run-end). IDDFS
   returns shortest plans within a budget of trouble cards.
@@ -70,8 +77,11 @@ gap.
 
 Ordered by "load-bearing first":
 
-- `beginner.claude` — the planner. The current strategic
-  brain. **Start here for any planner-side work.**
+- `bfs_solver.claude` — the four-bucket BFS planner.
+  Current strategic brain. **Start here for any
+  planner-side work.**
+- `beginner.claude` — the IDDFS predecessor. Kept for now
+  as a comparable baseline; same corpus minus 1 stuck.
 - `strategy.claude` — the trick engine. PLANNED-LEGACY but
   still wired. Per-trick emitters, primitive ordering
   discipline, plan-then-execute for `merge_hand`.
