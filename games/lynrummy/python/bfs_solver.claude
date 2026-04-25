@@ -100,5 +100,3 @@ rendered in a collapsed `<details>` block.
   `corpus_lab_catalog.py`).
 - Decide eventually whether to retire `beginner.py` or
   keep both as comparable baselines.
-- Consider a "shove" variant of SHIFT for length-4+ runs
-  (currently SHIFT only fires on length-3).
