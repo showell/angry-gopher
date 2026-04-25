@@ -354,11 +354,13 @@ def _enumerate_moves(state):
                                 "donor": list(donor),
                                 "stolen": stolen,
                                 "p_card": p_card,
+                                "which_end": which_end,
                                 "new_source": new_source,
                                 "new_donor": new_donor,
                                 "target_before": list(target),
                                 "target_bucket_before": bucket,
                                 "merged": merged,
+                                "side": absorb_side,
                                 "graduated": graduated,
                             }
                             yield desc, (nh, nt_base, ng_final, nc)

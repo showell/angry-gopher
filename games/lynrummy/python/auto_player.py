@@ -33,8 +33,9 @@ import urllib.request
 
 from client import Client, card, find_stack_containing
 import dealer
-import strategy
 import gesture_synth
+import primitives
+import strategy
 
 
 # Stuck-turn capture. When the agent finds no play past
@@ -157,82 +158,14 @@ def do_cosmetic_opener(c, session_id, *, verbose=True):
         if verbose:
             print(f"  opener: move_stack [{spec['label']}'s stack] "
                   f"{src['loc']} → {spec['loc']}")
-        c.send_action(session_id, _to_wire_shape(prim, board), gesture_metadata=meta)
+        c.send_action(
+            session_id,
+            primitives.to_wire_shape(prim, board),
+            gesture_metadata=meta)
 
 
-def _to_wire_shape(prim, board):
-    """Translate an internal index-based primitive to the
-    CardStack-ref wire shape the server expects. strategy.py + the
-    local _apply_locally mirror still use the internal shape;
-    translation is localized to the send boundary."""
-    kind = prim["action"]
-    if kind == "split":
-        return {
-            "action": "split",
-            "stack": board[prim["stack_index"]],
-            "card_index": prim["card_index"],
-        }
-    if kind == "merge_stack":
-        return {
-            "action": "merge_stack",
-            "source": board[prim["source_stack"]],
-            "target": board[prim["target_stack"]],
-            "side": prim.get("side", "right"),
-        }
-    if kind == "merge_hand":
-        return {
-            "action": "merge_hand",
-            "hand_card": prim["hand_card"],
-            "target": board[prim["target_stack"]],
-            "side": prim.get("side", "right"),
-        }
-    if kind == "move_stack":
-        return {
-            "action": "move_stack",
-            "stack": board[prim["stack_index"]],
-            "new_loc": prim["new_loc"],
-        }
-    # place_hand, complete_turn, undo pass through unchanged.
-    return prim
-
-
-def _apply_locally(board, prim):
-    """Mirror of what the server does to a board when it receives
-    this primitive, so gesture_synth sees the correct state for
-    the NEXT primitive in the same trick."""
-    kind = prim["action"]
-    if kind == "merge_hand":
-        return strategy._apply_merge_hand(
-            board, prim["target_stack"], prim["hand_card"],
-            prim.get("side", "right"))
-    if kind == "merge_stack":
-        return strategy._apply_merge_stack(
-            board, prim["source_stack"], prim["target_stack"],
-            prim.get("side", "right"))
-    if kind == "move_stack":
-        return strategy._apply_move(board, prim["stack_index"], prim["new_loc"])
-    if kind == "split":
-        return strategy._apply_split(board, prim["stack_index"], prim["card_index"])
-    if kind == "place_hand":
-        return strategy._apply_place_hand(board, prim["hand_card"], prim["loc"])
-    return board
-
-
-def _send_one(c, session_id, prim, local, verbose):
-    """Send one primitive + synthesize its drag path, advance
-    the local board, return the new board. Returns None on
-    send error (caller reports and aborts)."""
-    endpoints = gesture_synth.drag_endpoints(prim, local)
-    meta = (gesture_synth.synthesize(*endpoints)
-            if endpoints is not None else None)
-    wire = _to_wire_shape(prim, local)
-    try:
-        c.send_action(session_id, wire, gesture_metadata=meta)
-    except RuntimeError as e:
-        if verbose:
-            print(f"  send failed: {e}")
-        return None
-    return _apply_locally(local, prim)
+# Wire/local-apply/send helpers live in `primitives.py` — see
+# the VERBs → PRIMITIVEs → GESTUREs pipeline.
 
 
 def play_session(c, session_id, *, max_actions=300, verbose=True):
@@ -258,7 +191,7 @@ def play_session(c, session_id, *, max_actions=300, verbose=True):
             # round-trip to /state.
             local = strategy._copy_board(board)
             for prim in prims:
-                local = _send_one(c, session_id, prim, local, verbose)
+                local = primitives.send_one(c, session_id, prim, local, verbose=verbose)
                 if local is None:
                     return {"actions": actions, "turns": turns,
                             "final_turn_result": "send_error"}
@@ -273,7 +206,7 @@ def play_session(c, session_id, *, max_actions=300, verbose=True):
             if follow_ups and verbose:
                 print(f"  follow-up merges: {len(follow_ups)}")
             for prim in follow_ups:
-                local = _send_one(c, session_id, prim, local, verbose)
+                local = primitives.send_one(c, session_id, prim, local, verbose=verbose)
                 if local is None:
                     return {"actions": actions, "turns": turns,
                             "final_turn_result": "send_error"}
