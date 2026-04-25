@@ -70,22 +70,62 @@ def _color(s):
 
 
 def classify(stack):
+    """Single-pass classifier for length-3+ stacks. Early
+    exits on the first impossibility. Inlines _succ and the
+    red-set membership check to avoid call overhead — this
+    is the hottest function in the search."""
     n = len(stack)
     if n < 3:
         return "other"
-    vals = [c[0] for c in stack]
-    suits = [c[1] for c in stack]
-    if len(set(vals)) == 1 and len(set(suits)) == len(suits):
-        return "set"
-    for i in range(1, n):
-        if vals[i] != _succ(vals[i - 1]):
+    a0v, a0s, _ = stack[0]
+    a1v, a1s, _ = stack[1]
+
+    # Set: same value, distinct suits.
+    if a0v == a1v:
+        if a0s == a1s:
             return "other"
-    if len(set(suits)) == 1:
+        seen_suits = {a0s, a1s}
+        for i in range(2, n):
+            cv, cs, _ = stack[i]
+            if cv != a0v or cs in seen_suits:
+                return "other"
+            seen_suits.add(cs)
+        return "set"
+
+    # Run: consecutive values starting a0v → a1v.
+    expected = 1 if a0v == 13 else a0v + 1
+    if a1v != expected:
+        return "other"
+
+    if a0s == a1s:
+        # Pure-run candidate: same suit throughout.
+        prev_v = a1v
+        for i in range(2, n):
+            cv, cs, _ = stack[i]
+            expected = 1 if prev_v == 13 else prev_v + 1
+            if cv != expected or cs != a0s:
+                return "other"
+            prev_v = cv
         return "pure_run"
-    colors = [_color(s) for s in suits]
-    if all(colors[i] != colors[i - 1] for i in range(1, n)):
-        return "rb_run"
-    return "other"
+
+    # RB-run candidate: alternating colors.
+    a0_red = a0s in RED
+    a1_red = a1s in RED
+    if a0_red == a1_red:
+        return "other"
+    prev_v = a1v
+    prev_red = a1_red
+    for i in range(2, n):
+        cv, cs, _ = stack[i]
+        expected = 1 if prev_v == 13 else prev_v + 1
+        if cv != expected:
+            return "other"
+        c_red = cs in RED
+        if c_red == prev_red:
+            return "other"
+        prev_v = cv
+        prev_red = c_red
+    return "rb_run"
 
 
 def partial_ok(stack):
