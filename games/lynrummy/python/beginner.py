@@ -216,6 +216,26 @@ def _can_steal(stack, ci):
             and n == 3 and (ci == 0 or ci == n - 1))
 
 
+def _can_yank(stack, ci):
+    """Yank: pull from an inner-but-not-deep position of a
+    long run. One side is a legal sub-run (length 3+); the
+    other side is a singleton or 2-partial. Costlier than
+    pluck (which leaves both halves legal), cheaper or equal
+    to steal in the singleton case."""
+    n = len(stack)
+    kind = classify(stack)
+    if kind not in ("pure_run", "rb_run"):
+        return False
+    if ci == 0 or ci == n - 1:
+        return False
+    if 3 <= ci <= n - 4:
+        return False  # pluck
+    left_len = ci
+    right_len = n - ci - 1
+    return (max(left_len, right_len) >= 3
+            and min(left_len, right_len) >= 1)
+
+
 def peel(board, c):
     si, ci = _find(board, c)
     stack = board[si]
@@ -246,6 +266,20 @@ def steal(board, c):
 
 
 def pluck(board, c):
+    si, ci = _find(board, c)
+    stack = board[si]
+    new = [s[:] for i, s in enumerate(board) if i != si]
+    new.append(stack[:ci])
+    new.append([c])
+    new.append(stack[ci + 1:])
+    return new
+
+
+def yank(board, c):
+    """Same split mechanic as pluck, but the call site has
+    decided one half is a short partial (singleton or
+    2-partial). The cost is paid by the caller via taboo +
+    follow-up plans."""
     si, ci = _find(board, c)
     stack = board[si]
     new = [s[:] for i, s in enumerate(board) if i != si]
@@ -316,6 +350,9 @@ def _try_extract(board, shapes, verbs=("peel", "pluck")):
                 yield "peel", c, source, peel(board, c), frozenset()
             elif "pluck" in verbs and _can_pluck(stack, ci):
                 yield "pluck", c, source, pluck(board, c), frozenset()
+            elif "yank" in verbs and _can_yank(stack, ci):
+                partners = frozenset(x for x in stack if x != c)
+                yield "yank", c, source, yank(board, c), partners
             elif "steal" in verbs and _can_steal(stack, ci):
                 partners = frozenset(x for x in stack if x != c)
                 yield "steal", c, source, steal(board, c), partners
@@ -402,9 +439,26 @@ def beginner_plan(board, *, max_compound=6, max_nodes=200_000,
             return None
         visited.add(sig)
 
+        # Tier 0: free extend (no sacrifice). A loose card
+        # that already exists as a singleton can extend onto
+        # a trouble stack at no extract cost. Doesn't
+        # decrement budget — it's just consuming an existing
+        # loose without creating new trouble.
+        for loose, tgt, side, after, result in \
+                _try_extend(board, taboo):
+            line = (f"extend {label(loose)} on "
+                    f"{' '.join(label(x) for x in tgt)} to "
+                    f"{' '.join(label(x) for x in result)}")
+            found = search(after,
+                           steps + [(line, after)],
+                           budget, taboo, visited)
+            if found is not None:
+                return found
+
         direct = neighbor_shapes(board)
         tiers = [
             (direct, ("peel", "pluck")),
+            (direct, ("yank",)),
             (direct, ("steal",)),
         ]
         for shapes, verbs in tiers:
