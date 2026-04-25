@@ -49,28 +49,45 @@ def _state_sig(helper, trouble, growing, complete):
 
 
 def _trouble_count(trouble, growing):
-    n = 0
-    for s in trouble:
-        n += len(s)
-    for s in growing:
-        n += len(s)
-    return n
+    return sum(len(s) for s in trouble) + sum(len(s) for s in growing)
 
 
 def _victory(trouble, growing):
     return not trouble and all(len(s) >= 3 for s in growing)
 
 
-def _do_extract(helper, src_idx, ci, verb):
-    """Extract a card from HELPER. Returns
-    (new_helper, spawned_trouble_pieces, ext_card, source_before).
-    spawned_trouble_pieces are the pieces of the damaged source
-    stack that landed in TROUBLE (singletons or 2-partials)."""
-    source = helper[src_idx]
-    n = len(source)
+def _without(stacks, idx):
+    """Stacks list with index `idx` dropped. Pure."""
+    return stacks[:idx] + stacks[idx + 1:]
+
+
+def _remove_absorber(bucket_name, idx, trouble, growing):
+    """Drop the absorber at (bucket_name, idx) from its bucket;
+    the other bucket passes through unchanged. Returns
+    (new_trouble, new_growing). Pure."""
+    if bucket_name == "trouble":
+        return _without(trouble, idx), list(growing)
+    return list(trouble), _without(growing, idx)
+
+
+def _graduate(merged, growing, complete):
+    """If `merged` classifies as a complete legal group,
+    append it to COMPLETE; otherwise append it to GROWING.
+    Returns (new_growing, new_complete, graduated_flag). Pure."""
+    if classify(merged) != "other":
+        return list(growing), complete + [merged], True
+    return growing + [merged], list(complete), False
+
+
+def _extract_pieces(source, ci, verb):
+    """Return (helper_pieces, spawned_pieces) — the post-extract
+    pieces of `source` after removing the card at `ci` per
+    `verb`. Helper pieces are length-3+ legal stacks that stay
+    in HELPER; spawned pieces are short remnants that land in
+    TROUBLE.
+
+    Pure: takes a stack, returns lists. No mutation."""
     c = source[ci]
-    new_helper = helper[:src_idx] + helper[src_idx + 1:]
-    spawned = []
     if verb == "peel":
         kind = classify(source)
         if kind == "set":
@@ -79,35 +96,35 @@ def _do_extract(helper, src_idx, ci, verb):
             remnant = source[1:]
         else:
             remnant = source[:-1]
-        new_helper.append(remnant)
-    elif verb == "pluck":
-        new_helper.append(source[:ci])
-        new_helper.append(source[ci + 1:])
-    elif verb == "yank":
+        return [remnant], []
+    if verb == "pluck":
+        return [source[:ci], source[ci + 1:]], []
+    if verb == "yank":
         left = source[:ci]
         right = source[ci + 1:]
-        if len(left) >= 3:
-            new_helper.append(left)
-        else:
-            spawned.append(left)
-        if len(right) >= 3:
-            new_helper.append(right)
-        else:
-            spawned.append(right)
-    elif verb == "steal":
+        helpers = [s for s in (left, right) if len(s) >= 3]
+        spawned = [s for s in (left, right) if len(s) < 3]
+        return helpers, spawned
+    if verb == "steal":
         kind = classify(source)
         if kind == "set":
-            for x in source:
-                if x != c:
-                    spawned.append([x])
-        else:
-            if ci == 0:
-                spawned.append(source[1:])
-            else:
-                spawned.append(source[:-1])
-    else:
-        raise ValueError(f"unknown verb {verb}")
-    return new_helper, spawned, c, list(source)
+            return [], [[x] for x in source if x != c]
+        remnant = source[1:] if ci == 0 else source[:-1]
+        return [], [remnant]
+    raise ValueError(f"unknown verb {verb}")
+
+
+def _do_extract(helper, src_idx, ci, verb):
+    """Extract a card from HELPER. Returns
+    (new_helper, spawned_trouble_pieces, ext_card, source_before).
+
+    Pure: produces a fresh helper list via concatenation; no
+    mutation of the input."""
+    source = helper[src_idx]
+    helper_pieces, spawned = _extract_pieces(source, ci, verb)
+    new_helper = (helper[:src_idx] + helper[src_idx + 1:]
+                  + helper_pieces)
+    return new_helper, spawned, source[ci], list(source)
 
 
 def _verb_for(kind, n, ci):
@@ -159,24 +176,20 @@ def _enumerate_moves(state):
 
     # All targets for absorption (move type a). Each entry:
     # (bucket_name, idx_in_bucket, target_stack).
-    absorbers = []
-    for ti, t in enumerate(trouble):
-        absorbers.append(("trouble", ti, t))
-    for gi, g in enumerate(growing):
-        absorbers.append(("growing", gi, g))
+    absorbers = (
+        [("trouble", ti, t) for ti, t in enumerate(trouble)]
+        + [("growing", gi, g) for gi, g in enumerate(growing)]
+    )
 
     for bucket, idx, target in absorbers:
         # Neighbor shapes for this absorber.
-        shapes = set()
-        for c in target:
-            shapes |= neighbors(c)
+        shapes = set().union(*(neighbors(c) for c in target))
 
         # Source: HELPER stack via extract.
         for hi, src in enumerate(helper):
             kind = classify(src)
             n = len(src)
-            for ci in range(n):
-                c = src[ci]
+            for ci, c in enumerate(src):
                 if (c[0], c[1]) not in shapes:
                     continue
                 verb = _verb_for(kind, n, ci)
@@ -185,30 +198,15 @@ def _enumerate_moves(state):
                 new_helper, spawned, ext_card, source = \
                     _do_extract(helper, hi, ci, verb)
                 for side in ("right", "left"):
-                    if side == "right":
-                        merged = list(target) + [ext_card]
-                    else:
-                        merged = [ext_card] + list(target)
+                    merged = ([*target, ext_card] if side == "right"
+                              else [ext_card, *target])
                     if not partial_ok(merged):
                         continue
-                    nh = new_helper
-                    if bucket == "trouble":
-                        nt_base = [s for i, s in enumerate(trouble)
-                                   if i != idx]
-                        ng = list(growing)
-                    else:
-                        nt_base = list(trouble)
-                        ng = [s for i, s in enumerate(growing)
-                              if i != idx]
+                    nt_base, ng = _remove_absorber(
+                        bucket, idx, trouble, growing)
                     nt = nt_base + spawned
-                    if classify(merged) != "other":
-                        nc = complete + [merged]
-                        ng_final = ng
-                        graduated = True
-                    else:
-                        nc = list(complete)
-                        ng_final = ng + [merged]
-                        graduated = False
+                    ng_final, nc, graduated = _graduate(
+                        merged, ng, complete)
                     desc = {
                         "type": "extract_absorb",
                         "verb": verb,
@@ -221,7 +219,7 @@ def _enumerate_moves(state):
                         "graduated": graduated,
                         "spawned": list(spawned),
                     }
-                    yield desc, (nh, nt, ng_final, nc)
+                    yield desc, (new_helper, nt, ng_final, nc)
 
         # Source: TROUBLE singleton (free pull).
         for li, loose_stack in enumerate(trouble):
@@ -233,30 +231,24 @@ def _enumerate_moves(state):
             if (loose[0], loose[1]) not in shapes:
                 continue
             for side in ("right", "left"):
-                if side == "right":
-                    merged = list(target) + [loose]
-                else:
-                    merged = [loose] + list(target)
+                merged = ([*target, loose] if side == "right"
+                          else [loose, *target])
                 if not partial_ok(merged):
                     continue
-                nh = list(helper)
+                # Both the absorber AND the loose-source come
+                # out of TROUBLE — drop both at once.
+                nt_base, ng = _remove_absorber(
+                    bucket, idx, trouble, growing)
                 if bucket == "trouble":
-                    nt = [s for i, s in enumerate(trouble)
-                          if i != idx and i != li]
-                    ng = list(growing)
+                    # _remove_absorber dropped idx; also drop
+                    # li (its position in nt_base shifted iff
+                    # li > idx).
+                    li_in_base = li - 1 if li > idx else li
+                    nt = _without(nt_base, li_in_base)
                 else:
-                    nt = [s for i, s in enumerate(trouble)
-                          if i != li]
-                    ng = [s for i, s in enumerate(growing)
-                          if i != idx]
-                if classify(merged) != "other":
-                    nc = complete + [merged]
-                    ng_final = ng
-                    graduated = True
-                else:
-                    nc = list(complete)
-                    ng_final = ng + [merged]
-                    graduated = False
+                    nt = _without(nt_base, li)
+                ng_final, nc, graduated = _graduate(
+                    merged, ng, complete)
                 desc = {
                     "type": "free_pull",
                     "loose": loose,
@@ -266,7 +258,7 @@ def _enumerate_moves(state):
                     "side": side,
                     "graduated": graduated,
                 }
-                yield desc, (nh, nt, ng_final, nc)
+                yield desc, (list(helper), nt, ng_final, nc)
 
     # Move type (d): SHIFT — when an end-card of a length-3
     # pure/rb run would normally be steal-pulled (sacrificing
@@ -277,9 +269,7 @@ def _enumerate_moves(state):
     # stays legal; the popped card absorbs onto trouble like
     # a steal-pull would. NO sacrifice.
     for bucket, idx, target in absorbers:
-        shapes = set()
-        for c in target:
-            shapes |= neighbors(c)
+        shapes = set().union(*(neighbors(c) for c in target))
         for src_idx, source in enumerate(helper):
             if len(source) != 3:
                 continue
@@ -314,40 +304,33 @@ def _enumerate_moves(state):
                             continue
                         donor = helper[donor_idx]
                         p_card = donor[_ci]
-                        if which_end == 2:
-                            new_source = [p_card, source[0], source[1]]
-                        else:
-                            new_source = [source[1], source[2], p_card]
+                        new_source = (
+                            [p_card, source[0], source[1]]
+                            if which_end == 2
+                            else [source[1], source[2], p_card])
                         if classify(new_source) != kind:
                             continue
+                        # Helper drop: src_idx + donor_idx
+                        # (descending so removals don't shift
+                        # each other), then append the rebuilt
+                        # source and shrunken donor.
+                        hi_lo = sorted((src_idx, donor_idx),
+                                       reverse=True)
+                        nh = list(helper)
+                        for i in hi_lo:
+                            nh = _without(nh, i)
+                        nh = nh + [new_source, new_donor]
                         for absorb_side in ("right", "left"):
-                            if absorb_side == "right":
-                                merged = list(target) + [stolen]
-                            else:
-                                merged = [stolen] + list(target)
+                            merged = (
+                                [*target, stolen]
+                                if absorb_side == "right"
+                                else [stolen, *target])
                             if not partial_ok(merged):
                                 continue
-                            nh = ([s for i, s in enumerate(helper)
-                                   if i != src_idx
-                                   and i != donor_idx]
-                                  + [new_source, new_donor])
-                            if bucket == "trouble":
-                                nt_base = [
-                                    s for i, s in enumerate(trouble)
-                                    if i != idx]
-                                ng = list(growing)
-                            else:
-                                nt_base = list(trouble)
-                                ng = [s for i, s in enumerate(growing)
-                                      if i != idx]
-                            if classify(merged) != "other":
-                                nc = complete + [merged]
-                                ng_final = ng
-                                graduated = True
-                            else:
-                                nc = list(complete)
-                                ng_final = ng + [merged]
-                                graduated = False
+                            nt_base, ng = _remove_absorber(
+                                bucket, idx, trouble, growing)
+                            ng_final, nc, graduated = _graduate(
+                                merged, ng, complete)
                             desc = {
                                 "type": "shift",
                                 "source": list(source),
@@ -370,74 +353,58 @@ def _enumerate_moves(state):
     # around the inserted card; both halves must be legal
     # length-3+. One physical gesture in actual Lyn Rummy
     # (drop the card into the middle of the run).
+    def _splice_halves(side, src, k, loose):
+        """Return (left, right) for the named splice side."""
+        if side == "left":
+            return list(src[:k]) + [loose], list(src[k:])
+        return list(src[:k]), [loose, *src[k:]]
+
+    def _splice_legal(left, right):
+        return (len(left) >= 3 and len(right) >= 3
+                and classify(left) != "other"
+                and classify(right) != "other")
+
     for ti, t in enumerate(trouble):
         if len(t) != 1:
             continue
         loose = t[0]
         for hi, src in enumerate(helper):
             n = len(src)
-            if n < 4:
-                continue
-            kind = classify(src)
-            if kind not in ("pure_run", "rb_run"):
+            if n < 4 or classify(src) not in ("pure_run", "rb_run"):
                 continue
             for k in range(1, n):
-                # C joins left half.
-                left = list(src[:k]) + [loose]
-                right = list(src[k:])
-                if (len(left) >= 3 and len(right) >= 3
-                        and classify(left) != "other"
-                        and classify(right) != "other"):
-                    nh = ([s for i, s in enumerate(helper)
-                           if i != hi] + [left, right])
-                    nt = [s for i, s in enumerate(trouble)
-                          if i != ti]
+                for side in ("left", "right"):
+                    left, right = _splice_halves(
+                        side, src, k, loose)
+                    if not _splice_legal(left, right):
+                        continue
+                    nh = _without(helper, hi) + [left, right]
+                    nt = _without(trouble, ti)
                     desc = {
                         "type": "splice",
                         "loose": loose,
                         "source": list(src),
-                        "k": k, "side": "left",
-                        "left_result": left,
-                        "right_result": right,
-                    }
-                    yield desc, (nh, nt, list(growing),
-                                 list(complete))
-                # C joins right half.
-                left = list(src[:k])
-                right = [loose] + list(src[k:])
-                if (len(left) >= 3 and len(right) >= 3
-                        and classify(left) != "other"
-                        and classify(right) != "other"):
-                    nh = ([s for i, s in enumerate(helper)
-                           if i != hi] + [left, right])
-                    nt = [s for i, s in enumerate(trouble)
-                          if i != ti]
-                    desc = {
-                        "type": "splice",
-                        "loose": loose,
-                        "source": list(src),
-                        "k": k, "side": "right",
+                        "k": k, "side": side,
                         "left_result": left,
                         "right_result": right,
                     }
                     yield desc, (nh, nt, list(growing),
                                  list(complete))
 
-    # Move type (b): push a TROUBLE card onto a HELPER stack.
+    # Move type (b): push a TROUBLE 1- or 2-partial onto a
+    # HELPER stack so the result stays legal (the helper grows
+    # by 1 or 2 cards).
     for ti, t in enumerate(trouble):
         if len(t) > 2:
             continue
         for hi, h in enumerate(helper):
             for side in ("right", "left"):
-                if side == "right":
-                    merged = list(h) + list(t)
-                else:
-                    merged = list(t) + list(h)
+                merged = ([*h, *t] if side == "right"
+                          else [*t, *h])
                 if classify(merged) == "other":
                     continue
-                nh = ([s for i, s in enumerate(helper)
-                       if i != hi] + [merged])
-                nt = [s for i, s in enumerate(trouble) if i != ti]
+                nh = _without(helper, hi) + [merged]
+                nt = _without(trouble, ti)
                 desc = {
                     "type": "push",
                     "trouble_before": list(t),
@@ -447,24 +414,21 @@ def _enumerate_moves(state):
                 }
                 yield desc, (nh, nt, list(growing), list(complete))
 
-    # Move type (b'): a GROWING 2-partial fixes itself by
-    # pushing onto a HELPER stack. The growing build absorbs
-    # the helper into a longer legal stack which graduates to
-    # COMPLETE. Symmetric to (b) but the source is in GROWING
-    # instead of TROUBLE — the expert "we already have the
-    # 2-partial AC2D, just engulf the next legal helper" idea.
+    # Move type (b'): a GROWING 2-partial engulfs a HELPER
+    # stack — the growing build absorbs the helper into a
+    # single legal stack and graduates to COMPLETE. The
+    # expert "we already have AC2D, just engulf [3S 4D 5C]"
+    # one-gesture move that lands a 5-long rb-run in one go.
     for gi, g in enumerate(growing):
         for hi, h in enumerate(helper):
             for side in ("right", "left"):
-                if side == "right":
-                    merged = list(h) + list(g)
-                else:
-                    merged = list(g) + list(h)
+                merged = ([*h, *g] if side == "right"
+                          else [*g, *h])
                 if classify(merged) == "other":
                     continue
-                nh = [s for i, s in enumerate(helper) if i != hi]
-                ng = [s for i, s in enumerate(growing) if i != gi]
-                nc = list(complete) + [merged]
+                nh = _without(helper, hi)
+                ng = _without(growing, gi)
+                nc = complete + [merged]
                 desc = {
                     "type": "push",
                     "trouble_before": list(g),
