@@ -238,6 +238,64 @@ def _enumerate_moves(state):
                 }
                 yield desc, (nh, nt, ng_final, nc)
 
+    # Move type (c): splice — insert a TROUBLE singleton
+    # into a HELPER pure/rb run length 4+. The run splits
+    # around the inserted card; both halves must be legal
+    # length-3+. One physical gesture in actual Lyn Rummy
+    # (drop the card into the middle of the run).
+    for ti, t in enumerate(trouble):
+        if len(t) != 1:
+            continue
+        loose = t[0]
+        for hi, src in enumerate(helper):
+            n = len(src)
+            if n < 4:
+                continue
+            kind = classify(src)
+            if kind not in ("pure_run", "rb_run"):
+                continue
+            for k in range(1, n):
+                # C joins left half.
+                left = list(src[:k]) + [loose]
+                right = list(src[k:])
+                if (len(left) >= 3 and len(right) >= 3
+                        and classify(left) != "other"
+                        and classify(right) != "other"):
+                    nh = ([s for i, s in enumerate(helper)
+                           if i != hi] + [left, right])
+                    nt = [s for i, s in enumerate(trouble)
+                          if i != ti]
+                    desc = {
+                        "type": "splice",
+                        "loose": loose,
+                        "source": list(src),
+                        "k": k, "side": "left",
+                        "left_result": left,
+                        "right_result": right,
+                    }
+                    yield desc, (nh, nt, list(growing),
+                                 list(complete))
+                # C joins right half.
+                left = list(src[:k])
+                right = [loose] + list(src[k:])
+                if (len(left) >= 3 and len(right) >= 3
+                        and classify(left) != "other"
+                        and classify(right) != "other"):
+                    nh = ([s for i, s in enumerate(helper)
+                           if i != hi] + [left, right])
+                    nt = [s for i, s in enumerate(trouble)
+                          if i != ti]
+                    desc = {
+                        "type": "splice",
+                        "loose": loose,
+                        "source": list(src),
+                        "k": k, "side": "right",
+                        "left_result": left,
+                        "right_result": right,
+                    }
+                    yield desc, (nh, nt, list(growing),
+                                 list(complete))
+
     # Move type (b): push a TROUBLE card onto a HELPER stack.
     for ti, t in enumerate(trouble):
         if len(t) > 2:
@@ -289,6 +347,13 @@ def describe_move(desc):
         return (f"{verb} {ec} from HELPER [{src}], "
                 f"absorb onto {bucket} [{tb}] → "
                 f"[{result}]{graduated}{spawned}")
+    if desc["type"] == "splice":
+        loose = label_d(desc["loose"])
+        src = _stack_label(desc["source"])
+        left = _stack_label(desc["left_result"])
+        right = _stack_label(desc["right_result"])
+        return (f"splice [{loose}] into HELPER [{src}] → "
+                f"[{left}] + [{right}]")
     if desc["type"] == "push":
         tb = _stack_label(desc["trouble_before"])
         target = _stack_label(desc["target_before"])
