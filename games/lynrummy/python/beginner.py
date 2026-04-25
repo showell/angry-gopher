@@ -393,6 +393,20 @@ def _looses(board):
     return [s[0] for s in board if len(s) == 1]
 
 
+def _result_priority(stack):
+    """Lower = preferred. Pure runs read most cleanly to a
+    human eye (single suit), so the search tries pure-result
+    moves first; sets next; rb_runs after; partials last."""
+    kind = classify(stack)
+    if kind == "pure_run":
+        return 0
+    if kind == "set":
+        return 1
+    if kind == "rb_run":
+        return 2
+    return 3
+
+
 def _try_extract(board, shapes, verbs=("peel", "pluck")):
     """Yield (verb_name, extracted_card, source_stack, new_board,
     taboo_partners) for every legal extraction whose card
@@ -444,10 +458,12 @@ def _try_pushes(board, taboo=None, only_loose=None):
                     if c in s2:
                         if classify(s2) == "other":
                             break
+                        priority = _result_priority(s2)
                         options.append(
-                            (c, old_target, side, new, list(s2)))
+                            (priority, c, old_target, side, new, list(s2)))
                         break
-    for c, tgt, side, new, result in options:
+    options.sort(key=lambda x: x[0])
+    for _, c, tgt, side, new, result in options:
         yield c, tgt, side, new, result
 
 
@@ -487,6 +503,7 @@ def _try_push_merges(board, taboo=None):
     legal stack such that the combined stack is legal. Both
     partial cards absorbed at once. Δ trouble = -2."""
     taboo = taboo or {}
+    options = []
     for src_si, src_stack in enumerate(board):
         if len(src_stack) != 2:
             continue
@@ -511,8 +528,13 @@ def _try_push_merges(board, taboo=None):
                 new = [s[:] for i, s in enumerate(board)
                        if i != src_si and i != tgt_si]
                 new.append(merged)
-                yield (list(src_stack), list(tgt_stack), side,
-                       new, merged)
+                priority = _result_priority(merged)
+                options.append(
+                    (priority, list(src_stack), list(tgt_stack),
+                     side, new, merged))
+    options.sort(key=lambda x: x[0])
+    for _, sp, tgt, side, new, result in options:
+        yield sp, tgt, side, new, result
 
 
 def _try_pulls(board, taboo=None, only_loose=None):
@@ -554,8 +576,7 @@ def _try_pulls(board, taboo=None, only_loose=None):
                     if c in s2:
                         if not partial_ok(s2):
                             break
-                        result_legal = classify(s2) != "other"
-                        priority = 0 if result_legal else 1
+                        priority = _result_priority(s2)
                         options.append(
                             (priority, c, old_trouble, side, new, list(s2)))
                         break
