@@ -473,20 +473,19 @@ def describe_move(desc):
                 f"absorb onto {bucket} [{tb}] → "
                 f"[{result}]{graduated}{spawned}")
     if desc["type"] == "shift":
-        src = _stack_label(desc["source"])
-        donor = _stack_label(desc["donor"])
         p = label_d(desc["p_card"])
         stolen = label_d(desc["stolen"])
-        new_src = _stack_label(desc["new_source"])
         new_donor = _stack_label(desc["new_donor"])
-        bucket = desc["target_bucket_before"]
-        tb = _stack_label(desc["target_before"])
-        merged = _stack_label(desc["merged"])
-        graduated = " [→COMPLETE]" if desc["graduated"] else ""
-        return (f"shift HELPER [{src}] using [{p}] from "
-                f"[{donor}] → new HELPER [{new_src}] + "
-                f"[{new_donor}]; pop [{stolen}] onto "
-                f"{bucket} [{tb}] → [{merged}]{graduated}")
+        new_source = desc["new_source"]
+        p_idx = new_source.index(desc["p_card"])
+        rest = [c for c in new_source if c != desc["p_card"]]
+        rest_label = " ".join(label_d(c) for c in rest)
+        if p_idx == 0:
+            shifted = f"{p} + {rest_label}"
+        else:
+            shifted = f"{rest_label} + {p}"
+        return (f"shift {p} to pop {stolen} "
+                f"[{new_donor} -> {shifted}]")
     if desc["type"] == "splice":
         loose = label_d(desc["loose"])
         src = _stack_label(desc["source"])
