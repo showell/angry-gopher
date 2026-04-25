@@ -447,6 +447,33 @@ def _enumerate_moves(state):
                 }
                 yield desc, (nh, nt, list(growing), list(complete))
 
+    # Move type (b'): a GROWING 2-partial fixes itself by
+    # pushing onto a HELPER stack. The growing build absorbs
+    # the helper into a longer legal stack which graduates to
+    # COMPLETE. Symmetric to (b) but the source is in GROWING
+    # instead of TROUBLE — the expert "we already have the
+    # 2-partial AC2D, just engulf the next legal helper" idea.
+    for gi, g in enumerate(growing):
+        for hi, h in enumerate(helper):
+            for side in ("right", "left"):
+                if side == "right":
+                    merged = list(h) + list(g)
+                else:
+                    merged = list(g) + list(h)
+                if classify(merged) == "other":
+                    continue
+                nh = [s for i, s in enumerate(helper) if i != hi]
+                ng = [s for i, s in enumerate(growing) if i != gi]
+                nc = list(complete) + [merged]
+                desc = {
+                    "type": "push",
+                    "trouble_before": list(g),
+                    "target_before": list(h),
+                    "result": merged,
+                    "side": side,
+                }
+                yield desc, (nh, list(trouble), ng, nc)
+
 
 def describe_move(desc):
     """Render a one-line DSL string for a move."""
