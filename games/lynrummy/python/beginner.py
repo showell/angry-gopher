@@ -654,18 +654,18 @@ def beginner_plan(board, *, max_compound=6, max_nodes=200_000,
             if found is not None:
                 return found
 
-        # HOBBLE (throwaway): Tier 0c push-merge disabled to
-        # validate the corpus benchmark is sensitive to verb
-        # changes. Revert this block after the experiment.
-        # for src_partial, target_before, side, after, result in \
-        #         _try_push_merges(board, taboo):
-        #     line = _push_merge_line(src_partial, target_before,
-        #                             side, result)
-        #     found = search(after,
-        #                    steps + [(line, after)],
-        #                    budget, taboo, visited)
-        #     if found is not None:
-        #         return found
+        # Tier 0c: free push-merge. A 2-partial trouble glues
+        # onto a legal stack such that the combined stack is
+        # legal. Both partial cards dissolve at once.
+        for src_partial, target_before, side, after, result in \
+                _try_push_merges(board, taboo):
+            line = _push_merge_line(src_partial, target_before,
+                                    side, result)
+            found = search(after,
+                           steps + [(line, after)],
+                           budget, taboo, visited)
+            if found is not None:
+                return found
 
         direct = neighbor_shapes(board)
         tiers = [
