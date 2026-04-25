@@ -26,9 +26,6 @@ narration line so a human can follow what the search is
 "thinking" about.
 """
 
-import heapq
-from itertools import count
-
 import beginner as b
 
 
@@ -302,64 +299,54 @@ def describe_move(desc):
 
 
 def _bfs_with_cap(initial, max_trouble, *, max_states, verbose):
-    """Inner BFS bounded by max_trouble. States whose trouble
-    count exceeds max_trouble never enter the frontier."""
+    """Pure BFS by program length. Bounded by max_trouble:
+    states whose total trouble exceeds the cap never enter
+    the frontier. At each level we expand EVERY program of
+    that length, generating all level+1 programs, before
+    looking at any longer programs. First victory found at
+    level N returns the (shortest-under-cap) plan."""
+    if _trouble_count(initial[1], initial[2]) > max_trouble:
+        return None, 0, 0
+    if _victory(initial[1], initial[2]):
+        return [], 0, 1
     seen = {_state_sig(*initial)}
-    counter = count()
-    frontier = []
-    init_tc = _trouble_count(initial[1], initial[2])
-    if init_tc > max_trouble:
-        return None, 0, 0  # initial already exceeds cap
-    heapq.heappush(frontier,
-                   (init_tc, next(counter), initial, []))
+    current_level = [(initial, [])]
     expansions = 0
-    over_cap = 0
-    while frontier:
-        tc, _, state, program = heapq.heappop(frontier)
-        helper, trouble, growing, complete = state
-        expansions += 1
+    level = 0
+    while current_level:
+        level += 1
         if verbose:
-            print(f"\n[#{expansions}] T={tc} "
-                  f"frontier={len(frontier)} "
-                  f"program={len(program)}-line")
-            print(f"  HELPER  ({len(helper)} stacks)")
-            print(f"  TROUBLE ({len(trouble)} stacks): "
-                  + ", ".join("[" + _stack_label(s) + "]"
-                              for s in trouble))
-            print(f"  GROWING ({len(growing)} stacks): "
-                  + ", ".join("[" + _stack_label(s) + "]"
-                              for s in growing))
-            print(f"  COMPLETE ({len(complete)} stacks): "
-                  + ", ".join("[" + _stack_label(s) + "]"
-                              for s in complete))
-            for i, line in enumerate(program, 1):
-                print(f"  {i}. {line}")
-        if _victory(trouble, growing):
-            return program, expansions, len(seen)
-        enumerated = 0
-        pushed = 0
-        for desc, new_state in _enumerate_moves(state):
-            enumerated += 1
-            new_tc = _trouble_count(new_state[1], new_state[2])
-            if new_tc > max_trouble:
-                over_cap += 1
-                continue
-            sig = _state_sig(*new_state)
-            if sig in seen:
-                continue
-            seen.add(sig)
-            heapq.heappush(frontier,
-                           (new_tc, next(counter), new_state,
-                            program + [describe_move(desc)]))
-            pushed += 1
+            print(f"\n--- level {level}: expanding "
+                  f"{len(current_level)} program(s) ---")
+        next_level = []
+        for state, program in current_level:
+            expansions += 1
+            for desc, new_state in _enumerate_moves(state):
+                _, t, g, _ = new_state
+                tc = _trouble_count(t, g)
+                if tc > max_trouble:
+                    continue
+                sig = _state_sig(*new_state)
+                if sig in seen:
+                    continue
+                seen.add(sig)
+                new_program = program + [describe_move(desc)]
+                if _victory(t, g):
+                    if verbose:
+                        print(f"  VICTORY at level {level}: "
+                              f"{len(new_program)}-line plan, "
+                              f"{expansions} expansions, "
+                              f"{len(seen)} states")
+                    return new_program, expansions, len(seen)
+                next_level.append((new_state, new_program))
+            if expansions >= max_states:
+                if verbose:
+                    print(f"  EXHAUSTED max_states={max_states}")
+                return None, expansions, len(seen)
         if verbose:
-            print(f"  → {enumerated} moves, {pushed} pushed, "
-                  f"{enumerated - pushed} dropped "
-                  f"(dedup or over-cap)")
-        if expansions >= max_states:
-            if verbose:
-                print(f"  EXHAUSTED max_states={max_states}")
-            return None, expansions, len(seen)
+            print(f"  level {level} → "
+                  f"{len(next_level)} program(s) at level {level + 1}")
+        current_level = next_level
     return None, expansions, len(seen)
 
 
