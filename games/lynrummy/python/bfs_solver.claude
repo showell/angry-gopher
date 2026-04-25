@@ -14,11 +14,23 @@ Solves single-card-trouble puzzles. State is a 4-tuple
   push-merges, no splits. Only further absorption.
 - COMPLETE: graduated GROWING stacks. Sealed forever.
 
-Two move types (must touch trouble):
-- (a) Absorb a neighbor into TROUBLE/GROWING. Source:
-  HELPER extract or TROUBLE singleton.
-- (b) Push TROUBLE singleton/2-partial onto a HELPER
-  stack such that result stays legal.
+Move types (each must touch trouble):
+- **Absorb a neighbor into TROUBLE/GROWING.** Source:
+  HELPER extract (peel/pluck/yank/steal) or TROUBLE
+  singleton (free pull). Target moves to GROWING (or
+  graduates to COMPLETE if the absorption made it legal).
+- **Push TROUBLE singleton/2-partial onto a HELPER stack**
+  such that result stays legal. TROUBLE entry dissolves;
+  HELPER stack grows. (Push-merge for 2-partials.)
+- **Splice**: insert a TROUBLE singleton into a HELPER
+  pure/rb run length 5+; the run splits at the insertion
+  into two legal length-3+ halves. One physical gesture in
+  Lyn Rummy. Often a 1-line solve.
+- **Shift**: when stealing from a length-3 pure/rb run, scan
+  HELPER for a peel-eligible donor whose card P fits at the
+  opposite end. The run shifts: peel P + push P + pop the
+  stolen card. Source stays length-3 legal. NO sacrifice.
+  The "8C pops JC" expert idiom.
 
 ## The search
 
@@ -50,19 +62,25 @@ narrating their thinking.
 solve(board, max_trouble_outer=10, verbose=True)
 ```
 
-## Corpus baseline (2026-04-25)
+## Corpus baseline (2026-04-25, post-splice/shift/sort)
 
-`corpus/baseline_bfs.txt`:
+`corpus/baseline_bfs.txt` (initial milestone; pre splice +
+shift). With the full verb set + within-level sort:
 
 ```
-total wall: 2.8s
+total wall: ~3.8s
 21/21 solved, 0 stuck
-depth distribution: 2:7, 3:5, 4:1, 5:3, 6:2, 7:2, 14:1
+depth distribution: 1:5, 2:6, 3:1, 4:2, 5:2, 6:2, 7:2, 14:1
 ```
 
-Compared to `beginner.py` (3.6s, 1 stuck): 0.8s faster,
-solves all puzzles, two found shorter plans, two slightly
-longer (length-vs-peak-trouble trade-off).
+5 puzzles solve in 1 line (splice gestures); 2 puzzles
+formerly stuck under beginner.py now solve.
+
+Live regenerable report: `corpus_report.py` →
+`claude-steve/random020.md`. Lab catalog source:
+`corpus_lab_catalog.py` → `../board-lab/puzzles.json`. The
+lab now ships the BFS plan as `agent_solution` per puzzle,
+rendered in a collapsed `<details>` block.
 
 ## Pointers
 
@@ -76,8 +94,11 @@ longer (length-vs-peak-trouble trade-off).
 
 ## TODO
 
-- Investigate the four plan-length regressions vs
-  beginner.py one at a time (see `feedback_two_axis_blur`).
-- Memoize across cap iterations.
+- Memoize across cap iterations (currently each cap pass
+  starts fresh).
+- Sidecars for the helper scripts (`corpus_report.py`,
+  `corpus_lab_catalog.py`).
 - Decide eventually whether to retire `beginner.py` or
   keep both as comparable baselines.
+- Consider a "shove" variant of SHIFT for length-4+ runs
+  (currently SHIFT only fires on length-3).
