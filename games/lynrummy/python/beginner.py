@@ -45,6 +45,15 @@ def label(c):
     return RANKS[v - 1] + SUITS[s]
 
 
+def label_d(c):
+    """Label that includes deck suffix when non-zero. Used
+    in DSL output where two cards of the same value+suit
+    can co-exist (one per deck) and need to be told apart."""
+    v, s, d = c
+    base = RANKS[v - 1] + SUITS[s]
+    return f"{base}:{d}" if d else base
+
+
 def show(board):
     for stack in board:
         print(" ".join(label(c) for c in stack))
@@ -289,12 +298,14 @@ def yank(board, c):
     return new
 
 
-def extend(board, c, target_sig, side):
-    """Extend loose `c` onto the stack whose card tuple at
-    position 0 equals `target_sig`. `side` is 'left' or 'right'."""
+def _absorb(board, c, target_sig, side):
+    """Move loose `c` onto the stack anchored by `target_sig`
+    on the named side. Mechanic for pulling the loose into
+    its destination — never narrated as a verb. The narrator
+    sees the trouble card as the actor doing the pull."""
     si_src, _ = _find(board, c)
     if len(board[si_src]) != 1:
-        raise ValueError(f"extend: {label(c)} is not a loose singleton")
+        raise ValueError(f"absorb: {label(c)} is not a loose singleton")
     si_tgt = None
     for i, s in enumerate(board):
         if i == si_src:
@@ -303,7 +314,7 @@ def extend(board, c, target_sig, side):
             si_tgt = i
             break
     if si_tgt is None:
-        raise ValueError(f"extend: no stack anchored by {label(target_sig)}")
+        raise ValueError(f"absorb: no stack anchored by {label(target_sig)}")
     new = [s[:] for s in board]
     loose = new.pop(si_src)
     if si_tgt > si_src:
@@ -317,18 +328,37 @@ def extend(board, c, target_sig, side):
 
 # --- Planner ---
 
-def _line_peel(c, source):
-    return f"peel {label(c)}"
+def _stack_label(stack):
+    return " ".join(label_d(x) for x in stack)
 
 
-def _line_pluck(c):
-    return f"pluck {label(c)}"
+def _stack_with_marker(stack, marker_card, marker_template):
+    """Render `stack` with `marker_card` wrapped in
+    `marker_template` (e.g. '[{}]' or '-{}-')."""
+    out = []
+    for c in stack:
+        s = label_d(c)
+        if c == marker_card:
+            s = marker_template.format(s)
+        out.append(s)
+    return " ".join(out)
 
 
-def _line_extend(c, old_target, new_result, side):
-    before = " ".join(label(x) for x in old_target)
-    after = " ".join(label(x) for x in new_result)
-    return f"extend {label(c)} on {before} to {after}"
+def _free_pull_line(loose, trouble_before, result):
+    return (f"{_stack_label(trouble_before)} pulls "
+            f"{_stack_with_marker(result, loose, '[{}]')}")
+
+
+def _compound_line(verb, ext_card, source, trouble_before, result):
+    """`5C 6C peel-pulls [4C] 5C 6C {-4C- 4D 4S 4H}` —
+    trouble-before is the subject; verb-pulls is the action;
+    the result stack shows the helper bracketed where it
+    landed; the source stack (in braces) shows the helper
+    struck through where it left."""
+    tb = _stack_label(trouble_before)
+    res = _stack_with_marker(result, ext_card, "[{}]")
+    src = _stack_with_marker(source, ext_card, "-{}-")
+    return f"{tb} {verb}-pulls {res} {{{src}}}"
 
 
 def _looses(board):
@@ -358,19 +388,27 @@ def _try_extract(board, shapes, verbs=("peel", "pluck")):
                 yield "steal", c, source, steal(board, c), partners
 
 
-def _try_extend(board, taboo=None):
-    """Yield (loose_card, target_stack, side, new_board,
-    result_stack). Extend targets are restricted to trouble
-    stacks. A loose may not rejoin a stack that contains any
-    of its taboo cards (cards it was estranged from via a
-    prior steal)."""
+def _try_pulls(board, taboo=None, only_loose=None):
+    """For each loose card and each trouble stack, yield a
+    pull: trouble absorbs the loose onto its stack. The
+    trouble stack is the actor; the loose is the helper.
+
+    `only_loose` restricts the loose to a single card —
+    used by compound moves so the just-extracted helper is
+    the one absorbed (and not the original trouble singleton
+    inverting the role).
+
+    Yield (loose, trouble_stack_before, side, new_board,
+    trouble_stack_after). A loose may not rejoin a stack
+    that contains any of its taboo cards."""
     taboo = taboo or {}
 
     def is_trouble(s):
         return classify(s) == "other"
 
     options = []
-    for c in _looses(board):
+    looses = [only_loose] if only_loose is not None else _looses(board)
+    for c in looses:
         forbidden = taboo.get(c, frozenset())
         for si, stack in enumerate(board):
             if not stack or stack[0] == c:
@@ -379,10 +417,10 @@ def _try_extend(board, taboo=None):
                 continue
             if any(x in forbidden for x in stack):
                 continue
-            old_target = list(stack)
+            old_trouble = list(stack)
             for side in ("right", "left"):
                 try:
-                    new = extend(board, c, stack[0], side)
+                    new = _absorb(board, c, stack[0], side)
                 except ValueError:
                     continue
                 for s2 in new:
@@ -392,7 +430,7 @@ def _try_extend(board, taboo=None):
                         result_legal = classify(s2) != "other"
                         priority = 0 if result_legal else 1
                         options.append(
-                            (priority, c, old_target, side, new, list(s2)))
+                            (priority, c, old_trouble, side, new, list(s2)))
                         break
     options.sort(key=lambda x: x[0])
     for _, c, tgt, side, new, result in options:
@@ -439,16 +477,12 @@ def beginner_plan(board, *, max_compound=6, max_nodes=200_000,
             return None
         visited.add(sig)
 
-        # Tier 0: free extend (no sacrifice). A loose card
-        # that already exists as a singleton can extend onto
-        # a trouble stack at no extract cost. Doesn't
-        # decrement budget — it's just consuming an existing
-        # loose without creating new trouble.
-        for loose, tgt, side, after, result in \
-                _try_extend(board, taboo):
-            line = (f"extend {label(loose)} on "
-                    f"{' '.join(label(x) for x in tgt)} to "
-                    f"{' '.join(label(x) for x in result)}")
+        # Tier 0: free pull. A loose already on the board
+        # gets pulled in by some trouble stack — no extract
+        # cost, no budget decrement.
+        for loose, trouble_before, side, after, result in \
+                _try_pulls(board, taboo):
+            line = _free_pull_line(loose, trouble_before, result)
             found = search(after,
                            steps + [(line, after)],
                            budget, taboo, visited)
@@ -469,10 +503,12 @@ def beginner_plan(board, *, max_compound=6, max_nodes=200_000,
                     new_taboo = dict(taboo)
                     new_taboo[ext_card] = new_taboo.get(
                         ext_card, frozenset()) | partners
-                for loose, _tgt, _side, after, result in \
-                        _try_extend(after_pp, new_taboo):
+                for loose, trouble_before, _side, after, result in \
+                        _try_pulls(after_pp, new_taboo,
+                                   only_loose=ext_card):
                     line = _compound_line(
-                        verb_name, ext_card, source, result)
+                        verb_name, ext_card, source,
+                        trouble_before, result)
                     found = search(after,
                                    steps + [(line, after)],
                                    budget - 1, new_taboo, visited)
@@ -502,13 +538,6 @@ def beginner_plan(board, *, max_compound=6, max_nodes=200_000,
         print(f"  [search] nodes={state['nodes']:>6}  "
               f"time={elapsed:.2f}s  {status}")
     return plan
-
-
-def _compound_line(verb_name, ext_card, source, result):
-    """`peel-pull 5C from 5C 6C 7C 8C 9C TC to 5C 6C` etc."""
-    src = " ".join(label(x) for x in source)
-    res = " ".join(label(x) for x in result)
-    return f"{verb_name}-pull {label(ext_card)} from {src} to {res}"
 
 
 # --- Harness ---
