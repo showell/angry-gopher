@@ -119,6 +119,35 @@ def build_d1_board_half_rb():
     return _wipe_locs(stacks)
 
 
+def build_d1_board_rigid_all_rb():
+    """Everything that was rigid pure in the previous variant is
+    now rigid rb. Every run weaves suits. Greedy merge has
+    little to work with — consecutive rb runs rarely stitch
+    because the color pattern at the join won't match."""
+    stacks = []
+    # rb [A 2 3] per suit assignment (use all 12 A/2/3 cards).
+    stacks.append(td.stack("AD:0 2C:0 3D:0"))
+    stacks.append(td.stack("AH:0 2S:0 3H:0"))
+    stacks.append(td.stack("AC:0 2D:0 3C:0"))
+    stacks.append(td.stack("AS:0 2H:0 3S:0"))
+    # rb [T J Q K] per suit.
+    stacks.append(td.stack("TD:0 JC:0 QD:0 KC:0"))
+    stacks.append(td.stack("TH:0 JS:0 QH:0 KS:0"))
+    stacks.append(td.stack("TC:0 JD:0 QC:0 KD:0"))
+    stacks.append(td.stack("TS:0 JH:0 QS:0 KH:0"))
+    # rb 4-5-6.
+    stacks.append(td.stack("4D:0 5C:0 6D:0"))
+    stacks.append(td.stack("4H:0 5S:0 6H:0"))
+    stacks.append(td.stack("4C:0 5D:0 6C:0"))
+    stacks.append(td.stack("4S:0 5H:0 6S:0"))
+    # rb 7-8-9.
+    stacks.append(td.stack("7D:0 8C:0 9D:0"))
+    stacks.append(td.stack("7H:0 8S:0 9H:0"))
+    stacks.append(td.stack("7C:0 8D:0 9C:0"))
+    stacks.append(td.stack("7S:0 8H:0 9S:0"))
+    return _wipe_locs(stacks)
+
+
 def build_d1_board_rigid_half_rb():
     """Take all-rigid-pure and flip the middle runs (4-5-6 and
     7-8-9 per suit) into rb 3-card runs that weave suits
@@ -236,9 +265,13 @@ def build_d1_board_all_rb():
     return _wipe_locs(stacks)
 
 
-# Default: use the half-rb variant for sweep.
+# Default: the "friendliest" canonical board — two sets
+# (4s, 8s) plus the longest possible pure run per suit on
+# either side of those gaps. Not adversarial; the baseline
+# shape a human would lay out after taking all the obvious
+# consolidations.
 def build_d1_board():
-    return build_d1_board_rigid_half_rb()
+    return build_d1_board_all_pure()
 
 
 def all_d2_cards():

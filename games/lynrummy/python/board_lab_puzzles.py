@@ -1,44 +1,31 @@
 """
 board_lab_puzzles.py — canonical catalog of BOARD_LAB puzzles.
 
-Python is the source of truth for puzzle definitions; this
-module produces a JSON blob that Go serves at
-`/gopher/board-lab/puzzles` and Elm fetches on page load.
-Letting Python own the catalog means:
+Python is the source of truth. This module writes a JSON blob
+that Go serves at `/gopher/board-lab/puzzles` and Elm fetches
+on page load. Sessions (human and agent) are keyed by
+`puzzle_name` in `lynrummy_puzzle_seeds` so `study.py` can
+join both sides of a puzzle.
 
-  - Agent-studies-human and human-plays-agent-replay can refer
-    to the same named puzzle without two catalogs drifting.
-  - A `puzzle_name` column in `lynrummy_puzzle_seeds` (added
-    in the companion schema change) makes SQLite sessions
-    queryable by puzzle — "show me every solution anyone
-    played on 'tight_right_edge'."
-  - Writing new puzzles goes here first; Elm picks them up
-    automatically on next build.
-
-Each puzzle has:
+Each puzzle:
 
   - `name` — stable machine id (snake_case).
-  - `title` — human-readable panel heading.
+  - `title` — panel heading.
   - `description` — one-paragraph prompt shown in the panel.
-  - `initial_state` — a full lynrummy.State blob ready for
-    POSTing to /new-puzzle-session.
+  - `initial_state` — full lynrummy.State blob, POST-ready.
 
 Run as a script to write the catalog JSON:
 
     python3 games/lynrummy/python/board_lab_puzzles.py \\
         --write games/lynrummy/board-lab/puzzles.json
 
-Run with no args to print it to stdout (useful for diffing).
+Run with no args to print it to stdout.
 """
 
 import argparse
 import json
 import os
 import sys
-
-
-# Card constants. Suits: Clubs=0, Diamonds=1, Spades=2, Hearts=3.
-C, D, S, H = 0, 1, 2, 3
 
 
 _VALUE_MAP = {"A": 1, "2": 2, "3": 3, "4": 4, "5": 5, "6": 6,
@@ -74,13 +61,11 @@ def _parse_cards(s, deck=0):
     return [_parse_card(t, deck=deck) for t in s.split()]
 
 
-# --- DSL-ish builders -----------------------------------------
+# --- Puzzle builders ------------------------------------------
 #
-# These let a puzzle read close to how you'd describe it:
+# Let a puzzle read close to how you'd describe it:
 #   stack("6H 7H 8H", at=(80, 500))
 #   hand("9H")
-# instead of the lower-level _card / _stack / _hand dict
-# constructions. Short of a real DSL; just readable Python.
 
 
 def stack(cards, at):
@@ -391,24 +376,23 @@ def _no_room_at_the_top():
     )
 
 
-# --- Crowded-target batch v2 (2026-04-23) -----------------------
+# --- Crowded-target batch (2026-04-23) -----------------------
 #
-# 15 carefully-distinct puzzles that each force a pre-move —
-# no near-duplicates. The v1 batch (26 puzzles) taught us:
+# 14 distinct puzzles, each forcing a pre-move. Principles
+# for adding more:
 #
 #   - "Neighbor on one side" isn't crowding if the hand card
-#     can attach to the other side. Real crowding requires
-#     the hand card's VALUE to force a specific attachment
-#     (for runs) OR both sides to be blocked (for sets, or
-#     for merged-stack footprints that exceed either direction).
-#   - Gaps of 30 px read as comfortably spaced. Tight
-#     interference needs gap ~15 px (barely legal at margin=7,
-#     visually too close for the merged stack).
+#     can attach to the OTHER side. Real crowding needs the
+#     hand card's VALUE to force a specific attachment (for
+#     runs) OR both sides blocked (for sets / merged-stack
+#     footprints that exceed either direction).
+#   - Gaps of 30 px read as roomy. Tight interference wants
+#     gap ~15 px — barely legal at margin=7 but visually too
+#     close for the merged stack.
 #   - Splits need VERTICAL neighbors: the extracted card
-#     stays in-row and needs somewhere to go. A neighbor
-#     just above the split row forces the route.
+#     stays in-row and has to be routed somewhere.
 #
-# Each puzzle tests a distinct spatial decision:
+# Distinct spatial decisions, one per puzzle:
 #   1  Wedged run, hand value-forces right attach
 #   2  Right-edge pinch — merge overflows the board
 #   3  Single-side block, hand value forces the blocked side
@@ -420,10 +404,9 @@ def _no_room_at_the_top():
 #   9  Both legal targets crowded — pick which to clear
 #  10  Big-stack footprint (5→6 card merge overflows)
 #  11  Split-for-set with vertical neighbor above split
-#  12  Peel-for-run where derived run can't fit beside donor
-#  13  Neighbor-as-candidate — the "blocker" is a merge option
-#  14  Middle target between two merge candidates — order choice
-#  15  Wedge requires vertical relocation (row fully packed)
+#  12  Neighbor-as-candidate — the "blocker" is a merge option
+#  13  Middle target between two merge candidates — order choice
+#  14  Wedge requires vertical relocation (row fully packed)
 
 
 def _wedged_run_right_forced():
@@ -743,47 +726,6 @@ def _wedge_needs_vertical_move():
         player_hand=hand("5C"),
     )
 
-
-def _peel_for_run_red_herrings():
-    # Variation of #23 with red-herring clutter around the
-    # target. Same trick (peel JD off J-set, build 9-T-J
-    # diamond run with hand), but the board is noisy enough
-    # that the pre-move "find a 4-side-clear home for the
-    # J-set" scan has to hunt past distractors. Lower rows
-    # stay open so a legal landing exists.
-    return puzzle(
-        name="peel_for_run_red_herrings",
-        title="Peel-for-run, red-herring clutter",
-        description=(
-            "Hand has 9D and TD. Peel JD off the 4-set of "
-            "Jacks and build a 9-T-J diamond run. The J-set "
-            "is surrounded on three sides by distractor sets "
-            "— you need to find a clear spot for the J-set "
-            "BEFORE the split so the extracted card has room."
-        ),
-        board=[
-            # Row 1 (top=30): six 3-sets packed across the top.
-            stack("2C 2D 2S", at=(30, 30)),
-            stack("3C 3D 3H", at=(30, 150)),
-            stack("4C 4H 4S", at=(30, 270)),
-            stack("5C 5D 5S", at=(30, 390)),
-            stack("6D 6H 6S", at=(30, 510)),
-            stack("7C 7D 7H", at=(30, 630)),
-            # Row 2 (top=120): J-set wedged between left/right
-            # distractors.
-            stack("8H 8D 8S", at=(120, 30)),
-            stack("JC JD JH JS", at=(120, 150)),
-            stack("QC QH QS", at=(120, 300)),
-            # Row 3 (top=210): more distractors, but thinning out.
-            stack("AD AH AS", at=(210, 50)),
-            stack("KC KH KS", at=(210, 250)),
-            stack("9C 9H 9S", at=(210, 450)),
-            # Row 4 (top=300): one more to test the scan doesn't
-            # stop at the first opening.
-            stack("TC TH TS", at=(300, 100)),
-        ],
-        player_hand=hand("9D TD"),
-    )
 
 
 def catalog():

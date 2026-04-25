@@ -742,6 +742,275 @@ def _find_peelable_at_value(board, value, exclude):
 
 
 # ============================================================
+# 5b. SPLICE_PURE_RUN. Hand has a card whose rank+suit
+# duplicates a MIDDLE card of a pure run on the board.
+# Splitting the run after the middle leaves the left half
+# (≥3 cards ending at that rank) as a valid standalone run;
+# the right half (≥2 cards starting one above that rank)
+# is transient and becomes a valid 3+ pure run when the hand
+# card is prepended. "Middle" = 2+ cards on each side.
+# ============================================================
+
+def splice_pure_run(hand, board):
+    for hc in hand:
+        hand_card = hc["card"]
+        for si, s in enumerate(board):
+            cards = [bc["card"] for bc in s["board_cards"]]
+            if _classify(cards) != "pure_run":
+                continue
+            n = len(cards)
+            for i in range(2, n - 2):
+                middle = cards[i]
+                if (middle["value"] == hand_card["value"]
+                        and middle["suit"] == hand_card["suit"]
+                        and middle["origin_deck"] != hand_card["origin_deck"]):
+                    return _emit_splice_pure_run(board, si, i, hand_card)
+    return None
+
+
+def _emit_splice_pure_run(board, stack_idx, middle_idx, hand_card):
+    """Split after the middle card, move the right half to an
+    open spot, merge the hand card onto its left to form the
+    new pure run."""
+    # Remember the first card of the right half so we can re-find
+    # the sub-stack after the split reshuffles indices.
+    original_cards = [bc["card"] for bc in board[stack_idx]["board_cards"]]
+    right_first = original_cards[middle_idx + 1]
+
+    sim = _copy_board(board)
+    prims = []
+
+    # 1. Split after the middle. Left = [0..middle] (valid 3+
+    #    pure run); right = [middle+1..end] (transient 2+ card
+    #    fragment that will grow after the hand merge).
+    prims.append({"action": "split", "stack_index": stack_idx,
+                  "card_index": middle_idx + 1})
+    sim = _apply_split(sim, stack_idx, middle_idx + 1)
+
+    # 2. Move the right fragment to an open spot sized for the
+    #    final 3-card run.
+    right_idx = _find_stack(sim, right_first)
+    new_loc = find_open_loc(sim, card_count=3)
+    prims.append({"action": "move_stack", "stack_index": right_idx,
+                  "new_loc": new_loc})
+    sim = _apply_move(sim, right_idx, new_loc)
+
+    # 3. Merge hand card onto the right fragment's left side.
+    right_idx = _find_stack(sim, right_first)
+    step_prims, sim = _plan_merge_hand(sim, right_idx, hand_card, "left")
+    prims.extend(step_prims)
+
+    _fix_geometry(sim, prims)
+    return prims
+
+
+# ============================================================
+# 5c. PURE_RUN_FROM_NEIGHBORS. Form a new 3-card pure run using
+# the hand card plus two same-suit neighbor-value partners
+# harvested from the board. Partner sources, in priority:
+#   - a loose singleton
+#   - a peelable edge of a pure or rb run (≥ 4 long)
+#   - a middle position of a set of ≥ 4 (slack drop, with
+#     reassembly of the two remnants into a legal size-3 set)
+# Target shape is pure run only.
+# ============================================================
+
+def pure_run_from_neighbors(hand, board):
+    for hc in hand:
+        hand_card = hc["card"]
+        v = hand_card["value"]
+        suit = hand_card["suit"]
+        for hpos in (0, 1, 2):
+            # Build the triple [v_low, v_mid, v_high] with hand
+            # at position hpos. v_mid is derived by stepping from
+            # hand_card's value; _successor/_predecessor handle
+            # K→A wrap.
+            v_mid = (v if hpos == 1 else
+                     _successor(v) if hpos == 0 else
+                     _predecessor(v))
+            v_low = _predecessor(v_mid)
+            v_high = _successor(v_mid)
+            vals = [v_low, v_mid, v_high]
+            partner_vals = [vals[i] for i in range(3) if i != hpos]
+            sources = _find_liberatable_partners(
+                board, partner_vals, suit, hand_card)
+            if sources is None:
+                continue
+            return _emit_pure_run_from_neighbors(
+                board, hand_card, vals, hpos, sources)
+    return None
+
+
+def _find_liberatable_partners(board, partner_vals, suit, exclude):
+    """For each value in partner_vals, find a same-suit card
+    that can be liberated cleanly. Returns a list of source
+    descriptors (same order as partner_vals) or None if any
+    partner isn't available.
+
+    Each descriptor: {"stack_sig", "card", "kind"} where kind is
+    'loose' | 'run_edge' | 'set_slack'. Stack index is re-derived
+    at emit time from stack_sig because splits shift indices."""
+    out = []
+    used_sigs = set()
+    for pv in partner_vals:
+        found = None
+        for s in board:
+            sig = _stack_sig(s)
+            if sig in used_sigs:
+                continue
+            cards = [bc["card"] for bc in s["board_cards"]]
+            n = len(cards)
+            kind = _classify(cards)
+            for ci, c in enumerate(cards):
+                if c["value"] != pv or c["suit"] != suit:
+                    continue
+                if _card_eq(c, exclude):
+                    continue
+                src_kind = _available_source_kind(kind, n, ci)
+                if src_kind is None:
+                    continue
+                found = {"stack_sig": sig, "card": c, "kind": src_kind}
+                break
+            if found is not None:
+                break
+        if found is None:
+            return None
+        out.append(found)
+        used_sigs.add(found["stack_sig"])
+    return out
+
+
+def _available_source_kind(kind, n, ci):
+    if n == 1:
+        return "loose"
+    if kind in ("pure_run", "rb_run") and n >= 4 and (ci == 0 or ci == n - 1):
+        return "run_edge"
+    if kind == "set" and n >= 4:
+        return "set_slack"
+    return None
+
+
+def _liberate_partner(sim, src, prims):
+    """Reduce the partner card to a loose singleton in `sim`,
+    appending primitives to `prims`. Returns (sim, card)."""
+    target_card = src["card"]
+    kind = src["kind"]
+    if kind == "loose":
+        return sim, target_card
+
+    si = _stack_index_by_sig(sim, src["stack_sig"])
+    cards = [bc["card"] for bc in sim[si]["board_cards"]]
+    n = len(cards)
+    ci = next(i for i, c in enumerate(cards) if _card_eq(c, target_card))
+
+    if kind == "run_edge":
+        # n >= 4 guaranteed; ci == 0 or n-1.
+        split_ci = 0 if ci == 0 else ci
+        prims.append({"action": "split", "stack_index": si,
+                      "card_index": split_ci})
+        sim = _apply_split(sim, si, split_ci)
+        return sim, target_card
+
+    # set_slack
+    if ci == 0:
+        prims.append({"action": "split", "stack_index": si, "card_index": 0})
+        sim = _apply_split(sim, si, 0)
+        return sim, target_card
+    if ci == n - 1:
+        prims.append({"action": "split", "stack_index": si, "card_index": ci})
+        sim = _apply_split(sim, si, ci)
+        return sim, target_card
+
+    # Middle of set. Pre-move the donor (mid-stack splits can
+    # bump neighbors unpredictably; follow Steve's 2026-04-23
+    # mid-split rule).
+    others = [s for i2, s in enumerate(sim) if i2 != si]
+    new_loc = find_open_loc(others, card_count=n)
+    if new_loc != sim[si]["loc"]:
+        prims.append({"action": "move_stack", "stack_index": si,
+                      "new_loc": new_loc})
+        sim = _apply_move(sim, si, new_loc)
+        si = _find_stack(sim, target_card)
+
+    # Remember anchor cards for both remnants so we can re-find
+    # them after the splits shift indices.
+    pre_cards = [bc["card"] for bc in sim[si]["board_cards"]]
+    tail_first = pre_cards[ci + 1]  # first card of the above-target tail
+    below_first = pre_cards[0]      # first card of the below-target remnant
+
+    # Split at ci+1: left = [0..ci] (target at tail), right = [ci+1..].
+    prims.append({"action": "split", "stack_index": si,
+                  "card_index": ci + 1})
+    sim = _apply_split(sim, si, ci + 1)
+    left_idx = _find_stack(sim, target_card)
+    tail_ci = len(sim[left_idx]["board_cards"]) - 1
+    # Split off the target from its new tail.
+    prims.append({"action": "split", "stack_index": left_idx,
+                  "card_index": tail_ci})
+    sim = _apply_split(sim, left_idx, tail_ci)
+
+    # Reassemble the two remnants into a legal size-(n-1) set by
+    # merging the above-target tail onto the below-target piece.
+    below_idx = _find_stack(sim, below_first)
+    tail_idx = _find_stack(sim, tail_first)
+    prims.append({"action": "merge_stack", "source_stack": tail_idx,
+                  "target_stack": below_idx, "side": "right"})
+    sim = _apply_merge_stack(sim, tail_idx, below_idx, "right")
+    return sim, target_card
+
+
+def _emit_pure_run_from_neighbors(board, hand_card, vals, hpos, sources):
+    """Build the pure run [v_low, v_mid, v_high] incrementally.
+    Anchor = lower-valued partner (always sources[0] since
+    partner_vals is in value order). Add cards rightward in
+    value order, inserting the hand card at position hpos."""
+    sim = _copy_board(board)
+    prims = []
+
+    partner_cards = []
+    for src in sources:
+        sim, pc = _liberate_partner(sim, src, prims)
+        partner_cards.append(pc)
+
+    anchor_card = partner_cards[0]
+    other_card = partner_cards[1]
+    anchor_idx = _find_stack(sim, anchor_card)
+
+    # Park anchor at an open spot sized for 3.
+    new_loc = find_open_loc(sim, card_count=3)
+    if new_loc != sim[anchor_idx]["loc"]:
+        prims.append({"action": "move_stack", "stack_index": anchor_idx,
+                      "new_loc": new_loc})
+        sim = _apply_move(sim, anchor_idx, new_loc)
+        anchor_idx = _find_stack(sim, anchor_card)
+
+    if hpos == 0:
+        # [hand, anchor, other]
+        step_prims, sim = _plan_merge_hand(sim, anchor_idx, hand_card, "left")
+        prims.extend(step_prims)
+    elif hpos == 1:
+        # [anchor, hand, other]
+        step_prims, sim = _plan_merge_hand(sim, anchor_idx, hand_card, "right")
+        prims.extend(step_prims)
+    # hpos == 2: hand goes last; add other first.
+
+    anchor_idx = _find_stack(sim, anchor_card)
+    other_idx = _find_stack(sim, other_card)
+    prims.append({"action": "merge_stack", "source_stack": other_idx,
+                  "target_stack": anchor_idx, "side": "right"})
+    sim = _apply_merge_stack(sim, other_idx, anchor_idx, "right")
+
+    if hpos == 2:
+        # [anchor, other, hand]
+        anchor_idx = _find_stack(sim, anchor_card)
+        step_prims, sim = _plan_merge_hand(sim, anchor_idx, hand_card, "right")
+        prims.extend(step_prims)
+
+    _fix_geometry(sim, prims)
+    return prims
+
+
+# ============================================================
 # Shared emitter: extract two board targets, combine with one
 # hand card (split_for_set, peel_for_run).
 # ============================================================
@@ -1142,13 +1411,15 @@ def _emit_loose_move(board, src_si, src_ci, peeled, dst_si,
 # ============================================================
 
 TRICK_ORDER = [
-    ("direct_play",      direct_play),
-    ("hand_stacks",      hand_stacks),
-    ("pair_peel",        pair_peel),
-    ("split_for_set",    split_for_set),
-    ("peel_for_run",     peel_for_run),
-    ("rb_swap",          rb_swap),
-    ("loose_card_play",  loose_card_play),
+    ("direct_play",               direct_play),
+    ("hand_stacks",               hand_stacks),
+    ("splice_pure_run",           splice_pure_run),
+    ("pure_run_from_neighbors",   pure_run_from_neighbors),
+    ("pair_peel",                 pair_peel),
+    ("split_for_set",             split_for_set),
+    ("peel_for_run",              peel_for_run),
+    ("rb_swap",                   rb_swap),
+    ("loose_card_play",           loose_card_play),
 ]
 
 
