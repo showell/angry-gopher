@@ -122,10 +122,40 @@ def _verb_for(kind, n, ci):
     return None
 
 
+def _peelable_index(helper):
+    """Map (value, suit) → list of (donor_idx, ci, new_donor)
+    for every card in HELPER that can be peeled WITHOUT
+    source damage:
+      - Set length 4+: any position; new_donor is the set
+        minus that card.
+      - Pure/rb run length 4+: end positions only;
+        new_donor is the run minus the end card.
+    Used by SHIFT (and potentially others) for O(1) lookup
+    instead of re-scanning all HELPER stacks per move."""
+    out = {}
+    for di, donor in enumerate(helper):
+        n = len(donor)
+        if n < 4:
+            continue
+        kind = classify(donor)
+        if kind == "set":
+            for ci, c in enumerate(donor):
+                out.setdefault((c[0], c[1]), []).append(
+                    (di, ci, [x for x in donor if x != c]))
+        elif kind in ("pure_run", "rb_run"):
+            for ci in (0, n - 1):
+                c = donor[ci]
+                new_donor = donor[1:] if ci == 0 else donor[:-1]
+                out.setdefault((c[0], c[1]), []).append(
+                    (di, ci, new_donor))
+    return out
+
+
 def _enumerate_moves(state):
     """Yield (description_dict, new_state) for every legal
     1-line extension."""
     helper, trouble, growing, complete = state
+    peelable = _peelable_index(helper)
 
     # All targets for absorption (move type a). Each entry:
     # (bucket_name, idx_in_bucket, target_stack).
@@ -275,85 +305,63 @@ def _enumerate_moves(state):
                     needed_suits = tuple(
                         s for s in range(4)
                         if (s in b.RED) != anchor_red)
-                # Scan HELPER for a peel-eligible donor with P.
-                for donor_idx, donor in enumerate(helper):
-                    if donor_idx == src_idx:
-                        continue
-                    donor_kind = classify(donor)
-                    donor_n = len(donor)
-                    p_card = None
-                    new_donor = None
-                    if donor_kind == "set" and donor_n >= 4:
-                        for ci, c in enumerate(donor):
-                            if (c[0] == p_value
-                                    and c[1] in needed_suits):
-                                p_card = c
-                                new_donor = [x for x in donor
-                                             if x != c]
-                                break
-                    elif (donor_kind in ("pure_run", "rb_run")
-                            and donor_n >= 4):
-                        for ci in (0, donor_n - 1):
-                            c = donor[ci]
-                            if (c[0] == p_value
-                                    and c[1] in needed_suits):
-                                p_card = c
-                                if ci == 0:
-                                    new_donor = donor[1:]
-                                else:
-                                    new_donor = donor[:-1]
-                                break
-                    if p_card is None:
-                        continue
-                    # Build the shifted source.
-                    if which_end == 2:
-                        new_source = [p_card, source[0], source[1]]
-                    else:
-                        new_source = [source[1], source[2], p_card]
-                    # Sanity: new_source must classify same kind.
-                    if classify(new_source) != kind:
-                        continue
-                    # Absorb the stolen card onto target.
-                    for absorb_side in ("right", "left"):
-                        if absorb_side == "right":
-                            merged = list(target) + [stolen]
-                        else:
-                            merged = [stolen] + list(target)
-                        if not partial_ok(merged):
+                # Lookup donor candidates via the peelable
+                # index — O(1) per (value, suit) pair.
+                for p_suit in needed_suits:
+                    for donor_idx, _ci, new_donor in \
+                            peelable.get((p_value, p_suit), ()):
+                        if donor_idx == src_idx:
                             continue
-                        nh = ([s for i, s in enumerate(helper)
-                               if i != src_idx and i != donor_idx]
-                              + [new_source, new_donor])
-                        if bucket == "trouble":
-                            nt_base = [s for i, s in enumerate(trouble)
-                                       if i != idx]
-                            ng = list(growing)
+                        donor = helper[donor_idx]
+                        p_card = donor[_ci]
+                        if which_end == 2:
+                            new_source = [p_card, source[0], source[1]]
                         else:
-                            nt_base = list(trouble)
-                            ng = [s for i, s in enumerate(growing)
-                                  if i != idx]
-                        if classify(merged) != "other":
-                            nc = complete + [merged]
-                            ng_final = ng
-                            graduated = True
-                        else:
-                            nc = list(complete)
-                            ng_final = ng + [merged]
-                            graduated = False
-                        desc = {
-                            "type": "shift",
-                            "source": list(source),
-                            "donor": list(donor),
-                            "stolen": stolen,
-                            "p_card": p_card,
-                            "new_source": new_source,
-                            "new_donor": new_donor,
-                            "target_before": list(target),
-                            "target_bucket_before": bucket,
-                            "merged": merged,
-                            "graduated": graduated,
-                        }
-                        yield desc, (nh, nt_base, ng_final, nc)
+                            new_source = [source[1], source[2], p_card]
+                        if classify(new_source) != kind:
+                            continue
+                        for absorb_side in ("right", "left"):
+                            if absorb_side == "right":
+                                merged = list(target) + [stolen]
+                            else:
+                                merged = [stolen] + list(target)
+                            if not partial_ok(merged):
+                                continue
+                            nh = ([s for i, s in enumerate(helper)
+                                   if i != src_idx
+                                   and i != donor_idx]
+                                  + [new_source, new_donor])
+                            if bucket == "trouble":
+                                nt_base = [
+                                    s for i, s in enumerate(trouble)
+                                    if i != idx]
+                                ng = list(growing)
+                            else:
+                                nt_base = list(trouble)
+                                ng = [s for i, s in enumerate(growing)
+                                      if i != idx]
+                            if classify(merged) != "other":
+                                nc = complete + [merged]
+                                ng_final = ng
+                                graduated = True
+                            else:
+                                nc = list(complete)
+                                ng_final = ng + [merged]
+                                graduated = False
+                            desc = {
+                                "type": "shift",
+                                "source": list(source),
+                                "donor": list(donor),
+                                "stolen": stolen,
+                                "p_card": p_card,
+                                "new_source": new_source,
+                                "new_donor": new_donor,
+                                "target_before": list(target),
+                                "target_bucket_before": bucket,
+                                "merged": merged,
+                                "graduated": graduated,
+                            }
+                            yield desc, (nh, nt_base, ng_final, nc)
 
     # Move type (c): splice — insert a TROUBLE singleton
     # into a HELPER pure/rb run length 4+. The run splits
