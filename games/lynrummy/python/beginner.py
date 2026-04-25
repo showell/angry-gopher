@@ -388,6 +388,47 @@ def _try_extract(board, shapes, verbs=("peel", "pluck")):
                 yield "steal", c, source, steal(board, c), partners
 
 
+def _try_pushes(board, taboo=None, only_loose=None):
+    """Push: a loose card lands on a LEGAL stack such that
+    the result is also legal (3-set growing to 4-set, run
+    growing by one card on an end). Push is Δ trouble ≤ 0:
+    the loose dissolves into a legal stack with no source-
+    side disruption."""
+    taboo = taboo or {}
+    options = []
+    looses = [only_loose] if only_loose is not None else _looses(board)
+    for c in looses:
+        forbidden = taboo.get(c, frozenset())
+        for si, stack in enumerate(board):
+            if not stack or stack[0] == c:
+                continue
+            if classify(stack) == "other":
+                continue
+            if any(x in forbidden for x in stack):
+                continue
+            old_target = list(stack)
+            for side in ("right", "left"):
+                try:
+                    new = _absorb(board, c, stack[0], side)
+                except ValueError:
+                    continue
+                for s2 in new:
+                    if c in s2:
+                        if classify(s2) == "other":
+                            break
+                        options.append(
+                            (c, old_target, side, new, list(s2)))
+                        break
+    for c, tgt, side, new, result in options:
+        yield c, tgt, side, new, result
+
+
+def _push_line(loose, target_before, result):
+    return (f"{label_d(loose)} pushes-onto "
+            f"{_stack_with_marker(result, loose, '[{}]')} "
+            f"{{{_stack_label(target_before)}}}")
+
+
 def _try_pulls(board, taboo=None, only_loose=None):
     """For each loose card and each trouble stack, yield a
     pull: trouble absorbs the loose onto its stack. The
@@ -477,12 +518,24 @@ def beginner_plan(board, *, max_compound=6, max_nodes=200_000,
             return None
         visited.add(sig)
 
-        # Tier 0: free pull. A loose already on the board
+        # Tier 0a: free pull. A loose already on the board
         # gets pulled in by some trouble stack — no extract
         # cost, no budget decrement.
         for loose, trouble_before, side, after, result in \
                 _try_pulls(board, taboo):
             line = _free_pull_line(loose, trouble_before, result)
+            found = search(after,
+                           steps + [(line, after)],
+                           budget, taboo, visited)
+            if found is not None:
+                return found
+
+        # Tier 0b: free push. A loose lands on a legal stack
+        # whose result is also legal — orphan absorbed, no
+        # source-side disruption, no budget decrement.
+        for loose, target_before, side, after, result in \
+                _try_pushes(board, taboo):
+            line = _push_line(loose, target_before, result)
             found = search(after,
                            steps + [(line, after)],
                            budget, taboo, visited)
