@@ -51,6 +51,33 @@ return a plan.
   exposed.
 - BFS-by-length finds the shortest plan within the cap.
 
+## FP discipline (2026-04-25 prep for Elm port)
+
+Every state-transition helper takes state, returns state,
+no mutation. Lists stay lists (idiomatic Python) but are
+treated as immutable values by convention — no `.append`,
+no `.sort()`, no in-place reassignment. Construction goes
+through concatenation (`a + b`), spreads (`[*a, x]`), and
+comprehensions.
+
+Pure helpers extracted from the move-enumeration ladder:
+- `_extract_pieces(source, ci, verb)` — verb-keyed
+  decomposition of a source stack into helper pieces +
+  spawned trouble pieces.
+- `_without(stacks, idx)` — drop one slot.
+- `_remove_absorber(bucket, idx, trouble, growing)` — drop
+  the absorber from its bucket, leave the other unchanged.
+- `_graduate(merged, growing, complete)` — route a merged
+  result to GROWING (still partial) or COMPLETE (legal).
+
+These collapse the bucket/graduation ladders that used to
+repeat across extract_absorb, free_pull, and shift. The
+shape is what we'll port to Elm.
+
+Test contracts: `test_bfs_extract.py` (15 tests) covers
+`_extract_pieces` per verb and pins purity on `_do_extract`,
+`_remove_absorber`, `_graduate`.
+
 ## Instrumentation
 
 Verbose mode emits a narration line per BFS expansion:
