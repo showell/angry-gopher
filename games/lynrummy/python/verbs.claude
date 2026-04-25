@@ -61,9 +61,13 @@ all the way through the trick.
   is documented there + at the source.
 - `primitives.claude` — the PRIMITIVE → GESTURE layer.
 - `bfs_play.claude` — sole driver today.
+- `test_verbs.py` — 7 tests covering all 5 desc types
+  (extract_absorb / free_pull / push / splice / shift) with
+  hand-built boards.
 
 ## TODO
 
 - The translator hasn't been exercised against splice in a
   live game — only the corpus's existing splice puzzles have
   short plans where it triggers. Verify on a longer plan.
+- Port to Elm alongside `bfs_solver`.

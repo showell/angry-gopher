@@ -1,14 +1,23 @@
 # LynRummy — Python agent subsystem
 
-**Status:** `STILL_EVOLVING`. The planner half is in active
-flux (pull/push DSL + IDDFS); the trick-engine half is being
-phased out.
+**Status:** `WORKHORSE` for the BFS planner; older trick
+engine + DSL pipeline kept as comparable baselines pending
+retirement decisions. Currently the canonical home for
+strategic-brain experimentation; will be the durable
+iteration surface even after the Elm port lands.
 
 This subtree is the Python LynRummy agent — a complete player
 without a presentation layer. It chooses legal moves with its
 own planning logic, validates them against its own referee
 equivalent, keeps its own action log, and posts events to the
 server for later witness.
+
+The agent code follows a disciplined functional-Python style:
+pure helpers, lists treated as immutable values, state
+threaded explicitly. See `bfs_solver.claude` and
+`verbs.claude` for the conventions. The discipline is by
+convention, not by `frozen=True` types — Elm-readable shape,
+Python-idiomatic mechanics.
 
 ## Before reading the Python code
 
@@ -70,16 +79,21 @@ Concrete examples of what this buys us:
 
 ## Then — read sidecars
 
-Sidecar coverage is uneven right now. Most legacy modules
-have a `.claude`; several recent additions (planner +
-hunt drivers) don't yet. `tools/sidecar_audit` flags the
-gap.
+Full sidecar coverage as of 2026-04-25. Run
+`python3 ../../../tools/sidecar_audit.py` to verify.
 
 Ordered by "load-bearing first":
 
 - `bfs_solver.claude` — the four-bucket BFS planner.
   Current strategic brain. **Start here for any
   planner-side work.**
+- `verbs.claude` — VERB → PRIMITIVE library; decomposes a
+  BFS desc into UI primitives via content-based stack lookup.
+- `primitives.claude` — PRIMITIVE → GESTURE library;
+  to_wire_shape / apply_locally / send_one. Canonical send
+  path; auto_player imports from here.
+- `bfs_play.claude` — the replay driver: BFS plan executed
+  on the actual board, watchable in the browser.
 - `beginner.claude` — the IDDFS predecessor. Kept for now
   as a comparable baseline; same corpus minus 1 stuck.
 - `strategy.claude` — the trick engine. PLANNED-LEGACY but
@@ -106,25 +120,38 @@ Ordered by "load-bearing first":
 - Repo-wide tooling at `../../../tools/sidecar_audit.{claude,py}`
   — drift + coverage check across all sidecars.
 
-### Hunt drivers (no sidecars yet — TODO)
+### Corpus runners
 
-`complex_hunt.py`, `deep_hunt.py`, `one_card_hunt.py` —
-drive `auto_player` on randomized deals until a stall, then
-ask `beginner_plan` if it can rescue. Used to harvest
-puzzles for the corpus.
+- `corpus_report.claude` — runs `bfs_solver` against
+  `corpus/sessions.txt` and emits a Markdown report.
+  Regenerable in ~3-5s.
+- `corpus_lab_catalog.claude` — same corpus → BOARD_LAB
+  gallery JSON, with the BFS plan attached as
+  `agent_solution` per puzzle.
+- `run_corpus_v2.claude` — beginner-side counterpart.
+- `beginner_corpus.claude` — hand-built fixtures for
+  beginner.py before/after testing.
 
-### Corpus (no sidecar yet — TODO)
+### Hunt drivers
 
-`beginner_corpus.py` — deterministic before/after harness
-for `beginner.py` changes. Canonical 4/8 sweep + gap cases.
-Pipe to file, `git diff` to compare runs.
+`beginner_hunt.claude`, `complex_hunt.claude`,
+`deep_hunt.claude`, `one_card_hunt.claude` — drive
+`auto_player` on randomized deals until a stall, then ask
+`beginner_plan` if it can rescue. Used to harvest the
+random-deal corpus.
+
+### Older DSL pipeline (retirement TBD)
+
+`dsl_planner.claude`, `dsl_player.claude`,
+`board_classifier.claude`, `dsl.claude` — peel/park/extend/
+dissolve/home verb vocabulary, pre-dates `bfs_solver`. Kept
+as a comparable baseline; not load-bearing.
 
 ### Legacy puzzle harness (queued for purge)
 
-`puzzles.claude`, `puzzle_harness.claude`, `compare.claude`,
-`dsl.claude` — pre-BOARD_LAB Python cluster. Confirmed
-unreferenced from current BOARD_LAB modules during the
-2026-04-24 audit. See MINI_PROJECTS / PURGE_LEGACY_PUZZLE_HARNESS.
+`puzzles.claude`, `puzzle_harness.claude`, `compare.claude`
+— pre-BOARD_LAB Python cluster. See MINI_PROJECTS /
+PURGE_LEGACY_PUZZLE_HARNESS.
 
 ## The DSL conformance bridge
 
@@ -136,12 +163,32 @@ files. Central cross-language bridge per `BRIDGES.md`.
 **Caveat:** the hint-scenarios half is coupled to the
 trick engine and will change as that's phased out.
 
+## Test contracts
+
+The Python suite (run each test file directly) covers:
+
+- `test_bfs_extract.py` — 15 tests pinning
+  `_extract_pieces` per verb plus purity contracts.
+- `test_bfs_enumerate.py` — 6 hand-built snapshot tests
+  for `_enumerate_moves` across all five move types.
+- `test_verbs.py` — 7 tests across all 5 BFS desc types,
+  asserting both primitive shape and post-trick geometry.
+- `test_plan_merge_hand.py` — 3 tests for the geometry
+  pre-flight planner.
+- `test_follow_up_merges.py` — 7 tests for the post-trick
+  follow-up scan.
+- `test_dsl_conformance.py` — 18 cross-language hint
+  scenarios (compiled from the conformance DSL).
+- `test_gesture_synth.py` — 7 tests for drag-path synthesis.
+
+These are the snapshots the upcoming Elm port will mirror.
+
 ## TODO
 
-- Sidecars for `beginner_corpus.py`, the three hunt
-  drivers, `dealer.py`, `show_board.py`, `dsl_planner.py`,
-  `dsl_player.py`, and the analysis scripts.
 - Tag `strategy.claude` and friends PLANNED-LEGACY once the
   abandonment plan is concrete.
-- Cross-link to the `BRIDGES.md` principle from the
-  conformance-tooling entries.
+- Decide the older DSL pipeline's fate
+  (`dsl_planner.py` / `dsl_player.py` /
+  `board_classifier.py`) — retire or keep as baseline.
+- Begin the Elm port — see `bfs_solver.claude` § Port to
+  Elm.

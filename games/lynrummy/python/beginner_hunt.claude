@@ -1,0 +1,28 @@
+just_use beginner_hunt.py
+
+# label: TOOL
+# role: harvest puzzles via three-competitor stall comparison
+
+Random-deal a game; drive play with `strategy.choose_play`.
+When the tricks engine stalls AND the deck has ≤49 cards, run
+`beginner.py` on the current state. Three outcomes per stall:
+
+- tricks stalled, beginner solves   → beginner > tricks
+- both stall                        → puzzle candidate for Steve
+- tricks solves                     → not a stuck point
+
+Used to harvest the random-deal corpus that lives in
+`corpus/sessions.txt`. A spike-era helper, kept around for
+re-harvesting when the corpus needs refreshing.
+
+```
+python3 beginner_hunt.py [--games N]
+```
+
+## Pointers
+
+- Sibling hunt scripts: `complex_hunt.py`, `deep_hunt.py`,
+  `one_card_hunt.py` — each tunes the stall criteria
+  differently.
+- Corpus consumers: `corpus_report.py`,
+  `corpus_lab_catalog.py`, `bfs_solver.py`.

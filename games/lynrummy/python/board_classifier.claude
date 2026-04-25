@@ -1,0 +1,19 @@
+just_use board_classifier.py
+
+# label: EARLY
+# role: tag every card and stack on a board with strategic adjectives
+
+Produces the typed-board view a planner reads: per-card and
+per-stack adjective sets (`loose`, `peelable`, etc., per
+`random008.md`'s vocabulary). The "what roles can each
+thing play?" layer — derived once instead of recomputed
+per-verb.
+
+Currently used by `dsl_planner.py`. The newer `bfs_solver.py`
+operates on the 4-bucket model directly and does not consume
+this typed view.
+
+## TODO
+
+- Decide whether this stays load-bearing for the older DSL
+  pipeline or retires alongside `dsl_planner.py`.

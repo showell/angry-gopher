@@ -1,0 +1,20 @@
+just_use dealer.py
+
+# label: WORKHORSE
+# role: random-deal initial state generator for self-play
+
+Produces a random LynRummy initial state — board layout +
+hand cards — that auto_player consumes when starting a fresh
+session. Each call returns a new pseudo-random deal.
+
+The Go server has its own dealer with a fixed seed; relying
+on it would converge every self-play game to the same stuck
+states. Python's `dealer.deal()` exists so the agent's
+self-play actually explores different draws.
+
+## Pointers
+
+- Consumers: `auto_player.py`, several hunt scripts
+  (`beginner_hunt.py`, `complex_hunt.py`, etc.).
+- Companion: `feedback_random_vs_deterministic` (the deal
+  divergence story).

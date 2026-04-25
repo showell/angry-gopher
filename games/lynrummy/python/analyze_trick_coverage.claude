@@ -1,0 +1,12 @@
+just_use analyze_trick_coverage.py
+
+# label: TOOL
+# role: redundancy probe — find tricks whose firings are always shadowed
+
+Plays N games; at every decision point records the set of
+tricks that pass invariant. Trick A is a redundancy candidate
+if every state where A fires has some B≠A also firing —
+B could substitute for A.
+
+Diagnostic for the older `strategy.py` trick-engine; not
+load-bearing for `bfs_solver`.

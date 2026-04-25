@@ -124,12 +124,13 @@ rendered in a collapsed `<details>` block.
   nor peak trouble is the truth on its own.
 - `claude-steve/random018.md` — design spec.
 - `claude-steve/random019.md` — milestone essay.
+- `claude-steve/random021.md` — engulf milestone essay.
 
 ## TODO
 
 - Memoize across cap iterations (currently each cap pass
   starts fresh).
-- Sidecars for the helper scripts (`corpus_report.py`,
-  `corpus_lab_catalog.py`).
 - Decide eventually whether to retire `beginner.py` or
   keep both as comparable baselines.
+- Port to Elm — see Steve's MAJOR_GOAL kickoff
+  2026-04-25.

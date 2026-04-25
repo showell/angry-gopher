@@ -1,0 +1,12 @@
+just_use compare_engines.py
+
+# label: TOOL
+# role: measure how often beginner.py rescues a tricks-engine stall
+
+For each random-dealt game, drive play with
+`strategy.choose_play`. When the tricks engine stalls, run
+`beginner.py` on the current state. Reports rescue rate
+across N games.
+
+Diagnostic — informs the corpus-construction filter
+thresholds the hunt scripts use.

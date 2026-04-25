@@ -1,0 +1,19 @@
+just_use run_corpus_v2.py
+
+# label: TOOL
+# role: benchmark beginner.py against the random-deal corpus
+
+Reads `corpus/sessions.txt`, fetches each puzzle's
+`initial_state` from the DB, runs `beginner.py`, prints a
+per-puzzle line + final depth distribution. The
+beginner-side counterpart to `corpus_report.py` (which
+benchmarks `bfs_solver.py`).
+
+```
+python3 run_corpus_v2.py
+```
+
+## Pointers
+
+- Snapshot: `corpus/baseline.txt` is the latest beginner
+  benchmark output.

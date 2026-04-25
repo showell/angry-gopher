@@ -1,0 +1,27 @@
+just_use corpus_lab_catalog.py
+
+# label: WORKHORSE
+# role: write the 21-puzzle corpus to the BOARD_LAB catalog
+
+Each catalog entry uses the puzzle's `puzzle_name` from the
+DB plus a 1-line description with the trouble card + BFS-plan
+length. The puzzle's `initial_state` comes straight from
+`lynrummy_puzzle_seeds`. Each entry also carries an
+`agent_solution` field — the BFS plan rendered as
+numbered text — so the lab UI can render it in a collapsed
+`<details>` block.
+
+OVERWRITES `../board-lab/puzzles.json`. The hand-crafted
+catalog is restorable via:
+
+```
+python3 board_lab_puzzles.py --write ../board-lab/puzzles.json
+```
+
+## Pointers
+
+- Output: `games/lynrummy/board-lab/puzzles.json`.
+- Sibling: `corpus_report.py` (Markdown report variant).
+- Lab UI: `games/lynrummy/board-lab/elm/src/Lab.elm`
+  decodes the `agent_solution` field with `Decode.oneOf`
+  fallback.
