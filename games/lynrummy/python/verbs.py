@@ -235,31 +235,25 @@ def _push(desc, board):
 
 def _splice(desc, board):
     """Insert a TROUBLE singleton into a HELPER pure/rb run.
-    Physically: split the run at k, then merge the loose
-    onto the half it joins (per `side`). The other half
-    persists as new_helper-side stack untouched."""
+    Physically: split the run at k, then merge the loose onto
+    the half it joins (per `side`). The other half persists
+    untouched."""
     loose = desc["loose"]
     src = list(desc["source"])
     k = desc["k"]
     side = desc["side"]
-    left = list(desc["left_result"])
-    right = list(desc["right_result"])
 
     sim = list(board)
     prims, sim = _plan_split_after(sim, src, k)
-    out = list(prims)
-
-    # After split: [src[:k]] and [src[k:]] both on board.
-    # `side == "left"`  : loose joins LEFT half  → left = src[:k] + [loose]
-    # `side == "right"` : loose joins RIGHT half → right = [loose] + src[k:]
+    # `side == "left"`  : loose joins LEFT half  → src[:k] + [loose]
+    # `side == "right"` : loose joins RIGHT half → [loose] + src[k:]
     if side == "left":
-        prims, sim = _plan_merge(sim, [loose], list(src[:k]), "right")
+        merge_prims, _ = _plan_merge(
+            sim, [loose], list(src[:k]), "right")
     else:
-        prims, sim = _plan_merge(sim, [loose], list(src[k:]), "left")
-    out.extend(prims)
-
-    _ = (left, right)
-    return out
+        merge_prims, _ = _plan_merge(
+            sim, [loose], list(src[k:]), "left")
+    return list(prims) + merge_prims
 
 
 # --- shift ---------------------------------------------------

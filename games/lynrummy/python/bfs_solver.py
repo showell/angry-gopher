@@ -5,25 +5,35 @@ State buckets:
   HELPER   - original-board complete stacks. Source for extracts.
   TROUBLE  - orphaned cards (singletons or 2-partials) not yet
              committed to a build.
-  GROWING  - committed builds. Sealed: no extracts, no
-             push-merge, no split. Only further absorption.
+  GROWING  - committed builds. Sealed against extracts and
+             splits. Eligible for further absorption AND for
+             engulfing a HELPER stack (move type b').
   COMPLETE - graduated GROWING stacks. Sealed forever.
 
-Two move types (must touch a trouble card per Steve's invariant):
-  (a) Absorb a neighbor into a trouble card. Source = HELPER
-      (extract verb) or TROUBLE singleton. Target = TROUBLE
-      or GROWING. Target moves to GROWING (or COMPLETE if
-      result is legal length 3+).
-  (b) Push a trouble card back to HELPER. Source = TROUBLE
-      (singleton or 2-partial; NEVER GROWING — sealed).
-      Target = HELPER stack such that result stays legal.
+Move types:
+  (a)  Absorb a neighbor into TROUBLE or GROWING. Source =
+       HELPER extract OR a TROUBLE singleton. Target moves
+       to GROWING (or COMPLETE if the result is legal).
+  (b)  Push a TROUBLE 1- or 2-partial onto a HELPER stack
+       so the helper grows by 1-2 cards.
+  (b') Engulf: a GROWING 2-partial swallows a HELPER stack
+       into one legal stack that graduates to COMPLETE.
+  (c)  Splice: insert a TROUBLE singleton into a HELPER
+       pure/rb run, splitting it cleanly into two legal halves.
+  (d)  Shift: peel a HELPER donor card to replace the stolen
+       end of a length-3 run; no spawn.
 
-Frontier is a min-heap ranked by total trouble cards
-(cards in TROUBLE + GROWING).
+Search: BFS by program length, with an outer iterative cap
+on total trouble (cards in TROUBLE + GROWING). Within each
+level, programs are sorted by trouble count so victory-
+adjacent states are expanded earliest.
 
-Heavy instrumentation: every frontier expansion emits a
-narration line so a human can follow what the search is
-"thinking" about.
+Pure-FP discipline: every state-transition helper takes
+state, returns state, no mutation. State is a 4-tuple of
+lists; lists are treated as immutable values by convention.
+
+Verbose mode emits a narration line per expansion so a
+human can follow what the search is "thinking" about.
 """
 
 import beginner as b
@@ -568,13 +578,8 @@ def solve(board, *, max_trouble_outer=8, max_states=10000,
     solution, bump the cap by 1 and retry. The hope: caps
     below the puzzle's true peak trouble fail FAST (the
     frontier dies quickly because most moves exceed the cap)."""
-    helper = []
-    trouble = []
-    for s in board:
-        if classify(s) == "other":
-            trouble.append(s)
-        else:
-            helper.append(s)
+    helper = [s for s in board if classify(s) != "other"]
+    trouble = [s for s in board if classify(s) == "other"]
     initial = (helper, trouble, [], [])
 
     total_expansions = 0

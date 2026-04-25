@@ -139,6 +139,69 @@ def test_steal_run_right_edge_spawns_pair():
             f"got {spawned}")
 
 
+# --- bucket / graduation helpers ------------------------------
+
+def test_remove_absorber_from_trouble():
+    """Drop the named index from trouble; growing untouched."""
+    trouble = [[(1, H, 0)], [(2, H, 0)], [(3, H, 0)]]
+    growing = [[(7, C, 0), (7, D, 0)]]
+    nt, ng = bs._remove_absorber("trouble", 1, trouble, growing)
+    _assert("remove_absorber drops trouble[1]",
+            nt == [[(1, H, 0)], [(3, H, 0)]],
+            f"got {nt}")
+    _assert("growing unchanged when removing from trouble",
+            ng == growing,
+            f"got {ng}")
+
+
+def test_remove_absorber_from_growing():
+    trouble = [[(5, S, 0)]]
+    growing = [[(7, C, 0), (7, D, 0)],
+               [(11, C, 0), (12, C, 0)]]
+    nt, ng = bs._remove_absorber("growing", 0, trouble, growing)
+    _assert("remove_absorber drops growing[0]",
+            ng == [[(11, C, 0), (12, C, 0)]],
+            f"got {ng}")
+    _assert("trouble unchanged when removing from growing",
+            nt == trouble,
+            f"got {nt}")
+
+
+def test_remove_absorber_purity():
+    """Inputs aren't mutated."""
+    trouble = [[(1, H, 0)], [(2, H, 0)]]
+    growing = [[(7, C, 0), (7, D, 0)]]
+    t_snap = [list(s) for s in trouble]
+    g_snap = [list(s) for s in growing]
+    bs._remove_absorber("trouble", 0, trouble, growing)
+    _assert("trouble not mutated", trouble == t_snap)
+    _assert("growing not mutated", growing == g_snap)
+
+
+def test_graduate_legal_merged_goes_to_complete():
+    """A legal 3+ run merges into COMPLETE, not GROWING."""
+    growing = [[(7, C, 0), (7, D, 0)]]
+    complete = []
+    merged = [(5, H, 0), (6, H, 0), (7, H, 0)]
+    ng, nc, graduated = bs._graduate(merged, growing, complete)
+    _assert("graduated flag is True", graduated)
+    _assert("growing unchanged", ng == growing)
+    _assert("merged appended to complete",
+            nc == [merged], f"got {nc}")
+
+
+def test_graduate_partial_merged_stays_in_growing():
+    """A 2-partial merge stays in GROWING."""
+    growing = [[(11, C, 0), (12, C, 0)]]
+    complete = [[(2, H, 0), (3, H, 0), (4, H, 0)]]
+    merged = [(13, C, 0), (1, C, 0)]  # 2-partial
+    ng, nc, graduated = bs._graduate(merged, growing, complete)
+    _assert("graduated flag is False", not graduated)
+    _assert("merged appended to growing",
+            ng == growing + [merged], f"got {ng}")
+    _assert("complete unchanged", nc == complete)
+
+
 # --- _do_extract integration ---------------------------------
 
 def test_do_extract_does_not_mutate_input_helper():
@@ -175,6 +238,15 @@ TESTS = [
      test_steal_run_left_edge_spawns_pair),
     ("test_steal_run_right_edge_spawns_pair",
      test_steal_run_right_edge_spawns_pair),
+    ("test_remove_absorber_from_trouble",
+     test_remove_absorber_from_trouble),
+    ("test_remove_absorber_from_growing",
+     test_remove_absorber_from_growing),
+    ("test_remove_absorber_purity", test_remove_absorber_purity),
+    ("test_graduate_legal_merged_goes_to_complete",
+     test_graduate_legal_merged_goes_to_complete),
+    ("test_graduate_partial_merged_stays_in_growing",
+     test_graduate_partial_merged_stays_in_growing),
     ("test_do_extract_does_not_mutate_input_helper",
      test_do_extract_does_not_mutate_input_helper),
 ]
