@@ -519,6 +519,14 @@ def _bfs_with_cap(initial, max_trouble, *, max_states, verbose):
     level = 0
     while current_level:
         level += 1
+        # Sort within the level by trouble count of the
+        # current state — pure speedup: iteration order
+        # within BFS-by-length doesn't affect which plans
+        # are reachable, but lowest-trouble-first means
+        # victory-bearing states tend to be expanded earlier
+        # and we exit on first hit.
+        current_level.sort(
+            key=lambda e: _trouble_count(e[0][1], e[0][2]))
         if verbose:
             print(f"\n--- level {level}: expanding "
                   f"{len(current_level)} program(s) ---")
