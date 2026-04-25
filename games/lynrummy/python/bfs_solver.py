@@ -484,8 +484,14 @@ def describe_move(desc):
             shifted = f"{p} + {rest_label}"
         else:
             shifted = f"{rest_label} + {p}"
+        bucket = desc["target_bucket_before"]
+        tb = _stack_label(desc["target_before"])
+        merged = _stack_label(desc["merged"])
+        graduated = " [→COMPLETE]" if desc["graduated"] else ""
         return (f"shift {p} to pop {stolen} "
-                f"[{new_donor} -> {shifted}]")
+                f"[{new_donor} -> {shifted}]; "
+                f"absorb onto {bucket} [{tb}] → "
+                f"[{merged}]{graduated}")
     if desc["type"] == "splice":
         loose = label_d(desc["loose"])
         src = _stack_label(desc["source"])
