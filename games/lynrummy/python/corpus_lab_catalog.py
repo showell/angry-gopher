@@ -86,8 +86,11 @@ def main():
             verbose=False)
         if plan is None:
             depth = "STUCK"
+            solution_text = "(no plan within budget)"
         else:
             depth = f"{len(plan)}-line"
+            solution_text = "\n".join(
+                f"{i}. {line}" for i, line in enumerate(plan, 1))
 
         title = f"#{n}. corpus {sid} — trouble {trouble}"
         description = (
@@ -99,6 +102,7 @@ def main():
             "title": title,
             "description": description,
             "initial_state": state,
+            "agent_solution": solution_text,
         })
 
     out_payload = {"puzzles": catalog}
