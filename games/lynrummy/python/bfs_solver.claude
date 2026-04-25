@@ -62,19 +62,25 @@ narrating their thinking.
 solve(board, max_trouble_outer=10, verbose=True)
 ```
 
-## Corpus baseline (2026-04-25, post-splice/shift/sort)
+## Corpus baseline (2026-04-25, post-engulf)
 
-`corpus/baseline_bfs.txt` (initial milestone; pre splice +
-shift). With the full verb set + within-level sort:
+Files: `corpus/baseline_bfs.txt` (initial pre-splice
+snapshot, frozen), `corpus/baseline_pre_engulf.txt` (post
+splice/shift/sort, pre engulf), `corpus/baseline_post_engulf.txt`
+(current).
+
+With the full verb set + within-level sort + engulf:
 
 ```
-total wall: ~3.8s
+total wall: ~3.2s
 21/21 solved, 0 stuck
-depth distribution: 1:5, 2:6, 3:1, 4:2, 5:2, 6:2, 7:2, 14:1
+depth distribution: 1:5, 2:6, 3:1, 4:2, 5:2, 6:2, 7:2, 8:1
 ```
 
-5 puzzles solve in 1 line (splice gestures); 2 puzzles
-formerly stuck under beginner.py now solve.
+5 puzzles solve in 1 line (splice gestures). Session 130
+collapsed 14 → 8 lines once GROWING 2-partials gained
+permission to engulf HELPER stacks (move type b'). See
+`random021.md` for the milestone write-up.
 
 Live regenerable report: `corpus_report.py` →
 `claude-steve/random020.md`. Lab catalog source:
