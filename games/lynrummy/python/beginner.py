@@ -626,93 +626,85 @@ def beginner_plan(board, *, max_compound=6, max_nodes=200_000,
         if budget == 0:
             return None
         sig = _board_sig(board)
-        if sig in visited:
+        # Budget-aware visited: prune only when re-arrival
+        # has no MORE budget than a prior visit. With more
+        # budget the prior failure tells us nothing.
+        prev_budget = visited.get(sig, -1)
+        if budget <= prev_budget:
             return None
-        visited.add(sig)
+        visited[sig] = budget
 
-        # Tier 0a: free pull. A loose already on the board
-        # gets pulled in by some trouble stack — no extract
-        # cost, no budget decrement.
-        for loose, trouble_before, side, after, result in \
+        # Generate every candidate move in one flat list,
+        # then try them in order of resulting trouble count
+        # (least tech debt first). PUSH and PULL verbs are on
+        # equal footing — no tier preference. Budget cost is
+        # the secondary key so free moves win ties.
+        # (trouble_after, budget_cost, result_kind, line,
+        # after, taboo). Sort key (trouble_after,
+        # budget_cost, result_kind):
+        #   - trouble_after: less tech debt = more promising.
+        #   - budget_cost: free moves before compounds.
+        #   - result_kind: pure > set > rb > partial.
+        candidates = []
+
+        for loose, tb, _side, after, result in \
                 _try_pulls(board, taboo):
-            line = _free_pull_line(loose, trouble_before, result)
-            found = search(after,
-                           steps + [(line, after)],
-                           budget, taboo, visited)
-            if found is not None:
-                return found
+            candidates.append(
+                (len(trouble(after)), 0, _result_priority(result),
+                 _free_pull_line(loose, tb, result), after, taboo))
 
-        # Tier 0b: free push. A loose lands on a legal stack
-        # whose result is also legal — orphan absorbed, no
-        # source-side disruption, no budget decrement.
-        for loose, target_before, side, after, result in \
+        for loose, tb, _side, after, result in \
                 _try_pushes(board, taboo):
-            line = _push_line(loose, target_before, result)
-            found = search(after,
-                           steps + [(line, after)],
-                           budget, taboo, visited)
-            if found is not None:
-                return found
+            candidates.append(
+                (len(trouble(after)), 0, _result_priority(result),
+                 _push_line(loose, tb, result), after, taboo))
 
-        # Tier 0c: free push-merge. A 2-partial trouble glues
-        # onto a legal stack such that the combined stack is
-        # legal. Both partial cards dissolve at once.
-        for src_partial, target_before, side, after, result in \
+        for src_partial, tb, side, after, result in \
                 _try_push_merges(board, taboo):
-            line = _push_merge_line(src_partial, target_before,
-                                    side, result)
-            found = search(after,
-                           steps + [(line, after)],
-                           budget, taboo, visited)
-            if found is not None:
-                return found
+            candidates.append(
+                (len(trouble(after)), 0, _result_priority(result),
+                 _push_merge_line(src_partial, tb, side, result),
+                 after, taboo))
 
         direct = neighbor_shapes(board)
-        tiers = [
-            (direct, ("peel", "pluck")),
-            (direct, ("yank",)),
-            (direct, ("steal",)),
-        ]
-        for shapes, verbs in tiers:
-            for verb_name, ext_card, source, after_pp, partners \
-                    in _try_extract(board, shapes, verbs):
-                new_taboo = taboo
-                if partners:
-                    new_taboo = dict(taboo)
-                    new_taboo[ext_card] = new_taboo.get(
-                        ext_card, frozenset()) | partners
-                # Compound: extract + pull (loose absorbs onto
-                # trouble).
-                for loose, trouble_before, _side, after, result in \
-                        _try_pulls(after_pp, new_taboo,
-                                   only_loose=ext_card):
-                    line = _compound_pull_line(
-                        verb_name, ext_card, source,
-                        trouble_before, result)
-                    found = search(after,
-                                   steps + [(line, after)],
-                                   budget - 1, new_taboo, visited)
-                    if found is not None:
-                        return found
-                # Compound: extract + push (loose lands on a
-                # legal stack such that it stays legal).
-                for loose, target_before, _side, after, result in \
-                        _try_pushes(after_pp, new_taboo,
-                                    only_loose=ext_card):
-                    line = _compound_push_line(
-                        verb_name, ext_card, source,
-                        target_before, result)
-                    found = search(after,
-                                   steps + [(line, after)],
-                                   budget - 1, new_taboo, visited)
-                    if found is not None:
-                        return found
+        for verb, ext_card, source, after_pp, partners in \
+                _try_extract(board, direct,
+                             ("peel", "pluck", "yank", "steal")):
+            new_taboo = taboo
+            if partners:
+                new_taboo = dict(taboo)
+                new_taboo[ext_card] = (
+                    new_taboo.get(ext_card, frozenset()) | partners)
+            for loose, tb, _side, after, result in \
+                    _try_pulls(after_pp, new_taboo,
+                               only_loose=ext_card):
+                candidates.append(
+                    (len(trouble(after)), 1, _result_priority(result),
+                     _compound_pull_line(verb, ext_card, source,
+                                         tb, result),
+                     after, new_taboo))
+            for loose, tb, _side, after, result in \
+                    _try_pushes(after_pp, new_taboo,
+                                only_loose=ext_card):
+                candidates.append(
+                    (len(trouble(after)), 1, _result_priority(result),
+                     _compound_push_line(verb, ext_card, source,
+                                         tb, result),
+                     after, new_taboo))
+
+        candidates.sort(key=lambda x: x[0])
+        for _t, _b, _r, line, after, ct in candidates:
+            found = search(after,
+                           steps + [(line, after)],
+                           budget - (1 if _b else 0), ct, visited)
+            if found is not None:
+                return found
         return None
 
     start = time.time()
     plan = None
     for depth_limit in range(1, max_compound + 1):
-        plan = search(board, [], depth_limit, {}, set())
+        plan = search(board, [], depth_limit, {}, {})
         if plan is not None:
             break
         if (state["nodes"] > max_nodes
