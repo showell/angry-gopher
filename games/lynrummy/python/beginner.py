@@ -407,64 +407,144 @@ def _result_priority(stack):
     return 3
 
 
-def _try_extract(board, shapes, verbs=("peel", "pluck")):
-    """Yield (verb_name, extracted_card, source_stack, new_board,
-    taboo_partners) for every legal extraction whose card
-    matches `shapes`."""
-    for si, stack in enumerate(board):
-        if len(stack) <= 1:
-            continue
-        source = list(stack)
-        for ci, c in enumerate(stack):
+def _can_peel_kind(kind, n, ci):
+    if kind == "set" and n >= 4:
+        return True
+    if kind in ("pure_run", "rb_run") and n >= 4 and (
+            ci == 0 or ci == n - 1):
+        return True
+    return False
+
+
+def _can_pluck_kind(kind, n, ci):
+    return kind in ("pure_run", "rb_run") and 3 <= ci <= n - 4
+
+
+def _can_yank_kind(kind, n, ci):
+    if kind not in ("pure_run", "rb_run"):
+        return False
+    if ci == 0 or ci == n - 1 or 3 <= ci <= n - 4:
+        return False
+    left_len = ci
+    right_len = n - ci - 1
+    return (max(left_len, right_len) >= 3
+            and min(left_len, right_len) >= 1)
+
+
+def _can_steal_kind(kind, n, ci):
+    if n != 3:
+        return False
+    if kind in ("pure_run", "rb_run"):
+        return ci == 0 or ci == n - 1
+    return kind == "set"
+
+
+def _do_extract(complete, trouble, src_idx, ci, verb):
+    """Apply an extract verb to complete[src_idx] at ci.
+    Returns (new_complete, new_trouble, ext_card, source, partners).
+    Steve's invariant in code: ONE complete stack damaged,
+    becoming 0/1/2 new trouble pieces; loose enters trouble."""
+    source = complete[src_idx]
+    n = len(source)
+    c = source[ci]
+    nc = complete[:src_idx] + complete[src_idx + 1:]
+    nt = list(trouble)
+    if verb == "peel":
+        kind = classify(source)
+        if kind == "set":
+            remnant = [x for x in source if x != c]
+        elif ci == 0:
+            remnant = source[1:]
+        else:
+            remnant = source[:-1]
+        nc.append(remnant)
+        nt.append([c])
+        return nc, nt, c, list(source), frozenset()
+    if verb == "pluck":
+        nc.append(source[:ci])
+        nc.append(source[ci + 1:])
+        nt.append([c])
+        return nc, nt, c, list(source), frozenset()
+    if verb == "yank":
+        left = source[:ci]
+        right = source[ci + 1:]
+        (nc if len(left) >= 3 else nt).append(left)
+        (nc if len(right) >= 3 else nt).append(right)
+        nt.append([c])
+        partners = frozenset(x for x in source if x != c)
+        return nc, nt, c, list(source), partners
+    if verb == "steal":
+        kind = classify(source)
+        if kind == "set":
+            for x in source:
+                if x != c:
+                    nt.append([x])
+        else:
+            if ci == 0:
+                nt.append(source[1:])
+            else:
+                nt.append(source[:-1])
+        nt.append([c])
+        partners = frozenset(x for x in source if x != c)
+        return nc, nt, c, list(source), partners
+    raise ValueError(f"unknown verb {verb}")
+
+
+def _try_extracts(complete, trouble, shapes):
+    """Yield (verb, ext_card, source, new_complete, new_trouble,
+    partners) for every legal extraction whose card matches
+    `shapes`. Operates only on the complete bucket — extracts
+    take from legal stacks."""
+    for src_idx, source in enumerate(complete):
+        n = len(source)
+        kind = classify(source)
+        for ci, c in enumerate(source):
             if (c[0], c[1]) not in shapes:
                 continue
-            if "peel" in verbs and _can_peel(stack, ci):
-                yield "peel", c, source, peel(board, c), frozenset()
-            elif "pluck" in verbs and _can_pluck(stack, ci):
-                yield "pluck", c, source, pluck(board, c), frozenset()
-            elif "yank" in verbs and _can_yank(stack, ci):
-                partners = frozenset(x for x in stack if x != c)
-                yield "yank", c, source, yank(board, c), partners
-            elif "steal" in verbs and _can_steal(stack, ci):
-                partners = frozenset(x for x in stack if x != c)
-                yield "steal", c, source, steal(board, c), partners
+            if _can_peel_kind(kind, n, ci):
+                nc, nt, ec, src, p = _do_extract(
+                    complete, trouble, src_idx, ci, "peel")
+                yield "peel", ec, src, nc, nt, p
+            elif _can_pluck_kind(kind, n, ci):
+                nc, nt, ec, src, p = _do_extract(
+                    complete, trouble, src_idx, ci, "pluck")
+                yield "pluck", ec, src, nc, nt, p
+            elif _can_yank_kind(kind, n, ci):
+                nc, nt, ec, src, p = _do_extract(
+                    complete, trouble, src_idx, ci, "yank")
+                yield "yank", ec, src, nc, nt, p
+            elif _can_steal_kind(kind, n, ci):
+                nc, nt, ec, src, p = _do_extract(
+                    complete, trouble, src_idx, ci, "steal")
+                yield "steal", ec, src, nc, nt, p
 
 
-def _try_pushes(board, taboo=None, only_loose=None):
-    """Push: a loose card lands on a LEGAL stack such that
-    the result is also legal (3-set growing to 4-set, run
-    growing by one card on an end). Push is Δ trouble ≤ 0:
-    the loose dissolves into a legal stack with no source-
-    side disruption."""
+def _try_pushes(complete, trouble, taboo=None, only_loose=None):
+    """Push: a loose (singleton trouble stack) lands on a
+    complete stack such that the result is still complete.
+    Yields (loose, target_before, side, new_complete,
+    new_trouble, result)."""
     taboo = taboo or {}
-    options = []
-    looses = [only_loose] if only_loose is not None else _looses(board)
-    for c in looses:
-        forbidden = taboo.get(c, frozenset())
-        for si, stack in enumerate(board):
-            if not stack or stack[0] == c:
+    for src_idx, src in enumerate(trouble):
+        if len(src) != 1:
+            continue
+        loose = src[0]
+        if only_loose is not None and loose != only_loose:
+            continue
+        forbidden = taboo.get(loose, frozenset())
+        for tgt_idx, tgt in enumerate(complete):
+            if any(x in forbidden for x in tgt):
                 continue
-            if classify(stack) == "other":
-                continue
-            if any(x in forbidden for x in stack):
-                continue
-            old_target = list(stack)
             for side in ("right", "left"):
-                try:
-                    new = _absorb(board, c, stack[0], side)
-                except ValueError:
+                merged = (list(tgt) + [loose] if side == "right"
+                          else [loose] + list(tgt))
+                if classify(merged) == "other":
                     continue
-                for s2 in new:
-                    if c in s2:
-                        if classify(s2) == "other":
-                            break
-                        priority = _result_priority(s2)
-                        options.append(
-                            (priority, c, old_target, side, new, list(s2)))
-                        break
-    options.sort(key=lambda x: x[0])
-    for _, c, tgt, side, new, result in options:
-        yield c, tgt, side, new, result
+                nc = ([s for i, s in enumerate(complete)
+                       if i != tgt_idx] + [merged])
+                nt = [s for i, s in enumerate(trouble)
+                      if i != src_idx]
+                yield loose, list(tgt), side, nc, nt, merged
 
 
 def _push_line(loose, target_before, result):
@@ -503,91 +583,65 @@ def _push_merge_line(source_partial, target_before, side, result):
             f"{_stack_with_block(result, block_size, side)}")
 
 
-def _try_push_merges(board, taboo=None):
-    """Push-merge: a 2-partial trouble stack glues onto a
-    legal stack such that the combined stack is legal. Both
-    partial cards absorbed at once. Δ trouble = -2."""
+def _try_push_merges(complete, trouble, taboo=None):
+    """Push-merge: a 2-partial trouble glues onto a complete
+    stack such that the merged result is still complete.
+    Both partial cards absorbed at once. Yields (src_partial,
+    target_before, side, new_complete, new_trouble, result)."""
     taboo = taboo or {}
-    options = []
-    for src_si, src_stack in enumerate(board):
-        if len(src_stack) != 2:
+    for src_idx, src in enumerate(trouble):
+        if len(src) != 2:
             continue
-        if classify(src_stack) != "other":
-            continue
-        forbidden_a = taboo.get(src_stack[0], frozenset())
-        forbidden_b = taboo.get(src_stack[1], frozenset())
-        for tgt_si, tgt_stack in enumerate(board):
-            if tgt_si == src_si:
-                continue
-            if classify(tgt_stack) == "other":
-                continue
-            if any(x in forbidden_a or x in forbidden_b for x in tgt_stack):
+        forbidden_a = taboo.get(src[0], frozenset())
+        forbidden_b = taboo.get(src[1], frozenset())
+        for tgt_idx, tgt in enumerate(complete):
+            if any(x in forbidden_a or x in forbidden_b for x in tgt):
                 continue
             for side in ("right", "left"):
-                if side == "right":
-                    merged = list(tgt_stack) + list(src_stack)
-                else:
-                    merged = list(src_stack) + list(tgt_stack)
+                merged = (list(tgt) + list(src) if side == "right"
+                          else list(src) + list(tgt))
                 if classify(merged) == "other":
                     continue
-                new = [s[:] for i, s in enumerate(board)
-                       if i != src_si and i != tgt_si]
-                new.append(merged)
-                priority = _result_priority(merged)
-                options.append(
-                    (priority, list(src_stack), list(tgt_stack),
-                     side, new, merged))
-    options.sort(key=lambda x: x[0])
-    for _, sp, tgt, side, new, result in options:
-        yield sp, tgt, side, new, result
+                nc = ([s for i, s in enumerate(complete)
+                       if i != tgt_idx] + [merged])
+                nt = [s for i, s in enumerate(trouble)
+                      if i != src_idx]
+                yield list(src), list(tgt), side, nc, nt, merged
 
 
-def _try_pulls(board, taboo=None, only_loose=None):
-    """For each loose card and each trouble stack, yield a
-    pull: trouble absorbs the loose onto its stack. The
-    trouble stack is the actor; the loose is the helper.
-
-    `only_loose` restricts the loose to a single card —
-    used by compound moves so the just-extracted helper is
-    the one absorbed (and not the original trouble singleton
-    inverting the role).
-
-    Yield (loose, trouble_stack_before, side, new_board,
-    trouble_stack_after). A loose may not rejoin a stack
-    that contains any of its taboo cards."""
+def _try_pulls(complete, trouble, taboo=None, only_loose=None):
+    """Pull: a loose (singleton in trouble) absorbs onto
+    another trouble stack. Result lands in complete bucket
+    (if it classifies legal) or back in trouble (still
+    partial). Yields (loose, target_before, side,
+    new_complete, new_trouble, result)."""
     taboo = taboo or {}
-
-    def is_trouble(s):
-        return classify(s) == "other"
-
-    options = []
-    looses = [only_loose] if only_loose is not None else _looses(board)
-    for c in looses:
-        forbidden = taboo.get(c, frozenset())
-        for si, stack in enumerate(board):
-            if not stack or stack[0] == c:
+    for src_idx, src in enumerate(trouble):
+        if len(src) != 1:
+            continue
+        loose = src[0]
+        if only_loose is not None and loose != only_loose:
+            continue
+        forbidden = taboo.get(loose, frozenset())
+        for tgt_idx, tgt in enumerate(trouble):
+            if tgt_idx == src_idx:
                 continue
-            if not is_trouble(stack):
+            if any(x in forbidden for x in tgt):
                 continue
-            if any(x in forbidden for x in stack):
-                continue
-            old_trouble = list(stack)
             for side in ("right", "left"):
-                try:
-                    new = _absorb(board, c, stack[0], side)
-                except ValueError:
+                merged = (list(tgt) + [loose] if side == "right"
+                          else [loose] + list(tgt))
+                if not partial_ok(merged):
                     continue
-                for s2 in new:
-                    if c in s2:
-                        if not partial_ok(s2):
-                            break
-                        priority = _result_priority(s2)
-                        options.append(
-                            (priority, c, old_trouble, side, new, list(s2)))
-                        break
-    options.sort(key=lambda x: x[0])
-    for _, c, tgt, side, new, result in options:
-        yield c, tgt, side, new, result
+                nt_base = [s for i, s in enumerate(trouble)
+                           if i != src_idx and i != tgt_idx]
+                if classify(merged) != "other":
+                    nc = list(complete) + [merged]
+                    nt = nt_base
+                else:
+                    nc = list(complete)
+                    nt = nt_base + [merged]
+                yield loose, list(tgt), side, nc, nt, merged
 
 
 def beginner_plan(board, *, max_compound=6, max_nodes=200_000,
@@ -612,99 +666,109 @@ def beginner_plan(board, *, max_compound=6, max_nodes=200_000,
 
     state = {"nodes": 0, "deadline": time.time() + max_seconds}
 
-    def _board_sig(board):
-        return tuple(sorted(tuple(sorted(s)) for s in board))
+    def _state_sig(complete, trouble):
+        c_sig = tuple(sorted(tuple(sorted(s)) for s in complete))
+        t_sig = tuple(sorted(tuple(sorted(s)) for s in trouble))
+        return (c_sig, t_sig)
 
-    def search(board, steps, budget, taboo, visited):
+    def _trouble_count(trouble):
+        n = 0
+        for s in trouble:
+            n += len(s)
+        return n
+
+    def _shapes_from_trouble(trouble):
+        out = set()
+        for s in trouble:
+            for c in s:
+                out |= neighbors(c)
+        return out
+
+    def search(complete, trouble, steps, budget, taboo, visited):
         state["nodes"] += 1
         if state["nodes"] > max_nodes:
             return None
         if time.time() > state["deadline"]:
             return None
-        if not trouble(board):
-            return steps
+        if not trouble:
+            return steps  # all stacks complete
         if budget == 0:
             return None
-        sig = _board_sig(board)
-        # Budget-aware visited: prune only when re-arrival
-        # has no MORE budget than a prior visit. With more
-        # budget the prior failure tells us nothing.
+        sig = _state_sig(complete, trouble)
         prev_budget = visited.get(sig, -1)
         if budget <= prev_budget:
             return None
         visited[sig] = budget
 
-        # Generate every candidate move in one flat list,
-        # then try them in order of resulting trouble count
-        # (least tech debt first). PUSH and PULL verbs are on
-        # equal footing — no tier preference. Budget cost is
-        # the secondary key so free moves win ties.
-        # (trouble_after, budget_cost, result_kind, line,
-        # after, taboo). Sort key (trouble_after,
-        # budget_cost, result_kind):
-        #   - trouble_after: less tech debt = more promising.
-        #   - budget_cost: free moves before compounds.
-        #   - result_kind: pure > set > rb > partial.
+        shapes = _shapes_from_trouble(trouble)
+
+        # Collect every candidate move in one flat list. Each
+        # entry is (trouble_count_after, budget_cost, line,
+        # new_complete, new_trouble, taboo).
         candidates = []
 
-        for loose, tb, _side, after, result in \
-                _try_pulls(board, taboo):
+        for loose, tb, _side, nc, nt, result in \
+                _try_pulls(complete, trouble, taboo):
+            line = _free_pull_line(loose, tb, result)
             candidates.append(
-                (len(trouble(after)), 0, _result_priority(result),
-                 _free_pull_line(loose, tb, result), after, taboo))
+                (_trouble_count(nt), 0, line, nc, nt, taboo))
 
-        for loose, tb, _side, after, result in \
-                _try_pushes(board, taboo):
+        for loose, tb, _side, nc, nt, result in \
+                _try_pushes(complete, trouble, taboo):
+            line = _push_line(loose, tb, result)
             candidates.append(
-                (len(trouble(after)), 0, _result_priority(result),
-                 _push_line(loose, tb, result), after, taboo))
+                (_trouble_count(nt), 0, line, nc, nt, taboo))
 
-        for src_partial, tb, side, after, result in \
-                _try_push_merges(board, taboo):
+        for src_partial, tb, side, nc, nt, result in \
+                _try_push_merges(complete, trouble, taboo):
+            line = _push_merge_line(src_partial, tb, side, result)
             candidates.append(
-                (len(trouble(after)), 0, _result_priority(result),
-                 _push_merge_line(src_partial, tb, side, result),
-                 after, taboo))
+                (_trouble_count(nt), 0, line, nc, nt, taboo))
 
-        direct = neighbor_shapes(board)
-        for verb, ext_card, source, after_pp, partners in \
-                _try_extract(board, direct,
-                             ("peel", "pluck", "yank", "steal")):
+        for verb, ec, src, post_c, post_t, partners in \
+                _try_extracts(complete, trouble, shapes):
             new_taboo = taboo
             if partners:
                 new_taboo = dict(taboo)
-                new_taboo[ext_card] = (
-                    new_taboo.get(ext_card, frozenset()) | partners)
-            for loose, tb, _side, after, result in \
-                    _try_pulls(after_pp, new_taboo,
-                               only_loose=ext_card):
+                new_taboo[ec] = (
+                    new_taboo.get(ec, frozenset()) | partners)
+            for loose, tb, _side, nc, nt, result in \
+                    _try_pulls(post_c, post_t, new_taboo,
+                               only_loose=ec):
+                line = _compound_pull_line(verb, ec, src, tb, result)
                 candidates.append(
-                    (len(trouble(after)), 1, _result_priority(result),
-                     _compound_pull_line(verb, ext_card, source,
-                                         tb, result),
-                     after, new_taboo))
-            for loose, tb, _side, after, result in \
-                    _try_pushes(after_pp, new_taboo,
-                                only_loose=ext_card):
+                    (_trouble_count(nt), 1, line, nc, nt, new_taboo))
+            for loose, tb, _side, nc, nt, result in \
+                    _try_pushes(post_c, post_t, new_taboo,
+                                only_loose=ec):
+                line = _compound_push_line(verb, ec, src, tb, result)
                 candidates.append(
-                    (len(trouble(after)), 1, _result_priority(result),
-                     _compound_push_line(verb, ext_card, source,
-                                         tb, result),
-                     after, new_taboo))
+                    (_trouble_count(nt), 1, line, nc, nt, new_taboo))
 
-        candidates.sort(key=lambda x: x[0])
-        for _t, _b, _r, line, after, ct in candidates:
-            found = search(after,
-                           steps + [(line, after)],
-                           budget - (1 if _b else 0), ct, visited)
+        candidates.sort(key=lambda x: (x[0], x[1]))
+        for _t, b_cost, line, nc, nt, ct in candidates:
+            after_board = list(nc) + list(nt)
+            found = search(nc, nt,
+                           steps + [(line, after_board)],
+                           budget - b_cost, ct, visited)
             if found is not None:
                 return found
         return None
 
+    # Partition the input board into complete and trouble buckets.
+    init_complete = []
+    init_trouble = []
+    for s in board:
+        if classify(s) == "other":
+            init_trouble.append(s)
+        else:
+            init_complete.append(s)
+
     start = time.time()
     plan = None
     for depth_limit in range(1, max_compound + 1):
-        plan = search(board, [], depth_limit, {}, {})
+        plan = search(init_complete, init_trouble, [],
+                      depth_limit, {}, {})
         if plan is not None:
             break
         if (state["nodes"] > max_nodes
