@@ -214,15 +214,22 @@ def _can_pluck(stack, ci):
 
 
 def _can_steal(stack, ci):
-    """Steal: extract a card from a length-3 rigid run,
+    """Steal: extract a card from a length-3 legal stack,
     leaving a length-2 illegal remnant behind. The only
-    justification is a later extend that repairs or reuses
-    the orphan. Beginner-accessible but more expensive than
-    peel (which keeps remnants legal)."""
+    justification is a later move that reuses the extracted
+    card. More expensive than peel (which keeps remnants
+    legal). Length-3 runs steal from end positions only;
+    length-3 sets steal from any position (sets are
+    unordered)."""
     n = len(stack)
     kind = classify(stack)
-    return (kind in ("pure_run", "rb_run")
-            and n == 3 and (ci == 0 or ci == n - 1))
+    if n != 3:
+        return False
+    if kind in ("pure_run", "rb_run"):
+        return ci == 0 or ci == n - 1
+    if kind == "set":
+        return True
+    return False
 
 
 def _can_yank(stack, ci):
@@ -349,16 +356,28 @@ def _free_pull_line(loose, trouble_before, result):
             f"{_stack_with_marker(result, loose, '[{}]')}")
 
 
-def _compound_line(verb, ext_card, source, trouble_before, result):
+def _compound_pull_line(verb, ext_card, source, trouble_before, result):
     """`5C 6C peel-pulls [4C] 5C 6C {-4C- 4D 4S 4H}` —
-    trouble-before is the subject; verb-pulls is the action;
-    the result stack shows the helper bracketed where it
-    landed; the source stack (in braces) shows the helper
-    struck through where it left."""
+    trouble-before is the subject; the result stack shows
+    the helper bracketed where it landed; the source stack
+    (in braces) shows the helper struck through where it
+    left."""
     tb = _stack_label(trouble_before)
     res = _stack_with_marker(result, ext_card, "[{}]")
     src = _stack_with_marker(source, ext_card, "-{}-")
     return f"{tb} {verb}-pulls {res} {{{src}}}"
+
+
+def _compound_push_line(verb, ext_card, source, target_before, result):
+    """`2C 3C 4C peel-pushes 2C 3C 4C [5C] {-5C- 5H 5S}` —
+    target-before (a LEGAL stack) is the subject; the
+    helper is extracted from `source` and pushed onto the
+    target. Same shape as the pull line, just `-pushes`
+    instead of `-pulls` and the absorber was already legal."""
+    tb = _stack_label(target_before)
+    res = _stack_with_marker(result, ext_card, "[{}]")
+    src = _stack_with_marker(source, ext_card, "-{}-")
+    return f"{tb} {verb}-pushes {res} {{{src}}}"
 
 
 def _looses(board):
@@ -556,12 +575,27 @@ def beginner_plan(board, *, max_compound=6, max_nodes=200_000,
                     new_taboo = dict(taboo)
                     new_taboo[ext_card] = new_taboo.get(
                         ext_card, frozenset()) | partners
+                # Compound: extract + pull (loose absorbs onto
+                # trouble).
                 for loose, trouble_before, _side, after, result in \
                         _try_pulls(after_pp, new_taboo,
                                    only_loose=ext_card):
-                    line = _compound_line(
+                    line = _compound_pull_line(
                         verb_name, ext_card, source,
                         trouble_before, result)
+                    found = search(after,
+                                   steps + [(line, after)],
+                                   budget - 1, new_taboo, visited)
+                    if found is not None:
+                        return found
+                # Compound: extract + push (loose lands on a
+                # legal stack such that it stays legal).
+                for loose, target_before, _side, after, result in \
+                        _try_pushes(after_pp, new_taboo,
+                                    only_loose=ext_card):
+                    line = _compound_push_line(
+                        verb_name, ext_card, source,
+                        target_before, result)
                     found = search(after,
                                    steps + [(line, after)],
                                    budget - 1, new_taboo, visited)
