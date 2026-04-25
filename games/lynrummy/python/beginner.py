@@ -448,6 +448,64 @@ def _push_line(loose, target_before, result):
             f"{{{_stack_label(target_before)}}}")
 
 
+def _stack_with_block(stack, block_size, side):
+    """Render `stack` with `block_size` contiguous cards
+    bracketed on the named side. Used for push-merge: the
+    whole 2-partial source becomes a [bracketed] chunk
+    glued onto the legal target."""
+    if side == "right":
+        head, block = stack[:-block_size], stack[-block_size:]
+        head_s = " ".join(label_d(c) for c in head)
+        block_s = " ".join(label_d(c) for c in block)
+        return f"{head_s} [{block_s}]" if head_s else f"[{block_s}]"
+    block, tail = stack[:block_size], stack[block_size:]
+    block_s = " ".join(label_d(c) for c in block)
+    tail_s = " ".join(label_d(c) for c in tail)
+    return f"[{block_s}] {tail_s}" if tail_s else f"[{block_s}]"
+
+
+def _push_merge_line(source_partial, target_before, side, result):
+    """`2C:1 3C 4C push-merges 2C:1 3C 4C [5C 6C]` —
+    target-before (legal) is the subject; the whole 2-partial
+    source is bracketed where it landed in the result."""
+    block_size = len(source_partial)
+    return (f"{_stack_label(target_before)} push-merges "
+            f"{_stack_with_block(result, block_size, side)}")
+
+
+def _try_push_merges(board, taboo=None):
+    """Push-merge: a 2-partial trouble stack glues onto a
+    legal stack such that the combined stack is legal. Both
+    partial cards absorbed at once. Δ trouble = -2."""
+    taboo = taboo or {}
+    for src_si, src_stack in enumerate(board):
+        if len(src_stack) != 2:
+            continue
+        if classify(src_stack) != "other":
+            continue
+        forbidden_a = taboo.get(src_stack[0], frozenset())
+        forbidden_b = taboo.get(src_stack[1], frozenset())
+        for tgt_si, tgt_stack in enumerate(board):
+            if tgt_si == src_si:
+                continue
+            if classify(tgt_stack) == "other":
+                continue
+            if any(x in forbidden_a or x in forbidden_b for x in tgt_stack):
+                continue
+            for side in ("right", "left"):
+                if side == "right":
+                    merged = list(tgt_stack) + list(src_stack)
+                else:
+                    merged = list(src_stack) + list(tgt_stack)
+                if classify(merged) == "other":
+                    continue
+                new = [s[:] for i, s in enumerate(board)
+                       if i != src_si and i != tgt_si]
+                new.append(merged)
+                yield (list(src_stack), list(tgt_stack), side,
+                       new, merged)
+
+
 def _try_pulls(board, taboo=None, only_loose=None):
     """For each loose card and each trouble stack, yield a
     pull: trouble absorbs the loose onto its stack. The
@@ -555,6 +613,19 @@ def beginner_plan(board, *, max_compound=6, max_nodes=200_000,
         for loose, target_before, side, after, result in \
                 _try_pushes(board, taboo):
             line = _push_line(loose, target_before, result)
+            found = search(after,
+                           steps + [(line, after)],
+                           budget, taboo, visited)
+            if found is not None:
+                return found
+
+        # Tier 0c: free push-merge. A 2-partial trouble glues
+        # onto a legal stack such that the combined stack is
+        # legal. Both partial cards dissolve at once.
+        for src_partial, target_before, side, after, result in \
+                _try_push_merges(board, taboo):
+            line = _push_merge_line(src_partial, target_before,
+                                    side, result)
             found = search(after,
                            steps + [(line, after)],
                            budget, taboo, visited)
