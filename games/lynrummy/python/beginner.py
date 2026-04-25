@@ -187,161 +187,6 @@ def almost_neighbor_shapes(board):
 
 # --- Verb implementations (board → new board) ---
 
-def _find(board, c):
-    for si, stack in enumerate(board):
-        for ci, x in enumerate(stack):
-            if x == c:
-                return si, ci
-    raise ValueError(f"{label(c)} not on board")
-
-
-def _can_peel(stack, ci):
-    n = len(stack)
-    kind = classify(stack)
-    if kind == "set" and n >= 4:
-        return True
-    if kind in ("pure_run", "rb_run") and n >= 4 and (
-            ci == 0 or ci == n - 1):
-        return True
-    return False
-
-
-def _can_pluck(stack, ci):
-    n = len(stack)
-    kind = classify(stack)
-    return (kind in ("pure_run", "rb_run")
-            and 3 <= ci <= n - 4)
-
-
-def _can_steal(stack, ci):
-    """Steal: extract a card from a length-3 legal stack,
-    leaving a length-2 illegal remnant behind. The only
-    justification is a later move that reuses the extracted
-    card. More expensive than peel (which keeps remnants
-    legal). Length-3 runs steal from end positions only;
-    length-3 sets steal from any position (sets are
-    unordered)."""
-    n = len(stack)
-    kind = classify(stack)
-    if n != 3:
-        return False
-    if kind in ("pure_run", "rb_run"):
-        return ci == 0 or ci == n - 1
-    if kind == "set":
-        return True
-    return False
-
-
-def _can_yank(stack, ci):
-    """Yank: pull from an inner-but-not-deep position of a
-    long run. One side is a legal sub-run (length 3+); the
-    other side is a singleton or 2-partial. Costlier than
-    pluck (which leaves both halves legal), cheaper or equal
-    to steal in the singleton case."""
-    n = len(stack)
-    kind = classify(stack)
-    if kind not in ("pure_run", "rb_run"):
-        return False
-    if ci == 0 or ci == n - 1:
-        return False
-    if 3 <= ci <= n - 4:
-        return False  # pluck
-    left_len = ci
-    right_len = n - ci - 1
-    return (max(left_len, right_len) >= 3
-            and min(left_len, right_len) >= 1)
-
-
-def peel(board, c):
-    si, ci = _find(board, c)
-    stack = board[si]
-    new = [s[:] for s in board]
-    if classify(stack) == "set":
-        new[si] = [x for x in stack if x != c]
-    elif ci == 0:
-        new[si] = stack[1:]
-    else:
-        new[si] = stack[:-1]
-    new.append([c])
-    return new
-
-
-def steal(board, c):
-    """Run steal: leaves a length-2 partial remnant.
-    Set steal: fully dismantles the 3-set — the two
-    non-stolen cards become individual singletons (rather
-    than a 2-set partial). The mental model: with the third
-    card gone there's no realistic path back to a set, so
-    the partial framing is misleading."""
-    si, ci = _find(board, c)
-    stack = board[si]
-    kind = classify(stack)
-    new = [s[:] for i, s in enumerate(board) if i != si]
-    if kind == "set":
-        for x in stack:
-            if x != c:
-                new.append([x])
-    else:
-        if ci == 0:
-            new.append(stack[1:])
-        else:
-            new.append(stack[:-1])
-    new.append([c])
-    return new
-
-
-def pluck(board, c):
-    si, ci = _find(board, c)
-    stack = board[si]
-    new = [s[:] for i, s in enumerate(board) if i != si]
-    new.append(stack[:ci])
-    new.append([c])
-    new.append(stack[ci + 1:])
-    return new
-
-
-def yank(board, c):
-    """Same split mechanic as pluck, but the call site has
-    decided one half is a short partial (singleton or
-    2-partial). The cost is paid by the caller via taboo +
-    follow-up plans."""
-    si, ci = _find(board, c)
-    stack = board[si]
-    new = [s[:] for i, s in enumerate(board) if i != si]
-    new.append(stack[:ci])
-    new.append([c])
-    new.append(stack[ci + 1:])
-    return new
-
-
-def _absorb(board, c, target_sig, side):
-    """Move loose `c` onto the stack anchored by `target_sig`
-    on the named side. Mechanic for pulling the loose into
-    its destination — never narrated as a verb. The narrator
-    sees the trouble card as the actor doing the pull."""
-    si_src, _ = _find(board, c)
-    if len(board[si_src]) != 1:
-        raise ValueError(f"absorb: {label(c)} is not a loose singleton")
-    si_tgt = None
-    for i, s in enumerate(board):
-        if i == si_src:
-            continue
-        if s and s[0] == target_sig:
-            si_tgt = i
-            break
-    if si_tgt is None:
-        raise ValueError(f"absorb: no stack anchored by {label(target_sig)}")
-    new = [s[:] for s in board]
-    loose = new.pop(si_src)
-    if si_tgt > si_src:
-        si_tgt -= 1
-    if side == "left":
-        new[si_tgt] = loose + new[si_tgt]
-    else:
-        new[si_tgt] = new[si_tgt] + loose
-    return new
-
-
 # --- Planner ---
 
 def _stack_label(stack):
@@ -519,18 +364,29 @@ def _try_extracts(complete, trouble, shapes):
                 yield "steal", ec, src, nc, nt, p
 
 
+def _loose_indices(trouble, only_loose=None):
+    """Indices in trouble pointing at singleton stacks.
+    When only_loose is given, returns [idx] for that
+    specific loose — using trouble[-1] as the fast path
+    since extracts always append the new loose at the end."""
+    if only_loose is not None:
+        if trouble and len(trouble[-1]) == 1 and trouble[-1][0] == only_loose:
+            return [len(trouble) - 1]
+        for i, s in enumerate(trouble):
+            if len(s) == 1 and s[0] == only_loose:
+                return [i]
+        return []
+    return [i for i, s in enumerate(trouble) if len(s) == 1]
+
+
 def _try_pushes(complete, trouble, taboo=None, only_loose=None):
     """Push: a loose (singleton trouble stack) lands on a
     complete stack such that the result is still complete.
     Yields (loose, target_before, side, new_complete,
     new_trouble, result)."""
     taboo = taboo or {}
-    for src_idx, src in enumerate(trouble):
-        if len(src) != 1:
-            continue
-        loose = src[0]
-        if only_loose is not None and loose != only_loose:
-            continue
+    for src_idx in _loose_indices(trouble, only_loose):
+        loose = trouble[src_idx][0]
         forbidden = taboo.get(loose, frozenset())
         for tgt_idx, tgt in enumerate(complete):
             if any(x in forbidden for x in tgt):
@@ -616,12 +472,8 @@ def _try_pulls(complete, trouble, taboo=None, only_loose=None):
     partial). Yields (loose, target_before, side,
     new_complete, new_trouble, result)."""
     taboo = taboo or {}
-    for src_idx, src in enumerate(trouble):
-        if len(src) != 1:
-            continue
-        loose = src[0]
-        if only_loose is not None and loose != only_loose:
-            continue
+    for src_idx in _loose_indices(trouble, only_loose):
+        loose = trouble[src_idx][0]
         forbidden = taboo.get(loose, frozenset())
         for tgt_idx, tgt in enumerate(trouble):
             if tgt_idx == src_idx:
