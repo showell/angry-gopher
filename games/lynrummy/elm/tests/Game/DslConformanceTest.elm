@@ -90,6 +90,22 @@ deckIdentityMismatchInRemove =
                         Expect.pass
 
 
+engulfGrowing2partialIntoLegalRun : Test
+engulfGrowing2partialIntoLegalRun =
+    test "engulf_growing_2partial_into_legal_run" <|
+        \_ ->
+            -- Elm planner not yet ported (enumerate_moves)
+            Expect.pass
+
+
+freePullSingletonOntoRunGrowing : Test
+freePullSingletonOntoRunGrowing =
+    test "free_pull_singleton_onto_run_growing" <|
+        \_ ->
+            -- Elm planner not yet ported (enumerate_moves)
+            Expect.pass
+
+
 geometryCrowded : Test
 geometryCrowded =
     test "geometry_crowded" <|
@@ -897,6 +913,38 @@ midturnAllowsBogus =
                     Expect.fail (refereeStageToString err.stage ++ ": " ++ err.message)
 
 
+peelLeftEdgeIntoSingletonTrouble : Test
+peelLeftEdgeIntoSingletonTrouble =
+    test "peel_left_edge_into_singleton_trouble" <|
+        \_ ->
+            -- Elm planner not yet ported (enumerate_moves)
+            Expect.pass
+
+
+pushPartialPairOntoHelperRun : Test
+pushPartialPairOntoHelperRun =
+    test "push_partial_pair_onto_helper_run" <|
+        \_ ->
+            -- Elm planner not yet ported (enumerate_moves)
+            Expect.pass
+
+
+shiftEightClubsPopsJackClubs : Test
+shiftEightClubsPopsJackClubs =
+    test "shift_eight_clubs_pops_jack_clubs" <|
+        \_ ->
+            -- Elm planner not yet ported (enumerate_moves)
+            Expect.pass
+
+
+spliceDup5dIntoPureDiamonds : Test
+spliceDup5dIntoPureDiamonds =
+    test "splice_dup_5d_into_pure_diamonds" <|
+        \_ ->
+            -- Elm planner not yet ported (enumerate_moves)
+            Expect.pass
+
+
 turnCompleteCleanBoard : Test
 turnCompleteCleanBoard =
     test "turn_complete_clean_board" <|
@@ -964,6 +1012,8 @@ suite : Test
 suite =
     describe "DSL conformance"
         [ deckIdentityMismatchInRemove
+        , engulfGrowing2partialIntoLegalRun
+        , freePullSingletonOntoRunGrowing
         , geometryCrowded
         , geometryOutOfBounds
         , geometryOverlap
@@ -988,6 +1038,10 @@ suite =
         , identityReorderBreaksMatch
         , inventoryCardFromNowhere
         , midturnAllowsBogus
+        , peelLeftEdgeIntoSingletonTrouble
+        , pushPartialPairOntoHelperRun
+        , shiftEightClubsPopsJackClubs
+        , spliceDup5dIntoPureDiamonds
         , turnCompleteCleanBoard
         , turnCompleteRejectsIncomplete
         , validExtendRunWith8H

@@ -30,6 +30,12 @@ are build artifacts.
 - `hint_invariant` — apply named trick's first play to the
   board, assert every resulting stack classifies cleanly
   (Elm + Python).
+- `enumerate_moves` — given a 4-bucket state
+  (helper / trouble / growing / complete), assert
+  `bfs_solver._enumerate_moves` yields at least one move of
+  the named `expect.yields` type (Python today; Elm stubbed
+  with `Expect.pass` until the planner ports). Successor to
+  the trick-invariant scenarios as those retire.
 - `trick_first_play` — legacy; Elm still honors it, Go no
   longer has tricks.
 

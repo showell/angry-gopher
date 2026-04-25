@@ -1,5 +1,147 @@
 [
   {
+    "name": "engulf_growing_2partial_into_legal_run",
+    "desc": "GROWING [AC 2D] engulfs HELPER [3S 4D 5C] → length-5 rb-run, graduates.",
+    "op": "enumerate_moves",
+    "hand": [],
+    "board": [],
+    "helper": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 3,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 5,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "growing": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 1,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 2,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "expect": {
+      "kind": "",
+      "yields": "push"
+    }
+  },
+  {
+    "name": "free_pull_singleton_onto_run_growing",
+    "desc": "A loose [4H] singleton in TROUBLE absorbs onto a 2-partial GROWING build.",
+    "op": "enumerate_moves",
+    "hand": [],
+    "board": [],
+    "trouble": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 4,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 5,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "growing": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 6,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "expect": {
+      "kind": "",
+      "yields": "free_pull"
+    }
+  },
+  {
     "name": "hint_direct_play_wins_priority_on_opening_board",
     "desc": "With a hand that contains 7H', the opening board admits a direct_play (7H' onto the 7-set). Priority order means direct_play ranks first; other tricks may follow.",
     "op": "build_suggestions",
@@ -1711,6 +1853,338 @@
     ],
     "expect": {
       "kind": "suggestions"
+    }
+  },
+  {
+    "name": "peel_left_edge_into_singleton_trouble",
+    "desc": "5H peeled from a length-4 pure run absorbs onto trouble [4H].",
+    "op": "enumerate_moves",
+    "hand": [],
+    "board": [],
+    "helper": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 5,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 6,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 8,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "trouble": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 4,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "expect": {
+      "kind": "",
+      "yields": "extract_absorb"
+    }
+  },
+  {
+    "name": "push_partial_pair_onto_helper_run",
+    "desc": "TROUBLE 2-partial [QC KC] pushes onto a helper run that legalizes both halves.",
+    "op": "enumerate_moves",
+    "hand": [],
+    "board": [],
+    "helper": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 9,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 10,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 11,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "trouble": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 12,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 13,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "expect": {
+      "kind": "",
+      "yields": "push"
+    }
+  },
+  {
+    "name": "shift_eight_clubs_pops_jack_clubs",
+    "desc": "Length-3 run [9C TC JC] steals JC; donor [8D 8S 8H 8C] supplies 8C as replacement.",
+    "op": "enumerate_moves",
+    "hand": [],
+    "board": [],
+    "helper": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 9,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 10,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 11,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 8,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 8,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 8,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 8,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "trouble": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 12,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "expect": {
+      "kind": "",
+      "yields": "shift"
+    }
+  },
+  {
+    "name": "splice_dup_5d_into_pure_diamonds",
+    "desc": "A second-deck 5D' splices into a length-6 pure-diamond run between 4D and 5D.",
+    "op": "enumerate_moves",
+    "hand": [],
+    "board": [],
+    "helper": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 3,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 5,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 6,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 8,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "trouble": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 5,
+              "suit": 1,
+              "origin_deck": 1
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "expect": {
+      "kind": "",
+      "yields": "splice"
     }
   }
 ]

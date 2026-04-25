@@ -32,6 +32,7 @@ import json
 import sys
 from pathlib import Path
 
+import bfs_solver
 import strategy
 from geometry import find_violation
 
@@ -136,9 +137,45 @@ def _run_hint_invariant(sc):
     return True, f"OK — {len(prims)} primitives, {len(final)} clean stacks"
 
 
+def _bucket_to_tuples(stacks):
+    """Convert a JSON 4-bucket section (list of stacks with
+    board_cards) into bfs_solver's tuple-of-tuples shape."""
+    return [
+        [(bc["card"]["value"], bc["card"]["suit"],
+          bc["card"]["origin_deck"])
+         for bc in s["board_cards"]]
+        for s in stacks
+    ]
+
+
+def _run_enumerate_moves(sc):
+    """Build a 4-bucket state from the scenario's helper/trouble/
+    growing/complete sections, walk `bfs_solver._enumerate_moves`,
+    and assert at least one yielded desc matches the expected
+    `yields` type."""
+    state = (
+        _bucket_to_tuples(sc.get("helper", [])),
+        _bucket_to_tuples(sc.get("trouble", [])),
+        _bucket_to_tuples(sc.get("growing", [])),
+        _bucket_to_tuples(sc.get("complete", [])),
+    )
+    expected_type = sc["expect"].get("yields", "")
+    if not expected_type:
+        return False, "expect.yields missing"
+    moves = list(bfs_solver._enumerate_moves(state))
+    matches = [d for d, _ in moves if d["type"] == expected_type]
+    if not matches:
+        types = sorted({d["type"] for d, _ in moves})
+        return False, (f"no {expected_type!r} move yielded; "
+                       f"types seen: {types or 'none'}")
+    return True, (f"OK — {len(moves)} moves yielded, "
+                  f"{len(matches)} matched {expected_type!r}")
+
+
 DISPATCH = {
     "build_suggestions": _run_build_suggestions,
     "hint_invariant":    _run_hint_invariant,
+    "enumerate_moves":   _run_enumerate_moves,
 }
 
 

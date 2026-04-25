@@ -39,7 +39,13 @@ type Scenario struct {
 	Removed    []Stack
 	Added      []Stack
 	HandPlayed []Card
-	Expect     Expectation
+	// Four-bucket state, used by `enumerate_moves` and any future
+	// planner ops. Empty for non-planner ops.
+	Helper   []Stack
+	Trouble  []Stack
+	Growing  []Stack
+	Complete []Stack
+	Expect   Expectation
 }
 
 type Expectation struct {
@@ -49,6 +55,8 @@ type Expectation struct {
 	Stage         string
 	MessageSubstr string
 	Suggestions   []ExpectedSuggestion // expect: suggestions
+	// Planner expectations (op `enumerate_moves`).
+	Yields string // "push" / "extract_absorb" / etc. — assert AT LEAST one yielded move has this type
 }
 
 // ExpectedSuggestion — one row inside an `expect: suggestions`
@@ -96,6 +104,7 @@ var goSupportedOps = map[string]bool{
 var pythonSupportedOps = map[string]bool{
 	"build_suggestions": true,
 	"hint_invariant":    true,
+	"enumerate_moves":   true,
 }
 
 func main() {
@@ -595,6 +604,11 @@ func elmScenarioBody(sc Scenario) string {
 			return b.String()
 		}
 		elmHintInvariant(&b, sc, trickVar)
+	case "enumerate_moves":
+		// Elm planner is not yet ported. The scenario is captured
+		// in the DSL fixtures and exercised by Python today; once
+		// the BFS solver lands in Elm, replace this stub.
+		b.WriteString("            -- Elm planner not yet ported (enumerate_moves)\n            Expect.pass")
 	default:
 		fmt.Fprintf(&b, "            Expect.fail \"unknown op %s\"", sc.Op)
 	}
@@ -861,6 +875,8 @@ type jsonSuggestion struct {
 type jsonExpect struct {
 	Kind        string           `json:"kind"`
 	Suggestions []jsonSuggestion `json:"suggestions,omitempty"`
+	// Planner ops.
+	Yields string `json:"yields,omitempty"`
 }
 
 type jsonScenario struct {
@@ -870,7 +886,13 @@ type jsonScenario struct {
 	Trick  string         `json:"trick,omitempty"`
 	Hand   []jsonHandCard `json:"hand"`
 	Board  []jsonStack    `json:"board"`
-	Expect jsonExpect     `json:"expect"`
+	// Four-bucket state for `enumerate_moves`. Empty arrays for
+	// non-planner ops keep the JSON shape uniform.
+	Helper   []jsonStack `json:"helper,omitempty"`
+	Trouble  []jsonStack `json:"trouble,omitempty"`
+	Growing  []jsonStack `json:"growing,omitempty"`
+	Complete []jsonStack `json:"complete,omitempty"`
+	Expect   jsonExpect  `json:"expect"`
 }
 
 func emitJSON(scenarios []Scenario, outPath string) error {
@@ -898,14 +920,21 @@ func emitJSON(scenarios []Scenario, outPath string) error {
 
 func toJSONScenario(sc Scenario) jsonScenario {
 	js := jsonScenario{
-		Name:  sc.Name,
-		Desc:  sc.Desc,
-		Op:    sc.Op,
-		Trick: sc.Trick,
-		Hand:  toJSONHand(sc.Hand),
-		Board: toJSONBoard(sc.Board),
+		Name:     sc.Name,
+		Desc:     sc.Desc,
+		Op:       sc.Op,
+		Trick:    sc.Trick,
+		Hand:     toJSONHand(sc.Hand),
+		Board:    toJSONBoard(sc.Board),
+		Helper:   toJSONBoard(sc.Helper),
+		Trouble:  toJSONBoard(sc.Trouble),
+		Growing:  toJSONBoard(sc.Growing),
+		Complete: toJSONBoard(sc.Complete),
 	}
-	js.Expect = jsonExpect{Kind: sc.Expect.Kind}
+	js.Expect = jsonExpect{
+		Kind:   sc.Expect.Kind,
+		Yields: sc.Expect.Yields,
+	}
 	for _, es := range sc.Expect.Suggestions {
 		js.Expect.Suggestions = append(js.Expect.Suggestions, jsonSuggestion{
 			TrickID:   es.TrickID,
@@ -1111,6 +1140,30 @@ func applyBlockField(sc *Scenario, key string, children []line, path string) err
 			return err
 		}
 		sc.Added = stacks
+	case "helper":
+		stacks, err := parseStacks(children, path)
+		if err != nil {
+			return err
+		}
+		sc.Helper = stacks
+	case "trouble":
+		stacks, err := parseStacks(children, path)
+		if err != nil {
+			return err
+		}
+		sc.Trouble = stacks
+	case "growing":
+		stacks, err := parseStacks(children, path)
+		if err != nil {
+			return err
+		}
+		sc.Growing = stacks
+	case "complete":
+		stacks, err := parseStacks(children, path)
+		if err != nil {
+			return err
+		}
+		sc.Complete = stacks
 	case "expect":
 		return parseExpectBlock(&sc.Expect, children, path)
 	default:
@@ -1193,6 +1246,8 @@ func parseExpectBlock(e *Expectation, children []line, path string) error {
 					return fmt.Errorf("%s:%d: suggestion: %w", path, l.lineNum, err)
 				}
 				e.Suggestions = append(e.Suggestions, sug)
+			case "yields":
+				e.Yields = val
 			default:
 				return fmt.Errorf("%s:%d: unknown expect field %q", path, l.lineNum, key)
 			}
