@@ -4,14 +4,14 @@ module Game.Replay.Space exposing
     , boardStackSource
     , dragMsPerPixel
     , dragSourceForAction
-    , elementCenterInViewport
+    , elementTopLeftInViewport
     , handCardForAction
     , handCardSource
     , interpPath
     , linearPath
     , pathDuration
     , pointInLiveViewport
-    , stackEdgeInLiveViewport
+    , stackLandingInLiveViewport
     )
 
 {-| The spatial half of Instant Replay.
@@ -55,21 +55,18 @@ import Main.State as State
 -- ANIMATION INFO
 
 
-{-| The bundle a Time-phase `Animating` carries through its life:
-where the drag starts, its interpolation path (in the frame
-named by `pathFrame`), which DragSource drives the floater
-rendering, the pointer-to-card offset, and the action to apply
-once the interpolation ends.
+{-| The bundle a Time-phase `Animating` carries: when the
+animation started, the interpolation path (in the frame named
+by `pathFrame`), the DragSource that drives the floater's
+render, and the action to apply at end.
 
-Same shape as the record inside `State.ReplayAnimation.Animating`
-— Elm's structural record typing unifies them.
-
+No grabOffset — replay speaks only floaterTopLeft; nothing
+downstream of capture needs the cursor↔card offset.
 -}
 type alias AnimationInfo =
     { startMs : Float
     , path : List State.GesturePoint
     , source : DragSource
-    , grabOffset : Point
     , pathFrame : PathFrame
     , pendingAction : WireAction
     }
@@ -79,41 +76,26 @@ type alias AnimationInfo =
 -- VIEWPORT TRANSLATION (hand-origin target synthesis only)
 
 
-{-| Convert a `Browser.Dom.Element` to its center `Point` in
-viewport coords. Subtracts `viewport.x/y` so the result is
+{-| Convert a `Browser.Dom.Element` to its TOP-LEFT `Point`
+in viewport coords. Subtracts `viewport.x/y` so the result is
 relative to the browser viewport (matching mouse
 `clientX/Y`), not document coords. Used by both hand-origin
-Animate modules to locate the captured hand card's live
-center from the DOM rect the `Browser.Dom.getElement` Task
-returned.
+Animate modules to seed the animation's starting floater
+top-left — the replay floater renders where the hand card
+currently sits.
 -}
-elementCenterInViewport : Browser.Dom.Element -> Point
-elementCenterInViewport element =
-    { x =
-        round
-            (element.element.x
-                - element.viewport.x
-                + element.element.width
-                / 2
-            )
-    , y =
-        round
-            (element.element.y
-                - element.viewport.y
-                + element.element.height
-                / 2
-            )
+elementTopLeftInViewport : Browser.Dom.Element -> Point
+elementTopLeftInViewport element =
+    { x = round (element.element.x - element.viewport.x)
+    , y = round (element.element.y - element.viewport.y)
     }
 
 
-{-| Translate a board-frame `{ left, top }` into the current
-viewport frame using the live DOM-measured board rect.
-Returns `Nothing` if the rect hasn't arrived yet — callers
-handle absence explicitly. (Previously had a silent
-documentary-constants fallback with a Debug.log; removed
-2026-04-23 because "works most of the time, silently
-degrades otherwise" is the canonical smell for hidden
-bugs.)
+{-| Translate a board-frame `{ left, top }` into viewport
+frame using the live DOM-measured board rect. Returns
+`Nothing` if the rect hasn't arrived yet — callers handle
+absence explicitly rather than silently falling back to
+pinned constants.
 -}
 pointInLiveViewport : Model -> { left : Int, top : Int } -> Maybe Point
 pointInLiveViewport model loc =
@@ -124,42 +106,43 @@ pointInLiveViewport model loc =
             )
 
 
-{-| Viewport point of a stack's left- or right-edge, vertically
-centered. Returns `Nothing` if the live board rect isn't ready.
-Used by `handCardRectReceived` in Time: hand-origin drags
-cross the board widget boundary, so their target must be in
-viewport frame.
+{-| Viewport top-left of where a hand-origin merge floater
+should LAND when merging onto `stack` on `side`. The hand
+card is a single card; after a right-merge it becomes the new
+rightmost card of the target stack, so it lands with its
+top-left at (target.right, target.top). Left-merge lands at
+(target.left - CARD_PITCH, target.top).
+
+Returns `Nothing` if the live board rect isn't ready. Used
+by `AnimateMergeHand.finish` to compute the destination of
+the synthesized drag path.
 -}
-stackEdgeInLiveViewport : Model -> CardStack -> BoardActions.Side -> Maybe Point
-stackEdgeInLiveViewport model stack side =
+stackLandingInLiveViewport : Model -> CardStack -> BoardActions.Side -> Maybe Point
+stackLandingInLiveViewport model stack side =
     let
         size =
             CardStack.size stack
 
-        edgeLeft =
+        landingLeft =
             case side of
                 BoardActions.Right ->
                     stack.loc.left + size * BG.cardPitch
 
                 BoardActions.Left ->
-                    stack.loc.left
+                    stack.loc.left - BG.cardPitch
     in
-    pointInLiveViewport model { left = edgeLeft, top = stack.loc.top }
-        |> Maybe.map
-            (\anchor -> { x = anchor.x, y = anchor.y + BG.cardHeight // 2 })
+    pointInLiveViewport model { left = landingLeft, top = stack.loc.top }
 
 
 
 -- PATH + INTERPOLATION
 
 
-{-| Drag duration scales with distance at 2 ms/px (Steve,
-2026-04-21: settled pace for perceived replay readability now
-that the eased synthesis carries shape information). Decoupled
-from Python's `DRAG_MS_PER_PIXEL` — Python-captured paths carry
-their pace in their tMs values and Elm honors them verbatim;
-this constant governs ONLY Elm's own synthesis (hand-origin
-linearPath target construction).
+{-| Drag duration scales with distance at 2 ms/px — a pace
+that reads as natural motion when combined with the eased
+synthesis. Applied ONLY to Elm's own synthesized paths
+(hand-origin replays). Captured paths carry their pace in
+their tMs values and are honored verbatim.
 -}
 dragMsPerPixel : Float
 dragMsPerPixel =
@@ -263,12 +246,10 @@ interpPathHelp prev remaining targetTs =
 -- DRAG SOURCE
 
 
-{-| Resolve the DragSource + grabOffset for a WireAction against
-the current model state. Mirrors startBoardCardDrag /
-startHandDrag offsets so the replay floater matches what the
-human saw.
+{-| Resolve the DragSource for a WireAction against the
+current model state. Source identity only — no grabOffset.
 -}
-dragSourceForAction : WireAction -> Model -> Maybe ( DragSource, Point )
+dragSourceForAction : WireAction -> Model -> Maybe DragSource
 dragSourceForAction action model =
     case action of
         WA.Split p ->
@@ -290,18 +271,13 @@ dragSourceForAction action model =
             Nothing
 
 
-boardStackSource : CardStack -> Model -> Maybe ( DragSource, Point )
+boardStackSource : CardStack -> Model -> Maybe DragSource
 boardStackSource ref model =
     CardStack.findStack ref model.board
-        |> Maybe.map
-            (\stack ->
-                ( FromBoardStack stack
-                , { x = CardStack.stackDisplayWidth stack // 2, y = 20 }
-                )
-            )
+        |> Maybe.map FromBoardStack
 
 
-handCardSource : Card -> Model -> Maybe ( DragSource, Point )
+handCardSource : Card -> Model -> Maybe DragSource
 handCardSource card model =
     let
         hand =
@@ -311,10 +287,7 @@ handCardSource card model =
             List.any (\hc -> hc.card == card) hand.handCards
     in
     if present then
-        Just
-            ( FromHandCard card
-            , { x = CardStack.stackPitch // 2, y = 20 }
-            )
+        Just (FromHandCard card)
 
     else
         Nothing
@@ -342,23 +315,21 @@ handCardForAction action =
 
 
 {-| Synthesize a DragState from an animation bundle + current
-cursor. Good enough for the drag overlay to render the floater;
-the wings / hoveredWing / clickIntent fields don't matter during
-replay animation. The `pathFrame` from the anim is carried into
-the DragInfo so the View layer can pick the right rendering
-parent (board child for BoardFrame; viewport overlay for
-ViewportFrame).
+floater top-left. `floaterTopLeft` is the one field the View
+layer reads to position the drag overlay; live-only fields
+(cursor, originalCursor, wings, hoveredWing, boardRect,
+clickIntent) get stubs — replay doesn't use them.
 -}
 animatedDragState :
-    { a | source : DragSource, grabOffset : Point, pathFrame : PathFrame }
+    { a | source : DragSource, pathFrame : PathFrame }
     -> Point
     -> DragState
-animatedDragState anim cursor =
+animatedDragState anim floaterTopLeft =
     Dragging
         { source = anim.source
-        , cursor = cursor
-        , originalCursor = cursor
-        , grabOffset = anim.grabOffset
+        , cursor = { x = 0, y = 0 }
+        , originalCursor = { x = 0, y = 0 }
+        , floaterTopLeft = floaterTopLeft
         , wings = []
         , hoveredWing = Nothing
         , boardRect = Nothing

@@ -55,17 +55,17 @@ suite =
                 \_ ->
                     GA.clickIntentAfterMove { x = 5, y = 5 } { x = 5, y = 5 } (Just 2)
                         |> Expect.equal (Just 2)
-            , test "Just survives 1-pixel axis-aligned movement (distSquared=1, NOT > threshold)" <|
+            , test "Just survives axis jitter up to 3 px (distSquared=9, NOT > threshold)" <|
                 \_ ->
-                    GA.clickIntentAfterMove { x = 0, y = 0 } { x = 1, y = 0 } (Just 2)
+                    GA.clickIntentAfterMove { x = 0, y = 0 } { x = 3, y = 0 } (Just 2)
                         |> Expect.equal (Just 2)
-            , test "Just dies at diagonal (1,1) movement (distSquared=2 > threshold 1)" <|
+            , test "Just survives small diagonal jitter (2,2) (distSquared=8)" <|
                 \_ ->
-                    GA.clickIntentAfterMove { x = 0, y = 0 } { x = 1, y = 1 } (Just 2)
-                        |> Expect.equal Nothing
-            , test "Just dies at axis-aligned 2-pixel movement (distSquared=4)" <|
+                    GA.clickIntentAfterMove { x = 0, y = 0 } { x = 2, y = 2 } (Just 2)
+                        |> Expect.equal (Just 2)
+            , test "Just dies past threshold (4,0) (distSquared=16 > 9)" <|
                 \_ ->
-                    GA.clickIntentAfterMove { x = 0, y = 0 } { x = 2, y = 0 } (Just 2)
+                    GA.clickIntentAfterMove { x = 0, y = 0 } { x = 4, y = 0 } (Just 2)
                         |> Expect.equal Nothing
             , test "Just dies at large movement" <|
                 \_ ->

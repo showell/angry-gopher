@@ -7,12 +7,8 @@ no rendering, no Msg, no update logic.
 
 ## Status
 
-- **Label:** EARLY. Extracted 2026-04-19 during the Main.elm
-  split — the first module to come out of the pre-split
-  monolith. This is the dependency leaf: other Main.* modules
-  import from here; nothing Main-side imports into here.
-- **Source:** refactored from the pre-split `Main.elm`; no
-  behavioural change vs the monolith.
+- **Label:** EARLY. Dependency leaf: other Main.* modules
+  import from here; nothing Main-side imports back in.
 
 ## Exports
 
@@ -31,15 +27,10 @@ Types:
     synthesizer to translate board-frame coords into current
     viewport coords. Nothing outside replay.
 
-New `ReplayAnimation` variant (2026-04-21 B1 extension):
-
-- `AwaitingHandRect { action, source, grabOffset }` —
-  intermediate state while the replay synthesizer is waiting
-  on a `Browser.Dom.getElement` for a hand card's live
-  viewport rect. Transitions to `Animating` when the
-  `HandCardRectReceived` Msg arrives (or falls back on
-  error). No user-visible effect — the frame count is one
-  at most in practice.
+- `AwaitingHandRect { action, source }` — intermediate
+  replay state while waiting on a `Browser.Dom.getElement`
+  for a hand card's live viewport rect. Transitions to
+  `Animating` on `HandCardRectReceived`. Typically one frame.
 - `ReplayProgress` — `{ step, paused }`. Walker over
   `actionLog` (a `List ActionLogEntry`), advanced on every
   `onAnimationFrame` tick via the FSM in `Game.Replay.Time`;
@@ -55,14 +46,12 @@ New `ReplayAnimation` variant (2026-04-21 B1 extension):
   apply the outcome's status (human actions do; replay keeps
   its own "Replaying…" and ignores).
 - `DragState` — `NotDragging | Dragging DragInfo`.
-- `DragInfo` — cursor, original cursor, grab offset, wings,
-  hovered wing, boardRect, clickIntent, source, gesturePath,
-  pathFrame.
+- `DragInfo` — source, cursor, originalCursor, floaterTopLeft,
+  wings, hoveredWing, boardRect, clickIntent, gesturePath,
+  pathFrame. `floaterTopLeft` is the render-canonical field;
+  see the inline doc on the type itself in `State.elm`.
 - `DragSource` — `FromBoardStack CardStack | FromHandCard Card`.
-  Content-based, not positional. Matches the wire format's
-  CardStack refs so the same representation flows from
-  mousedown through mouseup through /actions — no "index in
-  memory, value on the wire" split.
+  Content-based, matching the wire format.
 - `PathFrame` — `BoardFrame | ViewportFrame`. Determines which
   DOM parent the drag floater renders under: `BoardFrame`
   renders as a board-div child (CSS handles board→viewport
@@ -81,19 +70,13 @@ New `ReplayAnimation` variant (2026-04-21 B1 extension):
 - `Flags` — `{ initialSessionId : Maybe Int }`. HTML harness
   input.
 - `RemoteState` — shape used for the bundle's `initialState`
-  (see `ActionLogBundle`) and for `model.replayBaseline`
-  (the Instant Replay rewind target). Was the body of the
-  standalone `/state` wire-read until that call was ripped
-  2026-04-22 (ELM_AUTONOMY_AUDIT); the type stayed because
-  the bundle still carries the same shape.
+  (see `ActionLogBundle`) and for `model.replayBaseline` (the
+  Instant Replay rewind target).
 - `ActionLogBundle` — `{ initialState, actions }`. The
-  /sessions/:id/actions response body. Bootstrap fold:
+  `/sessions/:id/actions` response body. Bootstrap fold:
   `initialState` seeds the Model; `actions` is threaded
   through `Main.Apply.applyAction` to reach current state.
-- `CompleteTurnOutcome` lives in `Game.Game`, not here —
-  moved 2026-04-22 because the type is the domain-level
-  result of `Game.applyCompleteTurn`, produced locally
-  and also happens to match the wire response shape.
+- `CompleteTurnOutcome` lives in `Game.Game`, not here.
 
 Helpers + constants:
 

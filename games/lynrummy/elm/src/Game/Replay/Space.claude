@@ -45,59 +45,53 @@ frame); Space has no dependency on Time.
 
 ### Endpoint math
 
-- `pointInLiveViewport : Model -> { left, top } -> Point` —
-  board-frame → viewport via `model.replayBoardRect`, with
-  pinned-constant fallback (dev-console log on fallback).
-- `stackEdgeInLiveViewport : Model -> CardStack -> Side -> Point`
-  — left-edge or right-edge of a stack in viewport coords.
-  Used only by `handCardRectReceived` to land a MergeHand target;
-  intra-board drags live entirely in board frame.
+- `elementTopLeftInViewport : Browser.Dom.Element -> Point` —
+  unwrap a DOM element's top-left in viewport frame. Used by
+  hand-origin replay to get the card's current live position
+  as the synthesized drag's origin.
+- `pointInLiveViewport : Model -> { left, top } -> Maybe Point`
+  — board-frame → viewport via `model.replayBoardRect`.
+  `Nothing` if the rect hasn't arrived yet.
+- `stackLandingInLiveViewport : Model -> CardStack -> Side ->
+  Maybe Point` — where a hand floater lands in viewport when
+  merging onto `stack` on `side`. Used only by
+  `AnimateMergeHand.finish`.
 
 ### Path + interpolation
 
-- `dragMsPerPixel : Float` — 2 ms/px, for Elm's own synthesis
-  (hand-origin target path construction). Decoupled from
-  Python's `DRAG_MS_PER_PIXEL`: Python-captured paths carry
-  their pace in their `tMs` values and Elm honors them verbatim.
+- `dragMsPerPixel : Float` — 2 ms/px, for Elm's own synthesized
+  hand-origin paths. Captured paths carry their own tMs.
 - `linearPath : Point -> Point -> Float -> List GesturePoint` —
   12-sample straight line at `dragMsPerPixel`.
 - `pathDuration : List GesturePoint -> Float` — last.tMs −
   first.tMs.
-- `interpPath : List GesturePoint -> Float -> Point` — linear
-  cursor interpolation clamped to bounds.
+- `interpPath : List GesturePoint -> Float -> Maybe Point` —
+  linear interpolation. `Nothing` on empty path.
 
 ### Drag-source resolution
 
-- `dragSourceForAction : WireAction -> Model -> Maybe (DragSource, Point)`
-  — mirrors the `startBoardCardDrag` / `startHandDrag` grab
-  offsets so the replay floater sits exactly where the human
-  saw it.
+- `dragSourceForAction : WireAction -> Model -> Maybe DragSource`
+  — identity only; no grabOffset (replay doesn't need one).
+- `boardStackSource` / `handCardSource` — individual resolvers.
 - `handCardForAction : WireAction -> Maybe Card` — classifier:
-  does this action originate in the hand? (Used by Time to
-  decide whether a sync or async endpoint path applies.)
+  does this action originate in the hand?
 
 ### Render adapter
 
-- `animatedDragState : { source, grabOffset, ... } -> Point -> DragState`
-  — produces a `Dragging` record suitable for
-  `draggedOverlay`. Wings / hoveredWing / clickIntent are
-  stubbed because replay doesn't care about hover.
+- `animatedDragState : { source, pathFrame, ... } -> Point -> DragState`
+  — builds a `Dragging` record for `draggedOverlay`. Sets
+  `floaterTopLeft` from the given Point; live-only fields
+  (cursor, originalCursor, wings, etc.) get stubs.
 
 ## Rule for adding synthesis
 
-Every viewport coord produced here comes from
-`pointInLiveViewport` / `stackEdgeInLiveViewport` — both consult
-the DOM-measured `model.replayBoardRect`. Never compute from
+Viewport coords come from `pointInLiveViewport` /
+`stackLandingInLiveViewport` — both consult
+`model.replayBoardRect`. Never compute from
 `BG.boardViewportLeft` / `boardViewportTop` directly; those
-constants are documentary fallbacks only. See the larger rule
-in `Main.claude`.
-
-Pinned-math shortcuts used to sneak past review here. 2026-04-20
-the "landing right, origin wrong" bug was caused by exactly
-that: a hand-origin synthesized via `HandLayout.cardCenterInViewport`
-(pinned math) paired with a DOM-measured target (live).
-Asymmetric authority → animation that lands perfectly but
-starts at the wrong place.
+constants are documentary. Mixing pinned-math with
+DOM-measured math in the same path produces asymmetric
+authority and breaks the animation's landing.
 
 ## Dependencies
 

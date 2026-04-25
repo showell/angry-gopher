@@ -52,11 +52,11 @@ for merge / place / move.
 
 | clickIntent | source | hoveredWing | cursorOverBoard | Result |
 |---|---|---|---|---|
-| Just cardIdx | FromBoardStack idx | — | — | `Split { stackIndex, cardIndex }` |
-| Nothing | FromBoardStack idx | Just wing | — | `MergeStack { source=idx, target=wing.stackIndex, side }` |
-| Nothing | FromHandCard idx | Just wing | — | `MergeHand { handCard, target=wing.stackIndex, side }` |
-| Nothing | FromHandCard idx | Nothing | True (loc present) | `PlaceHand { handCard, loc }` |
-| Nothing | FromBoardStack idx | Nothing | True (loc present) | `MoveStack { stackIndex, newLoc=loc }` |
+| Just cardIdx | FromBoardStack stack | — | — | `Split { stack, cardIndex }` |
+| Nothing | FromBoardStack stack | Just wing | — | `MergeStack { source=stack, target=wing.target, side }` |
+| Nothing | FromHandCard card | Just wing | — | `MergeHand { handCard=card, target=wing.target, side }` |
+| Nothing | FromHandCard card | Nothing | True (loc present) | `PlaceHand { handCard=card, loc }` |
+| Nothing | FromBoardStack stack | Nothing | True (loc present) | `MoveStack { stack, newLoc=loc }` |
 | any | any | any | drop too early / no rect | `Nothing` (gesture discarded) |
 
 -}
@@ -96,12 +96,12 @@ import Task
 -- DRAG START
 
 
-{-| Start a drag from a board card. Captures the half-width of
-the stack for grab offset so the drag floater centres correctly
-under the cursor. `clickIntent = Just cardIndex` marks this as
-a *potential* split click; `GestureArbitration.clickIntentAfterMove`
-(called on subsequent MouseMove) kills the intent if the cursor
-moves beyond the click threshold.
+{-| Start a drag from a board card. The floater's initial
+top-left is `stack.loc` (board frame, no translation).
+`clickIntent = Just cardIndex` marks this as a *potential*
+split click; `GestureArbitration.clickIntentAfterMove` (on
+subsequent MouseMove) kills the intent once the cursor
+drifts past the click threshold.
 -}
 startBoardCardDrag :
     { stack : CardStack, cardIndex : Int }
@@ -120,8 +120,15 @@ startBoardCardDrag { stack, cardIndex } clientPoint tMs model =
                     wings =
                         WingOracle.wingsForStack stack model.board
 
-                    halfWidth =
-                        CardStack.stackDisplayWidth stack // 2
+                    -- Intra-board: the floater starts exactly
+                    -- where the stack is. `stack.loc` is
+                    -- already in board frame, so no translation
+                    -- needed. `pathFrame = BoardFrame` tells
+                    -- the View layer to render the floater as
+                    -- a board-div child, which matches this
+                    -- frame by CSS construction.
+                    initialFloater =
+                        { x = stack.loc.left, y = stack.loc.top }
                 in
                 ( { model
                     | drag =
@@ -129,14 +136,14 @@ startBoardCardDrag { stack, cardIndex } clientPoint tMs model =
                             { source = FromBoardStack stack
                             , cursor = clientPoint
                             , originalCursor = clientPoint
-                            , grabOffset = { x = halfWidth, y = 20 }
+                            , floaterTopLeft = initialFloater
                             , wings = wings
                             , hoveredWing = Nothing
                             , boardRect = Nothing
                             , clickIntent = Just cardIndex
                             , gesturePath =
-                                [ { tMs = tMs, x = clientPoint.x, y = clientPoint.y } ]
-                            , pathFrame = ViewportFrame
+                                [ { tMs = tMs, x = initialFloater.x, y = initialFloater.y } ]
+                            , pathFrame = BoardFrame
                             }
                   }
                 , fetchBoardRect model.gameId
@@ -166,8 +173,21 @@ handDragAllowed card clientPoint tMs model =
                 wings =
                     WingOracle.wingsForHandCard handCard model.board
 
-                halfWidth =
-                    CardStack.stackPitch // 2
+                -- Hand-origin: the floater is rendered as a
+                -- viewport overlay (pathFrame = ViewportFrame).
+                -- We don't know the hand card's exact viewport
+                -- rect without a DOM measurement, so we
+                -- approximate the initial floater as "a bit
+                -- above-and-left of the cursor" — clientPoint
+                -- minus a local half-pitch / 20-px offset.
+                -- Not stored anywhere; used only to seed
+                -- `floaterTopLeft`. From there forward the
+                -- cursor-delta invariant in `mouseMove` does
+                -- the work.
+                initialFloater =
+                    { x = clientPoint.x - CardStack.stackPitch // 2
+                    , y = clientPoint.y - 20
+                    }
             in
             ( { model
                 | drag =
@@ -175,13 +195,13 @@ handDragAllowed card clientPoint tMs model =
                         { source = FromHandCard card
                         , cursor = clientPoint
                         , originalCursor = clientPoint
-                        , grabOffset = { x = halfWidth, y = 20 }
+                        , floaterTopLeft = initialFloater
                         , wings = wings
                         , hoveredWing = Nothing
                         , boardRect = Nothing
                         , clickIntent = Nothing
                         , gesturePath =
-                            [ { tMs = tMs, x = clientPoint.x, y = clientPoint.y } ]
+                            [ { tMs = tMs, x = initialFloater.x, y = initialFloater.y } ]
                         , pathFrame = ViewportFrame
                         }
               }
@@ -198,11 +218,11 @@ findHandCard target cards =
 
 
 {-| Fire a `Browser.Dom.getElement` Task to capture the board's
-viewport rectangle. The result arrives via `BoardRectReceived`;
-until then, `DragInfo.boardRect` is `Nothing` and `dropLoc`
-returns `Nothing` — callers that need the loc have to wait.
-Race with drag duration is benign in practice (task resolves in
-a tick).
+viewport rectangle. Needed by `cursorOverBoard` and by hand-
+origin `dropLoc` to translate a viewport-frame floater into
+board frame; intra-board drags don't need it. The rect
+arrives via `BoardRectReceived` — usually within a frame, so
+the race with drag duration is benign.
 -}
 fetchBoardRect : String -> Cmd Msg
 fetchBoardRect gameId =
@@ -229,26 +249,31 @@ handleMouseUp releasePoint tMs model =
 
         Dragging info ->
             let
-                _ =
-                    Debug.log "[mouseup]"
-                        { source = info.source
-                        , hoveredWing = info.hoveredWing
-                        , clickIntent = info.clickIntent
-                        , cursor = info.cursor
-                        }
-            in
-            let
-                -- Append the mouseup point so the gesture path
-                -- captures the full gesture including the release.
-                -- For a pure click (no MouseMove), this is the
-                -- second sample after the mousedown seed — so
-                -- even clicks carry two-point telemetry.
+                -- Apply the mouseup cursor delta to the floater
+                -- (same invariant as mousemove). Append the
+                -- resulting position to the gesture path so even
+                -- pure clicks — which skip mousemove entirely —
+                -- carry two samples (mousedown seed + release).
+                delta =
+                    { x = releasePoint.x - info.cursor.x
+                    , y = releasePoint.y - info.cursor.y
+                    }
+
+                releaseFloater =
+                    { x = info.floaterTopLeft.x + delta.x
+                    , y = info.floaterTopLeft.y + delta.y
+                    }
+
                 fullPath =
                     info.gesturePath
-                        ++ [ { tMs = tMs, x = releasePoint.x, y = releasePoint.y } ]
+                        ++ [ { tMs = tMs, x = releaseFloater.x, y = releaseFloater.y } ]
 
                 infoFull =
-                    { info | gesturePath = fullPath }
+                    { info
+                        | cursor = releasePoint
+                        , floaterTopLeft = releaseFloater
+                        , gesturePath = fullPath
+                    }
 
                 maybeAction =
                     resolveGesture infoFull model
@@ -273,7 +298,7 @@ handleMouseUp releasePoint tMs model =
                 maybeGesture =
                     case maybeAction of
                         Just action ->
-                            gestureForAction action info.boardRect fullPath
+                            gestureForAction action fullPath info.pathFrame
 
                         Nothing ->
                             Nothing
@@ -300,35 +325,21 @@ handleMouseUp releasePoint tMs model =
             ( finalModel, cmd )
 
 
-{-| Decide what gesture (if any) ships alongside this action,
-and in what frame.
+{-| Decide what gesture (if any) ships with this action.
 
-Hand-origin actions (`MergeHand`, `PlaceHand`) ALWAYS ship
-pathless — Elm's replay resolves hand origins via live DOM
-measurement regardless of sender, so a captured viewport-frame
-path would be dead weight (and stale after any window resize
-anyway). This matches Python's behavior.
-
-Intra-board actions (`Split`, `MergeStack`, `MoveStack`) ship a
-board-frame path: subtract the live board rect's viewport
-offset from each viewport-captured sample, producing coords
-that are invariant under any future viewport/DPR/monitor
-change. The board's internal geometry is fixed (800×600); only
-its position in the viewport can drift, and that's exactly what
-the rect subtraction absorbs.
-
-If the board rect hasn't arrived yet (a `fetchBoardRect` race
-that effectively can't happen in practice — the Task resolves
-in one frame and real drags span many), fall back to viewport
-frame untranslated. Server still accepts; replay will read the
-frame tag and render accordingly.
+Intra-board drags (`Split`, `MergeStack`, `MoveStack`) ship
+the captured path as-is with its native frame tag — the
+capture layer already stores it in the right frame.
+Hand-origin drags (`MergeHand`, `PlaceHand`) ship pathless;
+the receiver re-synthesizes at replay time via live DOM
+measurement. `CompleteTurn` and `Undo` aren't drags.
 -}
 gestureForAction :
     WireAction
-    -> Maybe GA.Rect
     -> List State.GesturePoint
+    -> PathFrame
     -> Maybe { path : List State.GesturePoint, frame : PathFrame }
-gestureForAction action maybeBoardRect path =
+gestureForAction action path pathFrame =
     case action of
         WA.MergeHand _ ->
             Nothing
@@ -337,13 +348,13 @@ gestureForAction action maybeBoardRect path =
             Nothing
 
         WA.Split _ ->
-            Just (intraBoardGesture maybeBoardRect path)
+            Just { path = path, frame = pathFrame }
 
         WA.MergeStack _ ->
-            Just (intraBoardGesture maybeBoardRect path)
+            Just { path = path, frame = pathFrame }
 
         WA.MoveStack _ ->
-            Just (intraBoardGesture maybeBoardRect path)
+            Just { path = path, frame = pathFrame }
 
         WA.CompleteTurn ->
             Nothing
@@ -352,36 +363,11 @@ gestureForAction action maybeBoardRect path =
             Nothing
 
 
-intraBoardGesture :
-    Maybe GA.Rect
-    -> List State.GesturePoint
-    -> { path : List State.GesturePoint, frame : PathFrame }
-intraBoardGesture maybeBoardRect path =
-    case maybeBoardRect of
-        Just rect ->
-            { path = List.map (translateToBoard rect) path, frame = BoardFrame }
-
-        Nothing ->
-            { path = path, frame = ViewportFrame }
-
-
-translateToBoard : GA.Rect -> State.GesturePoint -> State.GesturePoint
-translateToBoard rect p =
-    { tMs = p.tMs
-    , x = p.x - rect.x
-    , y = p.y - rect.y
-    }
-
-
-{-| Resolve a completed drag gesture into the WireAction (if
-any) it produces. Pure — no state mutation. The actual model
-update flows through `Main.Apply.applyAction`, same path as
-replay and (eventually) wire-received actions.
-
-Click precedence over drag mirrors the TS engine's
-`process_pointerup` logic: if `clickIntent` survived, it's a
-split; otherwise dispatch on `(hoveredWing, source,
-cursorOverBoard)`.
+{-| Resolve a completed drag into the WireAction (if any)
+it should produce. Pure. Click precedence: if `clickIntent`
+survived, it's a `Split`; otherwise dispatch on
+`(hoveredWing, source, cursorOverBoard)` per the branch
+table in the module header.
 -}
 resolveGesture : DragInfo -> Model -> Maybe WireAction
 resolveGesture info _ =
@@ -452,82 +438,78 @@ cursorOverBoard info =
             False
 
 
-{-| Purely geometric "which wing does the dragged floater
-overlap?" The drop decision is about **what the player sees** —
-the floater's visible rect — not where a naked cursor happens
-to be. So the hit-test is floater-rect vs wing-rect overlap,
-not cursor-in-wing.
-
-Independent of the browser's DOM hit-test. Called from every
-MouseMove so the wing highlight + status message track the
-floater in real time; also the authoritative check at drop
-time via `resolveGesture`.
+{-| Which wing (if any) is the floater about to land on?
+Fires when the floater's top-left is within
+`wingSnapTolerance` of its eventual landing. Independent of
+the browser's DOM hit-test; called from every MouseMove to
+drive the wing-highlight and from `resolveGesture` as the
+authoritative drop-time check.
 -}
 floaterOverWing : DragInfo -> Maybe WingOracle.WingId
 floaterOverWing info =
-    case info.boardRect of
-        Nothing ->
-            Nothing
-
-        Just rect ->
-            let
-                floater =
-                    floaterBoardRect info rect
-            in
-            info.wings
-                |> List.filter (\wing -> overlaps floater (WingOracle.wingBoardRect wing))
-                |> List.head
+    info.wings
+        |> List.filter (nearEventualLanding info)
+        |> List.head
 
 
-{-| The floater's footprint in board-frame coords. The
-floater's top-left sits at `cursor - grabOffset` in viewport
-coords; subtracting the board rect puts it in board frame.
-Width depends on the dragged source (a 3-card stack is wider
-than a hand card).
+{-| Half a card-pitch of slop in each axis around the
+eventual landing. Tight enough that the floater must be
+visually adjacent to the target; loose enough to tolerate
+normal mouse wiggle.
 -}
-floaterBoardRect :
-    DragInfo
-    -> { x : Int, y : Int, width : Int, height : Int }
-    -> { left : Int, top : Int, width : Int, height : Int }
-floaterBoardRect info rect =
+wingSnapTolerance : Int
+wingSnapTolerance =
+    CardStack.stackPitch // 2
+
+
+{-| The one localized spot where a board↔container frame
+translation happens for the hit-test. `eventualFloaterTopLeft`
+is naturally board-frame; lift it into the floater's frame
+(no-op for intra-board drags; add `boardRect` origin for
+hand-origin drags) and compare directly. Hand-origin drags
+with no board rect yet return False rather than guess.
+-}
+nearEventualLanding : DragInfo -> WingOracle.WingId -> Bool
+nearEventualLanding info wing =
     let
-        width =
+        floaterWidth =
             case info.source of
                 FromBoardStack stack ->
                     CardStack.stackDisplayWidth stack
 
                 FromHandCard _ ->
                     CardStack.stackPitch
+
+        eventualBoard =
+            WingOracle.eventualFloaterTopLeft wing floaterWidth
+
+        eventualInFloaterFrame =
+            case info.pathFrame of
+                BoardFrame ->
+                    Just { x = eventualBoard.left, y = eventualBoard.top }
+
+                ViewportFrame ->
+                    info.boardRect
+                        |> Maybe.map
+                            (\rect ->
+                                { x = eventualBoard.left + rect.x
+                                , y = eventualBoard.top + rect.y
+                                }
+                            )
     in
-    { left = info.cursor.x - info.grabOffset.x - rect.x
-    , top = info.cursor.y - info.grabOffset.y - rect.y
-    , width = width
-    , height = BG.cardHeight
-    }
+    case eventualInFloaterFrame of
+        Nothing ->
+            False
 
+        Just eventual ->
+            let
+                dx =
+                    abs (info.floaterTopLeft.x - eventual.x)
 
-overlaps :
-    { left : Int, top : Int, width : Int, height : Int }
-    -> { left : Int, top : Int, width : Int, height : Int }
-    -> Bool
-overlaps a b =
-    let
-        aRight =
-            a.left + a.width
-
-        aBottom =
-            a.top + a.height
-
-        bRight =
-            b.left + b.width
-
-        bBottom =
-            b.top + b.height
-    in
-    (a.left < bRight)
-        && (aRight > b.left)
-        && (a.top < bBottom)
-        && (aBottom > b.top)
+                dy =
+                    abs (info.floaterTopLeft.y - eventual.y)
+            in
+            dx < wingSnapTolerance && dy < wingSnapTolerance
 
 
 {-| Status message to show while hovering a wing (a drop here
@@ -547,13 +529,21 @@ arrived yet (race between drag-start and
 -}
 dropLoc : DragInfo -> Maybe BoardLocation
 dropLoc info =
-    info.boardRect
-        |> Maybe.map
-            (\rect ->
-                { left = info.cursor.x - info.grabOffset.x - rect.x
-                , top = info.cursor.y - info.grabOffset.y - rect.y
-                }
-            )
+    case info.pathFrame of
+        BoardFrame ->
+            -- Intra-board: floaterTopLeft IS the drop loc.
+            Just { left = info.floaterTopLeft.x, top = info.floaterTopLeft.y }
+
+        ViewportFrame ->
+            -- Hand-origin: translate viewport → board by
+            -- subtracting the board div's viewport origin.
+            info.boardRect
+                |> Maybe.map
+                    (\rect ->
+                        { left = info.floaterTopLeft.x - rect.x
+                        , top = info.floaterTopLeft.y - rect.y
+                        }
+                    )
 
 
 {-| True iff a stack of `cardCount` cards placed at `loc` fits

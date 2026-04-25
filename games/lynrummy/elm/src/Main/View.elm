@@ -378,14 +378,35 @@ handColumn model =
         , style "padding-right" "20px"
         , style "border-right" "1px gray solid"
         ]
-        (div
+        ((div
             [ style "color" "#666"
             , style "font-size" "13px"
             , style "margin-top" "12px"
             ]
             [ Html.text ("Turn " ++ String.fromInt (model.turnIndex + 1)) ]
             :: List.indexedMap (viewPlayerRow model) model.hands
+         )
+            ++ [ deckRemainingLine model ]
         )
+
+
+{-| Shows how many cards are left in the dealer's deck.
+Helpful for gauging how far into the game the agent has
+gotten / how long it's been sustaining itself.
+-}
+deckRemainingLine : Model -> Html Msg
+deckRemainingLine model =
+    div
+        [ style "color" "#666"
+        , style "font-size" "13px"
+        , style "margin-top" "8px"
+        ]
+        [ Html.text
+            ("Deck: "
+                ++ String.fromInt (List.length model.deck)
+                ++ " cards left"
+            )
+        ]
 
 
 {-| One player's row — name + score + either full interactive
@@ -648,23 +669,20 @@ viewWingAt info wing =
         }
 
 
-{-| Top-level drag overlay. Renders ONLY when the active drag's
-path frame is ViewportFrame (hand-origin drags, or pre-
-translation live-captured board drags). `position: fixed` over
-the whole viewport. BoardFrame drags render via
-`boardDragOverlay` inside the board-shell instead, where CSS
-does the board→viewport math for free.
+{-| Viewport-frame drag overlay (`position: fixed`). Renders
+hand-origin drags. Intra-board drags render via
+`boardDragOverlay` inside the board shell.
+
+While `clickIntent` is still alive (mousedown without
+confirmed drag movement), the floater is suppressed so a
+pure click doesn't briefly render a split-candidate floater
+then discard it.
 -}
 draggedOverlay : Model -> Html Msg
 draggedOverlay model =
     case model.drag of
         Dragging info ->
             if info.clickIntent /= Nothing then
-                -- Mousedown without confirmed drag: no floater
-                -- yet. Prevents the click→drag ambiguous window
-                -- from showing the source-stack-jumping-to-
-                -- cursor-minus-grabOffset flash that splits
-                -- would otherwise produce.
                 Html.text ""
 
             else
@@ -679,20 +697,15 @@ draggedOverlay model =
             Html.text ""
 
 
-{-| Board-level drag overlay. Renders as a DOM child of the
-board shell (which is `position: relative`) with
-`position: absolute` + board-frame coords. Active only when
-the drag's path frame is BoardFrame (intra-board replay today;
-intra-board live drags after the Tier 2 capture-time
-translation).
+{-| Board-frame drag overlay: a DOM child of the board shell
+(which is `position: relative`) with `position: absolute` and
+board-frame top/left. Renders intra-board drags.
 -}
 boardDragOverlay : Model -> Maybe (Html Msg)
 boardDragOverlay model =
     case model.drag of
         Dragging info ->
             if info.clickIntent /= Nothing then
-                -- Click intent still live — see draggedOverlay
-                -- for rationale.
                 Nothing
 
             else
@@ -707,19 +720,19 @@ boardDragOverlay model =
             Nothing
 
 
-{-| Shared floater renderer. The caller supplies the positioning
-mode (`fixed` for viewport, `absolute` for board child); `top`
-and `left` come from cursor − grabOffset regardless. The cursor
-values are in whichever frame the overlay is mounted in.
+{-| Shared floater renderer. Reads `info.floaterTopLeft`
+directly into the CSS top/left; caller picks `fixed` (viewport)
+vs `absolute` (board child). Frame of `floaterTopLeft` matches
+the overlay's mount frame — no translation at render.
 -}
 renderDraggedFloater : Model -> DragInfo -> List (Html.Attribute Msg) -> Html Msg
 renderDraggedFloater _ info positioningAttrs =
     let
         x =
-            info.cursor.x - info.grabOffset.x
+            info.floaterTopLeft.x
 
         y =
-            info.cursor.y - info.grabOffset.y
+            info.floaterTopLeft.y
 
         floatingAttrs =
             positioningAttrs

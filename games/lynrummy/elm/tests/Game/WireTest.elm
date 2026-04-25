@@ -264,7 +264,7 @@ geometryRoundTrips =
     describe "BoardBounds and GeometryError"
         [ test "BoardBounds round-trips" <|
             \_ -> expectRoundTrip encodeBoardBounds boardBoundsDecoder sampleBounds
-        , test "GeometryError (TooClose / 'crowded') round-trips" <|
+        , test "GeometryError (TooClose / 'too_close') round-trips" <|
             \_ -> expectRoundTrip encodeGeometryError geometryErrorDecoder sampleGeometryError
         , test "every GeometryErrorKind round-trips" <|
             \_ ->
@@ -380,11 +380,11 @@ shapeAssertions =
                 Expect.equal
                     """{"stage":"inventory","message":"card AH appeared on the board with no source"}"""
                     (Encode.encode 0 (encodeRefereeError sampleRefereeError))
-        , test "GeometryError encodes 'crowded' (not 'too_close') for TooClose kind" <|
+        , test "GeometryError encodes 'too_close' for TooClose kind" <|
             \_ ->
                 let
                     json =
                         Encode.encode 0 (encodeGeometryError sampleGeometryError)
                 in
-                Expect.equal True (String.contains "\"type\":\"crowded\"" json)
+                Expect.equal True (String.contains "\"type\":\"too_close\"" json)
         ]

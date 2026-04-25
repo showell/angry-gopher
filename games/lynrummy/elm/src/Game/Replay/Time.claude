@@ -89,19 +89,16 @@ a stuck UI.
    `views/lynrummy_elm.go`'s `requiresGestureMetadata`). Both
    humans and Python agents synthesize a path before send.
 2. **Hand-origin synthesis** — fire a `Browser.Dom.getElement`
-   Task for the hand card's live rect. Transition to
-   AwaitingHandRect; the rect arrives in
-   `handCardRectReceived`, which pairs it with the target (via
-   `Space.stackEdgeInLiveViewport` for MergeHand, pinned-math +
-   live-rect mix for PlaceHand's drop loc), synthesizes a
-   linear path, and enters Animating. Hand origins live in the
-   DOM, which no sender knows at action time, so the path
-   requirement doesn't apply to them.
+   Task for the hand card's live rect, transition to
+   AwaitingHandRect; when the rect arrives,
+   `handCardRectReceived` pairs it with the target (via
+   `Space.stackLandingInLiveViewport` for MergeHand, or the
+   translated `payload.loc` for PlaceHand), synthesizes a
+   linear path, and enters Animating.
 
 Anything else — an intra-board action reaching here without a
-path — is a server-contract violation; `Debug.log "[replay]
-FATAL..."` surfaces it and we `applyImmediate` so the game
-state still advances.
+path — is a server-contract violation. `applyImmediate` so the
+game state still advances.
 
 ## Dependencies
 

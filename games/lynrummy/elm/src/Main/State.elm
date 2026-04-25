@@ -163,7 +163,6 @@ type ReplayAnimation
         { startMs : Float
         , path : List GesturePoint
         , source : DragSource
-        , grabOffset : Point
         , pathFrame : PathFrame
         , pendingAction : WireAction
         }
@@ -172,7 +171,6 @@ type ReplayAnimation
     | AwaitingHandRect
         { action : WireAction
         , source : DragSource
-        , grabOffset : Point
         }
 
 
@@ -216,11 +214,38 @@ type DragState
     | Dragging DragInfo
 
 
+{-| Live-drag bookkeeping.
+
+The RENDER-CANONICAL field is `floaterTopLeft` — the one
+thing the View layer reads to position the drag floater.
+Everything in this record feeds INTO floaterTopLeft;
+nothing derives FROM it.
+
+Key invariants:
+
+  - `floaterTopLeft` is in the same frame as `pathFrame`:
+    board frame for intra-board drags, viewport frame for
+    hand-origin drags. Path samples (in `gesturePath`) match.
+  - Mousemove maintains `floaterTopLeft` by ADDING cursor
+    deltas (pure vectors, frame-agnostic). See
+    `Main.Gesture.claude` for the rationale.
+  - `cursor` is the current mouse position in viewport frame.
+    Used only for live concerns — the `cursorOverBoard`
+    hit-test, `clickIntentAfterMove`. Never travels on the
+    wire.
+  - `originalCursor` is the cursor at mousedown, also
+    viewport. Used only by `clickIntentAfterMove` to measure
+    drift.
+  - No `grabOffset` field. For intra-board drags it isn't
+    needed at all (the floater starts at `stack.loc`). For
+    hand-origin drags it's applied at mousedown to derive the
+    initial viewport floater position, then forgotten.
+-}
 type alias DragInfo =
     { source : DragSource
     , cursor : Point
     , originalCursor : Point
-    , grabOffset : Point
+    , floaterTopLeft : Point
     , wings : List WingId
     , hoveredWing : Maybe WingId
     , boardRect : Maybe GA.Rect
@@ -230,13 +255,10 @@ type alias DragInfo =
     }
 
 
-{-| What the user picked up at mousedown. Content-based, not
-positional: a board-stack drag carries the CardStack value it
-started from; a hand-card drag carries the Card. This mirrors
-the wire format's CardStack refs — one model for identifying
-stacks/cards everywhere, not "index in the middle of the drag
-lifecycle, value on the wire." See `feedback_record_facts_decide_later.md`
-and the STATUS_BAR-era discussion on competing representations.
+{-| What the user picked up at mousedown. Content-based:
+a board-stack drag carries the CardStack value; a hand-card
+drag carries the Card. Same identification model as the wire
+format uses — one representation everywhere.
 -}
 type DragSource
     = FromBoardStack CardStack

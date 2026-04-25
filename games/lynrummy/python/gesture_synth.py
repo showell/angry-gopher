@@ -101,36 +101,24 @@ def synthesize(start, end, *, samples=DEFAULT_SAMPLES, path_frame="board",
     }
 
 
-def _stack_center(stack):
-    """Board-frame point at the center of a stack's bounding
-    box. The "grab anywhere on the stack" start point for drags
-    that pick up a whole stack."""
-    size = len(stack["board_cards"])
-    return (stack["loc"]["left"] + size * CARD_PITCH // 2,
-            stack["loc"]["top"] + CARD_HEIGHT // 2)
-
-
-def _stack_edge(stack, side):
-    """Board-frame point at a stack's left- or right-edge,
-    vertically centered. The drop-target point for actions that
-    merge onto a stack's side."""
-    size = len(stack["board_cards"])
-    edge_x = stack["loc"]["left"] + (size * CARD_PITCH if side == "right" else 0)
-    return (edge_x, stack["loc"]["top"] + CARD_HEIGHT // 2)
-
-
 def drag_endpoints(prim, board_before):
-    """Compute `(start, end)` viewport coords for a primitive's
+    """Compute `(start, end)` board-frame coords for a primitive's
     drag, or None if Python can't honestly supply them.
 
-    Hand-origin actions (merge_hand, place_hand) return None:
-    Python doesn't know where hand cards sit in the viewport.
-    Elm synthesizes those at replay time from its own DOM
-    knowledge. Don't speculate here.
+    Path samples are FLOATER TOP-LEFT positions — the same
+    convention Elm uses for its captured paths. The renderer
+    places the floater at the path point directly. Matches
+    Elm's `DragInfo.floaterTopLeft` semantics end-to-end,
+    eliminating any translation between Python synthesis and
+    Elm consumption.
 
-    Intra-board actions have pinned endpoints on both sides,
-    so Python can emit a faithful path in shared viewport
-    coords.
+    Hand-origin actions (merge_hand, place_hand) return None:
+    Python doesn't know where hand cards sit in the viewport,
+    and Elm re-synthesizes those paths at replay time via
+    live DOM measurement.
+
+    Splits return None too — they're clicks in the UI; the
+    server no longer requires a gesture path for them.
     """
     kind = prim["action"]
 
@@ -140,19 +128,9 @@ def drag_endpoints(prim, board_before):
             return None
         src = board_before[src_idx]
         new_loc = prim["new_loc"]
-        size = len(src["board_cards"])
-        # Path points are CURSOR positions (the renderer draws
-        # the floater at cursor - grabOffset, where grabOffset
-        # for a board stack is roughly the stack's half-width
-        # + 20 from the top). So start/end must be where the
-        # cursor IS at each phase, not where the stack corner
-        # is. Cursor at start = source.top-left + grab-offset =
-        # source.center-ish. Cursor at end = new_loc +
-        # grab-offset.
-        start = (src["loc"]["left"] + size * CARD_PITCH // 2,
-                 src["loc"]["top"] + CARD_HEIGHT // 2)
-        end = (new_loc["left"] + size * CARD_PITCH // 2,
-               new_loc["top"] + CARD_HEIGHT // 2)
+        # Stack's top-left before and after the move.
+        start = (src["loc"]["left"], src["loc"]["top"])
+        end = (new_loc["left"], new_loc["top"])
         return start, end
 
     if kind == "merge_stack":
@@ -165,27 +143,15 @@ def drag_endpoints(prim, board_before):
         side = prim.get("side", "right")
         src_size = len(src["board_cards"])
         tgt_size = len(tgt["board_cards"])
-        # Path points are CURSOR positions, renderer offsets by
-        # grabOffset to place the floater. For the source stack
-        # to LAND FLUSH against the target (per Steve 2026-04-23
-        # — nail board-to-board merges, only miss by a couple
-        # pixels for realism), the source's top-left at end
-        # must be (target.right, target.top) for a right-merge
-        # or (target.left - source.width, target.top) for a
-        # left-merge. Cursor at end = floater.top-left +
-        # grab-offset.
-        src_half_width = src_size * CARD_PITCH // 2
-        start = (src["loc"]["left"] + src_half_width,
-                 src["loc"]["top"] + CARD_HEIGHT // 2)
-        tgt_right = tgt["loc"]["left"] + tgt_size * CARD_PITCH
+        # Source's top-left starts at its current loc and lands
+        # flush against the target's opposite edge. 2-px jitter
+        # keeps the landing from looking machine-pixel-perfect.
+        start = (src["loc"]["left"], src["loc"]["top"])
         if side == "right":
-            floater_left = tgt_right
+            end_left = tgt["loc"]["left"] + tgt_size * CARD_PITCH
         else:
-            floater_left = tgt["loc"]["left"] - src_size * CARD_PITCH
-        # Fixed 2-px jitter so the landing doesn't look
-        # machine-pixel-perfect.
-        end = (floater_left + src_half_width + 2,
-               tgt["loc"]["top"] + CARD_HEIGHT // 2 - 2)
+            end_left = tgt["loc"]["left"] - src_size * CARD_PITCH
+        end = (end_left + 2, tgt["loc"]["top"] - 2)
         return start, end
 
     # split: no gesture path. Splits are CLICKS in the UI —

@@ -1,12 +1,7 @@
 module Game.Replay.AnimateMergeStack exposing (start)
 
-{-| Replay animation for a MergeStack primitive. The human drags
-one board stack onto another stack's left or right wing; the
-result is a single merged stack. Captured path is always
-present (server-enforced), so this is the synchronous case.
-
-Extracted 2026-04-22 as part of REFACTOR_ELM_REPLAY B1/Axis X.
-
+{-| Replay animation for MergeStack. Captured path is always
+present (server-enforced), so synchronous — no DOM measure.
 -}
 
 import Game.BoardActions exposing (Side)
@@ -26,11 +21,10 @@ start :
 start payload path frame model nowMs =
     Space.boardStackSource payload.source model
         |> Maybe.map
-            (\( source, grabOffset ) ->
+            (\source ->
                 { startMs = nowMs
                 , path = path
                 , source = source
-                , grabOffset = grabOffset
                 , pathFrame = frame
                 , pendingAction = WA.MergeStack payload
                 }

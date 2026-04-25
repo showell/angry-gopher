@@ -53,19 +53,15 @@ def test_merge_hand_returns_none():
 
 
 def test_move_stack_uses_board_frame_coords():
-    # Board frame: origin at the board's top-left. Python emits
-    # board-frame coords; Elm renders the floater as a child of
-    # the board div so CSS handles board→viewport for free.
-    # Path points are CURSOR positions — center of stack,
-    # matching what the renderer will subtract grabOffset from.
+    # Path samples are floater top-left positions in board
+    # frame (same convention Elm uses for captured paths).
+    # Start = stack.loc; end = new_loc.
     board = [_stack(100, 50, 4)]
     prim = {"action": "move_stack", "stack_index": 0,
             "new_loc": {"left": 400, "top": 200}}
     start, end = gesture_synth.drag_endpoints(prim, board)
-    assert start[0] == 100 + 4 * CARD_PITCH // 2
-    assert start[1] == 50 + CARD_HEIGHT // 2
-    assert end[0] == 400 + 4 * CARD_PITCH // 2
-    assert end[1] == 200 + CARD_HEIGHT // 2
+    assert start == (100, 50), f"start (stack top-left): {start}"
+    assert end == (400, 200), f"end (new_loc top-left): {end}"
     return f"move_stack drag {start} -> {end}"
 
 
@@ -76,32 +72,26 @@ def test_drag_endpoints_returns_none_for_non_drag():
 
 
 def test_merge_stack_endpoints():
-    # Cursor-based endpoints. Start = source center. End =
-    # cursor position such that the source floater lands flush
-    # against the target (cursor = floater.top-left +
-    # grabOffset). Plus a fixed 2-px realism jitter.
+    # Floater top-left endpoints. Start = source.loc; end is
+    # where the source's top-left lands flush against the
+    # target (+2 / -2 jitter for realism).
     board = [_stack(200, 20, 3), _stack(80, 320, 4)]
     prim = {"action": "merge_stack",
             "source_stack": 0, "target_stack": 1, "side": "right"}
     start, end = gesture_synth.drag_endpoints(prim, board)
-    assert start[0] == 200 + 3 * CARD_PITCH // 2
-    assert start[1] == 20 + CARD_HEIGHT // 2
+    assert start == (200, 20), f"start (source top-left): {start}"
 
-    # Source (3-card) top-left lands at target's right edge
-    # (80 + 4*CARD_PITCH). Cursor = floater.top-left +
-    # src_half_width. Plus +2 jitter x, -2 jitter y.
-    expected_right_x = 80 + 4 * CARD_PITCH + 3 * CARD_PITCH // 2 + 2
-    expected_y = 320 + CARD_HEIGHT // 2 - 2
-    assert end == (expected_right_x, expected_y), \
-        f"right merge end: expected {(expected_right_x, expected_y)}, got {end}"
+    # Right-merge: source lands at target's right edge.
+    expected_right = (80 + 4 * CARD_PITCH + 2, 320 - 2)
+    assert end == expected_right, \
+        f"right merge end: expected {expected_right}, got {end}"
 
     prim_left = dict(prim, side="left")
     _, end_left = gesture_synth.drag_endpoints(prim_left, board)
-    # Source top-left at (80 - 3*CARD_PITCH, 320). Cursor +=
-    # src_half_width, jitter.
-    expected_left_x = 80 - 3 * CARD_PITCH + 3 * CARD_PITCH // 2 + 2
-    assert end_left == (expected_left_x, expected_y), \
-        f"left merge end: expected {(expected_left_x, expected_y)}, got {end_left}"
+    # Left-merge: source lands at target.left − source.width.
+    expected_left = (80 - 3 * CARD_PITCH + 2, 320 - 2)
+    assert end_left == expected_left, \
+        f"left merge end: expected {expected_left}, got {end_left}"
     return f"merge_stack drag {start} -> {end}"
 
 

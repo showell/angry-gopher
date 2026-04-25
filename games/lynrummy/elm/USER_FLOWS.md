@@ -90,8 +90,8 @@ verified ("button exists and fires Msg X"), it's a step.
 3. Drag state becomes Dragging; a floating copy follows cursor. ✅
 4. User releases over an empty part of the board (no wing hover). ✅
 5. Client: `MouseUp` / `resolveGesture` — no wing, `cursorOverBoard` true. ✅
-6. Compute `loc = cursor - grabOffset - boardRect` (viewport-relative). ✅
-7. `WA.PlaceHand { hand_card, loc }` sent to server. ✅
+6. Compute `loc = floaterTopLeft - boardRect` (viewport→board). ✅
+7. `WA.PlaceHand { handCard, loc }` sent to server. ✅
 8. Local model: card removed from active hand, new stack
    appended to board at loc. ✅
 9. Server: persists action, next /state reflects the placement. ✅
@@ -103,7 +103,7 @@ verified ("button exists and fires Msg X"), it's a step.
 3. Wing highlights (mergeable green). 🟡 (verify — wing tint
    wiring should be correct)
 4. User releases on the wing. ✅
-5. Client: `WA.MergeHand { hand_card, target_stack, side }`. ✅
+5. Client: `WA.MergeHand { handCard, target, side }`. ✅
 6. Local model: card removed from hand, target stack replaced
    by merged result. ✅
 
@@ -112,20 +112,20 @@ verified ("button exists and fires Msg X"), it's a step.
 1. User drags a board stack. ✅
 2. Floating copy follows cursor; wings of OTHER stacks show. ✅
 3. User releases over empty space (no wing). ✅
-4. Client: `WA.MoveStack { stack_index, new_loc }`. ✅
+4. Client: `WA.MoveStack { stack, newLoc }`. ✅
 
 ### 8. Merge a stack onto another stack's wing
 
 1. User drags a board stack. ✅
 2. Target stack's wing highlights on hover. ✅
 3. User releases on the wing. ✅
-4. Client: `WA.MergeStack { source_stack, target_stack, side }`. ✅
+4. Client: `WA.MergeStack { source, target, side }`. ✅
 
 ### 9. Split a stack
 
 1. User clicks a non-first card in a board stack (click-vs-drag
    arbitration via 1px threshold). ✅
-2. Click intent fires `WA.Split { stack_index, card_index }`. ✅
+2. Click intent fires `WA.Split { stack, cardIndex }`. ✅
 3. Local model: stack replaced by two smaller stacks. ✅
 
 ---

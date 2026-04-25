@@ -17,9 +17,15 @@ to render during a drag.
 - `wingsForHandCard : HandCard -> List CardStack -> List WingId`
   — enumerates wings for a hand-card drag source.
 - `wingBoardRect : WingId -> { left, top, width, height }` —
-  pure board-frame rect the wing renders into. Used both by
-  `Main.View.viewWingAt` at render time and by
-  `Main.Gesture.floaterOverWing` for the hit-test.
+  board-frame rect the wing renders into. Used by
+  `Main.View.viewWingAt` at render time. Not used by the
+  live hit-test.
+- `eventualFloaterTopLeft : WingId -> Int -> { left, top }` —
+  board-frame top-left where the floater lands if the merge
+  fires. Used by the live hit-test
+  (`Main.Gesture.floaterOverWing`) to measure closeness.
+  Takes `sourceWidth` because left-wing landing depends on
+  how wide the dragged source is.
 
 ## Calling convention
 
@@ -31,23 +37,19 @@ drop-onto-target UX.
 
 `side = Left` → source attaches to LEFT of target → wing
 renders to the LEFT of target. Same for Right. No flipping,
-no inversion. See memory `feedback_skill_as_three_factors`-
-adjacent: keep LEFT and RIGHT as two distinct cases.
+no inversion. Keep LEFT and RIGHT as two distinct cases.
 
 ## Why two functions instead of one polymorphic
 
-Stack-source and hand-source paths are deliberately kept as
-two separate functions; they are two similar things, not one
-parameterized thing. Mirrors Steve's "strong concept of LEFT
-and RIGHT" rule applied to source type.
+Stack-source and hand-source paths stay separate; they are
+two similar things, not one parameterized thing.
 
 ## Pointers
 
 - Consumers: `Main.Gesture.startBoardCardDrag` /
   `startHandDrag` (build the wings list at drag start);
-  `Main.Gesture.floaterOverWing` (hit-test on MouseMove);
-  `Main.View.viewWingAt` (render).
+  `Main.Gesture.nearEventualLanding` (hit-test on MouseMove
+  and at drop resolution); `Main.View.viewWingAt` (render).
 - Depends on: `BoardActions.tryStackMerge` /
-  `BoardActions.tryHandMerge` (faithful TS port).
-- Tests: `tests/Game/WingOracleTest.elm` covers wingsForStack
-  correctness + wingBoardRect math.
+  `BoardActions.tryHandMerge`.
+- Tests: `tests/Game/WingOracleTest.elm`.

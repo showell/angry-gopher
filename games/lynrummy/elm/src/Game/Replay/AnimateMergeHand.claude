@@ -1,30 +1,26 @@
 # Game/Replay/AnimateMergeHand.elm — EARLY
 
 Replay animation driver for MergeHand — one of two async
-hand-origin animators (with `AnimatePlaceHand`) extracted
-as REFACTOR_ELM_REPLAY B1/Axis Y, 2026-04-22.
+hand-origin animators (with `AnimatePlaceHand`).
 
 Hand-origin primitives don't ship with a captured gesture
-path (they cross the board widget boundary, so viewport coords
-at capture time would be meaningless at replay time if the
-board scrolled or the window resized). Replay instead
+path — they cross the board widget boundary, so replay
 synthesizes a linear path after asking the DOM for the hand
 card's live viewport rect.
 
 ## Status
 
-- **Label:** EARLY. Two-phase interface (prepare / finish)
-  reflects the async handshake with the DOM. The shape is
-  identical between AnimateMergeHand and AnimatePlaceHand
-  except for how each computes the target endpoint —
-  stack edge for this one, explicit `loc` for the other.
+- **Label:** EARLY. Two-phase interface (`prepare` / `finish`)
+  reflects the async handshake with the DOM. Same shape as
+  `AnimatePlaceHand` except for how the target endpoint is
+  computed — stack's landing for this one, explicit `loc` for
+  the other.
 
 ## Interface
 
 ```elm
 type alias PrepareResult =
     { source : DragSource
-    , grabOffset : Point
     , handCardToMeasure : Card
     }
 
@@ -32,24 +28,21 @@ prepare : { handCard, target, side } -> Model -> Maybe PrepareResult
 
 finish :
     { handCard, target, side }
-    -> Point       -- origin from DOM
+    -> Point       -- origin from DOM (hand card top-left)
     -> Float       -- nowMs
     -> DragSource  -- from the stashed AwaitingHandRect ctx
-    -> Point       -- grabOffset, ditto
     -> Model
     -> Maybe Space.AnimationInfo
 ```
 
-`prepare` returns Nothing when the hand card isn't present
-in the active hand (contract violation). `finish` returns
-Nothing when the target stack drifted off the board between
-prepare and rect-arrival — shouldn't happen in practice
-within one animation frame but is kept total.
+`prepare` returns Nothing when the hand card isn't in the
+active hand. `finish` returns Nothing when the target stack
+or the live board rect isn't available.
 
 ## Dependencies
 
 - `Game.Replay.Space` — for `handCardSource`,
-  `stackEdgeInLiveViewport`, `linearPath`, `AnimationInfo`.
+  `stackLandingInLiveViewport`, `linearPath`, `AnimationInfo`.
 - `Game.CardStack` — for `findStack` (target resolution).
 - `Game.BoardActions` — for `Side`.
 - `Game.WireAction` — for `WA.MergeHand`.
@@ -60,6 +53,6 @@ within one animation frame but is kept total.
 
 - Called from `Game.Replay.Time.prepareHandAnim` /
   `finishHandAnim` — the two dispatchers route hand-origin
-  WireActions to this module or `AnimatePlaceHand`.
-- Board-origin siblings: `AnimateSplit`, `AnimateMergeStack`,
-  `AnimateMoveStack` (all synchronous, one-phase).
+  WireActions here or to `AnimatePlaceHand`.
+- Board-origin siblings: `AnimateMergeStack`,
+  `AnimateMoveStack` (synchronous, one-phase).

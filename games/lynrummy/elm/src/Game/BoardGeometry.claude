@@ -11,10 +11,8 @@ fails, semantics is meaningless.
 
 - **Label:** WORKHORSE. Stable rules, small module.
 - **Mirrors:** Go `board_geometry.go` + `board_geometry.claude`.
-  Both sides validate; the Go referee calls its
-  `checkGeometry` to reject moves whose resulting board would
-  push off-board or overlap. Default bounds (800×600, 5-unit
-  margin) originate Go-side.
+  Both sides validate. Default bounds 800×600 with a 7-px
+  margin between stacks.
 
 ## Key exports
 
@@ -44,23 +42,20 @@ fails, semantics is meaningless.
 - `stackHeight = cardHeight`. Single row; no vertical
   spread within a stack.
 - `boardViewportLeft = 300`, `boardViewportTop = 100` —
-  **documentary / fallback** coordinates of the board div's
-  top-left in the viewport. NOT authoritative as of
-  2026-04-21's B1 change: the replay synthesizer reads the
-  board's live viewport rect via `Browser.Dom.getElement`
-  and uses that for board-frame → viewport translation.
-  These constants remain for (a) documenting Python's
-  expectation in `games/lynrummy/python/geometry.py`
-  and (b) a fallback path (with `Debug.log` warning) if the
-  DOM query loses the race at replay start.
+  **documentary** coordinates of the board div's top-left in
+  the viewport. Not consulted at runtime for drag or replay;
+  kept to document Python's `BOARD_VIEWPORT_LEFT/TOP` in
+  `games/lynrummy/python/geometry.py` and keep the two in
+  sync.
 
 ### Rule for future edits
 
-Do not use `boardViewportLeft/Top` + `stack.loc` in any
-synthesis path that feeds the drag floater. Use
-`Game.Replay.Space.stackEdgeInLiveViewport` instead; it reads
-the DOM-measured rect and falls back to these constants only
-as a salvage. See `Main.claude` for the general rule.
+Never combine `boardViewportLeft/Top` with `stack.loc` to
+derive a live viewport position. The replay synthesizer
+reads the live DOM rect via `Space.pointInLiveViewport` /
+`Space.stackLandingInLiveViewport`, both of which return
+`Maybe Point` and leave it to callers to handle the
+pre-measurement case.
 
 ## Two-step check
 
@@ -89,25 +84,26 @@ compare to every remaining stack.
 often crowded while they arrange cards, but the state is
 recoverable. `Illegal` is a harder failure.
 
-## TS's "crowded" kind → Elm's `TooClose`
+## Two-level naming: `TooClose` vs `Crowded`
 
-The TS source uses a string literal `"crowded"` for the error
-kind. Elm renames it to `TooClose` to avoid collision with
-the `BoardGeometryStatus.Crowded` constructor. Wire encoding
-still uses the TS string: `TooClose` ↔ `"crowded"`.
+- `GeometryErrorKind.TooClose` — per-pair: "these two stacks
+  are within the margin."
+- `BoardGeometryStatus.Crowded` — whole-board: "the board
+  has at least one TooClose pair and nothing worse."
+
+Different levels, different names. The wire matches Elm:
+`TooClose` encodes as `"too_close"`.
 
 ## JSON wire shape
 
 ```
 BoardBounds:  { "max_width": N, "max_height": N, "margin": N }
 GeometryError: {
-  "type": "out_of_bounds" | "overlap" | "crowded",
+  "type": "out_of_bounds" | "overlap" | "too_close",
   "message": "...",
   "stack_indices": [N, ...]
 }
 ```
-
-Wire strings match TS exactly (no `_v2` or `elm_` suffixes).
 
 ## What this module deliberately does NOT do
 

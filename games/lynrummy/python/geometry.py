@@ -125,21 +125,17 @@ def find_open_loc(existing, card_count):
     """Return {"top","left"} for a new stack of `card_count` cards
     that does not overlap any stack in `existing`.
 
-    Human-biased placement (2026-04-23 update, driven by
-    BOARD_LAB captures from three humans). The scan starts at
-    `HUMAN_PREFERRED_ORIGIN` — a zone humans actually use —
-    instead of the raw board margin. Rationale:
+    Scan is COLUMN-MAJOR (outer=left, inner=top), starting
+    from `HUMAN_PREFERRED_ORIGIN`. This embodies Steve's
+    preference order: left before right, then vertical
+    (middle-ish) before advancing further right. When the
+    top rows are packed, the agent drops DOWN in the same
+    leftward column before shifting right — rightward is the
+    last option, not the first.
 
-      - Humans don't land pre-moves at (7, 7). Captured data
-        shows landing locs in the `y ≈ 60-120`, `x ≈ 40-500`
-        band, never in the extreme top-left corner.
-      - The hand column sits off the board to its LEFT in
-        viewport frame, so pre-moves that shorten the
-        hand-card's upcoming drag live toward LOW x in
-        board frame. Scanning left-to-right from a
-        non-corner origin hits that zone first.
-      - Everything else (first-fit, PACK_GAP breathing room,
-        ANTI_ALIGN nudge, crowded-fallback) stays the same.
+    The hand column sits off the board to the LEFT, so
+    left-biased placement also shortens the next hand-card
+    drag.
 
     100% deterministic. Same board state → same placement.
 
@@ -154,9 +150,9 @@ def find_open_loc(existing, card_count):
         left, top = BOARD_START
         return _anti_align(left, top, new_w, new_h)
 
-    # First-fit scan at packing gap. Tighter step than the
-    # legal-margin fallback so the 2px anti-align offset
-    # actually lands off-grid.
+    # First-fit column-major scan at packing gap. Tighter step
+    # than the legal-margin fallback so the 2px anti-align
+    # offset actually lands off-grid.
     step = 15
     origin_left, origin_top = HUMAN_PREFERRED_ORIGIN
     min_left = BOARD_MARGIN
@@ -170,38 +166,38 @@ def find_open_loc(existing, card_count):
     start_left = min(max(origin_left, min_left), max_left)
     start_top = min(max(origin_top, min_top), max_top)
 
-    top = start_top
-    while top <= max_top:
-        left = start_left
-        while left <= max_left:
-            padded = (
-                left - PACK_GAP_X,
-                top - PACK_GAP_Y,
-                left + new_w + PACK_GAP_X,
-                top + new_h + PACK_GAP_Y,
-            )
-            if not any(rects_overlap(padded, er) for er in existing_rects):
-                return _anti_align(left, top, new_w, new_h)
-            left += step
-        top += step
+    def _clears(left, top):
+        padded = (
+            left - PACK_GAP_X,
+            top - PACK_GAP_Y,
+            left + new_w + PACK_GAP_X,
+            top + new_h + PACK_GAP_Y,
+        )
+        return not any(rects_overlap(padded, er) for er in existing_rects)
 
-    # Preferred-zone scan exhausted — widen to the whole
-    # board (including the top-left corner) before falling
-    # through to the legal-margin crowded fallback.
-    top = min_top
-    while top <= max_top:
-        left = min_left
-        while left <= max_left:
-            padded = (
-                left - PACK_GAP_X,
-                top - PACK_GAP_Y,
-                left + new_w + PACK_GAP_X,
-                top + new_h + PACK_GAP_Y,
-            )
-            if not any(rects_overlap(padded, er) for er in existing_rects):
+    # Phase 1: scan from the preferred origin. Column-major
+    # so a packed top row drops us downward in-place rather
+    # than pushing rightward.
+    left = start_left
+    while left <= max_left:
+        top = start_top
+        while top <= max_top:
+            if _clears(left, top):
                 return _anti_align(left, top, new_w, new_h)
-            left += step
-        top += step
+            top += step
+        left += step
+
+    # Phase 2: widen to the whole board, still column-major,
+    # before falling through to the legal-margin crowded
+    # fallback.
+    left = min_left
+    while left <= max_left:
+        top = min_top
+        while top <= max_top:
+            if _clears(left, top):
+                return _anti_align(left, top, new_w, new_h)
+            top += step
+        left += step
 
     # Board too crowded for the packing gap — drop to legal margin.
     return _grid_sweep_open_loc(existing_rects, new_w, new_h)

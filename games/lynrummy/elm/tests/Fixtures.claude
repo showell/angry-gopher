@@ -1,0 +1,34 @@
+---
+label: WORKHORSE
+summary:
+  Shared test fixtures for drag-related tests. Provides a neutral
+  `defaultDragInfo`, builder helpers (`boardStackDragAt`,
+  `handCardDragAt`), and small utilities (`at`, `stackAt`,
+  `defaultBoardRect`, `withWings`). Centralizes DragInfo
+  construction so field additions ripple through one module
+  instead of every test.
+invariants:
+  - `boardStackDragAt` → pathFrame = BoardFrame; floaterTopLeft
+    interpreted as BOARD frame.
+  - `handCardDragAt` → pathFrame = ViewportFrame; floaterTopLeft
+    interpreted as VIEWPORT frame; boardRect populated so hit
+    tests can translate into board frame.
+  - `defaultDragInfo` is neutral-but-valid — a placeholder 2-card
+    source at origin, no wings, no hovered wing, no click intent.
+    Tests override only what they need via record update.
+---
+
+Test fixture module. All drag-related tests should use the builders
+here instead of constructing DragInfo records by hand.
+
+Added 2026-04-24 alongside the floaterTopLeft refactor — DragInfo
+has 10 fields, and direct construction in every test was a
+fragility tax every time the record shape changed.
+
+If a new field lands on DragInfo:
+1. Add it to `defaultDragInfo` with a sensible neutral value.
+2. Existing tests keep compiling; they get the neutral value.
+3. Tests that care override it via `{ drag | newField = ... }`.
+
+See `claude-steve/drag_test_strategy.md` for the broader testing
+principles this module serves.

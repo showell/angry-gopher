@@ -20,23 +20,18 @@ module Game.BoardGeometry exposing
     )
 
 {-| Board geometry validation — checks that all stacks fit
-within bounds and none overlap. Ported from
-`angry-cat/src/lyn_rummy/game/board_geometry.ts`.
+within bounds and none overlap. Protocol-level constraint,
+checked before game logic.
 
-This is a protocol-level constraint — checked before game
-logic, like well-formed syntax.
+Two related but distinct concepts:
 
-**Elm port notes:**
-
-  - The TS source uses string-literal error kinds
-    (`"out_of_bounds" | "overlap" | "crowded"`). Elm gets a
-    proper sum type: `GeometryErrorKind`.
-  - The TS "crowded" error kind is renamed to `TooClose` in Elm
-    to avoid a constructor collision with
-    `BoardGeometryStatus.Crowded`. Same concept; clearer at the
-    error level ("these stacks are too close to each other"
-    within margin).
-  - `stackWidth` and `stackHeight` match the TS API.
+  - `BoardGeometryStatus` is a whole-board classification
+    (`CleanlySpaced | Crowded | Illegal`). "Crowded" here
+    means the overall board has at least one too-close pair.
+  - `GeometryErrorKind` names a per-pair failure
+    (`OutOfBounds | Overlap | TooClose`). `TooClose` is the
+    pair-level name that rolls up into the board-level
+    `Crowded` status.
 
 -}
 
@@ -104,7 +99,7 @@ type alias BoardBounds =
 type GeometryErrorKind
     = OutOfBounds
     | Overlap
-    | TooClose -- TS calls this "crowded"; renamed to avoid collision.
+    | TooClose -- pair-level; rolls up into BoardGeometryStatus.Crowded
 
 
 type alias GeometryError =
@@ -290,14 +285,9 @@ classifyBoardGeometry stacks bounds =
 
 -- JSON: WIRE FORMAT
 --
--- Mirrors the TS shapes:
---   BoardBounds   = { max_width: number, max_height: number, margin: number }
---   GeometryError = { type: "out_of_bounds" | "overlap" | "crowded",
---                     message: string, stack_indices: number[] }
---
--- Note the TS string-literal "crowded" maps to our Elm
--- `TooClose` constructor (renamed for collision avoidance —
--- see the type definition).
+--   BoardBounds   = { max_width, max_height, margin }
+--   GeometryError = { type: "out_of_bounds" | "overlap" | "too_close",
+--                     message, stack_indices }
 
 
 geometryErrorKindToString : GeometryErrorKind -> String
@@ -310,7 +300,7 @@ geometryErrorKindToString kind =
             "overlap"
 
         TooClose ->
-            "crowded"
+            "too_close"
 
 
 stringToGeometryErrorKind : String -> Maybe GeometryErrorKind
@@ -322,7 +312,7 @@ stringToGeometryErrorKind s =
         "overlap" ->
             Just Overlap
 
-        "crowded" ->
+        "too_close" ->
             Just TooClose
 
         _ ->

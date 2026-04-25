@@ -1,29 +1,24 @@
 # Game/Replay/AnimatePlaceHand.elm — EARLY
 
 Replay animation driver for PlaceHand — companion to
-`AnimateMergeHand`, extracted as REFACTOR_ELM_REPLAY
-B1/Axis Y, 2026-04-22.
+`AnimateMergeHand`.
 
 A hand card is dragged to an empty spot on the board,
 becoming a new single-card stack. Same two-phase async
-shape as AnimateMergeHand; the only difference is that the
-target endpoint comes from the payload's explicit `loc`
-field translated into viewport frame via the live board
-rect (rather than measured from another stack's edge).
+shape as `AnimateMergeHand`; the only difference is how the
+target endpoint is computed — payload's explicit `loc`
+field, translated into viewport via the live board rect.
 
 ## Status
 
-- **Label:** EARLY. See `AnimateMergeHand.claude` for the
-  broader context; this module is its near-twin.
+- **Label:** EARLY. Near-twin of `AnimateMergeHand`; see
+  that sidecar for the two-phase rationale.
 
 ## Interface
-
-Same shape as AnimateMergeHand:
 
 ```elm
 type alias PrepareResult =
     { source : DragSource
-    , grabOffset : Point
     , handCardToMeasure : Card
     }
 
@@ -31,23 +26,21 @@ prepare : { handCard, loc } -> Model -> Maybe PrepareResult
 
 finish :
     { handCard, loc }
-    -> Point
-    -> Float
-    -> DragSource
-    -> Point
+    -> Point      -- origin from DOM (hand card top-left)
+    -> Float      -- nowMs
+    -> DragSource -- from the stashed AwaitingHandRect ctx
     -> Model
     -> Maybe Space.AnimationInfo
 ```
 
-`finish` always returns Just — PlaceHand's target doesn't
-depend on any other board stack, so there's nothing to fail
-on once the prepare phase has resolved the source.
+`finish` returns Nothing only if the live board rect isn't
+available; PlaceHand's target doesn't depend on any other
+board stack.
 
 ## Dependencies
 
 - `Game.Replay.Space` — for `handCardSource`,
   `pointInLiveViewport`, `linearPath`, `AnimationInfo`.
-- `Game.BoardGeometry` — for `cardHeight`.
 - `Game.CardStack` — for `BoardLocation`.
 - `Game.WireAction` — for `WA.PlaceHand`.
 - `Main.State` — for `Model`, `DragSource`, `PathFrame`,

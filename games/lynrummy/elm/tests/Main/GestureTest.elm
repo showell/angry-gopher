@@ -1,61 +1,45 @@
 module Main.GestureTest exposing (suite)
 
-{-| Tests for `Main.Gesture.resolveGesture`. The pure function
-that decides which `WireAction` (if any) a completed drag
-should emit — given the DragInfo at mouseup and the current
-Model.
+{-| Tests for `Main.Gesture.resolveGesture` and
+`Main.Gesture.floaterOverWing`.
 
-DragSource and WingId carry content refs (CardStack, Card),
-not array positions. These tests construct DragInfos with
-real stack/card values and assert the emitted action.
+These tests exercise the PURE decision layer of a drag —
+given a DragInfo at mouseup (or mid-move), which WireAction
+should we emit, and which wing (if any) is the floater near?
+No DOM, no Msg loop.
 
-Added 2026-04-22. Updated the same day to the content-ref
-drag model.
+Updated 2026-04-24 to use `tests/Fixtures.elm` — a neutral
+`defaultDragInfo` plus small builders — so tests care only
+about the fields that differ from the default. See
+`drag_test_strategy.md` in claude-steve for the rationale.
 
 -}
 
 import Expect
+import Fixtures
+    exposing
+        ( at
+        , boardStackDragAt
+        , defaultBoardRect
+        , handCardDragAt
+        , stackAt
+        , withWings
+        )
 import Game.BoardActions exposing (Side(..))
 import Game.Card exposing (Card, CardValue(..), OriginDeck(..), Suit(..))
 import Game.CardStack as CardStack exposing (BoardLocation, CardStack, HandCard, HandCardState(..))
+import Game.WingOracle as WingOracle
 import Game.WireAction as WA
 import Main.Gesture as Gesture
-import Game.WingOracle as WingOracle
-import Main.State as State
-    exposing
-        ( DragInfo
-        , DragSource(..)
-        , Model
-        , PathFrame(..)
-        )
+import Main.State as State exposing (DragSource(..), PathFrame(..))
 import Test exposing (Test, describe, test)
 
 
 
--- HELPERS
+-- MODEL HELPER (only thing non-fixture needs)
 
 
-at : Int -> Int -> BoardLocation
-at left top =
-    { left = left, top = top }
-
-
-stackAt : String -> BoardLocation -> CardStack
-stackAt shorthand loc =
-    case CardStack.fromShorthand shorthand DeckOne loc of
-        Just s ->
-            s
-
-        Nothing ->
-            Debug.todo ("bad shorthand in test: " ++ shorthand)
-
-
-boardRect : { x : Int, y : Int, width : Int, height : Int }
-boardRect =
-    { x = 300, y = 100, width = 800, height = 600 }
-
-
-modelWith : List CardStack -> List HandCard -> Model
+modelWith : List CardStack -> List HandCard -> State.Model
 modelWith board hand =
     let
         base =
@@ -63,32 +47,6 @@ modelWith board hand =
     in
     State.setActiveHand { handCards = hand }
         { base | board = board }
-
-
-dragInfo :
-    { source : DragSource
-    , hoveredWing : Maybe { target : CardStack, side : Side }
-    , cursorBoard : { x : Int, y : Int }
-    }
-    -> DragInfo
-dragInfo { source, hoveredWing, cursorBoard } =
-    let
-        viewportCursor =
-            { x = cursorBoard.x + boardRect.x
-            , y = cursorBoard.y + boardRect.y
-            }
-    in
-    { source = source
-    , cursor = viewportCursor
-    , originalCursor = viewportCursor
-    , grabOffset = { x = 0, y = 0 }
-    , wings = []
-    , hoveredWing = hoveredWing
-    , boardRect = Just boardRect
-    , clickIntent = Nothing
-    , gesturePath = []
-    , pathFrame = ViewportFrame
-    }
 
 
 
@@ -104,18 +62,11 @@ suiteSplit =
                     stack =
                         stackAt "2C,3D,4C,5H,6S,7H" (at 20 20)
 
-                    model =
-                        modelWith [ stack ] []
-
                     info =
-                        dragInfo
-                            { source = FromBoardStack stack
-                            , hoveredWing = Nothing
-                            , cursorBoard = { x = 25, y = 25 }
-                            }
+                        boardStackDragAt stack { x = 20, y = 20 }
                             |> (\i -> { i | clickIntent = Just 3 })
                 in
-                Gesture.resolveGesture info model
+                Gesture.resolveGesture info (modelWith [ stack ] [])
                     |> Expect.equal (Just (WA.Split { stack = stack, cardIndex = 3 }))
         ]
 
@@ -127,7 +78,7 @@ suiteSplit =
 suiteMergeStack : Test
 suiteMergeStack =
     describe "resolveGesture — board-stack + hoveredWing yields MergeStack"
-        [ test "234 dragged onto 567's left wing (Steve's repro)" <|
+        [ test "234 onto 567's left wing" <|
             \_ ->
                 let
                     source234 =
@@ -136,17 +87,16 @@ suiteMergeStack =
                     target567 =
                         stackAt "5H,6S,7H" (at 300 200)
 
-                    model =
-                        modelWith [ source234, target567 ] []
-
                     info =
-                        dragInfo
-                            { source = FromBoardStack source234
-                            , hoveredWing = Just { target = target567, side = Left }
-                            , cursorBoard = { x = 290, y = 220 }
-                            }
+                        boardStackDragAt source234 { x = 207, y = 200 }
+                            |> (\i ->
+                                    { i
+                                        | hoveredWing =
+                                            Just { target = target567, side = Left }
+                                    }
+                               )
                 in
-                Gesture.resolveGesture info model
+                Gesture.resolveGesture info (modelWith [ source234, target567 ] [])
                     |> Expect.equal
                         (Just
                             (WA.MergeStack
@@ -156,7 +106,7 @@ suiteMergeStack =
                                 }
                             )
                         )
-        , test "567 dropped onto 234's right wing produces MergeStack" <|
+        , test "567 onto 234's right wing" <|
             \_ ->
                 let
                     target234 =
@@ -165,17 +115,16 @@ suiteMergeStack =
                     source567 =
                         stackAt "5H,6S,7H" (at 300 200)
 
-                    model =
-                        modelWith [ target234, source567 ] []
-
                     info =
-                        dragInfo
-                            { source = FromBoardStack source567
-                            , hoveredWing = Just { target = target234, side = Right }
-                            , cursorBoard = { x = 200, y = 220 }
-                            }
+                        boardStackDragAt source567 { x = 193, y = 200 }
+                            |> (\i ->
+                                    { i
+                                        | hoveredWing =
+                                            Just { target = target234, side = Right }
+                                    }
+                               )
                 in
-                Gesture.resolveGesture info model
+                Gesture.resolveGesture info (modelWith [ target234, source567 ] [])
                     |> Expect.equal
                         (Just
                             (WA.MergeStack
@@ -195,7 +144,7 @@ suiteMergeStack =
 suiteMergeHand : Test
 suiteMergeHand =
     describe "resolveGesture — hand-source + hoveredWing yields MergeHand"
-        [ test "hand-card drop onto a board stack's wing yields MergeHand" <|
+        [ test "hand-card drop onto a board stack's wing" <|
             \_ ->
                 let
                     target =
@@ -208,17 +157,16 @@ suiteMergeHand =
                     handCard =
                         { card = card6H, state = HandNormal }
 
-                    model =
-                        modelWith [ target ] [ handCard ]
-
                     info =
-                        dragInfo
-                            { source = FromHandCard card6H
-                            , hoveredWing = Just { target = target, side = Right }
-                            , cursorBoard = { x = 200, y = 220 }
-                            }
+                        handCardDragAt card6H { x = 0, y = 0 }
+                            |> (\i ->
+                                    { i
+                                        | hoveredWing =
+                                            Just { target = target, side = Right }
+                                    }
+                               )
                 in
-                Gesture.resolveGesture info model
+                Gesture.resolveGesture info (modelWith [ target ] [ handCard ])
                     |> Expect.equal
                         (Just
                             (WA.MergeHand
@@ -232,57 +180,58 @@ suiteMergeHand =
 
 
 
--- MOVE STACK
+-- MOVE STACK + off-board rejection
 
 
 suiteMoveStack : Test
 suiteMoveStack =
     describe "resolveGesture — no hoveredWing, cursor over board → MoveStack"
-        [ test "drops produce MoveStack with board-frame new_loc" <|
+        [ test "valid drop produces MoveStack with board-frame new_loc" <|
             \_ ->
                 let
                     stack =
                         stackAt "2C,3D,4C" (at 100 200)
 
-                    model =
-                        modelWith [ stack ] []
-
                     info =
-                        dragInfo
-                            { source = FromBoardStack stack
-                            , hoveredWing = Nothing
-                            , cursorBoard = { x = 400, y = 300 }
-                            }
+                        boardStackDragAt stack { x = 400, y = 300 }
+                            -- resolveGesture needs cursorOverBoard = True,
+                            -- which requires cursor to be inside boardRect.
+                            |> (\i ->
+                                    { i
+                                        | boardRect = Just defaultBoardRect
+                                        , cursor = { x = 700, y = 400 }
+                                    }
+                               )
                 in
-                case Gesture.resolveGesture info model of
+                case Gesture.resolveGesture info (modelWith [ stack ] []) of
                     Just (WA.MoveStack p) ->
                         Expect.all
-                            [ \_ -> p.stack |> Expect.equal stack
-                            , \_ -> p.newLoc.left |> Expect.equal 400
-                            , \_ -> p.newLoc.top |> Expect.equal 300
+                            [ \_ -> Expect.equal stack p.stack
+                            , \_ -> Expect.equal 400 p.newLoc.left
+                            , \_ -> Expect.equal 300 p.newLoc.top
                             ]
                             ()
 
                     other ->
                         Expect.fail ("expected MoveStack; got " ++ Debug.toString other)
-        , test "off-board drops (negative loc) are rejected" <|
+        , test "off-board drop (negative loc) is rejected" <|
             \_ ->
                 let
                     stack =
                         stackAt "2C,3D,4C" (at 100 200)
 
-                    model =
-                        modelWith [ stack ] []
-
+                    -- Floater at negative board-frame coords. The
+                    -- drop gets rejected via dropFootprintInBounds.
                     info =
-                        dragInfo
-                            { source = FromBoardStack stack
-                            , hoveredWing = Nothing
-                            , cursorBoard = { x = 5, y = 5 }
-                            }
-                            |> (\i -> { i | grabOffset = { x = 10, y = 10 } })
+                        boardStackDragAt stack { x = -50, y = -20 }
+                            |> (\i ->
+                                    { i
+                                        | boardRect = Just defaultBoardRect
+                                        , cursor = { x = 700, y = 400 }
+                                    }
+                               )
                 in
-                Gesture.resolveGesture info model
+                Gesture.resolveGesture info (modelWith [ stack ] [])
                     |> Expect.equal Nothing
         ]
 
@@ -304,22 +253,19 @@ suitePlaceHand =
                     handCard =
                         { card = card6H, state = HandNormal }
 
-                    model =
-                        modelWith [] [ handCard ]
-
+                    -- Floater at viewport (300+450, 100+350) = (750, 450),
+                    -- which translates to board-frame (450, 350) via
+                    -- boardRect subtraction in dropLoc.
                     info =
-                        dragInfo
-                            { source = FromHandCard card6H
-                            , hoveredWing = Nothing
-                            , cursorBoard = { x = 450, y = 350 }
-                            }
+                        handCardDragAt card6H { x = 750, y = 450 }
+                            |> (\i -> { i | cursor = { x = 750, y = 450 } })
                 in
-                case Gesture.resolveGesture info model of
+                case Gesture.resolveGesture info (modelWith [] [ handCard ]) of
                     Just (WA.PlaceHand p) ->
                         Expect.all
-                            [ \_ -> p.handCard |> Expect.equal card6H
-                            , \_ -> p.loc.left |> Expect.equal 450
-                            , \_ -> p.loc.top |> Expect.equal 350
+                            [ \_ -> Expect.equal card6H p.handCard
+                            , \_ -> Expect.equal 450 p.loc.left
+                            , \_ -> Expect.equal 350 p.loc.top
                             ]
                             ()
 
@@ -334,8 +280,8 @@ suitePlaceHand =
 
 suiteFloaterOverWing : Test
 suiteFloaterOverWing =
-    describe "floaterOverWing — the authoritative hit-test"
-        [ test "floater fully overlapping a right wing registers as hovering" <|
+    describe "floaterOverWing — tolerance around eventual landing"
+        [ test "floater exactly on right-wing landing fires" <|
             \_ ->
                 let
                     source =
@@ -347,37 +293,76 @@ suiteFloaterOverWing =
                     wing =
                         { target = target, side = Right }
 
-                    -- Board cursor placed so the 3-card floater sits
-                    -- on top of `wing` (which is one pitch wide at
-                    -- the right of the target).
-                    rect =
-                        WingOracle.wingBoardRect wing
-
-                    cursorBoardX =
-                        rect.left + (rect.width // 2) + (CardStack.stackDisplayWidth source // 2)
-
-                    cursorBoardY =
-                        rect.top + (rect.height // 2) + 20
+                    -- Eventual landing for right-wing: target's
+                    -- right edge, target's top.
+                    landing =
+                        { x = target.loc.left + CardStack.stackDisplayWidth target
+                        , y = target.loc.top
+                        }
 
                     info =
-                        dragInfo
-                            { source = FromBoardStack source
-                            , hoveredWing = Nothing
-                            , cursorBoard = { x = cursorBoardX, y = cursorBoardY }
-                            }
-                            |> (\i ->
-                                    { i
-                                        | wings = [ wing ]
-                                        , grabOffset =
-                                            { x = CardStack.stackDisplayWidth source // 2
-                                            , y = 20
-                                            }
-                                    }
-                               )
+                        boardStackDragAt source landing
+                            |> withWings [ wing ]
                 in
                 Gesture.floaterOverWing info
                     |> Expect.equal (Just wing)
-        , test "floater far from any wing returns Nothing" <|
+        , test "floater on left-wing landing fires" <|
+            \_ ->
+                let
+                    source =
+                        stackAt "2C,3D,4C" (at 20 20)
+
+                    target =
+                        stackAt "5H,6S,7H" (at 300 20)
+
+                    wing =
+                        { target = target, side = Left }
+
+                    -- Eventual landing for left-wing: target.left −
+                    -- source.width, target.top.
+                    landing =
+                        { x = target.loc.left - CardStack.stackDisplayWidth source
+                        , y = target.loc.top
+                        }
+
+                    info =
+                        boardStackDragAt source landing
+                            |> withWings [ wing ]
+                in
+                Gesture.floaterOverWing info
+                    |> Expect.equal (Just wing)
+        , test "floater past tolerance does NOT fire" <|
+            \_ ->
+                let
+                    source =
+                        stackAt "2C,3D,4C" (at 20 20)
+
+                    target =
+                        stackAt "5H,6S,7H" (at 300 20)
+
+                    wing =
+                        { target = target, side = Right }
+
+                    -- Landing is (target.right, target.top); put
+                    -- the floater past one pitch from landing —
+                    -- definitely outside the half-pitch tolerance.
+                    landing =
+                        { x = target.loc.left + CardStack.stackDisplayWidth target
+                        , y = target.loc.top
+                        }
+
+                    farFloater =
+                        { x = landing.x + CardStack.stackPitch + 5
+                        , y = landing.y
+                        }
+
+                    info =
+                        boardStackDragAt source farFloater
+                            |> withWings [ wing ]
+                in
+                Gesture.floaterOverWing info
+                    |> Expect.equal Nothing
+        , test "floater way off returns Nothing" <|
             \_ ->
                 let
                     source =
@@ -390,12 +375,8 @@ suiteFloaterOverWing =
                         { target = target, side = Right }
 
                     info =
-                        dragInfo
-                            { source = FromBoardStack source
-                            , hoveredWing = Nothing
-                            , cursorBoard = { x = 50, y = 400 }
-                            }
-                            |> (\i -> { i | wings = [ wing ] })
+                        boardStackDragAt source { x = 50, y = 400 }
+                            |> withWings [ wing ]
                 in
                 Gesture.floaterOverWing info
                     |> Expect.equal Nothing

@@ -2,6 +2,7 @@ module Main.Play exposing
     ( Config(..)
     , Output(..)
     , init
+    , mouseMove
     , subscriptions
     , update
     , view
@@ -256,13 +257,28 @@ mouseMove pos tMs model =
                 nextIntent =
                     GA.clickIntentAfterMove info.originalCursor pos info.clickIntent
 
+                -- Apply the cursor delta to the floater. Pure
+                -- vector, frame-agnostic — floaterTopLeft stays
+                -- in whatever frame it started (board for
+                -- intra-board drags, viewport for hand drags).
+                delta =
+                    { x = pos.x - info.cursor.x
+                    , y = pos.y - info.cursor.y
+                    }
+
+                nextFloater =
+                    { x = info.floaterTopLeft.x + delta.x
+                    , y = info.floaterTopLeft.y + delta.y
+                    }
+
                 nextPath =
                     info.gesturePath
-                        ++ [ { tMs = tMs, x = pos.x, y = pos.y } ]
+                        ++ [ { tMs = tMs, x = nextFloater.x, y = nextFloater.y } ]
 
                 nextInfo =
                     { info
                         | cursor = pos
+                        , floaterTopLeft = nextFloater
                         , clickIntent = nextIntent
                         , gesturePath = nextPath
                     }

@@ -1,12 +1,7 @@
 module Game.Replay.AnimateMoveStack exposing (start)
 
-{-| Replay animation for a MoveStack primitive. The human drags
-one board stack to an open location on the board — no merge,
-just a position change. Captured path is always present
-(server-enforced), so this is the synchronous case.
-
-Extracted 2026-04-22 as part of REFACTOR_ELM_REPLAY B1/Axis X.
-
+{-| Replay animation for MoveStack. Captured path is always
+present (server-enforced), so synchronous — no DOM measure.
 -}
 
 import Game.CardStack exposing (CardStack, BoardLocation)
@@ -25,11 +20,10 @@ start :
 start payload path frame model nowMs =
     Space.boardStackSource payload.stack model
         |> Maybe.map
-            (\( source, grabOffset ) ->
+            (\source ->
                 { startMs = nowMs
                 , path = path
                 , source = source
-                , grabOffset = grabOffset
                 , pathFrame = frame
                 , pendingAction = WA.MoveStack payload
                 }

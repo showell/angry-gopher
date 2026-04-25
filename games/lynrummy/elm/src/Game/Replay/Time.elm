@@ -321,7 +321,6 @@ prepareReplayStep action maybePath frame model nowMs =
                             AwaitingHandRect
                                 { action = action
                                 , source = result.source
-                                , grabOffset = result.grabOffset
                                 }
                       }
                     , Task.attempt HandCardRectReceived
@@ -363,10 +362,10 @@ handCardRectReceived result model =
                     toFloat (Time.posixToMillis posix)
 
                 origin =
-                    Space.elementCenterInViewport element
+                    Space.elementTopLeftInViewport element
 
                 maybeAnim =
-                    finishHandAnim ctx.action origin nowMs ctx.source ctx.grabOffset model
+                    finishHandAnim ctx.action origin nowMs ctx.source model
             in
             let
                 applyNow =
@@ -508,7 +507,6 @@ the FSM.
 -}
 type alias HandPrepareResult =
     { source : State.DragSource
-    , grabOffset : State.Point
     , handCardToMeasure : Game.Card.Card
     }
 
@@ -516,7 +514,6 @@ type alias HandPrepareResult =
 prepareResultFromMergeHand : AnimateMergeHand.PrepareResult -> HandPrepareResult
 prepareResultFromMergeHand r =
     { source = r.source
-    , grabOffset = r.grabOffset
     , handCardToMeasure = r.handCardToMeasure
     }
 
@@ -524,7 +521,6 @@ prepareResultFromMergeHand r =
 prepareResultFromPlaceHand : AnimatePlaceHand.PrepareResult -> HandPrepareResult
 prepareResultFromPlaceHand r =
     { source = r.source
-    , grabOffset = r.grabOffset
     , handCardToMeasure = r.handCardToMeasure
     }
 
@@ -538,16 +534,15 @@ finishHandAnim :
     -> State.Point
     -> Float
     -> State.DragSource
-    -> State.Point
     -> Model
     -> Maybe Space.AnimationInfo
-finishHandAnim action origin nowMs source grabOffset model =
+finishHandAnim action origin nowMs source model =
     case action of
         WA.MergeHand payload ->
-            AnimateMergeHand.finish payload origin nowMs source grabOffset model
+            AnimateMergeHand.finish payload origin nowMs source model
 
         WA.PlaceHand payload ->
-            AnimatePlaceHand.finish payload origin nowMs source grabOffset model
+            AnimatePlaceHand.finish payload origin nowMs source model
 
         _ ->
             Nothing

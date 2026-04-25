@@ -1,5 +1,6 @@
 module Game.WingOracle exposing
     ( WingId
+    , eventualFloaterTopLeft
     , wingBoardRect
     , wingsForHandCard
     , wingsForStack
@@ -8,26 +9,14 @@ module Game.WingOracle exposing
 {-| For a dragged source (stack or hand card), enumerate which
 board stacks can legally accept it — and on which side.
 
-`side = Left` means: the source attaches to the LEFT of the
-target (cards visually end up as `source ++ target`).
-`side = Right` means: the source attaches to the RIGHT of
-the target (cards end up as `target ++ source`).
+`side = Left` means the source attaches to the LEFT of the
+target (merged order is `source ++ target`). `side = Right`
+the mirror. The target anchors the merge: the merged stack's
+position derives from the target, not the source, matching
+the drop-onto-target UX.
 
-Call convention is TARGET-first: `tryStackMerge target source
-side` (and equivalently `tryHandMerge target handCard side`).
-This makes the target the "anchor" — the merged stack's
-position is derived from the target, not the source — which
-matches the drop-onto-target UX.
-
-Two entry points, one `WingId` shape out. Stack-source and
-hand-source paths are deliberately kept as two separate
-functions; they are two similar things, not one parametrized
-thing.
-
-`WingId` identifies its target by CardStack value, matching
-the wire format and the Main.State drag model. One
-representation everywhere.
-
+`WingId` identifies its target by CardStack value (same
+representation as the wire and the Main.State drag model).
 -}
 
 import Game.BoardActions as BoardActions exposing (Side(..))
@@ -115,14 +104,11 @@ handCardWingsForTarget handCard target =
 -- WING RECT (board-frame)
 
 
-{-| Board-frame rectangle the named wing renders into.
-Derived from the target stack's loc + which side the wing sits
-on, in the same math `Main.View.viewWingAt` uses at render
-time. Kept pure and exposed so tests (and a future computed
-hit-test) can ask the question without a DOM.
-
-`left`/`top` are board-frame pixels; `width` is one card pitch;
-`height` is `BG.cardHeight`.
+{-| Board-frame rectangle the wing renders into — the visual
+affordance a user sees when hovering a drop candidate. Used
+by `Main.View.viewWingAt`. The live hit-test does NOT use
+this rect; it calls `eventualFloaterTopLeft`. One card-pitch
+wide by `BG.cardHeight` tall.
 -}
 wingBoardRect : WingId -> { left : Int, top : Int, width : Int, height : Int }
 wingBoardRect wing =
@@ -140,3 +126,31 @@ wingBoardRect wing =
     , width = CardStack.stackPitch
     , height = BG.cardHeight
     }
+
+
+{-| Board-frame top-left where the floater will LAND if the
+merge fires. The hit-test checks closeness to this point,
+which is both tighter and more accurate than overlap with
+the visual wing rect.
+
+  - Right wing: floater lands flush against target's right
+    edge — at (target.right, target.top).
+  - Left wing: floater's right edge meets target's left edge
+    — at (target.left - sourceWidth, target.top).
+
+`sourceWidth` is needed for the left-wing case because the
+eventual floater starts `sourceWidth` pixels to the left of
+target.
+-}
+eventualFloaterTopLeft : WingId -> Int -> { left : Int, top : Int }
+eventualFloaterTopLeft wing sourceWidth =
+    let
+        left =
+            case wing.side of
+                Left ->
+                    wing.target.loc.left - sourceWidth
+
+                Right ->
+                    wing.target.loc.left + CardStack.stackDisplayWidth wing.target
+    in
+    { left = left, top = wing.target.loc.top }

@@ -7,84 +7,67 @@ styling hook that renders the drag-affordance feedback.
 
 ## Status
 
-- **Label:** EARLY. Extracted 2026-04-19 from the pre-split
-  `Main.elm` monolith. Cohesive unit — all the drag machinery
+- **Label:** EARLY. Cohesive unit — all the drag machinery
   plus the helpers a view needs to wire mousedowns.
 
 ## Public API
 
-- `startBoardCardDrag : {stackIndex, cardIndex} -> Point ->
-  Model -> (Model, Cmd Msg)` — begins a drag from a board
-  card. Computes wings via `WingOracle.wingsForStack`, sets
-  `clickIntent = Just cardIndex` (so an unmoved release
-  becomes a Split), fires `fetchBoardRect`.
-- `startHandDrag : Int -> Point -> Model -> (Model, Cmd Msg)`
-  — begins a drag from a hand card. Wings via
-  `WingOracle.wingsForHandCard`, `clickIntent = Nothing`
-  (hand cards have no split semantic).
-- `fetchBoardRect : Cmd Msg` — `Browser.Dom.getElement
-  boardDomId` → `Task.attempt BoardRectReceived`.
-- `handleMouseUp : Model -> (Model, Cmd Msg)` — resolves
-  gesture → clears drag → applies WireAction via
-  `Apply.applyAction |> Apply.commit` (outcome's status
-  becomes the new status bar text) → decides what gesture
-  (if any) to ship via `gestureForAction` → appends to
-  actionLog → fires `sendAction`. For rejected gestures, may
-  instead write the off-board scold status via
-  `droppedOffBoardScold`.
-- `clearDrag : Model -> Model` — `{ model | drag =
-  NotDragging }`.
-- `pointDecoder : Decoder Point` — `{clientX, clientY}` →
-  Point.
-- `cardMouseDown : Int -> Int -> List (Html.Attribute Msg)`
-  — mousedown handler for a board card; emits
-  `MouseDownOnBoardCard`.
-- `handCardAttrs : DragState -> List Card -> Int -> HandCard
-  -> List (Html.Attribute Msg)` — per-hand-card attribute
-  list: hint-green background + mousedown handler + drag-dim
-  opacity.
+- `startBoardCardDrag : {stack, cardIndex} -> Point -> Float
+  -> Model -> (Model, Cmd Msg)` — begins a board-card drag.
+  `floaterTopLeft = stack.loc` (board frame). Wings via
+  `WingOracle.wingsForStack`. `clickIntent = Just cardIndex`
+  so an unmoved release becomes a Split. Fires
+  `fetchBoardRect`.
+- `startHandDrag : Card -> Point -> Float -> Model ->
+  (Model, Cmd Msg)` — begins a hand-card drag. `pathFrame =
+  ViewportFrame`. Wings via `WingOracle.wingsForHandCard`.
+- `fetchBoardRect : String -> Cmd Msg` —
+  `Browser.Dom.getElement boardDomId` → `BoardRectReceived`.
+- `handleMouseUp : Point -> Float -> Model -> (Model, Cmd Msg)`
+  — resolves gesture → clears drag → applies WireAction via
+  `Apply.applyAction |> Apply.commit` → decides what gesture
+  (if any) rides via `gestureForAction` → appends to
+  actionLog → fires `sendAction`. On rejected gestures may
+  instead write the off-board scold.
+- `floaterOverWing : DragInfo -> Maybe WingId` — which wing
+  the floater is near enough to snap to.
+- `clearDrag : Model -> Model`.
+- `pointDecoder : Decoder Point`.
+- `cardMouseDown` / `handCardAttrs` — view-side styling
+  hooks.
 
 ## Gesture resolution (the central branch table)
 
-`resolveGesture` (not exported — internal helper for
-`handleMouseUp`) dispatches on `(clickIntent, source,
-hoveredWing, cursorOverBoard)`:
+`resolveGesture` (internal helper for `handleMouseUp`)
+dispatches on `(clickIntent, source, hoveredWing,
+cursorOverBoard)`:
 
 | clickIntent | source | hoveredWing | overBoard | Result |
 |---|---|---|---|---|
-| Just cardIdx | FromBoardStack idx | — | — | `Split { stackIndex, cardIndex }` |
-| Nothing | FromBoardStack idx | Just wing | — | `MergeStack { source=idx, target=wing.stackIndex, side }` |
-| Nothing | FromHandCard idx | Just wing | — | `MergeHand { handCard, target=wing.stackIndex, side }` |
-| Nothing | FromHandCard idx | Nothing | True + loc | `PlaceHand { handCard, loc }` |
-| Nothing | FromBoardStack idx | Nothing | True + loc | `MoveStack { stackIndex, newLoc=loc }` |
+| Just cardIdx | FromBoardStack stack | — | — | `Split { stack, cardIndex }` |
+| Nothing | FromBoardStack stack | Just wing | — | `MergeStack { source=stack, target=wing.target, side }` |
+| Nothing | FromHandCard card | Just wing | — | `MergeHand { handCard=card, target=wing.target, side }` |
+| Nothing | FromHandCard card | Nothing | True + loc | `PlaceHand { handCard=card, loc }` |
+| Nothing | FromBoardStack stack | Nothing | True + loc | `MoveStack { stack, newLoc=loc }` |
 | any | any | any | drop before rect arrives | `Nothing` (gesture discarded) |
 
-## Wing hover detection (2026-04-22)
+## Wing hover detection
 
-Wing hover is computed in Elm on every `MouseMove`, not
-dispatched by DOM `mouseenter`/`mouseleave` events. The check
-is **floater-rect vs wing-rect overlap** — the player's mental
-model is the visible floater landing adjacent to the target,
-not a naked cursor crossing an invisible hit-zone. See
-`floaterOverWing`.
+Computed in Elm on every `MouseMove`. The check is **"is the
+floater's top-left within `wingSnapTolerance` of the wing's
+eventual landing?"** — not a DOM event, not an AABB overlap
+with the affordance rect. The visual wing rendered by
+`WingOracle.wingBoardRect` is an affordance only; the live
+hit-test uses `WingOracle.eventualFloaterTopLeft`.
 
-The old DOM-event path was unreliable in practice (sometimes
-fired, sometimes didn't; no predictable pattern). We already
-know where we render the floater and where we render the
-wings — asking the DOM is a needless extra moving part. One
-source of truth: Elm math.
-
-On each `MouseMove`, `Main.elm`'s update:
-1. Updates `info.cursor` + `info.gesturePath` + `info.clickIntent`.
-2. Calls `Gesture.floaterOverWing` with the updated info.
-3. Writes the result into `info.hoveredWing`.
-4. On transition into a new hovered wing, writes
-   `Gesture.wingHoverStatus` ("Drop stack to complete merge.")
-   to the status bar.
+Per-MouseMove flow:
+1. Update `info.cursor`, `info.floaterTopLeft`, `info.gesturePath`,
+   `info.clickIntent`.
+2. `floaterOverWing nextInfo` → `info.hoveredWing`.
+3. On transition into a new hovered wing, write
+   `wingHoverStatus` to the status bar.
 
 `resolveGesture` at mouseup reads `info.hoveredWing` directly.
-Since hoveredWing was set by the same computation the user
-saw, the drop decision matches the mental model.
 
 ## Click-vs-drag arbitration
 
@@ -96,42 +79,28 @@ threshold. The call site for that is currently in
 `Main.elm`'s `MouseMove` handler (not in this module) because
 it's a one-liner that needs `info` unpacking anyway.
 
-## Gesture shipping rule (2026-04-22)
+## Gesture shipping rule
 
-`gestureForAction` decides what rides alongside the WireAction:
+`gestureForAction` decides what rides alongside the
+WireAction:
 
-- **Hand-origin actions** (`MergeHand`, `PlaceHand`) — always
-  `Nothing`. Elm's replay resolves hand origins via live DOM
-  measurement regardless of sender; a captured viewport-frame
-  path would be stale after any window resize and is never
-  consulted at replay time. Matches Python.
-- **Intra-board actions** (`Split`, `MergeStack`, `MoveStack`)
-  — `Just { path, frame = BoardFrame }`. Viewport-captured
-  samples get the live board rect's `(x, y)` subtracted at
-  send time, producing env-durable board-frame coords. The
-  board's internal geometry is fixed (800×600); only its
-  viewport position can drift, and rect subtraction absorbs
-  that drift exactly.
-- **Fallback** — if `info.boardRect` never arrived (a
-  `fetchBoardRect` race that effectively doesn't happen in
-  practice), ship the untranslated path tagged as
-  `ViewportFrame`. Server accepts; replay reads the frame tag
-  and still renders correctly in the matching env.
-- **Other actions** (`CompleteTurn`, `Undo`) — `Nothing`.
-
-The invariant this preserves: **every intra-board action on
-the wire carries a path that's faithful to replay forever,
-regardless of future viewport or DPR changes.** Matches the
-architecture doc's "durable always" rule.
+- **Intra-board** (`Split`, `MergeStack`, `MoveStack`) ships
+  `Just { path = info.gesturePath, frame = info.pathFrame }`.
+  Capture already wrote `gesturePath` in board frame — no
+  send-time translation.
+- **Hand-origin** (`MergeHand`, `PlaceHand`) ships `Nothing`.
+  Receivers re-synthesize the drag at replay via live DOM
+  measurement of the hand card.
+- **Non-drag** (`CompleteTurn`, `Undo`) ships `Nothing`.
 
 ## Drop-loc derivation
 
-`dropLoc info = info.boardRect |> Maybe.map (rect ->
-{left = cursor.x - grabOffset.x - rect.x, top = cursor.y -
-grabOffset.y - rect.y})`. Returns `Nothing` if the board rect
-hasn't arrived yet — the race between drag-start and
-`Browser.Dom.getElement` completing is benign but callers
-must handle `Nothing`.
+`dropLoc` branches on `info.pathFrame`:
+
+- `BoardFrame` (intra-board): floater top-left IS the drop
+  loc. No translation.
+- `ViewportFrame` (hand drag): subtract the board rect's
+  viewport origin. `Nothing` if the rect hasn't arrived yet.
 
 ## handCardAttrs branches
 

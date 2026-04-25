@@ -1,65 +1,66 @@
 just_use gesture_synth.py
 
 # label: EARLY
-# role: synthesize pointer-path telemetry for Python primitives
-#       WHEN PYTHON HONESTLY KNOWS BOTH ENDPOINTS
+# role: synthesize floater-top-left path telemetry for Python
+#       primitives WHEN PYTHON HONESTLY KNOWS BOTH ENDPOINTS
 
-The Elm client captures real mouse drags. Python primitives
-don't come from mouse events, so a replay of a Python-driven
-game wouldn't see any drag animation without synthesized
-pointer paths.
+The Elm client captures real mouse drags as floater-top-left
+trajectories. Python primitives don't come from mouse
+events, so a replay of a Python-driven game wouldn't see any
+drag animation without synthesized paths. This module
+produces those paths — in the same convention Elm uses.
 
-This module builds those paths — but only for actions whose
-endpoints Python actually knows in the **pinned viewport
-frame** (shared with Elm via `BOARD_VIEWPORT_LEFT/TOP`).
+## What paths represent
 
-## The rule (2026-04-21)
+Path samples are **floater top-left positions** in
+**board frame** over time. Not cursor positions, not
+center-of-card positions. The receiving Elm replay reads
+them directly into `DragInfo.floaterTopLeft` and renders
+the floater at that point. One representation across
+capture, wire, and replay.
 
-Python does NOT speculate about hand-card positions. Hand
-layout is Elm's business, knowable only at replay time via
-`LynRummy.HandLayout`. For hand-origin actions
-(`merge_hand`, `place_hand`), `drag_endpoints` returns None
-and Elm synthesizes at replay time.
+## Scope
 
-Python DOES emit paths for intra-board actions where source
-and target are pinned on both sides — `move_stack` and
-`merge_stack` today. `split` waits on a target-loc policy (the
-wire doesn't carry one).
+Python emits paths only for intra-board actions where it
+knows both endpoints:
 
-This follows `feedback_record_facts_decide_later.md`: don't
-put speculative coordinates on the wire.
+- `move_stack` — `(source.loc) → (new_loc)`.
+- `merge_stack` — `(source.loc) → (target's adjacent edge)`
+  with a 2-px realism jitter.
+
+Python does NOT emit paths for:
+
+- Hand-origin actions (`merge_hand`, `place_hand`). Python
+  can't know hand-card positions; Elm re-synthesizes those
+  at replay time via live DOM measurement.
+- `split`. Splits are clicks; the server doesn't require a
+  gesture path.
+- `complete_turn`, `undo`. Not drags.
 
 ## Surface
 
-- `synthesize(start, end, samples)` — ease-in-ease-out path in
-  viewport coords. Cosine ease on position, uniform time
-  spacing; slow start, peak velocity at the midpoint, slow
-  end. Duration = distance × `DRAG_MS_PER_PIXEL`.
-- `drag_endpoints(prim, board_before)` — return `(start, end)`
-  in viewport coords, or None if Python can't honestly supply
-  them.
-- `_stack_center`, `_stack_edge` — helpers shared by the
-  move_stack / merge_stack branches. Source of "grab center of
-  stack" and "drop on stack's left/right edge" points.
+- `synthesize(start, end, samples)` — ease-in-ease-out path.
+  Cosine ease on position, uniform time spacing. Duration =
+  distance × `DRAG_MS_PER_PIXEL`.
+- `drag_endpoints(prim, board_before)` — returns
+  `(start, end)` in board-frame floater-top-left coords, or
+  None if Python can't honestly supply them.
 
 ## Pointers
 
-- Consumer: `auto_player.py` (attaches gesture_metadata only
-  when `drag_endpoints` returns non-None).
+- Consumer: `auto_player.py` / `agent_board_lab.py` (attach
+  `gesture_metadata` only when `drag_endpoints` returns
+  non-None).
 - Complement: `telemetry.py` (read-side).
-- Shared constants: `geometry.py` `BOARD_VIEWPORT_LEFT/TOP`
-  must match Elm's `LynRummy.BoardGeometry.boardViewport{Left,Top}`.
+- `geometry.py`'s `BOARD_VIEWPORT_LEFT/TOP` constants mirror
+  Elm's `LynRummy.BoardGeometry.boardViewport{Left,Top}` for
+  documentation but are not used in path synthesis (paths
+  are board-frame, not viewport).
 
 ## Notes
 
-- `split` synthesizes a short downward drag anchored at
-  `card_index` within the source stack (travel of one
-  `CARD_HEIGHT`). The wire carries no target loc for Split —
-  the server chooses where the halves land — so the drag
-  expresses only the physical act of "pulling" the card off.
-- `DRAG_MS_PER_PIXEL = 5` is a settled value, not a pending
-  measurement — perceived replay pace reads well at this
-  setting (Steve, 2026-04-21). Decoupled from Elm's own
-  `dragMsPerPixel = 2` (Elm honors Python-captured paces
+- `DRAG_MS_PER_PIXEL = 5` — settled value; perceived replay
+  pace reads well. Decoupled from Elm's own
+  `dragMsPerPixel = 2` (Elm honors Python-emitted paces
   verbatim; that constant governs only Elm's hand-origin
   synthesis).

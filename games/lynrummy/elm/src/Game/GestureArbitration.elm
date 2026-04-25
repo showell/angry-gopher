@@ -9,23 +9,18 @@ module Game.GestureArbitration exposing
     )
 
 {-| Pure helpers for click-vs-drag arbitration during a board
-interaction. The actual event flow lives in `Main.elm` (it
-talks to `Browser.Events` and the view's mousedown handlers);
-everything that *can* be made pure has been pulled out here so
-elm-test can reach it.
+interaction. Event flow lives in the update loop; what can be
+made pure has been pulled here so elm-test can reach it.
 
-The disambiguation rule mirrors the TS engine
-(`DragDropHelper` in `angry-cat/src/lyn_rummy/game/game.ts`):
+The rule:
 
 - A board-card mousedown captures a "click intent" naming the
   card index within the stack.
-- Subsequent pointer movement past `clickThreshold` (squared
-  distance) kills the intent. Once dead, it stays dead for
-  the gesture.
-- At pointer-up, if the intent survived, the gesture is a
-  click — split the stack at the captured card index. If the
-  intent died, the gesture is a drag — usual drop / place /
-  snap-back logic applies.
+- Pointer movement past `clickThreshold` (squared distance)
+  kills the intent. Once dead, it stays dead for the gesture.
+- At pointer-up, a surviving intent means a click — split the
+  stack at the captured card. A dead intent means a drag —
+  normal drop / place / snap-back logic applies.
 
 -}
 
@@ -55,21 +50,13 @@ cursorInRect p r =
 
 
 {-| Squared-distance threshold above which click intent dies.
-Direct port of the TS literal (`dist_squared(e) > 1`). Tight
-enough that any deliberate drag kills it; loose enough that
-slight pointer jitter doesn't.
-
-NOTE: Steve knows as a developer and player that the click UI
-this threshold powers is sub-optimal — a hand that jitters
-more than one pixel between mousedown and mouseup will turn
-its intended click into a drag. Preserved verbatim from TS for
-faithful-port reasons; tuning waits for after-port iteration.
-See `showell/claude_writings/the_bar_for_done.md`.
-
+`9` = up to 3 pixels of axis movement (or ~2 diagonal) still
+reads as a click. Measured: accidental clicks bother players
+more than accidental drags, so err tight.
 -}
 clickThreshold : Int
 clickThreshold =
-    1
+    9
 
 
 distSquared : Point -> Point -> Int
