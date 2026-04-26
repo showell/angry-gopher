@@ -151,25 +151,54 @@ def _bucket_to_tuples(stacks):
 def _run_enumerate_moves(sc):
     """Build a 4-bucket state from the scenario's helper/trouble/
     growing/complete sections, walk `bfs_solver.enumerate_moves`,
-    and assert at least one yielded desc matches the expected
-    `yields` type."""
+    and assert against any of:
+      - expect.yields: at least one move has this type
+      - expect.narrate_contains: at least one move's narrate()
+        contains this substring
+      - expect.hint_contains: at least one move's hint()
+        contains this substring
+    """
     state = (
         _bucket_to_tuples(sc.get("helper", [])),
         _bucket_to_tuples(sc.get("trouble", [])),
         _bucket_to_tuples(sc.get("growing", [])),
         _bucket_to_tuples(sc.get("complete", [])),
     )
-    expected_type = sc["expect"].get("yields", "")
-    if not expected_type:
-        return False, "expect.yields missing"
+    expect = sc["expect"]
+    expected_type = expect.get("yields", "")
+    narrate_sub = expect.get("narrate_contains", "")
+    hint_sub = expect.get("hint_contains", "")
+
+    if not (expected_type or narrate_sub or hint_sub):
+        return False, ("expect missing yields / narrate_contains "
+                       "/ hint_contains")
+
     moves = list(bfs_solver.enumerate_moves(state))
-    matches = [d for d, _ in moves if d["type"] == expected_type]
-    if not matches:
-        types = sorted({d["type"] for d, _ in moves})
-        return False, (f"no {expected_type!r} move yielded; "
-                       f"types seen: {types or 'none'}")
+
+    if expected_type:
+        matches = [d for d, _ in moves if d["type"] == expected_type]
+        if not matches:
+            types = sorted({d["type"] for d, _ in moves})
+            return False, (f"no {expected_type!r} move yielded; "
+                           f"types seen: {types or 'none'}")
+
+    if narrate_sub:
+        narrates = [bfs_solver.narrate(d) for d, _ in moves]
+        if not any(narrate_sub in n for n in narrates):
+            sample = narrates[:3]
+            return False, (f"no narrate contains {narrate_sub!r}; "
+                           f"sample: {sample}")
+
+    if hint_sub:
+        hints = [bfs_solver.hint(d) for d, _ in moves]
+        hints = [h for h in hints if h is not None]
+        if not any(hint_sub in h for h in hints):
+            sample = hints[:3]
+            return False, (f"no hint contains {hint_sub!r}; "
+                           f"sample: {sample}")
+
     return True, (f"OK — {len(moves)} moves yielded, "
-                  f"{len(matches)} matched {expected_type!r}")
+                  f"assertions matched")
 
 
 def _run_solve(sc):

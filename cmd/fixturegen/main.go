@@ -56,7 +56,9 @@ type Expectation struct {
 	MessageSubstr string
 	Suggestions   []ExpectedSuggestion // expect: suggestions
 	// Planner expectations (op `enumerate_moves`).
-	Yields string // "push" / "extract_absorb" / etc. — assert AT LEAST one yielded move has this type
+	Yields           string // "push" / "extract_absorb" / etc. — at least one yielded move has this type
+	NarrateContains  string // at least one yielded move's narrate() contains this substring
+	HintContains     string // at least one yielded move's hint() contains this substring
 	// Solver expectations (op `solve`).
 	NoPlan     bool // expect: no_plan — assert solve returns None
 	PlanLength int  // expect: plan_length: N — assert plan has exactly N lines (-1 = not set)
@@ -810,9 +812,17 @@ func elmAgentStackLit(s Stack) string {
 // elmEnumerateMoves emits a test body that builds the
 // scenario's 4-bucket state, walks the enumerator, and
 // asserts at least one yielded move matches the
-// expect.yields type.
+// expect.yields type. Scenarios whose only assertion is
+// narrate_contains / hint_contains compile to Expect.pass
+// stubs on the Elm side until those renderers port.
 func elmEnumerateMoves(b *strings.Builder, sc Scenario) {
 	yields := sc.Expect.Yields
+	if yields == "" {
+		// narrate_contains / hint_contains only — stub on Elm
+		// until the renderers port.
+		b.WriteString("            -- narrate/hint matchers not yet ported to Elm\n            Expect.pass")
+		return
+	}
 	matcher := elmMoveMatcher(yields)
 	fmt.Fprintf(b, "            let\n                state : Buckets\n                state =\n                    { helper = %s\n                    , trouble = %s\n                    , growing = %s\n                    , complete = %s\n                    }\n\n                moves =\n                    AgentEnumerator.enumerateMoves state\n            in\n",
 		elmAgentStacks(sc.Helper, "                        "),
@@ -959,7 +969,9 @@ type jsonExpect struct {
 	Kind        string           `json:"kind"`
 	Suggestions []jsonSuggestion `json:"suggestions,omitempty"`
 	// Planner ops.
-	Yields string `json:"yields,omitempty"`
+	Yields          string `json:"yields,omitempty"`
+	NarrateContains string `json:"narrate_contains,omitempty"`
+	HintContains    string `json:"hint_contains,omitempty"`
 	// Solver op.
 	NoPlan     bool `json:"no_plan,omitempty"`
 	PlanLength int  `json:"plan_length,omitempty"`
@@ -1018,10 +1030,12 @@ func toJSONScenario(sc Scenario) jsonScenario {
 		Complete: toJSONBoard(sc.Complete),
 	}
 	js.Expect = jsonExpect{
-		Kind:       sc.Expect.Kind,
-		Yields:     sc.Expect.Yields,
-		NoPlan:     sc.Expect.NoPlan,
-		PlanLength: sc.Expect.PlanLength,
+		Kind:            sc.Expect.Kind,
+		Yields:          sc.Expect.Yields,
+		NarrateContains: sc.Expect.NarrateContains,
+		HintContains:    sc.Expect.HintContains,
+		NoPlan:          sc.Expect.NoPlan,
+		PlanLength:      sc.Expect.PlanLength,
 	}
 	for _, es := range sc.Expect.Suggestions {
 		js.Expect.Suggestions = append(js.Expect.Suggestions, jsonSuggestion{
@@ -1345,6 +1359,10 @@ func parseExpectBlock(e *Expectation, children []line, path string) error {
 				e.Suggestions = append(e.Suggestions, sug)
 			case "yields":
 				e.Yields = val
+			case "narrate_contains":
+				e.NarrateContains = val
+			case "hint_contains":
+				e.HintContains = val
 			case "plan_length":
 				n := 0
 				if _, err := fmt.Sscanf(val, "%d", &n); err != nil {

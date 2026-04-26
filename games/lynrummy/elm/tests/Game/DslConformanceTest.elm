@@ -883,6 +883,22 @@ hintNoPlaysForLonelyUnplayableCard =
                 Expect.pass
 
 
+hintPopViaShift : Test
+hintPopViaShift =
+    test "hint_pop_via_shift" <|
+        \_ ->
+            -- narrate/hint matchers not yet ported to Elm
+            Expect.pass
+
+
+hintSpliceRedBlackRun : Test
+hintSpliceRedBlackRun =
+    test "hint_splice_red_black_run" <|
+        \_ ->
+            -- narrate/hint matchers not yet ported to Elm
+            Expect.pass
+
+
 identityReorderBreaksMatch : Test
 identityReorderBreaksMatch =
     test "identity_reorder_breaks_match" <|
@@ -956,6 +972,14 @@ midturnAllowsBogus =
 
                 Err err ->
                     Expect.fail (refereeStageToString err.stage ++ ": " ++ err.message)
+
+
+narrateEngulfPhrasing : Test
+narrateEngulfPhrasing =
+    test "narrate_engulf_phrasing" <|
+        \_ ->
+            -- narrate/hint matchers not yet ported to Elm
+            Expect.pass
 
 
 peelLeftEdgeIntoSingletonTrouble : Test
@@ -1425,9 +1449,12 @@ suite =
         , hintInvariantSplitForSetBothEdges
         , hintInvariantSplitForSetOneMiddleOneEdge
         , hintNoPlaysForLonelyUnplayableCard
+        , hintPopViaShift
+        , hintSpliceRedBlackRun
         , identityReorderBreaksMatch
         , inventoryCardFromNowhere
         , midturnAllowsBogus
+        , narrateEngulfPhrasing
         , peelLeftEdgeIntoSingletonTrouble
         , pushPartialPairOntoHelperRun
         , shiftEightClubsPopsJackClubs

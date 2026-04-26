@@ -1856,6 +1856,267 @@
     }
   },
   {
+    "name": "hint_pop_via_shift",
+    "desc": "Player-facing shift hint says you can pop a card via shifting.",
+    "op": "enumerate_moves",
+    "hand": [],
+    "board": [],
+    "helper": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 9,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 10,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 11,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 8,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 8,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 8,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 8,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "trouble": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 12,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "expect": {
+      "kind": "",
+      "hint_contains": "pop the JC"
+    }
+  },
+  {
+    "name": "hint_splice_red_black_run",
+    "desc": "Player-facing splice hint names the verb + the run kind. (Steve's reference phrasing.)",
+    "op": "enumerate_moves",
+    "hand": [],
+    "board": [],
+    "helper": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 5,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 6,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 8,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 9,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 10,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "trouble": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 7,
+              "suit": 3,
+              "origin_deck": 1
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "expect": {
+      "kind": "",
+      "hint_contains": "red-black run"
+    }
+  },
+  {
+    "name": "narrate_engulf_phrasing",
+    "desc": "An engulf push narrates as 'engulf … into …' (Steve sees the chunk-level intent).",
+    "op": "enumerate_moves",
+    "hand": [],
+    "board": [],
+    "helper": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 3,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 5,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "growing": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 1,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 2,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "expect": {
+      "kind": "",
+      "narrate_contains": "engulf"
+    }
+  },
+  {
     "name": "peel_left_edge_into_singleton_trouble",
     "desc": "5H peeled from a length-4 pure run absorbs onto trouble [4H].",
     "op": "enumerate_moves",

@@ -174,6 +174,44 @@ scenario solve_simple_peel_in_one_line
   expect:
     plan_length: 1
 
+# --- narrate / hint renderings ------------------------------
+# Each layer has a different audience:
+#   narrate(desc) — Steve-facing, evocative ("engulf [3S 4D 5C]
+#     into [AC 2D]"). Used in Claude's verbose-mode log.
+#   hint(desc) — player-facing, vague-but-useful ("You can
+#     splice the 7H into a red-black run.")
+
+scenario narrate_engulf_phrasing
+  desc: An engulf push narrates as 'engulf … into …' (Steve sees the chunk-level intent).
+  op: enumerate_moves
+  helper:
+    at (0,0): 3S 4D 5C
+  growing:
+    at (0,0): AC 2D
+  expect:
+    narrate_contains: engulf
+
+scenario hint_splice_red_black_run
+  desc: Player-facing splice hint names the verb + the run kind. (Steve's reference phrasing.)
+  op: enumerate_moves
+  helper:
+    at (0,0): 5H 6S 7H 8S 9H TS
+  trouble:
+    at (0,0): 7H'
+  expect:
+    hint_contains: red-black run
+
+scenario hint_pop_via_shift
+  desc: Player-facing shift hint says you can pop a card via shifting.
+  op: enumerate_moves
+  helper:
+    at (0,0): 9C TC JC
+    at (0,0): 8D 8S 8H 8C
+  trouble:
+    at (0,0): QH
+  expect:
+    hint_contains: pop the JC
+
 # --- shift (8C-pops-JC idiom) --------------------------------
 
 scenario shift_eight_clubs_pops_jack_clubs

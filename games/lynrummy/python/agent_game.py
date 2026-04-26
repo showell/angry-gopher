@@ -20,6 +20,7 @@ import datetime
 import sys
 
 import agent_prelude
+import bfs_solver
 import dealer
 import geometry
 import primitives
@@ -147,7 +148,7 @@ def _execute_plan(client, sid, plan, local, *, verbose):
     None on send error."""
     for step_num, (line, desc) in enumerate(plan, 1):
         if verbose:
-            print(f"  plan step {step_num}: {line}")
+            print(f"  plan step {step_num}: {bfs_solver.narrate(desc)}")
         prims = verbs.step_to_primitives(desc, local)
         for prim in prims:
             local = primitives.send_one(client, sid, prim, local,

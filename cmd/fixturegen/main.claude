@@ -31,13 +31,21 @@ are build artifacts.
   board, assert every resulting stack classifies cleanly
   (Elm + Python).
 - `enumerate_moves` — given a 4-bucket state
-  (helper / trouble / growing / complete), assert the
-  planner's `enumerateMoves` yields at least one move of the
-  named `expect.yields` type. Live on both Python (via
-  `bfs_solver._enumerate_moves`) and Elm (via
-  `Game.Agent.Enumerator.enumerateMoves`) as of the
-  ELM_AGENT_PORT phase 2 landing 2026-04-25. Successor to
-  the trick-invariant scenarios as those retire.
+  (helper / trouble / growing / complete), assert against
+  any combination of:
+    - `expect.yields: <type>` — at least one yielded move
+      has this type. Cross-language live (Python + Elm).
+    - `expect.narrate_contains: <substr>` — at least one
+      yielded move's `narrate(desc)` (Steve-facing
+      evocative form) contains the substring. Python-only
+      today; Elm stub.
+    - `expect.hint_contains: <substr>` — at least one
+      yielded move's `hint(desc)` (player-facing vague
+      nudge) contains the substring. Python-only today;
+      Elm stub.
+  Successor to the trick-invariant scenarios as those retire.
+- `solve` — full BFS planner invocation. `expect: no_plan`
+  or `expect.plan_length: N`. Live on both Python and Elm.
 - `trick_first_play` — legacy; Elm still honors it, Go no
   longer has tricks.
 
