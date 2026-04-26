@@ -1,0 +1,44 @@
+just_use agent_prelude.py
+
+# label: WORKHORSE
+# role: hand-aware "what should I play?" outer loop
+
+The Python agent's missing layer. The BFS planner is hand-
+blind — it solves a 4-bucket board state. This module is
+the outer loop that, given a hand AND a board, finds a
+plausible play (which hand cards to place, plus the resulting
+BFS plan to clean up the board).
+
+## Search order (game-theoretic, no scoring)
+
+1. **Meldable pairs** — for each (c1, c2) hand pair where
+   `partial_ok([c1, c2])`:
+   - **(a)** Look for a third hand card that completes the
+     partial into a legal length-3 stack. If found, three
+     cards leave the hand in one gesture; return immediately
+     (no BFS).
+   - **(b)** Else project the pair as a 2-partial trouble
+     onto the board and run BFS. First plan wins.
+2. **Singletons** — for each unmatched hand card: project
+   as singleton trouble + run BFS. First success returns.
+3. **No plausible play** — return None. The agent is stuck;
+   the driver completes the turn and the dealer takes over
+   (draws). There's no "save a card" choice — emptying the
+   hand is always strictly preferred (per Steve's game-theory
+   note 2026-04-25).
+
+The order encodes preference: pairs first because emptying
+two cards beats emptying one; singletons fall back. No
+scoring; first plausible plan wins. (Per Steve: "human
+players rarely hold up on putting a card to the board.
+Each card on the board means more possibilities.")
+
+## Public API
+
+- `find_play(hand, board)` — main entry. Returns `{"placements":
+  [card, ...], "plan": [str, ...]}` or `None`.
+
+## Pointers
+
+- BFS engine: `bfs_solver.solve` / `solve_state`.
+- Tests: `test_agent_prelude.py`.
