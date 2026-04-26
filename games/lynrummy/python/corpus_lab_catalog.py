@@ -38,7 +38,7 @@ def _trouble_label(state):
     if not hand:
         return "?"
     c = hand[0]["card"]
-    return b.label_d((c["value"], c["suit"], c["origin_deck"]))
+    return b.card_label((c["value"], c["suit"], c["origin_deck"]))
 
 
 def _board_for_solver(state):

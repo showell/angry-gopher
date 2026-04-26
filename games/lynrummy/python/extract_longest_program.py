@@ -4,7 +4,7 @@ walk the BFS up to the cap and dump the LONGEST candidate
 DSL-style program it generated before exhausting.
 
 Useful for inspecting the chains the agent chases when it's
-stuck. Each line is `describe_move(desc)` form.
+stuck. Each line is `describe(desc)` form.
 
 Usage:
     python3 extract_longest_program.py /tmp/runaway_hunt.jsonl \
@@ -113,7 +113,7 @@ def main():
     print(f"\nLongest candidate program: {len(longest)} steps "
           f"(found at cap={longest_cap}).\n")
     for i, desc in enumerate(longest, 1):
-        line = move.describe_move(desc)
+        line = move.describe(desc)
         print(f"  {i:>2}. {line}")
 
     if longest_state is not None:
@@ -121,9 +121,9 @@ def main():
         print(f"\nFinal state at the end of this program:")
         print(f"  helper: {len(helper2)} stacks")
         for s in helper2:
-            print(f"    {[cards.label_d(c) for c in s]}")
-        print(f"  trouble: {[[cards.label_d(c) for c in s] for s in trouble2]}")
-        print(f"  growing: {[[cards.label_d(c) for c in s] for s in growing2]}")
+            print(f"    {[cards.card_label(c) for c in s]}")
+        print(f"  trouble: {[[cards.card_label(c) for c in s] for s in trouble2]}")
+        print(f"  growing: {[[cards.card_label(c) for c in s] for s in growing2]}")
         print(f"  complete: {len(complete2)} stacks")
 
 

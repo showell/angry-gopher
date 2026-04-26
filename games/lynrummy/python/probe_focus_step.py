@@ -17,7 +17,7 @@ import sys
 
 import enumerator
 import move
-from cards import classify, label_d
+from cards import classify, card_label
 from analyze_focus_block import (
     _load_puzzle, _solve, _apply_desc, stack_label,
     _format_lineage, _what_did_step_touch,
@@ -78,10 +78,10 @@ def main():
 
     print(f"\n--- focus-touching moves: {len(focus_moves)} ---")
     for d in focus_moves:
-        print(f"  {move.describe_move(d)}")
+        print(f"  {move.describe(d)}")
     print(f"\n--- non-focus moves: {len(other_moves)} ---")
     for d in other_moves[:20]:
-        print(f"  {move.describe_move(d)}")
+        print(f"  {move.describe(d)}")
     if len(other_moves) > 20:
         print(f"  ... {len(other_moves) - 20} more")
 

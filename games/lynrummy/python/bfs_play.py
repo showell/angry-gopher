@@ -86,7 +86,7 @@ def _bfs_with_descs(initial, max_trouble):
                 if sig in seen:
                     continue
                 seen.add(sig)
-                line = move.describe_move(desc)
+                line = move.describe(desc)
                 new_program = program + [(line, desc)]
                 if buckets.is_victory(t, g):
                     return new_program

@@ -38,7 +38,7 @@ def s2b(state):
 def render_board(stacks):
     sorted_stacks = sorted(stacks, key=lambda s: s[0][0])
     return "\n".join(
-        " ".join(b.label_d(c) for c in s) for s in sorted_stacks)
+        " ".join(b.card_label(c) for c in s) for s in sorted_stacks)
 
 
 def main():
@@ -105,7 +105,7 @@ def main():
 
         for r in rows:
             sid = r["sid"]
-            tb = b.label_d(r["trouble"])
+            tb = b.card_label(r["trouble"])
             f.write(f"## sid {sid} — trouble {tb} "
                     f"(depth {r['depth']}, "
                     f"{r['wall'] * 1000:.0f}ms)\n\n")

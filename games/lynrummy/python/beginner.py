@@ -29,11 +29,11 @@ from itertools import product
 # `from beginner import …` keep working without churn.
 from cards import (  # noqa: F401  (re-exports)
     RANKS, SUITS, RED,
-    card, label, label_d,
+    card, label, card_label,
     succ, color,
-    classify, partial_ok, neighbors,
-    can_peel_kind, can_pluck_kind, can_yank_kind,
-    can_steal_kind, can_split_out_kind,
+    classify, is_partial_ok, neighbors,
+    can_peel, can_pluck, can_yank,
+    can_steal, can_split_out,
 )
 
 
@@ -96,7 +96,7 @@ def almost_neighbor_shapes(board):
 # --- Planner ---
 
 def stack_label(stack):
-    return " ".join(label_d(x) for x in stack)
+    return " ".join(card_label(x) for x in stack)
 
 
 def _stack_with_marker(stack, marker_card, marker_template):
@@ -104,7 +104,7 @@ def _stack_with_marker(stack, marker_card, marker_template):
     `marker_template` (e.g. '[{}]' or '-{}-')."""
     out = []
     for c in stack:
-        s = label_d(c)
+        s = card_label(c)
         if c == marker_card:
             s = marker_template.format(s)
         out.append(s)
@@ -220,19 +220,19 @@ def _try_extracts(complete, trouble, shapes):
         for ci, c in enumerate(source):
             if (c[0], c[1]) not in shapes:
                 continue
-            if can_peel_kind(kind, n, ci):
+            if can_peel(kind, n, ci):
                 nc, nt, ec, src, p = do_extract(
                     complete, trouble, src_idx, ci, "peel")
                 yield "peel", ec, src, nc, nt, p
-            elif can_pluck_kind(kind, n, ci):
+            elif can_pluck(kind, n, ci):
                 nc, nt, ec, src, p = do_extract(
                     complete, trouble, src_idx, ci, "pluck")
                 yield "pluck", ec, src, nc, nt, p
-            elif can_yank_kind(kind, n, ci):
+            elif can_yank(kind, n, ci):
                 nc, nt, ec, src, p = do_extract(
                     complete, trouble, src_idx, ci, "yank")
                 yield "yank", ec, src, nc, nt, p
-            elif can_steal_kind(kind, n, ci):
+            elif can_steal(kind, n, ci):
                 nc, nt, ec, src, p = do_extract(
                     complete, trouble, src_idx, ci, "steal")
                 yield "steal", ec, src, nc, nt, p
@@ -294,12 +294,12 @@ def _stack_with_block(stack, block_size, side):
     glued onto the legal target."""
     if side == "right":
         head, block = stack[:-block_size], stack[-block_size:]
-        head_s = " ".join(label_d(c) for c in head)
-        block_s = " ".join(label_d(c) for c in block)
+        head_s = " ".join(card_label(c) for c in head)
+        block_s = " ".join(card_label(c) for c in block)
         return f"{head_s} [{block_s}]" if head_s else f"[{block_s}]"
     block, tail = stack[:block_size], stack[block_size:]
-    block_s = " ".join(label_d(c) for c in block)
-    tail_s = " ".join(label_d(c) for c in tail)
+    block_s = " ".join(card_label(c) for c in block)
+    tail_s = " ".join(card_label(c) for c in tail)
     return f"[{block_s}] {tail_s}" if tail_s else f"[{block_s}]"
 
 
@@ -357,7 +357,7 @@ def _try_pulls(complete, trouble, taboo=None, only_loose=None):
             for side in ("right", "left"):
                 merged = (list(tgt) + [loose] if side == "right"
                           else [loose] + list(tgt))
-                if not partial_ok(merged):
+                if not is_partial_ok(merged):
                     continue
                 nt_base = [s for i, s in enumerate(trouble)
                            if i != src_idx and i != tgt_idx]

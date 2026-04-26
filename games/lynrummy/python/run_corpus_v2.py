@@ -73,7 +73,7 @@ def main():
         else:
             depth = len(plan)
             depth_dist[depth] = depth_dist.get(depth, 0) + 1
-        print(f"{sid:>4} {b.label_d(trouble):>8} "
+        print(f"{sid:>4} {b.card_label(trouble):>8} "
               f"{str(depth):>5} {wall:>5.2f}s", flush=True)
 
     print()

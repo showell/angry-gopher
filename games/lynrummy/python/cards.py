@@ -34,7 +34,7 @@ def label(c):
     return RANKS[v - 1] + SUITS[s]
 
 
-def label_d(c):
+def card_label(c):
     """Label that includes deck suffix when non-zero. Used
     in DSL output where two cards of the same value+suit
     can co-exist (one per deck) and need to be told apart."""
@@ -112,7 +112,7 @@ def classify(stack):
     return "rb_run"
 
 
-def partial_ok(stack):
+def is_partial_ok(stack):
     """True if `stack` is a legal group OR a length-2 partial
     that could grow into one. Used to validate intermediate
     extends — a beginner is allowed to pair up two cards into a
@@ -167,7 +167,7 @@ def neighbors(c):
 # Enumerator.elm. Each predicate is a pure function on
 # (kind, n, ci); the enumerator dispatches via verb_for.
 
-def can_peel_kind(kind, n, ci):
+def can_peel(kind, n, ci):
     if kind == "set" and n >= 4:
         return True
     if kind in ("pure_run", "rb_run") and n >= 4 and (
@@ -176,11 +176,11 @@ def can_peel_kind(kind, n, ci):
     return False
 
 
-def can_pluck_kind(kind, n, ci):
+def can_pluck(kind, n, ci):
     return kind in ("pure_run", "rb_run") and 3 <= ci <= n - 4
 
 
-def can_yank_kind(kind, n, ci):
+def can_yank(kind, n, ci):
     if kind not in ("pure_run", "rb_run"):
         return False
     if ci == 0 or ci == n - 1 or 3 <= ci <= n - 4:
@@ -191,7 +191,7 @@ def can_yank_kind(kind, n, ci):
             and min(left_len, right_len) >= 1)
 
 
-def can_steal_kind(kind, n, ci):
+def can_steal(kind, n, ci):
     if n != 3:
         return False
     if kind in ("pure_run", "rb_run"):
@@ -199,7 +199,7 @@ def can_steal_kind(kind, n, ci):
     return kind == "set"
 
 
-def can_split_out_kind(kind, n, ci):
+def can_split_out(kind, n, ci):
     """Extract the interior card of a length-3 run, splitting
     it into two singleton TROUBLE fragments. Fills the only
     extraction gap in the verb vocabulary: every card on the

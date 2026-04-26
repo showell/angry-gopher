@@ -29,7 +29,7 @@ import sys
 import bfs
 import enumerator
 import move
-from cards import classify, label_d
+from cards import classify, card_label
 from move import (
     ExtractAbsorbDesc, FreePullDesc, PushDesc,
     ShiftDesc, SpliceDesc,
@@ -40,7 +40,7 @@ DB_PATH = "/home/steve/AngryGopher/prod/gopher.db"
 
 
 def stack_label(stack):
-    return " ".join(label_d(c) for c in stack)
+    return " ".join(card_label(c) for c in stack)
 
 
 def _load_puzzle(sid):
@@ -83,9 +83,9 @@ def _apply_desc(state4, desc):
     """Replay a desc against a 4-tuple state. We re-derive the
     new state by enumerate_moves and matching descs (by line
     string for uniqueness). Returns the new 4-tuple state."""
-    target_line = move.describe_move(desc)
+    target_line = move.describe(desc)
     for d, new_state in enumerator.enumerate_moves(state4):
-        if move.describe_move(d) == target_line:
+        if move.describe(d) == target_line:
             return new_state
     raise RuntimeError(
         f"could not replay step: {target_line!r}")
@@ -123,12 +123,12 @@ def _what_did_step_touch(desc):
     if isinstance(desc, ExtractAbsorbDesc):
         return f"absorb-onto [{stack_label(desc.target_before)}]"
     if isinstance(desc, FreePullDesc):
-        return (f"pull [{label_d(desc.loose)}] onto "
+        return (f"pull [{card_label(desc.loose)}] onto "
                 f"[{stack_label(desc.target_before)}]")
     if isinstance(desc, ShiftDesc):
         return f"shift-onto [{stack_label(desc.target_before)}]"
     if isinstance(desc, SpliceDesc):
-        return f"splice [{label_d(desc.loose)}] into helper"
+        return f"splice [{card_label(desc.loose)}] into helper"
     if isinstance(desc, PushDesc):
         return f"push [{stack_label(desc.trouble_before)}] onto helper"
     return desc.type
@@ -204,7 +204,7 @@ def main():
     print(f"=== analyze_focus_block sid {sid} ===")
 
     initial4, trouble_card = _load_puzzle(sid)
-    print(f"trouble card: {label_d(trouble_card)}")
+    print(f"trouble card: {card_label(trouble_card)}")
     print(f"initial helper count: {len(initial4[0])}")
     print(f"initial trouble count: {len(initial4[1])}")
     initial_lineage = enumerator.initial_lineage(initial4[1], initial4[2])

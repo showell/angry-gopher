@@ -10,9 +10,9 @@ landed. See `enumerator.claude` for the full overview.
 
 from buckets import Buckets, FocusedState
 from cards import (
-    RED, classify, neighbors, partial_ok,
-    can_peel_kind, can_pluck_kind, can_yank_kind,
-    can_steal_kind, can_split_out_kind,
+    RED, classify, neighbors, is_partial_ok,
+    can_peel, can_pluck, can_yank,
+    can_steal, can_split_out,
 )
 from move import (
     ExtractAbsorbDesc, FreePullDesc, PushDesc,
@@ -22,7 +22,7 @@ from move import (
 
 # --- Bucket transitions (pure helpers) ---
 
-def without(stacks, idx):
+def drop_at(stacks, idx):
     """Stacks list with index `idx` dropped. Pure."""
     return stacks[:idx] + stacks[idx + 1:]
 
@@ -32,8 +32,8 @@ def remove_absorber(bucket_name, idx, trouble, growing):
     the other bucket passes through unchanged. Returns
     (new_trouble, new_growing). Pure."""
     if bucket_name == "trouble":
-        return without(trouble, idx), list(growing)
-    return list(trouble), without(growing, idx)
+        return drop_at(trouble, idx), list(growing)
+    return list(trouble), drop_at(growing, idx)
 
 
 def graduate(merged, growing, complete):
@@ -112,7 +112,7 @@ def admissible_partial(merged, inventory):
     length-2) has a completion candidate somewhere in
     `inventory`. Lifted from the three sites
     (extract_absorb / free_pull / shift) that share the gate."""
-    if not partial_ok(merged):
+    if not is_partial_ok(merged):
         return False
     if len(merged) == 2 and has_doomed_third(merged, inventory):
         return False
@@ -172,15 +172,15 @@ def do_extract(helper, src_idx, ci, verb):
 
 
 def verb_for(kind, n, ci):
-    if can_peel_kind(kind, n, ci):
+    if can_peel(kind, n, ci):
         return "peel"
-    if can_pluck_kind(kind, n, ci):
+    if can_pluck(kind, n, ci):
         return "pluck"
-    if can_yank_kind(kind, n, ci):
+    if can_yank(kind, n, ci):
         return "yank"
-    if can_steal_kind(kind, n, ci):
+    if can_steal(kind, n, ci):
         return "steal"
-    if can_split_out_kind(kind, n, ci):
+    if can_split_out(kind, n, ci):
         return "split_out"
     return None
 
@@ -302,9 +302,9 @@ def enumerate_moves(state):
                     # li (its position in nt_base shifted iff
                     # li > idx).
                     li_in_base = li - 1 if li > idx else li
-                    nt = without(nt_base, li_in_base)
+                    nt = drop_at(nt_base, li_in_base)
                 else:
-                    nt = without(nt_base, li)
+                    nt = drop_at(nt_base, li)
                 ng_final, nc, graduated = graduate(
                     merged, ng, complete)
                 desc = FreePullDesc(
@@ -386,7 +386,7 @@ def enumerate_moves(state):
                                        reverse=True)
                         nh = list(helper)
                         for i in hi_lo:
-                            nh = without(nh, i)
+                            nh = drop_at(nh, i)
                         nh = nh + [new_source, new_donor]
                         for absorb_side in ("right", "left"):
                             merged = (
@@ -445,8 +445,8 @@ def enumerate_moves(state):
                         side, src, k, loose)
                     if not _splice_legal(left, right):
                         continue
-                    nh = without(helper, hi) + [left, right]
-                    nt = without(trouble, ti)
+                    nh = drop_at(helper, hi) + [left, right]
+                    nt = drop_at(trouble, ti)
                     desc = SpliceDesc(
                         loose=loose,
                         source=list(src),
@@ -469,8 +469,8 @@ def enumerate_moves(state):
                           else [*t, *h])
                 if classify(merged) == "other":
                     continue
-                nh = without(helper, hi) + [merged]
-                nt = without(trouble, ti)
+                nh = drop_at(helper, hi) + [merged]
+                nt = drop_at(trouble, ti)
                 desc = PushDesc(
                     trouble_before=list(t),
                     target_before=list(h),
@@ -491,8 +491,8 @@ def enumerate_moves(state):
                           else [*g, *h])
                 if classify(merged) == "other":
                     continue
-                nh = without(helper, hi)
-                ng = without(growing, gi)
+                nh = drop_at(helper, hi)
+                ng = drop_at(growing, gi)
                 nc = complete + [merged]
                 desc = PushDesc(
                     trouble_before=list(g),

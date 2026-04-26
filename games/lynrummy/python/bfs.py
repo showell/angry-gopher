@@ -12,7 +12,7 @@ from buckets import (
 )
 from cards import classify
 from enumerator import enumerate_focused, initial_lineage
-from move import describe_move
+from move import describe
 
 
 def bfs_with_cap(initial, max_trouble, max_states, *,
@@ -74,7 +74,7 @@ def bfs_with_cap(initial, max_trouble, max_states, *,
                 if sig in seen:
                     continue
                 seen.add(sig)
-                new_program = program + [(describe_move(desc), desc)]
+                new_program = program + [(describe(desc), desc)]
                 if diagnostics is not None:
                     tc = trouble_count(nb.trouble, nb.growing)
                     h = diagnostics["trouble_histogram"]

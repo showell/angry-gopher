@@ -323,8 +323,8 @@ addHelperEntries ( hi, src ) acc =
 
 {-| Drop the element at index `i` from a list. Pure.
 -}
-withoutAt : Int -> List a -> List a
-withoutAt i xs =
+dropAt : Int -> List a -> List a
+dropAt i xs =
     List.take i xs ++ List.drop (i + 1) xs
 
 
@@ -341,10 +341,10 @@ removeAbsorber :
 removeAbsorber bucket idx trouble growing =
     case bucket of
         Trouble ->
-            ( withoutAt idx trouble, growing )
+            ( dropAt idx trouble, growing )
 
         Growing ->
-            ( trouble, withoutAt idx growing )
+            ( trouble, dropAt idx growing )
 
 
 {-| Route a merged stack to GROWING (still partial) or
@@ -940,7 +940,7 @@ emitExtractAbsorb state inventory absorber hi src ci extCard verb =
             extractPieces src ci verb
 
         newHelper =
-            withoutAt hi state.helper ++ helperPieces
+            dropAt hi state.helper ++ helperPieces
     in
     [ RightSide, LeftSide ]
         |> List.filterMap
@@ -1073,10 +1073,10 @@ emitFreePull state inventory absorber li loose =
                                             else
                                                 li
                                     in
-                                    withoutAt liInBase ntBase
+                                    dropAt liInBase ntBase
 
                                 Growing ->
-                                    withoutAt li ntBase
+                                    dropAt li ntBase
 
                         ( ngFinal, nc, graduated ) =
                             graduate merged ng state.complete
@@ -1399,8 +1399,8 @@ shiftEmit state inventory absorber srcIdx source kind whichEnd stolen pCard dono
 
                             helperWithoutPair =
                                 state.helper
-                                    |> withoutAt hi
-                                    |> withoutAt lo
+                                    |> dropAt hi
+                                    |> dropAt lo
 
                             newHelper =
                                 helperWithoutPair ++ [ newSource, newDonor ]
@@ -1539,8 +1539,8 @@ spliceCandidates state ti loose hi src n =
                                     }
 
                                 newState =
-                                    { helper = withoutAt hi state.helper ++ [ left, right ]
-                                    , trouble = withoutAt ti state.trouble
+                                    { helper = dropAt hi state.helper ++ [ left, right ]
+                                    , trouble = dropAt ti state.trouble
                                     , growing = state.growing
                                     , complete = state.complete
                                     }
@@ -1611,8 +1611,8 @@ pushOnto state ti t helper =
                                         }
 
                                     newState =
-                                        { helper = withoutAt hi state.helper ++ [ merged ]
-                                        , trouble = withoutAt ti state.trouble
+                                        { helper = dropAt hi state.helper ++ [ merged ]
+                                        , trouble = dropAt ti state.trouble
                                         , growing = state.growing
                                         , complete = state.complete
                                         }
@@ -1671,9 +1671,9 @@ engulfFromGrowing state gi g =
                                         }
 
                                     newState =
-                                        { helper = withoutAt hi state.helper
+                                        { helper = dropAt hi state.helper
                                         , trouble = state.trouble
-                                        , growing = withoutAt gi state.growing
+                                        , growing = dropAt gi state.growing
                                         , complete = state.complete ++ [ merged ]
                                         }
                                 in

@@ -1,5 +1,5 @@
 """
-move.py — BFS desc dataclasses + rendering (describe_move,
+move.py — BFS desc dataclasses + rendering (describe,
 narrate, hint).
 
 The Python equivalent of `Game.Agent.Move.elm`. Each move
@@ -15,7 +15,7 @@ landed; dataclasses introduced in the same pass.
 from dataclasses import dataclass, field
 
 from buckets import Side, Verb
-from cards import classify, label_d
+from cards import classify, card_label
 
 
 # --- Per-move dataclasses ---
@@ -88,7 +88,7 @@ class ShiftDesc:
 
 
 def stack_label(stack):
-    return " ".join(label_d(c) for c in stack)
+    return " ".join(card_label(c) for c in stack)
 
 
 def narrate(desc):
@@ -98,7 +98,7 @@ def narrate(desc):
     log. Each move type gets a verb-forward phrasing at the
     human chunk level (engulf, splice, pop, tuck, ...).
 
-    For exact structural matching, use `describe_move`. For
+    For exact structural matching, use `describe`. For
     the vague hint a human PLAYER would see in the UI, use
     `hint`.
     """
@@ -106,7 +106,7 @@ def narrate(desc):
         case FreePullDesc(loose=loose, result=result,
                           graduated=graduated):
             check = " ✓" if graduated else ""
-            return (f"pull {label_d(loose)} into "
+            return (f"pull {card_label(loose)} into "
                     f"[{stack_label(result)}]{check}")
 
         case ExtractAbsorbDesc(verb=verb, ext_card=ext_card,
@@ -119,18 +119,18 @@ def narrate(desc):
                                + ", ".join("[" + stack_label(s) + "]"
                                            for s in spawned)
                                + " homeless)")
-            return (f"{verb} {label_d(ext_card)} → "
+            return (f"{verb} {card_label(ext_card)} → "
                     f"[{stack_label(result)}]{check}{spawned_str}")
 
         case ShiftDesc(p_card=p_card, stolen=stolen, merged=merged,
                        graduated=graduated):
             check = " ✓" if graduated else ""
-            return (f"{label_d(p_card)} pops {label_d(stolen)} → "
+            return (f"{card_label(p_card)} pops {card_label(stolen)} → "
                     f"[{stack_label(merged)}]{check}")
 
         case SpliceDesc(loose=loose, left_result=left,
                         right_result=right):
-            return (f"splice {label_d(loose)} → "
+            return (f"splice {card_label(loose)} → "
                     f"[{stack_label(left)}] + [{stack_label(right)}]")
 
         # Engulf-shape vs plain push: plain push extends a
@@ -165,21 +165,21 @@ def hint(desc):
     """
     match desc:
         case FreePullDesc(loose=loose, result=result):
-            return (f"You can pull the {label_d(loose)} onto "
+            return (f"You can pull the {card_label(loose)} onto "
                     f"{group_kind_phrase(result)}.")
 
         case ExtractAbsorbDesc(verb=verb, ext_card=ext_card,
                                target_before=target_before):
-            return (f"You can {verb} the {label_d(ext_card)} to "
+            return (f"You can {verb} the {card_label(ext_card)} to "
                     f"extend {partial_kind_phrase(target_before)}.")
 
         case ShiftDesc(p_card=p_card, stolen=stolen):
-            return (f"You can pop the {label_d(stolen)} by shifting "
-                    f"the {label_d(p_card)} into the run.")
+            return (f"You can pop the {card_label(stolen)} by shifting "
+                    f"the {card_label(p_card)} into the run.")
 
         case SpliceDesc(loose=loose, source=source):
             # Source is always a length-4+ pure or rb run.
-            return (f"You can splice the {label_d(loose)} into a "
+            return (f"You can splice the {card_label(loose)} into a "
                     f"{run_kind_phrase(source)}.")
 
         case PushDesc(trouble_before=tb, result=result) \
@@ -213,9 +213,9 @@ def partial_kind_phrase(stack):
     if n == 0:
         return "an empty target"
     if n == 1:
-        return f"the {label_d(stack[0])}"
+        return f"the {card_label(stack[0])}"
     return ("the partial ["
-            + " ".join(label_d(c) for c in stack)
+            + " ".join(card_label(c) for c in stack)
             + "]")
 
 
@@ -230,14 +230,14 @@ def run_kind_phrase(stack):
     return "run"
 
 
-def describe_move(desc):
+def describe(desc):
     """Render a one-line DSL string for a move."""
     match desc:
         case FreePullDesc(loose=loose, target_bucket_before=bucket,
                           target_before=target_before, result=result,
                           graduated=graduated):
             graduated_str = " [→COMPLETE]" if graduated else ""
-            return (f"pull {label_d(loose)} onto {bucket} "
+            return (f"pull {card_label(loose)} onto {bucket} "
                     f"[{stack_label(target_before)}] → "
                     f"[{stack_label(result)}]{graduated_str}")
 
@@ -253,7 +253,7 @@ def describe_move(desc):
                                + ", ".join("[" + stack_label(s) + "]"
                                            for s in spawned))
             graduated_str = " [→COMPLETE]" if graduated else ""
-            return (f"{verb} {label_d(ext_card)} from HELPER "
+            return (f"{verb} {card_label(ext_card)} from HELPER "
                     f"[{stack_label(source)}], "
                     f"absorb onto {bucket} "
                     f"[{stack_label(target_before)}] → "
@@ -265,14 +265,14 @@ def describe_move(desc):
                        target_bucket_before=bucket,
                        target_before=target_before, merged=merged,
                        graduated=graduated):
-            p = label_d(p_card)
+            p = card_label(p_card)
             p_idx = new_source.index(p_card)
             rest = [c for c in new_source if c != p_card]
-            rest_label = " ".join(label_d(c) for c in rest)
+            rest_label = " ".join(card_label(c) for c in rest)
             shifted = (f"{p} + {rest_label}" if p_idx == 0
                        else f"{rest_label} + {p}")
             graduated_str = " [→COMPLETE]" if graduated else ""
-            return (f"shift {p} to pop {label_d(stolen)} "
+            return (f"shift {p} to pop {card_label(stolen)} "
                     f"[{stack_label(new_donor)} -> {shifted}]; "
                     f"absorb onto {bucket} "
                     f"[{stack_label(target_before)}] → "
@@ -280,7 +280,7 @@ def describe_move(desc):
 
         case SpliceDesc(loose=loose, source=source,
                         left_result=left, right_result=right):
-            return (f"splice [{label_d(loose)}] into HELPER "
+            return (f"splice [{card_label(loose)}] into HELPER "
                     f"[{stack_label(source)}] → "
                     f"[{stack_label(left)}] + [{stack_label(right)}]")
 

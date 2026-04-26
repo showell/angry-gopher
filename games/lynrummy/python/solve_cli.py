@@ -18,7 +18,7 @@ import sqlite3
 import sys
 
 import bfs
-from cards import label_d
+from cards import card_label
 
 
 def main():
@@ -40,7 +40,7 @@ def main():
                     hand[0]["card"]["origin_deck"])
     board = s2b(state) + [[trouble_card]]
     print(f"=== solve_cli session {sid} "
-          f"(trouble={label_d(trouble_card)}) ===")
+          f"(trouble={card_label(trouble_card)}) ===")
     plan = bfs.solve(board, max_states=200)
     if plan:
         print("\nFinal plan:")

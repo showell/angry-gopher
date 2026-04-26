@@ -24,7 +24,7 @@ Search order (encodes game preference; no scoring layer):
 import time
 
 import bfs
-from cards import classify, partial_ok
+from cards import classify, is_partial_ok
 
 
 def find_play(hand, board, stats=None):
@@ -50,7 +50,7 @@ def find_play(hand, board, stats=None):
     # (a) + (b): pair search.
     for i, c1 in enumerate(hand):
         for c2 in hand[i + 1:]:
-            if not partial_ok([c1, c2]):
+            if not is_partial_ok([c1, c2]):
                 continue
 
             # (a) Third in hand?
