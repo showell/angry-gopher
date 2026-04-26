@@ -102,50 +102,54 @@ def narrate(desc):
     the vague hint a human PLAYER would see in the UI, use
     `hint`.
     """
-    if isinstance(desc, FreePullDesc):
-        loose = label_d(desc.loose)
-        result = stack_label(desc.result)
-        check = " ✓" if desc.graduated else ""
-        return f"pull {loose} into [{result}]{check}"
+    match desc:
+        case FreePullDesc(loose=loose, result=result,
+                          graduated=graduated):
+            check = " ✓" if graduated else ""
+            return (f"pull {label_d(loose)} into "
+                    f"[{stack_label(result)}]{check}")
 
-    if isinstance(desc, ExtractAbsorbDesc):
-        verb = desc.verb
-        ec = label_d(desc.ext_card)
-        result = stack_label(desc.result)
-        check = " ✓" if desc.graduated else ""
-        spawned = ""
-        if desc.spawned:
-            spawned = (" (leaves "
-                       + ", ".join("[" + stack_label(s) + "]"
-                                   for s in desc.spawned)
-                       + " homeless)")
-        return f"{verb} {ec} → [{result}]{check}{spawned}"
+        case ExtractAbsorbDesc(verb=verb, ext_card=ext_card,
+                               result=result, graduated=graduated,
+                               spawned=spawned):
+            check = " ✓" if graduated else ""
+            spawned_str = ""
+            if spawned:
+                spawned_str = (" (leaves "
+                               + ", ".join("[" + stack_label(s) + "]"
+                                           for s in spawned)
+                               + " homeless)")
+            return (f"{verb} {label_d(ext_card)} → "
+                    f"[{stack_label(result)}]{check}{spawned_str}")
 
-    if isinstance(desc, ShiftDesc):
-        p = label_d(desc.p_card)
-        stolen = label_d(desc.stolen)
-        merged = stack_label(desc.merged)
-        check = " ✓" if desc.graduated else ""
-        return f"{p} pops {stolen} → [{merged}]{check}"
+        case ShiftDesc(p_card=p_card, stolen=stolen, merged=merged,
+                       graduated=graduated):
+            check = " ✓" if graduated else ""
+            return (f"{label_d(p_card)} pops {label_d(stolen)} → "
+                    f"[{stack_label(merged)}]{check}")
 
-    if isinstance(desc, SpliceDesc):
-        loose = label_d(desc.loose)
-        left = stack_label(desc.left_result)
-        right = stack_label(desc.right_result)
-        return f"splice {loose} → [{left}] + [{right}]"
+        case SpliceDesc(loose=loose, left_result=left,
+                        right_result=right):
+            return (f"splice {label_d(loose)} → "
+                    f"[{stack_label(left)}] + [{stack_label(right)}]")
 
-    if isinstance(desc, PushDesc):
-        tb = stack_label(desc.trouble_before)
-        target = stack_label(desc.target_before)
-        result = stack_label(desc.result)
         # Engulf-shape vs plain push: plain push extends a
         # helper by 1-2 cards; engulf swallows a helper into a
         # complete stack (graduated from GROWING).
-        if classify(desc.result) != "other":
-            return f"engulf [{target}] into [{tb}] → [{result}] ✓"
-        return f"tuck [{tb}] into [{target}] → [{result}]"
+        case PushDesc(trouble_before=tb, target_before=target,
+                      result=result) if classify(result) != "other":
+            return (f"engulf [{stack_label(target)}] into "
+                    f"[{stack_label(tb)}] → "
+                    f"[{stack_label(result)}] ✓")
 
-    return str(desc)
+        case PushDesc(trouble_before=tb, target_before=target,
+                      result=result):
+            return (f"tuck [{stack_label(tb)}] into "
+                    f"[{stack_label(target)}] → "
+                    f"[{stack_label(result)}]")
+
+        case _:
+            return str(desc)
 
 
 def hint(desc):
@@ -159,36 +163,34 @@ def hint(desc):
     red-black run." (Names card, verb, group kind. Doesn't
     name the run.)
     """
-    if isinstance(desc, FreePullDesc):
-        loose = label_d(desc.loose)
-        kind = group_kind_phrase(desc.result)
-        return f"You can pull the {loose} onto {kind}."
+    match desc:
+        case FreePullDesc(loose=loose, result=result):
+            return (f"You can pull the {label_d(loose)} onto "
+                    f"{group_kind_phrase(result)}.")
 
-    if isinstance(desc, ExtractAbsorbDesc):
-        verb = desc.verb
-        ec = label_d(desc.ext_card)
-        target_kind = partial_kind_phrase(desc.target_before)
-        return f"You can {verb} the {ec} to extend {target_kind}."
+        case ExtractAbsorbDesc(verb=verb, ext_card=ext_card,
+                               target_before=target_before):
+            return (f"You can {verb} the {label_d(ext_card)} to "
+                    f"extend {partial_kind_phrase(target_before)}.")
 
-    if isinstance(desc, ShiftDesc):
-        p = label_d(desc.p_card)
-        stolen = label_d(desc.stolen)
-        return (f"You can pop the {stolen} by shifting "
-                f"the {p} into the run.")
+        case ShiftDesc(p_card=p_card, stolen=stolen):
+            return (f"You can pop the {label_d(stolen)} by shifting "
+                    f"the {label_d(p_card)} into the run.")
 
-    if isinstance(desc, SpliceDesc):
-        loose = label_d(desc.loose)
-        # Source is always a length-4+ pure or rb run.
-        run_kind = run_kind_phrase(desc.source)
-        return f"You can splice the {loose} into a {run_kind}."
+        case SpliceDesc(loose=loose, source=source):
+            # Source is always a length-4+ pure or rb run.
+            return (f"You can splice the {label_d(loose)} into a "
+                    f"{run_kind_phrase(source)}.")
 
-    if isinstance(desc, PushDesc):
-        tb = stack_label(desc.trouble_before)
-        if classify(desc.result) != "other":
-            return f"You can complete a run by absorbing [{tb}]."
-        return f"You can tuck [{tb}] back into a run."
+        case PushDesc(trouble_before=tb, result=result) \
+                if classify(result) != "other":
+            return f"You can complete a run by absorbing [{stack_label(tb)}]."
 
-    return None
+        case PushDesc(trouble_before=tb):
+            return f"You can tuck [{stack_label(tb)}] back into a run."
+
+        case _:
+            return None
 
 
 def group_kind_phrase(stack):
@@ -230,61 +232,63 @@ def run_kind_phrase(stack):
 
 def describe_move(desc):
     """Render a one-line DSL string for a move."""
-    if isinstance(desc, FreePullDesc):
-        loose = label_d(desc.loose)
-        bucket = desc.target_bucket_before
-        tb = stack_label(desc.target_before)
-        result = stack_label(desc.result)
-        graduated = " [→COMPLETE]" if desc.graduated else ""
-        return (f"pull {loose} onto {bucket} [{tb}] → "
-                f"[{result}]{graduated}")
-    if isinstance(desc, ExtractAbsorbDesc):
-        verb = desc.verb
-        ec = label_d(desc.ext_card)
-        src = stack_label(desc.source)
-        bucket = desc.target_bucket_before
-        tb = stack_label(desc.target_before)
-        result = stack_label(desc.result)
-        spawned = ""
-        if desc.spawned:
-            spawned = (" ; spawn TROUBLE: "
-                       + ", ".join("[" + stack_label(s) + "]"
-                                   for s in desc.spawned))
-        graduated = " [→COMPLETE]" if desc.graduated else ""
-        return (f"{verb} {ec} from HELPER [{src}], "
-                f"absorb onto {bucket} [{tb}] → "
-                f"[{result}]{graduated}{spawned}")
-    if isinstance(desc, ShiftDesc):
-        p = label_d(desc.p_card)
-        stolen = label_d(desc.stolen)
-        new_donor = stack_label(desc.new_donor)
-        new_source = desc.new_source
-        p_idx = new_source.index(desc.p_card)
-        rest = [c for c in new_source if c != desc.p_card]
-        rest_label = " ".join(label_d(c) for c in rest)
-        if p_idx == 0:
-            shifted = f"{p} + {rest_label}"
-        else:
-            shifted = f"{rest_label} + {p}"
-        bucket = desc.target_bucket_before
-        tb = stack_label(desc.target_before)
-        merged = stack_label(desc.merged)
-        graduated = " [→COMPLETE]" if desc.graduated else ""
-        return (f"shift {p} to pop {stolen} "
-                f"[{new_donor} -> {shifted}]; "
-                f"absorb onto {bucket} [{tb}] → "
-                f"[{merged}]{graduated}")
-    if isinstance(desc, SpliceDesc):
-        loose = label_d(desc.loose)
-        src = stack_label(desc.source)
-        left = stack_label(desc.left_result)
-        right = stack_label(desc.right_result)
-        return (f"splice [{loose}] into HELPER [{src}] → "
-                f"[{left}] + [{right}]")
-    if isinstance(desc, PushDesc):
-        tb = stack_label(desc.trouble_before)
-        target = stack_label(desc.target_before)
-        result = stack_label(desc.result)
-        return (f"push TROUBLE [{tb}] onto HELPER [{target}] → "
-                f"[{result}]")
-    return str(desc)
+    match desc:
+        case FreePullDesc(loose=loose, target_bucket_before=bucket,
+                          target_before=target_before, result=result,
+                          graduated=graduated):
+            graduated_str = " [→COMPLETE]" if graduated else ""
+            return (f"pull {label_d(loose)} onto {bucket} "
+                    f"[{stack_label(target_before)}] → "
+                    f"[{stack_label(result)}]{graduated_str}")
+
+        case ExtractAbsorbDesc(verb=verb, ext_card=ext_card,
+                               source=source,
+                               target_bucket_before=bucket,
+                               target_before=target_before,
+                               result=result, graduated=graduated,
+                               spawned=spawned):
+            spawned_str = ""
+            if spawned:
+                spawned_str = (" ; spawn TROUBLE: "
+                               + ", ".join("[" + stack_label(s) + "]"
+                                           for s in spawned))
+            graduated_str = " [→COMPLETE]" if graduated else ""
+            return (f"{verb} {label_d(ext_card)} from HELPER "
+                    f"[{stack_label(source)}], "
+                    f"absorb onto {bucket} "
+                    f"[{stack_label(target_before)}] → "
+                    f"[{stack_label(result)}]"
+                    f"{graduated_str}{spawned_str}")
+
+        case ShiftDesc(p_card=p_card, stolen=stolen,
+                       new_donor=new_donor, new_source=new_source,
+                       target_bucket_before=bucket,
+                       target_before=target_before, merged=merged,
+                       graduated=graduated):
+            p = label_d(p_card)
+            p_idx = new_source.index(p_card)
+            rest = [c for c in new_source if c != p_card]
+            rest_label = " ".join(label_d(c) for c in rest)
+            shifted = (f"{p} + {rest_label}" if p_idx == 0
+                       else f"{rest_label} + {p}")
+            graduated_str = " [→COMPLETE]" if graduated else ""
+            return (f"shift {p} to pop {label_d(stolen)} "
+                    f"[{stack_label(new_donor)} -> {shifted}]; "
+                    f"absorb onto {bucket} "
+                    f"[{stack_label(target_before)}] → "
+                    f"[{stack_label(merged)}]{graduated_str}")
+
+        case SpliceDesc(loose=loose, source=source,
+                        left_result=left, right_result=right):
+            return (f"splice [{label_d(loose)}] into HELPER "
+                    f"[{stack_label(source)}] → "
+                    f"[{stack_label(left)}] + [{stack_label(right)}]")
+
+        case PushDesc(trouble_before=tb, target_before=target,
+                      result=result):
+            return (f"push TROUBLE [{stack_label(tb)}] onto HELPER "
+                    f"[{stack_label(target)}] → "
+                    f"[{stack_label(result)}]")
+
+        case _:
+            return str(desc)
