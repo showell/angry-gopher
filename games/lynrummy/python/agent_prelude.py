@@ -120,19 +120,28 @@ def _find_completing_third(pair, hand):
 
 def _try_projection(board, extra_stacks, *, stats=None, kind="?",
                     cards=()):
+    max_states = _PROJECTION_MAX_STATES["value"]
     """Add `extra_stacks` to `board` (as new stacks), run BFS
     with desc tracking, and return the plan as
     [(line, desc), ...] on success or None on no plan.
 
     Records a per-projection entry in `stats["projections"]`
-    when stats is provided."""
+    when stats is provided. Each cap-exhaustion is recorded
+    too: stats["projections"][-1]["exhaustions"] is a list
+    of {cap, expansions, seen_count, hit_max_states} dicts —
+    one per cap that ran without finding a plan. A
+    `hit_max_states=True` entry means the search aborted on
+    the state budget (a runaway candidate, NOT a clean
+    no-plan-exists termination)."""
     augmented = list(board) + list(extra_stacks)
     helper = [s for s in augmented if classify(s) != "other"]
     trouble = [s for s in augmented if classify(s) == "other"]
     initial = (helper, trouble, [], [])
+    exhaustions = []
     t0 = time.time()
     plan = bs.solve_state_with_descs(
-        initial, max_trouble_outer=10, max_states=200000)
+        initial, max_trouble_outer=10, max_states=max_states,
+        on_cap_exhausted=lambda **kw: exhaustions.append(kw))
     wall = time.time() - t0
     if stats is not None:
         stats.setdefault("projections", []).append({
@@ -140,5 +149,25 @@ def _try_projection(board, extra_stacks, *, stats=None, kind="?",
             "cards": list(cards),
             "wall": wall,
             "found_plan": plan is not None,
+            "exhaustions": exhaustions,
         })
     return plan
+
+
+def find_play_with_budget(hand, board, *, max_states, stats=None):
+    """Variant of find_play that lets perf_harness control the
+    BFS state budget per projection. Default `find_play`
+    keeps the production budget."""
+    # Same logic as find_play but injects max_states. Implemented
+    # by temporarily monkey-patching the projection helper —
+    # cheap and avoids restructuring the public API.
+    original_max = _PROJECTION_MAX_STATES["value"]
+    _PROJECTION_MAX_STATES["value"] = max_states
+    try:
+        return find_play(hand, board, stats=stats)
+    finally:
+        _PROJECTION_MAX_STATES["value"] = original_max
+
+
+# Default budget; overridable via find_play_with_budget.
+_PROJECTION_MAX_STATES = {"value": 200000}

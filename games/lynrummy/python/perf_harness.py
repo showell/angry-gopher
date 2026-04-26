@@ -52,17 +52,35 @@ def _load_snapshots(path):
     return out
 
 
-def _time_one(rec, repeats):
-    """Re-run find_play `repeats` times, return list of walls."""
+def _time_one(rec, repeats, max_states):
+    """Re-run find_play `repeats` times, return list of
+    (wall, stats) pairs where `stats` is the per-projection
+    record from the LAST run (used to flag exhaustions)."""
     walls = []
+    last_stats = {}
     for _ in range(repeats):
+        last_stats = {}
         t0 = time.time()
-        agent_prelude.find_play(rec["hand"], rec["board"])
+        agent_prelude.find_play_with_budget(
+            rec["hand"], rec["board"],
+            max_states=max_states,
+            stats=last_stats)
         walls.append(time.time() - t0)
-    return walls
+    return walls, last_stats
 
 
-def _summarize(rec, walls):
+def _summarize(rec, walls, last_stats):
+    runaways = []
+    for proj in last_stats.get("projections", []):
+        for ex in proj.get("exhaustions", []):
+            if ex["hit_max_states"]:
+                runaways.append({
+                    "kind": proj["kind"],
+                    "cards": proj["cards"],
+                    "cap": ex["cap"],
+                    "expansions": ex["expansions"],
+                    "seen": ex["seen_count"],
+                })
     return {
         "captured_wall": rec["total_wall"],
         "median_wall": statistics.median(walls),
@@ -72,10 +90,12 @@ def _summarize(rec, walls):
         "board_size": len(rec["board"]),
         "found_play": rec["found_play"],
         "n_projections": len(rec["projections"]),
+        "runaways": runaways,
     }
 
 
 def _print_summary(rank, summary):
+    flag = " ⚠ RUNAWAY" if summary["runaways"] else ""
     print(f"  #{rank:2d} captured={summary['captured_wall']:5.2f}s "
           f"median={summary['median_wall']:5.2f}s "
           f"min={summary['min_wall']:5.2f}s "
@@ -83,7 +103,13 @@ def _print_summary(rank, summary):
           f"hand={summary['hand_size']:>2} "
           f"board={summary['board_size']:>2} "
           f"projs={summary['n_projections']:>2} "
-          f"{'+plan' if summary['found_play'] else 'STUCK'}")
+          f"{'+plan' if summary['found_play'] else 'STUCK'}"
+          f"{flag}")
+    for r in summary["runaways"]:
+        cards = ", ".join(f"{c[0]}/{c[1]}/{c[2]}" for c in r["cards"])
+        print(f"      ⚠ runaway: {r['kind']} cards=[{cards}] "
+              f"cap={r['cap']} expansions={r['expansions']} "
+              f"seen={r['seen']}")
 
 
 def _print_projection_breakdown(rec):
@@ -115,6 +141,15 @@ def main():
                     help="Show the N slowest cases (default 10)")
     ap.add_argument("--repeats", type=int, default=5,
                     help="Re-time each case N times (default 5)")
+    ap.add_argument("--max-states", type=int, default=10000,
+                    help=("BFS state budget per projection. Lower "
+                          "values cut profiling time AND surface "
+                          "any runaway searches as ⚠ RUNAWAY in "
+                          "the summary."))
+    ap.add_argument("--max-captured-wall", type=float, default=30.0,
+                    help=("Skip snapshots whose captured wall "
+                          "exceeds this (filters out pre-existing "
+                          "pathological captures)."))
     ap.add_argument("--profile-slowest", action="store_true",
                     help="cProfile the slowest case")
     args = ap.parse_args()
@@ -123,17 +158,24 @@ def main():
     if not snaps:
         sys.exit(f"no snapshots in {args.snapshots}")
 
+    snaps = [s for s in snaps
+             if s["total_wall"] <= args.max_captured_wall]
     snaps.sort(key=lambda s: s["total_wall"], reverse=True)
     top = snaps[:args.top]
 
-    print(f"Loaded {len(snaps)} snapshots; profiling top {len(top)} "
-          f"with {args.repeats} repeats each.\n")
+    print(f"Loaded {len(snaps)} snapshots (post-filter); profiling "
+          f"top {len(top)} with {args.repeats} repeats each, "
+          f"max_states={args.max_states}.\n")
     print("Per-case re-times:")
 
     summaries = []
+    last_stats_for_slowest = None
     for i, rec in enumerate(top, 1):
-        walls = _time_one(rec, args.repeats)
-        s = _summarize(rec, walls)
+        walls, last_stats = _time_one(rec, args.repeats,
+                                      args.max_states)
+        if i == 1:
+            last_stats_for_slowest = last_stats
+        s = _summarize(rec, walls, last_stats)
         summaries.append(s)
         _print_summary(i, s)
 

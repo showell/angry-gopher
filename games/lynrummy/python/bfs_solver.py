@@ -777,29 +777,48 @@ def solve_state(initial, *, max_trouble_outer=8, max_states=10000,
 
 
 def solve_state_with_descs(initial, *, max_trouble_outer=8,
-                           max_states=10000):
+                           max_states=10000,
+                           on_cap_exhausted=None):
     """Same as solve_state but returns [(line, desc), ...]
     instead of [line, ...]. The desc dicts feed
     `verbs.step_to_primitives` for primitive translation;
     the line strings are useful for human-readable logging.
-    Returns None if no plan within the outer cap."""
+    Returns None if no plan within the outer cap.
+
+    `on_cap_exhausted` (optional callable) fires once per cap
+    that completes without finding a plan, with kwargs
+    {cap, expansions, seen_count, hit_max_states}.
+    `hit_max_states=True` means the search aborted on the
+    state budget (BAD — possible runaway). False means the
+    frontier emptied naturally (GOOD termination).
+    """
     if trouble_count(initial[1], initial[2]) > max_trouble_outer:
         return None
     if is_victory(initial[1], initial[2]):
         return []
     for cap in range(1, max_trouble_outer + 1):
-        result = _bfs_with_cap_descs(initial, cap, max_states)
+        result, exhausted, expansions, seen_n = \
+            _bfs_with_cap_descs(initial, cap, max_states)
         if result is not None:
             return result
+        if on_cap_exhausted is not None:
+            on_cap_exhausted(cap=cap, expansions=expansions,
+                             seen_count=seen_n,
+                             hit_max_states=exhausted)
     return None
 
 
 def _bfs_with_cap_descs(initial, max_trouble, max_states):
-    """Pure BFS-by-length returning (line, desc) pairs."""
+    """Pure BFS-by-length returning (line, desc) pairs.
+
+    Returns (plan_or_None, hit_max_states, expansions,
+    seen_count). `hit_max_states=True` means the cap was hit
+    by exhausting the state budget rather than emptying the
+    frontier — that's the runaway signal."""
     if trouble_count(initial[1], initial[2]) > max_trouble:
-        return None
+        return None, False, 0, 0
     if is_victory(initial[1], initial[2]):
-        return []
+        return [], False, 0, 1
     seen = {state_sig(*initial)}
     current_level = [(initial, [])]
     expansions = 0
@@ -820,12 +839,12 @@ def _bfs_with_cap_descs(initial, max_trouble, max_states):
                 line = describe_move(desc)
                 new_program = program + [(line, desc)]
                 if is_victory(t, g):
-                    return new_program
+                    return new_program, False, expansions, len(seen)
                 next_level.append((new_state, new_program))
             if expansions >= max_states:
-                return None
+                return None, True, expansions, len(seen)
         current_level = next_level
-    return None
+    return None, False, expansions, len(seen)
 
 
 if __name__ == "__main__":
