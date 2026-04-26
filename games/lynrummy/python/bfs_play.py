@@ -62,29 +62,29 @@ def _solve_with_descs(initial_state, max_trouble):
 
 
 def _bfs_with_descs(initial, max_trouble):
-    if bs._trouble_count(initial[1], initial[2]) > max_trouble:
+    if bs.trouble_count(initial[1], initial[2]) > max_trouble:
         return None
-    if bs._victory(initial[1], initial[2]):
+    if bs.is_victory(initial[1], initial[2]):
         return []
-    seen = {bs._state_sig(*initial)}
+    seen = {bs.state_sig(*initial)}
     current_level = [(initial, [])]
     while current_level:
         current_level.sort(
-            key=lambda e: bs._trouble_count(e[0][1], e[0][2]))
+            key=lambda e: bs.trouble_count(e[0][1], e[0][2]))
         next_level = []
         for state, program in current_level:
             for desc, new_state in bs.enumerate_moves(state):
                 _, t, g, _ = new_state
-                tc = bs._trouble_count(t, g)
+                tc = bs.trouble_count(t, g)
                 if tc > max_trouble:
                     continue
-                sig = bs._state_sig(*new_state)
+                sig = bs.state_sig(*new_state)
                 if sig in seen:
                     continue
                 seen.add(sig)
                 line = bs.describe_move(desc)
                 new_program = program + [(line, desc)]
-                if bs._victory(t, g):
+                if bs.is_victory(t, g):
                     return new_program
                 next_level.append((new_state, new_program))
         current_level = next_level

@@ -49,7 +49,7 @@ def _stack_label(stack):
     return " ".join(label_d(c) for c in stack)
 
 
-def _state_sig(helper, trouble, growing, complete):
+def state_sig(helper, trouble, growing, complete):
     """Memoization key. Bucket order matters (HELPER vs
     COMPLETE differ in role) but stack order within a bucket
     doesn't."""
@@ -58,11 +58,11 @@ def _state_sig(helper, trouble, growing, complete):
     return (s(helper), s(trouble), s(growing), s(complete))
 
 
-def _trouble_count(trouble, growing):
+def trouble_count(trouble, growing):
     return sum(len(s) for s in trouble) + sum(len(s) for s in growing)
 
 
-def _victory(trouble, growing):
+def is_victory(trouble, growing):
     return not trouble and all(len(s) >= 3 for s in growing)
 
 
@@ -518,11 +518,11 @@ def bfs_with_cap(initial, max_trouble, *, max_states, verbose):
     that length, generating all level+1 programs, before
     looking at any longer programs. First victory found at
     level N returns the (shortest-under-cap) plan."""
-    if _trouble_count(initial[1], initial[2]) > max_trouble:
+    if trouble_count(initial[1], initial[2]) > max_trouble:
         return None, 0, 0
-    if _victory(initial[1], initial[2]):
+    if is_victory(initial[1], initial[2]):
         return [], 0, 1
-    seen = {_state_sig(*initial)}
+    seen = {state_sig(*initial)}
     current_level = [(initial, [])]
     expansions = 0
     level = 0
@@ -535,7 +535,7 @@ def bfs_with_cap(initial, max_trouble, *, max_states, verbose):
         # victory-bearing states tend to be expanded earlier
         # and we exit on first hit.
         current_level.sort(
-            key=lambda e: _trouble_count(e[0][1], e[0][2]))
+            key=lambda e: trouble_count(e[0][1], e[0][2]))
         if verbose:
             print(f"\n--- level {level}: expanding "
                   f"{len(current_level)} program(s) ---")
@@ -544,15 +544,15 @@ def bfs_with_cap(initial, max_trouble, *, max_states, verbose):
             expansions += 1
             for desc, new_state in enumerate_moves(state):
                 _, t, g, _ = new_state
-                tc = _trouble_count(t, g)
+                tc = trouble_count(t, g)
                 if tc > max_trouble:
                     continue
-                sig = _state_sig(*new_state)
+                sig = state_sig(*new_state)
                 if sig in seen:
                     continue
                 seen.add(sig)
                 new_program = program + [describe_move(desc)]
-                if _victory(t, g):
+                if is_victory(t, g):
                     if verbose:
                         print(f"  VICTORY at level {level}: "
                               f"{len(new_program)}-line plan, "
