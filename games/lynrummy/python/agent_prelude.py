@@ -21,18 +21,32 @@ Search order (encodes game preference; no scoring layer):
       to make — emptying the hand is always preferred.
 """
 
+import time
+
 import bfs_solver as bs
 from beginner import classify, partial_ok
 
 
-def find_play(hand, board):
+def find_play(hand, board, stats=None):
     """Find a plausible play. Returns
-    {"placements": [card, ...], "plan": [str, ...]}
+    {"placements": [card, ...], "plan": [(line, desc), ...]}
     or None.
 
     `hand` is a list of card-tuples (value, suit, deck).
-    `board` is a list of stacks, each a list of card-tuples
-    (the same shape `bfs_solver.solve` accepts)."""
+    `board` is a list of stacks, each a list of card-tuples.
+
+    If `stats` is provided (a mutable dict), it gets populated
+    with timing info:
+      stats["total_wall"]   = float, seconds across all
+                              projections this call ran.
+      stats["projections"]  = list of per-projection records
+                              {"kind", "cards", "wall",
+                               "found_plan"}, in execution order.
+    """
+    if stats is not None:
+        stats.setdefault("projections", [])
+    t_total = time.time()
+
     # (a) + (b): pair search.
     for i, c1 in enumerate(hand):
         for c2 in hand[i + 1:]:
@@ -42,14 +56,19 @@ def find_play(hand, board):
             # (a) Third in hand?
             ordered = _find_completing_third([c1, c2], hand)
             if ordered is not None:
+                _finish(stats, t_total)
                 return {
                     "placements": ordered,
                     "plan": [],
                 }
 
             # (b) Project the pair onto the board, run BFS.
-            plan = _try_projection(board, [[c1, c2]])
+            plan = _try_projection(board, [[c1, c2]],
+                                   stats=stats,
+                                   kind="pair",
+                                   cards=[c1, c2])
             if plan is not None:
+                _finish(stats, t_total)
                 return {
                     "placements": [c1, c2],
                     "plan": plan,
@@ -57,15 +76,25 @@ def find_play(hand, board):
 
     # (c) Singletons.
     for c in hand:
-        plan = _try_projection(board, [[c]])
+        plan = _try_projection(board, [[c]],
+                               stats=stats,
+                               kind="singleton",
+                               cards=[c])
         if plan is not None:
+            _finish(stats, t_total)
             return {
                 "placements": [c],
                 "plan": plan,
             }
 
     # (d) Nothing fired.
+    _finish(stats, t_total)
     return None
+
+
+def _finish(stats, t_start):
+    if stats is not None:
+        stats["total_wall"] = time.time() - t_start
 
 
 def _find_completing_third(pair, hand):
@@ -89,13 +118,27 @@ def _find_completing_third(pair, hand):
     return None
 
 
-def _try_projection(board, extra_stacks):
+def _try_projection(board, extra_stacks, *, stats=None, kind="?",
+                    cards=()):
     """Add `extra_stacks` to `board` (as new stacks), run BFS
     with desc tracking, and return the plan as
-    [(line, desc), ...] on success or None on no plan."""
+    [(line, desc), ...] on success or None on no plan.
+
+    Records a per-projection entry in `stats["projections"]`
+    when stats is provided."""
     augmented = list(board) + list(extra_stacks)
     helper = [s for s in augmented if classify(s) != "other"]
     trouble = [s for s in augmented if classify(s) == "other"]
     initial = (helper, trouble, [], [])
-    return bs.solve_state_with_descs(
+    t0 = time.time()
+    plan = bs.solve_state_with_descs(
         initial, max_trouble_outer=10, max_states=200000)
+    wall = time.time() - t0
+    if stats is not None:
+        stats.setdefault("projections", []).append({
+            "kind": kind,
+            "cards": list(cards),
+            "wall": wall,
+            "found_plan": plan is not None,
+        })
+    return plan

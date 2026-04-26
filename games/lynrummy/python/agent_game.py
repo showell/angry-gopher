@@ -17,7 +17,9 @@ Usage:
 
 import argparse
 import datetime
+import json
 import sys
+import time
 
 import agent_prelude
 import bfs_solver
@@ -142,27 +144,52 @@ def _execute_placements(client, sid, placements, local, *, verbose):
     return local
 
 
-def _execute_plan(client, sid, plan, local, *, verbose):
+def _execute_plan(client, sid, plan, local, *, verbose, perf):
     """For each (line, desc) plan step, translate via verbs and
     send each primitive. Returns the updated local board or
-    None on send error."""
+    None on send error.
+
+    `perf` is a dict; each translator + send is timed and the
+    longest-by-layer is tracked there."""
     for step_num, (line, desc) in enumerate(plan, 1):
         if verbose:
             print(f"  plan step {step_num}: {bfs_solver.narrate(desc)}")
+        t = time.time()
         prims = verbs.step_to_primitives(desc, local)
+        translate_wall = time.time() - t
+        _record_max(perf, "translate", translate_wall,
+                    {"desc_type": desc["type"],
+                     "n_prims": len(prims)})
         for prim in prims:
+            t = time.time()
             local = primitives.send_one(client, sid, prim, local,
                                         verbose=verbose)
+            send_wall = time.time() - t
+            _record_max(perf, "send", send_wall,
+                        {"action": prim["action"]})
             if local is None:
                 return None
     return local
 
 
+def _record_max(perf, layer, wall, meta):
+    """Track the per-layer maximum-wall record on the
+    aggregated `perf` dict."""
+    cur = perf.get(layer)
+    if cur is None or wall > cur["wall"]:
+        record = {"wall": wall}
+        record.update(meta)
+        perf[layer] = record
+
+
 def play_session(c, sid, *, max_turns=20, max_actions=300,
-                 verbose=True):
+                 verbose=True, capture_path=None):
     actions = 0
     turns = 0
     last_result = None
+    perf = {}  # global longest-per-layer across the whole game
+    capture_fp = (open(capture_path, "w")
+                  if capture_path else None)
     while turns < max_turns and actions < max_actions:
         state = c.get_state(sid)["state"]
         active = state["active_player_index"]
@@ -178,14 +205,37 @@ def play_session(c, sid, *, max_turns=20, max_actions=300,
         local = state["board"]
         plays_this_turn = 0
         while True:
-            play = agent_prelude.find_play(hand, board_tuples)
+            stats = {}
+            play = agent_prelude.find_play(hand, board_tuples,
+                                           stats=stats)
+            if capture_fp is not None:
+                capture_fp.write(json.dumps({
+                    "hand": hand,
+                    "board": board_tuples,
+                    "projections": stats.get("projections", []),
+                    "total_wall": stats.get("total_wall", 0.0),
+                    "found_play": play is not None,
+                }) + "\n")
+                capture_fp.flush()
+            # Track the slowest projection seen this game.
+            for proj in stats.get("projections", []):
+                _record_max(perf, "projection", proj["wall"], {
+                    "kind": proj["kind"],
+                    "cards": proj["cards"],
+                    "found_plan": proj["found_plan"],
+                })
+            _record_max(perf, "find_play",
+                        stats.get("total_wall", 0.0),
+                        {"hand_size": len(hand),
+                         "board_size": len(board_tuples)})
             if play is None:
                 break
             plays_this_turn += 1
             if verbose:
                 print(f"  play {plays_this_turn}: place "
                       f"{len(play['placements'])} card(s), "
-                      f"plan {len(play['plan'])} step(s)")
+                      f"plan {len(play['plan'])} step(s) "
+                      f"[find_play {stats.get('total_wall', 0):.2f}s]")
 
             local = _execute_placements(
                 c, sid, play["placements"], local, verbose=verbose)
@@ -194,7 +244,8 @@ def play_session(c, sid, *, max_turns=20, max_actions=300,
                 break
 
             local = _execute_plan(
-                c, sid, play["plan"], local, verbose=verbose)
+                c, sid, play["plan"], local, verbose=verbose,
+                perf=perf)
             if local is None:
                 last_result = "send_error"
                 break
@@ -242,8 +293,11 @@ def play_session(c, sid, *, max_turns=20, max_actions=300,
                       f"ending game.")
             break
 
+    if capture_fp is not None:
+        capture_fp.close()
     return {"actions": actions, "turns": turns,
-            "final_turn_result": last_result}
+            "final_turn_result": last_result,
+            "perf": perf}
 
 
 def main():
@@ -252,6 +306,10 @@ def main():
     parser.add_argument("--max-actions", type=int, default=300)
     parser.add_argument("--label", default=None)
     parser.add_argument("--base", default=DEFAULT_BASE)
+    parser.add_argument("--capture",
+                        help=("Path to JSONL file. When set, every "
+                              "find_play call's (hand, board) inputs "
+                              "and timing stats are appended."))
     args = parser.parse_args()
 
     c = Client(base=args.base)
@@ -264,7 +322,8 @@ def main():
           f"{initial['board_score']}")
 
     summary = play_session(c, sid, max_turns=args.max_turns,
-                           max_actions=args.max_actions)
+                           max_actions=args.max_actions,
+                           capture_path=args.capture)
 
     final = c.get_score(sid)
     print()
@@ -273,6 +332,10 @@ def main():
     print(f"final turn_result: {summary['final_turn_result']}")
     print(f"final board_score: {final['board_score']}")
     print(f"browse: {args.base}/play/{sid}")
+    print()
+    print("worst-case wall (per layer):")
+    for layer, record in summary.get("perf", {}).items():
+        print(f"  {layer:12} {record['wall']:6.2f}s  {record}")
 
 
 if __name__ == "__main__":
