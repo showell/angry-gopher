@@ -1,0 +1,9 @@
+# Iteration 3: desc.get("FIELD", ...) -> desc.FIELD.
+# Dataclasses always have all fields (defaults if not init'd),
+# so .get() with a default is unnecessary. The few sites are
+# all in enumerator.update_lineage where we used .get() to
+# tolerate missing keys in the legacy dict shape.
+
+re: desc\.get\("spawned", \(\)\) >>> desc.spawned
+re: desc\.get\("graduated", False\) >>> desc.graduated
+re: desc\.get\("graduated"\) >>> desc.graduated

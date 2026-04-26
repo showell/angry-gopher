@@ -1,17 +1,90 @@
 """
-move.py — BFS desc rendering: describe_move + narrate + hint.
+move.py — BFS desc dataclasses + rendering (describe_move,
+narrate, hint).
 
-The Python equivalent of `Game.Agent.Move.elm`'s rendering
-half. The desc dicts themselves are still inline literals
-built by the enumerator (Elm has typed records); see
-ALIGNMENT_REPORT.md § 3 for the dataclass opportunity that
-hasn't been taken yet.
+The Python equivalent of `Game.Agent.Move.elm`. Each move
+type has a dedicated dataclass mirroring Elm's per-variant
+record. The enumerator emits dataclass instances; readers
+use attribute access (`desc.foo`) and dispatch via
+`isinstance` or `match`.
 
 Lifted from `bfs_solver.py` 2026-04-26 as the module split
-landed.
+landed; dataclasses introduced in the same pass.
 """
 
+from dataclasses import dataclass, field
+
+from buckets import Side, Verb
 from cards import classify, label_d
+
+
+# --- Per-move dataclasses ---
+# Each carries the field set the legacy desc dicts used. The
+# `type` class attribute keeps the legacy string-key dispatch
+# readable for grep-archaeology, but isinstance() is the
+# preferred dispatch in code.
+
+
+@dataclass
+class ExtractAbsorbDesc:
+    type: str = field(default="extract_absorb", init=False)
+    verb: str = ""
+    source: list = field(default_factory=list)
+    ext_card: tuple = (0, 0, 0)
+    target_before: list = field(default_factory=list)
+    target_bucket_before: str = ""
+    result: list = field(default_factory=list)
+    side: str = "right"
+    graduated: bool = False
+    spawned: list = field(default_factory=list)
+
+
+@dataclass
+class FreePullDesc:
+    type: str = field(default="free_pull", init=False)
+    loose: tuple = (0, 0, 0)
+    target_before: list = field(default_factory=list)
+    target_bucket_before: str = ""
+    result: list = field(default_factory=list)
+    side: str = "right"
+    graduated: bool = False
+
+
+@dataclass
+class PushDesc:
+    type: str = field(default="push", init=False)
+    trouble_before: list = field(default_factory=list)
+    target_before: list = field(default_factory=list)
+    result: list = field(default_factory=list)
+    side: str = "right"
+
+
+@dataclass
+class SpliceDesc:
+    type: str = field(default="splice", init=False)
+    loose: tuple = (0, 0, 0)
+    source: list = field(default_factory=list)
+    k: int = 0
+    side: str = "left"
+    left_result: list = field(default_factory=list)
+    right_result: list = field(default_factory=list)
+
+
+@dataclass
+class ShiftDesc:
+    type: str = field(default="shift", init=False)
+    source: list = field(default_factory=list)
+    donor: list = field(default_factory=list)
+    stolen: tuple = (0, 0, 0)
+    p_card: tuple = (0, 0, 0)
+    which_end: int = 0
+    new_source: list = field(default_factory=list)
+    new_donor: list = field(default_factory=list)
+    target_before: list = field(default_factory=list)
+    target_bucket_before: str = ""
+    merged: list = field(default_factory=list)
+    side: str = "right"
+    graduated: bool = False
 
 
 def stack_label(stack):
@@ -29,46 +102,46 @@ def narrate(desc):
     the vague hint a human PLAYER would see in the UI, use
     `hint`.
     """
-    if desc["type"] == "free_pull":
-        loose = label_d(desc["loose"])
-        result = stack_label(desc["result"])
-        check = " ✓" if desc["graduated"] else ""
+    if isinstance(desc, FreePullDesc):
+        loose = label_d(desc.loose)
+        result = stack_label(desc.result)
+        check = " ✓" if desc.graduated else ""
         return f"pull {loose} into [{result}]{check}"
 
-    if desc["type"] == "extract_absorb":
-        verb = desc["verb"]
-        ec = label_d(desc["ext_card"])
-        result = stack_label(desc["result"])
-        check = " ✓" if desc["graduated"] else ""
+    if isinstance(desc, ExtractAbsorbDesc):
+        verb = desc.verb
+        ec = label_d(desc.ext_card)
+        result = stack_label(desc.result)
+        check = " ✓" if desc.graduated else ""
         spawned = ""
-        if desc["spawned"]:
+        if desc.spawned:
             spawned = (" (leaves "
                        + ", ".join("[" + stack_label(s) + "]"
-                                   for s in desc["spawned"])
+                                   for s in desc.spawned)
                        + " homeless)")
         return f"{verb} {ec} → [{result}]{check}{spawned}"
 
-    if desc["type"] == "shift":
-        p = label_d(desc["p_card"])
-        stolen = label_d(desc["stolen"])
-        merged = stack_label(desc["merged"])
-        check = " ✓" if desc["graduated"] else ""
+    if isinstance(desc, ShiftDesc):
+        p = label_d(desc.p_card)
+        stolen = label_d(desc.stolen)
+        merged = stack_label(desc.merged)
+        check = " ✓" if desc.graduated else ""
         return f"{p} pops {stolen} → [{merged}]{check}"
 
-    if desc["type"] == "splice":
-        loose = label_d(desc["loose"])
-        left = stack_label(desc["left_result"])
-        right = stack_label(desc["right_result"])
+    if isinstance(desc, SpliceDesc):
+        loose = label_d(desc.loose)
+        left = stack_label(desc.left_result)
+        right = stack_label(desc.right_result)
         return f"splice {loose} → [{left}] + [{right}]"
 
-    if desc["type"] == "push":
-        tb = stack_label(desc["trouble_before"])
-        target = stack_label(desc["target_before"])
-        result = stack_label(desc["result"])
+    if isinstance(desc, PushDesc):
+        tb = stack_label(desc.trouble_before)
+        target = stack_label(desc.target_before)
+        result = stack_label(desc.result)
         # Engulf-shape vs plain push: plain push extends a
         # helper by 1-2 cards; engulf swallows a helper into a
         # complete stack (graduated from GROWING).
-        if classify(desc["result"]) != "other":
+        if classify(desc.result) != "other":
             return f"engulf [{target}] into [{tb}] → [{result}] ✓"
         return f"tuck [{tb}] into [{target}] → [{result}]"
 
@@ -86,32 +159,32 @@ def hint(desc):
     red-black run." (Names card, verb, group kind. Doesn't
     name the run.)
     """
-    if desc["type"] == "free_pull":
-        loose = label_d(desc["loose"])
-        kind = group_kind_phrase(desc["result"])
+    if isinstance(desc, FreePullDesc):
+        loose = label_d(desc.loose)
+        kind = group_kind_phrase(desc.result)
         return f"You can pull the {loose} onto {kind}."
 
-    if desc["type"] == "extract_absorb":
-        verb = desc["verb"]
-        ec = label_d(desc["ext_card"])
-        target_kind = partial_kind_phrase(desc["target_before"])
+    if isinstance(desc, ExtractAbsorbDesc):
+        verb = desc.verb
+        ec = label_d(desc.ext_card)
+        target_kind = partial_kind_phrase(desc.target_before)
         return f"You can {verb} the {ec} to extend {target_kind}."
 
-    if desc["type"] == "shift":
-        p = label_d(desc["p_card"])
-        stolen = label_d(desc["stolen"])
+    if isinstance(desc, ShiftDesc):
+        p = label_d(desc.p_card)
+        stolen = label_d(desc.stolen)
         return (f"You can pop the {stolen} by shifting "
                 f"the {p} into the run.")
 
-    if desc["type"] == "splice":
-        loose = label_d(desc["loose"])
+    if isinstance(desc, SpliceDesc):
+        loose = label_d(desc.loose)
         # Source is always a length-4+ pure or rb run.
-        run_kind = run_kind_phrase(desc["source"])
+        run_kind = run_kind_phrase(desc.source)
         return f"You can splice the {loose} into a {run_kind}."
 
-    if desc["type"] == "push":
-        tb = stack_label(desc["trouble_before"])
-        if classify(desc["result"]) != "other":
+    if isinstance(desc, PushDesc):
+        tb = stack_label(desc.trouble_before)
+        if classify(desc.result) != "other":
             return f"You can complete a run by absorbing [{tb}]."
         return f"You can tuck [{tb}] back into a run."
 
@@ -157,61 +230,61 @@ def run_kind_phrase(stack):
 
 def describe_move(desc):
     """Render a one-line DSL string for a move."""
-    if desc["type"] == "free_pull":
-        loose = label_d(desc["loose"])
-        bucket = desc["target_bucket_before"]
-        tb = stack_label(desc["target_before"])
-        result = stack_label(desc["result"])
-        graduated = " [→COMPLETE]" if desc["graduated"] else ""
+    if isinstance(desc, FreePullDesc):
+        loose = label_d(desc.loose)
+        bucket = desc.target_bucket_before
+        tb = stack_label(desc.target_before)
+        result = stack_label(desc.result)
+        graduated = " [→COMPLETE]" if desc.graduated else ""
         return (f"pull {loose} onto {bucket} [{tb}] → "
                 f"[{result}]{graduated}")
-    if desc["type"] == "extract_absorb":
-        verb = desc["verb"]
-        ec = label_d(desc["ext_card"])
-        src = stack_label(desc["source"])
-        bucket = desc["target_bucket_before"]
-        tb = stack_label(desc["target_before"])
-        result = stack_label(desc["result"])
+    if isinstance(desc, ExtractAbsorbDesc):
+        verb = desc.verb
+        ec = label_d(desc.ext_card)
+        src = stack_label(desc.source)
+        bucket = desc.target_bucket_before
+        tb = stack_label(desc.target_before)
+        result = stack_label(desc.result)
         spawned = ""
-        if desc["spawned"]:
+        if desc.spawned:
             spawned = (" ; spawn TROUBLE: "
                        + ", ".join("[" + stack_label(s) + "]"
-                                   for s in desc["spawned"]))
-        graduated = " [→COMPLETE]" if desc["graduated"] else ""
+                                   for s in desc.spawned))
+        graduated = " [→COMPLETE]" if desc.graduated else ""
         return (f"{verb} {ec} from HELPER [{src}], "
                 f"absorb onto {bucket} [{tb}] → "
                 f"[{result}]{graduated}{spawned}")
-    if desc["type"] == "shift":
-        p = label_d(desc["p_card"])
-        stolen = label_d(desc["stolen"])
-        new_donor = stack_label(desc["new_donor"])
-        new_source = desc["new_source"]
-        p_idx = new_source.index(desc["p_card"])
-        rest = [c for c in new_source if c != desc["p_card"]]
+    if isinstance(desc, ShiftDesc):
+        p = label_d(desc.p_card)
+        stolen = label_d(desc.stolen)
+        new_donor = stack_label(desc.new_donor)
+        new_source = desc.new_source
+        p_idx = new_source.index(desc.p_card)
+        rest = [c for c in new_source if c != desc.p_card]
         rest_label = " ".join(label_d(c) for c in rest)
         if p_idx == 0:
             shifted = f"{p} + {rest_label}"
         else:
             shifted = f"{rest_label} + {p}"
-        bucket = desc["target_bucket_before"]
-        tb = stack_label(desc["target_before"])
-        merged = stack_label(desc["merged"])
-        graduated = " [→COMPLETE]" if desc["graduated"] else ""
+        bucket = desc.target_bucket_before
+        tb = stack_label(desc.target_before)
+        merged = stack_label(desc.merged)
+        graduated = " [→COMPLETE]" if desc.graduated else ""
         return (f"shift {p} to pop {stolen} "
                 f"[{new_donor} -> {shifted}]; "
                 f"absorb onto {bucket} [{tb}] → "
                 f"[{merged}]{graduated}")
-    if desc["type"] == "splice":
-        loose = label_d(desc["loose"])
-        src = stack_label(desc["source"])
-        left = stack_label(desc["left_result"])
-        right = stack_label(desc["right_result"])
+    if isinstance(desc, SpliceDesc):
+        loose = label_d(desc.loose)
+        src = stack_label(desc.source)
+        left = stack_label(desc.left_result)
+        right = stack_label(desc.right_result)
         return (f"splice [{loose}] into HELPER [{src}] → "
                 f"[{left}] + [{right}]")
-    if desc["type"] == "push":
-        tb = stack_label(desc["trouble_before"])
-        target = stack_label(desc["target_before"])
-        result = stack_label(desc["result"])
+    if isinstance(desc, PushDesc):
+        tb = stack_label(desc.trouble_before)
+        target = stack_label(desc.target_before)
+        result = stack_label(desc.result)
         return (f"push TROUBLE [{tb}] onto HELPER [{target}] → "
                 f"[{result}]")
     return str(desc)

@@ -41,18 +41,20 @@ opportunity that hasn't been taken yet.
   `run_kind_phrase` — natural-language renderers for
   group + partial + run kinds. Used by `hint`.
 
-## Migration phasing (2026-04-26)
+## Migration approach (2026-04-26)
 
-Phase 1 (this pass): introduce dataclasses + convert
-`enumerator.py` emit sites to construct instances. Read
-sites continue to use `desc["foo"]` via `__getitem__`.
+Going all-in: dataclasses replace dicts everywhere. No
+backward-compat `__getitem__` shim — every read site
+converts to attribute access (`desc.foo`) and every
+dispatch becomes an `isinstance` check (or `match` over
+the variant types). The transforms are regex-driven via
+`tools/py_regex_rename.py` so the migration is repeatable
+and can be reapplied if the desc shapes evolve.
 
-Phase 2 (future, if it earns its place): regex-driven
-sweep of all `desc["foo"]` reads to `desc.foo` attribute
-access. ~120 sites across move.py + enumerator.py +
-verbs.py + agent_game.py + analyze_focus_block.py +
-tests. Cleaner end state but pure churn — only worth doing
-if Phase 1's mixed style starts hurting.
+Touch radius: ~133 sites across move.py + enumerator.py +
+verbs.py + agent_game.py + analyze_focus_block.py + tests.
+Driven by the regex tool; verified per pass against the
+regression suite.
 
 ## Pointers
 

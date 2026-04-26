@@ -22,6 +22,10 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import enumerator
+from move import (
+    ExtractAbsorbDesc, FreePullDesc, PushDesc,
+    ShiftDesc, SpliceDesc,
+)
 
 
 C, D, S, H = 0, 1, 2, 3
@@ -35,7 +39,7 @@ def _assert(label, ok, detail=""):
 
 
 def _types(moves):
-    return sorted(d["type"] for d, _ in moves)
+    return sorted(d.type for d, _ in moves)
 
 
 # --- end-extract: peel a card adjacent to a trouble singleton --
@@ -54,9 +58,9 @@ def test_simple_peel_into_trouble():
             f"types: {types}")
     # Find the specific 5H peel.
     matches = [d for d, _ in moves
-               if d["type"] == "extract_absorb"
-               and d["ext_card"] == (5, H, 0)
-               and d["target_before"] == [(4, H, 0)]]
+               if isinstance(d, ExtractAbsorbDesc)
+               and d.ext_card == (5, H, 0)
+               and d.target_before == [(4, H, 0)]]
     _assert("peel 5H onto [4H] is enumerated",
             len(matches) >= 1,
             f"got {len(matches)}")
@@ -71,7 +75,7 @@ def test_splice_into_length_4_run():
     trouble = [[(7, H, 1)]]  # second-deck 7H — splices in
     state = (helper, trouble, [], [])
     moves = list(enumerator.enumerate_moves(state))
-    splices = [d for d, _ in moves if d["type"] == "splice"]
+    splices = [d for d, _ in moves if isinstance(d, SpliceDesc)]
     # Set classification: runs don't accept dup values.
     # rb_run also won't accept same-value-same-color. So no
     # splice should fire here.
@@ -90,11 +94,11 @@ def test_splice_dup_5d_into_pure_diamonds():
     trouble = [[(5, D, 1)]]  # second-deck 5D
     state = (helper, trouble, [], [])
     moves = list(enumerator.enumerate_moves(state))
-    splices = [d for d, _ in moves if d["type"] == "splice"]
+    splices = [d for d, _ in moves if isinstance(d, SpliceDesc)]
     _assert("at least one splice fires",
             len(splices) >= 1, f"got {len(splices)}")
     # Verify the specific desc shape.
-    matches = [d for d in splices if d["loose"] == (5, D, 1)]
+    matches = [d for d in splices if d.loose == (5, D, 1)]
     _assert("splice with loose=5D:1 is enumerated",
             len(matches) >= 1, f"got {len(matches)}")
 
@@ -108,24 +112,24 @@ def test_engulf_2partial_into_legal_run():
     growing = [[(1, C, 0), (2, D, 0)]]
     state = (helper, [], growing, [])
     moves = list(enumerator.enumerate_moves(state))
-    pushes = [d for d, _ in moves if d["type"] == "push"]
+    pushes = [d for d, _ in moves if isinstance(d, PushDesc)]
     _assert("at least one engulf fires",
             len(pushes) >= 1, f"got {len(pushes)}")
     # Find the engulf where growing 2-partial absorbs the run.
     engulfs = [d for d in pushes
-               if d["trouble_before"] == [(1, C, 0), (2, D, 0)]
-               and d["target_before"] == [(3, S, 0), (4, D, 0),
+               if d.trouble_before == [(1, C, 0), (2, D, 0)]
+               and d.target_before == [(3, S, 0), (4, D, 0),
                                            (5, C, 0)]]
     _assert("specific engulf desc is enumerated",
             len(engulfs) >= 1, f"got {len(engulfs)}")
     # Verify post-state: helper drained, growing drained,
     # complete gained the merged stack.
     for d, new_state in moves:
-        if (d["type"] == "push"
-                and d["trouble_before"] == [(1, C, 0), (2, D, 0)]
-                and d["target_before"] == [(3, S, 0), (4, D, 0),
+        if (isinstance(d, PushDesc)
+                and d.trouble_before == [(1, C, 0), (2, D, 0)]
+                and d.target_before == [(3, S, 0), (4, D, 0),
                                             (5, C, 0)]
-                and d["side"] == "right"):
+                and d.side == "right"):
             nh, nt, ng, nc = new_state
             _assert("engulf empties helper", nh == [],
                     f"got {nh}")
@@ -153,12 +157,12 @@ def test_shift_pops_jack_via_eight():
     trouble = [[(12, H, 0)]]  # QH absorbs the popped JC
     state = (helper, trouble, [], [])
     moves = list(enumerator.enumerate_moves(state))
-    shifts = [d for d, _ in moves if d["type"] == "shift"]
+    shifts = [d for d, _ in moves if isinstance(d, ShiftDesc)]
     _assert("at least one shift fires",
             len(shifts) >= 1, f"got {len(shifts)}")
     matches = [d for d in shifts
-               if d["stolen"] == (11, C, 0)
-               and d["p_card"] == (8, C, 0)]
+               if d.stolen == (11, C, 0)
+               and d.p_card == (8, C, 0)]
     _assert("8C-pops-JC shift is enumerated",
             len(matches) >= 1, f"got {len(matches)}")
 
@@ -178,7 +182,7 @@ def test_doomed_partial_pruned():
     state = (helper_with, [[(4, H, 0)]], [], [])
     moves = list(enumerator.enumerate_moves(state))
     _assert("doomed-filter admits move when completion exists",
-            any(d["type"] == "extract_absorb" for d, _ in moves))
+            any(isinstance(d, ExtractAbsorbDesc) for d, _ in moves))
 
     # Variant B: no completion exists. Trouble 4H + helper of
     # 5-6-7-8 of HEARTS (so peel 5H → [4H 5H] needs 3H or 6H;
@@ -197,7 +201,7 @@ def test_doomed_partial_pruned():
     # tests the upstream short-circuit, not specifically the
     # doomed-filter. Still, no extract_absorb should fire.
     _assert("no extract fires when no shape match",
-            not any(d["type"] == "extract_absorb" for d, _ in moves))
+            not any(isinstance(d, ExtractAbsorbDesc) for d, _ in moves))
 
     # Variant C: 4S + helper [5H 6H 7H 8H] (a pure-H run).
     # Peel 5H → spawn [6H 7H 8H], absorb 5H onto 4S → [4S 5H]
@@ -207,7 +211,7 @@ def test_doomed_partial_pruned():
     helper_only_pure_h = [[(5, H, 0), (6, H, 0), (7, H, 0), (8, H, 0)]]
     state = (helper_only_pure_h, [[(4, S, 0)]], [], [])
     moves = list(enumerator.enumerate_moves(state))
-    extracts = [d for d, _ in moves if d["type"] == "extract_absorb"]
+    extracts = [d for d, _ in moves if isinstance(d, ExtractAbsorbDesc)]
     _assert("doomed-filter blocks doomed peel",
             len(extracts) == 0,
             f"got {len(extracts)} extracts: "
@@ -221,7 +225,7 @@ def test_doomed_partial_pruned():
     ]
     state = (helper_with_3d, [[(4, S, 0)]], [], [])
     moves = list(enumerator.enumerate_moves(state))
-    extracts = [d for d, _ in moves if d["type"] == "extract_absorb"]
+    extracts = [d for d, _ in moves if isinstance(d, ExtractAbsorbDesc)]
     _assert("doomed-filter admits move when 3D supplies completion",
             len(extracts) >= 1,
             f"got {len(extracts)} extracts")
@@ -253,9 +257,9 @@ def test_doomed_growing_partial_is_reachable():
     # Move 1: pull 7D onto 7C.
     after_m1 = None
     for d, ns in enumerator.enumerate_moves(state):
-        if (d["type"] == "free_pull"
-                and d["loose"] == (7, D, 0)
-                and d["target_before"] == [(7, C, 0)]):
+        if (isinstance(d, FreePullDesc)
+                and d.loose == (7, D, 0)
+                and d.target_before == [(7, C, 0)]):
             after_m1 = ns
             break
     _assert("move 1 (pull 7D onto 7C) is enumerated",
@@ -264,9 +268,9 @@ def test_doomed_growing_partial_is_reachable():
     # Move 2: pull 7S onto 7H.
     after_m2 = None
     for d, ns in enumerator.enumerate_moves(after_m1):
-        if (d["type"] == "free_pull"
-                and d["loose"] == (7, S, 0)
-                and d["target_before"] == [(7, H, 0)]):
+        if (isinstance(d, FreePullDesc)
+                and d.loose == (7, S, 0)
+                and d.target_before == [(7, H, 0)]):
             after_m2 = ns
             break
     _assert("move 2 (pull 7S onto 7H) is enumerated",

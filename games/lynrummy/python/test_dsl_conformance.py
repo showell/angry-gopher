@@ -178,9 +178,9 @@ def _run_enumerate_moves(sc):
     moves = list(enumerator.enumerate_moves(state))
 
     if expected_type:
-        matches = [d for d, _ in moves if d["type"] == expected_type]
+        matches = [d for d, _ in moves if d.type == expected_type]
         if not matches:
-            types = sorted({d["type"] for d, _ in moves})
+            types = sorted({d.type for d, _ in moves})
             return False, (f"no {expected_type!r} move yielded; "
                            f"types seen: {types or 'none'}")
 

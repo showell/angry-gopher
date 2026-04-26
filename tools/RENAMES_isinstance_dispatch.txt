@@ -1,0 +1,24 @@
+# Iteration 4: convert string-keyed type dispatch to
+# isinstance() checks against the dataclass types. Closer to
+# Elm's `case move of` pattern matching.
+#
+# The `desc.type` class attribute is preserved on the
+# dataclasses so legacy code that reads `desc.type` directly
+# still works; this pass updates all the comparison sites.
+
+re: desc\.type == "extract_absorb" >>> isinstance(desc, ExtractAbsorbDesc)
+re: desc\.type == "free_pull" >>> isinstance(desc, FreePullDesc)
+re: desc\.type == "push" >>> isinstance(desc, PushDesc)
+re: desc\.type == "splice" >>> isinstance(desc, SpliceDesc)
+re: desc\.type == "shift" >>> isinstance(desc, ShiftDesc)
+
+# Same for short-name `d` (used in tests + comprehensions).
+re: \bd\.type == "extract_absorb" >>> isinstance(d, ExtractAbsorbDesc)
+re: \bd\.type == "free_pull" >>> isinstance(d, FreePullDesc)
+re: \bd\.type == "push" >>> isinstance(d, PushDesc)
+re: \bd\.type == "splice" >>> isinstance(d, SpliceDesc)
+re: \bd\.type == "shift" >>> isinstance(d, ShiftDesc)
+
+# `expected_type == "..."` in test_dsl_conformance — the
+# `expected_type` is a string from JSON and must stay a
+# string compare. Leave it.

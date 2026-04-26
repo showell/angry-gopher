@@ -13,6 +13,10 @@ from cards import (
     can_peel_kind, can_pluck_kind, can_yank_kind,
     can_steal_kind, can_split_out_kind,
 )
+from move import (
+    ExtractAbsorbDesc, FreePullDesc, PushDesc,
+    ShiftDesc, SpliceDesc,
+)
 
 
 # --- Bucket transitions (pure helpers) ---
@@ -261,18 +265,17 @@ def enumerate_moves(state):
                     nt = nt_base + spawned
                     ng_final, nc, graduated = graduate(
                         merged, ng, complete)
-                    desc = {
-                        "type": "extract_absorb",
-                        "verb": verb,
-                        "source": source,
-                        "ext_card": ext_card,
-                        "target_before": list(target),
-                        "target_bucket_before": bucket,
-                        "result": merged,
-                        "side": side,
-                        "graduated": graduated,
-                        "spawned": list(spawned),
-                    }
+                    desc = ExtractAbsorbDesc(
+                        verb=verb,
+                        source=source,
+                        ext_card=ext_card,
+                        target_before=list(target),
+                        target_bucket_before=bucket,
+                        result=merged,
+                        side=side,
+                        graduated=graduated,
+                        spawned=list(spawned),
+                    )
                     yield desc, (new_helper, nt, ng_final, nc)
 
         # Source: TROUBLE singleton (free pull).
@@ -303,15 +306,14 @@ def enumerate_moves(state):
                     nt = without(nt_base, li)
                 ng_final, nc, graduated = graduate(
                     merged, ng, complete)
-                desc = {
-                    "type": "free_pull",
-                    "loose": loose,
-                    "target_before": list(target),
-                    "target_bucket_before": bucket,
-                    "result": merged,
-                    "side": side,
-                    "graduated": graduated,
-                }
+                desc = FreePullDesc(
+                    loose=loose,
+                    target_before=list(target),
+                    target_bucket_before=bucket,
+                    result=merged,
+                    side=side,
+                    graduated=graduated,
+                )
                 yield desc, (list(helper), nt, ng_final, nc)
 
     # Move type (d): SHIFT — when an end-card of a length-3
@@ -396,21 +398,20 @@ def enumerate_moves(state):
                                 bucket, idx, trouble, growing)
                             ng_final, nc, graduated = graduate(
                                 merged, ng, complete)
-                            desc = {
-                                "type": "shift",
-                                "source": list(source),
-                                "donor": list(donor),
-                                "stolen": stolen,
-                                "p_card": p_card,
-                                "which_end": which_end,
-                                "new_source": new_source,
-                                "new_donor": new_donor,
-                                "target_before": list(target),
-                                "target_bucket_before": bucket,
-                                "merged": merged,
-                                "side": absorb_side,
-                                "graduated": graduated,
-                            }
+                            desc = ShiftDesc(
+                                source=list(source),
+                                donor=list(donor),
+                                stolen=stolen,
+                                p_card=p_card,
+                                which_end=which_end,
+                                new_source=new_source,
+                                new_donor=new_donor,
+                                target_before=list(target),
+                                target_bucket_before=bucket,
+                                merged=merged,
+                                side=absorb_side,
+                                graduated=graduated,
+                            )
                             yield desc, (nh, nt_base, ng_final, nc)
 
     # Move type (c): splice — insert a TROUBLE singleton
@@ -445,14 +446,13 @@ def enumerate_moves(state):
                         continue
                     nh = without(helper, hi) + [left, right]
                     nt = without(trouble, ti)
-                    desc = {
-                        "type": "splice",
-                        "loose": loose,
-                        "source": list(src),
-                        "k": k, "side": side,
-                        "left_result": left,
-                        "right_result": right,
-                    }
+                    desc = SpliceDesc(
+                        loose=loose,
+                        source=list(src),
+                        k=k, side=side,
+                        left_result=left,
+                        right_result=right,
+                    )
                     yield desc, (nh, nt, list(growing),
                                  list(complete))
 
@@ -470,13 +470,12 @@ def enumerate_moves(state):
                     continue
                 nh = without(helper, hi) + [merged]
                 nt = without(trouble, ti)
-                desc = {
-                    "type": "push",
-                    "trouble_before": list(t),
-                    "target_before": list(h),
-                    "result": merged,
-                    "side": side,
-                }
+                desc = PushDesc(
+                    trouble_before=list(t),
+                    target_before=list(h),
+                    result=merged,
+                    side=side,
+                )
                 yield desc, (nh, nt, list(growing), list(complete))
 
     # Move type (b'): a GROWING 2-partial engulfs a HELPER
@@ -494,13 +493,12 @@ def enumerate_moves(state):
                 nh = without(helper, hi)
                 ng = without(growing, gi)
                 nc = complete + [merged]
-                desc = {
-                    "type": "push",
-                    "trouble_before": list(g),
-                    "target_before": list(h),
-                    "result": merged,
-                    "side": side,
-                }
+                desc = PushDesc(
+                    trouble_before=list(g),
+                    target_before=list(h),
+                    result=merged,
+                    side=side,
+                )
                 yield desc, (nh, list(trouble), ng, nc)
 
 
@@ -509,22 +507,22 @@ def enumerate_moves(state):
 def move_touches_focus(desc, focus):
     """True iff this move grows or consumes the focus stack
     (identified by content tuple)."""
-    t = desc["type"]
-    if t == "extract_absorb" or t == "shift":
-        return tuple(desc["target_before"]) == focus
-    if t == "free_pull":
+    t = desc.type
+    if isinstance(desc, ExtractAbsorbDesc) or isinstance(desc, ShiftDesc):
+        return tuple(desc.target_before) == focus
+    if isinstance(desc, FreePullDesc):
         # Either target=focus (focus grew) or loose=focus
         # (focus singleton consumed onto a queued sibling).
-        if tuple(desc["target_before"]) == focus:
+        if tuple(desc.target_before) == focus:
             return True
-        return len(focus) == 1 and focus[0] == desc["loose"]
-    if t == "splice":
-        return len(focus) == 1 and focus[0] == desc["loose"]
-    if t == "push":
+        return len(focus) == 1 and focus[0] == desc.loose
+    if isinstance(desc, SpliceDesc):
+        return len(focus) == 1 and focus[0] == desc.loose
+    if isinstance(desc, PushDesc):
         # Both b (trouble pushed onto helper) and b' (growing
         # engulfs helper) carry trouble_before = the consumed
         # entry's content.
-        return tuple(desc["trouble_before"]) == focus
+        return tuple(desc.trouble_before) == focus
     return False
 
 
@@ -533,27 +531,31 @@ def update_lineage(lineage, desc):
     Caller has already verified the move touches lineage[0]."""
     focus = lineage[0]
     rest = list(lineage[1:])
-    t = desc["type"]
-    spawned = tuple(tuple(s) for s in desc.get("spawned", ()))
 
-    if t == "extract_absorb" or t == "shift":
-        # Focus (target) grew. Result joins (or graduates).
-        # extract_absorb uses "result"; shift uses "merged".
-        result_key = "merged" if t == "shift" else "result"
-        if desc.get("graduated"):
+    if isinstance(desc, ExtractAbsorbDesc):
+        # Focus (target) grew; spawn fragments append.
+        spawned = tuple(tuple(s) for s in desc.spawned)
+        if desc.graduated:
             new = rest
         else:
-            new = [tuple(desc[result_key])] + rest
+            new = [tuple(desc.result)] + rest
         return tuple(new) + spawned
 
-    if t == "free_pull":
-        target_before = tuple(desc["target_before"])
-        result = tuple(desc["result"])
-        graduated = desc.get("graduated", False)
+    if isinstance(desc, ShiftDesc):
+        # Same as ExtractAbsorb but uses `merged` and produces
+        # no spawned trouble.
+        if desc.graduated:
+            return tuple(rest)
+        return (tuple(desc.merged),) + tuple(rest)
+
+    if isinstance(desc, FreePullDesc):
+        target_before = tuple(desc.target_before)
+        result = tuple(desc.result)
+        graduated = desc.graduated
         if target_before == focus:
             # Focus grew; the loose was a queued singleton —
             # remove it from rest by content match.
-            loose_entry = (desc["loose"],)
+            loose_entry = (desc.loose,)
             if loose_entry in rest:
                 rest.remove(loose_entry)
             if graduated:
@@ -569,7 +571,7 @@ def update_lineage(lineage, desc):
                 rest[ti] = result
         return tuple(rest)
 
-    # splice / push — focus is consumed, no growth tracked.
+    # SpliceDesc / PushDesc — focus is consumed, no growth tracked.
     return tuple(rest)
 
 

@@ -30,6 +30,10 @@ import bfs
 import enumerator
 import move
 from cards import classify, label_d
+from move import (
+    ExtractAbsorbDesc, FreePullDesc, PushDesc,
+    ShiftDesc, SpliceDesc,
+)
 
 
 DB_PATH = "/home/steve/AngryGopher/prod/gopher.db"
@@ -115,19 +119,19 @@ def _resync_lineage(prev_lineage, state4):
 def _what_did_step_touch(desc):
     """Return a short string naming what content the step
     touched (target / loose / consumed). For diagnostic output."""
-    t = desc["type"]
-    if t == "extract_absorb":
-        return f"absorb-onto [{stack_label(desc['target_before'])}]"
-    if t == "free_pull":
-        return (f"pull [{label_d(desc['loose'])}] onto "
-                f"[{stack_label(desc['target_before'])}]")
-    if t == "shift":
-        return f"shift-onto [{stack_label(desc['target_before'])}]"
-    if t == "splice":
-        return f"splice [{label_d(desc['loose'])}] into helper"
-    if t == "push":
-        return f"push [{stack_label(desc['trouble_before'])}] onto helper"
-    return desc["type"]
+    t = desc.type
+    if isinstance(desc, ExtractAbsorbDesc):
+        return f"absorb-onto [{stack_label(desc.target_before)}]"
+    if isinstance(desc, FreePullDesc):
+        return (f"pull [{label_d(desc.loose)}] onto "
+                f"[{stack_label(desc.target_before)}]")
+    if isinstance(desc, ShiftDesc):
+        return f"shift-onto [{stack_label(desc.target_before)}]"
+    if isinstance(desc, SpliceDesc):
+        return f"splice [{label_d(desc.loose)}] into helper"
+    if isinstance(desc, PushDesc):
+        return f"push [{stack_label(desc.trouble_before)}] onto helper"
+    return desc.type
 
 
 def _format_lineage(lineage):
@@ -184,7 +188,7 @@ def _summarize(violations):
     print(f"\n--- {len(violations)} violation(s) ---")
     by_type = {}
     for v in violations:
-        t = v["desc"]["type"]
+        t = v["desc"].type
         by_type[t] = by_type.get(t, 0) + 1
     print("  by move type: "
           + ", ".join(f"{k}:{v}" for k, v in sorted(by_type.items())))

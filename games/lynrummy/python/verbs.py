@@ -22,6 +22,10 @@ import cards
 import geometry
 import primitives
 import strategy
+from move import (
+    ExtractAbsorbDesc, FreePullDesc, PushDesc,
+    ShiftDesc, SpliceDesc,
+)
 
 
 def step_to_primitives(desc, board):
@@ -38,16 +42,16 @@ def step_to_primitives(desc, board):
     `primitives.apply_locally` and the indices will stay
     valid.
     """
-    t = desc["type"]
-    if t == "extract_absorb":
+    t = desc.type
+    if isinstance(desc, ExtractAbsorbDesc):
         return _extract_absorb(desc, board)
-    if t == "free_pull":
+    if isinstance(desc, FreePullDesc):
         return _free_pull(desc, board)
-    if t == "push":
+    if isinstance(desc, PushDesc):
         return _push(desc, board)
-    if t == "splice":
+    if isinstance(desc, SpliceDesc):
         return _splice(desc, board)
-    if t == "shift":
+    if isinstance(desc, ShiftDesc):
         return _shift(desc, board)
     raise NotImplementedError(f"verb type {t!r} not supported")
 
@@ -146,11 +150,11 @@ def _extract_absorb(desc, board):
     """Peel/pluck/yank/steal a card from a HELPER stack and
     merge it onto target. For set extracts we may need a
     follow-up merge to reconstitute the legal remnant."""
-    source = list(desc["source"])
-    ext_card = desc["ext_card"]
-    target_before = list(desc["target_before"])
-    side = desc["side"]
-    verb = desc["verb"]
+    source = list(desc.source)
+    ext_card = desc.ext_card
+    target_before = list(desc.target_before)
+    side = desc.side
+    verb = desc.verb
     kind = cards.classify(source)
     ci = source.index(ext_card)
 
@@ -211,9 +215,9 @@ def _extract_absorb(desc, board):
 def _free_pull(desc, board):
     """A loose TROUBLE singleton is already on the board;
     merge it onto target."""
-    loose = desc["loose"]
-    target_before = list(desc["target_before"])
-    side = desc["side"]
+    loose = desc.loose
+    target_before = list(desc.target_before)
+    side = desc.side
     prims, _sim = _plan_merge(list(board), [loose],
                               target_before, side)
     return prims
@@ -223,9 +227,9 @@ def _push(desc, board):
     """Push a TROUBLE singleton or 2-partial onto a HELPER
     stack. The trouble cards are already on the board as a
     single stack (singleton or 2-partial)."""
-    trouble_before = list(desc["trouble_before"])
-    target_before = list(desc["target_before"])
-    side = desc["side"]
+    trouble_before = list(desc.trouble_before)
+    target_before = list(desc.target_before)
+    side = desc.side
     prims, _sim = _plan_merge(list(board), trouble_before,
                               target_before, side)
     return prims
@@ -238,10 +242,10 @@ def _splice(desc, board):
     Physically: split the run at k, then merge the loose onto
     the half it joins (per `side`). The other half persists
     untouched."""
-    loose = desc["loose"]
-    src = list(desc["source"])
-    k = desc["k"]
-    side = desc["side"]
+    loose = desc.loose
+    src = list(desc.source)
+    k = desc.k
+    side = desc.side
 
     sim = list(board)
     prims, sim = _plan_split_after(sim, src, k)
@@ -263,13 +267,13 @@ def _shift(desc, board):
     from a donor, push it onto source's opposite end, pop the
     stolen card, absorb it onto target. Source stays length-3
     legal; donor stays legal; no trouble is spawned."""
-    source = list(desc["source"])
-    donor = list(desc["donor"])
-    stolen = desc["stolen"]
-    p_card = desc["p_card"]
-    which_end = desc["which_end"]
-    target_before = list(desc["target_before"])
-    side = desc["side"]
+    source = list(desc.source)
+    donor = list(desc.donor)
+    stolen = desc.stolen
+    p_card = desc.p_card
+    which_end = desc.which_end
+    target_before = list(desc.target_before)
+    side = desc.side
 
     sim = list(board)
     out = []

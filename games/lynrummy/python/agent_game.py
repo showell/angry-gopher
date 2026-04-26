@@ -158,7 +158,7 @@ def _execute_plan(client, sid, plan, local, *, verbose, perf):
         prims = verbs.step_to_primitives(desc, local)
         translate_wall = time.time() - t
         _record_max(perf, "translate", translate_wall,
-                    {"desc_type": desc["type"],
+                    {"desc_type": desc.type,
                      "n_prims": len(prims)})
         for prim in prims:
             t = time.time()
@@ -386,7 +386,7 @@ def play_session_offline(*, max_actions=500, capture_path=None):
             prims = verbs.step_to_primitives(desc, board)
             translate_wall = time.time() - t
             _record_max(perf, "translate", translate_wall,
-                        {"desc_type": desc["type"],
+                        {"desc_type": desc.type,
                          "n_prims": len(prims)})
             for prim in prims:
                 board = primitives.apply_locally(board, prim)

@@ -25,6 +25,10 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import primitives
 import verbs
 from geometry import find_violation
+from move import (
+    ExtractAbsorbDesc, FreePullDesc, PushDesc,
+    ShiftDesc, SpliceDesc,
+)
 
 
 C, D, S, H = 0, 1, 2, 3
@@ -72,18 +76,17 @@ def test_peel_left_edge_then_merge():
                {"top": 100, "left": 100}),
         _stack([(4, H)], {"top": 100, "left": 400}),
     ]
-    desc = {
-        "type": "extract_absorb",
-        "verb": "peel",
-        "source": [(5, H, 0), (6, H, 0), (7, H, 0), (8, H, 0)],
-        "ext_card": (5, H, 0),
-        "target_before": [(4, H, 0)],
-        "target_bucket_before": "trouble",
-        "result": [(4, H, 0), (5, H, 0)],
-        "side": "right",
-        "graduated": False,
-        "spawned": [],
-    }
+    desc = ExtractAbsorbDesc(
+        verb="peel",
+        source=[(5, H, 0), (6, H, 0), (7, H, 0), (8, H, 0)],
+        ext_card=(5, H, 0),
+        target_before=[(4, H, 0)],
+        target_bucket_before="trouble",
+        result=[(4, H, 0), (5, H, 0)],
+        side="right",
+        graduated=False,
+        spawned=[],
+    )
     prims = verbs.step_to_primitives(desc, board)
     sim = _apply_all(board, prims)
     actions = [p["action"] for p in prims]
@@ -109,19 +112,18 @@ def test_pluck_interior_premoves_donor():
                {"top": 100, "left": 100}),
         _stack([(7, S)], {"top": 100, "left": 500}),
     ]
-    desc = {
-        "type": "extract_absorb",
-        "verb": "pluck",
-        "source": [(5, H, 0), (6, H, 0), (7, H, 0),
-                   (8, H, 0), (9, H, 0)],
-        "ext_card": (7, H, 0),
-        "target_before": [(7, S, 0)],
-        "target_bucket_before": "trouble",
-        "result": [(7, S, 0), (7, H, 0)],
-        "side": "right",
-        "graduated": False,
-        "spawned": [],
-    }
+    desc = ExtractAbsorbDesc(
+        verb="pluck",
+        source=[(5, H, 0), (6, H, 0), (7, H, 0),
+                (8, H, 0), (9, H, 0)],
+        ext_card=(7, H, 0),
+        target_before=[(7, S, 0)],
+        target_bucket_before="trouble",
+        result=[(7, S, 0), (7, H, 0)],
+        side="right",
+        graduated=False,
+        spawned=[],
+    )
     prims = verbs.step_to_primitives(desc, board)
     sim = _apply_all(board, prims)
     actions = [p["action"] for p in prims]
@@ -143,15 +145,14 @@ def test_free_pull_in_place():
                {"top": 100, "left": 100}),
         _stack([(4, H)], {"top": 100, "left": 50}),
     ]
-    desc = {
-        "type": "free_pull",
-        "loose": (4, H, 0),
-        "target_before": [(5, H, 0), (6, H, 0), (7, H, 0)],
-        "target_bucket_before": "growing",
-        "result": [(4, H, 0), (5, H, 0), (6, H, 0), (7, H, 0)],
-        "side": "left",
-        "graduated": True,
-    }
+    desc = FreePullDesc(
+        loose=(4, H, 0),
+        target_before=[(5, H, 0), (6, H, 0), (7, H, 0)],
+        target_bucket_before="growing",
+        result=[(4, H, 0), (5, H, 0), (6, H, 0), (7, H, 0)],
+        side="left",
+        graduated=True,
+    )
     prims = verbs.step_to_primitives(desc, board)
     sim = _apply_all(board, prims)
     _assert("free_pull emits one merge (no pre-move needed)",
@@ -172,15 +173,14 @@ def test_free_pull_left_edge_premoves():
                {"top": 200, "left": 5}),
         _stack([(4, H)], {"top": 100, "left": 400}),
     ]
-    desc = {
-        "type": "free_pull",
-        "loose": (4, H, 0),
-        "target_before": [(5, H, 0), (6, H, 0), (7, H, 0)],
-        "target_bucket_before": "growing",
-        "result": [(4, H, 0), (5, H, 0), (6, H, 0), (7, H, 0)],
-        "side": "left",
-        "graduated": True,
-    }
+    desc = FreePullDesc(
+        loose=(4, H, 0),
+        target_before=[(5, H, 0), (6, H, 0), (7, H, 0)],
+        target_bucket_before="growing",
+        result=[(4, H, 0), (5, H, 0), (6, H, 0), (7, H, 0)],
+        side="left",
+        graduated=True,
+    )
     prims = verbs.step_to_primitives(desc, board)
     sim = _apply_all(board, prims)
     actions = [p["action"] for p in prims]
@@ -201,13 +201,12 @@ def test_push_partial_in_place():
         _stack([(11, S)], {"top": 100, "left": 100}),
         _stack([(12, C), (13, C)], {"top": 200, "left": 100}),
     ]
-    desc = {
-        "type": "push",
-        "trouble_before": [(12, C, 0), (13, C, 0)],
-        "target_before": [(11, S, 0)],
-        "result": [(11, S, 0), (12, C, 0), (13, C, 0)],
-        "side": "right",
-    }
+    desc = PushDesc(
+        trouble_before=[(12, C, 0), (13, C, 0)],
+        target_before=[(11, S, 0)],
+        result=[(11, S, 0), (12, C, 0), (13, C, 0)],
+        side="right",
+    )
     prims = verbs.step_to_primitives(desc, board)
     sim = _apply_all(board, prims)
     _assert("push emits one merge_stack",
@@ -233,15 +232,14 @@ def test_splice_run():
     ]
     # k=3 means split after 3 cards: left=[2H 3H 4H], right=[5H 6H 7H].
     # side=right means loose joins right → [4S 5H 6H 7H].
-    desc = {
-        "type": "splice",
-        "loose": (4, S, 0),
-        "source": [(2, H, 0), (3, H, 0), (4, H, 0),
-                   (5, H, 0), (6, H, 0), (7, H, 0)],
-        "k": 3, "side": "right",
-        "left_result": [(2, H, 0), (3, H, 0), (4, H, 0)],
-        "right_result": [(4, S, 0), (5, H, 0), (6, H, 0), (7, H, 0)],
-    }
+    desc = SpliceDesc(
+        loose=(4, S, 0),
+        source=[(2, H, 0), (3, H, 0), (4, H, 0),
+                (5, H, 0), (6, H, 0), (7, H, 0)],
+        k=3, side="right",
+        left_result=[(2, H, 0), (3, H, 0), (4, H, 0)],
+        right_result=[(4, S, 0), (5, H, 0), (6, H, 0), (7, H, 0)],
+    )
     prims = verbs.step_to_primitives(desc, board)
     sim = _apply_all(board, prims)
     actions = [p["action"] for p in prims]
@@ -267,21 +265,20 @@ def test_shift_right_end():
                {"top": 200, "left": 100}),  # donor (set, length 4)
         _stack([(12, H)], {"top": 300, "left": 400}),  # target
     ]
-    desc = {
-        "type": "shift",
-        "source": [(9, C, 0), (10, C, 0), (11, C, 0)],
-        "donor": [(8, D, 0), (8, S, 0), (8, H, 0), (8, C, 0)],
-        "stolen": (11, C, 0),
-        "p_card": (8, C, 0),
-        "which_end": 2,
-        "new_source": [(8, C, 0), (9, C, 0), (10, C, 0)],
-        "new_donor": [(8, D, 0), (8, S, 0), (8, H, 0)],
-        "target_before": [(12, H, 0)],
-        "target_bucket_before": "trouble",
-        "merged": [(12, H, 0), (11, C, 0)],
-        "side": "right",
-        "graduated": False,
-    }
+    desc = ShiftDesc(
+        source=[(9, C, 0), (10, C, 0), (11, C, 0)],
+        donor=[(8, D, 0), (8, S, 0), (8, H, 0), (8, C, 0)],
+        stolen=(11, C, 0),
+        p_card=(8, C, 0),
+        which_end=2,
+        new_source=[(8, C, 0), (9, C, 0), (10, C, 0)],
+        new_donor=[(8, D, 0), (8, S, 0), (8, H, 0)],
+        target_before=[(12, H, 0)],
+        target_bucket_before="trouble",
+        merged=[(12, H, 0), (11, C, 0)],
+        side="right",
+        graduated=False,
+    )
     prims = verbs.step_to_primitives(desc, board)
     sim = _apply_all(board, prims)
     _assert("shift produces a non-empty primitive list",
