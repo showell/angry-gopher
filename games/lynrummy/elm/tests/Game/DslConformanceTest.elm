@@ -66,6 +66,904 @@ firstIncompleteStack stacks =
 
 
 
+corpusSid108 : Test
+corpusSid108 =
+    test "corpus_sid_108" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Three, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckTwo } ]
+                        , [ { value = Eight, suit = Diamond, originDeck = DeckOne }, { value = Nine, suit = Spade, originDeck = DeckTwo }, { value = Ten, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Nine, suit = Club, originDeck = DeckOne }, { value = Ten, suit = Club, originDeck = DeckTwo }, { value = Jack, suit = Club, originDeck = DeckTwo } ]
+                        , [ { value = Five, suit = Heart, originDeck = DeckOne }, { value = Five, suit = Diamond, originDeck = DeckTwo }, { value = Five, suit = Spade, originDeck = DeckTwo } ]
+                        , [ { value = Six, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne }, { value = Six, suit = Club, originDeck = DeckTwo }, { value = Six, suit = Diamond, originDeck = DeckTwo } ]
+                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckTwo } ]
+                        , [ { value = Queen, suit = Spade, originDeck = DeckTwo }, { value = King, suit = Spade, originDeck = DeckTwo }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Eight, suit = Club, originDeck = DeckOne }, { value = Eight, suit = Diamond, originDeck = DeckTwo }, { value = Eight, suit = Spade, originDeck = DeckOne }, { value = Eight, suit = Heart, originDeck = DeckTwo } ]
+                        , [ { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Ten, suit = Diamond, originDeck = DeckTwo }, { value = Ten, suit = Heart, originDeck = DeckTwo }, { value = Ten, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Diamond, originDeck = DeckOne }, { value = Six, suit = Club, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckTwo }, { value = Eight, suit = Spade, originDeck = DeckTwo } ]
+                        , [ { value = Ten, suit = Spade, originDeck = DeckOne }, { value = Jack, suit = Spade, originDeck = DeckOne }, { value = Queen, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Ace, suit = Heart, originDeck = DeckTwo }, { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckTwo }, { value = Six, suit = Heart, originDeck = DeckTwo }, { value = Seven, suit = Heart, originDeck = DeckOne }, { value = Eight, suit = Heart, originDeck = DeckOne }, { value = Nine, suit = Heart, originDeck = DeckOne }, { value = Ten, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = King, suit = Spade, originDeck = DeckOne }, { value = King, suit = Heart, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckTwo } ]
+                        , [ { value = Ace, suit = Club, originDeck = DeckTwo }, { value = Two, suit = Diamond, originDeck = DeckTwo }, { value = Three, suit = Club, originDeck = DeckTwo }, { value = Four, suit = Diamond, originDeck = DeckTwo } ]
+                        ]
+                    , trouble = [ [ { value = Queen, suit = Diamond, originDeck = DeckTwo } ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Just plan ->
+                    List.length plan |> Expect.equal 2
+
+                Nothing ->
+                    Expect.fail "expected plan of length 2; got Nothing"
+
+
+corpusSid110 : Test
+corpusSid110 =
+    test "corpus_sid_110" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Four, suit = Diamond, originDeck = DeckTwo }, { value = Five, suit = Diamond, originDeck = DeckOne }, { value = Six, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckTwo }, { value = Two, suit = Diamond, originDeck = DeckTwo } ]
+                        , [ { value = Jack, suit = Club, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckTwo }, { value = Jack, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckTwo }, { value = Three, suit = Heart, originDeck = DeckTwo } ]
+                        , [ { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Heart, originDeck = DeckTwo }, { value = Queen, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Eight, suit = Diamond, originDeck = DeckOne }, { value = Nine, suit = Diamond, originDeck = DeckTwo }, { value = Ten, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Seven, suit = Spade, originDeck = DeckTwo }, { value = Eight, suit = Spade, originDeck = DeckTwo }, { value = Nine, suit = Spade, originDeck = DeckTwo } ]
+                        , [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Two, suit = Club, originDeck = DeckTwo }, { value = Three, suit = Club, originDeck = DeckTwo }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Club, originDeck = DeckTwo } ]
+                        , [ { value = Ten, suit = Club, originDeck = DeckTwo }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Spade, originDeck = DeckTwo }, { value = King, suit = Heart, originDeck = DeckTwo }, { value = Ace, suit = Club, originDeck = DeckTwo } ]
+                        , [ { value = Four, suit = Club, originDeck = DeckTwo }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne }, { value = Eight, suit = Club, originDeck = DeckTwo } ]
+                        , [ { value = King, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckTwo }, { value = Two, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Ten, suit = Heart, originDeck = DeckTwo }, { value = Jack, suit = Club, originDeck = DeckTwo }, { value = Queen, suit = Diamond, originDeck = DeckTwo }, { value = King, suit = Spade, originDeck = DeckTwo } ]
+                        , [ { value = Four, suit = Heart, originDeck = DeckTwo }, { value = Five, suit = Heart, originDeck = DeckTwo }, { value = Six, suit = Heart, originDeck = DeckTwo }, { value = Seven, suit = Heart, originDeck = DeckTwo }, { value = Eight, suit = Heart, originDeck = DeckTwo }, { value = Nine, suit = Heart, originDeck = DeckOne }, { value = Ten, suit = Heart, originDeck = DeckOne } ]
+                        ]
+                    , trouble = [ [ { value = Ten, suit = Club, originDeck = DeckOne } ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Just plan ->
+                    List.length plan |> Expect.equal 5
+
+                Nothing ->
+                    Expect.fail "expected plan of length 5; got Nothing"
+
+
+corpusSid112 : Test
+corpusSid112 =
+    test "corpus_sid_112" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Nine, suit = Spade, originDeck = DeckTwo }, { value = Nine, suit = Club, originDeck = DeckTwo }, { value = Nine, suit = Diamond, originDeck = DeckTwo } ]
+                        , [ { value = Eight, suit = Heart, originDeck = DeckTwo }, { value = Nine, suit = Heart, originDeck = DeckTwo }, { value = Ten, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Five, suit = Club, originDeck = DeckTwo }, { value = Six, suit = Heart, originDeck = DeckTwo }, { value = Seven, suit = Spade, originDeck = DeckTwo }, { value = Eight, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Jack, suit = Diamond, originDeck = DeckTwo }, { value = Jack, suit = Heart, originDeck = DeckOne }, { value = Jack, suit = Spade, originDeck = DeckTwo } ]
+                        , [ { value = Jack, suit = Club, originDeck = DeckOne }, { value = Queen, suit = Club, originDeck = DeckTwo }, { value = King, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Ten, suit = Heart, originDeck = DeckTwo }, { value = Ten, suit = Club, originDeck = DeckTwo } ]
+                        , [ { value = Eight, suit = Spade, originDeck = DeckTwo }, { value = Nine, suit = Spade, originDeck = DeckOne }, { value = Ten, suit = Spade, originDeck = DeckTwo } ]
+                        , [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne }, { value = Four, suit = Spade, originDeck = DeckOne }, { value = Five, suit = Spade, originDeck = DeckTwo }, { value = Six, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Queen, suit = Spade, originDeck = DeckOne }, { value = Queen, suit = Heart, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckTwo } ]
+                        , [ { value = Queen, suit = Heart, originDeck = DeckTwo }, { value = King, suit = Spade, originDeck = DeckTwo }, { value = Ace, suit = Diamond, originDeck = DeckTwo }, { value = Two, suit = Club, originDeck = DeckTwo }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Diamond, originDeck = DeckTwo }, { value = Six, suit = Club, originDeck = DeckTwo }, { value = Seven, suit = Heart, originDeck = DeckOne }, { value = Eight, suit = Club, originDeck = DeckTwo }, { value = Nine, suit = Heart, originDeck = DeckOne }, { value = Ten, suit = Spade, originDeck = DeckOne }, { value = Jack, suit = Heart, originDeck = DeckTwo }, { value = Queen, suit = Spade, originDeck = DeckTwo }, { value = King, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Club, originDeck = DeckTwo }, { value = Two, suit = Diamond, originDeck = DeckTwo }, { value = Three, suit = Club, originDeck = DeckTwo } ]
+                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckTwo } ]
+                        , [ { value = Six, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Eight, suit = Diamond, originDeck = DeckTwo } ]
+                        , [ { value = Two, suit = Heart, originDeck = DeckTwo }, { value = Two, suit = Club, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckTwo }, { value = Two, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Four, suit = Spade, originDeck = DeckTwo }, { value = Four, suit = Diamond, originDeck = DeckTwo }, { value = Four, suit = Club, originDeck = DeckTwo } ]
+                        , [ { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckTwo }, { value = Five, suit = Heart, originDeck = DeckTwo } ]
+                        , [ { value = King, suit = Heart, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckTwo }, { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckTwo }, { value = Four, suit = Heart, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Nine, suit = Club, originDeck = DeckOne }, { value = Ten, suit = Club, originDeck = DeckOne }, { value = Jack, suit = Club, originDeck = DeckTwo }, { value = Queen, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Ten, suit = Diamond, originDeck = DeckTwo }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = King, suit = Club, originDeck = DeckTwo }, { value = King, suit = Diamond, originDeck = DeckTwo }, { value = King, suit = Heart, originDeck = DeckTwo } ]
+                        , [ { value = Six, suit = Spade, originDeck = DeckTwo }, { value = Seven, suit = Diamond, originDeck = DeckTwo }, { value = Eight, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Six, suit = Diamond, originDeck = DeckTwo }, { value = Seven, suit = Club, originDeck = DeckTwo }, { value = Eight, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Five, suit = Diamond, originDeck = DeckOne }, { value = Five, suit = Spade, originDeck = DeckOne }, { value = Five, suit = Club, originDeck = DeckOne } ]
+                        ]
+                    , trouble = [ [ { value = Three, suit = Club, originDeck = DeckOne } ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Just plan ->
+                    List.length plan |> Expect.equal 2
+
+                Nothing ->
+                    Expect.fail "expected plan of length 2; got Nothing"
+
+
+corpusSid114 : Test
+corpusSid114 =
+    test "corpus_sid_114" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ { value = Five, suit = Club, originDeck = DeckOne }, { value = Five, suit = Diamond, originDeck = DeckOne }, { value = Five, suit = Spade, originDeck = DeckTwo } ]
+                        , [ { value = Jack, suit = Club, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckTwo }, { value = Jack, suit = Spade, originDeck = DeckTwo } ]
+                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckTwo } ]
+                        , [ { value = Three, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckTwo }, { value = Three, suit = Club, originDeck = DeckTwo } ]
+                        , [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckTwo }, { value = Ace, suit = Diamond, originDeck = DeckTwo } ]
+                        , [ { value = Three, suit = Spade, originDeck = DeckTwo }, { value = Four, suit = Diamond, originDeck = DeckTwo }, { value = Five, suit = Spade, originDeck = DeckOne }, { value = Six, suit = Heart, originDeck = DeckOne }, { value = Seven, suit = Spade, originDeck = DeckTwo } ]
+                        , [ { value = Eight, suit = Heart, originDeck = DeckOne }, { value = Nine, suit = Heart, originDeck = DeckOne }, { value = Ten, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = King, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Two, suit = Diamond, originDeck = DeckTwo } ]
+                        , [ { value = Nine, suit = Diamond, originDeck = DeckTwo }, { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = King, suit = Heart, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne }, { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Heart, originDeck = DeckOne }, { value = Queen, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Nine, suit = Club, originDeck = DeckTwo }, { value = Ten, suit = Club, originDeck = DeckOne }, { value = Jack, suit = Club, originDeck = DeckTwo } ]
+                        , [ { value = Four, suit = Club, originDeck = DeckTwo }, { value = Five, suit = Club, originDeck = DeckTwo }, { value = Six, suit = Club, originDeck = DeckTwo }, { value = Seven, suit = Club, originDeck = DeckTwo } ]
+                        , [ { value = Queen, suit = Spade, originDeck = DeckTwo }, { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckTwo } ]
+                        , [ { value = King, suit = Diamond, originDeck = DeckTwo }, { value = King, suit = Heart, originDeck = DeckTwo }, { value = King, suit = Spade, originDeck = DeckTwo } ]
+                        , [ { value = King, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Club, originDeck = DeckTwo }, { value = Two, suit = Club, originDeck = DeckTwo } ]
+                        , [ { value = Ten, suit = Heart, originDeck = DeckTwo }, { value = Jack, suit = Spade, originDeck = DeckOne }, { value = Queen, suit = Heart, originDeck = DeckTwo } ]
+                        , [ { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne }, { value = Eight, suit = Club, originDeck = DeckTwo } ]
+                        , [ { value = Nine, suit = Club, originDeck = DeckOne }, { value = Nine, suit = Diamond, originDeck = DeckOne }, { value = Nine, suit = Spade, originDeck = DeckOne } ]
+                        ]
+                    , trouble = [ [ { value = Six, suit = Diamond, originDeck = DeckOne } ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Just plan ->
+                    List.length plan |> Expect.equal 4
+
+                Nothing ->
+                    Expect.fail "expected plan of length 4; got Nothing"
+
+
+corpusSid116 : Test
+corpusSid116 =
+    test "corpus_sid_116" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne }, { value = Eight, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = King, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Spade, originDeck = DeckOne }, { value = King, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = King, suit = Heart, originDeck = DeckTwo }, { value = Ace, suit = Heart, originDeck = DeckTwo }, { value = Two, suit = Heart, originDeck = DeckTwo } ]
+                        , [ { value = Two, suit = Diamond, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckTwo }, { value = Four, suit = Diamond, originDeck = DeckTwo } ]
+                        , [ { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckTwo }, { value = Ace, suit = Club, originDeck = DeckTwo } ]
+                        , [ { value = Ten, suit = Spade, originDeck = DeckOne }, { value = Jack, suit = Spade, originDeck = DeckTwo }, { value = Queen, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckTwo } ]
+                        , [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Ten, suit = Spade, originDeck = DeckTwo }, { value = Ten, suit = Heart, originDeck = DeckOne }, { value = Ten, suit = Club, originDeck = DeckTwo } ]
+                        , [ { value = Five, suit = Spade, originDeck = DeckOne }, { value = Five, suit = Diamond, originDeck = DeckOne }, { value = Five, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckTwo } ]
+                        , [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Two, suit = Club, originDeck = DeckTwo }, { value = Three, suit = Club, originDeck = DeckTwo } ]
+                        , [ { value = Seven, suit = Spade, originDeck = DeckTwo }, { value = Eight, suit = Heart, originDeck = DeckTwo }, { value = Nine, suit = Club, originDeck = DeckTwo }, { value = Ten, suit = Diamond, originDeck = DeckTwo }, { value = Jack, suit = Club, originDeck = DeckTwo } ]
+                        , [ { value = Nine, suit = Spade, originDeck = DeckOne }, { value = Ten, suit = Heart, originDeck = DeckTwo }, { value = Jack, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Six, suit = Diamond, originDeck = DeckTwo }, { value = Seven, suit = Diamond, originDeck = DeckTwo }, { value = Eight, suit = Diamond, originDeck = DeckTwo } ]
+                        , [ { value = Three, suit = Spade, originDeck = DeckTwo }, { value = Four, suit = Heart, originDeck = DeckTwo }, { value = Five, suit = Club, originDeck = DeckTwo } ]
+                        , [ { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne }, { value = Four, suit = Spade, originDeck = DeckTwo }, { value = Five, suit = Spade, originDeck = DeckTwo } ]
+                        ]
+                    , trouble = [ [ { value = Jack, suit = Spade, originDeck = DeckOne } ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Just plan ->
+                    List.length plan |> Expect.equal 5
+
+                Nothing ->
+                    Expect.fail "expected plan of length 5; got Nothing"
+
+
+corpusSid118 : Test
+corpusSid118 =
+    test "corpus_sid_118" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Nine, suit = Diamond, originDeck = DeckOne }, { value = Nine, suit = Heart, originDeck = DeckOne }, { value = Nine, suit = Club, originDeck = DeckTwo } ]
+                        , [ { value = Queen, suit = Club, originDeck = DeckOne }, { value = King, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Club, originDeck = DeckOne }, { value = Two, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Ten, suit = Spade, originDeck = DeckOne }, { value = Ten, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Two, suit = Club, originDeck = DeckTwo }, { value = Three, suit = Diamond, originDeck = DeckTwo }, { value = Four, suit = Club, originDeck = DeckTwo }, { value = Five, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Five, suit = Spade, originDeck = DeckTwo }, { value = Six, suit = Spade, originDeck = DeckTwo }, { value = Seven, suit = Spade, originDeck = DeckTwo } ]
+                        , [ { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckTwo }, { value = Three, suit = Heart, originDeck = DeckTwo } ]
+                        , [ { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckTwo } ]
+                        , [ { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckTwo } ]
+                        , [ { value = Ten, suit = Diamond, originDeck = DeckTwo }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckTwo } ]
+                        , [ { value = Five, suit = Club, originDeck = DeckOne }, { value = Six, suit = Diamond, originDeck = DeckTwo }, { value = Seven, suit = Club, originDeck = DeckTwo }, { value = Eight, suit = Diamond, originDeck = DeckTwo } ]
+                        , [ { value = Jack, suit = Club, originDeck = DeckTwo }, { value = Jack, suit = Heart, originDeck = DeckTwo }, { value = Jack, suit = Diamond, originDeck = DeckTwo } ]
+                        , [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne }, { value = Ace, suit = Club, originDeck = DeckTwo } ]
+                        , [ { value = Ten, suit = Spade, originDeck = DeckTwo }, { value = Jack, suit = Spade, originDeck = DeckTwo }, { value = Queen, suit = Spade, originDeck = DeckOne }, { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Ace, suit = Spade, originDeck = DeckTwo }, { value = Two, suit = Spade, originDeck = DeckTwo }, { value = Three, suit = Spade, originDeck = DeckOne } ]
+                        ]
+                    , trouble = [ [ { value = Queen, suit = Club, originDeck = DeckTwo } ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Just plan ->
+                    List.length plan |> Expect.equal 4
+
+                Nothing ->
+                    Expect.fail "expected plan of length 4; got Nothing"
+
+
+corpusSid120 : Test
+corpusSid120 =
+    test "corpus_sid_120" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Nine, suit = Club, originDeck = DeckTwo }, { value = Nine, suit = Spade, originDeck = DeckTwo }, { value = Nine, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Two, suit = Heart, originDeck = DeckOne }, { value = Two, suit = Diamond, originDeck = DeckTwo } ]
+                        , [ { value = Queen, suit = Diamond, originDeck = DeckTwo }, { value = Queen, suit = Spade, originDeck = DeckOne }, { value = Queen, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Six, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Club, originDeck = DeckTwo }, { value = Six, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = King, suit = Spade, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckTwo }, { value = Seven, suit = Spade, originDeck = DeckTwo } ]
+                        , [ { value = Five, suit = Club, originDeck = DeckTwo }, { value = Six, suit = Club, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Eight, suit = Heart, originDeck = DeckOne }, { value = Eight, suit = Spade, originDeck = DeckOne }, { value = Eight, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Five, suit = Spade, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Five, suit = Heart, originDeck = DeckTwo }, { value = Six, suit = Heart, originDeck = DeckTwo }, { value = Seven, suit = Heart, originDeck = DeckOne }, { value = Eight, suit = Heart, originDeck = DeckTwo } ]
+                        , [ { value = Nine, suit = Heart, originDeck = DeckTwo }, { value = Ten, suit = Club, originDeck = DeckTwo }, { value = Jack, suit = Diamond, originDeck = DeckTwo } ]
+                        , [ { value = Nine, suit = Club, originDeck = DeckOne }, { value = Ten, suit = Diamond, originDeck = DeckTwo }, { value = Jack, suit = Spade, originDeck = DeckTwo } ]
+                        , [ { value = Four, suit = Diamond, originDeck = DeckTwo }, { value = Five, suit = Club, originDeck = DeckOne }, { value = Six, suit = Diamond, originDeck = DeckTwo } ]
+                        , [ { value = Ten, suit = Spade, originDeck = DeckOne }, { value = Jack, suit = Heart, originDeck = DeckOne }, { value = Queen, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Ten, suit = Heart, originDeck = DeckOne }, { value = Jack, suit = Heart, originDeck = DeckTwo }, { value = Queen, suit = Heart, originDeck = DeckTwo } ]
+                        , [ { value = King, suit = Diamond, originDeck = DeckTwo }, { value = King, suit = Heart, originDeck = DeckOne }, { value = King, suit = Club, originDeck = DeckTwo } ]
+                        ]
+                    , trouble = [ [ { value = Jack, suit = Club, originDeck = DeckTwo } ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Just plan ->
+                    List.length plan |> Expect.equal 6
+
+                Nothing ->
+                    Expect.fail "expected plan of length 6; got Nothing"
+
+
+corpusSid122 : Test
+corpusSid122 =
+    test "corpus_sid_122" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = King, suit = Club, originDeck = DeckOne }, { value = King, suit = Spade, originDeck = DeckTwo }, { value = King, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckTwo }, { value = Two, suit = Diamond, originDeck = DeckTwo } ]
+                        , [ { value = Queen, suit = Club, originDeck = DeckTwo }, { value = Queen, suit = Heart, originDeck = DeckTwo }, { value = Queen, suit = Diamond, originDeck = DeckTwo } ]
+                        , [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Nine, suit = Diamond, originDeck = DeckTwo }, { value = Nine, suit = Heart, originDeck = DeckOne }, { value = Nine, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Two, suit = Diamond, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = King, suit = Heart, originDeck = DeckTwo }, { value = Ace, suit = Heart, originDeck = DeckTwo }, { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Queen, suit = Club, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Club, originDeck = DeckTwo } ]
+                        , [ { value = Jack, suit = Spade, originDeck = DeckOne }, { value = Jack, suit = Heart, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckTwo } ]
+                        , [ { value = Seven, suit = Club, originDeck = DeckTwo }, { value = Eight, suit = Club, originDeck = DeckTwo }, { value = Nine, suit = Club, originDeck = DeckTwo }, { value = Ten, suit = Club, originDeck = DeckTwo } ]
+                        , [ { value = Five, suit = Heart, originDeck = DeckTwo }, { value = Six, suit = Spade, originDeck = DeckTwo }, { value = Seven, suit = Diamond, originDeck = DeckTwo } ]
+                        , [ { value = Nine, suit = Spade, originDeck = DeckTwo }, { value = Ten, suit = Diamond, originDeck = DeckTwo }, { value = Jack, suit = Spade, originDeck = DeckTwo } ]
+                        , [ { value = Five, suit = Club, originDeck = DeckTwo }, { value = Six, suit = Heart, originDeck = DeckTwo }, { value = Seven, suit = Spade, originDeck = DeckTwo } ]
+                        , [ { value = Eight, suit = Spade, originDeck = DeckTwo }, { value = Eight, suit = Heart, originDeck = DeckOne }, { value = Eight, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Queen, suit = Spade, originDeck = DeckOne }, { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne }, { value = Four, suit = Spade, originDeck = DeckTwo } ]
+                        , [ { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckTwo } ]
+                        , [ { value = Five, suit = Spade, originDeck = DeckTwo }, { value = Six, suit = Diamond, originDeck = DeckTwo }, { value = Seven, suit = Spade, originDeck = DeckOne } ]
+                        ]
+                    , trouble = [ [ { value = Ten, suit = Heart, originDeck = DeckTwo } ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Just plan ->
+                    List.length plan |> Expect.equal 4
+
+                Nothing ->
+                    Expect.fail "expected plan of length 4; got Nothing"
+
+
+corpusSid124 : Test
+corpusSid124 =
+    test "corpus_sid_124" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Nine, suit = Club, originDeck = DeckTwo }, { value = Nine, suit = Spade, originDeck = DeckTwo }, { value = Nine, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckTwo }, { value = Seven, suit = Diamond, originDeck = DeckTwo } ]
+                        , [ { value = Five, suit = Diamond, originDeck = DeckTwo }, { value = Five, suit = Spade, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckTwo } ]
+                        , [ { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Spade, originDeck = DeckOne }, { value = Jack, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Two, suit = Diamond, originDeck = DeckTwo }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Club, originDeck = DeckTwo } ]
+                        , [ { value = Queen, suit = Heart, originDeck = DeckTwo }, { value = King, suit = Heart, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckTwo }, { value = Two, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckTwo }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne }, { value = Eight, suit = Club, originDeck = DeckTwo }, { value = Nine, suit = Heart, originDeck = DeckTwo } ]
+                        , [ { value = Queen, suit = Spade, originDeck = DeckTwo }, { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckTwo } ]
+                        , [ { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Eight, suit = Diamond, originDeck = DeckTwo }, { value = Nine, suit = Diamond, originDeck = DeckTwo }, { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckTwo }, { value = Queen, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = King, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Spade, originDeck = DeckTwo }, { value = King, suit = Heart, originDeck = DeckTwo } ]
+                        , [ { value = Ace, suit = Diamond, originDeck = DeckTwo }, { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Five, suit = Club, originDeck = DeckTwo }, { value = Six, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Spade, originDeck = DeckTwo } ]
+                        , [ { value = Queen, suit = Club, originDeck = DeckTwo }, { value = King, suit = Diamond, originDeck = DeckTwo }, { value = Ace, suit = Club, originDeck = DeckTwo }, { value = Two, suit = Heart, originDeck = DeckTwo }, { value = Three, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Four, suit = Club, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Diamond, originDeck = DeckTwo } ]
+                        ]
+                    , trouble = [ [ { value = Six, suit = Spade, originDeck = DeckTwo } ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Just plan ->
+                    List.length plan |> Expect.equal 1
+
+                Nothing ->
+                    Expect.fail "expected plan of length 1; got Nothing"
+
+
+corpusSid126 : Test
+corpusSid126 =
+    test "corpus_sid_126" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ { value = King, suit = Spade, originDeck = DeckTwo }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne }, { value = Four, suit = Spade, originDeck = DeckTwo } ]
+                        , [ { value = Ten, suit = Club, originDeck = DeckTwo }, { value = Ten, suit = Spade, originDeck = DeckTwo }, { value = Ten, suit = Heart, originDeck = DeckTwo } ]
+                        , [ { value = Seven, suit = Diamond, originDeck = DeckTwo }, { value = Eight, suit = Diamond, originDeck = DeckOne }, { value = Nine, suit = Diamond, originDeck = DeckOne }, { value = Ten, suit = Diamond, originDeck = DeckTwo }, { value = Jack, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Eight, suit = Spade, originDeck = DeckTwo }, { value = Nine, suit = Spade, originDeck = DeckTwo } ]
+                        , [ { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckTwo }, { value = Seven, suit = Spade, originDeck = DeckTwo } ]
+                        , [ { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne }, { value = Eight, suit = Club, originDeck = DeckTwo } ]
+                        , [ { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckTwo }, { value = Three, suit = Club, originDeck = DeckTwo } ]
+                        , [ { value = King, suit = Heart, originDeck = DeckTwo }, { value = Ace, suit = Heart, originDeck = DeckTwo }, { value = Two, suit = Heart, originDeck = DeckTwo } ]
+                        , [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = King, suit = Spade, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckTwo } ]
+                        , [ { value = Queen, suit = Club, originDeck = DeckTwo }, { value = King, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckTwo }, { value = Four, suit = Club, originDeck = DeckTwo }, { value = Five, suit = Heart, originDeck = DeckTwo } ]
+                        , [ { value = Nine, suit = Club, originDeck = DeckTwo }, { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Spade, originDeck = DeckTwo }, { value = Queen, suit = Heart, originDeck = DeckOne }, { value = King, suit = Club, originDeck = DeckTwo } ]
+                        , [ { value = Jack, suit = Diamond, originDeck = DeckTwo }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckTwo }, { value = Ace, suit = Diamond, originDeck = DeckTwo }, { value = Two, suit = Diamond, originDeck = DeckTwo } ]
+                        ]
+                    , trouble = [ [ { value = Five, suit = Club, originDeck = DeckTwo } ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Just plan ->
+                    List.length plan |> Expect.equal 7
+
+                Nothing ->
+                    Expect.fail "expected plan of length 7; got Nothing"
+
+
+corpusSid128 : Test
+corpusSid128 =
+    test "corpus_sid_128" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Three, suit = Heart, originDeck = DeckTwo }, { value = Four, suit = Club, originDeck = DeckTwo }, { value = Five, suit = Diamond, originDeck = DeckOne }, { value = Six, suit = Club, originDeck = DeckTwo } ]
+                        , [ { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Eight, suit = Club, originDeck = DeckOne }, { value = Nine, suit = Club, originDeck = DeckOne }, { value = Ten, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Three, suit = Diamond, originDeck = DeckTwo }, { value = Three, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Club, originDeck = DeckTwo } ]
+                        , [ { value = Four, suit = Spade, originDeck = DeckTwo }, { value = Five, suit = Diamond, originDeck = DeckTwo }, { value = Six, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Two, suit = Heart, originDeck = DeckTwo }, { value = Two, suit = Diamond, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckTwo } ]
+                        , [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Diamond, originDeck = DeckTwo } ]
+                        , [ { value = Nine, suit = Diamond, originDeck = DeckTwo }, { value = Ten, suit = Spade, originDeck = DeckTwo }, { value = Jack, suit = Diamond, originDeck = DeckTwo } ]
+                        , [ { value = Queen, suit = Heart, originDeck = DeckTwo }, { value = Queen, suit = Spade, originDeck = DeckOne }, { value = Queen, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Seven, suit = Spade, originDeck = DeckTwo }, { value = Eight, suit = Heart, originDeck = DeckOne }, { value = Nine, suit = Spade, originDeck = DeckOne }, { value = Ten, suit = Heart, originDeck = DeckTwo }, { value = Jack, suit = Club, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckTwo } ]
+                        , [ { value = Ten, suit = Spade, originDeck = DeckOne }, { value = Jack, suit = Spade, originDeck = DeckTwo }, { value = Queen, suit = Spade, originDeck = DeckTwo }, { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Nine, suit = Diamond, originDeck = DeckOne }, { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckTwo } ]
+                        , [ { value = King, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Club, originDeck = DeckTwo }, { value = Two, suit = Heart, originDeck = DeckOne } ]
+                        ]
+                    , trouble = [ [ { value = Five, suit = Spade, originDeck = DeckOne } ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Just plan ->
+                    List.length plan |> Expect.equal 2
+
+                Nothing ->
+                    Expect.fail "expected plan of length 2; got Nothing"
+
+
+corpusSid130 : Test
+corpusSid130 =
+    test "corpus_sid_130" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Ten, suit = Club, originDeck = DeckTwo }, { value = Ten, suit = Spade, originDeck = DeckTwo }, { value = Ten, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckTwo } ]
+                        , [ { value = Ace, suit = Heart, originDeck = DeckTwo }, { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Eight, suit = Diamond, originDeck = DeckOne }, { value = Nine, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Three, suit = Spade, originDeck = DeckOne }, { value = Four, suit = Diamond, originDeck = DeckTwo }, { value = Five, suit = Club, originDeck = DeckTwo } ]
+                        , [ { value = Eight, suit = Spade, originDeck = DeckOne }, { value = Nine, suit = Spade, originDeck = DeckOne }, { value = Ten, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Queen, suit = Spade, originDeck = DeckTwo }, { value = Queen, suit = Club, originDeck = DeckTwo }, { value = Queen, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Two, suit = Diamond, originDeck = DeckTwo }, { value = Three, suit = Diamond, originDeck = DeckTwo }, { value = Four, suit = Diamond, originDeck = DeckOne }, { value = Five, suit = Diamond, originDeck = DeckTwo } ]
+                        , [ { value = Four, suit = Club, originDeck = DeckTwo }, { value = Five, suit = Diamond, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = King, suit = Club, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckTwo }, { value = King, suit = Spade, originDeck = DeckTwo } ]
+                        , [ { value = Eight, suit = Heart, originDeck = DeckOne }, { value = Nine, suit = Club, originDeck = DeckTwo }, { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Club, originDeck = DeckTwo }, { value = Queen, suit = Heart, originDeck = DeckTwo } ]
+                        , [ { value = King, suit = Club, originDeck = DeckTwo }, { value = Ace, suit = Club, originDeck = DeckTwo }, { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Club, originDeck = DeckTwo } ]
+                        , [ { value = Five, suit = Heart, originDeck = DeckTwo }, { value = Six, suit = Heart, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne }, { value = Eight, suit = Heart, originDeck = DeckTwo } ]
+                        , [ { value = Nine, suit = Heart, originDeck = DeckOne }, { value = Nine, suit = Spade, originDeck = DeckTwo }, { value = Nine, suit = Club, originDeck = DeckOne }, { value = Nine, suit = Diamond, originDeck = DeckTwo } ]
+                        , [ { value = Three, suit = Club, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne }, { value = Five, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Six, suit = Club, originDeck = DeckOne }, { value = Six, suit = Diamond, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckTwo } ]
+                        , [ { value = Two, suit = Club, originDeck = DeckTwo }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Club, originDeck = DeckTwo } ]
+                        ]
+                    , trouble = [ [ { value = Jack, suit = Heart, originDeck = DeckOne } ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Just plan ->
+                    List.length plan |> Expect.equal 5
+
+                Nothing ->
+                    Expect.fail "expected plan of length 5; got Nothing"
+
+
+corpusSid132 : Test
+corpusSid132 =
+    test "corpus_sid_132" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Four, suit = Heart, originDeck = DeckTwo }, { value = Five, suit = Heart, originDeck = DeckTwo }, { value = Six, suit = Heart, originDeck = DeckTwo } ]
+                        , [ { value = Seven, suit = Heart, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckTwo }, { value = Seven, suit = Club, originDeck = DeckTwo } ]
+                        , [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Two, suit = Heart, originDeck = DeckOne }, { value = Two, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Four, suit = Heart, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Three, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckTwo }, { value = Three, suit = Diamond, originDeck = DeckTwo } ]
+                        , [ { value = Jack, suit = Diamond, originDeck = DeckTwo }, { value = Queen, suit = Diamond, originDeck = DeckTwo }, { value = King, suit = Diamond, originDeck = DeckTwo } ]
+                        , [ { value = Four, suit = Spade, originDeck = DeckTwo }, { value = Five, suit = Spade, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Ten, suit = Spade, originDeck = DeckTwo }, { value = Jack, suit = Spade, originDeck = DeckOne }, { value = Queen, suit = Spade, originDeck = DeckTwo }, { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Eight, suit = Diamond, originDeck = DeckTwo }, { value = Nine, suit = Club, originDeck = DeckTwo }, { value = Ten, suit = Heart, originDeck = DeckTwo } ]
+                        , [ { value = Five, suit = Spade, originDeck = DeckTwo }, { value = Six, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Spade, originDeck = DeckTwo }, { value = Eight, suit = Heart, originDeck = DeckOne }, { value = Nine, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Two, suit = Club, originDeck = DeckTwo }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Diamond, originDeck = DeckTwo } ]
+                        , [ { value = Six, suit = Diamond, originDeck = DeckTwo }, { value = Six, suit = Spade, originDeck = DeckTwo }, { value = Six, suit = Club, originDeck = DeckTwo } ]
+                        , [ { value = Ten, suit = Heart, originDeck = DeckOne }, { value = Jack, suit = Heart, originDeck = DeckTwo }, { value = Queen, suit = Heart, originDeck = DeckTwo } ]
+                        , [ { value = King, suit = Heart, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Club, originDeck = DeckTwo } ]
+                        , [ { value = Queen, suit = Club, originDeck = DeckTwo }, { value = King, suit = Heart, originDeck = DeckTwo }, { value = Ace, suit = Club, originDeck = DeckTwo }, { value = Two, suit = Heart, originDeck = DeckTwo }, { value = Three, suit = Spade, originDeck = DeckOne }, { value = Four, suit = Diamond, originDeck = DeckOne }, { value = Five, suit = Club, originDeck = DeckTwo } ]
+                        , [ { value = Eight, suit = Diamond, originDeck = DeckOne }, { value = Nine, suit = Diamond, originDeck = DeckOne }, { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Eight, suit = Heart, originDeck = DeckTwo }, { value = Nine, suit = Spade, originDeck = DeckTwo }, { value = Ten, suit = Diamond, originDeck = DeckTwo }, { value = Jack, suit = Spade, originDeck = DeckTwo }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Club, originDeck = DeckOne } ]
+                        ]
+                    , trouble = [ [ { value = Queen, suit = Club, originDeck = DeckOne } ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Just plan ->
+                    List.length plan |> Expect.equal 2
+
+                Nothing ->
+                    Expect.fail "expected plan of length 2; got Nothing"
+
+
+corpusSid134 : Test
+corpusSid134 =
+    test "corpus_sid_134" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = King, suit = Spade, originDeck = DeckOne }, { value = King, suit = Heart, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckTwo } ]
+                        , [ { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Spade, originDeck = DeckOne }, { value = Jack, suit = Heart, originDeck = DeckTwo } ]
+                        , [ { value = Two, suit = Club, originDeck = DeckTwo }, { value = Three, suit = Diamond, originDeck = DeckTwo }, { value = Four, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckTwo } ]
+                        , [ { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Three, suit = Club, originDeck = DeckTwo }, { value = Three, suit = Spade, originDeck = DeckTwo } ]
+                        , [ { value = King, suit = Spade, originDeck = DeckTwo }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne }, { value = Four, suit = Spade, originDeck = DeckTwo } ]
+                        , [ { value = Queen, suit = Spade, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckTwo }, { value = Queen, suit = Club, originDeck = DeckTwo } ]
+                        , [ { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckTwo }, { value = Two, suit = Diamond, originDeck = DeckTwo } ]
+                        , [ { value = Eight, suit = Diamond, originDeck = DeckTwo }, { value = Eight, suit = Heart, originDeck = DeckTwo }, { value = Eight, suit = Club, originDeck = DeckTwo } ]
+                        , [ { value = Nine, suit = Spade, originDeck = DeckTwo }, { value = Ten, suit = Heart, originDeck = DeckOne }, { value = Jack, suit = Spade, originDeck = DeckTwo } ]
+                        , [ { value = Ace, suit = Club, originDeck = DeckTwo }, { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Club, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckTwo }, { value = Five, suit = Club, originDeck = DeckTwo }, { value = Six, suit = Club, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne }, { value = Eight, suit = Club, originDeck = DeckOne }, { value = Nine, suit = Club, originDeck = DeckOne }, { value = Ten, suit = Club, originDeck = DeckOne }, { value = Jack, suit = Club, originDeck = DeckOne }, { value = Queen, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Ace, suit = Heart, originDeck = DeckTwo }, { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Five, suit = Diamond, originDeck = DeckOne }, { value = Six, suit = Diamond, originDeck = DeckTwo }, { value = Seven, suit = Diamond, originDeck = DeckTwo }, { value = Eight, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne }, { value = Eight, suit = Spade, originDeck = DeckOne }, { value = Nine, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Ten, suit = Club, originDeck = DeckTwo }, { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Ten, suit = Spade, originDeck = DeckTwo } ]
+                        , [ { value = Four, suit = Diamond, originDeck = DeckTwo }, { value = Five, suit = Club, originDeck = DeckOne }, { value = Six, suit = Heart, originDeck = DeckOne }, { value = Seven, suit = Spade, originDeck = DeckTwo }, { value = Eight, suit = Heart, originDeck = DeckOne }, { value = Nine, suit = Spade, originDeck = DeckOne } ]
+                        ]
+                    , trouble = [ [ { value = Six, suit = Heart, originDeck = DeckTwo } ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Just plan ->
+                    List.length plan |> Expect.equal 1
+
+                Nothing ->
+                    Expect.fail "expected plan of length 1; got Nothing"
+
+
+corpusSid136 : Test
+corpusSid136 =
+    test "corpus_sid_136" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckTwo } ]
+                        , [ { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckTwo } ]
+                        , [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Two, suit = Heart, originDeck = DeckOne }, { value = Two, suit = Diamond, originDeck = DeckTwo } ]
+                        , [ { value = Five, suit = Diamond, originDeck = DeckTwo }, { value = Six, suit = Club, originDeck = DeckTwo }, { value = Seven, suit = Diamond, originDeck = DeckTwo } ]
+                        , [ { value = Three, suit = Club, originDeck = DeckTwo }, { value = Four, suit = Diamond, originDeck = DeckTwo }, { value = Five, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne }, { value = Four, suit = Spade, originDeck = DeckTwo }, { value = Five, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Eight, suit = Spade, originDeck = DeckTwo }, { value = Nine, suit = Spade, originDeck = DeckTwo } ]
+                        , [ { value = Ten, suit = Spade, originDeck = DeckTwo }, { value = Ten, suit = Club, originDeck = DeckTwo }, { value = Ten, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Ten, suit = Club, originDeck = DeckOne }, { value = Jack, suit = Heart, originDeck = DeckTwo }, { value = Queen, suit = Spade, originDeck = DeckOne }, { value = King, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Seven, suit = Club, originDeck = DeckTwo }, { value = Eight, suit = Diamond, originDeck = DeckOne }, { value = Nine, suit = Club, originDeck = DeckOne }, { value = Ten, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Ten, suit = Diamond, originDeck = DeckTwo }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Eight, suit = Heart, originDeck = DeckOne }, { value = Nine, suit = Club, originDeck = DeckTwo }, { value = Ten, suit = Heart, originDeck = DeckTwo }, { value = Jack, suit = Club, originDeck = DeckOne }, { value = Queen, suit = Heart, originDeck = DeckTwo }, { value = King, suit = Club, originDeck = DeckTwo } ]
+                        , [ { value = Queen, suit = Diamond, originDeck = DeckTwo }, { value = King, suit = Diamond, originDeck = DeckTwo }, { value = Ace, suit = Diamond, originDeck = DeckTwo }, { value = Two, suit = Diamond, originDeck = DeckOne } ]
+                        ]
+                    , trouble = [ [ { value = Five, suit = Diamond, originDeck = DeckOne } ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Just plan ->
+                    List.length plan |> Expect.equal 1
+
+                Nothing ->
+                    Expect.fail "expected plan of length 1; got Nothing"
+
+
+corpusSid138 : Test
+corpusSid138 =
+    test "corpus_sid_138" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = King, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Club, originDeck = DeckOne }, { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Nine, suit = Diamond, originDeck = DeckTwo }, { value = Nine, suit = Heart, originDeck = DeckOne }, { value = Nine, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Ten, suit = Spade, originDeck = DeckTwo }, { value = Jack, suit = Spade, originDeck = DeckTwo }, { value = Queen, suit = Spade, originDeck = DeckTwo } ]
+                        , [ { value = Five, suit = Heart, originDeck = DeckTwo }, { value = Five, suit = Club, originDeck = DeckTwo }, { value = Five, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckTwo }, { value = Ace, suit = Club, originDeck = DeckTwo } ]
+                        , [ { value = Four, suit = Diamond, originDeck = DeckOne }, { value = Five, suit = Diamond, originDeck = DeckTwo }, { value = Six, suit = Diamond, originDeck = DeckTwo } ]
+                        , [ { value = Five, suit = Club, originDeck = DeckOne }, { value = Six, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Spade, originDeck = DeckTwo }, { value = Eight, suit = Heart, originDeck = DeckTwo }, { value = Nine, suit = Spade, originDeck = DeckTwo }, { value = Ten, suit = Diamond, originDeck = DeckTwo } ]
+                        , [ { value = Queen, suit = Spade, originDeck = DeckOne }, { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Jack, suit = Club, originDeck = DeckTwo }, { value = Jack, suit = Spade, originDeck = DeckOne }, { value = Jack, suit = Heart, originDeck = DeckTwo } ]
+                        , [ { value = Jack, suit = Heart, originDeck = DeckOne }, { value = Queen, suit = Heart, originDeck = DeckTwo }, { value = King, suit = Heart, originDeck = DeckTwo }, { value = Ace, suit = Heart, originDeck = DeckOne }, { value = Two, suit = Heart, originDeck = DeckTwo } ]
+                        , [ { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckTwo }, { value = Two, suit = Diamond, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Diamond, originDeck = DeckTwo } ]
+                        , [ { value = Ten, suit = Heart, originDeck = DeckTwo }, { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Ten, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Three, suit = Spade, originDeck = DeckTwo }, { value = Four, suit = Spade, originDeck = DeckOne }, { value = Five, suit = Spade, originDeck = DeckTwo } ]
+                        , [ { value = Six, suit = Spade, originDeck = DeckOne }, { value = Six, suit = Club, originDeck = DeckTwo }, { value = Six, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Two, suit = Club, originDeck = DeckTwo }, { value = Three, suit = Diamond, originDeck = DeckTwo }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckTwo }, { value = Seven, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Eight, suit = Club, originDeck = DeckTwo }, { value = Eight, suit = Spade, originDeck = DeckOne }, { value = Eight, suit = Diamond, originDeck = DeckTwo } ]
+                        ]
+                    , trouble = [ [ { value = Ten, suit = Club, originDeck = DeckTwo } ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Just plan ->
+                    List.length plan |> Expect.equal 2
+
+                Nothing ->
+                    Expect.fail "expected plan of length 2; got Nothing"
+
+
+corpusSid140 : Test
+corpusSid140 =
+    test "corpus_sid_140" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Four, suit = Diamond, originDeck = DeckOne }, { value = Five, suit = Diamond, originDeck = DeckOne }, { value = Six, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Jack, suit = Club, originDeck = DeckTwo }, { value = Jack, suit = Diamond, originDeck = DeckTwo }, { value = Jack, suit = Heart, originDeck = DeckTwo } ]
+                        , [ { value = Eight, suit = Club, originDeck = DeckOne }, { value = Eight, suit = Heart, originDeck = DeckOne }, { value = Eight, suit = Spade, originDeck = DeckTwo } ]
+                        , [ { value = Eight, suit = Heart, originDeck = DeckTwo }, { value = Eight, suit = Club, originDeck = DeckTwo }, { value = Eight, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Ace, suit = Heart, originDeck = DeckTwo }, { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Six, suit = Spade, originDeck = DeckTwo }, { value = Seven, suit = Spade, originDeck = DeckTwo }, { value = Eight, suit = Spade, originDeck = DeckOne }, { value = Nine, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Ten, suit = Diamond, originDeck = DeckTwo }, { value = Jack, suit = Spade, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckTwo }, { value = King, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckTwo }, { value = Two, suit = Diamond, originDeck = DeckTwo } ]
+                        , [ { value = Nine, suit = Club, originDeck = DeckTwo }, { value = Nine, suit = Diamond, originDeck = DeckOne }, { value = Nine, suit = Heart, originDeck = DeckTwo } ]
+                        , [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckTwo } ]
+                        , [ { value = Two, suit = Diamond, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckTwo }, { value = Five, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Five, suit = Heart, originDeck = DeckTwo }, { value = Six, suit = Heart, originDeck = DeckTwo }, { value = Seven, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Four, suit = Spade, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Diamond, originDeck = DeckTwo } ]
+                        , [ { value = Three, suit = Club, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckTwo }, { value = Five, suit = Club, originDeck = DeckTwo } ]
+                        , [ { value = Queen, suit = Club, originDeck = DeckOne }, { value = King, suit = Club, originDeck = DeckTwo }, { value = Ace, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Queen, suit = Spade, originDeck = DeckTwo }, { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckTwo } ]
+                        , [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckTwo }, { value = Four, suit = Spade, originDeck = DeckTwo } ]
+                        ]
+                    , trouble = [ [ { value = Jack, suit = Heart, originDeck = DeckOne } ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Just plan ->
+                    List.length plan |> Expect.equal 3
+
+                Nothing ->
+                    Expect.fail "expected plan of length 3; got Nothing"
+
+
+corpusSid142 : Test
+corpusSid142 =
+    test "corpus_sid_142" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Ten, suit = Club, originDeck = DeckTwo }, { value = Ten, suit = Heart, originDeck = DeckTwo } ]
+                        , [ { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckTwo } ]
+                        , [ { value = Five, suit = Heart, originDeck = DeckOne }, { value = Five, suit = Spade, originDeck = DeckOne }, { value = Five, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Eight, suit = Spade, originDeck = DeckOne }, { value = Nine, suit = Spade, originDeck = DeckTwo }, { value = Ten, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne }, { value = Four, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Jack, suit = Spade, originDeck = DeckTwo }, { value = Jack, suit = Heart, originDeck = DeckOne }, { value = Jack, suit = Club, originDeck = DeckTwo }, { value = Jack, suit = Diamond, originDeck = DeckTwo } ]
+                        , [ { value = Queen, suit = Diamond, originDeck = DeckTwo }, { value = Queen, suit = Heart, originDeck = DeckOne }, { value = Queen, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = King, suit = Spade, originDeck = DeckOne }, { value = King, suit = Heart, originDeck = DeckTwo }, { value = King, suit = Diamond, originDeck = DeckTwo } ]
+                        , [ { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckTwo }, { value = Two, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Three, suit = Club, originDeck = DeckTwo }, { value = Three, suit = Diamond, originDeck = DeckTwo }, { value = Three, suit = Heart, originDeck = DeckTwo } ]
+                        , [ { value = Four, suit = Diamond, originDeck = DeckOne }, { value = Five, suit = Club, originDeck = DeckTwo }, { value = Six, suit = Heart, originDeck = DeckOne }, { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Eight, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Queen, suit = Spade, originDeck = DeckTwo }, { value = King, suit = Spade, originDeck = DeckTwo }, { value = Ace, suit = Spade, originDeck = DeckTwo }, { value = Two, suit = Spade, originDeck = DeckTwo }, { value = Three, suit = Spade, originDeck = DeckTwo }, { value = Four, suit = Spade, originDeck = DeckTwo }, { value = Five, suit = Spade, originDeck = DeckTwo }, { value = Six, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Seven, suit = Heart, originDeck = DeckOne }, { value = Eight, suit = Spade, originDeck = DeckTwo }, { value = Nine, suit = Diamond, originDeck = DeckTwo } ]
+                        , [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckTwo }, { value = Six, suit = Club, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckTwo }, { value = Eight, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Eight, suit = Club, originDeck = DeckTwo }, { value = Nine, suit = Club, originDeck = DeckOne }, { value = Ten, suit = Club, originDeck = DeckOne }, { value = Jack, suit = Club, originDeck = DeckOne }, { value = Queen, suit = Club, originDeck = DeckOne }, { value = King, suit = Club, originDeck = DeckTwo }, { value = Ace, suit = Club, originDeck = DeckTwo }, { value = Two, suit = Club, originDeck = DeckTwo }, { value = Three, suit = Club, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckTwo } ]
+                        , [ { value = Six, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckTwo }, { value = Eight, suit = Diamond, originDeck = DeckOne }, { value = Nine, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Two, suit = Heart, originDeck = DeckTwo }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Queen, suit = Heart, originDeck = DeckTwo }, { value = King, suit = Heart, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckTwo }, { value = Two, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Five, suit = Club, originDeck = DeckOne }, { value = Six, suit = Diamond, originDeck = DeckTwo }, { value = Seven, suit = Spade, originDeck = DeckTwo }, { value = Eight, suit = Diamond, originDeck = DeckTwo }, { value = Nine, suit = Club, originDeck = DeckTwo }, { value = Ten, suit = Heart, originDeck = DeckOne } ]
+                        ]
+                    , trouble = [ [ { value = Eight, suit = Heart, originDeck = DeckTwo } ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Just plan ->
+                    List.length plan |> Expect.equal 1
+
+                Nothing ->
+                    Expect.fail "expected plan of length 1; got Nothing"
+
+
+corpusSid144 : Test
+corpusSid144 =
+    test "corpus_sid_144" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ { value = Eight, suit = Diamond, originDeck = DeckTwo }, { value = Nine, suit = Diamond, originDeck = DeckOne }, { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = King, suit = Club, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckTwo }, { value = King, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Two, suit = Heart, originDeck = DeckTwo }, { value = Two, suit = Spade, originDeck = DeckTwo } ]
+                        , [ { value = Seven, suit = Heart, originDeck = DeckOne }, { value = Eight, suit = Club, originDeck = DeckTwo }, { value = Nine, suit = Heart, originDeck = DeckTwo }, { value = Ten, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Six, suit = Spade, originDeck = DeckOne }, { value = Six, suit = Heart, originDeck = DeckTwo }, { value = Six, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Ace, suit = Heart, originDeck = DeckTwo }, { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Three, suit = Spade, originDeck = DeckTwo }, { value = Four, suit = Spade, originDeck = DeckTwo }, { value = Five, suit = Spade, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckTwo }, { value = Seven, suit = Spade, originDeck = DeckTwo } ]
+                        , [ { value = Jack, suit = Spade, originDeck = DeckOne }, { value = Queen, suit = Spade, originDeck = DeckTwo }, { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckTwo } ]
+                        , [ { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Four, suit = Heart, originDeck = DeckOne }, { value = Five, suit = Spade, originDeck = DeckTwo }, { value = Six, suit = Heart, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckTwo }, { value = Eight, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Ace, suit = Club, originDeck = DeckTwo }, { value = Two, suit = Club, originDeck = DeckTwo }, { value = Three, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckTwo } ]
+                        , [ { value = Eight, suit = Heart, originDeck = DeckTwo }, { value = Nine, suit = Heart, originDeck = DeckOne }, { value = Ten, suit = Heart, originDeck = DeckOne }, { value = Jack, suit = Heart, originDeck = DeckTwo } ]
+                        , [ { value = Ten, suit = Heart, originDeck = DeckTwo }, { value = Jack, suit = Club, originDeck = DeckTwo }, { value = Queen, suit = Diamond, originDeck = DeckTwo } ]
+                        ]
+                    , trouble = [ [ { value = Five, suit = Club, originDeck = DeckTwo } ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Just plan ->
+                    List.length plan |> Expect.equal 2
+
+                Nothing ->
+                    Expect.fail "expected plan of length 2; got Nothing"
+
+
+corpusSid146 : Test
+corpusSid146 =
+    test "corpus_sid_146" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Two, suit = Club, originDeck = DeckTwo }, { value = Two, suit = Diamond, originDeck = DeckTwo } ]
+                        , [ { value = Two, suit = Spade, originDeck = DeckTwo }, { value = Three, suit = Spade, originDeck = DeckOne }, { value = Four, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Two, suit = Heart, originDeck = DeckTwo }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckTwo }, { value = Six, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Five, suit = Spade, originDeck = DeckTwo }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Five, suit = Diamond, originDeck = DeckTwo }, { value = Five, suit = Club, originDeck = DeckTwo } ]
+                        , [ { value = Four, suit = Spade, originDeck = DeckTwo }, { value = Five, suit = Spade, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Four, suit = Heart, originDeck = DeckTwo }, { value = Five, suit = Club, originDeck = DeckOne }, { value = Six, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Spade, originDeck = DeckTwo }, { value = Eight, suit = Heart, originDeck = DeckTwo } ]
+                        , [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Eight, suit = Diamond, originDeck = DeckOne }, { value = Nine, suit = Spade, originDeck = DeckOne }, { value = Ten, suit = Diamond, originDeck = DeckTwo }, { value = Jack, suit = Spade, originDeck = DeckOne }, { value = Queen, suit = Heart, originDeck = DeckTwo } ]
+                        , [ { value = Nine, suit = Spade, originDeck = DeckTwo }, { value = Nine, suit = Diamond, originDeck = DeckTwo }, { value = Nine, suit = Club, originDeck = DeckTwo }, { value = Nine, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Queen, suit = Diamond, originDeck = DeckTwo }, { value = King, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckTwo }, { value = Two, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Six, suit = Club, originDeck = DeckTwo }, { value = Seven, suit = Heart, originDeck = DeckOne }, { value = Eight, suit = Spade, originDeck = DeckOne }, { value = Nine, suit = Diamond, originDeck = DeckOne }, { value = Ten, suit = Spade, originDeck = DeckTwo }, { value = Jack, suit = Diamond, originDeck = DeckTwo }, { value = Queen, suit = Club, originDeck = DeckOne } ]
+                        ]
+                    , trouble = [ [ { value = Ace, suit = Club, originDeck = DeckTwo } ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Just plan ->
+                    List.length plan |> Expect.equal 5
+
+                Nothing ->
+                    Expect.fail "expected plan of length 5; got Nothing"
+
+
+corpusSid148 : Test
+corpusSid148 =
+    test "corpus_sid_148" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Ten, suit = Club, originDeck = DeckTwo }, { value = Ten, suit = Spade, originDeck = DeckTwo } ]
+                        , [ { value = Jack, suit = Club, originDeck = DeckOne }, { value = Jack, suit = Heart, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckTwo } ]
+                        , [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckTwo }, { value = Two, suit = Club, originDeck = DeckTwo }, { value = Three, suit = Heart, originDeck = DeckTwo } ]
+                        , [ { value = Queen, suit = Heart, originDeck = DeckTwo }, { value = Queen, suit = Diamond, originDeck = DeckTwo }, { value = Queen, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = King, suit = Heart, originDeck = DeckTwo }, { value = Ace, suit = Club, originDeck = DeckTwo }, { value = Two, suit = Diamond, originDeck = DeckTwo }, { value = Three, suit = Club, originDeck = DeckOne }, { value = Four, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckTwo }, { value = Eight, suit = Spade, originDeck = DeckTwo } ]
+                        , [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Club, originDeck = DeckTwo }, { value = Four, suit = Heart, originDeck = DeckTwo }, { value = Five, suit = Spade, originDeck = DeckOne }, { value = Six, suit = Heart, originDeck = DeckTwo }, { value = Seven, suit = Spade, originDeck = DeckTwo } ]
+                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Five, suit = Club, originDeck = DeckOne }, { value = Six, suit = Club, originDeck = DeckTwo }, { value = Seven, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Three, suit = Spade, originDeck = DeckTwo }, { value = Four, suit = Spade, originDeck = DeckOne }, { value = Five, suit = Spade, originDeck = DeckTwo }, { value = Six, suit = Spade, originDeck = DeckTwo } ]
+                        , [ { value = Two, suit = Heart, originDeck = DeckTwo }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Six, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Club, originDeck = DeckOne }, { value = Six, suit = Diamond, originDeck = DeckTwo } ]
+                        , [ { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Seven, suit = Club, originDeck = DeckTwo }, { value = Eight, suit = Club, originDeck = DeckOne }, { value = Nine, suit = Club, originDeck = DeckTwo } ]
+                        , [ { value = Ten, suit = Diamond, originDeck = DeckTwo }, { value = Ten, suit = Club, originDeck = DeckOne }, { value = Ten, suit = Spade, originDeck = DeckOne } ]
+                        ]
+                    , trouble = [ [ { value = Two, suit = Diamond, originDeck = DeckOne } ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Just plan ->
+                    List.length plan |> Expect.equal 1
+
+                Nothing ->
+                    Expect.fail "expected plan of length 1; got Nothing"
+
+
 deckIdentityMismatchInRemove : Test
 deckIdentityMismatchInRemove =
     test "deck_identity_mismatch_in_remove" <|
@@ -1426,7 +2324,28 @@ validExtendRunWith8H =
 suite : Test
 suite =
     describe "DSL conformance"
-        [ deckIdentityMismatchInRemove
+        [ corpusSid108
+        , corpusSid110
+        , corpusSid112
+        , corpusSid114
+        , corpusSid116
+        , corpusSid118
+        , corpusSid120
+        , corpusSid122
+        , corpusSid124
+        , corpusSid126
+        , corpusSid128
+        , corpusSid130
+        , corpusSid132
+        , corpusSid134
+        , corpusSid136
+        , corpusSid138
+        , corpusSid140
+        , corpusSid142
+        , corpusSid144
+        , corpusSid146
+        , corpusSid148
+        , deckIdentityMismatchInRemove
         , engulfGrowing2partialIntoLegalRun
         , freePullSingletonOntoRunGrowing
         , geometryCrowded

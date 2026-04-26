@@ -1,15 +1,67 @@
 # BFS Solver — Python ↔ Elm Alignment Report
 
-As of 2026-04-26. Covers `bfs_solver.py`, `beginner.py`,
-`verbs.py`, `agent_prelude.py` (Python) and the `Game.Agent.*`
-modules (Elm). Read-only inventory; no refactor proposed.
+**Original audit:** 2026-04-26 morning. Read-only inventory.
+**Migration completed:** 2026-04-26 afternoon. Most of the
+proposals below have landed.
 
-The Elm port (April 2026) was structured into seven small
-modules. Python's BFS code grew incrementally and mostly lives
-in `bfs_solver.py` (1048 lines), with primitives like
-`classify`, `partial_ok`, `neighbors`, and the five
-`_can_*_kind` functions still living in `beginner.py` (a
-legacy planner not on the BFS path otherwise).
+This document captures the audit state PLUS a "Status as of
+afternoon" header per section noting what's done. The
+sections themselves are kept verbatim for archaeology.
+
+## Status as of 2026-04-26 afternoon
+
+**Module split (Section 2):** ✓ done. The 5 proposed
+modules — `buckets.py`, `cards.py`, `move.py`,
+`enumerator.py`, `bfs.py` — landed in commit `87d14b9`.
+`bfs_solver.py` is gone (the shim retired in `87d14b9`'s
+follow-up). `beginner.py` keeps a thin re-export of the
+BFS-load-bearing primitives so legacy callers stay working.
+
+**Type aliases + dataclasses (Section 3):** ✓ mostly done.
+- 9 type aliases adopted in `buckets.py` (`Card`, `Stack`,
+  `Bucket`, `ShapeKey`, `Lineage`, `BucketName`, `Verb`,
+  `Side`, `MoveType`).
+- 5 per-move dataclasses adopted in `move.py`
+  (`ExtractAbsorbDesc`, `FreePullDesc`, `PushDesc`,
+  `SpliceDesc`, `ShiftDesc`). Migration in commits
+  `678a611` + `4923b9f` (match-statement dispatchers).
+- `Buckets` + `FocusedState` adopted as NamedTuples in
+  commit `d594c20`.
+- ~133 desc-reading sites converted from `desc["foo"]` to
+  `desc.foo`; 42 dispatch sites converted from
+  `desc["type"] == "X"` to `isinstance(desc, XDesc)`;
+  3 dispatchers converted to `match` statements.
+
+**Naming misalignments (Section 1):** ✓ high-leverage subset
+done. Commits `1cfa109` + `9a267e4` + `10ba752`:
+- `_can_*_kind` → `can_*` (drop `_kind` suffix).
+- `partial_ok` → `is_partial_ok`.
+- `describe_move` → `describe`.
+- `label_d` → `card_label`.
+- `_without` → `drop_at` (better than both `without` and
+  the proposed `withoutAt` — neither was self-explanatory).
+- `step_to_primitives` → `move_to_primitives`.
+- `_extract_absorb`/`_free_pull`/`_push`/`_splice`/`_shift`
+  → suffix `_prims` to match Elm's `*Prims` helpers.
+- `succ` → `successor`.
+
+Leading underscores stripped on ~22 promotable functions
+(commit predates the module split).
+
+**What didn't get renamed:**
+- `state_sig` ↔ Elm's `Bfs.signature`: name is fine in
+  both. `state_sig` is more domain-explicit when read
+  without module prefix.
+- `color` ↔ `cardColor` / `suitColor`: prose collision risk
+  (the word "color" appears in many comments) and three
+  files have their own local `color` definitions.
+  Cost-benefit didn't justify.
+- `RANKS`/`SUITS`/`RED` constants: Elm uses different
+  conventions (`allSuits`, `suitColor`); 1:1 mapping isn't
+  clean.
+
+## Original Section text follows
+---
 
 ---
 

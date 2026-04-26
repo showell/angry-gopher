@@ -14,10 +14,10 @@ server for later witness.
 
 The agent code follows a disciplined functional-Python style:
 pure helpers, lists treated as immutable values, state
-threaded explicitly. See `bfs_solver.claude` and
-`verbs.claude` for the conventions. The discipline is by
-convention, not by `frozen=True` types — Elm-readable shape,
-Python-idiomatic mechanics.
+threaded explicitly. See `bfs.claude` / `enumerator.claude`
+/ `move.claude` and `verbs.claude` for the conventions. The
+discipline is by convention, not by `frozen=True` types —
+Elm-readable shape, Python-idiomatic mechanics.
 
 ## Before reading the Python code
 
@@ -32,13 +32,21 @@ load-bearing for why this subtree is shaped the way it is.
 
 The Python agent has two pieces of strategy code:
 
-- **`bfs_solver.py` — the four-bucket BFS planner**,
-  current strategic brain (milestone 2026-04-25; focus rule
-  + SPLIT_OUT verb landed 2026-04-26). State is the 5-tuple
-  HELPER / TROUBLE / GROWING / COMPLETE / lineage; pure
-  BFS-by-length with iterative max-trouble cap. 21/21
-  corpus solved (3 plans STRICTLY shorter than the
-  pre-focus-rule baseline). See `bfs_solver.claude`.
+- **The four-bucket BFS planner**, current strategic brain
+  (milestone 2026-04-25; focus rule + SPLIT_OUT verb landed
+  2026-04-26 morning; module split + dataclass migration
+  landed 2026-04-26 afternoon). State is `FocusedState`
+  (Buckets + lineage NamedTuples); pure BFS-by-length with
+  iterative max-trouble cap. 21/21 corpus solved (3 plans
+  STRICTLY shorter than the pre-focus-rule baseline).
+  Lives in five focused modules mirroring Elm's
+  `Game.Agent.*` tree:
+  - `buckets.py` — state shape + state_sig + type aliases
+  - `cards.py` — card primitives + verb eligibility
+  - `move.py` — desc dataclasses + describe / narrate / hint
+  - `enumerator.py` — move generator + focus rule + filters
+  - `bfs.py` — search engine
+  See per-module `*.claude` sidecars.
 
 - **`beginner.py` — the IDDFS planner**, prior strategic
   brain.
@@ -82,9 +90,17 @@ Full sidecar coverage as of 2026-04-25. Run
 
 Ordered by "load-bearing first":
 
-- `bfs_solver.claude` — the four-bucket BFS planner.
-  Current strategic brain. **Start here for any
-  planner-side work.**
+- **BFS planner — five-module split** (post-2026-04-26).
+  **Start here for any planner-side work.**
+  - `bfs.claude` — the search engine (`solve`,
+    `bfs_with_cap`).
+  - `enumerator.claude` — INTRICATE move generator; focus
+    rule + doomed-third filter + extractable index.
+  - `move.claude` — Move desc dataclasses + describe /
+    narrate / hint.
+  - `buckets.claude` — state shape + `state_sig` + type
+    aliases.
+  - `cards.claude` — card primitives + verb eligibility.
 - `verbs.claude` — VERB → PRIMITIVE library; decomposes a
   BFS desc into UI primitives via content-based stack lookup.
 - `primitives.claude` — PRIMITIVE → GESTURE library;
@@ -122,9 +138,9 @@ Ordered by "load-bearing first":
 
 ### Corpus runners
 
-- `corpus_report.claude` — runs `bfs_solver` against
+- `corpus_report.claude` — runs `bfs.solve` against
   `corpus/sessions.txt` and emits a Markdown report.
-  Regenerable in ~3-5s.
+  Regenerable in ~1-2s.
 - `corpus_lab_catalog.claude` — same corpus → BOARD_LAB
   gallery JSON, with the BFS plan attached as
   `agent_solution` per puzzle.
@@ -136,8 +152,9 @@ Ordered by "load-bearing first":
 
 `dsl_planner.claude`, `dsl_player.claude`,
 `board_classifier.claude`, `dsl.claude` — peel/park/extend/
-dissolve/home verb vocabulary, pre-dates `bfs_solver`. Kept
-as a comparable baseline; not load-bearing.
+dissolve/home verb vocabulary, pre-dates the four-bucket
+BFS planner. Kept as a comparable baseline; not
+load-bearing.
 
 ### Legacy puzzle harness (queued for purge)
 
@@ -194,8 +211,10 @@ The Python suite (run each test file directly) covers:
 
 ## Validation methodology (preventing solver regressions)
 
-After any change touching `bfs_solver.py` / `verbs.py` /
-`primitives.py` / `agent_prelude.py`, run all of:
+After any change touching the BFS planner modules
+(`bfs.py` / `enumerator.py` / `move.py` / `cards.py` /
+`buckets.py`) or the `verbs.py` / `primitives.py` /
+`agent_prelude.py` layers, run all of:
 
 1. **Unit + conformance suite** — every `test_*.py` file:
    ```
@@ -286,5 +305,9 @@ shortened; full test suite green.
 - Decide the older DSL pipeline's fate
   (`dsl_planner.py` / `dsl_player.py` /
   `board_classifier.py`) — retire or keep as baseline.
-- Begin the Elm port — see `bfs_solver.claude` § Port to
-  Elm.
+- The Elm port (`games/lynrummy/elm/src/Game/Agent/`) is
+  feature-complete on the correctness/perf axis as of
+  2026-04-26. Remaining drift is renderer-only:
+  `narrate` / `hint` aren't ported, and the
+  `solve_state_with_descs` diagnostics callback isn't
+  ported. Neither is load-bearing.
