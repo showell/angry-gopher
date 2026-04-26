@@ -178,11 +178,40 @@ def _peelable_index(helper):
     return out
 
 
+def _extractable_index(helper):
+    """One-pass scan over HELPER, classifying each stack and
+    determining which (helper_idx, ci, verb) tuples are
+    legal extracts. Maps `(value, suit)` shape →
+    list of (helper_idx, ci, verb).
+
+    Built once per state. The absorber loop inverts the old
+    "for-each-card check shape" pattern into a direct
+    "for-each-target-shape lookup" — helpers whose cards
+    aren't neighbors of any absorber are never visited.
+
+    classify() runs once per helper here, not once per
+    (helper × absorber) as before. _verb_for runs once per
+    (helper × ci), not once per (absorber × helper × ci).
+    """
+    out = {}
+    for hi, src in enumerate(helper):
+        kind = classify(src)
+        n = len(src)
+        for ci, c in enumerate(src):
+            verb = _verb_for(kind, n, ci)
+            if verb is None:
+                continue
+            out.setdefault((c[0], c[1]), []).append(
+                (hi, ci, verb))
+    return out
+
+
 def enumerate_moves(state):
     """Yield (description_dict, new_state) for every legal
     1-line extension."""
     helper, trouble, growing, complete = state
     peelable = _peelable_index(helper)
+    extractable = _extractable_index(helper)
 
     # All targets for absorption (move type a). Each entry:
     # (bucket_name, idx_in_bucket, target_stack).
@@ -195,16 +224,12 @@ def enumerate_moves(state):
         # Neighbor shapes for this absorber.
         shapes = set().union(*(neighbors(c) for c in target))
 
-        # Source: HELPER stack via extract.
-        for hi, src in enumerate(helper):
-            kind = classify(src)
-            n = len(src)
-            for ci, c in enumerate(src):
-                if (c[0], c[1]) not in shapes:
-                    continue
-                verb = _verb_for(kind, n, ci)
-                if verb is None:
-                    continue
+        # Source: HELPER stack via extract. Inverted loop —
+        # iterate the ABSORBER's neighbor shapes and look up
+        # extractable cards directly, instead of walking every
+        # helper × position to filter.
+        for shape in shapes:
+            for hi, ci, verb in extractable.get(shape, ()):
                 new_helper, spawned, ext_card, source = \
                     _do_extract(helper, hi, ci, verb)
                 for side in ("right", "left"):
