@@ -5,6 +5,9 @@
 module Game.DslConformanceTest exposing (suite)
 
 import Expect
+import Game.Agent.Buckets as AgentBuckets exposing (Buckets)
+import Game.Agent.Enumerator as AgentEnumerator
+import Game.Agent.Move as AgentMove exposing (Move(..))
 import Game.BoardGeometry exposing (BoardBounds)
 import Game.Card exposing (Card, CardValue(..), OriginDeck(..), Suit(..))
 import Game.CardStack
@@ -94,16 +97,57 @@ engulfGrowing2partialIntoLegalRun : Test
 engulfGrowing2partialIntoLegalRun =
     test "engulf_growing_2partial_into_legal_run" <|
         \_ ->
-            -- Elm planner not yet ported (enumerate_moves)
-            Expect.pass
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ { value = Three, suit = Spade, originDeck = DeckOne }, { value = Four, suit = Diamond, originDeck = DeckOne }, { value = Five, suit = Club, originDeck = DeckOne } ]
+                        ]
+                    , trouble = []
+                    , growing = [ [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Two, suit = Diamond, originDeck = DeckOne } ]
+                        ]
+                    , complete = []
+                    }
+
+                moves =
+                    AgentEnumerator.enumerateMoves state
+            in
+            if List.any (\( m, _ ) -> case m of
+                    Push _ -> True
+
+                    _ -> False) moves then
+                Expect.pass
+
+            else
+                Expect.fail ("no push move yielded; got " ++ String.fromInt (List.length moves) ++ " moves")
 
 
 freePullSingletonOntoRunGrowing : Test
 freePullSingletonOntoRunGrowing =
     test "free_pull_singleton_onto_run_growing" <|
         \_ ->
-            -- Elm planner not yet ported (enumerate_moves)
-            Expect.pass
+            let
+                state : Buckets
+                state =
+                    { helper = []
+                    , trouble = [ [ { value = Four, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Five, suit = Heart, originDeck = DeckOne } ]
+                        ]
+                    , growing = [ [ { value = Six, suit = Heart, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ]
+                        ]
+                    , complete = []
+                    }
+
+                moves =
+                    AgentEnumerator.enumerateMoves state
+            in
+            if List.any (\( m, _ ) -> case m of
+                    FreePull _ -> True
+
+                    _ -> False) moves then
+                Expect.pass
+
+            else
+                Expect.fail ("no free_pull move yielded; got " ++ String.fromInt (List.length moves) ++ " moves")
 
 
 geometryCrowded : Test
@@ -917,32 +961,113 @@ peelLeftEdgeIntoSingletonTrouble : Test
 peelLeftEdgeIntoSingletonTrouble =
     test "peel_left_edge_into_singleton_trouble" <|
         \_ ->
-            -- Elm planner not yet ported (enumerate_moves)
-            Expect.pass
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Heart, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne }, { value = Eight, suit = Heart, originDeck = DeckOne } ]
+                        ]
+                    , trouble = [ [ { value = Four, suit = Heart, originDeck = DeckOne } ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                moves =
+                    AgentEnumerator.enumerateMoves state
+            in
+            if List.any (\( m, _ ) -> case m of
+                    ExtractAbsorb _ -> True
+
+                    _ -> False) moves then
+                Expect.pass
+
+            else
+                Expect.fail ("no extract_absorb move yielded; got " ++ String.fromInt (List.length moves) ++ " moves")
 
 
 pushPartialPairOntoHelperRun : Test
 pushPartialPairOntoHelperRun =
     test "push_partial_pair_onto_helper_run" <|
         \_ ->
-            -- Elm planner not yet ported (enumerate_moves)
-            Expect.pass
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ { value = Nine, suit = Club, originDeck = DeckOne }, { value = Ten, suit = Club, originDeck = DeckOne }, { value = Jack, suit = Club, originDeck = DeckOne } ]
+                        ]
+                    , trouble = [ [ { value = Queen, suit = Club, originDeck = DeckOne }, { value = King, suit = Club, originDeck = DeckOne } ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                moves =
+                    AgentEnumerator.enumerateMoves state
+            in
+            if List.any (\( m, _ ) -> case m of
+                    Push _ -> True
+
+                    _ -> False) moves then
+                Expect.pass
+
+            else
+                Expect.fail ("no push move yielded; got " ++ String.fromInt (List.length moves) ++ " moves")
 
 
 shiftEightClubsPopsJackClubs : Test
 shiftEightClubsPopsJackClubs =
     test "shift_eight_clubs_pops_jack_clubs" <|
         \_ ->
-            -- Elm planner not yet ported (enumerate_moves)
-            Expect.pass
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ { value = Nine, suit = Club, originDeck = DeckOne }, { value = Ten, suit = Club, originDeck = DeckOne }, { value = Jack, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Eight, suit = Diamond, originDeck = DeckOne }, { value = Eight, suit = Spade, originDeck = DeckOne }, { value = Eight, suit = Heart, originDeck = DeckOne }, { value = Eight, suit = Club, originDeck = DeckOne } ]
+                        ]
+                    , trouble = [ [ { value = Queen, suit = Heart, originDeck = DeckOne } ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                moves =
+                    AgentEnumerator.enumerateMoves state
+            in
+            if List.any (\( m, _ ) -> case m of
+                    Shift _ -> True
+
+                    _ -> False) moves then
+                Expect.pass
+
+            else
+                Expect.fail ("no shift move yielded; got " ++ String.fromInt (List.length moves) ++ " moves")
 
 
 spliceDup5dIntoPureDiamonds : Test
 spliceDup5dIntoPureDiamonds =
     test "splice_dup_5d_into_pure_diamonds" <|
         \_ ->
-            -- Elm planner not yet ported (enumerate_moves)
-            Expect.pass
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Diamond, originDeck = DeckOne }, { value = Five, suit = Diamond, originDeck = DeckOne }, { value = Six, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Eight, suit = Diamond, originDeck = DeckOne } ]
+                        ]
+                    , trouble = [ [ { value = Five, suit = Diamond, originDeck = DeckTwo } ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                moves =
+                    AgentEnumerator.enumerateMoves state
+            in
+            if List.any (\( m, _ ) -> case m of
+                    Splice _ -> True
+
+                    _ -> False) moves then
+                Expect.pass
+
+            else
+                Expect.fail ("no splice move yielded; got " ++ String.fromInt (List.length moves) ++ " moves")
 
 
 turnCompleteCleanBoard : Test

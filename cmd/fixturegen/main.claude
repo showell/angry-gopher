@@ -31,10 +31,12 @@ are build artifacts.
   board, assert every resulting stack classifies cleanly
   (Elm + Python).
 - `enumerate_moves` — given a 4-bucket state
-  (helper / trouble / growing / complete), assert
-  `bfs_solver._enumerate_moves` yields at least one move of
-  the named `expect.yields` type (Python today; Elm stubbed
-  with `Expect.pass` until the planner ports). Successor to
+  (helper / trouble / growing / complete), assert the
+  planner's `enumerateMoves` yields at least one move of the
+  named `expect.yields` type. Live on both Python (via
+  `bfs_solver._enumerate_moves`) and Elm (via
+  `Game.Agent.Enumerator.enumerateMoves`) as of the
+  ELM_AGENT_PORT phase 2 landing 2026-04-25. Successor to
   the trick-invariant scenarios as those retire.
 - `trick_first_play` — legacy; Elm still honors it, Go no
   longer has tricks.
