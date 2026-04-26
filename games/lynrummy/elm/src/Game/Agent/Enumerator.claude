@@ -18,8 +18,12 @@ plan.
 ## The five move types (must touch a trouble card)
 
 - `(a)` **Absorb a neighbor into TROUBLE/GROWING.**
-  - Source = HELPER stack via extract verb (peel/pluck/yank/
-    steal). Emits `ExtractAbsorb`.
+  - Source = HELPER stack via extract verb (peel / pluck /
+    yank / steal / split_out). Emits `ExtractAbsorb`. The
+    five extract verbs together cover every card on every
+    helper — `SplitOut` (added 2026-04-26) closes the
+    interior-of-length-3-run gap that left earlier ports
+    unable to extract certain interior cards.
   - Source = TROUBLE singleton (free pull). Emits `FreePull`.
 - `(b)` **Push a TROUBLE 1- or 2-partial onto a HELPER**
   stack so the helper grows. Emits `Push`.
@@ -30,6 +34,56 @@ plan.
   pure/rb run, splitting it cleanly. Emits `Splice`.
 - `(d)` **Shift**: peel a HELPER donor card to replace the
   stolen end of a length-3 run; no spawn. Emits `Shift`.
+
+## Doomed-third filtering (OPTIMIZE_PYTHON, ported 2026-04-26)
+
+Two complementary filters keep the BFS from chasing futile
+partials:
+
+- `completionInventory state` — `Set ShapeKey` of
+  `(value, suit)` shapes available as candidate "third
+  cards": every helper card + every trouble singleton.
+  Excludes growing/complete (sealed) and trouble 2-partials
+  (committed).
+- `completionShapes partial` — shapes that would extend a
+  length-2 partial into a legal length-3 stack.
+- `hasDoomedThird partial inventory` — true iff no
+  completion candidate exists.
+- `admissiblePartial merged inventory` — combined gate:
+  partial-OK + (if length-2) not-doomed. Used at every
+  absorb call site (extract_absorb, free_pull, shift).
+
+**Filter 1 (merge time):** every length-2 absorb result
+goes through `admissiblePartial`. Skips moves that produce
+dead-end partials.
+
+**Filter 2 (state level, top of `enumerateMoves`):** if any
+existing growing 2-partial has no completion candidate in
+this state's inventory, the function short-circuits to
+`[]`. Catches partials whose candidates were consumed
+elsewhere mid-search.
+
+The `inventory` set is computed once per state and threaded
+through to every absorb-emit site.
+
+## Loop inversion via `extractableIndex` (OPTIMIZE_PYTHON, ported 2026-04-26)
+
+Python's pre-2026-04-25 absorb loop scanned every helper ×
+position and filtered by neighbor-shape match. The
+inversion replaces that with `_extractable_index : helper
+-> Map (value, suit) [(hi, ci, verb)]` built once per
+state. The absorb loop then iterates over each absorber's
+neighbor shapes and looks up matching helper positions
+directly. `classify` runs once per helper (not per helper ×
+absorber); `verbFor` runs once per (helper × ci).
+
+Elm port: `extractableIndex : List Stack -> Dict ShapeKey
+(List ExtractEntry)` built at the top of `enumerateMoves`,
+threaded alongside `inventory` through the absorb sites.
+Shift's donor lookup also reads the index (filtered to
+`verb == Peel`) instead of building a separate
+`peelableCards` list, mirroring Python's 2026-04-26
+consolidation.
 
 ## Pure-FP discipline
 

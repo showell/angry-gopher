@@ -41,16 +41,19 @@ type SourceBucket
     | Growing
 
 
-{-| Physical-isolation pattern for an extract. All four share
+{-| Physical-isolation pattern for an extract. All five share
 the `ExtractAbsorb` move shape — they differ in which
 spawned pieces qualify as helpers vs trouble (logical-layer
-detail handled by the enumerator).
+detail handled by the enumerator). `SplitOut` was added
+2026-04-26 to fill the interior-of-length-3-run gap so every
+helper card is reachable for absorption.
 -}
 type ExtractVerb
     = Peel
     | Pluck
     | Yank
     | Steal
+    | SplitOut
 
 
 {-| For `Shift`: which end of the source's length-3 run gets
@@ -219,6 +222,9 @@ verbStr v =
 
         Steal ->
             "steal"
+
+        SplitOut ->
+            "split_out"
 
 
 bucketStr : SourceBucket -> String

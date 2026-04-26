@@ -1,6 +1,6 @@
 # Bfs.elm — WORKHORSE, the planner
 
-The Elm port of Python's `bfs_solver._bfs_with_cap` and
+The Elm port of Python's `bfs_solver.bfs_with_cap` and
 `solve`. Pure BFS by program length, with an outer iterative
 cap on total `troubleCount`. The first cap to find a plan
 returns the shortest plan respecting that cap.
@@ -8,10 +8,12 @@ returns the shortest plan respecting that cap.
 ## Status
 
 - **Label:** WORKHORSE.
-- **Mirrors:** `python/bfs_solver.py` lines ~510–610.
+- **Mirrors:** `python/bfs_solver.py` `bfs_with_cap` +
+  `solve` family (single unified engine since 2026-04-26).
 - **Divergences:** Python uses a generator-driven loop with
   a `set` for dedup. Elm uses a `Set String` keyed on a
-  signature function that's stable under bucket reordering.
+  signature function. Python carries diagnostics +
+  `verbose` flags through the engine; Elm doesn't (yet).
 
 ## Public API
 
@@ -21,19 +23,41 @@ returns the shortest plan respecting that cap.
   outer cap.
 - `Plan` (type alias) — `List Move`.
 
+The public API takes the bare 4-tuple `Buckets`. Internally
+the BFS works in the focused 5-tuple `FocusedState` (buckets
++ lineage). `solve` builds the initial lineage via
+`Enumerator.initialLineage`.
+
 ## Inner BFS
 
-`bfsWithCap : Int -> Buckets -> Maybe Plan`. Returns the
-shortest plan whose every state stays under
-`troubleCount <= cap`, or Nothing if exhausted.
+`bfsWithCap : Int -> FocusedState -> Maybe Plan`. Returns
+the shortest plan whose every state stays under
+`troubleCount <= cap`, or Nothing if exhausted. Each
+expansion calls `Enumerator.enumerateFocused`, which
+applies the focus rule + lineage update.
+
+## Focus rule (ported from Python 2026-04-26)
+
+Each state carries a `lineage` queue of in-progress entries
+(originally `trouble ++ growing` in board order). The BFS
+only yields moves that grow or consume `lineage[0]`, i.e.
+the focus. The rule normalizes plan permutations to one
+canonical "oldest-first" ordering — equivalent reorderings
+collapse onto one BFS path, big pruning win.
+
+The seen-set signature includes lineage because two states
+with identical buckets but a different focus are NOT the
+same state: their admissible moves differ. Lineage entries
+are encoded in original order (no sorting between entries),
+while individual stack contents are still canonicalized.
 
 ## State signature
 
-`signature : Buckets -> String` — bucket order matters
+`signature : FocusedState -> String` — bucket order matters
 (HELPER vs COMPLETE differ in role) but stack order within a
-bucket doesn't. The sig sorts each bucket's stacks (and
-each stack's cards) before serializing. Two states that
-differ only in stack-shuffle hash to the same signature.
+bucket doesn't, so each bucket's stacks are sorted (and each
+stack's cards are sorted) before serializing. Lineage IS
+order-load-bearing — its entries are encoded in queue order.
 
 ## Within-level sort
 
@@ -44,7 +68,9 @@ are reachable).
 
 ## Pointers
 
-- Python source: `python/bfs_solver.py` `_bfs_with_cap`,
-  `solve`, `_state_sig`.
+- Python source: `python/bfs_solver.py` `bfs_with_cap`,
+  `solve_state_with_descs`, `state_sig`.
 - Tests: `tests/Game/Agent/BfsTest.elm`. Reuses some
   hand-built states from `EnumeratorTest.elm`.
+- Sibling memory: `project_focus_rule.md`,
+  `project_split_out_verb.md`.

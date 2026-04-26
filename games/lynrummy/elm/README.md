@@ -110,20 +110,42 @@ scenarios live on both sides.
 
 **Drift since the port (Python-side OPTIMIZE_PYTHON work,
 2026-04-25 / 26).** Python evolved further while the Elm
-agent stayed at the phase-5 snapshot. The following are
-not yet ported:
+agent stayed at the phase-5 snapshot. Status as of
+2026-04-26:
 
-- **Loop inversion** in `enumerate_moves` via
-  `_extractable_index` — Python's enumerator is now ~35%
-  faster per call. Elm's `Enumerator.elm` retains the
-  pre-inversion shape.
-- **Doomed-third filter** (merge-time) — Python rejects
-  length-2 merges with no completion candidate in the
-  board's (helper + trouble-singletons) inventory.
-  Cumulative speedup on captured worst cases: 2–55×.
-- **State-level doomed-growing filter** — Python yields
-  no moves from any state where an existing growing
-  2-partial has lost all completion candidates.
+**Already ported (2026-04-26):**
+
+- **`SplitOut` extract verb** — fifth verb, fills the
+  interior-of-length-3-run gap so every helper card is
+  reachable for absorption. Test:
+  `tests/Game/Agent/EnumeratorTest.elm`.
+- **Doomed-third filter** (merge-time) — `admissiblePartial`
+  in `Enumerator.elm` rejects length-2 merges whose
+  completion candidates are absent from the board's
+  inventory.
+- **State-level doomed-growing filter** — `enumerateMoves`
+  short-circuits to `[]` when any growing 2-partial has
+  no completion candidate left.
+- **Focus rule + lineage tracking** — `FocusedState =
+  { buckets, lineage }`; the BFS engine wraps every state
+  with a lineage queue (initialized as `trouble ++
+  growing`) and only yields moves that grow or consume
+  `lineage[0]`. Helpers `moveTouchesFocus`,
+  `updateLineage`, `enumerateFocused`, `initialLineage`
+  in `Enumerator.elm`. Bfs sig encodes lineage in queue
+  order. Public `solve : Buckets -> Maybe Plan` API
+  unchanged — the focused state is built internally.
+- **Loop inversion via `extractableIndex`** — built once
+  per state from the helper bucket; absorb path iterates
+  the absorber's neighbor shapes and looks up matching
+  helper positions in `O(1)` per shape rather than
+  scanning every (helper × ci) and filtering. Shift's
+  donor lookup also reads the index (filtered to peels)
+  instead of building a separate peelable index. Mirrors
+  Python's 2026-04-26 consolidation; ~75 lines of
+  `peelableCards` + `runEnds` retired.
+
+**Not yet ported:**
 - **Budget cap drop** — `_PROJECTION_MAX_STATES` 200000
   → 5000 in Python after the filters made the cap headroom
   unnecessary.
@@ -162,8 +184,6 @@ verify Elm conformance stubs flip to live where applicable.
 
 ## TODO (stub-level)
 
-- Port the OPTIMIZE_PYTHON-era filters to Elm (doomed-
-  third, state-level, loop inversion).
 - Port `narrate` / `hint` renderers; flip the Elm
   conformance stubs to live assertions.
 - Document the replay state machine (`PreRoll` / `Animating`

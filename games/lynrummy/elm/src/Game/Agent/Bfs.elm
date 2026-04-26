@@ -10,15 +10,21 @@ module Game.Agent.Bfs exposing
 shortest plan respecting that cap.
 
 Pure functional implementation. The seen-set is `Set String`
-keyed on a signature function that's stable under stack
-ordering within each bucket.
+keyed on a signature that includes both the canonical bucket
+shape AND the lineage queue — two states with identical
+buckets but a different focus are NOT the same state under
+the focus rule.
 
 -}
 
 import Game.Agent.Buckets as Buckets exposing (Buckets, Stack)
 import Game.Agent.Enumerator as Enumerator
+    exposing
+        ( FocusedState
+        , Lineage
+        )
 import Game.Agent.Move exposing (Move)
-import Game.Card exposing (Card, originDeckToInt, suitToInt, cardValueToInt)
+import Game.Card exposing (Card, cardValueToInt, originDeckToInt, suitToInt)
 import Set exposing (Set)
 
 
@@ -35,11 +41,17 @@ solve =
 
 
 solveWithCap : Int -> Buckets -> Maybe Plan
-solveWithCap maxOuter initial =
+solveWithCap maxOuter buckets =
+    let
+        initial =
+            { buckets = buckets
+            , lineage = Enumerator.initialLineage buckets
+            }
+    in
     solveLoop 1 maxOuter initial
 
 
-solveLoop : Int -> Int -> Buckets -> Maybe Plan
+solveLoop : Int -> Int -> FocusedState -> Maybe Plan
 solveLoop cap maxOuter initial =
     if cap > maxOuter then
         Nothing
@@ -58,12 +70,12 @@ state filtered against the cap. Within each level, frontier
 is sorted by trouble count so victory-adjacent states are
 expanded earlier.
 -}
-bfsWithCap : Int -> Buckets -> Maybe Plan
+bfsWithCap : Int -> FocusedState -> Maybe Plan
 bfsWithCap cap initial =
-    if Buckets.troubleCount initial > cap then
+    if Buckets.troubleCount initial.buckets > cap then
         Nothing
 
-    else if Buckets.isVictory initial then
+    else if Buckets.isVictory initial.buckets then
         Just []
 
     else
@@ -75,7 +87,7 @@ bfsWithCap cap initial =
 
 
 type alias Frontier =
-    List ( Buckets, Plan )
+    List ( FocusedState, Plan )
 
 
 bfsStep : Int -> Frontier -> Set String -> Maybe Plan
@@ -87,7 +99,7 @@ bfsStep cap currentLevel seen =
         let
             sorted =
                 List.sortBy
-                    (\( s, _ ) -> Buckets.troubleCount s)
+                    (\( s, _ ) -> Buckets.troubleCount s.buckets)
                     currentLevel
 
             -- Walk the level, accumulating next-level entries
@@ -138,7 +150,7 @@ the updated (acc, seen) pair.
 -}
 expandState :
     Int
-    -> Buckets
+    -> FocusedState
     -> Plan
     -> Set String
     -> Frontier
@@ -146,7 +158,7 @@ expandState :
 expandState cap state program seen acc =
     let
         moves =
-            Enumerator.enumerateMoves state
+            Enumerator.enumerateFocused state
     in
     expandMoves cap program moves seen acc
 
@@ -154,7 +166,7 @@ expandState cap state program seen acc =
 expandMoves :
     Int
     -> Plan
-    -> List ( Move, Buckets )
+    -> List ( Move, FocusedState )
     -> Set String
     -> Frontier
     -> StepResult
@@ -164,7 +176,7 @@ expandMoves cap program moves seen acc =
             Continue acc seen
 
         ( move, newState ) :: rest ->
-            if Buckets.troubleCount newState > cap then
+            if Buckets.troubleCount newState.buckets > cap then
                 expandMoves cap program rest seen acc
 
             else
@@ -183,7 +195,7 @@ expandMoves cap program moves seen acc =
                         newProgram =
                             program ++ [ move ]
                     in
-                    if Buckets.isVictory newState then
+                    if Buckets.isVictory newState.buckets then
                         Found newProgram
 
                     else
@@ -200,35 +212,49 @@ expandMoves cap program moves seen acc =
 -- ============================================================
 
 
-{-| A canonical string signature. Bucket order matters; stack
-order within a bucket does NOT — sigs sort each bucket's
-stacks (each stack as its own sorted list) before joining.
+{-| A canonical string signature for the focused state.
+Bucket order matters; stack order within a bucket does NOT
+— sigs sort each bucket's stacks (each stack as its own
+sorted list) before joining. Lineage IS order-load-bearing
+(the focus and the queue order both affect which moves are
+admissible) so it's encoded in original order.
 
-Format: `H<helper> | T<trouble> | G<growing> | C<complete>`
-where each bucket section sorts its stacks and joins them
-with `;`, and each stack joins its sorted cards with `,`.
+Format:
+`H<helper> | T<trouble> | G<growing> | C<complete> | L<lineage>`
 
 -}
-signature : Buckets -> String
-signature { helper, trouble, growing, complete } =
+signature : FocusedState -> String
+signature { buckets, lineage } =
     String.join " | "
-        [ "H" ++ encodeBucket helper
-        , "T" ++ encodeBucket trouble
-        , "G" ++ encodeBucket growing
-        , "C" ++ encodeBucket complete
+        [ "H" ++ encodeBucket buckets.helper
+        , "T" ++ encodeBucket buckets.trouble
+        , "G" ++ encodeBucket buckets.growing
+        , "C" ++ encodeBucket buckets.complete
+        , "L" ++ encodeLineage lineage
         ]
 
 
 encodeBucket : List Stack -> String
 encodeBucket stacks =
     stacks
-        |> List.map encodeStack
+        |> List.map encodeStackSorted
         |> List.sort
         |> String.join ";"
 
 
-encodeStack : Stack -> String
-encodeStack stack =
+encodeLineage : Lineage -> String
+encodeLineage lineage =
+    -- Lineage order is significant; do NOT sort the entries
+    -- against each other. Sort cards inside each stack only
+    -- (so that a stack's representation is canonical even
+    -- though the queue order is preserved).
+    lineage
+        |> List.map encodeStackSorted
+        |> String.join ";"
+
+
+encodeStackSorted : Stack -> String
+encodeStackSorted stack =
     stack
         |> List.map encodeCard
         |> List.sort

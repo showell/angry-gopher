@@ -36,11 +36,14 @@ verb ("absorb onto trouble" vs "absorb onto growing").
 
 ## Verb subtype on extract_absorb
 
-`ExtractVerb = Peel | Pluck | Yank | Steal` — physical
-isolation pattern. Distinct from the Move sum type itself
-because all four share the `extract_absorb` shape; they
-differ only in which spawned pieces qualify as helpers vs
-trouble.
+`ExtractVerb = Peel | Pluck | Yank | Steal | SplitOut` —
+physical isolation pattern. Distinct from the Move sum type
+itself because all five share the `extract_absorb` shape;
+they differ only in which spawned pieces qualify as helpers
+vs trouble. `SplitOut` (added 2026-04-26) extracts the
+interior of a length-3 run; both halves spawn as singleton
+TROUBLE fragments. Closes the only extraction gap in the
+verb vocabulary.
 
 ## Pointers
 

@@ -1,4 +1,12 @@
-module Game.Agent.Enumerator exposing (enumerateMoves)
+module Game.Agent.Enumerator exposing
+    ( FocusedState
+    , Lineage
+    , enumerateFocused
+    , enumerateMoves
+    , initialLineage
+    , moveTouchesFocus
+    , updateLineage
+    )
 
 {-| The BFS move generator. Given a `Buckets` state, returns
 every legal next-state move with the resulting buckets.
@@ -33,14 +41,18 @@ import Game.Card as Card
         , Suit
         , allSuits
         , cardColor
+        , cardValueToInt
         , suitColor
+        , suitToInt
         )
+import Dict exposing (Dict)
 import Game.StackType as StackType
     exposing
         ( CardStackType(..)
         , predecessor
         , successor
         )
+import Set exposing (Set)
 
 
 
@@ -52,14 +64,43 @@ import Game.StackType as StackType
 {-| All legal next moves from `state`. Each entry is
 `(move, postState)`. The order matches Python's enumeration
 order so within-level sort produces identical BFS behavior.
+
+The state-level doomed-growing filter (top of the function)
+short-circuits to `[]` if any growing 2-partial has no
+completion candidate left on the extractable board. The
+merge-time doomed-third filter (in `admissiblePartial`)
+catches the same condition for newly-formed length-2
+absorbs. Together they prune dead-ended search branches so
+the BFS doesn't waste expansions on doomed states.
+
 -}
 enumerateMoves : Buckets -> List ( Move, Buckets )
 enumerateMoves state =
-    extractAndAbsorbMoves state
-        ++ shiftMoves state
-        ++ spliceMoves state
-        ++ pushMoves state
-        ++ engulfMoves state
+    let
+        inventory =
+            completionInventory state
+
+        hasDoomedGrowing =
+            state.growing
+                |> List.any
+                    (\g ->
+                        List.length g == 2
+                            && hasDoomedThird g inventory
+                    )
+    in
+    if hasDoomedGrowing then
+        []
+
+    else
+        let
+            extractable =
+                extractableIndex state.helper
+        in
+        extractAndAbsorbMoves state inventory extractable
+            ++ shiftMoves state inventory extractable
+            ++ spliceMoves state
+            ++ pushMoves state
+            ++ engulfMoves state
 
 
 
@@ -110,6 +151,9 @@ verbFor kind n ci =
 
     else if canSteal kind n ci then
         Just Steal
+
+    else if canSplitOut kind n ci then
+        Just SplitOut
 
     else
         Nothing
@@ -175,6 +219,16 @@ canSteal kind n ci =
                 False
 
 
+{-| `SplitOut` extracts the interior of a length-3 run,
+splitting it into two singleton TROUBLE fragments. Closes
+the only extraction gap in the verb vocabulary so every
+helper card is reachable for absorption. Added 2026-04-26.
+-}
+canSplitOut : Kind -> Int -> Int -> Bool
+canSplitOut kind n ci =
+    isRunKind kind && n == 3 && ci == 1
+
+
 isRunKind : Kind -> Bool
 isRunKind kind =
     case kind of
@@ -186,6 +240,79 @@ isRunKind kind =
 
         _ ->
             False
+
+
+
+-- ============================================================
+-- Extractable index (loop inversion, OPTIMIZE_PYTHON)
+-- ============================================================
+
+
+{-| A single extractable position in the helper bucket: which
+helper stack (`hi`), which card index (`ci`), and which verb
+the extraction would use.
+-}
+type alias ExtractEntry =
+    { hi : Int, ci : Int, verb : ExtractVerb }
+
+
+{-| Maps every shape `(value, suit)` reachable as an extract to
+the list of helper positions that can produce it. Built once
+per state. The absorb loop iterates the absorber's neighbor
+shapes and looks up matches directly, instead of scanning
+every (helper × position) and filtering by shape.
+-}
+type alias ExtractableIndex =
+    Dict ShapeKey (List ExtractEntry)
+
+
+extractableIndex : List Stack -> ExtractableIndex
+extractableIndex helper =
+    helper
+        |> List.indexedMap Tuple.pair
+        |> List.foldl addHelperEntries Dict.empty
+
+
+addHelperEntries :
+    ( Int, Stack )
+    -> ExtractableIndex
+    -> ExtractableIndex
+addHelperEntries ( hi, src ) acc =
+    let
+        kind =
+            classify src
+
+        n =
+            List.length src
+    in
+    src
+        |> List.indexedMap Tuple.pair
+        |> List.foldl
+            (\( ci, c ) inner ->
+                case verbFor kind n ci of
+                    Nothing ->
+                        inner
+
+                    Just verb ->
+                        let
+                            key =
+                                ( cardValueToInt c.value, suitToInt c.suit )
+
+                            entry =
+                                { hi = hi, ci = ci, verb = verb }
+                        in
+                        Dict.update key
+                            (\maybeList ->
+                                case maybeList of
+                                    Just xs ->
+                                        Just (xs ++ [ entry ])
+
+                                    Nothing ->
+                                        Just [ entry ]
+                            )
+                            inner
+            )
+            acc
 
 
 
@@ -280,20 +407,14 @@ extractPieces source ci verb =
             ( [ List.take ci source, List.drop (ci + 1) source ], [] )
 
         Yank ->
-            let
-                left =
-                    List.take ci source
+            yankShape source ci
 
-                right =
-                    List.drop (ci + 1) source
-
-                helpers =
-                    List.filter (\s -> List.length s >= 3) [ left, right ]
-
-                spawned =
-                    List.filter (\s -> List.length s < 3) [ left, right ]
-            in
-            ( helpers, spawned )
+        SplitOut ->
+            -- Same physical decomposition as yank (left+right
+            -- halves), but constrained to n=3, ci=1 where both
+            -- halves are length-1 singletons. Reusing the yank
+            -- shape keeps the bookkeeping uniform.
+            yankShape source ci
 
         Steal ->
             let
@@ -319,6 +440,369 @@ extractPieces source ci verb =
                                 List.take (List.length source - 1) source
                     in
                     ( [], [ remnant ] )
+
+
+{-| Shared decomposition for verbs that split the source
+around `ci` and route each half by length: length-3+ stays
+in HELPER, length-≤2 falls to TROUBLE. Used by both Yank
+(any qualifying interior) and SplitOut (n=3, ci=1).
+-}
+yankShape : Stack -> Int -> ( List Stack, List Stack )
+yankShape source ci =
+    let
+        halves =
+            [ List.take ci source, List.drop (ci + 1) source ]
+    in
+    ( List.filter (\s -> List.length s >= 3) halves
+    , List.filter (\s -> List.length s < 3) halves
+    )
+
+
+
+-- ============================================================
+-- Doomed-third filter (OPTIMIZE_PYTHON, 2026-04-25)
+-- ============================================================
+
+
+{-| Encode `(value, suit)` as a comparable Int pair so we can
+keep the inventory in `Set` for O(log n) membership.
+-}
+type alias ShapeKey =
+    ( Int, Int )
+
+
+shapeOfCard : Card -> ShapeKey
+shapeOfCard c =
+    ( cardValueToInt c.value, suitToInt c.suit )
+
+
+{-| Set of `(value, suit)` shapes available as candidate
+"third cards" anywhere on the (extractable) board: every
+helper card plus every trouble singleton. Excludes growing /
+complete (sealed) and trouble 2-partials (committed).
+-}
+completionInventory : Buckets -> Set ShapeKey
+completionInventory state =
+    let
+        helperShapes =
+            List.concatMap (List.map shapeOfCard) state.helper
+
+        troubleSingletonShapes =
+            state.trouble
+                |> List.filter (\s -> List.length s == 1)
+                |> List.concatMap (List.map shapeOfCard)
+    in
+    Set.fromList (helperShapes ++ troubleSingletonShapes)
+
+
+{-| Shapes that would extend a 2-card partial into a legal
+length-3 stack. Mirrors Python's `_completion_shapes`.
+-}
+completionShapes : Stack -> Set ShapeKey
+completionShapes partial =
+    case partial of
+        [ c1, c2 ] ->
+            let
+                v1 =
+                    cardValueToInt c1.value
+
+                v2 =
+                    cardValueToInt c2.value
+            in
+            if v1 == v2 then
+                -- Set partial — distinct-suit third of same value.
+                allSuits
+                    |> List.filter (\s -> s /= c1.suit && s /= c2.suit)
+                    |> List.map (\s -> ( v1, suitToInt s ))
+                    |> Set.fromList
+
+            else
+                -- Run partial: c1, c2 consecutive (c2 = c1 + 1).
+                let
+                    predV =
+                        if v1 == 1 then
+                            13
+
+                        else
+                            v1 - 1
+
+                    succV =
+                        if v2 == 13 then
+                            1
+
+                        else
+                            v2 + 1
+                in
+                if c1.suit == c2.suit then
+                    -- Pure run — same-suit extensions on either end.
+                    Set.fromList
+                        [ ( predV, suitToInt c1.suit )
+                        , ( succV, suitToInt c2.suit )
+                        ]
+
+                else
+                    -- rb run — opposite-color extensions on each end.
+                    let
+                        c1Color =
+                            cardColor c1
+
+                        c2Color =
+                            cardColor c2
+
+                        predShapes =
+                            allSuits
+                                |> List.filter (\s -> suitColor s /= c1Color)
+                                |> List.map (\s -> ( predV, suitToInt s ))
+
+                        succShapes =
+                            allSuits
+                                |> List.filter (\s -> suitColor s /= c2Color)
+                                |> List.map (\s -> ( succV, suitToInt s ))
+                    in
+                    Set.fromList (predShapes ++ succShapes)
+
+        _ ->
+            Set.empty
+
+
+{-| True iff NO completion shape for `partial` exists in
+`inventory` — i.e., the partial is doomed to remain a
+2-partial because no third card is available anywhere on the
+extractable part of the board.
+-}
+hasDoomedThird : Stack -> Set ShapeKey -> Bool
+hasDoomedThird partial inventory =
+    completionShapes partial
+        |> Set.intersect inventory
+        |> Set.isEmpty
+
+
+{-| Combined gate: every length-2 absorption result must be
+legal as a partial AND have at least one completion candidate
+somewhere in `inventory`. Mirrors Python's `_admissible_partial`.
+-}
+admissiblePartial : Stack -> Set ShapeKey -> Bool
+admissiblePartial merged inventory =
+    if not (Cards.isPartialOk merged) then
+        False
+
+    else if List.length merged == 2 && hasDoomedThird merged inventory then
+        False
+
+    else
+        True
+
+
+
+-- ============================================================
+-- Focus rule (oldest-lineage-first pruning, 2026-04-26)
+-- ============================================================
+
+
+{-| The lineage queue: ordered content for every entry
+currently in TROUBLE + GROWING. `lineage[0]` is the focus —
+the in-progress entry the BFS must grow or consume. Yank
+spawn fragments append at the tail in left-then-right order
+(the older fragment gets focus first when the queue
+advances).
+-}
+type alias Lineage =
+    List Stack
+
+
+{-| BFS state under the focus rule: the 4-tuple buckets plus
+the lineage queue. The seen-set signature must include
+lineage because two states with the same buckets but a
+different focus are NOT the same state for search purposes.
+-}
+type alias FocusedState =
+    { buckets : Buckets
+    , lineage : Lineage
+    }
+
+
+{-| Initial lineage = trouble entries (board order) followed
+by any pre-existing growing 2-partials. Both are in-flight
+commitments that need to land before victory. Mirrors
+Python's `_initial_lineage(trouble, growing)`.
+-}
+initialLineage : Buckets -> Lineage
+initialLineage state =
+    state.trouble ++ state.growing
+
+
+{-| True iff this move grows or consumes the focus stack
+(identified by content). Mirrors Python's
+`_move_touches_focus`.
+-}
+moveTouchesFocus : Move -> Stack -> Bool
+moveTouchesFocus move focus =
+    case move of
+        ExtractAbsorb d ->
+            d.targetBefore == focus
+
+        Shift d ->
+            d.targetBefore == focus
+
+        FreePull d ->
+            -- Either target = focus (focus grew, loose was a
+            -- queued sibling) or loose = focus (focus singleton
+            -- consumed onto a non-focus target).
+            d.targetBefore
+                == focus
+                || (case focus of
+                        [ c ] ->
+                            c == d.loose
+
+                        _ ->
+                            False
+                   )
+
+        Splice d ->
+            case focus of
+                [ c ] ->
+                    c == d.loose
+
+                _ ->
+                    False
+
+        Push d ->
+            -- Both b (trouble pushed onto helper) and b' (growing
+            -- engulfs helper) carry trouble_before = the consumed
+            -- entry's content.
+            d.troubleBefore == focus
+
+
+{-| Compute the new lineage tuple after applying the move.
+Caller has verified the move touches `lineage[0]`.
+Mirrors Python's `_update_lineage`.
+-}
+updateLineage : Lineage -> Move -> Lineage
+updateLineage lineage move =
+    case lineage of
+        [] ->
+            []
+
+        focus :: rest ->
+            case move of
+                ExtractAbsorb d ->
+                    -- Focus (target) grew. Result joins (or
+                    -- graduates). Spawned fragments append in
+                    -- left-then-right order at the tail.
+                    let
+                        afterFocus =
+                            if d.graduated then
+                                rest
+
+                            else
+                                d.result :: rest
+                    in
+                    afterFocus ++ d.spawned
+
+                Shift d ->
+                    -- Same as ExtractAbsorb but uses `merged`
+                    -- and produces no spawned trouble.
+                    if d.graduated then
+                        rest
+
+                    else
+                        d.merged :: rest
+
+                FreePull d ->
+                    if d.targetBefore == focus then
+                        -- Focus grew; the loose was a queued
+                        -- singleton — remove it from rest.
+                        let
+                            rest2 =
+                                removeFirstEqual [ d.loose ] rest
+                        in
+                        if d.graduated then
+                            rest2
+
+                        else
+                            d.result :: rest2
+
+                    else
+                        -- Focus is the loose (singleton);
+                        -- target is a queued sibling that grew.
+                        updateMatching d.targetBefore d.result d.graduated rest
+
+                Splice _ ->
+                    -- Focus (loose) consumed.
+                    rest
+
+                Push _ ->
+                    -- Focus consumed (b: pushed onto helper,
+                    -- or b': growing engulfed a helper).
+                    rest
+
+
+{-| Wrap `enumerateMoves` with the focus filter and the
+lineage update. Yields `(move, newFocusedState)`. If lineage
+is empty (which means victory, in a well-formed search),
+yields nothing.
+-}
+enumerateFocused : FocusedState -> List ( Move, FocusedState )
+enumerateFocused state =
+    case state.lineage of
+        [] ->
+            []
+
+        focus :: _ ->
+            enumerateMoves state.buckets
+                |> List.filterMap
+                    (\( move, newBuckets ) ->
+                        if moveTouchesFocus move focus then
+                            Just
+                                ( move
+                                , { buckets = newBuckets
+                                  , lineage = updateLineage state.lineage move
+                                  }
+                                )
+
+                        else
+                            Nothing
+                    )
+
+
+{-| Drop the first occurrence of `target` from `xs`. If
+absent, returns `xs` unchanged.
+-}
+removeFirstEqual : a -> List a -> List a
+removeFirstEqual target xs =
+    case xs of
+        [] ->
+            []
+
+        h :: t ->
+            if h == target then
+                t
+
+            else
+                h :: removeFirstEqual target t
+
+
+{-| Find the first entry in `xs` matching `oldContent` and
+either drop it (if `graduated`) or replace it with
+`newContent`. Used when a non-focus lineage entry is
+mutated by a free_pull where focus is the loose.
+-}
+updateMatching : a -> a -> Bool -> List a -> List a
+updateMatching oldContent newContent graduated xs =
+    case xs of
+        [] ->
+            []
+
+        h :: t ->
+            if h == oldContent then
+                if graduated then
+                    t
+
+                else
+                    newContent :: t
+
+            else
+                h :: updateMatching oldContent newContent graduated t
 
 
 
@@ -350,77 +834,99 @@ absorbersOf { trouble, growing } =
     ts ++ gs
 
 
-extractAndAbsorbMoves : Buckets -> List ( Move, Buckets )
-extractAndAbsorbMoves state =
+extractAndAbsorbMoves :
+    Buckets
+    -> Set ShapeKey
+    -> ExtractableIndex
+    -> List ( Move, Buckets )
+extractAndAbsorbMoves state inventory extractable =
     List.concatMap
-        (\a -> absorberMoves state a)
+        (\a -> absorberMoves state inventory extractable a)
         (absorbersOf state)
 
 
-absorberMoves : Buckets -> Absorber -> List ( Move, Buckets )
-absorberMoves state absorber =
+absorberMoves :
+    Buckets
+    -> Set ShapeKey
+    -> ExtractableIndex
+    -> Absorber
+    -> List ( Move, Buckets )
+absorberMoves state inventory extractable absorber =
     let
         shapes =
             neighborShapes absorber.target
     in
-    helperExtractMoves state absorber shapes
-        ++ freePullMoves state absorber shapes
+    helperExtractMoves state inventory extractable absorber shapes
+        ++ freePullMoves state inventory absorber shapes
 
 
-neighborShapes : Stack -> List ( CardValue, Suit )
+{-| Neighbor shapes for a target stack — every `(value, suit)`
+that could legally sit adjacent to any card in the stack.
+Returns `ShapeKey`s directly so the loop-inverted absorb
+path can use them as `Dict` keys.
+-}
+neighborShapes : Stack -> List ShapeKey
 neighborShapes target =
-    List.concatMap Cards.neighbors target
+    target
+        |> List.concatMap Cards.neighbors
+        |> List.map (\( v, s ) -> ( cardValueToInt v, suitToInt s ))
 
 
+{-| Loop-inverted absorb: iterate the absorber's neighbor
+shapes and look up matching helper positions in the
+extractable index, instead of scanning every helper × ci
+and filtering by shape. Mirrors Python's 2026-04-25 win.
+-}
 helperExtractMoves :
     Buckets
+    -> Set ShapeKey
+    -> ExtractableIndex
     -> Absorber
-    -> List ( CardValue, Suit )
+    -> List ShapeKey
     -> List ( Move, Buckets )
-helperExtractMoves state absorber shapes =
-    state.helper
-        |> List.indexedMap (\hi src -> ( hi, src ))
+helperExtractMoves state inventory extractable absorber shapes =
+    shapes
         |> List.concatMap
-            (\( hi, src ) ->
-                let
-                    kind =
-                        classify src
-
-                    n =
-                        List.length src
-                in
-                src
-                    |> List.indexedMap (\ci c -> ( ci, c ))
+            (\shape ->
+                Dict.get shape extractable
+                    |> Maybe.withDefault []
                     |> List.concatMap
-                        (\( ci, c ) ->
-                            if not (shapeMatches c shapes) then
-                                []
+                        (\entry ->
+                            case lookupHelperCard state.helper entry.hi entry.ci of
+                                Just ( src, extCard ) ->
+                                    emitExtractAbsorb
+                                        state
+                                        inventory
+                                        absorber
+                                        entry.hi
+                                        src
+                                        entry.ci
+                                        extCard
+                                        entry.verb
 
-                            else
-                                case verbFor kind n ci of
-                                    Nothing ->
-                                        []
-
-                                    Just verb ->
-                                        emitExtractAbsorb
-                                            state
-                                            absorber
-                                            hi
-                                            src
-                                            ci
-                                            c
-                                            verb
+                                Nothing ->
+                                    []
                         )
             )
 
 
-shapeMatches : Card -> List ( CardValue, Suit ) -> Bool
-shapeMatches c shapes =
-    List.any (\( v, s ) -> v == c.value && s == c.suit) shapes
+lookupHelperCard : List Stack -> Int -> Int -> Maybe ( Stack, Card )
+lookupHelperCard helper hi ci =
+    helper
+        |> List.drop hi
+        |> List.head
+        |> Maybe.andThen
+            (\src ->
+                src
+                    |> List.drop ci
+                    |> List.head
+                    |> Maybe.map (\c -> ( src, c ))
+            )
 
 
 emitExtractAbsorb :
     Buckets
+    -> Set ShapeKey
     -> Absorber
     -> Int
     -> Stack
@@ -428,7 +934,7 @@ emitExtractAbsorb :
     -> Card
     -> ExtractVerb
     -> List ( Move, Buckets )
-emitExtractAbsorb state absorber hi src ci extCard verb =
+emitExtractAbsorb state inventory absorber hi src ci extCard verb =
     let
         ( helperPieces, spawned ) =
             extractPieces src ci verb
@@ -448,7 +954,7 @@ emitExtractAbsorb state absorber hi src ci extCard verb =
                             LeftSide ->
                                 extCard :: absorber.target
                 in
-                if not (Cards.isPartialOk merged) then
+                if not (admissiblePartial merged inventory) then
                     Nothing
 
                 else
@@ -492,10 +998,11 @@ emitExtractAbsorb state absorber hi src ci extCard verb =
 
 freePullMoves :
     Buckets
+    -> Set ShapeKey
     -> Absorber
-    -> List ( CardValue, Suit )
+    -> List ShapeKey
     -> List ( Move, Buckets )
-freePullMoves state absorber shapes =
+freePullMoves state inventory absorber shapes =
     state.trouble
         |> List.indexedMap (\li ts -> ( li, ts ))
         |> List.concatMap
@@ -512,21 +1019,22 @@ freePullMoves state absorber shapes =
                             []
 
                         Just loose ->
-                            if not (shapeMatches loose shapes) then
+                            if not (List.member (shapeOfCard loose) shapes) then
                                 []
 
                             else
-                                emitFreePull state absorber li loose
+                                emitFreePull state inventory absorber li loose
             )
 
 
 emitFreePull :
     Buckets
+    -> Set ShapeKey
     -> Absorber
     -> Int
     -> Card
     -> List ( Move, Buckets )
-emitFreePull state absorber li loose =
+emitFreePull state inventory absorber li loose =
     [ RightSide, LeftSide ]
         |> List.filterMap
             (\side ->
@@ -539,7 +1047,7 @@ emitFreePull state absorber li loose =
                             LeftSide ->
                                 loose :: absorber.target
                 in
-                if not (Cards.isPartialOk merged) then
+                if not (admissiblePartial merged inventory) then
                     Nothing
 
                 else
@@ -600,25 +1108,26 @@ emitFreePull state absorber li loose =
 -- ============================================================
 
 
-shiftMoves : Buckets -> List ( Move, Buckets )
-shiftMoves state =
-    let
-        peelable =
-            peelableCards state.helper
-    in
+shiftMoves :
+    Buckets
+    -> Set ShapeKey
+    -> ExtractableIndex
+    -> List ( Move, Buckets )
+shiftMoves state inventory extractable =
     absorbersOf state
         |> List.concatMap
             (\absorber ->
-                shiftMovesForAbsorber state absorber peelable
+                shiftMovesForAbsorber state inventory extractable absorber
             )
 
 
 shiftMovesForAbsorber :
     Buckets
+    -> Set ShapeKey
+    -> ExtractableIndex
     -> Absorber
-    -> List ( Card, Int, Stack )
     -> List ( Move, Buckets )
-shiftMovesForAbsorber state absorber peelable =
+shiftMovesForAbsorber state inventory extractable absorber =
     let
         shapes =
             neighborShapes absorber.target
@@ -635,9 +1144,10 @@ shiftMovesForAbsorber state absorber peelable =
                         KPureRun ->
                             shiftFromRun
                                 state
+                                inventory
+                                extractable
                                 absorber
                                 shapes
-                                peelable
                                 srcIdx
                                 source
                                 KPureRun
@@ -645,9 +1155,10 @@ shiftMovesForAbsorber state absorber peelable =
                         KRbRun ->
                             shiftFromRun
                                 state
+                                inventory
+                                extractable
                                 absorber
                                 shapes
-                                peelable
                                 srcIdx
                                 source
                                 KRbRun
@@ -659,23 +1170,25 @@ shiftMovesForAbsorber state absorber peelable =
 
 shiftFromRun :
     Buckets
+    -> Set ShapeKey
+    -> ExtractableIndex
     -> Absorber
-    -> List ( CardValue, Suit )
-    -> List ( Card, Int, Stack )
+    -> List ShapeKey
     -> Int
     -> Stack
     -> Kind
     -> List ( Move, Buckets )
-shiftFromRun state absorber shapes peelable srcIdx source kind =
+shiftFromRun state inventory extractable absorber shapes srcIdx source kind =
     -- Try each end (LeftEnd → ci=0, RightEnd → ci=2).
     [ LeftEnd, RightEnd ]
         |> List.concatMap
             (\whichEnd ->
                 shiftFromEnd
                     state
+                    inventory
+                    extractable
                     absorber
                     shapes
-                    peelable
                     srcIdx
                     source
                     kind
@@ -685,15 +1198,16 @@ shiftFromRun state absorber shapes peelable srcIdx source kind =
 
 shiftFromEnd :
     Buckets
+    -> Set ShapeKey
+    -> ExtractableIndex
     -> Absorber
-    -> List ( CardValue, Suit )
-    -> List ( Card, Int, Stack )
+    -> List ShapeKey
     -> Int
     -> Stack
     -> Kind
     -> WhichEnd
     -> List ( Move, Buckets )
-shiftFromEnd state absorber shapes peelable srcIdx source kind whichEnd =
+shiftFromEnd state inventory extractable absorber shapes srcIdx source kind whichEnd =
     let
         stolenIdx =
             case whichEnd of
@@ -713,7 +1227,7 @@ shiftFromEnd state absorber shapes peelable srcIdx source kind whichEnd =
     in
     case ( cardAt source stolenIdx, cardAt source anchorIdx ) of
         ( Just stolen, Just anchor ) ->
-            if not (shapeMatches stolen shapes) then
+            if not (List.member (shapeOfCard stolen) shapes) then
                 []
 
             else
@@ -736,38 +1250,94 @@ shiftFromEnd state absorber shapes peelable srcIdx source kind whichEnd =
                                     (\s -> suitColor s /= cardColor anchor)
                                     allSuits
                 in
-                peelable
+                -- Donor candidates: peel-eligible helpers
+                -- whose card matches (pValue, suit) for some
+                -- suit in `neededSuits`. Read directly from
+                -- the extractable index (filtered to peels)
+                -- — same shape as Python's 2026-04-26
+                -- consolidation, no separate peelable index.
+                neededSuits
                     |> List.concatMap
-                        (\( pCard, donorIdx, newDonor ) ->
-                            if donorIdx == srcIdx then
-                                []
+                        (\pSuit ->
+                            let
+                                key =
+                                    ( cardValueToInt pValue, suitToInt pSuit )
+                            in
+                            Dict.get key extractable
+                                |> Maybe.withDefault []
+                                |> List.concatMap
+                                    (\entry ->
+                                        if entry.verb /= Peel then
+                                            []
 
-                            else if pCard.value /= pValue then
-                                []
+                                        else if entry.hi == srcIdx then
+                                            []
 
-                            else if not (List.member pCard.suit neededSuits) then
-                                []
-
-                            else
-                                shiftEmit
-                                    state
-                                    absorber
-                                    srcIdx
-                                    source
-                                    kind
-                                    whichEnd
-                                    stolen
-                                    pCard
-                                    donorIdx
-                                    newDonor
+                                        else
+                                            shiftEmitFromEntry
+                                                state
+                                                inventory
+                                                absorber
+                                                srcIdx
+                                                source
+                                                kind
+                                                whichEnd
+                                                stolen
+                                                entry
+                                    )
                         )
 
         _ ->
             []
 
 
+{-| Resolve the donor stack from the index entry and emit
+the shift moves. The new_donor stack is computed at use
+time by re-running the peel decomposition.
+-}
+shiftEmitFromEntry :
+    Buckets
+    -> Set ShapeKey
+    -> Absorber
+    -> Int
+    -> Stack
+    -> Kind
+    -> WhichEnd
+    -> Card
+    -> ExtractEntry
+    -> List ( Move, Buckets )
+shiftEmitFromEntry state inventory absorber srcIdx source kind whichEnd stolen entry =
+    case lookupHelperCard state.helper entry.hi entry.ci of
+        Just ( donor, pCard ) ->
+            let
+                ( helperPieces, _ ) =
+                    extractPieces donor entry.ci Peel
+            in
+            case helperPieces of
+                [ newDonor ] ->
+                    shiftEmit
+                        state
+                        inventory
+                        absorber
+                        srcIdx
+                        source
+                        kind
+                        whichEnd
+                        stolen
+                        pCard
+                        entry.hi
+                        newDonor
+
+                _ ->
+                    []
+
+        Nothing ->
+            []
+
+
 shiftEmit :
     Buckets
+    -> Set ShapeKey
     -> Absorber
     -> Int
     -> Stack
@@ -778,7 +1348,7 @@ shiftEmit :
     -> Int
     -> Stack
     -> List ( Move, Buckets )
-shiftEmit state absorber srcIdx source kind whichEnd stolen pCard donorIdx newDonor =
+shiftEmit state inventory absorber srcIdx source kind whichEnd stolen pCard donorIdx newDonor =
     let
         newSource =
             case ( whichEnd, source ) of
@@ -811,7 +1381,7 @@ shiftEmit state absorber srcIdx source kind whichEnd stolen pCard donorIdx newDo
                                 LeftSide ->
                                     stolen :: absorber.target
                     in
-                    if not (Cards.isPartialOk merged) then
+                    if not (admissiblePartial merged inventory) then
                         Nothing
 
                     else
@@ -881,67 +1451,6 @@ shiftEmit state absorber srcIdx source kind whichEnd stolen pCard donorIdx newDo
 cardAt : Stack -> Int -> Maybe Card
 cardAt stack i =
     stack |> List.drop i |> List.head
-
-
-{-| Pre-compute every (card, donorIdx, newDonor) triple where
-the card can be peeled cleanly: from a length-4+ set (any
-position) or a length-4+ pure/rb run (end positions only).
--}
-peelableCards : List Stack -> List ( Card, Int, Stack )
-peelableCards helper =
-    helper
-        |> List.indexedMap (\di donor -> ( di, donor ))
-        |> List.concatMap
-            (\( di, donor ) ->
-                let
-                    n =
-                        List.length donor
-                in
-                if n < 4 then
-                    []
-
-                else
-                    case classify donor of
-                        KSet ->
-                            donor
-                                |> List.indexedMap (\ci c -> ( ci, c ))
-                                |> List.map
-                                    (\( _, c ) ->
-                                        ( c, di, List.filter ((/=) c) donor )
-                                    )
-
-                        KPureRun ->
-                            runEnds donor di
-
-                        KRbRun ->
-                            runEnds donor di
-
-                        _ ->
-                            []
-            )
-
-
-runEnds : Stack -> Int -> List ( Card, Int, Stack )
-runEnds donor di =
-    let
-        n =
-            List.length donor
-
-        firstCard =
-            List.head donor
-
-        lastCard =
-            List.drop (n - 1) donor |> List.head
-
-        leftEnd =
-            firstCard
-                |> Maybe.map (\c -> ( c, di, List.drop 1 donor ))
-
-        rightEnd =
-            lastCard
-                |> Maybe.map (\c -> ( c, di, List.take (n - 1) donor ))
-    in
-    List.filterMap identity [ leftEnd, rightEnd ]
 
 
 
