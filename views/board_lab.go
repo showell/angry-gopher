@@ -34,30 +34,22 @@ func HandleBoardLab(w http.ResponseWriter, r *http.Request) {
 	sub = strings.TrimPrefix(sub, "/")
 	switch sub {
 	case "", "/":
-		boardLabPage(w, "play")
-	case "review", "review/":
-		boardLabPage(w, "review")
+		boardLabPage(w)
 	case "elm.js":
 		boardLabJS(w)
 	case "puzzles":
 		boardLabPuzzles(w)
 	case "annotate":
 		boardLabAnnotate(w, r)
-	case "agent-sessions":
-		boardLabAgentSessions(w)
 	default:
 		http.NotFound(w, r)
 	}
 }
 
-func boardLabPage(w http.ResponseWriter, mode string) {
+func boardLabPage(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	title := "BOARD_LAB"
-	if mode == "review" {
-		title = "BOARD_LAB — agent review"
-	}
-	fmt.Fprintf(w, `<!doctype html>
-<html><head><meta charset="utf-8"><title>%s</title>
+	fmt.Fprint(w, `<!doctype html>
+<html><head><meta charset="utf-8"><title>BOARD_LAB</title>
 <style>
   body { margin: 0; font-family: sans-serif; background: #f4f4ec; }
   .app-nav { padding: 8px 16px; background: #000080; color: white; font-size: 13px; }
@@ -70,17 +62,13 @@ func boardLabPage(w http.ResponseWriter, mode string) {
   <a href="/gopher/game-lobby">Game lobby</a>
   <a href="/gopher/lynrummy-elm/">Play LynRummy</a>
   <a href="/gopher/board-lab/">Play lab</a>
-  <a href="/gopher/board-lab/review">Review agent</a>
 </div>
 <div id="root"></div>
 <script src="/gopher/board-lab/elm.js"></script>
 <script>
-  Elm.Lab.init({
-    node: document.getElementById("root"),
-    flags: { mode: %q }
-  });
+  Elm.Lab.init({ node: document.getElementById("root") });
 </script>
-</body></html>`, title, mode)
+</body></html>`)
 }
 
 func boardLabJS(w http.ResponseWriter) {
@@ -137,43 +125,6 @@ func boardLabAnnotate(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Write([]byte(`{"ok":true}`))
-}
-
-// boardLabAgentSessions returns the latest "agent:..." session id
-// per puzzle_name, so the lab's agent-review mode knows which
-// session to replay for each puzzle panel. Shape:
-//
-//	{"sessions": {"tight_right_edge": 26, "pair_peel": 25, ...}}
-//
-// Puzzles with no agent attempt are omitted.
-func boardLabAgentSessions(w http.ResponseWriter) {
-	rows, err := DB.Query(
-		`SELECT ps.puzzle_name, MAX(s.id)
-		 FROM lynrummy_elm_sessions s
-		 JOIN lynrummy_puzzle_seeds ps ON ps.session_id = s.id
-		 WHERE s.label LIKE 'agent:%' AND ps.puzzle_name IS NOT NULL
-		 GROUP BY ps.puzzle_name`,
-	)
-	if err != nil {
-		http.Error(w, "query: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	defer rows.Close()
-
-	out := map[string]int64{}
-	for rows.Next() {
-		var name string
-		var id int64
-		if err := rows.Scan(&name, &id); err != nil {
-			http.Error(w, "scan: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		out[name] = id
-	}
-
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	enc := json.NewEncoder(w)
-	_ = enc.Encode(map[string]interface{}{"sessions": out})
 }
 
 // boardLabPuzzles serves the Python-generated puzzle catalog.

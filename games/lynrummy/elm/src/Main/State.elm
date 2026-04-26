@@ -110,13 +110,6 @@ type alias Model =
     -- nothing. Main app sets this False.
     , hideTurnControls : Bool
 
-    -- True when this Play instance is displaying a pre-captured
-    -- session (e.g. the lab's agent-review mode). Gestures are
-    -- ignored so the viewer can't accidentally contaminate the
-    -- captured session's action log. Only Instant Replay + the
-    -- rendered board/hand surface work.
-    , readonly : Bool
-
     -- BOARD_LAB "Let agent play" program counter. Holds the
     -- list of plan lines the agent computed at the start of
     -- the walk; each click consumes one line (animating its
@@ -479,6 +472,5 @@ baseModel =
     , replayBoardRect = Nothing
     , gameId = "default"
     , hideTurnControls = False
-    , readonly = False
     , agentProgram = Nothing
     }

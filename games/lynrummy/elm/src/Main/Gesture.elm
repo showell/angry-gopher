@@ -110,47 +110,43 @@ startBoardCardDrag :
     -> Model
     -> ( Model, Cmd Msg )
 startBoardCardDrag { stack, cardIndex } clientPoint tMs model =
-    if model.readonly then
-        ( model, Cmd.none )
+    case model.drag of
+        NotDragging ->
+            let
+                wings =
+                    WingOracle.wingsForStack stack model.board
 
-    else
-        case model.drag of
-            NotDragging ->
-                let
-                    wings =
-                        WingOracle.wingsForStack stack model.board
+                -- Intra-board: the floater starts exactly
+                -- where the stack is. `stack.loc` is
+                -- already in board frame, so no translation
+                -- needed. `pathFrame = BoardFrame` tells
+                -- the View layer to render the floater as
+                -- a board-div child, which matches this
+                -- frame by CSS construction.
+                initialFloater =
+                    { x = stack.loc.left, y = stack.loc.top }
+            in
+            ( { model
+                | drag =
+                    Dragging
+                        { source = FromBoardStack stack
+                        , cursor = clientPoint
+                        , originalCursor = clientPoint
+                        , floaterTopLeft = initialFloater
+                        , wings = wings
+                        , hoveredWing = Nothing
+                        , boardRect = Nothing
+                        , clickIntent = Just cardIndex
+                        , gesturePath =
+                            [ { tMs = tMs, x = initialFloater.x, y = initialFloater.y } ]
+                        , pathFrame = BoardFrame
+                        }
+              }
+            , fetchBoardRect model.gameId
+            )
 
-                    -- Intra-board: the floater starts exactly
-                    -- where the stack is. `stack.loc` is
-                    -- already in board frame, so no translation
-                    -- needed. `pathFrame = BoardFrame` tells
-                    -- the View layer to render the floater as
-                    -- a board-div child, which matches this
-                    -- frame by CSS construction.
-                    initialFloater =
-                        { x = stack.loc.left, y = stack.loc.top }
-                in
-                ( { model
-                    | drag =
-                        Dragging
-                            { source = FromBoardStack stack
-                            , cursor = clientPoint
-                            , originalCursor = clientPoint
-                            , floaterTopLeft = initialFloater
-                            , wings = wings
-                            , hoveredWing = Nothing
-                            , boardRect = Nothing
-                            , clickIntent = Just cardIndex
-                            , gesturePath =
-                                [ { tMs = tMs, x = initialFloater.x, y = initialFloater.y } ]
-                            , pathFrame = BoardFrame
-                            }
-                  }
-                , fetchBoardRect model.gameId
-                )
-
-            Dragging _ ->
-                ( model, Cmd.none )
+        Dragging _ ->
+            ( model, Cmd.none )
 
 
 {-| Start a drag from a hand card. No click intent — hand cards
@@ -158,15 +154,6 @@ don't have a split semantic.
 -}
 startHandDrag : Card -> Point -> Float -> Model -> ( Model, Cmd Msg )
 startHandDrag card clientPoint tMs model =
-    if model.readonly then
-        ( model, Cmd.none )
-
-    else
-        handDragAllowed card clientPoint tMs model
-
-
-handDragAllowed : Card -> Point -> Float -> Model -> ( Model, Cmd Msg )
-handDragAllowed card clientPoint tMs model =
     case ( model.drag, findHandCard card (activeHand model).handCards ) of
         ( NotDragging, Just handCard ) ->
             let
