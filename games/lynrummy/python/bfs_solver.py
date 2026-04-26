@@ -89,6 +89,66 @@ def _graduate(merged, growing, complete):
     return growing + [merged], list(complete), False
 
 
+def _completion_inventory(helper, trouble):
+    """Set of (value, suit) shapes available as candidate
+    "third cards" to complete some 2-partial elsewhere on the
+    board. Helper cards (any position — peelable, pluckable,
+    or shiftable) plus trouble singletons (free-pullable).
+
+    Excludes:
+      - Trouble 2-partial members: they can't independently
+        move; the whole pair pushes or stays put.
+      - Growing: sealed against extracts; its cards can't
+        become a third for OTHER partials.
+      - Complete: sealed forever.
+    """
+    inv = set()
+    for stack in helper:
+        for c in stack:
+            inv.add((c[0], c[1]))
+    for stack in trouble:
+        if len(stack) == 1:
+            c = stack[0]
+            inv.add((c[0], c[1]))
+    return inv
+
+
+def _completion_shapes(partial):
+    """Return the set of (value, suit) shapes that would
+    complete a 2-card `partial` into a legal length-3 stack.
+    Caller compares against `_completion_inventory`."""
+    c1, c2 = partial
+    v1, s1, _ = c1
+    v2, s2, _ = c2
+    if v1 == v2:
+        # Set partial — distinct-suit third of same value.
+        return {(v1, s) for s in range(4)
+                if s != s1 and s != s2}
+    # Run partial: c1, c2 consecutive (c2 = c1's successor).
+    pred_v = 13 if v1 == 1 else v1 - 1
+    succ_v = 1 if v2 == 13 else v2 + 1
+    if s1 == s2:
+        # Pure run — same-suit extensions on either end.
+        return {(pred_v, s1), (succ_v, s2)}
+    # rb run — opposite-color extensions on either end.
+    pred_shapes = {(pred_v, s) for s in range(4)
+                   if (s in b.RED) != (s1 in b.RED)}
+    succ_shapes = {(succ_v, s) for s in range(4)
+                   if (s in b.RED) != (s2 in b.RED)}
+    return pred_shapes | succ_shapes
+
+
+def _has_doomed_third(partial, inventory):
+    """True if NO completion shape for `partial` exists in
+    `inventory` — i.e., the partial is doomed to remain a
+    2-partial because no third card is available anywhere
+    on the (helper + trouble-singletons) part of the board.
+
+    Cheap pruning: skip moves that produce doomed partials
+    before adding them to the BFS frontier."""
+    return not (_completion_shapes(partial) & inventory)
+
+
 def canonical_set(stack):
     """If `stack` is a same-value group (an actual set, set
     partial, or even a same-value-same-suit dup), return a
@@ -235,6 +295,7 @@ def enumerate_moves(state):
     helper, trouble, growing, complete = state
     peelable = _peelable_index(helper)
     extractable = _extractable_index(helper)
+    completion_inv = _completion_inventory(helper, trouble)
 
     # All targets for absorption (move type a). Each entry:
     # (bucket_name, idx_in_bucket, target_stack).
@@ -259,6 +320,9 @@ def enumerate_moves(state):
                     merged = ([*target, ext_card] if side == "right"
                               else [ext_card, *target])
                     if not partial_ok(merged):
+                        continue
+                    if (len(merged) == 2
+                            and _has_doomed_third(merged, completion_inv)):
                         continue
                     merged = canonical_set(merged)
                     nt_base, ng = _remove_absorber(
@@ -293,6 +357,9 @@ def enumerate_moves(state):
                 merged = ([*target, loose] if side == "right"
                           else [loose, *target])
                 if not partial_ok(merged):
+                    continue
+                if (len(merged) == 2
+                        and _has_doomed_third(merged, completion_inv)):
                     continue
                 merged = canonical_set(merged)
                 # Both the absorber AND the loose-source come
@@ -386,6 +453,9 @@ def enumerate_moves(state):
                                 if absorb_side == "right"
                                 else [stolen, *target])
                             if not partial_ok(merged):
+                                continue
+                            if (len(merged) == 2
+                                    and _has_doomed_third(merged, completion_inv)):
                                 continue
                             merged = canonical_set(merged)
                             nt_base, ng = _remove_absorber(

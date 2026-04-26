@@ -142,10 +142,13 @@ def test_shift_pops_jack_via_eight():
     """The expert 8C-pops-JC idiom. Source [9C TC JC] (length-3
     pure run) needs replacement at left end if we steal JC. Donor
     [8D 8S 8H 8C] (length-4 set) supplies 8C → new_source
-    [8C 9C TC]. Stolen JC absorbs onto trouble [QH]."""
+    [8C 9C TC]. Stolen JC absorbs onto trouble [QH] forming
+    [QH JC] partial — completion candidate KC required for the
+    doomed-third filter to admit the move."""
     helper = [
         [(9, C, 0), (10, C, 0), (11, C, 0)],   # source
         [(8, D, 0), (8, S, 0), (8, H, 0), (8, C, 0)],  # donor
+        [(13, C, 0), (1, C, 0), (2, C, 0)],    # KC AC 2C — supplies KC
     ]
     trouble = [[(12, H, 0)]]  # QH absorbs the popped JC
     state = (helper, trouble, [], [])
@@ -158,6 +161,70 @@ def test_shift_pops_jack_via_eight():
                and d["p_card"] == (8, C, 0)]
     _assert("8C-pops-JC shift is enumerated",
             len(matches) >= 1, f"got {len(matches)}")
+
+
+# --- doomed-third filter --------------------------------------
+
+def test_doomed_partial_pruned():
+    """Trouble [4H], helper [5H 6H 7H 8H]. Peel 5H or 8H would
+    extract a 5/8 onto 4H. Peel 5H → partial [4H 5H] (pure-run);
+    needs 3H or 6H. 6H is in helper (still extractable end of
+    the same run). So this partial is NOT doomed; move fires.
+
+    Now block: remove all the helper companions and ensure the
+    only completion path is gone."""
+    # Variant A: completion exists → move fires.
+    helper_with = [[(5, H, 0), (6, H, 0), (7, H, 0), (8, H, 0)]]
+    state = (helper_with, [[(4, H, 0)]], [], [])
+    moves = list(bs.enumerate_moves(state))
+    _assert("doomed-filter admits move when completion exists",
+            any(d["type"] == "extract_absorb" for d, _ in moves))
+
+    # Variant B: no completion exists. Trouble 4H + helper of
+    # 5-6-7-8 of HEARTS (so peel 5H → [4H 5H] needs 3H or 6H;
+    # 6H is interior of the run, NOT extractable; 3H is absent).
+    # Wait — the helper inventory check goes by (value, suit)
+    # ignoring extractability. 6H IS in inventory regardless of
+    # position. So this case is actually NOT doomed.
+    #
+    # To force doomed: trouble 4S + helper [6H 7H 8H] (no 3 or 5
+    # of any color, no 4-set partner).
+    helper_no_completion = [[(6, H, 0), (7, H, 0), (8, H, 0)]]
+    state = (helper_no_completion, [[(4, S, 0)]], [], [])
+    moves = list(bs.enumerate_moves(state))
+    # 4S has neighbor 5-of-anything. None of 6H/7H/8H is a
+    # 4S-neighbor — extracts wouldn't fire anyway. So this
+    # tests the upstream short-circuit, not specifically the
+    # doomed-filter. Still, no extract_absorb should fire.
+    _assert("no extract fires when no shape match",
+            not any(d["type"] == "extract_absorb" for d, _ in moves))
+
+    # Variant C: 4S + helper [5H 6H 7H 8H] (a pure-H run).
+    # Peel 5H → spawn [6H 7H 8H], absorb 5H onto 4S → [4S 5H]
+    # rb-pair partial. Completion needs 3-red or 6-black.
+    # Inventory: 4S 5H 6H 7H 8H. 6H is RED (doesn't satisfy
+    # 6-black). No 3-red anywhere. → DOOMED.
+    helper_only_pure_h = [[(5, H, 0), (6, H, 0), (7, H, 0), (8, H, 0)]]
+    state = (helper_only_pure_h, [[(4, S, 0)]], [], [])
+    moves = list(bs.enumerate_moves(state))
+    extracts = [d for d, _ in moves if d["type"] == "extract_absorb"]
+    _assert("doomed-filter blocks doomed peel",
+            len(extracts) == 0,
+            f"got {len(extracts)} extracts: "
+            f"{[(d['verb'], d['ext_card']) for d in extracts]}")
+
+    # Variant D: same setup but add a 3D card so the partial is
+    # NOT doomed. Move should fire.
+    helper_with_3d = [
+        [(5, H, 0), (6, H, 0), (7, H, 0), (8, H, 0)],
+        [(3, D, 0), (4, D, 0), (5, D, 0)],   # supplies 3D
+    ]
+    state = (helper_with_3d, [[(4, S, 0)]], [], [])
+    moves = list(bs.enumerate_moves(state))
+    extracts = [d for d, _ in moves if d["type"] == "extract_absorb"]
+    _assert("doomed-filter admits move when 3D supplies completion",
+            len(extracts) >= 1,
+            f"got {len(extracts)} extracts")
 
 
 # --- enumeration purity --------------------------------------
@@ -193,6 +260,7 @@ TESTS = [
      test_engulf_2partial_into_legal_run),
     ("test_shift_pops_jack_via_eight",
      test_shift_pops_jack_via_eight),
+    ("test_doomed_partial_pruned", test_doomed_partial_pruned),
     ("test_enumerate_does_not_mutate_state",
      test_enumerate_does_not_mutate_state),
 ]

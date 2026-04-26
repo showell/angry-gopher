@@ -1047,6 +1047,7 @@ shiftEightClubsPopsJackClubs =
                 state =
                     { helper = [ [ { value = Nine, suit = Club, originDeck = DeckOne }, { value = Ten, suit = Club, originDeck = DeckOne }, { value = Jack, suit = Club, originDeck = DeckOne } ]
                         , [ { value = Eight, suit = Diamond, originDeck = DeckOne }, { value = Eight, suit = Spade, originDeck = DeckOne }, { value = Eight, suit = Heart, originDeck = DeckOne }, { value = Eight, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = King, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Club, originDeck = DeckOne }, { value = Two, suit = Club, originDeck = DeckOne } ]
                         ]
                     , trouble = [ [ { value = Queen, suit = Heart, originDeck = DeckOne } ]
                         ]

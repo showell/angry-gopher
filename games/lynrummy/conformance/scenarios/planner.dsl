@@ -202,11 +202,12 @@ scenario hint_splice_red_black_run
     hint_contains: red-black run
 
 scenario hint_pop_via_shift
-  desc: Player-facing shift hint says you can pop a card via shifting.
+  desc: Player-facing shift hint says you can pop a card via shifting. KC supplies a completion candidate so the merged partial isn't doomed.
   op: enumerate_moves
   helper:
     at (0,0): 9C TC JC
     at (0,0): 8D 8S 8H 8C
+    at (0,0): KC AC 2C
   trouble:
     at (0,0): QH
   expect:
@@ -215,11 +216,12 @@ scenario hint_pop_via_shift
 # --- shift (8C-pops-JC idiom) --------------------------------
 
 scenario shift_eight_clubs_pops_jack_clubs
-  desc: Length-3 run [9C TC JC] steals JC; donor [8D 8S 8H 8C] supplies 8C as replacement.
+  desc: Length-3 run [9C TC JC] steals JC; donor [8D 8S 8H 8C] supplies 8C. KC is on the board so the resulting [QH JC] partial isn't doomed.
   op: enumerate_moves
   helper:
     at (0,0): 9C TC JC
     at (0,0): 8D 8S 8H 8C
+    at (0,0): KC AC 2C
   trouble:
     at (0,0): QH
   expect:
