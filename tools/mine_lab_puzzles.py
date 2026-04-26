@@ -35,6 +35,7 @@ REPO = Path("/home/steve/showell_repos/angry-gopher")
 sys.path.insert(0, str(REPO / "games/lynrummy/python"))
 
 import bfs  # noqa: E402
+import geometry  # noqa: E402
 from cards import classify  # noqa: E402
 
 # Default match the existing puzzle session HTTP path.
@@ -96,6 +97,34 @@ def evaluate_projection(rec, proj):
     return plan, board, hand_card_tuples
 
 
+def _laid_out_stacks(stacks):
+    """Assign each stack a non-overlapping loc via the canonical
+    Python placer. Iterative: each call to `find_open_loc` sees
+    only the stacks placed so far, so the layout is the same
+    column-major pack a human-style auto-player would produce
+    on an empty board.
+
+    The captured-projection's source board already had locs from
+    its original game, but those reflect mid-game packing of a
+    larger position. For a puzzle we want a fresh, human-feel
+    layout starting from an empty canvas — `find_open_loc`
+    delivers that.
+    """
+    placed = []
+    for stack in stacks:
+        wire_stack = {
+            "board_cards": [
+                {"card": {"value": c[0], "suit": c[1],
+                          "origin_deck": c[2]},
+                 "state": 0}
+                for c in stack
+            ],
+            "loc": geometry.find_open_loc(placed, len(stack)),
+        }
+        placed.append(wire_stack)
+    return placed
+
+
 def build_initial_state(board, hand_cards):
     """Build the wire-shape `lynrummy.State` for the puzzle.
 
@@ -104,23 +133,16 @@ def build_initial_state(board, hand_cards):
     are placed onto the board as a singleton (or pair) stack,
     so the player faces a board with trouble cards to clean
     up. The hand is empty.
+
+    Stacks are laid out via `geometry.find_open_loc` so the
+    persisted state ships with non-overlapping, human-feel
+    locs. Without this every stack would land at (0,0).
     """
     augmented_board = list(board)
     if hand_cards:
         augmented_board.append(list(hand_cards))
     return {
-        "board": [
-            {
-                "board_cards": [
-                    {"card": {"value": c[0], "suit": c[1],
-                              "origin_deck": c[2]},
-                     "state": 0}
-                    for c in stack
-                ],
-                "loc": {"top": 0, "left": 0},
-            }
-            for stack in augmented_board
-        ],
+        "board": _laid_out_stacks(augmented_board),
         "hands": [
             {"hand_cards": []},
             {"hand_cards": []},
