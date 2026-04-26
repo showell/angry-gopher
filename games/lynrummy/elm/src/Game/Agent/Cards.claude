@@ -1,0 +1,33 @@
+# Cards.elm — agent-side card predicates
+
+Thin module of pure predicates the BFS planner needs that
+don't already exist in `Game.Card` / `Game.StackType`. Lives
+inside the Agent namespace so it doesn't disturb the
+INTRICATE existing modules.
+
+## Status
+
+- **Label:** WORKHORSE.
+- **Mirrors:** `python/beginner.py` § `partial_ok`,
+  `neighbors`, plus a thin alias for `classify` →
+  `isLegalStack`.
+
+## Key exports
+
+- `isLegalStack : List Card -> Bool` — wraps
+  `Game.StackType.getStackType`. True iff the result is
+  `Set | PureRun | RedBlackRun`.
+- `isPartialOk : List Card -> Bool` — the
+  "could-this-extend?" predicate. Empty + singleton are
+  trivially OK; length-2 pairs are OK if they pair up as a
+  valid run-partial or set-partial; length-3+ delegates to
+  `isLegalStack`.
+- `neighbors : Card -> List ( CardValue, Suit )` — every
+  (value, suit) shape that could legally sit adjacent to
+  `c` in some valid group (pure run, rb run, or set).
+  Deck-agnostic.
+
+## Pointers
+
+- Python source: `python/beginner.py` lines 131–187.
+- Tests: `tests/Game/Agent/CardsTest.elm`.

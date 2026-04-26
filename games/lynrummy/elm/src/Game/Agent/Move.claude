@@ -1,0 +1,48 @@
+# Move.elm — agent move type (the BFS DSL output)
+
+The Elm port of Python's per-move `desc` dict. Where Python
+relies on string-typed dicts (`desc["type"] == "extract_absorb"`
+etc.), Elm gets a sum type with one variant per move kind:
+`ExtractAbsorb | FreePull | Push | Splice | Shift`. Each
+variant carries a record of fields specific to that move.
+
+## Status
+
+- **Label:** WORKHORSE.
+- **Mirrors:** `python/bfs_solver.py` § the desc dicts
+  emitted by `_enumerate_moves` and consumed by
+  `describe_move` + `verbs.step_to_primitives`.
+
+## The five variants
+
+- **`ExtractAbsorb`** — peel/pluck/yank/steal a card from
+  HELPER, absorb onto a TROUBLE/GROWING target.
+- **`FreePull`** — TROUBLE singleton absorbs onto target.
+- **`Push`** — TROUBLE 1- or 2-partial pushes onto HELPER
+  (or, when the source bucket is GROWING, the engulf
+  variant — same desc shape, the bucket route is implicit
+  in the producing enumerator).
+- **`Splice`** — insert a TROUBLE singleton into a HELPER
+  pure/rb run, splitting it cleanly.
+- **`Shift`** — peel a HELPER donor card to replace the
+  stolen end of a length-3 run; no spawn.
+
+## Bucket label
+
+`SourceBucket = Trouble | Growing` — used by extract_absorb
+and free_pull to identify which bucket the absorber was
+in. Carried so the verb translator can render the right DSL
+verb ("absorb onto trouble" vs "absorb onto growing").
+
+## Verb subtype on extract_absorb
+
+`ExtractVerb = Peel | Pluck | Yank | Steal` — physical
+isolation pattern. Distinct from the Move sum type itself
+because all four share the `extract_absorb` shape; they
+differ only in which spawned pieces qualify as helpers vs
+trouble.
+
+## Pointers
+
+- Python source: `python/bfs_solver.py` lines 175–450.
+- Tests: `tests/Game/Agent/MoveTest.elm`.
