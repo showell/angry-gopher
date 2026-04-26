@@ -45,7 +45,7 @@ def card_label(c):
 
 # --- Classification ---
 
-def succ(v):
+def successor(v):
     return 1 if v == 13 else v + 1
 
 
@@ -55,7 +55,7 @@ def color(s):
 
 def classify(stack):
     """Single-pass classifier for length-3+ stacks. Early
-    exits on the first impossibility. Inlines succ and the
+    exits on the first impossibility. Inlines successor and the
     red-set membership check to avoid call overhead — this
     is the hottest function in the search."""
     n = len(stack)
@@ -126,7 +126,7 @@ def is_partial_ok(stack):
         return classify(stack) != "other"
     a, b = stack
     # Pair that could be a run partial:
-    if succ(a[0]) == b[0]:
+    if successor(a[0]) == b[0]:
         if a[1] == b[1]:
             return True  # pure-run partial
         if color(a[1]) != color(b[1]):
@@ -145,7 +145,7 @@ def neighbors(c):
     v, s, _ = c
     c_color = color(s)
     pred_v = 13 if v == 1 else v - 1
-    succ_v = succ(v)
+    succ_v = successor(v)
     out = set()
     # pure run: same suit, ±1 value
     out.add((pred_v, s))

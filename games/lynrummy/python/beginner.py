@@ -30,7 +30,7 @@ from itertools import product
 from cards import (  # noqa: F401  (re-exports)
     RANKS, SUITS, RED,
     card, label, card_label,
-    succ, color,
+    successor, color,
     classify, is_partial_ok, neighbors,
     can_peel, can_pluck, can_yank,
     can_steal, can_split_out,
@@ -65,7 +65,7 @@ def almost_neighbors(c):
         return n
     def step_fwd(n, k):
         for _ in range(k):
-            n = succ(n)
+            n = successor(n)
         return n
     pred2 = step_back(v, 2)
     succ2 = step_fwd(v, 2)
