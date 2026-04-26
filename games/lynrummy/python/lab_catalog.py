@@ -4,8 +4,10 @@ gallery loads.
 
 Pulls mined puzzle seeds (rows where puzzle_name LIKE
 'mined_%') from the DB. Each row → catalog entry with name /
-title / description / initial_state / agent_solution. Output
-goes to games/lynrummy/board-lab/puzzles.json.
+title / initial_state. The title carries the BFS plan length
+("mined_003_KSp1 (5-line)"); the gallery doesn't render a
+description block any more — repeating that line in prose was
+just noise.
 
 The corpus block was removed 2026-04-26 — corpus seeds carry
 hand cards, and the lab now only surfaces board-only puzzles
@@ -32,16 +34,13 @@ def _board_for_solver(state):
             for stack in state["board"]]
 
 
-def _summarize(state, max_trouble, max_states):
+def _depth_label(state, max_trouble, max_states):
     board = _board_for_solver(state)
     plan = bfs.solve(board, max_trouble_outer=max_trouble,
                      max_states=max_states, verbose=False)
     if plan is None:
-        return "STUCK", "(no plan within budget)"
-    depth = f"{len(plan)}-line"
-    text = "\n".join(f"{i}. {line}"
-                     for i, line in enumerate(plan, 1))
-    return depth, text
+        return "STUCK"
+    return f"{len(plan)}-line"
 
 
 def main():
@@ -56,22 +55,17 @@ def main():
     catalog = []
 
     mined_rows = conn.execute(
-        "SELECT session_id, initial_state_json, puzzle_name "
+        "SELECT initial_state_json, puzzle_name "
         "FROM lynrummy_puzzle_seeds "
         "WHERE puzzle_name LIKE 'mined_%' "
         "ORDER BY session_id").fetchall()
-    for sid, state_json, puzzle_name in mined_rows:
+    for state_json, puzzle_name in mined_rows:
         state = json.loads(state_json)
-        depth, plan_text = _summarize(
-            state, args.max_trouble, args.max_states)
-        title = f"{puzzle_name} ({depth})"
-        description = f"Mined puzzle (session {sid}). BFS plan: {depth}."
+        depth = _depth_label(state, args.max_trouble, args.max_states)
         catalog.append({
             "name": puzzle_name,
-            "title": title,
-            "description": description,
+            "title": f"{puzzle_name} ({depth})",
             "initial_state": state,
-            "agent_solution": plan_text,
         })
 
     out_payload = {"puzzles": catalog}

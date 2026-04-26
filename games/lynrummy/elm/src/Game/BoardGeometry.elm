@@ -68,7 +68,7 @@ boardViewportLeft =
 
 boardViewportTop : Int
 boardViewportTop =
-    70
+    38
 
 
 stackHeight : Int

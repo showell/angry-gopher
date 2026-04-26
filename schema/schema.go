@@ -16,10 +16,10 @@ CREATE TABLE IF NOT EXISTS message_content (
     html TEXT NOT NULL
 );
 
--- LynRummy Elm client action log. V1 scaffolding: every page load
--- gets a new session; actions posted to /gopher/lynrummy-elm/actions
--- are stored with their WireAction JSON verbatim, sequenced per
--- session.
+-- One row per LynRummy Elm session. deck_seed is non-zero for
+-- server-dealt full games and 0 for puzzle / client-dealt
+-- sessions (where the initial state lives in
+-- lynrummy_puzzle_seeds instead).
 CREATE TABLE IF NOT EXISTS lynrummy_elm_sessions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     created_at INTEGER NOT NULL,
@@ -27,36 +27,29 @@ CREATE TABLE IF NOT EXISTS lynrummy_elm_sessions (
     deck_seed INTEGER NOT NULL DEFAULT 0
 );
 
+-- Append-only WireAction log, sequenced per session. Each row
+-- is one primitive (split / merge_stack / merge_hand /
+-- place_hand / move_stack / complete_turn / undo) as it
+-- crossed the wire. gesture_metadata carries pointer-path
+-- telemetry for drag-derived actions; NULL otherwise (button
+-- clicks, agent-emitted moves, complete_turn).
 CREATE TABLE IF NOT EXISTS lynrummy_elm_actions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     session_id INTEGER NOT NULL REFERENCES lynrummy_elm_sessions(id),
     seq INTEGER NOT NULL,
     action_kind TEXT NOT NULL,
     action_json TEXT NOT NULL,
-    -- Raw pointer telemetry for every primitive wire action
-    -- (split, merge_stack, merge_hand, place_hand, move_stack).
-    -- JSON blob with pointer path samples (t, x, y), pointer
-    -- type, viewport at drag start, devicePixelRatio. NULL for
-    -- non-pointer actions (complete_turn, undo).
     gesture_metadata TEXT,
     created_at INTEGER NOT NULL
 );
-
 CREATE INDEX IF NOT EXISTS idx_lynrummy_elm_actions_session ON lynrummy_elm_actions(session_id, seq);
 
--- Puzzle sessions: sessions whose initial state is hand-crafted
--- (not the dealer's deal). When a row is present for a session_id,
--- replaySessionNoHTTP uses this JSON as the initial state instead
--- of InitialStateWithSeed(deck_seed). Used by the decomposition
--- harness to stage narrow test scenarios AND by BOARD_LAB.
---
--- puzzle_name is the stable machine id of a catalog puzzle (e.g.
--- "tight_right_edge"). NULL for ad-hoc puzzles that aren't in a
--- catalog (e.g. the Python decomposition harness). For BOARD_LAB
--- sessions this is the key linking every solution — human or
--- agent — to the same named puzzle, so SELECT * FROM
--- lynrummy_puzzle_seeds WHERE puzzle_name = ... enumerates
--- attempts for analysis.
+-- Initial state for sessions whose board isn't generated from a
+-- deck_seed: BOARD_LAB puzzles, client-dealt full games,
+-- Python-harness scenarios. puzzle_name names a catalog puzzle
+-- when present and is NULL for one-off client-dealt deals. The
+-- name is the join key when grouping every attempt at the same
+-- puzzle for analysis.
 CREATE TABLE IF NOT EXISTS lynrummy_puzzle_seeds (
     session_id INTEGER PRIMARY KEY REFERENCES lynrummy_elm_sessions(id),
     initial_state_json TEXT NOT NULL,
@@ -64,17 +57,9 @@ CREATE TABLE IF NOT EXISTS lynrummy_puzzle_seeds (
 );
 CREATE INDEX IF NOT EXISTS idx_lynrummy_puzzle_seeds_name ON lynrummy_puzzle_seeds(puzzle_name);
 
--- BOARD_LAB annotations. A human playing or evaluating a
--- puzzle may want to jot context about a specific attempt
--- (e.g. "mouse slip on seq 2", "agent's landing loc feels
--- off"). One textarea per panel, same shape as the essay
--- comment surface in claude-collab.
---
--- session_id is the canonical anchor — an annotation is a
--- reply to one specific play, not the puzzle in general.
--- Puzzle name can be derived from the session via
--- lynrummy_puzzle_seeds; stored denormalized here for easy
--- tail-reading and to survive hypothetical seed-row loss.
+-- Free-text notes humans add to a specific puzzle attempt
+-- ("mouse slip on seq 2", "agent landing felt off"). Anchored
+-- to session_id; puzzle_name is denormalized for tail-reading.
 CREATE TABLE IF NOT EXISTS board_lab_annotations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     session_id INTEGER NOT NULL,

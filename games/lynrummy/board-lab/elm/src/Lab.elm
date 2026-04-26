@@ -27,7 +27,7 @@ SQLite.
 
 import Browser
 import Dict exposing (Dict)
-import Html exposing (Html, button, details, div, h1, h2, input, label, p, pre, summary, text, textarea)
+import Html exposing (Html, button, div, h1, h2, input, label, p, text, textarea)
 import Html.Attributes exposing (disabled, placeholder, rows, style, type_, value)
 import Html.Events exposing (onClick, onInput)
 import Http
@@ -50,9 +50,7 @@ Python canonical and Elm out of the state-shape business).
 type alias Puzzle =
     { name : String
     , title : String
-    , description : String
     , initialState : Encode.Value
-    , agentSolution : String
     }
 
 
@@ -147,16 +145,10 @@ catalogDecoder =
 
 puzzleDecoder : Decoder Puzzle
 puzzleDecoder =
-    Decode.map5 Puzzle
+    Decode.map3 Puzzle
         (Decode.field "name" Decode.string)
         (Decode.field "title" Decode.string)
-        (Decode.field "description" Decode.string)
         (Decode.field "initial_state" Decode.value)
-        (Decode.oneOf
-            [ Decode.field "agent_solution" Decode.string
-            , Decode.succeed ""
-            ]
-        )
 
 
 
@@ -695,38 +687,9 @@ viewPuzzle model puzzle =
         , style "background" "#fafafa"
         ]
         [ h2 [ style "margin-top" "0" ] [ text puzzle.title ]
-        , p [] [ text puzzle.description ]
-        , viewAgentSolution puzzle.agentSolution
         , viewPanelBody puzzle panel
         , viewAnnotation puzzle (getAnnotation puzzle.name model)
         ]
-
-
-viewAgentSolution : String -> Html Msg
-viewAgentSolution sol =
-    if String.trim sol == "" then
-        text ""
-
-    else
-        details
-            [ style "margin-bottom" "12px" ]
-            [ summary
-                [ style "cursor" "pointer"
-                , style "color" "#555"
-                , style "font-size" "13px"
-                ]
-                [ text "Agent solution (click to expand)" ]
-            , pre
-                [ style "background" "#fff"
-                , style "border" "1px solid #ddd"
-                , style "padding" "8px 12px"
-                , style "margin" "8px 0 0 0"
-                , style "font-size" "12px"
-                , style "white-space" "pre-wrap"
-                , style "overflow-x" "auto"
-                ]
-                [ text sol ]
-            ]
 
 
 viewAnnotation : Puzzle -> AnnotationState -> Html Msg

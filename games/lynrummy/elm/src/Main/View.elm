@@ -23,8 +23,7 @@ rewritten as embeddable 2026-04-23
 
 ```
 Html (position: relative, 1100×700, embeddable)
-├── viewTopBar              // at (0, 0), 32px tall
-├── viewStatusBar           // at (0, 32), 32px tall
+├── viewStatusBar           // at (0, 0), ~32px tall
 ├── leftSidebar            // at (20, 100), 240px wide
 │   ├── playerHands         // main app: turn # + per-player rows + turn controls
 │   └── puzzleControls      // BOARD_LAB: Hint / Let agent play / Replay
@@ -229,13 +228,6 @@ view model =
             , style "left" "0"
             , style "right" "0"
             ]
-            [ viewTopBar ]
-        , div
-            [ style "position" "absolute"
-            , style "top" "32px"
-            , style "left" "0"
-            , style "right" "0"
-            ]
             [ viewStatusBar model.status ]
         , div
             [ style "position" "absolute"
@@ -328,19 +320,7 @@ viewPopup maybePopup =
 
 
 
--- TOP BAR / STATUS BAR
-
-
-viewTopBar : Html Msg
-viewTopBar =
-    div
-        [ style "background-color" View.navy
-        , style "color" "white"
-        , style "text-align" "center"
-        , style "padding" "6px"
-        , style "font-size" "18px"
-        ]
-        [ Html.text "Welcome to Lyn Rummy! Have fun!" ]
+-- STATUS BAR
 
 
 viewStatusBar : StatusMessage -> Html Msg

@@ -43,7 +43,7 @@ BOARD_MARGIN = 7
 # games/lynrummy/elm/src/Game/BoardGeometry.elm
 # to match.
 BOARD_VIEWPORT_LEFT = 300
-BOARD_VIEWPORT_TOP = 70
+BOARD_VIEWPORT_TOP = 38
 
 # Placement-sweep granularity in pixels (fallback path only).
 PLACE_STEP = 10
