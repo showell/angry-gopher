@@ -40,10 +40,10 @@ def find_play(hand, board):
                 continue
 
             # (a) Third in hand?
-            third = _find_completing_third([c1, c2], hand)
-            if third is not None:
+            ordered = _find_completing_third([c1, c2], hand)
+            if ordered is not None:
                 return {
-                    "placements": [c1, c2, third],
+                    "placements": ordered,
                     "plan": [],
                 }
 
@@ -69,32 +69,33 @@ def find_play(hand, board):
 
 
 def _find_completing_third(pair, hand):
-    """Return a hand card that completes `pair` into a legal
-    length-3 stack, or None. `pair` itself is consumed
-    (removed from candidates)."""
+    """Return the ordered length-3 stack [a, b, c] that
+    classifies as a legal group when `pair` gains a third
+    hand card, or None. The order matters — runs are
+    consecutive-by-value, so the harness needs to lay the
+    cards down in the legal order."""
     for c in hand:
         if c is pair[0] or c is pair[1]:
             continue
         if c == pair[0] or c == pair[1]:
-            # Same identity (could happen with duplicate cards
-            # across decks); skip to avoid double-using.
             continue
-        # Try inserting c at every position; if any orientation
-        # classifies legal, we have a completing third.
         for ordered in (
                 [pair[0], pair[1], c],
                 [pair[0], c, pair[1]],
                 [c, pair[0], pair[1]],
         ):
             if classify(ordered) != "other":
-                return c
+                return ordered
     return None
 
 
 def _try_projection(board, extra_stacks):
     """Add `extra_stacks` to `board` (as new stacks), run BFS
-    via solve, and return the plan (list of DSL strings) on
-    success or None on no plan."""
+    with desc tracking, and return the plan as
+    [(line, desc), ...] on success or None on no plan."""
     augmented = list(board) + list(extra_stacks)
-    return bs.solve(augmented, max_trouble_outer=10,
-                    max_states=200000, verbose=False)
+    helper = [s for s in augmented if classify(s) != "other"]
+    trouble = [s for s in augmented if classify(s) == "other"]
+    initial = (helper, trouble, [], [])
+    return bs.solve_state_with_descs(
+        initial, max_trouble_outer=10, max_states=200000)

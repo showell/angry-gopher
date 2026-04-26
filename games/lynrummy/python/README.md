@@ -49,13 +49,9 @@ The Python agent has two pieces of strategy code:
 - **`strategy.py` — the trick engine**, legacy. Per-trick
   emitters (`direct_play`, `pair_peel`, `split_for_set`, …)
   that produce primitive sequences for high-confidence
-  patterns. Still wired into `auto_player.py` for now;
-  abandonment plan is in flight (affects Elm too — its
-  `Game.Strategy.*` modules and the conformance hint
-  scenarios).
-
-When both engines stall on the same board, that's the
-"Steve-level puzzle" sweet spot the hunt drivers harvest.
+  patterns. Still wired into `agent_board_lab.py` and the
+  Elm conformance hint scenarios; abandonment plan is in
+  flight.
 
 ## The Python agent's stance — plan, then execute
 
@@ -90,8 +86,12 @@ Ordered by "load-bearing first":
 - `verbs.claude` — VERB → PRIMITIVE library; decomposes a
   BFS desc into UI primitives via content-based stack lookup.
 - `primitives.claude` — PRIMITIVE → GESTURE library;
-  to_wire_shape / apply_locally / send_one. Canonical send
-  path; auto_player imports from here.
+  to_wire_shape / apply_locally / send_one. The canonical
+  send path used by every driver.
+- `agent_prelude.claude` — hand-aware outer loop;
+  `find_play(hand, board)` returns a plausible play.
+- `agent_game.claude` — autonomous-play harness:
+  dealer.deal → loop find_play → place + plan → complete_turn.
 - `bfs_play.claude` — the replay driver: BFS plan executed
   on the actual board, watchable in the browser.
 - `beginner.claude` — the IDDFS predecessor. Kept for now
@@ -99,8 +99,6 @@ Ordered by "load-bearing first":
 - `strategy.claude` — the trick engine. PLANNED-LEGACY but
   still wired. Per-trick emitters, primitive ordering
   discipline, plan-then-execute for `merge_hand`.
-- `auto_player.claude` — the main loop: fetch state, pick a
-  trick / planner suggestion, post primitives, repeat.
 - `geometry.claude` — board-frame geometry primitives
   (find_open_loc, find_violation, pinned viewport
   constants).
@@ -131,14 +129,6 @@ Ordered by "load-bearing first":
 - `run_corpus_v2.claude` — beginner-side counterpart.
 - `beginner_corpus.claude` — hand-built fixtures for
   beginner.py before/after testing.
-
-### Hunt drivers
-
-`beginner_hunt.claude`, `complex_hunt.claude`,
-`deep_hunt.claude`, `one_card_hunt.claude` — drive
-`auto_player` on randomized deals until a stall, then ask
-`beginner_plan` if it can rescue. Used to harvest the
-random-deal corpus.
 
 ### Older DSL pipeline (retirement TBD)
 

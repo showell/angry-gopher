@@ -614,6 +614,58 @@ def solve_state(initial, *, max_trouble_outer=8, max_states=10000,
     return None
 
 
+def solve_state_with_descs(initial, *, max_trouble_outer=8,
+                           max_states=10000):
+    """Same as solve_state but returns [(line, desc), ...]
+    instead of [line, ...]. The desc dicts feed
+    `verbs.step_to_primitives` for primitive translation;
+    the line strings are useful for human-readable logging.
+    Returns None if no plan within the outer cap."""
+    if trouble_count(initial[1], initial[2]) > max_trouble_outer:
+        return None
+    if is_victory(initial[1], initial[2]):
+        return []
+    for cap in range(1, max_trouble_outer + 1):
+        result = _bfs_with_cap_descs(initial, cap, max_states)
+        if result is not None:
+            return result
+    return None
+
+
+def _bfs_with_cap_descs(initial, max_trouble, max_states):
+    """Pure BFS-by-length returning (line, desc) pairs."""
+    if trouble_count(initial[1], initial[2]) > max_trouble:
+        return None
+    if is_victory(initial[1], initial[2]):
+        return []
+    seen = {state_sig(*initial)}
+    current_level = [(initial, [])]
+    expansions = 0
+    while current_level:
+        current_level.sort(
+            key=lambda e: trouble_count(e[0][1], e[0][2]))
+        next_level = []
+        for state, program in current_level:
+            expansions += 1
+            for desc, new_state in enumerate_moves(state):
+                _, t, g, _ = new_state
+                if trouble_count(t, g) > max_trouble:
+                    continue
+                sig = state_sig(*new_state)
+                if sig in seen:
+                    continue
+                seen.add(sig)
+                line = describe_move(desc)
+                new_program = program + [(line, desc)]
+                if is_victory(t, g):
+                    return new_program
+                next_level.append((new_state, new_program))
+            if expansions >= max_states:
+                return None
+        current_level = next_level
+    return None
+
+
 if __name__ == "__main__":
     import sqlite3
     import json

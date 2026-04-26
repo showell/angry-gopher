@@ -1,0 +1,49 @@
+just_use agent_game.py
+
+# label: EARLY (autonomous-play harness, BFS-driven)
+# role: drive an Elm-backed LynRummy session using the
+#       BFS planner + hand-aware outer loop
+
+The autonomous-play replacement for `auto_player.py`. Same
+shape (fetch state → choose play → send primitives → repeat
+→ complete_turn) but plays through the new pipeline:
+
+  agent_prelude.find_play     ← hand-aware outer loop
+  bfs_solver.solve_state       ← BFS planner (via prelude)
+  verbs.step_to_primitives    ← VERB → PRIMITIVE
+  primitives.send_one          ← PRIMITIVE → GESTURE → wire
+
+`auto_player.py` was wired to the legacy trick engine
+(`strategy.choose_play`); this harness uses the planner
+that actually represents the agent's current strategic
+brain.
+
+## Loop shape
+
+1. Bootstrap: `dealer.deal()` → `client.new_session(initial_state=...)`.
+2. Per turn:
+   - Fetch state. Active player's hand, board.
+   - `find_play(hand, board)`. If None: `complete_turn`,
+     check deck-low-water, continue.
+   - For each placement card in the play: emit `place_hand`
+     (singleton) or `place_hand` + `merge_hand` chain (when
+     placements form a legal trio).
+   - For each `(line, desc)` in the plan: translate via
+     `verbs.step_to_primitives(desc, board)`, send each
+     primitive via `primitives.send_one`.
+   - Loop again to find another play (turn allows multiple).
+
+## Why no scoring
+
+Per Steve 2026-04-25: any plausible play is good play.
+Humans rarely hold up on placing cards. The search order
+inside `find_play` encodes preference (pairs > singletons);
+nothing beyond that.
+
+## Pointers
+
+- Bootstrap: `dealer.py` (`deal()` → initial_state).
+- Brain: `agent_prelude.py` (`find_play`).
+- Translator: `verbs.py`, `primitives.py`.
+- Predecessor (retiring): `auto_player.py` — the
+  trick-engine driver.
