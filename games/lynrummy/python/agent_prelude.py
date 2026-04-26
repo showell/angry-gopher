@@ -175,5 +175,11 @@ def find_play_with_budget(hand, board, *, max_states, stats=None):
         _PROJECTION_MAX_STATES["value"] = original_max
 
 
-# Default budget; overridable via find_play_with_budget.
-_PROJECTION_MAX_STATES = {"value": 200000}
+# Default BFS state budget per projection. Lowered to 5000
+# (from 200000) on 2026-04-25 after the doomed-third filter
+# + state-level doomed-growing filter landed. With those
+# filters, the corpus solves 21/21 at budget 2000; 5000
+# gives a 1.5× safety margin. Anything higher is wasted
+# work — none of the captured snapshot cases needed more
+# than ~1500 states once the filters kick in.
+_PROJECTION_MAX_STATES = {"value": 5000}
