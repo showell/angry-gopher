@@ -1,0 +1,43 @@
+# Verbs.elm — VERB → PRIMITIVE translator
+
+The Elm port of `python/verbs.py`. Decomposes one BFS `Move`
+into a sequence of `WireAction`s — the primitives the server
+expects. Mirrors the Python translator's structure but skips
+one indirection: Python translates "internal index-based
+primitive" → "wire shape (content-based)". Elm's `WireAction`
+is content-based directly, so the agent emits `WireAction`s
+straight away, no internal primitive type.
+
+## Status
+
+- **Label:** WORKHORSE.
+- **Mirrors:** `python/verbs.py` § `step_to_primitives` and
+  per-verb helpers.
+- **Divergences:** Python carries an index→wire layer
+  internally; Elm doesn't need it (`WireAction` is content).
+  Geometry pre-flight planning (mirror of
+  `strategy._plan_merge_stack`) is a separate module
+  (`Game.Agent.GeometryPlan`, forthcoming) so this module
+  stays focused on the logical decomposition.
+
+## Public API
+
+- `moveToPrimitives : List CardStack -> Move -> List WireAction`
+  — translate one move against the live board. Returns a
+  list of WireActions; the caller's job is to send them in
+  order (or to also pass each through a geometry planner
+  layer that pre-flights move_stack as needed).
+
+## Convention: content-based stack lookup
+
+Each emitted WireAction takes a `CardStack` directly. We
+locate stacks on the live board by content (matching the
+agent-side `List Card` against `CardStack.boardCards`).
+After each emitted WireAction we advance the local board
+copy via a small simulator so subsequent lookups see the
+post-state.
+
+## Pointers
+
+- Python source: `python/verbs.py`.
+- Tests: `tests/Game/Agent/VerbsTest.elm`.
