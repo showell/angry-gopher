@@ -2272,6 +2272,157 @@
     }
   },
   {
+    "name": "solve_lonely_trouble_amid_rich_helpers",
+    "desc": "Trouble 5H surrounded by length-4 helpers whose end cards are not 5H neighbors. Helpers exist but no extract verb fires for 5H.",
+    "op": "solve",
+    "hand": [],
+    "board": [],
+    "helper": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 1,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 2,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 11,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 12,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 13,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 8,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 9,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 10,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 11,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "trouble": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 5,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "expect": {
+      "kind": "no_plan",
+      "no_plan": true
+    }
+  },
+  {
     "name": "solve_partial_completable_but_stranded",
     "desc": "Trouble [5H] + helper [3C 4C 5C 6C]. Peel 6C produces partial [5H 6C] but no further extract leads to victory; an unrelated helper [JS QS KS AS] adds noise but no path.",
     "op": "solve",
@@ -2593,6 +2744,133 @@
     "expect": {
       "kind": "",
       "plan_length": 1
+    }
+  },
+  {
+    "name": "solve_two_partial_troubles_no_paths",
+    "desc": "Two unsolvable trouble pairs (AH AS needs another A; 5H 6H needs 4H or 7H). Helpers don't carry the missing values.",
+    "op": "solve",
+    "hand": [],
+    "board": [],
+    "helper": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 8,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 9,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 10,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 8,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 9,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 10,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "trouble": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 1,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 5,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 6,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "expect": {
+      "kind": "no_plan",
+      "no_plan": true
     }
   },
   {

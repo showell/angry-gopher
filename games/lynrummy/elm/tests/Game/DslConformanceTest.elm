@@ -1120,6 +1120,34 @@ solveLoneSingletonNoPlan =
                     Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
 
 
+solveLonelyTroubleAmidRichHelpers : Test
+solveLonelyTroubleAmidRichHelpers =
+    test "solve_lonely_trouble_amid_rich_helpers" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne }, { value = Four, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Jack, suit = Club, originDeck = DeckOne }, { value = Queen, suit = Club, originDeck = DeckOne }, { value = King, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Eight, suit = Diamond, originDeck = DeckOne }, { value = Nine, suit = Diamond, originDeck = DeckOne }, { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne } ]
+                        ]
+                    , trouble = [ [ { value = Five, suit = Heart, originDeck = DeckOne } ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
 solvePartialCompletableButStranded : Test
 solvePartialCompletableButStranded =
     test "solve_partial_completable_but_stranded" <|
@@ -1223,6 +1251,34 @@ solveSimplePeelInOneLine =
 
                 Nothing ->
                     Expect.fail "expected plan of length 1; got Nothing"
+
+
+solveTwoPartialTroublesNoPaths : Test
+solveTwoPartialTroublesNoPaths =
+    test "solve_two_partial_troubles_no_paths" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ { value = Eight, suit = Diamond, originDeck = DeckOne }, { value = Nine, suit = Diamond, originDeck = DeckOne }, { value = Ten, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Eight, suit = Spade, originDeck = DeckOne }, { value = Nine, suit = Spade, originDeck = DeckOne }, { value = Ten, suit = Spade, originDeck = DeckOne } ]
+                        ]
+                    , trouble = [ [ { value = Ace, suit = Heart, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Heart, originDeck = DeckOne } ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
 
 
 solveTwoUnrelatedSingletons : Test
@@ -1378,10 +1434,12 @@ suite =
         , solveDisjointHelperNoPlan
         , solveEngulfInOneLine
         , solveLoneSingletonNoPlan
+        , solveLonelyTroubleAmidRichHelpers
         , solvePartialCompletableButStranded
         , solveRunPartialUncompletable
         , solveSetPartialUncompletable
         , solveSimplePeelInOneLine
+        , solveTwoPartialTroublesNoPaths
         , solveTwoUnrelatedSingletons
         , spliceDup5dIntoPureDiamonds
         , turnCompleteCleanBoard

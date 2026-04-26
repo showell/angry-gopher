@@ -130,6 +130,28 @@ scenario solve_partial_completable_but_stranded
     at (0,0): 5H
   expect: no_plan
 
+scenario solve_lonely_trouble_amid_rich_helpers
+  desc: Trouble 5H surrounded by length-4 helpers whose end cards are not 5H neighbors. Helpers exist but no extract verb fires for 5H.
+  op: solve
+  helper:
+    at (0,0): AS 2S 3S 4S
+    at (0,0): JC QC KC AC
+    at (0,0): 8D 9D TD JD
+  trouble:
+    at (0,0): 5H
+  expect: no_plan
+
+scenario solve_two_partial_troubles_no_paths
+  desc: Two unsolvable trouble pairs (AH AS needs another A; 5H 6H needs 4H or 7H). Helpers don't carry the missing values.
+  op: solve
+  helper:
+    at (0,0): 8D 9D TD
+    at (0,0): 8S 9S TS
+  trouble:
+    at (0,0): AH AS
+    at (0,0): 5H 6H
+  expect: no_plan
+
 # --- solve: positive cases ----------------------------------
 
 scenario solve_engulf_in_one_line
