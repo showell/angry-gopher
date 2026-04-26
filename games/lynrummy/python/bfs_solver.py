@@ -573,15 +573,27 @@ def bfs_with_cap(initial, max_trouble, *, max_states, verbose):
 
 def solve(board, *, max_trouble_outer=8, max_states=10000,
           verbose=True):
-    """Outer iterative-deepening on max_trouble. Inner BFS
-    runs with the cap; if it exhausts without finding a
-    solution, bump the cap by 1 and retry. The hope: caps
-    below the puzzle's true peak trouble fail FAST (the
-    frontier dies quickly because most moves exceed the cap)."""
+    """Outer iterative-deepening on max_trouble. Takes a flat
+    board (list of stacks) and partitions into HELPER /
+    TROUBLE before running the inner BFS. For callers that
+    already have a 4-bucket state, see `solve_state`."""
     helper = [s for s in board if classify(s) != "other"]
     trouble = [s for s in board if classify(s) == "other"]
     initial = (helper, trouble, [], [])
+    return solve_state(initial,
+                       max_trouble_outer=max_trouble_outer,
+                       max_states=max_states,
+                       verbose=verbose)
 
+
+def solve_state(initial, *, max_trouble_outer=8, max_states=10000,
+                verbose=True):
+    """Inner BFS driver. Takes a 4-bucket state directly
+    (helper, trouble, growing, complete). Iterates the outer
+    cap from 1 upward; first cap to find a plan returns. The
+    hope: caps below the puzzle's true peak trouble fail
+    FAST (the frontier dies quickly because most moves exceed
+    the cap)."""
     total_expansions = 0
     for cap in range(1, max_trouble_outer + 1):
         if verbose:

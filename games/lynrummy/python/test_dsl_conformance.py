@@ -173,28 +173,17 @@ def _run_enumerate_moves(sc):
 
 
 def _run_solve(sc):
-    """Build a 4-bucket state, walk `bfs_solver.solve`, and
-    assert on `no_plan` or `plan_length` per the scenario."""
-    # Convert the 4-bucket sections into a flat board: solve
-    # expects `board = list of stacks` and partitions them.
-    # We go around that by calling the inner BFS directly via
-    # the same helpers the 4-bucket model exposes.
+    """Build a 4-bucket state, walk `bfs_solver.solve_state`,
+    and assert on `no_plan` or `plan_length` per the scenario."""
     state = (
         _bucket_to_tuples(sc.get("helper", [])),
         _bucket_to_tuples(sc.get("trouble", [])),
         _bucket_to_tuples(sc.get("growing", [])),
         _bucket_to_tuples(sc.get("complete", [])),
     )
-    # Iterate the outer cap loop using bfs_solver.bfs_with_cap
-    # directly, since the convenience `solve(board)` only
-    # accepts a flat board.
-    plan = None
-    for cap in range(1, 11):
-        result = bfs_solver.bfs_with_cap(
-            state, cap, max_states=200000, verbose=False)
-        if result[0] is not None:
-            plan = result[0]
-            break
+    plan = bfs_solver.solve_state(
+        state, max_trouble_outer=10, max_states=200000,
+        verbose=False)
 
     expect = sc["expect"]
     if expect.get("no_plan"):
