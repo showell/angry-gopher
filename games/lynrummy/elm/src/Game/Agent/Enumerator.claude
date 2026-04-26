@@ -1,0 +1,48 @@
+# Enumerator.elm — INTRICATE, the BFS move generator
+
+The Elm port of Python's `bfs_solver._enumerate_moves`. Given
+a `Buckets` state, returns every legal next move + the
+post-state. Each move corresponds to one DSL line in the BFS
+plan.
+
+## Status
+
+- **Label:** WORKHORSE + INTRICATE.
+- **Mirrors:** `python/bfs_solver.py` lines ~155–470
+  (`_enumerate_moves` and the 5 move-type loops).
+- **Divergences:** Python yields a generator; Elm returns a
+  `List (Move, Buckets)`. Python's helper functions stay
+  module-private; Elm's mirror them with the same names
+  (without leading underscore).
+
+## The five move types (must touch a trouble card)
+
+- `(a)` **Absorb a neighbor into TROUBLE/GROWING.**
+  - Source = HELPER stack via extract verb (peel/pluck/yank/
+    steal). Emits `ExtractAbsorb`.
+  - Source = TROUBLE singleton (free pull). Emits `FreePull`.
+- `(b)` **Push a TROUBLE 1- or 2-partial onto a HELPER**
+  stack so the helper grows. Emits `Push`.
+- `(b')` **Engulf**: a GROWING 2-partial swallows a HELPER
+  stack into one legal stack that graduates to COMPLETE.
+  Same `Push` shape as (b); the bucket route is implicit.
+- `(c)` **Splice**: insert a TROUBLE singleton into a HELPER
+  pure/rb run, splitting it cleanly. Emits `Splice`.
+- `(d)` **Shift**: peel a HELPER donor card to replace the
+  stolen end of a length-3 run; no spawn. Emits `Shift`.
+
+## Pure-FP discipline
+
+Every helper takes state, returns state. Lists treated as
+immutable values (no mutation by convention). Mirrors the
+2026-04-25 Python pass: `withoutAt`, `removeAbsorber`,
+`graduate`, `extractPieces` are all pure.
+
+## Pointers
+
+- Python source: `python/bfs_solver.py` `_enumerate_moves`.
+- DSL contract: `conformance/scenarios/planner.dsl`. Each
+  scenario asserts at least one move of a named type fires.
+  Currently exercised by Python; this Elm port flips the
+  Elm stubs (`Expect.pass`) to live assertions.
+- Tests: `tests/Game/Agent/EnumeratorTest.elm`.
