@@ -3,7 +3,7 @@ bfs_play.py — replay a BFS plan on the actual board.
 
 Pipeline (all three layers live in libraries to prevent drift):
   1. VERBs       : `bfs.solve` produces DSL lines + descs.
-  2. VERB → PRIM : `verbs.step_to_primitives` decomposes each
+  2. VERB → PRIM : `verbs.move_to_primitives` decomposes each
                    move into UI primitives.
   3. PRIM → GEST : `primitives.send_one` handles wire-shape +
                    gesture synthesis + POST.
@@ -171,7 +171,7 @@ def main():
 
     for step_num, (line, desc) in enumerate(plan, 1):
         print(f"\nstep {step_num}: {line}")
-        prims = verbs.step_to_primitives(desc, local)
+        prims = verbs.move_to_primitives(desc, local)
         for prim in prims:
             local = primitives.send_one(c, sid, prim, local,
                                         verbose=True)

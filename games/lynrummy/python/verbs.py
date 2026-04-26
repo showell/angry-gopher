@@ -28,7 +28,7 @@ from move import (
 )
 
 
-def step_to_primitives(desc, board):
+def move_to_primitives(desc, board):
     """Decompose one BFS DSL move into UI primitives.
 
     `desc` is the BFS solver's per-move dict. `board` is the
@@ -44,15 +44,15 @@ def step_to_primitives(desc, board):
     """
     t = desc.type
     if isinstance(desc, ExtractAbsorbDesc):
-        return _extract_absorb(desc, board)
+        return _extract_absorb_prims(desc, board)
     if isinstance(desc, FreePullDesc):
-        return _free_pull(desc, board)
+        return _free_pull_prims(desc, board)
     if isinstance(desc, PushDesc):
-        return _push(desc, board)
+        return _push_prims(desc, board)
     if isinstance(desc, SpliceDesc):
-        return _splice(desc, board)
+        return _splice_prims(desc, board)
     if isinstance(desc, ShiftDesc):
-        return _shift(desc, board)
+        return _shift_prims(desc, board)
     raise NotImplementedError(f"verb type {t!r} not supported")
 
 
@@ -146,7 +146,7 @@ def _isolate_card(sim, stack_content, ci, kind):
     ]
 
 
-def _extract_absorb(desc, board):
+def _extract_absorb_prims(desc, board):
     """Peel/pluck/yank/steal a card from a HELPER stack and
     merge it onto target. For set extracts we may need a
     follow-up merge to reconstitute the legal remnant."""
@@ -212,7 +212,7 @@ def _extract_absorb(desc, board):
 
 # --- free pull / push / push-merge ---------------------------
 
-def _free_pull(desc, board):
+def _free_pull_prims(desc, board):
     """A loose TROUBLE singleton is already on the board;
     merge it onto target."""
     loose = desc.loose
@@ -223,7 +223,7 @@ def _free_pull(desc, board):
     return prims
 
 
-def _push(desc, board):
+def _push_prims(desc, board):
     """Push a TROUBLE singleton or 2-partial onto a HELPER
     stack. The trouble cards are already on the board as a
     single stack (singleton or 2-partial)."""
@@ -237,7 +237,7 @@ def _push(desc, board):
 
 # --- splice --------------------------------------------------
 
-def _splice(desc, board):
+def _splice_prims(desc, board):
     """Insert a TROUBLE singleton into a HELPER pure/rb run.
     Physically: split the run at k, then merge the loose onto
     the half it joins (per `side`). The other half persists
@@ -262,7 +262,7 @@ def _splice(desc, board):
 
 # --- shift ---------------------------------------------------
 
-def _shift(desc, board):
+def _shift_prims(desc, board):
     """Length-3 run end-steal with replacement: peel p_card
     from a donor, push it onto source's opposite end, pop the
     stolen card, absorb it onto target. Source stays length-3

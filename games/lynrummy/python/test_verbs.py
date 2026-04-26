@@ -87,7 +87,7 @@ def test_peel_left_edge_then_merge():
         graduated=False,
         spawned=[],
     )
-    prims = verbs.step_to_primitives(desc, board)
+    prims = verbs.move_to_primitives(desc, board)
     sim = _apply_all(board, prims)
     actions = [p["action"] for p in prims]
     _assert("peel-left actions are split + merge",
@@ -124,7 +124,7 @@ def test_pluck_interior_premoves_donor():
         graduated=False,
         spawned=[],
     )
-    prims = verbs.step_to_primitives(desc, board)
+    prims = verbs.move_to_primitives(desc, board)
     sim = _apply_all(board, prims)
     actions = [p["action"] for p in prims]
     _assert("pluck-interior emits a pre-move before splitting",
@@ -153,7 +153,7 @@ def test_free_pull_in_place():
         side="left",
         graduated=True,
     )
-    prims = verbs.step_to_primitives(desc, board)
+    prims = verbs.move_to_primitives(desc, board)
     sim = _apply_all(board, prims)
     _assert("free_pull emits one merge (no pre-move needed)",
             len(prims) == 1 and prims[0]["action"] == "merge_stack",
@@ -181,7 +181,7 @@ def test_free_pull_left_edge_premoves():
         side="left",
         graduated=True,
     )
-    prims = verbs.step_to_primitives(desc, board)
+    prims = verbs.move_to_primitives(desc, board)
     sim = _apply_all(board, prims)
     actions = [p["action"] for p in prims]
     _assert("left-edge free_pull pre-moves target before merging",
@@ -207,7 +207,7 @@ def test_push_partial_in_place():
         result=[(11, S, 0), (12, C, 0), (13, C, 0)],
         side="right",
     )
-    prims = verbs.step_to_primitives(desc, board)
+    prims = verbs.move_to_primitives(desc, board)
     sim = _apply_all(board, prims)
     _assert("push emits one merge_stack",
             len(prims) == 1 and prims[0]["action"] == "merge_stack",
@@ -240,7 +240,7 @@ def test_splice_run():
         left_result=[(2, H, 0), (3, H, 0), (4, H, 0)],
         right_result=[(4, S, 0), (5, H, 0), (6, H, 0), (7, H, 0)],
     )
-    prims = verbs.step_to_primitives(desc, board)
+    prims = verbs.move_to_primitives(desc, board)
     sim = _apply_all(board, prims)
     actions = [p["action"] for p in prims]
     _assert("splice emits split + merge_stack (with optional pre-moves)",
@@ -279,7 +279,7 @@ def test_shift_right_end():
         side="right",
         graduated=False,
     )
-    prims = verbs.step_to_primitives(desc, board)
+    prims = verbs.move_to_primitives(desc, board)
     sim = _apply_all(board, prims)
     _assert("shift produces a non-empty primitive list",
             len(prims) >= 3,

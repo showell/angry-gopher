@@ -155,7 +155,7 @@ def _execute_plan(client, sid, plan, local, *, verbose, perf):
         if verbose:
             print(f"  plan step {step_num}: {move.narrate(desc)}")
         t = time.time()
-        prims = verbs.step_to_primitives(desc, local)
+        prims = verbs.move_to_primitives(desc, local)
         translate_wall = time.time() - t
         _record_max(perf, "translate", translate_wall,
                     {"desc_type": desc.type,
@@ -383,7 +383,7 @@ def play_session_offline(*, max_actions=500, capture_path=None):
         # Apply BFS plan steps locally.
         for line, desc in play["plan"]:
             t = time.time()
-            prims = verbs.step_to_primitives(desc, board)
+            prims = verbs.move_to_primitives(desc, board)
             translate_wall = time.time() - t
             _record_max(perf, "translate", translate_wall,
                         {"desc_type": desc.type,

@@ -141,7 +141,7 @@ def solve_state_with_descs(initial, *, max_trouble_outer=8,
                            on_cap_exhausted=None,
                            verbose=False):
     """Same as solve_state but returns [(line, desc), ...].
-    The desc dicts feed `verbs.step_to_primitives` for
+    The desc dicts feed `verbs.move_to_primitives` for
     primitive translation. Returns None if no plan within the
     outer cap.
 
