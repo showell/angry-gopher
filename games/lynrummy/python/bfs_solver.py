@@ -293,9 +293,24 @@ def enumerate_moves(state):
     """Yield (description_dict, new_state) for every legal
     1-line extension."""
     helper, trouble, growing, complete = state
+    completion_inv = _completion_inventory(helper, trouble)
+
+    # State-level doomed-growing filter. If any growing
+    # 2-partial has no completion candidate in this state's
+    # (helper + trouble-singletons) inventory, the partial
+    # will NEVER graduate. The state is dead — yield nothing.
+    # The doomed-third filter at merge time admits partials
+    # whose completion is available AT ADMISSION; this guard
+    # catches partials whose completion has since been
+    # consumed elsewhere.
+    for g in growing:
+        if len(g) == 2:
+            shapes = _completion_shapes(g)
+            if not (shapes & completion_inv):
+                return
+
     peelable = _peelable_index(helper)
     extractable = _extractable_index(helper)
-    completion_inv = _completion_inventory(helper, trouble)
 
     # All targets for absorption (move type a). Each entry:
     # (bucket_name, idx_in_bucket, target_stack).

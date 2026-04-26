@@ -285,6 +285,14 @@ def test_doomed_growing_partial_is_reachable():
             len(doomed) >= 1,
             f"growing={growing2}, doomed={doomed}, inv={sorted(inv)}")
 
+    # And the state-level filter MUST fire on this state —
+    # enumerate_moves yields nothing when a doomed growing
+    # partial is present.
+    moves_from_doomed_state = list(bs.enumerate_moves(after_m2))
+    _assert("state-level filter prunes a doomed-growing state",
+            moves_from_doomed_state == [],
+            f"got {len(moves_from_doomed_state)} moves")
+
 
 # --- enumeration purity --------------------------------------
 
