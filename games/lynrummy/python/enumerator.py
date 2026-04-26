@@ -8,6 +8,7 @@ Lifted from `bfs_solver.py` 2026-04-26 as the module split
 landed. See `enumerator.claude` for the full overview.
 """
 
+from buckets import Buckets, FocusedState
 from cards import (
     RED, classify, neighbors, partial_ok,
     can_peel_kind, can_pluck_kind, can_yank_kind,
@@ -276,7 +277,7 @@ def enumerate_moves(state):
                         graduated=graduated,
                         spawned=list(spawned),
                     )
-                    yield desc, (new_helper, nt, ng_final, nc)
+                    yield desc, Buckets(new_helper, nt, ng_final, nc)
 
         # Source: TROUBLE singleton (free pull).
         for li, loose_stack in enumerate(trouble):
@@ -314,7 +315,7 @@ def enumerate_moves(state):
                     side=side,
                     graduated=graduated,
                 )
-                yield desc, (list(helper), nt, ng_final, nc)
+                yield desc, Buckets(list(helper), nt, ng_final, nc)
 
     # Move type (d): SHIFT — when an end-card of a length-3
     # pure/rb run would normally be steal-pulled (sacrificing
@@ -412,7 +413,7 @@ def enumerate_moves(state):
                                 side=absorb_side,
                                 graduated=graduated,
                             )
-                            yield desc, (nh, nt_base, ng_final, nc)
+                            yield desc, Buckets(nh, nt_base, ng_final, nc)
 
     # Move type (c): splice — insert a TROUBLE singleton
     # into a HELPER pure/rb run length 4+. The run splits
@@ -453,8 +454,8 @@ def enumerate_moves(state):
                         left_result=left,
                         right_result=right,
                     )
-                    yield desc, (nh, nt, list(growing),
-                                 list(complete))
+                    yield desc, Buckets(nh, nt, list(growing),
+                                        list(complete))
 
     # Move type (b): push a TROUBLE 1- or 2-partial onto a
     # HELPER stack so the result stays legal (the helper grows
@@ -476,7 +477,7 @@ def enumerate_moves(state):
                     result=merged,
                     side=side,
                 )
-                yield desc, (nh, nt, list(growing), list(complete))
+                yield desc, Buckets(nh, nt, list(growing), list(complete))
 
     # Move type (b'): a GROWING 2-partial engulfs a HELPER
     # stack — the growing build absorbs the helper into a
@@ -499,7 +500,7 @@ def enumerate_moves(state):
                     result=merged,
                     side=side,
                 )
-                yield desc, (nh, list(trouble), ng, nc)
+                yield desc, Buckets(nh, list(trouble), ng, nc)
 
 
 # --- Focus rule + lineage tracking ---
@@ -583,23 +584,23 @@ FOCUS_ENABLED = True
 
 def enumerate_focused(state):
     """Wrap enumerate_moves with the focus-only filter and
-    lineage bookkeeping. Yields (desc, new_5tuple_state)."""
-    helper, trouble, growing, complete, lineage = state
-    if not lineage:
+    lineage bookkeeping. Yields (desc, new_FocusedState)."""
+    if not state.lineage:
         return
-    focus = lineage[0]
-    base = (helper, trouble, growing, complete)
+    focus = state.lineage[0]
     if not FOCUS_ENABLED:
         # Bypass: yield every legal move; freeze lineage so the
         # dedup key reduces to the bucket signature.
-        for desc, new_base in enumerate_moves(base):
-            yield desc, (*new_base, lineage)
+        for desc, new_buckets in enumerate_moves(state.buckets):
+            yield desc, FocusedState(buckets=new_buckets,
+                                     lineage=state.lineage)
         return
-    for desc, new_base in enumerate_moves(base):
+    for desc, new_buckets in enumerate_moves(state.buckets):
         if not move_touches_focus(desc, focus):
             continue
-        new_lineage = update_lineage(lineage, desc)
-        yield desc, (*new_base, new_lineage)
+        new_lineage = update_lineage(state.lineage, desc)
+        yield desc, FocusedState(buckets=new_buckets,
+                                 lineage=new_lineage)
 
 
 def initial_lineage(trouble, growing):

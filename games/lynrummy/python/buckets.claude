@@ -24,6 +24,17 @@ operations (`state_sig`, `trouble_count`, `is_victory`).
 - **Type aliases:** `Card`, `Stack`, `Bucket`, `ShapeKey`,
   `Lineage`, `BucketName`, `Verb`, `Side`, `MoveType`. Pure
   documentation aliases — `list` stays `list`.
+- **`Buckets` NamedTuple** (added 2026-04-26): the 4-bucket
+  state record. Mirrors Elm's
+  `type alias Buckets = { helper, trouble, growing, complete }`.
+  NamedTuple gives both named access (`state.helper`) and
+  positional unpacking (`h, t, g, c = state`) so it's
+  drop-in compatible with the legacy 4-tuple shape.
+- **`FocusedState` NamedTuple** (added 2026-04-26): the
+  focus-rule wrapper. `(buckets: Buckets, lineage: Lineage)`.
+  Mirrors Elm's
+  `type alias FocusedState = { buckets : Buckets, lineage : Lineage }`.
+  Access pattern: `state.buckets.helper`, `state.lineage`.
 - `state_sig(helper, trouble, growing, complete)` — the
   memoization key for the BFS seen-set. Bucket order
   matters; stack order within a bucket doesn't.

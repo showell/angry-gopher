@@ -9,7 +9,7 @@ Lifted from `bfs_solver.py` 2026-04-26 as the module split
 landed (per ALIGNMENT_REPORT.md).
 """
 
-from typing import Literal
+from typing import Literal, NamedTuple
 
 
 # --- Type aliases (parallel to Elm's `Game.Agent.*` typedefs) ---
@@ -27,6 +27,27 @@ BucketName = Literal["trouble", "growing"]   # the two absorber-source buckets
 Verb = Literal["peel", "pluck", "yank", "steal", "split_out"]
 Side = Literal["left", "right"]
 MoveType = Literal["extract_absorb", "free_pull", "push", "splice", "shift"]
+
+
+# --- State records ---
+# Mirrors Elm's `Game.Agent.Buckets` + the `FocusedState`
+# alias inside `Enumerator.elm`. NamedTuple gives both
+# named access (`state.helper`) and positional unpacking
+# (`h, t, g, c = state`), so it's drop-in compatible with
+# the legacy 4-tuple shape while reading more like the Elm
+# record on the new sites.
+
+
+class Buckets(NamedTuple):
+    helper: Bucket
+    trouble: Bucket
+    growing: Bucket
+    complete: Bucket
+
+
+class FocusedState(NamedTuple):
+    buckets: Buckets
+    lineage: Lineage
 
 
 # --- State-level operations ---

@@ -6,7 +6,10 @@ The Python equivalent of `Game.Agent.Bfs.elm`. Lifted from
 `bfs_solver.py` 2026-04-26 as the module split landed.
 """
 
-from buckets import is_victory, state_sig, trouble_count
+from buckets import (
+    Buckets, FocusedState,
+    is_victory, state_sig, trouble_count,
+)
 from cards import classify
 from enumerator import enumerate_focused, initial_lineage
 from move import describe_move
@@ -22,9 +25,9 @@ def bfs_with_cap(initial, max_trouble, max_states, *,
     level N returns the (shortest-under-cap) plan as a list
     of (line, desc) pairs.
 
-    `initial` is a 5-tuple `(helper, trouble, growing,
-    complete, lineage)`. The lineage's head is the focus —
-    each step must grow or consume it.
+    `initial` is a `FocusedState` (Buckets + lineage).
+    The lineage's head is the focus — each step must grow
+    or consume it.
 
     Returns (plan_or_None, hit_max_states, expansions,
     seen_count). `hit_max_states=True` means the cap was hit
@@ -34,11 +37,12 @@ def bfs_with_cap(initial, max_trouble, max_states, *,
     with trouble_histogram / level_widths / sample_states.
     `verbose` prints level transitions + victory message.
     """
-    if trouble_count(initial[1], initial[2]) > max_trouble:
+    b = initial.buckets
+    if trouble_count(b.trouble, b.growing) > max_trouble:
         return None, False, 0, 0
-    if is_victory(initial[1], initial[2]):
+    if is_victory(b.trouble, b.growing):
         return [], False, 0, 1
-    seen = {(state_sig(*initial[:4]), initial[4])}
+    seen = {(state_sig(*b), initial.lineage)}
     current_level = [(initial, [])]
     expansions = 0
     level = 0
@@ -54,7 +58,8 @@ def bfs_with_cap(initial, max_trouble, max_states, *,
         # lowest-trouble-first means victory-bearing states
         # get expanded earliest and we exit on first hit.
         current_level.sort(
-            key=lambda e: trouble_count(e[0][1], e[0][2]))
+            key=lambda e: trouble_count(e[0].buckets.trouble,
+                                        e[0].buckets.growing))
         if verbose:
             print(f"\n--- level {level}: expanding "
                   f"{len(current_level)} program(s) ---")
@@ -62,19 +67,19 @@ def bfs_with_cap(initial, max_trouble, max_states, *,
         for state, program in current_level:
             expansions += 1
             for desc, new_state in enumerate_focused(state):
-                _, t, g, _, lin = new_state
-                if trouble_count(t, g) > max_trouble:
+                nb = new_state.buckets
+                if trouble_count(nb.trouble, nb.growing) > max_trouble:
                     continue
-                sig = (state_sig(*new_state[:4]), lin)
+                sig = (state_sig(*nb), new_state.lineage)
                 if sig in seen:
                     continue
                 seen.add(sig)
                 new_program = program + [(describe_move(desc), desc)]
                 if diagnostics is not None:
-                    tc = trouble_count(t, g)
+                    tc = trouble_count(nb.trouble, nb.growing)
                     h = diagnostics["trouble_histogram"]
                     h[tc] = h.get(tc, 0) + 1
-                if is_victory(t, g):
+                if is_victory(nb.trouble, nb.growing):
                     if verbose:
                         print(f"  VICTORY at level {level}: "
                               f"{len(new_program)}-line plan, "
@@ -109,7 +114,7 @@ def solve(board, *, max_trouble_outer=8, max_states=10000,
     `solve_state_with_descs`."""
     helper = [s for s in board if classify(s) != "other"]
     trouble = [s for s in board if classify(s) == "other"]
-    initial = (helper, trouble, [], [])
+    initial = Buckets(helper, trouble, [], [])
     return solve_state(initial,
                        max_trouble_outer=max_trouble_outer,
                        max_states=max_states,
@@ -147,13 +152,21 @@ def solve_state_with_descs(initial, *, max_trouble_outer=8,
     state budget (BAD — possible runaway). False means the
     frontier emptied naturally (GOOD termination).
     """
-    if trouble_count(initial[1], initial[2]) > max_trouble_outer:
+    # Accept either a Buckets NamedTuple or a bare 4-tuple
+    # (legacy callers + tests still pass tuples). Promote to
+    # Buckets if needed.
+    if not isinstance(initial, Buckets):
+        initial = Buckets(*initial)
+    if trouble_count(initial.trouble, initial.growing) > max_trouble_outer:
         return None
-    if is_victory(initial[1], initial[2]):
+    if is_victory(initial.trouble, initial.growing):
         return []
-    # Promote the 4-tuple input to a 5-tuple by attaching the
+    # Wrap the Buckets into a FocusedState by attaching the
     # initial lineage (the trouble entries in board order).
-    initial5 = (*initial, initial_lineage(initial[1], initial[2]))
+    initial5 = FocusedState(
+        buckets=initial,
+        lineage=initial_lineage(initial.trouble, initial.growing),
+    )
     for cap in range(1, max_trouble_outer + 1):
         if verbose:
             print(f"\n========== outer pass: max_trouble={cap} "
