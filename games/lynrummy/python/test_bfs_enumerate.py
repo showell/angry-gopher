@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 test_bfs_enumerate.py — snapshot tests for
-`bfs_solver._enumerate_moves`, the per-state move generator.
+`bfs_solver.enumerate_moves`, the per-state move generator.
 
 These tests are intentionally small and concrete: hand-built
 4-bucket states, full enumeration, exact assertions on the
@@ -47,7 +47,7 @@ def test_simple_peel_into_trouble():
     helper = [[(5, H, 0), (6, H, 0), (7, H, 0), (8, H, 0)]]
     trouble = [[(4, H, 0)]]
     state = (helper, trouble, [], [])
-    moves = list(bs._enumerate_moves(state))
+    moves = list(bs.enumerate_moves(state))
     types = _types(moves)
     _assert("at least one extract_absorb fires",
             "extract_absorb" in types,
@@ -70,7 +70,7 @@ def test_splice_into_length_4_run():
     helper = [[(5, H, 0), (6, H, 0), (7, H, 0), (8, H, 0)]]
     trouble = [[(7, H, 1)]]  # second-deck 7H — splices in
     state = (helper, trouble, [], [])
-    moves = list(bs._enumerate_moves(state))
+    moves = list(bs.enumerate_moves(state))
     splices = [d for d, _ in moves if d["type"] == "splice"]
     # Set classification: runs don't accept dup values.
     # rb_run also won't accept same-value-same-color. So no
@@ -89,7 +89,7 @@ def test_splice_dup_5d_into_pure_diamonds():
                (6, D, 0), (7, D, 0), (8, D, 0)]]
     trouble = [[(5, D, 1)]]  # second-deck 5D
     state = (helper, trouble, [], [])
-    moves = list(bs._enumerate_moves(state))
+    moves = list(bs.enumerate_moves(state))
     splices = [d for d, _ in moves if d["type"] == "splice"]
     _assert("at least one splice fires",
             len(splices) >= 1, f"got {len(splices)}")
@@ -107,7 +107,7 @@ def test_engulf_2partial_into_legal_run():
     helper = [[(3, S, 0), (4, D, 0), (5, C, 0)]]
     growing = [[(1, C, 0), (2, D, 0)]]
     state = (helper, [], growing, [])
-    moves = list(bs._enumerate_moves(state))
+    moves = list(bs.enumerate_moves(state))
     pushes = [d for d, _ in moves if d["type"] == "push"]
     _assert("at least one engulf fires",
             len(pushes) >= 1, f"got {len(pushes)}")
@@ -149,7 +149,7 @@ def test_shift_pops_jack_via_eight():
     ]
     trouble = [[(12, H, 0)]]  # QH absorbs the popped JC
     state = (helper, trouble, [], [])
-    moves = list(bs._enumerate_moves(state))
+    moves = list(bs.enumerate_moves(state))
     shifts = [d for d, _ in moves if d["type"] == "shift"]
     _assert("at least one shift fires",
             len(shifts) >= 1, f"got {len(shifts)}")
@@ -176,7 +176,7 @@ def test_enumerate_does_not_mutate_state():
     snap_g = [list(s) for s in growing]
     snap_c = [list(s) for s in complete]
 
-    _ = list(bs._enumerate_moves(state))
+    _ = list(bs.enumerate_moves(state))
 
     _assert("helper not mutated", helper == snap_h)
     _assert("trouble not mutated", trouble == snap_t)

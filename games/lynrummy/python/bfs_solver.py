@@ -178,7 +178,7 @@ def _peelable_index(helper):
     return out
 
 
-def _enumerate_moves(state):
+def enumerate_moves(state):
     """Yield (description_dict, new_state) for every legal
     1-line extension."""
     helper, trouble, growing, complete = state
@@ -511,7 +511,7 @@ def describe_move(desc):
     return str(desc)
 
 
-def _bfs_with_cap(initial, max_trouble, *, max_states, verbose):
+def bfs_with_cap(initial, max_trouble, *, max_states, verbose):
     """Pure BFS by program length. Bounded by max_trouble:
     states whose total trouble exceeds the cap never enter
     the frontier. At each level we expand EVERY program of
@@ -542,7 +542,7 @@ def _bfs_with_cap(initial, max_trouble, *, max_states, verbose):
         next_level = []
         for state, program in current_level:
             expansions += 1
-            for desc, new_state in _enumerate_moves(state):
+            for desc, new_state in enumerate_moves(state):
                 _, t, g, _ = new_state
                 tc = _trouble_count(t, g)
                 if tc > max_trouble:
@@ -587,7 +587,7 @@ def solve(board, *, max_trouble_outer=8, max_states=10000,
         if verbose:
             print(f"\n========== outer pass: max_trouble={cap} "
                   f"==========")
-        plan, expansions, seen = _bfs_with_cap(
+        plan, expansions, seen = bfs_with_cap(
             initial, cap, max_states=max_states, verbose=verbose)
         total_expansions += expansions
         if plan is not None:

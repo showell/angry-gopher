@@ -150,7 +150,7 @@ def _bucket_to_tuples(stacks):
 
 def _run_enumerate_moves(sc):
     """Build a 4-bucket state from the scenario's helper/trouble/
-    growing/complete sections, walk `bfs_solver._enumerate_moves`,
+    growing/complete sections, walk `bfs_solver.enumerate_moves`,
     and assert at least one yielded desc matches the expected
     `yields` type."""
     state = (
@@ -162,7 +162,7 @@ def _run_enumerate_moves(sc):
     expected_type = sc["expect"].get("yields", "")
     if not expected_type:
         return False, "expect.yields missing"
-    moves = list(bfs_solver._enumerate_moves(state))
+    moves = list(bfs_solver.enumerate_moves(state))
     matches = [d for d, _ in moves if d["type"] == expected_type]
     if not matches:
         types = sorted({d["type"] for d, _ in moves})
@@ -185,12 +185,12 @@ def _run_solve(sc):
         _bucket_to_tuples(sc.get("growing", [])),
         _bucket_to_tuples(sc.get("complete", [])),
     )
-    # Iterate the outer cap loop using bfs_solver._bfs_with_cap
+    # Iterate the outer cap loop using bfs_solver.bfs_with_cap
     # directly, since the convenience `solve(board)` only
     # accepts a flat board.
     plan = None
     for cap in range(1, 11):
-        result = bfs_solver._bfs_with_cap(
+        result = bfs_solver.bfs_with_cap(
             state, cap, max_states=200000, verbose=False)
         if result[0] is not None:
             plan = result[0]

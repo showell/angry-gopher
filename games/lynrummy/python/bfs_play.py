@@ -73,7 +73,7 @@ def _bfs_with_descs(initial, max_trouble):
             key=lambda e: bs._trouble_count(e[0][1], e[0][2]))
         next_level = []
         for state, program in current_level:
-            for desc, new_state in bs._enumerate_moves(state):
+            for desc, new_state in bs.enumerate_moves(state):
                 _, t, g, _ = new_state
                 tc = bs._trouble_count(t, g)
                 if tc > max_trouble:
