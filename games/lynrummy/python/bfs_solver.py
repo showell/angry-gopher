@@ -89,6 +89,25 @@ def _graduate(merged, growing, complete):
     return growing + [merged], list(complete), False
 
 
+def canonical_set(stack):
+    """If `stack` is a same-value group (an actual set, set
+    partial, or even a same-value-same-suit dup), return a
+    sorted copy by (suit, origin_deck). Else return unchanged.
+
+    Used WITHIN the solver only — the UI / wire format treat
+    set order as load-bearing (placement order matters for
+    humans). Inside the solver, set order is meaningless and
+    canonicalizing makes state representations deterministic
+    + makes desc dicts produced from equivalent merges
+    structurally identical."""
+    if len(stack) < 2:
+        return stack
+    v = stack[0][0]
+    if any(c[0] != v for c in stack):
+        return stack
+    return sorted(stack, key=lambda c: (c[1], c[2]))
+
+
 def _extract_pieces(source, ci, verb):
     """Return (helper_pieces, spawned_pieces) — the post-extract
     pieces of `source` after removing the card at `ci` per
@@ -101,7 +120,11 @@ def _extract_pieces(source, ci, verb):
     if verb == "peel":
         kind = classify(source)
         if kind == "set":
-            remnant = [x for x in source if x != c]
+            # Set remnant — same-value, distinct suits.
+            # Canonicalize so equivalent permutations of the
+            # remaining cards produce identical state shape.
+            remnant = canonical_set(
+                [x for x in source if x != c])
         elif ci == 0:
             remnant = source[1:]
         else:
@@ -237,6 +260,7 @@ def enumerate_moves(state):
                               else [ext_card, *target])
                     if not partial_ok(merged):
                         continue
+                    merged = canonical_set(merged)
                     nt_base, ng = _remove_absorber(
                         bucket, idx, trouble, growing)
                     nt = nt_base + spawned
@@ -270,6 +294,7 @@ def enumerate_moves(state):
                           else [loose, *target])
                 if not partial_ok(merged):
                     continue
+                merged = canonical_set(merged)
                 # Both the absorber AND the loose-source come
                 # out of TROUBLE — drop both at once.
                 nt_base, ng = _remove_absorber(
@@ -362,6 +387,7 @@ def enumerate_moves(state):
                                 else [stolen, *target])
                             if not partial_ok(merged):
                                 continue
+                            merged = canonical_set(merged)
                             nt_base, ng = _remove_absorber(
                                 bucket, idx, trouble, growing)
                             ng_final, nc, graduated = _graduate(
@@ -438,6 +464,7 @@ def enumerate_moves(state):
                           else [*t, *h])
                 if classify(merged) == "other":
                     continue
+                merged = canonical_set(merged)
                 nh = _without(helper, hi) + [merged]
                 nt = _without(trouble, ti)
                 desc = {
@@ -461,6 +488,7 @@ def enumerate_moves(state):
                           else [*g, *h])
                 if classify(merged) == "other":
                     continue
+                merged = canonical_set(merged)
                 nh = _without(helper, hi)
                 ng = _without(growing, gi)
                 nc = complete + [merged]
@@ -739,8 +767,10 @@ def solve(board, *, max_trouble_outer=8, max_states=10000,
     board (list of stacks) and partitions into HELPER /
     TROUBLE before running the inner BFS. For callers that
     already have a 4-bucket state, see `solve_state`."""
-    helper = [s for s in board if classify(s) != "other"]
-    trouble = [s for s in board if classify(s) == "other"]
+    helper = [canonical_set(s) for s in board
+              if classify(s) != "other"]
+    trouble = [canonical_set(s) for s in board
+               if classify(s) == "other"]
     initial = (helper, trouble, [], [])
     return solve_state(initial,
                        max_trouble_outer=max_trouble_outer,
