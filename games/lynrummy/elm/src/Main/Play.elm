@@ -42,8 +42,7 @@ import Game.Referee as Referee
 import Game.Score as Score
 import Game.Strategy.Hint as Hint
 import Game.WireAction as WA exposing (WireAction)
-import Main.Apply as Apply exposing (applyAction, refereeBounds)
-import Process
+import Main.Apply exposing (applyAction, refereeBounds)
 import Main.Gesture as Gesture
     exposing
         ( handleMouseUp
@@ -247,12 +246,6 @@ update msg model =
 
         ClickAgentPlay ->
             withNoOutput (clickAgentPlay model)
-
-        AgentTick remaining ->
-            withNoOutput (agentTick remaining model)
-
-        AgentApplyAction action ->
-            withNoOutput (agentApplyAction action model)
 
 
 withNoOutput : ( Model, Cmd Msg ) -> ( Model, Cmd Msg, Output )
@@ -495,18 +488,10 @@ bfsHint model =
             )
 
 
-{-| Pacing between agent moves — gives the watcher a beat to
-register what just happened on the board before the next move
-fires. -}
-agentMoveDelayMs : Float
-agentMoveDelayMs =
-    500
-
-
 {-| Each click plays exactly the next BFS plan line — i.e. the
-primitives for one logical move, paced 500ms apart. Then it
-stops, so the user can keep clicking to walk through the
-program one line at a time.
+primitives for one logical move. Then it stops, so the user
+can keep clicking to walk through the program one line at a
+time.
 
 The plan is computed ONCE on the first click and cached in
 `model.agentProgram` (a "program counter" of remaining
@@ -514,52 +499,84 @@ moves). Subsequent clicks consume the head of that cache —
 no re-solve. If the user makes their own gesture in between,
 the gesture path clears `agentProgram` back to Nothing,
 which forces the next click to re-solve from the new live
-board. -}
+board.
+
+The animation itself is owned by the Replay engine. We expand
+the move into a sequence of WireActions, append each to the
+action log with no captured gesture path, fire each on the
+wire for persistence, then kick Replay forward from the new
+tail with `stopAtStep` set to the post-tail index so it stops
+when the move's primitives are exhausted (instead of running
+to end-of-log). Replay walks each entry, calls
+`Space.synthesizeBoardPath` because no captured path is
+present, and animates with the same FSM that animates Steve's
+captured drags. The agent is a clean producer of WireActions;
+all rendering work lives behind the Replay seam. -}
 clickAgentPlay : Model -> ( Model, Cmd Msg )
 clickAgentPlay model =
+    -- Don't stack agent moves on top of an already-running
+    -- replay or animation — wait for the current step to land
+    -- before the user can advance.
+    if model.replay /= Nothing then
+        ( model, Cmd.none )
+
+    else
+        case nextAgentMove model of
+            Just ( move, remaining ) ->
+                runAgentMove move remaining model
+
+            Nothing ->
+                -- nextAgentMove already filled in the right
+                -- status; just hand the model back unchanged.
+                ( noteAgentStatus model, Cmd.none )
+
+
+{-| Resolve the next move to play, using the cached program
+counter when one's live and re-solving from the live board
+otherwise. Returns Nothing when there's nothing left to do
+AND writes a status message describing why. -}
+nextAgentMove : Model -> Maybe ( Move, List Move )
+nextAgentMove model =
     case model.agentProgram of
         Just (move :: rest) ->
-            playAgentMove move rest model
+            Just ( move, rest )
 
         Just [] ->
-            ( { model
-                | agentProgram = Nothing
-                , status =
-                    { text = "Agent finished its program."
-                    , kind = Inform
-                    }
-              }
-            , Cmd.none
-            )
+            Nothing
 
         Nothing ->
             case Bfs.solveBoard model.board of
                 Just (move :: rest) ->
-                    playAgentMove move rest model
+                    Just ( move, rest )
 
+                _ ->
+                    Nothing
+
+
+noteAgentStatus : Model -> Model
+noteAgentStatus model =
+    let
+        text =
+            case model.agentProgram of
                 Just [] ->
-                    ( { model
-                        | status =
-                            { text = "Board is already clean — nothing to do."
-                            , kind = Inform
-                            }
-                      }
-                    , Cmd.none
-                    )
+                    "Agent finished its program."
 
-                Nothing ->
-                    ( { model
-                        | status =
-                            { text = "Agent could not find a plan within budget."
-                            , kind = Inform
-                            }
-                      }
-                    , Cmd.none
-                    )
+                _ ->
+                    case Bfs.solveBoard model.board of
+                        Just [] ->
+                            "Board is already clean — nothing to do."
+
+                        _ ->
+                            "Agent could not find a plan within budget."
+    in
+    { model
+        | agentProgram = Nothing
+        , status = { text = text, kind = Inform }
+    }
 
 
-playAgentMove : Move -> List Move -> Model -> ( Model, Cmd Msg )
-playAgentMove move remaining model =
+runAgentMove : Move -> List Move -> Model -> ( Model, Cmd Msg )
+runAgentMove move remaining model =
     let
         -- Verbs decompose the logical move; GeometryPlan injects
         -- pre-flight MoveStacks before any merge whose in-place
@@ -568,64 +585,48 @@ playAgentMove move remaining model =
         primitives =
             AgentVerbs.moveToPrimitives model.board move
                 |> AgentGeometry.planActions model.board
-    in
-    agentTick primitives
-        { model
-            | agentProgram = Just remaining
-            , status =
-                { text = "Agent: " ++ AgentMove.describe move
-                , kind = Inform
-                }
-        }
 
+        newEntries =
+            List.map agentLogEntry primitives
 
-agentTick : List WireAction -> Model -> ( Model, Cmd Msg )
-agentTick remaining model =
-    case remaining of
-        [] ->
-            ( model, Cmd.none )
-
-        action :: rest ->
-            let
-                applyCmd =
-                    Task.perform (\_ -> AgentApplyAction action) (Task.succeed ())
-
-                nextTickCmd =
-                    case rest of
-                        [] ->
-                            Cmd.none
-
-                        _ ->
-                            Process.sleep agentMoveDelayMs
-                                |> Task.perform (\_ -> AgentTick rest)
-            in
-            ( model, Cmd.batch [ applyCmd, nextTickCmd ] )
-
-
-agentApplyAction : WireAction -> Model -> ( Model, Cmd Msg )
-agentApplyAction action model =
-    let
-        committed =
-            Apply.applyAction action model |> Apply.commit
-
-        entry =
-            { action = action
-            , gesturePath = Nothing
-            , pathFrame = ViewportFrame
+        appended =
+            { model
+                | actionLog = model.actionLog ++ newEntries
+                , agentProgram = Just remaining
+                , status =
+                    { text = "Agent: " ++ AgentMove.describe move
+                    , kind = Inform
+                    }
+                , replay = Just { pending = newEntries, paused = False }
+                , replayAnim = State.NotAnimating
+                , drag = NotDragging
             }
 
-        withLog =
-            { committed | actionLog = committed.actionLog ++ [ entry ] }
-
-        sendCmd =
-            case withLog.sessionId of
+        wireCmds =
+            case model.sessionId of
                 Just sid ->
-                    Wire.sendAction sid action Nothing
+                    List.map (\p -> Wire.sendAction sid p Nothing) primitives
 
                 Nothing ->
-                    Cmd.none
+                    []
+
+        boardRectCmd =
+            -- Replay synthesizes paths in board frame; the live
+            -- board rect is needed downstream by translation
+            -- helpers. Refresh it now so it's fresh for the
+            -- about-to-run animation.
+            Task.attempt BoardRectReceived
+                (Browser.Dom.getElement (State.boardDomIdFor model.gameId))
     in
-    ( withLog, sendCmd )
+    ( appended, Cmd.batch (boardRectCmd :: wireCmds) )
+
+
+agentLogEntry : WireAction -> State.ActionLogEntry
+agentLogEntry action =
+    { action = action
+    , gesturePath = Nothing
+    , pathFrame = BoardFrame
+    }
 
 
 

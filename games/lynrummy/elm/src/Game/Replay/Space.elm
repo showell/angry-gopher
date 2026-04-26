@@ -4,14 +4,17 @@ module Game.Replay.Space exposing
     , boardStackSource
     , dragMsPerPixel
     , dragSourceForAction
+    , easedPath
     , elementTopLeftInViewport
     , handCardForAction
     , handCardSource
     , interpPath
     , linearPath
     , pathDuration
+    , pathStillValid
     , pointInLiveViewport
     , stackLandingInLiveViewport
+    , synthesizeBoardPath
     )
 
 {-| The spatial half of Instant Replay.
@@ -138,15 +141,15 @@ stackLandingInLiveViewport model stack side =
 -- PATH + INTERPOLATION
 
 
-{-| Drag duration scales with distance at 2 ms/px — a pace
-that reads as natural motion when combined with the eased
-synthesis. Applied ONLY to Elm's own synthesized paths
-(hand-origin replays). Captured paths carry their pace in
-their tMs values and are honored verbatim.
+{-| Drag duration scales with distance. Verbatim from Python's
+`gesture_synth.DRAG_MS_PER_PIXEL = 2.5`. The pace is perceptual
+(a fluent-human drag pace), not a measurement of real human
+mouse speed. Applied to Elm's synthesized paths; captured
+paths carry their own pace in their tMs values.
 -}
 dragMsPerPixel : Float
 dragMsPerPixel =
-    2
+    2.5
 
 
 {-| Build a straight-line path from `start` to `end`, duration
@@ -183,6 +186,192 @@ linearPath start end nowMs =
             }
     in
     List.range 0 (samples - 1) |> List.map step
+
+
+{-| Quintic-eased path from `start` to `end`, sampled at uniform
+time intervals. Verbatim port of Python's
+`gesture_synth.synthesize`: ease curve `6f⁵ − 15f⁴ + 10f³`
+(quintic smootherstep — peak velocity at the midpoint, zero
+derivative AND zero second derivative at both ends, so the
+floater eases out of rest and into rest more pronouncedly than
+cosine). 20 samples is dense enough that linear interpolation
+between them reads smoothly through the fast middle.
+-}
+easedPath : Point -> Point -> Float -> List State.GesturePoint
+easedPath start end nowMs =
+    let
+        dx =
+            toFloat (end.x - start.x)
+
+        dy =
+            toFloat (end.y - start.y)
+
+        dist =
+            sqrt (dx * dx + dy * dy)
+
+        duration =
+            max 100 (dist * dragMsPerPixel)
+
+        samples =
+            20
+
+        step i =
+            let
+                frac =
+                    toFloat i / toFloat (samples - 1)
+
+                pos =
+                    quinticEase frac
+            in
+            { tMs = nowMs + frac * duration
+            , x = round (toFloat start.x + dx * pos)
+            , y = round (toFloat start.y + dy * pos)
+            }
+    in
+    List.range 0 (samples - 1) |> List.map step
+
+
+quinticEase : Float -> Float
+quinticEase f =
+    let
+        f3 =
+            f * f * f
+    in
+    f3 * (f * (f * 6 - 15) + 10)
+
+
+
+-- BOARD-ORIGIN PATH SYNTHESIS (the JIT seam)
+--
+-- Mirrors Python's `gesture_synth.drag_endpoints`: given a
+-- WireAction and the live board, derive the (start, end) pair
+-- in board frame, then build an eased path. Hand-origin
+-- primitives and Splits return Nothing (the former goes
+-- through the async DOM-measurement path, the latter is a
+-- click and isn't animated at all).
+
+
+{-| Synthesize a fresh gesture path for `action` against the
+live `model`. Returns the path together with the frame it lives
+in, or `Nothing` if synthesis can't honestly be done for this
+action shape.
+
+This is the "JIT" half of the Replay runtime. Whenever a
+captured gesture path is missing or stale,
+`Game.Replay.Time.prepareReplayStep` calls this to manufacture
+one on the fly. The agent-play flow specifically relies on
+this path: agent-emitted primitives carry no captured gesture,
+so every drag the player sees is synthesized here.
+-}
+synthesizeBoardPath :
+    WireAction
+    -> Model
+    -> Float
+    -> Maybe ( List State.GesturePoint, PathFrame )
+synthesizeBoardPath action model nowMs =
+    boardEndpoints action model
+        |> Maybe.map
+            (\( start, end ) ->
+                ( easedPath start end nowMs, BoardFrame )
+            )
+
+
+{-| Resolve `(start, end)` board-frame floater-top-left points
+for a board-origin primitive against the live board. Mirrors
+Python's `drag_endpoints` exactly so paths look the same on
+both sides:
+
+  - `MoveStack`: src.loc → newLoc.
+  - `MergeStack` right side: src.loc → (target.left + target.size * pitch + 2,
+    target.top - 2). The +2 / -2 jitter is the same pixel-perfect
+    offset Python emits to keep the landing from looking
+    machine-tidied.
+  - `MergeStack` left side: src.loc → (target.left - src.size * pitch + 2,
+    target.top - 2).
+  - `Split`, hand-origin actions: `Nothing` — Splits are clicks
+    in the live UI (the live click event produces a single
+    redraw with no floater; replay matches), and hand origins
+    aren't pinned in board coords.
+
+-}
+boardEndpoints : WireAction -> Model -> Maybe ( Point, Point )
+boardEndpoints action model =
+    case action of
+        WA.MoveStack p ->
+            CardStack.findStack p.stack model.board
+                |> Maybe.map
+                    (\src ->
+                        ( { x = src.loc.left, y = src.loc.top }
+                        , { x = p.newLoc.left, y = p.newLoc.top }
+                        )
+                    )
+
+        WA.MergeStack p ->
+            Maybe.map2
+                (\src tgt ->
+                    let
+                        srcSize =
+                            CardStack.size src
+
+                        tgtSize =
+                            CardStack.size tgt
+
+                        endLeft =
+                            case p.side of
+                                BoardActions.Right ->
+                                    tgt.loc.left + tgtSize * BG.cardPitch
+
+                                BoardActions.Left ->
+                                    tgt.loc.left - srcSize * BG.cardPitch
+                    in
+                    ( { x = src.loc.left, y = src.loc.top }
+                    , { x = endLeft + 2, y = tgt.loc.top - 2 }
+                    )
+                )
+                (CardStack.findStack p.source model.board)
+                (CardStack.findStack p.target model.board)
+
+        _ ->
+            Nothing
+
+
+{-| Decide whether a captured gesture path is still trustworthy
+against the live board. Path samples are floater-top-left
+points, so the first sample should match the source stack's
+current `loc`. If a stack has been MovedStack since the path
+was captured (e.g. the agent's geometry pre-flight ran ahead),
+the start point is stale and the path would draw a phantom
+trajectory; in that case we discard it and let
+`synthesizeBoardPath` build a fresh one.
+
+The check is intentionally conservative: any miss → re-synth.
+A few-pixel difference is rare in practice (locs are integer
+and paths are recorded with the exact loc), so this isn't a
+fuzzy match.
+-}
+pathStillValid : List State.GesturePoint -> WireAction -> Model -> Bool
+pathStillValid path action model =
+    case ( List.head path, expectedStartFor action model ) of
+        ( Just first, Just expected ) ->
+            first.x == expected.x && first.y == expected.y
+
+        ( _, Nothing ) ->
+            -- No expectation we can check (hand-origin, split,
+            -- or unknown shape). Trust the captured path —
+            -- the JIT fallback only kicks in when we can
+            -- actively prove staleness.
+            True
+
+        ( Nothing, _ ) ->
+            -- Empty path → not valid; let the caller decide
+            -- (today: synthesize or applyImmediate).
+            False
+
+
+expectedStartFor : WireAction -> Model -> Maybe Point
+expectedStartFor action model =
+    boardEndpoints action model
+        |> Maybe.map Tuple.first
 
 
 pathDuration : List State.GesturePoint -> Float

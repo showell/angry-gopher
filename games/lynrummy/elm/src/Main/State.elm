@@ -128,10 +128,22 @@ type alias Model =
     }
 
 
-{-| Replay progress: a walker over `actionLog`. `step` is the
-index of the action to play NEXT. When it reaches
-`List.length log`, replay stops and `replay` returns to
-`Nothing`.
+{-| Replay's own work queue: the entries left to walk, in
+order. Replay pops the head, animates / applies, and stops
+when the queue is empty.
+
+One engine serves two callers:
+
+  - **Instant Replay** (the Replay button): rewinds the model
+    to baseline and hands the entire `actionLog` to Replay.
+  - **Agent play** (the Let-Agent-Play button): hands Replay
+    just the primitives the agent emitted for this move.
+
+Either way, Replay only sees the entries it's supposed to
+walk — no indexing into a longer list, no off-by-one stop
+arithmetic. The full `actionLog` stays the persistent record
+that other code (replay-resume on session bootstrap, the
+wire) reads; Replay's queue is a transient slice.
 
 Subscription during replay is `Browser.Events.onAnimationFrame`
 (not a fixed Time.every tick) so drag animations can interpolate
@@ -139,7 +151,7 @@ cursor position smoothly. See `replayAnim` for per-step
 animation state.
 -}
 type alias ReplayProgress =
-    { step : Int
+    { pending : List ActionLogEntry
     , paused : Bool
     }
 

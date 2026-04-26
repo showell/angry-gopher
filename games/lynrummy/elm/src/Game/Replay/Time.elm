@@ -102,7 +102,7 @@ clickInstantReplay model =
             in
             ( { rewound
                 | status = { text = "Replaying…", kind = Inform }
-                , replay = Just { step = 0, paused = False }
+                , replay = Just { pending = model.actionLog, paused = False }
                 , replayAnim = PreRoll { untilMs = 0 }
                 , drag = NotDragging
                 , replayBoardRect = Nothing
@@ -148,19 +148,30 @@ replayFrame nowMs model =
             else
                 case model.replayAnim of
                     NotAnimating ->
-                        case listAt progress.step model.actionLog of
-                            Nothing ->
+                        case progress.pending of
+                            [] ->
                                 ( { model
                                     | replay = Nothing
                                     , replayAnim = NotAnimating
                                     , drag = NotDragging
-                                    , status = { text = "Replay complete.", kind = Celebrate }
                                   }
                                 , Cmd.none
                                 )
 
-                            Just entry ->
-                                prepareReplayStep entry.action entry.gesturePath entry.pathFrame model nowMs
+                            entry :: rest ->
+                                let
+                                    advanced =
+                                        { model
+                                            | replay =
+                                                Just { progress | pending = rest }
+                                        }
+                                in
+                                prepareReplayStep
+                                    entry.action
+                                    entry.gesturePath
+                                    entry.pathFrame
+                                    advanced
+                                    nowMs
 
                     Animating anim ->
                         let
@@ -198,10 +209,10 @@ replayFrame nowMs model =
 
                     Beating { untilMs } ->
                         if nowMs >= untilMs then
-                            ( { model
-                                | replay = Just { progress | step = progress.step + 1 }
-                                , replayAnim = NotAnimating
-                              }
+                            -- Advancement happened at queue-pop
+                            -- time in NotAnimating; here we just
+                            -- close out the beat.
+                            ( { model | replayAnim = NotAnimating }
                             , Cmd.none
                             )
 
@@ -246,26 +257,28 @@ replayFrame nowMs model =
 {-| Transition from NotAnimating into the right next replay
 state, given an action and its captured gesture path (if any).
 
-Two cases:
+Replay is the runtime — it owns the decision of whether to
+honor a captured path or synthesize a fresh one (the "JIT"
+branch, used by agent-emitted primitives that ship without a
+path). The decision tree:
 
-  - **Faithful path present.** Build Animating synchronously
-    and go. Intra-board actions (Split / MergeStack /
-    MoveStack) ALWAYS hit this branch — the server rejects
-    those without `gesture_metadata.path` (see
-    `views/lynrummy_elm.go`'s `requiresGestureMetadata`), so
-    a captured path is guaranteed here.
-  - **No path, hand origin (MergeHand / PlaceHand).** Fire a
-    `Browser.Dom.getElement` Task for the hand card's DOM id
-    and transition to AwaitingHandRect; the
-    `handCardRectReceived` handler completes the build when
-    the rect arrives. This is the only synthesis path: hand
-    origins live in the DOM, not in board coords Python can
-    supply, so we measure at replay time.
-
-Any other combination (intra-board action without a path, or
-a non-drag action) is impossible by server contract. If it
-happens, the `Debug.log` shouts "FATAL" and we `applyImmediate`
-so the game state stays consistent.
+  1. **Captured path present and still valid** (its first
+     sample matches the live source stack's loc): faithful
+     playback. This is the human-replay common case.
+  2. **Captured path absent OR stale** for an intra-board
+     action: synthesize a fresh path via
+     `Space.synthesizeBoardPath` and animate it. This is the
+     agent-play common case (no path captured) and the
+     out-of-band-MoveStack edge case (path captured but the
+     source has since moved).
+  3. **Captured path absent for a hand-origin action**: fire a
+     `Browser.Dom.getElement` Task for the hand card's DOM id
+     and transition to AwaitingHandRect. Hand origins live in
+     the DOM, not in board coords, so we measure at replay
+     time rather than synthesize blindly.
+  4. **Anything else** (Splits, unknown shapes): apply
+     immediately and beat. Splits are clicks in the live UI,
+     so animating a fake drag for them would be a lie.
 
 -}
 prepareReplayStep :
@@ -288,8 +301,6 @@ prepareReplayStep action maybePath frame model nowMs =
                     )
 
                 Nothing ->
-                    -- Empty-path guard: AnimationInfo without a
-                    -- path can't animate. Apply immediately.
                     applyImmediate
 
         applyImmediate =
@@ -303,37 +314,67 @@ prepareReplayStep action maybePath frame model nowMs =
               }
             , Cmd.none
             )
+
+        animateFromCaptured path =
+            case path of
+                [] ->
+                    jitOrApply
+
+                _ ->
+                    case startBoardAnim action path frame model nowMs of
+                        Just anim ->
+                            startAnimating anim
+
+                        Nothing ->
+                            -- Board-anim builder said no (e.g.
+                            -- Split, which is click-only by
+                            -- design).
+                            applyImmediate
+
+        jitOrApply =
+            case Space.synthesizeBoardPath action model nowMs of
+                Just ( synthPath, synthFrame ) ->
+                    case startBoardAnim action synthPath synthFrame model nowMs of
+                        Just anim ->
+                            startAnimating anim
+
+                        Nothing ->
+                            applyImmediate
+
+                Nothing ->
+                    -- No JIT recipe for this action shape. Try
+                    -- the hand-origin async measurement path.
+                    case prepareHandAnim action model of
+                        Just result ->
+                            ( { model
+                                | replayAnim =
+                                    AwaitingHandRect
+                                        { action = action
+                                        , source = result.source
+                                        }
+                              }
+                            , Task.attempt HandCardRectReceived
+                                (Task.map2 Tuple.pair
+                                    (Browser.Dom.getElement
+                                        (HandLayout.handCardDomId result.handCardToMeasure)
+                                    )
+                                    Time.now
+                                )
+                            )
+
+                        Nothing ->
+                            applyImmediate
     in
     case maybePath of
         Just (p :: rest) ->
-            case startBoardAnim action (p :: rest) frame model nowMs of
-                Just anim ->
-                    startAnimating anim
+            if Space.pathStillValid (p :: rest) action model then
+                animateFromCaptured (p :: rest)
 
-                Nothing ->
-                    applyImmediate
+            else
+                jitOrApply
 
         _ ->
-            case prepareHandAnim action model of
-                Just result ->
-                    ( { model
-                        | replayAnim =
-                            AwaitingHandRect
-                                { action = action
-                                , source = result.source
-                                }
-                      }
-                    , Task.attempt HandCardRectReceived
-                        (Task.map2 Tuple.pair
-                            (Browser.Dom.getElement
-                                (HandLayout.handCardDomId result.handCardToMeasure)
-                            )
-                            Time.now
-                        )
-                    )
-
-                Nothing ->
-                    applyImmediate
+            jitOrApply
 
 
 
@@ -427,8 +468,11 @@ handCardRectReceived result model =
 
 {-| Inter-action beat duration (ms). `CompleteTurn` gets extra
 time because a lot happens at once — hand refresh, score update,
-active-player swap, dealt cards appearing. A normal 1-second
-beat reads as buggy at that boundary.
+active-player swap, dealt cards appearing. A normal beat reads
+as buggy at that boundary. The base 800ms beat applies to
+every primitive, whether it came from a captured human drag
+or from an agent program — Replay is the runtime, the source
+of the action doesn't change the timing budget.
 -}
 beatAfter : WireAction -> Float
 beatAfter action =
@@ -437,7 +481,7 @@ beatAfter action =
             2500
 
         _ ->
-            1000
+            800
 
 
 
@@ -546,8 +590,3 @@ finishHandAnim action origin nowMs source model =
 
         _ ->
             Nothing
-
-
-listAt : Int -> List a -> Maybe a
-listAt i xs =
-    List.head (List.drop i xs)
