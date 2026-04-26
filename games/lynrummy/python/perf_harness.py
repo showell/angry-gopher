@@ -80,6 +80,7 @@ def _summarize(rec, walls, last_stats):
                     "cap": ex["cap"],
                     "expansions": ex["expansions"],
                     "seen": ex["seen_count"],
+                    "diagnostics": ex.get("diagnostics", {}),
                 })
     return {
         "captured_wall": rec["total_wall"],
@@ -119,6 +120,56 @@ def _print_projection_breakdown(rec):
         marker = "✓" if proj["found_plan"] else "·"
         print(f"      {marker} {proj['kind']:9} wall={proj['wall']:.2f}s "
               f"cards=[{cards}]")
+
+
+def _print_runaway_diagnostics(runaway):
+    diags = runaway.get("diagnostics", {})
+    if not diags:
+        print("    (no diagnostics captured — runaway record"
+              " came from non-final cap)")
+        return
+
+    print(f"    cap={runaway['cap']} expansions="
+          f"{runaway['expansions']} seen={runaway['seen']}")
+
+    hist = diags.get("trouble_histogram", {})
+    if hist:
+        print("    trouble-count histogram of states added "
+              "to frontier:")
+        for tc in sorted(hist.keys()):
+            bar = "█" * min(40, hist[tc] // max(1, max(hist.values()) // 40))
+            print(f"      tc={tc:>2}  {hist[tc]:>5}  {bar}")
+
+    widths = diags.get("level_widths", [])
+    if widths:
+        print("    BFS level widths "
+              "(level → frontier size at end of level):")
+        for i, w in enumerate(widths[:15]):
+            print(f"      L{i:>2}  {w}")
+        if len(widths) > 15:
+            print(f"      ... ({len(widths) - 15} more levels)")
+
+    samples = diags.get("sample_states", [])
+    if samples:
+        print("    Sample states from the frontier at"
+              " cap-exhaustion:")
+        for i, (state, prog_lines) in enumerate(samples, 1):
+            helper, trouble, growing, complete = state
+            print(f"      sample {i}:")
+            print(f"        program ({len(prog_lines)} lines):")
+            for line in prog_lines[-3:]:
+                print(f"          ... {line}")
+            print(f"        trouble: {[_card_summary(s) for s in trouble]}")
+            print(f"        growing: {[_card_summary(s) for s in growing]}")
+            print(f"        helper count: {len(helper)},"
+                  f" complete count: {len(complete)}")
+
+
+def _card_summary(stack):
+    return "[" + " ".join(
+        f"{c[0]}/{'CDSH'[c[1]]}{c[2] if c[2] else ''}"
+        for c in stack
+    ) + "]"
 
 
 def _profile_one(rec):
@@ -181,6 +232,10 @@ def main():
 
     print("\nProjection breakdown for the slowest case:")
     _print_projection_breakdown(top[0])
+
+    if summaries[0]["runaways"]:
+        print("\nWhat the slowest runaway is chasing:")
+        _print_runaway_diagnostics(summaries[0]["runaways"][0])
 
     if args.profile_slowest:
         print("\ncProfile (top 30 by cumulative time) for the "

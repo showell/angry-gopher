@@ -143,6 +143,12 @@ def _try_projection(board, extra_stacks, *, stats=None, kind="?",
         initial, max_trouble_outer=10, max_states=max_states,
         on_cap_exhausted=lambda **kw: exhaustions.append(kw))
     wall = time.time() - t0
+    # Drop the bulky `diagnostics` field from non-runaway
+    # exhaustions so the stats stay JSON-friendly. Runaways
+    # keep their diagnostics for analysis.
+    for ex in exhaustions:
+        if not ex.get("hit_max_states"):
+            ex.pop("diagnostics", None)
     if stats is not None:
         stats.setdefault("projections", []).append({
             "kind": kind,

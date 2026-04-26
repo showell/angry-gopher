@@ -797,24 +797,39 @@ def solve_state_with_descs(initial, *, max_trouble_outer=8,
     if is_victory(initial[1], initial[2]):
         return []
     for cap in range(1, max_trouble_outer + 1):
+        diags = {} if on_cap_exhausted is not None else None
         result, exhausted, expansions, seen_n = \
-            _bfs_with_cap_descs(initial, cap, max_states)
+            _bfs_with_cap_descs(initial, cap, max_states,
+                                 diagnostics=diags)
         if result is not None:
             return result
         if on_cap_exhausted is not None:
             on_cap_exhausted(cap=cap, expansions=expansions,
                              seen_count=seen_n,
-                             hit_max_states=exhausted)
+                             hit_max_states=exhausted,
+                             diagnostics=diags)
     return None
 
 
-def _bfs_with_cap_descs(initial, max_trouble, max_states):
+def _bfs_with_cap_descs(initial, max_trouble, max_states,
+                         diagnostics=None):
     """Pure BFS-by-length returning (line, desc) pairs.
 
     Returns (plan_or_None, hit_max_states, expansions,
     seen_count). `hit_max_states=True` means the cap was hit
     by exhausting the state budget rather than emptying the
-    frontier — that's the runaway signal."""
+    frontier — that's the runaway signal.
+
+    `diagnostics`, if provided, is a mutable dict that will
+    be populated with:
+      "trouble_histogram": {trouble_count → state_count} for
+        states added to the frontier this cap pass.
+      "level_widths": list of frontier sizes by level (level
+        0 is the initial state, level 1 is its children, etc).
+      "sample_states": up to 5 (state, program_lines) pairs
+        sampled around the time of cap-exhaustion — useful
+        for "what is it chasing?" inspection.
+    """
     if trouble_count(initial[1], initial[2]) > max_trouble:
         return None, False, 0, 0
     if is_victory(initial[1], initial[2]):
@@ -822,6 +837,10 @@ def _bfs_with_cap_descs(initial, max_trouble, max_states):
     seen = {state_sig(*initial)}
     current_level = [(initial, [])]
     expansions = 0
+    if diagnostics is not None:
+        diagnostics.setdefault("trouble_histogram", {})
+        diagnostics.setdefault("level_widths", [1])
+        diagnostics.setdefault("sample_states", [])
     while current_level:
         current_level.sort(
             key=lambda e: trouble_count(e[0][1], e[0][2]))
@@ -838,11 +857,24 @@ def _bfs_with_cap_descs(initial, max_trouble, max_states):
                 seen.add(sig)
                 line = describe_move(desc)
                 new_program = program + [(line, desc)]
+                if diagnostics is not None:
+                    tc = trouble_count(t, g)
+                    h = diagnostics["trouble_histogram"]
+                    h[tc] = h.get(tc, 0) + 1
                 if is_victory(t, g):
                     return new_program, False, expansions, len(seen)
                 next_level.append((new_state, new_program))
             if expansions >= max_states:
+                if diagnostics is not None:
+                    # Sample a few states from the current level
+                    # to see what shape the search ended on.
+                    diagnostics["sample_states"] = [
+                        (s, [line for line, _ in prog])
+                        for s, prog in next_level[-5:]
+                    ]
                 return None, True, expansions, len(seen)
+        if diagnostics is not None:
+            diagnostics["level_widths"].append(len(next_level))
         current_level = next_level
     return None, False, expansions, len(seen)
 
