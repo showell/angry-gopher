@@ -180,11 +180,7 @@ def _extract_pieces(source, ci, verb):
     if verb == "peel":
         kind = classify(source)
         if kind == "set":
-            # Set remnant — same-value, distinct suits.
-            # Canonicalize so equivalent permutations of the
-            # remaining cards produce identical state shape.
-            remnant = canonical_set(
-                [x for x in source if x != c])
+            remnant = [x for x in source if x != c]
         elif ci == 0:
             remnant = source[1:]
         else:
@@ -339,7 +335,6 @@ def enumerate_moves(state):
                     if (len(merged) == 2
                             and _has_doomed_third(merged, completion_inv)):
                         continue
-                    merged = canonical_set(merged)
                     nt_base, ng = _remove_absorber(
                         bucket, idx, trouble, growing)
                     nt = nt_base + spawned
@@ -376,7 +371,6 @@ def enumerate_moves(state):
                 if (len(merged) == 2
                         and _has_doomed_third(merged, completion_inv)):
                     continue
-                merged = canonical_set(merged)
                 # Both the absorber AND the loose-source come
                 # out of TROUBLE — drop both at once.
                 nt_base, ng = _remove_absorber(
@@ -472,7 +466,6 @@ def enumerate_moves(state):
                             if (len(merged) == 2
                                     and _has_doomed_third(merged, completion_inv)):
                                 continue
-                            merged = canonical_set(merged)
                             nt_base, ng = _remove_absorber(
                                 bucket, idx, trouble, growing)
                             ng_final, nc, graduated = _graduate(
@@ -549,7 +542,6 @@ def enumerate_moves(state):
                           else [*t, *h])
                 if classify(merged) == "other":
                     continue
-                merged = canonical_set(merged)
                 nh = _without(helper, hi) + [merged]
                 nt = _without(trouble, ti)
                 desc = {
@@ -573,7 +565,6 @@ def enumerate_moves(state):
                           else [*g, *h])
                 if classify(merged) == "other":
                     continue
-                merged = canonical_set(merged)
                 nh = _without(helper, hi)
                 ng = _without(growing, gi)
                 nc = complete + [merged]
@@ -852,10 +843,8 @@ def solve(board, *, max_trouble_outer=8, max_states=10000,
     board (list of stacks) and partitions into HELPER /
     TROUBLE before running the inner BFS. For callers that
     already have a 4-bucket state, see `solve_state`."""
-    helper = [canonical_set(s) for s in board
-              if classify(s) != "other"]
-    trouble = [canonical_set(s) for s in board
-               if classify(s) == "other"]
+    helper = [s for s in board if classify(s) != "other"]
+    trouble = [s for s in board if classify(s) == "other"]
     initial = (helper, trouble, [], [])
     return solve_state(initial,
                        max_trouble_outer=max_trouble_outer,

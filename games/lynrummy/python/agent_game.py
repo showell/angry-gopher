@@ -300,6 +300,104 @@ def play_session(c, sid, *, max_turns=20, max_actions=300,
             "perf": perf}
 
 
+def play_session_offline(*, max_actions=500, capture_path=None):
+    """Pure self-play with no server in the loop. Bootstraps via
+    dealer.deal(), runs find_play until the agent is stuck or
+    the hand empties, applies each play's placements +
+    primitives to a local board copy. No HTTP. No session
+    persistence. No gesture synthesis.
+
+    Used for runaway-hunting / OPTIMIZE_PYTHON profiling where
+    the server's validation, replay log, and rendering aren't
+    needed."""
+    initial_state = dealer.deal()
+    board = initial_state["board"]
+    hand = _hand_cards_to_tuples(
+        initial_state["hands"][0]["hand_cards"])
+
+    capture_fp = (open(capture_path, "a")
+                  if capture_path else None)
+    perf = {}
+    actions = 0
+    plays = 0
+
+    while actions < max_actions and hand:
+        board_tuples = _board_cards_to_tuples(board)
+        stats = {}
+        play = agent_prelude.find_play(hand, board_tuples,
+                                       stats=stats)
+        if capture_fp is not None:
+            capture_fp.write(json.dumps({
+                "hand": hand,
+                "board": board_tuples,
+                "projections": stats.get("projections", []),
+                "total_wall": stats.get("total_wall", 0.0),
+                "found_play": play is not None,
+            }) + "\n")
+            capture_fp.flush()
+        for proj in stats.get("projections", []):
+            _record_max(perf, "projection", proj["wall"], {
+                "kind": proj["kind"],
+                "cards": proj["cards"],
+                "found_plan": proj["found_plan"],
+            })
+        _record_max(perf, "find_play",
+                    stats.get("total_wall", 0.0),
+                    {"hand_size": len(hand),
+                     "board_size": len(board_tuples)})
+
+        if play is None:
+            break
+
+        plays += 1
+        # Apply placements: each placement ends up on the board
+        # as a singleton (or merged into the prior placement
+        # for 2- and 3-card placements). Mirror what
+        # _execute_placements does, but locally.
+        for ci, placed in enumerate(play["placements"]):
+            placed_loc = geometry.find_open_loc(board, card_count=1)
+            if ci == 0:
+                board = list(board) + [{
+                    "board_cards": [
+                        {"card": _tuple_to_card_dict(placed),
+                         "state": 0}
+                    ],
+                    "loc": placed_loc,
+                }]
+            else:
+                # Merge the new card onto the placed-so-far stack
+                # (always the last entry on the board).
+                target = board[-1]
+                new_target = {
+                    "board_cards": (
+                        list(target["board_cards"])
+                        + [{"card": _tuple_to_card_dict(placed),
+                            "state": 0}]
+                    ),
+                    "loc": dict(target["loc"]),
+                }
+                board = board[:-1] + [new_target]
+            hand = [c for c in hand if c != placed]
+            actions += 1
+
+        # Apply BFS plan steps locally.
+        for line, desc in play["plan"]:
+            t = time.time()
+            prims = verbs.step_to_primitives(desc, board)
+            translate_wall = time.time() - t
+            _record_max(perf, "translate", translate_wall,
+                        {"desc_type": desc["type"],
+                         "n_prims": len(prims)})
+            for prim in prims:
+                board = primitives.apply_locally(board, prim)
+                actions += 1
+
+    if capture_fp is not None:
+        capture_fp.close()
+    return {"actions": actions, "plays": plays,
+            "hand_remaining": len(hand), "perf": perf}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--max-turns", type=int, default=20)
@@ -310,7 +408,25 @@ def main():
                         help=("Path to JSONL file. When set, every "
                               "find_play call's (hand, board) inputs "
                               "and timing stats are appended."))
+    parser.add_argument("--offline", action="store_true",
+                        help=("Skip session creation + HTTP. Pure "
+                              "self-play with local board only. "
+                              "Used for runaway hunting and BFS "
+                              "profiling."))
     args = parser.parse_args()
+
+    if args.offline:
+        summary = play_session_offline(
+            max_actions=args.max_actions,
+            capture_path=args.capture)
+        print(f"offline self-play: {summary['plays']} plays, "
+              f"{summary['actions']} actions, "
+              f"{summary['hand_remaining']} cards in hand at end")
+        print()
+        print("worst-case wall (per layer):")
+        for layer, record in summary.get("perf", {}).items():
+            print(f"  {layer:12} {record['wall']:6.2f}s  {record}")
+        return
 
     c = Client(base=args.base)
     stamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
