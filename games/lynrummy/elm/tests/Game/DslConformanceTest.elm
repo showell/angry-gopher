@@ -1125,6 +1125,914 @@ engulfGrowing2partialIntoLegalRun =
                 Expect.fail ("no push move yielded; got " ++ String.fromInt (List.length moves) ++ " moves")
 
 
+extra001JCJDp : Test
+extra001JCJDp =
+    test "extra_001_JC_JDp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Nine, suit = Spade, originDeck = DeckTwo }, { value = Ten, suit = Spade, originDeck = DeckOne }, { value = Jack, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Seven, suit = Heart, originDeck = DeckTwo }, { value = Seven, suit = Club, originDeck = DeckTwo }, { value = Seven, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ]
+                        ]
+                    , trouble = [ [ { value = Jack, suit = Club, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckTwo } ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+extra002JCJDp : Test
+extra002JCJDp =
+    test "extra_002_JC_JDp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Nine, suit = Spade, originDeck = DeckTwo }, { value = Ten, suit = Spade, originDeck = DeckOne }, { value = Jack, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Seven, suit = Heart, originDeck = DeckTwo }, { value = Seven, suit = Club, originDeck = DeckTwo }, { value = Seven, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Three, suit = Spade, originDeck = DeckTwo }, { value = Four, suit = Diamond, originDeck = DeckOne }, { value = Five, suit = Club, originDeck = DeckOne } ]
+                        ]
+                    , trouble = [ [ { value = Jack, suit = Club, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckTwo } ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+extra0035D6C : Test
+extra0035D6C =
+    test "extra_003_5D_6C" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Nine, suit = Spade, originDeck = DeckTwo }, { value = Ten, suit = Spade, originDeck = DeckOne }, { value = Jack, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Seven, suit = Heart, originDeck = DeckTwo }, { value = Seven, suit = Club, originDeck = DeckTwo }, { value = Seven, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Three, suit = Spade, originDeck = DeckTwo }, { value = Four, suit = Diamond, originDeck = DeckOne }, { value = Five, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Jack, suit = Diamond, originDeck = DeckTwo }, { value = Queen, suit = Spade, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ]
+                        ]
+                    , trouble = [ [ { value = Five, suit = Diamond, originDeck = DeckOne }, { value = Six, suit = Club, originDeck = DeckOne } ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+extra0045D6C : Test
+extra0045D6C =
+    test "extra_004_5D_6C" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Nine, suit = Spade, originDeck = DeckTwo }, { value = Ten, suit = Spade, originDeck = DeckOne }, { value = Jack, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Seven, suit = Heart, originDeck = DeckTwo }, { value = Seven, suit = Club, originDeck = DeckTwo }, { value = Seven, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Three, suit = Spade, originDeck = DeckTwo }, { value = Four, suit = Diamond, originDeck = DeckOne }, { value = Five, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Jack, suit = Diamond, originDeck = DeckTwo }, { value = Queen, suit = Spade, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Ace, suit = Diamond, originDeck = DeckTwo }, { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne } ]
+                        ]
+                    , trouble = [ [ { value = Five, suit = Diamond, originDeck = DeckOne }, { value = Six, suit = Club, originDeck = DeckOne } ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+extra005JC : Test
+extra005JC =
+    test "extra_005_JC" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Nine, suit = Spade, originDeck = DeckTwo }, { value = Ten, suit = Spade, originDeck = DeckOne }, { value = Jack, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Seven, suit = Heart, originDeck = DeckTwo }, { value = Seven, suit = Club, originDeck = DeckTwo }, { value = Seven, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Three, suit = Spade, originDeck = DeckTwo }, { value = Four, suit = Diamond, originDeck = DeckOne }, { value = Five, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Jack, suit = Diamond, originDeck = DeckTwo }, { value = Queen, suit = Spade, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Ace, suit = Diamond, originDeck = DeckTwo }, { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Diamond, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne } ]
+                        ]
+                    , trouble = [ [ { value = Jack, suit = Club, originDeck = DeckOne } ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+extra006JC : Test
+extra006JC =
+    test "extra_006_JC" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Nine, suit = Spade, originDeck = DeckTwo }, { value = Ten, suit = Spade, originDeck = DeckOne }, { value = Jack, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Jack, suit = Diamond, originDeck = DeckTwo }, { value = Queen, suit = Spade, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Ace, suit = Diamond, originDeck = DeckTwo }, { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckTwo }, { value = Four, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Five, suit = Club, originDeck = DeckOne }, { value = Six, suit = Club, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckTwo } ]
+                        , [ { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Diamond, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckTwo } ]
+                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne } ]
+                        ]
+                    , trouble = [ [ { value = Jack, suit = Club, originDeck = DeckOne } ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+extra0074S5Dp : Test
+extra0074S5Dp =
+    test "extra_007_4S_5Dp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Six, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Diamond, originDeck = DeckTwo }, { value = Six, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Ace, suit = Spade, originDeck = DeckTwo }, { value = Two, suit = Spade, originDeck = DeckTwo }, { value = Three, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Eight, suit = Club, originDeck = DeckOne }, { value = Nine, suit = Diamond, originDeck = DeckTwo }, { value = Ten, suit = Spade, originDeck = DeckTwo } ]
+                        ]
+                    , trouble = [ [ { value = Four, suit = Spade, originDeck = DeckOne }, { value = Five, suit = Diamond, originDeck = DeckTwo } ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+extra0084S5Dp : Test
+extra0084S5Dp =
+    test "extra_008_4S_5Dp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Six, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Diamond, originDeck = DeckTwo }, { value = Six, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Ace, suit = Spade, originDeck = DeckTwo }, { value = Two, suit = Spade, originDeck = DeckTwo }, { value = Three, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Eight, suit = Club, originDeck = DeckOne }, { value = Nine, suit = Diamond, originDeck = DeckTwo }, { value = Ten, suit = Spade, originDeck = DeckTwo } ]
+                        , [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Heart, originDeck = DeckTwo }, { value = Seven, suit = Heart, originDeck = DeckOne } ]
+                        ]
+                    , trouble = [ [ { value = Four, suit = Spade, originDeck = DeckOne }, { value = Five, suit = Diamond, originDeck = DeckTwo } ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+extra009KHp : Test
+extra009KHp =
+    test "extra_009_KHp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Six, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Diamond, originDeck = DeckTwo }, { value = Six, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Club, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Eight, suit = Club, originDeck = DeckOne }, { value = Nine, suit = Diamond, originDeck = DeckTwo }, { value = Ten, suit = Spade, originDeck = DeckTwo }, { value = Jack, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Two, suit = Spade, originDeck = DeckTwo }, { value = Three, suit = Spade, originDeck = DeckOne }, { value = Four, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = King, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckTwo }, { value = Two, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Heart, originDeck = DeckTwo }, { value = Seven, suit = Heart, originDeck = DeckOne } ]
+                        ]
+                    , trouble = [ [ { value = King, suit = Heart, originDeck = DeckTwo } ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+extra010KHp : Test
+extra010KHp =
+    test "extra_010_KHp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Six, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Diamond, originDeck = DeckTwo }, { value = Six, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Club, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Two, suit = Spade, originDeck = DeckTwo }, { value = Three, suit = Spade, originDeck = DeckOne }, { value = Four, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = King, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckTwo }, { value = Two, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Nine, suit = Diamond, originDeck = DeckTwo }, { value = Ten, suit = Spade, originDeck = DeckTwo }, { value = Jack, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Heart, originDeck = DeckTwo } ]
+                        , [ { value = Seven, suit = Heart, originDeck = DeckOne }, { value = Eight, suit = Club, originDeck = DeckOne }, { value = Nine, suit = Diamond, originDeck = DeckOne } ]
+                        ]
+                    , trouble = [ [ { value = King, suit = Heart, originDeck = DeckTwo } ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+extra011THp : Test
+extra011THp =
+    test "extra_011_THp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ { value = Six, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Diamond, originDeck = DeckTwo }, { value = Six, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Club, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Nine, suit = Diamond, originDeck = DeckTwo }, { value = Ten, suit = Spade, originDeck = DeckTwo }, { value = Jack, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Seven, suit = Heart, originDeck = DeckOne }, { value = Eight, suit = Club, originDeck = DeckOne }, { value = Nine, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = King, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckTwo }, { value = Two, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = King, suit = Heart, originDeck = DeckTwo }, { value = Ace, suit = Club, originDeck = DeckOne }, { value = Two, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Four, suit = Heart, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Heart, originDeck = DeckTwo } ]
+                        , [ { value = Ace, suit = Heart, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckTwo }, { value = Three, suit = Spade, originDeck = DeckOne }, { value = Four, suit = Spade, originDeck = DeckOne } ]
+                        ]
+                    , trouble = [ [ { value = Ten, suit = Heart, originDeck = DeckTwo } ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+extra012THp : Test
+extra012THp =
+    test "extra_012_THp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ { value = Six, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Diamond, originDeck = DeckTwo }, { value = Six, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Club, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Nine, suit = Diamond, originDeck = DeckTwo }, { value = Ten, suit = Spade, originDeck = DeckTwo }, { value = Jack, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Seven, suit = Heart, originDeck = DeckOne }, { value = Eight, suit = Club, originDeck = DeckOne }, { value = Nine, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = King, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckTwo }, { value = Two, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = King, suit = Heart, originDeck = DeckTwo }, { value = Ace, suit = Club, originDeck = DeckOne }, { value = Two, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Four, suit = Heart, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Heart, originDeck = DeckTwo } ]
+                        , [ { value = Ace, suit = Heart, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckTwo }, { value = Three, suit = Spade, originDeck = DeckOne }, { value = Four, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Diamond, originDeck = DeckTwo } ]
+                        ]
+                    , trouble = [ [ { value = Ten, suit = Heart, originDeck = DeckTwo } ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+extra0138D8C : Test
+extra0138D8C =
+    test "extra_013_8D_8C" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Queen, suit = Club, originDeck = DeckTwo }, { value = King, suit = Club, originDeck = DeckTwo }, { value = Ace, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Ace, suit = Heart, originDeck = DeckOne }, { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ]
+                        ]
+                    , trouble = [ [ { value = Eight, suit = Diamond, originDeck = DeckOne }, { value = Eight, suit = Club, originDeck = DeckOne } ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+extra0148D8C : Test
+extra0148D8C =
+    test "extra_014_8D_8C" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Queen, suit = Club, originDeck = DeckTwo }, { value = King, suit = Club, originDeck = DeckTwo }, { value = Ace, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Ace, suit = Heart, originDeck = DeckOne }, { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Five, suit = Diamond, originDeck = DeckTwo }, { value = Six, suit = Club, originDeck = DeckTwo }, { value = Seven, suit = Heart, originDeck = DeckOne } ]
+                        ]
+                    , trouble = [ [ { value = Eight, suit = Diamond, originDeck = DeckOne }, { value = Eight, suit = Club, originDeck = DeckOne } ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+extra0158D8C : Test
+extra0158D8C =
+    test "extra_015_8D_8C" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Queen, suit = Club, originDeck = DeckTwo }, { value = King, suit = Club, originDeck = DeckTwo }, { value = Ace, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Ace, suit = Heart, originDeck = DeckOne }, { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Five, suit = Diamond, originDeck = DeckTwo }, { value = Six, suit = Club, originDeck = DeckTwo }, { value = Seven, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Ten, suit = Spade, originDeck = DeckTwo }, { value = Ten, suit = Club, originDeck = DeckOne }, { value = Ten, suit = Diamond, originDeck = DeckOne } ]
+                        ]
+                    , trouble = [ [ { value = Eight, suit = Diamond, originDeck = DeckOne }, { value = Eight, suit = Club, originDeck = DeckOne } ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+extra0167Hp7Cp : Test
+extra0167Hp7Cp =
+    test "extra_016_7Hp_7Cp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Nine, suit = Spade, originDeck = DeckTwo }, { value = Ten, suit = Spade, originDeck = DeckOne }, { value = Jack, suit = Spade, originDeck = DeckOne } ]
+                        ]
+                    , trouble = [ [ { value = Seven, suit = Heart, originDeck = DeckTwo }, { value = Seven, suit = Club, originDeck = DeckTwo } ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            let
+                expected =
+                    [ "steal 7D from HELPER [7S 7D 7C], absorb onto trouble [7H:1 7C:1] → [7H:1 7C:1 7D] [→COMPLETE] ; spawn TROUBLE: [7S], [7C]", "pull 7C onto trouble [7S] → [7S 7C]", "peel 7H from HELPER [2C 3D 4C 5H 6S 7H], absorb onto growing [7S 7C] → [7S 7C 7H] [→COMPLETE]" ]
+            in
+            case result of
+                Just plan ->
+                    List.map AgentMove.describe plan
+                        |> Expect.equal expected
+
+                Nothing ->
+                    Expect.fail ("expected plan; got Nothing")
+
+
+extra0176H6Dp : Test
+extra0176H6Dp =
+    test "extra_017_6H_6Dp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ]
+                        ]
+                    , trouble = [ [ { value = Six, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Diamond, originDeck = DeckTwo } ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            let
+                expected =
+                    [ "yank 6S from HELPER [2C 3D 4C 5H 6S 7H], absorb onto trouble [6H 6D:1] → [6H 6D:1 6S] [→COMPLETE] ; spawn TROUBLE: [7H]", "push TROUBLE [7H] onto HELPER [7S 7D 7C] → [7S 7D 7C 7H]" ]
+            in
+            case result of
+                Just plan ->
+                    List.map AgentMove.describe plan
+                        |> Expect.equal expected
+
+                Nothing ->
+                    Expect.fail ("expected plan; got Nothing")
+
+
+extra018ASp2Sp : Test
+extra018ASp2Sp =
+    test "extra_018_ASp_2Sp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Six, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Diamond, originDeck = DeckTwo }, { value = Six, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ]
+                        ]
+                    , trouble = [ [ { value = Ace, suit = Spade, originDeck = DeckTwo }, { value = Two, suit = Spade, originDeck = DeckTwo } ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            let
+                expected =
+                    [ "peel 3S from HELPER [KS AS 2S 3S], absorb onto trouble [AS:1 2S:1] → [AS:1 2S:1 3S] [→COMPLETE]" ]
+            in
+            case result of
+                Just plan ->
+                    List.map AgentMove.describe plan
+                        |> Expect.equal expected
+
+                Nothing ->
+                    Expect.fail ("expected plan; got Nothing")
+
+
+extra019JC : Test
+extra019JC =
+    test "extra_019_JC" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Six, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Diamond, originDeck = DeckTwo }, { value = Six, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Eight, suit = Club, originDeck = DeckOne }, { value = Nine, suit = Diamond, originDeck = DeckTwo }, { value = Ten, suit = Spade, originDeck = DeckTwo } ]
+                        , [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Heart, originDeck = DeckTwo }, { value = Seven, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Ace, suit = Spade, originDeck = DeckTwo }, { value = Two, suit = Spade, originDeck = DeckTwo }, { value = Three, suit = Spade, originDeck = DeckOne }, { value = Four, suit = Spade, originDeck = DeckOne } ]
+                        ]
+                    , trouble = [ [ { value = Jack, suit = Club, originDeck = DeckOne } ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            let
+                expected =
+                    [ "peel TD from HELPER [TD JD QD KD], absorb onto trouble [JC] → [TD JC]", "split_out QD from HELPER [JD QD KD], absorb onto growing [TD JC] → [TD JC QD] [→COMPLETE] ; spawn TROUBLE: [JD], [KD]", "push TROUBLE [JD] onto HELPER [8C 9D:1 TS:1] → [8C 9D:1 TS:1 JD]", "peel AS:1 from HELPER [AS:1 2S:1 3S 4S], absorb onto trouble [KD] → [KD AS:1]", "steal 2H from HELPER [2H 3H 4H], absorb onto growing [KD AS:1] → [KD AS:1 2H] [→COMPLETE] ; spawn TROUBLE: [3H 4H]", "push TROUBLE [3H 4H] onto HELPER [5H 6H:1 7H] → [3H 4H 5H 6H:1 7H]" ]
+            in
+            case result of
+                Just plan ->
+                    List.map AgentMove.describe plan
+                        |> Expect.equal expected
+
+                Nothing ->
+                    Expect.fail ("expected plan; got Nothing")
+
+
+extra020KHp : Test
+extra020KHp =
+    test "extra_020_KHp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Six, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Diamond, originDeck = DeckTwo }, { value = Six, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Club, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Two, suit = Spade, originDeck = DeckTwo }, { value = Three, suit = Spade, originDeck = DeckOne }, { value = Four, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Nine, suit = Diamond, originDeck = DeckTwo }, { value = Ten, suit = Spade, originDeck = DeckTwo }, { value = Jack, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Seven, suit = Heart, originDeck = DeckOne }, { value = Eight, suit = Club, originDeck = DeckOne }, { value = Nine, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = King, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckTwo }, { value = Two, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Heart, originDeck = DeckTwo } ]
+                        ]
+                    , trouble = [ [ { value = King, suit = Heart, originDeck = DeckTwo } ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            let
+                expected =
+                    [ "steal AC from HELPER [AC AD AH], absorb onto trouble [KH:1] → [KH:1 AC] ; spawn TROUBLE: [AD], [AH]", "peel 2H from HELPER [2H 3H 4H 5H 6H:1], absorb onto growing [KH:1 AC] → [KH:1 AC 2H] [→COMPLETE]", "push TROUBLE [AD] onto HELPER [2C 3D 4C] → [AD 2C 3D 4C]", "steal 2S from HELPER [KS AS 2S], absorb onto trouble [AH] → [AH 2S] ; spawn TROUBLE: [KS AS]", "peel 3H from HELPER [3H 4H 5H 6H:1], absorb onto growing [AH 2S] → [AH 2S 3H] [→COMPLETE]", "push TROUBLE [KS AS] onto HELPER [2S:1 3S 4S] → [KS AS 2S:1 3S 4S]" ]
+            in
+            case result of
+                Just plan ->
+                    List.map AgentMove.describe plan
+                        |> Expect.equal expected
+
+                Nothing ->
+                    Expect.fail ("expected plan; got Nothing")
+
+
+extra0212D : Test
+extra0212D =
+    test "extra_021_2D" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Ace, suit = Heart, originDeck = DeckOne }, { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Five, suit = Diamond, originDeck = DeckTwo }, { value = Six, suit = Club, originDeck = DeckTwo }, { value = Seven, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Ten, suit = Spade, originDeck = DeckTwo }, { value = Ten, suit = Club, originDeck = DeckOne }, { value = Ten, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = King, suit = Club, originDeck = DeckTwo }, { value = Ace, suit = Club, originDeck = DeckOne }, { value = Two, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Queen, suit = Heart, originDeck = DeckTwo }, { value = Queen, suit = Spade, originDeck = DeckTwo }, { value = Queen, suit = Club, originDeck = DeckTwo } ]
+                        ]
+                    , trouble = [ [ { value = Two, suit = Diamond, originDeck = DeckOne } ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            let
+                expected =
+                    [ "push TROUBLE [2D] onto HELPER [JD QD KD AD] → [JD QD KD AD 2D]" ]
+            in
+            case result of
+                Just plan ->
+                    List.map AgentMove.describe plan
+                        |> Expect.equal expected
+
+                Nothing ->
+                    Expect.fail ("expected plan; got Nothing")
+
+
+extra0223Hp : Test
+extra0223Hp =
+    test "extra_022_3Hp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Ace, suit = Heart, originDeck = DeckOne }, { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Five, suit = Diamond, originDeck = DeckTwo }, { value = Six, suit = Club, originDeck = DeckTwo }, { value = Seven, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Ten, suit = Spade, originDeck = DeckTwo }, { value = Ten, suit = Club, originDeck = DeckOne }, { value = Ten, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = King, suit = Club, originDeck = DeckTwo }, { value = Ace, suit = Club, originDeck = DeckOne }, { value = Two, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Queen, suit = Heart, originDeck = DeckTwo }, { value = Queen, suit = Spade, originDeck = DeckTwo }, { value = Queen, suit = Club, originDeck = DeckTwo } ]
+                        , [ { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Two, suit = Diamond, originDeck = DeckOne } ]
+                        ]
+                    , trouble = [ [ { value = Three, suit = Heart, originDeck = DeckTwo } ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            let
+                expected =
+                    [ "peel 3D from HELPER [3D 4C 5H 6S], absorb onto trouble [3H:1] → [3H:1 3D]", "peel 3S from HELPER [KS AS 2S 3S], absorb onto growing [3H:1 3D] → [3H:1 3D 3S] [→COMPLETE]" ]
+            in
+            case result of
+                Just plan ->
+                    List.map AgentMove.describe plan
+                        |> Expect.equal expected
+
+                Nothing ->
+                    Expect.fail ("expected plan; got Nothing")
+
+
+extra023TCp : Test
+extra023TCp =
+    test "extra_023_TCp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Ace, suit = Heart, originDeck = DeckOne }, { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Five, suit = Diamond, originDeck = DeckTwo }, { value = Six, suit = Club, originDeck = DeckTwo }, { value = Seven, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Ten, suit = Spade, originDeck = DeckTwo }, { value = Ten, suit = Club, originDeck = DeckOne }, { value = Ten, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = King, suit = Club, originDeck = DeckTwo }, { value = Ace, suit = Club, originDeck = DeckOne }, { value = Two, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Queen, suit = Heart, originDeck = DeckTwo }, { value = Queen, suit = Spade, originDeck = DeckTwo }, { value = Queen, suit = Club, originDeck = DeckTwo } ]
+                        , [ { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Two, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Three, suit = Heart, originDeck = DeckTwo }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ]
+                        ]
+                    , trouble = [ [ { value = Ten, suit = Club, originDeck = DeckTwo } ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            let
+                expected =
+                    [ "peel JD from HELPER [JD QD KD AD 2D], absorb onto trouble [TC:1] → [TC:1 JD]", "steal QC:1 from HELPER [QH:1 QS:1 QC:1], absorb onto growing [TC:1 JD] → [TC:1 JD QC:1] [→COMPLETE] ; spawn TROUBLE: [QH:1], [QS:1]", "pull QS:1 onto trouble [QH:1] → [QH:1 QS:1]", "peel QD from HELPER [QD KD AD 2D], absorb onto growing [QH:1 QS:1] → [QH:1 QS:1 QD] [→COMPLETE]" ]
+            in
+            case result of
+                Just plan ->
+                    List.map AgentMove.describe plan
+                        |> Expect.equal expected
+
+                Nothing ->
+                    Expect.fail ("expected plan; got Nothing")
+
+
+extra0242Cp : Test
+extra0242Cp =
+    test "extra_024_2Cp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Ace, suit = Heart, originDeck = DeckOne }, { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Five, suit = Diamond, originDeck = DeckTwo }, { value = Six, suit = Club, originDeck = DeckTwo }, { value = Seven, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Ten, suit = Spade, originDeck = DeckTwo }, { value = Ten, suit = Club, originDeck = DeckOne }, { value = Ten, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = King, suit = Club, originDeck = DeckTwo }, { value = Ace, suit = Club, originDeck = DeckOne }, { value = Two, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Three, suit = Heart, originDeck = DeckTwo }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = Ten, suit = Club, originDeck = DeckTwo }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Club, originDeck = DeckTwo } ]
+                        , [ { value = King, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Two, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Queen, suit = Heart, originDeck = DeckTwo }, { value = Queen, suit = Spade, originDeck = DeckTwo }, { value = Queen, suit = Diamond, originDeck = DeckOne } ]
+                        ]
+                    , trouble = [ [ { value = Two, suit = Club, originDeck = DeckTwo } ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            let
+                expected =
+                    [ "peel AH from HELPER [AH 2H 3H 4H], absorb onto trouble [2C:1] → [AH 2C:1]", "steal 3D from HELPER [3H:1 3D 3S], absorb onto growing [AH 2C:1] → [AH 2C:1 3D] [→COMPLETE] ; spawn TROUBLE: [3H:1], [3S]", "push TROUBLE [3H:1] onto HELPER [4C 5H 6S] → [3H:1 4C 5H 6S]", "push TROUBLE [3S] onto HELPER [KS AS 2S] → [KS AS 2S 3S]" ]
+            in
+            case result of
+                Just plan ->
+                    List.map AgentMove.describe plan
+                        |> Expect.equal expected
+
+                Nothing ->
+                    Expect.fail ("expected plan; got Nothing")
+
+
+extra0258C : Test
+extra0258C =
+    test "extra_025_8C" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Five, suit = Diamond, originDeck = DeckTwo }, { value = Six, suit = Club, originDeck = DeckTwo }, { value = Seven, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Ten, suit = Spade, originDeck = DeckTwo }, { value = Ten, suit = Club, originDeck = DeckOne }, { value = Ten, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = King, suit = Club, originDeck = DeckTwo }, { value = Ace, suit = Club, originDeck = DeckOne }, { value = Two, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Ten, suit = Club, originDeck = DeckTwo }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Club, originDeck = DeckTwo } ]
+                        , [ { value = King, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Two, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Queen, suit = Heart, originDeck = DeckTwo }, { value = Queen, suit = Spade, originDeck = DeckTwo }, { value = Queen, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Ace, suit = Heart, originDeck = DeckOne }, { value = Two, suit = Club, originDeck = DeckTwo }, { value = Three, suit = Diamond, originDeck = DeckOne } ]
+                        , [ { value = Three, suit = Heart, originDeck = DeckTwo }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne } ]
+                        , [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ]
+                        ]
+                    , trouble = [ [ { value = Eight, suit = Club, originDeck = DeckOne } ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            let
+                expected =
+                    [ "push TROUBLE [8C] onto HELPER [5D:1 6C:1 7H] → [5D:1 6C:1 7H 8C]" ]
+            in
+            case result of
+                Just plan ->
+                    List.map AgentMove.describe plan
+                        |> Expect.equal expected
+
+                Nothing ->
+                    Expect.fail ("expected plan; got Nothing")
+
+
 freePullSingletonOntoRunGrowing : Test
 freePullSingletonOntoRunGrowing =
     test "free_pull_singleton_onto_run_growing" <|
@@ -2452,6 +3360,31 @@ suite =
         , corpusSid148
         , deckIdentityMismatchInRemove
         , engulfGrowing2partialIntoLegalRun
+        , extra001JCJDp
+        , extra002JCJDp
+        , extra0035D6C
+        , extra0045D6C
+        , extra005JC
+        , extra006JC
+        , extra0074S5Dp
+        , extra0084S5Dp
+        , extra009KHp
+        , extra010KHp
+        , extra011THp
+        , extra012THp
+        , extra0138D8C
+        , extra0148D8C
+        , extra0158D8C
+        , extra0167Hp7Cp
+        , extra0176H6Dp
+        , extra018ASp2Sp
+        , extra019JC
+        , extra020KHp
+        , extra0212D
+        , extra0223Hp
+        , extra023TCp
+        , extra0242Cp
+        , extra0258C
         , freePullSingletonOntoRunGrowing
         , geometryCrowded
         , geometryOutOfBounds

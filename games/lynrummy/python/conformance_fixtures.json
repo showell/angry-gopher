@@ -14800,6 +14800,9061 @@
     }
   },
   {
+    "name": "extra_001_JC_JDp",
+    "desc": "extra_001_JC_JDp. Auto-generated from offline play; asserts BFS proves no plan.",
+    "op": "solve",
+    "hand": [],
+    "board": [],
+    "helper": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 13,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 2,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 10,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 11,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 12,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 13,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 2,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 1,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 9,
+              "suit": 2,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 10,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 11,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 7,
+              "suit": 3,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 0,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 2,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 5,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 6,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 7,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "trouble": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 11,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 11,
+              "suit": 1,
+              "origin_deck": 1
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "expect": {
+      "kind": "no_plan",
+      "no_plan": true
+    }
+  },
+  {
+    "name": "extra_002_JC_JDp",
+    "desc": "extra_002_JC_JDp. Auto-generated from offline play; asserts BFS proves no plan.",
+    "op": "solve",
+    "hand": [],
+    "board": [],
+    "helper": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 13,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 2,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 10,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 11,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 12,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 13,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 2,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 1,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 9,
+              "suit": 2,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 10,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 11,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 7,
+              "suit": 3,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 0,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 2,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 5,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 6,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 7,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 3,
+              "suit": 2,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 5,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "trouble": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 11,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 11,
+              "suit": 1,
+              "origin_deck": 1
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "expect": {
+      "kind": "no_plan",
+      "no_plan": true
+    }
+  },
+  {
+    "name": "extra_003_5D_6C",
+    "desc": "extra_003_5D_6C. Auto-generated from offline play; asserts BFS proves no plan.",
+    "op": "solve",
+    "hand": [],
+    "board": [],
+    "helper": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 13,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 2,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 2,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 1,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 9,
+              "suit": 2,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 10,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 11,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 7,
+              "suit": 3,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 0,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 2,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 5,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 6,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 7,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 3,
+              "suit": 2,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 5,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 10,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 11,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 12,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 11,
+              "suit": 1,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 12,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 13,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "trouble": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 5,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 6,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "expect": {
+      "kind": "no_plan",
+      "no_plan": true
+    }
+  },
+  {
+    "name": "extra_004_5D_6C",
+    "desc": "extra_004_5D_6C. Auto-generated from offline play; asserts BFS proves no plan.",
+    "op": "solve",
+    "hand": [],
+    "board": [],
+    "helper": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 13,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 2,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 2,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 1,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 9,
+              "suit": 2,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 10,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 11,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 7,
+              "suit": 3,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 0,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 7,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 3,
+              "suit": 2,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 5,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 10,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 11,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 12,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 11,
+              "suit": 1,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 12,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 13,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 1,
+              "suit": 1,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 2,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 5,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 6,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "trouble": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 5,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 6,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "expect": {
+      "kind": "no_plan",
+      "no_plan": true
+    }
+  },
+  {
+    "name": "extra_005_JC",
+    "desc": "extra_005_JC. Auto-generated from offline play; asserts BFS proves no plan.",
+    "op": "solve",
+    "hand": [],
+    "board": [],
+    "helper": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 13,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 2,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 1,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 9,
+              "suit": 2,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 10,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 11,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 7,
+              "suit": 3,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 0,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 7,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 3,
+              "suit": 2,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 5,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 10,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 11,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 12,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 11,
+              "suit": 1,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 12,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 13,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 1,
+              "suit": 1,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 2,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 4,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 5,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 6,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 2,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 5,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "trouble": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 11,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "expect": {
+      "kind": "no_plan",
+      "no_plan": true
+    }
+  },
+  {
+    "name": "extra_006_JC",
+    "desc": "extra_006_JC. Auto-generated from offline play; asserts BFS proves no plan.",
+    "op": "solve",
+    "hand": [],
+    "board": [],
+    "helper": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 13,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 2,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 1,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 9,
+              "suit": 2,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 10,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 11,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 10,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 11,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 12,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 11,
+              "suit": 1,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 12,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 13,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 1,
+              "suit": 1,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 2,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 3,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 5,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 2,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 2,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 5,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 6,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 0,
+              "origin_deck": 1
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 4,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 5,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 6,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 3,
+              "origin_deck": 1
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 7,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "trouble": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 11,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "expect": {
+      "kind": "no_plan",
+      "no_plan": true
+    }
+  },
+  {
+    "name": "extra_007_4S_5Dp",
+    "desc": "extra_007_4S_5Dp. Auto-generated from offline play; asserts BFS proves no plan.",
+    "op": "solve",
+    "hand": [],
+    "board": [],
+    "helper": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 10,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 11,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 12,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 13,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 2,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 1,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 2,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 5,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 6,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 6,
+              "suit": 1,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 6,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 7,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 13,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 2,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 1,
+              "suit": 2,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 2,
+              "suit": 2,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 8,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 9,
+              "suit": 1,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 10,
+              "suit": 2,
+              "origin_deck": 1
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "trouble": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 4,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 5,
+              "suit": 1,
+              "origin_deck": 1
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "expect": {
+      "kind": "no_plan",
+      "no_plan": true
+    }
+  },
+  {
+    "name": "extra_008_4S_5Dp",
+    "desc": "extra_008_4S_5Dp. Auto-generated from offline play; asserts BFS proves no plan.",
+    "op": "solve",
+    "hand": [],
+    "board": [],
+    "helper": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 10,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 11,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 12,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 13,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 2,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 1,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 6,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 6,
+              "suit": 1,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 6,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 13,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 2,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 1,
+              "suit": 2,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 2,
+              "suit": 2,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 8,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 9,
+              "suit": 1,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 10,
+              "suit": 2,
+              "origin_deck": 1
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 2,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 7,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 5,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 6,
+              "suit": 3,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "trouble": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 4,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 5,
+              "suit": 1,
+              "origin_deck": 1
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "expect": {
+      "kind": "no_plan",
+      "no_plan": true
+    }
+  },
+  {
+    "name": "extra_009_KHp",
+    "desc": "extra_009_KHp. Auto-generated from offline play; asserts BFS proves no plan.",
+    "op": "solve",
+    "hand": [],
+    "board": [],
+    "helper": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 1,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 6,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 6,
+              "suit": 1,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 6,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 13,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 2,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 2,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 7,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 10,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 11,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 12,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 8,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 9,
+              "suit": 1,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 10,
+              "suit": 2,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 11,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 2,
+              "suit": 2,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 13,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 2,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 2,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 3,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 5,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 6,
+              "suit": 3,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "trouble": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 13,
+              "suit": 3,
+              "origin_deck": 1
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "expect": {
+      "kind": "no_plan",
+      "no_plan": true
+    }
+  },
+  {
+    "name": "extra_010_KHp",
+    "desc": "extra_010_KHp. Auto-generated from offline play; asserts BFS proves no plan.",
+    "op": "solve",
+    "hand": [],
+    "board": [],
+    "helper": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 1,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 6,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 6,
+              "suit": 1,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 6,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 13,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 2,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 2,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 7,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 10,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 11,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 12,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 2,
+              "suit": 2,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 13,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 2,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 2,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 9,
+              "suit": 1,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 10,
+              "suit": 2,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 11,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 3,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 5,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 6,
+              "suit": 3,
+              "origin_deck": 1
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 7,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 8,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 9,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "trouble": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 13,
+              "suit": 3,
+              "origin_deck": 1
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "expect": {
+      "kind": "no_plan",
+      "no_plan": true
+    }
+  },
+  {
+    "name": "extra_011_THp",
+    "desc": "extra_011_THp. Auto-generated from offline play; asserts BFS proves no plan.",
+    "op": "solve",
+    "hand": [],
+    "board": [],
+    "helper": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 6,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 6,
+              "suit": 1,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 6,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 7,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 10,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 11,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 12,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 9,
+              "suit": 1,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 10,
+              "suit": 2,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 11,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 7,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 8,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 9,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 13,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 2,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 2,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 13,
+              "suit": 3,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 2,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 1,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 2,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 4,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 5,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 6,
+              "suit": 3,
+              "origin_deck": 1
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 1,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 2,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 13,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 2,
+              "suit": 2,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "trouble": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 10,
+              "suit": 3,
+              "origin_deck": 1
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "expect": {
+      "kind": "no_plan",
+      "no_plan": true
+    }
+  },
+  {
+    "name": "extra_012_THp",
+    "desc": "extra_012_THp. Auto-generated from offline play; asserts BFS proves no plan.",
+    "op": "solve",
+    "hand": [],
+    "board": [],
+    "helper": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 6,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 6,
+              "suit": 1,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 6,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 7,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 10,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 11,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 12,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 9,
+              "suit": 1,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 10,
+              "suit": 2,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 11,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 7,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 8,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 9,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 13,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 2,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 2,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 13,
+              "suit": 3,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 2,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 4,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 5,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 6,
+              "suit": 3,
+              "origin_deck": 1
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 1,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 2,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 13,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 2,
+              "suit": 2,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 1,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 2,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 5,
+              "suit": 1,
+              "origin_deck": 1
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "trouble": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 10,
+              "suit": 3,
+              "origin_deck": 1
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "expect": {
+      "kind": "no_plan",
+      "no_plan": true
+    }
+  },
+  {
+    "name": "extra_013_8D_8C",
+    "desc": "extra_013_8D_8C. Auto-generated from offline play; asserts BFS proves no plan.",
+    "op": "solve",
+    "hand": [],
+    "board": [],
+    "helper": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 13,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 2,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 7,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 2,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 5,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 6,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 12,
+              "suit": 0,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 13,
+              "suit": 0,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 10,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 11,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 12,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 13,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 1,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 2,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "trouble": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 8,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 8,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "expect": {
+      "kind": "no_plan",
+      "no_plan": true
+    }
+  },
+  {
+    "name": "extra_014_8D_8C",
+    "desc": "extra_014_8D_8C. Auto-generated from offline play; asserts BFS proves no plan.",
+    "op": "solve",
+    "hand": [],
+    "board": [],
+    "helper": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 13,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 2,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 7,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 12,
+              "suit": 0,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 13,
+              "suit": 0,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 10,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 11,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 12,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 13,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 1,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 2,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 2,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 5,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 6,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 5,
+              "suit": 1,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 6,
+              "suit": 0,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "trouble": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 8,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 8,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "expect": {
+      "kind": "no_plan",
+      "no_plan": true
+    }
+  },
+  {
+    "name": "extra_015_8D_8C",
+    "desc": "extra_015_8D_8C. Auto-generated from offline play; asserts BFS proves no plan.",
+    "op": "solve",
+    "hand": [],
+    "board": [],
+    "helper": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 13,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 2,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 7,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 12,
+              "suit": 0,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 13,
+              "suit": 0,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 1,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 2,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 2,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 5,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 6,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 5,
+              "suit": 1,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 6,
+              "suit": 0,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 11,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 12,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 13,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 10,
+              "suit": 2,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 10,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 10,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "trouble": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 8,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 8,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "expect": {
+      "kind": "no_plan",
+      "no_plan": true
+    }
+  },
+  {
+    "name": "extra_016_7Hp_7Cp",
+    "desc": "extra_016_7Hp_7Cp. Auto-generated from offline play.",
+    "op": "solve",
+    "hand": [],
+    "board": [],
+    "helper": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 13,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 2,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 10,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 11,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 12,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 13,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 2,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 7,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 1,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 2,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 5,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 6,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 9,
+              "suit": 2,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 10,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 11,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "trouble": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 7,
+              "suit": 3,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 0,
+              "origin_deck": 1
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "expect": {
+      "kind": "",
+      "plan_lines": [
+        "steal 7D from HELPER [7S 7D 7C], absorb onto trouble [7H:1 7C:1] → [7H:1 7C:1 7D] [→COMPLETE] ; spawn TROUBLE: [7S], [7C]",
+        "pull 7C onto trouble [7S] → [7S 7C]",
+        "peel 7H from HELPER [2C 3D 4C 5H 6S 7H], absorb onto growing [7S 7C] → [7S 7C 7H] [→COMPLETE]"
+      ]
+    }
+  },
+  {
+    "name": "extra_017_6H_6Dp",
+    "desc": "extra_017_6H_6Dp. Auto-generated from offline play.",
+    "op": "solve",
+    "hand": [],
+    "board": [],
+    "helper": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 13,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 2,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 10,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 11,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 12,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 13,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 2,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 7,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 1,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 2,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 5,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 6,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "trouble": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 6,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 6,
+              "suit": 1,
+              "origin_deck": 1
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "expect": {
+      "kind": "",
+      "plan_lines": [
+        "yank 6S from HELPER [2C 3D 4C 5H 6S 7H], absorb onto trouble [6H 6D:1] → [6H 6D:1 6S] [→COMPLETE] ; spawn TROUBLE: [7H]",
+        "push TROUBLE [7H] onto HELPER [7S 7D 7C] → [7S 7D 7C 7H]"
+      ]
+    }
+  },
+  {
+    "name": "extra_018_ASp_2Sp",
+    "desc": "extra_018_ASp_2Sp. Auto-generated from offline play.",
+    "op": "solve",
+    "hand": [],
+    "board": [],
+    "helper": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 13,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 2,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 10,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 11,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 12,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 13,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 2,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 1,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 2,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 5,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 6,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 6,
+              "suit": 1,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 6,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 7,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "trouble": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 1,
+              "suit": 2,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 2,
+              "suit": 2,
+              "origin_deck": 1
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "expect": {
+      "kind": "",
+      "plan_lines": [
+        "peel 3S from HELPER [KS AS 2S 3S], absorb onto trouble [AS:1 2S:1] → [AS:1 2S:1 3S] [→COMPLETE]"
+      ]
+    }
+  },
+  {
+    "name": "extra_019_JC",
+    "desc": "extra_019_JC. Auto-generated from offline play.",
+    "op": "solve",
+    "hand": [],
+    "board": [],
+    "helper": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 10,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 11,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 12,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 13,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 2,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 1,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 6,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 6,
+              "suit": 1,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 6,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 13,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 2,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 8,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 9,
+              "suit": 1,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 10,
+              "suit": 2,
+              "origin_deck": 1
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 2,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 7,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 5,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 6,
+              "suit": 3,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 1,
+              "suit": 2,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 2,
+              "suit": 2,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "trouble": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 11,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "expect": {
+      "kind": "",
+      "plan_lines": [
+        "peel TD from HELPER [TD JD QD KD], absorb onto trouble [JC] → [TD JC]",
+        "split_out QD from HELPER [JD QD KD], absorb onto growing [TD JC] → [TD JC QD] [→COMPLETE] ; spawn TROUBLE: [JD], [KD]",
+        "push TROUBLE [JD] onto HELPER [8C 9D:1 TS:1] → [8C 9D:1 TS:1 JD]",
+        "peel AS:1 from HELPER [AS:1 2S:1 3S 4S], absorb onto trouble [KD] → [KD AS:1]",
+        "steal 2H from HELPER [2H 3H 4H], absorb onto growing [KD AS:1] → [KD AS:1 2H] [→COMPLETE] ; spawn TROUBLE: [3H 4H]",
+        "push TROUBLE [3H 4H] onto HELPER [5H 6H:1 7H] → [3H 4H 5H 6H:1 7H]"
+      ]
+    }
+  },
+  {
+    "name": "extra_020_KHp",
+    "desc": "extra_020_KHp. Auto-generated from offline play.",
+    "op": "solve",
+    "hand": [],
+    "board": [],
+    "helper": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 1,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 6,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 6,
+              "suit": 1,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 6,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 13,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 2,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 2,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 7,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 10,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 11,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 12,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 2,
+              "suit": 2,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 9,
+              "suit": 1,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 10,
+              "suit": 2,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 11,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 7,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 8,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 9,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 13,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 2,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 2,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 2,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 5,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 6,
+              "suit": 3,
+              "origin_deck": 1
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "trouble": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 13,
+              "suit": 3,
+              "origin_deck": 1
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "expect": {
+      "kind": "",
+      "plan_lines": [
+        "steal AC from HELPER [AC AD AH], absorb onto trouble [KH:1] → [KH:1 AC] ; spawn TROUBLE: [AD], [AH]",
+        "peel 2H from HELPER [2H 3H 4H 5H 6H:1], absorb onto growing [KH:1 AC] → [KH:1 AC 2H] [→COMPLETE]",
+        "push TROUBLE [AD] onto HELPER [2C 3D 4C] → [AD 2C 3D 4C]",
+        "steal 2S from HELPER [KS AS 2S], absorb onto trouble [AH] → [AH 2S] ; spawn TROUBLE: [KS AS]",
+        "peel 3H from HELPER [3H 4H 5H 6H:1], absorb onto growing [AH 2S] → [AH 2S 3H] [→COMPLETE]",
+        "push TROUBLE [KS AS] onto HELPER [2S:1 3S 4S] → [KS AS 2S:1 3S 4S]"
+      ]
+    }
+  },
+  {
+    "name": "extra_021_2D",
+    "desc": "extra_021_2D. Auto-generated from offline play.",
+    "op": "solve",
+    "hand": [],
+    "board": [],
+    "helper": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 13,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 2,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 7,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 1,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 2,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 5,
+              "suit": 1,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 6,
+              "suit": 0,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 11,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 12,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 13,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 10,
+              "suit": 2,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 10,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 10,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 3,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 5,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 6,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 13,
+              "suit": 0,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 2,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 12,
+              "suit": 3,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 12,
+              "suit": 2,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 12,
+              "suit": 0,
+              "origin_deck": 1
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "trouble": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 2,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "expect": {
+      "kind": "",
+      "plan_lines": [
+        "push TROUBLE [2D] onto HELPER [JD QD KD AD] → [JD QD KD AD 2D]"
+      ]
+    }
+  },
+  {
+    "name": "extra_022_3Hp",
+    "desc": "extra_022_3Hp. Auto-generated from offline play.",
+    "op": "solve",
+    "hand": [],
+    "board": [],
+    "helper": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 13,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 2,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 7,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 1,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 2,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 5,
+              "suit": 1,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 6,
+              "suit": 0,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 10,
+              "suit": 2,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 10,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 10,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 3,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 5,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 6,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 13,
+              "suit": 0,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 2,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 12,
+              "suit": 3,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 12,
+              "suit": 2,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 12,
+              "suit": 0,
+              "origin_deck": 1
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 11,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 12,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 13,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 2,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "trouble": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 3,
+              "suit": 3,
+              "origin_deck": 1
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "expect": {
+      "kind": "",
+      "plan_lines": [
+        "peel 3D from HELPER [3D 4C 5H 6S], absorb onto trouble [3H:1] → [3H:1 3D]",
+        "peel 3S from HELPER [KS AS 2S 3S], absorb onto growing [3H:1 3D] → [3H:1 3D 3S] [→COMPLETE]"
+      ]
+    }
+  },
+  {
+    "name": "extra_023_TCp",
+    "desc": "extra_023_TCp. Auto-generated from offline play.",
+    "op": "solve",
+    "hand": [],
+    "board": [],
+    "helper": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 7,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 1,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 2,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 5,
+              "suit": 1,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 6,
+              "suit": 0,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 10,
+              "suit": 2,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 10,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 10,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 13,
+              "suit": 0,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 2,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 12,
+              "suit": 3,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 12,
+              "suit": 2,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 12,
+              "suit": 0,
+              "origin_deck": 1
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 11,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 12,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 13,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 2,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 4,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 5,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 6,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 13,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 2,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 3,
+              "suit": 3,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "trouble": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 10,
+              "suit": 0,
+              "origin_deck": 1
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "expect": {
+      "kind": "",
+      "plan_lines": [
+        "peel JD from HELPER [JD QD KD AD 2D], absorb onto trouble [TC:1] → [TC:1 JD]",
+        "steal QC:1 from HELPER [QH:1 QS:1 QC:1], absorb onto growing [TC:1 JD] → [TC:1 JD QC:1] [→COMPLETE] ; spawn TROUBLE: [QH:1], [QS:1]",
+        "pull QS:1 onto trouble [QH:1] → [QH:1 QS:1]",
+        "peel QD from HELPER [QD KD AD 2D], absorb onto growing [QH:1 QS:1] → [QH:1 QS:1 QD] [→COMPLETE]"
+      ]
+    }
+  },
+  {
+    "name": "extra_024_2Cp",
+    "desc": "extra_024_2Cp. Auto-generated from offline play.",
+    "op": "solve",
+    "hand": [],
+    "board": [],
+    "helper": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 7,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 1,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 2,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 5,
+              "suit": 1,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 6,
+              "suit": 0,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 10,
+              "suit": 2,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 10,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 10,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 13,
+              "suit": 0,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 2,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 4,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 5,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 6,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 13,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 2,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 3,
+              "suit": 3,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 10,
+              "suit": 0,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 11,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 12,
+              "suit": 0,
+              "origin_deck": 1
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 13,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 2,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 12,
+              "suit": 3,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 12,
+              "suit": 2,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 12,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "trouble": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 2,
+              "suit": 0,
+              "origin_deck": 1
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "expect": {
+      "kind": "",
+      "plan_lines": [
+        "peel AH from HELPER [AH 2H 3H 4H], absorb onto trouble [2C:1] → [AH 2C:1]",
+        "steal 3D from HELPER [3H:1 3D 3S], absorb onto growing [AH 2C:1] → [AH 2C:1 3D] [→COMPLETE] ; spawn TROUBLE: [3H:1], [3S]",
+        "push TROUBLE [3H:1] onto HELPER [4C 5H 6S] → [3H:1 4C 5H 6S]",
+        "push TROUBLE [3S] onto HELPER [KS AS 2S] → [KS AS 2S 3S]"
+      ]
+    }
+  },
+  {
+    "name": "extra_025_8C",
+    "desc": "extra_025_8C. Auto-generated from offline play.",
+    "op": "solve",
+    "hand": [],
+    "board": [],
+    "helper": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 7,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 5,
+              "suit": 1,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 6,
+              "suit": 0,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 10,
+              "suit": 2,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 10,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 10,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 13,
+              "suit": 0,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 2,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 10,
+              "suit": 0,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 11,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 12,
+              "suit": 0,
+              "origin_deck": 1
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 13,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 2,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 12,
+              "suit": 3,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 12,
+              "suit": 2,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 12,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 2,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 1,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 2,
+              "suit": 0,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 3,
+              "suit": 3,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 5,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 6,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 13,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 2,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "trouble": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 8,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "expect": {
+      "kind": "",
+      "plan_lines": [
+        "push TROUBLE [8C] onto HELPER [5D:1 6C:1 7H] → [5D:1 6C:1 7H 8C]"
+      ]
+    }
+  },
+  {
     "name": "free_pull_singleton_onto_run_growing",
     "desc": "A loose [4H] singleton in TROUBLE absorbs onto a 2-partial GROWING build.",
     "op": "enumerate_moves",
