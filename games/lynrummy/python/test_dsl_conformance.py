@@ -205,7 +205,8 @@ def _run_enumerate_moves(sc):
 
 def _run_solve(sc):
     """Build a 4-bucket state, walk `bfs.solve_state`,
-    and assert on `no_plan` or `plan_length` per the scenario."""
+    and assert on `no_plan` / `plan_length` / `plan_lines`
+    per the scenario."""
     state = (
         _bucket_to_tuples(sc.get("helper", [])),
         _bucket_to_tuples(sc.get("trouble", [])),
@@ -222,6 +223,22 @@ def _run_solve(sc):
             return True, "OK — no plan, as expected"
         return False, f"expected no plan; got plan of length {len(plan)}"
 
+    plan_lines = expect.get("plan_lines")
+    if plan_lines:
+        if plan is None:
+            return False, (f"expected plan of {len(plan_lines)} lines; "
+                           f"got None")
+        if plan == plan_lines:
+            return True, f"OK — plan_lines match ({len(plan)} lines)"
+        # Find first divergence for a useful message.
+        for i, (got, want) in enumerate(zip(plan, plan_lines)):
+            if got != want:
+                return False, (
+                    f"plan_lines diverge at line {i+1}: "
+                    f"want {want!r}, got {got!r}")
+        return False, (f"plan_lines length: want {len(plan_lines)}, "
+                       f"got {len(plan)}")
+
     plan_length = expect.get("plan_length", 0)
     if plan_length > 0:
         if plan is None:
@@ -230,7 +247,8 @@ def _run_solve(sc):
             return True, f"OK — plan of length {plan_length}"
         return False, (f"expected plan of length {plan_length}; "
                        f"got {len(plan)}")
-    return False, "solve scenario missing expectation (no_plan or plan_length)"
+    return False, ("solve scenario missing expectation "
+                   "(no_plan / plan_length / plan_lines)")
 
 
 DISPATCH = {

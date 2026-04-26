@@ -27,6 +27,7 @@ planner_corpus.dsl` (separate from hand-authored
 
 import json
 import sqlite3
+import sys
 from pathlib import Path
 
 DB_PATH = "/home/steve/AngryGopher/prod/gopher.db"
@@ -34,10 +35,9 @@ REPO = Path("/home/steve/showell_repos/angry-gopher")
 SESSIONS_PATH = REPO / "games/lynrummy/python/corpus/sessions.txt"
 OUT_PATH = REPO / "games/lynrummy/conformance/scenarios/planner_corpus.dsl"
 
-# Baseline depth distribution (post-focus-rule + SPLIT_OUT).
-# Re-export the DSL whenever the BFS shape changes and the
-# baseline shifts.
-BASELINE_DEPTHS = [2, 5, 2, 4, 5, 4, 6, 4, 1, 7, 2, 5, 2, 1, 1, 2, 3, 1, 2, 5, 1]
+# Need the BFS solver to produce canonical plan_lines.
+sys.path.insert(0, str(REPO / "games/lynrummy/python"))
+import bfs  # noqa: E402
 
 RANKS = "A23456789TJQK"
 SUITS = "CDSH"
@@ -50,27 +50,41 @@ def card_label_dsl(value, suit, deck):
 
 
 def board_for_solver(state):
-    """Return (helper_stacks, trouble_label) where helpers are
-    the original board stacks (label-string lists) and trouble
-    is just the singleton appended from hand."""
-    helpers = [
-        [
-            card_label_dsl(bc["card"]["value"], bc["card"]["suit"],
-                           bc["card"]["origin_deck"])
-            for bc in stack["board_cards"]
-        ]
-        for stack in state["board"]
-    ]
+    """Return (helper_stacks_labels, helper_stacks_tuples,
+    trouble_label, trouble_tuple). Labels are for DSL output;
+    tuples are for feeding bfs.solve to capture canonical
+    plan_lines."""
+    helpers_labels = []
+    helpers_tuples = []
+    for stack in state["board"]:
+        cards = [(bc["card"]["value"], bc["card"]["suit"],
+                  bc["card"]["origin_deck"])
+                 for bc in stack["board_cards"]]
+        helpers_tuples.append(cards)
+        helpers_labels.append(
+            [card_label_dsl(*c) for c in cards])
     hand = state["hands"][state["active_player_index"]]["hand_cards"]
-    trouble_card = hand[0]["card"]
-    trouble_label = card_label_dsl(
-        trouble_card["value"], trouble_card["suit"],
-        trouble_card["origin_deck"])
-    return helpers, trouble_label
+    tc = hand[0]["card"]
+    trouble_tuple = (tc["value"], tc["suit"], tc["origin_deck"])
+    trouble_label = card_label_dsl(*trouble_tuple)
+    return helpers_labels, helpers_tuples, trouble_label, trouble_tuple
 
 
-def render_scenario(sid, helpers, trouble, depth):
-    """Emit one DSL scenario."""
+def canonical_plan_lines(helpers_tuples, trouble_tuple):
+    """Run Python's BFS on the augmented board and return
+    the exact plan-line strings (or None if no plan)."""
+    augmented = list(helpers_tuples) + [[trouble_tuple]]
+    plan = bfs.solve(augmented, max_trouble_outer=10,
+                     max_states=200000, verbose=False)
+    return plan
+
+
+def render_scenario(sid, helpers, trouble, plan):
+    """Emit one DSL scenario.
+
+    `plan` is None for unsolvable puzzles (becomes
+    `expect: no_plan`) or a list of plan-line strings
+    (becomes `expect: plan_lines: [...]`)."""
     lines = []
     lines.append(f"scenario corpus_sid_{sid}")
     lines.append(
@@ -82,31 +96,33 @@ def render_scenario(sid, helpers, trouble, depth):
         lines.append(f"    at (0,0): {' '.join(stack)}")
     lines.append("  trouble:")
     lines.append(f"    at (0,0): {trouble}")
-    lines.append("  expect:")
-    if depth is None:
-        # The DSL form for "solver returns no plan."
-        lines[-1] = "  expect: no_plan"
+    if plan is None:
+        lines.append("  expect: no_plan")
     else:
-        lines.append(f"    plan_length: {depth}")
+        lines.append("  expect:")
+        lines.append("    plan_lines:")
+        for line in plan:
+            # Quote via JSON so embedded chars (→, etc.)
+            # round-trip cleanly.
+            lines.append(f"      - {json.dumps(line)}")
     return "\n".join(lines)
 
 
 def main():
     sids = [int(s.strip()) for s in open(SESSIONS_PATH) if s.strip()]
-    if len(sids) != len(BASELINE_DEPTHS):
-        raise SystemExit(
-            f"sids count {len(sids)} != baseline depths "
-            f"count {len(BASELINE_DEPTHS)}")
 
     conn = sqlite3.connect(DB_PATH)
     scenarios = []
-    for sid, depth in zip(sids, BASELINE_DEPTHS):
+    for sid in sids:
         row = conn.execute(
             "SELECT initial_state_json FROM lynrummy_puzzle_seeds "
             "WHERE session_id=?", (sid,)).fetchone()
         state = json.loads(row[0])
-        helpers, trouble = board_for_solver(state)
-        scenarios.append(render_scenario(sid, helpers, trouble, depth))
+        helpers_labels, helpers_tuples, trouble_label, trouble_tuple = \
+            board_for_solver(state)
+        plan = canonical_plan_lines(helpers_tuples, trouble_tuple)
+        scenarios.append(render_scenario(
+            sid, helpers_labels, trouble_label, plan))
 
     OUT_PATH.parent.mkdir(parents=True, exist_ok=True)
     out = []

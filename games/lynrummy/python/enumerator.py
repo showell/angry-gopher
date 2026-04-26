@@ -245,8 +245,11 @@ def enumerate_moves(state):
     )
 
     for bucket, idx, target in absorbers:
-        # Neighbor shapes for this absorber.
-        shapes = set().union(*(neighbors(c) for c in target))
+        # Neighbor shapes for this absorber. Sorted so move
+        # enumeration is deterministic across runs AND across
+        # the Python/Elm port (Elm's shapes are list-ordered;
+        # we sort to match).
+        shapes = sorted(set().union(*(neighbors(c) for c in target)))
 
         # Source: HELPER stack via extract. Inverted loop —
         # iterate the ABSORBER's neighbor shapes and look up

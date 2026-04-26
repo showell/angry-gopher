@@ -39,7 +39,9 @@ scenario corpus_sid_108
   trouble:
     at (0,0): QD'
   expect:
-    plan_length: 2
+    plan_lines:
+      - "shift 8C to pop JC:1 [8D:1 8S 8H:1 -> 8C + 9C TC:1]; absorb onto trouble [QD:1] \u2192 [JC:1 QD:1]"
+      - "peel TH from HELPER [AH:1 2H 3H 4H 5H:1 6H:1 7H 8H 9H TH], absorb onto growing [JC:1 QD:1] \u2192 [TH JC:1 QD:1] [\u2192COMPLETE]"
 
 scenario corpus_sid_110
   desc: Corpus session 110, trouble TC. Auto-generated; do not hand-edit.
@@ -65,7 +67,12 @@ scenario corpus_sid_110
   trouble:
     at (0,0): TC
   expect:
-    plan_length: 5
+    plan_lines:
+      - "peel TH:1 from HELPER [TH:1 JC:1 QD:1 KS:1], absorb onto trouble [TC] \u2192 [TC TH:1]"
+      - "steal TD from HELPER [8D 9D:1 TD], absorb onto growing [TC TH:1] \u2192 [TC TH:1 TD] [\u2192COMPLETE] ; spawn TROUBLE: [8D 9D:1]"
+      - "steal 7D from HELPER [7S 7D 7C], absorb onto trouble [8D 9D:1] \u2192 [7D 8D 9D:1] [\u2192COMPLETE] ; spawn TROUBLE: [7S], [7C]"
+      - "pull 7C onto trouble [7S] \u2192 [7S 7C]"
+      - "pluck 7H:1 from HELPER [4H:1 5H:1 6H:1 7H:1 8H:1 9H TH], absorb onto growing [7S 7C] \u2192 [7S 7C 7H:1] [\u2192COMPLETE]"
 
 scenario corpus_sid_112
   desc: Corpus session 112, trouble 3C. Auto-generated; do not hand-edit.
@@ -97,7 +104,9 @@ scenario corpus_sid_112
   trouble:
     at (0,0): 3C
   expect:
-    plan_length: 2
+    plan_lines:
+      - "peel 2C from HELPER [2H:1 2C 2S:1 2D], absorb onto trouble [3C] \u2192 [2C 3C]"
+      - "pluck 4C from HELPER [QH:1 KS:1 AD:1 2C:1 3D 4C 5D:1 6C:1 7H 8C:1 9H TS JH:1 QS:1 KD AC:1 2D:1 3C:1], absorb onto growing [2C 3C] \u2192 [2C 3C 4C] [\u2192COMPLETE]"
 
 scenario corpus_sid_114
   desc: Corpus session 114, trouble 6D. Auto-generated; do not hand-edit.
@@ -126,7 +135,11 @@ scenario corpus_sid_114
   trouble:
     at (0,0): 6D
   expect:
-    plan_length: 4
+    plan_lines:
+      - "peel 7C from HELPER [7S 7D 7C 7H:1], absorb onto trouble [6D] \u2192 [6D 7C]"
+      - "steal 5C from HELPER [5C 5D 5S:1], absorb onto growing [6D 7C] \u2192 [5C 6D 7C] [\u2192COMPLETE] ; spawn TROUBLE: [5D], [5S:1]"
+      - "splice [5D] into HELPER [3D 4C 5H 6S 7H 8C:1] \u2192 [3D 4C 5D] + [5H 6S 7H 8C:1]"
+      - "splice [5S:1] into HELPER [3S:1 4D:1 5S 6H 7S:1] \u2192 [3S:1 4D:1 5S:1] + [5S 6H 7S:1]"
 
 scenario corpus_sid_116
   desc: Corpus session 116, trouble JS. Auto-generated; do not hand-edit.
@@ -154,7 +167,12 @@ scenario corpus_sid_116
   trouble:
     at (0,0): JS
   expect:
-    plan_length: 5
+    plan_lines:
+      - "peel JC:1 from HELPER [7S:1 8H:1 9C:1 TD:1 JC:1], absorb onto trouble [JS] \u2192 [JS JC:1]"
+      - "steal JD from HELPER [JD QD KD:1], absorb onto growing [JS JC:1] \u2192 [JS JC:1 JD] [\u2192COMPLETE] ; spawn TROUBLE: [QD KD:1]"
+      - "steal AD:1 from HELPER [AS AD:1 AC:1], absorb onto trouble [QD KD:1] \u2192 [QD KD:1 AD:1] [\u2192COMPLETE] ; spawn TROUBLE: [AS], [AC:1]"
+      - "push TROUBLE [AS] onto HELPER [2S 3S 4S:1 5S:1] \u2192 [AS 2S 3S 4S:1 5S:1]"
+      - "push TROUBLE [AC:1] onto HELPER [AD AH AS:1] \u2192 [AD AH AS:1 AC:1]"
 
 scenario corpus_sid_118
   desc: Corpus session 118, trouble QC'. Auto-generated; do not hand-edit.
@@ -179,7 +197,11 @@ scenario corpus_sid_118
   trouble:
     at (0,0): QC'
   expect:
-    plan_length: 4
+    plan_lines:
+      - "yank KD from HELPER [TD:1 JD QD KD AD:1], absorb onto trouble [QC:1] \u2192 [QC:1 KD] ; spawn TROUBLE: [AD:1]"
+      - "yank AS from HELPER [TS:1 JS:1 QS KS AS 2S], absorb onto growing [QC:1 KD] \u2192 [QC:1 KD AS] [\u2192COMPLETE] ; spawn TROUBLE: [2S]"
+      - "pull 2S onto trouble [AD:1] \u2192 [AD:1 2S]"
+      - "peel KS from HELPER [TS:1 JS:1 QS KS], absorb onto growing [AD:1 2S] \u2192 [KS AD:1 2S] [\u2192COMPLETE]"
 
 scenario corpus_sid_120
   desc: Corpus session 120, trouble JC'. Auto-generated; do not hand-edit.
@@ -209,7 +231,13 @@ scenario corpus_sid_120
   trouble:
     at (0,0): JC'
   expect:
-    plan_length: 6
+    plan_lines:
+      - "steal QD:1 from HELPER [QD:1 QS QH], absorb onto trouble [JC:1] \u2192 [JC:1 QD:1] ; spawn TROUBLE: [QS], [QH]"
+      - "steal KC from HELPER [KS KD KC], absorb onto growing [JC:1 QD:1] \u2192 [JC:1 QD:1 KC] [\u2192COMPLETE] ; spawn TROUBLE: [KS], [KD]"
+      - "push TROUBLE [QS] onto HELPER [9H:1 TC:1 JD:1] \u2192 [9H:1 TC:1 JD:1 QS]"
+      - "push TROUBLE [QH] onto HELPER [9C TD:1 JS:1] \u2192 [9C TD:1 JS:1 QH]"
+      - "push TROUBLE [KS] onto HELPER [AS 2S 3S] \u2192 [KS AS 2S 3S]"
+      - "push TROUBLE [KD] onto HELPER [TD JD QD] \u2192 [TD JD QD KD]"
 
 scenario corpus_sid_122
   desc: Corpus session 122, trouble TH'. Auto-generated; do not hand-edit.
@@ -237,7 +265,11 @@ scenario corpus_sid_122
   trouble:
     at (0,0): TH'
   expect:
-    plan_length: 4
+    plan_lines:
+      - "peel TC:1 from HELPER [7C:1 8C:1 9C:1 TC:1], absorb onto trouble [TH:1] \u2192 [TH:1 TC:1]"
+      - "split_out TD:1 from HELPER [9S:1 TD:1 JS:1], absorb onto growing [TH:1 TC:1] \u2192 [TH:1 TC:1 TD:1] [\u2192COMPLETE] ; spawn TROUBLE: [9S:1], [JS:1]"
+      - "push TROUBLE [9S:1] onto HELPER [9D:1 9H 9C] \u2192 [9D:1 9H 9C 9S:1]"
+      - "push TROUBLE [JS:1] onto HELPER [QS KS AS 2S 3S 4S:1] \u2192 [JS:1 QS KS AS 2S 3S 4S:1]"
 
 scenario corpus_sid_124
   desc: Corpus session 124, trouble 6S'. Auto-generated; do not hand-edit.
@@ -261,7 +293,8 @@ scenario corpus_sid_124
   trouble:
     at (0,0): 6S'
   expect:
-    plan_length: 1
+    plan_lines:
+      - "splice [6S:1] into HELPER [3H 4C:1 5H 6S 7H 8C:1 9H:1] \u2192 [3H 4C:1 5H 6S:1] + [6S 7H 8C:1 9H:1]"
 
 scenario corpus_sid_126
   desc: Corpus session 126, trouble 5C'. Auto-generated; do not hand-edit.
@@ -285,7 +318,14 @@ scenario corpus_sid_126
   trouble:
     at (0,0): 5C'
   expect:
-    plan_length: 7
+    plan_lines:
+      - "peel 4C from HELPER [4C 5H 6S 7H 8C:1], absorb onto trouble [5C:1] \u2192 [4C 5C:1]"
+      - "steal 3C:1 from HELPER [3D 3S:1 3C:1], absorb onto growing [4C 5C:1] \u2192 [3C:1 4C 5C:1] [\u2192COMPLETE] ; spawn TROUBLE: [3D], [3S:1]"
+      - "push TROUBLE [3D] onto HELPER [JD:1 QD KD:1 AD:1 2D:1] \u2192 [JD:1 QD KD:1 AD:1 2D:1 3D]"
+      - "shift 5H:1 to pop 2H [2C 3H:1 4C:1 -> 3H 4H + 5H:1]; absorb onto trouble [3S:1] \u2192 [2H 3S:1]"
+      - "steal AS:1 from HELPER [AD AH AS:1], absorb onto growing [2H 3S:1] \u2192 [AS:1 2H 3S:1] [\u2192COMPLETE] ; spawn TROUBLE: [AD], [AH]"
+      - "splice [AD] into HELPER [JD:1 QD KD:1 AD:1 2D:1 3D] \u2192 [JD:1 QD KD:1 AD] + [AD:1 2D:1 3D]"
+      - "push TROUBLE [AH] onto HELPER [9C:1 TD JS:1 QH KC:1] \u2192 [9C:1 TD JS:1 QH KC:1 AH]"
 
 scenario corpus_sid_128
   desc: Corpus session 128, trouble 5S. Auto-generated; do not hand-edit.
@@ -310,7 +350,9 @@ scenario corpus_sid_128
   trouble:
     at (0,0): 5S
   expect:
-    plan_length: 2
+    plan_lines:
+      - "shift 7H to pop 4S:1 [3D 4C 5H 6S -> 5D:1 6C + 7H]; absorb onto trouble [5S] \u2192 [4S:1 5S]"
+      - "peel 6S from HELPER [3D 4C 5H 6S], absorb onto growing [4S:1 5S] \u2192 [4S:1 5S 6S] [\u2192COMPLETE]"
 
 scenario corpus_sid_130
   desc: Corpus session 130, trouble JH. Auto-generated; do not hand-edit.
@@ -339,7 +381,12 @@ scenario corpus_sid_130
   trouble:
     at (0,0): JH
   expect:
-    plan_length: 5
+    plan_lines:
+      - "steal TS from HELPER [8S 9S TS], absorb onto trouble [JH] \u2192 [TS JH] ; spawn TROUBLE: [8S 9S]"
+      - "peel 9D:1 from HELPER [9H 9S:1 9C 9D:1], absorb onto growing [TS JH] \u2192 [9D:1 TS JH] [\u2192COMPLETE]"
+      - "steal 7S from HELPER [7S 7C 7H:1], absorb onto trouble [8S 9S] \u2192 [7S 8S 9S] [\u2192COMPLETE] ; spawn TROUBLE: [7C], [7H:1]"
+      - "push TROUBLE [7C] onto HELPER [8H 9C:1 TD JC:1 QH:1] \u2192 [7C 8H 9C:1 TD JC:1 QH:1]"
+      - "push TROUBLE [7H:1] onto HELPER [4C:1 5D 6S] \u2192 [4C:1 5D 6S 7H:1]"
 
 scenario corpus_sid_132
   desc: Corpus session 132, trouble QC. Auto-generated; do not hand-edit.
@@ -367,7 +414,9 @@ scenario corpus_sid_132
   trouble:
     at (0,0): QC
   expect:
-    plan_length: 2
+    plan_lines:
+      - "peel JD from HELPER [8D 9D TD JD], absorb onto trouble [QC] \u2192 [JD QC]"
+      - "peel TS:1 from HELPER [TS:1 JS QS:1 KS AS 2S], absorb onto growing [JD QC] \u2192 [TS:1 JD QC] [\u2192COMPLETE]"
 
 scenario corpus_sid_134
   desc: Corpus session 134, trouble 6H'. Auto-generated; do not hand-edit.
@@ -393,7 +442,8 @@ scenario corpus_sid_134
   trouble:
     at (0,0): 6H'
   expect:
-    plan_length: 1
+    plan_lines:
+      - "splice [6H:1] into HELPER [4D:1 5C 6H 7S:1 8H 9S] \u2192 [4D:1 5C 6H:1] + [6H 7S:1 8H 9S]"
 
 scenario corpus_sid_136
   desc: Corpus session 136, trouble 5D. Auto-generated; do not hand-edit.
@@ -417,7 +467,8 @@ scenario corpus_sid_136
   trouble:
     at (0,0): 5D
   expect:
-    plan_length: 1
+    plan_lines:
+      - "splice [5D] into HELPER [3D 4C 5H 6S 7H] \u2192 [3D 4C 5D] + [5H 6S 7H]"
 
 scenario corpus_sid_138
   desc: Corpus session 138, trouble TC'. Auto-generated; do not hand-edit.
@@ -444,7 +495,9 @@ scenario corpus_sid_138
   trouble:
     at (0,0): TC'
   expect:
-    plan_length: 2
+    plan_lines:
+      - "peel JD from HELPER [JD QD KD AD:1 2D 3D 4D:1], absorb onto trouble [TC:1] \u2192 [TC:1 JD]"
+      - "peel QS from HELPER [QS KS AS 2S 3S], absorb onto growing [TC:1 JD] \u2192 [TC:1 JD QS] [\u2192COMPLETE]"
 
 scenario corpus_sid_140
   desc: Corpus session 140, trouble JH. Auto-generated; do not hand-edit.
@@ -472,7 +525,10 @@ scenario corpus_sid_140
   trouble:
     at (0,0): JH
   expect:
-    plan_length: 3
+    plan_lines:
+      - "peel QS:1 from HELPER [QS:1 KS AS 2S 3S:1], absorb onto trouble [JH] \u2192 [JH QS:1]"
+      - "yank KD from HELPER [TD JD QD KD AD:1 2D:1], absorb onto growing [JH QS:1] \u2192 [JH QS:1 KD] [\u2192COMPLETE] ; spawn TROUBLE: [AD:1 2D:1]"
+      - "peel 3D from HELPER [3D 4C 5H 6S], absorb onto trouble [AD:1 2D:1] \u2192 [AD:1 2D:1 3D] [\u2192COMPLETE]"
 
 scenario corpus_sid_142
   desc: Corpus session 142, trouble 8H'. Auto-generated; do not hand-edit.
@@ -501,7 +557,8 @@ scenario corpus_sid_142
   trouble:
     at (0,0): 8H'
   expect:
-    plan_length: 1
+    plan_lines:
+      - "splice [8H:1] into HELPER [5C 6D:1 7S:1 8D:1 9C:1 TH] \u2192 [5C 6D:1 7S:1 8H:1] + [8D:1 9C:1 TH]"
 
 scenario corpus_sid_144
   desc: Corpus session 144, trouble 5C'. Auto-generated; do not hand-edit.
@@ -525,7 +582,9 @@ scenario corpus_sid_144
   trouble:
     at (0,0): 5C'
   expect:
-    plan_length: 2
+    plan_lines:
+      - "peel 4H from HELPER [4H 5S:1 6H 7C:1 8D], absorb onto trouble [5C:1] \u2192 [4H 5C:1]"
+      - "peel 3S:1 from HELPER [3S:1 4S:1 5S 6S:1 7S:1], absorb onto growing [4H 5C:1] \u2192 [3S:1 4H 5C:1] [\u2192COMPLETE]"
 
 scenario corpus_sid_146
   desc: Corpus session 146, trouble AC'. Auto-generated; do not hand-edit.
@@ -549,7 +608,12 @@ scenario corpus_sid_146
   trouble:
     at (0,0): AC'
   expect:
-    plan_length: 5
+    plan_lines:
+      - "peel 2D from HELPER [QD:1 KD AD:1 2D], absorb onto trouble [AC:1] \u2192 [AC:1 2D]"
+      - "split_out 3S from HELPER [2S:1 3S 4S], absorb onto growing [AC:1 2D] \u2192 [AC:1 2D 3S] [\u2192COMPLETE] ; spawn TROUBLE: [2S:1], [4S]"
+      - "push TROUBLE [2S:1] onto HELPER [2H 2C:1 2D:1] \u2192 [2H 2C:1 2D:1 2S:1]"
+      - "peel 5D:1 from HELPER [5S:1 5H 5D:1 5C:1], absorb onto trouble [4S] \u2192 [4S 5D:1]"
+      - "peel 6C:1 from HELPER [6C:1 7H 8S 9D TS:1 JD:1 QC], absorb onto growing [4S 5D:1] \u2192 [4S 5D:1 6C:1] [\u2192COMPLETE]"
 
 scenario corpus_sid_148
   desc: Corpus session 148, trouble 2D. Auto-generated; do not hand-edit.
@@ -576,5 +640,6 @@ scenario corpus_sid_148
   trouble:
     at (0,0): 2D
   expect:
-    plan_length: 1
+    plan_lines:
+      - "splice [2D] into HELPER [KH:1 AC:1 2D:1 3C 4D] \u2192 [KH:1 AC:1 2D] + [2D:1 3C 4D]"
 

@@ -194,11 +194,37 @@ describe move =
                 ++ "]"
 
         Shift d ->
+            let
+                pLabel =
+                    cardLabel d.pCard
+
+                rest =
+                    List.filter (\c -> c /= d.pCard) d.newSource
+
+                restLabel =
+                    rest |> List.map cardLabel |> String.join " "
+
+                shifted =
+                    case d.newSource of
+                        first :: _ ->
+                            if first == d.pCard then
+                                pLabel ++ " + " ++ restLabel
+
+                            else
+                                restLabel ++ " + " ++ pLabel
+
+                        [] ->
+                            pLabel
+            in
             "shift "
-                ++ cardLabel d.pCard
+                ++ pLabel
                 ++ " to pop "
                 ++ cardLabel d.stolen
-                ++ "; absorb onto "
+                ++ " ["
+                ++ stackStr d.newDonor
+                ++ " -> "
+                ++ shifted
+                ++ "]; absorb onto "
                 ++ bucketStr d.targetBucketBefore
                 ++ " ["
                 ++ stackStr d.targetBefore

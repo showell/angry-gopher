@@ -864,12 +864,20 @@ absorberMoves state inventory extractable absorber =
 that could legally sit adjacent to any card in the stack.
 Returns `ShapeKey`s directly so the loop-inverted absorb
 path can use them as `Dict` keys.
+
+Deduplicated and sorted so move enumeration order is
+deterministic and matches Python's sorted iteration of the
+neighbor shape set. Sort matters for cross-language plan
+parity — without it the same input puzzle yields different
+(but equally valid) plans on the two sides.
 -}
 neighborShapes : Stack -> List ShapeKey
 neighborShapes target =
     target
         |> List.concatMap Cards.neighbors
         |> List.map (\( v, s ) -> ( cardValueToInt v, suitToInt s ))
+        |> Set.fromList
+        |> Set.toList
 
 
 {-| Loop-inverted absorb: iterate the absorber's neighbor

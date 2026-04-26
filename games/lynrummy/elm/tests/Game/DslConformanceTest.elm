@@ -99,12 +99,17 @@ corpusSid108 =
                 result =
                     Game.Agent.Bfs.solve state
             in
+            let
+                expected =
+                    [ "shift 8C to pop JC:1 [8D:1 8S 8H:1 -> 8C + 9C TC:1]; absorb onto trouble [QD:1] → [JC:1 QD:1]", "peel TH from HELPER [AH:1 2H 3H 4H 5H:1 6H:1 7H 8H 9H TH], absorb onto growing [JC:1 QD:1] → [TH JC:1 QD:1] [→COMPLETE]" ]
+            in
             case result of
                 Just plan ->
-                    List.length plan |> Expect.equal 2
+                    List.map AgentMove.describe plan
+                        |> Expect.equal expected
 
                 Nothing ->
-                    Expect.fail "expected plan of length 2; got Nothing"
+                    Expect.fail ("expected plan; got Nothing")
 
 
 corpusSid110 : Test
@@ -141,12 +146,17 @@ corpusSid110 =
                 result =
                     Game.Agent.Bfs.solve state
             in
+            let
+                expected =
+                    [ "peel TH:1 from HELPER [TH:1 JC:1 QD:1 KS:1], absorb onto trouble [TC] → [TC TH:1]", "steal TD from HELPER [8D 9D:1 TD], absorb onto growing [TC TH:1] → [TC TH:1 TD] [→COMPLETE] ; spawn TROUBLE: [8D 9D:1]", "steal 7D from HELPER [7S 7D 7C], absorb onto trouble [8D 9D:1] → [7D 8D 9D:1] [→COMPLETE] ; spawn TROUBLE: [7S], [7C]", "pull 7C onto trouble [7S] → [7S 7C]", "pluck 7H:1 from HELPER [4H:1 5H:1 6H:1 7H:1 8H:1 9H TH], absorb onto growing [7S 7C] → [7S 7C 7H:1] [→COMPLETE]" ]
+            in
             case result of
                 Just plan ->
-                    List.length plan |> Expect.equal 5
+                    List.map AgentMove.describe plan
+                        |> Expect.equal expected
 
                 Nothing ->
-                    Expect.fail "expected plan of length 5; got Nothing"
+                    Expect.fail ("expected plan; got Nothing")
 
 
 corpusSid112 : Test
@@ -189,12 +199,17 @@ corpusSid112 =
                 result =
                     Game.Agent.Bfs.solve state
             in
+            let
+                expected =
+                    [ "peel 2C from HELPER [2H:1 2C 2S:1 2D], absorb onto trouble [3C] → [2C 3C]", "pluck 4C from HELPER [QH:1 KS:1 AD:1 2C:1 3D 4C 5D:1 6C:1 7H 8C:1 9H TS JH:1 QS:1 KD AC:1 2D:1 3C:1], absorb onto growing [2C 3C] → [2C 3C 4C] [→COMPLETE]" ]
+            in
             case result of
                 Just plan ->
-                    List.length plan |> Expect.equal 2
+                    List.map AgentMove.describe plan
+                        |> Expect.equal expected
 
                 Nothing ->
-                    Expect.fail "expected plan of length 2; got Nothing"
+                    Expect.fail ("expected plan; got Nothing")
 
 
 corpusSid114 : Test
@@ -234,12 +249,17 @@ corpusSid114 =
                 result =
                     Game.Agent.Bfs.solve state
             in
+            let
+                expected =
+                    [ "peel 7C from HELPER [7S 7D 7C 7H:1], absorb onto trouble [6D] → [6D 7C]", "steal 5C from HELPER [5C 5D 5S:1], absorb onto growing [6D 7C] → [5C 6D 7C] [→COMPLETE] ; spawn TROUBLE: [5D], [5S:1]", "splice [5D] into HELPER [3D 4C 5H 6S 7H 8C:1] → [3D 4C 5D] + [5H 6S 7H 8C:1]", "splice [5S:1] into HELPER [3S:1 4D:1 5S 6H 7S:1] → [3S:1 4D:1 5S:1] + [5S 6H 7S:1]" ]
+            in
             case result of
                 Just plan ->
-                    List.length plan |> Expect.equal 4
+                    List.map AgentMove.describe plan
+                        |> Expect.equal expected
 
                 Nothing ->
-                    Expect.fail "expected plan of length 4; got Nothing"
+                    Expect.fail ("expected plan; got Nothing")
 
 
 corpusSid116 : Test
@@ -278,12 +298,17 @@ corpusSid116 =
                 result =
                     Game.Agent.Bfs.solve state
             in
+            let
+                expected =
+                    [ "peel JC:1 from HELPER [7S:1 8H:1 9C:1 TD:1 JC:1], absorb onto trouble [JS] → [JS JC:1]", "steal JD from HELPER [JD QD KD:1], absorb onto growing [JS JC:1] → [JS JC:1 JD] [→COMPLETE] ; spawn TROUBLE: [QD KD:1]", "steal AD:1 from HELPER [AS AD:1 AC:1], absorb onto trouble [QD KD:1] → [QD KD:1 AD:1] [→COMPLETE] ; spawn TROUBLE: [AS], [AC:1]", "push TROUBLE [AS] onto HELPER [2S 3S 4S:1 5S:1] → [AS 2S 3S 4S:1 5S:1]", "push TROUBLE [AC:1] onto HELPER [AD AH AS:1] → [AD AH AS:1 AC:1]" ]
+            in
             case result of
                 Just plan ->
-                    List.length plan |> Expect.equal 5
+                    List.map AgentMove.describe plan
+                        |> Expect.equal expected
 
                 Nothing ->
-                    Expect.fail "expected plan of length 5; got Nothing"
+                    Expect.fail ("expected plan; got Nothing")
 
 
 corpusSid118 : Test
@@ -319,12 +344,17 @@ corpusSid118 =
                 result =
                     Game.Agent.Bfs.solve state
             in
+            let
+                expected =
+                    [ "yank KD from HELPER [TD:1 JD QD KD AD:1], absorb onto trouble [QC:1] → [QC:1 KD] ; spawn TROUBLE: [AD:1]", "yank AS from HELPER [TS:1 JS:1 QS KS AS 2S], absorb onto growing [QC:1 KD] → [QC:1 KD AS] [→COMPLETE] ; spawn TROUBLE: [2S]", "pull 2S onto trouble [AD:1] → [AD:1 2S]", "peel KS from HELPER [TS:1 JS:1 QS KS], absorb onto growing [AD:1 2S] → [KS AD:1 2S] [→COMPLETE]" ]
+            in
             case result of
                 Just plan ->
-                    List.length plan |> Expect.equal 4
+                    List.map AgentMove.describe plan
+                        |> Expect.equal expected
 
                 Nothing ->
-                    Expect.fail "expected plan of length 4; got Nothing"
+                    Expect.fail ("expected plan; got Nothing")
 
 
 corpusSid120 : Test
@@ -365,12 +395,17 @@ corpusSid120 =
                 result =
                     Game.Agent.Bfs.solve state
             in
+            let
+                expected =
+                    [ "steal QD:1 from HELPER [QD:1 QS QH], absorb onto trouble [JC:1] → [JC:1 QD:1] ; spawn TROUBLE: [QS], [QH]", "steal KC from HELPER [KS KD KC], absorb onto growing [JC:1 QD:1] → [JC:1 QD:1 KC] [→COMPLETE] ; spawn TROUBLE: [KS], [KD]", "push TROUBLE [QS] onto HELPER [9H:1 TC:1 JD:1] → [9H:1 TC:1 JD:1 QS]", "push TROUBLE [QH] onto HELPER [9C TD:1 JS:1] → [9C TD:1 JS:1 QH]", "push TROUBLE [KS] onto HELPER [AS 2S 3S] → [KS AS 2S 3S]", "push TROUBLE [KD] onto HELPER [TD JD QD] → [TD JD QD KD]" ]
+            in
             case result of
                 Just plan ->
-                    List.length plan |> Expect.equal 6
+                    List.map AgentMove.describe plan
+                        |> Expect.equal expected
 
                 Nothing ->
-                    Expect.fail "expected plan of length 6; got Nothing"
+                    Expect.fail ("expected plan; got Nothing")
 
 
 corpusSid122 : Test
@@ -409,12 +444,17 @@ corpusSid122 =
                 result =
                     Game.Agent.Bfs.solve state
             in
+            let
+                expected =
+                    [ "peel TC:1 from HELPER [7C:1 8C:1 9C:1 TC:1], absorb onto trouble [TH:1] → [TH:1 TC:1]", "split_out TD:1 from HELPER [9S:1 TD:1 JS:1], absorb onto growing [TH:1 TC:1] → [TH:1 TC:1 TD:1] [→COMPLETE] ; spawn TROUBLE: [9S:1], [JS:1]", "push TROUBLE [9S:1] onto HELPER [9D:1 9H 9C] → [9D:1 9H 9C 9S:1]", "push TROUBLE [JS:1] onto HELPER [QS KS AS 2S 3S 4S:1] → [JS:1 QS KS AS 2S 3S 4S:1]" ]
+            in
             case result of
                 Just plan ->
-                    List.length plan |> Expect.equal 4
+                    List.map AgentMove.describe plan
+                        |> Expect.equal expected
 
                 Nothing ->
-                    Expect.fail "expected plan of length 4; got Nothing"
+                    Expect.fail ("expected plan; got Nothing")
 
 
 corpusSid124 : Test
@@ -449,12 +489,17 @@ corpusSid124 =
                 result =
                     Game.Agent.Bfs.solve state
             in
+            let
+                expected =
+                    [ "splice [6S:1] into HELPER [3H 4C:1 5H 6S 7H 8C:1 9H:1] → [3H 4C:1 5H 6S:1] + [6S 7H 8C:1 9H:1]" ]
+            in
             case result of
                 Just plan ->
-                    List.length plan |> Expect.equal 1
+                    List.map AgentMove.describe plan
+                        |> Expect.equal expected
 
                 Nothing ->
-                    Expect.fail "expected plan of length 1; got Nothing"
+                    Expect.fail ("expected plan; got Nothing")
 
 
 corpusSid126 : Test
@@ -489,12 +534,17 @@ corpusSid126 =
                 result =
                     Game.Agent.Bfs.solve state
             in
+            let
+                expected =
+                    [ "peel 4C from HELPER [4C 5H 6S 7H 8C:1], absorb onto trouble [5C:1] → [4C 5C:1]", "steal 3C:1 from HELPER [3D 3S:1 3C:1], absorb onto growing [4C 5C:1] → [3C:1 4C 5C:1] [→COMPLETE] ; spawn TROUBLE: [3D], [3S:1]", "push TROUBLE [3D] onto HELPER [JD:1 QD KD:1 AD:1 2D:1] → [JD:1 QD KD:1 AD:1 2D:1 3D]", "shift 5H:1 to pop 2H [2C 3H:1 4C:1 -> 3H 4H + 5H:1]; absorb onto trouble [3S:1] → [2H 3S:1]", "steal AS:1 from HELPER [AD AH AS:1], absorb onto growing [2H 3S:1] → [AS:1 2H 3S:1] [→COMPLETE] ; spawn TROUBLE: [AD], [AH]", "splice [AD] into HELPER [JD:1 QD KD:1 AD:1 2D:1 3D] → [JD:1 QD KD:1 AD] + [AD:1 2D:1 3D]", "push TROUBLE [AH] onto HELPER [9C:1 TD JS:1 QH KC:1] → [9C:1 TD JS:1 QH KC:1 AH]" ]
+            in
             case result of
                 Just plan ->
-                    List.length plan |> Expect.equal 7
+                    List.map AgentMove.describe plan
+                        |> Expect.equal expected
 
                 Nothing ->
-                    Expect.fail "expected plan of length 7; got Nothing"
+                    Expect.fail ("expected plan; got Nothing")
 
 
 corpusSid128 : Test
@@ -530,12 +580,17 @@ corpusSid128 =
                 result =
                     Game.Agent.Bfs.solve state
             in
+            let
+                expected =
+                    [ "shift 7H to pop 4S:1 [3D 4C 5H 6S -> 5D:1 6C + 7H]; absorb onto trouble [5S] → [4S:1 5S]", "peel 6S from HELPER [3D 4C 5H 6S], absorb onto growing [4S:1 5S] → [4S:1 5S 6S] [→COMPLETE]" ]
+            in
             case result of
                 Just plan ->
-                    List.length plan |> Expect.equal 2
+                    List.map AgentMove.describe plan
+                        |> Expect.equal expected
 
                 Nothing ->
-                    Expect.fail "expected plan of length 2; got Nothing"
+                    Expect.fail ("expected plan; got Nothing")
 
 
 corpusSid130 : Test
@@ -575,12 +630,17 @@ corpusSid130 =
                 result =
                     Game.Agent.Bfs.solve state
             in
+            let
+                expected =
+                    [ "steal TS from HELPER [8S 9S TS], absorb onto trouble [JH] → [TS JH] ; spawn TROUBLE: [8S 9S]", "peel 9D:1 from HELPER [9H 9S:1 9C 9D:1], absorb onto growing [TS JH] → [9D:1 TS JH] [→COMPLETE]", "steal 7S from HELPER [7S 7C 7H:1], absorb onto trouble [8S 9S] → [7S 8S 9S] [→COMPLETE] ; spawn TROUBLE: [7C], [7H:1]", "push TROUBLE [7C] onto HELPER [8H 9C:1 TD JC:1 QH:1] → [7C 8H 9C:1 TD JC:1 QH:1]", "push TROUBLE [7H:1] onto HELPER [4C:1 5D 6S] → [4C:1 5D 6S 7H:1]" ]
+            in
             case result of
                 Just plan ->
-                    List.length plan |> Expect.equal 5
+                    List.map AgentMove.describe plan
+                        |> Expect.equal expected
 
                 Nothing ->
-                    Expect.fail "expected plan of length 5; got Nothing"
+                    Expect.fail ("expected plan; got Nothing")
 
 
 corpusSid132 : Test
@@ -619,12 +679,17 @@ corpusSid132 =
                 result =
                     Game.Agent.Bfs.solve state
             in
+            let
+                expected =
+                    [ "peel JD from HELPER [8D 9D TD JD], absorb onto trouble [QC] → [JD QC]", "peel TS:1 from HELPER [TS:1 JS QS:1 KS AS 2S], absorb onto growing [JD QC] → [TS:1 JD QC] [→COMPLETE]" ]
+            in
             case result of
                 Just plan ->
-                    List.length plan |> Expect.equal 2
+                    List.map AgentMove.describe plan
+                        |> Expect.equal expected
 
                 Nothing ->
-                    Expect.fail "expected plan of length 2; got Nothing"
+                    Expect.fail ("expected plan; got Nothing")
 
 
 corpusSid134 : Test
@@ -661,12 +726,17 @@ corpusSid134 =
                 result =
                     Game.Agent.Bfs.solve state
             in
+            let
+                expected =
+                    [ "splice [6H:1] into HELPER [4D:1 5C 6H 7S:1 8H 9S] → [4D:1 5C 6H:1] + [6H 7S:1 8H 9S]" ]
+            in
             case result of
                 Just plan ->
-                    List.length plan |> Expect.equal 1
+                    List.map AgentMove.describe plan
+                        |> Expect.equal expected
 
                 Nothing ->
-                    Expect.fail "expected plan of length 1; got Nothing"
+                    Expect.fail ("expected plan; got Nothing")
 
 
 corpusSid136 : Test
@@ -701,12 +771,17 @@ corpusSid136 =
                 result =
                     Game.Agent.Bfs.solve state
             in
+            let
+                expected =
+                    [ "splice [5D] into HELPER [3D 4C 5H 6S 7H] → [3D 4C 5D] + [5H 6S 7H]" ]
+            in
             case result of
                 Just plan ->
-                    List.length plan |> Expect.equal 1
+                    List.map AgentMove.describe plan
+                        |> Expect.equal expected
 
                 Nothing ->
-                    Expect.fail "expected plan of length 1; got Nothing"
+                    Expect.fail ("expected plan; got Nothing")
 
 
 corpusSid138 : Test
@@ -744,12 +819,17 @@ corpusSid138 =
                 result =
                     Game.Agent.Bfs.solve state
             in
+            let
+                expected =
+                    [ "peel JD from HELPER [JD QD KD AD:1 2D 3D 4D:1], absorb onto trouble [TC:1] → [TC:1 JD]", "peel QS from HELPER [QS KS AS 2S 3S], absorb onto growing [TC:1 JD] → [TC:1 JD QS] [→COMPLETE]" ]
+            in
             case result of
                 Just plan ->
-                    List.length plan |> Expect.equal 2
+                    List.map AgentMove.describe plan
+                        |> Expect.equal expected
 
                 Nothing ->
-                    Expect.fail "expected plan of length 2; got Nothing"
+                    Expect.fail ("expected plan; got Nothing")
 
 
 corpusSid140 : Test
@@ -788,12 +868,17 @@ corpusSid140 =
                 result =
                     Game.Agent.Bfs.solve state
             in
+            let
+                expected =
+                    [ "peel QS:1 from HELPER [QS:1 KS AS 2S 3S:1], absorb onto trouble [JH] → [JH QS:1]", "yank KD from HELPER [TD JD QD KD AD:1 2D:1], absorb onto growing [JH QS:1] → [JH QS:1 KD] [→COMPLETE] ; spawn TROUBLE: [AD:1 2D:1]", "peel 3D from HELPER [3D 4C 5H 6S], absorb onto trouble [AD:1 2D:1] → [AD:1 2D:1 3D] [→COMPLETE]" ]
+            in
             case result of
                 Just plan ->
-                    List.length plan |> Expect.equal 3
+                    List.map AgentMove.describe plan
+                        |> Expect.equal expected
 
                 Nothing ->
-                    Expect.fail "expected plan of length 3; got Nothing"
+                    Expect.fail ("expected plan; got Nothing")
 
 
 corpusSid142 : Test
@@ -833,12 +918,17 @@ corpusSid142 =
                 result =
                     Game.Agent.Bfs.solve state
             in
+            let
+                expected =
+                    [ "splice [8H:1] into HELPER [5C 6D:1 7S:1 8D:1 9C:1 TH] → [5C 6D:1 7S:1 8H:1] + [8D:1 9C:1 TH]" ]
+            in
             case result of
                 Just plan ->
-                    List.length plan |> Expect.equal 1
+                    List.map AgentMove.describe plan
+                        |> Expect.equal expected
 
                 Nothing ->
-                    Expect.fail "expected plan of length 1; got Nothing"
+                    Expect.fail ("expected plan; got Nothing")
 
 
 corpusSid144 : Test
@@ -873,12 +963,17 @@ corpusSid144 =
                 result =
                     Game.Agent.Bfs.solve state
             in
+            let
+                expected =
+                    [ "peel 4H from HELPER [4H 5S:1 6H 7C:1 8D], absorb onto trouble [5C:1] → [4H 5C:1]", "peel 3S:1 from HELPER [3S:1 4S:1 5S 6S:1 7S:1], absorb onto growing [4H 5C:1] → [3S:1 4H 5C:1] [→COMPLETE]" ]
+            in
             case result of
                 Just plan ->
-                    List.length plan |> Expect.equal 2
+                    List.map AgentMove.describe plan
+                        |> Expect.equal expected
 
                 Nothing ->
-                    Expect.fail "expected plan of length 2; got Nothing"
+                    Expect.fail ("expected plan; got Nothing")
 
 
 corpusSid146 : Test
@@ -913,12 +1008,17 @@ corpusSid146 =
                 result =
                     Game.Agent.Bfs.solve state
             in
+            let
+                expected =
+                    [ "peel 2D from HELPER [QD:1 KD AD:1 2D], absorb onto trouble [AC:1] → [AC:1 2D]", "split_out 3S from HELPER [2S:1 3S 4S], absorb onto growing [AC:1 2D] → [AC:1 2D 3S] [→COMPLETE] ; spawn TROUBLE: [2S:1], [4S]", "push TROUBLE [2S:1] onto HELPER [2H 2C:1 2D:1] → [2H 2C:1 2D:1 2S:1]", "peel 5D:1 from HELPER [5S:1 5H 5D:1 5C:1], absorb onto trouble [4S] → [4S 5D:1]", "peel 6C:1 from HELPER [6C:1 7H 8S 9D TS:1 JD:1 QC], absorb onto growing [4S 5D:1] → [4S 5D:1 6C:1] [→COMPLETE]" ]
+            in
             case result of
                 Just plan ->
-                    List.length plan |> Expect.equal 5
+                    List.map AgentMove.describe plan
+                        |> Expect.equal expected
 
                 Nothing ->
-                    Expect.fail "expected plan of length 5; got Nothing"
+                    Expect.fail ("expected plan; got Nothing")
 
 
 corpusSid148 : Test
@@ -956,12 +1056,17 @@ corpusSid148 =
                 result =
                     Game.Agent.Bfs.solve state
             in
+            let
+                expected =
+                    [ "splice [2D] into HELPER [KH:1 AC:1 2D:1 3C 4D] → [KH:1 AC:1 2D] + [2D:1 3C 4D]" ]
+            in
             case result of
                 Just plan ->
-                    List.length plan |> Expect.equal 1
+                    List.map AgentMove.describe plan
+                        |> Expect.equal expected
 
                 Nothing ->
-                    Expect.fail "expected plan of length 1; got Nothing"
+                    Expect.fail ("expected plan; got Nothing")
 
 
 deckIdentityMismatchInRemove : Test

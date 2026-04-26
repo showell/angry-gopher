@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"text/template"
 
@@ -60,8 +61,9 @@ type Expectation struct {
 	NarrateContains  string // at least one yielded move's narrate() contains this substring
 	HintContains     string // at least one yielded move's hint() contains this substring
 	// Solver expectations (op `solve`).
-	NoPlan     bool // expect: no_plan — assert solve returns None
-	PlanLength int  // expect: plan_length: N — assert plan has exactly N lines (-1 = not set)
+	NoPlan     bool     // expect: no_plan — assert solve returns None
+	PlanLength int      // expect: plan_length: N — assert plan has exactly N lines (-1 = not set)
+	PlanLines  []string // expect: plan_lines — assert plan describe() output matches line-by-line (snapshot)
 }
 
 // ExpectedSuggestion — one row inside an `expect: suggestions`
@@ -844,11 +846,25 @@ func elmSolve(b *strings.Builder, sc Scenario) {
 		elmAgentStacks(sc.Complete, "                        "))
 	if sc.Expect.NoPlan {
 		b.WriteString("            case result of\n                Nothing ->\n                    Expect.pass\n\n                Just plan ->\n                    Expect.fail (\"expected no plan; got plan of length \" ++ String.fromInt (List.length plan))")
+	} else if len(sc.Expect.PlanLines) > 0 {
+		// Snapshot match: every line of describe(move) must
+		// equal the pinned canonical plan_lines from Python.
+		var listLits strings.Builder
+		listLits.WriteString("[ ")
+		for i, line := range sc.Expect.PlanLines {
+			if i > 0 {
+				listLits.WriteString(", ")
+			}
+			listLits.WriteString(strconv.Quote(line))
+		}
+		listLits.WriteString(" ]")
+		fmt.Fprintf(b, "            let\n                expected =\n                    %s\n            in\n            case result of\n                Just plan ->\n                    List.map AgentMove.describe plan\n                        |> Expect.equal expected\n\n                Nothing ->\n                    Expect.fail (\"expected plan; got Nothing\")",
+			listLits.String())
 	} else if sc.Expect.PlanLength > 0 {
 		fmt.Fprintf(b, "            case result of\n                Just plan ->\n                    List.length plan |> Expect.equal %d\n\n                Nothing ->\n                    Expect.fail \"expected plan of length %d; got Nothing\"",
 			sc.Expect.PlanLength, sc.Expect.PlanLength)
 	} else {
-		b.WriteString("            Expect.fail \"solve scenario missing expectation (no_plan or plan_length)\"")
+		b.WriteString("            Expect.fail \"solve scenario missing expectation (no_plan or plan_length or plan_lines)\"")
 	}
 }
 
@@ -973,8 +989,9 @@ type jsonExpect struct {
 	NarrateContains string `json:"narrate_contains,omitempty"`
 	HintContains    string `json:"hint_contains,omitempty"`
 	// Solver op.
-	NoPlan     bool `json:"no_plan,omitempty"`
-	PlanLength int  `json:"plan_length,omitempty"`
+	NoPlan     bool     `json:"no_plan,omitempty"`
+	PlanLength int      `json:"plan_length,omitempty"`
+	PlanLines  []string `json:"plan_lines,omitempty"`
 }
 
 type jsonScenario struct {
@@ -1036,6 +1053,7 @@ func toJSONScenario(sc Scenario) jsonScenario {
 		HintContains:    sc.Expect.HintContains,
 		NoPlan:          sc.Expect.NoPlan,
 		PlanLength:      sc.Expect.PlanLength,
+		PlanLines:       sc.Expect.PlanLines,
 	}
 	for _, es := range sc.Expect.Suggestions {
 		js.Expect.Suggestions = append(js.Expect.Suggestions, jsonSuggestion{
@@ -1336,6 +1354,26 @@ func parseExpectBlock(e *Expectation, children []line, path string) error {
 					return err
 				}
 				e.BoardAfter = stacks
+			case "plan_lines":
+				// Each sub line is `- "string"`. Strip the
+				// leading `- ` and the surrounding quotes.
+				var lines []string
+				for _, sl := range sub {
+					t := strings.TrimSpace(sl.content)
+					if !strings.HasPrefix(t, "- ") {
+						return fmt.Errorf("%s:%d: plan_lines entries must start with '- '", path, sl.lineNum)
+					}
+					body := strings.TrimSpace(t[2:])
+					if len(body) < 2 || body[0] != '"' || body[len(body)-1] != '"' {
+						return fmt.Errorf("%s:%d: plan_lines entry must be a quoted string", path, sl.lineNum)
+					}
+					unquoted, err := strconv.Unquote(body)
+					if err != nil {
+						return fmt.Errorf("%s:%d: plan_lines unquote: %w", path, sl.lineNum, err)
+					}
+					lines = append(lines, unquoted)
+				}
+				e.PlanLines = lines
 			default:
 				return fmt.Errorf("%s:%d: unknown expect block %q", path, l.lineNum, key)
 			}
