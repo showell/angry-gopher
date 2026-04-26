@@ -69,25 +69,78 @@ Pure helpers extracted from the move-enumeration ladder:
   the absorber from its bucket, leave the other unchanged.
 - `_graduate(merged, growing, complete)` — route a merged
   result to GROWING (still partial) or COMPLETE (legal).
+- `_extractable_index(helper)` — one-pass scan; maps
+  `(value, suit)` → list of (helper_idx, ci, verb). Built
+  once per state. Inverts the absorber loop: instead of
+  "for each helper × ci, check shape," we look up by shape
+  (O(1) dict).
 
 These collapse the bucket/graduation ladders that used to
 repeat across extract_absorb, free_pull, and shift. The
 shape is what we'll port to Elm.
 
-Test contracts: `test_bfs_extract.py` (15 tests) covers
-`_extract_pieces` per verb and pins purity on `_do_extract`,
-`_remove_absorber`, `_graduate`.
+## Doomed-third filtering (OPTIMIZE_PYTHON, 2026-04-25)
+
+Two complementary filters cut combinatorial fan-out where
+the BFS would otherwise chase futile partials:
+
+- `_completion_inventory(helper, trouble)` — multiset of
+  `(value, suit)` shapes available as candidate "third
+  cards" anywhere on the (extractable) board. Excludes
+  growing + complete (sealed) and trouble 2-partials
+  (committed).
+- `_completion_shapes(partial)` — required shapes to
+  extend a 2-partial into a length-3 legal stack.
+- `_has_doomed_third(partial, inventory)` — True if no
+  completion candidate exists.
+
+**Filter 1 (merge time):** every length-2 merged in
+extract_absorb / free_pull / shift gates on
+`_has_doomed_third`. Skip moves that produce dead-end
+partials.
+
+**Filter 2 (state level, top of `enumerate_moves`):** if any
+existing growing 2-partial has no completion candidate in
+the current state's inventory, the state is dead — yield
+nothing. Catches partials whose candidates were consumed
+elsewhere mid-search.
+
+Together they delivered 4× speedup on the worst case and
+44× on case #2 of the captured snapshots, with no change
+to corpus depth distribution.
+
+Test contracts: `test_bfs_extract.py` (15 tests) +
+`test_bfs_enumerate.py` (8 tests including the
+`test_doomed_partial_pruned` /
+`test_doomed_growing_partial_is_reachable` filter pins).
 
 ## Instrumentation
 
-Verbose mode emits a narration line per BFS expansion:
-state of all four buckets, accumulated program lines, count
-of moves enumerated/pushed/dropped. Reads like a human
-narrating their thinking.
+- **Verbose mode** emits a narration line per BFS expansion:
+  state of all four buckets, accumulated program lines, count
+  of moves enumerated/pushed/dropped.
 
-```python
-solve(board, max_trouble_outer=10, verbose=True)
-```
+  ```python
+  solve(board, max_trouble_outer=10, verbose=True)
+  ```
+
+- **`narrate(desc)`** — Steve-facing evocative one-liner per
+  move ("engulf [3S 4D 5C] into [AC 2D] → ..."). Used by
+  `agent_game.py`'s verbose log.
+- **`hint(desc)`** — vague-but-useful player-facing nudge
+  ("You can splice the 7H into a red-black run.").
+- **`describe_move(desc)`** — exact structural form, for
+  conformance/test snapshots.
+
+- **`solve_state_with_descs(initial, on_cap_exhausted=...)`**
+  takes an optional callback that fires per cap pass that
+  exhausts without finding a plan. Each callback receives
+  `(cap, expansions, seen_count, hit_max_states, diagnostics)`.
+  `hit_max_states=True` is the runaway signal —
+  cap-exhaustion driven by `max_states` rather than natural
+  frontier emptying. `diagnostics` carries trouble-count
+  histogram, level widths, and sample states from the
+  frontier at exhaustion-time.
 
 ## Corpus baseline (2026-04-25, post-engulf)
 

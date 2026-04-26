@@ -35,10 +35,32 @@ Each card on the board means more possibilities.")
 
 ## Public API
 
-- `find_play(hand, board)` — main entry. Returns `{"placements":
-  [card, ...], "plan": [str, ...]}` or `None`.
+- `find_play(hand, board, stats=None)` — main entry. Returns
+  `{"placements": [card, ...], "plan": [(line, desc), ...]}`
+  or `None`. Optional `stats` dict gets per-projection wall
+  + cap-exhaustion records populated.
+- `find_play_with_budget(hand, board, *, max_states, stats=None)`
+  — same, with overridable BFS state budget. Used by
+  `perf_harness.py` to sweep budgets.
+
+## State budget (OPTIMIZE_PYTHON, 2026-04-25)
+
+`_PROJECTION_MAX_STATES = 5000` (was 200000 originally).
+After the doomed-third + state-level doomed-growing filters
+landed in `bfs_solver`, the BFS state space is dramatically
+smaller. Corpus 21/21 at budget 2000; 5000 gives 1.5×
+safety margin and matches 200000 wall. Anything above is
+wasted budget. RUNAWAY signals fire only on genuine
+unbounded searches.
+
+To revisit: `budget_sweep.py` against a fresh capture.
 
 ## Pointers
 
-- BFS engine: `bfs_solver.solve` / `solve_state`.
+- BFS engine: `bfs_solver.solve` / `solve_state` /
+  `solve_state_with_descs` (descs variant returns
+  `[(line, desc), ...]` so the verb translator can act on
+  each move).
 - Tests: `test_agent_prelude.py`.
+- Profiling: `perf_harness.py` (snapshot replay),
+  `budget_sweep.py` (per-budget sweep).

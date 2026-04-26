@@ -40,10 +40,29 @@ Humans rarely hold up on placing cards. The search order
 inside `find_play` encodes preference (pairs > singletons);
 nothing beyond that.
 
+## --offline mode (OPTIMIZE_PYTHON, 2026-04-26)
+
+Skips session creation, HTTP, and gesture synthesis. Pure
+self-play with a local board mirror only. ~12s/game vs
+~60s online. Used for runaway-hunting and BFS profiling
+where the server's validation, replay log, and rendering
+aren't load-bearing.
+
+```
+python3 agent_game.py --offline --max-actions 500 \
+    --capture /tmp/runaway_hunt.jsonl
+```
+
+Per Steve's lesson `feedback_impatient_about_wall_time`:
+profiling work shouldn't pay HTTP cost that produces no
+data we look at.
+
 ## Pointers
 
 - Bootstrap: `dealer.py` (`deal()` → initial_state).
 - Brain: `agent_prelude.py` (`find_play`).
 - Translator: `verbs.py`, `primitives.py`.
-- Predecessor (retiring): `auto_player.py` — the
-  trick-engine driver.
+- Predecessor (retired 2026-04-25): `auto_player.py` —
+  trick-engine driver. Removed in commit `a13aa11`.
+- Runaway pipeline: `runaway_puzzles.py` consumes
+  `--capture` output to post puzzles for runaway cases.

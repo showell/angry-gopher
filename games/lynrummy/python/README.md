@@ -166,21 +166,97 @@ scenarios pass as of 2026-04-25.
 The Python suite (run each test file directly) covers:
 
 - `test_bfs_extract.py` — 15 tests pinning
-  `_extract_pieces` per verb plus purity contracts.
-- `test_bfs_enumerate.py` — 6 hand-built snapshot tests
-  for `_enumerate_moves` across all five move types.
+  `_extract_pieces` per verb plus purity contracts on
+  `_do_extract`, `_remove_absorber`, `_graduate`.
+- `test_bfs_enumerate.py` — 8 tests: snapshot per move
+  type + doomed-third filter pinning
+  (`test_doomed_partial_pruned`,
+  `test_doomed_growing_partial_is_reachable`).
+- `test_bfs_failure.py` — 8 wall-time-guarded tests pinning
+  futility detection (singleton with no board, set partial
+  with no third, lonely-trouble-rich-helpers, etc).
 - `test_verbs.py` — 7 tests across all 5 BFS desc types,
   asserting both primitive shape and post-trick geometry.
 - `test_plan_merge_hand.py` — 3 tests for the geometry
   pre-flight planner.
 - `test_follow_up_merges.py` — 7 tests for the post-trick
   follow-up scan.
-- `test_dsl_conformance.py` — 24 cross-language scenarios
+- `test_dsl_conformance.py` — 37 cross-language scenarios
   compiled from the conformance DSL (referee + hint +
-  planner).
+  planner; planner.dsl includes futility cases via
+  `expect: no_plan`).
+- `test_agent_prelude.py` — 7 tests for the hand-aware
+  outer loop (pair-with-third, pair-via-BFS, singleton
+  fallback, stuck → None, pair-priority).
 - `test_gesture_synth.py` — 7 tests for drag-path synthesis.
 
-These are the snapshots the upcoming Elm port will mirror.
+## Validation methodology (preventing solver regressions)
+
+After any change touching `bfs_solver.py` / `verbs.py` /
+`primitives.py` / `agent_prelude.py`, run all of:
+
+1. **Unit + conformance suite** — every `test_*.py` file:
+   ```
+   for t in test_bfs_extract.py test_bfs_enumerate.py \
+            test_bfs_failure.py test_verbs.py \
+            test_dsl_conformance.py test_agent_prelude.py \
+            test_plan_merge_hand.py test_follow_up_merges.py \
+            test_gesture_synth.py; do
+     python3 $t 2>&1 | tail -1
+   done
+   ```
+
+2. **Corpus regression** — depths must match the baseline:
+   ```
+   python3 -c "..."   # standard corpus run; see
+                      # corpus/baseline_post_engulf.txt for
+                      # the canonical depth distribution
+                      # [2,5,2,4,5,4,6,6,1,7,2,8,2,1,1,2,3,1,2,7,1]
+   ```
+   Or just `python3 corpus_report.py` and diff the output
+   against the prior `random020.md`.
+
+3. **Snapshot perf check** — re-time captured snapshots
+   against the new code:
+   ```
+   python3 perf_harness.py /tmp/perf_snapshots.jsonl \
+       --top 5 --repeats 3
+   ```
+   Compare against the previous wall numbers in commit
+   messages. Flag any wall regression > 25%.
+
+4. **Offline self-play smoke** — quick "does autonomous
+   play still terminate" check:
+   ```
+   python3 agent_game.py --offline --max-actions 200
+   ```
+   Should finish in <10s with at least a few plays
+   completed.
+
+5. **Sidecar audit** — every code file has its sidecar:
+   ```
+   python3 ../../../tools/sidecar_audit.py
+   ```
+
+Snapshot files are throwaway — re-capture periodically
+with `agent_game.py --offline --capture FILE` to get fresh
+representative samples.
+
+## OPTIMIZE_PYTHON pruning landmarks (2026-04-25 / 26)
+
+- **Loop inversion** in `enumerate_moves`: 35% reduction in
+  `enumerate_moves` tottime via `_extractable_index`.
+- **Merge-time doomed-third filter**: rejects 2-partial
+  merges with no completion candidate in board inventory.
+- **State-level doomed-growing filter**: yields nothing
+  from any state where an existing growing 2-partial has
+  lost all its candidates.
+- **Budget cap drop**: `_PROJECTION_MAX_STATES` 200000 →
+  5000.
+
+Cumulative effect: 4–44× speedups on captured
+worst-case projections; corpus depths preserved; full
+test suite green.
 
 ## TODO
 

@@ -1,0 +1,33 @@
+just_use runaway_puzzles.py
+
+# label: TOOL (OPTIMIZE_PYTHON era)
+# role: post a puzzle per cap-exhausting projection, evil card alone in hand
+
+For each projection in a JSONL capture that hit the BFS
+state cap (`hit_max_states=True`), build a puzzle session
+with JUST the evil card in the hand + the snapshot's board
+laid out at non-overlapping locations. Steve plays each to
+either:
+- Find a play the agent missed → algorithm gap.
+- Confirm stuck → agent's slow give-up was honest.
+
+```
+python3 runaway_puzzles.py /tmp/runaway_hunt.jsonl
+```
+
+Prints one URL per puzzle.
+
+## Workflow
+
+1. `agent_game.py --offline --capture FILE` (run a few games).
+2. `runaway_puzzles.py FILE` (post puzzles for each runaway).
+3. Steve plays.
+4. If patterns emerge from "stuck-confirmed" cases →
+   structural pruning candidate. If "agent missed it" →
+   algorithm gap.
+
+## Pointers
+
+- Companion: `puzzle_from_snapshot.py` (ranks slowest
+  cases; uses full hand from snapshot).
+- `agent_game.py --offline` — fast (no HTTP) capture mode.
