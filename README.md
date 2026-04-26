@@ -1,6 +1,6 @@
 # Angry Gopher
 
-**As-of:** 2026-04-23
+**As-of:** 2026-04-26
 **Confidence:** Working.
 **Durability:** Architecture stable; LynRummy-specific surface
 is the active work area.
@@ -59,9 +59,15 @@ strategic engines:
 - `games/lynrummy/python/strategy.py` — older trick
   recognizers + hint priority (legacy, retiring).
 
-Elm currently mirrors the older trick engine at
-`games/lynrummy/elm/src/Game/Strategy/`. The BFS planner
-will port to Elm next.
+Elm has a partial port of the BFS planner under
+`games/lynrummy/elm/src/Game/Agent/` (Buckets, Cards,
+Move, Enumerator, Bfs, Verbs, GeometryPlan; phases 1–5
+landed). Python continued evolving (OPTIMIZE_PYTHON
+filters + diagnostics, 2026-04-25/26); see
+`games/lynrummy/elm/README.md` for the current Python →
+Elm drift list. Elm also still hosts the older trick
+engine at `games/lynrummy/elm/src/Game/Strategy/`,
+retiring alongside Python's `strategy.py`.
 
 ## LynRummy
 
@@ -73,8 +79,10 @@ The project's main feature. Three roles inside Gopher:
   protocol/geometry/semantics/inventory checks. Stateless.
 - **Strategy layer** (client-side) — Python-side current
   brain is the four-bucket BFS planner
-  (`games/lynrummy/python/bfs_solver.py`). The older
-  seven-trick recognizer engine
+  (`games/lynrummy/python/bfs_solver.py`). Elm has a
+  partial port at `games/lynrummy/elm/src/Game/Agent/`
+  with known drift on the Python optimizations side. The
+  older seven-trick recognizer engine
   (`games/lynrummy/python/strategy.py`,
   `games/lynrummy/elm/src/Game/Strategy/`) is still wired
   but retiring. Server has no opinion on which plays are

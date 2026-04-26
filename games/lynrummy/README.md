@@ -46,8 +46,15 @@ repo root for the generated label index):
 
 - `elm/` — the human-facing client (Main.Play + Game.* +
   Main.* harness). Served at `/gopher/lynrummy-elm/`.
-- `python/` — agent tools (strategy + auto_player + board-
-  lab harness + conformance runner).
+  Includes a partial port of the Python agent
+  (`src/Game/Agent/`) — see `elm/README.md` for the
+  Python-side drift this port hasn't picked up yet.
+- `python/` — agent tools: BFS planner, hand-aware
+  outer loop, verb/primitive translators, autonomous
+  self-play harness, conformance runner, OPTIMIZE_PYTHON
+  diagnostics. The trick engine that this READ-ME used to
+  reference is retiring; `agent_game.py` is the current
+  driver, not `auto_player.py` (deleted 2026-04-25).
 - `board-lab/` — curated puzzle gallery (added 2026-04-23).
   Elm sub-app at `board-lab/elm/` importing Main.Play from
   `elm/src/Main/`; Python puzzle catalog at
@@ -71,9 +78,13 @@ via `cmd/fixturegen`:
 - `referee.dsl` — referee ops (Go + Elm tests).
 - `tricks.dsl` — hint/trick invariants (Elm + Python; will
   retire as the trick engine retires).
-- `planner.dsl` — `enumerate_moves` op for the four-bucket
-  BFS planner (Python today; Elm stubs until the planner
-  ports).
+- `planner.dsl` — `enumerate_moves` + `solve` ops for the
+  four-bucket BFS planner. 6 enumerate_moves cases are live
+  on both Python and Elm; futility (`expect: no_plan`) and
+  per-card narrate/hint cases live on Python only — Elm
+  stubs them with `Expect.pass` until the corresponding
+  Python features port to Elm. See `elm/README.md` for the
+  current drift list.
 
 See `cmd/fixturegen/main.claude` for the codegen pipeline
 and `python/test_dsl_conformance.py` for the Python runner.

@@ -98,23 +98,76 @@ REFACTOR_ELM_REPLAY).
 the TS → Elm port. Process reflections, mapping references.
 Not current-work references.
 
-## Upcoming: agent-library port
+## Agent-library port (in progress, with drift)
 
 The Python four-bucket BFS planner
-(`../python/bfs_solver.py` and friends) is queued for an
-Elm port — see Steve's MAJOR_GOAL kickoff 2026-04-25. Once
-landed, the Elm UI gains agent-level hints and geometry
-planning natively. The
-`enumerate_moves` conformance scenarios in
-`../conformance/scenarios/planner.dsl` already emit Elm
-test stubs (`Expect.pass`); those become live assertions
-when the planner module lands.
+(`../python/bfs_solver.py` and friends) was ported to Elm
+under `src/Game/Agent/` — see Steve's MAJOR_GOAL kickoff
+2026-04-25. Modules landed:
+`Buckets`, `Cards`, `Move`, `Enumerator`, `Bfs`, `Verbs`,
+`GeometryPlan`. 47 agent-specific tests + 6 conformance
+scenarios live on both sides.
+
+**Drift since the port (Python-side OPTIMIZE_PYTHON work,
+2026-04-25 / 26).** Python evolved further while the Elm
+agent stayed at the phase-5 snapshot. The following are
+not yet ported:
+
+- **Loop inversion** in `enumerate_moves` via
+  `_extractable_index` — Python's enumerator is now ~35%
+  faster per call. Elm's `Enumerator.elm` retains the
+  pre-inversion shape.
+- **Doomed-third filter** (merge-time) — Python rejects
+  length-2 merges with no completion candidate in the
+  board's (helper + trouble-singletons) inventory.
+  Cumulative speedup on captured worst cases: 2–55×.
+- **State-level doomed-growing filter** — Python yields
+  no moves from any state where an existing growing
+  2-partial has lost all completion candidates.
+- **Budget cap drop** — `_PROJECTION_MAX_STATES` 200000
+  → 5000 in Python after the filters made the cap headroom
+  unnecessary.
+- **`narrate(desc)` / `hint(desc)`** — Python-side renderers
+  for Steve-facing evocative output and player-facing
+  vague nudges. Elm conformance stubs `Expect.pass` for
+  scenarios asserting on these.
+- **`solve_state_with_descs(... on_cap_exhausted=...)`** —
+  Python-side diagnostics callback (cap, expansions, seen,
+  hit_max_states, trouble-count histogram, sample states).
+- **`agent_prelude.find_play(stats=...)` + `_with_budget`** —
+  Python instrumentation for per-projection timing +
+  cap-exhaustion records.
+- **`agent_game.py --offline`** — Python's BFS-only
+  self-play mode. No Elm equivalent (and may not need one
+  given Elm's natural single-process loop).
+
+The Python side also has a host of OPTIMIZE_PYTHON
+diagnostic tools (`perf_harness.py`, `mine_doomed_growing.py`,
+`diagnose_loop.py`, `runaway_puzzles.py`, etc.) that don't
+need direct Elm equivalents — they're profiling tools, not
+gameplay code. Their LESSONS (e.g., the doomed-third filter)
+do need to port.
+
+**Conformance bridge holds**: `planner.dsl` scenarios have
+6 cases live on both sides, plus several `expect:
+narrate_contains` / `hint_contains` stubbed on the Elm
+side until the renderers port. Python passes 37/37; Elm
+passes the subset relevant to its current state.
+
+When the Elm port resumes, the port discipline is: take
+the current Python source, port the new feature, run the
+shared regression methodology
+(see `python/README.md` § Validation methodology), then
+verify Elm conformance stubs flip to live where applicable.
 
 ## TODO (stub-level)
 
+- Port the OPTIMIZE_PYTHON-era filters to Elm (doomed-
+  third, state-level, loop inversion).
+- Port `narrate` / `hint` renderers; flip the Elm
+  conformance stubs to live assertions.
 - Document the replay state machine (`PreRoll` / `Animating`
   / `Beating`) in terms of the capture-vs-synthesis
   distinction.
-- Document the pinned-viewport discipline explicitly once the
-  layout pivot lands.
-- Land the BFS-planner port (see § Upcoming above).
+- Document the pinned-viewport discipline explicitly once
+  the layout pivot lands.
