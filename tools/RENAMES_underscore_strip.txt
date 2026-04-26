@@ -1,0 +1,45 @@
+# Underscore strip pass — first cleanup from ALIGNMENT_REPORT.md
+# (2026-04-26). All targets are load-bearing functions used
+# across files or exercised by tests. Per Steve's preference,
+# leading underscores aren't pulling weight here.
+
+# bfs_solver.py — verb / extract helpers
+_extract_pieces -> extract_pieces
+_do_extract -> do_extract
+_verb_for -> verb_for
+_extractable_index -> extractable_index
+
+# bfs_solver.py — bucket / state transitions
+_without -> without
+_remove_absorber -> remove_absorber
+_graduate -> graduate
+
+# bfs_solver.py — doomed-third filter
+_completion_inventory -> completion_inventory
+_completion_shapes -> completion_shapes
+_has_doomed_third -> has_doomed_third
+_admissible_partial -> admissible_partial
+
+# bfs_solver.py — focus rule + lineage
+_move_touches_focus -> move_touches_focus
+_update_lineage -> update_lineage
+_enumerate_focused -> enumerate_focused
+_initial_lineage -> initial_lineage
+_FOCUS_ENABLED -> FOCUS_ENABLED
+
+# bfs_solver.py — rendering helpers
+_stack_label -> stack_label
+_group_kind_phrase -> group_kind_phrase
+_partial_kind_phrase -> partial_kind_phrase
+_run_kind_phrase -> run_kind_phrase
+
+# beginner.py — verb-eligibility primitives (BFS-load-bearing)
+_can_peel_kind -> can_peel_kind
+_can_pluck_kind -> can_pluck_kind
+_can_yank_kind -> can_yank_kind
+_can_steal_kind -> can_steal_kind
+_can_split_out_kind -> can_split_out_kind
+
+# beginner.py — small primitives used inside the file
+_succ -> succ
+_color -> color

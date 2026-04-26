@@ -23,8 +23,8 @@ Search order (encodes game preference; no scoring layer):
 
 import time
 
-import bfs_solver as bs
-from beginner import classify, partial_ok
+import bfs
+from cards import classify, partial_ok
 
 
 def find_play(hand, board, stats=None):
@@ -139,7 +139,7 @@ def _try_projection(board, extra_stacks, *, stats=None, kind="?",
     initial = (helper, trouble, [], [])
     exhaustions = []
     t0 = time.time()
-    plan = bs.solve_state_with_descs(
+    plan = bfs.solve_state_with_descs(
         initial, max_trouble_outer=10, max_states=max_states,
         on_cap_exhausted=lambda **kw: exhaustions.append(kw))
     wall = time.time() - t0

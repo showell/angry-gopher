@@ -2,7 +2,7 @@
 bfs_play.py — replay a BFS plan on the actual board.
 
 Pipeline (all three layers live in libraries to prevent drift):
-  1. VERBs       : `bfs_solver.solve` produces DSL lines + descs.
+  1. VERBs       : `bfs.solve` produces DSL lines + descs.
   2. VERB → PRIM : `verbs.step_to_primitives` decomposes each
                    move into UI primitives.
   3. PRIM → GEST : `primitives.send_one` handles wire-shape +
@@ -25,7 +25,11 @@ import sqlite3
 import sys
 import urllib.request
 
-import bfs_solver as bs
+import bfs
+import buckets
+import cards
+import enumerator
+import move
 import primitives
 import verbs
 from client import Client
@@ -51,7 +55,7 @@ def _post_puzzle(client, label, puzzle_name, state):
 
 
 def _solve_with_descs(initial_state, max_trouble):
-    """Variant of bfs_solver.solve that returns
+    """Variant of bfs.solve that returns
     [(line, desc), ...] so the translator can act on each
     desc dict."""
     for cap in range(1, max_trouble + 1):
@@ -62,29 +66,29 @@ def _solve_with_descs(initial_state, max_trouble):
 
 
 def _bfs_with_descs(initial, max_trouble):
-    if bs.trouble_count(initial[1], initial[2]) > max_trouble:
+    if buckets.trouble_count(initial[1], initial[2]) > max_trouble:
         return None
-    if bs.is_victory(initial[1], initial[2]):
+    if buckets.is_victory(initial[1], initial[2]):
         return []
-    seen = {bs.state_sig(*initial)}
+    seen = {buckets.state_sig(*initial)}
     current_level = [(initial, [])]
     while current_level:
         current_level.sort(
-            key=lambda e: bs.trouble_count(e[0][1], e[0][2]))
+            key=lambda e: buckets.trouble_count(e[0][1], e[0][2]))
         next_level = []
         for state, program in current_level:
-            for desc, new_state in bs.enumerate_moves(state):
+            for desc, new_state in enumerator.enumerate_moves(state):
                 _, t, g, _ = new_state
-                tc = bs.trouble_count(t, g)
+                tc = buckets.trouble_count(t, g)
                 if tc > max_trouble:
                     continue
-                sig = bs.state_sig(*new_state)
+                sig = buckets.state_sig(*new_state)
                 if sig in seen:
                     continue
                 seen.add(sig)
-                line = bs.describe_move(desc)
+                line = move.describe_move(desc)
                 new_program = program + [(line, desc)]
-                if bs.is_victory(t, g):
+                if buckets.is_victory(t, g):
                     return new_program
                 next_level.append((new_state, new_program))
         current_level = next_level
@@ -108,7 +112,7 @@ def _initial_buckets(state):
     raw_board = raw_board + [[trouble_card]]
     helper, trouble = [], []
     for s in raw_board:
-        if bs.classify(s) == "other":
+        if cards.classify(s) == "other":
             trouble.append(s)
         else:
             helper.append(s)

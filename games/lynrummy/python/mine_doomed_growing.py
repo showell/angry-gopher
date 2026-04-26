@@ -22,7 +22,8 @@ import json
 import sys
 
 sys.path.insert(0, ".")
-import bfs_solver as bs
+import buckets
+import enumerator
 
 
 def _doomed_growing_partials(state):
@@ -30,11 +31,11 @@ def _doomed_growing_partials(state):
     completion candidate in this state's helper + trouble
     singletons."""
     helper, trouble, growing, _ = state
-    inv = bs._completion_inventory(helper, trouble)
+    inv = enumerator.completion_inventory(helper, trouble)
     out = []
     for g in growing:
         if len(g) == 2:
-            shapes = bs._completion_shapes(g)
+            shapes = enumerator.completion_shapes(g)
             if not (shapes & inv):
                 out.append(g)
     return out
@@ -43,9 +44,9 @@ def _doomed_growing_partials(state):
 def _walk_bfs(initial, max_trouble, max_states):
     """Walk the BFS up to max_states, yielding each state
     reached."""
-    if bs.trouble_count(initial[1], initial[2]) > max_trouble:
+    if buckets.trouble_count(initial[1], initial[2]) > max_trouble:
         return
-    seen = {bs.state_sig(*initial)}
+    seen = {buckets.state_sig(*initial)}
     yield initial
     frontier = [initial]
     expansions = 0
@@ -53,10 +54,10 @@ def _walk_bfs(initial, max_trouble, max_states):
         next_frontier = []
         for state in frontier:
             expansions += 1
-            for desc, ns in bs.enumerate_moves(state):
-                if bs.trouble_count(ns[1], ns[2]) > max_trouble:
+            for desc, ns in enumerator.enumerate_moves(state):
+                if buckets.trouble_count(ns[1], ns[2]) > max_trouble:
                     continue
-                sig = bs.state_sig(*ns)
+                sig = buckets.state_sig(*ns)
                 if sig in seen:
                     continue
                 seen.add(sig)
@@ -94,7 +95,7 @@ def main():
           f"board={len(board)}.")
 
     # Try each projection's initial state.
-    from beginner import classify
+    from cards import classify
     found_total = 0
     for proj in rec["projections"]:
         extra = [list(map(tuple, proj["cards"]))]

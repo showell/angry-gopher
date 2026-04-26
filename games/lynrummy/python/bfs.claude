@@ -1,0 +1,48 @@
+just_use bfs.py
+
+# label: WORKHORSE
+# role: BFS search engine — solve / solve_state / solve_state_with_descs
+
+The Python equivalent of `Game.Agent.Bfs.elm`. Pure BFS by
+program length, with iterative outer cap on `trouble_count`.
+The first cap to find a plan returns the shortest plan
+respecting that cap.
+
+## Status
+
+- **Mirrors:** `games/lynrummy/elm/src/Game/Agent/Bfs.elm`.
+- **Origin:** lifted from `bfs_solver.py` 2026-04-26 as the
+  module split landed.
+
+## Public API
+
+- `solve(board, ...)` — convenience wrapper. Takes a flat
+  board (list of stacks) and partitions into HELPER /
+  TROUBLE before running the inner BFS. Returns a list of
+  plan-line strings or `None`.
+- `solve_state(initial, ...)` — same, but takes an explicit
+  4-tuple `(helper, trouble, growing, complete)`.
+- `solve_state_with_descs(initial, ...)` — returns
+  `[(line, desc), ...]` instead of just lines. The desc
+  dicts feed `verbs.step_to_primitives` for primitive
+  translation. Supports an `on_cap_exhausted` callback
+  for runaway diagnostics.
+- `bfs_with_cap(initial5, max_trouble, max_states, ...)` —
+  inner engine. Takes the 5-tuple state (with lineage) and
+  a per-pass cap. Returns
+  `(plan_or_None, hit_max_states, expansions, seen_count)`.
+
+## Engine shape
+
+One BFS engine. The seen-set signature includes the
+lineage queue alongside the canonical bucket shape (states
+with identical buckets but different focus are not the
+same state for search purposes). Within each level,
+programs are sorted by current `trouble_count` so victory-
+adjacent states get expanded earliest.
+
+## Pointers
+
+- Elm sibling: `games/lynrummy/elm/src/Game/Agent/Bfs.elm`.
+- Python sibling: `enumerator.py` (the move generator the
+  engine calls).

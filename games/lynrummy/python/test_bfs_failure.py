@@ -21,7 +21,7 @@ import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import bfs_solver as bs
+import bfs
 
 
 # Wall-time per `solve` call. Tier-1 cases should return in
@@ -44,7 +44,7 @@ def _solve_with_guard(board, max_trouble_outer=10, max_states=200000):
     """Run `solve` and return (plan_or_None, wall_seconds). If
     wall exceeds MAX_WALL, the caller treats it as a failure."""
     t0 = time.time()
-    plan = bs.solve(board, max_trouble_outer=max_trouble_outer,
+    plan = bfs.solve(board, max_trouble_outer=max_trouble_outer,
                     max_states=max_states, verbose=False)
     wall = time.time() - t0
     return plan, wall

@@ -258,7 +258,7 @@ def verb_home(args, sim, prims):
         f"into stack anchored at {anchor_label}")
 
 
-def _color(suit):
+def color(suit):
     return "black" if suit in (0, 2) else "red"
 
 
@@ -295,7 +295,7 @@ def verb_swap(args, sim, prims):
     # Legality checks for rb color-slot swap.
     if loose["value"] != kicked["value"]:
         raise DSLError("swap: values differ")
-    if _color(loose["suit"]) != _color(kicked["suit"]):
+    if color(loose["suit"]) != color(kicked["suit"]):
         raise DSLError("swap: colors differ")
     if loose["suit"] == kicked["suit"]:
         raise DSLError("swap: must be different suits")

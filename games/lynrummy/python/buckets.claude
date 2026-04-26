@@ -1,0 +1,35 @@
+just_use buckets.py
+
+# label: WORKHORSE
+# role: 4-bucket state model + state_sig
+
+The Python equivalent of `Game.Agent.Buckets.elm`. Holds the
+type aliases for the BFS state shape and the bucket-level
+operations (`state_sig`, `trouble_count`, `is_victory`).
+
+## Status
+
+- **Mirrors:** `games/lynrummy/elm/src/Game/Agent/Buckets.elm`.
+- **Origin:** lifted from `bfs_solver.py` 2026-04-26 as the
+  module split landed.
+- **State shape:** the agent state is a 4-tuple `(helper,
+  trouble, growing, complete)` where each bucket is a
+  `list[Stack]`. Lists stay lists per Steve's
+  immutable-by-convention preference; tuples are reserved
+  for places where positional + hashable matters
+  (`state_sig` keys, `Lineage` queues).
+
+## What it owns
+
+- **Type aliases:** `Card`, `Stack`, `Bucket`, `ShapeKey`,
+  `Lineage`, `BucketName`, `Verb`, `Side`, `MoveType`. Pure
+  documentation aliases — `list` stays `list`.
+- `state_sig(helper, trouble, growing, complete)` — the
+  memoization key for the BFS seen-set. Bucket order
+  matters; stack order within a bucket doesn't.
+- `trouble_count(trouble, growing)` — the cap metric.
+- `is_victory(trouble, growing)` — terminal state check.
+
+## Pointers
+
+- Elm sibling: `games/lynrummy/elm/src/Game/Agent/Buckets.elm`.

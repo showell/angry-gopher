@@ -19,7 +19,7 @@ import sys
 import time
 
 import beginner as b
-import bfs_solver as bs
+import bfs
 
 
 DEFAULT_DB = "/home/steve/AngryGopher/prod/gopher.db"
@@ -70,7 +70,7 @@ def main():
         board = s2b(state) + [[trouble]]
 
         t0 = time.time()
-        plan = bs.solve(
+        plan = bfs.solve(
             board,
             max_trouble_outer=args.max_trouble,
             max_states=args.max_states,
@@ -91,7 +91,7 @@ def main():
     out_path = args.out
     with open(out_path, "w") as f:
         f.write("# Corpus solutions report\n\n")
-        f.write(f"Generated: bfs_solver.solve, "
+        f.write(f"Generated: bfs.solve, "
                 f"max_trouble_outer={args.max_trouble}, "
                 f"max_states={args.max_states}.\n\n")
         f.write(f"**Total wall**: {total_wall:.2f}s across "

@@ -32,7 +32,8 @@ import sys
 from collections import Counter
 
 sys.path.insert(0, ".")
-import bfs_solver as bs
+import buckets
+import enumerator
 
 
 # --- skeleton definition --------------------------------------
@@ -71,7 +72,7 @@ def replay_program(initial, descs):
     state = initial
     for i, desc in enumerate(descs):
         match = None
-        for d, ns in bs.enumerate_moves(state):
+        for d, ns in enumerator.enumerate_moves(state):
             if _descs_equivalent(d, desc):
                 match = ns
                 break
@@ -153,7 +154,7 @@ def main():
         return
 
     # Reconstruct the initial state for the projection.
-    from beginner import classify
+    from cards import classify
     augmented = list(board) + [list(map(tuple, proj["cards"]))]
     helper = [s for s in augmented if classify(s) != "other"]
     trouble = [s for s in augmented if classify(s) == "other"]
@@ -202,20 +203,20 @@ def _find_desc_chain_to(initial, target_state, *,
                         max_trouble, max_states):
     """BFS the path: find a desc-chain from `initial` to
     `target_state` (matched by state_sig)."""
-    target_sig = bs.state_sig(*target_state)
-    if bs.state_sig(*initial) == target_sig:
+    target_sig = buckets.state_sig(*target_state)
+    if buckets.state_sig(*initial) == target_sig:
         return []
-    seen = {bs.state_sig(*initial)}
+    seen = {buckets.state_sig(*initial)}
     frontier = [(initial, [])]
     expansions = 0
     while frontier:
         next_frontier = []
         for state, descs in frontier:
             expansions += 1
-            for d, ns in bs.enumerate_moves(state):
-                if bs.trouble_count(ns[1], ns[2]) > max_trouble:
+            for d, ns in enumerator.enumerate_moves(state):
+                if buckets.trouble_count(ns[1], ns[2]) > max_trouble:
                     continue
-                sig = bs.state_sig(*ns)
+                sig = buckets.state_sig(*ns)
                 if sig in seen:
                     continue
                 seen.add(sig)

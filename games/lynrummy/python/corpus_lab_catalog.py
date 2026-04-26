@@ -25,7 +25,7 @@ import sqlite3
 import sys
 
 import beginner as b
-import bfs_solver as bs
+import bfs
 
 
 DEFAULT_DB = "/home/steve/AngryGopher/prod/gopher.db"
@@ -79,7 +79,7 @@ def main():
               state["hands"][state["active_player_index"]]["hand_cards"][0]["card"]["suit"],
               state["hands"][state["active_player_index"]]["hand_cards"][0]["card"]["origin_deck"])]
         ]
-        plan = bs.solve(
+        plan = bfs.solve(
             board,
             max_trouble_outer=args.max_trouble,
             max_states=args.max_states,

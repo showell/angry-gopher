@@ -22,8 +22,8 @@ import sys
 import time
 
 import agent_prelude
-import bfs_solver
 import dealer
+import move
 import geometry
 import primitives
 import verbs
@@ -153,7 +153,7 @@ def _execute_plan(client, sid, plan, local, *, verbose, perf):
     longest-by-layer is tracked there."""
     for step_num, (line, desc) in enumerate(plan, 1):
         if verbose:
-            print(f"  plan step {step_num}: {bfs_solver.narrate(desc)}")
+            print(f"  plan step {step_num}: {move.narrate(desc)}")
         t = time.time()
         prims = verbs.step_to_primitives(desc, local)
         translate_wall = time.time() - t

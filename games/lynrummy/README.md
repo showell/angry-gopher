@@ -80,11 +80,13 @@ via `cmd/fixturegen`:
   retire as the trick engine retires).
 - `planner.dsl` — `enumerate_moves` + `solve` ops for the
   four-bucket BFS planner. 6 enumerate_moves cases are live
-  on both Python and Elm; futility (`expect: no_plan`) and
-  per-card narrate/hint cases live on Python only — Elm
-  stubs them with `Expect.pass` until the corresponding
-  Python features port to Elm. See `elm/README.md` for the
-  current drift list.
+  on both Python and Elm. Per-card `narrate_contains` /
+  `hint_contains` cases live on Python only — Elm stubs
+  them with `Expect.pass` until the renderers port. See
+  `elm/README.md` for the current drift list. Futility
+  cases (`expect: no_plan`) — UNCERTAIN whether Elm
+  exercises these end-to-end after the focus-rule port
+  (2026-04-26); needs a dedicated re-check.
 
 See `cmd/fixturegen/main.claude` for the codegen pipeline
 and `python/test_dsl_conformance.py` for the Python runner.
@@ -93,4 +95,8 @@ and `python/test_dsl_conformance.py` for the Python runner.
 
 - Document the `/gopher/lynrummy-elm/*` HTTP surface (lives in
   `views/lynrummy_elm.go`, not in this package).
-- Retire the trick engine once the BFS planner ports to Elm.
+- Retire the trick engine. The BFS planner port to Elm is
+  near-complete as of 2026-04-26 (focus rule + SPLIT_OUT +
+  doomed-third filters all live). Remaining drift is
+  perf/diagnostic only (loop inversion, narrate/hint,
+  diagnostics callback) — none block retirement.

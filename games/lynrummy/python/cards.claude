@@ -1,0 +1,50 @@
+just_use cards.py
+
+# label: WORKHORSE
+# role: card primitives — the BFS planner's bottom layer
+
+The Python equivalent of `Game.Agent.Cards.elm` plus the
+constants and small helpers that go with the agent-side card
+model.
+
+## Status
+
+- **Mirrors:** `games/lynrummy/elm/src/Game/Agent/Cards.elm`
+  + bits of `Game.Card.elm` and `Game.StackType.elm`.
+- **Origin:** lifted from `beginner.py` 2026-04-26 as the
+  module split landed (per ALIGNMENT_REPORT.md). The legacy
+  beginner planner is retiring; these primitives needed
+  their own home so the BFS doesn't import through a
+  legacy module to find them.
+
+## What it owns
+
+- **Card model:** `RANKS`, `SUITS`, `RED` constants;
+  `card(label, deck)` parser; `label`, `label_d` renderers;
+  `succ`, `color` value helpers.
+- **Classification:** `classify(stack)` (the hottest
+  function in the search), `partial_ok(stack)`.
+- **Neighborhood:** `neighbors(c)` — every shape that could
+  sit adjacent to a card in some legal group.
+- **Verb eligibility:** `can_peel_kind`, `can_pluck_kind`,
+  `can_yank_kind`, `can_steal_kind`, `can_split_out_kind`.
+  Mirror the Elm `canPeel` / `canPluck` / etc. inside
+  `Enumerator.elm`.
+
+## What it doesn't own
+
+- Stack geometry (location, board layout): not part of the
+  agent's view; lives in `Game.CardStack` (Go) +
+  `Game.BoardGeometry` (Elm).
+- Trick / hint logic: that's `strategy.py` (legacy) +
+  not-yet-ported in Elm.
+- The legacy `beginner_plan`, `almost_neighbors`,
+  `neighbor_shapes`, etc.: stay in `beginner.py` until
+  that module is retired.
+
+## Pointers
+
+- Elm sibling: `games/lynrummy/elm/src/Game/Agent/Cards.elm`
+  + `Game.Card.elm` + `Game.StackType.elm`.
+- Tests: card primitives are exercised indirectly through
+  `test_bfs_extract.py`, `test_bfs_enumerate.py`.

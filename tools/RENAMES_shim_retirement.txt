@@ -1,0 +1,97 @@
+# Shim retirement: rewrite every `bs.X` and `bfs_solver.X`
+# qualified access to the new module that owns X. After
+# running this, follow up by hand-editing the import lines
+# (drop `import bfs_solver as bs`; add explicit imports of
+# the modules used).
+#
+# 2026-04-26 module split: bfs_solver was split into
+# buckets / cards / move / enumerator / bfs. The shim
+# (bfs_solver.py) re-exports for backward compat; this pass
+# updates consumers so the shim earns retirement.
+
+# === buckets ===
+bs.Card -> buckets.Card
+bs.Stack -> buckets.Stack
+bs.Bucket -> buckets.Bucket
+bs.ShapeKey -> buckets.ShapeKey
+bs.Lineage -> buckets.Lineage
+bs.BucketName -> buckets.BucketName
+bs.Verb -> buckets.Verb
+bs.Side -> buckets.Side
+bs.MoveType -> buckets.MoveType
+bs.state_sig -> buckets.state_sig
+bs.trouble_count -> buckets.trouble_count
+bs.is_victory -> buckets.is_victory
+
+bfs_solver.Card -> buckets.Card
+bfs_solver.Stack -> buckets.Stack
+bfs_solver.state_sig -> buckets.state_sig
+bfs_solver.trouble_count -> buckets.trouble_count
+bfs_solver.is_victory -> buckets.is_victory
+
+# === cards ===
+bs.classify -> cards.classify
+bs.partial_ok -> cards.partial_ok
+bs.neighbors -> cards.neighbors
+bs.label_d -> cards.label_d
+bs.RED -> cards.RED
+
+bfs_solver.classify -> cards.classify
+bfs_solver.partial_ok -> cards.partial_ok
+bfs_solver.neighbors -> cards.neighbors
+bfs_solver.label_d -> cards.label_d
+
+# === move ===
+bs.stack_label -> move.stack_label
+bs.describe_move -> move.describe_move
+bs.narrate -> move.narrate
+bs.hint -> move.hint
+bs.group_kind_phrase -> move.group_kind_phrase
+bs.partial_kind_phrase -> move.partial_kind_phrase
+bs.run_kind_phrase -> move.run_kind_phrase
+
+bfs_solver.stack_label -> move.stack_label
+bfs_solver.describe_move -> move.describe_move
+bfs_solver.narrate -> move.narrate
+bfs_solver.hint -> move.hint
+
+# === enumerator ===
+bs.without -> enumerator.without
+bs.remove_absorber -> enumerator.remove_absorber
+bs.graduate -> enumerator.graduate
+bs.completion_inventory -> enumerator.completion_inventory
+bs.completion_shapes -> enumerator.completion_shapes
+bs.has_doomed_third -> enumerator.has_doomed_third
+bs.admissible_partial -> enumerator.admissible_partial
+bs.extract_pieces -> enumerator.extract_pieces
+bs.do_extract -> enumerator.do_extract
+bs.verb_for -> enumerator.verb_for
+bs.extractable_index -> enumerator.extractable_index
+bs.enumerate_moves -> enumerator.enumerate_moves
+bs.move_touches_focus -> enumerator.move_touches_focus
+bs.update_lineage -> enumerator.update_lineage
+bs.enumerate_focused -> enumerator.enumerate_focused
+bs.initial_lineage -> enumerator.initial_lineage
+bs.FOCUS_ENABLED -> enumerator.FOCUS_ENABLED
+
+bfs_solver.without -> enumerator.without
+bfs_solver.completion_inventory -> enumerator.completion_inventory
+bfs_solver.completion_shapes -> enumerator.completion_shapes
+bfs_solver.extract_pieces -> enumerator.extract_pieces
+bfs_solver.enumerate_moves -> enumerator.enumerate_moves
+bfs_solver.enumerate_focused -> enumerator.enumerate_focused
+bfs_solver.initial_lineage -> enumerator.initial_lineage
+bfs_solver.move_touches_focus -> enumerator.move_touches_focus
+bfs_solver.update_lineage -> enumerator.update_lineage
+bfs_solver.FOCUS_ENABLED -> enumerator.FOCUS_ENABLED
+
+# === bfs ===
+bs.bfs_with_cap -> bfs.bfs_with_cap
+bs.solve -> bfs.solve
+bs.solve_state -> bfs.solve_state
+bs.solve_state_with_descs -> bfs.solve_state_with_descs
+
+bfs_solver.solve -> bfs.solve
+bfs_solver.solve_state -> bfs.solve_state
+bfs_solver.solve_state_with_descs -> bfs.solve_state_with_descs
+bfs_solver.bfs_with_cap -> bfs.bfs_with_cap

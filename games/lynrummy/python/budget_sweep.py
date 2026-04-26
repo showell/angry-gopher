@@ -18,8 +18,8 @@ import sys
 import time
 
 sys.path.insert(0, ".")
-import bfs_solver as bs
-from beginner import classify
+import bfs
+from cards import classify
 
 
 BUDGETS = [200000, 50000, 20000, 10000, 5000, 2000, 1000]
@@ -34,7 +34,7 @@ def _build_initial(board, extra_stacks):
 
 def _run_projection(initial, max_states):
     t0 = time.time()
-    plan = bs.solve_state_with_descs(
+    plan = bfs.solve_state_with_descs(
         initial, max_trouble_outer=10,
         max_states=max_states)
     wall = time.time() - t0

@@ -18,7 +18,7 @@ bookkeeping that the server's split/merge semantics impose
 appends one).
 """
 
-import bfs_solver as bs
+import cards
 import geometry
 import primitives
 import strategy
@@ -151,18 +151,18 @@ def _extract_absorb(desc, board):
     target_before = list(desc["target_before"])
     side = desc["side"]
     verb = desc["verb"]
-    kind = bs.classify(source)
+    kind = cards.classify(source)
     ci = source.index(ext_card)
 
     sim = list(board)
     out = []
 
-    if verb in ("peel", "pluck", "yank"):
+    if verb in ("peel", "pluck", "yank", "split_out"):
         # Same physical isolation regardless of verb. The
-        # difference between peel/pluck/yank is which spawned
-        # pieces qualify as helpers vs trouble — that's a
-        # logical-layer concern; physically all are split-then-
-        # merge.
+        # difference between peel/pluck/yank/split_out is which
+        # spawned pieces qualify as helpers vs trouble — that's
+        # a logical-layer concern; physically all are split-
+        # then-merge.
         prims, sim, ext_singleton, remnants = _isolate_card(
             sim, source, ci, kind)
         out.extend(prims)
@@ -276,7 +276,7 @@ def _shift(desc, board):
 
     # 1. Peel p_card from donor (donor is length 4+).
     pi = donor.index(p_card)
-    kind = bs.classify(donor)
+    kind = cards.classify(donor)
     prims, sim, _ext, donor_remnants = _isolate_card(
         sim, donor, pi, kind)
     out.extend(prims)

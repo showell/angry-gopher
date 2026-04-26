@@ -33,10 +33,12 @@ load-bearing for why this subtree is shaped the way it is.
 The Python agent has two pieces of strategy code:
 
 - **`bfs_solver.py` — the four-bucket BFS planner**,
-  current strategic brain (milestone 2026-04-25). State is
-  HELPER / TROUBLE / GROWING / COMPLETE; pure BFS-by-length
-  with iterative max-trouble cap. 21/21 corpus solved,
-  ~25% faster than beginner.py. See `bfs_solver.claude`.
+  current strategic brain (milestone 2026-04-25; focus rule
+  + SPLIT_OUT verb landed 2026-04-26). State is the 5-tuple
+  HELPER / TROUBLE / GROWING / COMPLETE / lineage; pure
+  BFS-by-length with iterative max-trouble cap. 21/21
+  corpus solved (3 plans STRICTLY shorter than the
+  pre-focus-rule baseline). See `bfs_solver.claude`.
 
 - **`beginner.py` — the IDDFS planner**, prior strategic
   brain.
@@ -248,15 +250,34 @@ representative samples.
   `enumerate_moves` tottime via `_extractable_index`.
 - **Merge-time doomed-third filter**: rejects 2-partial
   merges with no completion candidate in board inventory.
+  Lifted into the `_admissible_partial` helper 2026-04-26.
 - **State-level doomed-growing filter**: yields nothing
   from any state where an existing growing 2-partial has
   lost all its candidates.
 - **Budget cap drop**: `_PROJECTION_MAX_STATES` 200000 →
   5000.
 
-Cumulative effect: 4–44× speedups on captured
-worst-case projections; corpus depths preserved; full
-test suite green.
+## Focus rule + SPLIT_OUT (2026-04-26)
+
+- **`SplitOut` extract verb** — the missing fifth extraction
+  primitive. Extracts the interior of a length-3 run,
+  splitting it into two singleton TROUBLE fragments. Fills
+  the only gap in the verb vocabulary so every helper card
+  is reachable for absorption.
+- **Focus rule** — BFS state extends to 5-tuple
+  `(helper, trouble, growing, complete, lineage)` where
+  `lineage[0]` is the focus. Each step must grow or consume
+  the focus. Pruning win + canonical plan ordering.
+- Together: the runaway puzzles 226 / 228 (DUP_CYCLE /
+  EXCESSIVE_SACRIFICE) dissolved (10 / 11 lines instead of
+  exhausting cap=8). Puzzle 227 confirmed genuinely
+  unsolvable, proven in ~50ms via natural frontier
+  termination at every cap.
+
+Cumulative effect: 4–44× speedups on captured worst-case
+projections (pre-focus); 2-3× additional on top of those
+post-focus on snapshot top-5; corpus depths preserved or
+shortened; full test suite green.
 
 ## TODO
 

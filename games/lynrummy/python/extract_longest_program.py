@@ -17,8 +17,11 @@ import json
 import sys
 
 sys.path.insert(0, ".")
-import bfs_solver as bs
-from beginner import classify
+import buckets
+import cards
+import enumerator
+import move
+from cards import classify
 
 
 def _parse_card(s):
@@ -70,24 +73,24 @@ def main():
     longest_state = None
     longest_cap = None
     for cap in range(1, 11):
-        if bs.trouble_count(initial[1], initial[2]) > cap:
+        if buckets.trouble_count(initial[1], initial[2]) > cap:
             continue
-        seen = {bs.state_sig(*initial)}
+        seen = {buckets.state_sig(*initial)}
         frontier = [(initial, [])]
         expansions = 0
         while frontier:
             next_frontier = []
             for state, program in frontier:
                 expansions += 1
-                for desc, ns in bs.enumerate_moves(state):
-                    if bs.trouble_count(ns[1], ns[2]) > cap:
+                for desc, ns in enumerator.enumerate_moves(state):
+                    if buckets.trouble_count(ns[1], ns[2]) > cap:
                         continue
-                    sig = bs.state_sig(*ns)
+                    sig = buckets.state_sig(*ns)
                     if sig in seen:
                         continue
                     seen.add(sig)
                     new_program = program + [desc]
-                    if bs.is_victory(ns[1], ns[2]):
+                    if buckets.is_victory(ns[1], ns[2]):
                         # Wouldn't be a runaway; bail.
                         return
                     if len(new_program) > len(longest):
@@ -110,7 +113,7 @@ def main():
     print(f"\nLongest candidate program: {len(longest)} steps "
           f"(found at cap={longest_cap}).\n")
     for i, desc in enumerate(longest, 1):
-        line = bs.describe_move(desc)
+        line = move.describe_move(desc)
         print(f"  {i:>2}. {line}")
 
     if longest_state is not None:
@@ -118,9 +121,9 @@ def main():
         print(f"\nFinal state at the end of this program:")
         print(f"  helper: {len(helper2)} stacks")
         for s in helper2:
-            print(f"    {[bs.label_d(c) for c in s]}")
-        print(f"  trouble: {[[bs.label_d(c) for c in s] for s in trouble2]}")
-        print(f"  growing: {[[bs.label_d(c) for c in s] for s in growing2]}")
+            print(f"    {[cards.label_d(c) for c in s]}")
+        print(f"  trouble: {[[cards.label_d(c) for c in s] for s in trouble2]}")
+        print(f"  growing: {[[cards.label_d(c) for c in s] for s in growing2]}")
         print(f"  complete: {len(complete2)} stacks")
 
 

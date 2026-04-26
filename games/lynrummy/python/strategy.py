@@ -45,7 +45,7 @@ def _predecessor(v):
     return 13 if v == 1 else v - 1
 
 
-def _color(suit):
+def color(suit):
     # Clubs=0, Diamonds=1, Spades=2, Hearts=3.
     # Black = 0, 2. Red = 1, 3.
     return "black" if suit in (0, 2) else "red"
@@ -79,7 +79,7 @@ def _classify(cards):
     if len(set(suits)) == 1:
         return "pure_run"
 
-    colors = [_color(s) for s in suits]
+    colors = [color(s) for s in suits]
     if all(colors[i] != colors[i - 1] for i in range(1, n)):
         return "rb_run"
     return "other"
@@ -537,7 +537,7 @@ def _find_hand_group(hand):
     for c in sorted_cards:
         if chain:
             same_succ = c["value"] == chain[-1]["value"] + 1
-            alt_color = _color(c["suit"]) != _color(chain[-1]["suit"])
+            alt_color = color(c["suit"]) != color(chain[-1]["suit"])
             if same_succ and alt_color:
                 chain.append(c)
                 continue
@@ -600,9 +600,9 @@ def _pair_needs(a, b):
             (_predecessor(lo["value"]), [lo["suit"]]),
             (_successor(hi["value"]), [hi["suit"]]),
         ]
-    if _color(a["suit"]) != _color(b["suit"]):
-        opp_lo = _opposite_color_suits(_color(lo["suit"]))
-        opp_hi = _opposite_color_suits(_color(hi["suit"]))
+    if color(a["suit"]) != color(b["suit"]):
+        opp_lo = _opposite_color_suits(color(lo["suit"]))
+        opp_hi = _opposite_color_suits(color(hi["suit"]))
         return [
             (_predecessor(lo["value"]), opp_lo),
             (_successor(hi["value"]), opp_hi),
@@ -1135,7 +1135,7 @@ def _merge_side_for_run(stack, new_card, anchor_card):
 def rb_swap(hand, board):
     for hc in hand:
         swap_in = hc["card"]
-        swap_in_color = _color(swap_in["suit"])
+        swap_in_color = color(swap_in["suit"])
         for si, s in enumerate(board):
             if _classify([bc["card"] for bc in s["board_cards"]]) != "rb_run":
                 continue
@@ -1143,7 +1143,7 @@ def rb_swap(hand, board):
             for ci, bc in enumerate(cards):
                 if bc["value"] != swap_in["value"]:
                     continue
-                if _color(bc["suit"]) != swap_in_color:
+                if color(bc["suit"]) != swap_in_color:
                     continue
                 if bc["suit"] == swap_in["suit"]:
                     continue

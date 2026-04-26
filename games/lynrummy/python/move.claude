@@ -1,0 +1,61 @@
+just_use move.py
+
+# label: WORKHORSE
+# role: BFS desc rendering — describe_move + narrate + hint
+
+The Python equivalent of `Game.Agent.Move.elm`'s rendering
+half. Holds the per-move-desc rendering functions plus
+small phrase helpers. The desc dicts themselves are still
+inline literals built by the enumerator (vs Elm's typed
+sum-type) — see ALIGNMENT_REPORT.md § 3 for the dataclass
+opportunity that hasn't been taken yet.
+
+## Status
+
+- **Mirrors:** `games/lynrummy/elm/src/Game/Agent/Move.elm`
+  (the `describe` function family).
+- **Origin:** lifted from `bfs_solver.py` 2026-04-26 as the
+  module split landed.
+
+## What it owns
+
+- **Move desc dataclasses** (added 2026-04-26):
+  `ExtractAbsorbDesc`, `FreePullDesc`, `PushDesc`,
+  `SpliceDesc`, `ShiftDesc`. Each mirrors Elm's
+  per-variant record under `Game.Agent.Move.elm`. They
+  carry a `type` class attribute matching the legacy
+  string dispatch key. Backward compat: each dataclass
+  implements `__getitem__` and `get` so legacy
+  `desc["foo"]` reads continue to work alongside the new
+  `desc.foo` attribute access.
+- `stack_label(stack)` — `" ".join(label_d(c) for c in
+  stack)`. Used by every renderer.
+- `describe_move(desc)` — exact structural one-line DSL
+  string. Mirrors Elm's `Move.describe`.
+- `narrate(desc)` — Steve-facing evocative one-liner per
+  move (engulf / splice / pop / tuck …). Used by
+  `agent_game.py`'s verbose log.
+- `hint(desc)` — vague-but-useful player-facing nudge
+  ("You can splice the 7H into a red-black run.").
+- `group_kind_phrase`, `partial_kind_phrase`,
+  `run_kind_phrase` — natural-language renderers for
+  group + partial + run kinds. Used by `hint`.
+
+## Migration phasing (2026-04-26)
+
+Phase 1 (this pass): introduce dataclasses + convert
+`enumerator.py` emit sites to construct instances. Read
+sites continue to use `desc["foo"]` via `__getitem__`.
+
+Phase 2 (future, if it earns its place): regex-driven
+sweep of all `desc["foo"]` reads to `desc.foo` attribute
+access. ~120 sites across move.py + enumerator.py +
+verbs.py + agent_game.py + analyze_focus_block.py +
+tests. Cleaner end state but pure churn — only worth doing
+if Phase 1's mixed style starts hurting.
+
+## Pointers
+
+- Elm sibling: `games/lynrummy/elm/src/Game/Agent/Move.elm`.
+- ALIGNMENT_REPORT.md § 3: future `*Desc` dataclass
+  migration (~133 sites).

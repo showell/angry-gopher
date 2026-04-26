@@ -55,17 +55,21 @@ wire + referee. The Python side currently houses two
 strategic engines:
 
 - `games/lynrummy/python/bfs_solver.py` — the four-bucket BFS
-  planner (current strategic brain, milestone 2026-04-25).
+  planner. Strategic brain. Milestone 2026-04-25; focus
+  rule + SPLIT_OUT verb landed 2026-04-26.
 - `games/lynrummy/python/strategy.py` — older trick
   recognizers + hint priority (legacy, retiring).
 
-Elm has a partial port of the BFS planner under
+Elm has a near-complete port of the BFS planner under
 `games/lynrummy/elm/src/Game/Agent/` (Buckets, Cards,
-Move, Enumerator, Bfs, Verbs, GeometryPlan; phases 1–5
-landed). Python continued evolving (OPTIMIZE_PYTHON
-filters + diagnostics, 2026-04-25/26); see
-`games/lynrummy/elm/README.md` for the current Python →
-Elm drift list. Elm also still hosts the older trick
+Move, Enumerator, Bfs, Verbs, GeometryPlan). All five
+extract verbs, the doomed-third filters (merge-time +
+state-level), and the focus rule + lineage tracking are
+live as of 2026-04-26. Remaining drift: loop inversion
+via `_extractable_index`, `narrate` / `hint` renderers,
+and the `solve_state_with_descs` diagnostics callback.
+See `games/lynrummy/elm/README.md` for the current
+drift detail. Elm also still hosts the older trick
 engine at `games/lynrummy/elm/src/Game/Strategy/`,
 retiring alongside Python's `strategy.py`.
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-test_bfs_extract.py — assertions for `bfs_solver._extract_pieces`,
+test_bfs_extract.py — assertions for `enumerator.extract_pieces`,
 the pure VERB → (helper_pieces, spawned_pieces) decomposition
 that the extract layer of move-enumeration sits on.
 
@@ -18,7 +18,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import bfs_solver as bs
+import enumerator
 
 
 C, D, S, H = 0, 1, 2, 3
@@ -36,7 +36,7 @@ def _assert(label, ok, detail=""):
 def test_peel_left_edge_run():
     """Peel 5H from [5H 6H 7H 8H] → remnant [6H 7H 8H]."""
     src = [(5, H, 0), (6, H, 0), (7, H, 0), (8, H, 0)]
-    helpers, spawned = bs._extract_pieces(src, 0, "peel")
+    helpers, spawned = enumerator.extract_pieces(src, 0, "peel")
     _assert("peel-left-edge helpers",
             helpers == [[(6, H, 0), (7, H, 0), (8, H, 0)]],
             f"got {helpers}")
@@ -47,7 +47,7 @@ def test_peel_left_edge_run():
 def test_peel_right_edge_run():
     """Peel 8H from [5H 6H 7H 8H] → remnant [5H 6H 7H]."""
     src = [(5, H, 0), (6, H, 0), (7, H, 0), (8, H, 0)]
-    helpers, spawned = bs._extract_pieces(src, 3, "peel")
+    helpers, spawned = enumerator.extract_pieces(src, 3, "peel")
     _assert("peel-right-edge helpers",
             helpers == [[(5, H, 0), (6, H, 0), (7, H, 0)]],
             f"got {helpers}")
@@ -56,7 +56,7 @@ def test_peel_right_edge_run():
 def test_peel_from_set_keeps_remaining_three():
     """Peel any card from a 4-set: remnant is the other three."""
     src = [(7, C, 0), (7, D, 0), (7, S, 0), (7, H, 0)]
-    helpers, spawned = bs._extract_pieces(src, 1, "peel")
+    helpers, spawned = enumerator.extract_pieces(src, 1, "peel")
     _assert("peel-set keeps three",
             helpers == [[(7, C, 0), (7, S, 0), (7, H, 0)]],
             f"got {helpers}")
@@ -67,9 +67,9 @@ def test_peel_from_set_keeps_remaining_three():
 def test_pluck_interior_run_yields_two_helpers():
     """Pluck 7H from [5H 6H 7H 8H 9H] → left [5H 6H], right
     [8H 9H]. Both end up in helper_pieces (regardless of length;
-    `_do_extract` is the layer that filters)."""
+    `do_extract` is the layer that filters)."""
     src = [(5, H, 0), (6, H, 0), (7, H, 0), (8, H, 0), (9, H, 0)]
-    helpers, spawned = bs._extract_pieces(src, 2, "pluck")
+    helpers, spawned = enumerator.extract_pieces(src, 2, "pluck")
     _assert("pluck-interior helpers split into two",
             helpers == [[(5, H, 0), (6, H, 0)],
                         [(8, H, 0), (9, H, 0)]],
@@ -85,7 +85,7 @@ def test_yank_keeps_long_helpers_spawns_short():
     (length 2, spawn), right [8H 9H 10H] (length 3, helper)."""
     src = [(5, H, 0), (6, H, 0), (7, H, 0),
            (8, H, 0), (9, H, 0), (10, H, 0)]
-    helpers, spawned = bs._extract_pieces(src, 2, "yank")
+    helpers, spawned = enumerator.extract_pieces(src, 2, "yank")
     _assert("yank long-right stays helper",
             helpers == [[(8, H, 0), (9, H, 0), (10, H, 0)]],
             f"got {helpers}")
@@ -98,7 +98,7 @@ def test_yank_two_long_helpers_no_spawn():
     """Yank from middle of a 7-card run: both halves length-3."""
     src = [(2, H, 0), (3, H, 0), (4, H, 0),
            (5, H, 0), (6, H, 0), (7, H, 0), (8, H, 0)]
-    helpers, spawned = bs._extract_pieces(src, 3, "yank")
+    helpers, spawned = enumerator.extract_pieces(src, 3, "yank")
     _assert("yank both halves stay helper",
             len(helpers) == 2 and spawned == [],
             f"got helpers={helpers}, spawned={spawned}")
@@ -110,7 +110,7 @@ def test_steal_set_dismantles_to_singletons():
     """Steal from length-3 set: spawn each remaining card as a
     singleton."""
     src = [(7, S, 0), (7, H, 0), (7, D, 0)]
-    helpers, spawned = bs._extract_pieces(src, 0, "steal")
+    helpers, spawned = enumerator.extract_pieces(src, 0, "steal")
     _assert("steal-set no helpers", helpers == [],
             f"got {helpers}")
     _assert("steal-set spawns two singletons",
@@ -121,7 +121,7 @@ def test_steal_set_dismantles_to_singletons():
 def test_steal_run_left_edge_spawns_pair():
     """Steal from left edge of length-3 run: spawn the 2-partial."""
     src = [(5, H, 0), (6, H, 0), (7, H, 0)]
-    helpers, spawned = bs._extract_pieces(src, 0, "steal")
+    helpers, spawned = enumerator.extract_pieces(src, 0, "steal")
     _assert("steal-run-left no helpers", helpers == [],
             f"got {helpers}")
     _assert("steal-run-left spawns the pair",
@@ -133,9 +133,21 @@ def test_steal_run_right_edge_spawns_pair():
     """Steal from right edge of length-3 run: spawn the
     leading 2-partial."""
     src = [(5, H, 0), (6, H, 0), (7, H, 0)]
-    helpers, spawned = bs._extract_pieces(src, 2, "steal")
+    helpers, spawned = enumerator.extract_pieces(src, 2, "steal")
     _assert("steal-run-right spawns the leading pair",
             spawned == [[(5, H, 0), (6, H, 0)]],
+            f"got {spawned}")
+
+
+def test_split_out_run_interior_spawns_two_singletons():
+    """split_out the middle of a length-3 run: both endpoints
+    fall to TROUBLE as singletons; no helper remnant."""
+    src = [(5, H, 0), (6, H, 0), (7, H, 0)]
+    helpers, spawned = enumerator.extract_pieces(src, 1, "split_out")
+    _assert("split_out yields no helper remnant",
+            helpers == [], f"got {helpers}")
+    _assert("split_out spawns left singleton then right",
+            spawned == [[(5, H, 0)], [(7, H, 0)]],
             f"got {spawned}")
 
 
@@ -145,7 +157,7 @@ def test_remove_absorber_from_trouble():
     """Drop the named index from trouble; growing untouched."""
     trouble = [[(1, H, 0)], [(2, H, 0)], [(3, H, 0)]]
     growing = [[(7, C, 0), (7, D, 0)]]
-    nt, ng = bs._remove_absorber("trouble", 1, trouble, growing)
+    nt, ng = enumerator.remove_absorber("trouble", 1, trouble, growing)
     _assert("remove_absorber drops trouble[1]",
             nt == [[(1, H, 0)], [(3, H, 0)]],
             f"got {nt}")
@@ -158,7 +170,7 @@ def test_remove_absorber_from_growing():
     trouble = [[(5, S, 0)]]
     growing = [[(7, C, 0), (7, D, 0)],
                [(11, C, 0), (12, C, 0)]]
-    nt, ng = bs._remove_absorber("growing", 0, trouble, growing)
+    nt, ng = enumerator.remove_absorber("growing", 0, trouble, growing)
     _assert("remove_absorber drops growing[0]",
             ng == [[(11, C, 0), (12, C, 0)]],
             f"got {ng}")
@@ -173,7 +185,7 @@ def test_remove_absorber_purity():
     growing = [[(7, C, 0), (7, D, 0)]]
     t_snap = [list(s) for s in trouble]
     g_snap = [list(s) for s in growing]
-    bs._remove_absorber("trouble", 0, trouble, growing)
+    enumerator.remove_absorber("trouble", 0, trouble, growing)
     _assert("trouble not mutated", trouble == t_snap)
     _assert("growing not mutated", growing == g_snap)
 
@@ -183,7 +195,7 @@ def test_graduate_legal_merged_goes_to_complete():
     growing = [[(7, C, 0), (7, D, 0)]]
     complete = []
     merged = [(5, H, 0), (6, H, 0), (7, H, 0)]
-    ng, nc, graduated = bs._graduate(merged, growing, complete)
+    ng, nc, graduated = enumerator.graduate(merged, growing, complete)
     _assert("graduated flag is True", graduated)
     _assert("growing unchanged", ng == growing)
     _assert("merged appended to complete",
@@ -195,14 +207,14 @@ def test_graduate_partial_merged_stays_in_growing():
     growing = [[(11, C, 0), (12, C, 0)]]
     complete = [[(2, H, 0), (3, H, 0), (4, H, 0)]]
     merged = [(13, C, 0), (1, C, 0)]  # 2-partial
-    ng, nc, graduated = bs._graduate(merged, growing, complete)
+    ng, nc, graduated = enumerator.graduate(merged, growing, complete)
     _assert("graduated flag is False", not graduated)
     _assert("merged appended to growing",
             ng == growing + [merged], f"got {ng}")
     _assert("complete unchanged", nc == complete)
 
 
-# --- _do_extract integration ---------------------------------
+# --- do_extract integration ---------------------------------
 
 def test_do_extract_does_not_mutate_input_helper():
     """Pure: the input helper list is unchanged after the call."""
@@ -210,7 +222,7 @@ def test_do_extract_does_not_mutate_input_helper():
     h1 = [(2, C, 0), (3, C, 0), (4, C, 0)]
     helper = [h0, h1]
     helper_snapshot = [list(s) for s in helper]
-    new_helper, spawned, ext, src = bs._do_extract(
+    new_helper, spawned, ext, src = enumerator.do_extract(
         helper, 0, 0, "peel")
     _assert("input helper list is unchanged",
             helper == helper_snapshot,
@@ -238,6 +250,8 @@ TESTS = [
      test_steal_run_left_edge_spawns_pair),
     ("test_steal_run_right_edge_spawns_pair",
      test_steal_run_right_edge_spawns_pair),
+    ("test_split_out_run_interior_spawns_two_singletons",
+     test_split_out_run_interior_spawns_two_singletons),
     ("test_remove_absorber_from_trouble",
      test_remove_absorber_from_trouble),
     ("test_remove_absorber_from_growing",

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 test_bfs_enumerate.py — snapshot tests for
-`bfs_solver.enumerate_moves`, the per-state move generator.
+`enumerator.enumerate_moves`, the per-state move generator.
 
 These tests are intentionally small and concrete: hand-built
 4-bucket states, full enumeration, exact assertions on the
@@ -21,7 +21,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-import bfs_solver as bs
+import enumerator
 
 
 C, D, S, H = 0, 1, 2, 3
@@ -47,7 +47,7 @@ def test_simple_peel_into_trouble():
     helper = [[(5, H, 0), (6, H, 0), (7, H, 0), (8, H, 0)]]
     trouble = [[(4, H, 0)]]
     state = (helper, trouble, [], [])
-    moves = list(bs.enumerate_moves(state))
+    moves = list(enumerator.enumerate_moves(state))
     types = _types(moves)
     _assert("at least one extract_absorb fires",
             "extract_absorb" in types,
@@ -70,7 +70,7 @@ def test_splice_into_length_4_run():
     helper = [[(5, H, 0), (6, H, 0), (7, H, 0), (8, H, 0)]]
     trouble = [[(7, H, 1)]]  # second-deck 7H — splices in
     state = (helper, trouble, [], [])
-    moves = list(bs.enumerate_moves(state))
+    moves = list(enumerator.enumerate_moves(state))
     splices = [d for d, _ in moves if d["type"] == "splice"]
     # Set classification: runs don't accept dup values.
     # rb_run also won't accept same-value-same-color. So no
@@ -89,7 +89,7 @@ def test_splice_dup_5d_into_pure_diamonds():
                (6, D, 0), (7, D, 0), (8, D, 0)]]
     trouble = [[(5, D, 1)]]  # second-deck 5D
     state = (helper, trouble, [], [])
-    moves = list(bs.enumerate_moves(state))
+    moves = list(enumerator.enumerate_moves(state))
     splices = [d for d, _ in moves if d["type"] == "splice"]
     _assert("at least one splice fires",
             len(splices) >= 1, f"got {len(splices)}")
@@ -107,7 +107,7 @@ def test_engulf_2partial_into_legal_run():
     helper = [[(3, S, 0), (4, D, 0), (5, C, 0)]]
     growing = [[(1, C, 0), (2, D, 0)]]
     state = (helper, [], growing, [])
-    moves = list(bs.enumerate_moves(state))
+    moves = list(enumerator.enumerate_moves(state))
     pushes = [d for d, _ in moves if d["type"] == "push"]
     _assert("at least one engulf fires",
             len(pushes) >= 1, f"got {len(pushes)}")
@@ -152,7 +152,7 @@ def test_shift_pops_jack_via_eight():
     ]
     trouble = [[(12, H, 0)]]  # QH absorbs the popped JC
     state = (helper, trouble, [], [])
-    moves = list(bs.enumerate_moves(state))
+    moves = list(enumerator.enumerate_moves(state))
     shifts = [d for d, _ in moves if d["type"] == "shift"]
     _assert("at least one shift fires",
             len(shifts) >= 1, f"got {len(shifts)}")
@@ -176,7 +176,7 @@ def test_doomed_partial_pruned():
     # Variant A: completion exists → move fires.
     helper_with = [[(5, H, 0), (6, H, 0), (7, H, 0), (8, H, 0)]]
     state = (helper_with, [[(4, H, 0)]], [], [])
-    moves = list(bs.enumerate_moves(state))
+    moves = list(enumerator.enumerate_moves(state))
     _assert("doomed-filter admits move when completion exists",
             any(d["type"] == "extract_absorb" for d, _ in moves))
 
@@ -191,7 +191,7 @@ def test_doomed_partial_pruned():
     # of any color, no 4-set partner).
     helper_no_completion = [[(6, H, 0), (7, H, 0), (8, H, 0)]]
     state = (helper_no_completion, [[(4, S, 0)]], [], [])
-    moves = list(bs.enumerate_moves(state))
+    moves = list(enumerator.enumerate_moves(state))
     # 4S has neighbor 5-of-anything. None of 6H/7H/8H is a
     # 4S-neighbor — extracts wouldn't fire anyway. So this
     # tests the upstream short-circuit, not specifically the
@@ -206,7 +206,7 @@ def test_doomed_partial_pruned():
     # 6-black). No 3-red anywhere. → DOOMED.
     helper_only_pure_h = [[(5, H, 0), (6, H, 0), (7, H, 0), (8, H, 0)]]
     state = (helper_only_pure_h, [[(4, S, 0)]], [], [])
-    moves = list(bs.enumerate_moves(state))
+    moves = list(enumerator.enumerate_moves(state))
     extracts = [d for d, _ in moves if d["type"] == "extract_absorb"]
     _assert("doomed-filter blocks doomed peel",
             len(extracts) == 0,
@@ -220,7 +220,7 @@ def test_doomed_partial_pruned():
         [(3, D, 0), (4, D, 0), (5, D, 0)],   # supplies 3D
     ]
     state = (helper_with_3d, [[(4, S, 0)]], [], [])
-    moves = list(bs.enumerate_moves(state))
+    moves = list(enumerator.enumerate_moves(state))
     extracts = [d for d, _ in moves if d["type"] == "extract_absorb"]
     _assert("doomed-filter admits move when 3D supplies completion",
             len(extracts) >= 1,
@@ -252,7 +252,7 @@ def test_doomed_growing_partial_is_reachable():
 
     # Move 1: pull 7D onto 7C.
     after_m1 = None
-    for d, ns in bs.enumerate_moves(state):
+    for d, ns in enumerator.enumerate_moves(state):
         if (d["type"] == "free_pull"
                 and d["loose"] == (7, D, 0)
                 and d["target_before"] == [(7, C, 0)]):
@@ -263,7 +263,7 @@ def test_doomed_growing_partial_is_reachable():
 
     # Move 2: pull 7S onto 7H.
     after_m2 = None
-    for d, ns in bs.enumerate_moves(after_m1):
+    for d, ns in enumerator.enumerate_moves(after_m1):
         if (d["type"] == "free_pull"
                 and d["loose"] == (7, S, 0)
                 and d["target_before"] == [(7, H, 0)]):
@@ -273,11 +273,11 @@ def test_doomed_growing_partial_is_reachable():
             after_m2 is not None)
 
     helper2, trouble2, growing2, _ = after_m2
-    inv = bs._completion_inventory(helper2, trouble2)
+    inv = enumerator.completion_inventory(helper2, trouble2)
     doomed = []
     for g in growing2:
         if len(g) == 2:
-            shapes = bs._completion_shapes(g)
+            shapes = enumerator.completion_shapes(g)
             if not (shapes & inv):
                 doomed.append(g)
     _assert("at least one growing partial is doomed in the "
@@ -288,7 +288,7 @@ def test_doomed_growing_partial_is_reachable():
     # And the state-level filter MUST fire on this state —
     # enumerate_moves yields nothing when a doomed growing
     # partial is present.
-    moves_from_doomed_state = list(bs.enumerate_moves(after_m2))
+    moves_from_doomed_state = list(enumerator.enumerate_moves(after_m2))
     _assert("state-level filter prunes a doomed-growing state",
             moves_from_doomed_state == [],
             f"got {len(moves_from_doomed_state)} moves")
@@ -310,7 +310,7 @@ def test_enumerate_does_not_mutate_state():
     snap_g = [list(s) for s in growing]
     snap_c = [list(s) for s in complete]
 
-    _ = list(bs.enumerate_moves(state))
+    _ = list(enumerator.enumerate_moves(state))
 
     _assert("helper not mutated", helper == snap_h)
     _assert("trouble not mutated", trouble == snap_t)

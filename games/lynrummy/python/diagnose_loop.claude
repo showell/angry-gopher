@@ -13,7 +13,8 @@ effectively visited before.
 The script:
 1. Loads a JSONL snapshot.
 2. Picks the slowest runaway projection's sample states
-   (collected by `_bfs_with_cap_descs` at cap-exhaustion).
+   (collected by `bfs_with_cap` at cap-exhaustion via the
+   diagnostics dict).
 3. Replays each program prefix from initial state.
 4. Computes a "skeleton" per state — coarser than state_sig,
    ignoring suit/deck identity, focusing on bucket +

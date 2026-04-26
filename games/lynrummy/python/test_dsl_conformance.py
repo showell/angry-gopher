@@ -32,7 +32,9 @@ import json
 import sys
 from pathlib import Path
 
-import bfs_solver
+import bfs
+import enumerator
+import move
 import strategy
 from geometry import find_violation
 
@@ -150,7 +152,7 @@ def _bucket_to_tuples(stacks):
 
 def _run_enumerate_moves(sc):
     """Build a 4-bucket state from the scenario's helper/trouble/
-    growing/complete sections, walk `bfs_solver.enumerate_moves`,
+    growing/complete sections, walk `enumerator.enumerate_moves`,
     and assert against any of:
       - expect.yields: at least one move has this type
       - expect.narrate_contains: at least one move's narrate()
@@ -173,7 +175,7 @@ def _run_enumerate_moves(sc):
         return False, ("expect missing yields / narrate_contains "
                        "/ hint_contains")
 
-    moves = list(bfs_solver.enumerate_moves(state))
+    moves = list(enumerator.enumerate_moves(state))
 
     if expected_type:
         matches = [d for d, _ in moves if d["type"] == expected_type]
@@ -183,14 +185,14 @@ def _run_enumerate_moves(sc):
                            f"types seen: {types or 'none'}")
 
     if narrate_sub:
-        narrates = [bfs_solver.narrate(d) for d, _ in moves]
+        narrates = [move.narrate(d) for d, _ in moves]
         if not any(narrate_sub in n for n in narrates):
             sample = narrates[:3]
             return False, (f"no narrate contains {narrate_sub!r}; "
                            f"sample: {sample}")
 
     if hint_sub:
-        hints = [bfs_solver.hint(d) for d, _ in moves]
+        hints = [move.hint(d) for d, _ in moves]
         hints = [h for h in hints if h is not None]
         if not any(hint_sub in h for h in hints):
             sample = hints[:3]
@@ -202,7 +204,7 @@ def _run_enumerate_moves(sc):
 
 
 def _run_solve(sc):
-    """Build a 4-bucket state, walk `bfs_solver.solve_state`,
+    """Build a 4-bucket state, walk `bfs.solve_state`,
     and assert on `no_plan` or `plan_length` per the scenario."""
     state = (
         _bucket_to_tuples(sc.get("helper", [])),
@@ -210,7 +212,7 @@ def _run_solve(sc):
         _bucket_to_tuples(sc.get("growing", [])),
         _bucket_to_tuples(sc.get("complete", [])),
     )
-    plan = bfs_solver.solve_state(
+    plan = bfs.solve_state(
         state, max_trouble_outer=10, max_states=200000,
         verbose=False)
 
