@@ -1,0 +1,50 @@
+# GeometryPlan.elm — pre-flight move_stack injection
+
+The Elm port of `python/strategy._plan_merge_stack` (and the
+mid-stack split pre-clear pattern). Wraps a stream of agent
+WireActions so that any merge whose IN-PLACE result would
+violate geometry gets a pre-flight `MoveStack` injected to
+move the target into a hole sized for the EVENTUAL stack.
+
+## Status
+
+- **Label:** WORKHORSE.
+- **Mirrors:** `python/strategy.py` `_plan_merge_stack`,
+  plus the interior-split pre-move idiom (donor pre-cleared
+  to a 4-side-clear region before mid-stack splits).
+- **Divergences:** Python integrates pre-flight into the
+  verb translator (`verbs.py` calls
+  `strategy._plan_merge_stack` directly). Elm keeps it as a
+  separate post-pass over the WireAction stream so the
+  logical decomposition (`Game.Agent.Verbs`) stays geometry-
+  unaware. This matches the cleaner "verbs decompose;
+  geometry plans separately" boundary.
+
+## Public API
+
+- `planActions : List CardStack -> List WireAction -> List WireAction`
+  — given the live board and the verb translator's
+  primitive sequence, return a sequence with pre-flight
+  `MoveStack`s injected wherever a merge would violate
+  geometry in place.
+
+## Algorithm
+
+For each WireAction in order:
+
+1. Simulate against the local board (same simulator the
+   Verbs module uses).
+2. If the result has no geometry violation, keep it as is.
+3. If the result has a violation AND the action is a merge:
+   - Compute the eventual stack size + side-specific offset.
+   - Find a hole via `Game.PlaceStack.findOpenLoc`.
+   - Inject a `MoveStack` of the target into that hole
+     before the merge.
+4. For mid-stack splits: pre-move the donor before splitting.
+   (Mirror of strategy.py:240–247.)
+
+## Pointers
+
+- Python source: `python/strategy.py` `_plan_merge_stack`,
+  `_plan_merge_hand`.
+- Tests: `tests/Game/Agent/GeometryPlanTest.elm`.
