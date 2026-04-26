@@ -19,7 +19,7 @@ reader can cross-reference 1:1 with `bfs_solver.py`.
 
 This module is types + a single rendering function. Move
 enumeration lives in `Game.Agent.Enumerator`; primitive
-translation lives in `Game.Agent.Verbs` (forthcoming).
+translation lives in `Game.Agent.Verbs`.
 
 -}
 

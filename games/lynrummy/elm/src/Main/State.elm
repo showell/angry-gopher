@@ -36,6 +36,7 @@ ripples in.
 
 -}
 
+import Game.Agent.Move exposing (Move)
 import Game.Card exposing (Card)
 import Game.CardStack exposing (CardStack)
 import Game.GestureArbitration as GA
@@ -115,6 +116,15 @@ type alias Model =
     -- captured session's action log. Only Instant Replay + the
     -- rendered board/hand surface work.
     , readonly : Bool
+
+    -- BOARD_LAB "Let agent play" program counter. Holds the
+    -- list of plan lines the agent computed at the start of
+    -- the walk; each click consumes one line (animating its
+    -- primitives at 500ms pacing) and advances. Empty/Nothing
+    -- means "no walk in progress — next click solves fresh."
+    -- A user gesture between clicks invalidates the cache by
+    -- clearing this back to Nothing.
+    , agentProgram : Maybe (List Move)
     }
 
 
@@ -458,4 +468,5 @@ baseModel =
     , gameId = "default"
     , hideTurnControls = False
     , readonly = False
+    , agentProgram = Nothing
     }

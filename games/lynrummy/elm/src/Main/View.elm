@@ -25,10 +25,9 @@ rewritten as embeddable 2026-04-23
 Html (position: relative, 1100×700, embeddable)
 ├── viewTopBar              // at (0, 0), 32px tall
 ├── viewStatusBar           // at (0, 32), 32px tall
-├── handColumn gutter       // at (20, 100), 240px wide
-│   ├── turn #
-│   └── viewPlayerRow × 2   // name + score + hand (if active) OR "N cards"
-│       └── viewTurnControls  // Complete turn / Hint / Replay / Lobby
+├── leftSidebar            // at (20, 100), 240px wide
+│   ├── playerHands         // main app: turn # + per-player rows + turn controls
+│   └── puzzleControls      // BOARD_LAB: Hint / Let agent play / Replay
 ├── boardColumn             // at (boardViewportLeft, boardViewportTop)
 │   └── boardWithWings      // id = `boardDomIdFor model.gameId`
 │       ├── viewStackForBoard (×N)
@@ -244,7 +243,7 @@ view model =
             , style "left" "20px"
             , style "width" (String.fromInt (BoardGeometry.boardViewportLeft - 40) ++ "px")
             ]
-            [ handColumn model ]
+            [ leftSidebar model ]
         , div
             [ style "position" "absolute"
             , style "top" (String.fromInt BoardGeometry.boardViewportTop ++ "px")
@@ -368,26 +367,75 @@ viewStatusBar status =
 
 
 
--- HAND COLUMN
+-- LEFT SIDEBAR
 
 
-handColumn : Model -> Html Msg
-handColumn model =
+{-| The left column of the play surface. Shared chrome (fixed
+width, right border, padding) wraps one of two interior
+layouts:
+
+  - `playerHands` — the main app's full hand-and-score surface
+    with per-player rows + turn controls.
+  - `puzzleControls` — the BOARD_LAB lab's stripped-down
+    vertical button stack (Hint / Let agent play / replay).
+    Puzzles are board-only, so everything in `playerHands`
+    is irrelevant there.
+-}
+leftSidebar : Model -> Html Msg
+leftSidebar model =
     div
         [ style "min-width" "240px"
         , style "padding-right" "20px"
         , style "border-right" "1px gray solid"
         ]
-        ((div
-            [ style "color" "#666"
-            , style "font-size" "13px"
-            , style "margin-top" "12px"
-            ]
-            [ Html.text ("Turn " ++ String.fromInt (model.turnIndex + 1)) ]
-            :: List.indexedMap (viewPlayerRow model) model.hands
-         )
-            ++ [ deckRemainingLine model ]
+        (if model.hideTurnControls then
+            puzzleControls model
+
+         else
+            playerHands model
         )
+
+
+playerHands : Model -> List (Html Msg)
+playerHands model =
+    (div
+        [ style "color" "#666"
+        , style "font-size" "13px"
+        , style "margin-top" "12px"
+        ]
+        [ Html.text ("Turn " ++ String.fromInt (model.turnIndex + 1)) ]
+        :: List.indexedMap (viewPlayerRow model) model.hands
+    )
+        ++ [ deckRemainingLine model ]
+
+
+puzzleControls : Model -> List (Html Msg)
+puzzleControls model =
+    let
+        replayControl =
+            case model.replay of
+                Just progress ->
+                    if progress.paused then
+                        gameButton "Resume" ClickReplayPauseToggle
+
+                    else
+                        gameButton "Pause" ClickReplayPauseToggle
+
+                Nothing ->
+                    gameButton "Instant replay" ClickInstantReplay
+    in
+    [ div
+        [ style "padding-top" "12px"
+        , style "display" "flex"
+        , style "flex-direction" "column"
+        , style "gap" "10px"
+        , style "align-items" "stretch"
+        ]
+        [ gameButton "Hint" ClickHint
+        , gameButton "Let agent play" ClickAgentPlay
+        , replayControl
+        ]
+    ]
 
 
 {-| Shows how many cards are left in the dealer's deck.
@@ -504,6 +552,9 @@ viewPlayerRow model idx hand =
         )
 
 
+{-| Main-app turn controls — Complete turn / Hint / Replay /
+Lobby. The puzzle/lab path uses `puzzleControls` instead and
+never reaches this. -}
 viewTurnControls : Model -> Html Msg
 viewTurnControls model =
     let
@@ -518,20 +569,6 @@ viewTurnControls model =
 
                 Nothing ->
                     gameButton "Instant replay" ClickInstantReplay
-
-        children =
-            if model.hideTurnControls then
-                -- BOARD_LAB puzzle context: no turn end, no lobby.
-                [ gameButton "Hint" ClickHint
-                , replayControl
-                ]
-
-            else
-                [ gameButton "Complete turn" ClickCompleteTurn
-                , gameButton "Hint" ClickHint
-                , replayControl
-                , gameLink "← Lobby" "/gopher/game-lobby"
-                ]
     in
     div
         [ style "margin-top" "12px"
@@ -539,7 +576,11 @@ viewTurnControls model =
         , style "gap" "8px"
         , style "flex-wrap" "wrap"
         ]
-        children
+        [ gameButton "Complete turn" ClickCompleteTurn
+        , gameButton "Hint" ClickHint
+        , replayControl
+        , gameLink "← Lobby" "/gopher/game-lobby"
+        ]
 
 
 gameLink : String -> String -> Html Msg

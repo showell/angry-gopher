@@ -14,6 +14,7 @@ import Http
 import Game.Card exposing (Card)
 import Game.CardStack exposing (CardStack)
 import Game.Game exposing (CompleteTurnOutcome)
+import Game.WireAction exposing (WireAction)
 import Main.State exposing (ActionLogBundle, Point)
 import Time
 
@@ -47,6 +48,9 @@ type Msg
     | SessionReceived (Result Http.Error Int)
     | ClickCompleteTurn
     | ClickHint
+    | ClickAgentPlay
+    | AgentTick (List WireAction)
+    | AgentApplyAction WireAction
     | CompleteTurnResponded (Result Http.Error CompleteTurnOutcome)
     | PopupOk
     | ClickInstantReplay

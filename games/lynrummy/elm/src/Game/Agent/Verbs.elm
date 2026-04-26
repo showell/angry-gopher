@@ -7,9 +7,11 @@ module Game.Agent.Verbs exposing (moveToPrimitives)
 references a `CardStack` directly.
 
 Geometry pre-flight (reactively pre-moving target stacks
-before merges) lives in a separate module
-(`Game.Agent.GeometryPlan`, forthcoming) so this module stays
-focused on the logical decomposition.
+before merges) lives in a separate module —
+`Game.Agent.GeometryPlan.planActions`. Callers that send
+emitted primitives to a referee should pipe through that
+wrapper; this module stays focused on the logical
+decomposition and emits in-place merges.
 
 -}
 

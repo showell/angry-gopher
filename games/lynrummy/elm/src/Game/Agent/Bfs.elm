@@ -2,6 +2,7 @@ module Game.Agent.Bfs exposing
     ( Plan
     , bfsWithCap
     , solve
+    , solveBoard
     , solveWithCap
     )
 
@@ -25,6 +26,8 @@ import Game.Agent.Enumerator as Enumerator
         )
 import Game.Agent.Move exposing (Move)
 import Game.Card exposing (Card, cardValueToInt, originDeckToInt, suitToInt)
+import Game.CardStack exposing (CardStack)
+import Game.StackType as StackType
 import Set exposing (Set)
 
 
@@ -38,6 +41,48 @@ type alias Plan =
 solve : Buckets -> Maybe Plan
 solve =
     solveWithCap 10
+
+
+{-| Board-shaped entry point: partition a live `List CardStack`
+into the helper/trouble buckets BFS expects, then run `solve`.
+The solver's `Buckets` shape stays internal — production
+callers (the Lab puzzle panel) need only the board.
+
+A stack classifies as helper if `StackType.getStackType`
+recognizes it as a complete group (Set / PureRun /
+RedBlackRun); everything else is trouble. Mirrors Python's
+`bfs.solve(board)` partition step.
+-}
+solveBoard : List CardStack -> Maybe Plan
+solveBoard board =
+    let
+        cardsOf stack =
+            List.map .card stack.boardCards
+
+        ( helper, trouble ) =
+            List.foldr
+                (\stack ( hs, ts ) ->
+                    let
+                        cards =
+                            cardsOf stack
+                    in
+                    case StackType.getStackType cards of
+                        StackType.Set ->
+                            ( cards :: hs, ts )
+
+                        StackType.PureRun ->
+                            ( cards :: hs, ts )
+
+                        StackType.RedBlackRun ->
+                            ( cards :: hs, ts )
+
+                        _ ->
+                            ( hs, cards :: ts )
+                )
+                ( [], [] )
+                board
+    in
+    solve { helper = helper, trouble = trouble, growing = [], complete = [] }
 
 
 solveWithCap : Int -> Buckets -> Maybe Plan

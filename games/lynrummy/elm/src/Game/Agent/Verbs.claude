@@ -16,9 +16,12 @@ straight away, no internal primitive type.
 - **Divergences:** Python carries an index→wire layer
   internally; Elm doesn't need it (`WireAction` is content).
   Geometry pre-flight planning (mirror of
-  `strategy._plan_merge_stack`) is a separate module
-  (`Game.Agent.GeometryPlan`, forthcoming) so this module
-  stays focused on the logical decomposition.
+  `strategy._plan_merge_stack`) lives in a separate module —
+  `Game.Agent.GeometryPlan.planActions`. Callers that need
+  geometry-clean output (e.g. live agent play) pipe the
+  primitive stream through `planActions` after this module
+  emits it. This module stays focused on the logical
+  decomposition.
 
 ## Public API
 
