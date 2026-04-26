@@ -239,7 +239,7 @@ view model =
             [ viewStatusBar model.status ]
         , div
             [ style "position" "absolute"
-            , style "top" "100px"
+            , style "top" (String.fromInt BoardGeometry.boardViewportTop ++ "px")
             , style "left" "20px"
             , style "width" (String.fromInt (BoardGeometry.boardViewportLeft - 40) ++ "px")
             ]
