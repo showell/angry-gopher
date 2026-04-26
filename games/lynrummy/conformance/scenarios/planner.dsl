@@ -74,6 +74,84 @@ scenario splice_dup_5d_into_pure_diamonds
   expect:
     yields: splice
 
+# --- solve: futility detection -------------------------------
+
+scenario solve_lone_singleton_no_plan
+  desc: A single trouble card with no helpers cannot form any group; solve must return None fast.
+  op: solve
+  helper:
+  trouble:
+    at (0,0): 5H
+  expect: no_plan
+
+scenario solve_disjoint_helper_no_plan
+  desc: Trouble 5H plus a helper run J-Q-K-A spades that has no value-overlap with 5H. No move fires.
+  op: solve
+  helper:
+    at (0,0): JS QS KS AS
+  trouble:
+    at (0,0): 5H
+  expect: no_plan
+
+scenario solve_set_partial_uncompletable
+  desc: Trouble [AH AS] needs a third Ace; board has no third A and no A-adjacent extracts.
+  op: solve
+  helper:
+    at (0,0): JS QS KS
+  trouble:
+    at (0,0): AH AS
+  expect: no_plan
+
+scenario solve_two_unrelated_singletons
+  desc: Trouble [5H] + [JC] share no group; neither completable from any helper.
+  op: solve
+  helper:
+  trouble:
+    at (0,0): 5H
+    at (0,0): JC
+  expect: no_plan
+
+scenario solve_run_partial_uncompletable
+  desc: Trouble pair [5H 6H] is a pure-run partial; needs 4H or 7H, board has neither.
+  op: solve
+  helper:
+    at (0,0): JS QS KS
+  trouble:
+    at (0,0): 5H 6H
+  expect: no_plan
+
+scenario solve_partial_completable_but_stranded
+  desc: Trouble [5H] + helper [3C 4C 5C 6C]. Peel 6C produces partial [5H 6C] but no further extract leads to victory; an unrelated helper [JS QS KS AS] adds noise but no path.
+  op: solve
+  helper:
+    at (0,0): 3C 4C 5C 6C
+    at (0,0): JS QS KS AS
+  trouble:
+    at (0,0): 5H
+  expect: no_plan
+
+# --- solve: positive cases ----------------------------------
+
+scenario solve_engulf_in_one_line
+  desc: GROWING [AC 2D] engulfs HELPER [3S 4D 5C] for a 1-line plan.
+  op: solve
+  helper:
+    at (0,0): 3S 4D 5C
+  growing:
+    at (0,0): AC 2D
+  expect:
+    plan_length: 1
+
+scenario solve_simple_peel_in_one_line
+  desc: Trouble [4H] absorbs 5H peeled from a length-4 helper run for a 1-line plan.
+  op: solve
+  helper:
+    at (0,0): 5H 6H 7H 8H
+  trouble:
+    at (0,0): 4H
+  expect:
+    plan_length: 1
+
 # --- shift (8C-pops-JC idiom) --------------------------------
 
 scenario shift_eight_clubs_pops_jack_clubs

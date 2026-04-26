@@ -172,10 +172,52 @@ def _run_enumerate_moves(sc):
                   f"{len(matches)} matched {expected_type!r}")
 
 
+def _run_solve(sc):
+    """Build a 4-bucket state, walk `bfs_solver.solve`, and
+    assert on `no_plan` or `plan_length` per the scenario."""
+    # Convert the 4-bucket sections into a flat board: solve
+    # expects `board = list of stacks` and partitions them.
+    # We go around that by calling the inner BFS directly via
+    # the same helpers the 4-bucket model exposes.
+    state = (
+        _bucket_to_tuples(sc.get("helper", [])),
+        _bucket_to_tuples(sc.get("trouble", [])),
+        _bucket_to_tuples(sc.get("growing", [])),
+        _bucket_to_tuples(sc.get("complete", [])),
+    )
+    # Iterate the outer cap loop using bfs_solver._bfs_with_cap
+    # directly, since the convenience `solve(board)` only
+    # accepts a flat board.
+    plan = None
+    for cap in range(1, 11):
+        result = bfs_solver._bfs_with_cap(
+            state, cap, max_states=200000, verbose=False)
+        if result[0] is not None:
+            plan = result[0]
+            break
+
+    expect = sc["expect"]
+    if expect.get("no_plan"):
+        if plan is None:
+            return True, "OK — no plan, as expected"
+        return False, f"expected no plan; got plan of length {len(plan)}"
+
+    plan_length = expect.get("plan_length", 0)
+    if plan_length > 0:
+        if plan is None:
+            return False, f"expected plan of length {plan_length}; got None"
+        if len(plan) == plan_length:
+            return True, f"OK — plan of length {plan_length}"
+        return False, (f"expected plan of length {plan_length}; "
+                       f"got {len(plan)}")
+    return False, "solve scenario missing expectation (no_plan or plan_length)"
+
+
 DISPATCH = {
     "build_suggestions": _run_build_suggestions,
     "hint_invariant":    _run_hint_invariant,
     "enumerate_moves":   _run_enumerate_moves,
+    "solve":             _run_solve,
 }
 
 

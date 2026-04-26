@@ -5,6 +5,7 @@
 module Game.DslConformanceTest exposing (suite)
 
 import Expect
+import Game.Agent.Bfs
 import Game.Agent.Buckets as AgentBuckets exposing (Buckets)
 import Game.Agent.Enumerator as AgentEnumerator
 import Game.Agent.Move as AgentMove exposing (Move(..))
@@ -1042,6 +1043,214 @@ shiftEightClubsPopsJackClubs =
                 Expect.fail ("no shift move yielded; got " ++ String.fromInt (List.length moves) ++ " moves")
 
 
+solveDisjointHelperNoPlan : Test
+solveDisjointHelperNoPlan =
+    test "solve_disjoint_helper_no_plan" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ { value = Jack, suit = Spade, originDeck = DeckOne }, { value = Queen, suit = Spade, originDeck = DeckOne }, { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne } ]
+                        ]
+                    , trouble = [ [ { value = Five, suit = Heart, originDeck = DeckOne } ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+solveEngulfInOneLine : Test
+solveEngulfInOneLine =
+    test "solve_engulf_in_one_line" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ { value = Three, suit = Spade, originDeck = DeckOne }, { value = Four, suit = Diamond, originDeck = DeckOne }, { value = Five, suit = Club, originDeck = DeckOne } ]
+                        ]
+                    , trouble = []
+                    , growing = [ [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Two, suit = Diamond, originDeck = DeckOne } ]
+                        ]
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Just plan ->
+                    List.length plan |> Expect.equal 1
+
+                Nothing ->
+                    Expect.fail "expected plan of length 1; got Nothing"
+
+
+solveLoneSingletonNoPlan : Test
+solveLoneSingletonNoPlan =
+    test "solve_lone_singleton_no_plan" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = []
+                    , trouble = [ [ { value = Five, suit = Heart, originDeck = DeckOne } ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+solvePartialCompletableButStranded : Test
+solvePartialCompletableButStranded =
+    test "solve_partial_completable_but_stranded" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ { value = Three, suit = Club, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Club, originDeck = DeckOne }, { value = Six, suit = Club, originDeck = DeckOne } ]
+                        , [ { value = Jack, suit = Spade, originDeck = DeckOne }, { value = Queen, suit = Spade, originDeck = DeckOne }, { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne } ]
+                        ]
+                    , trouble = [ [ { value = Five, suit = Heart, originDeck = DeckOne } ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+solveRunPartialUncompletable : Test
+solveRunPartialUncompletable =
+    test "solve_run_partial_uncompletable" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ { value = Jack, suit = Spade, originDeck = DeckOne }, { value = Queen, suit = Spade, originDeck = DeckOne }, { value = King, suit = Spade, originDeck = DeckOne } ]
+                        ]
+                    , trouble = [ [ { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Heart, originDeck = DeckOne } ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+solveSetPartialUncompletable : Test
+solveSetPartialUncompletable =
+    test "solve_set_partial_uncompletable" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ { value = Jack, suit = Spade, originDeck = DeckOne }, { value = Queen, suit = Spade, originDeck = DeckOne }, { value = King, suit = Spade, originDeck = DeckOne } ]
+                        ]
+                    , trouble = [ [ { value = Ace, suit = Heart, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne } ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+solveSimplePeelInOneLine : Test
+solveSimplePeelInOneLine =
+    test "solve_simple_peel_in_one_line" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Heart, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne }, { value = Eight, suit = Heart, originDeck = DeckOne } ]
+                        ]
+                    , trouble = [ [ { value = Four, suit = Heart, originDeck = DeckOne } ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Just plan ->
+                    List.length plan |> Expect.equal 1
+
+                Nothing ->
+                    Expect.fail "expected plan of length 1; got Nothing"
+
+
+solveTwoUnrelatedSingletons : Test
+solveTwoUnrelatedSingletons =
+    test "solve_two_unrelated_singletons" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = []
+                    , trouble = [ [ { value = Five, suit = Heart, originDeck = DeckOne } ]
+                        , [ { value = Jack, suit = Club, originDeck = DeckOne } ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
 spliceDup5dIntoPureDiamonds : Test
 spliceDup5dIntoPureDiamonds =
     test "splice_dup_5d_into_pure_diamonds" <|
@@ -1166,6 +1375,14 @@ suite =
         , peelLeftEdgeIntoSingletonTrouble
         , pushPartialPairOntoHelperRun
         , shiftEightClubsPopsJackClubs
+        , solveDisjointHelperNoPlan
+        , solveEngulfInOneLine
+        , solveLoneSingletonNoPlan
+        , solvePartialCompletableButStranded
+        , solveRunPartialUncompletable
+        , solveSetPartialUncompletable
+        , solveSimplePeelInOneLine
+        , solveTwoUnrelatedSingletons
         , spliceDup5dIntoPureDiamonds
         , turnCompleteCleanBoard
         , turnCompleteRejectsIncomplete
