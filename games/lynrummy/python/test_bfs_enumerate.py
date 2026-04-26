@@ -227,6 +227,65 @@ def test_doomed_partial_pruned():
             f"got {len(extracts)} extracts")
 
 
+# --- doomed growing partials reachable mid-search -------------
+
+def test_doomed_growing_partial_is_reachable():
+    """The doomed-third filter checks at MERGE time. It does
+    NOT re-check existing growing partials. This test
+    constructs an initial state where the BFS reaches a
+    state with a doomed growing partial — proving that the
+    current filter has a gap.
+
+    Setup: 4 distinct 7s in trouble + a length-4 pure-clubs
+    helper [4C 5C 6C 7C']. Step 1: free pull 7D onto 7C →
+    growing [7C 7D] (admitted; 7H, 7S still in trouble as
+    completion candidates). Step 2: free pull 7S onto 7H →
+    growing [7H 7S] (admitted; 7C/7C' in helper is a
+    completion candidate). Resulting state has two growing
+    7-partials; [7C 7D]'s completion candidates (7H, 7S)
+    are now committed inside [7H 7S], NOT available in
+    helper or trouble. So [7C 7D] is doomed in this state,
+    even though it was admitted earlier."""
+    helper = [[(4, C, 0), (5, C, 0), (6, C, 0), (7, C, 1)]]
+    trouble = [[(7, C, 0)], [(7, D, 0)], [(7, H, 0)], [(7, S, 0)]]
+    state = (helper, trouble, [], [])
+
+    # Move 1: pull 7D onto 7C.
+    after_m1 = None
+    for d, ns in bs.enumerate_moves(state):
+        if (d["type"] == "free_pull"
+                and d["loose"] == (7, D, 0)
+                and d["target_before"] == [(7, C, 0)]):
+            after_m1 = ns
+            break
+    _assert("move 1 (pull 7D onto 7C) is enumerated",
+            after_m1 is not None)
+
+    # Move 2: pull 7S onto 7H.
+    after_m2 = None
+    for d, ns in bs.enumerate_moves(after_m1):
+        if (d["type"] == "free_pull"
+                and d["loose"] == (7, S, 0)
+                and d["target_before"] == [(7, H, 0)]):
+            after_m2 = ns
+            break
+    _assert("move 2 (pull 7S onto 7H) is enumerated",
+            after_m2 is not None)
+
+    helper2, trouble2, growing2, _ = after_m2
+    inv = bs._completion_inventory(helper2, trouble2)
+    doomed = []
+    for g in growing2:
+        if len(g) == 2:
+            shapes = bs._completion_shapes(g)
+            if not (shapes & inv):
+                doomed.append(g)
+    _assert("at least one growing partial is doomed in the "
+            "reached state",
+            len(doomed) >= 1,
+            f"growing={growing2}, doomed={doomed}, inv={sorted(inv)}")
+
+
 # --- enumeration purity --------------------------------------
 
 def test_enumerate_does_not_mutate_state():
@@ -261,6 +320,8 @@ TESTS = [
     ("test_shift_pops_jack_via_eight",
      test_shift_pops_jack_via_eight),
     ("test_doomed_partial_pruned", test_doomed_partial_pruned),
+    ("test_doomed_growing_partial_is_reachable",
+     test_doomed_growing_partial_is_reachable),
     ("test_enumerate_does_not_mutate_state",
      test_enumerate_does_not_mutate_state),
 ]
