@@ -98,8 +98,16 @@ def evaluate_projection(rec, proj):
 
 def build_initial_state(board, hand_cards):
     """Build the wire-shape `lynrummy.State` for the puzzle.
-    The board is unmodified; the hand contains the projected
-    cards so the player gets to decide placement."""
+
+    Steve's 2026-04-26 framing: a puzzle is purely board-as-
+    problem. The "hand cards" from the captured projection
+    are placed onto the board as a singleton (or pair) stack,
+    so the player faces a board with trouble cards to clean
+    up. The hand is empty.
+    """
+    augmented_board = list(board)
+    if hand_cards:
+        augmented_board.append(list(hand_cards))
     return {
         "board": [
             {
@@ -111,15 +119,10 @@ def build_initial_state(board, hand_cards):
                 ],
                 "loc": {"top": 0, "left": 0},
             }
-            for stack in board
+            for stack in augmented_board
         ],
         "hands": [
-            {"hand_cards": [
-                {"card": {"value": c[0], "suit": c[1],
-                          "origin_deck": c[2]},
-                 "state": 0}
-                for c in hand_cards
-            ]},
+            {"hand_cards": []},
             {"hand_cards": []},
         ],
         "deck": [],
