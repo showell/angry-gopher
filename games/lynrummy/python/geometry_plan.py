@@ -48,7 +48,19 @@ def _plan_one(sim, action):
     sibling offset) but that's not a violation since they
     came from the same parent. The check only flags when a
     primitive's output is too close to a stack that was
-    already on the board."""
+    already on the board.
+
+    Interior splits are pre-flighted unconditionally per
+    Steve's 2026-04-23 rule: even when the immediate post-
+    board doesn't yet overlap, an interior split's siblings
+    will sit in tight quarters that downstream primitives
+    can't safely build on. Pre-moving the donor to a
+    4-side-clear region is the human-feel default."""
+    if _is_interior_split(sim, action):
+        pre_flight = _pre_flight(sim, action)
+        if pre_flight is not None:
+            move_prim, new_action, new_post = pre_flight
+            return [move_prim, new_action], new_post
     post = primitives.apply_locally(sim, action)
     if _is_clean_after_action(sim, post):
         return [action], post
@@ -57,6 +69,27 @@ def _plan_one(sim, action):
         move_prim, new_action, new_post = pre_flight
         return [move_prim, new_action], new_post
     return [action], post
+
+
+def _is_interior_split(sim, action):
+    """True if `action` is a split that breaks a stack
+    somewhere strictly between the ends — i.e. neither half
+    is a singleton end-peel. End splits (left_count=1 or
+    left_count=n-1) keep the nudge bounded; interior splits
+    spawn two siblings that need a clear staging area."""
+    if action["action"] != "split":
+        return False
+    si = action["stack_index"]
+    ci = action["card_index"]
+    n = len(sim[si]["board_cards"])
+    if n < 3:
+        return False
+    # Mirror strategy._apply_split's left_count derivation.
+    if ci + 1 <= n // 2:
+        left_count = ci + 1
+    else:
+        left_count = ci
+    return left_count != 1 and left_count != n - 1
 
 
 def _pre_flight(sim, action):

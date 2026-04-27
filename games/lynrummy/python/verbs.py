@@ -19,6 +19,7 @@ appends one).
 """
 
 import cards
+import geometry_plan
 import primitives
 from move import (
     ExtractAbsorbDesc, FreePullDesc, PushDesc,
@@ -39,19 +40,29 @@ def move_to_primitives(desc, board):
     step, so callers can apply them sequentially through
     `primitives.apply_locally` and the indices will stay
     valid.
+
+    The per-verb helpers below emit a geometry-agnostic
+    primitive sequence; the final `geometry_plan.plan_actions`
+    pass injects pre-flight `move_stack` primitives wherever
+    the next primitive would land the board too close to a
+    pre-existing stack (or off-board). This honors the
+    "pre-flight planning, never post-hoc tidy" convention
+    documented in `verbs.claude`.
     """
     t = desc.type
     if isinstance(desc, ExtractAbsorbDesc):
-        return _extract_absorb_prims(desc, board)
-    if isinstance(desc, FreePullDesc):
-        return _free_pull_prims(desc, board)
-    if isinstance(desc, PushDesc):
-        return _push_prims(desc, board)
-    if isinstance(desc, SpliceDesc):
-        return _splice_prims(desc, board)
-    if isinstance(desc, ShiftDesc):
-        return _shift_prims(desc, board)
-    raise NotImplementedError(f"verb type {t!r} not supported")
+        prims = _extract_absorb_prims(desc, board)
+    elif isinstance(desc, FreePullDesc):
+        prims = _free_pull_prims(desc, board)
+    elif isinstance(desc, PushDesc):
+        prims = _push_prims(desc, board)
+    elif isinstance(desc, SpliceDesc):
+        prims = _splice_prims(desc, board)
+    elif isinstance(desc, ShiftDesc):
+        prims = _shift_prims(desc, board)
+    else:
+        raise NotImplementedError(f"verb type {t!r} not supported")
+    return geometry_plan.plan_actions(board, prims)
 
 
 # --- helpers --------------------------------------------------
