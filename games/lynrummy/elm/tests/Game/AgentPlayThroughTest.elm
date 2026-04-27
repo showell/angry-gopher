@@ -15,6 +15,7 @@ snapshot.
 -}
 
 import Expect
+import Http
 import Game.Card exposing (Card, CardValue(..), OriginDeck(..), Suit(..))
 import Game.CardStack
     exposing
@@ -119,7 +120,55 @@ suite =
         , boardChangesAfterDrain
         , clickThenDrainProducesVictory
         , mined001FullWalkthrough
+        , mined001FullWalkthroughPuzzleSession
+        , wireFailureMidReplayDoesNotStallBoard
         ]
+
+
+{-| What happens if the wire POST returns 400 mid-replay?
+The browser fires `ActionSent (Err _)` which my recent
+visibility patch (commit 6cdaa6f) handles by setting status
+to a Scold. If that handler corrupted replay state — e.g.,
+cleared `replay = Nothing` — the FSM would silently abandon
+pending entries. Test: dispatch ClickAgentPlay, then inject
+`ActionSent (Err NetworkError)` after one frame, then continue
+draining. Final board should still reach victory.
+-}
+wireFailureMidReplayDoesNotStallBoard : Test
+wireFailureMidReplayDoesNotStallBoard =
+    test "ActionSent (Err) mid-replay does not abandon pending entries" <|
+        \_ ->
+            let
+                m0 =
+                    modelFromBoard simplePeelBoard
+
+                ( m1, _, _ ) =
+                    Play.update ClickAgentPlay m0
+
+                ( m2, _, _ ) =
+                    Play.update (ReplayFrame (posix 16)) m1
+
+                -- Inject the wire-failure Msg mid-flight.
+                ( m3, _, _ ) =
+                    Play.update
+                        (ActionSent (Err Http.NetworkError))
+                        m2
+
+                final =
+                    driveReplayToCompletion m3 32 5000
+            in
+            if List.all isCleanStack final.board then
+                Expect.pass
+
+            else
+                Expect.fail
+                    ("wire-error mid-replay corrupted state; final.board: "
+                        ++ Debug.toString final.board
+                        ++ "\n  replay: "
+                        ++ Debug.toString final.replay
+                        ++ "\n  status: "
+                        ++ final.status.text
+                    )
 
 
 cd2 : CardValue -> Suit -> Card
@@ -169,6 +218,69 @@ mined001FullWalkthrough =
                             (List.filter (not << isCleanStack) final.board)
                         ++ "\n  agentProgram: "
                         ++ Debug.toString final.agentProgram
+                        ++ "\n  status: "
+                        ++ final.status.text
+                    )
+
+
+{-| Same walkthrough but with the puzzleSession-bootstrapped
+model shape: puzzleName = Just, gameId = puzzleName,
+hideTurnControls = True, replayBaseline = Just (the initial
+state). Mirrors what `Play.init (PuzzleSession ...)` produces
+without going through JSON encode/decode. If the click+drain
+contract holds with this shape, the bug is outside the model
+layer.
+-}
+mined001FullWalkthroughPuzzleSession : Test
+mined001FullWalkthroughPuzzleSession =
+    test "mined_001 (puzzleSession-shaped model): 4 clicks → victory" <|
+        \_ ->
+            let
+                base =
+                    State.baseModel
+
+                puzzleName =
+                    "mined_001_4S_4Cp1"
+
+                initialRemote =
+                    { board = mined001Board
+                    , hands = base.hands
+                    , scores = base.scores
+                    , activePlayerIndex = base.activePlayerIndex
+                    , turnIndex = base.turnIndex
+                    , deck = base.deck
+                    , cardsPlayedThisTurn = base.cardsPlayedThisTurn
+                    , victorAwarded = base.victorAwarded
+                    , turnStartBoardScore = base.turnStartBoardScore
+                    }
+
+                m0 =
+                    { base
+                        | sessionId = Just 629
+                        , puzzleName = Just puzzleName
+                        , gameId = puzzleName
+                        , hideTurnControls = True
+                        , board = mined001Board
+                        , replayBaseline = Just initialRemote
+                    }
+
+                final =
+                    walkClicks m0 10
+            in
+            if List.all isCleanStack final.board then
+                Expect.pass
+
+            else
+                Expect.fail
+                    ("puzzleSession walkthrough failed; incomplete stacks: "
+                        ++ Debug.toString
+                            (List.filter (not << isCleanStack) final.board)
+                        ++ "\n  agentProgram: "
+                        ++ Debug.toString final.agentProgram
+                        ++ "\n  replay: "
+                        ++ Debug.toString final.replay
+                        ++ "\n  replayAnim: "
+                        ++ Debug.toString final.replayAnim
                         ++ "\n  status: "
                         ++ final.status.text
                     )
