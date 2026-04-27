@@ -1,6 +1,0 @@
-# `without_at(stacks, idx)` is awkward — reads as "without
-# the at?" Rename to `drop_at(stacks, idx)`. Idiomatic
-# pure-functional name (cf. Rust's drop, Ruby's drop). Same
-# idea on the Elm side: `withoutAt` → `dropAt`.
-
-without_at -> drop_at

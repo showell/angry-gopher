@@ -1,4 +1,4 @@
-corpus_v2 baseline: bfs_solver max_trouble_outer=10, max_states=200000 (POST-FOCUS-RULE 2026-04-27)
+corpus_v2 baseline: bfs.solve_state max_trouble_outer=10, max_states=200000 (POST-FOCUS-RULE 2026-04-27)
  sid  trouble depth   wall
  108      QD'     2  0.00s
  110       TC     5  0.01s

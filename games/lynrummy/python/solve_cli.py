@@ -6,11 +6,6 @@ given session id, partitions into HELPER + TROUBLE, and
 runs `bfs.solve`. Prints the resulting plan (or "no plan").
 
 Usage:  python3 solve_cli.py [SID]   (SID defaults to 128)
-
-Originally lived as `if __name__ == "__main__":` in
-`bfs_solver.py`; lifted to its own file 2026-04-26 when
-`bfs_solver.py` was retired in favor of the
-`buckets/cards/move/enumerator/bfs` module split.
 """
 
 import json

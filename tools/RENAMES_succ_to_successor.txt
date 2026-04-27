@@ -1,6 +1,0 @@
-# `succ(v)` is concise but generic. Elm names this
-# `Game.StackType.successor`; matching keeps the cross-language
-# read uniform. No prose collision: `succ` doesn't appear as
-# an English word.
-
-succ -> successor

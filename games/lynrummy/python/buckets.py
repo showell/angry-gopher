@@ -4,9 +4,6 @@ buckets.py — 4-bucket BFS state shape + state_sig.
 The Python equivalent of `Game.Agent.Buckets.elm`. Holds
 the type aliases for the BFS state and the bucket-level
 operations (`state_sig`, `trouble_count`, `is_victory`).
-
-Lifted from `bfs_solver.py` 2026-04-26 as the module split
-landed (per ALIGNMENT_REPORT.md).
 """
 
 from typing import Literal, NamedTuple

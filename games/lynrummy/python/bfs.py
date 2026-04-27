@@ -2,8 +2,7 @@
 bfs.py — pure BFS by program length with iterative outer
 cap on trouble_count.
 
-The Python equivalent of `Game.Agent.Bfs.elm`. Lifted from
-`bfs_solver.py` 2026-04-26 as the module split landed.
+The Python equivalent of `Game.Agent.Bfs.elm`.
 """
 
 from buckets import (

@@ -7,9 +7,6 @@ type has a dedicated dataclass mirroring Elm's per-variant
 record. The enumerator emits dataclass instances; readers
 use attribute access (`desc.foo`) and dispatch via
 `isinstance` or `match`.
-
-Lifted from `bfs_solver.py` 2026-04-26 as the module split
-landed; dataclasses introduced in the same pass.
 """
 
 from dataclasses import dataclass, field

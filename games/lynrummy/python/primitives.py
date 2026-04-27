@@ -2,7 +2,8 @@
 primitives.py — the PRIMITIVE → GESTURE layer.
 
 Pipeline: VERBs → PRIMITIVEs → GESTUREs.
-- VERBs live in `verbs.py` and `bfs_solver.py` (DSL output).
+- VERBs live in `verbs.py` and the BFS planner's `move.py`
+  desc emissions (DSL output).
 - PRIMITIVEs are atomic UI ops: split, merge_stack, merge_hand,
   move_stack, place_hand. Internal shape uses index-based stack
   refs.

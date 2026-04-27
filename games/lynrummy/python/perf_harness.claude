@@ -35,4 +35,4 @@ time entries for the worst case.
 
 - `agent_game.py` `--capture` flag — the input source.
 - `agent_prelude.find_play` — the function under test.
-- `bfs_solver.solve_state_with_descs` — the inner BFS.
+- `bfs.solve_state_with_descs` — the inner BFS.

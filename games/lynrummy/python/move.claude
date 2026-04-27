@@ -13,8 +13,6 @@ small phrase helpers. Move descs are dataclasses
 
 - **Mirrors:** `games/lynrummy/elm/src/Game/Agent/Move.elm`
   (the `describe` function family).
-- **Origin:** lifted from `bfs_solver.py` 2026-04-26 as the
-  module split landed.
 
 ## What it owns
 
@@ -39,21 +37,6 @@ small phrase helpers. Move descs are dataclasses
 - `group_kind_phrase`, `partial_kind_phrase`,
   `run_kind_phrase` — natural-language renderers for
   group + partial + run kinds. Used by `hint`.
-
-## Migration approach (2026-04-26)
-
-Going all-in: dataclasses replace dicts everywhere. No
-backward-compat `__getitem__` shim — every read site
-converts to attribute access (`desc.foo`) and every
-dispatch becomes an `isinstance` check (or `match` over
-the variant types). The transforms are regex-driven via
-`tools/py_regex_rename.py` so the migration is repeatable
-and can be reapplied if the desc shapes evolve.
-
-Touch radius: ~133 sites across move.py + enumerator.py +
-verbs.py + agent_game.py + analyze_focus_block.py + tests.
-Driven by the regex tool; verified per pass against the
-regression suite.
 
 ## Pointers
 

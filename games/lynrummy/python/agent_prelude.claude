@@ -47,18 +47,18 @@ Each card on the board means more possibilities.")
 
 `_PROJECTION_MAX_STATES = 5000` (was 200000 originally).
 After the doomed-third + state-level doomed-growing filters
-landed in `bfs_solver`, the BFS state space is dramatically
-smaller. Corpus 21/21 at budget 2000; 5000 gives 1.5×
-safety margin and matches 200000 wall. Anything above is
-wasted budget. RUNAWAY signals fire only on genuine
-unbounded searches.
+landed in the BFS planner, the BFS state space is
+dramatically smaller. Corpus 21/21 at budget 2000; 5000
+gives 1.5× safety margin and matches 200000 wall. Anything
+above is wasted budget. RUNAWAY signals fire only on
+genuine unbounded searches.
 
 To revisit: `budget_sweep.py` against a fresh capture.
 
 ## Pointers
 
-- BFS engine: `bfs_solver.solve` / `solve_state` /
-  `solve_state_with_descs` (descs variant returns
+- BFS engine: `bfs.solve` / `bfs.solve_state` /
+  `bfs.solve_state_with_descs` (descs variant returns
   `[(line, desc), ...]` so the verb translator can act on
   each move).
 - Tests: `test_agent_prelude.py`.

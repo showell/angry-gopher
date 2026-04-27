@@ -1,8 +1,0 @@
-# Iteration 4b: catch the `t = desc.type ... if t == "X":`
-# pattern in verbs.py + analyze_focus_block.py.
-
-re: \bt == "extract_absorb" >>> isinstance(desc, ExtractAbsorbDesc)
-re: \bt == "free_pull" >>> isinstance(desc, FreePullDesc)
-re: \bt == "push" >>> isinstance(desc, PushDesc)
-re: \bt == "splice" >>> isinstance(desc, SpliceDesc)
-re: \bt == "shift" >>> isinstance(desc, ShiftDesc)

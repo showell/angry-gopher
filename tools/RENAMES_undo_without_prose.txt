@@ -1,7 +1,0 @@
-# The `without -> without_at` rename clobbered the English
-# preposition "without" in 18+ comment / docstring sites. Revert
-# the prose-damaged matches by walking back any `without_at`
-# that ISN'T immediately followed by `(`. Function call sites
-# (e.g., `without_at(stacks, idx)`) are untouched.
-
-re: without_at(?!\() >>> without

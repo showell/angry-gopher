@@ -11,8 +11,6 @@ respecting that cap.
 ## Status
 
 - **Mirrors:** `games/lynrummy/elm/src/Game/Agent/Bfs.elm`.
-- **Origin:** lifted from `bfs_solver.py` 2026-04-26 as the
-  module split landed.
 
 ## Public API
 

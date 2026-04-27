@@ -3,17 +3,17 @@ just_use bfs_play.py
 # label: EARLY
 # role: replay a BFS plan on the actual board (UI watch mode)
 
-Loads a corpus puzzle, runs `bfs_solver.solve` to get the
-plan + per-step descs, spins up a fresh agent puzzle session
-against the same initial state, and walks the plan one
-primitive at a time so a human can watch the board "solve
-itself" in the browser.
+Loads a corpus puzzle, runs `bfs.solve_state_with_descs`
+to get the plan + per-step descs, spins up a fresh agent
+puzzle session against the same initial state, and walks
+the plan one primitive at a time so a human can watch the
+board "solve itself" in the browser.
 
 Pipeline (intentionally thin — each layer lives in its own
 library):
-  1. **VERBs**: `bfs_solver._bfs_with_descs` (mirror of
-     `solve`) emits `(line, desc)` pairs.
-  2. **VERB → PRIM**: `verbs.step_to_primitives(desc, local)`
+  1. **VERBs**: `bfs.solve_state_with_descs` emits
+     `(line, desc)` pairs.
+  2. **VERB → PRIM**: `verbs.move_to_primitives(desc, local)`
      decomposes each move.
   3. **PRIM → GEST**: `primitives.send_one(client, sid, prim,
      local)` synthesizes the drag path + POSTs.
@@ -30,4 +30,5 @@ board) lines up.
 
 - `verbs.claude` — VERB → PRIM library.
 - `primitives.claude` — PRIM → GEST library.
-- `bfs_solver.claude` — VERB producer.
+- `bfs.claude` + `enumerator.claude` + `move.claude` —
+  VERB producers.

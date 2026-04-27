@@ -9,4 +9,4 @@ if every state where A fires has some B≠A also firing —
 B could substitute for A.
 
 Diagnostic for the older `strategy.py` trick-engine; not
-load-bearing for `bfs_solver`.
+load-bearing for the BFS planner.

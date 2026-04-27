@@ -2,10 +2,8 @@
 enumerator.py — BFS move generator + focus rule + doomed-
 third filter + extractable index.
 
-The Python equivalent of `Game.Agent.Enumerator.elm`.
-
-Lifted from `bfs_solver.py` 2026-04-26 as the module split
-landed. See `enumerator.claude` for the full overview.
+The Python equivalent of `Game.Agent.Enumerator.elm`. See
+`enumerator.claude` for the full overview.
 """
 
 from buckets import Buckets, FocusedState

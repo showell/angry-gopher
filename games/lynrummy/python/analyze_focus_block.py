@@ -70,7 +70,7 @@ def _solve(initial4, focus_on):
     """Run solve_state_with_descs with focus_on toggled. Returns
     [(line, desc), ...] or None. Flips the flag on the
     `enumerator` module directly — that's where the BFS engine
-    reads it; the `bfs_solver` re-export is read-only."""
+    reads it."""
     enumerator.FOCUS_ENABLED = focus_on
     try:
         return bfs.solve_state_with_descs(

@@ -17,7 +17,7 @@ Reports per-projection stats + sample.
 Result on the slowest captured case (2026-04-25): 74% of
 states in the worst projection had a doomed growing
 partial. Drove the state-level doomed-growing filter that
-landed in `bfs_solver.enumerate_moves`.
+landed in `enumerator.enumerate_moves`.
 
 Use case: validating that the state-level filter still
 catches what it should, OR investigating a new
@@ -31,7 +31,7 @@ python3 mine_doomed_growing.py /tmp/perf_snapshots.jsonl
 
 ## Pointers
 
-- `bfs_solver._has_doomed_third` + state-level filter at
+- `enumerator.has_doomed_third` + state-level filter at
   the top of `enumerate_moves` — what this tool helped
   validate.
 - `test_bfs_enumerate.py::test_doomed_growing_partial_is_reachable`

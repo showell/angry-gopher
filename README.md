@@ -54,9 +54,11 @@ Strategy lives in the clients, never in Go. Go owns only
 wire + referee. The Python side currently houses two
 strategic engines:
 
-- `games/lynrummy/python/bfs_solver.py` — the four-bucket BFS
-  planner. Strategic brain. Milestone 2026-04-25; focus
-  rule + SPLIT_OUT verb landed 2026-04-26.
+- `games/lynrummy/python/bfs.py` (plus `enumerator.py`,
+  `move.py`, `buckets.py`, `cards.py`) — the four-bucket
+  BFS planner. Strategic brain. Milestone 2026-04-25;
+  focus rule + SPLIT_OUT verb landed 2026-04-26; module
+  split landed 2026-04-26 afternoon.
 - `games/lynrummy/python/strategy.py` — older trick
   recognizers + hint priority (legacy, retiring).
 
@@ -83,8 +85,8 @@ The project's main feature. Three roles inside Gopher:
   protocol/geometry/semantics/inventory checks. Stateless.
 - **Strategy layer** (client-side) — Python-side current
   brain is the four-bucket BFS planner
-  (`games/lynrummy/python/bfs_solver.py`). Elm has a
-  partial port at `games/lynrummy/elm/src/Game/Agent/`
+  (`games/lynrummy/python/{bfs,enumerator,move,buckets,cards}.py`).
+  Elm has a partial port at `games/lynrummy/elm/src/Game/Agent/`
   with known drift on the Python optimizations side. The
   older seven-trick recognizer engine
   (`games/lynrummy/python/strategy.py`,

@@ -10,8 +10,6 @@ operations (`state_sig`, `trouble_count`, `is_victory`).
 ## Status
 
 - **Mirrors:** `games/lynrummy/elm/src/Game/Agent/Buckets.elm`.
-- **Origin:** lifted from `bfs_solver.py` 2026-04-26 as the
-  module split landed.
 - **State shape:** the agent state is a 4-tuple `(helper,
   trouble, growing, complete)` where each bucket is a
   `list[Stack]`. Lists stay lists per Steve's

@@ -12,8 +12,6 @@ the focus rule + lineage tracking.
 ## Status
 
 - **Mirrors:** `games/lynrummy/elm/src/Game/Agent/Enumerator.elm`.
-- **Origin:** lifted from `bfs_solver.py` 2026-04-26 as the
-  module split landed.
 
 ## Move types
 

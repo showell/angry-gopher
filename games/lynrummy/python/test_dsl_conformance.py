@@ -141,7 +141,7 @@ def _run_hint_invariant(sc):
 
 def _bucket_to_tuples(stacks):
     """Convert a JSON 4-bucket section (list of stacks with
-    board_cards) into bfs_solver's tuple-of-tuples shape."""
+    board_cards) into the BFS solver's tuple-of-tuples shape."""
     return [
         [(bc["card"]["value"], bc["card"]["suit"],
           bc["card"]["origin_deck"])

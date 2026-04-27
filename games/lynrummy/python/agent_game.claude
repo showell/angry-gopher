@@ -9,8 +9,8 @@ shape (fetch state → choose play → send primitives → repeat
 → complete_turn) but plays through the new pipeline:
 
   agent_prelude.find_play     ← hand-aware outer loop
-  bfs_solver.solve_state       ← BFS planner (via prelude)
-  verbs.step_to_primitives    ← VERB → PRIMITIVE
+  bfs.solve_state              ← BFS planner (via prelude)
+  verbs.move_to_primitives    ← VERB → PRIMITIVE
   primitives.send_one          ← PRIMITIVE → GESTURE → wire
 
 `auto_player.py` was wired to the legacy trick engine
