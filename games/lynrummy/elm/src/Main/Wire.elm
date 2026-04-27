@@ -1,8 +1,10 @@
 module Main.Wire exposing
     ( fetchActionLog
     , fetchNewSession
+    , initialStateDecoder
     , sendAction
     , sendCompleteTurn
+    , sendPuzzleAction
     )
 
 {-| HTTP surface between the Elm client and the Gopher server.
@@ -101,6 +103,40 @@ sendAction sessionId action maybeGesture =
         }
 
 
+{-| Lab-puzzle write path. Goes to /gopher/board-lab/actions
+with `?session=<id>&puzzle=<name>`; the server appends to
+`lynrummy_elm_puzzle_actions`. Same envelope shape as
+`sendAction`. Same fire-and-forget contract.
+
+Callers dispatch on `model.puzzleName`:
+
+  - `Just name` → `sendPuzzleAction sid name action gesture`
+  - `Nothing` → `sendAction sid action gesture`
+
+The split exists because the two activity kinds (full-game vs.
+puzzle attempts on a shared page-load) need different
+disambiguators on the action row, and the schema split that
+follows from "no nullable kind-discriminators" lands as two
+endpoints.
+-}
+sendPuzzleAction :
+    Int
+    -> String
+    -> WireAction
+    -> Maybe { path : List GesturePoint, frame : PathFrame }
+    -> Cmd Msg
+sendPuzzleAction sessionId puzzleName action maybeGesture =
+    Http.post
+        { url =
+            "/gopher/board-lab/actions?session="
+                ++ String.fromInt sessionId
+                ++ "&puzzle="
+                ++ puzzleName
+        , body = Http.jsonBody (encodeEnvelope action maybeGesture)
+        , expect = Http.expectWhatever ActionSent
+        }
+
+
 {-| CompleteTurn needs the server's referee verdict (dirty-board
 rejection) in the response, unlike fire-and-forget actions. A
 200 with `turn_result:"success*"` is a committed turn; a 400
@@ -191,12 +227,15 @@ handDecoder =
         |> Decode.map (\cards -> { handCards = cards })
 
 
-{-| The game-state record as the server ships it in
-`initial_state` (inside the /actions bundle). Used by
-`actionLogDecoder` to hydrate `ActionLogBundle.initialState`.
+{-| The game-state record as the server ships it. Same shape
+whether nested inside an /actions bundle (full-game session
+resume) or living alone in the lab catalog payload (lab puzzle
+panels bootstrap from this directly). Exposed so the lab can
+decode the initial state it already has in hand without a
+round-trip.
 -}
-innerStateDecoder : Decoder RemoteState
-innerStateDecoder =
+initialStateDecoder : Decoder RemoteState
+initialStateDecoder =
     Decode.map8 RemoteState
         (Decode.field "board" (Decode.list CardStack.cardStackDecoder))
         (Decode.field "hands" (Decode.list handDecoder))
@@ -216,7 +255,7 @@ innerStateDecoder =
 actionLogDecoder : Decoder ActionLogBundle
 actionLogDecoder =
     Decode.map2 ActionLogBundle
-        (Decode.field "initial_state" innerStateDecoder)
+        (Decode.field "initial_state" initialStateDecoder)
         (Decode.field "actions" (Decode.list actionLogEntryDecoder))
 
 

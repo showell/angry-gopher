@@ -81,6 +81,16 @@ type alias Model =
     -- UI-layer fields.
     , drag : DragState
     , sessionId : Maybe Int
+
+    -- When this Play instance is hosting a lab puzzle, names
+    -- which puzzle. Used by `Main.Wire.sendAction` to dispatch
+    -- to the lab actions endpoint (which writes to
+    -- `lynrummy_elm_puzzle_actions`) instead of the full-game
+    -- endpoint. Nothing for full-game sessions. The wire layer
+    -- treats (sessionId=Just, puzzleName=Just) as "puzzle
+    -- write" and (sessionId=Just, puzzleName=Nothing) as
+    -- "full-game write."
+    , puzzleName : Maybe String
     , status : StatusMessage
     , score : Int
     , hintedCards : List Card
@@ -461,6 +471,7 @@ baseModel =
     -- UI-layer fields.
     , drag = NotDragging
     , sessionId = Nothing
+    , puzzleName = Nothing
     , status = { text = "You may begin moving.", kind = Inform }
     , score = Score.forStacks Game.Dealer.initialBoard
     , hintedCards = []

@@ -165,6 +165,20 @@ extractAbsorbPrims board d =
             if isInteriorSetPeel d then
                 interiorSetReassemble d postIsolate
 
+            else if isEndSetSteal d then
+                -- Steal end of length-3 SET leaves a same-value
+                -- pair as remnant ([AD AH] when stealing AC
+                -- from [AC AD AH]). The BFS plan reasons about
+                -- the remnant as TWO singletons (subsequent
+                -- moves push them onto helpers individually);
+                -- physical reality leaves them as one pair.
+                -- Without dismantling, those subsequent pushes
+                -- can't find their content-keyed sources and
+                -- emit empty primitives — runtime stalls.
+                -- Mirrors python/verbs.py's `verb=="steal"
+                -- and kind=="set"` two-split pattern.
+                dismantleSetRemnant d postIsolate
+
             else
                 []
 
@@ -185,6 +199,45 @@ extractAbsorbPrims board d =
                     []
     in
     isolatePrims ++ followUp ++ absorbStep
+
+
+{-| End-Steal of a length-3 Set: source is all-same-value,
+verb is Steal, ext is at index 0 or 2. -}
+isEndSetSteal : ExtractAbsorbDesc -> Bool
+isEndSetSteal d =
+    let
+        ci =
+            indexOf d.extCard d.source
+
+        n =
+            List.length d.source
+    in
+    d.verb == Steal && allSameValue d.source && n == 3 && (ci == 0 || ci == n - 1)
+
+
+{-| The remnant of a length-3 set after end-steal is a
+same-value pair. Emit one Split that breaks it into two
+singletons so subsequent BFS-planned moves (push the
+individual aces, etc.) can find their content-keyed sources.
+-}
+dismantleSetRemnant :
+    ExtractAbsorbDesc
+    -> List CardStack
+    -> List WireAction
+dismantleSetRemnant d postIsolate =
+    let
+        ci =
+            indexOf d.extCard d.source
+
+        remnantCards =
+            List.take ci d.source ++ List.drop (ci + 1) d.source
+    in
+    case findByCards remnantCards postIsolate of
+        Just stack ->
+            [ Split { stack = stack, cardIndex = 0 } ]
+
+        Nothing ->
+            []
 
 
 freePullPrims : List CardStack -> FreePullDesc -> List WireAction

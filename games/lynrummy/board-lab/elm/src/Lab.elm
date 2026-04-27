@@ -1,27 +1,23 @@
 module Lab exposing (main)
 
 {-| BOARD_LAB — a single-page gallery of curated LynRummy
-puzzles. Each panel auto-creates a puzzle session on page
-load and embeds a `Main.Play` instance in place. You play
-within the gallery — drag a card, the gesture goes through
-the normal telemetry pipeline into SQLite, scroll down to
-the next puzzle.
+puzzles. The catalog endpoint hands us all puzzles + a single
+page-load session_id at boot. Panels instantiate Play
+instances synchronously from the inline initial state —
+zero per-panel HTTP. You play within the gallery; drags and
+agent moves write to /gopher/board-lab/actions, which appends
+to lynrummy_elm_puzzle_actions keyed by (session_id,
+puzzle_name).
 
-Per-panel gameId (the puzzle session's id stringified)
-disambiguates DOM ids so multiple Play instances coexist on
-one page. Board DOM ids are per-gameId via
-`State.boardDomIdFor`; hand-card DOM ids are shared across
-instances (collision is harmless for live play since hand
-cards are identified by mouse position, not DOM lookup —
-only replay inside a single panel measures hand-card DOM
-rects).
+Per-panel gameId is the puzzle name, which disambiguates DOM
+ids so multiple Play instances coexist on one page (board DOM
+ids are per-gameId via `State.boardDomIdFor`).
 
 Always within-a-turn: each puzzle's lab-level state is just
-`{ board, hand }` — no deck, no dealer, no turn cycling.
-Puzzle catalog lives here as Elm literals; a follow-up will
-pull from a Python-canonical catalog so agent and human
-solutions to the same named puzzle can be correlated via
-SQLite.
+`{ board }` — no deck, no dealer, no turn cycling, no hand
+cards (puzzles are board-only). Page reload terminates the
+session by design; sessions and action rows persist for
+analysis but the in-memory attempt is single-use.
 
 -}
 
@@ -43,14 +39,25 @@ import Main.State as MainState
 
 
 {-| A puzzle as received from the catalog endpoint. The
-`initialState` is opaque JSON (we forward it verbatim to
-`new-puzzle-session` rather than decode-and-re-encode — keeps
-Python canonical and Elm out of the state-shape business).
+`initialState` is opaque JSON; we forward it verbatim to
+Play.init, which decodes once at panel boot.
 -}
 type alias Puzzle =
     { name : String
     , title : String
     , initialState : Encode.Value
+    }
+
+
+{-| The full catalog response the server sends on a page-load
+GET: a fresh session_id allocated up front + the array of
+puzzles. The session id is the same across every panel's wire
+write; puzzle_name disambiguates which puzzle each action
+belongs to.
+-}
+type alias Catalog =
+    { sessionId : Int
+    , puzzles : List Puzzle
     }
 
 
@@ -63,6 +70,7 @@ type alias Model =
     , started : Bool
     , finished : Bool
     , catalog : CatalogState
+    , sessionId : Maybe Int
     , panels : Dict String Panel
     , annotations : Dict String AnnotationState
     }
@@ -96,13 +104,13 @@ type CatalogState
     | CatalogFailed String
 
 
-{-| Per-puzzle panel state. Each puzzle's session is created on
-page load (Creating) and swaps to Playing as soon as the
-server returns the session id. Failed is the http-error case.
+{-| Per-puzzle panel state. With the catalog carrying initial
+state inline, panels go straight to Playing on catalog landing
+(no Creating limbo). Failed is the decode-error case for
+malformed catalog entries.
 -}
 type Panel
-    = Creating
-    | Playing MainState.Model
+    = Playing MainState.Model
     | Failed String
 
 
@@ -114,8 +122,7 @@ type Msg
     = UpdateName String
     | SubmitName
     | ClickFinish
-    | CatalogFetched (Result Http.Error (List Puzzle))
-    | PuzzleSessionCreated String (Result Http.Error Int)
+    | CatalogFetched (Result Http.Error Catalog)
     | PlayMsg String MainMsg.Msg
     | UpdateAnnotation String String
     | SendAnnotation String
@@ -126,9 +133,11 @@ type Msg
 -- CATALOG DECODE
 
 
-catalogDecoder : Decoder (List Puzzle)
+catalogDecoder : Decoder Catalog
 catalogDecoder =
-    Decode.field "puzzles" (Decode.list puzzleDecoder)
+    Decode.map2 Catalog
+        (Decode.field "session_id" Decode.int)
+        (Decode.field "puzzles" (Decode.list puzzleDecoder))
 
 
 puzzleDecoder : Decoder Puzzle
@@ -159,6 +168,7 @@ init _ =
       , started = False
       , finished = False
       , catalog = CatalogLoading
+      , sessionId = Nothing
       , panels = Dict.empty
       , annotations = Dict.empty
       }
@@ -197,37 +207,38 @@ update msg model =
         ClickFinish ->
             ( { model | finished = True }, Cmd.none )
 
-        CatalogFetched (Ok puzzles) ->
+        CatalogFetched (Ok catalog) ->
             let
-                initialPanels =
-                    puzzles
-                        |> List.map (\p -> ( p.name, Creating ))
-                        |> Dict.fromList
+                ( panels, panelCmds ) =
+                    catalog.puzzles
+                        |> List.foldr
+                            (\puzzle ( accPanels, accCmds ) ->
+                                let
+                                    ( playModel, playCmd ) =
+                                        Play.init
+                                            (Play.PuzzleSession
+                                                { sessionId = catalog.sessionId
+                                                , puzzleName = puzzle.name
+                                                , initialState = puzzle.initialState
+                                                }
+                                            )
+                                in
+                                ( Dict.insert puzzle.name (Playing playModel) accPanels
+                                , Cmd.map (PlayMsg puzzle.name) playCmd :: accCmds
+                                )
+                            )
+                            ( Dict.empty, [] )
             in
-            ( { model | catalog = CatalogLoaded puzzles, panels = initialPanels }
-            , Cmd.batch (List.map (createPuzzleSession model.userName) puzzles)
+            ( { model
+                | catalog = CatalogLoaded catalog.puzzles
+                , sessionId = Just catalog.sessionId
+                , panels = panels
+              }
+            , Cmd.batch panelCmds
             )
 
         CatalogFetched (Err err) ->
             ( { model | catalog = CatalogFailed (httpErrorToString err) }
-            , Cmd.none
-            )
-
-        PuzzleSessionCreated name (Ok sessionId) ->
-            let
-                ( playModel, playCmd ) =
-                    Play.init (Play.PuzzleSession sessionId)
-            in
-            ( { model
-                | panels = Dict.insert name (Playing playModel) model.panels
-              }
-            , Cmd.map (PlayMsg name) playCmd
-            )
-
-        PuzzleSessionCreated name (Err err) ->
-            ( { model
-                | panels = Dict.insert name (Failed (httpErrorToString err)) model.panels
-              }
             , Cmd.none
             )
 
@@ -268,24 +279,17 @@ update msg model =
 
                 trimmed =
                     String.trim current.text
-
-                maybeSid =
-                    case Dict.get name model.panels of
-                        Just (Playing p) ->
-                            p.sessionId
-
-                        _ ->
-                            Nothing
             in
-            case ( trimmed, maybeSid ) of
+            case ( trimmed, model.sessionId ) of
                 ( "", _ ) ->
                     ( model, Cmd.none )
 
                 ( _, Nothing ) ->
-                    -- No session yet — can't anchor the reply.
-                    -- Shouldn't happen in practice (the textarea
-                    -- is only reachable once a panel is Playing),
-                    -- but guard rather than ship a 0 session_id.
+                    -- No session yet — catalog hasn't landed.
+                    -- The textarea is only reachable after a
+                    -- panel is Playing, so this is structurally
+                    -- impossible; bail rather than ship a 0
+                    -- session_id.
                     ( model, Cmd.none )
 
                 ( _, Just sid ) ->
@@ -371,41 +375,6 @@ fetchCatalog =
         { url = "/gopher/board-lab/puzzles"
         , expect = Http.expectJson CatalogFetched catalogDecoder
         }
-
-
-createPuzzleSession : String -> Puzzle -> Cmd Msg
-createPuzzleSession userName puzzle =
-    Http.post
-        { url = "/gopher/lynrummy-elm/new-puzzle-session"
-        , body = Http.jsonBody (encodePuzzleRequest userName puzzle)
-        , expect =
-            Http.expectJson (PuzzleSessionCreated puzzle.name) sessionIdDecoder
-        }
-
-
-encodePuzzleRequest : String -> Puzzle -> Encode.Value
-encodePuzzleRequest userName puzzle =
-    let
-        trimmed =
-            String.trim userName
-
-        label =
-            if trimmed == "" then
-                "board-lab: " ++ puzzle.title
-
-            else
-                "board-lab: " ++ puzzle.title ++ " [by " ++ trimmed ++ "]"
-    in
-    Encode.object
-        [ ( "label", Encode.string label )
-        , ( "puzzle_name", Encode.string puzzle.name )
-        , ( "initial_state", puzzle.initialState )
-        ]
-
-
-sessionIdDecoder : Decode.Decoder Int
-sessionIdDecoder =
-    Decode.field "session_id" Decode.int
 
 
 sendAnnotation : Int -> String -> String -> String -> Cmd Msg
@@ -573,7 +542,7 @@ viewPuzzle model puzzle =
     let
         panel =
             Dict.get puzzle.name model.panels
-                |> Maybe.withDefault Creating
+                |> Maybe.withDefault (Failed "panel missing — race or bug")
     in
     div
         [ style "border" "1px solid #ccc"
@@ -666,14 +635,6 @@ viewPanelBody puzzle panel =
             div
                 [ style "margin-top" "12px" ]
                 [ Html.map (PlayMsg puzzle.name) (Play.view p) ]
-
-        Creating ->
-            div
-                [ style "margin-top" "12px"
-                , style "color" "#666"
-                , style "font-style" "italic"
-                ]
-                [ text "Loading puzzle…" ]
 
         Failed reason ->
             div

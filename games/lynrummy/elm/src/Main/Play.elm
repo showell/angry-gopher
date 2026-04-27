@@ -32,6 +32,7 @@ DOM ids for multi-embedding.
 import Browser.Dom
 import Browser.Events
 import Json.Decode as Decode exposing (Decoder)
+import Json.Encode as Encode
 import Game.Agent.Bfs as Bfs
 import Game.Agent.GeometryPlan as AgentGeometry
 import Game.Agent.Move as AgentMove exposing (Move)
@@ -94,7 +95,17 @@ same.
 type Config
     = NewSession
     | ResumeSession Int
-    | PuzzleSession Int
+      -- BOARD_LAB puzzle. Carries the initial state inline (the
+      -- catalog already has it), so init can bootstrap
+      -- synchronously without an HTTP round-trip. No session id
+      -- at boot — sessions for puzzles are born from intent to
+      -- persist (first wire-emitting action), not from page
+      -- render. See `project_sessions_born_from_intent.md`.
+    | PuzzleSession
+        { sessionId : Int
+        , puzzleName : String
+        , initialState : Encode.Value
+        }
 
 
 
@@ -139,18 +150,33 @@ init config =
             , fetchActionLog sid
             )
 
-        PuzzleSession sid ->
-            ( { baseModel
-                | sessionId = Just sid
-                , gameId = String.fromInt sid
-                , hideTurnControls = True
-                , status =
-                    { text = "Puzzle " ++ String.fromInt sid ++ " loaded."
-                    , kind = Inform
+        PuzzleSession { sessionId, puzzleName, initialState } ->
+            let
+                framed =
+                    { baseModel
+                        | sessionId = Just sessionId
+                        , puzzleName = Just puzzleName
+                        , gameId = puzzleName
+                        , hideTurnControls = True
                     }
-              }
-            , fetchActionLog sid
-            )
+            in
+            case Decode.decodeValue Wire.initialStateDecoder initialState of
+                Ok decoded ->
+                    ( bootstrapPuzzle decoded puzzleName framed, Cmd.none )
+
+                Err err ->
+                    ( { framed
+                        | status =
+                            { text =
+                                "Puzzle "
+                                    ++ puzzleName
+                                    ++ " failed to decode: "
+                                    ++ Decode.errorToString err
+                            , kind = Scold
+                            }
+                      }
+                    , Cmd.none
+                    )
 
 
 
@@ -172,8 +198,23 @@ update msg model =
         MouseUp pos tMs ->
             withNoOutput (handleMouseUp pos tMs model)
 
-        ActionSent _ ->
+        ActionSent (Ok ()) ->
             ( model, Cmd.none, NoOutput )
+
+        ActionSent (Err err) ->
+            let
+                _ =
+                    Debug.log "ActionSent err" err
+            in
+            ( { model
+                | status =
+                    { text = "Server rejected action — check console; state may be out of sync."
+                    , kind = Scold
+                    }
+              }
+            , Cmd.none
+            , NoOutput
+            )
 
         SessionReceived (Ok sid) ->
             -- Session created server-side. Fetch the bundle for
@@ -184,18 +225,41 @@ update msg model =
             , SessionChanged sid
             )
 
-        SessionReceived (Err _) ->
-            ( model, Cmd.none, NoOutput )
+        SessionReceived (Err err) ->
+            let
+                _ =
+                    Debug.log "SessionReceived err" err
+            in
+            ( { model
+                | status =
+                    { text = "Could not allocate a session — check console."
+                    , kind = Scold
+                    }
+              }
+            , Cmd.none
+            , NoOutput
+            )
 
         ClickCompleteTurn ->
             withNoOutput (clickCompleteTurn model)
 
-        CompleteTurnResponded result ->
+        CompleteTurnResponded (Ok _) ->
+            ( model, Cmd.none, NoOutput )
+
+        CompleteTurnResponded (Err err) ->
             let
                 _ =
-                    Debug.log "[CompleteTurn server response]" result
+                    Debug.log "CompleteTurnResponded err" err
             in
-            ( model, Cmd.none, NoOutput )
+            ( { model
+                | status =
+                    { text = "Server rejected complete-turn — check console."
+                    , kind = Scold
+                    }
+              }
+            , Cmd.none
+            , NoOutput
+            )
 
         PopupOk ->
             ( { model | popup = Nothing }, Cmd.none, NoOutput )
@@ -215,8 +279,20 @@ update msg model =
         ActionLogFetched (Ok bundle) ->
             ( bootstrapFromBundle bundle model, Cmd.none, NoOutput )
 
-        ActionLogFetched (Err _) ->
-            ( model, Cmd.none, NoOutput )
+        ActionLogFetched (Err err) ->
+            let
+                _ =
+                    Debug.log "ActionLogFetched err" err
+            in
+            ( { model
+                | status =
+                    { text = "Could not load action log — check console."
+                    , kind = Scold
+                    }
+              }
+            , Cmd.none
+            , NoOutput
+            )
 
         BoardRectReceived result ->
             withNoOutput (boardRectReceived result model)
@@ -498,7 +574,14 @@ clickAgentPlay model =
     -- replay or animation — wait for the current step to land
     -- before the user can advance.
     if model.replay /= Nothing then
-        ( model, Cmd.none )
+        ( { model
+            | status =
+                { text = "Animation in progress — wait for it to finish before clicking again."
+                , kind = Scold
+                }
+          }
+        , Cmd.none
+        )
 
     else
         case nextAgentMove model of
@@ -568,37 +651,73 @@ runAgentMove move remaining model =
 
         newEntries =
             List.map agentLogEntry primitives
-
-        appended =
-            { model
-                | actionLog = model.actionLog ++ newEntries
-                , agentProgram = Just remaining
-                , status =
-                    { text = "Agent: " ++ AgentMove.describe move
-                    , kind = Inform
-                    }
-                , replay = Just { pending = newEntries, paused = False }
-                , replayAnim = State.NotAnimating
-                , drag = NotDragging
-            }
-
-        wireCmds =
-            case model.sessionId of
-                Just sid ->
-                    List.map (\p -> Wire.sendAction sid p Nothing) primitives
-
-                Nothing ->
-                    []
-
-        boardRectCmd =
-            -- Replay synthesizes paths in board frame; the live
-            -- board rect is needed downstream by translation
-            -- helpers. Refresh it now so it's fresh for the
-            -- about-to-run animation.
-            Task.attempt BoardRectReceived
-                (Browser.Dom.getElement (State.boardDomIdFor model.gameId))
     in
-    ( appended, Cmd.batch (boardRectCmd :: wireCmds) )
+    if List.isEmpty primitives then
+        -- Verb-to-primitive translation produced nothing. Most
+        -- common cause: the BFS plan and the live board have
+        -- drifted (a stack the move expected to find by content
+        -- isn't there in that exact shape). Make the failure
+        -- visible: status bar + console log of the failed move.
+        -- Don't kick Replay — there's nothing to animate. Don't
+        -- pop further into the program; the user needs to see
+        -- this and decide.
+        let
+            described =
+                AgentMove.describe move
+
+            _ =
+                Debug.log "agent: move emitted no primitives" described
+        in
+        ( { model
+            | status =
+                { text =
+                    "Agent stalled: couldn't emit primitives for "
+                        ++ described
+                        ++ " — see console."
+                , kind = Scold
+                }
+            , agentProgram = Nothing
+          }
+        , Cmd.none
+        )
+
+    else
+        let
+            appended =
+                { model
+                    | actionLog = model.actionLog ++ newEntries
+                    , agentProgram = Just remaining
+                    , status =
+                        { text = "Agent: " ++ AgentMove.describe move
+                        , kind = Inform
+                        }
+                    , replay = Just { pending = newEntries, paused = False }
+                    , replayAnim = State.NotAnimating
+                    , drag = NotDragging
+                }
+
+            wireCmds =
+                case model.sessionId of
+                    Just sid ->
+                        case model.puzzleName of
+                            Just name ->
+                                List.map (\p -> Wire.sendPuzzleAction sid name p Nothing) primitives
+
+                            Nothing ->
+                                List.map (\p -> Wire.sendAction sid p Nothing) primitives
+
+                    Nothing ->
+                        []
+
+            boardRectCmd =
+                -- Replay synthesizes paths in board frame; the
+                -- live board rect is needed downstream by
+                -- translation helpers. Refresh it now so it's
+                -- fresh for the about-to-run animation.
+                Task.attempt BoardRectReceived
+                    (Browser.Dom.getElement (State.boardDomIdFor model.gameId))
+        in
+        ( appended, Cmd.batch (boardRectCmd :: wireCmds) )
 
 
 agentLogEntry : WireAction -> State.ActionLogEntry
@@ -671,26 +790,48 @@ view =
 bootstrapFromBundle : ActionLogBundle -> Model -> Model
 bootstrapFromBundle bundle model =
     let
-        initial =
-            bundle.initialState
-
         atInitial =
-            { model
-                | board = initial.board
-                , hands = initial.hands
-                , scores = initial.scores
-                , activePlayerIndex = initial.activePlayerIndex
-                , turnIndex = initial.turnIndex
-                , deck = initial.deck
-                , cardsPlayedThisTurn = initial.cardsPlayedThisTurn
-                , victorAwarded = initial.victorAwarded
-                , turnStartBoardScore = initial.turnStartBoardScore
-                , score = Score.forStacks initial.board
-                , actionLog = bundle.actions
-                , replayBaseline = Just initial
-            }
+            modelAtInitial bundle.initialState
+                { model | actionLog = bundle.actions }
     in
     List.foldl
         (\entry m -> .model (applyAction entry.action m))
         atInitial
         bundle.actions
+
+
+{-| Synchronous bootstrap for a lab puzzle. The catalog already
+delivered the initial state inline; no fetch, no actions to
+fold. Lab puzzles are session-scoped to one page-load — a
+reload terminates the attempt by design — so the in-memory
+action log is empty at boot. -}
+bootstrapPuzzle : State.RemoteState -> String -> Model -> Model
+bootstrapPuzzle initial puzzleName model =
+    modelAtInitial initial
+        { model
+            | actionLog = []
+            , status =
+                { text = "Puzzle " ++ puzzleName ++ " loaded."
+                , kind = Inform
+                }
+        }
+
+
+{-| Common shape — drop the initial-state record's fields onto
+the model and pin it as the replay baseline. Used by both
+bootstraps. -}
+modelAtInitial : State.RemoteState -> Model -> Model
+modelAtInitial initial model =
+    { model
+        | board = initial.board
+        , hands = initial.hands
+        , scores = initial.scores
+        , activePlayerIndex = initial.activePlayerIndex
+        , turnIndex = initial.turnIndex
+        , deck = initial.deck
+        , cardsPlayedThisTurn = initial.cardsPlayedThisTurn
+        , victorAwarded = initial.victorAwarded
+        , turnStartBoardScore = initial.turnStartBoardScore
+        , score = Score.forStacks initial.board
+        , replayBaseline = Just initial
+    }

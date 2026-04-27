@@ -307,9 +307,17 @@ handleMouseUp releasePoint tMs model =
                                         Maybe.map .frame maybeGesture
                                             |> Maybe.withDefault ViewportFrame
                                     }
+
+                                writeCmd =
+                                    case modelAfterAction.puzzleName of
+                                        Just name ->
+                                            Wire.sendPuzzleAction sid name action maybeGesture
+
+                                        Nothing ->
+                                            Wire.sendAction sid action maybeGesture
                             in
                             ( { modelAfterAction | actionLog = modelAfterAction.actionLog ++ [ entry ] }
-                            , Wire.sendAction sid action maybeGesture
+                            , writeCmd
                             )
 
                         _ ->

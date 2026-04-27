@@ -1,15 +1,17 @@
 // BOARD_LAB — a standalone Elm app that hosts a vertical list
 // of curated LynRummy puzzles. Always within-a-turn: no dealer,
-// no deck, no turn cycling. Each panel auto-creates a puzzle
-// session on page load and embeds a Main.Play instance via the
-// existing /gopher/lynrummy-elm/new-puzzle-session endpoint.
+// no deck, no turn cycling.
 //
-// label: SPIKE (board-lab)
+// label: EARLY (board-lab)
 //
-// Go surface here is minimal: serve the page (HTML chrome +
-// bootstrap script) and the compiled elm.js. All puzzle-session
-// creation + action persistence reuses the lynrummy-elm
-// endpoints — no new Go endpoints added for the lab.
+// Go surface: serve the page (HTML chrome + bootstrap script),
+// serve the compiled elm.js, serve the puzzle catalog JSON,
+// accept lab puzzle actions (one per primitive crossing the
+// wire), and accept reader annotations. The lab uses its own
+// /gopher/board-lab/actions endpoint — separate from the
+// full-game /gopher/lynrummy-elm/actions — so the puzzle
+// actions table can carry puzzle_name in every row without
+// nullables.
 
 package views
 
@@ -17,11 +19,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
+
+	"angry-gopher/games/lynrummy"
 )
 
 // ElmBoardLabDir — compiled elm.js location. Mirrors
@@ -39,6 +45,8 @@ func HandleBoardLab(w http.ResponseWriter, r *http.Request) {
 		boardLabJS(w)
 	case "puzzles":
 		boardLabPuzzles(w)
+	case "actions":
+		boardLabActions(w, r)
 	case "annotate":
 		boardLabAnnotate(w, r)
 	default:
@@ -80,6 +88,110 @@ func boardLabJS(w http.ResponseWriter) {
 	}
 	w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
 	w.Write(data)
+}
+
+// boardLabActions persists one wire action from the lab.
+//
+// Inputs: query params `session=<id>` and `puzzle=<name>`,
+// plus the standard envelope body `{action, gesture_metadata?}`.
+// session_id is allocated up-front by the catalog endpoint at
+// page-load (one session per page-load); puzzle_name
+// disambiguates which of the page's puzzles this action
+// belongs to.
+//
+// Writes to `lynrummy_elm_puzzle_actions`. seq is monotonic
+// per (session_id, puzzle_name) — each puzzle attempt within a
+// page-load has its own ordered sequence.
+//
+// Lab puzzles have no CompleteTurn / dealer / deck, so this
+// handler is simpler than the full-game equivalent — pure
+// append, no turn classification, no card dealing.
+func boardLabActions(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		log.Printf("board-lab action: read body err=%v", err)
+		http.Error(w, "read body: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	var env struct {
+		Action          json.RawMessage `json:"action"`
+		GestureMetadata json.RawMessage `json:"gesture_metadata,omitempty"`
+	}
+	if err := json.Unmarshal(body, &env); err != nil || len(env.Action) == 0 {
+		log.Printf("board-lab action: envelope parse err=%v body=%s", err, body)
+		http.Error(w, "expected envelope {action, gesture_metadata?}", http.StatusBadRequest)
+		return
+	}
+	action, err := lynrummy.DecodeWireAction(env.Action)
+	if err != nil {
+		log.Printf("board-lab action: decode err=%v action=%s", err, env.Action)
+		http.Error(w, "decode: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Same gesture-completeness gate as the full-game endpoint:
+	// intra-board actions must carry a path, drag or synthesized.
+	if requiresGestureMetadata(action) && !envelopeHasPath(env.GestureMetadata) {
+		kind := action.ActionKind()
+		log.Printf("board-lab action: missing gesture_metadata.path for %s", kind)
+		http.Error(w,
+			"gesture_metadata.path is required for intra-board actions ("+kind+")",
+			http.StatusBadRequest)
+		return
+	}
+
+	sessionIDStr := r.URL.Query().Get("session")
+	sessionID, err := strconv.ParseInt(sessionIDStr, 10, 64)
+	if err != nil || sessionID <= 0 {
+		log.Printf("board-lab action: bad/missing session param=%q", sessionIDStr)
+		http.Error(w, "missing or bad ?session=<id>", http.StatusBadRequest)
+		return
+	}
+	puzzleName := strings.TrimSpace(r.URL.Query().Get("puzzle"))
+	if puzzleName == "" {
+		log.Printf("board-lab action: missing ?puzzle=<name>")
+		http.Error(w, "missing ?puzzle=<name>", http.StatusBadRequest)
+		return
+	}
+
+	// Sequence number = count of prior actions for THIS puzzle in
+	// THIS session + 1. Different puzzles in the same session
+	// have independent sequences.
+	var nextSeq int64
+	if err := DB.QueryRow(
+		`SELECT COALESCE(MAX(seq), 0) + 1
+		 FROM lynrummy_elm_puzzle_actions
+		 WHERE session_id = ? AND puzzle_name = ?`,
+		sessionID, puzzleName,
+	).Scan(&nextSeq); err != nil {
+		log.Printf("board-lab action: seq lookup err=%v", err)
+		http.Error(w, "seq lookup: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	var gestureArg interface{}
+	if len(env.GestureMetadata) > 0 && string(env.GestureMetadata) != "null" {
+		gestureArg = string(env.GestureMetadata)
+	}
+	if _, err := DB.Exec(
+		`INSERT INTO lynrummy_elm_puzzle_actions
+		 (session_id, puzzle_name, seq, action_kind, action_json, gesture_metadata, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		sessionID, puzzleName, nextSeq, action.ActionKind(), string(env.Action), gestureArg, time.Now().Unix(),
+	); err != nil {
+		log.Printf("board-lab action: insert err=%v", err)
+		http.Error(w, "insert: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("board-lab action: session=%d puzzle=%s seq=%d kind=%s gesture=%d",
+		sessionID, puzzleName, nextSeq, action.ActionKind(), len(env.GestureMetadata))
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	fmt.Fprintf(w, `{"ok":true,"seq":%d}`, nextSeq)
 }
 
 // boardLabAnnotate accepts POST {session_id, puzzle_name,
@@ -127,24 +239,67 @@ func boardLabAnnotate(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(`{"ok":true}`))
 }
 
-// boardLabPuzzles serves the Python-generated puzzle catalog.
-// The JSON file is written by
-// `games/lynrummy/python/board_lab_puzzles.py --write ...`
-// as part of `ops/start`. If the file is missing (generator
-// didn't run, e.g. fresh checkout), the response is a helpful
-// 404 pointing at the command.
+// boardLabPuzzles serves the Python-generated puzzle catalog
+// alongside a freshly allocated page-load session_id.
+//
+// The catalog JSON on disk is `{"puzzles": [...]}`. We allocate
+// a new session row (one per page-load), then merge the
+// session_id into the response: `{"session_id": <id>,
+// "puzzles": [...]}`. The Elm client uses session_id for every
+// subsequent wire action; puzzle_name disambiguates which
+// puzzle within the page-load each action belongs to.
+//
+// One session per page-load is the new architecture's basic
+// unit. Empty sessions (the user opened the lab and closed
+// without playing) leave a row recording "someone visited" —
+// that's telemetry, not waste; the prod DB is nukable.
 func boardLabPuzzles(w http.ResponseWriter) {
-	// Catalog lives alongside the Elm project root, one level
-	// above `elm/` so it's not confused with elm build output.
 	path := filepath.Join(filepath.Dir(ElmBoardLabDir), "puzzles.json")
-	data, err := os.ReadFile(path)
+	catalogJSON, err := os.ReadFile(path)
 	if err != nil {
 		http.Error(w, "puzzles.json not found — run "+
-			"`python3 games/lynrummy/python/board_lab_puzzles.py "+
-			"--write games/lynrummy/board-lab/puzzles.json`",
+			"`python3 games/lynrummy/python/lab_catalog.py`",
 			http.StatusNotFound)
 		return
 	}
+
+	// Decode the puzzles array; keep them as raw JSON so we
+	// don't have to model the puzzle shape here.
+	var catalog struct {
+		Puzzles []json.RawMessage `json:"puzzles"`
+	}
+	if err := json.Unmarshal(catalogJSON, &catalog); err != nil {
+		log.Printf("board-lab puzzles: catalog decode err=%v", err)
+		http.Error(w, "catalog decode: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	now := time.Now().Unix()
+	res, err := DB.Exec(
+		`INSERT INTO lynrummy_elm_sessions (created_at, label, deck_seed) VALUES (?, ?, 0)`,
+		now, "board-lab page-load",
+	)
+	if err != nil {
+		log.Printf("board-lab puzzles: insert session err=%v", err)
+		http.Error(w, "insert session: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	sessionID, err := res.LastInsertId()
+	if err != nil {
+		log.Printf("board-lab puzzles: lastinsertid err=%v", err)
+		http.Error(w, "lastinsertid: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.Write(data)
+	resp := struct {
+		SessionID int64             `json:"session_id"`
+		Puzzles   []json.RawMessage `json:"puzzles"`
+	}{
+		SessionID: sessionID,
+		Puzzles:   catalog.Puzzles,
+	}
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
+		log.Printf("board-lab puzzles: encode err=%v", err)
+	}
 }

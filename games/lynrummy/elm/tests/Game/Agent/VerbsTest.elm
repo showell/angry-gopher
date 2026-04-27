@@ -224,4 +224,36 @@ suite =
                 in
                 actions prims
                     |> Expect.equal [ "split", "split", "merge_stack", "merge_stack" ]
+        , test "steal-from-set: ext + remnant fully dismantled into 3 singletons" <|
+            -- Regression for the puzzle-1 stall: steal AC from
+            -- [AC AD AH] used to emit only one split, leaving
+            -- [AD AH] as a pair and stalling subsequent moves
+            -- that wanted to push [AD] / [AH] independently.
+            -- Expected: split off AC, split the remnant pair,
+            -- merge AC onto target. Three primitives total.
+            \_ ->
+                let
+                    board =
+                        [ stack 100 100 [ card "AC", card "AD", card "AH" ]
+                        , stack 200 100 [ card "2D", card "3S" ]
+                        ]
+
+                    move =
+                        ExtractAbsorb
+                            { verb = Steal
+                            , source = [ card "AC", card "AD", card "AH" ]
+                            , extCard = card "AC"
+                            , targetBefore = [ card "2D", card "3S" ]
+                            , targetBucketBefore = Trouble
+                            , result = [ card "AC", card "2D", card "3S" ]
+                            , side = LeftSide
+                            , graduated = True
+                            , spawned = [ [ card "AD" ], [ card "AH" ] ]
+                            }
+
+                    prims =
+                        Verbs.moveToPrimitives board move
+                in
+                actions prims
+                    |> Expect.equal [ "split", "split", "merge_stack" ]
         ]

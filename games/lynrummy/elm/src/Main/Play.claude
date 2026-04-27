@@ -38,9 +38,12 @@ legitimately needs that access.
   id. Main app's default landing page.
 - `ResumeSession sid` — fetch action log for `sid`. Main
   app's URL-resume path.
-- `PuzzleSession sid` — same fetch as Resume, different status
-  text. BOARD_LAB calls this after creating a puzzle session
-  via the `new-puzzle-session` endpoint.
+- `PuzzleSession { sessionId, puzzleName, initialState }` —
+  synchronous bootstrap from the catalog payload. No HTTP. Lab
+  calls this for every puzzle on catalog landing; the
+  page-load session_id (allocated by the catalog endpoint at
+  GET time) is shared across every panel; puzzleName tags wire
+  writes so they land in `lynrummy_elm_puzzle_actions`.
 
 ## Output
 
