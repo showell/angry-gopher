@@ -158,6 +158,12 @@ def is_partial_ok(stack):
 
 # --- Neighborhood ---
 
+# maxsize=None: input space is bounded at 104 distinct
+# (value, suit, deck) triples, so the cache can never grow
+# beyond that. Trivial memory; full retention beats LRU
+# eviction overhead. Pure function: cached results are
+# equivalent to live results.
+@functools.lru_cache(maxsize=None)
 def neighbors(c):
     """(value, suit) shapes that could sit adjacent to `c` in
     some valid group. Deck-agnostic."""
