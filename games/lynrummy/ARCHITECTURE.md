@@ -14,6 +14,12 @@ The scope is Lyn Rummy specifically. Angry Gopher — the broader
 Go server that hosts it — only shows up as context when a
 Lyn Rummy concern crosses into it.
 
+For a snapshot of what concrete entry points exist today (Elm
+boots, server handlers, CLI tools) and how mature each one
+is, see [`ENTRY_POINTS.md`](ENTRY_POINTS.md). This document
+covers principles; that one covers the actual artifacts
+running.
+
 ## What Lyn Rummy is
 
 A two-player card game. The rules are domain-specific; they're

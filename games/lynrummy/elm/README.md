@@ -28,6 +28,12 @@ owns its own view**, and **Elm is layered around source-aware
 events** are the context that makes the layered module
 structure here make sense.
 
+For a current map of what entry points exist and how mature
+each one is, see
+[`../ENTRY_POINTS.md`](../ENTRY_POINTS.md). It covers both
+Elm boots (`Main.elm`, `Lab.elm`), server handlers, CLI
+tooling, and conformance test surfaces, with maturity notes.
+
 ## Then — read sidecars
 
 Every `.elm` file under `src/` has a sibling `.claude`
