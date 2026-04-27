@@ -6,7 +6,7 @@ Python + Elm conformance fixtures.
 Same role as `export_corpus_to_dsl.py`, but sourced from
 `lynrummy_puzzle_seeds` rows where `puzzle_name LIKE 'mined_%'`
 (i.e. the 25 board-only puzzles produced by
-`tools/mine_lab_puzzles.py`).
+`tools/mine_puzzles.py`).
 
 Each scenario asserts the BFS plan_lines match Python's
 canonical output — turning the mined catalog into a

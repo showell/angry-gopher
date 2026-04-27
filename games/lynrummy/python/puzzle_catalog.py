@@ -1,5 +1,5 @@
 """
-lab_catalog.py — write the BOARD_LAB catalog JSON the Elm
+puzzle_catalog.py — write the Puzzles catalog JSON the Elm
 gallery loads.
 
 Pulls mined puzzle seeds (rows where puzzle_name LIKE
@@ -10,11 +10,11 @@ description block any more — repeating that line in prose was
 just noise.
 
 The corpus block was removed 2026-04-26 — corpus seeds carry
-hand cards, and the lab now only surfaces board-only puzzles
-where the hand is empty.
+hand cards, and the Puzzles surface now only carries board-only
+puzzles where the hand is empty.
 
 Usage:
-    python3 games/lynrummy/python/lab_catalog.py
+    python3 games/lynrummy/python/puzzle_catalog.py
 """
 
 import argparse
@@ -24,7 +24,7 @@ import sqlite3
 import bfs
 
 DEFAULT_DB = "/home/steve/AngryGopher/prod/gopher.db"
-CATALOG_PATH = "../board-lab/puzzles.json"
+CATALOG_PATH = "../puzzles/puzzles.json"
 
 
 def _board_for_solver(state):

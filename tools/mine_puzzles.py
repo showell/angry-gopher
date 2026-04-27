@@ -1,5 +1,5 @@
 """
-mine_lab_puzzles.py — generate fresh BOARD_LAB puzzles in
+mine_puzzles.py — generate fresh Puzzles entries in
 the 3-5-line difficulty band and persist them to the Go DB.
 
 Pipeline:
@@ -12,7 +12,7 @@ Pipeline:
   4. POST each kept puzzle to /new-puzzle-session with a
      puzzle_name like `mined_<value-suit-deck>_<seq>`.
      The server inserts a row into `lynrummy_puzzle_seeds`.
-  5. Print a summary so the lab UI integration step knows
+  5. Print a summary so the Puzzles UI integration step knows
      what's available.
 
 The puzzle-as-presented-to-the-player has the projected
@@ -21,7 +21,7 @@ must place + plan; the agent_solution is the BFS plan over
 the augmented board.
 
 Usage:
-    python3 tools/mine_lab_puzzles.py [--target N]
+    python3 tools/mine_puzzles.py [--target N]
         [--max-attempts N] [--server URL]
 """
 
@@ -191,7 +191,7 @@ def main():
                     help="don't POST; just print what would be persisted")
     args = ap.parse_args()
 
-    print(f"=== Mining lab puzzles (target {args.target}, "
+    print(f"=== Mining puzzles (target {args.target}, "
           f"depth {args.min_depth}-{args.max_depth}) ===\n")
     print("Phase 1: capture offline snapshots...")
     snapshots = collect_projections(args.num_games, args.max_actions)
