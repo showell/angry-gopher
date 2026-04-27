@@ -1,4 +1,4 @@
-module Lab exposing (main)
+module Puzzles exposing (main)
 
 {-| BOARD_LAB — a single-page gallery of curated LynRummy
 puzzles. The catalog endpoint hands us all puzzles + a single

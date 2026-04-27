@@ -1,18 +1,20 @@
-# Lab.elm — SPIKE (board-lab)
+# Puzzles.elm
 
-BOARD_LAB's top-level Elm app. Renders a vertical gallery of
-hand-crafted LynRummy puzzle panels, each embedding an
+The Puzzles gallery's top-level Elm app. Renders a vertical
+gallery of curated LynRummy puzzle panels, each embedding an
 independent `Main.Play` instance so Steve plays multiple
 puzzles on one scrolling page.
 
 ## Status
 
-- **Label:** SPIKE (board-lab). Active development 2026-04-22
-  onward. Panels auto-create their puzzle session on page
-  load and swap straight to the Play surface when the
-  session id returns. No Play button; no single-active
-  gating. DOM-id collisions for hand-card replay are a
-  known limitation (see below).
+- **Label:** production (puzzle gallery, per ENTRY_POINTS.md).
+  Originally a SPIKE for board-feel studies, the surface has
+  matured into the curated gallery used to exercise the agent
+  and capture conformance scenarios. Panels auto-create their
+  puzzle session on page load and swap straight to the Play
+  surface when the session id returns. No Play button; no
+  single-active gating. DOM-id collisions for hand-card
+  replay are a known limitation (see below).
 
 ## Shape
 
