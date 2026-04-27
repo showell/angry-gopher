@@ -154,90 +154,108 @@ extractAbsorbPrims :
     -> ExtractAbsorbDesc
     -> List WireAction
 extractAbsorbPrims board d =
-    let
-        ci =
-            indexOf d.extCard d.source
+    if isStealFromSet d then
+        -- Mirrors python/verbs.py's `verb == "steal" and
+        -- kind == "set"` branch: dismantle the length-3 set
+        -- into three singletons by splitting from the LEFT
+        -- twice, regardless of where the ext card sits in
+        -- the source. The BFS plan reasons about each remnant
+        -- card as an independent trouble singleton, so leaving
+        -- them as a pair stalls subsequent push moves that
+        -- can't find their content-keyed source. Identifying
+        -- the ext card by content (rather than by index)
+        -- lets the same code path serve ext-at-0, ext-at-1,
+        -- and ext-at-2.
+        stealFromSetPrims board d
 
-        ( isolatePrims, postIsolate ) =
-            isolateCard board d.source ci d.verb
+    else
+        let
+            ci =
+                indexOf d.extCard d.source
 
-        followUp =
-            if isInteriorSetPeel d then
-                interiorSetReassemble d postIsolate
+            ( isolatePrims, postIsolate ) =
+                isolateCard board d.source ci d.verb
 
-            else if isEndSetSteal d then
-                -- Steal end of length-3 SET leaves a same-value
-                -- pair as remnant ([AD AH] when stealing AC
-                -- from [AC AD AH]). The BFS plan reasons about
-                -- the remnant as TWO singletons (subsequent
-                -- moves push them onto helpers individually);
-                -- physical reality leaves them as one pair.
-                -- Without dismantling, those subsequent pushes
-                -- can't find their content-keyed sources and
-                -- emit empty primitives — runtime stalls.
-                -- Mirrors python/verbs.py's `verb=="steal"
-                -- and kind=="set"` two-split pattern.
-                dismantleSetRemnant d postIsolate
+            followUp =
+                if isInteriorSetPeel d then
+                    interiorSetReassemble d postIsolate
 
-            else
-                []
-
-        postFollowUp =
-            List.foldl applyOnBoard postIsolate followUp
-
-        absorbStep =
-            case ( findByCards [ d.extCard ] postFollowUp, findByCards d.targetBefore postFollowUp ) of
-                ( Just singleton, Just target ) ->
-                    [ MergeStack
-                        { source = singleton
-                        , target = target
-                        , side = toBoardSide d.side
-                        }
-                    ]
-
-                _ ->
+                else
                     []
-    in
-    isolatePrims ++ followUp ++ absorbStep
+
+            postFollowUp =
+                List.foldl applyOnBoard postIsolate followUp
+
+            absorbStep =
+                case ( findByCards [ d.extCard ] postFollowUp, findByCards d.targetBefore postFollowUp ) of
+                    ( Just singleton, Just target ) ->
+                        [ MergeStack
+                            { source = singleton
+                            , target = target
+                            , side = toBoardSide d.side
+                            }
+                        ]
+
+                    _ ->
+                        []
+        in
+        isolatePrims ++ followUp ++ absorbStep
 
 
-{-| End-Steal of a length-3 Set: source is all-same-value,
-verb is Steal, ext is at index 0 or 2. -}
-isEndSetSteal : ExtractAbsorbDesc -> Bool
-isEndSetSteal d =
-    let
-        ci =
-            indexOf d.extCard d.source
-
-        n =
-            List.length d.source
-    in
-    d.verb == Steal && allSameValue d.source && n == 3 && (ci == 0 || ci == n - 1)
+isStealFromSet : ExtractAbsorbDesc -> Bool
+isStealFromSet d =
+    d.verb == Steal && allSameValue d.source && List.length d.source == 3
 
 
-{-| The remnant of a length-3 set after end-steal is a
-same-value pair. Emit one Split that breaks it into two
-singletons so subsequent BFS-planned moves (push the
-individual aces, etc.) can find their content-keyed sources.
--}
-dismantleSetRemnant :
-    ExtractAbsorbDesc
-    -> List CardStack
+stealFromSetPrims :
+    List CardStack
+    -> ExtractAbsorbDesc
     -> List WireAction
-dismantleSetRemnant d postIsolate =
-    let
-        ci =
-            indexOf d.extCard d.source
-
-        remnantCards =
-            List.take ci d.source ++ List.drop (ci + 1) d.source
-    in
-    case findByCards remnantCards postIsolate of
-        Just stack ->
-            [ Split { stack = stack, cardIndex = 0 } ]
-
+stealFromSetPrims board d =
+    case findByCards d.source board of
         Nothing ->
             []
+
+        Just src ->
+            let
+                first =
+                    Split { stack = src, cardIndex = 0 }
+
+                boardAfterFirst =
+                    applyOnBoard first board
+
+                tailCards =
+                    List.drop 1 d.source
+            in
+            case findByCards tailCards boardAfterFirst of
+                Nothing ->
+                    []
+
+                Just tailStack ->
+                    let
+                        second =
+                            Split { stack = tailStack, cardIndex = 0 }
+
+                        boardAfterSecond =
+                            applyOnBoard second boardAfterFirst
+                    in
+                    case
+                        ( findByCards [ d.extCard ] boardAfterSecond
+                        , findByCards d.targetBefore boardAfterSecond
+                        )
+                    of
+                        ( Just extSt, Just tgt ) ->
+                            [ first
+                            , second
+                            , MergeStack
+                                { source = extSt
+                                , target = tgt
+                                , side = toBoardSide d.side
+                                }
+                            ]
+
+                        _ ->
+                            []
 
 
 freePullPrims : List CardStack -> FreePullDesc -> List WireAction
