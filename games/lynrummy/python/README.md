@@ -140,12 +140,6 @@ were purged 2026-04-27. The older DSL pipeline
 2026-04-27. Their roles are now covered by the
 DSL conformance pipeline plus replay walkthroughs.
 
-### Legacy puzzle harness (queued for purge)
-
-`puzzles.claude`, `puzzle_harness.claude`, `compare.claude`
-— pre-Puzzles-gallery Python cluster. See MINI_PROJECTS /
-PURGE_LEGACY_PUZZLE_HARNESS.
-
 ## The DSL conformance bridge
 
 Python + Elm both exercise the same scenarios, defined once
