@@ -8,6 +8,7 @@
   },
   "devDependencies": {
     "elm": "^0.19.1-6",
+    "elm-review": "^2.13.5",
     "elm-test": "^0.19.1-revision17"
   }
 }

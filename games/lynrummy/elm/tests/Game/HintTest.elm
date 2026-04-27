@@ -17,7 +17,6 @@ Structure:
 -}
 
 import Expect
-import Game.Card exposing (Card)
 import Game.Dealer as Dealer
 import Game.Hand as Hand
 import Game.Strategy.Hint as Hint

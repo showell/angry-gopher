@@ -1,7 +1,6 @@
 module Fixtures exposing
     ( at
     , boardStackDragAt
-    , defaultDragInfo
     , defaultBoardRect
     , handCardDragAt
     , stackAt
@@ -25,7 +24,6 @@ measured boardRect populated.
 
 -}
 
-import Game.BoardActions exposing (Side)
 import Game.Card exposing (Card, OriginDeck(..))
 import Game.CardStack as CardStack exposing (BoardLocation, CardStack)
 import Game.GestureArbitration as GA

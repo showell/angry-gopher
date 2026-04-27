@@ -8,7 +8,6 @@ import Expect
 import Game.PlayerTurn as PT
     exposing
         ( CompleteTurnResult(..)
-        , PlayerTurn
         )
 import Game.Score as Score
 import Test exposing (Test, describe, test)

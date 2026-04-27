@@ -10,12 +10,12 @@ module Main.Play exposing
 
 {-| The live-play component for LynRummy. Contains what was
 formerly the whole of `Main.elm`'s update/view/subscriptions
-surface, now factored out so BOARD_LAB (and future
+surface, now factored out so BOARD\_LAB (and future
 multi-game-per-page hosts) can embed a single Play instance
 per puzzle without inheriting the main app's top-level
 port + wrapper shape.
 
-Phase I of REFACTOR_EMBEDDABLE_PLAY — a literal relocation
+Phase I of REFACTOR\_EMBEDDABLE\_PLAY — a literal relocation
 with one small interface widening: `update` returns an
 `Output` value the host uses to decide whether to fire its
 own port (e.g. the URL-path update when a new session id
@@ -31,8 +31,6 @@ DOM ids for multi-embedding.
 
 import Browser.Dom
 import Browser.Events
-import Json.Decode as Decode exposing (Decoder)
-import Json.Encode as Encode
 import Game.Agent.Bfs as Bfs
 import Game.Agent.GeometryPlan as AgentGeometry
 import Game.Agent.Move as AgentMove exposing (Move)
@@ -40,11 +38,14 @@ import Game.Agent.Verbs as AgentVerbs
 import Game.Game as Game
 import Game.GestureArbitration as GA
 import Game.Referee as Referee
+import Game.Replay.Space as ReplaySpace
+import Game.Replay.Time as ReplayTime
 import Game.Score as Score
 import Game.Strategy.Hint as Hint
-import Game.CardStack
-import Game.Replay.Space as ReplaySpace
 import Game.WireAction as WA exposing (WireAction)
+import Html exposing (Html)
+import Json.Decode as Decode exposing (Decoder)
+import Json.Encode as Encode
 import Main.Apply exposing (applyAction, refereeBounds)
 import Main.Gesture as Gesture
     exposing
@@ -54,12 +55,10 @@ import Main.Gesture as Gesture
         , startHandDrag
         )
 import Main.Msg exposing (Msg(..))
-import Game.Replay.Time as ReplayTime
 import Main.State as State
     exposing
         ( ActionLogBundle
         , DragState(..)
-        , Flags
         , Model
         , PathFrame(..)
         , StatusKind(..)
@@ -70,7 +69,6 @@ import Main.View as View exposing (popupForCompleteTurn, statusForCompleteTurn)
 import Main.Wire as Wire exposing (fetchActionLog, fetchNewSession, sendCompleteTurn)
 import Task
 import Time
-import Html exposing (Html)
 
 
 
@@ -86,7 +84,7 @@ same.
     app's default landing page.
   - `ResumeSession sid` — URL says we're resuming session
     `sid`; fetch its action log and reconstruct state.
-  - `PuzzleSession sid` — BOARD_LAB created a puzzle session
+  - `PuzzleSession sid` — BOARD\_LAB created a puzzle session
     (hand-crafted initial state stored in
     `lynrummy_puzzle_seeds`). Same bootstrap as resume; the
     distinct variant exists so the status message and
@@ -115,7 +113,7 @@ type Config
 
 
 {-| Emitted from `update` when the host (Main.elm or the
-BOARD_LAB gallery) needs to do something beyond what Play
+BOARD\_LAB gallery) needs to do something beyond what Play
 can do for itself. Today there's one case — fire the host's
 port to pin the session id into the URL — plus the default
 no-op.
@@ -569,7 +567,9 @@ to end-of-log). Replay walks each entry, calls
 `Space.synthesizeBoardPath` because no captured path is
 present, and animates with the same FSM that animates Steve's
 captured drags. The agent is a clean producer of WireActions;
-all rendering work lives behind the Replay seam. -}
+all rendering work lives behind the Replay seam.
+
+-}
 clickAgentPlay : Model -> ( Model, Cmd Msg )
 clickAgentPlay model =
     -- Don't stack agent moves on top of an already-running
@@ -599,7 +599,8 @@ clickAgentPlay model =
 {-| Resolve the next move to play, using the cached program
 counter when one's live and re-solving from the live board
 otherwise. Returns Nothing when there's nothing left to do
-AND writes a status message describing why. -}
+AND writes a status message describing why.
+-}
 nextAgentMove : Model -> Maybe ( Move, List Move )
 nextAgentMove model =
     case model.agentProgram of
@@ -775,7 +776,8 @@ synthesized gesture (if any). Replaces the older
 `agentLogEntry` which always shipped `gesturePath = Nothing`
 and forced replay to JIT-synthesize. Carrying the gesture
 here means Instant Replay finds a captured path and
-animates immediately. -}
+animates immediately.
+-}
 agentLogEntryWith : ( WireAction, Maybe { path : List State.GesturePoint, frame : PathFrame } ) -> State.ActionLogEntry
 agentLogEntryWith ( action, gesture ) =
     { action = action
@@ -788,6 +790,7 @@ agentLogEntryWith ( action, gesture ) =
             Nothing ->
                 BoardFrame
     }
+
 
 
 -- SUBSCRIPTIONS
@@ -861,11 +864,12 @@ bootstrapFromBundle bundle model =
         bundle.actions
 
 
-{-| Synchronous bootstrap for a lab puzzle. The catalog already
+{-| Synchronous bootstrap for BOARD_LAB puzzles. The catalog
 delivered the initial state inline; no fetch, no actions to
 fold. Lab puzzles are session-scoped to one page-load — a
 reload terminates the attempt by design — so the in-memory
-action log is empty at boot. -}
+action log is empty at boot.
+-}
 bootstrapPuzzle : State.RemoteState -> String -> Model -> Model
 bootstrapPuzzle initial puzzleName model =
     modelAtInitial initial
@@ -880,7 +884,8 @@ bootstrapPuzzle initial puzzleName model =
 
 {-| Common shape — drop the initial-state record's fields onto
 the model and pin it as the replay baseline. Used by both
-bootstraps. -}
+bootstraps.
+-}
 modelAtInitial : State.RemoteState -> Model -> Model
 modelAtInitial initial model =
     { model

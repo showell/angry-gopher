@@ -24,7 +24,6 @@ import Game.Agent.Move as Move
         , PushDesc
         , ShiftDesc
         , SpliceDesc
-        , WhichEnd(..)
         )
 import Game.BoardActions as BoardActions
 import Game.Card exposing (Card)
@@ -174,7 +173,7 @@ extractAbsorbPrims board d =
                 indexOf d.extCard d.source
 
             ( isolatePrims, postIsolate ) =
-                isolateCard board d.source ci d.verb
+                isolateCard board d.source ci
 
             followUp =
                 if isInteriorSetPeel d then
@@ -359,24 +358,25 @@ splicePrims board d =
     splitPrims ++ mergeStep
 
 
-{-| Shift verb: p_card moves from donor INTO source's
+{-| Shift verb: p\_card moves from donor INTO source's
 opposite-end position, displacing stolen, which then absorbs
 onto target.
 
 Sequence (matches python/verbs._shift_prims):
 
-  1. Isolate p_card from donor (split + interior-set
-     reassemble if applicable).
-  2. Merge p_card onto source on the OPPOSITE side from
-     stolen — source becomes augmented length+1.
-  3. Pop stolen off the augmented source by splitting at its
-     end.
-  4. Merge stolen onto target.
+1.  Isolate p\_card from donor (split + interior-set
+    reassemble if applicable).
+2.  Merge p\_card onto source on the OPPOSITE side from
+    stolen — source becomes augmented length+1.
+3.  Pop stolen off the augmented source by splitting at its
+    end.
+4.  Merge stolen onto target.
 
 The ordering reflects the LOGIC of a shift: the user sees
-p_card join source (the swap moment), then stolen pop and
+p\_card join source (the swap moment), then stolen pop and
 absorb. The earlier ordering pre-disassembled source before
-p_card touched it, which obscured the swap (Steve, 2026-04-27).
+p\_card touched it, which obscured the swap (Steve, 2026-04-27).
+
 -}
 shiftPrims : List CardStack -> ShiftDesc -> List WireAction
 shiftPrims board d =
@@ -390,7 +390,7 @@ shiftPrims board d =
                     allSameValue d.donor
 
                 ( donorPrims, postDonor ) =
-                    isolateCard board d.donor pi Peel
+                    isolateCard board d.donor pi
 
                 donorFollowUp =
                     if donorIsSet && pi > 0 && pi < List.length d.donor - 1 then
@@ -475,9 +475,8 @@ isolateCard :
     List CardStack
     -> List Card
     -> Int
-    -> ExtractVerb
     -> ( List WireAction, List CardStack )
-isolateCard board source ci _ =
+isolateCard board source ci =
     let
         n =
             List.length source
@@ -486,7 +485,7 @@ isolateCard board source ci _ =
         Nothing ->
             ( [], board )
 
-        Just srcStack ->
+        Just _ ->
             if ci == 0 && n > 1 then
                 let
                     ( pre, board1 ) =

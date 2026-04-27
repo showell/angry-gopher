@@ -37,7 +37,6 @@ import Game.CardStack
     exposing
         ( BoardCard
         , BoardCardState(..)
-        , BoardLocation
         , CardStack
         , HandCard
         , HandCardState(..)
@@ -45,7 +44,6 @@ import Game.CardStack
 import Game.Referee
     exposing
         ( RefereeError
-        , RefereeMove
         , RefereeStage(..)
         , validateGameMove
         , validateTurnComplete

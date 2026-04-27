@@ -2,11 +2,7 @@ module Game.Replay.Space exposing
     ( AnimationInfo
     , animatedDragState
     , boardStackSource
-    , dragMsPerPixel
-    , dragSourceForAction
-    , easedPath
     , elementTopLeftInViewport
-    , handCardForAction
     , handCardSource
     , interpPath
     , linearPath
@@ -41,7 +37,7 @@ import Browser.Dom
 import Game.BoardActions as BoardActions
 import Game.BoardGeometry as BG
 import Game.Card exposing (Card)
-import Game.CardStack as CardStack exposing (CardStack, HandCard)
+import Game.CardStack as CardStack exposing (CardStack)
 import Game.WireAction as WA exposing (WireAction)
 import Main.State as State
     exposing
@@ -65,6 +61,7 @@ render, and the action to apply at end.
 
 No grabOffset — replay speaks only floaterTopLeft; nothing
 downstream of capture needs the cursor↔card offset.
+
 -}
 type alias AnimationInfo =
     { startMs : Float
@@ -114,11 +111,12 @@ should LAND when merging onto `stack` on `side`. The hand
 card is a single card; after a right-merge it becomes the new
 rightmost card of the target stack, so it lands with its
 top-left at (target.right, target.top). Left-merge lands at
-(target.left - CARD_PITCH, target.top).
+(target.left - CARD\_PITCH, target.top).
 
 Returns `Nothing` if the live board rect isn't ready. Used
 by `AnimateMergeHand.finish` to compute the destination of
 the synthesized drag path.
+
 -}
 stackLandingInLiveViewport : Model -> CardStack -> BoardActions.Side -> Maybe Point
 stackLandingInLiveViewport model stack side =
@@ -262,6 +260,7 @@ captured gesture path is missing or stale,
 one on the fly. The agent-play flow specifically relies on
 this path: agent-emitted primitives carry no captured gesture,
 so every drag the player sees is synthesized here.
+
 -}
 synthesizeBoardPath :
     WireAction
@@ -282,11 +281,11 @@ Python's `drag_endpoints` exactly so paths look the same on
 both sides:
 
   - `MoveStack`: src.loc → newLoc.
-  - `MergeStack` right side: src.loc → (target.left + target.size * pitch + 2,
+  - `MergeStack` right side: src.loc → (target.left + target.size \* pitch + 2,
     target.top - 2). The +2 / -2 jitter is the same pixel-perfect
     offset Python emits to keep the landing from looking
     machine-tidied.
-  - `MergeStack` left side: src.loc → (target.left - src.size * pitch + 2,
+  - `MergeStack` left side: src.loc → (target.left - src.size \* pitch + 2,
     target.top - 2).
   - `Split`, hand-origin actions: `Nothing` — Splits are clicks
     in the live UI (the live click event produces a single
@@ -348,6 +347,7 @@ The check is intentionally conservative: any miss → re-synth.
 A few-pixel difference is rare in practice (locs are integer
 and paths are recorded with the exact loc), so this isn't a
 fuzzy match.
+
 -}
 pathStillValid : List State.GesturePoint -> WireAction -> Model -> Bool
 pathStillValid path action model =
@@ -435,31 +435,6 @@ interpPathHelp prev remaining targetTs =
 -- DRAG SOURCE
 
 
-{-| Resolve the DragSource for a WireAction against the
-current model state. Source identity only — no grabOffset.
--}
-dragSourceForAction : WireAction -> Model -> Maybe DragSource
-dragSourceForAction action model =
-    case action of
-        WA.Split p ->
-            boardStackSource p.stack model
-
-        WA.MergeStack p ->
-            boardStackSource p.source model
-
-        WA.MoveStack p ->
-            boardStackSource p.stack model
-
-        WA.MergeHand p ->
-            handCardSource p.handCard model
-
-        WA.PlaceHand p ->
-            handCardSource p.handCard model
-
-        _ ->
-            Nothing
-
-
 boardStackSource : CardStack -> Model -> Maybe DragSource
 boardStackSource ref model =
     CardStack.findStack ref model.board
@@ -480,23 +455,6 @@ handCardSource card model =
 
     else
         Nothing
-
-
-{-| Extract the hand card referenced by a hand-origin wire
-action, for DOM-id lookup. Returns Nothing for actions that
-don't originate in the hand.
--}
-handCardForAction : WireAction -> Maybe Card
-handCardForAction action =
-    case action of
-        WA.MergeHand p ->
-            Just p.handCard
-
-        WA.PlaceHand p ->
-            Just p.handCard
-
-        _ ->
-            Nothing
 
 
 
@@ -526,6 +484,3 @@ animatedDragState anim floaterTopLeft =
         , gesturePath = []
         , pathFrame = anim.pathFrame
         }
-
-
-

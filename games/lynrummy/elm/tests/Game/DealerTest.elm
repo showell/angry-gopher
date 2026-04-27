@@ -18,7 +18,6 @@ Covered:
 
 import Expect
 import Game.Card as Card exposing (OriginDeck(..), Suit(..))
-import Game.CardStack as CardStack exposing (CardStack)
 import Game.Dealer as Dealer
 import Game.Hand as Hand
 import Game.Random as Random

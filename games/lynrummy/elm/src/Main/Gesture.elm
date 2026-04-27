@@ -1,7 +1,5 @@
 module Main.Gesture exposing
     ( cardMouseDown
-    , clearDrag
-    , fetchBoardRect
     , floaterOverWing
     , handCardAttrs
     , handleMouseUp
@@ -32,12 +30,13 @@ Responsibilities:
     persistence.
   - **Styling hooks** — `handCardAttrs` produces the per-hand-card
     `Html.Attribute` list (mousedown handler + drag-dim opacity
-    + hint-green background); `cardMouseDown` produces a
-    board-card mousedown handler.
+      - hint-green background); `cardMouseDown` produces a
+        board-card mousedown handler.
   - **Decoder** — `pointDecoder` pulls `{clientX, clientY}` from
     mouse events into the `Point` record.
 
 Extracted 2026-04-19 from the pre-split `Main.elm` monolith.
+
 
 ## Click-vs-drag precedence
 
@@ -47,6 +46,7 @@ on a board card AND hasn't moved beyond the click threshold
 yields a `Split` action. Only if the click intent has been
 killed do we dispatch on `(hoveredWing, source, cursorOverBoard)`
 for merge / place / move.
+
 
 ## WireAction production — branch table
 
@@ -62,18 +62,16 @@ for merge / place / move.
 -}
 
 import Browser.Dom
-import Browser.Events
-import Html
-import Html.Attributes exposing (style)
-import Html.Events as Events
-import Json.Decode as Decode exposing (Decoder)
 import Game.BoardGeometry as BG
 import Game.Card exposing (Card)
 import Game.CardStack as CardStack exposing (BoardLocation, CardStack, HandCard)
 import Game.GestureArbitration as GA
-import Game.Hand exposing (Hand)
 import Game.WingOracle as WingOracle
 import Game.WireAction as WA exposing (WireAction)
+import Html
+import Html.Attributes exposing (style)
+import Html.Events as Events
+import Json.Decode as Decode exposing (Decoder)
 import Main.Apply as Apply
 import Main.Msg exposing (Msg(..))
 import Main.State as State
@@ -98,7 +96,7 @@ import Task
 
 {-| Start a drag from a board card. The floater's initial
 top-left is `stack.loc` (board frame, no translation).
-`clickIntent = Just cardIndex` marks this as a *potential*
+`clickIntent = Just cardIndex` marks this as a _potential_
 split click; `GestureArbitration.clickIntentAfterMove` (on
 subsequent MouseMove) kills the intent once the cursor
 drifts past the click threshold.
@@ -263,7 +261,7 @@ handleMouseUp releasePoint tMs model =
                     }
 
                 maybeAction =
-                    resolveGesture infoFull model
+                    resolveGesture infoFull
 
                 modelAfterDragClear =
                     clearDrag model
@@ -334,6 +332,7 @@ capture layer already stores it in the right frame.
 Hand-origin drags (`MergeHand`, `PlaceHand`) ship pathless;
 the receiver re-synthesizes at replay time via live DOM
 measurement. `CompleteTurn` and `Undo` aren't drags.
+
 -}
 gestureForAction :
     WireAction
@@ -370,8 +369,8 @@ survived, it's a `Split`; otherwise dispatch on
 `(hoveredWing, source, cursorOverBoard)` per the branch
 table in the module header.
 -}
-resolveGesture : DragInfo -> Model -> Maybe WireAction
-resolveGesture info _ =
+resolveGesture : DragInfo -> Maybe WireAction
+resolveGesture info =
     case ( info.clickIntent, info.source ) of
         ( Just cardIdx, FromBoardStack stack ) ->
             Just (WA.Split { stack = stack, cardIndex = cardIdx })
@@ -556,6 +555,7 @@ of shipping negative or overflowing coords to the server.
 Follows the "invalid drops snap back" rule — the gesture is
 discarded, and the source card returns to where it was picked
 up. No silent clamping.
+
 -}
 dropFootprintInBounds : Int -> BoardLocation -> Bool
 dropFootprintInBounds cardCount loc =

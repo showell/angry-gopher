@@ -1,6 +1,6 @@
 module Game.Strategy.HandStacks exposing (trick)
 
-{-| HAND_STACKS: the hand already contains 3+ cards that form a
+{-| HAND\_STACKS: the hand already contains 3+ cards that form a
 complete set or run — push the whole group onto the board as a
 new stack.
 
@@ -9,7 +9,7 @@ Mirrors `angry-gopher/lynrummy/tricks/hand_stacks.go`.
 -}
 
 import Dict exposing (Dict)
-import Game.Card exposing (Card, cardValueToInt, suitToInt)
+import Game.Card exposing (cardValueToInt, suitToInt)
 import Game.CardStack exposing (CardStack, HandCard)
 import Game.StackType exposing (CardStackType(..), getStackType)
 import Game.Strategy.Helpers exposing (freshlyPlayed, pushNewStack)
@@ -209,9 +209,10 @@ consecutiveRuns sorted =
                             ( acc, [ hc ] )
 
                         prev :: _ ->
-                            if cardValueToInt hc.card.value
-                                == cardValueToInt prev.card.value
-                                + 1
+                            if
+                                cardValueToInt hc.card.value
+                                    == cardValueToInt prev.card.value
+                                    + 1
                             then
                                 ( acc, hc :: current )
 

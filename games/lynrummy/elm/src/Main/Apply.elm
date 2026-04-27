@@ -35,7 +35,7 @@ import Game.Reducer as Reducer
 import Game.Score as Score
 import Game.StackType as StackType
 import Game.WireAction as WA exposing (WireAction)
-import Main.State as State
+import Main.State
     exposing
         ( ActionOutcome
         , Model
@@ -246,7 +246,7 @@ undoStatus =
 
 
 {-| Layer the board-tidiness overlay onto the primary action
-status. If a CROWDED board became CLEANLY_SPACED, celebrate
+status. If a CROWDED board became CLEANLY\_SPACED, celebrate
 the recovery; if the action left the board in a CROWDED state
 (regardless of where it came from), scold. Otherwise the
 primary message stands.
@@ -255,6 +255,7 @@ Mirrors the post-hook in angry-cat's
 `process_and_push_player_action`. Overlay OVERRIDES the
 primary message when it fires, matching the TS order-of-
 operations.
+
 -}
 withTidinessOverlay : Model -> Model -> StatusMessage -> StatusMessage
 withTidinessOverlay pre post primary =

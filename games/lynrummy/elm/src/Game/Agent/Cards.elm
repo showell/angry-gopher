@@ -13,10 +13,9 @@ have no existing Elm equivalent — ported from
 
 -}
 
-import Game.Card as Card
+import Game.Card
     exposing
         ( Card
-        , CardColor
         , CardValue
         , Suit
         , allSuits

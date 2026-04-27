@@ -8,10 +8,11 @@ Mirrors `python/test_verbs.py`'s coverage: per move type, plus
 post-board geometry sanity is covered separately by the
 geometry tests (this module asserts only on move
 decomposition).
+
 -}
 
 import Expect
-import Game.Agent.Move as Move
+import Game.Agent.Move
     exposing
         ( ExtractVerb(..)
         , Move(..)
@@ -20,7 +21,6 @@ import Game.Agent.Move as Move
         , WhichEnd(..)
         )
 import Game.Agent.Verbs as Verbs
-import Game.BoardActions as BoardActions
 import Game.Card exposing (Card, OriginDeck(..))
 import Game.CardStack exposing (BoardCard, BoardCardState(..), CardStack)
 import Game.WireAction exposing (WireAction(..))
@@ -157,11 +157,6 @@ suite =
                 let
                     src =
                         [ card "3D", card "4D", card "5D", card "6D", card "7D", card "8D" ]
-
-                    board =
-                        [ stack 100 100 src
-                        , stack 200 400 [ card "5D" ]
-                        ]
 
                     -- Note the loose's identity is by its own
                     -- card record; we use a deck-2 5D so it's

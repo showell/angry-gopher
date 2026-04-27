@@ -1,7 +1,6 @@
 module Game.Strategy.Hint exposing
     ( Suggestion
     , buildSuggestions
-    , hintPriorityOrder
     )
 
 {-| Hint orchestration. Walks the seven tricks in a fixed

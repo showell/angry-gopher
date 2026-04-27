@@ -7,14 +7,12 @@ module Game.BoardActionsTest exposing (suite)
 import Expect
 import Game.BoardActions as BA
     exposing
-        ( BoardChange
-        , Side(..)
+        ( Side(..)
         )
 import Game.Card exposing (Card, CardValue(..), OriginDeck(..), Suit(..), cardFromLabel)
 import Game.CardStack
     exposing
-        ( BoardCard
-        , BoardCardState(..)
+        ( BoardCardState(..)
         , BoardLocation
         , CardStack
         , HandCard

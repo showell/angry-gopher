@@ -2,7 +2,6 @@ module Game.Hand exposing
     ( Hand
     , addCards
     , empty
-    , isEmpty
     , removeHandCard
     , resetState
     , size
@@ -12,7 +11,6 @@ module Game.Hand exposing
 `angry-cat/src/lyn_rummy/game/game.ts:322`. A hand holds a
 list of `HandCard`s; operations add, remove, reset state, and
 query.
-
 -}
 
 import Game.Card exposing (Card)
@@ -26,11 +24,6 @@ type alias Hand =
 empty : Hand
 empty =
     { handCards = [] }
-
-
-isEmpty : Hand -> Bool
-isEmpty h =
-    List.isEmpty h.handCards
 
 
 size : Hand -> Int

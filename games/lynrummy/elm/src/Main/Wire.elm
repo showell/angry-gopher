@@ -15,35 +15,36 @@ picks it up at the right branch.
 
 Extracted 2026-04-19 from the pre-split `Main.elm` monolith.
 
+
 ## Design invariants
 
-- **Client is authoritative on game state.** Elm derives
-  current state locally from (initial_state + action log);
-  these calls are for persistence (sendAction,
-  sendCompleteTurn), session creation (fetchNewSession),
-  and the one-time bootstrap fetch of the action log
-  (fetchActionLog). No runtime wire read of current state;
-  the server's responses on CompleteTurn are diagnostic,
-  not gating.
-- **No ports here.** `setSessionPath` lives in `Main.elm` (only
-  port-modules may declare ports).
-- **Decoders match server emission exactly.** If a field shape
-  changes on the server, the decoder here must change; if it
-  doesn't match, the HTTP response errors at decode time
-  instead of silently half-succeeding.
+  - **Client is authoritative on game state.** Elm derives
+    current state locally from (initial\_state + action log);
+    these calls are for persistence (sendAction,
+    sendCompleteTurn), session creation (fetchNewSession),
+    and the one-time bootstrap fetch of the action log
+    (fetchActionLog). No runtime wire read of current state;
+    the server's responses on CompleteTurn are diagnostic,
+    not gating.
+  - **No ports here.** `setSessionPath` lives in `Main.elm` (only
+    port-modules may declare ports).
+  - **Decoders match server emission exactly.** If a field shape
+    changes on the server, the decoder here must change; if it
+    doesn't match, the HTTP response errors at decode time
+    instead of silently half-succeeding.
 
 -}
 
-import Http
-import Json.Decode as Decode exposing (Decoder)
-import Json.Encode as Encode exposing (Value)
 import Game.Card as Card
 import Game.CardStack as CardStack
+import Game.Game exposing (CompleteTurnOutcome)
 import Game.Hand exposing (Hand)
 import Game.PlayerTurn exposing (CompleteTurnResult(..))
 import Game.WireAction as WA exposing (WireAction)
+import Http
+import Json.Decode as Decode exposing (Decoder)
+import Json.Encode as Encode exposing (Value)
 import Main.Msg exposing (Msg(..))
-import Game.Game exposing (CompleteTurnOutcome)
 import Main.State exposing (ActionLogBundle, ActionLogEntry, GesturePoint, PathFrame(..), RemoteState)
 
 
@@ -80,19 +81,20 @@ fetchActionLog sid =
 
 
 {-| Fire-and-forget wire-action submission. Used for every
-action EXCEPT CompleteTurn — merge_hand, merge_stack, split,
-move_stack, place_hand. Errors are currently ignored
+action EXCEPT CompleteTurn — merge\_hand, merge\_stack, split,
+move\_stack, place\_hand. Errors are currently ignored
 (`ActionSent` handler is a no-op); server-side validation +
 broadcast arrives with multiplayer.
 
 `maybeGesture` carries the captured drag telemetry for the
 wire. Pass `Nothing` for actions that didn't originate from a
 drag (button clicks, replay-emitted, etc.) AND for hand-origin
-drags (merge_hand, place_hand) — those always replay via
+drags (merge\_hand, place\_hand) — those always replay via
 live DOM measurement, so shipping a captured path just serves
 as dead weight. Intra-board drags pass `Just { path, frame =
 BoardFrame }` after translating viewport samples to board
 frame at the send boundary.
+
 -}
 sendAction : Int -> WireAction -> Maybe { path : List GesturePoint, frame : PathFrame } -> Cmd Msg
 sendAction sessionId action maybeGesture =
@@ -118,6 +120,7 @@ puzzle attempts on a shared page-load) need different
 disambiguators on the action row, and the schema split that
 follows from "no nullable kind-discriminators" lands as two
 endpoints.
+
 -}
 sendPuzzleAction :
     Int
@@ -178,6 +181,7 @@ parity with Python's synthesizer: `path`, `path_frame`,
 `pointer_type`. The caller has already translated the path's
 samples into the named frame (typically `BoardFrame` for
 intra-board drags — see `Main.Gesture.handleMouseUp`).
+
 -}
 encodeEnvelope : WireAction -> Maybe { path : List GesturePoint, frame : PathFrame } -> Value
 encodeEnvelope action maybeGesture =
@@ -272,6 +276,7 @@ handles board→viewport at render time; viewport = hand-origin
 or pre-translation live capture). Missing `path_frame`
 defaults to viewport (back-compat with earlier captures that
 didn't carry the tag).
+
 -}
 actionLogEntryDecoder : Decoder ActionLogEntry
 actionLogEntryDecoder =

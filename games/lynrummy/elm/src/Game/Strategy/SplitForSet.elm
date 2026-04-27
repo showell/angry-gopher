@@ -1,6 +1,6 @@
 module Game.Strategy.SplitForSet exposing (trick)
 
-{-| SPLIT_FOR_SET: a hand card of value V finds two same-value,
+{-| SPLIT\_FOR\_SET: a hand card of value V finds two same-value,
 different-suit board cards that can be extracted, and the three
 together form a new 3-set.
 
@@ -8,7 +8,7 @@ Mirrors `angry-gopher/lynrummy/tricks/split_for_set.go`.
 
 -}
 
-import Game.Card exposing (Card, Suit, suitToInt)
+import Game.Card exposing (Card, Suit)
 import Game.CardStack exposing (CardStack, HandCard, canExtract)
 import Game.StackType exposing (CardStackType(..), getStackType)
 import Game.Strategy.Helpers exposing (extractCard, freshlyPlayed, pushNewStack)
@@ -213,4 +213,3 @@ findInStack stack target =
                         go (ci + 1) rest
     in
     go 0 stack.boardCards
-

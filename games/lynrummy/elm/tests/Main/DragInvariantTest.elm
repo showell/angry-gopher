@@ -18,10 +18,10 @@ tests fail loudly.
 import Expect
 import Fixtures exposing (at, stackAt)
 import Game.Card exposing (Card, CardValue(..), OriginDeck(..), Suit(..))
-import Game.CardStack as CardStack exposing (CardStack, HandCard, HandCardState(..))
+import Game.CardStack exposing (CardStack, HandCard, HandCardState(..))
 import Main.Gesture as Gesture
 import Main.Play as Play
-import Main.State as State exposing (DragSource(..), PathFrame(..))
+import Main.State as State exposing (PathFrame(..))
 import Test exposing (Test, describe, test)
 
 

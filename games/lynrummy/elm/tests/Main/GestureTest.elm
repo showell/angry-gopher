@@ -27,29 +27,14 @@ import Fixtures
         )
 import Game.BoardActions exposing (Side(..))
 import Game.Card exposing (Card, CardValue(..), OriginDeck(..), Suit(..))
-import Game.CardStack as CardStack exposing (BoardLocation, CardStack, HandCard, HandCardState(..))
-import Game.WingOracle as WingOracle
+import Game.CardStack as CardStack
 import Game.WireAction as WA
 import Main.Gesture as Gesture
-import Main.State as State exposing (DragSource(..), PathFrame(..))
 import Test exposing (Test, describe, test)
 
 
 
 -- MODEL HELPER (only thing non-fixture needs)
-
-
-modelWith : List CardStack -> List HandCard -> State.Model
-modelWith board hand =
-    let
-        base =
-            State.baseModel
-    in
-    State.setActiveHand { handCards = hand }
-        { base | board = board }
-
-
-
 -- SPLIT
 
 
@@ -66,7 +51,7 @@ suiteSplit =
                         boardStackDragAt stack { x = 20, y = 20 }
                             |> (\i -> { i | clickIntent = Just 3 })
                 in
-                Gesture.resolveGesture info (modelWith [ stack ] [])
+                Gesture.resolveGesture info
                     |> Expect.equal (Just (WA.Split { stack = stack, cardIndex = 3 }))
         ]
 
@@ -96,7 +81,7 @@ suiteMergeStack =
                                     }
                                )
                 in
-                Gesture.resolveGesture info (modelWith [ source234, target567 ] [])
+                Gesture.resolveGesture info
                     |> Expect.equal
                         (Just
                             (WA.MergeStack
@@ -124,7 +109,7 @@ suiteMergeStack =
                                     }
                                )
                 in
-                Gesture.resolveGesture info (modelWith [ target234, source567 ] [])
+                Gesture.resolveGesture info
                     |> Expect.equal
                         (Just
                             (WA.MergeStack
@@ -154,9 +139,6 @@ suiteMergeHand =
                     card6H =
                         { value = Six, suit = Heart, originDeck = DeckOne }
 
-                    handCard =
-                        { card = card6H, state = HandNormal }
-
                     info =
                         handCardDragAt card6H { x = 0, y = 0 }
                             |> (\i ->
@@ -166,7 +148,7 @@ suiteMergeHand =
                                     }
                                )
                 in
-                Gesture.resolveGesture info (modelWith [ target ] [ handCard ])
+                Gesture.resolveGesture info
                     |> Expect.equal
                         (Just
                             (WA.MergeHand
@@ -203,7 +185,7 @@ suiteMoveStack =
                                     }
                                )
                 in
-                case Gesture.resolveGesture info (modelWith [ stack ] []) of
+                case Gesture.resolveGesture info of
                     Just (WA.MoveStack p) ->
                         Expect.all
                             [ \_ -> Expect.equal stack p.stack
@@ -231,7 +213,7 @@ suiteMoveStack =
                                     }
                                )
                 in
-                Gesture.resolveGesture info (modelWith [ stack ] [])
+                Gesture.resolveGesture info
                     |> Expect.equal Nothing
         ]
 
@@ -250,9 +232,6 @@ suitePlaceHand =
                     card6H =
                         { value = Six, suit = Heart, originDeck = DeckOne }
 
-                    handCard =
-                        { card = card6H, state = HandNormal }
-
                     -- Floater at viewport (300+450, 100+350) = (750, 450),
                     -- which translates to board-frame (450, 350) via
                     -- boardRect subtraction in dropLoc.
@@ -260,7 +239,7 @@ suitePlaceHand =
                         handCardDragAt card6H { x = 750, y = 450 }
                             |> (\i -> { i | cursor = { x = 750, y = 450 } })
                 in
-                case Gesture.resolveGesture info (modelWith [] [ handCard ]) of
+                case Gesture.resolveGesture info of
                     Just (WA.PlaceHand p) ->
                         Expect.all
                             [ \_ -> Expect.equal card6H p.handCard

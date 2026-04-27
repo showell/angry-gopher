@@ -1,6 +1,6 @@
 module Game.Strategy.LooseCardPlay exposing (trick)
 
-{-| LOOSE_CARD_PLAY: move one board card from its stack onto
+{-| LOOSE\_CARD\_PLAY: move one board card from its stack onto
 another stack, then play a hand card that the new arrangement
 accepts.
 
@@ -11,8 +11,7 @@ Mirrors `angry-gopher/lynrummy/tricks/loose_card_play.go`.
 import Game.Card exposing (Card)
 import Game.CardStack
     exposing
-        ( BoardCard
-        , CardStack
+        ( CardStack
         , HandCard
         , canExtract
         , leftMerge
@@ -22,8 +21,7 @@ import Game.CardStack
 import Game.StackType exposing (CardStackType(..))
 import Game.Strategy.Helpers
     exposing
-        ( dummyLoc
-        , extractCard
+        ( extractCard
         , freshlyPlayed
         , replaceAt
         , singleStackFromCard

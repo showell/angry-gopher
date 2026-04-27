@@ -21,11 +21,9 @@ import Expect
 import Game.Card exposing (Card, CardValue(..), OriginDeck(..), Suit(..), cardFromLabel)
 import Game.CardStack
     exposing
-        ( BoardCard
-        , BoardCardState(..)
+        ( BoardCardState(..)
         , BoardLocation
         , CardStack
-        , HandCard
         , HandCardState(..)
         , agedFromPriorTurn
         , boardCardAgedState
@@ -141,7 +139,7 @@ strAndEqualsTests =
     describe "stackStr and stacksEqual"
         [ test "stackStr uses value + suit-emoji, comma-joined" <|
             \_ ->
-                Expect.equal "A\u{2665},2\u{2665},3\u{2665}"
+                Expect.equal "A♥,2♥,3♥"
                     (stackStr (stackOf [ "AH", "2H", "3H" ]))
         , test "two stacks with the same cards + loc are equal" <|
             \_ ->

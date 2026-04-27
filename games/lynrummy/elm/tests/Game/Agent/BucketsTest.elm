@@ -6,7 +6,7 @@ the bucket helpers and the purity contracts.
 -}
 
 import Expect
-import Game.Agent.Buckets as Buckets exposing (Buckets)
+import Game.Agent.Buckets as Buckets
 import Game.Card exposing (Card, OriginDeck(..))
 import Test exposing (..)
 

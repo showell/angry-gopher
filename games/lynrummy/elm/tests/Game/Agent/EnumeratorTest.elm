@@ -372,9 +372,6 @@ suite =
                         , growing = growing
                         , complete = []
                         }
-
-                    _ =
-                        enumerateMoves state
                 in
                 ( state.helper, state.trouble, state.growing )
                     |> Expect.equal ( helper, trouble, growing )

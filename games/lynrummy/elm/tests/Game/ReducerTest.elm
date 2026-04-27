@@ -8,8 +8,8 @@ no-ops here (turn-logic handled elsewhere).
 
 import Expect
 import Game.BoardActions exposing (Side(..))
-import Game.Card exposing (Card, CardValue(..), OriginDeck(..), Suit(..))
-import Game.CardStack exposing (BoardCard, BoardCardState(..), CardStack, HandCardState(..))
+import Game.Card exposing (CardValue(..), OriginDeck(..), Suit(..))
+import Game.CardStack exposing (BoardCardState(..), CardStack)
 import Game.Hand as Hand
 import Game.Reducer as Reducer
 import Game.WireAction exposing (WireAction(..))
@@ -17,7 +17,8 @@ import Test exposing (Test, describe, test)
 
 
 {-| Return the CardStack at index idx of the given state's board.
-Used to build wire-layer references for tests. -}
+Used to build wire-layer references for tests.
+-}
 stackAt : Int -> Reducer.State -> CardStack
 stackAt idx state =
     state.board
@@ -28,7 +29,8 @@ stackAt idx state =
             { boardCards = [], loc = { top = 0, left = 0 } }
 
 
-{-| A synthetic ghost CardStack that no real board will match. -}
+{-| A synthetic ghost CardStack that no real board will match.
+-}
 ghostStack : CardStack
 ghostStack =
     { boardCards =

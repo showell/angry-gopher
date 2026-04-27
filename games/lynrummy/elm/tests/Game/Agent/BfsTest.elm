@@ -8,7 +8,6 @@ shortest plan respecting the cap.
 
 import Expect
 import Game.Agent.Bfs as Bfs
-import Game.Agent.Buckets exposing (Buckets)
 import Game.Card exposing (Card, OriginDeck(..))
 import Test exposing (..)
 

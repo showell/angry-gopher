@@ -19,6 +19,7 @@ Two phases:
     a linear viewport-frame path from origin to landing.
 
 Companion: `Game.Replay.AnimatePlaceHand`.
+
 -}
 
 import Game.BoardActions exposing (Side)
@@ -26,7 +27,7 @@ import Game.Card exposing (Card)
 import Game.CardStack as CardStack exposing (CardStack)
 import Game.Replay.Space as Space
 import Game.WireAction as WA
-import Main.State as State
+import Main.State
     exposing
         ( DragSource
         , Model

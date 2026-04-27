@@ -15,7 +15,7 @@ import Game.Card exposing (Card)
 import Game.CardStack exposing (BoardLocation)
 import Game.Replay.Space as Space
 import Game.WireAction as WA
-import Main.State as State
+import Main.State
     exposing
         ( DragSource
         , Model

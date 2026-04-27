@@ -1,6 +1,6 @@
 module Game.Strategy.RbSwap exposing (trick)
 
-{-| RB_SWAP ("substitute trick"): kick a same-value, same-color,
+{-| RB\_SWAP ("substitute trick"): kick a same-value, same-color,
 different-suit card out of an rb run and slot the hand card into
 its seat. The kicked card must find a home on a pure run or a
 not-yet-full set.
@@ -12,8 +12,7 @@ Mirrors `angry-gopher/lynrummy/tricks/rb_swap.go`.
 import Game.Card exposing (Card, suitColor)
 import Game.CardStack
     exposing
-        ( BoardCard
-        , BoardCardState(..)
+        ( BoardCardState(..)
         , CardStack
         , HandCard
         , leftMerge

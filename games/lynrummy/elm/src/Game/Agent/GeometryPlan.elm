@@ -1,16 +1,12 @@
-module Game.Agent.GeometryPlan exposing
-    ( defaultBounds
-    , humanFeelBounds
-    , planActions
-    )
+module Game.Agent.GeometryPlan exposing (planActions)
 
 {-| Wrap a stream of WireActions with pre-flight `MoveStack`s
 when applying a primitive would land the board in a state where
-two stacks overlap (with PACK_GAP padding — the human-feel
+two stacks overlap (with PACK\_GAP padding — the human-feel
 threshold, stricter than the referee's legal margin).
 
 The agent's invariant: after every primitive applies, no two
-stacks are within PACK_GAP of each other. A human player
+stacks are within PACK\_GAP of each other. A human player
 relocates crowded stacks BEFORE building on them; the agent
 matches by injecting MoveStacks at the points where the next
 primitive would otherwise produce a too-close result.
@@ -22,7 +18,7 @@ emits a logical primitive sequence (geometry-agnostic);
 -}
 
 import Game.BoardActions as BoardActions
-import Game.BoardGeometry as Geometry
+import Game.BoardGeometry
     exposing
         ( BoardBounds
         , cardPitch
@@ -40,16 +36,6 @@ import Game.WireAction exposing (WireAction(..))
 defaultBounds : BoardBounds
 defaultBounds =
     { maxWidth = 800, maxHeight = 600, margin = 7 }
-
-
-{-| Stricter bounds for the agent's "no overlap, human-feel"
-invariant. Stacks must clear each other by PACK_GAP_X (=30px),
-matching what `Game.PlaceStack.findOpenLoc`'s phase-1 scan
-uses for placement.
--}
-humanFeelBounds : BoardBounds
-humanFeelBounds =
-    { maxWidth = 800, maxHeight = 600, margin = 30 }
 
 
 {-| Walk a sequence of WireActions, injecting pre-flight
@@ -90,6 +76,7 @@ If post-state respects the invariant, emit as is. Otherwise
 try a pre-flight MoveStack to a clear spot, then re-emit. If
 pre-flight can't find a clear loc, fall back to the bare
 primitive; the referee may still accept (legal margin).
+
 -}
 planOne : List CardStack -> WireAction -> ( List WireAction, List CardStack )
 planOne board action =
@@ -307,6 +294,7 @@ pairs (split siblings) are exempt.
 
 Out-of-bounds and pure overlap apply to all stacks
 unconditionally via the legal-margin validator.
+
 -}
 isCleanAfterAction : List CardStack -> List CardStack -> Bool
 isCleanAfterAction preBoard postBoard =

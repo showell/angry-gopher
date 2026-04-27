@@ -34,24 +34,22 @@ the replay FSM + its Msg handlers in one module.
 -}
 
 import Browser.Dom
-import Game.BoardGeometry as BG
 import Game.Card
-import Game.CardStack as CardStack
 import Game.HandLayout as HandLayout
-import Game.Score as Score
-import Game.WireAction as WA exposing (WireAction)
-import Main.Apply as Apply
-import Main.Msg exposing (Msg(..))
 import Game.Replay.AnimateMergeHand as AnimateMergeHand
 import Game.Replay.AnimateMergeStack as AnimateMergeStack
 import Game.Replay.AnimateMoveStack as AnimateMoveStack
 import Game.Replay.AnimatePlaceHand as AnimatePlaceHand
 import Game.Replay.Space as Space
+import Game.Score as Score
+import Game.WireAction as WA exposing (WireAction)
+import Main.Apply as Apply
+import Main.Msg exposing (Msg(..))
 import Main.State as State
     exposing
         ( DragState(..)
         , Model
-        , PathFrame(..)
+        , PathFrame
         , ReplayAnimation(..)
         , StatusKind(..)
         )
@@ -262,23 +260,23 @@ honor a captured path or synthesize a fresh one (the "JIT"
 branch, used by agent-emitted primitives that ship without a
 path). The decision tree:
 
-  1. **Captured path present and still valid** (its first
-     sample matches the live source stack's loc): faithful
-     playback. This is the human-replay common case.
-  2. **Captured path absent OR stale** for an intra-board
-     action: synthesize a fresh path via
-     `Space.synthesizeBoardPath` and animate it. This is the
-     agent-play common case (no path captured) and the
-     out-of-band-MoveStack edge case (path captured but the
-     source has since moved).
-  3. **Captured path absent for a hand-origin action**: fire a
-     `Browser.Dom.getElement` Task for the hand card's DOM id
-     and transition to AwaitingHandRect. Hand origins live in
-     the DOM, not in board coords, so we measure at replay
-     time rather than synthesize blindly.
-  4. **Anything else** (Splits, unknown shapes): apply
-     immediately and beat. Splits are clicks in the live UI,
-     so animating a fake drag for them would be a lie.
+1.  **Captured path present and still valid** (its first
+    sample matches the live source stack's loc): faithful
+    playback. This is the human-replay common case.
+2.  **Captured path absent OR stale** for an intra-board
+    action: synthesize a fresh path via
+    `Space.synthesizeBoardPath` and animate it. This is the
+    agent-play common case (no path captured) and the
+    out-of-band-MoveStack edge case (path captured but the
+    source has since moved).
+3.  **Captured path absent for a hand-origin action**: fire a
+    `Browser.Dom.getElement` Task for the hand card's DOM id
+    and transition to AwaitingHandRect. Hand origins live in
+    the DOM, not in board coords, so we measure at replay
+    time rather than synthesize blindly.
+4.  **Anything else** (Splits, unknown shapes): apply
+    immediately and beat. Splits are clicks in the live UI,
+    so animating a fake drag for them would be a lie.
 
 -}
 prepareReplayStep :

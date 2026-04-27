@@ -9,7 +9,6 @@ module Game.CardStack exposing
     , boardCardAgedState
     , boardCardDecoder
     , boardCardSameCard
-    , boardCardStateToInt
     , boardLocationDecoder
     , canExtract
     , cardStackDecoder
@@ -23,20 +22,13 @@ module Game.CardStack exposing
     , fromShorthand
     , handCardDecoder
     , handCardSameCard
-    , handCardStateToInt
-    , intToBoardCardState
-    , intToHandCardState
     , incomplete
     , leftMerge
-    , leftSplit
-    , locsEqual
     , maybeMerge
     , problematic
     , rightMerge
-    , rightSplit
     , size
     , split
-    , stackCards
     , stackDisplayWidth
     , stackPitch
     , stackStr
@@ -68,8 +60,6 @@ Intentional Elm divergences:
 
 -}
 
-import Json.Decode as Decode exposing (Decoder)
-import Json.Encode as Encode exposing (Value)
 import Game.Card
     exposing
         ( Card
@@ -84,6 +74,8 @@ import Game.StackType
         ( CardStackType(..)
         , getStackType
         )
+import Json.Decode as Decode exposing (Decoder)
+import Json.Encode as Encode exposing (Value)
 
 
 

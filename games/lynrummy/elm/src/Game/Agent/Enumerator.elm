@@ -5,7 +5,6 @@ module Game.Agent.Enumerator exposing
     , enumerateMoves
     , initialLineage
     , moveTouchesFocus
-    , updateLineage
     )
 
 {-| The BFS move generator. Given a `Buckets` state, returns
@@ -18,7 +17,8 @@ identical across implementations.
 
 -}
 
-import Game.Agent.Buckets as Buckets exposing (Buckets, Stack)
+import Dict exposing (Dict)
+import Game.Agent.Buckets exposing (Buckets, Stack)
 import Game.Agent.Cards as Cards
 import Game.Agent.Move
     exposing
@@ -26,26 +26,20 @@ import Game.Agent.Move
         , ExtractVerb(..)
         , FreePullDesc
         , Move(..)
-        , PushDesc
         , ShiftDesc
         , Side(..)
         , SourceBucket(..)
-        , SpliceDesc
         , WhichEnd(..)
         )
-import Game.Card as Card
+import Game.Card
     exposing
         ( Card
-        , CardColor
-        , CardValue
-        , Suit
         , allSuits
         , cardColor
         , cardValueToInt
         , suitColor
         , suitToInt
         )
-import Dict exposing (Dict)
 import Game.StackType as StackType
     exposing
         ( CardStackType(..)
@@ -84,7 +78,8 @@ enumerateMoves state =
             state.growing
                 |> List.any
                     (\g ->
-                        List.length g == 2
+                        List.length g
+                            == 2
                             && hasDoomedThird g inventory
                     )
     in
@@ -785,7 +780,7 @@ removeFirstEqual target xs =
 {-| Find the first entry in `xs` matching `oldContent` and
 either drop it (if `graduated`) or replace it with
 `newContent`. Used when a non-focus lineage entry is
-mutated by a free_pull where focus is the loose.
+mutated by a free\_pull where focus is the loose.
 -}
 updateMatching : a -> a -> Bool -> List a -> List a
 updateMatching oldContent newContent graduated xs =
@@ -870,6 +865,7 @@ deterministic and matches Python's sorted iteration of the
 neighbor shape set. Sort matters for cross-language plan
 parity — without it the same input puzzle yields different
 (but equally valid) plans on the two sides.
+
 -}
 neighborShapes : Stack -> List ShapeKey
 neighborShapes target =
@@ -1300,7 +1296,7 @@ shiftFromEnd state inventory extractable absorber shapes srcIdx source kind whic
 
 
 {-| Resolve the donor stack from the index entry and emit
-the shift moves. The new_donor stack is computed at use
+the shift moves. The new\_donor stack is computed at use
 time by re-running the peel decomposition.
 -}
 shiftEmitFromEntry :

@@ -29,7 +29,7 @@ the refactor that unwound "one big module" (an artifact of the
 original TS game's deployment constraint that no longer applies).
 
 This module is pure types + trivial helpers — no I/O, no
-rendering, no update logic, no Msg. Other Main.* modules import
+rendering, no update logic, no Msg. Other Main.\* modules import
 from here; it imports only the LynRummy domain primitives. That
 makes State a safe leaf: changes here ripple out, but nothing
 ripples in.
@@ -39,13 +39,12 @@ ripples in.
 import Game.Agent.Move exposing (Move)
 import Game.Card exposing (Card)
 import Game.CardStack exposing (CardStack)
+import Game.Dealer
 import Game.GestureArbitration as GA
 import Game.Hand as Hand exposing (Hand)
-import Game.PlayerTurn exposing (CompleteTurnResult)
 import Game.Score as Score
 import Game.WingOracle exposing (WingId)
 import Game.WireAction exposing (WireAction)
-import Game.Dealer
 
 
 
@@ -152,6 +151,7 @@ Subscription during replay is `Browser.Events.onAnimationFrame`
 (not a fixed Time.every tick) so drag animations can interpolate
 cursor position smoothly. See `replayAnim` for per-step
 animation state.
+
 -}
 type alias ReplayProgress =
     { pending : List ActionLogEntry
@@ -265,6 +265,7 @@ Key invariants:
     needed at all (the floater starts at `stack.loc`). For
     hand-origin drags it's applied at mousedown to derive the
     initial viewport floater position, then forgotten.
+
 -}
 type alias DragInfo =
     { source : DragSource

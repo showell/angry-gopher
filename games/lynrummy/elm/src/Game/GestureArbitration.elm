@@ -3,7 +3,6 @@ module Game.GestureArbitration exposing
     , Rect
     , applySplit
     , clickIntentAfterMove
-    , clickThreshold
     , cursorInRect
     , distSquared
     )
@@ -14,13 +13,13 @@ made pure has been pulled here so elm-test can reach it.
 
 The rule:
 
-- A board-card mousedown captures a "click intent" naming the
-  card index within the stack.
-- Pointer movement past `clickThreshold` (squared distance)
-  kills the intent. Once dead, it stays dead for the gesture.
-- At pointer-up, a surviving intent means a click — split the
-  stack at the captured card. A dead intent means a drag —
-  normal drop / place / snap-back logic applies.
+  - A board-card mousedown captures a "click intent" naming the
+    card index within the stack.
+  - Pointer movement past `clickThreshold` (squared distance)
+    kills the intent. Once dead, it stays dead for the gesture.
+  - At pointer-up, a surviving intent means a click — split the
+    stack at the captured card. A dead intent means a drag —
+    normal drop / place / snap-back logic applies.
 
 -}
 

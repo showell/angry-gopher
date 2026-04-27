@@ -12,18 +12,18 @@ asserting on the model state at each phase.
 
 The ONLY input is a button click. Everything else is a model
 snapshot.
+
 -}
 
 import Expect
-import Http
 import Game.Card exposing (Card, CardValue(..), OriginDeck(..), Suit(..))
 import Game.CardStack
     exposing
-        ( BoardCard
-        , BoardCardState(..)
+        ( BoardCardState(..)
         , CardStack
         )
 import Game.StackType as StackType
+import Http
 import Main.Msg exposing (Msg(..))
 import Main.Play as Play
 import Main.State as State
@@ -138,6 +138,7 @@ This test injects a `MouseUp` Msg one frame after Animating
 starts, then drives drain. If the action still applies, the
 playback layer survives the mouseup race. If not, this test
 fails AND we have a localized regression.
+
 -}
 mouseUpDuringAnimDoesNotAbortPlayback : Test
 mouseUpDuringAnimDoesNotAbortPlayback =
@@ -263,7 +264,7 @@ mined001Board =
     ]
 
 
-{-| Walk the full mined_001_4S_4Cp1 program via repeated
+{-| Walk the full mined\_001\_4S\_4Cp1 program via repeated
 ClickAgentPlay. Reproduces what Steve does in the browser:
 click, watch the move animate, click for the next move,
 etc. The test asserts the final board is victory after walking

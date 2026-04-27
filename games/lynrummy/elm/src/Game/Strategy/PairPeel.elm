@@ -1,6 +1,6 @@
 module Game.Strategy.PairPeel exposing (trick)
 
-{-| PAIR_PEEL: two hand cards form a pair (set-pair or run-pair)
+{-| PAIR\_PEEL: two hand cards form a pair (set-pair or run-pair)
 and a peelable board card completes the triplet.
 
 Mirrors `angry-gopher/lynrummy/tricks/pair_peel.go`.
@@ -21,7 +21,6 @@ import Game.CardStack
         ( CardStack
         , HandCard
         , canExtract
-        , stackType
         )
 import Game.StackType exposing (CardStackType(..), getStackType, predecessor, successor)
 import Game.Strategy.Helpers exposing (dummyLoc, extractCard, freshlyPlayed)

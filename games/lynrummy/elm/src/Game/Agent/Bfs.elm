@@ -1,6 +1,5 @@
 module Game.Agent.Bfs exposing
     ( Plan
-    , bfsWithCap
     , solve
     , solveBoard
     , solveWithCap
@@ -52,6 +51,7 @@ A stack classifies as helper if `StackType.getStackType`
 recognizes it as a complete group (Set / PureRun /
 RedBlackRun); everything else is trouble. Mirrors Python's
 `bfs.solve(board)` partition step.
+
 -}
 solveBoard : List CardStack -> Maybe Plan
 solveBoard board =

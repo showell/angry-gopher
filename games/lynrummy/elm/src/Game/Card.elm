@@ -13,9 +13,6 @@ module Game.Card exposing
     , cardStr
     , cardValueToInt
     , encodeCard
-    , intToCardValue
-    , intToOriginDeck
-    , intToSuit
     , isPairOfDups
     , originDeckToInt
     , suitColor
@@ -68,9 +65,9 @@ intent. Use them.
 
 -}
 
+import Game.Random
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode exposing (Value)
-import Game.Random
 
 
 
@@ -162,6 +159,7 @@ cardValueToInt v =
 
         King ->
             13
+
 
 
 -- CARD EQUIVALENCE
@@ -271,16 +269,16 @@ suitEmojiStr : Suit -> String
 suitEmojiStr suit =
     case suit of
         Club ->
-            "\u{2663}"
+            "♣"
 
         Diamond ->
-            "\u{2666}"
+            "♦"
 
         Heart ->
-            "\u{2665}"
+            "♥"
 
         Spade ->
-            "\u{2660}"
+            "♠"
 
 
 cardStr : Card -> String

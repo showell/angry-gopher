@@ -12,16 +12,15 @@ cd "$GOPHER_DIR"
 COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 go build -ldflags "-X main.gitCommit=$COMMIT" -o gopher-server .
 
-# Compile the standalone Elm LynRummy client so Gopher can serve elm.js
-# from games/lynrummy/elm/. Non-fatal if it fails — the
-# handler returns a helpful 404 pointing at the rebuild command.
+# Compile the LynRummy Elm app's two entry points (Main.elm
+# for the full-game client, Lab.elm for BOARD_LAB) into the
+# same project directory. Both share games/lynrummy/elm/'s
+# elm.json + node_modules + tests + review setup.
 (cd games/lynrummy/elm && ./node_modules/.bin/elm make src/Main.elm --output=elm.js >/dev/null 2>&1) \
     || echo "Warning: Elm LynRummy build failed; /gopher/lynrummy-elm/ will 404 on elm.js (try \`npm install\` in games/lynrummy/elm/)"
 
-# Compile the BOARD_LAB Elm app — shares the LynRummy Elm's pinned
-# elm binary via a sibling-relative path.
-(cd games/lynrummy/board-lab/elm && ../../elm/node_modules/.bin/elm make src/Lab.elm --output=elm.js >/dev/null 2>&1) \
-    || echo "Warning: BOARD_LAB Elm build failed; /gopher/board-lab/ will 404 on elm.js"
+(cd games/lynrummy/elm && ./node_modules/.bin/elm make src/Lab.elm --output=lab.js >/dev/null 2>&1) \
+    || echo "Warning: BOARD_LAB Elm build failed; /gopher/board-lab/ will 404 on lab.js"
 
 # Regenerate the BOARD_LAB puzzle catalog from the DB-mined
 # board-only puzzles. Resulting JSON is served at

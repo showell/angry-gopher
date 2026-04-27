@@ -3,19 +3,17 @@ module Game.BoardGeometry exposing
     , BoardGeometryStatus(..)
     , GeometryError
     , GeometryErrorKind(..)
+    , boardBoundsDecoder
     , boardViewportLeft
     , boardViewportTop
-    , boardBoundsDecoder
     , cardHeight
     , cardPitch
     , classifyBoardGeometry
     , encodeBoardBounds
     , encodeGeometryError
     , geometryErrorDecoder
-    , geometryErrorKindToString
     , stackHeight
     , stackWidth
-    , stringToGeometryErrorKind
     , validateBoardGeometry
     )
 
@@ -35,9 +33,9 @@ Two related but distinct concepts:
 
 -}
 
+import Game.CardStack exposing (CardStack, cardWidth, size)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode exposing (Value)
-import Game.CardStack exposing (CardStack, cardWidth, size)
 
 
 
@@ -60,6 +58,7 @@ viewport coordinate of every board stack: viewport = loc +
 (boardViewportLeft, boardViewportTop).
 
 If you change these, update `geometry.py` to match.
+
 -}
 boardViewportLeft : Int
 boardViewportLeft =

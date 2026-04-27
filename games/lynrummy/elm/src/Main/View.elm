@@ -8,7 +8,7 @@ module Main.View exposing
 bar, hand column, board column, drag overlay, and popup into
 an **embeddable** 1100×700 div (`position: relative`). The
 main app's Main.elm wraps this in a viewport-filling outer
-shell; BOARD_LAB's Lab.elm places it directly inside each
+shell; BOARD\_LAB's Lab.elm places it directly inside each
 puzzle panel.
 
 Plus the turn-ceremony helpers (`statusForCompleteTurn`,
@@ -17,23 +17,22 @@ update writes into Model.
 
 Extracted 2026-04-19 from the pre-split `Main.elm` monolith;
 rewritten as embeddable 2026-04-23
-(REFACTOR_EMBEDDABLE_PLAY phase III).
+(REFACTOR\_EMBEDDABLE\_PLAY phase III).
+
 
 ## Visual structure
 
-```
-Html (position: relative, 1100×700, embeddable)
-├── viewStatusBar           // at (0, 0), ~32px tall
-├── leftSidebar            // at (20, 100), 240px wide
-│   ├── playerHands         // main app: turn # + per-player rows + turn controls
-│   └── puzzleControls      // BOARD_LAB: Hint / Let agent play / Replay
-├── boardColumn             // at (boardViewportLeft, boardViewportTop)
-│   └── boardWithWings      // id = `boardDomIdFor model.gameId`
-│       ├── viewStackForBoard (×N)
-│       └── viewWingAt       (×M, during drag only)
-├── draggedOverlay          // floating drag card (position: fixed)
-└── viewPopup               // modal ceremony (position: fixed)
-```
+    Html (position: relative, 1100×700, embeddable)
+    ├── viewStatusBar           // at (0, 0), ~32px tall
+    ├── leftSidebar            // at (20, 100), 240px wide
+    │   ├── playerHands         // main app: turn # + per-player rows + turn controls
+    │   └── puzzleControls      // BOARD_LAB: Hint / Let agent play / Replay
+    ├── boardColumn             // at (boardViewportLeft, boardViewportTop)
+    │   └── boardWithWings      // id = `boardDomIdFor model.gameId`
+    │       ├── viewStackForBoard (×N)
+    │       └── viewWingAt       (×M, during drag only)
+    ├── draggedOverlay          // floating drag card (position: fixed)
+    └── viewPopup               // modal ceremony (position: fixed)
 
 The drag floater and popup stay `position: fixed` — they're
 viewport-level overlays that work the same whether the view
@@ -49,20 +48,19 @@ drag math honest.
 
 -}
 
-import Html exposing (Html, div)
-import Html.Attributes exposing (href, id, style)
-import Html.Events as Events
-import Game.BoardActions exposing (Side(..))
 import Game.BoardGeometry as BoardGeometry
 import Game.CardStack as CardStack exposing (CardStack)
+import Game.Game exposing (CompleteTurnOutcome)
 import Game.Hand exposing (Hand)
 import Game.PlayerTurn exposing (CompleteTurnResult(..))
 import Game.View as View
 import Game.WingOracle as WingOracle exposing (WingId)
+import Html exposing (Html, div)
+import Html.Attributes exposing (href, id, style)
+import Html.Events as Events
 import Main.Gesture as Gesture
 import Main.Msg exposing (Msg(..))
-import Game.Game exposing (CompleteTurnOutcome)
-import Main.State as State
+import Main.State
     exposing
         ( DragInfo
         , DragSource(..)
@@ -72,7 +70,6 @@ import Main.State as State
         , PopupContent
         , StatusKind(..)
         , StatusMessage
-        , activeHand
         , boardDomIdFor
         )
 
@@ -356,10 +353,11 @@ layouts:
 
   - `playerHands` — the main app's full hand-and-score surface
     with per-player rows + turn controls.
-  - `puzzleControls` — the BOARD_LAB lab's stripped-down
+  - `puzzleControls` — the BOARD\_LAB lab's stripped-down
     vertical button stack (Hint / Let agent play / replay).
     Puzzles are board-only, so everything in `playerHands`
     is irrelevant there.
+
 -}
 leftSidebar : Model -> Html Msg
 leftSidebar model =
@@ -534,7 +532,8 @@ viewPlayerRow model idx hand =
 
 {-| Main-app turn controls — Complete turn / Hint / Replay /
 Lobby. The puzzle/lab path uses `puzzleControls` instead and
-never reaches this. -}
+never reaches this.
+-}
 viewTurnControls : Model -> Html Msg
 viewTurnControls model =
     let
@@ -698,6 +697,7 @@ While `clickIntent` is still alive (mousedown without
 confirmed drag movement), the floater is suppressed so a
 pure click doesn't briefly render a split-candidate floater
 then discard it.
+
 -}
 draggedOverlay : Model -> Html Msg
 draggedOverlay model =
@@ -709,7 +709,7 @@ draggedOverlay model =
             else
                 case info.pathFrame of
                     ViewportFrame ->
-                        renderDraggedFloater model info [ style "position" "fixed" ]
+                        renderDraggedFloater info [ style "position" "fixed" ]
 
                     BoardFrame ->
                         Html.text ""
@@ -732,7 +732,7 @@ boardDragOverlay model =
             else
                 case info.pathFrame of
                     BoardFrame ->
-                        Just (renderDraggedFloater model info [ style "position" "absolute" ])
+                        Just (renderDraggedFloater info [ style "position" "absolute" ])
 
                     ViewportFrame ->
                         Nothing
@@ -746,8 +746,8 @@ directly into the CSS top/left; caller picks `fixed` (viewport)
 vs `absolute` (board child). Frame of `floaterTopLeft` matches
 the overlay's mount frame — no translation at render.
 -}
-renderDraggedFloater : Model -> DragInfo -> List (Html.Attribute Msg) -> Html Msg
-renderDraggedFloater _ info positioningAttrs =
+renderDraggedFloater : DragInfo -> List (Html.Attribute Msg) -> Html Msg
+renderDraggedFloater info positioningAttrs =
     let
         x =
             info.floaterTopLeft.x

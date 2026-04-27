@@ -2,7 +2,6 @@ module Game.Referee exposing
     ( RefereeError
     , RefereeMove
     , RefereeStage(..)
-    , computeBoardAfter
     , encodeRefereeError
     , encodeRefereeMove
     , encodeRefereeResult
@@ -10,7 +9,6 @@ module Game.Referee exposing
     , refereeMoveDecoder
     , refereeResultDecoder
     , refereeStageToString
-    , stringToRefereeStage
     , validateGameMove
     , validateTurnComplete
     )
@@ -26,11 +24,11 @@ Two entry points:
 
   - `validateGameMove` — rule on a single move during a turn.
     The board can be messy mid-turn. Four stages:
-      1. Protocol — is the JSON well-formed? (stubbed)
-      2. Geometry — do stacks fit without illegal overlap? (stubbed)
-      3. Inventory — are cards conserved?
-    Semantics is NOT checked here; mid-turn messiness (incomplete
-    stacks, splits in progress) is allowed.
+    1.  Protocol — is the JSON well-formed? (stubbed)
+    2.  Geometry — do stacks fit without illegal overlap? (stubbed)
+    3.  Inventory — are cards conserved?
+        Semantics is NOT checked here; mid-turn messiness (incomplete
+        stacks, splits in progress) is allowed.
 
   - `validateTurnComplete` — rule on whether the turn can end.
     The board must be clean before we move on to the next
@@ -39,7 +37,7 @@ Two entry points:
 The referee does not enforce turn order, player identity, or
 how many moves per turn. Those are social rules, not physics.
 
-**Elm port notes:**
+\*\*Elm port <notes:**>
 
   - Returns `Result RefereeError ()` rather than TS's
     `RefereeError | undefined`. `Ok ()` = move is valid.
@@ -55,14 +53,11 @@ how many moves per turn. Those are social rules, not physics.
 
 -}
 
-import Json.Decode as Decode exposing (Decoder)
-import Json.Encode as Encode exposing (Value)
-import Game.BoardGeometry exposing (BoardBounds, GeometryError, validateBoardGeometry)
+import Game.BoardGeometry exposing (BoardBounds, validateBoardGeometry)
 import Game.Card exposing (Card)
 import Game.CardStack
     exposing
-        ( BoardCard
-        , CardStack
+        ( CardStack
         , HandCard
         , cardStackDecoder
         , encodeCardStack
@@ -71,6 +66,8 @@ import Game.CardStack
         , stacksEqual
         )
 import Game.StackType exposing (CardStackType(..), getStackType)
+import Json.Decode as Decode exposing (Decoder)
+import Json.Encode as Encode exposing (Value)
 
 
 
@@ -110,7 +107,7 @@ protocol, geometry, and inventory checks in order.
 -}
 validateGameMove : RefereeMove -> BoardBounds -> Result RefereeError ()
 validateGameMove move bounds =
-    checkProtocol move
+    checkProtocol
         |> Result.andThen (\() -> computeBoardAfter move)
         |> Result.andThen
             (\boardAfter ->
@@ -133,8 +130,8 @@ validateTurnComplete board bounds =
 -- STAGE 1: PROTOCOL (stubbed)
 
 
-checkProtocol : RefereeMove -> Result RefereeError ()
-checkProtocol _ =
+checkProtocol : Result RefereeError ()
+checkProtocol =
     -- Placeholder. Real implementation is deferred; see
     -- `angry-cat/src/lyn_rummy/game/protocol_validation.ts`.
     Ok ()
@@ -167,7 +164,7 @@ checkGeometry board bounds =
 
 
 {-| Every stack on the board must be a valid card group:
-SET, PURE_RUN, or RED_BLACK_RUN. Reject Incomplete / Bogus / Dup.
+SET, PURE\_RUN, or RED\_BLACK\_RUN. Reject Incomplete / Bogus / Dup.
 -}
 checkSemantics : List CardStack -> Result RefereeError ()
 checkSemantics board =

@@ -1,12 +1,9 @@
 module Game.View exposing
-    ( boardShell
-    , boardShellWith
-    , cardHeightPx
+    ( boardShellWith
     , mergeableGreen
     , mergeableHover
     , navy
     , viewBoardHeading
-    , viewCard
     , viewCardWithAttrs
     , viewHand
     , viewHandHeading
@@ -25,13 +22,13 @@ are composed in `Main.elm` using these pieces.
 
 -}
 
-import Html exposing (Html, div, text)
-import Html.Attributes exposing (id, style)
 import Game.BoardGeometry as BG
-import Game.Card as Card exposing (Card, CardColor(..), Suit)
+import Game.Card as Card exposing (Card, CardColor(..))
 import Game.CardStack as CardStack exposing (BoardCard, BoardCardState(..), CardStack, HandCard, HandCardState(..))
 import Game.Hand exposing (Hand)
 import Game.HandLayout as HandLayout
+import Html exposing (Html, div, text)
+import Html.Attributes exposing (id, style)
 
 
 
@@ -97,15 +94,6 @@ sectionHeading label =
 
 
 -- BOARD
-
-
-{-| Board shell — khaki play surface, navy border, relative
-position. Callers supply all children (stacks, wings,
-dragged-stack overlay).
--}
-boardShell : List (Html msg) -> Html msg
-boardShell children =
-    boardShellWith [] children
 
 
 {-| Board shell with extra attributes on the shell element
@@ -231,13 +219,6 @@ viewBoardCardAt cardAttrs index bc =
 
 
 -- CARD
-
-
-{-| Single playing card. Exported as `viewCard` with no extras.
--}
-viewCard : Card -> Html msg
-viewCard card =
-    viewPlayingCardWith [] card
 
 
 {-| Single playing card with extra attributes (mousedown
