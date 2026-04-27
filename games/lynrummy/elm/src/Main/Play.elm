@@ -42,6 +42,8 @@ import Game.GestureArbitration as GA
 import Game.Referee as Referee
 import Game.Score as Score
 import Game.Strategy.Hint as Hint
+import Game.CardStack
+import Game.Replay.Space as ReplaySpace
 import Game.WireAction as WA exposing (WireAction)
 import Main.Apply exposing (applyAction, refereeBounds)
 import Main.Gesture as Gesture
@@ -648,9 +650,6 @@ runAgentMove move remaining model =
         primitives =
             AgentVerbs.moveToPrimitives model.board move
                 |> AgentGeometry.planActions model.board
-
-        newEntries =
-            List.map agentLogEntry primitives
     in
     if List.isEmpty primitives then
         -- Verb-to-primitive translation produced nothing. Most
@@ -693,25 +692,29 @@ runAgentMove move remaining model =
                     , preDrag = dragLabel model.drag
                     }
 
+            -- Synthesize a gesture per primitive against an
+            -- evolving sim board. Each Merge/Move primitive
+            -- gets a real path; the resulting actionLog entry
+            -- carries it so Instant Replay can animate later
+            -- AND the wire envelope ships it so the server's
+            -- gesture-required gate accepts (Splits, hand-
+            -- origin, complete_turn don't need one — synthesis
+            -- returns Nothing for those).
+            primGestures =
+                synthesizeAgentGestures model primitives
+
+            entries =
+                List.map agentLogEntryWith primGestures
+
             appended =
                 { model
-                    | actionLog = model.actionLog ++ newEntries
+                    | actionLog = model.actionLog ++ entries
                     , agentProgram = Just remaining
                     , status =
                         { text = "Agent: " ++ AgentMove.describe move
                         , kind = Inform
                         }
-                    , replay = Just { pending = newEntries, paused = False }
-
-                    -- Reverted 2026-04-27: removing these caused
-                    -- "click but no animation" in the live UI even
-                    -- though the walkthrough tests pass. Empirically,
-                    -- something about the prior `replayAnim` /
-                    -- `drag` state is non-NotAnimating / non-Dragging
-                    -- at click time in browser-real conditions that
-                    -- the test harness's clean-baseline runReplay
-                    -- doesn't reproduce. Sit on the fix; revisit
-                    -- with a test that fails first.
+                    , replay = Just { pending = entries, paused = False }
                     , replayAnim = State.NotAnimating
                     , drag = NotDragging
                 }
@@ -721,30 +724,79 @@ runAgentMove move remaining model =
                     Just sid ->
                         case model.puzzleName of
                             Just name ->
-                                List.map (\p -> Wire.sendPuzzleAction sid name p Nothing) primitives
+                                List.map (sendOnePuzzle sid name) primGestures
 
                             Nothing ->
-                                List.map (\p -> Wire.sendAction sid p Nothing) primitives
+                                List.map (sendOneFull sid) primGestures
 
                     Nothing ->
                         []
 
             boardRectCmd =
-                -- Replay synthesizes paths in board frame; the
-                -- live board rect is needed downstream by
-                -- translation helpers. Refresh it now so it's
-                -- fresh for the about-to-run animation.
                 Task.attempt BoardRectReceived
                     (Browser.Dom.getElement (State.boardDomIdFor model.gameId))
         in
         ( appended, Cmd.batch (boardRectCmd :: wireCmds) )
 
 
-agentLogEntry : WireAction -> State.ActionLogEntry
-agentLogEntry action =
+sendOnePuzzle : Int -> String -> ( WireAction, Maybe { path : List State.GesturePoint, frame : PathFrame } ) -> Cmd Msg
+sendOnePuzzle sid name ( prim, gesture ) =
+    Wire.sendPuzzleAction sid name prim gesture
+
+
+sendOneFull : Int -> ( WireAction, Maybe { path : List State.GesturePoint, frame : PathFrame } ) -> Cmd Msg
+sendOneFull sid ( prim, gesture ) =
+    Wire.sendAction sid prim gesture
+
+
+{-| Walk a primitive sequence against an evolving sim board,
+synthesizing a gesture for each Merge/Move primitive against
+the sim AT THAT POINT. Apply each primitive locally to advance
+the sim before the next synthesis. Returns
+`[(prim, maybeGesture)]` in the original order.
+-}
+synthesizeAgentGestures :
+    Model
+    -> List WireAction
+    -> List ( WireAction, Maybe { path : List State.GesturePoint, frame : PathFrame } )
+synthesizeAgentGestures initialModel prims =
+    let
+        loop simModel acc remaining =
+            case remaining of
+                [] ->
+                    List.reverse acc
+
+                p :: rest ->
+                    let
+                        synth =
+                            ReplaySpace.synthesizeBoardPath p simModel 0
+                                |> Maybe.map (\( path, frame ) -> { path = path, frame = frame })
+
+                        nextSim =
+                            (applyAction p simModel).model
+                    in
+                    loop nextSim (( p, synth ) :: acc) rest
+    in
+    loop initialModel [] prims
+
+
+{-| Build an actionLog entry for a primitive plus its
+synthesized gesture (if any). Replaces the older
+`agentLogEntry` which always shipped `gesturePath = Nothing`
+and forced replay to JIT-synthesize. Carrying the gesture
+here means Instant Replay finds a captured path and
+animates immediately. -}
+agentLogEntryWith : ( WireAction, Maybe { path : List State.GesturePoint, frame : PathFrame } ) -> State.ActionLogEntry
+agentLogEntryWith ( action, gesture ) =
     { action = action
-    , gesturePath = Nothing
-    , pathFrame = BoardFrame
+    , gesturePath = Maybe.map .path gesture
+    , pathFrame =
+        case gesture of
+            Just g ->
+                g.frame
+
+            Nothing ->
+                BoardFrame
     }
 
 

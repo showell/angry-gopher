@@ -369,10 +369,19 @@ prepareReplayStep action maybePath frame model nowMs =
                             startAnimating anim
 
                         Nothing ->
-                            -- Board-anim builder said no (e.g.
-                            -- Split, which is click-only by
-                            -- design).
-                            applyImmediate
+                            -- Captured path was deemed valid by
+                            -- pathStillValid but the underlying
+                            -- source-stack lookup (boardStackSource)
+                            -- still failed. The two checks aren't
+                            -- coupled; rather than silently degrade
+                            -- to applyImmediate, escalate to JIT
+                            -- synthesis. JIT itself falls back to
+                            -- applyImmediate if it can't synthesize
+                            -- either. This is the only place where
+                            -- this lookup gap can surface during
+                            -- replay; centralizing the fallback
+                            -- here keeps the gap from being silent.
+                            jitOrApply
 
         jitOrApply =
             case Space.synthesizeBoardPath action model nowMs of
