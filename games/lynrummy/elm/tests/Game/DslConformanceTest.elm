@@ -24,6 +24,9 @@ import Game.PlaceStack
 import Game.Referee as Referee exposing (RefereeStage(..), refereeStageToString)
 import Game.StackType as StackType
 import Game.Strategy.Hint as Hint
+import Main.Msg as Msg
+import Main.Play as Play
+import Main.State as State
 import Game.Strategy.DirectPlay
 import Game.Strategy.HandStacks
 import Game.Strategy.LooseCardPlay
@@ -65,6 +68,132 @@ firstIncompleteStack stacks =
         |> List.filter (\( _, s ) -> not (isCleanStack s))
         |> List.head
 
+
+
+clickAgentPlayAlreadyClean : Test
+clickAgentPlayAlreadyClean =
+    test "click_agent_play_already_clean" <|
+        \_ ->
+            let
+                board =
+                    [ { boardCards = [ { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 50, left = 50 } }
+                        , { boardCards = [ { card = { value = Two, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Four, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 100, left = 50 } }
+                        ]
+
+                base =
+                    State.baseModel
+
+                model0 =
+                    { base | board = board, sessionId = Just 0 }
+
+                ( newModel, _, _ ) =
+                    Play.update Msg.ClickAgentPlay model0
+
+                logAppended =
+                    List.length newModel.actionLog - List.length model0.actionLog
+
+                replayStarted =
+                    newModel.replay /= Nothing
+
+                programSize =
+                    case newModel.agentProgram of
+                        Just lst ->
+                            List.length lst
+
+                        Nothing ->
+                            0
+            in
+            Expect.all
+                [ \_ -> Expect.equal False replayStarted
+                , \_ -> Expect.equal 0 logAppended
+                , \_ -> if String.contains "already clean" newModel.status.text then Expect.pass else Expect.fail ("status missing already clean; got: " ++ newModel.status.text)
+                ]
+                ()
+
+
+clickAgentPlaySimplePeel : Test
+clickAgentPlaySimplePeel =
+    test "click_agent_play_simple_peel" <|
+        \_ ->
+            let
+                board =
+                    [ { boardCards = [ { card = { value = Ten, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 50, left = 50 } }
+                        , { boardCards = [ { card = { value = Nine, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 100, left = 200 } }
+                        ]
+
+                base =
+                    State.baseModel
+
+                model0 =
+                    { base | board = board, sessionId = Just 0 }
+
+                ( newModel, _, _ ) =
+                    Play.update Msg.ClickAgentPlay model0
+
+                logAppended =
+                    List.length newModel.actionLog - List.length model0.actionLog
+
+                replayStarted =
+                    newModel.replay /= Nothing
+
+                programSize =
+                    case newModel.agentProgram of
+                        Just lst ->
+                            List.length lst
+
+                        Nothing ->
+                            0
+            in
+            Expect.all
+                [ \_ -> Expect.equal True replayStarted
+                , \_ -> Expect.equal 1 logAppended
+                , \_ -> Expect.equal 0 programSize
+                , \_ -> Expect.equal State.Inform newModel.status.kind
+                , \_ -> if String.contains "Agent:" newModel.status.text then Expect.pass else Expect.fail ("status missing Agent:; got: " ++ newModel.status.text)
+                ]
+                ()
+
+
+clickAgentPlayUnsolvableBoard : Test
+clickAgentPlayUnsolvableBoard =
+    test "click_agent_play_unsolvable_board" <|
+        \_ ->
+            let
+                board =
+                    [ { boardCards = [ { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 50, left = 50 } }
+                        , { boardCards = [ { card = { value = Nine, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 100, left = 200 } }
+                        ]
+
+                base =
+                    State.baseModel
+
+                model0 =
+                    { base | board = board, sessionId = Just 0 }
+
+                ( newModel, _, _ ) =
+                    Play.update Msg.ClickAgentPlay model0
+
+                logAppended =
+                    List.length newModel.actionLog - List.length model0.actionLog
+
+                replayStarted =
+                    newModel.replay /= Nothing
+
+                programSize =
+                    case newModel.agentProgram of
+                        Just lst ->
+                            List.length lst
+
+                        Nothing ->
+                            0
+            in
+            Expect.all
+                [ \_ -> Expect.equal False replayStarted
+                , \_ -> Expect.equal 0 logAppended
+                , \_ -> Expect.equal 0 programSize
+                , \_ -> if String.contains "could not find a plan" newModel.status.text then Expect.pass else Expect.fail ("status missing could not find a plan; got: " ++ newModel.status.text)
+                ]
+                ()
 
 
 corpusSid108 : Test
@@ -4401,7 +4530,10 @@ validExtendRunWith8H =
 suite : Test
 suite =
     describe "DSL conformance"
-        [ corpusSid108
+        [ clickAgentPlayAlreadyClean
+        , clickAgentPlaySimplePeel
+        , clickAgentPlayUnsolvableBoard
+        , corpusSid108
         , corpusSid110
         , corpusSid112
         , corpusSid114

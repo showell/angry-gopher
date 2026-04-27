@@ -75,6 +75,12 @@ type Expectation struct {
 	PlanLines  []string // expect: plan_lines — assert plan describe() output matches line-by-line (snapshot)
 	// Geometry expectations (op `find_open_loc`).
 	Loc *Loc // expect: loc: (top, left) — assert findOpenLoc returns this exact loc
+	// Click-agent-play expectations (op `click_agent_play`).
+	ReplayStarted    *bool  // expect: replay_started: true | false
+	LogAppended      *int   // expect: log_appended: N — exact entries appended to actionLog
+	AgentProgramSize *int   // expect: agent_program_size: N — Just (List of length N) or 0 = Nothing
+	StatusKind       string // expect: status_kind: inform | scold | celebrate
+	StatusContains   string // expect: status_contains: "..."
 }
 
 // ExpectedSuggestion — one row inside an `expect: suggestions`
@@ -438,6 +444,9 @@ import Game.PlaceStack
 import Game.Referee as Referee exposing (RefereeStage(..), refereeStageToString)
 import Game.StackType as StackType
 import Game.Strategy.Hint as Hint
+import Main.Msg as Msg
+import Main.Play as Play
+import Main.State as State
 {{range elmTrickModules}}import Game.Strategy.{{.}}
 {{end}}import Test exposing (Test, describe, test)
 
@@ -635,10 +644,78 @@ func elmScenarioBody(sc Scenario) string {
 		elmSolve(&b, sc)
 	case "find_open_loc":
 		elmFindOpenLoc(&b, sc)
+	case "click_agent_play":
+		elmClickAgentPlay(&b, sc)
 	default:
 		fmt.Fprintf(&b, "            Expect.fail \"unknown op %s\"", sc.Op)
 	}
 	return b.String()
+}
+
+
+// elmClickAgentPlay emits a test body that constructs a Play
+// model from the scenario's `board:` block, dispatches a
+// `ClickAgentPlay` Msg through Play.update, and asserts on the
+// resulting model. Used to lock down the click-side contract:
+// what the immediate-reducer post-state looks like for
+// solvable / unsolvable / replay-running cases.
+//
+// Only Elm runs this op (Python doesn't have an Elm-style
+// reducer). Go and Python skip — the JSON gate filters by op.
+func elmClickAgentPlay(b *strings.Builder, sc Scenario) {
+	fmt.Fprintf(b, "            let\n                board =\n                    %s\n\n                base =\n                    State.baseModel\n\n                model0 =\n                    { base | board = board, sessionId = Just 0 }\n\n                ( newModel, _, _ ) =\n                    Play.update Msg.ClickAgentPlay model0\n\n                logAppended =\n                    List.length newModel.actionLog - List.length model0.actionLog\n\n                replayStarted =\n                    newModel.replay /= Nothing\n\n                programSize =\n                    case newModel.agentProgram of\n                        Just lst ->\n                            List.length lst\n\n                        Nothing ->\n                            0\n            in\n",
+		elmStacks(sc.Board, "                        "))
+	b.WriteString("            Expect.all\n                [ ")
+	first := true
+	emitCheck := func(s string) {
+		if !first {
+			b.WriteString("\n                , ")
+		}
+		first = false
+		b.WriteString(s)
+	}
+	if sc.Expect.ReplayStarted != nil {
+		emitCheck(fmt.Sprintf("\\_ -> Expect.equal %s replayStarted", elmBool(*sc.Expect.ReplayStarted)))
+	}
+	if sc.Expect.LogAppended != nil {
+		emitCheck(fmt.Sprintf("\\_ -> Expect.equal %d logAppended", *sc.Expect.LogAppended))
+	}
+	if sc.Expect.AgentProgramSize != nil {
+		emitCheck(fmt.Sprintf("\\_ -> Expect.equal %d programSize", *sc.Expect.AgentProgramSize))
+	}
+	if sc.Expect.StatusKind != "" {
+		emitCheck(fmt.Sprintf("\\_ -> Expect.equal %s newModel.status.kind", elmStatusKind(sc.Expect.StatusKind)))
+	}
+	if sc.Expect.StatusContains != "" {
+		emitCheck(fmt.Sprintf("\\_ -> if String.contains %q newModel.status.text then Expect.pass else Expect.fail (\"status missing %s; got: \" ++ newModel.status.text)", sc.Expect.StatusContains, sc.Expect.StatusContains))
+	}
+	if first {
+		// No expectations supplied — at minimum verify the
+		// reducer didn't crash.
+		b.WriteString("\\_ -> Expect.pass")
+	}
+	b.WriteString("\n                ]\n                ()")
+}
+
+
+func elmBool(b bool) string {
+	if b {
+		return "True"
+	}
+	return "False"
+}
+
+
+func elmStatusKind(s string) string {
+	switch s {
+	case "inform":
+		return "State.Inform"
+	case "scold":
+		return "State.Scold"
+	case "celebrate":
+		return "State.Celebrate"
+	}
+	return "State.Inform"
 }
 
 
@@ -1469,6 +1546,36 @@ func parseExpectBlock(e *Expectation, children []line, path string) error {
 					return fmt.Errorf("%s:%d: loc: %w", path, l.lineNum, err)
 				}
 				e.Loc = &loc
+			case "replay_started":
+				v, err := parseBool(val)
+				if err != nil {
+					return fmt.Errorf("%s:%d: replay_started: %w", path, l.lineNum, err)
+				}
+				e.ReplayStarted = &v
+			case "log_appended":
+				n, err := atoi(val)
+				if err != nil {
+					return fmt.Errorf("%s:%d: log_appended: %w", path, l.lineNum, err)
+				}
+				e.LogAppended = &n
+			case "agent_program_size":
+				n, err := atoi(val)
+				if err != nil {
+					return fmt.Errorf("%s:%d: agent_program_size: %w", path, l.lineNum, err)
+				}
+				e.AgentProgramSize = &n
+			case "status_kind":
+				e.StatusKind = val
+			case "status_contains":
+				if len(val) >= 2 && val[0] == '"' && val[len(val)-1] == '"' {
+					unquoted, err := strconv.Unquote(val)
+					if err != nil {
+						return fmt.Errorf("%s:%d: status_contains: %w", path, l.lineNum, err)
+					}
+					e.StatusContains = unquoted
+				} else {
+					e.StatusContains = val
+				}
 			default:
 				return fmt.Errorf("%s:%d: unknown expect field %q", path, l.lineNum, key)
 			}
@@ -1599,6 +1706,18 @@ func suitFromLetter(b byte) int {
 	}
 	return -1
 }
+
+// parseBool parses true/false as written in DSL bodies.
+func parseBool(s string) (bool, error) {
+	switch strings.TrimSpace(s) {
+	case "true":
+		return true, nil
+	case "false":
+		return false, nil
+	}
+	return false, fmt.Errorf("expected true | false, got %q", s)
+}
+
 
 // parseLoc parses "(top, left)" into a Loc.
 func parseLoc(s string) (Loc, error) {
