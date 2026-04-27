@@ -46,7 +46,16 @@ type Scenario struct {
 	Trouble  []Stack
 	Growing  []Stack
 	Complete []Stack
-	Expect   Expectation
+	// Geometry op (`find_open_loc`).
+	Existing  []Stack
+	CardCount int
+	Expect    Expectation
+}
+
+// Loc is a (top, left) pair used by `expect: loc:` in
+// find_open_loc scenarios.
+type Loc struct {
+	Top, Left int
 }
 
 type Expectation struct {
@@ -64,6 +73,8 @@ type Expectation struct {
 	NoPlan     bool     // expect: no_plan — assert solve returns None
 	PlanLength int      // expect: plan_length: N — assert plan has exactly N lines (-1 = not set)
 	PlanLines  []string // expect: plan_lines — assert plan describe() output matches line-by-line (snapshot)
+	// Geometry expectations (op `find_open_loc`).
+	Loc *Loc // expect: loc: (top, left) — assert findOpenLoc returns this exact loc
 }
 
 // ExpectedSuggestion — one row inside an `expect: suggestions`
@@ -113,6 +124,7 @@ var pythonSupportedOps = map[string]bool{
 	"hint_invariant":    true,
 	"enumerate_moves":   true,
 	"solve":             true,
+	"find_open_loc":     true,
 }
 
 func main() {
@@ -422,6 +434,7 @@ import Game.CardStack
         , HandCard
         , HandCardState(..)
         )
+import Game.PlaceStack
 import Game.Referee as Referee exposing (RefereeStage(..), refereeStageToString)
 import Game.StackType as StackType
 import Game.Strategy.Hint as Hint
@@ -620,10 +633,31 @@ func elmScenarioBody(sc Scenario) string {
 		elmEnumerateMoves(&b, sc)
 	case "solve":
 		elmSolve(&b, sc)
+	case "find_open_loc":
+		elmFindOpenLoc(&b, sc)
 	default:
 		fmt.Fprintf(&b, "            Expect.fail \"unknown op %s\"", sc.Op)
 	}
 	return b.String()
+}
+
+
+// elmFindOpenLoc emits a test body that constructs a list of
+// existing CardStacks and asserts `Game.PlaceStack.findOpenLoc`
+// returns the expected loc. Mirrors what
+// `python/test_dsl_conformance.py::_run_find_open_loc` does on
+// the Python side. Cards in the existing stacks are shape-only;
+// findOpenLoc only reads loc + boardCards length.
+func elmFindOpenLoc(b *strings.Builder, sc Scenario) {
+	if sc.Expect.Loc == nil {
+		b.WriteString("            Expect.fail \"find_open_loc scenario missing expect.loc\"")
+		return
+	}
+	fmt.Fprintf(b, "            let\n                existing =\n                    %s\n\n                got =\n                    Game.PlaceStack.findOpenLoc existing %d\n\n                expected =\n                    { top = %d, left = %d }\n            in\n",
+		elmStacks(sc.Existing, "                        "),
+		sc.CardCount,
+		sc.Expect.Loc.Top, sc.Expect.Loc.Left)
+	b.WriteString("            got |> Expect.equal expected")
 }
 
 
@@ -992,6 +1026,8 @@ type jsonExpect struct {
 	NoPlan     bool     `json:"no_plan,omitempty"`
 	PlanLength int      `json:"plan_length,omitempty"`
 	PlanLines  []string `json:"plan_lines,omitempty"`
+	// Geometry op.
+	Loc *jsonLoc `json:"loc,omitempty"`
 }
 
 type jsonScenario struct {
@@ -1007,7 +1043,10 @@ type jsonScenario struct {
 	Trouble  []jsonStack `json:"trouble,omitempty"`
 	Growing  []jsonStack `json:"growing,omitempty"`
 	Complete []jsonStack `json:"complete,omitempty"`
-	Expect   jsonExpect  `json:"expect"`
+	// Geometry op (`find_open_loc`).
+	Existing  []jsonStack `json:"existing,omitempty"`
+	CardCount int         `json:"card_count,omitempty"`
+	Expect    jsonExpect  `json:"expect"`
 }
 
 func emitJSON(scenarios []Scenario, outPath string) error {
@@ -1035,16 +1074,18 @@ func emitJSON(scenarios []Scenario, outPath string) error {
 
 func toJSONScenario(sc Scenario) jsonScenario {
 	js := jsonScenario{
-		Name:     sc.Name,
-		Desc:     sc.Desc,
-		Op:       sc.Op,
-		Trick:    sc.Trick,
-		Hand:     toJSONHand(sc.Hand),
-		Board:    toJSONBoard(sc.Board),
-		Helper:   toJSONBoard(sc.Helper),
-		Trouble:  toJSONBoard(sc.Trouble),
-		Growing:  toJSONBoard(sc.Growing),
-		Complete: toJSONBoard(sc.Complete),
+		Name:      sc.Name,
+		Desc:      sc.Desc,
+		Op:        sc.Op,
+		Trick:     sc.Trick,
+		Hand:      toJSONHand(sc.Hand),
+		Board:     toJSONBoard(sc.Board),
+		Helper:    toJSONBoard(sc.Helper),
+		Trouble:   toJSONBoard(sc.Trouble),
+		Growing:   toJSONBoard(sc.Growing),
+		Complete:  toJSONBoard(sc.Complete),
+		Existing:  toJSONBoard(sc.Existing),
+		CardCount: sc.CardCount,
 	}
 	js.Expect = jsonExpect{
 		Kind:            sc.Expect.Kind,
@@ -1054,6 +1095,9 @@ func toJSONScenario(sc Scenario) jsonScenario {
 		NoPlan:          sc.Expect.NoPlan,
 		PlanLength:      sc.Expect.PlanLength,
 		PlanLines:       sc.Expect.PlanLines,
+	}
+	if sc.Expect.Loc != nil {
+		js.Expect.Loc = &jsonLoc{Top: sc.Expect.Loc.Top, Left: sc.Expect.Loc.Left}
 	}
 	for _, es := range sc.Expect.Suggestions {
 		js.Expect.Suggestions = append(js.Expect.Suggestions, jsonSuggestion{
@@ -1227,6 +1271,12 @@ func applyScalarField(sc *Scenario, key, val string, ln int, path string) error 
 			return fmt.Errorf("%s:%d: hand_cards_played: %w", path, ln, err)
 		}
 		sc.HandPlayed = cards
+	case "card_count":
+		n, err := atoi(val)
+		if err != nil {
+			return fmt.Errorf("%s:%d: card_count: %w", path, ln, err)
+		}
+		sc.CardCount = n
 	case "expect":
 		sc.Expect.Kind = val
 		if val == "no_plan" {
@@ -1290,6 +1340,12 @@ func applyBlockField(sc *Scenario, key string, children []line, path string) err
 			return err
 		}
 		sc.Complete = stacks
+	case "existing":
+		stacks, err := parseStacks(children, path)
+		if err != nil {
+			return err
+		}
+		sc.Existing = stacks
 	case "expect":
 		return parseExpectBlock(&sc.Expect, children, path)
 	default:
@@ -1407,6 +1463,12 @@ func parseExpectBlock(e *Expectation, children []line, path string) error {
 					return fmt.Errorf("%s:%d: plan_length: %w", path, l.lineNum, err)
 				}
 				e.PlanLength = n
+			case "loc":
+				loc, err := parseLoc(val)
+				if err != nil {
+					return fmt.Errorf("%s:%d: loc: %w", path, l.lineNum, err)
+				}
+				e.Loc = &loc
 			default:
 				return fmt.Errorf("%s:%d: unknown expect field %q", path, l.lineNum, key)
 			}
@@ -1537,6 +1599,26 @@ func suitFromLetter(b byte) int {
 	}
 	return -1
 }
+
+// parseLoc parses "(top, left)" into a Loc.
+func parseLoc(s string) (Loc, error) {
+	t := strings.TrimSpace(s)
+	if !strings.HasPrefix(t, "(") || !strings.HasSuffix(t, ")") {
+		return Loc{}, fmt.Errorf("expected (top, left) form")
+	}
+	body := t[1 : len(t)-1]
+	parts := strings.Split(body, ",")
+	if len(parts) != 2 {
+		return Loc{}, fmt.Errorf("expected two integers")
+	}
+	top, err1 := atoi(strings.TrimSpace(parts[0]))
+	left, err2 := atoi(strings.TrimSpace(parts[1]))
+	if err1 != nil || err2 != nil {
+		return Loc{}, fmt.Errorf("non-integer in loc")
+	}
+	return Loc{Top: top, Left: left}, nil
+}
+
 
 func atoi(s string) (int, error) {
 	n := 0

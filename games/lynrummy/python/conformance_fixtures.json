@@ -23855,6 +23855,425 @@
     }
   },
   {
+    "name": "find_open_loc_blocking_preferred_origin",
+    "desc": "Stack camped at the preferred origin (90, 50) forces the placer down. Python's column-major scan with packStep=15 + pack-gap=30 finds (167, 52) — three step-15 ticks below the blocker, plus anti-align.",
+    "op": "find_open_loc",
+    "hand": [],
+    "board": [],
+    "existing": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 1,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 1,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 90,
+          "left": 50
+        }
+      }
+    ],
+    "card_count": 3,
+    "expect": {
+      "kind": "",
+      "loc": {
+        "top": 167,
+        "left": 52
+      }
+    }
+  },
+  {
+    "name": "find_open_loc_empty_board",
+    "desc": "Empty board → BOARD_START + ANTI_ALIGN = (24+2, 24+2).",
+    "op": "find_open_loc",
+    "hand": [],
+    "board": [],
+    "card_count": 3,
+    "expect": {
+      "kind": "",
+      "loc": {
+        "top": 26,
+        "left": 26
+      }
+    }
+  },
+  {
+    "name": "find_open_loc_long_stack",
+    "desc": "Long stack still fits in the preferred column. 12 cards = 27 + 33*11 = 390px wide. Column-major scan picks (92, 52) — the long stack still clears at the preferred origin.",
+    "op": "find_open_loc",
+    "hand": [],
+    "board": [],
+    "existing": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 1,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "card_count": 12,
+    "expect": {
+      "kind": "",
+      "loc": {
+        "top": 92,
+        "left": 52
+      }
+    }
+  },
+  {
+    "name": "find_open_loc_lots_of_top_row_stacks",
+    "desc": "A row of stacks across the top forces the placer to drop down inside the preferred column. Column-major scan finds first clear top-cell at left=52, top below the existing row.",
+    "op": "find_open_loc",
+    "hand": [],
+    "board": [],
+    "existing": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 1,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 1,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 200
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 1,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 400
+        }
+      }
+    ],
+    "card_count": 3,
+    "expect": {
+      "kind": "",
+      "loc": {
+        "top": 92,
+        "left": 52
+      }
+    }
+  },
+  {
+    "name": "find_open_loc_one_stack_top_left",
+    "desc": "A single short stack at (0, 0). Preferred origin (50, 90) clears it; placer lands at (90+ANTI_ALIGN, 50+ANTI_ALIGN) = (92, 52).",
+    "op": "find_open_loc",
+    "hand": [],
+    "board": [],
+    "existing": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 1,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "card_count": 3,
+    "expect": {
+      "kind": "",
+      "loc": {
+        "top": 92,
+        "left": 52
+      }
+    }
+  },
+  {
     "name": "free_pull_singleton_onto_run_growing",
     "desc": "A loose [4H] singleton in TROUBLE absorbs onto a 2-partial GROWING build.",
     "op": "enumerate_moves",

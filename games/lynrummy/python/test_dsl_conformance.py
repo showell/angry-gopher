@@ -251,11 +251,33 @@ def _run_solve(sc):
                    "(no_plan / plan_length / plan_lines)")
 
 
+def _run_find_open_loc(sc):
+    """Geometry parity: invoke `geometry.find_open_loc` on the
+    scenario's `existing` stacks + `card_count`, assert the
+    returned loc matches `expect.loc` exactly. The same fixture
+    runs in Elm via `Game.PlaceStack.findOpenLoc`, so any drift
+    between the two algorithms shows up identically on both
+    sides."""
+    import geometry
+    expect = sc["expect"]
+    want = expect.get("loc")
+    if want is None:
+        return False, "find_open_loc scenario missing expect.loc"
+    existing = sc.get("existing", [])
+    card_count = sc.get("card_count", 0)
+    got = geometry.find_open_loc(existing, card_count)
+    if got["top"] == want["top"] and got["left"] == want["left"]:
+        return True, (f"OK — loc=({got['top']},{got['left']})")
+    return False, (f"want ({want['top']},{want['left']}); "
+                   f"got ({got['top']},{got['left']})")
+
+
 DISPATCH = {
     "build_suggestions": _run_build_suggestions,
     "hint_invariant":    _run_hint_invariant,
     "enumerate_moves":   _run_enumerate_moves,
     "solve":             _run_solve,
+    "find_open_loc":     _run_find_open_loc,
 }
 
 

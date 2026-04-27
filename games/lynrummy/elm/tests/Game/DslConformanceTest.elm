@@ -20,6 +20,7 @@ import Game.CardStack
         , HandCard
         , HandCardState(..)
         )
+import Game.PlaceStack
 import Game.Referee as Referee exposing (RefereeStage(..), refereeStageToString)
 import Game.StackType as StackType
 import Game.Strategy.Hint as Hint
@@ -2031,6 +2032,98 @@ extra0258C =
 
                 Nothing ->
                     Expect.fail ("expected plan; got Nothing")
+
+
+findOpenLocBlockingPreferredOrigin : Test
+findOpenLocBlockingPreferredOrigin =
+    test "find_open_loc_blocking_preferred_origin" <|
+        \_ ->
+            let
+                existing =
+                    [ { boardCards = [ { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 0, left = 0 } }
+                        , { boardCards = [ { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 90, left = 50 } }
+                        ]
+
+                got =
+                    Game.PlaceStack.findOpenLoc existing 3
+
+                expected =
+                    { top = 167, left = 52 }
+            in
+            got |> Expect.equal expected
+
+
+findOpenLocEmptyBoard : Test
+findOpenLocEmptyBoard =
+    test "find_open_loc_empty_board" <|
+        \_ ->
+            let
+                existing =
+                    []
+
+                got =
+                    Game.PlaceStack.findOpenLoc existing 3
+
+                expected =
+                    { top = 26, left = 26 }
+            in
+            got |> Expect.equal expected
+
+
+findOpenLocLongStack : Test
+findOpenLocLongStack =
+    test "find_open_loc_long_stack" <|
+        \_ ->
+            let
+                existing =
+                    [ { boardCards = [ { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 0, left = 0 } }
+                        ]
+
+                got =
+                    Game.PlaceStack.findOpenLoc existing 12
+
+                expected =
+                    { top = 92, left = 52 }
+            in
+            got |> Expect.equal expected
+
+
+findOpenLocLotsOfTopRowStacks : Test
+findOpenLocLotsOfTopRowStacks =
+    test "find_open_loc_lots_of_top_row_stacks" <|
+        \_ ->
+            let
+                existing =
+                    [ { boardCards = [ { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 0, left = 0 } }
+                        , { boardCards = [ { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 0, left = 200 } }
+                        , { boardCards = [ { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 0, left = 400 } }
+                        ]
+
+                got =
+                    Game.PlaceStack.findOpenLoc existing 3
+
+                expected =
+                    { top = 92, left = 52 }
+            in
+            got |> Expect.equal expected
+
+
+findOpenLocOneStackTopLeft : Test
+findOpenLocOneStackTopLeft =
+    test "find_open_loc_one_stack_top_left" <|
+        \_ ->
+            let
+                existing =
+                    [ { boardCards = [ { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 0, left = 0 } }
+                        ]
+
+                got =
+                    Game.PlaceStack.findOpenLoc existing 3
+
+                expected =
+                    { top = 92, left = 52 }
+            in
+            got |> Expect.equal expected
 
 
 freePullSingletonOntoRunGrowing : Test
@@ -4356,6 +4449,11 @@ suite =
         , extra023TCp
         , extra0242Cp
         , extra0258C
+        , findOpenLocBlockingPreferredOrigin
+        , findOpenLocEmptyBoard
+        , findOpenLocLongStack
+        , findOpenLocLotsOfTopRowStacks
+        , findOpenLocOneStackTopLeft
         , freePullSingletonOntoRunGrowing
         , geometryCrowded
         , geometryOutOfBounds
