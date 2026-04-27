@@ -31,6 +31,7 @@ scenario walkthrough_mined_001_4S_4Cp1
     - split [2D' 3S' 4D']@2
     - merge_stack [4D'] -> [4S 4C'] /right
     - split [AC AD AH]@0
+    - move_stack [AD AH] -> (407,187)
     - split [AD AH]@0
     - merge_stack [AC] -> [2D' 3S'] /left
     - merge_stack [AD] -> [2C 3D 4C 5H 6S 7H] /left
@@ -60,8 +61,10 @@ scenario walkthrough_mined_002_QDp1
     - move_stack [JD QD KD] -> (467,187)
     - merge_stack [AD] -> [JD QD KD] /right
     - split [JD QD KD AD]@0
+    - move_stack [QD'] -> (257,85)
     - merge_stack [JD] -> [QD'] /left
     - split [KD' KH' KS]@0
+    - move_stack [KH' KS] -> (392,187)
     - split [KH' KS]@0
     - merge_stack [KD'] -> [JD QD'] /right
     - merge_stack [KH'] -> [AC 2D' 3S'] /left
@@ -87,6 +90,7 @@ scenario walkthrough_mined_003_6D
     at (482,187): 6D
   actions:
     - split [7S 7D 7C]@2
+    - move_stack [7S 7D] -> (242,247)
     - split [7S 7D]@0
     - merge_stack [7C] -> [6D] /right
     - move_stack [8D' 9C TD] -> (482,118)
@@ -111,6 +115,7 @@ scenario walkthrough_mined_004_5C_6Dp1
     at (182,187): 5C 6D'
   actions:
     - split [7S 7D 7C]@2
+    - move_stack [7S 7D] -> (257,187)
     - split [7S 7D]@0
     - merge_stack [7C] -> [5C 6D'] /right
     - merge_stack [7D] -> [7S] /right
@@ -136,8 +141,8 @@ scenario walkthrough_mined_005_2Hp1
     - split [KS AS 2S 3S]@3
     - merge_stack [3S] -> [2H'] /right
     - split [AC AD AH]@0
+    - move_stack [AD AH] -> (332,187)
     - split [AD AH]@0
-    - move_stack [2H' 3S] -> (332,220)
     - merge_stack [AC] -> [2H' 3S] /left
     - merge_stack [AD] -> [TD JD QD KD] /right
     - merge_stack [AH] -> [2H 3H 4H] /left
@@ -163,9 +168,11 @@ scenario walkthrough_mined_006_6Cp1
     - split [3D 4C 5H 6S]@3
     - merge_stack [6S] -> [6C'] /right
     - split [5C 6D' 7C]@0
+    - move_stack [6D' 7C] -> (332,172)
     - split [6D' 7C]@0
     - merge_stack [6D'] -> [6C' 6S] /right
     - merge_stack [5C] -> [AC' 2H' 3S 4H] /right
+    - move_stack [7S 7D 7H] -> (332,172)
     - merge_stack [7C] -> [7S 7D 7H] /right
   expect:
     final_board_victory: true
@@ -184,6 +191,7 @@ scenario walkthrough_mined_007_5Cp1_6C
     at (182,187): 5C' 6C
   actions:
     - split [7S 7D 7C]@2
+    - move_stack [7S 7D] -> (257,187)
     - split [7S 7D]@0
     - merge_stack [7C] -> [5C' 6C] /right
     - merge_stack [7D] -> [7S] /right
@@ -208,11 +216,13 @@ scenario walkthrough_mined_008_QHp1
     at (242,187): QH'
   actions:
     - split [JS' QS' KS]@0
+    - move_stack [QH'] -> (242,220)
     - merge_stack [JS'] -> [QH'] /left
+    - move_stack [TD JD QD KD] -> (317,187)
     - split [TD JD QD KD]@0
     - move_stack [JS' QH'] -> (242,220)
     - merge_stack [TD] -> [JS' QH'] /left
-    - move_stack [AS 2S 3S] -> (107,253)
+    - move_stack [AS 2S 3S] -> (92,253)
     - merge_stack [QS' KS] -> [AS 2S 3S] /left
   expect:
     final_board_victory: true
@@ -235,6 +245,7 @@ scenario walkthrough_mined_009_JC
     - split [9S TD JS' QH']@3
     - merge_stack [QH'] -> [JC] /right
     - split [QS' KS AS 2S 3S]@0
+    - move_stack [KS AS 2S 3S] -> (482,112)
     - split [KS AS 2S 3S]@0
     - merge_stack [KS] -> [JC QH'] /right
     - move_stack [9H' TC' JH] -> (407,187)
@@ -259,10 +270,12 @@ scenario walkthrough_mined_010_3Hp1
     at (317,187): 3H'
   actions:
     - split [2C 3D 4C 5H 6S]@0
+    - move_stack [3H'] -> (317,220)
     - merge_stack [2C] -> [3H'] /left
     - split [AC AD AH]@0
+    - move_stack [AD AH] -> (482,187)
     - split [AD AH]@0
-    - move_stack [2C 3H'] -> (332,220)
+    - move_stack [2C 3H'] -> (317,220)
     - merge_stack [AD] -> [2C 3H'] /left
     - split [TD JD QD KD]@3
     - merge_stack [KD] -> [AC] /left
@@ -289,8 +302,10 @@ scenario walkthrough_mined_011_JC
     at (392,187): JC
   actions:
     - split [TC' JD' QS KD AC]@0
+    - move_stack [JC] -> (392,220)
     - merge_stack [TC'] -> [JC] /left
     - split [9H' 9C 9D]@0
+    - move_stack [9C 9D] -> (467,262)
     - split [9C 9D]@0
     - move_stack [TC' JC] -> (392,220)
     - merge_stack [9C] -> [TC' JC] /left
@@ -313,6 +328,7 @@ scenario walkthrough_mined_012_QC_KC
     at (182,187): QC KC
   actions:
     - split [AC AD AH]@0
+    - move_stack [AD AH] -> (332,112)
     - split [AD AH]@0
     - merge_stack [AC] -> [QC KC] /right
     - merge_stack [AD] -> [TD JD QD KD] /right
@@ -335,13 +351,15 @@ scenario walkthrough_mined_013_AHp1
     at (257,187): TC' JH QC
     at (332,187): AH'
   actions:
+    - move_stack [KS AS 2S 3S] -> (167,247)
     - split [KS AS 2S 3S]@0
+    - move_stack [AH'] -> (332,220)
     - merge_stack [KS] -> [AH'] /left
     - split [AS 2S 3S]@0
+    - move_stack [2S 3S] -> (407,247)
     - split [2S 3S]@0
     - merge_stack [2S] -> [KS AH'] /right
     - merge_stack [AS] -> [2D 3C' 4D' 5S 6D'] /left
-    - move_stack [AS 2D 3C' 4D' 5S 6D'] -> (407,52)
     - split [AS 2D 3C' 4D' 5S 6D']@1
     - move_stack [AS 2D] -> (167,247)
     - merge_stack [3S] -> [AS 2D] /right
@@ -367,6 +385,7 @@ scenario walkthrough_mined_014_5C
     - split [3C' 4D' 5S 6D']@3
     - merge_stack [6D'] -> [5C] /right
     - split [7S 7D 7C]@2
+    - move_stack [7S 7D] -> (92,247)
     - split [7S 7D]@0
     - merge_stack [7C] -> [5C 6D'] /right
     - merge_stack [7D] -> [7S] /right
@@ -391,10 +410,12 @@ scenario walkthrough_mined_015_3Cp1
     at (242,187): 3C'
   actions:
     - split [2C 3D 4C 5H 6S 7H]@0
+    - move_stack [3C'] -> (242,220)
     - merge_stack [2C] -> [3C'] /left
     - split [AC AD AH]@0
+    - move_stack [AD AH] -> (407,187)
     - split [AD AH]@0
-    - move_stack [2C 3C'] -> (407,220)
+    - move_stack [2C 3C'] -> (257,85)
     - merge_stack [AC] -> [2C 3C'] /left
     - merge_stack [AD] -> [JD QD KD] /right
     - merge_stack [AH] -> [2H 3H 4H] /left
@@ -441,6 +462,7 @@ scenario walkthrough_mined_017_5Dp1_6Dp1
     at (482,52): 5D' 6D'
   actions:
     - split [7S 7D 7C]@0
+    - move_stack [7D 7C] -> (257,112)
     - split [7D 7C]@0
     - merge_stack [7D] -> [5D' 6D'] /right
     - merge_stack [7C] -> [7S] /right
@@ -465,13 +487,14 @@ scenario walkthrough_mined_018_2Sp1_3Hp1
     at (242,187): 2S' 3H'
   actions:
     - split [AC AD AH]@0
+    - move_stack [AD AH] -> (407,187)
     - split [AD AH]@0
-    - move_stack [2S' 3H'] -> (407,220)
+    - move_stack [2S' 3H'] -> (257,145)
     - merge_stack [AD] -> [2S' 3H'] /left
     - split [2C 3D 4C 5H 6S 7H]@0
+    - move_stack [AC] -> (482,187)
     - merge_stack [2C] -> [AC] /right
     - split [3C' 4H' 5S']@0
-    - move_stack [AC 2C] -> (482,187)
     - merge_stack [3C'] -> [AC 2C] /right
     - merge_stack [AH] -> [2H 3H 4H] /left
     - split [KS AS 2S 3S]@3
@@ -496,12 +519,14 @@ scenario walkthrough_mined_019_2D
     at (317,187): 2D
   actions:
     - split [KS AD 2C']@0
+    - move_stack [AD 2C'] -> (392,187)
     - split [AD 2C']@0
+    - move_stack [2D] -> (317,220)
     - merge_stack [AD] -> [2D] /left
     - move_stack [JD QD KD] -> (317,187)
     - merge_stack [AD 2D] -> [JD QD KD] /right
+    - move_stack [AH 2C 3D 4C] -> (92,190)
     - merge_stack [KS] -> [AH 2C 3D 4C] /left
-    - move_stack [KS AH 2C 3D 4C] -> (242,187)
     - split [KS AH 2C 3D 4C]@1
     - move_stack [KS AH] -> (107,52)
     - merge_stack [2C'] -> [KS AH] /right
@@ -523,7 +548,9 @@ scenario walkthrough_mined_020_2Dp1_3Cp1
     at (167,187): 2D' 3C'
   actions:
     - split [AC AD AH]@0
+    - move_stack [AD AH] -> (257,112)
     - split [AD AH]@0
+    - move_stack [2D' 3C'] -> (167,220)
     - merge_stack [AC] -> [2D' 3C'] /left
     - merge_stack [AD] -> [2C 3D 4C 5H 6S 7H] /left
     - merge_stack [AH] -> [2H 3H 4H] /left
@@ -546,17 +573,17 @@ scenario walkthrough_mined_021_8Dp1
     at (332,187): 8D'
   actions:
     - split [7S 7D 7C]@2
+    - move_stack [7S 7D] -> (482,187)
     - split [7S 7D]@0
+    - move_stack [8D'] -> (257,85)
     - merge_stack [7C] -> [8D'] /left
     - split [KS AS 2S 3S]@3
+    - move_stack [4H' 5C' 6D'] -> (182,220)
     - merge_stack [3S] -> [4H' 5C' 6D'] /left
     - split [3S 4H' 5C' 6D']@3
-    - move_stack [7C 8D'] -> (332,220)
     - merge_stack [6D'] -> [7C 8D'] /left
-    - move_stack [7S] -> (257,52)
     - merge_stack [7D] -> [7S] /right
     - split [2C 3D 4C 5H 6S 7H]@5
-    - move_stack [7S 7D] -> (257,52)
     - merge_stack [7H] -> [7S 7D] /right
   expect:
     final_board_victory: true
@@ -575,6 +602,7 @@ scenario walkthrough_mined_022_AHp1_ADp1
     at (182,187): AH' AD'
   actions:
     - split [AC AD AH]@0
+    - move_stack [AD AH] -> (332,112)
     - split [AD AH]@0
     - merge_stack [AC] -> [AH' AD'] /right
     - merge_stack [AD] -> [TD JD QD KD] /right
@@ -599,6 +627,7 @@ scenario walkthrough_mined_023_3C
     - split [4C 5H 6S 7H]@0
     - merge_stack [4C] -> [3C] /right
     - split [2C 3D 4S']@0
+    - move_stack [3C 4C] -> (167,220)
     - merge_stack [2C] -> [3C 4C] /left
     - merge_stack [3D 4S'] -> [5H 6S 7H] /left
   expect:
@@ -621,7 +650,9 @@ scenario walkthrough_mined_024_2D
     - split [KS AS 2S 3S]@3
     - merge_stack [3S] -> [2D] /right
     - split [AC AD AH]@0
+    - move_stack [AD AH] -> (332,112)
     - split [AD AH]@0
+    - move_stack [2D 3S] -> (257,220)
     - merge_stack [AC] -> [2D 3S] /left
     - merge_stack [AD] -> [TD JD QD KD] /right
     - merge_stack [AH] -> [2H 3H 4H] /left
@@ -648,6 +679,7 @@ scenario walkthrough_mined_025_TSp1
     - split [8H 9S TH']@2
     - merge_stack [TH'] -> [TS' TD] /right
     - split [7S 7D 7C]@2
+    - move_stack [7S 7D] -> (407,187)
     - split [7S 7D]@0
     - merge_stack [7C] -> [8H 9S] /left
     - merge_stack [7D] -> [7S] /right

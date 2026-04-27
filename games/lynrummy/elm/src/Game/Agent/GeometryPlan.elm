@@ -1,22 +1,23 @@
 module Game.Agent.GeometryPlan exposing
     ( defaultBounds
+    , humanFeelBounds
     , planActions
     )
 
 {-| Wrap a stream of WireActions with pre-flight `MoveStack`s
-when an in-place merge would violate geometry. Mirrors
-`python/strategy._plan_merge_stack`.
+when applying a primitive would land the board in a state where
+two stacks overlap (with PACK_GAP padding — the human-feel
+threshold, stricter than the referee's legal margin).
 
-Approach: simulate each WireAction against the local board.
-If the result is clean, emit it as is. If a merge's in-place
-result would violate, find a hole sized for the EVENTUAL
-stack (accounting for side-specific offset), inject a
-`MoveStack` of the target into that hole, then emit the
-merge.
+The agent's invariant: after every primitive applies, no two
+stacks are within PACK_GAP of each other. A human player
+relocates crowded stacks BEFORE building on them; the agent
+matches by injecting MoveStacks at the points where the next
+primitive would otherwise produce a too-close result.
 
-Mid-stack splits are handled by `Game.Agent.Verbs` already
-(it pre-moves donors before interior splits via the
-isolateCard helper). This module focuses on merges.
+This module is the single home for that invariant. Verbs.elm
+emits a logical primitive sequence (geometry-agnostic);
+`planActions` walks it and inserts pre-flights as needed.
 
 -}
 
@@ -27,25 +28,33 @@ import Game.BoardGeometry as Geometry
         , cardPitch
         , validateBoardGeometry
         )
+import Game.Card
 import Game.CardStack as CardStack exposing (CardStack, stacksEqual)
 import Game.PlaceStack as PlaceStack
 import Game.WireAction exposing (WireAction(..))
 
 
-{-| Match the referee's bounds at the canonical viewport.
-Mirrors `python/geometry.py`'s `BOARD_MAX_WIDTH/HEIGHT/MARGIN`.
-This is the geometry-validation bounds shape (no step
-field).
+{-| The referee's bounds. Stacks must fit within
+800×600 with a 7px legal margin between them.
 -}
 defaultBounds : BoardBounds
 defaultBounds =
     { maxWidth = 800, maxHeight = 600, margin = 7 }
 
 
+{-| Stricter bounds for the agent's "no overlap, human-feel"
+invariant. Stacks must clear each other by PACK_GAP_X (=30px),
+matching what `Game.PlaceStack.findOpenLoc`'s phase-1 scan
+uses for placement.
+-}
+humanFeelBounds : BoardBounds
+humanFeelBounds =
+    { maxWidth = 800, maxHeight = 600, margin = 30 }
+
+
 {-| Walk a sequence of WireActions, injecting pre-flight
-`MoveStack` primitives ahead of any merge whose in-place
-result would violate geometry. Returns the augmented sequence
-in send order.
+`MoveStack`s ahead of any primitive whose post-board would
+violate the no-overlap-with-pack-gap invariant.
 -}
 planActions : List CardStack -> List WireAction -> List WireAction
 planActions board actions =
@@ -70,71 +79,181 @@ planLoop board remaining acc =
             planLoop postBoard rest (List.reverse emitted ++ acc)
 
 
-{-| Plan one WireAction. Returns (emittedSequence, postBoard).
+{-| Plan one primitive. The check is diff-based: NEW stacks
+(in postBoard but not preBoard) must be pack-gap-clear from
+PRE-EXISTING stacks (stacks that survived). Split siblings
+(new-vs-new pairs) are exempt — they're inherently close by
+the +8px split offset, which isn't a primitive emitting an
+overlap with the rest of the board.
+
+If post-state respects the invariant, emit as is. Otherwise
+try a pre-flight MoveStack to a clear spot, then re-emit. If
+pre-flight can't find a clear loc, fall back to the bare
+primitive; the referee may still accept (legal margin).
 -}
 planOne : List CardStack -> WireAction -> ( List WireAction, List CardStack )
 planOne board action =
-    case action of
-        MergeStack p ->
-            planMergeStack board p
-
-        _ ->
-            ( [ action ], applyOnBoard action board )
-
-
-planMergeStack :
-    List CardStack
-    -> { source : CardStack, target : CardStack, side : BoardActions.Side }
-    -> ( List WireAction, List CardStack )
-planMergeStack board p =
     let
-        inPlaceAction =
-            MergeStack p
+        -- Re-resolve the action's stack refs against the
+        -- CURRENT board. Verbs.elm emits WireActions whose
+        -- stack snapshots carry locs from a sim that doesn't
+        -- include prior planActions pre-flights; resolving
+        -- here lets the action correctly target stacks that
+        -- have moved.
+        resolved =
+            resolveAction board action
 
-        inPlaceBoard =
-            applyOnBoard inPlaceAction board
+        postBoard =
+            applyOnBoard resolved board
     in
-    if isClean inPlaceBoard then
-        ( [ inPlaceAction ], inPlaceBoard )
+    if isCleanAfterAction board postBoard then
+        ( [ resolved ], postBoard )
 
     else
-        case rePlanMergeStack board p of
-            Just ( prims, postBoard ) ->
-                ( prims, postBoard )
+        case preFlight board resolved of
+            Just ( movePrim, newAction, newPostBoard ) ->
+                ( [ movePrim, newAction ], newPostBoard )
 
             Nothing ->
-                -- Couldn't find a hole. Fall back to the bare
-                -- merge; the caller can still send it (the
-                -- referee may reject — that's a signal worth
-                -- surfacing rather than silently swallowing).
-                ( [ inPlaceAction ], inPlaceBoard )
+                ( [ resolved ], postBoard )
 
 
-rePlanMergeStack :
+{-| Re-look-up a WireAction's stack references against the
+current board. Stack identity is by content (cards in order);
+the carried `loc` may be stale because earlier planActions
+pre-flights moved the stack.
+-}
+resolveAction : List CardStack -> WireAction -> WireAction
+resolveAction board action =
+    case action of
+        Split p ->
+            case findByContent p.stack board of
+                Just live ->
+                    Split { p | stack = live }
+
+                Nothing ->
+                    action
+
+        MergeStack p ->
+            case ( findByContent p.source board, findByContent p.target board ) of
+                ( Just src, Just tgt ) ->
+                    MergeStack { p | source = src, target = tgt }
+
+                _ ->
+                    action
+
+        MoveStack p ->
+            case findByContent p.stack board of
+                Just live ->
+                    MoveStack { p | stack = live }
+
+                Nothing ->
+                    action
+
+        _ ->
+            action
+
+
+{-| Compute a pre-flight MoveStack for a primitive whose
+post-board would overlap. Returns
+`(movePrim, primitive-against-moved-board, post-state)` or
+Nothing if no helpful pre-flight exists for this primitive
+shape (e.g., MoveStack itself).
+-}
+preFlight :
     List CardStack
-    -> { source : CardStack, target : CardStack, side : BoardActions.Side }
-    -> Maybe ( List WireAction, List CardStack )
-rePlanMergeStack board p =
+    -> WireAction
+    -> Maybe ( WireAction, WireAction, List CardStack )
+preFlight board action =
+    case action of
+        Split p ->
+            preFlightSplit board p.stack p.cardIndex
+
+        MergeStack p ->
+            preFlightMerge board p.source p.target p.side
+
+        _ ->
+            Nothing
+
+
+{-| Move the source stack to a pack-gap-cleared loc with room
+for the source's full size, then re-emit the split. The post-
+split spawn lands within the source's relocated footprint, so
+this also clears the spawn.
+-}
+preFlightSplit :
+    List CardStack
+    -> CardStack
+    -> Int
+    -> Maybe ( WireAction, WireAction, List CardStack )
+preFlightSplit board stack cardIndex =
     let
         sourceSize =
-            List.length p.source.boardCards
+            List.length stack.boardCards
+
+        others =
+            List.filter (not << stacksEqual stack) board
+
+        newLoc =
+            PlaceStack.findOpenLoc others sourceSize
+    in
+    if newLoc == stack.loc then
+        Nothing
+
+    else
+        let
+            movePrim =
+                MoveStack { stack = stack, newLoc = newLoc }
+
+            afterMove =
+                applyOnBoard movePrim board
+        in
+        case findByContent stack afterMove of
+            Just relocated ->
+                let
+                    newSplit =
+                        Split { stack = relocated, cardIndex = cardIndex }
+
+                    afterSplit =
+                        applyOnBoard newSplit afterMove
+                in
+                Just ( movePrim, newSplit, afterSplit )
+
+            Nothing ->
+                Nothing
+
+
+{-| Move the merge target to a pack-gap-cleared loc that fits
+the augmented (source.size + target.size) stack, then re-emit
+the merge. Mirrors what the old `rePlanMergeStack` did.
+-}
+preFlightMerge :
+    List CardStack
+    -> CardStack
+    -> CardStack
+    -> BoardActions.Side
+    -> Maybe ( WireAction, WireAction, List CardStack )
+preFlightMerge board source target side =
+    let
+        sourceSize =
+            List.length source.boardCards
 
         targetSize =
-            List.length p.target.boardCards
+            List.length target.boardCards
 
         finalSize =
             sourceSize + targetSize
 
         others =
             List.filter
-                (\s -> not (stacksEqual s p.source) && not (stacksEqual s p.target))
+                (\s -> not (stacksEqual s source) && not (stacksEqual s target))
                 board
 
         finalLoc =
             PlaceStack.findOpenLoc others finalSize
 
         targetLoc =
-            case p.side of
+            case side of
                 BoardActions.Left ->
                     { left = finalLoc.left + sourceSize * cardPitch
                     , top = finalLoc.top
@@ -142,34 +261,37 @@ rePlanMergeStack board p =
 
                 BoardActions.Right ->
                     finalLoc
-
-        movePrim =
-            MoveStack { stack = p.target, newLoc = targetLoc }
-
-        afterMove =
-            applyOnBoard movePrim board
-
-        movedTarget =
-            -- Look up the moved target by content; its loc is now
-            -- targetLoc but content unchanged.
-            findByContent p.target afterMove
-
-        movedSource =
-            findByContent p.source afterMove
     in
-    case ( movedSource, movedTarget ) of
-        ( Just src, Just tgt ) ->
-            let
-                mergePrim =
-                    MergeStack { source = src, target = tgt, side = p.side }
+    if targetLoc == target.loc then
+        Nothing
 
-                afterMerge =
-                    applyOnBoard mergePrim afterMove
-            in
-            Just ( [ movePrim, mergePrim ], afterMerge )
+    else
+        let
+            movePrim =
+                MoveStack { stack = target, newLoc = targetLoc }
 
-        _ ->
-            Nothing
+            afterMove =
+                applyOnBoard movePrim board
+
+            movedTarget =
+                findByContent target afterMove
+
+            movedSource =
+                findByContent source afterMove
+        in
+        case ( movedSource, movedTarget ) of
+            ( Just src, Just tgt ) ->
+                let
+                    newMerge =
+                        MergeStack { source = src, target = tgt, side = side }
+
+                    afterMerge =
+                        applyOnBoard newMerge afterMove
+                in
+                Just ( movePrim, newMerge, afterMerge )
+
+            _ ->
+                Nothing
 
 
 
@@ -178,9 +300,166 @@ rePlanMergeStack board p =
 -- ============================================================
 
 
-isClean : List CardStack -> Bool
-isClean board =
-    List.isEmpty (validateBoardGeometry board defaultBounds)
+{-| Diff-based pack-gap check: new stacks (in postBoard but
+not preBoard) must be pack-gap-clear from pre-existing stacks
+(stacks that survived from preBoard to postBoard). New-vs-new
+pairs (split siblings) are exempt.
+
+Out-of-bounds and pure overlap apply to all stacks
+unconditionally via the legal-margin validator.
+-}
+isCleanAfterAction : List CardStack -> List CardStack -> Bool
+isCleanAfterAction preBoard postBoard =
+    let
+        preKeys =
+            List.map stackKey preBoard
+
+        preExisting =
+            List.filter (\s -> List.member (stackKey s) preKeys) postBoard
+
+        newStacks =
+            List.filter (\s -> not (List.member (stackKey s) preKeys)) postBoard
+
+        legalErrors =
+            validateBoardGeometry postBoard defaultBounds
+    in
+    if not (List.isEmpty legalErrors) then
+        False
+
+    else
+        not (List.any (anyPackGapOverlap preExisting) newStacks)
+
+
+anyPackGapOverlap : List CardStack -> CardStack -> Bool
+anyPackGapOverlap preExisting newStack =
+    let
+        rect =
+            stackBoundingRect newStack
+
+        padded =
+            { left = rect.left - 30
+            , top = rect.top - 30
+            , right = rect.right + 30
+            , bottom = rect.bottom + 30
+            }
+    in
+    List.any
+        (\old ->
+            let
+                otherRect =
+                    stackBoundingRect old
+            in
+            padded.left
+                < otherRect.right
+                && padded.right
+                > otherRect.left
+                && padded.top
+                < otherRect.bottom
+                && padded.bottom
+                > otherRect.top
+        )
+        preExisting
+
+
+stackBoundingRect : CardStack -> { left : Int, top : Int, right : Int, bottom : Int }
+stackBoundingRect s =
+    let
+        n =
+            List.length s.boardCards
+
+        width =
+            if n <= 0 then
+                0
+
+            else
+                27 + (n - 1) * cardPitch
+    in
+    { left = s.loc.left
+    , top = s.loc.top
+    , right = s.loc.left + width
+    , bottom = s.loc.top + 40
+    }
+
+
+stackKey : CardStack -> ( Int, Int, List ( Int, Int, Int ) )
+stackKey s =
+    let
+        cardCode c =
+            ( cardValueCode c.value, cardSuitCode c.suit, cardDeckCode c.originDeck )
+    in
+    ( s.loc.top
+    , s.loc.left
+    , List.map (\bc -> cardCode bc.card) s.boardCards
+    )
+
+
+cardValueCode : Game.Card.CardValue -> Int
+cardValueCode v =
+    case v of
+        Game.Card.Ace ->
+            1
+
+        Game.Card.Two ->
+            2
+
+        Game.Card.Three ->
+            3
+
+        Game.Card.Four ->
+            4
+
+        Game.Card.Five ->
+            5
+
+        Game.Card.Six ->
+            6
+
+        Game.Card.Seven ->
+            7
+
+        Game.Card.Eight ->
+            8
+
+        Game.Card.Nine ->
+            9
+
+        Game.Card.Ten ->
+            10
+
+        Game.Card.Jack ->
+            11
+
+        Game.Card.Queen ->
+            12
+
+        Game.Card.King ->
+            13
+
+
+cardSuitCode : Game.Card.Suit -> Int
+cardSuitCode s =
+    case s of
+        Game.Card.Club ->
+            0
+
+        Game.Card.Diamond ->
+            1
+
+        Game.Card.Spade ->
+            2
+
+        Game.Card.Heart ->
+            3
+
+
+cardDeckCode : Game.Card.OriginDeck -> Int
+cardDeckCode d =
+    case d of
+        Game.Card.DeckOne ->
+            0
+
+        Game.Card.DeckTwo ->
+            1
 
 
 findByContent : CardStack -> List CardStack -> Maybe CardStack

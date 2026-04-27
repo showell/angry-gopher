@@ -51,6 +51,7 @@ ELM_PATH = REPO / ("games/lynrummy/elm/tests/Game/"
 
 sys.path.insert(0, str(REPO / "games/lynrummy/python"))
 import bfs  # noqa: E402
+import geometry_plan  # noqa: E402
 import primitives  # noqa: E402
 import verbs  # noqa: E402
 from cards import classify  # noqa: E402
@@ -230,17 +231,46 @@ def fixtures_for_puzzle(puzzle_name, state):
     local = [dict(s) for s in board]
     fixtures = []
     for step_num, (_line, desc) in enumerate(plan, 1):
-        prims = verbs.move_to_primitives(desc, local)
+        # Verbs emit a geometry-agnostic primitive sequence;
+        # geometry_plan injects pre-flight MoveStacks where
+        # the post-board would be too-close-by-pack-gap.
+        raw_prims = verbs.move_to_primitives(desc, local)
+        prims = geometry_plan.plan_actions(local, raw_prims)
 
         # Canonicalize each, advancing local sim between each
         # so canonicalize_primitive's content lookup matches
         # what the primitive actually targeted.
+        # Also enforce the agent's invariant: after each
+        # primitive applies, NEW stacks must be pack-gap-clear
+        # from PRE-EXISTING stacks. This is the same check
+        # GeometryPlan uses to decide whether to inject a
+        # pre-flight; if it fires here, GeometryPlan failed
+        # to plan correctly and the fixture would teach Elm
+        # an invalid sequence.
         canonical = []
         sim = local
         for p in prims:
+            pre_sim = sim
             text = canonicalize_primitive(p, sim)
             canonical.append(text)
             sim = primitives.apply_locally(sim, p)
+            # Invariant: after each CARD-PHYSICS primitive, new
+            # stacks must be pack-gap-clear from pre-existing.
+            # move_stack is exempt — it's pre-flight infrastructure
+            # that intentionally lands target adjacent to source
+            # so the immediately-following merge can land on a
+            # cleared region. By the time the merge applies, the
+            # adjacency disappears.
+            if (p["action"] != "move_stack"
+                    and not geometry_plan._is_clean_after_action(
+                        pre_sim, sim)):
+                raise AssertionError(
+                    f"INVARIANT VIOLATION in {puzzle_name} step "
+                    f"{step_num} after primitive {p['action']!r}: "
+                    f"new stack overlaps a pre-existing stack "
+                    f"with pack-gap padding. GeometryPlan should "
+                    f"have injected a pre-flight."
+                )
 
         fixtures.append({
             "name": f"{puzzle_name}_step_{step_num:02d}",

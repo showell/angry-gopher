@@ -4678,6 +4678,7 @@ walkthroughMined0014S4Cp1 =
                         [ SpecSplit [ { value = Two, suit = Diamond, originDeck = DeckTwo }, { value = Three, suit = Spade, originDeck = DeckTwo }, { value = Four, suit = Diamond, originDeck = DeckTwo } ] 2
                         , SpecMergeStack [ { value = Four, suit = Diamond, originDeck = DeckTwo } ] [ { value = Four, suit = Spade, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckTwo } ] BoardActions.Right
                         , SpecSplit [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] 0
+                        , SpecMoveStack [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] { top = 407, left = 187 }
                         , SpecSplit [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] 0
                         , SpecMergeStack [ { value = Ace, suit = Club, originDeck = DeckOne } ] [ { value = Two, suit = Diamond, originDeck = DeckTwo }, { value = Three, suit = Spade, originDeck = DeckTwo } ] BoardActions.Left
                         , SpecMergeStack [ { value = Ace, suit = Diamond, originDeck = DeckOne } ] [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ] BoardActions.Left
@@ -4731,8 +4732,10 @@ walkthroughMined002QDp1 =
                         , SpecMoveStack [ { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ] { top = 467, left = 187 }
                         , SpecMergeStack [ { value = Ace, suit = Diamond, originDeck = DeckOne } ] [ { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ] BoardActions.Right
                         , SpecSplit [ { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne } ] 0
+                        , SpecMoveStack [ { value = Queen, suit = Diamond, originDeck = DeckTwo } ] { top = 257, left = 85 }
                         , SpecMergeStack [ { value = Jack, suit = Diamond, originDeck = DeckOne } ] [ { value = Queen, suit = Diamond, originDeck = DeckTwo } ] BoardActions.Left
                         , SpecSplit [ { value = King, suit = Diamond, originDeck = DeckTwo }, { value = King, suit = Heart, originDeck = DeckTwo }, { value = King, suit = Spade, originDeck = DeckOne } ] 0
+                        , SpecMoveStack [ { value = King, suit = Heart, originDeck = DeckTwo }, { value = King, suit = Spade, originDeck = DeckOne } ] { top = 392, left = 187 }
                         , SpecSplit [ { value = King, suit = Heart, originDeck = DeckTwo }, { value = King, suit = Spade, originDeck = DeckOne } ] 0
                         , SpecMergeStack [ { value = King, suit = Diamond, originDeck = DeckTwo } ] [ { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckTwo } ] BoardActions.Right
                         , SpecMergeStack [ { value = King, suit = Heart, originDeck = DeckTwo } ] [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Two, suit = Diamond, originDeck = DeckTwo }, { value = Three, suit = Spade, originDeck = DeckTwo } ] BoardActions.Left
@@ -4782,6 +4785,7 @@ walkthroughMined0036D =
                 ( eagerModel, actions ) =
                     buildEagerAndActions initialModel
                         [ SpecSplit [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ] 2
+                        , SpecMoveStack [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne } ] { top = 242, left = 247 }
                         , SpecSplit [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne } ] 0
                         , SpecMergeStack [ { value = Seven, suit = Club, originDeck = DeckOne } ] [ { value = Six, suit = Diamond, originDeck = DeckOne } ] BoardActions.Right
                         , SpecMoveStack [ { value = Eight, suit = Diamond, originDeck = DeckTwo }, { value = Nine, suit = Club, originDeck = DeckOne }, { value = Ten, suit = Diamond, originDeck = DeckOne } ] { top = 482, left = 118 }
@@ -4830,6 +4834,7 @@ walkthroughMined0045C6Dp1 =
                 ( eagerModel, actions ) =
                     buildEagerAndActions initialModel
                         [ SpecSplit [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ] 2
+                        , SpecMoveStack [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne } ] { top = 257, left = 187 }
                         , SpecSplit [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne } ] 0
                         , SpecMergeStack [ { value = Seven, suit = Club, originDeck = DeckOne } ] [ { value = Five, suit = Club, originDeck = DeckOne }, { value = Six, suit = Diamond, originDeck = DeckTwo } ] BoardActions.Right
                         , SpecMergeStack [ { value = Seven, suit = Diamond, originDeck = DeckOne } ] [ { value = Seven, suit = Spade, originDeck = DeckOne } ] BoardActions.Right
@@ -4879,8 +4884,8 @@ walkthroughMined0052Hp1 =
                         [ SpecSplit [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ] 3
                         , SpecMergeStack [ { value = Three, suit = Spade, originDeck = DeckOne } ] [ { value = Two, suit = Heart, originDeck = DeckTwo } ] BoardActions.Right
                         , SpecSplit [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] 0
+                        , SpecMoveStack [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] { top = 332, left = 187 }
                         , SpecSplit [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] 0
-                        , SpecMoveStack [ { value = Two, suit = Heart, originDeck = DeckTwo }, { value = Three, suit = Spade, originDeck = DeckOne } ] { top = 332, left = 220 }
                         , SpecMergeStack [ { value = Ace, suit = Club, originDeck = DeckOne } ] [ { value = Two, suit = Heart, originDeck = DeckTwo }, { value = Three, suit = Spade, originDeck = DeckOne } ] BoardActions.Left
                         , SpecMergeStack [ { value = Ace, suit = Diamond, originDeck = DeckOne } ] [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ] BoardActions.Right
                         , SpecMergeStack [ { value = Ace, suit = Heart, originDeck = DeckOne } ] [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ] BoardActions.Left ]
@@ -4930,9 +4935,11 @@ walkthroughMined0066Cp1 =
                         [ SpecSplit [ { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne } ] 3
                         , SpecMergeStack [ { value = Six, suit = Spade, originDeck = DeckOne } ] [ { value = Six, suit = Club, originDeck = DeckTwo } ] BoardActions.Right
                         , SpecSplit [ { value = Five, suit = Club, originDeck = DeckOne }, { value = Six, suit = Diamond, originDeck = DeckTwo }, { value = Seven, suit = Club, originDeck = DeckOne } ] 0
+                        , SpecMoveStack [ { value = Six, suit = Diamond, originDeck = DeckTwo }, { value = Seven, suit = Club, originDeck = DeckOne } ] { top = 332, left = 172 }
                         , SpecSplit [ { value = Six, suit = Diamond, originDeck = DeckTwo }, { value = Seven, suit = Club, originDeck = DeckOne } ] 0
                         , SpecMergeStack [ { value = Six, suit = Diamond, originDeck = DeckTwo } ] [ { value = Six, suit = Club, originDeck = DeckTwo }, { value = Six, suit = Spade, originDeck = DeckOne } ] BoardActions.Right
                         , SpecMergeStack [ { value = Five, suit = Club, originDeck = DeckOne } ] [ { value = Ace, suit = Club, originDeck = DeckTwo }, { value = Two, suit = Heart, originDeck = DeckTwo }, { value = Three, suit = Spade, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ] BoardActions.Right
+                        , SpecMoveStack [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ] { top = 332, left = 172 }
                         , SpecMergeStack [ { value = Seven, suit = Club, originDeck = DeckOne } ] [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ] BoardActions.Right ]
 
                 replayedModel =
@@ -4975,6 +4982,7 @@ walkthroughMined0075Cp16C =
                 ( eagerModel, actions ) =
                     buildEagerAndActions initialModel
                         [ SpecSplit [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ] 2
+                        , SpecMoveStack [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne } ] { top = 257, left = 187 }
                         , SpecSplit [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne } ] 0
                         , SpecMergeStack [ { value = Seven, suit = Club, originDeck = DeckOne } ] [ { value = Five, suit = Club, originDeck = DeckTwo }, { value = Six, suit = Club, originDeck = DeckOne } ] BoardActions.Right
                         , SpecMergeStack [ { value = Seven, suit = Diamond, originDeck = DeckOne } ] [ { value = Seven, suit = Spade, originDeck = DeckOne } ] BoardActions.Right
@@ -5023,11 +5031,13 @@ walkthroughMined008QHp1 =
                 ( eagerModel, actions ) =
                     buildEagerAndActions initialModel
                         [ SpecSplit [ { value = Jack, suit = Spade, originDeck = DeckTwo }, { value = Queen, suit = Spade, originDeck = DeckTwo }, { value = King, suit = Spade, originDeck = DeckOne } ] 0
+                        , SpecMoveStack [ { value = Queen, suit = Heart, originDeck = DeckTwo } ] { top = 242, left = 220 }
                         , SpecMergeStack [ { value = Jack, suit = Spade, originDeck = DeckTwo } ] [ { value = Queen, suit = Heart, originDeck = DeckTwo } ] BoardActions.Left
+                        , SpecMoveStack [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ] { top = 317, left = 187 }
                         , SpecSplit [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ] 0
                         , SpecMoveStack [ { value = Jack, suit = Spade, originDeck = DeckTwo }, { value = Queen, suit = Heart, originDeck = DeckTwo } ] { top = 242, left = 220 }
                         , SpecMergeStack [ { value = Ten, suit = Diamond, originDeck = DeckOne } ] [ { value = Jack, suit = Spade, originDeck = DeckTwo }, { value = Queen, suit = Heart, originDeck = DeckTwo } ] BoardActions.Left
-                        , SpecMoveStack [ { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ] { top = 107, left = 253 }
+                        , SpecMoveStack [ { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ] { top = 92, left = 253 }
                         , SpecMergeStack [ { value = Queen, suit = Spade, originDeck = DeckTwo }, { value = King, suit = Spade, originDeck = DeckOne } ] [ { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ] BoardActions.Left ]
 
                 replayedModel =
@@ -5074,6 +5084,7 @@ walkthroughMined009JC =
                         [ SpecSplit [ { value = Nine, suit = Spade, originDeck = DeckOne }, { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Spade, originDeck = DeckTwo }, { value = Queen, suit = Heart, originDeck = DeckTwo } ] 3
                         , SpecMergeStack [ { value = Queen, suit = Heart, originDeck = DeckTwo } ] [ { value = Jack, suit = Club, originDeck = DeckOne } ] BoardActions.Right
                         , SpecSplit [ { value = Queen, suit = Spade, originDeck = DeckTwo }, { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ] 0
+                        , SpecMoveStack [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ] { top = 482, left = 112 }
                         , SpecSplit [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ] 0
                         , SpecMergeStack [ { value = King, suit = Spade, originDeck = DeckOne } ] [ { value = Jack, suit = Club, originDeck = DeckOne }, { value = Queen, suit = Heart, originDeck = DeckTwo } ] BoardActions.Right
                         , SpecMoveStack [ { value = Nine, suit = Heart, originDeck = DeckTwo }, { value = Ten, suit = Club, originDeck = DeckTwo }, { value = Jack, suit = Heart, originDeck = DeckOne } ] { top = 407, left = 187 }
@@ -5122,10 +5133,12 @@ walkthroughMined0103Hp1 =
                 ( eagerModel, actions ) =
                     buildEagerAndActions initialModel
                         [ SpecSplit [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne } ] 0
+                        , SpecMoveStack [ { value = Three, suit = Heart, originDeck = DeckTwo } ] { top = 317, left = 220 }
                         , SpecMergeStack [ { value = Two, suit = Club, originDeck = DeckOne } ] [ { value = Three, suit = Heart, originDeck = DeckTwo } ] BoardActions.Left
                         , SpecSplit [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] 0
+                        , SpecMoveStack [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] { top = 482, left = 187 }
                         , SpecSplit [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] 0
-                        , SpecMoveStack [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckTwo } ] { top = 332, left = 220 }
+                        , SpecMoveStack [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckTwo } ] { top = 317, left = 220 }
                         , SpecMergeStack [ { value = Ace, suit = Diamond, originDeck = DeckOne } ] [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckTwo } ] BoardActions.Left
                         , SpecSplit [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ] 3
                         , SpecMergeStack [ { value = King, suit = Diamond, originDeck = DeckOne } ] [ { value = Ace, suit = Club, originDeck = DeckOne } ] BoardActions.Left
@@ -5176,8 +5189,10 @@ walkthroughMined011JC =
                 ( eagerModel, actions ) =
                     buildEagerAndActions initialModel
                         [ SpecSplit [ { value = Ten, suit = Club, originDeck = DeckTwo }, { value = Jack, suit = Diamond, originDeck = DeckTwo }, { value = Queen, suit = Spade, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Club, originDeck = DeckOne } ] 0
+                        , SpecMoveStack [ { value = Jack, suit = Club, originDeck = DeckOne } ] { top = 392, left = 220 }
                         , SpecMergeStack [ { value = Ten, suit = Club, originDeck = DeckTwo } ] [ { value = Jack, suit = Club, originDeck = DeckOne } ] BoardActions.Left
                         , SpecSplit [ { value = Nine, suit = Heart, originDeck = DeckTwo }, { value = Nine, suit = Club, originDeck = DeckOne }, { value = Nine, suit = Diamond, originDeck = DeckOne } ] 0
+                        , SpecMoveStack [ { value = Nine, suit = Club, originDeck = DeckOne }, { value = Nine, suit = Diamond, originDeck = DeckOne } ] { top = 467, left = 262 }
                         , SpecSplit [ { value = Nine, suit = Club, originDeck = DeckOne }, { value = Nine, suit = Diamond, originDeck = DeckOne } ] 0
                         , SpecMoveStack [ { value = Ten, suit = Club, originDeck = DeckTwo }, { value = Jack, suit = Club, originDeck = DeckOne } ] { top = 392, left = 220 }
                         , SpecMergeStack [ { value = Nine, suit = Club, originDeck = DeckOne } ] [ { value = Ten, suit = Club, originDeck = DeckTwo }, { value = Jack, suit = Club, originDeck = DeckOne } ] BoardActions.Left
@@ -5224,6 +5239,7 @@ walkthroughMined012QCKC =
                 ( eagerModel, actions ) =
                     buildEagerAndActions initialModel
                         [ SpecSplit [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] 0
+                        , SpecMoveStack [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] { top = 332, left = 112 }
                         , SpecSplit [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] 0
                         , SpecMergeStack [ { value = Ace, suit = Club, originDeck = DeckOne } ] [ { value = Queen, suit = Club, originDeck = DeckOne }, { value = King, suit = Club, originDeck = DeckOne } ] BoardActions.Right
                         , SpecMergeStack [ { value = Ace, suit = Diamond, originDeck = DeckOne } ] [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ] BoardActions.Right
@@ -5270,13 +5286,15 @@ walkthroughMined013AHp1 =
 
                 ( eagerModel, actions ) =
                     buildEagerAndActions initialModel
-                        [ SpecSplit [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ] 0
+                        [ SpecMoveStack [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ] { top = 167, left = 247 }
+                        , SpecSplit [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ] 0
+                        , SpecMoveStack [ { value = Ace, suit = Heart, originDeck = DeckTwo } ] { top = 332, left = 220 }
                         , SpecMergeStack [ { value = King, suit = Spade, originDeck = DeckOne } ] [ { value = Ace, suit = Heart, originDeck = DeckTwo } ] BoardActions.Left
                         , SpecSplit [ { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ] 0
+                        , SpecMoveStack [ { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ] { top = 407, left = 247 }
                         , SpecSplit [ { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ] 0
                         , SpecMergeStack [ { value = Two, suit = Spade, originDeck = DeckOne } ] [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckTwo } ] BoardActions.Right
                         , SpecMergeStack [ { value = Ace, suit = Spade, originDeck = DeckOne } ] [ { value = Two, suit = Diamond, originDeck = DeckOne }, { value = Three, suit = Club, originDeck = DeckTwo }, { value = Four, suit = Diamond, originDeck = DeckTwo }, { value = Five, suit = Spade, originDeck = DeckOne }, { value = Six, suit = Diamond, originDeck = DeckTwo } ] BoardActions.Left
-                        , SpecMoveStack [ { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Diamond, originDeck = DeckOne }, { value = Three, suit = Club, originDeck = DeckTwo }, { value = Four, suit = Diamond, originDeck = DeckTwo }, { value = Five, suit = Spade, originDeck = DeckOne }, { value = Six, suit = Diamond, originDeck = DeckTwo } ] { top = 407, left = 52 }
                         , SpecSplit [ { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Diamond, originDeck = DeckOne }, { value = Three, suit = Club, originDeck = DeckTwo }, { value = Four, suit = Diamond, originDeck = DeckTwo }, { value = Five, suit = Spade, originDeck = DeckOne }, { value = Six, suit = Diamond, originDeck = DeckTwo } ] 1
                         , SpecMoveStack [ { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Diamond, originDeck = DeckOne } ] { top = 167, left = 247 }
                         , SpecMergeStack [ { value = Three, suit = Spade, originDeck = DeckOne } ] [ { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Diamond, originDeck = DeckOne } ] BoardActions.Right ]
@@ -5326,6 +5344,7 @@ walkthroughMined0145C =
                         [ SpecSplit [ { value = Three, suit = Club, originDeck = DeckTwo }, { value = Four, suit = Diamond, originDeck = DeckTwo }, { value = Five, suit = Spade, originDeck = DeckOne }, { value = Six, suit = Diamond, originDeck = DeckTwo } ] 3
                         , SpecMergeStack [ { value = Six, suit = Diamond, originDeck = DeckTwo } ] [ { value = Five, suit = Club, originDeck = DeckOne } ] BoardActions.Right
                         , SpecSplit [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ] 2
+                        , SpecMoveStack [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne } ] { top = 92, left = 247 }
                         , SpecSplit [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne } ] 0
                         , SpecMergeStack [ { value = Seven, suit = Club, originDeck = DeckOne } ] [ { value = Five, suit = Club, originDeck = DeckOne }, { value = Six, suit = Diamond, originDeck = DeckTwo } ] BoardActions.Right
                         , SpecMergeStack [ { value = Seven, suit = Diamond, originDeck = DeckOne } ] [ { value = Seven, suit = Spade, originDeck = DeckOne } ] BoardActions.Right
@@ -5374,10 +5393,12 @@ walkthroughMined0153Cp1 =
                 ( eagerModel, actions ) =
                     buildEagerAndActions initialModel
                         [ SpecSplit [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ] 0
+                        , SpecMoveStack [ { value = Three, suit = Club, originDeck = DeckTwo } ] { top = 242, left = 220 }
                         , SpecMergeStack [ { value = Two, suit = Club, originDeck = DeckOne } ] [ { value = Three, suit = Club, originDeck = DeckTwo } ] BoardActions.Left
                         , SpecSplit [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] 0
+                        , SpecMoveStack [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] { top = 407, left = 187 }
                         , SpecSplit [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] 0
-                        , SpecMoveStack [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Club, originDeck = DeckTwo } ] { top = 407, left = 220 }
+                        , SpecMoveStack [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Club, originDeck = DeckTwo } ] { top = 257, left = 85 }
                         , SpecMergeStack [ { value = Ace, suit = Club, originDeck = DeckOne } ] [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Club, originDeck = DeckTwo } ] BoardActions.Left
                         , SpecMergeStack [ { value = Ace, suit = Diamond, originDeck = DeckOne } ] [ { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ] BoardActions.Right
                         , SpecMergeStack [ { value = Ace, suit = Heart, originDeck = DeckOne } ] [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ] BoardActions.Left ]
@@ -5472,6 +5493,7 @@ walkthroughMined0175Dp16Dp1 =
                 ( eagerModel, actions ) =
                     buildEagerAndActions initialModel
                         [ SpecSplit [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ] 0
+                        , SpecMoveStack [ { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ] { top = 257, left = 112 }
                         , SpecSplit [ { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ] 0
                         , SpecMergeStack [ { value = Seven, suit = Diamond, originDeck = DeckOne } ] [ { value = Five, suit = Diamond, originDeck = DeckTwo }, { value = Six, suit = Diamond, originDeck = DeckTwo } ] BoardActions.Right
                         , SpecMergeStack [ { value = Seven, suit = Club, originDeck = DeckOne } ] [ { value = Seven, suit = Spade, originDeck = DeckOne } ] BoardActions.Right
@@ -5520,13 +5542,14 @@ walkthroughMined0182Sp13Hp1 =
                 ( eagerModel, actions ) =
                     buildEagerAndActions initialModel
                         [ SpecSplit [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] 0
+                        , SpecMoveStack [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] { top = 407, left = 187 }
                         , SpecSplit [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] 0
-                        , SpecMoveStack [ { value = Two, suit = Spade, originDeck = DeckTwo }, { value = Three, suit = Heart, originDeck = DeckTwo } ] { top = 407, left = 220 }
+                        , SpecMoveStack [ { value = Two, suit = Spade, originDeck = DeckTwo }, { value = Three, suit = Heart, originDeck = DeckTwo } ] { top = 257, left = 145 }
                         , SpecMergeStack [ { value = Ace, suit = Diamond, originDeck = DeckOne } ] [ { value = Two, suit = Spade, originDeck = DeckTwo }, { value = Three, suit = Heart, originDeck = DeckTwo } ] BoardActions.Left
                         , SpecSplit [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ] 0
+                        , SpecMoveStack [ { value = Ace, suit = Club, originDeck = DeckOne } ] { top = 482, left = 187 }
                         , SpecMergeStack [ { value = Two, suit = Club, originDeck = DeckOne } ] [ { value = Ace, suit = Club, originDeck = DeckOne } ] BoardActions.Right
                         , SpecSplit [ { value = Three, suit = Club, originDeck = DeckTwo }, { value = Four, suit = Heart, originDeck = DeckTwo }, { value = Five, suit = Spade, originDeck = DeckTwo } ] 0
-                        , SpecMoveStack [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Two, suit = Club, originDeck = DeckOne } ] { top = 482, left = 187 }
                         , SpecMergeStack [ { value = Three, suit = Club, originDeck = DeckTwo } ] [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Two, suit = Club, originDeck = DeckOne } ] BoardActions.Right
                         , SpecMergeStack [ { value = Ace, suit = Heart, originDeck = DeckOne } ] [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ] BoardActions.Left
                         , SpecSplit [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ] 3
@@ -5575,12 +5598,14 @@ walkthroughMined0192D =
                 ( eagerModel, actions ) =
                     buildEagerAndActions initialModel
                         [ SpecSplit [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Two, suit = Club, originDeck = DeckTwo } ] 0
+                        , SpecMoveStack [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Two, suit = Club, originDeck = DeckTwo } ] { top = 392, left = 187 }
                         , SpecSplit [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Two, suit = Club, originDeck = DeckTwo } ] 0
+                        , SpecMoveStack [ { value = Two, suit = Diamond, originDeck = DeckOne } ] { top = 317, left = 220 }
                         , SpecMergeStack [ { value = Ace, suit = Diamond, originDeck = DeckOne } ] [ { value = Two, suit = Diamond, originDeck = DeckOne } ] BoardActions.Left
                         , SpecMoveStack [ { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ] { top = 317, left = 187 }
                         , SpecMergeStack [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Two, suit = Diamond, originDeck = DeckOne } ] [ { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ] BoardActions.Right
+                        , SpecMoveStack [ { value = Ace, suit = Heart, originDeck = DeckOne }, { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne } ] { top = 92, left = 190 }
                         , SpecMergeStack [ { value = King, suit = Spade, originDeck = DeckOne } ] [ { value = Ace, suit = Heart, originDeck = DeckOne }, { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne } ] BoardActions.Left
-                        , SpecMoveStack [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne }, { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne } ] { top = 242, left = 187 }
                         , SpecSplit [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne }, { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne } ] 1
                         , SpecMoveStack [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] { top = 107, left = 52 }
                         , SpecMergeStack [ { value = Two, suit = Club, originDeck = DeckTwo } ] [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] BoardActions.Right ]
@@ -5626,7 +5651,9 @@ walkthroughMined0202Dp13Cp1 =
                 ( eagerModel, actions ) =
                     buildEagerAndActions initialModel
                         [ SpecSplit [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] 0
+                        , SpecMoveStack [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] { top = 257, left = 112 }
                         , SpecSplit [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] 0
+                        , SpecMoveStack [ { value = Two, suit = Diamond, originDeck = DeckTwo }, { value = Three, suit = Club, originDeck = DeckTwo } ] { top = 167, left = 220 }
                         , SpecMergeStack [ { value = Ace, suit = Club, originDeck = DeckOne } ] [ { value = Two, suit = Diamond, originDeck = DeckTwo }, { value = Three, suit = Club, originDeck = DeckTwo } ] BoardActions.Left
                         , SpecMergeStack [ { value = Ace, suit = Diamond, originDeck = DeckOne } ] [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ] BoardActions.Left
                         , SpecMergeStack [ { value = Ace, suit = Heart, originDeck = DeckOne } ] [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ] BoardActions.Left ]
@@ -5673,17 +5700,17 @@ walkthroughMined0218Dp1 =
                 ( eagerModel, actions ) =
                     buildEagerAndActions initialModel
                         [ SpecSplit [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ] 2
+                        , SpecMoveStack [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne } ] { top = 482, left = 187 }
                         , SpecSplit [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne } ] 0
+                        , SpecMoveStack [ { value = Eight, suit = Diamond, originDeck = DeckTwo } ] { top = 257, left = 85 }
                         , SpecMergeStack [ { value = Seven, suit = Club, originDeck = DeckOne } ] [ { value = Eight, suit = Diamond, originDeck = DeckTwo } ] BoardActions.Left
                         , SpecSplit [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ] 3
+                        , SpecMoveStack [ { value = Four, suit = Heart, originDeck = DeckTwo }, { value = Five, suit = Club, originDeck = DeckTwo }, { value = Six, suit = Diamond, originDeck = DeckTwo } ] { top = 182, left = 220 }
                         , SpecMergeStack [ { value = Three, suit = Spade, originDeck = DeckOne } ] [ { value = Four, suit = Heart, originDeck = DeckTwo }, { value = Five, suit = Club, originDeck = DeckTwo }, { value = Six, suit = Diamond, originDeck = DeckTwo } ] BoardActions.Left
                         , SpecSplit [ { value = Three, suit = Spade, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckTwo }, { value = Five, suit = Club, originDeck = DeckTwo }, { value = Six, suit = Diamond, originDeck = DeckTwo } ] 3
-                        , SpecMoveStack [ { value = Seven, suit = Club, originDeck = DeckOne }, { value = Eight, suit = Diamond, originDeck = DeckTwo } ] { top = 332, left = 220 }
                         , SpecMergeStack [ { value = Six, suit = Diamond, originDeck = DeckTwo } ] [ { value = Seven, suit = Club, originDeck = DeckOne }, { value = Eight, suit = Diamond, originDeck = DeckTwo } ] BoardActions.Left
-                        , SpecMoveStack [ { value = Seven, suit = Spade, originDeck = DeckOne } ] { top = 257, left = 52 }
                         , SpecMergeStack [ { value = Seven, suit = Diamond, originDeck = DeckOne } ] [ { value = Seven, suit = Spade, originDeck = DeckOne } ] BoardActions.Right
                         , SpecSplit [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ] 5
-                        , SpecMoveStack [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne } ] { top = 257, left = 52 }
                         , SpecMergeStack [ { value = Seven, suit = Heart, originDeck = DeckOne } ] [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne } ] BoardActions.Right ]
 
                 replayedModel =
@@ -5726,6 +5753,7 @@ walkthroughMined022AHp1ADp1 =
                 ( eagerModel, actions ) =
                     buildEagerAndActions initialModel
                         [ SpecSplit [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] 0
+                        , SpecMoveStack [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] { top = 332, left = 112 }
                         , SpecSplit [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] 0
                         , SpecMergeStack [ { value = Ace, suit = Club, originDeck = DeckOne } ] [ { value = Ace, suit = Heart, originDeck = DeckTwo }, { value = Ace, suit = Diamond, originDeck = DeckTwo } ] BoardActions.Right
                         , SpecMergeStack [ { value = Ace, suit = Diamond, originDeck = DeckOne } ] [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ] BoardActions.Right
@@ -5774,6 +5802,7 @@ walkthroughMined0233C =
                         [ SpecSplit [ { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ] 0
                         , SpecMergeStack [ { value = Four, suit = Club, originDeck = DeckOne } ] [ { value = Three, suit = Club, originDeck = DeckOne } ] BoardActions.Right
                         , SpecSplit [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Spade, originDeck = DeckTwo } ] 0
+                        , SpecMoveStack [ { value = Three, suit = Club, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne } ] { top = 167, left = 220 }
                         , SpecMergeStack [ { value = Two, suit = Club, originDeck = DeckOne } ] [ { value = Three, suit = Club, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne } ] BoardActions.Left
                         , SpecMergeStack [ { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Spade, originDeck = DeckTwo } ] [ { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ] BoardActions.Left ]
 
@@ -5820,7 +5849,9 @@ walkthroughMined0242D =
                         [ SpecSplit [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ] 3
                         , SpecMergeStack [ { value = Three, suit = Spade, originDeck = DeckOne } ] [ { value = Two, suit = Diamond, originDeck = DeckOne } ] BoardActions.Right
                         , SpecSplit [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] 0
+                        , SpecMoveStack [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] { top = 332, left = 112 }
                         , SpecSplit [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] 0
+                        , SpecMoveStack [ { value = Two, suit = Diamond, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ] { top = 257, left = 220 }
                         , SpecMergeStack [ { value = Ace, suit = Club, originDeck = DeckOne } ] [ { value = Two, suit = Diamond, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ] BoardActions.Left
                         , SpecMergeStack [ { value = Ace, suit = Diamond, originDeck = DeckOne } ] [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ] BoardActions.Right
                         , SpecMergeStack [ { value = Ace, suit = Heart, originDeck = DeckOne } ] [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ] BoardActions.Left ]
@@ -5871,6 +5902,7 @@ walkthroughMined025TSp1 =
                         , SpecSplit [ { value = Eight, suit = Heart, originDeck = DeckOne }, { value = Nine, suit = Spade, originDeck = DeckOne }, { value = Ten, suit = Heart, originDeck = DeckTwo } ] 2
                         , SpecMergeStack [ { value = Ten, suit = Heart, originDeck = DeckTwo } ] [ { value = Ten, suit = Spade, originDeck = DeckTwo }, { value = Ten, suit = Diamond, originDeck = DeckOne } ] BoardActions.Right
                         , SpecSplit [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ] 2
+                        , SpecMoveStack [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne } ] { top = 407, left = 187 }
                         , SpecSplit [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne } ] 0
                         , SpecMergeStack [ { value = Seven, suit = Club, originDeck = DeckOne } ] [ { value = Eight, suit = Heart, originDeck = DeckOne }, { value = Nine, suit = Spade, originDeck = DeckOne } ] BoardActions.Left
                         , SpecMergeStack [ { value = Seven, suit = Diamond, originDeck = DeckOne } ] [ { value = Seven, suit = Spade, originDeck = DeckOne } ] BoardActions.Right

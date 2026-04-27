@@ -403,17 +403,6 @@ shiftPrims board d =
                 postDonorAssembled =
                     List.foldl applyOnBoard postDonor donorFollowUp
 
-                -- Pre-flight: move source to a pack-gap-cleared
-                -- loc that fits the upcoming augmented (n+1)
-                -- stack. The merge-only pre-flight in
-                -- GeometryPlan fires only on legal-margin
-                -- violations and doesn't anticipate the next
-                -- split's spawn perturbing neighbors. A human
-                -- relocates crowded helpers BEFORE building
-                -- on them; agent matches.
-                ( sourcePreFlightPrims, postSourcePreFlight ) =
-                    sourcePreFlight d.source postDonorAssembled
-
                 ( pSide, augmentedSource, splitK ) =
                     case d.whichEnd of
                         Move.LeftEnd ->
@@ -431,7 +420,7 @@ shiftPrims board d =
                             )
 
                 pMergeStep =
-                    case ( findByCards [ d.pCard ] postSourcePreFlight, findByCards d.source postSourcePreFlight ) of
+                    case ( findByCards [ d.pCard ] postDonorAssembled, findByCards d.source postDonorAssembled ) of
                         ( Just pSt, Just srcSt ) ->
                             [ MergeStack { source = pSt, target = srcSt, side = pSide } ]
 
@@ -439,7 +428,7 @@ shiftPrims board d =
                             []
 
                 postPMerge =
-                    List.foldl applyOnBoard postSourcePreFlight pMergeStep
+                    List.foldl applyOnBoard postDonorAssembled pMergeStep
 
                 ( stolenSplitPrims, postStolenSplit ) =
                     planSplit postPMerge augmentedSource splitK
@@ -459,44 +448,12 @@ shiftPrims board d =
             in
             donorPrims
                 ++ donorFollowUp
-                ++ sourcePreFlightPrims
                 ++ pMergeStep
                 ++ stolenSplitPrims
                 ++ stolenMergeStep
 
         _ ->
             []
-
-
-sourcePreFlight :
-    List Card
-    -> List CardStack
-    -> ( List WireAction, List CardStack )
-sourcePreFlight sourceCards board =
-    case findByCards sourceCards board of
-        Nothing ->
-            ( [], board )
-
-        Just liveSrc ->
-            let
-                others =
-                    List.filter (not << stacksEqual liveSrc) board
-
-                augSize =
-                    List.length sourceCards + 1
-
-                newLoc =
-                    PlaceStack.findOpenLoc others augSize
-            in
-            if newLoc == liveSrc.loc then
-                ( [], board )
-
-            else
-                let
-                    movePrim =
-                        MoveStack { stack = liveSrc, newLoc = newLoc }
-                in
-                ( [ movePrim ], applyOnBoard movePrim board )
 
 
 
@@ -560,12 +517,10 @@ isolateCard board source ci _ =
                 ( firstPrims ++ secondPrims, afterSecond )
 
 
-{-| Mirrors `python/verbs.py::_plan_split_after`. For end
-splits (k == 1 or k == n-1) emits one Split. For INTERIOR
-splits, pre-moves the donor into a 4-side-clear region first
-via `Game.PlaceStack.findOpenLoc` — bump distances after a
-mid-stack split are unpredictable and can spawn pieces into
-neighbors. Returns (prims, postBoard).
+{-| Geometry-agnostic split planner. Emits exactly one Split
+primitive (or zero, if the source isn't on the board). Any
+necessary pre-flight MoveStack to keep the post-split board
+clean is added later by `Game.Agent.GeometryPlan.planActions`.
 -}
 planSplit :
     List CardStack
@@ -577,55 +532,22 @@ planSplit board source k =
         n =
             List.length source
 
-        interior =
-            k /= 1 && k /= n - 1
-
-        ( prePrims, donorBoard, donorStack ) =
-            if interior then
-                case findByCards source board of
-                    Just stack ->
-                        let
-                            others =
-                                List.filter (not << stacksEqual stack) board
-
-                            newLoc =
-                                PlaceStack.findOpenLoc others n
-                        in
-                        if newLoc == stack.loc then
-                            ( [], board, Just stack )
-
-                        else
-                            let
-                                movePrim =
-                                    MoveStack { stack = stack, newLoc = newLoc }
-
-                                afterMove =
-                                    applyOnBoard movePrim board
-                            in
-                            ( [ movePrim ], afterMove, findByCards source afterMove )
-
-                    Nothing ->
-                        ( [], board, Nothing )
-
-            else
-                ( [], board, findByCards source board )
-
         ci =
             splitCardIndex k n
+
+        donorStack =
+            findByCards source board
     in
     case donorStack of
         Just real ->
             let
                 splitPrim =
                     Split { stack = real, cardIndex = ci }
-
-                afterSplit =
-                    applyOnBoard splitPrim donorBoard
             in
-            ( prePrims ++ [ splitPrim ], afterSplit )
+            ( [ splitPrim ], applyOnBoard splitPrim board )
 
         Nothing ->
-            ( prePrims, donorBoard )
+            ( [], board )
 
 
 

@@ -300,6 +300,7 @@
     },
     "expect_primitives": [
       "split [AC AD AH]@0",
+      "move_stack [AD AH] -> (407,187)",
       "split [AD AH]@0",
       "merge_stack [AC] -> [2D' 3S'] /left"
     ]
@@ -402,8 +403,8 @@
       },
       {
         "loc": [
-          178,
-          91
+          403,
+          185
         ],
         "cards": [
           "AD"
@@ -411,8 +412,8 @@
       },
       {
         "loc": [
-          182,
-          134
+          407,
+          228
         ],
         "cards": [
           "AH"
@@ -542,8 +543,8 @@
       },
       {
         "loc": [
-          182,
-          134
+          407,
+          228
         ],
         "cards": [
           "AH"
@@ -779,6 +780,7 @@
       "move_stack [JD QD KD] -> (467,187)",
       "merge_stack [AD] -> [JD QD KD] /right",
       "split [JD QD KD AD]@0",
+      "move_stack [QD'] -> (257,85)",
       "merge_stack [JD] -> [QD'] /left"
     ]
   },
@@ -911,8 +913,8 @@
       },
       {
         "loc": [
-          392,
-          154
+          257,
+          52
         ],
         "cards": [
           "JD",
@@ -952,6 +954,7 @@
     },
     "expect_primitives": [
       "split [KD' KH' KS]@0",
+      "move_stack [KH' KS] -> (392,187)",
       "split [KH' KS]@0",
       "merge_stack [KD'] -> [JD QD'] /right"
     ]
@@ -1074,8 +1077,8 @@
       },
       {
         "loc": [
-          178,
-          91
+          388,
+          185
         ],
         "cards": [
           "KH'"
@@ -1083,8 +1086,8 @@
       },
       {
         "loc": [
-          182,
-          134
+          392,
+          228
         ],
         "cards": [
           "KS"
@@ -1092,8 +1095,8 @@
       },
       {
         "loc": [
-          392,
-          154
+          257,
+          52
         ],
         "cards": [
           "JD",
@@ -1231,8 +1234,8 @@
       },
       {
         "loc": [
-          182,
-          134
+          392,
+          228
         ],
         "cards": [
           "KS"
@@ -1240,8 +1243,8 @@
       },
       {
         "loc": [
-          392,
-          154
+          257,
+          52
         ],
         "cards": [
           "JD",
@@ -1452,6 +1455,7 @@
     },
     "expect_primitives": [
       "split [7S 7D 7C]@2",
+      "move_stack [7S 7D] -> (242,247)",
       "split [7S 7D]@0",
       "merge_stack [7C] -> [6D] /right"
     ]
@@ -1575,8 +1579,8 @@
       },
       {
         "loc": [
-          103,
-          42
+          238,
+          245
         ],
         "cards": [
           "7S"
@@ -1584,8 +1588,8 @@
       },
       {
         "loc": [
-          107,
-          85
+          242,
+          288
         ],
         "cards": [
           "7D"
@@ -1735,8 +1739,8 @@
       },
       {
         "loc": [
-          103,
-          42
+          238,
+          245
         ],
         "cards": [
           "7S"
@@ -1744,8 +1748,8 @@
       },
       {
         "loc": [
-          107,
-          85
+          242,
+          288
         ],
         "cards": [
           "7D"
@@ -1904,8 +1908,8 @@
       },
       {
         "loc": [
-          103,
-          42
+          238,
+          245
         ],
         "cards": [
           "7S",
@@ -2073,6 +2077,7 @@
     },
     "expect_primitives": [
       "split [7S 7D 7C]@2",
+      "move_stack [7S 7D] -> (257,187)",
       "split [7S 7D]@0",
       "merge_stack [7C] -> [5C 6D'] /right"
     ]
@@ -2156,7 +2161,7 @@
       {
         "loc": [
           253,
-          42
+          185
         ],
         "cards": [
           "7S"
@@ -2165,7 +2170,7 @@
       {
         "loc": [
           257,
-          85
+          228
         ],
         "cards": [
           "7D"
@@ -2291,7 +2296,7 @@
       {
         "loc": [
           253,
-          42
+          185
         ],
         "cards": [
           "7S",
@@ -2603,8 +2608,8 @@
     },
     "expect_primitives": [
       "split [AC AD AH]@0",
+      "move_stack [AD AH] -> (332,187)",
       "split [AD AH]@0",
-      "move_stack [2H' 3S] -> (332,220)",
       "merge_stack [AC] -> [2H' 3S] /left"
     ]
   },
@@ -2695,8 +2700,8 @@
       },
       {
         "loc": [
-          253,
-          91
+          328,
+          185
         ],
         "cards": [
           "AD"
@@ -2704,8 +2709,8 @@
       },
       {
         "loc": [
-          257,
-          134
+          332,
+          228
         ],
         "cards": [
           "AH"
@@ -2713,8 +2718,8 @@
       },
       {
         "loc": [
-          332,
-          187
+          257,
+          154
         ],
         "cards": [
           "AC",
@@ -2822,8 +2827,8 @@
       },
       {
         "loc": [
-          257,
-          134
+          332,
+          228
         ],
         "cards": [
           "AH"
@@ -2831,8 +2836,8 @@
       },
       {
         "loc": [
-          332,
-          187
+          257,
+          154
         ],
         "cards": [
           "AC",
@@ -3189,6 +3194,7 @@
     },
     "expect_primitives": [
       "split [5C 6D' 7C]@0",
+      "move_stack [6D' 7C] -> (332,172)",
       "split [6D' 7C]@0",
       "merge_stack [6D'] -> [6C' 6S] /right"
     ]
@@ -3309,8 +3315,8 @@
       },
       {
         "loc": [
-          107,
-          134
+          332,
+          213
         ],
         "cards": [
           "7C"
@@ -3447,8 +3453,8 @@
       },
       {
         "loc": [
-          107,
-          134
+          332,
+          213
         ],
         "cards": [
           "7C"
@@ -3498,6 +3504,7 @@
       "side": "right"
     },
     "expect_primitives": [
+      "move_stack [7S 7D 7H] -> (332,172)",
       "merge_stack [7C] -> [7S 7D 7H] /right"
     ]
   },
@@ -3631,6 +3638,7 @@
     },
     "expect_primitives": [
       "split [7S 7D 7C]@2",
+      "move_stack [7S 7D] -> (257,187)",
       "split [7S 7D]@0",
       "merge_stack [7C] -> [5C' 6C] /right"
     ]
@@ -3714,7 +3722,7 @@
       {
         "loc": [
           253,
-          42
+          185
         ],
         "cards": [
           "7S"
@@ -3723,7 +3731,7 @@
       {
         "loc": [
           257,
-          85
+          228
         ],
         "cards": [
           "7D"
@@ -3849,7 +3857,7 @@
       {
         "loc": [
           253,
-          42
+          185
         ],
         "cards": [
           "7S",
@@ -4033,6 +4041,7 @@
     },
     "expect_primitives": [
       "split [JS' QS' KS]@0",
+      "move_stack [QH'] -> (242,220)",
       "merge_stack [JS'] -> [QH'] /left"
     ]
   },
@@ -4145,7 +4154,7 @@
       {
         "loc": [
           242,
-          154
+          187
         ],
         "cards": [
           "JS'",
@@ -4178,6 +4187,7 @@
       "spawned": []
     },
     "expect_primitives": [
+      "move_stack [TD JD QD KD] -> (317,187)",
       "split [TD JD QD KD]@0",
       "move_stack [JS' QH'] -> (242,220)",
       "merge_stack [TD] -> [JS' QH'] /left"
@@ -4279,8 +4289,8 @@
       },
       {
         "loc": [
-          26,
-          67
+          317,
+          228
         ],
         "cards": [
           "JD",
@@ -4321,7 +4331,7 @@
       "side": "left"
     },
     "expect_primitives": [
-      "move_stack [AS 2S 3S] -> (107,253)",
+      "move_stack [AS 2S 3S] -> (92,253)",
       "merge_stack [QS' KS] -> [AS 2S 3S] /left"
     ]
   },
@@ -4623,6 +4633,7 @@
     },
     "expect_primitives": [
       "split [QS' KS AS 2S 3S]@0",
+      "move_stack [KS AS 2S 3S] -> (482,112)",
       "split [KS AS 2S 3S]@0",
       "merge_stack [KS] -> [JC QH'] /right"
     ]
@@ -4735,7 +4746,7 @@
       {
         "loc": [
           482,
-          134
+          153
         ],
         "cards": [
           "AS",
@@ -4931,6 +4942,7 @@
     },
     "expect_primitives": [
       "split [2C 3D 4C 5H 6S]@0",
+      "move_stack [3H'] -> (317,220)",
       "merge_stack [2C] -> [3H'] /left"
     ]
   },
@@ -5054,7 +5066,7 @@
       {
         "loc": [
           317,
-          154
+          187
         ],
         "cards": [
           "2C",
@@ -5094,8 +5106,9 @@
     },
     "expect_primitives": [
       "split [AC AD AH]@0",
+      "move_stack [AD AH] -> (482,187)",
       "split [AD AH]@0",
-      "move_stack [2C 3H'] -> (332,220)",
+      "move_stack [2C 3H'] -> (317,220)",
       "merge_stack [AD] -> [2C 3H'] /left"
     ]
   },
@@ -5216,8 +5229,8 @@
       },
       {
         "loc": [
-          257,
-          134
+          482,
+          228
         ],
         "cards": [
           "AH"
@@ -5225,7 +5238,7 @@
       },
       {
         "loc": [
-          332,
+          317,
           187
         ],
         "cards": [
@@ -5358,8 +5371,8 @@
       },
       {
         "loc": [
-          257,
-          134
+          482,
+          228
         ],
         "cards": [
           "AH"
@@ -5367,7 +5380,7 @@
       },
       {
         "loc": [
-          332,
+          317,
           187
         ],
         "cards": [
@@ -5507,8 +5520,8 @@
       },
       {
         "loc": [
-          257,
-          134
+          482,
+          228
         ],
         "cards": [
           "AH"
@@ -5516,7 +5529,7 @@
       },
       {
         "loc": [
-          332,
+          317,
           187
         ],
         "cards": [
@@ -5736,6 +5749,7 @@
     },
     "expect_primitives": [
       "split [TC' JD' QS KD AC]@0",
+      "move_stack [JC] -> (392,220)",
       "merge_stack [TC'] -> [JC] /left"
     ]
   },
@@ -5870,7 +5884,7 @@
       {
         "loc": [
           392,
-          154
+          187
         ],
         "cards": [
           "TC'",
@@ -5910,6 +5924,7 @@
     },
     "expect_primitives": [
       "split [9H' 9C 9D]@0",
+      "move_stack [9C 9D] -> (467,262)",
       "split [9C 9D]@0",
       "move_stack [TC' JC] -> (392,220)",
       "merge_stack [9C] -> [TC' JC] /left"
@@ -6043,8 +6058,8 @@
       },
       {
         "loc": [
-          107,
-          134
+          467,
+          303
         ],
         "cards": [
           "9D"
@@ -6192,8 +6207,8 @@
       },
       {
         "loc": [
-          107,
-          134
+          467,
+          303
         ],
         "cards": [
           "9D"
@@ -6375,6 +6390,7 @@
     },
     "expect_primitives": [
       "split [AC AD AH]@0",
+      "move_stack [AD AH] -> (332,112)",
       "split [AD AH]@0",
       "merge_stack [AC] -> [QC KC] /right"
     ]
@@ -6458,7 +6474,7 @@
       {
         "loc": [
           328,
-          91
+          110
         ],
         "cards": [
           "AD"
@@ -6467,7 +6483,7 @@
       {
         "loc": [
           332,
-          134
+          153
         ],
         "cards": [
           "AH"
@@ -6576,7 +6592,7 @@
       {
         "loc": [
           332,
-          134
+          153
         ],
         "cards": [
           "AH"
@@ -6773,7 +6789,9 @@
       "spawned": []
     },
     "expect_primitives": [
+      "move_stack [KS AS 2S 3S] -> (167,247)",
       "split [KS AS 2S 3S]@0",
+      "move_stack [AH'] -> (332,220)",
       "merge_stack [KS] -> [AH'] /left"
     ]
   },
@@ -6878,8 +6896,8 @@
       },
       {
         "loc": [
-          26,
-          67
+          167,
+          288
         ],
         "cards": [
           "AS",
@@ -6890,7 +6908,7 @@
       {
         "loc": [
           332,
-          154
+          187
         ],
         "cards": [
           "KS",
@@ -6930,6 +6948,7 @@
     },
     "expect_primitives": [
       "split [AS 2S 3S]@0",
+      "move_stack [2S 3S] -> (407,247)",
       "split [2S 3S]@0",
       "merge_stack [2S] -> [KS AH'] /right"
     ]
@@ -7035,8 +7054,8 @@
       },
       {
         "loc": [
-          22,
-          65
+          163,
+          286
         ],
         "cards": [
           "AS"
@@ -7044,8 +7063,8 @@
       },
       {
         "loc": [
-          26,
-          149
+          407,
+          288
         ],
         "cards": [
           "3S"
@@ -7054,7 +7073,7 @@
       {
         "loc": [
           332,
-          154
+          187
         ],
         "cards": [
           "KS",
@@ -7177,8 +7196,8 @@
       },
       {
         "loc": [
-          26,
-          149
+          407,
+          288
         ],
         "cards": [
           "3S"
@@ -7187,7 +7206,7 @@
       {
         "loc": [
           332,
-          154
+          187
         ],
         "cards": [
           "KS",
@@ -7236,7 +7255,6 @@
       ]
     },
     "expect_primitives": [
-      "move_stack [AS 2D 3C' 4D' 5S 6D'] -> (407,52)",
       "split [AS 2D 3C' 4D' 5S 6D']@1",
       "move_stack [AS 2D] -> (167,247)",
       "merge_stack [3S] -> [AS 2D] /right"
@@ -7561,6 +7579,7 @@
     },
     "expect_primitives": [
       "split [7S 7D 7C]@2",
+      "move_stack [7S 7D] -> (92,247)",
       "split [7S 7D]@0",
       "merge_stack [7C] -> [5C 6D'] /right"
     ]
@@ -7675,8 +7694,8 @@
       },
       {
         "loc": [
-          22,
-          16
+          88,
+          245
         ],
         "cards": [
           "7S"
@@ -7684,8 +7703,8 @@
       },
       {
         "loc": [
-          26,
-          59
+          92,
+          288
         ],
         "cards": [
           "7D"
@@ -7842,8 +7861,8 @@
       },
       {
         "loc": [
-          22,
-          16
+          88,
+          245
         ],
         "cards": [
           "7S",
@@ -8025,6 +8044,7 @@
     },
     "expect_primitives": [
       "split [2C 3D 4C 5H 6S 7H]@0",
+      "move_stack [3C'] -> (242,220)",
       "merge_stack [2C] -> [3C'] /left"
     ]
   },
@@ -8138,7 +8158,7 @@
       {
         "loc": [
           242,
-          154
+          187
         ],
         "cards": [
           "2C",
@@ -8178,8 +8198,9 @@
     },
     "expect_primitives": [
       "split [AC AD AH]@0",
+      "move_stack [AD AH] -> (407,187)",
       "split [AD AH]@0",
-      "move_stack [2C 3C'] -> (407,220)",
+      "move_stack [2C 3C'] -> (257,85)",
       "merge_stack [AC] -> [2C 3C'] /left"
     ]
   },
@@ -8281,8 +8302,8 @@
       },
       {
         "loc": [
-          253,
-          91
+          403,
+          185
         ],
         "cards": [
           "AD"
@@ -8290,8 +8311,8 @@
       },
       {
         "loc": [
-          257,
-          134
+          407,
+          228
         ],
         "cards": [
           "AH"
@@ -8299,8 +8320,8 @@
       },
       {
         "loc": [
-          407,
-          187
+          257,
+          52
         ],
         "cards": [
           "AC",
@@ -8418,8 +8439,8 @@
       },
       {
         "loc": [
-          257,
-          134
+          407,
+          228
         ],
         "cards": [
           "AH"
@@ -8427,8 +8448,8 @@
       },
       {
         "loc": [
-          407,
-          187
+          257,
+          52
         ],
         "cards": [
           "AC",
@@ -9228,6 +9249,7 @@
     },
     "expect_primitives": [
       "split [7S 7D 7C]@0",
+      "move_stack [7D 7C] -> (257,112)",
       "split [7D 7C]@0",
       "merge_stack [7D] -> [5D' 6D'] /right"
     ]
@@ -9309,7 +9331,7 @@
       {
         "loc": [
           257,
-          134
+          153
         ],
         "cards": [
           "7C"
@@ -9614,8 +9636,9 @@
     },
     "expect_primitives": [
       "split [AC AD AH]@0",
+      "move_stack [AD AH] -> (407,187)",
       "split [AD AH]@0",
-      "move_stack [2S' 3H'] -> (407,220)",
+      "move_stack [2S' 3H'] -> (257,145)",
       "merge_stack [AD] -> [2S' 3H'] /left"
     ]
   },
@@ -9727,8 +9750,8 @@
       },
       {
         "loc": [
-          257,
-          134
+          407,
+          228
         ],
         "cards": [
           "AH"
@@ -9736,8 +9759,8 @@
       },
       {
         "loc": [
-          407,
-          187
+          257,
+          112
         ],
         "cards": [
           "AD",
@@ -9772,6 +9795,7 @@
     },
     "expect_primitives": [
       "split [2C 3D 4C 5H 6S 7H]@0",
+      "move_stack [AC] -> (482,187)",
       "merge_stack [2C] -> [AC] /right"
     ]
   },
@@ -9860,8 +9884,8 @@
       },
       {
         "loc": [
-          257,
-          134
+          407,
+          228
         ],
         "cards": [
           "AH"
@@ -9869,8 +9893,8 @@
       },
       {
         "loc": [
-          407,
-          187
+          257,
+          112
         ],
         "cards": [
           "AD",
@@ -9893,8 +9917,8 @@
       },
       {
         "loc": [
-          253,
-          50
+          482,
+          187
         ],
         "cards": [
           "AC",
@@ -9932,7 +9956,6 @@
     },
     "expect_primitives": [
       "split [3C' 4H' 5S']@0",
-      "move_stack [AC 2C] -> (482,187)",
       "merge_stack [3C'] -> [AC 2C] /right"
     ]
   },
@@ -10010,8 +10033,8 @@
       },
       {
         "loc": [
-          257,
-          134
+          407,
+          228
         ],
         "cards": [
           "AH"
@@ -10019,8 +10042,8 @@
       },
       {
         "loc": [
-          407,
-          187
+          257,
+          112
         ],
         "cards": [
           "AD",
@@ -10148,8 +10171,8 @@
       },
       {
         "loc": [
-          407,
-          187
+          257,
+          112
         ],
         "cards": [
           "AD",
@@ -10390,7 +10413,9 @@
     },
     "expect_primitives": [
       "split [KS AD 2C']@0",
+      "move_stack [AD 2C'] -> (392,187)",
       "split [AD 2C']@0",
+      "move_stack [2D] -> (317,220)",
       "merge_stack [AD] -> [2D] /left"
     ]
   },
@@ -10511,8 +10536,8 @@
       },
       {
         "loc": [
-          92,
-          269
+          392,
+          228
         ],
         "cards": [
           "2C'"
@@ -10521,7 +10546,7 @@
       {
         "loc": [
           317,
-          154
+          187
         ],
         "cards": [
           "AD",
@@ -10660,8 +10685,8 @@
       },
       {
         "loc": [
-          92,
-          269
+          392,
+          228
         ],
         "cards": [
           "2C'"
@@ -10702,6 +10727,7 @@
       "side": "left"
     },
     "expect_primitives": [
+      "move_stack [AH 2C 3D 4C] -> (92,190)",
       "merge_stack [KS] -> [AH 2C 3D 4C] /left"
     ]
   },
@@ -10790,8 +10816,8 @@
       },
       {
         "loc": [
-          92,
-          269
+          392,
+          228
         ],
         "cards": [
           "2C'"
@@ -10812,8 +10838,8 @@
       },
       {
         "loc": [
-          242,
-          154
+          92,
+          157
         ],
         "cards": [
           "KS",
@@ -10848,7 +10874,6 @@
       ]
     },
     "expect_primitives": [
-      "move_stack [KS AH 2C 3D 4C] -> (242,187)",
       "split [KS AH 2C 3D 4C]@1",
       "move_stack [KS AH] -> (107,52)",
       "merge_stack [2C'] -> [KS AH] /right"
@@ -10994,7 +11019,9 @@
     },
     "expect_primitives": [
       "split [AC AD AH]@0",
+      "move_stack [AD AH] -> (257,112)",
       "split [AD AH]@0",
+      "move_stack [2D' 3C'] -> (167,220)",
       "merge_stack [AC] -> [2D' 3C'] /left"
     ]
   },
@@ -11087,7 +11114,7 @@
       {
         "loc": [
           253,
-          91
+          110
         ],
         "cards": [
           "AD"
@@ -11096,7 +11123,7 @@
       {
         "loc": [
           257,
-          134
+          153
         ],
         "cards": [
           "AH"
@@ -11105,7 +11132,7 @@
       {
         "loc": [
           167,
-          154
+          187
         ],
         "cards": [
           "AC",
@@ -11217,7 +11244,7 @@
       {
         "loc": [
           257,
-          134
+          153
         ],
         "cards": [
           "AH"
@@ -11226,7 +11253,7 @@
       {
         "loc": [
           167,
-          154
+          187
         ],
         "cards": [
           "AC",
@@ -11422,7 +11449,9 @@
     },
     "expect_primitives": [
       "split [7S 7D 7C]@2",
+      "move_stack [7S 7D] -> (482,187)",
       "split [7S 7D]@0",
+      "move_stack [8D'] -> (257,85)",
       "merge_stack [7C] -> [8D'] /left"
     ]
   },
@@ -11527,8 +11556,8 @@
       },
       {
         "loc": [
-          253,
-          42
+          478,
+          185
         ],
         "cards": [
           "7S"
@@ -11536,8 +11565,8 @@
       },
       {
         "loc": [
-          257,
-          85
+          482,
+          228
         ],
         "cards": [
           "7D"
@@ -11545,8 +11574,8 @@
       },
       {
         "loc": [
-          332,
-          154
+          257,
+          52
         ],
         "cards": [
           "7C",
@@ -11595,9 +11624,9 @@
     },
     "expect_primitives": [
       "split [KS AS 2S 3S]@3",
+      "move_stack [4H' 5C' 6D'] -> (182,220)",
       "merge_stack [3S] -> [4H' 5C' 6D'] /left",
       "split [3S 4H' 5C' 6D']@3",
-      "move_stack [7C 8D'] -> (332,220)",
       "merge_stack [6D'] -> [7C 8D'] /left"
     ]
   },
@@ -11679,8 +11708,8 @@
       },
       {
         "loc": [
-          253,
-          42
+          478,
+          185
         ],
         "cards": [
           "7S"
@@ -11688,8 +11717,8 @@
       },
       {
         "loc": [
-          257,
-          85
+          482,
+          228
         ],
         "cards": [
           "7D"
@@ -11709,7 +11738,7 @@
       {
         "loc": [
           182,
-          146
+          179
         ],
         "cards": [
           "3S",
@@ -11719,8 +11748,8 @@
       },
       {
         "loc": [
-          332,
-          187
+          257,
+          19
         ],
         "cards": [
           "6D'",
@@ -11744,7 +11773,6 @@
       "graduated": false
     },
     "expect_primitives": [
-      "move_stack [7S] -> (257,52)",
       "merge_stack [7D] -> [7S] /right"
     ]
   },
@@ -11838,7 +11866,7 @@
       {
         "loc": [
           182,
-          146
+          179
         ],
         "cards": [
           "3S",
@@ -11848,8 +11876,8 @@
       },
       {
         "loc": [
-          332,
-          187
+          257,
+          19
         ],
         "cards": [
           "6D'",
@@ -11859,8 +11887,8 @@
       },
       {
         "loc": [
-          257,
-          52
+          478,
+          185
         ],
         "cards": [
           "7S",
@@ -11896,7 +11924,6 @@
     },
     "expect_primitives": [
       "split [2C 3D 4C 5H 6S 7H]@5",
-      "move_stack [7S 7D] -> (257,52)",
       "merge_stack [7H] -> [7S 7D] /right"
     ]
   },
@@ -12030,6 +12057,7 @@
     },
     "expect_primitives": [
       "split [AC AD AH]@0",
+      "move_stack [AD AH] -> (332,112)",
       "split [AD AH]@0",
       "merge_stack [AC] -> [AH' AD'] /right"
     ]
@@ -12113,7 +12141,7 @@
       {
         "loc": [
           328,
-          91
+          110
         ],
         "cards": [
           "AD"
@@ -12122,7 +12150,7 @@
       {
         "loc": [
           332,
-          134
+          153
         ],
         "cards": [
           "AH"
@@ -12231,7 +12259,7 @@
       {
         "loc": [
           332,
-          134
+          153
         ],
         "cards": [
           "AH"
@@ -12559,6 +12587,7 @@
     },
     "expect_primitives": [
       "split [2C 3D 4S']@0",
+      "move_stack [3C 4C] -> (167,220)",
       "merge_stack [2C] -> [3C 4C] /left"
     ]
   },
@@ -12662,7 +12691,7 @@
       {
         "loc": [
           167,
-          154
+          187
         ],
         "cards": [
           "2C",
@@ -12970,7 +12999,9 @@
     },
     "expect_primitives": [
       "split [AC AD AH]@0",
+      "move_stack [AD AH] -> (332,112)",
       "split [AD AH]@0",
+      "move_stack [2D 3S] -> (257,220)",
       "merge_stack [AC] -> [2D 3S] /left"
     ]
   },
@@ -13063,7 +13094,7 @@
       {
         "loc": [
           328,
-          91
+          110
         ],
         "cards": [
           "AD"
@@ -13072,7 +13103,7 @@
       {
         "loc": [
           332,
-          134
+          153
         ],
         "cards": [
           "AH"
@@ -13081,7 +13112,7 @@
       {
         "loc": [
           257,
-          154
+          187
         ],
         "cards": [
           "AC",
@@ -13191,7 +13222,7 @@
       {
         "loc": [
           332,
-          134
+          153
         ],
         "cards": [
           "AH"
@@ -13200,7 +13231,7 @@
       {
         "loc": [
           257,
-          154
+          187
         ],
         "cards": [
           "AC",
@@ -13694,6 +13725,7 @@
     },
     "expect_primitives": [
       "split [7S 7D 7C]@2",
+      "move_stack [7S 7D] -> (407,187)",
       "split [7S 7D]@0",
       "merge_stack [7C] -> [8H 9S] /left"
     ]
@@ -13797,8 +13829,8 @@
       },
       {
         "loc": [
-          22,
-          16
+          403,
+          185
         ],
         "cards": [
           "7S"
@@ -13806,8 +13838,8 @@
       },
       {
         "loc": [
-          26,
-          59
+          407,
+          228
         ],
         "cards": [
           "7D"
@@ -13953,8 +13985,8 @@
       },
       {
         "loc": [
-          22,
-          16
+          403,
+          185
         ],
         "cards": [
           "7S",

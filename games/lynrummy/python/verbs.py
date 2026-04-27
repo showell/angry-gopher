@@ -61,11 +61,9 @@ def move_to_primitives(desc, board):
 def _plan_split_after(sim, stack_content, k):
     """Plan a split that puts the first `k` cards of
     `stack_content` into the left half and the rest into the
-    right half. For end splits (k == 1 or k == n-1) emits one
-    primitive. For INTERIOR splits the donor is pre-moved into
-    a 4-side-clear region first per Steve's 2026-04-23 rule —
-    the bump distances after a mid-stack split are
-    unpredictable and can spawn pieces into neighbors.
+    right half. Geometry-agnostic: emits one Split primitive.
+    Any necessary pre-flight MoveStack is added by the unified
+    `geometry_plan.plan_actions` post-pass.
 
     Returns (prims, new_sim)."""
     n = len(stack_content)
@@ -73,21 +71,6 @@ def _plan_split_after(sim, stack_content, k):
         raise ValueError(
             f"split-after k={k} out of range for n={n}")
 
-    out = []
-    interior = k != 1 and k != n - 1
-    if interior:
-        si = primitives.find_stack_index(sim, stack_content)
-        others = [s for i, s in enumerate(sim) if i != si]
-        new_loc = geometry.find_open_loc(others, card_count=n)
-        cur_loc = sim[si]["loc"]
-        if new_loc != cur_loc:
-            move = {"action": "move_stack",
-                    "stack_index": si, "new_loc": new_loc}
-            out.append(move)
-            sim = primitives.apply_locally(sim, move)
-
-    # Choose ci so left_count == k (per strategy._apply_split's
-    # leftSplit/rightSplit convention).
     if k <= n // 2:
         ci = k - 1
     else:
@@ -95,20 +78,22 @@ def _plan_split_after(sim, stack_content, k):
     si = primitives.find_stack_index(sim, stack_content)
     split = {"action": "split", "stack_index": si,
              "card_index": ci}
-    out.append(split)
-    return out, primitives.apply_locally(sim, split)
+    return [split], primitives.apply_locally(sim, split)
 
 
 def _plan_merge(sim, source_content, target_content, side):
-    """Plan a content-addressed merge_stack with pre-flight
-    geometry — delegates to `strategy._plan_merge_stack`
-    which tries merge-in-place first and otherwise pre-moves
-    the target into a hole sized for the EVENTUAL stack.
+    """Plan a content-addressed merge_stack. Geometry-agnostic:
+    emits exactly one merge_stack primitive. Any necessary
+    pre-flight MoveStack is added by the unified
+    `geometry_plan.plan_actions` post-pass.
 
     Returns (prims, new_sim)."""
     src = primitives.find_stack_index(sim, source_content)
     tgt = primitives.find_stack_index(sim, target_content)
-    return strategy._plan_merge_stack(sim, src, tgt, side)
+    merge = {"action": "merge_stack",
+             "source_stack": src, "target_stack": tgt,
+             "side": side}
+    return [merge], primitives.apply_locally(sim, merge)
 
 
 # --- extract + absorb ----------------------------------------
@@ -319,24 +304,7 @@ def _shift_prims(desc, board):
         prims, sim = _plan_merge(sim, tail_chunk, left_chunk, "right")
         out.extend(prims)
 
-    # 2a. Pre-flight: move source to a pack-gap-cleared loc
-    # accounting for the upcoming length-(n+1) augmented
-    # stack. The merge-only pre-flight in `_plan_merge` only
-    # fires on legal-margin violations; it doesn't anticipate
-    # the next split's spawn perturbing the neighbors. A human
-    # relocates crowded helpers BEFORE building on top, and
-    # the agent should match.
-    src_idx = primitives.find_stack_index(sim, source)
-    src_others = [s for i, s in enumerate(sim) if i != src_idx]
-    src_new_loc = geometry.find_open_loc(
-        src_others, card_count=len(source) + 1)
-    if src_new_loc != sim[src_idx]["loc"]:
-        move = {"action": "move_stack",
-                "stack_index": src_idx, "new_loc": src_new_loc}
-        out.append(move)
-        sim = primitives.apply_locally(sim, move)
-
-    # 2b. Merge p_card onto source. p_card joins the OPPOSITE
+    # 2. Merge p_card onto source. p_card joins the OPPOSITE
     # side from stolen, so that splitting at the stolen end
     # next yields the correct new_source.
     if which_end == 0:

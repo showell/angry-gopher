@@ -152,7 +152,7 @@ suite =
                 in
                 actions prims
                     |> Expect.equal [ "merge_stack" ]
-        , test "splice: pre-flight move + split + merge" <|
+        , test "splice: split + merge (geometry-agnostic — pre-flight is GeometryPlan's job)" <|
             \_ ->
                 let
                     src =
@@ -193,8 +193,8 @@ suite =
                         Verbs.moveToPrimitives boardWithLoose move
                 in
                 actions prims
-                    |> Expect.equal [ "move_stack", "split", "merge_stack" ]
-        , test "shift (8C-pops-JC): donor split + source pre-flight + p-merge + source split + stolen-merge" <|
+                    |> Expect.equal [ "split", "merge_stack" ]
+        , test "shift (8C-pops-JC): donor split + p-merge + source split + stolen-merge (geometry-agnostic)" <|
             \_ ->
                 let
                     board =
@@ -223,7 +223,7 @@ suite =
                         Verbs.moveToPrimitives board move
                 in
                 actions prims
-                    |> Expect.equal [ "split", "move_stack", "merge_stack", "split", "merge_stack" ]
+                    |> Expect.equal [ "split", "merge_stack", "split", "merge_stack" ]
         , test "steal-from-set: ext + remnant fully dismantled into 3 singletons" <|
             -- Regression for the puzzle-1 stall: steal AC from
             -- [AC AD AH] used to emit only one split, leaving
