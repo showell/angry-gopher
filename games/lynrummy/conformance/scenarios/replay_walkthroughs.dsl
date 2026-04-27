@@ -57,17 +57,14 @@ scenario walkthrough_mined_002_QDp1
     at (392,187): QD'
   actions:
     - split [AD 2C 3D 4C]@0
+    - move_stack [JD QD KD] -> (467,187)
     - merge_stack [AD] -> [JD QD KD] /right
     - split [JD QD KD AD]@0
-    - move_stack [QD'] -> (392,220)
     - merge_stack [JD] -> [QD'] /left
     - split [KD' KH' KS]@0
     - split [KH' KS]@0
-    - move_stack [JD QD'] -> (392,187)
     - merge_stack [KD'] -> [JD QD'] /right
-    - move_stack [AC 2D' 3S'] -> (482,85)
     - merge_stack [KH'] -> [AC 2D' 3S'] /left
-    - move_stack [AS 2S 3S] -> (167,85)
     - merge_stack [KS] -> [AS 2S 3S] /left
   expect:
     final_board_victory: true
@@ -89,8 +86,8 @@ scenario walkthrough_mined_003_6D
     at (407,187): KD' KC' KS
     at (482,187): 6D
   actions:
-    - split [7S 7D 7C]@0
-    - split [7D 7C]@0
+    - split [7S 7D 7C]@2
+    - split [7S 7D]@0
     - merge_stack [7C] -> [6D] /right
     - move_stack [8D' 9C TD] -> (482,118)
     - merge_stack [6D 7C] -> [8D' 9C TD] /left
@@ -113,8 +110,8 @@ scenario walkthrough_mined_004_5C_6Dp1
     at (482,52): 4S' 5D' 6C
     at (182,187): 5C 6D'
   actions:
-    - split [7S 7D 7C]@0
-    - split [7D 7C]@0
+    - split [7S 7D 7C]@2
+    - split [7S 7D]@0
     - merge_stack [7C] -> [5C 6D'] /right
     - merge_stack [7D] -> [7S] /right
     - split [2C 3D 4C 5H 6S 7H]@5
@@ -186,8 +183,8 @@ scenario walkthrough_mined_007_5Cp1_6C
     at (482,52): 9H' TC' JH
     at (182,187): 5C' 6C
   actions:
-    - split [7S 7D 7C]@0
-    - split [7D 7C]@0
+    - split [7S 7D 7C]@2
+    - split [7S 7D]@0
     - merge_stack [7C] -> [5C' 6C] /right
     - merge_stack [7D] -> [7S] /right
     - split [2C 3D 4C 5H 6S 7H]@5
@@ -369,8 +366,8 @@ scenario walkthrough_mined_014_5C
   actions:
     - split [3C' 4D' 5S 6D']@3
     - merge_stack [6D'] -> [5C] /right
-    - split [7S 7D 7C]@0
-    - split [7D 7C]@0
+    - split [7S 7D 7C]@2
+    - split [7S 7D]@0
     - merge_stack [7C] -> [5C 6D'] /right
     - merge_stack [7D] -> [7S] /right
     - split [3D 4C 5H 6S 7H]@4
@@ -548,8 +545,8 @@ scenario walkthrough_mined_021_8Dp1
     at (257,187): 6S' 7H' 8C' 9H
     at (332,187): 8D'
   actions:
-    - split [7S 7D 7C]@0
-    - split [7D 7C]@0
+    - split [7S 7D 7C]@2
+    - split [7S 7D]@0
     - merge_stack [7C] -> [8D'] /left
     - split [KS AS 2S 3S]@3
     - merge_stack [3S] -> [4H' 5C' 6D'] /left
@@ -650,8 +647,8 @@ scenario walkthrough_mined_025_TSp1
     - merge_stack [TD] -> [TS'] /right
     - split [8H 9S TH']@2
     - merge_stack [TH'] -> [TS' TD] /right
-    - split [7S 7D 7C]@0
-    - split [7D 7C]@0
+    - split [7S 7D 7C]@2
+    - split [7S 7D]@0
     - merge_stack [7C] -> [8H 9S] /left
     - merge_stack [7D] -> [7S] /right
     - split [2C 3D 4C 5H 6S 7H]@5

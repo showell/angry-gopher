@@ -776,9 +776,9 @@
     },
     "expect_primitives": [
       "split [AD 2C 3D 4C]@0",
+      "move_stack [JD QD KD] -> (467,187)",
       "merge_stack [AD] -> [JD QD KD] /right",
       "split [JD QD KD AD]@0",
-      "move_stack [QD'] -> (392,220)",
       "merge_stack [JD] -> [QD'] /left"
     ]
   },
@@ -900,8 +900,8 @@
       },
       {
         "loc": [
-          257,
-          93
+          467,
+          228
         ],
         "cards": [
           "QD",
@@ -912,7 +912,7 @@
       {
         "loc": [
           392,
-          187
+          154
         ],
         "cards": [
           "JD",
@@ -953,7 +953,6 @@
     "expect_primitives": [
       "split [KD' KH' KS]@0",
       "split [KH' KS]@0",
-      "move_stack [JD QD'] -> (392,187)",
       "merge_stack [KD'] -> [JD QD'] /right"
     ]
   },
@@ -1064,8 +1063,8 @@
       },
       {
         "loc": [
-          257,
-          93
+          467,
+          228
         ],
         "cards": [
           "QD",
@@ -1094,7 +1093,7 @@
       {
         "loc": [
           392,
-          187
+          154
         ],
         "cards": [
           "JD",
@@ -1122,7 +1121,6 @@
       "side": "left"
     },
     "expect_primitives": [
-      "move_stack [AC 2D' 3S'] -> (482,85)",
       "merge_stack [KH'] -> [AC 2D' 3S'] /left"
     ]
   },
@@ -1222,8 +1220,8 @@
       },
       {
         "loc": [
-          257,
-          93
+          467,
+          228
         ],
         "cards": [
           "QD",
@@ -1243,7 +1241,7 @@
       {
         "loc": [
           392,
-          187
+          154
         ],
         "cards": [
           "JD",
@@ -1254,7 +1252,7 @@
       {
         "loc": [
           482,
-          52
+          19
         ],
         "cards": [
           "KH'",
@@ -1283,7 +1281,6 @@
       "side": "left"
     },
     "expect_primitives": [
-      "move_stack [AS 2S 3S] -> (167,85)",
       "merge_stack [KS] -> [AS 2S 3S] /left"
     ]
   },
@@ -1454,8 +1451,8 @@
       ]
     },
     "expect_primitives": [
-      "split [7S 7D 7C]@0",
-      "split [7D 7C]@0",
+      "split [7S 7D 7C]@2",
+      "split [7S 7D]@0",
       "merge_stack [7C] -> [6D] /right"
     ]
   },
@@ -1579,7 +1576,7 @@
       {
         "loc": [
           103,
-          50
+          42
         ],
         "cards": [
           "7S"
@@ -1587,8 +1584,8 @@
       },
       {
         "loc": [
-          103,
-          91
+          107,
+          85
         ],
         "cards": [
           "7D"
@@ -1739,7 +1736,7 @@
       {
         "loc": [
           103,
-          50
+          42
         ],
         "cards": [
           "7S"
@@ -1747,8 +1744,8 @@
       },
       {
         "loc": [
-          103,
-          91
+          107,
+          85
         ],
         "cards": [
           "7D"
@@ -1908,7 +1905,7 @@
       {
         "loc": [
           103,
-          50
+          42
         ],
         "cards": [
           "7S",
@@ -2075,8 +2072,8 @@
       ]
     },
     "expect_primitives": [
-      "split [7S 7D 7C]@0",
-      "split [7D 7C]@0",
+      "split [7S 7D 7C]@2",
+      "split [7S 7D]@0",
       "merge_stack [7C] -> [5C 6D'] /right"
     ]
   },
@@ -2159,7 +2156,7 @@
       {
         "loc": [
           253,
-          50
+          42
         ],
         "cards": [
           "7S"
@@ -2167,8 +2164,8 @@
       },
       {
         "loc": [
-          253,
-          91
+          257,
+          85
         ],
         "cards": [
           "7D"
@@ -2294,7 +2291,7 @@
       {
         "loc": [
           253,
-          50
+          42
         ],
         "cards": [
           "7S",
@@ -3633,8 +3630,8 @@
       ]
     },
     "expect_primitives": [
-      "split [7S 7D 7C]@0",
-      "split [7D 7C]@0",
+      "split [7S 7D 7C]@2",
+      "split [7S 7D]@0",
       "merge_stack [7C] -> [5C' 6C] /right"
     ]
   },
@@ -3717,7 +3714,7 @@
       {
         "loc": [
           253,
-          50
+          42
         ],
         "cards": [
           "7S"
@@ -3725,8 +3722,8 @@
       },
       {
         "loc": [
-          253,
-          91
+          257,
+          85
         ],
         "cards": [
           "7D"
@@ -3852,7 +3849,7 @@
       {
         "loc": [
           253,
-          50
+          42
         ],
         "cards": [
           "7S",
@@ -7563,8 +7560,8 @@
       ]
     },
     "expect_primitives": [
-      "split [7S 7D 7C]@0",
-      "split [7D 7C]@0",
+      "split [7S 7D 7C]@2",
+      "split [7S 7D]@0",
       "merge_stack [7C] -> [5C 6D'] /right"
     ]
   },
@@ -7679,7 +7676,7 @@
       {
         "loc": [
           22,
-          24
+          16
         ],
         "cards": [
           "7S"
@@ -7687,8 +7684,8 @@
       },
       {
         "loc": [
-          22,
-          65
+          26,
+          59
         ],
         "cards": [
           "7D"
@@ -7846,7 +7843,7 @@
       {
         "loc": [
           22,
-          24
+          16
         ],
         "cards": [
           "7S",
@@ -11424,8 +11421,8 @@
       ]
     },
     "expect_primitives": [
-      "split [7S 7D 7C]@0",
-      "split [7D 7C]@0",
+      "split [7S 7D 7C]@2",
+      "split [7S 7D]@0",
       "merge_stack [7C] -> [8D'] /left"
     ]
   },
@@ -11531,7 +11528,7 @@
       {
         "loc": [
           253,
-          50
+          42
         ],
         "cards": [
           "7S"
@@ -11539,8 +11536,8 @@
       },
       {
         "loc": [
-          253,
-          91
+          257,
+          85
         ],
         "cards": [
           "7D"
@@ -11683,7 +11680,7 @@
       {
         "loc": [
           253,
-          50
+          42
         ],
         "cards": [
           "7S"
@@ -11691,8 +11688,8 @@
       },
       {
         "loc": [
-          253,
-          91
+          257,
+          85
         ],
         "cards": [
           "7D"
@@ -13696,8 +13693,8 @@
       ]
     },
     "expect_primitives": [
-      "split [7S 7D 7C]@0",
-      "split [7D 7C]@0",
+      "split [7S 7D 7C]@2",
+      "split [7S 7D]@0",
       "merge_stack [7C] -> [8H 9S] /left"
     ]
   },
@@ -13801,7 +13798,7 @@
       {
         "loc": [
           22,
-          24
+          16
         ],
         "cards": [
           "7S"
@@ -13809,8 +13806,8 @@
       },
       {
         "loc": [
-          22,
-          65
+          26,
+          59
         ],
         "cards": [
           "7D"
@@ -13957,7 +13954,7 @@
       {
         "loc": [
           22,
-          24
+          16
         ],
         "cards": [
           "7S",

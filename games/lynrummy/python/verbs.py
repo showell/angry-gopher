@@ -190,14 +190,28 @@ def _extract_absorb_prims(desc, board):
         out.extend(prims)
 
     elif verb == "steal" and kind == "set":
-        # Dismantle length-3 set into 3 singletons.
-        prims, sim = _plan_split_after(sim, source, 1)
+        # Detach ext_card FIRST (split at the end where it
+        # sits) so the user sees the steal as the visible
+        # action; then dismantle the remaining same-value
+        # pair into two singletons.
+        n = len(source)
+        if ci == n - 1:
+            # X at right end. Split @(n-1) → [pair] + [X].
+            prims, sim = _plan_split_after(sim, source, n - 1)
+            out.extend(prims)
+            residue = list(source[:n - 1])
+        else:
+            # ci == 0 (left end) or ci == 1 (interior — rare).
+            # Split @1 → [s[0]] + [s[1:]]. For ci=0 this
+            # detaches X; for ci=1 it isolates X's pair.
+            prims, sim = _plan_split_after(sim, source, 1)
+            out.extend(prims)
+            residue = list(source[1:])
+        # Dismantle the same-value remnant pair so subsequent
+        # BFS-planned moves (push spawned singletons) can find
+        # them by content.
+        prims, sim = _plan_split_after(sim, residue, 1)
         out.extend(prims)
-        # Now [source[0]] and [source[1], source[2]] exist.
-        prims, sim = _plan_split_after(sim, list(source[1:]), 1)
-        out.extend(prims)
-        # Now three singletons: [source[0]], [source[1]],
-        # [source[2]]. Identify the desired one by content.
         ext_singleton = [ext_card]
 
     else:
@@ -305,7 +319,24 @@ def _shift_prims(desc, board):
         prims, sim = _plan_merge(sim, tail_chunk, left_chunk, "right")
         out.extend(prims)
 
-    # 2. Merge p_card onto source. p_card joins the OPPOSITE
+    # 2a. Pre-flight: move source to a pack-gap-cleared loc
+    # accounting for the upcoming length-(n+1) augmented
+    # stack. The merge-only pre-flight in `_plan_merge` only
+    # fires on legal-margin violations; it doesn't anticipate
+    # the next split's spawn perturbing the neighbors. A human
+    # relocates crowded helpers BEFORE building on top, and
+    # the agent should match.
+    src_idx = primitives.find_stack_index(sim, source)
+    src_others = [s for i, s in enumerate(sim) if i != src_idx]
+    src_new_loc = geometry.find_open_loc(
+        src_others, card_count=len(source) + 1)
+    if src_new_loc != sim[src_idx]["loc"]:
+        move = {"action": "move_stack",
+                "stack_index": src_idx, "new_loc": src_new_loc}
+        out.append(move)
+        sim = primitives.apply_locally(sim, move)
+
+    # 2b. Merge p_card onto source. p_card joins the OPPOSITE
     # side from stolen, so that splitting at the stolen end
     # next yields the correct new_source.
     if which_end == 0:

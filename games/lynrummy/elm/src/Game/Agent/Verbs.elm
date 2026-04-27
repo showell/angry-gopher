@@ -219,23 +219,49 @@ stealFromSetPrims board d =
 
         Just src ->
             let
+                ci =
+                    indexOf d.extCard d.source
+
+                n =
+                    List.length d.source
+
+                ( firstSplitIndex, residueCards ) =
+                    if ci == n - 1 then
+                        -- X at right end. Split off the right
+                        -- card first so X visibly detaches; the
+                        -- residue is the same-value pair to
+                        -- the left.
+                        ( splitCardIndex (n - 1) n
+                        , List.take (n - 1) d.source
+                        )
+
+                    else
+                        -- ci == 0 (left end) or ci == 1
+                        -- (interior, rare). Split @1 first so
+                        -- s[0] (ci==0 case: that's X) detaches
+                        -- left, or X's pair is isolated
+                        -- (ci==1 case).
+                        ( splitCardIndex 1 n
+                        , List.drop 1 d.source
+                        )
+
                 first =
-                    Split { stack = src, cardIndex = 0 }
+                    Split { stack = src, cardIndex = firstSplitIndex }
 
                 boardAfterFirst =
                     applyOnBoard first board
-
-                tailCards =
-                    List.drop 1 d.source
             in
-            case findByCards tailCards boardAfterFirst of
+            case findByCards residueCards boardAfterFirst of
                 Nothing ->
                     []
 
-                Just tailStack ->
+                Just residueStack ->
                     let
                         second =
-                            Split { stack = tailStack, cardIndex = 0 }
+                            Split
+                                { stack = residueStack
+                                , cardIndex = splitCardIndex 1 (List.length residueCards)
+                                }
 
                         boardAfterSecond =
                             applyOnBoard second boardAfterFirst
@@ -377,6 +403,17 @@ shiftPrims board d =
                 postDonorAssembled =
                     List.foldl applyOnBoard postDonor donorFollowUp
 
+                -- Pre-flight: move source to a pack-gap-cleared
+                -- loc that fits the upcoming augmented (n+1)
+                -- stack. The merge-only pre-flight in
+                -- GeometryPlan fires only on legal-margin
+                -- violations and doesn't anticipate the next
+                -- split's spawn perturbing neighbors. A human
+                -- relocates crowded helpers BEFORE building
+                -- on them; agent matches.
+                ( sourcePreFlightPrims, postSourcePreFlight ) =
+                    sourcePreFlight d.source postDonorAssembled
+
                 ( pSide, augmentedSource, splitK ) =
                     case d.whichEnd of
                         Move.LeftEnd ->
@@ -394,7 +431,7 @@ shiftPrims board d =
                             )
 
                 pMergeStep =
-                    case ( findByCards [ d.pCard ] postDonorAssembled, findByCards d.source postDonorAssembled ) of
+                    case ( findByCards [ d.pCard ] postSourcePreFlight, findByCards d.source postSourcePreFlight ) of
                         ( Just pSt, Just srcSt ) ->
                             [ MergeStack { source = pSt, target = srcSt, side = pSide } ]
 
@@ -402,7 +439,7 @@ shiftPrims board d =
                             []
 
                 postPMerge =
-                    List.foldl applyOnBoard postDonorAssembled pMergeStep
+                    List.foldl applyOnBoard postSourcePreFlight pMergeStep
 
                 ( stolenSplitPrims, postStolenSplit ) =
                     planSplit postPMerge augmentedSource splitK
@@ -422,12 +459,44 @@ shiftPrims board d =
             in
             donorPrims
                 ++ donorFollowUp
+                ++ sourcePreFlightPrims
                 ++ pMergeStep
                 ++ stolenSplitPrims
                 ++ stolenMergeStep
 
         _ ->
             []
+
+
+sourcePreFlight :
+    List Card
+    -> List CardStack
+    -> ( List WireAction, List CardStack )
+sourcePreFlight sourceCards board =
+    case findByCards sourceCards board of
+        Nothing ->
+            ( [], board )
+
+        Just liveSrc ->
+            let
+                others =
+                    List.filter (not << stacksEqual liveSrc) board
+
+                augSize =
+                    List.length sourceCards + 1
+
+                newLoc =
+                    PlaceStack.findOpenLoc others augSize
+            in
+            if newLoc == liveSrc.loc then
+                ( [], board )
+
+            else
+                let
+                    movePrim =
+                        MoveStack { stack = liveSrc, newLoc = newLoc }
+                in
+                ( [ movePrim ], applyOnBoard movePrim board )
 
 
 
