@@ -200,7 +200,7 @@ func puzzlesActions(w http.ResponseWriter, r *http.Request) {
 
 // puzzlesAnnotate accepts POST {session_id, puzzle_name,
 // user_name, body} and appends a row to
-// `board_lab_annotations`. Session-scoped — every annotation
+// `lynrummy_puzzle_annotations`. Session-scoped — every annotation
 // is a reply to one specific play. puzzle_name is stored
 // alongside so the log tails cleanly without a JOIN on read.
 func puzzlesAnnotate(w http.ResponseWriter, r *http.Request) {
@@ -232,7 +232,7 @@ func puzzlesAnnotate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if _, err := DB.Exec(
-		`INSERT INTO board_lab_annotations (session_id, puzzle_name, user_name, body, created_at) VALUES (?, ?, ?, ?, ?)`,
+		`INSERT INTO lynrummy_puzzle_annotations (session_id, puzzle_name, user_name, body, created_at) VALUES (?, ?, ?, ?, ?)`,
 		req.SessionID, req.PuzzleName, req.UserName, req.Body, time.Now().Unix(),
 	); err != nil {
 		http.Error(w, "insert: "+err.Error(),

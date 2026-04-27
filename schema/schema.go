@@ -86,7 +86,7 @@ CREATE INDEX IF NOT EXISTS idx_lynrummy_puzzle_seeds_name ON lynrummy_puzzle_see
 -- Free-text notes humans add to a specific puzzle attempt
 -- ("mouse slip on seq 2", "agent landing felt off"). Anchored
 -- to session_id; puzzle_name is denormalized for tail-reading.
-CREATE TABLE IF NOT EXISTS board_lab_annotations (
+CREATE TABLE IF NOT EXISTS lynrummy_puzzle_annotations (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     session_id INTEGER NOT NULL,
     puzzle_name TEXT NOT NULL,
@@ -94,5 +94,5 @@ CREATE TABLE IF NOT EXISTS board_lab_annotations (
     body TEXT NOT NULL,
     created_at INTEGER NOT NULL
 );
-CREATE INDEX IF NOT EXISTS idx_board_lab_annotations_session ON board_lab_annotations(session_id);
+CREATE INDEX IF NOT EXISTS idx_lynrummy_puzzle_annotations_session ON lynrummy_puzzle_annotations(session_id);
 `
