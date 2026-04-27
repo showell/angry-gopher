@@ -115,7 +115,7 @@ Server-rendered pages at `/gopher/*` with Basic auth:
 | `/gopher/` | Landing page |
 | `/gopher/game-lobby` | Games launch pad (LynRummy) |
 | `/gopher/lynrummy-elm/` | Elm LynRummy client |
-| `/gopher/board-lab/` | Curated puzzle gallery (study instrument) |
+| `/gopher/puzzles/` | Curated puzzle gallery (study instrument) |
 | `/gopher/wiki/` | Wiki viewer over repo source |
 | `/gopher/docs/` | Markdown essay viewer |
 | `/gopher/code/` | Code browser |

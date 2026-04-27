@@ -181,7 +181,7 @@ func mathRandInt63() int64 {
 }
 
 // lynrummyElmNewPuzzleSession creates a session whose initial
-// state is hand-crafted — a puzzle in the BOARD_LAB sense. Body
+// state is hand-crafted — a puzzle in the Puzzles sense. Body
 // is a JSON envelope:
 //
 //	{"label": "...", "puzzle_name": "...", "initial_state": {...State JSON...}}
