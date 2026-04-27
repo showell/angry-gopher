@@ -334,10 +334,29 @@ splicePrims board d =
     splitPrims ++ mergeStep
 
 
+{-| Shift verb: p_card moves from donor INTO source's
+opposite-end position, displacing stolen, which then absorbs
+onto target.
+
+Sequence (matches python/verbs._shift_prims):
+
+  1. Isolate p_card from donor (split + interior-set
+     reassemble if applicable).
+  2. Merge p_card onto source on the OPPOSITE side from
+     stolen — source becomes augmented length+1.
+  3. Pop stolen off the augmented source by splitting at its
+     end.
+  4. Merge stolen onto target.
+
+The ordering reflects the LOGIC of a shift: the user sees
+p_card join source (the swap moment), then stolen pop and
+absorb. The earlier ordering pre-disassembled source before
+p_card touched it, which obscured the swap (Steve, 2026-04-27).
+-}
 shiftPrims : List CardStack -> ShiftDesc -> List WireAction
 shiftPrims board d =
     case ( findByCards d.donor board, findByCards d.source board ) of
-        ( Just donorStack, Just _ ) ->
+        ( Just _, Just _ ) ->
             let
                 pi =
                     indexOf d.pCard d.donor
@@ -345,15 +364,8 @@ shiftPrims board d =
                 donorIsSet =
                     allSameValue d.donor
 
-                donorVerb =
-                    if donorIsSet then
-                        Peel
-
-                    else
-                        Peel
-
                 ( donorPrims, postDonor ) =
-                    isolateCard board d.donor pi donorVerb
+                    isolateCard board d.donor pi Peel
 
                 donorFollowUp =
                     if donorIsSet && pi > 0 && pi < List.length d.donor - 1 then
@@ -365,41 +377,38 @@ shiftPrims board d =
                 postDonorAssembled =
                     List.foldl applyOnBoard postDonor donorFollowUp
 
-                ( srcSplitPrim, srcRemainder, pSide ) =
+                ( pSide, augmentedSource, splitK ) =
                     case d.whichEnd of
-                        Move.RightEnd ->
-                            ( srcSplitFor d 2 postDonorAssembled
-                            , List.take 2 d.source
-                            , BoardActions.Left
-                            )
-
                         Move.LeftEnd ->
-                            ( srcSplitFor d 1 postDonorAssembled
-                            , List.drop 1 d.source
-                            , BoardActions.Right
+                            -- stolen at LEFT of source; p_card joins RIGHT.
+                            ( BoardActions.Right
+                            , d.source ++ [ d.pCard ]
+                            , 1
                             )
 
-                postSrcSplit =
-                    case srcSplitPrim of
-                        Just prim ->
-                            applyOnBoard prim postDonorAssembled
-
-                        Nothing ->
-                            postDonorAssembled
+                        Move.RightEnd ->
+                            -- stolen at RIGHT of source; p_card joins LEFT.
+                            ( BoardActions.Left
+                            , d.pCard :: d.source
+                            , List.length d.source
+                            )
 
                 pMergeStep =
-                    case ( findByCards [ d.pCard ] postSrcSplit, findByCards srcRemainder postSrcSplit ) of
-                        ( Just pSt, Just remSt ) ->
-                            [ MergeStack { source = pSt, target = remSt, side = pSide } ]
+                    case ( findByCards [ d.pCard ] postDonorAssembled, findByCards d.source postDonorAssembled ) of
+                        ( Just pSt, Just srcSt ) ->
+                            [ MergeStack { source = pSt, target = srcSt, side = pSide } ]
 
                         _ ->
                             []
 
                 postPMerge =
-                    List.foldl applyOnBoard postSrcSplit pMergeStep
+                    List.foldl applyOnBoard postDonorAssembled pMergeStep
+
+                ( stolenSplitPrims, postStolenSplit ) =
+                    planSplit postPMerge augmentedSource splitK
 
                 stolenMergeStep =
-                    case ( findByCards [ d.stolen ] postPMerge, findByCards d.targetBefore postPMerge ) of
+                    case ( findByCards [ d.stolen ] postStolenSplit, findByCards d.targetBefore postStolenSplit ) of
                         ( Just stlnSt, Just tgtSt ) ->
                             [ MergeStack
                                 { source = stlnSt
@@ -410,41 +419,14 @@ shiftPrims board d =
 
                         _ ->
                             []
-
-                _ =
-                    donorStack
             in
             donorPrims
                 ++ donorFollowUp
-                ++ maybeToList srcSplitPrim
                 ++ pMergeStep
+                ++ stolenSplitPrims
                 ++ stolenMergeStep
 
         _ ->
-            []
-
-
-srcSplitFor : ShiftDesc -> Int -> List CardStack -> Maybe WireAction
-srcSplitFor d leftCount board =
-    case findByCards d.source board of
-        Just freshSrc ->
-            let
-                n =
-                    List.length d.source
-            in
-            Just (Split { stack = freshSrc, cardIndex = splitCardIndex leftCount n })
-
-        Nothing ->
-            Nothing
-
-
-maybeToList : Maybe a -> List a
-maybeToList m =
-    case m of
-        Just x ->
-            [ x ]
-
-        Nothing ->
             []
 
 

@@ -263,10 +263,26 @@ def _splice_prims(desc, board):
 # --- shift ---------------------------------------------------
 
 def _shift_prims(desc, board):
-    """Length-3 run end-steal with replacement: peel p_card
-    from a donor, push it onto source's opposite end, pop the
-    stolen card, absorb it onto target. Source stays length-3
-    legal; donor stays legal; no trouble is spawned."""
+    """Shift verb: p_card moves from donor INTO source's
+    opposite-end position, displacing stolen, which then
+    absorbs onto target.
+
+    The primitive ordering reflects the LOGIC of the shift —
+    the user sees `p_card` physically join `source` (the
+    moment the swap happens), then `stolen` pop out and
+    absorb. The earlier ordering pre-disassembled the source
+    before `p_card` interacted with it, which obscured the
+    swap — fixed 2026-04-27 per Steve's "primitives should
+    demonstrate the logic" reframing.
+
+    Sequence:
+      1. Isolate `p_card` from donor (split, plus
+         interior-set reassemble if applicable).
+      2. Merge `p_card` onto source on the OPPOSITE side from
+         `stolen`. Source becomes augmented (length+1).
+      3. Pop `stolen` off the augmented source by splitting at
+         its end.
+      4. Merge stolen onto target."""
     source = list(desc.source)
     donor = list(desc.donor)
     stolen = desc.stolen
@@ -278,7 +294,7 @@ def _shift_prims(desc, board):
     sim = list(board)
     out = []
 
-    # 1. Peel p_card from donor (donor is length 4+).
+    # 1. Isolate p_card from donor.
     pi = donor.index(p_card)
     kind = cards.classify(donor)
     prims, sim, _ext, donor_remnants = _isolate_card(
@@ -289,21 +305,26 @@ def _shift_prims(desc, board):
         prims, sim = _plan_merge(sim, tail_chunk, left_chunk, "right")
         out.extend(prims)
 
-    # 2. Split source to isolate the stolen card.
-    if which_end == 2:
-        prims, sim = _plan_split_after(sim, source, 2)
-        out.extend(prims)
-        source_remainder = list(source[:2])
-        prims, sim = _plan_merge(sim, [p_card], source_remainder, "left")
-        out.extend(prims)
+    # 2. Merge p_card onto source. p_card joins the OPPOSITE
+    # side from stolen, so that splitting at the stolen end
+    # next yields the correct new_source.
+    if which_end == 0:
+        # stolen at LEFT of source; p_card joins RIGHT.
+        prims, sim = _plan_merge(sim, [p_card], source, "right")
+        augmented_source = source + [p_card]
+        split_k = 1
     else:
-        prims, sim = _plan_split_after(sim, source, 1)
-        out.extend(prims)
-        source_remainder = list(source[1:])
-        prims, sim = _plan_merge(sim, [p_card], source_remainder, "right")
-        out.extend(prims)
+        # stolen at RIGHT of source; p_card joins LEFT.
+        prims, sim = _plan_merge(sim, [p_card], source, "left")
+        augmented_source = [p_card] + source
+        split_k = len(source)
+    out.extend(prims)
 
-    # 3. Merge stolen onto target.
+    # 3. Pop stolen off the augmented source.
+    prims, sim = _plan_split_after(sim, augmented_source, split_k)
+    out.extend(prims)
+
+    # 4. Merge stolen onto target.
     prims, sim = _plan_merge(sim, [stolen], target_before, side)
     out.extend(prims)
     return out

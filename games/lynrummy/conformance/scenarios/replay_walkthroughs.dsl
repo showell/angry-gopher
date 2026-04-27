@@ -57,14 +57,17 @@ scenario walkthrough_mined_002_QDp1
     at (392,187): QD'
   actions:
     - split [AD 2C 3D 4C]@0
-    - split [JD QD KD]@0
-    - move_stack [QD KD] -> (467,187)
-    - merge_stack [AD] -> [QD KD] /right
+    - merge_stack [AD] -> [JD QD KD] /right
+    - split [JD QD KD AD]@0
+    - move_stack [QD'] -> (392,220)
     - merge_stack [JD] -> [QD'] /left
     - split [KD' KH' KS]@0
     - split [KH' KS]@0
+    - move_stack [JD QD'] -> (392,187)
     - merge_stack [KD'] -> [JD QD'] /right
+    - move_stack [AC 2D' 3S'] -> (482,85)
     - merge_stack [KH'] -> [AC 2D' 3S'] /left
+    - move_stack [AS 2S 3S] -> (167,85)
     - merge_stack [KS] -> [AS 2S 3S] /left
   expect:
     final_board_victory: true
@@ -549,13 +552,14 @@ scenario walkthrough_mined_021_8Dp1
     - split [7D 7C]@0
     - merge_stack [7C] -> [8D'] /left
     - split [KS AS 2S 3S]@3
-    - split [4H' 5C' 6D']@2
-    - move_stack [4H' 5C'] -> (482,220)
-    - merge_stack [3S] -> [4H' 5C'] /left
-    - move_stack [7C 8D'] -> (182,220)
+    - merge_stack [3S] -> [4H' 5C' 6D'] /left
+    - split [3S 4H' 5C' 6D']@3
+    - move_stack [7C 8D'] -> (332,220)
     - merge_stack [6D'] -> [7C 8D'] /left
+    - move_stack [7S] -> (257,52)
     - merge_stack [7D] -> [7S] /right
     - split [2C 3D 4C 5H 6S 7H]@5
+    - move_stack [7S 7D] -> (257,52)
     - merge_stack [7H] -> [7S 7D] /right
   expect:
     final_board_victory: true

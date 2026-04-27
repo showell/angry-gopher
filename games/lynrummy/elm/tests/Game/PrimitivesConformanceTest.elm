@@ -182,9 +182,9 @@ fixtures =
             }
       , expected =
             [ "split [AD 2C 3D 4C]@0"
-            , "split [JD QD KD]@0"
-            , "move_stack [QD KD] -> (467,187)"
-            , "merge_stack [AD] -> [QD KD] /right"
+            , "merge_stack [AD] -> [JD QD KD] /right"
+            , "split [JD QD KD AD]@0"
+            , "move_stack [QD'] -> (392,220)"
             , "merge_stack [JD] -> [QD'] /left"
             ]
       }
@@ -200,8 +200,8 @@ fixtures =
             , boardStack { top = 242, left = 187 } [ { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne }, { value = Eight, suit = Spade, originDeck = DeckOne } ]
             , boardStack { top = 317, left = 187 } [ { value = Five, suit = Club, originDeck = DeckOne }, { value = Five, suit = Diamond, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne } ]
             , boardStack { top = 167, left = 228 } [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne } ]
-            , boardStack { top = 467, left = 187 } [ { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne } ]
-            , boardStack { top = 392, left = 154 } [ { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckTwo } ]
+            , boardStack { top = 257, left = 93 } [ { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne } ]
+            , boardStack { top = 392, left = 187 } [ { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckTwo } ]
             ]
       , move =
           ExtractAbsorb
@@ -218,6 +218,7 @@ fixtures =
       , expected =
             [ "split [KD' KH' KS]@0"
             , "split [KH' KS]@0"
+            , "move_stack [JD QD'] -> (392,187)"
             , "merge_stack [KD'] -> [JD QD'] /right"
             ]
       }
@@ -232,10 +233,10 @@ fixtures =
             , boardStack { top = 242, left = 187 } [ { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne }, { value = Eight, suit = Spade, originDeck = DeckOne } ]
             , boardStack { top = 317, left = 187 } [ { value = Five, suit = Club, originDeck = DeckOne }, { value = Five, suit = Diamond, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne } ]
             , boardStack { top = 167, left = 228 } [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne } ]
-            , boardStack { top = 467, left = 187 } [ { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne } ]
+            , boardStack { top = 257, left = 93 } [ { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne } ]
             , boardStack { top = 178, left = 91 } [ { value = King, suit = Heart, originDeck = DeckTwo } ]
             , boardStack { top = 182, left = 134 } [ { value = King, suit = Spade, originDeck = DeckOne } ]
-            , boardStack { top = 392, left = 154 } [ { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckTwo }, { value = King, suit = Diamond, originDeck = DeckTwo } ]
+            , boardStack { top = 392, left = 187 } [ { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckTwo }, { value = King, suit = Diamond, originDeck = DeckTwo } ]
             ]
       , move =
           Push
@@ -245,7 +246,9 @@ fixtures =
             , side = LeftSide
             }
       , expected =
-            [ "merge_stack [KH'] -> [AC 2D' 3S'] /left" ]
+            [ "move_stack [AC 2D' 3S'] -> (482,85)"
+            , "merge_stack [KH'] -> [AC 2D' 3S'] /left"
+            ]
       }
     , { name = "mined_002_QDp1_step_04"
       , board =
@@ -257,10 +260,10 @@ fixtures =
             , boardStack { top = 242, left = 187 } [ { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne }, { value = Eight, suit = Spade, originDeck = DeckOne } ]
             , boardStack { top = 317, left = 187 } [ { value = Five, suit = Club, originDeck = DeckOne }, { value = Five, suit = Diamond, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne } ]
             , boardStack { top = 167, left = 228 } [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne } ]
-            , boardStack { top = 467, left = 187 } [ { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne } ]
+            , boardStack { top = 257, left = 93 } [ { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne } ]
             , boardStack { top = 182, left = 134 } [ { value = King, suit = Spade, originDeck = DeckOne } ]
-            , boardStack { top = 392, left = 154 } [ { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckTwo }, { value = King, suit = Diamond, originDeck = DeckTwo } ]
-            , boardStack { top = 482, left = 19 } [ { value = King, suit = Heart, originDeck = DeckTwo }, { value = Ace, suit = Club, originDeck = DeckOne }, { value = Two, suit = Diamond, originDeck = DeckTwo }, { value = Three, suit = Spade, originDeck = DeckTwo } ]
+            , boardStack { top = 392, left = 187 } [ { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckTwo }, { value = King, suit = Diamond, originDeck = DeckTwo } ]
+            , boardStack { top = 482, left = 52 } [ { value = King, suit = Heart, originDeck = DeckTwo }, { value = Ace, suit = Club, originDeck = DeckOne }, { value = Two, suit = Diamond, originDeck = DeckTwo }, { value = Three, suit = Spade, originDeck = DeckTwo } ]
             ]
       , move =
           Push
@@ -270,7 +273,9 @@ fixtures =
             , side = LeftSide
             }
       , expected =
-            [ "merge_stack [KS] -> [AS 2S 3S] /left" ]
+            [ "move_stack [AS 2S 3S] -> (167,85)"
+            , "merge_stack [KS] -> [AS 2S 3S] /left"
+            ]
       }
     , { name = "mined_003_6D_step_01"
       , board =
@@ -2221,10 +2226,9 @@ fixtures =
             }
       , expected =
             [ "split [KS AS 2S 3S]@3"
-            , "split [4H' 5C' 6D']@2"
-            , "move_stack [4H' 5C'] -> (482,220)"
-            , "merge_stack [3S] -> [4H' 5C'] /left"
-            , "move_stack [7C 8D'] -> (182,220)"
+            , "merge_stack [3S] -> [4H' 5C' 6D'] /left"
+            , "split [3S 4H' 5C' 6D']@3"
+            , "move_stack [7C 8D'] -> (332,220)"
             , "merge_stack [6D'] -> [7C 8D'] /left"
             ]
       }
@@ -2239,8 +2243,8 @@ fixtures =
             , boardStack { top = 253, left = 50 } [ { value = Seven, suit = Spade, originDeck = DeckOne } ]
             , boardStack { top = 253, left = 91 } [ { value = Seven, suit = Diamond, originDeck = DeckOne } ]
             , boardStack { top = 26, left = 18 } [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne } ]
-            , boardStack { top = 482, left = 187 } [ { value = Three, suit = Spade, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckTwo }, { value = Five, suit = Club, originDeck = DeckTwo } ]
-            , boardStack { top = 182, left = 187 } [ { value = Six, suit = Diamond, originDeck = DeckTwo }, { value = Seven, suit = Club, originDeck = DeckOne }, { value = Eight, suit = Diamond, originDeck = DeckTwo } ]
+            , boardStack { top = 182, left = 146 } [ { value = Three, suit = Spade, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckTwo }, { value = Five, suit = Club, originDeck = DeckTwo } ]
+            , boardStack { top = 332, left = 187 } [ { value = Six, suit = Diamond, originDeck = DeckTwo }, { value = Seven, suit = Club, originDeck = DeckOne }, { value = Eight, suit = Diamond, originDeck = DeckTwo } ]
             ]
       , move =
           FreePull
@@ -2252,7 +2256,9 @@ fixtures =
             , graduated = False
             }
       , expected =
-            [ "merge_stack [7D] -> [7S] /right" ]
+            [ "move_stack [7S] -> (257,52)"
+            , "merge_stack [7D] -> [7S] /right"
+            ]
       }
     , { name = "mined_021_8Dp1_step_04"
       , board =
@@ -2263,9 +2269,9 @@ fixtures =
             , boardStack { top = 482, left = 52 } [ { value = Jack, suit = Heart, originDeck = DeckTwo }, { value = Jack, suit = Diamond, originDeck = DeckTwo }, { value = Jack, suit = Club, originDeck = DeckOne } ]
             , boardStack { top = 257, left = 187 } [ { value = Six, suit = Spade, originDeck = DeckTwo }, { value = Seven, suit = Heart, originDeck = DeckTwo }, { value = Eight, suit = Club, originDeck = DeckTwo }, { value = Nine, suit = Heart, originDeck = DeckOne } ]
             , boardStack { top = 26, left = 18 } [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne } ]
-            , boardStack { top = 482, left = 187 } [ { value = Three, suit = Spade, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckTwo }, { value = Five, suit = Club, originDeck = DeckTwo } ]
-            , boardStack { top = 182, left = 187 } [ { value = Six, suit = Diamond, originDeck = DeckTwo }, { value = Seven, suit = Club, originDeck = DeckOne }, { value = Eight, suit = Diamond, originDeck = DeckTwo } ]
-            , boardStack { top = 253, left = 50 } [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne } ]
+            , boardStack { top = 182, left = 146 } [ { value = Three, suit = Spade, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckTwo }, { value = Five, suit = Club, originDeck = DeckTwo } ]
+            , boardStack { top = 332, left = 187 } [ { value = Six, suit = Diamond, originDeck = DeckTwo }, { value = Seven, suit = Club, originDeck = DeckOne }, { value = Eight, suit = Diamond, originDeck = DeckTwo } ]
+            , boardStack { top = 257, left = 52 } [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne } ]
             ]
       , move =
           ExtractAbsorb
@@ -2281,6 +2287,7 @@ fixtures =
             }
       , expected =
             [ "split [2C 3D 4C 5H 6S 7H]@5"
+            , "move_stack [7S 7D] -> (257,52)"
             , "merge_stack [7H] -> [7S 7D] /right"
             ]
       }
