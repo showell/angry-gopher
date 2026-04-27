@@ -59,9 +59,8 @@ The Python agent has two pieces of strategy code:
 - **`strategy.py` — the trick engine**, legacy. Per-trick
   emitters (`direct_play`, `pair_peel`, `split_for_set`, …)
   that produce primitive sequences for high-confidence
-  patterns. Still wired into `agent_board_lab.py` and the
-  Elm conformance hint scenarios; abandonment plan is in
-  flight.
+  patterns. Still wired into the Elm conformance hint
+  scenarios; abandonment plan is in flight.
 
 ## The Python agent's stance — plan, then execute
 
@@ -124,13 +123,9 @@ Ordered by "load-bearing first":
   floater-top-left paths where Python knows both endpoints.
 - `client.claude` — thin HTTP wrapper around the Gopher
   endpoints.
-- `board_lab_puzzles.py` — canonical puzzle catalog for
-  BOARD_LAB. Single source of truth for the JSON Go serves.
-- `agent_board_lab.py` — runs the strategy engine against
-  every puzzle in the catalog; persists a session per
-  puzzle (label `"agent: <title>"`).
-- `study.py` — reads captured sessions for a named puzzle
-  and prints divergence between human and agent attempts.
+- `puzzle_catalog.py` — reads mined puzzles from
+  `lynrummy_puzzle_seeds` and writes the JSON the Elm
+  Puzzles gallery loads.
 - `telemetry.claude` — read-side of the DB's gesture
   capture. Analysis, not gameplay.
 - Repo-wide tooling at `../../../tools/sidecar_audit.{claude,py}`
@@ -138,15 +133,15 @@ Ordered by "load-bearing first":
 
 ### Corpus runners
 
-- `corpus_report.claude` — runs `bfs.solve` against
-  `corpus/sessions.txt` and emits a Markdown report.
-  Regenerable in ~1-2s.
-- `corpus_lab_catalog.claude` — same corpus → BOARD_LAB
-  gallery JSON, with the BFS plan attached as
-  `agent_solution` per puzzle.
 - `run_corpus_v2.claude` — beginner-side counterpart.
 - `beginner_corpus.claude` — hand-built fixtures for
   beginner.py before/after testing.
+
+The pre-DSL corpus tooling (`corpus_report.py`,
+`corpus_lab_catalog.py`) and the agent-vs-human harness
+(`agent_board_lab.py`, `board_lab_puzzles.py`, `study.py`)
+were purged 2026-04-27. Their role is now covered by the
+DSL conformance pipeline plus replay walkthroughs.
 
 ### Older DSL pipeline (retirement TBD)
 
@@ -159,7 +154,7 @@ load-bearing.
 ### Legacy puzzle harness (queued for purge)
 
 `puzzles.claude`, `puzzle_harness.claude`, `compare.claude`
-— pre-BOARD_LAB Python cluster. See MINI_PROJECTS /
+— pre-Puzzles-gallery Python cluster. See MINI_PROJECTS /
 PURGE_LEGACY_PUZZLE_HARNESS.
 
 ## The DSL conformance bridge
@@ -234,8 +229,10 @@ After any change touching the BFS planner modules
                       # the canonical depth distribution
                       # [2,5,2,4,5,4,6,6,1,7,2,8,2,1,1,2,3,1,2,7,1]
    ```
-   Or just `python3 corpus_report.py` and diff the output
-   against the prior `random020.md`.
+   (The earlier `corpus_report.py` driver was purged
+   2026-04-27 along with the rest of the pre-DSL corpus
+   tooling; the DSL conformance suite is the regression
+   gate now.)
 
 3. **Snapshot perf check** — re-time captured snapshots
    against the new code:

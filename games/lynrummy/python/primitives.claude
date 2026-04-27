@@ -23,14 +23,14 @@ the server should import from here:
 ## Why this exists
 
 Pre-2026-04-25 these helpers were copy-pasted across
-`auto_player.py`, `agent_board_lab.py`, `analyze_trick_coverage.py`,
-`beginner_hunt.py`, `one_card_hunt.py`. Steve flagged the
-drift and asked for libraries. `auto_player.py` now imports
-here; the other duplicates remain inline and should migrate
-opportunistically.
+several driver scripts. Steve flagged the drift and asked
+for libraries; `auto_player.py` (since deleted) was the
+first migrant, and the canonical send path now flows
+through this module.
 
 ## TODO
 
-- Migrate `agent_board_lab.py`, `beginner_hunt.py`,
-  `one_card_hunt.py`, `analyze_trick_coverage.py` to import
-  from this module.
+- Audit any remaining drivers (`beginner_hunt.py`,
+  `one_card_hunt.py`, `analyze_trick_coverage.py`) for
+  inline copies and migrate them to import from this
+  module.

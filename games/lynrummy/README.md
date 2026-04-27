@@ -55,11 +55,12 @@ repo root for the generated label index):
   diagnostics. The trick engine that this READ-ME used to
   reference is retiring; `agent_game.py` is the current
   driver, not `auto_player.py` (deleted 2026-04-25).
-- `board-lab/` — curated puzzle gallery (added 2026-04-23).
-  Elm sub-app at `board-lab/elm/` importing Main.Play from
-  `elm/src/Main/`; Python puzzle catalog at
-  `../python/board_lab_puzzles.py`. Served at
-  `/gopher/board-lab/`.
+- `puzzles/` — curated puzzle gallery (added 2026-04-23,
+  renamed from `board-lab/` 2026-04-27). Elm sub-app
+  compiled from `elm/src/Puzzles.elm`, embedding Main.Play
+  per panel. Served at `/gopher/puzzles/`. The Python
+  catalog is mined from `lynrummy_puzzle_seeds` via
+  `python/puzzle_catalog.py`.
 
 ## Tests
 

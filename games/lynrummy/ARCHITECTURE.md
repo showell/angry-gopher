@@ -577,7 +577,8 @@ this doc can't carry without becoming a reference manual.
 
 ## Elm components should be easy to embed
 
-Design goal surfaced 2026-04-23 while building BOARD_LAB.
+Design goal surfaced 2026-04-23 while building the Puzzles
+gallery (formerly BOARD_LAB).
 When a feature earns a second surface (e.g. the main play
 surface AND a gallery of curated puzzle panels each with
 their own play instance), the Elm app's architecture
@@ -603,44 +604,37 @@ should make that cheap:
 
 Two successful applications of this pattern within a week
 (REFACTOR_ELM_REPLAY for Game.Replay, REFACTOR_EMBEDDABLE_PLAY
-for Main.Play) validate it as a principle. BOARD_LAB embeds
-Main.Play without forking code.
+for Main.Play) validate it as a principle. The Puzzles
+gallery embeds Main.Play without forking code.
 
 For new Elm features: if it could plausibly show up in more
 than one host context, design it as a component from the
 start. The "is this a component or the whole app?" question
 should bias toward component.
 
-## BOARD_LAB as study instrument
+## Puzzles as study instrument
 
-BOARD_LAB (`/gopher/board-lab/`, added 2026-04-23) is the
-apparatus the Lyn Rummy project uses to observe human and
-agent play on the SAME curated puzzle and compare them:
+The Puzzles gallery (`/gopher/puzzles/`, added 2026-04-23)
+is the apparatus the Lyn Rummy project uses to observe
+play on curated mid-game situations and feed divergences
+back into the agent:
 
-- Python catalog: `games/lynrummy/python/board_lab_puzzles.py`
-  defines named puzzles (stable ids like
-  `tight_right_edge`). Built to JSON by `ops/start`; Go
-  serves it at `/gopher/board-lab/puzzles`.
+- Catalog: `games/lynrummy/python/puzzle_catalog.py` reads
+  mined puzzles from `lynrummy_puzzle_seeds` and writes
+  the JSON the Elm gallery loads. Go serves it at
+  `/gopher/puzzles/catalog`.
 - Elm gallery: a panel per puzzle, auto-creating its
   puzzle session on page load. Human plays inline; drags
   capture via the normal telemetry pipeline.
-- Agent attempts: `python3 games/lynrummy/python/agent_board_lab.py`
-  iterates the catalog and posts one agent session per
-  puzzle.
 - DB correlation: `lynrummy_puzzle_seeds.puzzle_name`
   carries the catalog id. `SELECT ... WHERE puzzle_name =
-  ?` enumerates every human + agent attempt.
-- Analysis: `python3 games/lynrummy/python/study.py
-  <puzzle_name>` prints every attempt's primitives with
-  a divergence summary. `--feedback N` is the one-shot
-  path for "what did the human annotate on the N most
-  recent plays?" — single query, markdown output, no ad-
-  hoc SQL. Annotations carry a `session_id` anchor so
-  each reply ties to a specific play (added
-  2026-04-23).
+  ?` enumerates every attempt at a named puzzle.
+- Annotations: `lynrummy_puzzle_annotations` (renamed from
+  `board_lab_annotations` 2026-04-27) carry a `session_id`
+  anchor so each reply ties to a specific play.
 
 The apparatus lets us name concrete divergences between
-human and agent and feed them back into the agent's
+human and agent play and feed them back into the agent's
 spatial strategy. Surfaced weaknesses: the original
 `find_open_loc → (7,7)` corner-dump was fixed by
 shifting `HUMAN_PREFERRED_ORIGIN` to (50, 90). Current
@@ -649,15 +643,20 @@ row the scan can land the agent far-right on that row
 before trying a lower open row; fix queued as
 `FIND_OPEN_LOC_COLUMN_MAJOR`.
 
+Note: the original agent-vs-human comparison harness
+(`agent_board_lab.py`, `study.py`) is gone (purged
+2026-04-27); the role it played is now covered by the
+DSL conformance pipeline plus replay walkthroughs.
+
 ## Parking status
 
 Parked `STILL_EVOLVING`, last swept 2026-04-23 evening
-(TOP_DOWN_SWEEP after a full day of BOARD_LAB refinement —
-margin 5→7, 25-puzzle v2 catalog, session-scoped
-annotations, agent mid-stack-split pre-move rule, Replay
-hygiene pass). The principles are stable; new surfaces
-(BOARD_LAB, embeddable-components design goal) are
-documented above.
+(TOP_DOWN_SWEEP after a full day of Puzzles-gallery
+refinement — margin 5→7, 25-puzzle v2 catalog,
+session-scoped annotations, agent mid-stack-split pre-move
+rule, Replay hygiene pass). The principles are stable; new
+surfaces (Puzzles gallery, embeddable-components design
+goal) are documented above.
 
 Two-player mechanics are still immature (coordinated
 sessions have been exercised out-of-band at best); expect

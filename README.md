@@ -96,15 +96,14 @@ The Elm client lives at `games/lynrummy/elm/` and is
 served via `/gopher/lynrummy-elm/`. A Python agent-side client
 is at `games/lynrummy/python/`.
 
-**BOARD_LAB** (`games/lynrummy/board-lab/`) is the study
+**Puzzles** (`games/lynrummy/puzzles/`) is the study
 instrument: a gallery of curated puzzles served at
-`/gopher/board-lab/`, where a human plays inline and the
-Python agent plays the same catalog via
-`agent_board_lab.py`. Both sides' attempts land in
-SQLite keyed by `puzzle_name`, so `study.py` can read
-them side-by-side. The Elm Lab app embeds one
-`Main.Play` component per puzzle panel — proving the
-"Elm components should be easy to embed" design goal.
+`/gopher/puzzles/`, where a human plays inline. Plays land
+in SQLite keyed by `puzzle_name`, so attempts on the same
+named situation can be enumerated side-by-side. The Elm
+Puzzles app embeds one `Main.Play` component per puzzle
+panel — proving the "Elm components should be easy to
+embed" design goal.
 
 ## HTML views
 

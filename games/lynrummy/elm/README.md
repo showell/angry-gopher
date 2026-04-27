@@ -31,7 +31,7 @@ structure here make sense.
 For a current map of what entry points exist and how mature
 each one is, see
 [`../ENTRY_POINTS.md`](../ENTRY_POINTS.md). It covers both
-Elm boots (`Main.elm`, `Lab.elm`), server handlers, CLI
+Elm boots (`Main.elm`, `Puzzles.elm`), server handlers, CLI
 tooling, and conformance test surfaces, with maturity notes.
 
 ## Then — read sidecars
@@ -75,8 +75,8 @@ a new flow.
 ## Embeddable-component design goal
 
 The app is structured so `Main.Play` can be embedded into
-hosts other than `Main.elm` (for example BOARD_LAB's
-`games/lynrummy/board-lab/elm/src/Lab.elm`, where each
+hosts other than `Main.elm` (for example the Puzzles
+gallery's `games/lynrummy/elm/src/Puzzles.elm`, where each
 puzzle panel embeds its own `Play.Model`). The split:
 
 - **`Main.Play`** — the embeddable component. Exposes
@@ -93,7 +93,7 @@ puzzle panel embeds its own `Play.Model`). The split:
 
 When adding a new surface that might embed Play (tutorial
 host, side-by-side agent-vs-human viewer, etc.), import
-`Main.Play` directly and follow the Lab.elm pattern.
+`Main.Play` directly and follow the `Puzzles.elm` pattern.
 Game.Replay follows the same shape (extracted earlier via
 REFACTOR_ELM_REPLAY).
 

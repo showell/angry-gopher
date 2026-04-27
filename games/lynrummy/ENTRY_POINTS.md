@@ -9,10 +9,6 @@ what it does, and how mature each piece is. Companion to
 answers "where do I start reading" and "is this a SPIKE or
 production?".
 
-Names that read off are noted at the bottom; this document
-does not propose renames.
-
-
 ## Web entry points (Browser apps)
 
 Two Elm `Browser.element` boots, both compiled from
@@ -21,18 +17,20 @@ Two Elm `Browser.element` boots, both compiled from
 | Source | Output | URL | Role |
 |---|---|---|---|
 | `src/Main.elm` | `elm.js` | `/gopher/lynrummy-elm/` | Full Lyn Rummy game client |
-| `src/Lab.elm` | `lab.js` | `/gopher/board-lab/` | Puzzle gallery (multi-panel) |
+| `src/Puzzles.elm` | `puzzles.js` | `/gopher/puzzles/` | Puzzle gallery (multi-panel) |
 
-Both share the same `Game.*` and `Main.*` source tree. Lab is
-a vertical gallery of `Main.Play` instances, one per mined
-puzzle, sharing a single page-load session id.
+Both share the same `Game.*` and `Main.*` source tree. The
+Puzzles gallery is a vertical stack of `Main.Play`
+instances, one per mined puzzle, sharing a single page-load
+session id.
 
 **Maturity: both are production code paths.** The full game
 runs end-to-end (deal → play → complete turns → score). The
 puzzle gallery hosts the "Let agent play" + "Hint" buttons
 plus per-panel annotations the user uses to exercise the
-agent on real puzzles. Lab was originally a SPIKE; the SPIKE
-framing has been outgrown by real use.
+agent on real puzzles. The Puzzles surface began life as a
+SPIKE called BOARD_LAB; that framing has been outgrown by
+real use, and the rename to "Puzzles" landed 2026-04-27.
 
 
 ## Server-side handlers (Go)
@@ -42,9 +40,10 @@ In `views/`:
 - `lynrummy_elm.go` — full-game HTTP surface: session
   bootstrap, action log fetch, action persistence,
   complete-turn validation. Writes to `lynrummy_elm_actions`.
-- `board_lab.go` — puzzle HTTP surface: catalog at page-load,
+- `puzzles.go` — puzzle HTTP surface: catalog at page-load,
   action persistence, annotations. Writes to
-  `lynrummy_elm_puzzle_actions` and `board_lab_annotations`.
+  `lynrummy_elm_puzzle_actions` and
+  `lynrummy_puzzle_annotations`.
 - The broader `views/wiki_*.go` and friends host the rest of
   Angry Gopher. Unrelated to Lyn Rummy.
 
@@ -55,9 +54,9 @@ In `views/`:
 
 ### Mining + fixture generation (`tools/`)
 
-- `mine_lab_puzzles.py` — generates puzzles from agent
+- `mine_puzzles.py` — generates puzzles from agent
   gameplay snapshots; writes to `lynrummy_puzzle_seeds`.
-  Stable; produces the puzzle corpus the lab serves.
+  Stable; produces the corpus the Puzzles gallery serves.
 - `export_primitives_fixtures.py` — captures Python verbs +
   geometry_plan output per BFS plan step. Asserts the
   post-step pack-gap invariant at generation time. Produces
@@ -116,45 +115,16 @@ From `games/lynrummy/python/`:
 - `python3 test_dsl_conformance.py` — 113 tests pass.
 
 The single canonical run point for both elm-test and
-elm-review is `games/lynrummy/elm/`. There is no longer a
-separate Lab project (unified 2026-04-27).
-
-
-## Names that read off (non-prescriptive)
-
-These are observations for future review; this document does
-not propose renames.
-
-- **"BOARD\_LAB" / "board-lab" / "Lab.elm" / "lab.js"** — the
-  module, URL, file, and constants all carry the "lab"
-  framing from when this was a SPIKE for board-feel and
-  human-feel studies. The actual usage today is a puzzle
-  gallery for exercising the agent and curating conformance
-  scenarios.
-
-- **`Lab.claude` sidecar** — header still says "SPIKE
-  (board-lab)". The code is no longer experimental. Worth
-  refreshing alongside any rename pass.
-
-- **Server handlers `boardLabActions`, `boardLabPuzzles`,
-  `boardLabAnnotate`** — named for the URL prefix. Renames
-  follow if the URL prefix moves.
-
-- **DB tables**: `lynrummy_elm_puzzle_actions` is more
-  accurate than `board_lab_*` since it stores puzzle-attempt
-  actions, not generic "lab" ones. Some inconsistency
-  between table names and URL prefixes already exists.
-
-The artifact most worth thinking about isn't the file rename
-itself — it's whether the *concept* "board lab" still maps
-to something coherent, or whether what's there now is really
-"puzzles" with the lab framing as historical residue.
+elm-review is `games/lynrummy/elm/`. The Puzzles gallery
+shares this single project (unified 2026-04-27).
 
 
 ## What is NOT current (avoid confusion)
 
 - The Cat TS UI (`angry-cat/`) — legacy Lyn Rummy UI. Still
   in the repo but not in the agent flow.
-- `corpus_report.py` and friends — superseded by the DSL
-  conformance pipeline.
+- The pre-DSL corpus tooling (`corpus_report.py`,
+  `corpus_lab_catalog.py`) and the agent-vs-human harness
+  (`agent_board_lab.py`, `study.py`) — purged 2026-04-27;
+  superseded by the DSL conformance pipeline.
 - Old "review mode" in the puzzle UI — ripped 2026-04-26.

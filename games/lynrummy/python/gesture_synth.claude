@@ -48,9 +48,9 @@ Python does NOT emit paths for:
 
 ## Pointers
 
-- Consumer: `auto_player.py` / `agent_board_lab.py` (attach
-  `gesture_metadata` only when `drag_endpoints` returns
-  non-None).
+- Consumer: any agent driver that posts primitives via
+  `primitives.send_one` (attach `gesture_metadata` only when
+  `drag_endpoints` returns non-None).
 - Complement: `telemetry.py` (read-side).
 - `geometry.py`'s `BOARD_VIEWPORT_LEFT/TOP` constants mirror
   Elm's `LynRummy.BoardGeometry.boardViewport{Left,Top}` for

@@ -88,7 +88,7 @@ Helpers + constants:
   DOM id (`"lynrummy-board-" ++ gameId`). Used by
   `Browser.Dom.getElement` on drag start and at replay
   start. Per-instance so multiple Play instances on one
-  page (BOARD_LAB) don't collide.
+  page (the Puzzles gallery) don't collide.
 - `baseModel : Model` — initial Model; defaults to hardcoded
   Dealer opening board + canned P1 hand + empty P2 hand.
 

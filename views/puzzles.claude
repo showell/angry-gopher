@@ -12,8 +12,7 @@ endpoints:
 - `/gopher/puzzles/actions` — POST one wire action; appends
   to `lynrummy_elm_puzzle_actions`.
 - `/gopher/puzzles/annotate` — POST one reader annotation;
-  appends to `board_lab_annotations` (table renamed in a
-  later task).
+  appends to `lynrummy_puzzle_annotations`.
 
 All puzzle-session creation and action persistence happens
 through the dedicated puzzles endpoints (catalog, actions),

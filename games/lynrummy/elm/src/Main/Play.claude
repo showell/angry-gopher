@@ -3,8 +3,8 @@
 Embeddable Play component. Owns the live-play lifecycle —
 init / update / view / subscriptions — of a LynRummy session.
 The main app (`Main.elm`) wraps one Play instance in a
-viewport-filling shell; BOARD_LAB's `Lab.elm` embeds many
-Play instances side-by-side as gallery panels.
+viewport-filling shell; the Puzzles gallery (`Puzzles.elm`)
+embeds many Play instances side-by-side as gallery panels.
 
 Extracted from the pre-split `Main.elm` on 2026-04-23 as
 REFACTOR_EMBEDDABLE_PLAY phases I-III.
@@ -39,17 +39,18 @@ legitimately needs that access.
 - `ResumeSession sid` — fetch action log for `sid`. Main
   app's URL-resume path.
 - `PuzzleSession { sessionId, puzzleName, initialState }` —
-  synchronous bootstrap from the catalog payload. No HTTP. Lab
-  calls this for every puzzle on catalog landing; the
-  page-load session_id (allocated by the catalog endpoint at
-  GET time) is shared across every panel; puzzleName tags wire
-  writes so they land in `lynrummy_elm_puzzle_actions`.
+  synchronous bootstrap from the catalog payload. No HTTP. The
+  Puzzles gallery calls this for every puzzle on catalog
+  landing; the page-load session_id (allocated by the catalog
+  endpoint at GET time) is shared across every panel;
+  puzzleName tags wire writes so they land in
+  `lynrummy_elm_puzzle_actions`.
 
 ## Output
 
 The host reacts to `SessionChanged sid` by pinning the URL
-path (main app) or caching the id per panel (lab). `NoOutput`
-covers every other update.
+path (main app) or caching the id per panel (Puzzles
+gallery). `NoOutput` covers every other update.
 
 ## Depends on
 
@@ -69,11 +70,11 @@ All of the Main/* support modules it always has:
   Main.elm fires it when Play emits `SessionChanged`.
 - `Browser.element` boot.
 - The viewport-filling outer shell (the main app looks
-  full-page; lab panels don't).
+  full-page; Puzzles gallery panels don't).
 
 ## Pointers
 
 - Host wrapper pattern: see `Main.elm`.
-- BOARD_LAB embed pattern: see
-  `games/lynrummy/board-lab/elm/src/Lab.elm`.
+- Multi-panel embed pattern: see
+  `games/lynrummy/elm/src/Puzzles.elm`.
 - Proposal: `~/showell_repos/claude-steve/REFACTOR_EMBEDDABLE_PLAY.md`.

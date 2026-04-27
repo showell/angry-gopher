@@ -18,7 +18,7 @@ puzzles on one scrolling page.
 
 ## Shape
 
-Lab keeps a `Dict String Panel` keyed by puzzle title.
+Puzzles keeps a `Dict String Panel` keyed by puzzle title.
 Each Panel cycles `Creating → Playing Model` (or
 `Creating → Failed reason` on server error). Msg routing
 uses `PlayMsg title pmsg` so a drag in panel A never
@@ -34,9 +34,10 @@ Multi-active coexistence is safe for live play: board
 DOM ids are per-gameId via `State.boardDomIdFor`. Hand
 card DOM ids are NOT per-gameId; that matters only when
 Instant Replay is used inside a panel (AnimateMergeHand's
-Browser.Dom.getElement). For live gesture capture
-(what Lab is for), hand cards identify by mouse click
-coordinates, not DOM id — so the collision is harmless.
+Browser.Dom.getElement). For live gesture capture (what
+the Puzzles gallery is for), hand cards identify by mouse
+click coordinates, not DOM id — so the collision is
+harmless.
 
 ## Puzzle catalog
 
@@ -50,11 +51,12 @@ Five panels today, each defined as an Elm literal:
 5. **Follow-up merge (chained runs)** — primary merge
    plus a stack-to-stack follow-up
 
-The catalog is currently embedded in Lab.elm. Planned
-move: pull from Python's `puzzles.py` as canonical source
-(with a build step that writes a JSON catalog and a Go
-endpoint serving it) so agent-runs and human-runs on the
-same named puzzle can be correlated in SQLite.
+The catalog is loaded at page load from
+`/gopher/puzzles/catalog`, served by `views/puzzles.go`
+from the JSON file `puzzle_catalog.py` writes. The
+five-puzzle Elm-literal listing above describes the
+shape of an early hand-curated catalog; today's catalog
+is the mined-puzzles JSON.
 
 ## Dependencies
 
@@ -67,9 +69,11 @@ same named puzzle can be correlated in SQLite.
 
 ## Pointers
 
-- Served at `http://localhost:9000/gopher/board-lab/`.
-- Go handler: `views/board_lab.go`.
-- Build: `games/lynrummy/board-lab/elm/check.sh` (also
-  wired into `ops/start`).
+- Served at `http://localhost:9000/gopher/puzzles/`.
+- Go handler: `views/puzzles.go`.
+- Build: `games/lynrummy/elm/check.sh` (also wired into
+  `ops/start`).
 - Pre-experiment doc:
-  `~/showell_repos/claude-steve/board_lab_pre_experiment.md`.
+  `~/showell_repos/claude-steve/board_lab_pre_experiment.md`
+  (kept under its original filename as a historical
+  artifact).

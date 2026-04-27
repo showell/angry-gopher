@@ -28,8 +28,9 @@ Everything here is host-level:
   - `initialSessionId == Just sid` → `ResumeSession sid`
   - `Nothing` → `NewSession`
 - Viewport-filling outer div — fixed-to-viewport, scroll,
-  background — wrapping `Play.view`. BOARD_LAB skips this
-  wrapper; puzzle panels scroll normally in the gallery.
+  background — wrapping `Play.view`. The Puzzles gallery
+  skips this wrapper; puzzle panels scroll normally in the
+  gallery.
 - Routing `Play.Output` through the port. `NoOutput` is a
   plain `(model, cmd)` pass-through.
 
@@ -38,13 +39,13 @@ Everything here is host-level:
 Anything that pertains to gameplay, session bootstrap, drag,
 replay, or rendering. That all lives in `Main.Play` (and its
 submodules). Main.elm should remain a harness you can replace
-with a different host (e.g., Lab.elm) without losing
+with a different host (e.g., `Puzzles.elm`) without losing
 functionality.
 
 ## Pointers
 
 - `Main.Play` — the embeddable component (everything the
   main app actually does).
-- `games/lynrummy/board-lab/elm/src/Lab.elm` — the lab's
-  host; shows that Main.Play is embeddable.
+- `games/lynrummy/elm/src/Puzzles.elm` — the Puzzles
+  gallery's host; shows that Main.Play is embeddable.
 - Proposal: `~/showell_repos/claude-steve/REFACTOR_EMBEDDABLE_PLAY.md`.
