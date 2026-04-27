@@ -65,3 +65,8 @@ Terms from the Cook-Levin VM simulator UI iteration. Each earned its place by na
 2. One-line definition, concrete, no hedging.
 3. If it's project-specific, put it in the right section; if it earns cross-project life, promote it up.
 4. Remove stale entries during the weekly docs audit. A glossary that grows without pruning stops being load-bearing.
+
+---
+
+See: [`games/lynrummy/ARCHITECTURE.md`](games/lynrummy/ARCHITECTURE.md)
+— Lyn Rummy architecture references this glossary for vocabulary.

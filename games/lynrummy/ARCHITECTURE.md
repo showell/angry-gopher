@@ -473,7 +473,9 @@ The fix was uniform content refs everywhere, integer-exact
 coords on `loc`, and strict `stacksEqual` (same loc AND
 same cards in same order — no multiset tolerance). Pick
 one canonical representation per concept; enforce it end
-to end. See `feedback_no_indices_no_floats_in_drag.md`.
+to end. See `doctrine_make_state_honest.md` (drag-state
+strict shape) and `doctrine_eliminate_dont_paper_over.md`
+(slices over indices).
 
 ## Design principles woven through
 
@@ -569,8 +571,11 @@ carries standalone notes. A few load-bearing ones:
 - `project_enumerate_and_bridge.md`
 - `project_ui_engine_elm.md`
 - `project_agent_tools_python.md`
-- `feedback_own_the_whole_system.md`
-- `feedback_record_facts_decide_later.md`
+- `doctrine_make_state_honest.md` (record facts decide later;
+  shape matches reality)
+- `doctrine_eliminate_dont_paper_over.md` (I own the whole
+  system; change the shape, not the adapter)
+- `feedback_compute_dont_delegate.md`
 
 The memory system is comprehensive; use it for specifics
 this doc can't carry without becoming a reference manual.

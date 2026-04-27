@@ -68,3 +68,7 @@ byte-compare to the just-written bytes. Both fail fast.
   against `test_dsl_conformance.py` would catch generator
   schema drift. Low priority — `ops/check` runs the Python
   runner itself so schema drift surfaces as a runtime error.
+
+# See: games/lynrummy/ARCHITECTURE.md § Conformance & testing —
+# cites this generator as the mechanism behind the cross-language
+# bridges.

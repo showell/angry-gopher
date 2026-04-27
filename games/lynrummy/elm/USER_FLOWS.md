@@ -239,3 +239,8 @@ When adding a new action:
 
 A flow is "done" when every step is marked ✅ and the sequence
 walks end-to-end without silent failure.
+
+---
+
+See: [`../ARCHITECTURE.md`](../ARCHITECTURE.md) — cited from
+the architecture doc's "Where to find more" section.

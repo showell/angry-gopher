@@ -145,3 +145,9 @@ either stale or irrelevant. A bridge would log memory reads
 and flag never-accessed files.
 
 — C.
+
+---
+
+See: [`games/lynrummy/ARCHITECTURE.md`](games/lynrummy/ARCHITECTURE.md)
+— the Lyn Rummy architecture doc cites this paradigm as
+load-bearing for its cross-language layer.
