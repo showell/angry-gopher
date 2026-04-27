@@ -692,6 +692,18 @@ runAgentMove move remaining model =
                         , kind = Inform
                         }
                     , replay = Just { pending = newEntries, paused = False }
+
+                    -- Reverted 2026-04-27: removing these caused
+                    -- "click but no animation" in the live UI even
+                    -- though the walkthrough tests pass. Empirically,
+                    -- something about the prior `replayAnim` /
+                    -- `drag` state is non-NotAnimating / non-Dragging
+                    -- at click time in browser-real conditions that
+                    -- the test harness's clean-baseline runReplay
+                    -- doesn't reproduce. Sit on the fix; revisit
+                    -- with a test that fails first.
+                    , replayAnim = State.NotAnimating
+                    , drag = NotDragging
                 }
 
             wireCmds =
