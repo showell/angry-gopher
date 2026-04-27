@@ -160,13 +160,6 @@ replayFrame nowMs model =
 
                             entry :: rest ->
                                 let
-                                    _ =
-                                        Debug.log "[replay] popping entry from NotAnimating"
-                                            { actionKind = wireActionKind entry.action
-                                            , remainingPending = List.length rest
-                                            , nowMs = nowMs
-                                            }
-
                                     advanced =
                                         { model
                                             | replay =
@@ -190,13 +183,6 @@ replayFrame nowMs model =
                         in
                         if elapsed >= duration then
                             let
-                                _ =
-                                    Debug.log "[replay] Animating complete → applyAction"
-                                        { actionKind = wireActionKind anim.pendingAction
-                                        , elapsed = elapsed
-                                        , duration = duration
-                                        }
-
                                 modelAfter =
                                     (Apply.applyAction anim.pendingAction { model | drag = NotDragging }).model
                             in
@@ -295,31 +281,6 @@ path). The decision tree:
      so animating a fake drag for them would be a lie.
 
 -}
-wireActionKind : WireAction -> String
-wireActionKind a =
-    case a of
-        WA.Split _ ->
-            "split"
-
-        WA.MergeStack _ ->
-            "merge_stack"
-
-        WA.MergeHand _ ->
-            "merge_hand"
-
-        WA.MoveStack _ ->
-            "move_stack"
-
-        WA.PlaceHand _ ->
-            "place_hand"
-
-        WA.CompleteTurn ->
-            "complete_turn"
-
-        WA.Undo ->
-            "undo"
-
-
 prepareReplayStep :
     WireAction
     -> Maybe (List State.GesturePoint)
@@ -344,10 +305,6 @@ prepareReplayStep action maybePath frame model nowMs =
 
         applyImmediate =
             let
-                _ =
-                    Debug.log "[replay] applyImmediate (no animation)"
-                        { actionKind = wireActionKind action }
-
                 modelAfter =
                     (Apply.applyAction action model).model
             in
@@ -386,38 +343,16 @@ prepareReplayStep action maybePath frame model nowMs =
         jitOrApply =
             case Space.synthesizeBoardPath action model nowMs of
                 Just ( synthPath, synthFrame ) ->
-                    let
-                        _ =
-                            Debug.log "[replay] synthesizeBoardPath OK"
-                                { actionKind = wireActionKind action
-                                , pathSamples = List.length synthPath
-                                }
-                    in
                     case startBoardAnim action synthPath synthFrame model nowMs of
                         Just anim ->
-                            let
-                                _ =
-                                    Debug.log "[replay] startBoardAnim OK → startAnimating"
-                                        { duration = Space.pathDuration anim.path }
-                            in
                             startAnimating anim
 
                         Nothing ->
-                            let
-                                _ =
-                                    Debug.log "[replay] startBoardAnim returned Nothing → applyImmediate"
-                                        { actionKind = wireActionKind action }
-                            in
                             applyImmediate
 
                 Nothing ->
                     -- No JIT recipe for this action shape. Try
                     -- the hand-origin async measurement path.
-                    let
-                        _ =
-                            Debug.log "[replay] synthesizeBoardPath returned Nothing"
-                                { actionKind = wireActionKind action }
-                    in
                     case prepareHandAnim action model of
                         Just result ->
                             ( { model

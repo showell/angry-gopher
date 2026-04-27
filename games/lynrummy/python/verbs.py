@@ -19,9 +19,7 @@ appends one).
 """
 
 import cards
-import geometry
 import primitives
-import strategy
 from move import (
     ExtractAbsorbDesc, FreePullDesc, PushDesc,
     ShiftDesc, SpliceDesc,
