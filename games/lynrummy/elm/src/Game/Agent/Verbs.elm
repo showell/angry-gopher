@@ -29,7 +29,6 @@ import Game.Agent.Move as Move
 import Game.BoardActions as BoardActions
 import Game.Card exposing (Card)
 import Game.CardStack as CardStack exposing (CardStack, stacksEqual)
-import Game.PlaceStack as PlaceStack
 import Game.WireAction exposing (WireAction(..))
 
 

@@ -381,85 +381,9 @@ stackBoundingRect s =
     }
 
 
-stackKey : CardStack -> ( Int, Int, List ( Int, Int, Int ) )
+stackKey : CardStack -> ( CardStack.BoardLocation, List Game.Card.Card )
 stackKey s =
-    let
-        cardCode c =
-            ( cardValueCode c.value, cardSuitCode c.suit, cardDeckCode c.originDeck )
-    in
-    ( s.loc.top
-    , s.loc.left
-    , List.map (\bc -> cardCode bc.card) s.boardCards
-    )
-
-
-cardValueCode : Game.Card.CardValue -> Int
-cardValueCode v =
-    case v of
-        Game.Card.Ace ->
-            1
-
-        Game.Card.Two ->
-            2
-
-        Game.Card.Three ->
-            3
-
-        Game.Card.Four ->
-            4
-
-        Game.Card.Five ->
-            5
-
-        Game.Card.Six ->
-            6
-
-        Game.Card.Seven ->
-            7
-
-        Game.Card.Eight ->
-            8
-
-        Game.Card.Nine ->
-            9
-
-        Game.Card.Ten ->
-            10
-
-        Game.Card.Jack ->
-            11
-
-        Game.Card.Queen ->
-            12
-
-        Game.Card.King ->
-            13
-
-
-cardSuitCode : Game.Card.Suit -> Int
-cardSuitCode s =
-    case s of
-        Game.Card.Club ->
-            0
-
-        Game.Card.Diamond ->
-            1
-
-        Game.Card.Spade ->
-            2
-
-        Game.Card.Heart ->
-            3
-
-
-cardDeckCode : Game.Card.OriginDeck -> Int
-cardDeckCode d =
-    case d of
-        Game.Card.DeckOne ->
-            0
-
-        Game.Card.DeckTwo ->
-            1
+    ( s.loc, List.map .card s.boardCards )
 
 
 findByContent : CardStack -> List CardStack -> Maybe CardStack
