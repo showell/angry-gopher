@@ -45,7 +45,7 @@ solve =
 {-| Board-shaped entry point: partition a live `List CardStack`
 into the helper/trouble buckets BFS expects, then run `solve`.
 The solver's `Buckets` shape stays internal — production
-callers (the Lab puzzle panel) need only the board.
+callers (the Puzzles gallery) need only the board.
 
 A stack classifies as helper if `StackType.getStackType`
 recognizes it as a complete group (Set / PureRun /

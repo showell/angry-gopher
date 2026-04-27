@@ -627,11 +627,12 @@ back into the agent:
   puzzle session on page load. Human plays inline; drags
   capture via the normal telemetry pipeline.
 - DB correlation: `lynrummy_puzzle_seeds.puzzle_name`
-  carries the catalog id. `SELECT ... WHERE puzzle_name =
-  ?` enumerates every attempt at a named puzzle.
-- Annotations: `lynrummy_puzzle_annotations` (renamed from
-  `board_lab_annotations` 2026-04-27) carry a `session_id`
-  anchor so each reply ties to a specific play.
+  carries the catalog id. Per-attempt rows live in
+  `lynrummy_elm_puzzle_actions`; `SELECT ... FROM
+  lynrummy_elm_puzzle_actions WHERE puzzle_name = ?`
+  enumerates every attempt at a named puzzle.
+- Annotations: `lynrummy_puzzle_annotations` carry a
+  `session_id` anchor so each reply ties to a specific play.
 
 The apparatus lets us name concrete divergences between
 human and agent play and feed them back into the agent's
@@ -644,19 +645,24 @@ before trying a lower open row; fix queued as
 `FIND_OPEN_LOC_COLUMN_MAJOR`.
 
 Note: the original agent-vs-human comparison harness
-(`agent_board_lab.py`, `study.py`) is gone (purged
-2026-04-27); the role it played is now covered by the
-DSL conformance pipeline plus replay walkthroughs.
+(`agent_board_lab.py`, `board_lab_puzzles.py`, `study.py`)
+and the pre-DSL corpus tooling (`corpus_report.py`,
+`corpus_lab_catalog.py`) are gone (purged 2026-04-27);
+the role they played is now covered by the DSL conformance
+pipeline plus replay walkthroughs.
 
 ## Parking status
 
-Parked `STILL_EVOLVING`, last swept 2026-04-23 evening
-(TOP_DOWN_SWEEP after a full day of Puzzles-gallery
-refinement — margin 5→7, 25-puzzle v2 catalog,
-session-scoped annotations, agent mid-stack-split pre-move
-rule, Replay hygiene pass). The principles are stable; new
-surfaces (Puzzles gallery, embeddable-components design
-goal) are documented above.
+Parked `STILL_EVOLVING`, last swept 2026-04-27
+(TOP_DOWN_SWEEP after the Lab → Puzzles rename — verified
+file paths, URLs, table names, and sidecar pointers align
+with the post-rename code). Prior sweep was 2026-04-23
+evening, after a full day of Puzzles-gallery refinement
+(margin 5→7, 25-puzzle v2 catalog, session-scoped
+annotations, agent mid-stack-split pre-move rule, Replay
+hygiene pass). The principles are stable; new surfaces
+(Puzzles gallery, embeddable-components design goal) are
+documented above.
 
 Two-player mechanics are still immature (coordinated
 sessions have been exercised out-of-band at best); expect

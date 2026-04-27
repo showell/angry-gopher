@@ -41,22 +41,15 @@ harmless.
 
 ## Puzzle catalog
 
-Five panels today, each defined as an Elm literal:
-
-1. **Pair peel**
-2. **Tight right edge** — forces a MoveStack before a
-   hand-card merge due to bounds overflow
-3. **Split for set** — mid-run extraction
-4. **Peel for run** — peel from a 4-set
-5. **Follow-up merge (chained runs)** — primary merge
-   plus a stack-to-stack follow-up
-
 The catalog is loaded at page load from
 `/gopher/puzzles/catalog`, served by `views/puzzles.go`
 from the JSON file `puzzle_catalog.py` writes. The
-five-puzzle Elm-literal listing above describes the
-shape of an early hand-curated catalog; today's catalog
-is the mined-puzzles JSON.
+catalog itself is the mined-puzzles JSON, sourced from
+`lynrummy_puzzle_seeds` rows where `puzzle_name` matches
+`mined_%`. (The original surface had five hand-curated
+Elm-literal panels — Pair peel / Tight right edge / Split
+for set / Peel for run / Follow-up merge — superseded
+when mining took over the catalog.)
 
 ## Dependencies
 

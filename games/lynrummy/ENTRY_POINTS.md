@@ -125,6 +125,7 @@ shares this single project (unified 2026-04-27).
   in the repo but not in the agent flow.
 - The pre-DSL corpus tooling (`corpus_report.py`,
   `corpus_lab_catalog.py`) and the agent-vs-human harness
-  (`agent_board_lab.py`, `study.py`) — purged 2026-04-27;
-  superseded by the DSL conformance pipeline.
+  (`agent_board_lab.py`, `board_lab_puzzles.py`, `study.py`)
+  — purged 2026-04-27; superseded by the DSL conformance
+  pipeline.
 - Old "review mode" in the puzzle UI — ripped 2026-04-26.
