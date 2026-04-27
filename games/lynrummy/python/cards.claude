@@ -11,11 +11,12 @@ model.
 
 - **Mirrors:** `games/lynrummy/elm/src/Game/Agent/Cards.elm`
   + bits of `Game.Card.elm` and `Game.StackType.elm`.
-- **Origin:** lifted from `beginner.py` 2026-04-26 as the
-  module split landed (per ALIGNMENT_REPORT.md). The legacy
-  beginner planner is retiring; these primitives needed
-  their own home so the BFS doesn't import through a
-  legacy module to find them.
+- **Origin:** lifted out of the now-retired `beginner.py`
+  on 2026-04-26 as the module split landed; the IDDFS
+  planner cluster (`beginner` / `run_corpus_v2` /
+  `beginner_corpus`) was purged 2026-04-27. These
+  primitives now live here as the BFS planner's bottom
+  layer.
 
 ## What it owns
 
@@ -38,9 +39,9 @@ model.
   `Game.BoardGeometry` (Elm).
 - Trick / hint logic: that's `strategy.py` (legacy) +
   not-yet-ported in Elm.
-- The legacy `beginner_plan`, `almost_neighbors`,
-  `neighbor_shapes`, etc.: stay in `beginner.py` until
-  that module is retired.
+- Stack-display rendering: `show_board.py` carries its own
+  `_label` helper for one-stack-per-line dict output (server
+  state shape). Not load-bearing for the planner.
 
 ## Pointers
 

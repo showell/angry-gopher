@@ -1,16 +1,15 @@
 """Pretty-print a board: one line per stack, space-separated
 card labels like 5H, 8C, JS, AD."""
 
-import dsl_player
+
+def _label(c):
+    rank = {1: "A", 10: "T", 11: "J", 12: "Q", 13: "K"}.get(
+        c["value"], str(c["value"]))
+    suit = {0: "C", 1: "D", 2: "S", 3: "H"}.get(c["suit"], "?")
+    return f"{rank}{suit}"
 
 
 def show(board):
     for s in board:
-        labels = [dsl_player._label(bc["card"])
-                  for bc in s["board_cards"]]
+        labels = [_label(bc["card"]) for bc in s["board_cards"]]
         print(" ".join(labels))
-
-
-if __name__ == "__main__":
-    import test_d1_d2_sweep as ts
-    show(ts.build_d1_board_all_pure())

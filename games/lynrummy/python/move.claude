@@ -5,10 +5,9 @@ just_use move.py
 
 The Python equivalent of `Game.Agent.Move.elm`'s rendering
 half. Holds the per-move-desc rendering functions plus
-small phrase helpers. The desc dicts themselves are still
-inline literals built by the enumerator (vs Elm's typed
-sum-type) — see ALIGNMENT_REPORT.md § 3 for the dataclass
-opportunity that hasn't been taken yet.
+small phrase helpers. Move descs are dataclasses
+(`ExtractAbsorbDesc`, `FreePullDesc`, `PushDesc`,
+`SpliceDesc`, `ShiftDesc`) — see "What it owns" below.
 
 ## Status
 
@@ -59,5 +58,3 @@ regression suite.
 ## Pointers
 
 - Elm sibling: `games/lynrummy/elm/src/Game/Agent/Move.elm`.
-- ALIGNMENT_REPORT.md § 3: future `*Desc` dataclass
-  migration (~133 sites).

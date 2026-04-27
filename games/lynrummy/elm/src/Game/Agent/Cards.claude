@@ -8,7 +8,7 @@ INTRICATE existing modules.
 ## Status
 
 - **Label:** WORKHORSE.
-- **Mirrors:** `python/beginner.py` § `partial_ok`,
+- **Mirrors:** `python/cards.py` § `partial_ok`,
   `neighbors`, plus a thin alias for `classify` →
   `isLegalStack`.
 
@@ -29,5 +29,5 @@ INTRICATE existing modules.
 
 ## Pointers
 
-- Python source: `python/beginner.py` lines 131–187.
+- Python source: `python/cards.py`.
 - Tests: `tests/Game/Agent/CardsTest.elm`.

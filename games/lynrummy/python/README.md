@@ -1,8 +1,8 @@
 # LynRummy — Python agent subsystem
 
-**Status:** `WORKHORSE` for the BFS planner; older trick
-engine + DSL pipeline kept as comparable baselines pending
-retirement decisions. Currently the canonical home for
+**Status:** `WORKHORSE` for the BFS planner; legacy trick
+engine (`strategy.py`) kept as a comparable baseline pending
+its own retirement. Currently the canonical home for
 strategic-brain experimentation; will be the durable
 iteration surface even after the Elm port lands.
 
@@ -47,14 +47,6 @@ The Python agent has two pieces of strategy code:
   - `enumerator.py` — move generator + focus rule + filters
   - `bfs.py` — search engine
   See per-module `*.claude` sidecars.
-
-- **`beginner.py` — the IDDFS planner**, prior strategic
-  brain.
-  Trouble-driven search using PULL verbs (peel / pluck / yank
-  / steal) and PUSH verbs (onto-set, onto-run-end). IDDFS
-  returns shortest plans within a budget of trouble cards.
-  Trouble-as-actor DSL: `5C 6C peel-pulls [4C] 5C 6C {-4C- 4D
-  4S 4H}`. See `beginner.claude`.
 
 - **`strategy.py` — the trick engine**, legacy. Per-trick
   emitters (`direct_play`, `pair_peel`, `split_for_set`, …)
@@ -111,8 +103,6 @@ Ordered by "load-bearing first":
   dealer.deal → loop find_play → place + plan → complete_turn.
 - `bfs_play.claude` — the replay driver: BFS plan executed
   on the actual board, watchable in the browser.
-- `beginner.claude` — the IDDFS predecessor. Kept for now
-  as a comparable baseline; same corpus minus 1 stuck.
 - `strategy.claude` — the trick engine. PLANNED-LEGACY but
   still wired. Per-trick emitters, primitive ordering
   discipline, plan-then-execute for `merge_hand`.
@@ -131,25 +121,24 @@ Ordered by "load-bearing first":
 - Repo-wide tooling at `../../../tools/sidecar_audit.{claude,py}`
   — drift + coverage check across all sidecars.
 
-### Corpus runners
+### Corpus regression
 
-- `run_corpus_v2.claude` — beginner-side counterpart.
-- `beginner_corpus.claude` — hand-built fixtures for
-  beginner.py before/after testing.
+The 21-puzzle corpus regression target lives in
+`corpus/baseline_post_focus.txt`. The corpus is exercised
+via `test_dsl_conformance.py` against the
+`corpus_sid_*` scenarios in `conformance_fixtures.json`
+(compiled from
+`games/lynrummy/conformance/scenarios/planner_corpus.dsl`).
 
 The pre-DSL corpus tooling (`corpus_report.py`,
 `corpus_lab_catalog.py`) and the agent-vs-human harness
 (`agent_board_lab.py`, `board_lab_puzzles.py`, `study.py`)
-were purged 2026-04-27. Their role is now covered by the
+were purged 2026-04-27. The older DSL pipeline
+(`dsl_planner` / `dsl_player` / `board_classifier` /
+`dsl`) and the IDDFS planner (`beginner` /
+`run_corpus_v2` / `beginner_corpus`) were purged
+2026-04-27. Their roles are now covered by the
 DSL conformance pipeline plus replay walkthroughs.
-
-### Older DSL pipeline (retirement TBD)
-
-`dsl_planner.claude`, `dsl_player.claude`,
-`board_classifier.claude`, `dsl.claude` — peel/park/extend/
-dissolve/home verb vocabulary, pre-dates the four-bucket
-BFS planner. Kept as a comparable baseline; not
-load-bearing.
 
 ### Legacy puzzle harness (queued for purge)
 
@@ -300,9 +289,6 @@ shortened; full test suite green.
 
 - Tag `strategy.claude` and friends PLANNED-LEGACY once the
   abandonment plan is concrete.
-- Decide the older DSL pipeline's fate
-  (`dsl_planner.py` / `dsl_player.py` /
-  `board_classifier.py`) — retire or keep as baseline.
 - The Elm port (`games/lynrummy/elm/src/Game/Agent/`) is
   feature-complete on the correctness/perf axis as of
   2026-04-26. Remaining drift is renderer-only:
