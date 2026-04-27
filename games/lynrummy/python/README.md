@@ -211,16 +211,17 @@ After any change touching the BFS planner modules
 `buckets.py`) or the `verbs.py` / `primitives.py` /
 `agent_prelude.py` layers, run all of:
 
-1. **Unit + conformance suite** — every `test_*.py` file:
+1. **Unit + conformance suite** — run the gate script:
    ```
-   for t in test_bfs_extract.py test_bfs_enumerate.py \
-            test_bfs_failure.py test_verbs.py \
-            test_dsl_conformance.py test_agent_prelude.py \
-            test_plan_merge_hand.py test_follow_up_merges.py \
-            test_gesture_synth.py; do
-     python3 $t 2>&1 | tail -1
-   done
+   ./check.sh
    ```
+   `check.sh` runs every `test_*.py` in this directory and
+   exits non-zero if any file fails (either by non-zero
+   exit code OR by printing a `FAIL`/`FAILED` marker
+   inline). Tests aren't load-bearing without enforcement;
+   this script IS the enforcement. Solver-touching work
+   must run it before commit. See
+   `memory/feedback_tests_arent_load_bearing_without_enforcement.md`.
 
 2. **Corpus regression** — depths must match the gold
    baseline at `corpus/baseline_post_focus.txt` (current
