@@ -683,6 +683,16 @@ runAgentMove move remaining model =
 
     else
         let
+            _ =
+                Debug.log "[agent] runAgentMove: queued primitives"
+                    { count = List.length primitives
+                    , move = AgentMove.describe move
+                    , kinds = List.map agentPrimKind primitives
+                    , preReplay = model.replay /= Nothing
+                    , preReplayAnim = stateLabel model.replayAnim
+                    , preDrag = dragLabel model.drag
+                    }
+
             appended =
                 { model
                     | actionLog = model.actionLog ++ newEntries
@@ -736,6 +746,60 @@ agentLogEntry action =
     , gesturePath = Nothing
     , pathFrame = BoardFrame
     }
+
+
+agentPrimKind : WireAction -> String
+agentPrimKind action =
+    case action of
+        WA.Split _ ->
+            "split"
+
+        WA.MergeStack _ ->
+            "merge_stack"
+
+        WA.MergeHand _ ->
+            "merge_hand"
+
+        WA.MoveStack _ ->
+            "move_stack"
+
+        WA.PlaceHand _ ->
+            "place_hand"
+
+        WA.CompleteTurn ->
+            "complete_turn"
+
+        WA.Undo ->
+            "undo"
+
+
+stateLabel : State.ReplayAnimation -> String
+stateLabel s =
+    case s of
+        State.NotAnimating ->
+            "NotAnimating"
+
+        State.PreRoll _ ->
+            "PreRoll"
+
+        State.Animating _ ->
+            "Animating"
+
+        State.Beating _ ->
+            "Beating"
+
+        State.AwaitingHandRect _ ->
+            "AwaitingHandRect"
+
+
+dragLabel : DragState -> String
+dragLabel d =
+    case d of
+        NotDragging ->
+            "NotDragging"
+
+        Dragging _ ->
+            "Dragging"
 
 
 

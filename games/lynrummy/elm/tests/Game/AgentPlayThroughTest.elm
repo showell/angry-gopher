@@ -122,7 +122,79 @@ suite =
         , mined001FullWalkthrough
         , mined001FullWalkthroughPuzzleSession
         , wireFailureMidReplayDoesNotStallBoard
+        , mouseUpDuringAnimDoesNotAbortPlayback
         ]
+
+
+{-| The button click that kicked agent play also produces a
+mouseup event at document level. While `model.drag = Dragging`
+(set by Animating phase for non-Split first primitives), the
+document-level `onMouseUp` subscription is LIVE. If the user's
+button-release mouseup arrives between Animating start and the
+animation completing, `handleMouseUp` runs against the
+replay-driven drag state and may abort it.
+
+This test injects a `MouseUp` Msg one frame after Animating
+starts, then drives drain. If the action still applies, the
+playback layer survives the mouseup race. If not, this test
+fails AND we have a localized regression.
+-}
+mouseUpDuringAnimDoesNotAbortPlayback : Test
+mouseUpDuringAnimDoesNotAbortPlayback =
+    test "mouseUp during Animating does not abort the action's apply" <|
+        \_ ->
+            let
+                m0 =
+                    -- Push-only board: single MergeStack primitive.
+                    -- The first replayFrame transitions NotAnimating
+                    -- to Animating (drag=Dragging). A mouseUp at
+                    -- this point would route into handleMouseUp.
+                    modelFromBoard
+                        [ makeStack 100 100 [ c Ace Diamond ]
+                        , makeStack 200 100 [ c Two Club, c Three Diamond, c Four Club, c Five Heart, c Six Spade, c Seven Heart ]
+                        ]
+
+                ( m1, _, _ ) =
+                    Play.update ClickAgentPlay m0
+
+                ( m2, _, _ ) =
+                    -- One ReplayFrame: NotAnimating → Animating.
+                    Play.update (ReplayFrame (posix 16)) m1
+
+                ( m3, _, _ ) =
+                    -- The user's button-release mouseup — anywhere
+                    -- on the document. handleMouseUp runs because
+                    -- drag = Dragging (from Animating).
+                    Play.update (MouseUp { x = 0, y = 0 } 16) m2
+
+                final =
+                    driveReplayToCompletion m3 32 5000
+            in
+            if m0.board /= final.board then
+                Expect.pass
+
+            else
+                Expect.fail
+                    ("mouseUp mid-Animating aborted the action; final board unchanged from m0."
+                        ++ "\n  m1.replayAnim: "
+                        ++ Debug.toString m1.replayAnim
+                        ++ "\n  m2.replayAnim: "
+                        ++ Debug.toString m2.replayAnim
+                        ++ "\n  m2.drag: "
+                        ++ Debug.toString m2.drag
+                        ++ "\n  m3.replayAnim: "
+                        ++ Debug.toString m3.replayAnim
+                        ++ "\n  m3.drag: "
+                        ++ Debug.toString m3.drag
+                        ++ "\n  m3.replay: "
+                        ++ Debug.toString m3.replay
+                        ++ "\n  m3.agentProgram: "
+                        ++ Debug.toString m3.agentProgram
+                        ++ "\n  final.replay: "
+                        ++ Debug.toString final.replay
+                        ++ "\n  final.status: "
+                        ++ final.status.text
+                    )
 
 
 {-| What happens if the wire POST returns 400 mid-replay?
