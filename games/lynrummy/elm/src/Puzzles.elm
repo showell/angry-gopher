@@ -1,11 +1,11 @@
 module Puzzles exposing (main)
 
-{-| BOARD_LAB — a single-page gallery of curated LynRummy
+{-| Puzzles — a single-page gallery of curated LynRummy
 puzzles. The catalog endpoint hands us all puzzles + a single
 page-load session_id at boot. Panels instantiate Play
 instances synchronously from the inline initial state —
 zero per-panel HTTP. You play within the gallery; drags and
-agent moves write to /gopher/board-lab/actions, which appends
+agent moves write to /gopher/puzzles/actions, which appends
 to lynrummy_elm_puzzle_actions keyed by (session_id,
 puzzle_name).
 
@@ -13,7 +13,7 @@ Per-panel gameId is the puzzle name, which disambiguates DOM
 ids so multiple Play instances coexist on one page (board DOM
 ids are per-gameId via `State.boardDomIdFor`).
 
-Always within-a-turn: each puzzle's lab-level state is just
+Always within-a-turn: each puzzle's gallery-level state is just
 `{ board }` — no deck, no dealer, no turn cycling, no hand
 cards (puzzles are board-only). Page reload terminates the
 session by design; sessions and action rows persist for
@@ -35,7 +35,7 @@ import Main.State as MainState
 
 
 
--- LAB STATE
+-- GALLERY STATE
 
 
 {-| A puzzle as received from the catalog endpoint. The
@@ -372,7 +372,7 @@ subscriptions model =
 fetchCatalog : Cmd Msg
 fetchCatalog =
     Http.get
-        { url = "/gopher/board-lab/puzzles"
+        { url = "/gopher/puzzles/catalog"
         , expect = Http.expectJson CatalogFetched catalogDecoder
         }
 
@@ -380,7 +380,7 @@ fetchCatalog =
 sendAnnotation : Int -> String -> String -> String -> Cmd Msg
 sendAnnotation sessionId userName puzzleName body =
     Http.post
-        { url = "/gopher/board-lab/annotate"
+        { url = "/gopher/puzzles/annotate"
         , body =
             Http.jsonBody
                 (Encode.object
@@ -408,7 +408,7 @@ view model =
         , style "padding" "24px"
         , style "font-family" "sans-serif"
         ]
-        ([ h1 [] [ text "BOARD_LAB" ]
+        ([ h1 [] [ text "Puzzles" ]
          , p []
             [ text
                 ("A gallery of hand-crafted LynRummy puzzles. Each "

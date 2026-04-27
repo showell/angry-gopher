@@ -81,9 +81,9 @@ type alias Model =
     , drag : DragState
     , sessionId : Maybe Int
 
-    -- When this Play instance is hosting a lab puzzle, names
+    -- When this Play instance is hosting a puzzle, names
     -- which puzzle. Used by `Main.Wire.sendAction` to dispatch
-    -- to the lab actions endpoint (which writes to
+    -- to the puzzles actions endpoint (which writes to
     -- `lynrummy_elm_puzzle_actions`) instead of the full-game
     -- endpoint. Nothing for full-game sessions. The wire layer
     -- treats (sessionId=Just, puzzleName=Just) as "puzzle
@@ -106,20 +106,20 @@ type alias Model =
     , replayBoardRect : Maybe { x : Int, y : Int }
 
     -- Per-instance identity. The main app uses "default"; each
-    -- lab-embedded Play gets the puzzle's session id stringified.
+    -- Puzzles-embedded Play gets the puzzle's session id stringified.
     -- Drives the board DOM id (via `boardDomIdFor`) so multiple
     -- Play instances on one page don't collide on
     -- `Browser.Dom.getElement`.
     , gameId : String
 
-    -- True when this Play instance lives inside a BOARD_LAB
-    -- puzzle panel — suppresses the Complete Turn button and
-    -- the "← Lobby" link in the turn-controls row. Puzzles are
+    -- True when this Play instance lives inside a Puzzles
+    -- panel — suppresses the Complete Turn button and the
+    -- "← Lobby" link in the turn-controls row. Puzzles are
     -- always within-a-turn; surfacing Complete Turn would mean
     -- nothing. Main app sets this False.
     , hideTurnControls : Bool
 
-    -- BOARD_LAB "Let agent play" program counter. Holds the
+    -- Puzzles "Let agent play" program counter. Holds the
     -- list of plan lines the agent computed at the start of
     -- the walk; each click consumes one line (animating its
     -- primitives at 500ms pacing) and advances. Empty/Nothing
@@ -389,7 +389,7 @@ type alias ActionLogEntry =
 {-| CSS id of the board element for a given game id. Per-
 instance so multiple Play instances on one page don't collide
 on `Browser.Dom.getElement`. The main app uses `gameId =
-"default"`; each lab-embedded Play gets its puzzle session
+"default"`; each Puzzles-embedded Play gets its puzzle session
 id stringified.
 -}
 boardDomIdFor : String -> String

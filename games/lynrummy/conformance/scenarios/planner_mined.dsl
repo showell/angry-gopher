@@ -4,7 +4,7 @@
 
 #
 
-# Each scenario is one BOARD_LAB mined puzzle's initial
+# Each scenario is one mined Puzzles puzzle's initial
 
 # state. Asserts that BFS solve produces a plan whose
 

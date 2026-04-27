@@ -24,7 +24,7 @@ CARD_HEIGHT = 40
 # Board region. Match the referee's bounds in
 # views/lynrummy_elm.go (ValidateTurnComplete call site).
 # Margin bumped 5 → 7 on 2026-04-23 (CROWDED_BOARDS) after
-# BOARD_LAB captures revealed that gap=7 between stacks
+# Puzzles captures revealed that gap=7 between stacks
 # reads as overlap to humans even though the old
 # gap-must-be-at-least-5 rule accepted it. Keep in sync
 # with Elm's Main.Apply.refereeBounds + Go's uses of
@@ -73,7 +73,7 @@ BOARD_START = (24, 24)  # (left, top)
 
 
 # Preferred scan origin on a non-empty board — tuned 2026-04-23
-# from BOARD_LAB human captures (Steve, Joshua, Emma). Humans
+# from Puzzles human captures (Steve, Joshua, Emma). Humans
 # don't land pre-moves near the (0, 0) corner; they favor a
 # zone with some inset on both axes. (50, 90) is the lower-left
 # edge of the observed landing cluster, chosen so the row-major

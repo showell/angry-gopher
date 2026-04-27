@@ -8,7 +8,7 @@ only affects the post-deal draw pile order. Every auto_player
 run from a fresh session therefore converges to the same stuck
 state because agent play is deterministic from a fixed hand.
 This dealer keeps the opening BOARD fixed (it's a teaching
-fixture that appears in docs and BOARD_LAB) but randomizes the
+fixture that appears in docs and Puzzles) but randomizes the
 HANDS + DECK so each game explores a different trajectory.
 
 Usage:

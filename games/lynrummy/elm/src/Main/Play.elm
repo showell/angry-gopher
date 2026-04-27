@@ -10,7 +10,7 @@ module Main.Play exposing
 
 {-| The live-play component for LynRummy. Contains what was
 formerly the whole of `Main.elm`'s update/view/subscriptions
-surface, now factored out so BOARD\_LAB (and future
+surface, now factored out so Puzzles (and future
 multi-game-per-page hosts) can embed a single Play instance
 per puzzle without inheriting the main app's top-level
 port + wrapper shape.
@@ -84,7 +84,7 @@ same.
     app's default landing page.
   - `ResumeSession sid` — URL says we're resuming session
     `sid`; fetch its action log and reconstruct state.
-  - `PuzzleSession sid` — BOARD\_LAB created a puzzle session
+  - `PuzzleSession sid` — Puzzles created a puzzle session
     (hand-crafted initial state stored in
     `lynrummy_puzzle_seeds`). Same bootstrap as resume; the
     distinct variant exists so the status message and
@@ -95,7 +95,7 @@ same.
 type Config
     = NewSession
     | ResumeSession Int
-      -- BOARD_LAB puzzle. Carries the initial state inline (the
+      -- Puzzles puzzle. Carries the initial state inline (the
       -- catalog already has it), so init can bootstrap
       -- synchronously without an HTTP round-trip. No session id
       -- at boot — sessions for puzzles are born from intent to
@@ -113,7 +113,7 @@ type Config
 
 
 {-| Emitted from `update` when the host (Main.elm or the
-BOARD\_LAB gallery) needs to do something beyond what Play
+Puzzles gallery) needs to do something beyond what Play
 can do for itself. Today there's one case — fire the host's
 port to pin the session id into the URL — plus the default
 no-op.
@@ -864,9 +864,9 @@ bootstrapFromBundle bundle model =
         bundle.actions
 
 
-{-| Synchronous bootstrap for BOARD_LAB puzzles. The catalog
+{-| Synchronous bootstrap for Puzzles. The catalog
 delivered the initial state inline; no fetch, no actions to
-fold. Lab puzzles are session-scoped to one page-load — a
+fold. Puzzles are session-scoped to one page-load — a
 reload terminates the attempt by design — so the in-memory
 action log is empty at boot.
 -}

@@ -20,15 +20,15 @@ go build -ldflags "-X main.gitCommit=$COMMIT" -o gopher-server .
     || echo "Warning: Elm LynRummy build failed; /gopher/lynrummy-elm/ will 404 on elm.js (try \`npm install\` in games/lynrummy/elm/)"
 
 (cd games/lynrummy/elm && ./node_modules/.bin/elm make src/Puzzles.elm --output=puzzles.js >/dev/null 2>&1) \
-    || echo "Warning: Puzzles Elm build failed; /gopher/board-lab/ will 404 on puzzles.js"
+    || echo "Warning: Puzzles Elm build failed; /gopher/puzzles/ will 404 on puzzles.js"
 
 # Regenerate the Puzzles catalog from the DB-mined
 # board-only puzzles. Resulting JSON is served at
-# /gopher/board-lab/puzzles. puzzle_catalog.py reads
+# /gopher/puzzles/catalog. puzzle_catalog.py reads
 # `lynrummy_puzzle_seeds` rows where puzzle_name LIKE 'mined_%'
 # and writes ../puzzles/puzzles.json relative to its own dir.
 ( cd games/lynrummy/python && python3 puzzle_catalog.py >/dev/null 2>&1 ) \
-    || echo "Warning: Puzzles catalog write failed; /gopher/board-lab/puzzles will be stale"
+    || echo "Warning: Puzzles catalog write failed; /gopher/puzzles/catalog will be stale"
 
 GOPHER_CONFIG=~/AngryGopher/prod.json nohup ./gopher-server > /tmp/angry-gopher.log 2>&1 &
 

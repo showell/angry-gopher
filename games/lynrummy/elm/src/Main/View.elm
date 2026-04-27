@@ -8,7 +8,7 @@ module Main.View exposing
 bar, hand column, board column, drag overlay, and popup into
 an **embeddable** 1100×700 div (`position: relative`). The
 main app's Main.elm wraps this in a viewport-filling outer
-shell; BOARD\_LAB's Lab.elm places it directly inside each
+shell; Puzzles' Puzzles.elm places it directly inside each
 puzzle panel.
 
 Plus the turn-ceremony helpers (`statusForCompleteTurn`,
@@ -26,7 +26,7 @@ rewritten as embeddable 2026-04-23
     ├── viewStatusBar           // at (0, 0), ~32px tall
     ├── leftSidebar            // at (20, 100), 240px wide
     │   ├── playerHands         // main app: turn # + per-player rows + turn controls
-    │   └── puzzleControls      // BOARD_LAB: Hint / Let agent play / Replay
+    │   └── puzzleControls      // Puzzles: Hint / Let agent play / Replay
     ├── boardColumn             // at (boardViewportLeft, boardViewportTop)
     │   └── boardWithWings      // id = `boardDomIdFor model.gameId`
     │       ├── viewStackForBoard (×N)
@@ -204,7 +204,7 @@ view model =
     -- the positioning context for its absolute-positioned
     -- children (top-bar, status-bar, hand column, board column).
     -- Host wraps this (Main.elm wraps in a viewport-filling
-    -- shell for the main app; Lab.elm places it inside a
+    -- shell for the main app; Puzzles.elm places it inside a
     -- puzzle card). The drag floater and popup stay
     -- `position: fixed` since they're viewport-level overlays
     -- — consistent across hosts.
@@ -353,7 +353,7 @@ layouts:
 
   - `playerHands` — the main app's full hand-and-score surface
     with per-player rows + turn controls.
-  - `puzzleControls` — the BOARD\_LAB lab's stripped-down
+  - `puzzleControls` — the Puzzles gallery's stripped-down
     vertical button stack (Hint / Let agent play / replay).
     Puzzles are board-only, so everything in `playerHands`
     is irrelevant there.
@@ -531,7 +531,7 @@ viewPlayerRow model idx hand =
 
 
 {-| Main-app turn controls — Complete turn / Hint / Replay /
-Lobby. The puzzle/lab path uses `puzzleControls` instead and
+Lobby. The puzzle path uses `puzzleControls` instead and
 never reaches this.
 -}
 viewTurnControls : Model -> Html Msg

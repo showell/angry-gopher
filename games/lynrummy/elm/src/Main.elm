@@ -7,7 +7,7 @@ REFACTOR_EMBEDDABLE_PLAY Phase I — Main here just owns the
 URL-pinning port (only port modules may declare ports), boots
 `Browser.element`, and routes Play's `Output` to the port.
 
-BOARD_LAB will eventually embed `Main.Play` directly for its
+Puzzles will eventually embed `Main.Play` directly for its
 puzzle gallery, without needing this port at all; that's why
 the port stays a host concern instead of living inside Play.
 

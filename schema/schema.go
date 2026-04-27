@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS message_content (
 
 -- One row per LynRummy Elm session. A session is a single
 -- page-load of an Elm client — could be one full-game session
--- or one lab-puzzle session, distinguished by which actions
+-- or one puzzle session, distinguished by which actions
 -- table the session's actions land in (see below).
 -- deck_seed is non-zero for server-dealt full games and 0 for
 -- puzzle / client-dealt sessions.
@@ -48,7 +48,7 @@ CREATE TABLE IF NOT EXISTS lynrummy_elm_actions (
 );
 CREATE INDEX IF NOT EXISTS idx_lynrummy_elm_actions_session ON lynrummy_elm_actions(session_id, seq);
 
--- Lab-puzzle action log. Same primitive shape as
+-- Puzzle action log. Same primitive shape as
 -- lynrummy_elm_actions, but every row carries a puzzle_name —
 -- one page-load (session_id) hosts attempts at multiple
 -- puzzles, so puzzle_name is the disambiguator. seq is
@@ -72,10 +72,10 @@ CREATE INDEX IF NOT EXISTS idx_lynrummy_elm_puzzle_actions_name ON lynrummy_elm_
 -- Initial state for sessions whose board isn't generated from
 -- a deck_seed: client-dealt full games (Python-harness
 -- scenarios that bypass the dealer) and the legacy curated
--- BOARD_LAB seeds. The lab no longer writes here — lab
--- catalog content carries puzzle initial states inline, so
--- new lab page-loads don't allocate seed rows. puzzle_name is
--- NULL for the client-dealt path.
+-- Puzzles seeds. The Puzzles surface no longer writes here —
+-- the catalog content carries puzzle initial states inline, so
+-- new Puzzles page-loads don't allocate seed rows. puzzle_name
+-- is NULL for the client-dealt path.
 CREATE TABLE IF NOT EXISTS lynrummy_puzzle_seeds (
     session_id INTEGER PRIMARY KEY REFERENCES lynrummy_elm_sessions(id),
     initial_state_json TEXT NOT NULL,

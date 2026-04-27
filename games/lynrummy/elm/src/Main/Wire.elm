@@ -105,7 +105,7 @@ sendAction sessionId action maybeGesture =
         }
 
 
-{-| Lab-puzzle write path. Goes to /gopher/board-lab/actions
+{-| Puzzle write path. Goes to /gopher/puzzles/actions
 with `?session=<id>&puzzle=<name>`; the server appends to
 `lynrummy_elm_puzzle_actions`. Same envelope shape as
 `sendAction`. Same fire-and-forget contract.
@@ -131,7 +131,7 @@ sendPuzzleAction :
 sendPuzzleAction sessionId puzzleName action maybeGesture =
     Http.post
         { url =
-            "/gopher/board-lab/actions?session="
+            "/gopher/puzzles/actions?session="
                 ++ String.fromInt sessionId
                 ++ "&puzzle="
                 ++ puzzleName
@@ -233,10 +233,10 @@ handDecoder =
 
 {-| The game-state record as the server ships it. Same shape
 whether nested inside an /actions bundle (full-game session
-resume) or living alone in the lab catalog payload (lab puzzle
-panels bootstrap from this directly). Exposed so the lab can
-decode the initial state it already has in hand without a
-round-trip.
+resume) or living alone in the puzzles catalog payload (puzzle
+panels bootstrap from this directly). Exposed so the puzzles
+gallery can decode the initial state it already has in hand
+without a round-trip.
 -}
 initialStateDecoder : Decoder RemoteState
 initialStateDecoder =
