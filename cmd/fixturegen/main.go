@@ -49,7 +49,24 @@ type Scenario struct {
 	// Geometry op (`find_open_loc`).
 	Existing  []Stack
 	CardCount int
-	Expect    Expectation
+	// Replay-invariant op (`replay_invariant`).
+	ReplayActions []ReplayAction
+	Expect        Expectation
+}
+
+// ReplayAction is one entry in a replay_invariant scenario's
+// action log. We don't reuse Stack because each shape carries
+// different fields. The Elm emitter walks these to build a
+// dynamic WireAction list at test-runtime — content addresses
+// are resolved against the live board on each step, mirroring
+// what the replay engine does in production.
+type ReplayAction struct {
+	Kind      string
+	Source    []Card // for Split (stack content), MergeStack (source content), MoveStack (stack content)
+	Target    []Card // for MergeStack (target content)
+	CardIndex int    // for Split
+	Side      string // for MergeStack ("left" / "right")
+	NewLoc    *Loc   // for MoveStack
 }
 
 // Loc is a (top, left) pair used by `expect: loc:` in
@@ -81,6 +98,8 @@ type Expectation struct {
 	AgentProgramSize *int   // expect: agent_program_size: N — Just (List of length N) or 0 = Nothing
 	StatusKind       string // expect: status_kind: inform | scold | celebrate
 	StatusContains   string // expect: status_contains: "..."
+	// Replay-invariant expectations (op `replay_invariant`).
+	FinalBoardVictory *bool // expect: final_board_victory: true | false
 }
 
 // ExpectedSuggestion — one row inside an `expect: suggestions`
@@ -440,10 +459,14 @@ import Game.CardStack
         , HandCard
         , HandCardState(..)
         )
+import Game.BoardActions as BoardActions
 import Game.PlaceStack
 import Game.Referee as Referee exposing (RefereeStage(..), refereeStageToString)
+import Game.Replay.Time as ReplayTime
 import Game.StackType as StackType
 import Game.Strategy.Hint as Hint
+import Game.WireAction as WA exposing (WireAction)
+import Main.Apply as Apply
 import Main.Msg as Msg
 import Main.Play as Play
 import Main.State as State
@@ -481,6 +504,124 @@ firstIncompleteStack stacks =
         |> List.indexedMap Tuple.pair
         |> List.filter (\( _, s ) -> not (isCleanStack s))
         |> List.head
+
+
+-- ============================================================
+-- Replay-invariant helpers (op replay_invariant)
+-- ============================================================
+
+
+type ReplaySpec
+    = SpecSplit (List Card) Int
+    | SpecMergeStack (List Card) (List Card) BoardActions.Side
+    | SpecMoveStack (List Card) BoardLocation
+    | SpecCompleteTurn
+
+
+findStackByContent : List Card -> List CardStack -> CardStack
+findStackByContent cards board =
+    case List.filter (\s -> List.map .card s.boardCards == cards) board of
+        match :: _ ->
+            match
+
+        [] ->
+            -- Test-fixture invariant. If a scenario references
+            -- a stack that doesn't exist on the live sim, the
+            -- DSL author and the production code disagree about
+            -- what the action log says — fail loudly rather than
+            -- silently no-op. (Production code returns Nothing
+            -- in this case; here we want it to be a test error.)
+            { boardCards = []
+            , loc = { top = -1, left = -1 }
+            }
+
+
+resolveSpec : ReplaySpec -> List CardStack -> WireAction
+resolveSpec spec board =
+    case spec of
+        SpecSplit cards idx ->
+            WA.Split { stack = findStackByContent cards board, cardIndex = idx }
+
+        SpecMergeStack src tgt side ->
+            WA.MergeStack
+                { source = findStackByContent src board
+                , target = findStackByContent tgt board
+                , side = side
+                }
+
+        SpecMoveStack cards loc ->
+            WA.MoveStack { stack = findStackByContent cards board, newLoc = loc }
+
+        SpecCompleteTurn ->
+            WA.CompleteTurn
+
+
+buildEagerAndActions : State.Model -> List ReplaySpec -> ( State.Model, List WireAction )
+buildEagerAndActions initialModel specs =
+    let
+        loop model acc remaining =
+            case remaining of
+                [] ->
+                    ( model, List.reverse acc )
+
+                spec :: rest ->
+                    let
+                        action =
+                            resolveSpec spec model.board
+
+                        next =
+                            (Apply.applyAction action model).model
+                    in
+                    loop next (action :: acc) rest
+    in
+    loop initialModel [] specs
+
+
+runReplay : State.Model -> List WireAction -> State.Model
+runReplay initialModel actions =
+    let
+        entries =
+            List.map
+                (\a ->
+                    { action = a
+                    , gesturePath = Nothing
+                    , pathFrame = State.BoardFrame
+                    }
+                )
+                actions
+
+        seeded =
+            { initialModel
+                | replay = Just { pending = entries, paused = False }
+                , replayAnim = State.NotAnimating
+            }
+    in
+    runReplayLoop seeded 0 5000
+
+
+runReplayLoop : State.Model -> Float -> Int -> State.Model
+runReplayLoop model nowMs budget =
+    case model.replay of
+        Nothing ->
+            model
+
+        Just _ ->
+            if budget <= 0 then
+                -- Test-time guard: if the FSM doesn't drain the
+                -- queue within this many ticks, the test would
+                -- hang. Hand-origin actions in particular can
+                -- park in AwaitingHandRect indefinitely under
+                -- elm-test (no DOM). Bail loudly via Debug.todo
+                -- so the failure mode is visible.
+                Debug.todo
+                    "runReplayLoop budget exhausted — replay FSM did not complete"
+
+            else
+                let
+                    ( next, _ ) =
+                        ReplayTime.replayFrame nowMs model
+                in
+                runReplayLoop next (nowMs + 50) (budget - 1)
 
 {{range .}}
 
@@ -646,6 +787,8 @@ func elmScenarioBody(sc Scenario) string {
 		elmFindOpenLoc(&b, sc)
 	case "click_agent_play":
 		elmClickAgentPlay(&b, sc)
+	case "replay_invariant":
+		elmReplayInvariant(&b, sc)
 	default:
 		fmt.Fprintf(&b, "            Expect.fail \"unknown op %s\"", sc.Op)
 	}
@@ -717,6 +860,92 @@ func elmStatusKind(s string) string {
 	}
 	return "State.Inform"
 }
+
+
+// elmReplayInvariant emits a test body that asserts the
+// replay-engine endpoint matches the eager-applier endpoint.
+//
+// The promise of `Game.Replay`: walking the FSM forward to
+// completion produces the same model the eager applier
+// (`Apply.applyAction` chained over the action log) would.
+// If that promise holds, animation can't silently drop, double-
+// apply, or corrupt state. This op is the regression gate for
+// that invariant.
+//
+// Build:
+//   1. initialModel from `board:`.
+//   2. actions from `actions:`, resolved against a moving sim
+//      board so each WireAction's CardStack ref reflects the
+//      pre-action state at its point of execution (mirroring
+//      what gets stored in the live actionLog).
+//   3. eagerModel = foldl Apply.applyAction over actions.
+//   4. replayedModel = drive replayFrame from initialModel +
+//      seeded replay until replay = Nothing.
+//   5. assert eagerModel.{board, hands, scores, ...} ==
+//      replayedModel.{board, hands, scores, ...}.
+//
+// Hand-origin actions (MergeHand/PlaceHand) are out of scope:
+// their replay path needs DOM measurements that elm-test can't
+// fulfill. Agent-emitted action logs (the primary worry) only
+// use board-origin shapes, so the gate covers the case that
+// matters most.
+func elmReplayInvariant(b *strings.Builder, sc Scenario) {
+	fmt.Fprintf(b, "            let\n                board =\n                    %s\n\n                base =\n                    State.baseModel\n\n                initialModel =\n                    { base | board = board, sessionId = Just 0 }\n\n                ( eagerModel, actions ) =\n                    buildEagerAndActions initialModel\n                        [ %s ]\n\n                replayedModel =\n                    runReplay initialModel actions\n            in\n",
+		elmStacks(sc.Board, "                        "),
+		elmReplaySpecList(sc.ReplayActions))
+	b.WriteString("            Expect.all\n                [ \\_ -> Expect.equal eagerModel.board replayedModel.board\n                , \\_ -> Expect.equal eagerModel.hands replayedModel.hands\n                , \\_ -> Expect.equal eagerModel.scores replayedModel.scores\n                , \\_ -> Expect.equal eagerModel.activePlayerIndex replayedModel.activePlayerIndex\n                , \\_ -> Expect.equal eagerModel.turnIndex replayedModel.turnIndex")
+	if sc.Expect.FinalBoardVictory != nil && *sc.Expect.FinalBoardVictory {
+		b.WriteString("\n                , \\_ -> if List.all isCleanStack eagerModel.board then Expect.pass else Expect.fail (\"final eager board not victory; incomplete stacks present: \" ++ Debug.toString (firstIncompleteStack eagerModel.board))\n                , \\_ -> if List.all isCleanStack replayedModel.board then Expect.pass else Expect.fail (\"final replayed board not victory; incomplete stacks present: \" ++ Debug.toString (firstIncompleteStack replayedModel.board))")
+	}
+	b.WriteString("\n                ]\n                ()")
+}
+
+
+// elmReplaySpecList renders a list of ReplayAction entries as
+// Elm `ReplaySpec` constructor literals (the runner's
+// dispatchable shape, defined in the generated module
+// preamble).
+func elmReplaySpecList(actions []ReplayAction) string {
+	var parts []string
+	for _, a := range actions {
+		parts = append(parts, elmReplaySpec(a))
+	}
+	return strings.Join(parts, "\n                        , ")
+}
+
+
+func elmReplaySpec(a ReplayAction) string {
+	switch a.Kind {
+	case "split":
+		return fmt.Sprintf("SpecSplit %s %d", elmRawCards(cardsFromCards(a.Source)), a.CardIndex)
+	case "merge_stack":
+		return fmt.Sprintf("SpecMergeStack %s %s %s",
+			elmRawCards(cardsFromCards(a.Source)),
+			elmRawCards(cardsFromCards(a.Target)),
+			elmReplaySide(a.Side))
+	case "move_stack":
+		return fmt.Sprintf("SpecMoveStack %s { top = %d, left = %d }",
+			elmRawCards(cardsFromCards(a.Source)),
+			a.NewLoc.Top, a.NewLoc.Left)
+	case "complete_turn":
+		return "SpecCompleteTurn"
+	}
+	return "SpecCompleteTurn"
+}
+
+
+func elmReplaySide(s string) string {
+	if s == "left" {
+		return "BoardActions.Left"
+	}
+	return "BoardActions.Right"
+}
+
+
+// cardsFromCards copies (no-op identity) so elmRawCards's
+// signature stays compatible with both ExpectedSuggestion-style
+// and ReplayAction-style call sites.
+func cardsFromCards(cs []Card) []Card { return cs }
 
 
 // elmFindOpenLoc emits a test body that constructs a list of
@@ -1423,6 +1652,12 @@ func applyBlockField(sc *Scenario, key string, children []line, path string) err
 			return err
 		}
 		sc.Existing = stacks
+	case "actions":
+		acts, err := parseReplayActions(children, path)
+		if err != nil {
+			return err
+		}
+		sc.ReplayActions = acts
 	case "expect":
 		return parseExpectBlock(&sc.Expect, children, path)
 	default:
@@ -1576,6 +1811,12 @@ func parseExpectBlock(e *Expectation, children []line, path string) error {
 				} else {
 					e.StatusContains = val
 				}
+			case "final_board_victory":
+				v, err := parseBool(val)
+				if err != nil {
+					return fmt.Errorf("%s:%d: final_board_victory: %w", path, l.lineNum, err)
+				}
+				e.FinalBoardVictory = &v
 			default:
 				return fmt.Errorf("%s:%d: unknown expect field %q", path, l.lineNum, key)
 			}
@@ -1625,6 +1866,140 @@ func parseStacks(children []line, path string) ([]Stack, error) {
 	}
 	return stacks, nil
 }
+
+// parseReplayActions parses an `actions:` block inside a
+// replay_invariant scenario. Each child line is a
+// `- <kind> ...` directive in one of these shapes:
+//
+//   - split [<labels>]@<int>
+//   - merge_stack [<labels>] -> [<labels>] /<side>
+//   - move_stack [<labels>] -> (<top>,<left>)
+//   - complete_turn
+//
+// The labels match the canonical-text-form already used in
+// `tools/export_primitives_fixtures.py` so the two layers stay
+// readable in the same vocabulary.
+func parseReplayActions(children []line, path string) ([]ReplayAction, error) {
+	var out []ReplayAction
+	for _, l := range children {
+		t := strings.TrimSpace(l.content)
+		if !strings.HasPrefix(t, "- ") {
+			return nil, fmt.Errorf("%s:%d: action must start with '- '", path, l.lineNum)
+		}
+		body := strings.TrimSpace(t[2:])
+		act, err := parseReplayAction(body)
+		if err != nil {
+			return nil, fmt.Errorf("%s:%d: %w", path, l.lineNum, err)
+		}
+		out = append(out, act)
+	}
+	return out, nil
+}
+
+
+func parseReplayAction(body string) (ReplayAction, error) {
+	if body == "complete_turn" {
+		return ReplayAction{Kind: "complete_turn"}, nil
+	}
+	if strings.HasPrefix(body, "split ") {
+		return parseReplaySplit(body[len("split "):])
+	}
+	if strings.HasPrefix(body, "merge_stack ") {
+		return parseReplayMergeStack(body[len("merge_stack "):])
+	}
+	if strings.HasPrefix(body, "move_stack ") {
+		return parseReplayMoveStack(body[len("move_stack "):])
+	}
+	return ReplayAction{}, fmt.Errorf("unknown action kind: %q", body)
+}
+
+
+func parseReplaySplit(rest string) (ReplayAction, error) {
+	// shape: [<labels>]@<int>
+	at := strings.LastIndex(rest, "@")
+	if at < 0 {
+		return ReplayAction{}, fmt.Errorf("split missing '@<index>'")
+	}
+	contentStr, idxStr := rest[:at], rest[at+1:]
+	cards, err := parseBracketed(contentStr)
+	if err != nil {
+		return ReplayAction{}, fmt.Errorf("split: %w", err)
+	}
+	idx, err := atoi(strings.TrimSpace(idxStr))
+	if err != nil {
+		return ReplayAction{}, fmt.Errorf("split index: %w", err)
+	}
+	return ReplayAction{Kind: "split", Source: cards, CardIndex: idx}, nil
+}
+
+
+func parseReplayMergeStack(rest string) (ReplayAction, error) {
+	// shape: [<src>] -> [<tgt>] /<side>
+	arrow := strings.Index(rest, "->")
+	if arrow < 0 {
+		return ReplayAction{}, fmt.Errorf("merge_stack missing '->'")
+	}
+	srcStr := strings.TrimSpace(rest[:arrow])
+	tail := strings.TrimSpace(rest[arrow+2:])
+	slash := strings.LastIndex(tail, "/")
+	if slash < 0 {
+		return ReplayAction{}, fmt.Errorf("merge_stack missing '/<side>'")
+	}
+	tgtStr := strings.TrimSpace(tail[:slash])
+	sideStr := strings.TrimSpace(tail[slash+1:])
+	src, err := parseBracketed(srcStr)
+	if err != nil {
+		return ReplayAction{}, fmt.Errorf("merge_stack source: %w", err)
+	}
+	tgt, err := parseBracketed(tgtStr)
+	if err != nil {
+		return ReplayAction{}, fmt.Errorf("merge_stack target: %w", err)
+	}
+	if sideStr != "left" && sideStr != "right" {
+		return ReplayAction{}, fmt.Errorf("merge_stack side must be left|right, got %q", sideStr)
+	}
+	return ReplayAction{
+		Kind:   "merge_stack",
+		Source: src,
+		Target: tgt,
+		Side:   sideStr,
+	}, nil
+}
+
+
+func parseReplayMoveStack(rest string) (ReplayAction, error) {
+	// shape: [<labels>] -> (<top>,<left>)
+	arrow := strings.Index(rest, "->")
+	if arrow < 0 {
+		return ReplayAction{}, fmt.Errorf("move_stack missing '->'")
+	}
+	contentStr := strings.TrimSpace(rest[:arrow])
+	locStr := strings.TrimSpace(rest[arrow+2:])
+	cards, err := parseBracketed(contentStr)
+	if err != nil {
+		return ReplayAction{}, fmt.Errorf("move_stack content: %w", err)
+	}
+	loc, err := parseLoc(locStr)
+	if err != nil {
+		return ReplayAction{}, fmt.Errorf("move_stack loc: %w", err)
+	}
+	return ReplayAction{Kind: "move_stack", Source: cards, NewLoc: &loc}, nil
+}
+
+
+// parseBracketed extracts cards from "[<label> <label> ...]".
+func parseBracketed(s string) ([]Card, error) {
+	t := strings.TrimSpace(s)
+	if !strings.HasPrefix(t, "[") || !strings.HasSuffix(t, "]") {
+		return nil, fmt.Errorf("expected [<labels>] form, got %q", s)
+	}
+	inner := strings.TrimSpace(t[1 : len(t)-1])
+	if inner == "" {
+		return nil, nil
+	}
+	return parseCards(inner)
+}
+
 
 func parseCards(s string) ([]Card, error) {
 	if s == "" {

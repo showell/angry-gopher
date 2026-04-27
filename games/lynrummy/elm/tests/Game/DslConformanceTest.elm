@@ -20,10 +20,14 @@ import Game.CardStack
         , HandCard
         , HandCardState(..)
         )
+import Game.BoardActions as BoardActions
 import Game.PlaceStack
 import Game.Referee as Referee exposing (RefereeStage(..), refereeStageToString)
+import Game.Replay.Time as ReplayTime
 import Game.StackType as StackType
 import Game.Strategy.Hint as Hint
+import Game.WireAction as WA exposing (WireAction)
+import Main.Apply as Apply
 import Main.Msg as Msg
 import Main.Play as Play
 import Main.State as State
@@ -67,6 +71,124 @@ firstIncompleteStack stacks =
         |> List.indexedMap Tuple.pair
         |> List.filter (\( _, s ) -> not (isCleanStack s))
         |> List.head
+
+
+-- ============================================================
+-- Replay-invariant helpers (op replay_invariant)
+-- ============================================================
+
+
+type ReplaySpec
+    = SpecSplit (List Card) Int
+    | SpecMergeStack (List Card) (List Card) BoardActions.Side
+    | SpecMoveStack (List Card) BoardLocation
+    | SpecCompleteTurn
+
+
+findStackByContent : List Card -> List CardStack -> CardStack
+findStackByContent cards board =
+    case List.filter (\s -> List.map .card s.boardCards == cards) board of
+        match :: _ ->
+            match
+
+        [] ->
+            -- Test-fixture invariant. If a scenario references
+            -- a stack that doesn't exist on the live sim, the
+            -- DSL author and the production code disagree about
+            -- what the action log says — fail loudly rather than
+            -- silently no-op. (Production code returns Nothing
+            -- in this case; here we want it to be a test error.)
+            { boardCards = []
+            , loc = { top = -1, left = -1 }
+            }
+
+
+resolveSpec : ReplaySpec -> List CardStack -> WireAction
+resolveSpec spec board =
+    case spec of
+        SpecSplit cards idx ->
+            WA.Split { stack = findStackByContent cards board, cardIndex = idx }
+
+        SpecMergeStack src tgt side ->
+            WA.MergeStack
+                { source = findStackByContent src board
+                , target = findStackByContent tgt board
+                , side = side
+                }
+
+        SpecMoveStack cards loc ->
+            WA.MoveStack { stack = findStackByContent cards board, newLoc = loc }
+
+        SpecCompleteTurn ->
+            WA.CompleteTurn
+
+
+buildEagerAndActions : State.Model -> List ReplaySpec -> ( State.Model, List WireAction )
+buildEagerAndActions initialModel specs =
+    let
+        loop model acc remaining =
+            case remaining of
+                [] ->
+                    ( model, List.reverse acc )
+
+                spec :: rest ->
+                    let
+                        action =
+                            resolveSpec spec model.board
+
+                        next =
+                            (Apply.applyAction action model).model
+                    in
+                    loop next (action :: acc) rest
+    in
+    loop initialModel [] specs
+
+
+runReplay : State.Model -> List WireAction -> State.Model
+runReplay initialModel actions =
+    let
+        entries =
+            List.map
+                (\a ->
+                    { action = a
+                    , gesturePath = Nothing
+                    , pathFrame = State.BoardFrame
+                    }
+                )
+                actions
+
+        seeded =
+            { initialModel
+                | replay = Just { pending = entries, paused = False }
+                , replayAnim = State.NotAnimating
+            }
+    in
+    runReplayLoop seeded 0 5000
+
+
+runReplayLoop : State.Model -> Float -> Int -> State.Model
+runReplayLoop model nowMs budget =
+    case model.replay of
+        Nothing ->
+            model
+
+        Just _ ->
+            if budget <= 0 then
+                -- Test-time guard: if the FSM doesn't drain the
+                -- queue within this many ticks, the test would
+                -- hang. Hand-origin actions in particular can
+                -- park in AwaitingHandRect indefinitely under
+                -- elm-test (no DOM). Bail loudly via Debug.todo
+                -- so the failure mode is visible.
+                Debug.todo
+                    "runReplayLoop budget exhausted — replay FSM did not complete"
+
+            else
+                let
+                    ( next, _ ) =
+                        ReplayTime.replayFrame nowMs model
+                in
+                runReplayLoop next (nowMs + 50) (budget - 1)
 
 
 
@@ -4527,6 +4649,1248 @@ validExtendRunWith8H =
                     Expect.fail (refereeStageToString err.stage ++ ": " ++ err.message)
 
 
+walkthroughMined0014S4Cp1 : Test
+walkthroughMined0014S4Cp1 =
+    test "walkthrough_mined_001_4S_4Cp1" <|
+        \_ ->
+            let
+                board =
+                    [ { boardCards = [ { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 26, left = 26 } }
+                        , { boardCards = [ { card = { value = Seven, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 107, left = 52 } }
+                        , { boardCards = [ { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 182, left = 52 } }
+                        , { boardCards = [ { card = { value = Two, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 257, left = 52 } }
+                        , { boardCards = [ { card = { value = Two, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Three, suit = Spade, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Four, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 332, left = 52 } }
+                        , { boardCards = [ { card = { value = Ace, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 407, left = 52 } }
+                        , { boardCards = [ { card = { value = King, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = King, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = King, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 482, left = 52 } }
+                        , { boardCards = [ { card = { value = Jack, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 92, left = 187 } }
+                        , { boardCards = [ { card = { value = Ten, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ten, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Ten, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 167, left = 187 } }
+                        , { boardCards = [ { card = { value = Four, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 332, left = 187 } }
+                        ]
+
+                base =
+                    State.baseModel
+
+                initialModel =
+                    { base | board = board, sessionId = Just 0 }
+
+                ( eagerModel, actions ) =
+                    buildEagerAndActions initialModel
+                        [ SpecSplit [ { value = Two, suit = Diamond, originDeck = DeckTwo }, { value = Three, suit = Spade, originDeck = DeckTwo }, { value = Four, suit = Diamond, originDeck = DeckTwo } ] 2
+                        , SpecMergeStack [ { value = Four, suit = Diamond, originDeck = DeckTwo } ] [ { value = Four, suit = Spade, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckTwo } ] BoardActions.Right
+                        , SpecSplit [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] 0
+                        , SpecSplit [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] 0
+                        , SpecMergeStack [ { value = Ace, suit = Club, originDeck = DeckOne } ] [ { value = Two, suit = Diamond, originDeck = DeckTwo }, { value = Three, suit = Spade, originDeck = DeckTwo } ] BoardActions.Left
+                        , SpecMergeStack [ { value = Ace, suit = Diamond, originDeck = DeckOne } ] [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ] BoardActions.Left
+                        , SpecMoveStack [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ] { top = 407, left = 220 }
+                        , SpecMergeStack [ { value = Ace, suit = Heart, originDeck = DeckOne } ] [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ] BoardActions.Left ]
+
+                replayedModel =
+                    runReplay initialModel actions
+            in
+            Expect.all
+                [ \_ -> Expect.equal eagerModel.board replayedModel.board
+                , \_ -> Expect.equal eagerModel.hands replayedModel.hands
+                , \_ -> Expect.equal eagerModel.scores replayedModel.scores
+                , \_ -> Expect.equal eagerModel.activePlayerIndex replayedModel.activePlayerIndex
+                , \_ -> Expect.equal eagerModel.turnIndex replayedModel.turnIndex
+                , \_ -> if List.all isCleanStack eagerModel.board then Expect.pass else Expect.fail ("final eager board not victory; incomplete stacks present: " ++ Debug.toString (firstIncompleteStack eagerModel.board))
+                , \_ -> if List.all isCleanStack replayedModel.board then Expect.pass else Expect.fail ("final replayed board not victory; incomplete stacks present: " ++ Debug.toString (firstIncompleteStack replayedModel.board))
+                ]
+                ()
+
+
+walkthroughMined002QDp1 : Test
+walkthroughMined002QDp1 =
+    test "walkthrough_mined_002_QDp1" <|
+        \_ ->
+            let
+                board =
+                    [ { boardCards = [ { card = { value = Seven, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 26, left = 26 } }
+                        , { boardCards = [ { card = { value = Ace, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 107, left = 52 } }
+                        , { boardCards = [ { card = { value = King, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = King, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = King, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 182, left = 52 } }
+                        , { boardCards = [ { card = { value = Jack, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 257, left = 52 } }
+                        , { boardCards = [ { card = { value = Ten, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ten, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Ten, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 332, left = 52 } }
+                        , { boardCards = [ { card = { value = Four, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Four, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 407, left = 52 } }
+                        , { boardCards = [ { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Three, suit = Spade, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 482, left = 52 } }
+                        , { boardCards = [ { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 92, left = 187 } }
+                        , { boardCards = [ { card = { value = Ace, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 167, left = 187 } }
+                        , { boardCards = [ { card = { value = Six, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Eight, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 242, left = 187 } }
+                        , { boardCards = [ { card = { value = Five, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 317, left = 187 } }
+                        , { boardCards = [ { card = { value = Queen, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 392, left = 187 } }
+                        ]
+
+                base =
+                    State.baseModel
+
+                initialModel =
+                    { base | board = board, sessionId = Just 0 }
+
+                ( eagerModel, actions ) =
+                    buildEagerAndActions initialModel
+                        [ SpecSplit [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne } ] 0
+                        , SpecSplit [ { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ] 0
+                        , SpecMoveStack [ { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ] { top = 467, left = 187 }
+                        , SpecMergeStack [ { value = Ace, suit = Diamond, originDeck = DeckOne } ] [ { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ] BoardActions.Right
+                        , SpecMergeStack [ { value = Jack, suit = Diamond, originDeck = DeckOne } ] [ { value = Queen, suit = Diamond, originDeck = DeckTwo } ] BoardActions.Left
+                        , SpecSplit [ { value = King, suit = Diamond, originDeck = DeckTwo }, { value = King, suit = Heart, originDeck = DeckTwo }, { value = King, suit = Spade, originDeck = DeckOne } ] 0
+                        , SpecSplit [ { value = King, suit = Heart, originDeck = DeckTwo }, { value = King, suit = Spade, originDeck = DeckOne } ] 0
+                        , SpecMergeStack [ { value = King, suit = Diamond, originDeck = DeckTwo } ] [ { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckTwo } ] BoardActions.Right
+                        , SpecMergeStack [ { value = King, suit = Heart, originDeck = DeckTwo } ] [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Two, suit = Diamond, originDeck = DeckTwo }, { value = Three, suit = Spade, originDeck = DeckTwo } ] BoardActions.Left
+                        , SpecMergeStack [ { value = King, suit = Spade, originDeck = DeckOne } ] [ { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ] BoardActions.Left ]
+
+                replayedModel =
+                    runReplay initialModel actions
+            in
+            Expect.all
+                [ \_ -> Expect.equal eagerModel.board replayedModel.board
+                , \_ -> Expect.equal eagerModel.hands replayedModel.hands
+                , \_ -> Expect.equal eagerModel.scores replayedModel.scores
+                , \_ -> Expect.equal eagerModel.activePlayerIndex replayedModel.activePlayerIndex
+                , \_ -> Expect.equal eagerModel.turnIndex replayedModel.turnIndex
+                , \_ -> if List.all isCleanStack eagerModel.board then Expect.pass else Expect.fail ("final eager board not victory; incomplete stacks present: " ++ Debug.toString (firstIncompleteStack eagerModel.board))
+                , \_ -> if List.all isCleanStack replayedModel.board then Expect.pass else Expect.fail ("final replayed board not victory; incomplete stacks present: " ++ Debug.toString (firstIncompleteStack replayedModel.board))
+                ]
+                ()
+
+
+walkthroughMined0036D : Test
+walkthroughMined0036D =
+    test "walkthrough_mined_003_6D" <|
+        \_ ->
+            let
+                board =
+                    [ { boardCards = [ { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 26, left = 26 } }
+                        , { boardCards = [ { card = { value = Seven, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 107, left = 52 } }
+                        , { boardCards = [ { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 182, left = 52 } }
+                        , { boardCards = [ { card = { value = Three, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 257, left = 52 } }
+                        , { boardCards = [ { card = { value = Two, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Two, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Two, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 332, left = 52 } }
+                        , { boardCards = [ { card = { value = Jack, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 407, left = 52 } }
+                        , { boardCards = [ { card = { value = Eight, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Nine, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ten, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 482, left = 52 } }
+                        , { boardCards = [ { card = { value = Seven, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Eight, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Nine, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 92, left = 187 } }
+                        , { boardCards = [ { card = { value = Queen, suit = Spade, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 167, left = 187 } }
+                        , { boardCards = [ { card = { value = Ace, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 332, left = 187 } }
+                        , { boardCards = [ { card = { value = King, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = King, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = King, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 407, left = 187 } }
+                        , { boardCards = [ { card = { value = Six, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 482, left = 187 } }
+                        ]
+
+                base =
+                    State.baseModel
+
+                initialModel =
+                    { base | board = board, sessionId = Just 0 }
+
+                ( eagerModel, actions ) =
+                    buildEagerAndActions initialModel
+                        [ SpecSplit [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ] 0
+                        , SpecSplit [ { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ] 0
+                        , SpecMergeStack [ { value = Seven, suit = Club, originDeck = DeckOne } ] [ { value = Six, suit = Diamond, originDeck = DeckOne } ] BoardActions.Right
+                        , SpecMoveStack [ { value = Eight, suit = Diamond, originDeck = DeckTwo }, { value = Nine, suit = Club, originDeck = DeckOne }, { value = Ten, suit = Diamond, originDeck = DeckOne } ] { top = 482, left = 118 }
+                        , SpecMergeStack [ { value = Six, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ] [ { value = Eight, suit = Diamond, originDeck = DeckTwo }, { value = Nine, suit = Club, originDeck = DeckOne }, { value = Ten, suit = Diamond, originDeck = DeckOne } ] BoardActions.Left
+                        , SpecMergeStack [ { value = Seven, suit = Diamond, originDeck = DeckOne } ] [ { value = Seven, suit = Spade, originDeck = DeckOne } ] BoardActions.Right
+                        , SpecSplit [ { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ] 4
+                        , SpecMergeStack [ { value = Seven, suit = Heart, originDeck = DeckOne } ] [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne } ] BoardActions.Right ]
+
+                replayedModel =
+                    runReplay initialModel actions
+            in
+            Expect.all
+                [ \_ -> Expect.equal eagerModel.board replayedModel.board
+                , \_ -> Expect.equal eagerModel.hands replayedModel.hands
+                , \_ -> Expect.equal eagerModel.scores replayedModel.scores
+                , \_ -> Expect.equal eagerModel.activePlayerIndex replayedModel.activePlayerIndex
+                , \_ -> Expect.equal eagerModel.turnIndex replayedModel.turnIndex
+                , \_ -> if List.all isCleanStack eagerModel.board then Expect.pass else Expect.fail ("final eager board not victory; incomplete stacks present: " ++ Debug.toString (firstIncompleteStack eagerModel.board))
+                , \_ -> if List.all isCleanStack replayedModel.board then Expect.pass else Expect.fail ("final replayed board not victory; incomplete stacks present: " ++ Debug.toString (firstIncompleteStack replayedModel.board))
+                ]
+                ()
+
+
+walkthroughMined0045C6Dp1 : Test
+walkthroughMined0045C6Dp1 =
+    test "walkthrough_mined_004_5C_6Dp1" <|
+        \_ ->
+            let
+                board =
+                    [ { boardCards = [ { card = { value = King, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 26, left = 26 } }
+                        , { boardCards = [ { card = { value = Ten, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 107, left = 52 } }
+                        , { boardCards = [ { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 182, left = 52 } }
+                        , { boardCards = [ { card = { value = Seven, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 257, left = 52 } }
+                        , { boardCards = [ { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 332, left = 52 } }
+                        , { boardCards = [ { card = { value = Two, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 407, left = 52 } }
+                        , { boardCards = [ { card = { value = Four, suit = Spade, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Five, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Six, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 482, left = 52 } }
+                        , { boardCards = [ { card = { value = Five, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 182, left = 187 } }
+                        ]
+
+                base =
+                    State.baseModel
+
+                initialModel =
+                    { base | board = board, sessionId = Just 0 }
+
+                ( eagerModel, actions ) =
+                    buildEagerAndActions initialModel
+                        [ SpecSplit [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ] 0
+                        , SpecSplit [ { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ] 0
+                        , SpecMergeStack [ { value = Seven, suit = Club, originDeck = DeckOne } ] [ { value = Five, suit = Club, originDeck = DeckOne }, { value = Six, suit = Diamond, originDeck = DeckTwo } ] BoardActions.Right
+                        , SpecMergeStack [ { value = Seven, suit = Diamond, originDeck = DeckOne } ] [ { value = Seven, suit = Spade, originDeck = DeckOne } ] BoardActions.Right
+                        , SpecSplit [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ] 5
+                        , SpecMergeStack [ { value = Seven, suit = Heart, originDeck = DeckOne } ] [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne } ] BoardActions.Right ]
+
+                replayedModel =
+                    runReplay initialModel actions
+            in
+            Expect.all
+                [ \_ -> Expect.equal eagerModel.board replayedModel.board
+                , \_ -> Expect.equal eagerModel.hands replayedModel.hands
+                , \_ -> Expect.equal eagerModel.scores replayedModel.scores
+                , \_ -> Expect.equal eagerModel.activePlayerIndex replayedModel.activePlayerIndex
+                , \_ -> Expect.equal eagerModel.turnIndex replayedModel.turnIndex
+                , \_ -> if List.all isCleanStack eagerModel.board then Expect.pass else Expect.fail ("final eager board not victory; incomplete stacks present: " ++ Debug.toString (firstIncompleteStack eagerModel.board))
+                , \_ -> if List.all isCleanStack replayedModel.board then Expect.pass else Expect.fail ("final replayed board not victory; incomplete stacks present: " ++ Debug.toString (firstIncompleteStack replayedModel.board))
+                ]
+                ()
+
+
+walkthroughMined0052Hp1 : Test
+walkthroughMined0052Hp1 =
+    test "walkthrough_mined_005_2Hp1" <|
+        \_ ->
+            let
+                board =
+                    [ { boardCards = [ { card = { value = King, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 26, left = 26 } }
+                        , { boardCards = [ { card = { value = Ten, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 107, left = 52 } }
+                        , { boardCards = [ { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 182, left = 52 } }
+                        , { boardCards = [ { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 257, left = 52 } }
+                        , { boardCards = [ { card = { value = Four, suit = Spade, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Five, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Six, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 332, left = 52 } }
+                        , { boardCards = [ { card = { value = Five, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 407, left = 52 } }
+                        , { boardCards = [ { card = { value = Two, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 482, left = 52 } }
+                        , { boardCards = [ { card = { value = Seven, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 182, left = 187 } }
+                        , { boardCards = [ { card = { value = Two, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 257, left = 187 } }
+                        ]
+
+                base =
+                    State.baseModel
+
+                initialModel =
+                    { base | board = board, sessionId = Just 0 }
+
+                ( eagerModel, actions ) =
+                    buildEagerAndActions initialModel
+                        [ SpecSplit [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ] 3
+                        , SpecMergeStack [ { value = Three, suit = Spade, originDeck = DeckOne } ] [ { value = Two, suit = Heart, originDeck = DeckTwo } ] BoardActions.Right
+                        , SpecSplit [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] 0
+                        , SpecSplit [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] 0
+                        , SpecMoveStack [ { value = Two, suit = Heart, originDeck = DeckTwo }, { value = Three, suit = Spade, originDeck = DeckOne } ] { top = 332, left = 220 }
+                        , SpecMergeStack [ { value = Ace, suit = Club, originDeck = DeckOne } ] [ { value = Two, suit = Heart, originDeck = DeckTwo }, { value = Three, suit = Spade, originDeck = DeckOne } ] BoardActions.Left
+                        , SpecMergeStack [ { value = Ace, suit = Diamond, originDeck = DeckOne } ] [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ] BoardActions.Right
+                        , SpecMergeStack [ { value = Ace, suit = Heart, originDeck = DeckOne } ] [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ] BoardActions.Left ]
+
+                replayedModel =
+                    runReplay initialModel actions
+            in
+            Expect.all
+                [ \_ -> Expect.equal eagerModel.board replayedModel.board
+                , \_ -> Expect.equal eagerModel.hands replayedModel.hands
+                , \_ -> Expect.equal eagerModel.scores replayedModel.scores
+                , \_ -> Expect.equal eagerModel.activePlayerIndex replayedModel.activePlayerIndex
+                , \_ -> Expect.equal eagerModel.turnIndex replayedModel.turnIndex
+                , \_ -> if List.all isCleanStack eagerModel.board then Expect.pass else Expect.fail ("final eager board not victory; incomplete stacks present: " ++ Debug.toString (firstIncompleteStack eagerModel.board))
+                , \_ -> if List.all isCleanStack replayedModel.board then Expect.pass else Expect.fail ("final replayed board not victory; incomplete stacks present: " ++ Debug.toString (firstIncompleteStack replayedModel.board))
+                ]
+                ()
+
+
+walkthroughMined0066Cp1 : Test
+walkthroughMined0066Cp1 =
+    test "walkthrough_mined_006_6Cp1" <|
+        \_ ->
+            let
+                board =
+                    [ { boardCards = [ { card = { value = Four, suit = Spade, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Five, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Six, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 26, left = 26 } }
+                        , { boardCards = [ { card = { value = Five, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 107, left = 52 } }
+                        , { boardCards = [ { card = { value = Seven, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 182, left = 52 } }
+                        , { boardCards = [ { card = { value = King, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 257, left = 52 } }
+                        , { boardCards = [ { card = { value = Three, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 332, left = 52 } }
+                        , { boardCards = [ { card = { value = King, suit = Spade, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 407, left = 52 } }
+                        , { boardCards = [ { card = { value = Ten, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 482, left = 52 } }
+                        , { boardCards = [ { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 92, left = 187 } }
+                        , { boardCards = [ { card = { value = Queen, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 167, left = 187 } }
+                        , { boardCards = [ { card = { value = Ace, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Two, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Three, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 242, left = 187 } }
+                        , { boardCards = [ { card = { value = Six, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 407, left = 187 } }
+                        ]
+
+                base =
+                    State.baseModel
+
+                initialModel =
+                    { base | board = board, sessionId = Just 0 }
+
+                ( eagerModel, actions ) =
+                    buildEagerAndActions initialModel
+                        [ SpecSplit [ { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne } ] 3
+                        , SpecMergeStack [ { value = Six, suit = Spade, originDeck = DeckOne } ] [ { value = Six, suit = Club, originDeck = DeckTwo } ] BoardActions.Right
+                        , SpecSplit [ { value = Five, suit = Club, originDeck = DeckOne }, { value = Six, suit = Diamond, originDeck = DeckTwo }, { value = Seven, suit = Club, originDeck = DeckOne } ] 0
+                        , SpecSplit [ { value = Six, suit = Diamond, originDeck = DeckTwo }, { value = Seven, suit = Club, originDeck = DeckOne } ] 0
+                        , SpecMergeStack [ { value = Six, suit = Diamond, originDeck = DeckTwo } ] [ { value = Six, suit = Club, originDeck = DeckTwo }, { value = Six, suit = Spade, originDeck = DeckOne } ] BoardActions.Right
+                        , SpecMergeStack [ { value = Five, suit = Club, originDeck = DeckOne } ] [ { value = Ace, suit = Club, originDeck = DeckTwo }, { value = Two, suit = Heart, originDeck = DeckTwo }, { value = Three, suit = Spade, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ] BoardActions.Right
+                        , SpecMergeStack [ { value = Seven, suit = Club, originDeck = DeckOne } ] [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ] BoardActions.Right ]
+
+                replayedModel =
+                    runReplay initialModel actions
+            in
+            Expect.all
+                [ \_ -> Expect.equal eagerModel.board replayedModel.board
+                , \_ -> Expect.equal eagerModel.hands replayedModel.hands
+                , \_ -> Expect.equal eagerModel.scores replayedModel.scores
+                , \_ -> Expect.equal eagerModel.activePlayerIndex replayedModel.activePlayerIndex
+                , \_ -> Expect.equal eagerModel.turnIndex replayedModel.turnIndex
+                , \_ -> if List.all isCleanStack eagerModel.board then Expect.pass else Expect.fail ("final eager board not victory; incomplete stacks present: " ++ Debug.toString (firstIncompleteStack eagerModel.board))
+                , \_ -> if List.all isCleanStack replayedModel.board then Expect.pass else Expect.fail ("final replayed board not victory; incomplete stacks present: " ++ Debug.toString (firstIncompleteStack replayedModel.board))
+                ]
+                ()
+
+
+walkthroughMined0075Cp16C : Test
+walkthroughMined0075Cp16C =
+    test "walkthrough_mined_007_5Cp1_6C" <|
+        \_ ->
+            let
+                board =
+                    [ { boardCards = [ { card = { value = King, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 26, left = 26 } }
+                        , { boardCards = [ { card = { value = Ten, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 107, left = 52 } }
+                        , { boardCards = [ { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 182, left = 52 } }
+                        , { boardCards = [ { card = { value = Seven, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 257, left = 52 } }
+                        , { boardCards = [ { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 332, left = 52 } }
+                        , { boardCards = [ { card = { value = Two, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 407, left = 52 } }
+                        , { boardCards = [ { card = { value = Nine, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Ten, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 482, left = 52 } }
+                        , { boardCards = [ { card = { value = Five, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Six, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 182, left = 187 } }
+                        ]
+
+                base =
+                    State.baseModel
+
+                initialModel =
+                    { base | board = board, sessionId = Just 0 }
+
+                ( eagerModel, actions ) =
+                    buildEagerAndActions initialModel
+                        [ SpecSplit [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ] 0
+                        , SpecSplit [ { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ] 0
+                        , SpecMergeStack [ { value = Seven, suit = Club, originDeck = DeckOne } ] [ { value = Five, suit = Club, originDeck = DeckTwo }, { value = Six, suit = Club, originDeck = DeckOne } ] BoardActions.Right
+                        , SpecMergeStack [ { value = Seven, suit = Diamond, originDeck = DeckOne } ] [ { value = Seven, suit = Spade, originDeck = DeckOne } ] BoardActions.Right
+                        , SpecSplit [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ] 5
+                        , SpecMergeStack [ { value = Seven, suit = Heart, originDeck = DeckOne } ] [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne } ] BoardActions.Right ]
+
+                replayedModel =
+                    runReplay initialModel actions
+            in
+            Expect.all
+                [ \_ -> Expect.equal eagerModel.board replayedModel.board
+                , \_ -> Expect.equal eagerModel.hands replayedModel.hands
+                , \_ -> Expect.equal eagerModel.scores replayedModel.scores
+                , \_ -> Expect.equal eagerModel.activePlayerIndex replayedModel.activePlayerIndex
+                , \_ -> Expect.equal eagerModel.turnIndex replayedModel.turnIndex
+                , \_ -> if List.all isCleanStack eagerModel.board then Expect.pass else Expect.fail ("final eager board not victory; incomplete stacks present: " ++ Debug.toString (firstIncompleteStack eagerModel.board))
+                , \_ -> if List.all isCleanStack replayedModel.board then Expect.pass else Expect.fail ("final replayed board not victory; incomplete stacks present: " ++ Debug.toString (firstIncompleteStack replayedModel.board))
+                ]
+                ()
+
+
+walkthroughMined008QHp1 : Test
+walkthroughMined008QHp1 =
+    test "walkthrough_mined_008_QHp1" <|
+        \_ ->
+            let
+                board =
+                    [ { boardCards = [ { card = { value = Ten, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 26, left = 26 } }
+                        , { boardCards = [ { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 107, left = 52 } }
+                        , { boardCards = [ { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 182, left = 52 } }
+                        , { boardCards = [ { card = { value = Nine, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Ten, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 257, left = 52 } }
+                        , { boardCards = [ { card = { value = Five, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Six, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 332, left = 52 } }
+                        , { boardCards = [ { card = { value = Two, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 407, left = 52 } }
+                        , { boardCards = [ { card = { value = Seven, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 482, left = 52 } }
+                        , { boardCards = [ { card = { value = Ace, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 92, left = 187 } }
+                        , { boardCards = [ { card = { value = Jack, suit = Spade, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Spade, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = King, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 167, left = 187 } }
+                        , { boardCards = [ { card = { value = Queen, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 242, left = 187 } }
+                        ]
+
+                base =
+                    State.baseModel
+
+                initialModel =
+                    { base | board = board, sessionId = Just 0 }
+
+                ( eagerModel, actions ) =
+                    buildEagerAndActions initialModel
+                        [ SpecSplit [ { value = Jack, suit = Spade, originDeck = DeckTwo }, { value = Queen, suit = Spade, originDeck = DeckTwo }, { value = King, suit = Spade, originDeck = DeckOne } ] 0
+                        , SpecMergeStack [ { value = Jack, suit = Spade, originDeck = DeckTwo } ] [ { value = Queen, suit = Heart, originDeck = DeckTwo } ] BoardActions.Left
+                        , SpecSplit [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ] 0
+                        , SpecMoveStack [ { value = Jack, suit = Spade, originDeck = DeckTwo }, { value = Queen, suit = Heart, originDeck = DeckTwo } ] { top = 242, left = 220 }
+                        , SpecMergeStack [ { value = Ten, suit = Diamond, originDeck = DeckOne } ] [ { value = Jack, suit = Spade, originDeck = DeckTwo }, { value = Queen, suit = Heart, originDeck = DeckTwo } ] BoardActions.Left
+                        , SpecMoveStack [ { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ] { top = 107, left = 253 }
+                        , SpecMergeStack [ { value = Queen, suit = Spade, originDeck = DeckTwo }, { value = King, suit = Spade, originDeck = DeckOne } ] [ { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ] BoardActions.Left ]
+
+                replayedModel =
+                    runReplay initialModel actions
+            in
+            Expect.all
+                [ \_ -> Expect.equal eagerModel.board replayedModel.board
+                , \_ -> Expect.equal eagerModel.hands replayedModel.hands
+                , \_ -> Expect.equal eagerModel.scores replayedModel.scores
+                , \_ -> Expect.equal eagerModel.activePlayerIndex replayedModel.activePlayerIndex
+                , \_ -> Expect.equal eagerModel.turnIndex replayedModel.turnIndex
+                , \_ -> if List.all isCleanStack eagerModel.board then Expect.pass else Expect.fail ("final eager board not victory; incomplete stacks present: " ++ Debug.toString (firstIncompleteStack eagerModel.board))
+                , \_ -> if List.all isCleanStack replayedModel.board then Expect.pass else Expect.fail ("final replayed board not victory; incomplete stacks present: " ++ Debug.toString (firstIncompleteStack replayedModel.board))
+                ]
+                ()
+
+
+walkthroughMined009JC : Test
+walkthroughMined009JC =
+    test "walkthrough_mined_009_JC" <|
+        \_ ->
+            let
+                board =
+                    [ { boardCards = [ { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 26, left = 26 } }
+                        , { boardCards = [ { card = { value = Nine, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Ten, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 107, left = 52 } }
+                        , { boardCards = [ { card = { value = Five, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Six, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 182, left = 52 } }
+                        , { boardCards = [ { card = { value = Two, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 257, left = 52 } }
+                        , { boardCards = [ { card = { value = Seven, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 332, left = 52 } }
+                        , { boardCards = [ { card = { value = Jack, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 407, left = 52 } }
+                        , { boardCards = [ { card = { value = Queen, suit = Spade, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = King, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 482, left = 52 } }
+                        , { boardCards = [ { card = { value = Nine, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ten, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Spade, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 92, left = 187 } }
+                        , { boardCards = [ { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 167, left = 187 } }
+                        , { boardCards = [ { card = { value = Jack, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 332, left = 187 } }
+                        ]
+
+                base =
+                    State.baseModel
+
+                initialModel =
+                    { base | board = board, sessionId = Just 0 }
+
+                ( eagerModel, actions ) =
+                    buildEagerAndActions initialModel
+                        [ SpecSplit [ { value = Nine, suit = Spade, originDeck = DeckOne }, { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Spade, originDeck = DeckTwo }, { value = Queen, suit = Heart, originDeck = DeckTwo } ] 3
+                        , SpecMergeStack [ { value = Queen, suit = Heart, originDeck = DeckTwo } ] [ { value = Jack, suit = Club, originDeck = DeckOne } ] BoardActions.Right
+                        , SpecSplit [ { value = Queen, suit = Spade, originDeck = DeckTwo }, { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ] 0
+                        , SpecSplit [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ] 0
+                        , SpecMergeStack [ { value = King, suit = Spade, originDeck = DeckOne } ] [ { value = Jack, suit = Club, originDeck = DeckOne }, { value = Queen, suit = Heart, originDeck = DeckTwo } ] BoardActions.Right
+                        , SpecMoveStack [ { value = Nine, suit = Heart, originDeck = DeckTwo }, { value = Ten, suit = Club, originDeck = DeckTwo }, { value = Jack, suit = Heart, originDeck = DeckOne } ] { top = 407, left = 187 }
+                        , SpecMergeStack [ { value = Queen, suit = Spade, originDeck = DeckTwo } ] [ { value = Nine, suit = Heart, originDeck = DeckTwo }, { value = Ten, suit = Club, originDeck = DeckTwo }, { value = Jack, suit = Heart, originDeck = DeckOne } ] BoardActions.Right ]
+
+                replayedModel =
+                    runReplay initialModel actions
+            in
+            Expect.all
+                [ \_ -> Expect.equal eagerModel.board replayedModel.board
+                , \_ -> Expect.equal eagerModel.hands replayedModel.hands
+                , \_ -> Expect.equal eagerModel.scores replayedModel.scores
+                , \_ -> Expect.equal eagerModel.activePlayerIndex replayedModel.activePlayerIndex
+                , \_ -> Expect.equal eagerModel.turnIndex replayedModel.turnIndex
+                , \_ -> if List.all isCleanStack eagerModel.board then Expect.pass else Expect.fail ("final eager board not victory; incomplete stacks present: " ++ Debug.toString (firstIncompleteStack eagerModel.board))
+                , \_ -> if List.all isCleanStack replayedModel.board then Expect.pass else Expect.fail ("final replayed board not victory; incomplete stacks present: " ++ Debug.toString (firstIncompleteStack replayedModel.board))
+                ]
+                ()
+
+
+walkthroughMined0103Hp1 : Test
+walkthroughMined0103Hp1 =
+    test "walkthrough_mined_010_3Hp1" <|
+        \_ ->
+            let
+                board =
+                    [ { boardCards = [ { card = { value = Ten, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 26, left = 26 } }
+                        , { boardCards = [ { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 107, left = 52 } }
+                        , { boardCards = [ { card = { value = Seven, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 182, left = 52 } }
+                        , { boardCards = [ { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 257, left = 52 } }
+                        , { boardCards = [ { card = { value = Nine, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Nine, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Nine, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 332, left = 52 } }
+                        , { boardCards = [ { card = { value = Two, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 407, left = 52 } }
+                        , { boardCards = [ { card = { value = Five, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Six, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 482, left = 52 } }
+                        , { boardCards = [ { card = { value = Ace, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 92, left = 187 } }
+                        , { boardCards = [ { card = { value = King, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = King, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = King, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 167, left = 187 } }
+                        , { boardCards = [ { card = { value = Ten, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 242, left = 187 } }
+                        , { boardCards = [ { card = { value = Three, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 317, left = 187 } }
+                        ]
+
+                base =
+                    State.baseModel
+
+                initialModel =
+                    { base | board = board, sessionId = Just 0 }
+
+                ( eagerModel, actions ) =
+                    buildEagerAndActions initialModel
+                        [ SpecSplit [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne } ] 0
+                        , SpecMergeStack [ { value = Two, suit = Club, originDeck = DeckOne } ] [ { value = Three, suit = Heart, originDeck = DeckTwo } ] BoardActions.Left
+                        , SpecSplit [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] 0
+                        , SpecSplit [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] 0
+                        , SpecMoveStack [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckTwo } ] { top = 332, left = 220 }
+                        , SpecMergeStack [ { value = Ace, suit = Diamond, originDeck = DeckOne } ] [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckTwo } ] BoardActions.Left
+                        , SpecSplit [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ] 3
+                        , SpecMergeStack [ { value = King, suit = Diamond, originDeck = DeckOne } ] [ { value = Ace, suit = Club, originDeck = DeckOne } ] BoardActions.Left
+                        , SpecMergeStack [ { value = King, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Club, originDeck = DeckOne } ] [ { value = Ten, suit = Club, originDeck = DeckTwo }, { value = Jack, suit = Diamond, originDeck = DeckTwo }, { value = Queen, suit = Spade, originDeck = DeckOne } ] BoardActions.Right
+                        , SpecMergeStack [ { value = Ace, suit = Heart, originDeck = DeckOne } ] [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ] BoardActions.Left ]
+
+                replayedModel =
+                    runReplay initialModel actions
+            in
+            Expect.all
+                [ \_ -> Expect.equal eagerModel.board replayedModel.board
+                , \_ -> Expect.equal eagerModel.hands replayedModel.hands
+                , \_ -> Expect.equal eagerModel.scores replayedModel.scores
+                , \_ -> Expect.equal eagerModel.activePlayerIndex replayedModel.activePlayerIndex
+                , \_ -> Expect.equal eagerModel.turnIndex replayedModel.turnIndex
+                , \_ -> if List.all isCleanStack eagerModel.board then Expect.pass else Expect.fail ("final eager board not victory; incomplete stacks present: " ++ Debug.toString (firstIncompleteStack eagerModel.board))
+                , \_ -> if List.all isCleanStack replayedModel.board then Expect.pass else Expect.fail ("final replayed board not victory; incomplete stacks present: " ++ Debug.toString (firstIncompleteStack replayedModel.board))
+                ]
+                ()
+
+
+walkthroughMined011JC : Test
+walkthroughMined011JC =
+    test "walkthrough_mined_011_JC" <|
+        \_ ->
+            let
+                board =
+                    [ { boardCards = [ { card = { value = Seven, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 26, left = 26 } }
+                        , { boardCards = [ { card = { value = Nine, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Nine, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Nine, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 107, left = 52 } }
+                        , { boardCards = [ { card = { value = Ace, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 182, left = 52 } }
+                        , { boardCards = [ { card = { value = King, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = King, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = King, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 257, left = 52 } }
+                        , { boardCards = [ { card = { value = Ace, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 332, left = 52 } }
+                        , { boardCards = [ { card = { value = Ten, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 407, left = 52 } }
+                        , { boardCards = [ { card = { value = Ten, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 482, left = 52 } }
+                        , { boardCards = [ { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 92, left = 187 } }
+                        , { boardCards = [ { card = { value = Four, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 167, left = 187 } }
+                        , { boardCards = [ { card = { value = Six, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Eight, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 242, left = 187 } }
+                        , { boardCards = [ { card = { value = Three, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 317, left = 187 } }
+                        , { boardCards = [ { card = { value = Jack, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 392, left = 187 } }
+                        ]
+
+                base =
+                    State.baseModel
+
+                initialModel =
+                    { base | board = board, sessionId = Just 0 }
+
+                ( eagerModel, actions ) =
+                    buildEagerAndActions initialModel
+                        [ SpecSplit [ { value = Ten, suit = Club, originDeck = DeckTwo }, { value = Jack, suit = Diamond, originDeck = DeckTwo }, { value = Queen, suit = Spade, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Club, originDeck = DeckOne } ] 0
+                        , SpecMergeStack [ { value = Ten, suit = Club, originDeck = DeckTwo } ] [ { value = Jack, suit = Club, originDeck = DeckOne } ] BoardActions.Left
+                        , SpecSplit [ { value = Nine, suit = Heart, originDeck = DeckTwo }, { value = Nine, suit = Club, originDeck = DeckOne }, { value = Nine, suit = Diamond, originDeck = DeckOne } ] 0
+                        , SpecSplit [ { value = Nine, suit = Club, originDeck = DeckOne }, { value = Nine, suit = Diamond, originDeck = DeckOne } ] 0
+                        , SpecMoveStack [ { value = Ten, suit = Club, originDeck = DeckTwo }, { value = Jack, suit = Club, originDeck = DeckOne } ] { top = 392, left = 220 }
+                        , SpecMergeStack [ { value = Nine, suit = Club, originDeck = DeckOne } ] [ { value = Ten, suit = Club, originDeck = DeckTwo }, { value = Jack, suit = Club, originDeck = DeckOne } ] BoardActions.Left
+                        , SpecMergeStack [ { value = Nine, suit = Heart, originDeck = DeckTwo } ] [ { value = Six, suit = Club, originDeck = DeckTwo }, { value = Seven, suit = Heart, originDeck = DeckOne }, { value = Eight, suit = Spade, originDeck = DeckOne } ] BoardActions.Right
+                        , SpecMergeStack [ { value = Nine, suit = Diamond, originDeck = DeckOne } ] [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne } ] BoardActions.Left ]
+
+                replayedModel =
+                    runReplay initialModel actions
+            in
+            Expect.all
+                [ \_ -> Expect.equal eagerModel.board replayedModel.board
+                , \_ -> Expect.equal eagerModel.hands replayedModel.hands
+                , \_ -> Expect.equal eagerModel.scores replayedModel.scores
+                , \_ -> Expect.equal eagerModel.activePlayerIndex replayedModel.activePlayerIndex
+                , \_ -> Expect.equal eagerModel.turnIndex replayedModel.turnIndex
+                , \_ -> if List.all isCleanStack eagerModel.board then Expect.pass else Expect.fail ("final eager board not victory; incomplete stacks present: " ++ Debug.toString (firstIncompleteStack eagerModel.board))
+                , \_ -> if List.all isCleanStack replayedModel.board then Expect.pass else Expect.fail ("final replayed board not victory; incomplete stacks present: " ++ Debug.toString (firstIncompleteStack replayedModel.board))
+                ]
+                ()
+
+
+walkthroughMined012QCKC : Test
+walkthroughMined012QCKC =
+    test "walkthrough_mined_012_QC_KC" <|
+        \_ ->
+            let
+                board =
+                    [ { boardCards = [ { card = { value = King, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 26, left = 26 } }
+                        , { boardCards = [ { card = { value = Ten, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 107, left = 52 } }
+                        , { boardCards = [ { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 182, left = 52 } }
+                        , { boardCards = [ { card = { value = Seven, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 257, left = 52 } }
+                        , { boardCards = [ { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 332, left = 52 } }
+                        , { boardCards = [ { card = { value = Two, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 407, left = 52 } }
+                        , { boardCards = [ { card = { value = Four, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Five, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 482, left = 52 } }
+                        , { boardCards = [ { card = { value = Queen, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 182, left = 187 } }
+                        ]
+
+                base =
+                    State.baseModel
+
+                initialModel =
+                    { base | board = board, sessionId = Just 0 }
+
+                ( eagerModel, actions ) =
+                    buildEagerAndActions initialModel
+                        [ SpecSplit [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] 0
+                        , SpecSplit [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] 0
+                        , SpecMergeStack [ { value = Ace, suit = Club, originDeck = DeckOne } ] [ { value = Queen, suit = Club, originDeck = DeckOne }, { value = King, suit = Club, originDeck = DeckOne } ] BoardActions.Right
+                        , SpecMergeStack [ { value = Ace, suit = Diamond, originDeck = DeckOne } ] [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ] BoardActions.Right
+                        , SpecMergeStack [ { value = Ace, suit = Heart, originDeck = DeckOne } ] [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ] BoardActions.Left ]
+
+                replayedModel =
+                    runReplay initialModel actions
+            in
+            Expect.all
+                [ \_ -> Expect.equal eagerModel.board replayedModel.board
+                , \_ -> Expect.equal eagerModel.hands replayedModel.hands
+                , \_ -> Expect.equal eagerModel.scores replayedModel.scores
+                , \_ -> Expect.equal eagerModel.activePlayerIndex replayedModel.activePlayerIndex
+                , \_ -> Expect.equal eagerModel.turnIndex replayedModel.turnIndex
+                , \_ -> if List.all isCleanStack eagerModel.board then Expect.pass else Expect.fail ("final eager board not victory; incomplete stacks present: " ++ Debug.toString (firstIncompleteStack eagerModel.board))
+                , \_ -> if List.all isCleanStack replayedModel.board then Expect.pass else Expect.fail ("final replayed board not victory; incomplete stacks present: " ++ Debug.toString (firstIncompleteStack replayedModel.board))
+                ]
+                ()
+
+
+walkthroughMined013AHp1 : Test
+walkthroughMined013AHp1 =
+    test "walkthrough_mined_013_AHp1" <|
+        \_ ->
+            let
+                board =
+                    [ { boardCards = [ { card = { value = King, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 26, left = 26 } }
+                        , { boardCards = [ { card = { value = Seven, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 107, left = 52 } }
+                        , { boardCards = [ { card = { value = Ten, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 182, left = 52 } }
+                        , { boardCards = [ { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 257, left = 52 } }
+                        , { boardCards = [ { card = { value = Four, suit = Spade, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Four, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 332, left = 52 } }
+                        , { boardCards = [ { card = { value = Two, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Four, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Five, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 407, left = 52 } }
+                        , { boardCards = [ { card = { value = Three, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 482, left = 52 } }
+                        , { boardCards = [ { card = { value = King, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 92, left = 187 } }
+                        , { boardCards = [ { card = { value = Ten, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 257, left = 187 } }
+                        , { boardCards = [ { card = { value = Ace, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 332, left = 187 } }
+                        ]
+
+                base =
+                    State.baseModel
+
+                initialModel =
+                    { base | board = board, sessionId = Just 0 }
+
+                ( eagerModel, actions ) =
+                    buildEagerAndActions initialModel
+                        [ SpecSplit [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ] 0
+                        , SpecMergeStack [ { value = King, suit = Spade, originDeck = DeckOne } ] [ { value = Ace, suit = Heart, originDeck = DeckTwo } ] BoardActions.Left
+                        , SpecSplit [ { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ] 0
+                        , SpecSplit [ { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ] 0
+                        , SpecMergeStack [ { value = Two, suit = Spade, originDeck = DeckOne } ] [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckTwo } ] BoardActions.Right
+                        , SpecMergeStack [ { value = Ace, suit = Spade, originDeck = DeckOne } ] [ { value = Two, suit = Diamond, originDeck = DeckOne }, { value = Three, suit = Club, originDeck = DeckTwo }, { value = Four, suit = Diamond, originDeck = DeckTwo }, { value = Five, suit = Spade, originDeck = DeckOne }, { value = Six, suit = Diamond, originDeck = DeckTwo } ] BoardActions.Left
+                        , SpecMoveStack [ { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Diamond, originDeck = DeckOne }, { value = Three, suit = Club, originDeck = DeckTwo }, { value = Four, suit = Diamond, originDeck = DeckTwo }, { value = Five, suit = Spade, originDeck = DeckOne }, { value = Six, suit = Diamond, originDeck = DeckTwo } ] { top = 407, left = 52 }
+                        , SpecSplit [ { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Diamond, originDeck = DeckOne }, { value = Three, suit = Club, originDeck = DeckTwo }, { value = Four, suit = Diamond, originDeck = DeckTwo }, { value = Five, suit = Spade, originDeck = DeckOne }, { value = Six, suit = Diamond, originDeck = DeckTwo } ] 1
+                        , SpecMoveStack [ { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Diamond, originDeck = DeckOne } ] { top = 167, left = 247 }
+                        , SpecMergeStack [ { value = Three, suit = Spade, originDeck = DeckOne } ] [ { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Diamond, originDeck = DeckOne } ] BoardActions.Right ]
+
+                replayedModel =
+                    runReplay initialModel actions
+            in
+            Expect.all
+                [ \_ -> Expect.equal eagerModel.board replayedModel.board
+                , \_ -> Expect.equal eagerModel.hands replayedModel.hands
+                , \_ -> Expect.equal eagerModel.scores replayedModel.scores
+                , \_ -> Expect.equal eagerModel.activePlayerIndex replayedModel.activePlayerIndex
+                , \_ -> Expect.equal eagerModel.turnIndex replayedModel.turnIndex
+                , \_ -> if List.all isCleanStack eagerModel.board then Expect.pass else Expect.fail ("final eager board not victory; incomplete stacks present: " ++ Debug.toString (firstIncompleteStack eagerModel.board))
+                , \_ -> if List.all isCleanStack replayedModel.board then Expect.pass else Expect.fail ("final replayed board not victory; incomplete stacks present: " ++ Debug.toString (firstIncompleteStack replayedModel.board))
+                ]
+                ()
+
+
+walkthroughMined0145C : Test
+walkthroughMined0145C =
+    test "walkthrough_mined_014_5C" <|
+        \_ ->
+            let
+                board =
+                    [ { boardCards = [ { card = { value = Seven, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 26, left = 26 } }
+                        , { boardCards = [ { card = { value = Ten, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 107, left = 52 } }
+                        , { boardCards = [ { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 182, left = 52 } }
+                        , { boardCards = [ { card = { value = Four, suit = Spade, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Four, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 257, left = 52 } }
+                        , { boardCards = [ { card = { value = Three, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 332, left = 52 } }
+                        , { boardCards = [ { card = { value = King, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 407, left = 52 } }
+                        , { boardCards = [ { card = { value = Ten, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 482, left = 52 } }
+                        , { boardCards = [ { card = { value = King, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Two, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 182, left = 187 } }
+                        , { boardCards = [ { card = { value = Three, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Four, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Five, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 257, left = 187 } }
+                        , { boardCards = [ { card = { value = Ace, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 407, left = 187 } }
+                        , { boardCards = [ { card = { value = Five, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 482, left = 187 } }
+                        ]
+
+                base =
+                    State.baseModel
+
+                initialModel =
+                    { base | board = board, sessionId = Just 0 }
+
+                ( eagerModel, actions ) =
+                    buildEagerAndActions initialModel
+                        [ SpecSplit [ { value = Three, suit = Club, originDeck = DeckTwo }, { value = Four, suit = Diamond, originDeck = DeckTwo }, { value = Five, suit = Spade, originDeck = DeckOne }, { value = Six, suit = Diamond, originDeck = DeckTwo } ] 3
+                        , SpecMergeStack [ { value = Six, suit = Diamond, originDeck = DeckTwo } ] [ { value = Five, suit = Club, originDeck = DeckOne } ] BoardActions.Right
+                        , SpecSplit [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ] 0
+                        , SpecSplit [ { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ] 0
+                        , SpecMergeStack [ { value = Seven, suit = Club, originDeck = DeckOne } ] [ { value = Five, suit = Club, originDeck = DeckOne }, { value = Six, suit = Diamond, originDeck = DeckTwo } ] BoardActions.Right
+                        , SpecMergeStack [ { value = Seven, suit = Diamond, originDeck = DeckOne } ] [ { value = Seven, suit = Spade, originDeck = DeckOne } ] BoardActions.Right
+                        , SpecSplit [ { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ] 4
+                        , SpecMergeStack [ { value = Seven, suit = Heart, originDeck = DeckOne } ] [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne } ] BoardActions.Right ]
+
+                replayedModel =
+                    runReplay initialModel actions
+            in
+            Expect.all
+                [ \_ -> Expect.equal eagerModel.board replayedModel.board
+                , \_ -> Expect.equal eagerModel.hands replayedModel.hands
+                , \_ -> Expect.equal eagerModel.scores replayedModel.scores
+                , \_ -> Expect.equal eagerModel.activePlayerIndex replayedModel.activePlayerIndex
+                , \_ -> Expect.equal eagerModel.turnIndex replayedModel.turnIndex
+                , \_ -> if List.all isCleanStack eagerModel.board then Expect.pass else Expect.fail ("final eager board not victory; incomplete stacks present: " ++ Debug.toString (firstIncompleteStack eagerModel.board))
+                , \_ -> if List.all isCleanStack replayedModel.board then Expect.pass else Expect.fail ("final replayed board not victory; incomplete stacks present: " ++ Debug.toString (firstIncompleteStack replayedModel.board))
+                ]
+                ()
+
+
+walkthroughMined0153Cp1 : Test
+walkthroughMined0153Cp1 =
+    test "walkthrough_mined_015_3Cp1" <|
+        \_ ->
+            let
+                board =
+                    [ { boardCards = [ { card = { value = King, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 26, left = 26 } }
+                        , { boardCards = [ { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 107, left = 52 } }
+                        , { boardCards = [ { card = { value = Seven, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 182, left = 52 } }
+                        , { boardCards = [ { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 257, left = 52 } }
+                        , { boardCards = [ { card = { value = Two, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 332, left = 52 } }
+                        , { boardCards = [ { card = { value = Nine, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ten, suit = Spade, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 407, left = 52 } }
+                        , { boardCards = [ { card = { value = Jack, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 482, left = 52 } }
+                        , { boardCards = [ { card = { value = Eight, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Nine, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ten, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 92, left = 187 } }
+                        , { boardCards = [ { card = { value = Two, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Two, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Two, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 167, left = 187 } }
+                        , { boardCards = [ { card = { value = Three, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 242, left = 187 } }
+                        ]
+
+                base =
+                    State.baseModel
+
+                initialModel =
+                    { base | board = board, sessionId = Just 0 }
+
+                ( eagerModel, actions ) =
+                    buildEagerAndActions initialModel
+                        [ SpecSplit [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ] 0
+                        , SpecMergeStack [ { value = Two, suit = Club, originDeck = DeckOne } ] [ { value = Three, suit = Club, originDeck = DeckTwo } ] BoardActions.Left
+                        , SpecSplit [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] 0
+                        , SpecSplit [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] 0
+                        , SpecMoveStack [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Club, originDeck = DeckTwo } ] { top = 407, left = 220 }
+                        , SpecMergeStack [ { value = Ace, suit = Club, originDeck = DeckOne } ] [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Club, originDeck = DeckTwo } ] BoardActions.Left
+                        , SpecMergeStack [ { value = Ace, suit = Diamond, originDeck = DeckOne } ] [ { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ] BoardActions.Right
+                        , SpecMergeStack [ { value = Ace, suit = Heart, originDeck = DeckOne } ] [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ] BoardActions.Left ]
+
+                replayedModel =
+                    runReplay initialModel actions
+            in
+            Expect.all
+                [ \_ -> Expect.equal eagerModel.board replayedModel.board
+                , \_ -> Expect.equal eagerModel.hands replayedModel.hands
+                , \_ -> Expect.equal eagerModel.scores replayedModel.scores
+                , \_ -> Expect.equal eagerModel.activePlayerIndex replayedModel.activePlayerIndex
+                , \_ -> Expect.equal eagerModel.turnIndex replayedModel.turnIndex
+                , \_ -> if List.all isCleanStack eagerModel.board then Expect.pass else Expect.fail ("final eager board not victory; incomplete stacks present: " ++ Debug.toString (firstIncompleteStack eagerModel.board))
+                , \_ -> if List.all isCleanStack replayedModel.board then Expect.pass else Expect.fail ("final replayed board not victory; incomplete stacks present: " ++ Debug.toString (firstIncompleteStack replayedModel.board))
+                ]
+                ()
+
+
+walkthroughMined016TCp1 : Test
+walkthroughMined016TCp1 =
+    test "walkthrough_mined_016_TCp1" <|
+        \_ ->
+            let
+                board =
+                    [ { boardCards = [ { card = { value = Seven, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 26, left = 26 } }
+                        , { boardCards = [ { card = { value = Eight, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Nine, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ten, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 107, left = 52 } }
+                        , { boardCards = [ { card = { value = Two, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Two, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Two, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 182, left = 52 } }
+                        , { boardCards = [ { card = { value = Three, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 257, left = 52 } }
+                        , { boardCards = [ { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 332, left = 52 } }
+                        , { boardCards = [ { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 407, left = 52 } }
+                        , { boardCards = [ { card = { value = Ace, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 482, left = 52 } }
+                        , { boardCards = [ { card = { value = Jack, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 92, left = 187 } }
+                        , { boardCards = [ { card = { value = Queen, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 167, left = 187 } }
+                        , { boardCards = [ { card = { value = Nine, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ten, suit = Spade, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 332, left = 187 } }
+                        , { boardCards = [ { card = { value = Ten, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 482, left = 187 } }
+                        ]
+
+                base =
+                    State.baseModel
+
+                initialModel =
+                    { base | board = board, sessionId = Just 0 }
+
+                ( eagerModel, actions ) =
+                    buildEagerAndActions initialModel
+                        [ SpecSplit [ { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ] 0
+                        , SpecMergeStack [ { value = Jack, suit = Diamond, originDeck = DeckOne } ] [ { value = Ten, suit = Club, originDeck = DeckTwo } ] BoardActions.Right
+                        , SpecSplit [ { value = Nine, suit = Spade, originDeck = DeckOne }, { value = Ten, suit = Spade, originDeck = DeckTwo }, { value = Jack, suit = Spade, originDeck = DeckOne }, { value = Queen, suit = Spade, originDeck = DeckOne } ] 3
+                        , SpecMergeStack [ { value = Queen, suit = Spade, originDeck = DeckOne } ] [ { value = Ten, suit = Club, originDeck = DeckTwo }, { value = Jack, suit = Diamond, originDeck = DeckOne } ] BoardActions.Right
+                        , SpecSplit [ { value = Queen, suit = Heart, originDeck = DeckOne }, { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne } ] 2
+                        , SpecMergeStack [ { value = Ace, suit = Diamond, originDeck = DeckOne } ] [ { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ] BoardActions.Right
+                        , SpecSplit [ { value = Ace, suit = Heart, originDeck = DeckOne }, { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ] 0
+                        , SpecMergeStack [ { value = Ace, suit = Heart, originDeck = DeckOne } ] [ { value = Queen, suit = Heart, originDeck = DeckOne }, { value = King, suit = Spade, originDeck = DeckOne } ] BoardActions.Right ]
+
+                replayedModel =
+                    runReplay initialModel actions
+            in
+            Expect.all
+                [ \_ -> Expect.equal eagerModel.board replayedModel.board
+                , \_ -> Expect.equal eagerModel.hands replayedModel.hands
+                , \_ -> Expect.equal eagerModel.scores replayedModel.scores
+                , \_ -> Expect.equal eagerModel.activePlayerIndex replayedModel.activePlayerIndex
+                , \_ -> Expect.equal eagerModel.turnIndex replayedModel.turnIndex
+                , \_ -> if List.all isCleanStack eagerModel.board then Expect.pass else Expect.fail ("final eager board not victory; incomplete stacks present: " ++ Debug.toString (firstIncompleteStack eagerModel.board))
+                , \_ -> if List.all isCleanStack replayedModel.board then Expect.pass else Expect.fail ("final replayed board not victory; incomplete stacks present: " ++ Debug.toString (firstIncompleteStack replayedModel.board))
+                ]
+                ()
+
+
+walkthroughMined0175Dp16Dp1 : Test
+walkthroughMined0175Dp16Dp1 =
+    test "walkthrough_mined_017_5Dp1_6Dp1" <|
+        \_ ->
+            let
+                board =
+                    [ { boardCards = [ { card = { value = King, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 26, left = 26 } }
+                        , { boardCards = [ { card = { value = Ten, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 107, left = 52 } }
+                        , { boardCards = [ { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 182, left = 52 } }
+                        , { boardCards = [ { card = { value = Seven, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 257, left = 52 } }
+                        , { boardCards = [ { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 332, left = 52 } }
+                        , { boardCards = [ { card = { value = Two, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 407, left = 52 } }
+                        , { boardCards = [ { card = { value = Five, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Six, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 482, left = 52 } }
+                        ]
+
+                base =
+                    State.baseModel
+
+                initialModel =
+                    { base | board = board, sessionId = Just 0 }
+
+                ( eagerModel, actions ) =
+                    buildEagerAndActions initialModel
+                        [ SpecSplit [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ] 0
+                        , SpecSplit [ { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ] 0
+                        , SpecMergeStack [ { value = Seven, suit = Diamond, originDeck = DeckOne } ] [ { value = Five, suit = Diamond, originDeck = DeckTwo }, { value = Six, suit = Diamond, originDeck = DeckTwo } ] BoardActions.Right
+                        , SpecMergeStack [ { value = Seven, suit = Club, originDeck = DeckOne } ] [ { value = Seven, suit = Spade, originDeck = DeckOne } ] BoardActions.Right
+                        , SpecSplit [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ] 5
+                        , SpecMergeStack [ { value = Seven, suit = Heart, originDeck = DeckOne } ] [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ] BoardActions.Right ]
+
+                replayedModel =
+                    runReplay initialModel actions
+            in
+            Expect.all
+                [ \_ -> Expect.equal eagerModel.board replayedModel.board
+                , \_ -> Expect.equal eagerModel.hands replayedModel.hands
+                , \_ -> Expect.equal eagerModel.scores replayedModel.scores
+                , \_ -> Expect.equal eagerModel.activePlayerIndex replayedModel.activePlayerIndex
+                , \_ -> Expect.equal eagerModel.turnIndex replayedModel.turnIndex
+                , \_ -> if List.all isCleanStack eagerModel.board then Expect.pass else Expect.fail ("final eager board not victory; incomplete stacks present: " ++ Debug.toString (firstIncompleteStack eagerModel.board))
+                , \_ -> if List.all isCleanStack replayedModel.board then Expect.pass else Expect.fail ("final replayed board not victory; incomplete stacks present: " ++ Debug.toString (firstIncompleteStack replayedModel.board))
+                ]
+                ()
+
+
+walkthroughMined0182Sp13Hp1 : Test
+walkthroughMined0182Sp13Hp1 =
+    test "walkthrough_mined_018_2Sp1_3Hp1" <|
+        \_ ->
+            let
+                board =
+                    [ { boardCards = [ { card = { value = King, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 26, left = 26 } }
+                        , { boardCards = [ { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 107, left = 52 } }
+                        , { boardCards = [ { card = { value = Seven, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 182, left = 52 } }
+                        , { boardCards = [ { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 257, left = 52 } }
+                        , { boardCards = [ { card = { value = Two, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 332, left = 52 } }
+                        , { boardCards = [ { card = { value = Seven, suit = Spade, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Eight, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Nine, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 407, left = 52 } }
+                        , { boardCards = [ { card = { value = Three, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Four, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Five, suit = Spade, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 482, left = 52 } }
+                        , { boardCards = [ { card = { value = Jack, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 92, left = 187 } }
+                        , { boardCards = [ { card = { value = Ten, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ten, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ten, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 167, left = 187 } }
+                        , { boardCards = [ { card = { value = Two, suit = Spade, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Three, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 242, left = 187 } }
+                        ]
+
+                base =
+                    State.baseModel
+
+                initialModel =
+                    { base | board = board, sessionId = Just 0 }
+
+                ( eagerModel, actions ) =
+                    buildEagerAndActions initialModel
+                        [ SpecSplit [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] 0
+                        , SpecSplit [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] 0
+                        , SpecMoveStack [ { value = Two, suit = Spade, originDeck = DeckTwo }, { value = Three, suit = Heart, originDeck = DeckTwo } ] { top = 407, left = 220 }
+                        , SpecMergeStack [ { value = Ace, suit = Diamond, originDeck = DeckOne } ] [ { value = Two, suit = Spade, originDeck = DeckTwo }, { value = Three, suit = Heart, originDeck = DeckTwo } ] BoardActions.Left
+                        , SpecSplit [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ] 0
+                        , SpecMergeStack [ { value = Two, suit = Club, originDeck = DeckOne } ] [ { value = Ace, suit = Club, originDeck = DeckOne } ] BoardActions.Right
+                        , SpecSplit [ { value = Three, suit = Club, originDeck = DeckTwo }, { value = Four, suit = Heart, originDeck = DeckTwo }, { value = Five, suit = Spade, originDeck = DeckTwo } ] 0
+                        , SpecMoveStack [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Two, suit = Club, originDeck = DeckOne } ] { top = 482, left = 187 }
+                        , SpecMergeStack [ { value = Three, suit = Club, originDeck = DeckTwo } ] [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Two, suit = Club, originDeck = DeckOne } ] BoardActions.Right
+                        , SpecMergeStack [ { value = Ace, suit = Heart, originDeck = DeckOne } ] [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ] BoardActions.Left
+                        , SpecSplit [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ] 3
+                        , SpecMergeStack [ { value = Three, suit = Spade, originDeck = DeckOne } ] [ { value = Four, suit = Heart, originDeck = DeckTwo }, { value = Five, suit = Spade, originDeck = DeckTwo } ] BoardActions.Left ]
+
+                replayedModel =
+                    runReplay initialModel actions
+            in
+            Expect.all
+                [ \_ -> Expect.equal eagerModel.board replayedModel.board
+                , \_ -> Expect.equal eagerModel.hands replayedModel.hands
+                , \_ -> Expect.equal eagerModel.scores replayedModel.scores
+                , \_ -> Expect.equal eagerModel.activePlayerIndex replayedModel.activePlayerIndex
+                , \_ -> Expect.equal eagerModel.turnIndex replayedModel.turnIndex
+                , \_ -> if List.all isCleanStack eagerModel.board then Expect.pass else Expect.fail ("final eager board not victory; incomplete stacks present: " ++ Debug.toString (firstIncompleteStack eagerModel.board))
+                , \_ -> if List.all isCleanStack replayedModel.board then Expect.pass else Expect.fail ("final replayed board not victory; incomplete stacks present: " ++ Debug.toString (firstIncompleteStack replayedModel.board))
+                ]
+                ()
+
+
+walkthroughMined0192D : Test
+walkthroughMined0192D =
+    test "walkthrough_mined_019_2D" <|
+        \_ ->
+            let
+                board =
+                    [ { boardCards = [ { card = { value = Seven, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 26, left = 26 } }
+                        , { boardCards = [ { card = { value = Jack, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 107, left = 52 } }
+                        , { boardCards = [ { card = { value = Ten, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Ten, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ten, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 182, left = 52 } }
+                        , { boardCards = [ { card = { value = Five, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Six, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 257, left = 52 } }
+                        , { boardCards = [ { card = { value = Six, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Eight, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 332, left = 52 } }
+                        , { boardCards = [ { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Three, suit = Spade, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 407, left = 52 } }
+                        , { boardCards = [ { card = { value = Ace, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 482, left = 52 } }
+                        , { boardCards = [ { card = { value = King, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 92, left = 187 } }
+                        , { boardCards = [ { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 167, left = 187 } }
+                        , { boardCards = [ { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 242, left = 187 } }
+                        , { boardCards = [ { card = { value = Two, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 317, left = 187 } }
+                        ]
+
+                base =
+                    State.baseModel
+
+                initialModel =
+                    { base | board = board, sessionId = Just 0 }
+
+                ( eagerModel, actions ) =
+                    buildEagerAndActions initialModel
+                        [ SpecSplit [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Two, suit = Club, originDeck = DeckTwo } ] 0
+                        , SpecSplit [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Two, suit = Club, originDeck = DeckTwo } ] 0
+                        , SpecMergeStack [ { value = Ace, suit = Diamond, originDeck = DeckOne } ] [ { value = Two, suit = Diamond, originDeck = DeckOne } ] BoardActions.Left
+                        , SpecMoveStack [ { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ] { top = 317, left = 187 }
+                        , SpecMergeStack [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Two, suit = Diamond, originDeck = DeckOne } ] [ { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ] BoardActions.Right
+                        , SpecMergeStack [ { value = King, suit = Spade, originDeck = DeckOne } ] [ { value = Ace, suit = Heart, originDeck = DeckOne }, { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne } ] BoardActions.Left
+                        , SpecMoveStack [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne }, { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne } ] { top = 242, left = 187 }
+                        , SpecSplit [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne }, { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne } ] 1
+                        , SpecMoveStack [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] { top = 107, left = 52 }
+                        , SpecMergeStack [ { value = Two, suit = Club, originDeck = DeckTwo } ] [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] BoardActions.Right ]
+
+                replayedModel =
+                    runReplay initialModel actions
+            in
+            Expect.all
+                [ \_ -> Expect.equal eagerModel.board replayedModel.board
+                , \_ -> Expect.equal eagerModel.hands replayedModel.hands
+                , \_ -> Expect.equal eagerModel.scores replayedModel.scores
+                , \_ -> Expect.equal eagerModel.activePlayerIndex replayedModel.activePlayerIndex
+                , \_ -> Expect.equal eagerModel.turnIndex replayedModel.turnIndex
+                , \_ -> if List.all isCleanStack eagerModel.board then Expect.pass else Expect.fail ("final eager board not victory; incomplete stacks present: " ++ Debug.toString (firstIncompleteStack eagerModel.board))
+                , \_ -> if List.all isCleanStack replayedModel.board then Expect.pass else Expect.fail ("final replayed board not victory; incomplete stacks present: " ++ Debug.toString (firstIncompleteStack replayedModel.board))
+                ]
+                ()
+
+
+walkthroughMined0202Dp13Cp1 : Test
+walkthroughMined0202Dp13Cp1 =
+    test "walkthrough_mined_020_2Dp1_3Cp1" <|
+        \_ ->
+            let
+                board =
+                    [ { boardCards = [ { card = { value = King, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 26, left = 26 } }
+                        , { boardCards = [ { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 107, left = 52 } }
+                        , { boardCards = [ { card = { value = Seven, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 182, left = 52 } }
+                        , { boardCards = [ { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 257, left = 52 } }
+                        , { boardCards = [ { card = { value = Two, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 332, left = 52 } }
+                        , { boardCards = [ { card = { value = Jack, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 407, left = 52 } }
+                        , { boardCards = [ { card = { value = Ten, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ten, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ten, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 482, left = 52 } }
+                        , { boardCards = [ { card = { value = Nine, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Nine, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Nine, suit = Spade, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 92, left = 187 } }
+                        , { boardCards = [ { card = { value = Two, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Three, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 167, left = 187 } }
+                        ]
+
+                base =
+                    State.baseModel
+
+                initialModel =
+                    { base | board = board, sessionId = Just 0 }
+
+                ( eagerModel, actions ) =
+                    buildEagerAndActions initialModel
+                        [ SpecSplit [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] 0
+                        , SpecSplit [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] 0
+                        , SpecMergeStack [ { value = Ace, suit = Club, originDeck = DeckOne } ] [ { value = Two, suit = Diamond, originDeck = DeckTwo }, { value = Three, suit = Club, originDeck = DeckTwo } ] BoardActions.Left
+                        , SpecMergeStack [ { value = Ace, suit = Diamond, originDeck = DeckOne } ] [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ] BoardActions.Left
+                        , SpecMergeStack [ { value = Ace, suit = Heart, originDeck = DeckOne } ] [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ] BoardActions.Left ]
+
+                replayedModel =
+                    runReplay initialModel actions
+            in
+            Expect.all
+                [ \_ -> Expect.equal eagerModel.board replayedModel.board
+                , \_ -> Expect.equal eagerModel.hands replayedModel.hands
+                , \_ -> Expect.equal eagerModel.scores replayedModel.scores
+                , \_ -> Expect.equal eagerModel.activePlayerIndex replayedModel.activePlayerIndex
+                , \_ -> Expect.equal eagerModel.turnIndex replayedModel.turnIndex
+                , \_ -> if List.all isCleanStack eagerModel.board then Expect.pass else Expect.fail ("final eager board not victory; incomplete stacks present: " ++ Debug.toString (firstIncompleteStack eagerModel.board))
+                , \_ -> if List.all isCleanStack replayedModel.board then Expect.pass else Expect.fail ("final replayed board not victory; incomplete stacks present: " ++ Debug.toString (firstIncompleteStack replayedModel.board))
+                ]
+                ()
+
+
+walkthroughMined0218Dp1 : Test
+walkthroughMined0218Dp1 =
+    test "walkthrough_mined_021_8Dp1" <|
+        \_ ->
+            let
+                board =
+                    [ { boardCards = [ { card = { value = King, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 26, left = 26 } }
+                        , { boardCards = [ { card = { value = Ten, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 107, left = 52 } }
+                        , { boardCards = [ { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 182, left = 52 } }
+                        , { boardCards = [ { card = { value = Seven, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 257, left = 52 } }
+                        , { boardCards = [ { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 332, left = 52 } }
+                        , { boardCards = [ { card = { value = Two, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 407, left = 52 } }
+                        , { boardCards = [ { card = { value = Jack, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 482, left = 52 } }
+                        , { boardCards = [ { card = { value = Four, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Five, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Six, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 182, left = 187 } }
+                        , { boardCards = [ { card = { value = Six, suit = Spade, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Eight, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Nine, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 257, left = 187 } }
+                        , { boardCards = [ { card = { value = Eight, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 332, left = 187 } }
+                        ]
+
+                base =
+                    State.baseModel
+
+                initialModel =
+                    { base | board = board, sessionId = Just 0 }
+
+                ( eagerModel, actions ) =
+                    buildEagerAndActions initialModel
+                        [ SpecSplit [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ] 0
+                        , SpecSplit [ { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ] 0
+                        , SpecMergeStack [ { value = Seven, suit = Club, originDeck = DeckOne } ] [ { value = Eight, suit = Diamond, originDeck = DeckTwo } ] BoardActions.Left
+                        , SpecSplit [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ] 3
+                        , SpecSplit [ { value = Four, suit = Heart, originDeck = DeckTwo }, { value = Five, suit = Club, originDeck = DeckTwo }, { value = Six, suit = Diamond, originDeck = DeckTwo } ] 2
+                        , SpecMoveStack [ { value = Four, suit = Heart, originDeck = DeckTwo }, { value = Five, suit = Club, originDeck = DeckTwo } ] { top = 482, left = 220 }
+                        , SpecMergeStack [ { value = Three, suit = Spade, originDeck = DeckOne } ] [ { value = Four, suit = Heart, originDeck = DeckTwo }, { value = Five, suit = Club, originDeck = DeckTwo } ] BoardActions.Left
+                        , SpecMoveStack [ { value = Seven, suit = Club, originDeck = DeckOne }, { value = Eight, suit = Diamond, originDeck = DeckTwo } ] { top = 182, left = 220 }
+                        , SpecMergeStack [ { value = Six, suit = Diamond, originDeck = DeckTwo } ] [ { value = Seven, suit = Club, originDeck = DeckOne }, { value = Eight, suit = Diamond, originDeck = DeckTwo } ] BoardActions.Left
+                        , SpecMergeStack [ { value = Seven, suit = Diamond, originDeck = DeckOne } ] [ { value = Seven, suit = Spade, originDeck = DeckOne } ] BoardActions.Right
+                        , SpecSplit [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ] 5
+                        , SpecMergeStack [ { value = Seven, suit = Heart, originDeck = DeckOne } ] [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne } ] BoardActions.Right ]
+
+                replayedModel =
+                    runReplay initialModel actions
+            in
+            Expect.all
+                [ \_ -> Expect.equal eagerModel.board replayedModel.board
+                , \_ -> Expect.equal eagerModel.hands replayedModel.hands
+                , \_ -> Expect.equal eagerModel.scores replayedModel.scores
+                , \_ -> Expect.equal eagerModel.activePlayerIndex replayedModel.activePlayerIndex
+                , \_ -> Expect.equal eagerModel.turnIndex replayedModel.turnIndex
+                , \_ -> if List.all isCleanStack eagerModel.board then Expect.pass else Expect.fail ("final eager board not victory; incomplete stacks present: " ++ Debug.toString (firstIncompleteStack eagerModel.board))
+                , \_ -> if List.all isCleanStack replayedModel.board then Expect.pass else Expect.fail ("final replayed board not victory; incomplete stacks present: " ++ Debug.toString (firstIncompleteStack replayedModel.board))
+                ]
+                ()
+
+
+walkthroughMined022AHp1ADp1 : Test
+walkthroughMined022AHp1ADp1 =
+    test "walkthrough_mined_022_AHp1_ADp1" <|
+        \_ ->
+            let
+                board =
+                    [ { boardCards = [ { card = { value = King, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 26, left = 26 } }
+                        , { boardCards = [ { card = { value = Ten, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 107, left = 52 } }
+                        , { boardCards = [ { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 182, left = 52 } }
+                        , { boardCards = [ { card = { value = Seven, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 257, left = 52 } }
+                        , { boardCards = [ { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 332, left = 52 } }
+                        , { boardCards = [ { card = { value = Two, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 407, left = 52 } }
+                        , { boardCards = [ { card = { value = Nine, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ten, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 482, left = 52 } }
+                        , { boardCards = [ { card = { value = Ace, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 182, left = 187 } }
+                        ]
+
+                base =
+                    State.baseModel
+
+                initialModel =
+                    { base | board = board, sessionId = Just 0 }
+
+                ( eagerModel, actions ) =
+                    buildEagerAndActions initialModel
+                        [ SpecSplit [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] 0
+                        , SpecSplit [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] 0
+                        , SpecMergeStack [ { value = Ace, suit = Club, originDeck = DeckOne } ] [ { value = Ace, suit = Heart, originDeck = DeckTwo }, { value = Ace, suit = Diamond, originDeck = DeckTwo } ] BoardActions.Right
+                        , SpecMergeStack [ { value = Ace, suit = Diamond, originDeck = DeckOne } ] [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ] BoardActions.Right
+                        , SpecMergeStack [ { value = Ace, suit = Heart, originDeck = DeckOne } ] [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ] BoardActions.Left ]
+
+                replayedModel =
+                    runReplay initialModel actions
+            in
+            Expect.all
+                [ \_ -> Expect.equal eagerModel.board replayedModel.board
+                , \_ -> Expect.equal eagerModel.hands replayedModel.hands
+                , \_ -> Expect.equal eagerModel.scores replayedModel.scores
+                , \_ -> Expect.equal eagerModel.activePlayerIndex replayedModel.activePlayerIndex
+                , \_ -> Expect.equal eagerModel.turnIndex replayedModel.turnIndex
+                , \_ -> if List.all isCleanStack eagerModel.board then Expect.pass else Expect.fail ("final eager board not victory; incomplete stacks present: " ++ Debug.toString (firstIncompleteStack eagerModel.board))
+                , \_ -> if List.all isCleanStack replayedModel.board then Expect.pass else Expect.fail ("final replayed board not victory; incomplete stacks present: " ++ Debug.toString (firstIncompleteStack replayedModel.board))
+                ]
+                ()
+
+
+walkthroughMined0233C : Test
+walkthroughMined0233C =
+    test "walkthrough_mined_023_3C" <|
+        \_ ->
+            let
+                board =
+                    [ { boardCards = [ { card = { value = King, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 26, left = 26 } }
+                        , { boardCards = [ { card = { value = Nine, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ten, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 107, left = 52 } }
+                        , { boardCards = [ { card = { value = Ace, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 182, left = 52 } }
+                        , { boardCards = [ { card = { value = Ten, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 257, left = 52 } }
+                        , { boardCards = [ { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 332, left = 52 } }
+                        , { boardCards = [ { card = { value = Seven, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 407, left = 52 } }
+                        , { boardCards = [ { card = { value = Four, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 482, left = 52 } }
+                        , { boardCards = [ { card = { value = Two, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Spade, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 92, left = 187 } }
+                        , { boardCards = [ { card = { value = Three, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 167, left = 187 } }
+                        ]
+
+                base =
+                    State.baseModel
+
+                initialModel =
+                    { base | board = board, sessionId = Just 0 }
+
+                ( eagerModel, actions ) =
+                    buildEagerAndActions initialModel
+                        [ SpecSplit [ { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ] 0
+                        , SpecMergeStack [ { value = Four, suit = Club, originDeck = DeckOne } ] [ { value = Three, suit = Club, originDeck = DeckOne } ] BoardActions.Right
+                        , SpecSplit [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Spade, originDeck = DeckTwo } ] 0
+                        , SpecMergeStack [ { value = Two, suit = Club, originDeck = DeckOne } ] [ { value = Three, suit = Club, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne } ] BoardActions.Left
+                        , SpecMergeStack [ { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Spade, originDeck = DeckTwo } ] [ { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ] BoardActions.Left ]
+
+                replayedModel =
+                    runReplay initialModel actions
+            in
+            Expect.all
+                [ \_ -> Expect.equal eagerModel.board replayedModel.board
+                , \_ -> Expect.equal eagerModel.hands replayedModel.hands
+                , \_ -> Expect.equal eagerModel.scores replayedModel.scores
+                , \_ -> Expect.equal eagerModel.activePlayerIndex replayedModel.activePlayerIndex
+                , \_ -> Expect.equal eagerModel.turnIndex replayedModel.turnIndex
+                , \_ -> if List.all isCleanStack eagerModel.board then Expect.pass else Expect.fail ("final eager board not victory; incomplete stacks present: " ++ Debug.toString (firstIncompleteStack eagerModel.board))
+                , \_ -> if List.all isCleanStack replayedModel.board then Expect.pass else Expect.fail ("final replayed board not victory; incomplete stacks present: " ++ Debug.toString (firstIncompleteStack replayedModel.board))
+                ]
+                ()
+
+
+walkthroughMined0242D : Test
+walkthroughMined0242D =
+    test "walkthrough_mined_024_2D" <|
+        \_ ->
+            let
+                board =
+                    [ { boardCards = [ { card = { value = King, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 26, left = 26 } }
+                        , { boardCards = [ { card = { value = Ten, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 107, left = 52 } }
+                        , { boardCards = [ { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 182, left = 52 } }
+                        , { boardCards = [ { card = { value = Seven, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 257, left = 52 } }
+                        , { boardCards = [ { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 332, left = 52 } }
+                        , { boardCards = [ { card = { value = Two, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 407, left = 52 } }
+                        , { boardCards = [ { card = { value = Eight, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Nine, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ten, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 482, left = 52 } }
+                        , { boardCards = [ { card = { value = Nine, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ten, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 182, left = 187 } }
+                        , { boardCards = [ { card = { value = Two, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 257, left = 187 } }
+                        ]
+
+                base =
+                    State.baseModel
+
+                initialModel =
+                    { base | board = board, sessionId = Just 0 }
+
+                ( eagerModel, actions ) =
+                    buildEagerAndActions initialModel
+                        [ SpecSplit [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ] 3
+                        , SpecMergeStack [ { value = Three, suit = Spade, originDeck = DeckOne } ] [ { value = Two, suit = Diamond, originDeck = DeckOne } ] BoardActions.Right
+                        , SpecSplit [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] 0
+                        , SpecSplit [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] 0
+                        , SpecMergeStack [ { value = Ace, suit = Club, originDeck = DeckOne } ] [ { value = Two, suit = Diamond, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ] BoardActions.Left
+                        , SpecMergeStack [ { value = Ace, suit = Diamond, originDeck = DeckOne } ] [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ] BoardActions.Right
+                        , SpecMergeStack [ { value = Ace, suit = Heart, originDeck = DeckOne } ] [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ] BoardActions.Left ]
+
+                replayedModel =
+                    runReplay initialModel actions
+            in
+            Expect.all
+                [ \_ -> Expect.equal eagerModel.board replayedModel.board
+                , \_ -> Expect.equal eagerModel.hands replayedModel.hands
+                , \_ -> Expect.equal eagerModel.scores replayedModel.scores
+                , \_ -> Expect.equal eagerModel.activePlayerIndex replayedModel.activePlayerIndex
+                , \_ -> Expect.equal eagerModel.turnIndex replayedModel.turnIndex
+                , \_ -> if List.all isCleanStack eagerModel.board then Expect.pass else Expect.fail ("final eager board not victory; incomplete stacks present: " ++ Debug.toString (firstIncompleteStack eagerModel.board))
+                , \_ -> if List.all isCleanStack replayedModel.board then Expect.pass else Expect.fail ("final replayed board not victory; incomplete stacks present: " ++ Debug.toString (firstIncompleteStack replayedModel.board))
+                ]
+                ()
+
+
+walkthroughMined025TSp1 : Test
+walkthroughMined025TSp1 =
+    test "walkthrough_mined_025_TSp1" <|
+        \_ ->
+            let
+                board =
+                    [ { boardCards = [ { card = { value = Seven, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 26, left = 26 } }
+                        , { boardCards = [ { card = { value = Two, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 107, left = 52 } }
+                        , { boardCards = [ { card = { value = Eight, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Nine, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ten, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 182, left = 52 } }
+                        , { boardCards = [ { card = { value = Nine, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ten, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 257, left = 52 } }
+                        , { boardCards = [ { card = { value = King, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 332, left = 52 } }
+                        , { boardCards = [ { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 407, left = 52 } }
+                        , { boardCards = [ { card = { value = Ten, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 482, left = 52 } }
+                        , { boardCards = [ { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 182, left = 187 } }
+                        , { boardCards = [ { card = { value = Four, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Spade, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Four, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 257, left = 187 } }
+                        , { boardCards = [ { card = { value = Ten, suit = Spade, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 332, left = 187 } }
+                        ]
+
+                base =
+                    State.baseModel
+
+                initialModel =
+                    { base | board = board, sessionId = Just 0 }
+
+                ( eagerModel, actions ) =
+                    buildEagerAndActions initialModel
+                        [ SpecSplit [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne } ] 0
+                        , SpecMergeStack [ { value = Ten, suit = Diamond, originDeck = DeckOne } ] [ { value = Ten, suit = Spade, originDeck = DeckTwo } ] BoardActions.Right
+                        , SpecSplit [ { value = Eight, suit = Heart, originDeck = DeckOne }, { value = Nine, suit = Spade, originDeck = DeckOne }, { value = Ten, suit = Heart, originDeck = DeckTwo } ] 2
+                        , SpecMergeStack [ { value = Ten, suit = Heart, originDeck = DeckTwo } ] [ { value = Ten, suit = Spade, originDeck = DeckTwo }, { value = Ten, suit = Diamond, originDeck = DeckOne } ] BoardActions.Right
+                        , SpecSplit [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ] 0
+                        , SpecSplit [ { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ] 0
+                        , SpecMergeStack [ { value = Seven, suit = Club, originDeck = DeckOne } ] [ { value = Eight, suit = Heart, originDeck = DeckOne }, { value = Nine, suit = Spade, originDeck = DeckOne } ] BoardActions.Left
+                        , SpecMergeStack [ { value = Seven, suit = Diamond, originDeck = DeckOne } ] [ { value = Seven, suit = Spade, originDeck = DeckOne } ] BoardActions.Right
+                        , SpecSplit [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ] 5
+                        , SpecMergeStack [ { value = Seven, suit = Heart, originDeck = DeckOne } ] [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne } ] BoardActions.Right ]
+
+                replayedModel =
+                    runReplay initialModel actions
+            in
+            Expect.all
+                [ \_ -> Expect.equal eagerModel.board replayedModel.board
+                , \_ -> Expect.equal eagerModel.hands replayedModel.hands
+                , \_ -> Expect.equal eagerModel.scores replayedModel.scores
+                , \_ -> Expect.equal eagerModel.activePlayerIndex replayedModel.activePlayerIndex
+                , \_ -> Expect.equal eagerModel.turnIndex replayedModel.turnIndex
+                , \_ -> if List.all isCleanStack eagerModel.board then Expect.pass else Expect.fail ("final eager board not victory; incomplete stacks present: " ++ Debug.toString (firstIncompleteStack eagerModel.board))
+                , \_ -> if List.all isCleanStack replayedModel.board then Expect.pass else Expect.fail ("final replayed board not victory; incomplete stacks present: " ++ Debug.toString (firstIncompleteStack replayedModel.board))
+                ]
+                ()
+
+
 suite : Test
 suite =
     describe "DSL conformance"
@@ -4656,4 +6020,29 @@ suite =
         , turnCompleteCleanBoard
         , turnCompleteRejectsIncomplete
         , validExtendRunWith8H
+        , walkthroughMined0014S4Cp1
+        , walkthroughMined002QDp1
+        , walkthroughMined0036D
+        , walkthroughMined0045C6Dp1
+        , walkthroughMined0052Hp1
+        , walkthroughMined0066Cp1
+        , walkthroughMined0075Cp16C
+        , walkthroughMined008QHp1
+        , walkthroughMined009JC
+        , walkthroughMined0103Hp1
+        , walkthroughMined011JC
+        , walkthroughMined012QCKC
+        , walkthroughMined013AHp1
+        , walkthroughMined0145C
+        , walkthroughMined0153Cp1
+        , walkthroughMined016TCp1
+        , walkthroughMined0175Dp16Dp1
+        , walkthroughMined0182Sp13Hp1
+        , walkthroughMined0192D
+        , walkthroughMined0202Dp13Cp1
+        , walkthroughMined0218Dp1
+        , walkthroughMined022AHp1ADp1
+        , walkthroughMined0233C
+        , walkthroughMined0242D
+        , walkthroughMined025TSp1
         ]
