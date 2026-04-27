@@ -651,6 +651,23 @@ and the pre-DSL corpus tooling (`corpus_report.py`,
 the role they played is now covered by the DSL conformance
 pipeline plus replay walkthroughs.
 
+## Algorithm benchmarks
+
+Algorithm-side benchmark numbers (BFS solver depths + wall
+times across the 21-puzzle corpus) live as plain-text gold
+files in `games/lynrummy/python/corpus/`. The current gold
+is `baseline_post_focus.txt`; older milestones
+(`baseline_post_engulf.txt`, `baseline_pre_engulf.txt`,
+`baseline_bfs.txt`, `baseline.txt`) are preserved as
+historical reference. The corpus inputs themselves live in
+`games/lynrummy/conformance/scenarios/planner_corpus.dsl`
+(versioned, in repo) — not in the DB, per the policy that
+no valuable asset relies on the DB.
+
+For the validation methodology around regenerating and
+diffing baselines, see `python/README.md` § Validation
+methodology.
+
 ## Parking status
 
 Parked `STILL_EVOLVING`, last swept 2026-04-27

@@ -1,0 +1,46 @@
+corpus_v2 baseline: bfs_solver max_trouble_outer=10, max_states=200000 (POST-FOCUS-RULE 2026-04-27)
+ sid  trouble depth   wall
+ 108      QD'     2  0.00s
+ 110       TC     5  0.01s
+ 112       3C     2  0.02s
+ 114       6D     4  0.04s
+ 116       JS     5  0.04s
+ 118      QC'     4  0.02s
+ 120      JC'     6  1.15s
+ 122      TH'     4  0.01s
+ 124      6S'     1  0.00s
+ 126      5C'     7  0.02s
+ 128       5S     2  0.00s
+ 130       JH     5  0.14s
+ 132       QC     2  0.00s
+ 134      6H'     1  0.00s
+ 136       5D     1  0.00s
+ 138      TC'     2  0.00s
+ 140       JH     3  0.00s
+ 142      8H'     1  0.00s
+ 144      5C'     2  0.00s
+ 146      AC'     5  0.01s
+ 148       2D     1  0.00s
+
+total wall: 1.47s
+depth distribution:
+  1: 5
+  2: 6
+  3: 1
+  4: 3
+  5: 4
+  6: 1
+  7: 1
+
+Source: planner_corpus.dsl (21 scenarios corpus_sid_108..148), via
+conformance_fixtures.json. Run from games/lynrummy/python/.
+
+Diff against baseline_post_engulf.txt:
+  3 plans STRICTLY shorter (consistent with the documented
+  post-focus-rule milestone in README.md):
+    sid 122: 6 → 4
+    sid 130: 8 → 5
+    sid 146: 7 → 5
+  18 unchanged.
+  Total wall: 3.17s → 1.47s (~2.2× speedup, consistent with
+  OPTIMIZE_PYTHON pruning landmarks 2026-04-25/26).

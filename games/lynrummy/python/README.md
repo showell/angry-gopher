@@ -222,17 +222,17 @@ After any change touching the BFS planner modules
    done
    ```
 
-2. **Corpus regression** — depths must match the baseline:
-   ```
-   python3 -c "..."   # standard corpus run; see
-                      # corpus/baseline_post_engulf.txt for
-                      # the canonical depth distribution
-                      # [2,5,2,4,5,4,6,6,1,7,2,8,2,1,1,2,3,1,2,7,1]
-   ```
-   (The earlier `corpus_report.py` driver was purged
-   2026-04-27 along with the rest of the pre-DSL corpus
-   tooling; the DSL conformance suite is the regression
-   gate now.)
+2. **Corpus regression** — depths must match the gold
+   baseline at `corpus/baseline_post_focus.txt` (current
+   gold; rerun 2026-04-27). Canonical depth distribution:
+   `[2,5,2,4,5,4,6,4,1,7,2,5,2,1,1,2,3,1,2,5,1]`. The
+   corpus is the 21 scenarios named `corpus_sid_*` in
+   `conformance_fixtures.json` (compiled from
+   `games/lynrummy/conformance/scenarios/planner_corpus.dsl`).
+   Earlier baselines (`baseline_post_engulf.txt`,
+   `baseline_pre_engulf.txt`, `baseline_bfs.txt`,
+   `baseline.txt`) are kept as historical milestones, not
+   the regression target.
 
 3. **Snapshot perf check** — re-time captured snapshots
    against the new code:
