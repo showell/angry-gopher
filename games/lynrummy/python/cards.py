@@ -12,6 +12,8 @@ planner is retiring; these primitives needed their own home
 so the BFS doesn't reach into a legacy module.
 """
 
+import functools
+
 # --- Card + board model ---
 
 RANKS = "A23456789TJQK"
@@ -57,7 +59,24 @@ def classify(stack):
     """Single-pass classifier for length-3+ stacks. Early
     exits on the first impossibility. Inlines successor and the
     red-set membership check to avoid call overhead — this
-    is the hottest function in the search."""
+    is the hottest function in the search.
+
+    Thin wrapper that hashes the (mutable list-of-tuples) stack
+    into an immutable tuple key and delegates to the cached
+    implementation. Pure function: cached results are equivalent
+    to live results."""
+    return _classify_cached(tuple(stack))
+
+
+# maxsize=2**14 (16384) is a principled bound: large enough to
+# hold all unique stacks seen during a single corpus run
+# (~thousands of distinct stacks across 21 puzzles) without
+# evicting, while still bounding memory for long-running
+# processes (agent_game.py self-play). Profile evidence:
+# ~192k classify calls per dominator puzzle, but the unique
+# stack-content cardinality is tiny by comparison.
+@functools.lru_cache(maxsize=2**14)
+def _classify_cached(stack):
     n = len(stack)
     if n < 3:
         return "other"
