@@ -1,7 +1,21 @@
 module Game.PlaceStackTest exposing (suite)
 
-{-| Tests for `Game.PlaceStack`. Ported from
-`angry-cat/src/lyn_rummy/game/place_stack_test.ts`.
+{-| Tests for `Game.PlaceStack`. Two layers:
+
+1. Property tests — placer never lands on top of an existing
+   stack, regardless of board shape.
+2. Specific-loc tests — exact (top, left) values that
+   python/geometry.py::find_open_loc produces for the same
+   inputs. These are the parity oracle: any drift from
+   Python flags here.
+
+The Python oracle values are independently confirmed by
+running:
+
+    python3 -c "import sys; sys.path.insert(0, 'games/lynrummy/python');
+                import geometry as g; print(g.find_open_loc([], 3))"
+
+(and substituting other inputs).
 -}
 
 import Expect
@@ -12,7 +26,7 @@ import Game.CardStack
         , BoardLocation
         , CardStack
         )
-import Game.PlaceStack as PS exposing (BoardBounds)
+import Game.PlaceStack as PS
 import Test exposing (Test, describe, test)
 
 
@@ -43,24 +57,6 @@ stackAt top left cardCount =
             labels
     , loc = { top = top, left = left }
     }
-
-
-defaultBounds : BoardBounds
-defaultBounds =
-    { maxWidth = 1200
-    , maxHeight = 540
-    , margin = 4
-    , step = 10
-    }
-
-
-boundsWith : (BoardBounds -> BoardBounds) -> BoardBounds
-boundsWith f =
-    f defaultBounds
-
-
-
--- OVERLAP CHECK (mirrors the TS assertion style)
 
 
 overlapsAny : BoardLocation -> Int -> List CardStack -> Bool
@@ -97,12 +93,9 @@ suite : Test
 suite =
     describe "Game.PlaceStack"
         [ stackWidthTests
-        , emptyBoardTests
-        , oneStackNoOverlapTests
-        , rowOfStacksTests
-        , scatteredBoardTests
-        , noFitFallbackTests
-        , marginTests
+        , emptyBoardOracleTest
+        , preferredOriginOracleTest
+        , noOverlapPropertyTests
         ]
 
 
@@ -117,43 +110,26 @@ stackWidthTests =
         ]
 
 
-emptyBoardTests : Test
-emptyBoardTests =
-    describe "empty board"
-        [ test "returns origin (0, 0)" <|
-            \_ ->
-                let
-                    loc =
-                        PS.findOpenLoc [] 3 defaultBounds
-                in
-                Expect.all
-                    [ \_ -> Expect.equal 0 loc.top
-                    , \_ -> Expect.equal 0 loc.left
-                    ]
-                    ()
-        ]
+emptyBoardOracleTest : Test
+emptyBoardOracleTest =
+    test "empty board → BOARD_START + ANTI_ALIGN = (26, 26)" <|
+        \_ ->
+            PS.findOpenLoc [] 3
+                |> Expect.equal { top = 26, left = 26 }
 
 
-oneStackNoOverlapTests : Test
-oneStackNoOverlapTests =
-    describe "one stack at top-left"
-        [ test "placer returns a non-overlapping loc" <|
-            \_ ->
-                let
-                    existing =
-                        [ stackAt 0 0 5 ]
-
-                    loc =
-                        PS.findOpenLoc existing 3 defaultBounds
-                in
-                Expect.equal False (overlapsAny loc 3 existing)
-        ]
+preferredOriginOracleTest : Test
+preferredOriginOracleTest =
+    test "one-stack board → preferred origin (52, 92) per Python oracle" <|
+        \_ ->
+            PS.findOpenLoc [ stackAt 0 0 5 ] 3
+                |> Expect.equal { top = 92, left = 52 }
 
 
-rowOfStacksTests : Test
-rowOfStacksTests =
-    describe "row of stacks at top"
-        [ test "placer returns a non-overlapping loc" <|
+noOverlapPropertyTests : Test
+noOverlapPropertyTests =
+    describe "placer never overlaps existing stacks"
+        [ test "row of stacks at top" <|
             \_ ->
                 let
                     existing =
@@ -163,16 +139,10 @@ rowOfStacksTests =
                         ]
 
                     loc =
-                        PS.findOpenLoc existing 3 defaultBounds
+                        PS.findOpenLoc existing 3
                 in
                 Expect.equal False (overlapsAny loc 3 existing)
-        ]
-
-
-scatteredBoardTests : Test
-scatteredBoardTests =
-    describe "tightly packed board"
-        [ test "finds somewhere that fits" <|
+        , test "scattered packed board" <|
             \_ ->
                 let
                     existing =
@@ -185,62 +155,7 @@ scatteredBoardTests =
                         ]
 
                     loc =
-                        PS.findOpenLoc existing 3 defaultBounds
+                        PS.findOpenLoc existing 3
                 in
                 Expect.equal False (overlapsAny loc 3 existing)
-        ]
-
-
-noFitFallbackTests : Test
-noFitFallbackTests =
-    describe "no-fit fallback"
-        [ test "5-card stack won't fit in 50x50; fallback = {top=10, left=0}" <|
-            \_ ->
-                let
-                    tight =
-                        { maxWidth = 50, maxHeight = 50, margin = 0, step = 10 }
-
-                    loc =
-                        PS.findOpenLoc [] 5 tight
-                in
-                Expect.all
-                    [ \_ -> Expect.equal 0 loc.left
-                    , \_ -> Expect.equal 10 loc.top
-                    ]
-                    ()
-        ]
-
-
-marginTests : Test
-marginTests =
-    describe "margin separates stacks"
-        [ test "big margin does not return closer than no margin" <|
-            \_ ->
-                let
-                    existing =
-                        [ stackAt 0 0 3 ]
-
-                    noMargin =
-                        PS.findOpenLoc existing 3 (boundsWith (\b -> { b | margin = 0 }))
-
-                    bigMargin =
-                        PS.findOpenLoc existing 3 (boundsWith (\b -> { b | margin = 20 }))
-
-                    noDist =
-                        abs noMargin.left + abs noMargin.top
-
-                    bigDist =
-                        abs bigMargin.left + abs bigMargin.top
-                in
-                if bigDist >= noDist then
-                    Expect.pass
-
-                else
-                    Expect.fail
-                        ("big margin ("
-                            ++ String.fromInt bigDist
-                            ++ ") should not be closer than no margin ("
-                            ++ String.fromInt noDist
-                            ++ ")"
-                        )
         ]

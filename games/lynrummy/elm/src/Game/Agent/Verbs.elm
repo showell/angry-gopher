@@ -29,6 +29,7 @@ import Game.Agent.Move as Move
 import Game.BoardActions as BoardActions
 import Game.Card exposing (Card)
 import Game.CardStack as CardStack exposing (CardStack, stacksEqual)
+import Game.PlaceStack as PlaceStack
 import Game.WireAction exposing (WireAction(..))
 
 
@@ -290,58 +291,47 @@ pushPrims board d =
 
 splicePrims : List CardStack -> SpliceDesc -> List WireAction
 splicePrims board d =
-    case findByCards d.source board of
-        Nothing ->
-            []
+    let
+        ( splitPrims, postSplit ) =
+            planSplit board d.source d.k
 
-        Just src ->
-            let
-                splitPrim =
-                    Split
-                        { stack = src
-                        , cardIndex = splitCardIndex d.k (List.length d.source)
-                        }
+        leftChunk =
+            List.take d.k d.source
 
-                postSplit =
-                    applyOnBoard splitPrim board
+        rightChunk =
+            List.drop d.k d.source
 
-                leftChunk =
-                    List.take d.k d.source
+        mergeStep =
+            case d.side of
+                Move.LeftSide ->
+                    -- Loose joins left chunk's right end.
+                    case ( findByCards [ d.loose ] postSplit, findByCards leftChunk postSplit ) of
+                        ( Just looseSt, Just leftSt ) ->
+                            [ MergeStack
+                                { source = looseSt
+                                , target = leftSt
+                                , side = BoardActions.Right
+                                }
+                            ]
 
-                rightChunk =
-                    List.drop d.k d.source
+                        _ ->
+                            []
 
-                mergeStep =
-                    case d.side of
-                        Move.LeftSide ->
-                            -- Loose joins left chunk's right end.
-                            case ( findByCards [ d.loose ] postSplit, findByCards leftChunk postSplit ) of
-                                ( Just looseSt, Just leftSt ) ->
-                                    [ MergeStack
-                                        { source = looseSt
-                                        , target = leftSt
-                                        , side = BoardActions.Right
-                                        }
-                                    ]
+                Move.RightSide ->
+                    -- Loose joins right chunk's left end.
+                    case ( findByCards [ d.loose ] postSplit, findByCards rightChunk postSplit ) of
+                        ( Just looseSt, Just rightSt ) ->
+                            [ MergeStack
+                                { source = looseSt
+                                , target = rightSt
+                                , side = BoardActions.Left
+                                }
+                            ]
 
-                                _ ->
-                                    []
-
-                        Move.RightSide ->
-                            -- Loose joins right chunk's left end.
-                            case ( findByCards [ d.loose ] postSplit, findByCards rightChunk postSplit ) of
-                                ( Just looseSt, Just rightSt ) ->
-                                    [ MergeStack
-                                        { source = looseSt
-                                        , target = rightSt
-                                        , side = BoardActions.Left
-                                        }
-                                    ]
-
-                                _ ->
-                                    []
-            in
-            splitPrim :: mergeStep
+                        _ ->
+                            []
+    in
+    splitPrims ++ mergeStep
 
 
 shiftPrims : List CardStack -> ShiftDesc -> List WireAction
@@ -492,49 +482,99 @@ isolateCard board source ci _ =
         Just srcStack ->
             if ci == 0 && n > 1 then
                 let
-                    prim =
-                        Split { stack = srcStack, cardIndex = 0 }
+                    ( pre, board1 ) =
+                        planSplit board source 1
                 in
-                ( [ prim ], applyOnBoard prim board )
+                ( pre, board1 )
 
             else if ci == n - 1 && n > 1 then
                 let
-                    prim =
-                        Split { stack = srcStack, cardIndex = n - 1 }
+                    ( pre, board1 ) =
+                        planSplit board source (n - 1)
                 in
-                ( [ prim ], applyOnBoard prim board )
+                ( pre, board1 )
 
             else
                 let
-                    -- First split: left = source[:ci], right = source[ci:].
-                    firstPrim =
-                        Split
-                            { stack = srcStack
-                            , cardIndex = splitCardIndex ci n
-                            }
-
-                    afterFirst =
-                        applyOnBoard firstPrim board
+                    -- First split: source @ k=ci → left=source[:ci], right=source[ci:].
+                    ( firstPrims, afterFirst ) =
+                        planSplit board source ci
 
                     rightChunk =
                         List.drop ci source
-                in
-                case findByCards rightChunk afterFirst of
-                    Just rightStack ->
-                        let
-                            secondPrim =
-                                Split
-                                    { stack = rightStack
-                                    , cardIndex = splitCardIndex 1 (List.length rightChunk)
-                                    }
 
-                            afterSecond =
-                                applyOnBoard secondPrim afterFirst
+                    ( secondPrims, afterSecond ) =
+                        planSplit afterFirst rightChunk 1
+                in
+                ( firstPrims ++ secondPrims, afterSecond )
+
+
+{-| Mirrors `python/verbs.py::_plan_split_after`. For end
+splits (k == 1 or k == n-1) emits one Split. For INTERIOR
+splits, pre-moves the donor into a 4-side-clear region first
+via `Game.PlaceStack.findOpenLoc` — bump distances after a
+mid-stack split are unpredictable and can spawn pieces into
+neighbors. Returns (prims, postBoard).
+-}
+planSplit :
+    List CardStack
+    -> List Card
+    -> Int
+    -> ( List WireAction, List CardStack )
+planSplit board source k =
+    let
+        n =
+            List.length source
+
+        interior =
+            k /= 1 && k /= n - 1
+
+        ( prePrims, donorBoard, donorStack ) =
+            if interior then
+                case findByCards source board of
+                    Just stack ->
+                        let
+                            others =
+                                List.filter (not << stacksEqual stack) board
+
+                            newLoc =
+                                PlaceStack.findOpenLoc others n
                         in
-                        ( [ firstPrim, secondPrim ], afterSecond )
+                        if newLoc == stack.loc then
+                            ( [], board, Just stack )
+
+                        else
+                            let
+                                movePrim =
+                                    MoveStack { stack = stack, newLoc = newLoc }
+
+                                afterMove =
+                                    applyOnBoard movePrim board
+                            in
+                            ( [ movePrim ], afterMove, findByCards source afterMove )
 
                     Nothing ->
-                        ( [ firstPrim ], afterFirst )
+                        ( [], board, Nothing )
+
+            else
+                ( [], board, findByCards source board )
+
+        ci =
+            splitCardIndex k n
+    in
+    case donorStack of
+        Just real ->
+            let
+                splitPrim =
+                    Split { stack = real, cardIndex = ci }
+
+                afterSplit =
+                    applyOnBoard splitPrim donorBoard
+            in
+            ( prePrims ++ [ splitPrim ], afterSplit )
+
+        Nothing ->
+            ( prePrims, donorBoard )
 
 
 

@@ -152,7 +152,7 @@ suite =
                 in
                 actions prims
                     |> Expect.equal [ "merge_stack" ]
-        , test "splice: split + merge" <|
+        , test "splice: pre-flight move + split + merge" <|
             \_ ->
                 let
                     src =
@@ -193,7 +193,7 @@ suite =
                         Verbs.moveToPrimitives boardWithLoose move
                 in
                 actions prims
-                    |> Expect.equal [ "split", "merge_stack" ]
+                    |> Expect.equal [ "move_stack", "split", "merge_stack" ]
         , test "shift (8C-pops-JC): donor split + source split + 2 merges" <|
             \_ ->
                 let

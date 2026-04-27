@@ -1,6 +1,5 @@
 module Game.Agent.GeometryPlan exposing
-    ( agentBounds
-    , defaultBounds
+    ( defaultBounds
     , planActions
     )
 
@@ -41,14 +40,6 @@ field).
 defaultBounds : BoardBounds
 defaultBounds =
     { maxWidth = 800, maxHeight = 600, margin = 7 }
-
-
-{-| Same bounds in the shape `Game.PlaceStack.findOpenLoc`
-expects (carries the placement-step granularity).
--}
-agentBounds : PlaceStack.BoardBounds
-agentBounds =
-    { maxWidth = 800, maxHeight = 600, margin = 7, step = 10 }
 
 
 {-| Walk a sequence of WireActions, injecting pre-flight
@@ -140,7 +131,7 @@ rePlanMergeStack board p =
                 board
 
         finalLoc =
-            PlaceStack.findOpenLoc others finalSize agentBounds
+            PlaceStack.findOpenLoc others finalSize
 
         targetLoc =
             case p.side of

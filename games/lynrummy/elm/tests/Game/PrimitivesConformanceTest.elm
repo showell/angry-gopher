@@ -6,6 +6,7 @@
 module Game.PrimitivesConformanceTest exposing (suite)
 
 import Expect
+import Game.Agent.GeometryPlan as GeometryPlan
 import Game.Agent.Move as Move
     exposing
         ( ExtractVerb(..)
@@ -145,7 +146,9 @@ fixtures =
             , side = LeftSide
             }
       , expected =
-            [ "merge_stack [AH] -> [2H 3H 4H] /left" ]
+            [ "move_stack [2H 3H 4H] -> (407,220)"
+            , "merge_stack [AH] -> [2H 3H 4H] /left"
+            ]
       }
     , { name = "mined_002_QDp1_step_01"
       , board =
@@ -180,6 +183,7 @@ fixtures =
       , expected =
             [ "split [AD 2C 3D 4C]@0"
             , "split [JD QD KD]@0"
+            , "move_stack [QD KD] -> (467,187)"
             , "merge_stack [AD] -> [QD KD] /right"
             , "merge_stack [JD] -> [QD'] /left"
             ]
@@ -325,7 +329,9 @@ fixtures =
             , side = LeftSide
             }
       , expected =
-            [ "merge_stack [6D 7C] -> [8D' 9C TD] /left" ]
+            [ "move_stack [8D' 9C TD] -> (482,118)"
+            , "merge_stack [6D 7C] -> [8D' 9C TD] /left"
+            ]
       }
     , { name = "mined_003_6D_step_03"
       , board =
@@ -522,6 +528,7 @@ fixtures =
       , expected =
             [ "split [AC AD AH]@0"
             , "split [AD AH]@0"
+            , "move_stack [2H' 3S] -> (332,220)"
             , "merge_stack [AC] -> [2H' 3S] /left"
             ]
       }
@@ -820,6 +827,7 @@ fixtures =
             }
       , expected =
             [ "split [TD JD QD KD]@0"
+            , "move_stack [JS' QH'] -> (242,220)"
             , "merge_stack [TD] -> [JS' QH'] /left"
             ]
       }
@@ -844,7 +852,9 @@ fixtures =
             , side = LeftSide
             }
       , expected =
-            [ "merge_stack [QS' KS] -> [AS 2S 3S] /left" ]
+            [ "move_stack [AS 2S 3S] -> (107,253)"
+            , "merge_stack [QS' KS] -> [AS 2S 3S] /left"
+            ]
       }
     , { name = "mined_009_JC_step_01"
       , board =
@@ -929,7 +939,9 @@ fixtures =
             , side = RightSide
             }
       , expected =
-            [ "merge_stack [QS'] -> [9H' TC' JH] /right" ]
+            [ "move_stack [9H' TC' JH] -> (407,187)"
+            , "merge_stack [QS'] -> [9H' TC' JH] /right"
+            ]
       }
     , { name = "mined_010_3Hp1_step_01"
       , board =
@@ -991,6 +1003,7 @@ fixtures =
       , expected =
             [ "split [AC AD AH]@0"
             , "split [AD AH]@0"
+            , "move_stack [2C 3H'] -> (332,220)"
             , "merge_stack [AD] -> [2C 3H'] /left"
             ]
       }
@@ -1137,6 +1150,7 @@ fixtures =
       , expected =
             [ "split [9H' 9C 9D]@0"
             , "split [9C 9D]@0"
+            , "move_stack [TC' JC] -> (392,220)"
             , "merge_stack [9C] -> [TC' JC] /left"
             ]
       }
@@ -1371,7 +1385,9 @@ fixtures =
             , rightResult = [ { value = Three, suit = Club, originDeck = DeckTwo }, { value = Four, suit = Diamond, originDeck = DeckTwo }, { value = Five, suit = Spade, originDeck = DeckOne }, { value = Six, suit = Diamond, originDeck = DeckTwo } ]
             }
       , expected =
-            [ "split [AS 2D 3C' 4D' 5S 6D']@1"
+            [ "move_stack [AS 2D 3C' 4D' 5S 6D'] -> (407,52)"
+            , "split [AS 2D 3C' 4D' 5S 6D']@1"
+            , "move_stack [AS 2D] -> (167,247)"
             , "merge_stack [3S] -> [AS 2D] /right"
             ]
       }
@@ -1554,6 +1570,7 @@ fixtures =
       , expected =
             [ "split [AC AD AH]@0"
             , "split [AD AH]@0"
+            , "move_stack [2C 3C'] -> (407,220)"
             , "merge_stack [AC] -> [2C 3C'] /left"
             ]
       }
@@ -1834,6 +1851,7 @@ fixtures =
       , expected =
             [ "split [AC AD AH]@0"
             , "split [AD AH]@0"
+            , "move_stack [2S' 3H'] -> (407,220)"
             , "merge_stack [AD] -> [2S' 3H'] /left"
             ]
       }
@@ -1896,6 +1914,7 @@ fixtures =
             }
       , expected =
             [ "split [3C' 4H' 5S']@0"
+            , "move_stack [AC 2C] -> (482,187)"
             , "merge_stack [3C'] -> [AC 2C] /right"
             ]
       }
@@ -2008,7 +2027,9 @@ fixtures =
             , side = RightSide
             }
       , expected =
-            [ "merge_stack [AD 2D] -> [JD QD KD] /right" ]
+            [ "move_stack [JD QD KD] -> (317,187)"
+            , "merge_stack [AD 2D] -> [JD QD KD] /right"
+            ]
       }
     , { name = "mined_019_2D_step_03"
       , board =
@@ -2057,7 +2078,9 @@ fixtures =
             , rightResult = [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne } ]
             }
       , expected =
-            [ "split [KS AH 2C 3D 4C]@1"
+            [ "move_stack [KS AH 2C 3D 4C] -> (242,187)"
+            , "split [KS AH 2C 3D 4C]@1"
+            , "move_stack [KS AH] -> (107,52)"
             , "merge_stack [2C'] -> [KS AH] /right"
             ]
       }
@@ -2199,7 +2222,9 @@ fixtures =
       , expected =
             [ "split [KS AS 2S 3S]@3"
             , "split [4H' 5C' 6D']@2"
+            , "move_stack [4H' 5C'] -> (482,220)"
             , "merge_stack [3S] -> [4H' 5C'] /left"
+            , "move_stack [7C 8D'] -> (182,220)"
             , "merge_stack [6D'] -> [7C 8D'] /left"
             ]
       }
@@ -2677,14 +2702,15 @@ runFixture f =
     test f.name <|
         \_ ->
             Verbs.moveToPrimitives f.board f.move
+                |> GeometryPlan.planActions f.board
                 |> List.filterMap canonicalize
                 |> Expect.equal f.expected
 
 
 {-| Mirrors `canonicalize_primitive` in
-    `tools/export_primitives_fixtures.py`. MoveStack returns
-    Nothing (filtered) — geometry pre-flights are checked
-    separately.
+    `tools/export_primitives_fixtures.py`. MoveStack carries
+    its destination loc — Elm and Python's `findOpenLoc`
+    must agree exactly for any text-equal comparison.
 -}
 canonicalize : WireAction -> Maybe String
 canonicalize action =
@@ -2728,8 +2754,16 @@ canonicalize action =
                     ++ ")"
                 )
 
-        MoveStack _ ->
-            Nothing
+        MoveStack { stack, newLoc } ->
+            Just
+                ("move_stack ["
+                    ++ stackLabels stack
+                    ++ "] -> ("
+                    ++ String.fromInt newLoc.top
+                    ++ ","
+                    ++ String.fromInt newLoc.left
+                    ++ ")"
+                )
 
         CompleteTurn ->
             Nothing

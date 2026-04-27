@@ -87,11 +87,16 @@ def cards_to_labels(cards):
 
 def canonicalize_primitive(prim, sim):
     """Translate one Python (index-based) primitive to a
-    content-addressed text form. MoveStack filtered (returns
-    None) — geometry pre-flight, asserted separately."""
+    content-addressed text form. MoveStack carries its
+    pre-move loc in the canonical form so the Elm side has
+    to produce the SAME loc — this asserts find_open_loc
+    parity end-to-end."""
     kind = prim["action"]
     if kind == "move_stack":
-        return None
+        labels = stack_labels(sim[prim["stack_index"]])
+        loc = prim["new_loc"]
+        return (f"move_stack [{' '.join(labels)}] -> "
+                f"({loc['top']},{loc['left']})")
     if kind == "split":
         labels = stack_labels(sim[prim["stack_index"]])
         return f"split [{' '.join(labels)}]@{prim['card_index']}"
@@ -234,8 +239,7 @@ def fixtures_for_puzzle(puzzle_name, state):
         sim = local
         for p in prims:
             text = canonicalize_primitive(p, sim)
-            if text is not None:
-                canonical.append(text)
+            canonical.append(text)
             sim = primitives.apply_locally(sim, p)
 
         fixtures.append({
@@ -480,6 +484,7 @@ def render_elm_test(fixtures):
 module Game.PrimitivesConformanceTest exposing (suite)
 
 import Expect
+import Game.Agent.GeometryPlan as GeometryPlan
 import Game.Agent.Move as Move
     exposing
         ( ExtractVerb(..)
@@ -528,14 +533,15 @@ runFixture f =
     test f.name <|
         \\_ ->
             Verbs.moveToPrimitives f.board f.move
+                |> GeometryPlan.planActions f.board
                 |> List.filterMap canonicalize
                 |> Expect.equal f.expected
 
 
 {{-| Mirrors `canonicalize_primitive` in
-    `tools/export_primitives_fixtures.py`. MoveStack returns
-    Nothing (filtered) — geometry pre-flights are checked
-    separately.
+    `tools/export_primitives_fixtures.py`. MoveStack carries
+    its destination loc — Elm and Python's `findOpenLoc`
+    must agree exactly for any text-equal comparison.
 -}}
 canonicalize : WireAction -> Maybe String
 canonicalize action =
@@ -579,8 +585,16 @@ canonicalize action =
                     ++ ")"
                 )
 
-        MoveStack _ ->
-            Nothing
+        MoveStack {{ stack, newLoc }} ->
+            Just
+                ("move_stack ["
+                    ++ stackLabels stack
+                    ++ "] -> ("
+                    ++ String.fromInt newLoc.top
+                    ++ ","
+                    ++ String.fromInt newLoc.left
+                    ++ ")"
+                )
 
         CompleteTurn ->
             Nothing

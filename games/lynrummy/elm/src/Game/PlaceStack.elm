@@ -1,24 +1,19 @@
 module Game.PlaceStack exposing
-    ( BoardBounds
-    , findOpenLoc
+    ( findOpenLoc
     , stackWidth
     )
 
 {-| Collision-free placement math for new stacks on the
-LynRummy board. Pure geometry. Faithful port of
-`angry-cat/src/lyn_rummy/game/place_stack.ts`.
+LynRummy board. Pure geometry. **Faithful port of
+`games/lynrummy/python/geometry.py::find_open_loc`** —
+column-major scan from `HUMAN_PREFERRED_ORIGIN`, anti-align,
+PACK_GAP, then crowded-board legal-margin fallback. See the
+Python module's docstring for the human-feel rationale.
 
-When a move produces a NEW stack (e.g. peel a card off, split
-a run), this module computes a top/left position that does
-not overlap any existing stack on the board.
-
-Intentional Elm divergences:
-
-  - Takes `List CardStack` (native Elm type) rather than the
-    TS `JsonCardStack[]`. The placer only uses `.loc` and
-    `.boardCards` length — both are already on `CardStack`.
-  - Nested `for` loops with early `break` → recursive walk of
-    a generated candidate list.
+The constants below mirror Python's module-level constants.
+Both languages must agree exactly: any landed loc is
+text-asserted by `tools/export_primitives_fixtures.py` /
+`Game.PrimitivesConformanceTest.elm`.
 
 -}
 
@@ -26,7 +21,7 @@ import Game.CardStack as CardStack exposing (BoardLocation, CardStack)
 
 
 
--- CONSTANTS
+-- CONSTANTS (mirror python/geometry.py)
 
 
 cardHeight : Int
@@ -39,26 +34,64 @@ cardPitch =
     CardStack.cardWidth + 6
 
 
+boardMaxWidth : Int
+boardMaxWidth =
+    800
 
--- PUBLIC TYPES
+
+boardMaxHeight : Int
+boardMaxHeight =
+    600
 
 
-{-| Visible region the placer is allowed to use. All four
-fields required (no defaults) so the caller makes explicit
-decisions about size, padding, and sweep granularity.
+boardMargin : Int
+boardMargin =
+    7
 
-  - `maxWidth` / `maxHeight` — usable area in pixels.
-  - `margin` — extra padding around each stack.
-  - `step` — candidate-sweep granularity; smaller = tighter
-    packing, more iterations. 10 is a sensible default.
 
--}
-type alias BoardBounds =
-    { maxWidth : Int
-    , maxHeight : Int
-    , margin : Int
-    , step : Int
-    }
+packGapX : Int
+packGapX =
+    30
+
+
+packGapY : Int
+packGapY =
+    30
+
+
+antiAlignPx : Int
+antiAlignPx =
+    2
+
+
+boardStartLeft : Int
+boardStartLeft =
+    24
+
+
+boardStartTop : Int
+boardStartTop =
+    24
+
+
+humanPreferredOriginLeft : Int
+humanPreferredOriginLeft =
+    50
+
+
+humanPreferredOriginTop : Int
+humanPreferredOriginTop =
+    90
+
+
+packStep : Int
+packStep =
+    15
+
+
+placeStep : Int
+placeStep =
+    10
 
 
 
@@ -90,17 +123,10 @@ type alias Rect =
 
 stackRect : CardStack -> Rect
 stackRect stack =
-    let
-        left =
-            stack.loc.left
-
-        top =
-            stack.loc.top
-    in
-    { left = left
-    , top = top
-    , right = left + stackWidth (List.length stack.boardCards)
-    , bottom = top + cardHeight
+    { left = stack.loc.left
+    , top = stack.loc.top
+    , right = stack.loc.left + stackWidth (List.length stack.boardCards)
+    , bottom = stack.loc.top + cardHeight
     }
 
 
@@ -113,22 +139,22 @@ rectsOverlap a b =
 -- PUBLIC: FIND AN OPEN LOC
 
 
-{-| Find a top/left position for a new stack of `cardCount`
-cards such that its bounding box (padded by `bounds.margin`)
-does not overlap any existing stack.
+{-| Faithful port of python/geometry.py::find_open_loc.
 
-Sweeps a uniform grid from the top-left corner downward,
-`bounds.step` at a time, and returns the first hit.
+Empty board → BOARD_START + anti-align. Otherwise:
 
-If no position fits within the bounds, returns the bottom-left
-corner of the bounds as a fallback so the caller always has
-a usable `BoardLocation`. Callers that care about detecting
-the failure can re-check the result against the existing
-stacks.
+1. Phase 1 — column-major scan from HUMAN_PREFERRED_ORIGIN
+   at packStep granularity, with PACK_GAP padding.
+2. Phase 2 — same scan widened to the entire board.
+3. Phase 3 — row-major fallback at placeStep with the
+   referee's legal BOARD_MARGIN padding (used when the board
+   is too crowded for human-feel spacing).
+4. Final fallback — bottom-left corner.
 
+Same inputs → same output, always.
 -}
-findOpenLoc : List CardStack -> Int -> BoardBounds -> BoardLocation
-findOpenLoc existing cardCount bounds =
+findOpenLoc : List CardStack -> Int -> BoardLocation
+findOpenLoc existing cardCount =
     let
         newW =
             stackWidth cardCount
@@ -139,41 +165,175 @@ findOpenLoc existing cardCount bounds =
         existingRects =
             List.map stackRect existing
     in
-    case firstFit 0 0 newW newH bounds existingRects of
+    if List.isEmpty existingRects then
+        antiAlign boardStartLeft boardStartTop newW newH
+
+    else
+        let
+            minLeft =
+                boardMargin
+
+            minTop =
+                boardMargin
+
+            maxLeft =
+                boardMaxWidth - newW - boardMargin
+
+            maxTop =
+                boardMaxHeight - newH - boardMargin
+
+            startLeft =
+                clamp minLeft maxLeft humanPreferredOriginLeft
+
+            startTop =
+                clamp minTop maxTop humanPreferredOriginTop
+        in
+        case
+            packedScan
+                { existingRects = existingRects
+                , newW = newW
+                , newH = newH
+                , minLeft = startLeft
+                , minTop = startTop
+                , maxLeft = maxLeft
+                , maxTop = maxTop
+                }
+        of
+            Just loc ->
+                antiAlign loc.left loc.top newW newH
+
+            Nothing ->
+                case
+                    packedScan
+                        { existingRects = existingRects
+                        , newW = newW
+                        , newH = newH
+                        , minLeft = minLeft
+                        , minTop = minTop
+                        , maxLeft = maxLeft
+                        , maxTop = maxTop
+                        }
+                of
+                    Just loc ->
+                        antiAlign loc.left loc.top newW newH
+
+                    Nothing ->
+                        gridSweep existingRects newW newH
+
+
+type alias ScanArgs =
+    { existingRects : List Rect
+    , newW : Int
+    , newH : Int
+    , minLeft : Int
+    , minTop : Int
+    , maxLeft : Int
+    , maxTop : Int
+    }
+
+
+{-| Column-major scan with PACK_GAP padding (Python's Phase 1 / 2
+inner sweep). Outer loop = left, inner loop = top. Returns the
+first hit's raw {top, left} (no anti-align — caller applies it).
+-}
+packedScan : ScanArgs -> Maybe { top : Int, left : Int }
+packedScan args =
+    packedScanLeft args args.minLeft
+
+
+packedScanLeft : ScanArgs -> Int -> Maybe { top : Int, left : Int }
+packedScanLeft args left =
+    if left > args.maxLeft then
+        Nothing
+
+    else
+        case packedScanTop args left args.minTop of
+            Just hit ->
+                Just hit
+
+            Nothing ->
+                packedScanLeft args (left + packStep)
+
+
+packedScanTop : ScanArgs -> Int -> Int -> Maybe { top : Int, left : Int }
+packedScanTop args left top =
+    if top > args.maxTop then
+        Nothing
+
+    else if packGapClears args.existingRects left top args.newW args.newH then
+        Just { left = left, top = top }
+
+    else
+        packedScanTop args left (top + packStep)
+
+
+packGapClears : List Rect -> Int -> Int -> Int -> Int -> Bool
+packGapClears rects left top newW newH =
+    let
+        padded =
+            { left = left - packGapX
+            , top = top - packGapY
+            , right = left + newW + packGapX
+            , bottom = top + newH + packGapY
+            }
+    in
+    not (List.any (rectsOverlap padded) rects)
+
+
+{-| Crowded-board fallback: row-major sweep at placeStep with
+the legal BOARD_MARGIN padding. Mirrors Python's
+`_grid_sweep_open_loc`.
+-}
+gridSweep : List Rect -> Int -> Int -> BoardLocation
+gridSweep existingRects newW newH =
+    case gridSweepLoop existingRects newW newH 0 of
         Just loc ->
             loc
 
         Nothing ->
-            { top = max 0 (bounds.maxHeight - newH)
-            , left = 0
-            }
+            { top = max 0 (boardMaxHeight - newH), left = 0 }
 
 
-{-| Recursively walk candidate positions row-major from (0,0)
-until one clears or we exhaust the bounds.
--}
-firstFit : Int -> Int -> Int -> Int -> BoardBounds -> List Rect -> Maybe BoardLocation
-firstFit top left newW newH bounds existingRects =
-    if top + newH > bounds.maxHeight then
+gridSweepLoop : List Rect -> Int -> Int -> Int -> Maybe BoardLocation
+gridSweepLoop rects newW newH top =
+    if top + newH > boardMaxHeight then
         Nothing
 
-    else if left + newW > bounds.maxWidth then
-        firstFit (top + bounds.step) 0 newW newH bounds existingRects
+    else
+        case gridSweepRow rects newW newH top 0 of
+            Just loc ->
+                Just loc
+
+            Nothing ->
+                gridSweepLoop rects newW newH (top + placeStep)
+
+
+gridSweepRow : List Rect -> Int -> Int -> Int -> Int -> Maybe BoardLocation
+gridSweepRow rects newW newH top left =
+    if left + newW > boardMaxWidth then
+        Nothing
 
     else
         let
-            candidate =
-                { left = left - bounds.margin
-                , top = top - bounds.margin
-                , right = left + newW + bounds.margin
-                , bottom = top + newH + bounds.margin
+            padded =
+                { left = left - boardMargin
+                , top = top - boardMargin
+                , right = left + newW + boardMargin
+                , bottom = top + newH + boardMargin
                 }
 
             collides =
-                List.any (rectsOverlap candidate) existingRects
+                List.any (rectsOverlap padded) rects
         in
         if collides then
-            firstFit top (left + bounds.step) newW newH bounds existingRects
+            gridSweepRow rects newW newH top (left + placeStep)
 
         else
             Just { top = top, left = left }
+
+
+antiAlign : Int -> Int -> Int -> Int -> BoardLocation
+antiAlign left top newW newH =
+    { left = min (left + antiAlignPx) (boardMaxWidth - newW)
+    , top = min (top + antiAlignPx) (boardMaxHeight - newH)
+    }

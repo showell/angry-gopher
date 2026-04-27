@@ -595,6 +595,7 @@
       "side": "left"
     },
     "expect_primitives": [
+      "move_stack [2H 3H 4H] -> (407,220)",
       "merge_stack [AH] -> [2H 3H 4H] /left"
     ]
   },
@@ -776,6 +777,7 @@
     "expect_primitives": [
       "split [AD 2C 3D 4C]@0",
       "split [JD QD KD]@0",
+      "move_stack [QD KD] -> (467,187)",
       "merge_stack [AD] -> [QD KD] /right",
       "merge_stack [JD] -> [QD'] /left"
     ]
@@ -1621,6 +1623,7 @@
       "side": "left"
     },
     "expect_primitives": [
+      "move_stack [8D' 9C TD] -> (482,118)",
       "merge_stack [6D 7C] -> [8D' 9C TD] /left"
     ]
   },
@@ -2601,6 +2604,7 @@
     "expect_primitives": [
       "split [AC AD AH]@0",
       "split [AD AH]@0",
+      "move_stack [2H' 3S] -> (332,220)",
       "merge_stack [AC] -> [2H' 3S] /left"
     ]
   },
@@ -4175,6 +4179,7 @@
     },
     "expect_primitives": [
       "split [TD JD QD KD]@0",
+      "move_stack [JS' QH'] -> (242,220)",
       "merge_stack [TD] -> [JS' QH'] /left"
     ]
   },
@@ -4316,6 +4321,7 @@
       "side": "left"
     },
     "expect_primitives": [
+      "move_stack [AS 2S 3S] -> (107,253)",
       "merge_stack [QS' KS] -> [AS 2S 3S] /left"
     ]
   },
@@ -4768,6 +4774,7 @@
       "side": "right"
     },
     "expect_primitives": [
+      "move_stack [9H' TC' JH] -> (407,187)",
       "merge_stack [QS'] -> [9H' TC' JH] /right"
     ]
   },
@@ -5088,6 +5095,7 @@
     "expect_primitives": [
       "split [AC AD AH]@0",
       "split [AD AH]@0",
+      "move_stack [2C 3H'] -> (332,220)",
       "merge_stack [AD] -> [2C 3H'] /left"
     ]
   },
@@ -5903,6 +5911,7 @@
     "expect_primitives": [
       "split [9H' 9C 9D]@0",
       "split [9C 9D]@0",
+      "move_stack [TC' JC] -> (392,220)",
       "merge_stack [9C] -> [TC' JC] /left"
     ]
   },
@@ -7227,7 +7236,9 @@
       ]
     },
     "expect_primitives": [
+      "move_stack [AS 2D 3C' 4D' 5S 6D'] -> (407,52)",
       "split [AS 2D 3C' 4D' 5S 6D']@1",
+      "move_stack [AS 2D] -> (167,247)",
       "merge_stack [3S] -> [AS 2D] /right"
     ]
   },
@@ -8168,6 +8179,7 @@
     "expect_primitives": [
       "split [AC AD AH]@0",
       "split [AD AH]@0",
+      "move_stack [2C 3C'] -> (407,220)",
       "merge_stack [AC] -> [2C 3C'] /left"
     ]
   },
@@ -9603,6 +9615,7 @@
     "expect_primitives": [
       "split [AC AD AH]@0",
       "split [AD AH]@0",
+      "move_stack [2S' 3H'] -> (407,220)",
       "merge_stack [AD] -> [2S' 3H'] /left"
     ]
   },
@@ -9919,6 +9932,7 @@
     },
     "expect_primitives": [
       "split [3C' 4H' 5S']@0",
+      "move_stack [AC 2C] -> (482,187)",
       "merge_stack [3C'] -> [AC 2C] /right"
     ]
   },
@@ -10536,6 +10550,7 @@
       "side": "right"
     },
     "expect_primitives": [
+      "move_stack [JD QD KD] -> (317,187)",
       "merge_stack [AD 2D] -> [JD QD KD] /right"
     ]
   },
@@ -10833,7 +10848,9 @@
       ]
     },
     "expect_primitives": [
+      "move_stack [KS AH 2C 3D 4C] -> (242,187)",
       "split [KS AH 2C 3D 4C]@1",
+      "move_stack [KS AH] -> (107,52)",
       "merge_stack [2C'] -> [KS AH] /right"
     ]
   },
@@ -11579,7 +11596,9 @@
     "expect_primitives": [
       "split [KS AS 2S 3S]@3",
       "split [4H' 5C' 6D']@2",
+      "move_stack [4H' 5C'] -> (482,220)",
       "merge_stack [3S] -> [4H' 5C'] /left",
+      "move_stack [7C 8D'] -> (182,220)",
       "merge_stack [6D'] -> [7C 8D'] /left"
     ]
   },
