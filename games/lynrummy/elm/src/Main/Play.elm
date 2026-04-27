@@ -692,8 +692,6 @@ runAgentMove move remaining model =
                         , kind = Inform
                         }
                     , replay = Just { pending = newEntries, paused = False }
-                    , replayAnim = State.NotAnimating
-                    , drag = NotDragging
                 }
 
             wireCmds =
