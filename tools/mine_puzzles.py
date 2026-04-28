@@ -1,6 +1,7 @@
 """
 mine_puzzles.py — generate fresh Puzzles entries in
-the 3-5-line difficulty band and persist them to the Go DB.
+the 3-5-line difficulty band and write them to the
+mined-seeds JSON file.
 
 Pipeline:
   1. Run agent_game.py --offline in-process to capture
@@ -9,9 +10,9 @@ Pipeline:
   2. For each (board, projected hand cards), augment the
      board with the projection and run bfs.solve.
   3. Filter to plans of length 3-5. Dedup by board signature.
-  4. POST each kept puzzle to /new-puzzle-session with a
-     puzzle_name like `mined_<value-suit-deck>_<seq>`.
-     The server inserts a row into `lynrummy_puzzle_seeds`.
+  4. Overwrite `games/lynrummy/conformance/mined_seeds.json`
+     with the kept puzzles, keyed by `puzzle_name` like
+     `mined_<value-suit-deck>_<seq>`.
   5. Print a summary so the Puzzles UI integration step knows
      what's available.
 
@@ -22,13 +23,12 @@ the augmented board.
 
 Usage:
     python3 tools/mine_puzzles.py [--target N]
-        [--max-attempts N] [--server URL]
+        [--max-actions N] [--dry-run]
 """
 
 import argparse
 import json
 import sys
-import urllib.request
 from pathlib import Path
 
 REPO = Path("/home/steve/showell_repos/angry-gopher")
@@ -36,10 +36,8 @@ sys.path.insert(0, str(REPO / "games/lynrummy/python"))
 
 import bfs  # noqa: E402
 import geometry  # noqa: E402
-from cards import classify  # noqa: E402
 
-# Default match the existing puzzle session HTTP path.
-DEFAULT_SERVER = "http://localhost:9000/gopher/lynrummy-elm"
+SEEDS_PATH = REPO / "games/lynrummy/conformance/mined_seeds.json"
 
 
 def board_signature(board):
@@ -158,24 +156,6 @@ def build_initial_state(board, hand_cards):
     }
 
 
-def post_puzzle(server, label, puzzle_name, initial_state):
-    body = json.dumps({
-        "label": label,
-        "puzzle_name": puzzle_name,
-        "initial_state": initial_state,
-    }).encode("utf-8")
-    req = urllib.request.Request(
-        f"{server}/new-puzzle-session",
-        data=body,
-        headers={"Content-Type": "application/json"},
-        method="POST")
-    try:
-        with urllib.request.urlopen(req, timeout=10) as resp:
-            return json.loads(resp.read())["session_id"]
-    except Exception as e:
-        return f"ERROR: {e}"
-
-
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--target", type=int, default=25,
@@ -186,9 +166,10 @@ def main():
                     help="actions per offline game")
     ap.add_argument("--min-depth", type=int, default=3)
     ap.add_argument("--max-depth", type=int, default=5)
-    ap.add_argument("--server", default=DEFAULT_SERVER)
+    ap.add_argument("--out", default=str(SEEDS_PATH),
+                    help="seeds JSON to overwrite")
     ap.add_argument("--dry-run", action="store_true",
-                    help="don't POST; just print what would be persisted")
+                    help="don't write; just print what would be persisted")
     args = ap.parse_args()
 
     print(f"=== Mining puzzles (target {args.target}, "
@@ -224,7 +205,8 @@ def main():
         print("No puzzles in target band. Try --num-games higher.")
         return
 
-    print("Phase 3: persist to DB via /new-puzzle-session...")
+    print(f"Phase 3: write seeds to {args.out}...")
+    seeds = []
     seq = 0
     for board, hand, plan in kept:
         seq += 1
@@ -232,18 +214,23 @@ def main():
             card_label(*c).replace(":", "p") for c in hand)
         puzzle_name = f"mined_{seq:03d}_{hand_label}"
         initial_state = build_initial_state(board, hand)
-        title = f"Mined puzzle #{seq} — hand {hand_label}, "
-        title += f"{len(plan)}-line plan"
-        if args.dry_run:
-            sid = "(dry-run)"
-        else:
-            sid = post_puzzle(args.server, title, puzzle_name,
-                               initial_state)
-        print(f"  {puzzle_name}: {len(plan)} lines, "
-              f"hand={hand_label}, sid={sid}")
+        seeds.append({
+            "puzzle_name": puzzle_name,
+            "initial_state": initial_state,
+        })
+        print(f"  {puzzle_name}: {len(plan)} lines, hand={hand_label}")
 
-    print(f"\nDone. {len(kept)} puzzles "
-          f"{'planned' if args.dry_run else 'persisted'}.")
+    if args.dry_run:
+        print(f"\nDone. {len(kept)} puzzles planned (dry-run; "
+              f"file not written).")
+        return
+
+    out_path = Path(args.out)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    with out_path.open("w") as f:
+        json.dump({"seeds": seeds}, f, indent=2)
+        f.write("\n")
+    print(f"\nDone. wrote {len(seeds)} seeds to {out_path}.")
 
 
 if __name__ == "__main__":

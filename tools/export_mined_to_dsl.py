@@ -4,9 +4,8 @@ DSL `solve` scenarios so cmd/fixturegen produces matching
 Python + Elm conformance fixtures.
 
 Same role as `export_corpus_to_dsl.py`, but sourced from
-`lynrummy_puzzle_seeds` rows where `puzzle_name LIKE 'mined_%'`
-(i.e. the 25 board-only puzzles produced by
-`tools/mine_puzzles.py`).
+`games/lynrummy/conformance/mined_seeds.json` (the committed
+file overwritten by `tools/mine_puzzles.py`).
 
 Each scenario asserts the BFS plan_lines match Python's
 canonical output — turning the mined catalog into a
@@ -30,17 +29,16 @@ Output: `games/lynrummy/conformance/scenarios/planner_mined.dsl`.
 """
 
 import json
-import sqlite3
 import sys
 from pathlib import Path
 
-DB_PATH = "/home/steve/AngryGopher/prod/gopher.db"
 REPO = Path("/home/steve/showell_repos/angry-gopher")
+SEEDS_PATH = REPO / "games/lynrummy/conformance/mined_seeds.json"
 OUT_PATH = REPO / "games/lynrummy/conformance/scenarios/planner_mined.dsl"
 
 sys.path.insert(0, str(REPO / "games/lynrummy/python"))
 import bfs  # noqa: E402
-from cards import classify  # noqa: E402
+from rules import classify  # noqa: E402
 
 RANKS = "A23456789TJQK"
 SUITS = "CDSH"
@@ -98,16 +96,14 @@ def render_scenario(name, helper, trouble, plan):
 
 
 def main():
-    conn = sqlite3.connect(DB_PATH)
-    rows = conn.execute(
-        "SELECT puzzle_name, initial_state_json "
-        "FROM lynrummy_puzzle_seeds "
-        "WHERE puzzle_name LIKE 'mined_%' "
-        "ORDER BY puzzle_name").fetchall()
+    with open(SEEDS_PATH) as f:
+        seeds = json.load(f)["seeds"]
+    seeds = sorted(seeds, key=lambda s: s["puzzle_name"])
 
     scenarios = []
-    for puzzle_name, state_json in rows:
-        state = json.loads(state_json)
+    for seed in seeds:
+        puzzle_name = seed["puzzle_name"]
+        state = seed["initial_state"]
         board = stacks_from_state(state)
         helper, trouble = split_helper_trouble(board)
         plan = bfs.solve(board, max_trouble_outer=10,

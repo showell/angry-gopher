@@ -2,12 +2,13 @@
 puzzle_catalog.py — write the Puzzles catalog JSON the Elm
 gallery loads.
 
-Pulls mined puzzle seeds (rows where puzzle_name LIKE
-'mined_%') from the DB. Each row → catalog entry with name /
-title / initial_state. The title carries the BFS plan length
-("mined_003_KSp1 (5-line)"); the gallery doesn't render a
-description block any more — repeating that line in prose was
-just noise.
+Reads mined puzzle seeds from
+`games/lynrummy/conformance/mined_seeds.json` (committed,
+overwritten by `tools/mine_puzzles.py`). Each seed → catalog
+entry with name / title / initial_state. The title carries
+the BFS plan length ("mined_003_KSp1 (5-line)"); the gallery
+doesn't render a description block any more — repeating that
+line in prose was just noise.
 
 The corpus block was removed 2026-04-26 — corpus seeds carry
 hand cards, and the Puzzles surface now only carries board-only
@@ -19,11 +20,12 @@ Usage:
 
 import argparse
 import json
-import sqlite3
+from pathlib import Path
 
 import bfs
 
-DEFAULT_DB = "/home/steve/AngryGopher/prod/gopher.db"
+REPO = Path("/home/steve/showell_repos/angry-gopher")
+DEFAULT_SEEDS = REPO / "games/lynrummy/conformance/mined_seeds.json"
 CATALOG_PATH = "../puzzles/puzzles.json"
 
 
@@ -45,22 +47,19 @@ def _depth_label(state, max_trouble, max_states):
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--db", default=DEFAULT_DB)
+    p.add_argument("--seeds", default=str(DEFAULT_SEEDS))
     p.add_argument("--out", default=CATALOG_PATH)
     p.add_argument("--max-trouble", type=int, default=10)
     p.add_argument("--max-states", type=int, default=200000)
     args = p.parse_args()
 
-    conn = sqlite3.connect(args.db)
-    catalog = []
+    with open(args.seeds) as f:
+        seeds = json.load(f)["seeds"]
 
-    mined_rows = conn.execute(
-        "SELECT initial_state_json, puzzle_name "
-        "FROM lynrummy_puzzle_seeds "
-        "WHERE puzzle_name LIKE 'mined_%' "
-        "ORDER BY session_id").fetchall()
-    for state_json, puzzle_name in mined_rows:
-        state = json.loads(state_json)
+    catalog = []
+    for seed in seeds:
+        state = seed["initial_state"]
+        puzzle_name = seed["puzzle_name"]
         depth = _depth_label(state, args.max_trouble, args.max_states)
         catalog.append({
             "name": puzzle_name,
