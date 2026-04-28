@@ -5,8 +5,8 @@ module Main.State exposing
     , DragInfo
     , DragSource(..)
     , DragState(..)
+    , EnvelopeForGesture
     , Flags
-    , GestureEnvelope
     , GesturePoint
     , Model
     , PathFrame(..)
@@ -347,7 +347,7 @@ The shape is also produced by the agent-gesture synthesizer
 land in the action-log with the same envelope as human drags.
 
 -}
-type alias GestureEnvelope =
+type alias EnvelopeForGesture =
     { path : List GesturePoint, frame : PathFrame }
 
 

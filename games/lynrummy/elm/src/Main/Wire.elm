@@ -45,7 +45,7 @@ import Http
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode exposing (Value)
 import Main.Msg exposing (Msg(..))
-import Main.State exposing (ActionLogBundle, ActionLogEntry, GestureEnvelope, GesturePoint, PathFrame(..), RemoteState)
+import Main.State exposing (ActionLogBundle, ActionLogEntry, EnvelopeForGesture, GesturePoint, PathFrame(..), RemoteState)
 
 
 
@@ -96,7 +96,7 @@ BoardFrame }` after translating viewport samples to board
 frame at the send boundary.
 
 -}
-sendAction : Int -> WireAction -> Maybe GestureEnvelope -> Cmd Msg
+sendAction : Int -> WireAction -> Maybe EnvelopeForGesture -> Cmd Msg
 sendAction sessionId action maybeGesture =
     Http.post
         { url = "/gopher/lynrummy-elm/actions?session=" ++ String.fromInt sessionId
@@ -126,7 +126,7 @@ sendPuzzleAction :
     Int
     -> String
     -> WireAction
-    -> Maybe GestureEnvelope
+    -> Maybe EnvelopeForGesture
     -> Cmd Msg
 sendPuzzleAction sessionId puzzleName action maybeGesture =
     Http.post
@@ -183,7 +183,7 @@ samples into the named frame (typically `BoardFrame` for
 intra-board drags — see `Main.Gesture.handleMouseUp`).
 
 -}
-encodeEnvelope : WireAction -> Maybe GestureEnvelope -> Value
+encodeEnvelope : WireAction -> Maybe EnvelopeForGesture -> Value
 encodeEnvelope action maybeGesture =
     case maybeGesture of
         Nothing ->
