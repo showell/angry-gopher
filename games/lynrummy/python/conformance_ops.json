@@ -1,0 +1,25 @@
+{
+  "elm": [
+    "build_suggestions",
+    "click_agent_play",
+    "enumerate_moves",
+    "find_open_loc",
+    "hint_invariant",
+    "replay_invariant",
+    "solve",
+    "trick_first_play",
+    "validate_game_move",
+    "validate_turn_complete"
+  ],
+  "go": [
+    "validate_game_move",
+    "validate_turn_complete"
+  ],
+  "python": [
+    "build_suggestions",
+    "enumerate_moves",
+    "find_open_loc",
+    "hint_invariant",
+    "solve"
+  ]
+}

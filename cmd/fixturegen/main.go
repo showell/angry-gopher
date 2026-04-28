@@ -125,31 +125,155 @@ type Card struct {
 // --- Entry point ---
 
 const (
-	goOutPath   = "./games/lynrummy/referee_conformance_test.go"
-	elmOutPath  = "./games/lynrummy/elm/tests/Game/DslConformanceTest.elm"
-	jsonOutPath = "./games/lynrummy/python/conformance_fixtures.json"
-	goPackage   = "./games/lynrummy/..."
+	goOutPath       = "./games/lynrummy/referee_conformance_test.go"
+	elmOutPath      = "./games/lynrummy/elm/tests/Game/DslConformanceTest.elm"
+	jsonOutPath     = "./games/lynrummy/python/conformance_fixtures.json"
+	manifestOutPath = "./games/lynrummy/python/conformance_ops.json"
+	goPackage       = "./games/lynrummy/..."
 )
 
-// goSupportedOps — the subset of scenario ops the Go emitter
-// targets. Go owns the referee; hints live in Elm + Python only
-// (hints-are-client-side, per project memory). Scenarios whose
-// ops are not listed here are skipped by emitGo and routed to
-// other targets instead.
-var goSupportedOps = map[string]bool{
-	"validate_game_move":     true,
-	"validate_turn_complete": true,
+// --- Op registry ---
+//
+// One declaration per scenario op. To add a new op:
+//
+//   1. Append an OpKind row below.
+//   2. Implement the per-target emitter functions you flagged
+//      true (Go and/or Elm). Python is interpreted: register a
+//      runner in test_dsl_conformance.py:DISPATCH.
+//   3. If the op needs new scalar / block / expectation fields,
+//      extend the parser (applyScalarField / applyBlockField /
+//      parseExpectBlock) and the AST struct (Scenario /
+//      Expectation), plus the JSON shape (jsonScenario /
+//      jsonExpect / toJSONScenario) if the op is python:true.
+//
+// fixturegen verifies at startup that every op encountered in
+// the .dsl files is registered here, and emits a sibling
+// `conformance_ops.json` that the Python runner consumes to
+// cross-check its DISPATCH dict. So a forgotten registration
+// fails loud, and a Python<->Go drift fails loud too.
+//
+// See cmd/fixturegen/ADDING_AN_OP.md for the full recipe.
+type OpKind struct {
+	Name     string
+	Go       bool                                // emit a Go test stub for this op
+	Elm      bool                                // emit an Elm test stub for this op
+	Python   bool                                // include in conformance_fixtures.json
+	EmitGo   func(*strings.Builder, Scenario)    // body of the generated Go Test_ function (Go=true)
+	EmitElm  func(*strings.Builder, Scenario)    // body of the generated Elm test thunk (Elm=true)
 }
 
-// pythonSupportedOps — the subset of scenario ops the JSON
-// fixtures target. Python is interpreted: the runner reads the
-// JSON at run time and dispatches per op. No Python codegen.
-var pythonSupportedOps = map[string]bool{
-	"build_suggestions": true,
-	"hint_invariant":    true,
-	"enumerate_moves":   true,
-	"solve":             true,
-	"find_open_loc":     true,
+// opRegistry is the single source of truth for op routing +
+// per-target emission. Order is insignificant; lookups go
+// through opByName.
+var opRegistry = []OpKind{
+	{
+		Name:    "validate_game_move",
+		Go:      true,
+		Elm:     true,
+		EmitGo:  func(b *strings.Builder, sc Scenario) { goValidateMove(b, sc, false) },
+		EmitElm: func(b *strings.Builder, sc Scenario) { elmValidateMove(b, sc, false) },
+	},
+	{
+		Name:    "validate_turn_complete",
+		Go:      true,
+		Elm:     true,
+		EmitGo:  func(b *strings.Builder, sc Scenario) { goValidateMove(b, sc, true) },
+		EmitElm: func(b *strings.Builder, sc Scenario) { elmValidateMove(b, sc, true) },
+	},
+	{
+		Name:    "build_suggestions",
+		Elm:     true,
+		Python:  true,
+		EmitElm: elmBuildSuggestions,
+	},
+	{
+		Name:    "hint_invariant",
+		Elm:     true,
+		Python:  true,
+		EmitElm: emitElmHintInvariant,
+	},
+	{
+		Name:    "enumerate_moves",
+		Elm:     true,
+		Python:  true,
+		EmitElm: elmEnumerateMoves,
+	},
+	{
+		Name:    "solve",
+		Elm:     true,
+		Python:  true,
+		EmitElm: elmSolve,
+	},
+	{
+		Name:    "find_open_loc",
+		Elm:     true,
+		Python:  true,
+		EmitElm: elmFindOpenLoc,
+	},
+	{
+		Name:    "click_agent_play",
+		Elm:     true,
+		EmitElm: elmClickAgentPlay,
+	},
+	{
+		Name:    "replay_invariant",
+		Elm:     true,
+		EmitElm: elmReplayInvariant,
+	},
+	{
+		// Legacy: no scenarios reference this op today, but the
+		// Elm emitter is preserved so old hint scenarios can
+		// re-enter without re-implementing the dispatch.
+		Name:    "trick_first_play",
+		Elm:     true,
+		EmitElm: emitElmTrickFirstPlay,
+	},
+}
+
+var opByName = func() map[string]*OpKind {
+	out := make(map[string]*OpKind, len(opRegistry))
+	for i := range opRegistry {
+		op := &opRegistry[i]
+		if _, dup := out[op.Name]; dup {
+			panic(fmt.Sprintf("opRegistry: duplicate op %q", op.Name))
+		}
+		out[op.Name] = op
+	}
+	return out
+}()
+
+// validateRegistryAgainstScenarios fails loud if any scenario
+// uses an op not declared above. This is the load-bearing check
+// that turns "I forgot to register the op" into a startup error
+// instead of a silent dead branch.
+func validateRegistryAgainstScenarios(scenarios []Scenario) error {
+	for _, sc := range scenarios {
+		op := opByName[sc.Op]
+		if op == nil {
+			return fmt.Errorf("scenario %q uses unregistered op %q — add it to opRegistry in cmd/fixturegen/main.go (see ADDING_AN_OP.md)", sc.Name, sc.Op)
+		}
+		if op.Go && op.EmitGo == nil {
+			return fmt.Errorf("op %q is Go=true but has no EmitGo", op.Name)
+		}
+		if op.Elm && op.EmitElm == nil {
+			return fmt.Errorf("op %q is Elm=true but has no EmitElm", op.Name)
+		}
+	}
+	return nil
+}
+
+// pythonOps returns the sorted list of op names that are
+// expected to run in the Python runner. Emitted as a manifest
+// alongside the fixtures so the Python side can cross-check.
+func pythonOps() []string {
+	var out []string
+	for _, op := range opRegistry {
+		if op.Python {
+			out = append(out, op.Name)
+		}
+	}
+	sort.Strings(out)
+	return out
 }
 
 func main() {
@@ -179,6 +303,12 @@ func main() {
 
 	sort.Slice(all, func(i, j int) bool { return all[i].Name < all[j].Name })
 
+	// Registry gate: a scenario using an unregistered op should
+	// fail loud here, not produce a silent dead branch downstream.
+	if err := validateRegistryAgainstScenarios(all); err != nil {
+		die(err)
+	}
+
 	if err := emitGo(all, goOutPath); err != nil {
 		die(fmt.Errorf("go emit: %w", err))
 	}
@@ -187,6 +317,9 @@ func main() {
 	}
 	if err := emitJSON(all, jsonOutPath); err != nil {
 		die(fmt.Errorf("json emit: %w", err))
+	}
+	if err := emitOpsManifest(manifestOutPath); err != nil {
+		die(fmt.Errorf("ops manifest emit: %w", err))
 	}
 
 	// Build-gate: the real compiler tells us instantly if the
@@ -201,7 +334,7 @@ func main() {
 		die(fmt.Errorf("regen not idempotent: %w", err))
 	}
 
-	fmt.Printf("Emitted %d scenarios → Go + Elm test files + JSON fixtures (built + idempotent).\n", len(all))
+	fmt.Printf("Emitted %d scenarios → Go + Elm test files + JSON fixtures + ops manifest (built + idempotent).\n", len(all))
 }
 
 func die(err error) {
@@ -261,6 +394,10 @@ func checkIdempotence(all []Scenario) error {
 	if err != nil {
 		return err
 	}
+	originalManifest, err := os.ReadFile(manifestOutPath)
+	if err != nil {
+		return err
+	}
 	if err := emitGo(all, goOutPath); err != nil {
 		return err
 	}
@@ -270,9 +407,13 @@ func checkIdempotence(all []Scenario) error {
 	if err := emitJSON(all, jsonOutPath); err != nil {
 		return err
 	}
+	if err := emitOpsManifest(manifestOutPath); err != nil {
+		return err
+	}
 	afterGo, _ := os.ReadFile(goOutPath)
 	afterElm, _ := os.ReadFile(elmOutPath)
 	afterJSON, _ := os.ReadFile(jsonOutPath)
+	afterManifest, _ := os.ReadFile(manifestOutPath)
 	if !bytes.Equal(originalGo, afterGo) {
 		return fmt.Errorf("Go output differs on second regen")
 	}
@@ -281,6 +422,9 @@ func checkIdempotence(all []Scenario) error {
 	}
 	if !bytes.Equal(originalJSON, afterJSON) {
 		return fmt.Errorf("JSON output differs on second regen")
+	}
+	if !bytes.Equal(originalManifest, afterManifest) {
+		return fmt.Errorf("ops manifest differs on second regen")
 	}
 	return nil
 }
@@ -306,7 +450,7 @@ func Test_{{.Name}}(t *testing.T) {
 func emitGo(scenarios []Scenario, outPath string) error {
 	var filtered []Scenario
 	for _, sc := range scenarios {
-		if goSupportedOps[sc.Op] {
+		if op, ok := opByName[sc.Op]; ok && op.Go {
 			filtered = append(filtered, sc)
 		}
 	}
@@ -327,19 +471,19 @@ func goFuncs() template.FuncMap {
 	}
 }
 
-// goScenarioBody emits the inside of a Test_ function. Go only
-// targets the referee ops (see goSupportedOps). Hint scenarios
-// are routed to Elm + Python instead.
+// goScenarioBody emits the inside of a Test_ function via the
+// op registry. Only ops with Go=true reach here; an unregistered
+// or non-Go op never lands in the filtered slice that the
+// template iterates, so the t.Fatalf below is purely a
+// belt-and-suspenders for invariant violations.
 func goScenarioBody(sc Scenario) string {
 	var b strings.Builder
-	switch sc.Op {
-	case "validate_game_move":
-		goValidateMove(&b, sc, false)
-	case "validate_turn_complete":
-		goValidateMove(&b, sc, true)
-	default:
-		fmt.Fprintf(&b, "\tt.Fatalf(%q)\n", "unknown op "+sc.Op)
+	op := opByName[sc.Op]
+	if op == nil || !op.Go || op.EmitGo == nil {
+		fmt.Fprintf(&b, "\tt.Fatalf(%q)\n", "registry/emitter mismatch for op "+sc.Op)
+		return b.String()
 	}
+	op.EmitGo(&b, sc)
 	return b.String()
 }
 
@@ -757,42 +901,42 @@ func pascalToSnake(s string) string {
 	return b.String()
 }
 
+// elmScenarioBody emits the inside of an Elm test thunk via the
+// op registry. The Elm runner is the target-of-record (every op
+// is expected to have an Elm emitter), so an unregistered op
+// here is a registry bug.
 func elmScenarioBody(sc Scenario) string {
 	var b strings.Builder
-	switch sc.Op {
-	case "trick_first_play":
-		if trickVar, ok := elmPortedTricks[sc.Trick]; ok {
-			elmTrickFirstPlay(&b, sc, trickVar)
-		} else {
-			fmt.Fprintf(&b, "            -- Elm TrickBag not ported yet (%s / %s)\n            Expect.pass", sc.Trick, sc.Expect.Kind)
-		}
-	case "validate_game_move":
-		elmValidateMove(&b, sc, false)
-	case "validate_turn_complete":
-		elmValidateMove(&b, sc, true)
-	case "build_suggestions":
-		elmBuildSuggestions(&b, sc)
-	case "hint_invariant":
-		trickVar, ok := elmPortedTricks[sc.Trick]
-		if !ok {
-			fmt.Fprintf(&b, "            Expect.fail \"unknown trick %s\"", sc.Trick)
-			return b.String()
-		}
-		elmHintInvariant(&b, sc, trickVar)
-	case "enumerate_moves":
-		elmEnumerateMoves(&b, sc)
-	case "solve":
-		elmSolve(&b, sc)
-	case "find_open_loc":
-		elmFindOpenLoc(&b, sc)
-	case "click_agent_play":
-		elmClickAgentPlay(&b, sc)
-	case "replay_invariant":
-		elmReplayInvariant(&b, sc)
-	default:
-		fmt.Fprintf(&b, "            Expect.fail \"unknown op %s\"", sc.Op)
+	op := opByName[sc.Op]
+	if op == nil || !op.Elm || op.EmitElm == nil {
+		fmt.Fprintf(&b, "            Expect.fail %q", "registry/emitter mismatch for op "+sc.Op)
+		return b.String()
 	}
+	op.EmitElm(&b, sc)
 	return b.String()
+}
+
+// emitElmHintInvariant + emitElmTrickFirstPlay are tiny adapters
+// that resolve the Elm trick module from elmPortedTricks before
+// delegating to the real emitter. Kept thin so the registry can
+// take a uniform `func(*Builder, Scenario)` shape.
+
+func emitElmHintInvariant(b *strings.Builder, sc Scenario) {
+	trickVar, ok := elmPortedTricks[sc.Trick]
+	if !ok {
+		fmt.Fprintf(b, "            Expect.fail \"unknown trick %s\"", sc.Trick)
+		return
+	}
+	elmHintInvariant(b, sc, trickVar)
+}
+
+func emitElmTrickFirstPlay(b *strings.Builder, sc Scenario) {
+	trickVar, ok := elmPortedTricks[sc.Trick]
+	if !ok {
+		fmt.Fprintf(b, "            -- Elm TrickBag not ported yet (%s / %s)\n            Expect.pass", sc.Trick, sc.Expect.Kind)
+		return
+	}
+	elmTrickFirstPlay(b, sc, trickVar)
 }
 
 
@@ -1358,7 +1502,7 @@ type jsonScenario struct {
 func emitJSON(scenarios []Scenario, outPath string) error {
 	var out []jsonScenario
 	for _, sc := range scenarios {
-		if !pythonSupportedOps[sc.Op] {
+		if op, ok := opByName[sc.Op]; !ok || !op.Python {
 			continue
 		}
 		out = append(out, toJSONScenario(sc))
@@ -1368,6 +1512,38 @@ func emitJSON(scenarios []Scenario, outPath string) error {
 	}
 	// Indent for humans — diffs should be readable.
 	bs, err := json.MarshalIndent(out, "", "  ")
+	if err != nil {
+		return err
+	}
+	bs = append(bs, '\n')
+	if err := os.MkdirAll(filepath.Dir(outPath), 0755); err != nil {
+		return err
+	}
+	return os.WriteFile(outPath, bs, 0644)
+}
+
+// emitOpsManifest writes a small JSON file listing the op names
+// expected to run on each target. The Python runner reads this
+// to verify its DISPATCH dict matches the registry — drift on
+// either side fails loud.
+func emitOpsManifest(outPath string) error {
+	var goNames, elmNames []string
+	for _, op := range opRegistry {
+		if op.Go {
+			goNames = append(goNames, op.Name)
+		}
+		if op.Elm {
+			elmNames = append(elmNames, op.Name)
+		}
+	}
+	sort.Strings(goNames)
+	sort.Strings(elmNames)
+	manifest := map[string][]string{
+		"go":     goNames,
+		"elm":    elmNames,
+		"python": pythonOps(),
+	}
+	bs, err := json.MarshalIndent(manifest, "", "  ")
 	if err != nil {
 		return err
 	}

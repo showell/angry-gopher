@@ -39,6 +39,7 @@ import strategy
 from geometry import find_violation
 
 FIXTURES_PATH = Path(__file__).parent / "conformance_fixtures.json"
+OPS_MANIFEST_PATH = Path(__file__).parent / "conformance_ops.json"
 
 
 def _collect_hand_cards_from_primitives(prims):
@@ -281,7 +282,44 @@ DISPATCH = {
 }
 
 
+def _verify_dispatch_matches_manifest():
+    """Cross-check DISPATCH against the Go registry's manifest.
+
+    The fixturegen tool emits `conformance_ops.json` listing the
+    op names the registry says should run on each target. If the
+    Python DISPATCH dict disagrees with the manifest's `python`
+    list, an op was added (or removed) on one side and not the
+    other — which would otherwise show up as a silent SKIP. We'd
+    rather fail loud than silently pass with reduced coverage.
+
+    See cmd/fixturegen/ADDING_AN_OP.md.
+    """
+    manifest = json.loads(OPS_MANIFEST_PATH.read_text())
+    expected = set(manifest.get("python", []))
+    actual = set(DISPATCH.keys())
+    missing_in_dispatch = sorted(expected - actual)
+    extra_in_dispatch = sorted(actual - expected)
+    if missing_in_dispatch or extra_in_dispatch:
+        print("DISPATCH / registry drift:", file=sys.stderr)
+        if missing_in_dispatch:
+            print(f"  registry says python should handle: "
+                  f"{missing_in_dispatch} — but DISPATCH has no entry. "
+                  "Add a runner to test_dsl_conformance.py or set "
+                  "Python=false on the OpKind.",
+                  file=sys.stderr)
+        if extra_in_dispatch:
+            print(f"  DISPATCH has runners for: {extra_in_dispatch} "
+                  "— but the Go registry doesn't mark them Python=true. "
+                  "Update opRegistry in cmd/fixturegen/main.go or "
+                  "remove the dead Python runner.",
+                  file=sys.stderr)
+        return False
+    return True
+
+
 def main():
+    if not _verify_dispatch_matches_manifest():
+        return 2
     scenarios = json.loads(FIXTURES_PATH.read_text())
     passed = failed = skipped = 0
     for sc in scenarios:
