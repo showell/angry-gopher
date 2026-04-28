@@ -259,6 +259,7 @@ h1 { color: #000080; font-size: 34px; margin-bottom: 4px; }
     <ul>
       <li><a href="/gopher/lynrummy-elm/">Play</a></li>
       <li><a href="/gopher/lynrummy-elm/sessions">Sessions</a></li>
+      <li><a href="/gopher/puzzles/">Puzzles</a></li>
     </ul>
   </div>
 

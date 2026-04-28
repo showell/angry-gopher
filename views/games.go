@@ -55,7 +55,10 @@ func renderGamesHero(w http.ResponseWriter) {
   <div class="games-tile">
     <h2>LynRummy</h2>
     <p>Two-player rummy with a real referee. Drag cards from your hand to the board, build runs and sets, hit Complete Turn when you're happy with your play.</p>
-    <div class="cta"><a class="play-btn" href="/gopher/lynrummy-elm/">Play LynRummy →</a></div>
+    <div class="cta">
+      <a class="play-btn" href="/gopher/lynrummy-elm/">Play LynRummy →</a>
+      <a class="play-btn" href="/gopher/puzzles/" style="margin-left:12px; background:#0a6e3a;">Puzzles →</a>
+    </div>
   </div>
 </div>`)
 }
