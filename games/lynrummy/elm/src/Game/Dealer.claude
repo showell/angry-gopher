@@ -107,3 +107,6 @@ Locations derive from row only:
   the current live path; `dealFullGame` available for offline
   mode once the init flow is wired to call it).
 - Go counterpart: `games/lynrummy/dealer.go`.
+
+# See: games/lynrummy/elm/README.md — listed under Domain modules
+# in the layered sidecar tour.

@@ -34,3 +34,6 @@ query.
   produces the canned 15-card test hand.
 - Tests: none yet — module is mostly trivial List ops over
   HandCard records. Add tests if behavior grows.
+
+# See: games/lynrummy/elm/README.md — listed under Domain modules
+# in the layered sidecar tour.

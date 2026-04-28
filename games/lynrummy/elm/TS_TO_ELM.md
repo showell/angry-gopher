@@ -303,3 +303,8 @@ via `describe` / `test` and asserted with `Expect`.
 | `assert.equal(a, b)` | `Expect.equal expected actual` | Note the argument order (expected first). |
 | `assert.ok(cond)` | `Expect.equal True cond` or `Expect.notEqual ...` | Elm prefers explicit equality. |
 | Inline IIFEs per test block | `describe` group with named tests | More structure; richer reporter output. |
+
+---
+
+See: [`README.md`](./README.md) — the elm-subtree README links
+here under "Port history".

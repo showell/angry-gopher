@@ -112,3 +112,6 @@ Imports:
   domain-level result of a CompleteTurn transition, not a
   wire-framing concern). Both the local call and the wire
   response land in the same type.
+
+# See: games/lynrummy/elm/README.md — listed under Capture in the
+# layered sidecar tour.

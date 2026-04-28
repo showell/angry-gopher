@@ -137,3 +137,6 @@ WireAction:
 - `Main.State` — Model, DragState, DragInfo, activeHand,
   boardDomId.
 - `Main.Wire` — sendAction in handleMouseUp.
+
+# See: games/lynrummy/elm/README.md — listed under Capture in the
+# layered sidecar tour.

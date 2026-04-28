@@ -128,3 +128,6 @@ order:
 - Host: `Main.elm` embeds the `GameState` fields into
   `Main.Model` and calls `Game.applyCompleteTurn` from
   `applyAction WA.CompleteTurn`.
+
+# See: games/lynrummy/elm/README.md — listed under Execution in
+# the layered sidecar tour.

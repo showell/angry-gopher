@@ -244,3 +244,6 @@ walks end-to-end without silent failure.
 
 See: [`../ARCHITECTURE.md`](../ARCHITECTURE.md) — cited from
 the architecture doc's "Where to find more" section.
+
+See: [`README.md`](./README.md) — the elm-subtree README links
+here under "User-flow enumeration".

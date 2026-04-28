@@ -112,3 +112,6 @@ board would silently accept illegal sets.
   `Tricks/*` module, `Hint`. If you edit this file, run the
   full conformance suite — drift here is invisible locally.
 - Tests: `tests/Game/StackTypeTest.elm`.
+
+# See: games/lynrummy/elm/README.md — listed under Domain modules
+# in the layered sidecar tour.

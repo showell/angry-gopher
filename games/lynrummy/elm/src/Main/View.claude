@@ -167,3 +167,6 @@ on source type: `FromBoardStack` renders the full stack,
 - `Main.Msg` — Msg constructors for button onClick handlers.
 - `Main.State` — Model, PopupContent, StatusMessage + kind,
   DragState + info, boardDomId, activeHand.
+
+# See: games/lynrummy/elm/README.md — listed under Render in the
+# layered sidecar tour.

@@ -129,3 +129,8 @@ shares this single project (unified 2026-04-27).
   — purged 2026-04-27; superseded by the DSL conformance
   pipeline.
 - Old "review mode" in the puzzle UI — ripped 2026-04-26.
+
+---
+
+See also: [`elm/README.md`](./elm/README.md) — links here for
+the current map of entry points.

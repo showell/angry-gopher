@@ -98,3 +98,6 @@ Wing:
 - The hand container width is hardcoded to `240 - 20 = 220`
   px. Should follow a shared constant (HandLayout or a hand
   column width). Small local cleanup.
+
+# See: games/lynrummy/elm/README.md — listed under Render in the
+# layered sidecar tour.

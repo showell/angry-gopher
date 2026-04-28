@@ -96,3 +96,6 @@ primitives, promote to a shared helper then.
 - Consumer: `Main/Apply.applyAction` (wraps this with
   Msg plumbing), `Main/State.replayBaseline` logic.
 - Tests: `tests/Game.ReducerTest.elm`.
+
+# See: games/lynrummy/elm/README.md — listed under Execution in
+# the layered sidecar tour.

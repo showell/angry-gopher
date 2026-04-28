@@ -183,3 +183,6 @@ indirect:
 A dedicated test module could assert the Model-level wrappers
 (Score recompute, setActiveHand, noteCardsPlayed increment,
 CompleteTurn status text) but isn't written yet.
+
+# See: games/lynrummy/elm/README.md — listed under Execution in
+# the layered sidecar tour.

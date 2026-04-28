@@ -53,3 +53,6 @@ rule and the pattern to follow when extending synthesis.
   bar heights change, update them. No preflight check yet
   that they stay consistent with the Elm page layout around
   them.
+
+# See: games/lynrummy/elm/README.md — listed under Render in the
+# layered sidecar tour.

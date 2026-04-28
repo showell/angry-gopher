@@ -176,3 +176,6 @@ domain + view boundaries. Resolved 2026-04-14.
   `View.elm`, every Trick module, `BoardActions.elm`,
   `BoardPhysics.elm`. Basically everything.
 - Tests: `tests/Game/CardStackTest.elm`.
+
+# See: games/lynrummy/elm/README.md — listed under Domain modules
+# in the layered sidecar tour.

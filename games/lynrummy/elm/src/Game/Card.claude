@@ -103,3 +103,6 @@ confirmed by the DSL conformance scenarios and by
   `Dealer.elm`, `WireAction.elm`, basically every downstream
   module. Changes here are blast-radius-wide.
 - Tests: `tests/Game/CardTest.elm`.
+
+# See: games/lynrummy/elm/README.md — listed under Domain modules
+# in the layered sidecar tour.

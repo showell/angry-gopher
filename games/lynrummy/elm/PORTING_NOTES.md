@@ -486,3 +486,8 @@ following it would give bad advice. Verdict of each:
 - **2026-04-14**: module layout mirrors TS 1:1 — `LynRummy.Card`,
   `LynRummy.CardStack`, `LynRummy.StackType`, `LynRummy.Referee`,
   `LynRummy.BoardGeometry` (later).
+
+---
+
+See: [`README.md`](./README.md) — the elm-subtree README links
+here under "Port history".

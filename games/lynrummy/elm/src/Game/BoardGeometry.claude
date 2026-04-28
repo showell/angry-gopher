@@ -130,3 +130,6 @@ GeometryError: {
 - No automated check that Python's `BOARD_VIEWPORT_LEFT/TOP`
   in `games/lynrummy/python/geometry.py` match the Elm
   constants here. A preflight diff would catch drift.
+
+# See: games/lynrummy/elm/README.md — listed under Render in the
+# layered sidecar tour.

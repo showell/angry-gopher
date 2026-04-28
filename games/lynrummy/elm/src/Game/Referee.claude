@@ -151,3 +151,6 @@ legitimate plays get rejected during gameplay.
   `validateTurnComplete` before transitioning), any trick
   suggestion that wants to preview validity.
 - Tests: `tests/Game/RefereeTest.elm`.
+
+# See: games/lynrummy/elm/README.md — listed under Integration in
+# the layered sidecar tour.

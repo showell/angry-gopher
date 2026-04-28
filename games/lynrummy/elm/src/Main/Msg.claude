@@ -83,3 +83,6 @@ Imports `Main.State` for `ActionLogBundle` and `Point`,
 - No handlers. `update` lives in `Main.elm`.
 - No Cmd production. HTTP and subscription producers live in
   `Main.Wire` and `Main.elm`'s `subscriptions` function.
+
+# See: games/lynrummy/elm/README.md — listed under Capture in the
+# layered sidecar tour.
