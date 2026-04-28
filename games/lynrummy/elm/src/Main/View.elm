@@ -72,6 +72,7 @@ import Main.State
         , StatusMessage
         , boardDomIdFor
         )
+import Main.Util exposing (listAt, pluralize)
 
 
 
@@ -179,20 +180,6 @@ popupFromOutcome { result, turnScore, cardsDrawn } =
                     ++ String.fromInt turnScore
                     ++ " points for this turn!"
             }
-
-
-pluralize : Int -> String -> String
-pluralize n word =
-    String.fromInt n
-        ++ " "
-        ++ word
-        ++ (if n == 1 then
-                ""
-
-            else
-                "s"
-           )
-
 
 
 -- TOP-LEVEL VIEW
@@ -763,12 +750,3 @@ renderDraggedFloater info positioningAttrs =
             View.viewCardWithAttrs
                 (floatingAttrs ++ [ style "background-color" "white" ])
                 card
-
-
-
--- INTERNAL
-
-
-listAt : Int -> List a -> Maybe a
-listAt i xs =
-    List.head (List.drop i xs)

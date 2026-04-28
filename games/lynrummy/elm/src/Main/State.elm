@@ -46,6 +46,7 @@ import Game.Hand as Hand exposing (Hand)
 import Game.Score as Score
 import Game.WingOracle exposing (WingId)
 import Game.WireAction exposing (WireAction)
+import Main.Util exposing (listAt)
 
 
 
@@ -456,11 +457,6 @@ setActiveHand newHand model =
                 )
                 model.hands
     }
-
-
-listAt : Int -> List a -> Maybe a
-listAt i xs =
-    List.head (List.drop i xs)
 
 
 
