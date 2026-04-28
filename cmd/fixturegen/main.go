@@ -14,17 +14,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"go/format"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 	"text/template"
-
-	"golang.org/x/tools/imports"
 )
 
 // --- AST (exported fields so text/template can access them) ---
@@ -125,11 +121,9 @@ type Card struct {
 // --- Entry point ---
 
 const (
-	goOutPath       = "./games/lynrummy/referee_conformance_test.go"
 	elmOutPath      = "./games/lynrummy/elm/tests/Game/DslConformanceTest.elm"
 	jsonOutPath     = "./games/lynrummy/python/conformance_fixtures.json"
 	manifestOutPath = "./games/lynrummy/python/conformance_ops.json"
-	goPackage       = "./games/lynrummy/..."
 )
 
 // --- Op registry ---
@@ -154,12 +148,10 @@ const (
 //
 // See cmd/fixturegen/ADDING_AN_OP.md for the full recipe.
 type OpKind struct {
-	Name     string
-	Go       bool                                // emit a Go test stub for this op
-	Elm      bool                                // emit an Elm test stub for this op
-	Python   bool                                // include in conformance_fixtures.json
-	EmitGo   func(*strings.Builder, Scenario)    // body of the generated Go Test_ function (Go=true)
-	EmitElm  func(*strings.Builder, Scenario)    // body of the generated Elm test thunk (Elm=true)
+	Name    string
+	Elm     bool                             // emit an Elm test stub for this op
+	Python  bool                             // include in conformance_fixtures.json
+	EmitElm func(*strings.Builder, Scenario) // body of the generated Elm test thunk (Elm=true)
 }
 
 // opRegistry is the single source of truth for op routing +
@@ -168,16 +160,12 @@ type OpKind struct {
 var opRegistry = []OpKind{
 	{
 		Name:    "validate_game_move",
-		Go:      true,
 		Elm:     true,
-		EmitGo:  func(b *strings.Builder, sc Scenario) { goValidateMove(b, sc, false) },
 		EmitElm: func(b *strings.Builder, sc Scenario) { elmValidateMove(b, sc, false) },
 	},
 	{
 		Name:    "validate_turn_complete",
-		Go:      true,
 		Elm:     true,
-		EmitGo:  func(b *strings.Builder, sc Scenario) { goValidateMove(b, sc, true) },
 		EmitElm: func(b *strings.Builder, sc Scenario) { elmValidateMove(b, sc, true) },
 	},
 	{
@@ -252,9 +240,6 @@ func validateRegistryAgainstScenarios(scenarios []Scenario) error {
 		if op == nil {
 			return fmt.Errorf("scenario %q uses unregistered op %q — add it to opRegistry in cmd/fixturegen/main.go (see ADDING_AN_OP.md)", sc.Name, sc.Op)
 		}
-		if op.Go && op.EmitGo == nil {
-			return fmt.Errorf("op %q is Go=true but has no EmitGo", op.Name)
-		}
 		if op.Elm && op.EmitElm == nil {
 			return fmt.Errorf("op %q is Elm=true but has no EmitElm", op.Name)
 		}
@@ -309,9 +294,6 @@ func main() {
 		die(err)
 	}
 
-	if err := emitGo(all, goOutPath); err != nil {
-		die(fmt.Errorf("go emit: %w", err))
-	}
 	if err := emitElm(all, elmOutPath); err != nil {
 		die(fmt.Errorf("elm emit: %w", err))
 	}
@@ -322,19 +304,13 @@ func main() {
 		die(fmt.Errorf("ops manifest emit: %w", err))
 	}
 
-	// Build-gate: the real compiler tells us instantly if the
-	// generator produced invalid code.
-	if err := runGoBuild(); err != nil {
-		die(fmt.Errorf("generated Go didn't build:\n%w", err))
-	}
-
 	// Idempotence: regen and diff; a clean generator never produces
 	// different output for the same input.
 	if err := checkIdempotence(all); err != nil {
 		die(fmt.Errorf("regen not idempotent: %w", err))
 	}
 
-	fmt.Printf("Emitted %d scenarios → Go + Elm test files + JSON fixtures + ops manifest (built + idempotent).\n", len(all))
+	fmt.Printf("Emitted %d scenarios → Elm test file + JSON fixtures + ops manifest (idempotent).\n", len(all))
 }
 
 func die(err error) {
@@ -344,27 +320,8 @@ func die(err error) {
 
 // --- Post-process pipeline ---
 
-// writeGoFile formats + imports-resolves + writes Go source.
-// The emitter emits raw code without an import block; imports
-// adds what's needed from context. gofmt happens as part of
-// imports.Process.
-func writeGoFile(path string, src []byte) error {
-	formatted, err := imports.Process(path, src, &imports.Options{
-		Comments:  true,
-		TabIndent: true,
-		TabWidth:  8,
-	})
-	if err != nil {
-		// Fall back to plain gofmt so we can see what we wrote.
-		_ = os.WriteFile(path+".raw", src, 0644)
-		return fmt.Errorf("goimports: %w (raw saved to %s.raw)", err, path)
-	}
-	return os.WriteFile(path, formatted, 0644)
-}
-
-// writeElmFile is the Elm equivalent — no auto-formatter dep in
-// the Go tool, so we just write as-is. (elm-format could be
-// shelled out later if we want; not wired today.)
+// writeElmFile writes Elm source as-is (no auto-formatter
+// shelled out today; could be wired later if we want).
 func writeElmFile(path string, src []byte) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return err
@@ -372,20 +329,7 @@ func writeElmFile(path string, src []byte) error {
 	return os.WriteFile(path, src, 0644)
 }
 
-func runGoBuild() error {
-	cmd := exec.Command("go", "build", goPackage)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("%s\n%s", err, out)
-	}
-	return nil
-}
-
 func checkIdempotence(all []Scenario) error {
-	originalGo, err := os.ReadFile(goOutPath)
-	if err != nil {
-		return err
-	}
 	originalElm, err := os.ReadFile(elmOutPath)
 	if err != nil {
 		return err
@@ -398,9 +342,6 @@ func checkIdempotence(all []Scenario) error {
 	if err != nil {
 		return err
 	}
-	if err := emitGo(all, goOutPath); err != nil {
-		return err
-	}
 	if err := emitElm(all, elmOutPath); err != nil {
 		return err
 	}
@@ -410,13 +351,9 @@ func checkIdempotence(all []Scenario) error {
 	if err := emitOpsManifest(manifestOutPath); err != nil {
 		return err
 	}
-	afterGo, _ := os.ReadFile(goOutPath)
 	afterElm, _ := os.ReadFile(elmOutPath)
 	afterJSON, _ := os.ReadFile(jsonOutPath)
 	afterManifest, _ := os.ReadFile(manifestOutPath)
-	if !bytes.Equal(originalGo, afterGo) {
-		return fmt.Errorf("Go output differs on second regen")
-	}
 	if !bytes.Equal(originalElm, afterElm) {
 		return fmt.Errorf("Elm output differs on second regen")
 	}
@@ -427,156 +364,6 @@ func checkIdempotence(all []Scenario) error {
 		return fmt.Errorf("ops manifest differs on second regen")
 	}
 	return nil
-}
-
-// --- Go emission (template-based) ---
-
-const goTemplate = `// GENERATED by cmd/fixturegen — DO NOT EDIT.
-// Source scenarios: lynrummy/conformance/scenarios/*.dsl
-// Regenerate with: go run ./cmd/fixturegen ./lynrummy/conformance/scenarios/*.dsl
-
-package lynrummy
-
-import (
-	"testing"
-)
-
-{{range .}}// {{.Desc}}
-func Test_{{.Name}}(t *testing.T) {
-{{goScenarioBody .}}}
-
-{{end}}`
-
-func emitGo(scenarios []Scenario, outPath string) error {
-	var filtered []Scenario
-	for _, sc := range scenarios {
-		if op, ok := opByName[sc.Op]; ok && op.Go {
-			filtered = append(filtered, sc)
-		}
-	}
-	t := template.New("go").Funcs(goFuncs())
-	if _, err := t.Parse(goTemplate); err != nil {
-		return err
-	}
-	var buf bytes.Buffer
-	if err := t.Execute(&buf, filtered); err != nil {
-		return err
-	}
-	return writeGoFile(outPath, buf.Bytes())
-}
-
-func goFuncs() template.FuncMap {
-	return template.FuncMap{
-		"goScenarioBody": goScenarioBody,
-	}
-}
-
-// goScenarioBody emits the inside of a Test_ function via the
-// op registry. Only ops with Go=true reach here; an unregistered
-// or non-Go op never lands in the filtered slice that the
-// template iterates, so the t.Fatalf below is purely a
-// belt-and-suspenders for invariant violations.
-func goScenarioBody(sc Scenario) string {
-	var b strings.Builder
-	op := opByName[sc.Op]
-	if op == nil || !op.Go || op.EmitGo == nil {
-		fmt.Fprintf(&b, "\tt.Fatalf(%q)\n", "registry/emitter mismatch for op "+sc.Op)
-		return b.String()
-	}
-	op.EmitGo(&b, sc)
-	return b.String()
-}
-
-func goValidateMove(b *strings.Builder, sc Scenario, turnComplete bool) {
-	b.WriteString("\tbounds := BoardBounds{MaxWidth: 800, MaxHeight: 600, Margin: 7}\n")
-	var call string
-	if turnComplete {
-		fmt.Fprintf(b, "\tboard := %s\n", goStacksVar(sc.Board))
-		call = "ValidateTurnComplete(board, bounds)"
-	} else {
-		fmt.Fprintf(b, "\tboardBefore := %s\n", goStacksVar(sc.Board))
-		fmt.Fprintf(b, "\tstacksToRemove := %s\n", goStacksVar(sc.Removed))
-		fmt.Fprintf(b, "\tstacksToAdd := %s\n", goStacksVar(sc.Added))
-		fmt.Fprintf(b, "\thand := %s\n", goRawCardsVar(sc.HandPlayed))
-		call = "ValidateGameMove(Move{BoardBefore: boardBefore, StacksToRemove: stacksToRemove, StacksToAdd: stacksToAdd, HandCardsPlayed: hand}, bounds)"
-	}
-	fmt.Fprintf(b, "\tgot := %s\n", call)
-	switch sc.Expect.Kind {
-	case "ok":
-		b.WriteString("\tif got != nil {\n\t\tt.Fatalf(\"expected ok, got %s: %s\", got.Stage, got.Message)\n\t}\n")
-	case "error":
-		fmt.Fprintf(b, "\tif got == nil {\n\t\tt.Fatal(%q)\n\t}\n",
-			fmt.Sprintf("expected error at stage %q, got ok", sc.Expect.Stage))
-		fmt.Fprintf(b, "\tif got.Stage != %q {\n\t\tt.Fatalf(%q, got.Stage)\n\t}\n",
-			sc.Expect.Stage,
-			fmt.Sprintf("stage: want %q, got %%q", sc.Expect.Stage))
-		if sc.Expect.MessageSubstr != "" {
-			fmt.Fprintf(b, "\tif !strings.Contains(got.Message, %q) {\n\t\tt.Fatalf(%q, got.Message)\n\t}\n",
-				sc.Expect.MessageSubstr,
-				fmt.Sprintf("message: want substring %q, got %%q", sc.Expect.MessageSubstr))
-		}
-	default:
-		fmt.Fprintf(b, "\tt.Fatalf(%q)\n", "unsupported expectation "+sc.Expect.Kind)
-	}
-}
-
-// --- Go value renderers ---
-//
-// Generated tests live inside package lynrummy, so types are
-// referenced unqualified (no `lynrummy.` prefix).
-
-func goHandCards(cs []Card) string {
-	if len(cs) == 0 {
-		return "[]HandCard{}"
-	}
-	var parts []string
-	for _, c := range cs {
-		parts = append(parts, fmt.Sprintf("{Card: %s, State: HandNormal}", goCardLit(c)))
-	}
-	return "[]HandCard{" + strings.Join(parts, ", ") + "}"
-}
-
-func goRawCardsVar(cs []Card) string {
-	if len(cs) == 0 {
-		return "[]Card(nil)"
-	}
-	var parts []string
-	for _, c := range cs {
-		parts = append(parts, goCardLit(c))
-	}
-	return "[]Card{" + strings.Join(parts, ", ") + "}"
-}
-
-func goStacksVar(ss []Stack) string {
-	if len(ss) == 0 {
-		return "[]CardStack(nil)"
-	}
-	var parts []string
-	for _, s := range ss {
-		parts = append(parts, goStackLit(s))
-	}
-	return "[]CardStack{" + strings.Join(parts, ", ") + "}"
-}
-
-func goStackLit(s Stack) string {
-	var bcs []string
-	for _, c := range s.Cards {
-		bcs = append(bcs, fmt.Sprintf("{Card: %s, State: %s}", goCardLit(c), goBoardState(c.BoardState)))
-	}
-	return fmt.Sprintf("NewCardStack([]BoardCard{%s}, Location{Top: %d, Left: %d})",
-		strings.Join(bcs, ", "), s.Top, s.Left)
-}
-
-func goCardLit(c Card) string {
-	return fmt.Sprintf("Card{Value: %d, Suit: %s, OriginDeck: %d}", c.Value, goSuit(c.Suit), c.Deck)
-}
-
-func goSuit(s int) string {
-	return []string{"Club", "Diamond", "Spade", "Heart"}[s]
-}
-
-func goBoardState(s int) string {
-	return []string{"FirmlyOnBoard", "FreshlyPlayed", "FreshlyPlayedByLastPlayer"}[s]
 }
 
 // --- Elm emission (template-based) ---
@@ -1423,10 +1210,6 @@ func elmBoardState(s int) string {
 	return []string{"FirmlyOnBoard", "FreshlyPlayed", "FreshlyPlayedByLastPlayer"}[s]
 }
 
-// keep format import reachable so goimports doesn't strip it in
-// case we later use gofmt's Source directly
-var _ = format.Source
-
 // --- JSON emission (for Python, interpreted — no codegen) ---
 //
 // Python reads the JSON at runtime and dispatches per op. Only
@@ -1527,19 +1310,14 @@ func emitJSON(scenarios []Scenario, outPath string) error {
 // to verify its DISPATCH dict matches the registry — drift on
 // either side fails loud.
 func emitOpsManifest(outPath string) error {
-	var goNames, elmNames []string
+	var elmNames []string
 	for _, op := range opRegistry {
-		if op.Go {
-			goNames = append(goNames, op.Name)
-		}
 		if op.Elm {
 			elmNames = append(elmNames, op.Name)
 		}
 	}
-	sort.Strings(goNames)
 	sort.Strings(elmNames)
 	manifest := map[string][]string{
-		"go":     goNames,
 		"elm":    elmNames,
 		"python": pythonOps(),
 	}

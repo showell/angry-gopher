@@ -99,6 +99,7 @@ type alias Model =
     , hintedCards : List Card
     , popup : Maybe PopupContent
     , actionLog : List ActionLogEntry
+    , nextSeq : Int
     , replay : Maybe ReplayProgress
     , replayAnim : ReplayAnimationState
     , replayBaseline : Maybe RemoteState
@@ -530,6 +531,7 @@ baseModel =
     , hintedCards = []
     , popup = Nothing
     , actionLog = []
+    , nextSeq = 1
     , replay = Nothing
     , replayAnim = NotAnimating
     , replayBaseline = Nothing

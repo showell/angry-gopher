@@ -49,14 +49,15 @@ wired.
 - *DSL conformance harness (Lyn Rummy, 2026-04).* The canonical
   full bridge in this repo today. Scenarios in
   `games/lynrummy/conformance/scenarios/*.dsl` compile via
-  `cmd/fixturegen` into three independent test suites:
-  Go (`referee_conformance_test.go`), Elm
-  (`games/lynrummy/elm/tests/Game/DslConformanceTest.elm`), and
-  Python (via `conformance_fixtures.json` consumed by
-  `test_dsl_conformance.py`). All three must agree scenario-
-  by-scenario; divergent pass/fail counts surface as the
-  bridge failing. This is the Lyn Rummy referee triple, now
-  living inside Gopher.
+  `cmd/fixturegen` into two independent test suites:
+  Elm (`games/lynrummy/elm/tests/Game/DslConformanceTest.elm`)
+  and Python (via `conformance_fixtures.json` consumed by
+  `test_dsl_conformance.py`). Both must agree scenario-by-
+  scenario; divergent pass/fail counts surface as the bridge
+  failing. The Go target retired 2026-04-28 with the Go
+  domain package — Go is now dumb file storage and no longer
+  runs the referee at runtime, so the conformance bridge has
+  no game on that target.
 - *Reading list ↔ Gopher comment JSON.* As of 2026-04-16, both
   the reading-list static site and the Gopher server render
   the same `.md` + `.md.comments.json` pair. The JSON is the

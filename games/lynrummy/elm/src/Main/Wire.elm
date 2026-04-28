@@ -3,43 +3,25 @@ module Main.Wire exposing
     , fetchNewSession
     , initialStateDecoder
     , sendAction
-    , sendCompleteTurn
-    , sendPuzzleAction
     )
 
 {-| HTTP surface between the Elm client and the Gopher server.
-Four outbound calls, plus the decoders that shape the inbound
-responses. Each function produces `Cmd Msg` tagged with the
-appropriate `Main.Msg` constructor so the `update` function
-picks it up at the right branch.
+The server is a dumb URL-keyed file store as of LEAN_PASS phase 2
+(2026-04-28); this module is a thin afterthought layer, not a
+load-bearing concept in the Elm app's architecture.
 
-Extracted 2026-04-19 from the pre-split `Main.elm` monolith.
-
-
-## Design invariants
-
-  - **Client is authoritative on game state.** Elm derives
-    current state locally from (initial\_state + action log);
-    these calls are for persistence (sendAction,
-    sendCompleteTurn), session creation (fetchNewSession),
-    and the one-time bootstrap fetch of the action log
-    (fetchActionLog). No runtime wire read of current state;
-    the server's responses on CompleteTurn are diagnostic,
-    not gating.
-  - **No ports here.** `setSessionPath` lives in `Main.elm` (only
-    port-modules may declare ports).
-  - **Decoders match server emission exactly.** If a field shape
-    changes on the server, the decoder here must change; if it
-    doesn't match, the HTTP response errors at decode time
-    instead of silently half-succeeding.
+Three outbound calls (fetchNewSession, fetchActionLog,
+sendAction) plus the inbound decoders for the bootstrap bundle.
+sendAction handles every action including CompleteTurn and
+puzzle moves — the server doesn't validate, doesn't reply with
+turn outcomes, just files the body at
+`/sessions/<id>/actions/<seq>`.
 
 -}
 
 import Game.Rules.Card as Card
 import Game.CardStack as CardStack
-import Game.Game exposing (CompleteTurnOutcome)
 import Game.Hand exposing (Hand)
-import Game.PlayerTurn exposing (CompleteTurnResult(..))
 import Game.WireAction as WA exposing (WireAction)
 import Http
 import Json.Decode as Decode exposing (Decoder)
@@ -52,10 +34,8 @@ import Main.State exposing (ActionLogBundle, ActionLogEntry, EnvelopeForGesture,
 -- OUTBOUND CALLS
 
 
-{-| Create a new session on the server. Elm has already dealt
-the game locally (Elm is the autonomous dealer); this call
-just registers the dealt state with the server so a reload can
-re-hydrate. Body: `{label, initial_state}`. Server returns id.
+{-| Create a new session. Elm has already dealt the game
+locally; this just registers it. Body: `{label, initial_state}`.
 -}
 fetchNewSession : Value -> Cmd Msg
 fetchNewSession initialState =
@@ -72,11 +52,9 @@ fetchNewSession initialState =
         }
 
 
-{-| Fetch the session's action log AND the pre-first-action
-initial state. The one-time bootstrap wire read: Elm uses
-`initialState` + `actions` to reconstruct current state
-locally via `Main.bootstrapFromBundle`. No separate /state
-fetch; Elm owns derivation.
+{-| Bootstrap a session for resume: fetch the meta + action log.
+Elm decodes initial_state from `meta.initial_state` and replays
+the actions locally.
 -}
 fetchActionLog : Int -> Cmd Msg
 fetchActionLog sid =
@@ -86,78 +64,27 @@ fetchActionLog sid =
         }
 
 
-{-| Fire-and-forget wire-action submission. Used for every
-action EXCEPT CompleteTurn — merge\_hand, merge\_stack, split,
-move\_stack, place\_hand. Errors are currently ignored
-(`ActionSent` handler is a no-op); server-side validation +
-broadcast arrives with multiplayer.
-
-`maybeGesture` carries the captured drag telemetry for the
-wire. Pass `Nothing` for actions that didn't originate from a
-drag (button clicks, replay-emitted, etc.) AND for hand-origin
-drags (merge\_hand, place\_hand) — those always replay via
-live DOM measurement, so shipping a captured path just serves
-as dead weight. Intra-board drags pass `Just { path, frame =
-BoardFrame }` after translating viewport samples to board
-frame at the send boundary.
-
+{-| Persist one wire action to its own URL-keyed file. Server
+just writes the body; no validation, no outcome reply.
+`maybePuzzleName` rides in the body for puzzle attempts so
+forensics can attribute each action to its puzzle.
 -}
-sendAction : Int -> WireAction -> Maybe EnvelopeForGesture -> Cmd Msg
-sendAction sessionId action maybeGesture =
-    Http.post
-        { url = "/gopher/lynrummy-elm/actions?session=" ++ String.fromInt sessionId
-        , body = Http.jsonBody (encodeEnvelope action maybeGesture)
-        , expect = Http.expectWhatever ActionSent
-        }
-
-
-{-| Puzzle write path. Goes to /gopher/puzzles/actions
-with `?session=<id>&puzzle=<name>`; the server appends to
-`lynrummy_elm_puzzle_actions`. Same envelope shape as
-`sendAction`. Same fire-and-forget contract.
-
-Callers dispatch on `model.puzzleName`:
-
-  - `Just name` → `sendPuzzleAction sid name action gesture`
-  - `Nothing` → `sendAction sid action gesture`
-
-The split exists because the two activity kinds (full-game vs.
-puzzle attempts on a shared page-load) need different
-disambiguators on the action row, and the schema split that
-follows from "no nullable kind-discriminators" lands as two
-endpoints.
-
--}
-sendPuzzleAction :
+sendAction :
     Int
-    -> String
+    -> Int
+    -> Maybe String
     -> WireAction
     -> Maybe EnvelopeForGesture
     -> Cmd Msg
-sendPuzzleAction sessionId puzzleName action maybeGesture =
+sendAction sessionId seq maybePuzzleName action maybeGesture =
     Http.post
         { url =
-            "/gopher/puzzles/actions?session="
+            "/gopher/lynrummy-elm/sessions/"
                 ++ String.fromInt sessionId
-                ++ "&puzzle="
-                ++ puzzleName
-        , body = Http.jsonBody (encodeEnvelope action maybeGesture)
+                ++ "/actions/"
+                ++ String.fromInt seq
+        , body = Http.jsonBody (encodeEnvelope action maybeGesture maybePuzzleName)
         , expect = Http.expectWhatever ActionSent
-        }
-
-
-{-| CompleteTurn needs the server's referee verdict (dirty-board
-rejection) in the response, unlike fire-and-forget actions. A
-200 with `turn_result:"success*"` is a committed turn; a 400
-with `turn_result:"failure"` is the referee refusing a dirty
-board. Both paths surface via `CompleteTurnResponded`.
--}
-sendCompleteTurn : Int -> Cmd Msg
-sendCompleteTurn sessionId =
-    Http.post
-        { url = "/gopher/lynrummy-elm/actions?session=" ++ String.fromInt sessionId
-        , body = Http.jsonBody (encodeEnvelope WA.CompleteTurn Nothing)
-        , expect = Http.expectStringResponse CompleteTurnResponded decodeCompleteTurnResponse
         }
 
 
@@ -175,42 +102,46 @@ pathFrameString frame =
 -- ENVELOPE
 
 
-{-| Outbound POST body: `{"action": <WireAction>, "gesture_metadata": <optional>}`.
-Server decodes both sibling fields. Keeps the action JSON clean
-(no telemetry fields polluting `DecodeWireAction`) and leaves
-headroom for later telemetry kinds (click timings, undos) to
-drop in alongside `gesture_metadata` without touching
-WireAction's shape.
-
-When a gesture is present, emit the full metadata shape in
-parity with Python's synthesizer: `path`, `path_frame`,
-`pointer_type`. The caller has already translated the path's
-samples into the named frame (typically `BoardFrame` for
-intra-board drags — see `Main.Gesture.handleMouseUp`).
-
+{-| Outbound POST body: `{action, gesture_metadata?, puzzle_name?}`.
+The server stores it verbatim; nothing here is parsed
+server-side beyond writing the file.
 -}
-encodeEnvelope : WireAction -> Maybe EnvelopeForGesture -> Value
-encodeEnvelope action maybeGesture =
-    case maybeGesture of
-        Nothing ->
-            Encode.object [ ( "action", WA.encode action ) ]
+encodeEnvelope : WireAction -> Maybe EnvelopeForGesture -> Maybe String -> Value
+encodeEnvelope action maybeGesture maybePuzzleName =
+    let
+        baseFields =
+            [ ( "action", WA.encode action ) ]
 
-        Just { path, frame } ->
-            case path of
-                [] ->
-                    Encode.object [ ( "action", WA.encode action ) ]
+        withGesture =
+            case maybeGesture of
+                Nothing ->
+                    baseFields
 
-                _ ->
-                    Encode.object
-                        [ ( "action", WA.encode action )
-                        , ( "gesture_metadata"
-                          , Encode.object
-                                [ ( "path", Encode.list encodeGesturePoint path )
-                                , ( "path_frame", Encode.string (pathFrameString frame) )
-                                , ( "pointer_type", Encode.string "mouse" )
-                                ]
-                          )
-                        ]
+                Just { path, frame } ->
+                    case path of
+                        [] ->
+                            baseFields
+
+                        _ ->
+                            baseFields
+                                ++ [ ( "gesture_metadata"
+                                     , Encode.object
+                                        [ ( "path", Encode.list encodeGesturePoint path )
+                                        , ( "path_frame", Encode.string (pathFrameString frame) )
+                                        , ( "pointer_type", Encode.string "mouse" )
+                                        ]
+                                     )
+                                   ]
+
+        withPuzzle =
+            case maybePuzzleName of
+                Nothing ->
+                    withGesture
+
+                Just name ->
+                    withGesture ++ [ ( "puzzle_name", Encode.string name ) ]
+    in
+    Encode.object withPuzzle
 
 
 encodeGesturePoint : GesturePoint -> Value
@@ -237,12 +168,8 @@ handDecoder =
         |> Decode.map (\cards -> { handCards = cards })
 
 
-{-| The game-state record as the server ships it. Same shape
-whether nested inside an /actions bundle (full-game session
-resume) or living alone in the puzzles catalog payload (puzzle
-panels bootstrap from this directly). Exposed so the puzzles
-gallery can decode the initial state it already has in hand
-without a round-trip.
+{-| The dealt-state record as the server stores it. Same shape
+the Puzzles catalog ships per puzzle.
 -}
 initialStateDecoder : Decoder RemoteState
 initialStateDecoder =
@@ -269,21 +196,6 @@ actionLogDecoder =
         (Decode.field "actions" (Decode.list actionLogEntryDecoder))
 
 
-{-| Each action in `/actions` comes as the same envelope shape
-as the inbound POST body:
-
-    {"action": <WireAction>,
-     "gesture_metadata": {"path": [...], "path_frame": "board"|"viewport"}}
-
-Gesture metadata is pulled into `gesturePath` when present;
-`path_frame` tags the coordinate frame those samples live in
-(board = intra-board drag, translated at capture time so CSS
-handles board→viewport at render time; viewport = hand-origin
-or pre-translation live capture). Missing `path_frame`
-defaults to viewport (back-compat with earlier captures that
-didn't carry the tag).
-
--}
 actionLogEntryDecoder : Decoder ActionLogEntry
 actionLogEntryDecoder =
     Decode.map3 ActionLogEntry
@@ -321,85 +233,3 @@ gesturePointDecoder =
         (Decode.field "t" Decode.float)
         (Decode.field "x" Decode.int)
         (Decode.field "y" Decode.int)
-
-
-
--- COMPLETETURN RESPONSE
-
-
-{-| CompleteTurn uses `expectStringResponse` so we can decode
-BOTH 200 (success variants) and 400 (failure) response bodies
-— both share the `{turn_result, turn_score, cards_drawn,
-dealt_cards}` shape that `completeTurnOutcomeDecoder` handles.
--}
-decodeCompleteTurnResponse : Http.Response String -> Result Http.Error CompleteTurnOutcome
-decodeCompleteTurnResponse response =
-    case response of
-        Http.BadUrl_ url ->
-            Err (Http.BadUrl url)
-
-        Http.Timeout_ ->
-            Err Http.Timeout
-
-        Http.NetworkError_ ->
-            Err Http.NetworkError
-
-        Http.BadStatus_ _ body ->
-            -- 400 with {"turn_result":"failure",...} is the
-            -- dirty-board rejection. Any other non-2xx is a
-            -- real error.
-            case Decode.decodeString completeTurnOutcomeDecoder body of
-                Ok outcome ->
-                    Ok outcome
-
-                Err _ ->
-                    Err (Http.BadBody body)
-
-        Http.GoodStatus_ _ body ->
-            case Decode.decodeString completeTurnOutcomeDecoder body of
-                Ok outcome ->
-                    Ok outcome
-
-                Err decodeErr ->
-                    Err (Http.BadBody (Decode.errorToString decodeErr))
-
-
-completeTurnOutcomeDecoder : Decoder CompleteTurnOutcome
-completeTurnOutcomeDecoder =
-    Decode.map4 CompleteTurnOutcome
-        turnResultDecoder
-        (Decode.maybe (Decode.field "turn_score" Decode.int)
-            |> Decode.map (Maybe.withDefault 0)
-        )
-        (Decode.maybe (Decode.field "cards_drawn" Decode.int)
-            |> Decode.map (Maybe.withDefault 0)
-        )
-        (Decode.maybe (Decode.field "dealt_cards" (Decode.list Card.cardDecoder))
-            |> Decode.map (Maybe.withDefault [])
-        )
-
-
-turnResultDecoder : Decoder CompleteTurnResult
-turnResultDecoder =
-    Decode.field "turn_result" Decode.string
-        |> Decode.andThen
-            (\s ->
-                case s of
-                    "success" ->
-                        Decode.succeed Success
-
-                    "success_but_needs_cards" ->
-                        Decode.succeed SuccessButNeedsCards
-
-                    "success_as_victor" ->
-                        Decode.succeed SuccessAsVictor
-
-                    "success_with_hand_emptied" ->
-                        Decode.succeed SuccessWithHandEmptied
-
-                    "failure" ->
-                        Decode.succeed Failure
-
-                    other ->
-                        Decode.fail ("unknown turn_result: " ++ other)
-            )

@@ -71,7 +71,7 @@ import Main.State as State
         , encodeRemoteState
         )
 import Main.View as View exposing (popupForCompleteTurn, statusForCompleteTurn)
-import Main.Wire as Wire exposing (fetchActionLog, fetchNewSession, sendCompleteTurn)
+import Main.Wire as Wire exposing (fetchActionLog, fetchNewSession)
 import Task
 import Time
 
@@ -243,10 +243,8 @@ update msg model =
             logAndScold "ActionSent" err actionRejectedStatus model
 
         SessionReceived (Ok sid) ->
-            -- Session id allocated by the server. The state was
-            -- already dealt locally during NewSession init —
-            -- nothing to fetch. Emit SessionChanged so the host
-            -- pins the URL for reload-resume.
+            -- Session id allocated by the server. State was
+            -- already dealt locally during NewSession init.
             ( { model | sessionId = Just sid }
             , Cmd.none
             , SessionChanged sid
@@ -257,12 +255,6 @@ update msg model =
 
         ClickCompleteTurn ->
             withNoOutput (clickCompleteTurn model)
-
-        CompleteTurnResponded (Ok _) ->
-            ( model, Cmd.none, NoOutput )
-
-        CompleteTurnResponded (Err err) ->
-            logAndScold "CompleteTurnResponded" err completeTurnRejectedStatus model
 
         PopupOk ->
             ( { model | popup = Nothing }, Cmd.none, NoOutput )
@@ -397,8 +389,14 @@ clickCompleteTurn model =
                     , pathFrame = State.ViewportFrame
                     }
 
+                seq =
+                    model.nextSeq
+
                 withEntry =
-                    { model | actionLog = model.actionLog ++ [ completeTurnEntry ] }
+                    { model
+                        | actionLog = model.actionLog ++ [ completeTurnEntry ]
+                        , nextSeq = seq + 1
+                    }
 
                 ( afterTurn, turnOutcome ) =
                     Game.applyCompleteTurn withEntry
@@ -413,7 +411,7 @@ clickCompleteTurn model =
                 persistCmd =
                     case model.sessionId of
                         Just sid ->
-                            sendCompleteTurn sid
+                            Wire.sendAction sid seq model.puzzleName WA.CompleteTurn Nothing
 
                         Nothing ->
                             Cmd.none
@@ -689,9 +687,13 @@ runAgentMove move remaining model =
             entries =
                 List.map agentLogEntryWith primGestures
 
+            startSeq =
+                model.nextSeq
+
             appended =
                 { model
                     | actionLog = model.actionLog ++ entries
+                    , nextSeq = startSeq + List.length entries
                     , agentProgram = Just remaining
                     , status =
                         { text = "Agent: " ++ AgentMove.describe move
@@ -705,12 +707,11 @@ runAgentMove move remaining model =
             wireCmds =
                 case model.sessionId of
                     Just sid ->
-                        case model.puzzleName of
-                            Just name ->
-                                List.map (sendOnePuzzle sid name) primGestures
-
-                            Nothing ->
-                                List.map (sendOneFull sid) primGestures
+                        List.indexedMap
+                            (\i ( prim, gesture ) ->
+                                Wire.sendAction sid (startSeq + i) model.puzzleName prim gesture
+                            )
+                            primGestures
 
                     Nothing ->
                         []
@@ -720,16 +721,6 @@ runAgentMove move remaining model =
                     (Browser.Dom.getElement (State.boardDomIdFor model.gameId))
         in
         ( appended, Cmd.batch (boardRectCmd :: wireCmds) )
-
-
-sendOnePuzzle : Int -> String -> ( WireAction, Maybe State.EnvelopeForGesture ) -> Cmd Msg
-sendOnePuzzle sid name ( prim, gesture ) =
-    Wire.sendPuzzleAction sid name prim gesture
-
-
-sendOneFull : Int -> ( WireAction, Maybe State.EnvelopeForGesture ) -> Cmd Msg
-sendOneFull sid ( prim, gesture ) =
-    Wire.sendAction sid prim gesture
 
 
 {-| Walk a primitive sequence against an evolving sim board,
@@ -848,7 +839,10 @@ bootstrapFromBundle bundle model =
     let
         atInitial =
             modelAtInitial bundle.initialState
-                { model | actionLog = bundle.actions }
+                { model
+                    | actionLog = bundle.actions
+                    , nextSeq = List.length bundle.actions + 1
+                }
     in
     List.foldl
         (\entry m -> .model (applyAction entry.action m))
@@ -917,13 +911,6 @@ actionRejectedStatus =
 sessionAllocFailedStatus : StatusMessage
 sessionAllocFailedStatus =
     { text = "Could not allocate a session — check console."
-    , kind = Scold
-    }
-
-
-completeTurnRejectedStatus : StatusMessage
-completeTurnRejectedStatus =
-    { text = "Server rejected complete-turn — check console."
     , kind = Scold
     }
 

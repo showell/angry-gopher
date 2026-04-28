@@ -124,9 +124,9 @@ This has four direct consequences:
   divergence-monitor payload). Zero inbound state reads
   after bootstrap.
 - **Each client is its own gatekeeper.** Elm has its OWN
-  referee module; it cannot rely on the Go referee to reject
-  invalid moves, because in autonomous mode Go isn't in the
-  loop. Python has its own referee-equivalent too.
+  referee module; the Go referee was retired 2026-04-28
+  (the entire Go domain package went with it). Python has
+  its own referee-equivalent too.
 - **Clients do not blindly accept events from other sources.**
   If the server delivers an opponent's move, the Elm client
   decides whether to integrate it. The human may want to play
@@ -529,7 +529,9 @@ them plainly here so they're not only implicit:
 
 ### Subsystem landing pages
 
-- [`./README.md`](./README.md) — Go subsystem.
+- [`./README.md`](./README.md) — repo-level overview (the Go
+  domain package was retired 2026-04-28; the Go server is now
+  dumb file storage).
 - [`./elm/README.md`](./elm/README.md) —
   Elm UI subsystem.
 - [`./python/README.md`](./python/README.md)

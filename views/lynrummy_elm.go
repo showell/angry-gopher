@@ -56,11 +56,6 @@ func HandleLynRummyElm(w http.ResponseWriter, r *http.Request) {
 		lynrummyElmNewSession(w, r)
 	case sub == "new-puzzle-session":
 		lynrummyElmNewPuzzleSession(w, r)
-	case sub == "actions":
-		// Back-compat shim: /actions?session=<id> POSTs from
-		// the current Elm. Go auto-allocates seq from existing
-		// files. Retire when Elm switches to per-seq URLs.
-		lynrummyElmActionsShim(w, r)
 	case sub == "sessions":
 		lynrummyElmSessionsList(w)
 	case sub == "api/sessions":
@@ -265,56 +260,6 @@ func lynrummyElmWriteSessionFile(w http.ResponseWriter, r *http.Request, session
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	fmt.Fprint(w, `{"ok":true}`)
-}
-
-// lynrummyElmActionsShim is the temporary back-compat handler
-// for the pre-LEAN_PASS-phase-2 URL: POST /actions?session=N
-// with body=envelope. Go counts existing action files and
-// allocates the next seq, writes the body verbatim, returns
-// {ok:true, seq:N}. Will retire when Elm posts to per-seq URLs.
-func lynrummyElmActionsShim(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	sessionIDStr := r.URL.Query().Get("session")
-	sessionID, err := strconv.ParseInt(sessionIDStr, 10, 64)
-	if err != nil || sessionID <= 0 {
-		http.Error(w, "missing or bad ?session=<id>", http.StatusBadRequest)
-		return
-	}
-	if !SessionExists(sessionID) {
-		http.NotFound(w, r)
-		return
-	}
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		http.Error(w, "read body: "+err.Error(), http.StatusBadRequest)
-		return
-	}
-	files, _ := ListActionFiles(sessionID)
-	nextSeq := int64(len(files) + 1)
-	rel := filepath.Join("actions", strconv.FormatInt(nextSeq, 10)+".json")
-	if err := WriteSessionFile(sessionID, rel, body); err != nil {
-		http.Error(w, "write: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	// CompleteTurn's expectStringResponse decoder requires a
-	// turn_result field. We can't compute the real outcome
-	// (replay retired); emit a synthetic success so Elm's
-	// already-locally-derived UI proceeds. This is the only
-	// "smart" carve-out in the shim.
-	var probe struct {
-		Action struct {
-			Kind string `json:"action"`
-		} `json:"action"`
-	}
-	if err := json.Unmarshal(body, &probe); err == nil && probe.Action.Kind == "complete_turn" {
-		fmt.Fprintf(w, `{"turn_result":"success","turn_score":0,"cards_drawn":0,"dealt_cards":[],"seq":%d}`, nextSeq)
-		return
-	}
-	fmt.Fprintf(w, `{"ok":true,"seq":%d}`, nextSeq)
 }
 
 // --- Session reads ---

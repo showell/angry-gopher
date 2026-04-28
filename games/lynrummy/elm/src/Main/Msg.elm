@@ -13,7 +13,6 @@ import Browser.Dom
 import Http
 import Game.Rules.Card exposing (Card)
 import Game.CardStack exposing (CardStack)
-import Game.Game exposing (CompleteTurnOutcome)
 import Main.State exposing (ActionLogBundle, Point)
 import Time
 
@@ -65,7 +64,6 @@ type Msg
     | ClickCompleteTurn
     | ClickHint
     | ClickAgentPlay
-    | CompleteTurnResponded (Result Http.Error CompleteTurnOutcome)
     | PopupOk
     | ClickInstantReplay
     | ReplayFrame Time.Posix

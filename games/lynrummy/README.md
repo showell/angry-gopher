@@ -1,102 +1,70 @@
-# Lyn Rummy — Go subsystem
+# Lyn Rummy
 
-**Status:** `WORKHORSE` for the referee + wire path; the
-older trick engine + hint scenarios are retiring.
+**Status:** `WORKHORSE`. Elm is the autonomous client (deals,
+referees, replays). Python is the agent / planner / conformance
+side. Go is dumb file storage at `views/lynrummy_elm.go` plus
+`views/puzzles.go` — the entire `games/lynrummy/` Go package
+was retired 2026-04-28 in LEAN_PASS phase 2.
 
-This subtree holds the Go-side Lyn Rummy code that runs inside
-Angry Gopher: domain types (Card, CardStack, Hand, etc.),
-dealer, referee, replay, scoring, the primitives-only wire
-format, and the server-side rendezvous point for multi-actor
-sessions.
-
-## Before reading the Go code
+## Before reading the code
 
 Start with [`ARCHITECTURE.md`](./ARCHITECTURE.md) — the
 system-wide Lyn Rummy architecture document. It explains the
-event-driven model, the per-actor log story, and where the Go
-subsystem fits relative to the Elm UI and Python agent.
+event-driven model, the per-actor log story, and how Elm and
+Python relate.
 
-## Then — read the load-bearing modules
-
-Per-file domain knowledge lives in each module's top-of-file
-docstring. The `.claude` sidecar system was retired
-2026-04-28 — commit history is now the authoritative record
-of why decisions were made. Check `LABELS.md` at the repo
-root for the generated maturity-label index.
-
-Ordered by "load-bearing first":
-
-- `wire_action.go` — the wire format as seen from Go.
-  Primitives-only. The envelope shape.
-- `referee.go` — move validation: protocol / geometry /
-  semantics / inventory. Stateless.
-- `replay.go` — the action-log reducer. Folds events
-  forward from a deck seed.
-- `dealer.go` — opening board + deck seed. Coordination
-  artifact for multi-player sessions.
-- `board_geometry.go` — bounds, overlap, viewport-pinning
-  constants.
-- `card_stack.go`, `card.go`, `hand.go`, `stack_type.go`,
-  `score.go`, `turn_result.go` — domain primitives.
-- `events.go` — what's left after the 2026-04-20 rip.
-  Currently vestigial.
-
-## Subsystems inside `games/lynrummy/`
+## Subsystems
 
 - `elm/` — the human-facing client (Main.Play + Game.* +
   Main.* harness). Served at `/gopher/lynrummy-elm/`.
-  Includes a partial port of the Python agent
-  (`src/Game/Agent/`) — see `elm/README.md` for the
-  Python-side drift this port hasn't picked up yet.
-- `python/` — agent tools: BFS planner, hand-aware
-  outer loop, verb/primitive translators, autonomous
-  self-play harness, conformance runner, OPTIMIZE_PYTHON
-  diagnostics. The trick engine that this READ-ME used to
-  reference is retiring; `agent_game.py` is the current
-  driver, not `auto_player.py` (deleted 2026-04-25).
+  Includes the BFS planner port (`src/Game/Agent/`),
+  Game.Rules locked-down primitives, the dealer (Game.Dealer),
+  and a referee (Game.Referee). Elm is autonomous; the Go
+  server is observational at most.
+- `python/` — agent tools: BFS planner, hand-aware outer
+  loop, verb/primitive translators, autonomous self-play
+  harness, DSL conformance runner. `agent_game.py` is the
+  driver.
 - `puzzles/` — curated puzzle gallery (added 2026-04-23).
   Elm sub-app compiled from `elm/src/Puzzles.elm`,
-  embedding Main.Play per panel. Served at `/gopher/puzzles/`. The Python
-  catalog is mined from `lynrummy_puzzle_seeds` via
+  embedding `Main.Play` per panel. Served at
+  `/gopher/puzzles/`. The Python catalog is generated from
+  `conformance/mined_seeds.json` via
   `python/puzzle_catalog.py`.
-
-## Tests
-
-- `go test ./games/lynrummy/...` runs the Go suite.
-- `referee_conformance_test.go` is **generated** by
-  `cmd/fixturegen` from the DSL scenarios under
-  `conformance/scenarios/`. Don't hand-edit. See
-  `../../cmd/fixturegen/main.go` for the pipeline.
+- `data/` — file-system-backed session data
+  (`lynrummy-elm/sessions/<id>/{meta.json, actions/<seq>.json,
+  annotations/<seq>.json}`). All committed; `next-session-id.txt`
+  is the counter.
+- `conformance/scenarios/*.dsl` — cross-language scenario
+  contract. Compiled to Elm tests + Python JSON fixtures
+  via `cmd/fixturegen`. Single source of truth for Elm ↔
+  Python parity.
 
 ## Conformance DSL
 
 The DSL under `conformance/scenarios/` is the cross-language
-contract. Three scenario files compile to all three targets
-via `cmd/fixturegen`:
+contract. Scenario files compile to two targets via
+`cmd/fixturegen`:
 
-- `referee.dsl` — referee ops (Go + Elm tests).
+- `referee.dsl` — referee ops (Elm only; Go referee retired
+  with the package 2026-04-28).
 - `tricks.dsl` — hint/trick invariants (Elm + Python; will
   retire as the trick engine retires).
-- `planner.dsl` — `enumerate_moves` + `solve` ops for the
-  four-bucket BFS planner. 6 enumerate_moves cases are live
-  on both Python and Elm. Per-card `narrate_contains` /
-  `hint_contains` cases live on Python only — Elm stubs
-  them with `Expect.pass` until the renderers port. See
-  `elm/README.md` for the current drift list. Futility
-  cases (`expect: no_plan`) — UNCERTAIN whether Elm
-  exercises these end-to-end after the focus-rule port
-  (2026-04-26); needs a dedicated re-check.
+- `planner.dsl`, `planner_corpus.dsl`, `planner_corpus_extras.dsl`,
+  `planner_mined.dsl` — `enumerate_moves` + `solve` ops for the
+  four-bucket BFS planner. Elm + Python.
+- `place_stack.dsl` — `find_open_loc` ops. Elm + Python.
+- `click_agent_play.dsl` — agent-click invariants (Elm).
+- `replay_walkthroughs.dsl` — replay invariants (Elm).
 
-See `../../cmd/fixturegen/main.go` for the codegen
-pipeline and `python/test_dsl_conformance.py` for the
-Python runner.
+See `../../cmd/fixturegen/main.go` for the codegen pipeline
+and `python/test_dsl_conformance.py` for the Python runner.
 
 ## TODO
 
-- Document the `/gopher/lynrummy-elm/*` HTTP surface (lives in
-  `views/lynrummy_elm.go`, not in this package).
-- Retire the trick engine. The BFS planner port to Elm is
-  near-complete as of 2026-04-26 (focus rule + SPLIT_OUT +
-  doomed-third filters all live). Remaining drift is
-  perf/diagnostic only (loop inversion, narrate/hint,
-  diagnostics callback) — none block retirement.
+- Retire the trick engine (`Game.Strategy.Hint` on the Elm
+  side, `strategy.py` on the Python side). The BFS planner
+  is the replacement; full-game UI swap pending per
+  `~/.claude/projects/.../memory/project_hint_solver_split.md`.
+- Doc-sweep `views/puzzles.go`'s `puzzlesAnnotateShim` once
+  Puzzles.elm migrates to the unified URL space.

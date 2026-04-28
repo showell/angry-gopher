@@ -11,10 +11,6 @@
     "validate_game_move",
     "validate_turn_complete"
   ],
-  "go": [
-    "validate_game_move",
-    "validate_turn_complete"
-  ],
   "python": [
     "build_suggestions",
     "enumerate_moves",
