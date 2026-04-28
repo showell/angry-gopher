@@ -16,10 +16,16 @@
 //   # Go move: rewrites import paths + package declarations.
 //   mv auth/ core/auth/
 //
-//   # Elm move: rewrites module names + qualified references.
-//   # Auto-detects the Elm project root via the nearest elm.json
-//   # walking up from the source path.
+//   # Elm directory move: rewrites module names + qualified
+//   # references. Auto-detects the Elm project root via the
+//   # nearest elm.json walking up from the source path.
 //   elm-mv games/lynrummy/elm/src/LynRummy/ games/lynrummy/elm/src/Game/
+//
+//   # Elm file move (auto-detected when src ends in .elm and is
+//   # a file): renames the module declaration in the moved file
+//   # and rewrites every importer's bare/aliased/exposing/chain
+//   # form. Also moves any sibling .claude sidecar.
+//   elm-mv games/lynrummy/elm/src/Game/Card.elm games/lynrummy/elm/src/Game/Rules/Card.elm
 //
 // Dry-run output shows every file that would be touched and every
 // name that would be rewritten. Execute mode applies the changes
@@ -66,16 +72,24 @@ type move struct {
 	newPkg string // e.g. "angry-gopher/core/auth"
 
 	// Elm-specific (kindElm only).
-	elmProjectRoot string // e.g. "games/lynrummy/elm"
-	oldModulePrefix string // e.g. "LynRummy"
-	newModulePrefix string // e.g. "Game"
+	elmProjectRoot  string // e.g. "games/lynrummy/elm"
+	oldModulePrefix string // e.g. "LynRummy" or "Game.Card"
+	newModulePrefix string // e.g. "Game" or "Game.Rules.Card"
+	// elmIsFile is true when src/dst end in .elm and src is a
+	// file (single-file move). The two flavours differ in:
+	//   - what we move: a directory tree vs a .elm + .claude pair
+	//   - how rewrites match: directory mode requires `oldPrefix.X`
+	//     (a chain or `.*` wildcard); file mode also matches the
+	//     bare prefix (e.g. `import Game.Card` with no follow-up
+	//     chain) since the file IS the leaf module.
+	elmIsFile bool
 }
 
 type rewrite struct {
 	file string
 	old  string
 	new  string
-	kind string // "import" | "package" | "elm-module" | "elm-ref"
+	kind string // "import" | "package" | "elm-module" | "elm-ref" | "elm-ref-file"
 }
 
 func main() {
@@ -156,13 +170,23 @@ func main() {
 	fmt.Println()
 
 	for _, m := range moves {
-		fmt.Printf("  [%s] mv %-50s → %s\n", m.kind, m.src+"/", m.dst+"/")
+		srcDisp, dstDisp := m.src, m.dst
+		if !(m.kind == kindElm && m.elmIsFile) {
+			srcDisp += "/"
+			dstDisp += "/"
+		}
+		fmt.Printf("  [%s] mv %-50s → %s\n", m.kind, srcDisp, dstDisp)
 		switch m.kind {
 		case kindGo:
 			fmt.Printf("        import: %q → %q\n", m.oldPkg, m.newPkg)
 		case kindElm:
-			fmt.Printf("        module: %s.* → %s.*  (project root: %s)\n",
-				m.oldModulePrefix, m.newModulePrefix, m.elmProjectRoot)
+			if m.elmIsFile {
+				fmt.Printf("        module: %s → %s  (file move; project root: %s)\n",
+					m.oldModulePrefix, m.newModulePrefix, m.elmProjectRoot)
+			} else {
+				fmt.Printf("        module: %s.* → %s.*  (project root: %s)\n",
+					m.oldModulePrefix, m.newModulePrefix, m.elmProjectRoot)
+			}
 		}
 	}
 	fmt.Println()
@@ -196,11 +220,32 @@ func main() {
 		}
 	}
 
-	fmt.Println("Moving directories...")
+	fmt.Println("Moving paths...")
 	for _, m := range moves {
 		parent := filepath.Dir(m.dst)
 		if parent != "." {
 			os.MkdirAll(parent, 0755)
+		}
+		if m.kind == kindElm && m.elmIsFile {
+			// File-level Elm move: git mv the .elm file and
+			// (if present) its sibling .claude sidecar. git mv
+			// keeps git's rename-detection clean and stages
+			// the move atomically with the rewrites.
+			if err := gitMv(m.src, m.dst); err != nil {
+				fmt.Fprintf(os.Stderr, "error git mv %s → %s: %v\n", m.src, m.dst, err)
+				os.Exit(1)
+			}
+			fmt.Printf("  git mv %s → %s\n", m.src, m.dst)
+			srcSidecar := strings.TrimSuffix(m.src, ".elm") + ".claude"
+			dstSidecar := strings.TrimSuffix(m.dst, ".elm") + ".claude"
+			if _, err := os.Stat(srcSidecar); err == nil {
+				if err := gitMv(srcSidecar, dstSidecar); err != nil {
+					fmt.Fprintf(os.Stderr, "error git mv %s → %s: %v\n", srcSidecar, dstSidecar, err)
+					os.Exit(1)
+				}
+				fmt.Printf("  git mv %s → %s\n", srcSidecar, dstSidecar)
+			}
+			continue
 		}
 		if err := os.Rename(m.src, m.dst); err != nil {
 			fmt.Fprintf(os.Stderr, "error moving %s → %s: %v\n", m.src, m.dst, err)
@@ -333,12 +378,41 @@ func movesOfKind(moves []move, kind moveKind) []move {
 // makeElmMove locates the nearest elm.json above src, resolves the
 // source-directory the path lives under, and derives the old/new
 // dotted module prefix from that.
+//
+// Auto-detects file-vs-directory: if src ends in .elm AND exists as
+// a regular file, the move is treated as a single-file rename
+// (e.g. Game/Card.elm → Game/Rules/Card.elm). dst must then also
+// end in .elm.
 func makeElmMove(src, dst string, line int) (move, error) {
-	root, err := findElmProjectRoot(src)
+	srcInfo, statErr := os.Stat(src)
+	isFile := false
+	if statErr == nil && !srcInfo.IsDir() && strings.HasSuffix(src, ".elm") {
+		isFile = true
+	}
+	if isFile && !strings.HasSuffix(dst, ".elm") {
+		return move{}, fmt.Errorf("line %d: elm-mv file source %q requires a .elm destination, got %q", line, src, dst)
+	}
+	// If src looks .elm-shaped but isn't a regular file, fall
+	// through. main()'s existence check produces the clearer
+	// error message ("source %q does not exist").
+	_ = statErr
+
+	// For file moves, walk up from the file's parent dir to find
+	// elm.json; for directory moves the existing behavior (walk
+	// from src itself) is right.
+	startForRoot := src
+	if isFile {
+		startForRoot = filepath.Dir(src) + "/"
+	}
+	root, err := findElmProjectRoot(startForRoot)
 	if err != nil {
 		return move{}, fmt.Errorf("line %d: %v", line, err)
 	}
-	dstRoot, err := findElmProjectRoot(filepath.Dir(dst) + "/")
+	dstParent := filepath.Dir(dst)
+	if dstParent == "" || dstParent == "." {
+		dstParent = "."
+	}
+	dstRoot, err := findElmProjectRoot(dstParent + "/")
 	if err == nil && dstRoot != root {
 		return move{}, fmt.Errorf("line %d: elm-mv source and destination must live in the same Elm project", line)
 	}
@@ -348,16 +422,42 @@ func makeElmMove(src, dst string, line int) (move, error) {
 		return move{}, fmt.Errorf("line %d: reading elm.json in %s: %v", line, root, err)
 	}
 
-	oldPrefix, err := modulePrefixFor(src, root, sourceDirs)
+	// For file moves the prefix is derived from the path with the
+	// .elm suffix stripped — that gives the full dotted module
+	// name (e.g. src/Game/Card.elm → "Game.Card").
+	srcForPrefix := src
+	dstForPrefix := dst
+	if isFile {
+		srcForPrefix = strings.TrimSuffix(src, ".elm")
+		dstForPrefix = strings.TrimSuffix(dst, ".elm")
+	}
+
+	oldPrefix, err := modulePrefixFor(srcForPrefix, root, sourceDirs)
 	if err != nil {
 		return move{}, fmt.Errorf("line %d: src %q: %v", line, src, err)
 	}
-	newPrefix, err := modulePrefixFor(dst, root, sourceDirs)
+	newPrefix, err := modulePrefixFor(dstForPrefix, root, sourceDirs)
 	if err != nil {
 		return move{}, fmt.Errorf("line %d: dst %q: %v", line, dst, err)
 	}
 	if oldPrefix == newPrefix {
 		return move{}, fmt.Errorf("line %d: computed module prefix did not change (%q)", line, oldPrefix)
+	}
+
+	// File-mode safety check: if a sibling directory with the same
+	// stem exists (e.g. moving Game/Card.elm while Game/Card/
+	// also exists as a sub-tree), the bare-prefix regex would
+	// rewrite references to those submodules too — which is
+	// wrong. Refuse and ask the user to disambiguate.
+	if isFile {
+		stemDir := strings.TrimSuffix(src, ".elm")
+		if info, err := os.Stat(stemDir); err == nil && info.IsDir() {
+			return move{}, fmt.Errorf(
+				"line %d: refusing file move: sibling directory %q exists; "+
+					"a file move would also rewrite references to its submodules. "+
+					"Move the directory first, or move both together explicitly.",
+				line, stemDir)
+		}
 	}
 
 	return move{
@@ -367,6 +467,7 @@ func makeElmMove(src, dst string, line int) (move, error) {
 		elmProjectRoot:  root,
 		oldModulePrefix: oldPrefix,
 		newModulePrefix: newPrefix,
+		elmIsFile:       isFile,
 		line:            line,
 	}, nil
 }
@@ -568,11 +669,18 @@ func findElmFiles(root string) []string {
 }
 
 // scanElmFile records every place in path where the old module
-// prefix appears as a qualified reference. Pattern:
-// `\boldPrefix(?=\.[A-Z])` — so `LynRummy` in `import LynRummy.Card`,
-// `module LynRummy.Card ...`, and `LynRummy.Card.foo` all match.
-// A bare word `LynRummy` in a comment (no following dot-uppercase)
-// does NOT match.
+// prefix appears as a qualified reference.
+//
+// Directory-move pattern: `\boldPrefix(?=\.[A-Z])` — so
+// `LynRummy` in `import LynRummy.Card`, `module LynRummy.Card`,
+// and `LynRummy.Card.foo` all match. A bare word `LynRummy` in a
+// comment (no following dot-uppercase) does NOT match.
+//
+// File-move pattern: also matches the bare prefix as a complete
+// module name. `import Game.Card`, `import Game.Card as C`,
+// `import Game.Card exposing (Card)`, and submodule chains like
+// `Game.Card.foo` all match. The prefix is anchored on both
+// sides so `Game.Cards` (different module) does not match.
 func scanElmFile(path string, m move) []rewrite {
 	if m.kind != kindElm {
 		return nil
@@ -582,7 +690,7 @@ func scanElmFile(path string, m move) []rewrite {
 		return nil
 	}
 	content := string(data)
-	re := elmRefRegex(m.oldModulePrefix)
+	re := elmRefRegex(m.oldModulePrefix, m.elmIsFile)
 	matches := re.FindAllString(content, -1)
 	if len(matches) == 0 {
 		return nil
@@ -590,6 +698,14 @@ func scanElmFile(path string, m move) []rewrite {
 	// Deduplicate for readability in the dry-run report.
 	seen := map[string]bool{}
 	var rws []rewrite
+	kind := "elm-ref"
+	if m.elmIsFile {
+		// File mode rewrites need word-boundary-aware
+		// replacement (so `Game.Card` in `Game.Cards` is
+		// untouched). The applier dispatches on this kind to
+		// use a regex instead of `strings.ReplaceAll`.
+		kind = "elm-ref-file"
+	}
 	for _, match := range matches {
 		if seen[match] {
 			continue
@@ -599,19 +715,37 @@ func scanElmFile(path string, m move) []rewrite {
 			file: path,
 			old:  match,
 			new:  m.newModulePrefix + match[len(m.oldModulePrefix):],
-			kind: "elm-ref",
+			kind: kind,
 		})
 	}
 	return rws
 }
 
-// elmRefRegex matches `<prefix>` when immediately followed by
-// either a dotted uppercase component chain (e.g. `Game.Card` or
-// `Game.Tricks.Hint`) OR a literal `.*` (the "Game.*" wildcard
-// shorthand common in sidecars). Word-boundary at the start
-// avoids matching inside an identifier like `MyGame`.
-func elmRefRegex(prefix string) *regexp.Regexp {
+// elmRefRegex builds the per-mode reference matcher.
+//
+// Directory mode: matches `<prefix>` only when followed by a
+// dotted uppercase chain (`.Card.Something`) or `.*` (wildcard).
+// A bare prefix without a chain is left alone — that's the
+// "prose mention of the game's name" carve-out.
+//
+// File mode: matches the bare prefix as a complete module
+// reference, anchored on both sides by `\b`. The prefix's last
+// segment ends in an identifier char (e.g. `Card`); `\b` then
+// matches against any following non-identifier character or
+// end-of-string. This admits `import Game.Card`, `import
+// Game.Card as C`, `import Game.Card exposing (...)`, and chains
+// `Game.Card.foo` / `Game.Card.subThing` uniformly. It rejects
+// continuations into a different word: `Game.Cards` (followed by
+// `s`, a word char) does not match.
+func elmRefRegex(prefix string, isFile bool) *regexp.Regexp {
 	escaped := regexp.QuoteMeta(prefix)
+	if isFile {
+		// `\b<prefix>\b` — Go's RE2 lacks lookahead, but \b is a
+		// zero-width word boundary that gives the same effect:
+		// the prefix must be followed by a non-word char (incl.
+		// `.`) or EOS, never by another identifier char.
+		return regexp.MustCompile(`\b` + escaped + `\b`)
+	}
 	// Two alternatives: `.Card.Something` (identifier chain) OR
 	// `.*` (wildcard). The identifier branch ends at `\b` so
 	// `Card0` isn't clipped to `Card`.
@@ -646,6 +780,12 @@ func applyRewrite(rw rewrite) error {
 		// The scanner dedupes, but applyRewrite may be called
 		// once per unique match — so replace ALL.
 		newContent = strings.ReplaceAll(content, rw.old, rw.new)
+	case "elm-ref-file":
+		// File-mode rewrites are word-boundary-anchored: the
+		// prefix `Game.Card` must not match inside
+		// `Game.Cards`. Use a regex instead of ReplaceAll.
+		re := regexp.MustCompile(`\b` + regexp.QuoteMeta(rw.old) + `\b`)
+		newContent = re.ReplaceAllString(content, rw.new)
 	default:
 		return fmt.Errorf("unknown rewrite kind: %s", rw.kind)
 	}
@@ -653,6 +793,23 @@ func applyRewrite(rw rewrite) error {
 		return nil
 	}
 	return os.WriteFile(rw.file, []byte(newContent), 0644)
+}
+
+// --- git mv (file-mode Elm moves) ---
+
+// gitMv runs `git mv src dst`. The parent of dst must already
+// exist. Errors if the working tree's git invocation fails.
+func gitMv(src, dst string) error {
+	parent := filepath.Dir(dst)
+	if parent != "." && parent != "" {
+		if err := os.MkdirAll(parent, 0755); err != nil {
+			return fmt.Errorf("mkdir %s: %v", parent, err)
+		}
+	}
+	cmd := exec.Command("git", "mv", src, dst)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
 }
 
 // --- Elm verification ---

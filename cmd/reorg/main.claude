@@ -34,9 +34,17 @@ Script grammar:
 # across every .go file in the repo.
 mv auth/ core/auth/
 
-# Elm move: rewrites `module X` + qualified `X.Y` references
-# across every .elm and .claude file under the Elm project.
+# Elm directory move: rewrites `module X` + qualified `X.Y`
+# references across every .elm and .claude file under the
+# Elm project.
 elm-mv games/lynrummy/elm/src/LynRummy/ games/lynrummy/elm/src/Game/
+
+# Elm file move (auto-detected when src ends in .elm and is
+# a regular file): renames the module declaration and rewrites
+# every importer's bare/aliased/exposing/chain reference. Also
+# moves the sibling .claude sidecar if present. Both paths
+# end in .elm; the move uses `git mv`.
+elm-mv games/lynrummy/elm/src/Game/Card.elm games/lynrummy/elm/src/Game/Rules/Card.elm
 ```
 
 ## Go semantics (`mv`)
@@ -62,11 +70,26 @@ Source-directory detection:
 - Also treats `tests/` as a source-dir by elm-test convention,
   if the directory exists.
 
+Two flavours, auto-detected from the source path:
+
+- **Directory move** (`src/LynRummy/ → src/Game/`): src is a
+  directory. Moves the whole tree with `os.Rename` and rewrites
+  the dotted prefix everywhere it occurs as a chain or wildcard.
+- **File move** (`src/Game/Card.elm → src/Game/Rules/Card.elm`):
+  src ends in `.elm` and is a regular file. dst must also end in
+  `.elm`. Uses `git mv` for the file and (if present) its
+  sibling `.claude` sidecar. Rewrites the moved file's `module`
+  declaration plus every importer's bare/aliased/exposing/chain
+  reference.
+
 Old/new module prefix derivation:
 
-- Takes the path relative to the Elm source-dir and converts `/`
-  to `.`. So `src/LynRummy` → `LynRummy`; `src/Game/Tricks` →
-  `Game.Tricks`.
+- Directory mode: takes the directory path relative to the Elm
+  source-dir and converts `/` to `.`. So `src/LynRummy` →
+  `LynRummy`; `src/Game/Tricks` → `Game.Tricks`.
+- File mode: strips `.elm` first, then same conversion. So
+  `src/Game/Card.elm` → `Game.Card`;
+  `src/Game/Rules/Card.elm` → `Game.Rules.Card`.
 - Both src and dst must live under the same Elm project, and
   the computed prefixes must differ.
 
@@ -74,12 +97,25 @@ Rewrite rules:
 
 - Scans every `.elm` and `.claude` file under the project root
   (sidecars use module-qualified names the same as code).
-- Regex: `\b<oldPrefix>(\.\*|\.UpperCase[.Chain]*\b)` — matches
-  `OldPrefix.Card`, `OldPrefix.Tricks.Hint`, and `OldPrefix.*`
-  (the wildcard shorthand common in sidecars).
-- Bare `<oldPrefix>` without `.` follow-up (e.g. the word
-  "LynRummy" in prose) is NOT rewritten. Prose references to
-  the game's name survive.
+- **Directory mode** regex:
+  `\b<oldPrefix>(\.\*|\.UpperCase[.Chain]*\b)`
+  — matches `OldPrefix.Card`, `OldPrefix.Tricks.Hint`, and
+  `OldPrefix.*` (wildcard shorthand). Bare `<oldPrefix>` without
+  a `.` follow-up (e.g. the word "LynRummy" in prose) is NOT
+  rewritten. Prose references to the game's name survive.
+- **File mode** regex: `\b<oldPrefix>\b` — also matches the
+  bare prefix as a complete module name, so `import Game.Card`,
+  `import Game.Card as C`, `import Game.Card exposing (Card)`,
+  and `Game.Card.foo` all rewrite uniformly. Word-boundary
+  anchoring keeps `Game.Cards` and `Game.CardStack` untouched.
+  Replacement uses a regex (not `strings.ReplaceAll`) for the
+  same word-boundary reason.
+
+File-mode safety check: if a sibling directory with the same
+stem exists (e.g. moving `Game/Card.elm` while `Game/Card/` also
+exists), the tool refuses — bare-prefix rewriting would also
+clobber references to the submodules. Move the directory first,
+or handle them together explicitly.
 
 Dedup: when multiple Elm moves share a (root, oldPrefix,
 newPrefix) combo — e.g. `src/LynRummy → src/Game` paired with
@@ -100,10 +136,19 @@ make src/Main.elm --output=/dev/null` in the project root
 - Does NOT update `cmd/fixturegen` or any other code generator
   that emits Elm module references in string templates. Update
   those by hand before re-running the generator.
-- Does NOT handle single-file Elm renames (e.g. renaming
-  `Game/Game.elm` to `Game/Turn.elm` which would only change
-  one module name's last segment). That would need a different
-  verb — not built.
+- Does NOT handle single-file Elm renames where the basename
+  changes within the same parent (e.g.
+  `Game/HandLayout.elm → Game/Layout.elm`). The current file
+  mode is built for parent-path changes with a stable basename
+  (`Game/Card.elm → Game/Rules/Card.elm`); a basename-changing
+  rename would also rewrite the module's last segment and is
+  not exercised. Either move + rename in two steps, or extend
+  the tool.
+- Does NOT clean up empty parent directories left behind after
+  a file-mode move. The destination's parent is created with
+  `os.MkdirAll`; on revert the now-empty intermediate dir
+  remains. Remove it manually if desired (git ignores empty
+  dirs anyway).
 
 ## Pointers
 
@@ -111,3 +156,8 @@ make src/Main.elm --output=/dev/null` in the project root
 - REORG script format documented in the `main.go` header comment.
 - The tool was exercised on 2026-04-21 for the `LynRummy → Game`
   rename under games/lynrummy/elm/.
+- File-mode (`elm-mv` for a single `.elm` file) added 2026-04-27
+  after a sub-agent had to fall back to a Python regex script to
+  do `Game/Card.elm → Game/Rules/Card.elm`-style moves. Verified
+  on a `Game/HandLayout.elm` round-trip: 7 files rewritten,
+  check.sh green, then reverted with check.sh still green.
