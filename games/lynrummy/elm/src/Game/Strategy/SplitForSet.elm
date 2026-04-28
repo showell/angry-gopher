@@ -8,9 +8,9 @@ Mirrors `angry-gopher/lynrummy/tricks/split_for_set.go`.
 
 -}
 
-import Game.Card exposing (Card, Suit)
+import Game.Rules.Card exposing (Card, Suit)
 import Game.CardStack exposing (CardStack, HandCard, canExtract)
-import Game.StackType exposing (CardStackType(..), getStackType)
+import Game.Rules.StackType exposing (CardStackType(..), getStackType)
 import Game.Strategy.Helpers exposing (extractCard, freshlyPlayed, pushNewStack)
 import Game.Strategy.Trick exposing (Play, Trick)
 

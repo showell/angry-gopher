@@ -18,7 +18,7 @@ re-resolves stacks against the live board by content.
 
 -}
 
-import Game.Card exposing (Card)
+import Game.Rules.Card exposing (Card)
 
 
 type alias Stack =

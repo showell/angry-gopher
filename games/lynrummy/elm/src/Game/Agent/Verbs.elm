@@ -26,7 +26,7 @@ import Game.Agent.Move as Move
         , SpliceDesc
         )
 import Game.BoardActions as BoardActions
-import Game.Card exposing (Card)
+import Game.Rules.Card exposing (Card)
 import Game.CardStack as CardStack exposing (CardStack, stacksEqual)
 import Game.WireAction exposing (WireAction(..))
 

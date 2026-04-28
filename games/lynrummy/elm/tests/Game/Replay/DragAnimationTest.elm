@@ -32,7 +32,7 @@ What's NOT in scope here:
 
 import Expect
 import Game.BoardActions as BoardActions
-import Game.Card exposing (Card, CardValue(..), OriginDeck(..), Suit(..))
+import Game.Rules.Card exposing (Card, CardValue(..), OriginDeck(..), Suit(..))
 import Game.CardStack exposing (BoardCard, BoardCardState(..), CardStack)
 import Game.Replay.DragAnimation as DA
 import Game.Replay.Space as Space

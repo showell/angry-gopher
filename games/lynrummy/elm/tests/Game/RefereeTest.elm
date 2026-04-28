@@ -32,7 +32,7 @@ Deferred with their modules:
 
 import Expect
 import Game.BoardGeometry exposing (BoardBounds)
-import Game.Card exposing (Card, CardValue(..), OriginDeck(..), Suit(..))
+import Game.Rules.Card exposing (Card, CardValue(..), OriginDeck(..), Suit(..))
 import Game.CardStack
     exposing
         ( BoardCard

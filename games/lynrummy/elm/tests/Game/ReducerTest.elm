@@ -8,7 +8,7 @@ no-ops here (turn-logic handled elsewhere).
 
 import Expect
 import Game.BoardActions exposing (Side(..))
-import Game.Card exposing (CardValue(..), OriginDeck(..), Suit(..))
+import Game.Rules.Card exposing (CardValue(..), OriginDeck(..), Suit(..))
 import Game.CardStack exposing (BoardCardState(..), CardStack)
 import Game.Hand as Hand
 import Game.Reducer as Reducer

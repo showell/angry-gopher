@@ -25,7 +25,7 @@ to the incoming party. In the Go path that decision flows from
 
 -}
 
-import Game.Card exposing (Card)
+import Game.Rules.Card exposing (Card)
 import Game.CardStack as CardStack exposing (CardStack, HandCardState(..))
 import Game.Hand as Hand exposing (Hand)
 import Game.PlayerTurn as PlayerTurn exposing (CompleteTurnResult(..))

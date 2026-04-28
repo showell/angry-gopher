@@ -593,7 +593,7 @@ import Game.Agent.Buckets as AgentBuckets exposing (Buckets)
 import Game.Agent.Enumerator as AgentEnumerator
 import Game.Agent.Move as AgentMove exposing (Move(..))
 import Game.BoardGeometry exposing (BoardBounds)
-import Game.Card exposing (Card, CardValue(..), OriginDeck(..), Suit(..))
+import Game.Rules.Card exposing (Card, CardValue(..), OriginDeck(..), Suit(..))
 import Game.CardStack
     exposing
         ( BoardCard
@@ -607,7 +607,7 @@ import Game.BoardActions as BoardActions
 import Game.PlaceStack
 import Game.Referee as Referee exposing (RefereeStage(..), refereeStageToString)
 import Game.Replay.Time as ReplayTime
-import Game.StackType as StackType
+import Game.Rules.StackType as StackType
 import Game.Strategy.Hint as Hint
 import Game.WireAction as WA exposing (WireAction)
 import Main.Apply as Apply

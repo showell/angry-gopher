@@ -16,13 +16,13 @@ snapshot.
 -}
 
 import Expect
-import Game.Card exposing (Card, CardValue(..), OriginDeck(..), Suit(..))
+import Game.Rules.Card exposing (Card, CardValue(..), OriginDeck(..), Suit(..))
 import Game.CardStack
     exposing
         ( BoardCardState(..)
         , CardStack
         )
-import Game.StackType as StackType
+import Game.Rules.StackType as StackType
 import Http
 import Main.Msg exposing (Msg(..))
 import Main.Play as Play

@@ -9,7 +9,7 @@ Mirrors `angry-gopher/lynrummy/tricks/rb_swap.go`.
 
 -}
 
-import Game.Card exposing (Card, suitColor)
+import Game.Rules.Card exposing (Card, suitColor)
 import Game.CardStack
     exposing
         ( BoardCardState(..)
@@ -19,7 +19,7 @@ import Game.CardStack
         , rightMerge
         , stackType
         )
-import Game.StackType exposing (CardStackType(..), getStackType)
+import Game.Rules.StackType exposing (CardStackType(..), getStackType)
 import Game.Strategy.Helpers
     exposing
         ( freshlyPlayed

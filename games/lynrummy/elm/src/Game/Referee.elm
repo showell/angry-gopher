@@ -54,7 +54,7 @@ how many moves per turn. Those are social rules, not physics.
 -}
 
 import Game.BoardGeometry exposing (BoardBounds, validateBoardGeometry)
-import Game.Card exposing (Card)
+import Game.Rules.Card exposing (Card)
 import Game.CardStack
     exposing
         ( CardStack
@@ -65,7 +65,7 @@ import Game.CardStack
         , handCardDecoder
         , stacksEqual
         )
-import Game.StackType exposing (CardStackType(..), getStackType)
+import Game.Rules.StackType exposing (CardStackType(..), getStackType)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode exposing (Value)
 
@@ -233,7 +233,7 @@ stackTypeStr t =
 stackDebugStr : CardStack -> String
 stackDebugStr s =
     s.boardCards
-        |> List.map (.card >> Game.Card.cardStr)
+        |> List.map (.card >> Game.Rules.Card.cardStr)
         |> String.join ","
 
 
@@ -291,7 +291,7 @@ consumeFromPool pool added =
                         { stage = Inventory
                         , message =
                             "card "
-                                ++ Game.Card.cardStr card
+                                ++ Game.Rules.Card.cardStr card
                                 ++ " appeared on the board with no source"
                         }
 
@@ -307,7 +307,7 @@ checkEveryHandCardPlaced handCards leftoverPool =
                 { stage = Inventory
                 , message =
                     "hand card "
-                        ++ Game.Card.cardStr c
+                        ++ Game.Rules.Card.cardStr c
                         ++ " was declared played but not placed on the board"
                 }
 
@@ -337,7 +337,7 @@ checkNoBoardDuplicates board =
                 { stage = Inventory
                 , message =
                     "duplicate card on board: "
-                        ++ Game.Card.cardStr c
+                        ++ Game.Rules.Card.cardStr c
                 }
 
         Nothing ->

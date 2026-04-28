@@ -61,6 +61,6 @@ identity** (Card, not HandCard — wire doesn't carry state).
   `wire_action.claude`. Same shape. Cross-language
   conformance via `games/lynrummy/conformance/` scenarios
   + format-lock tests.
-- Depends on: `Game.Card.encodeCard` / `cardDecoder`,
+- Depends on: `Game.Rules.Card.encodeCard` / `cardDecoder`,
   `Game.CardStack.encodeBoardLocation` /
   `boardLocationDecoder`, `Game.BoardActions.Side`.

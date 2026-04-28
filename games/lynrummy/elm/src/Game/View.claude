@@ -84,7 +84,7 @@ Wing:
 
 - Consumer: `Main.elm` composes the full view from these
   primitives.
-- Depends on: `Game.Card.cardColor` /
+- Depends on: `Game.Rules.Card.cardColor` /
   `valueDisplayStr` / `suitEmojiStr`,
   `Game.CardStack.incomplete`,
   `Game.Hand`,

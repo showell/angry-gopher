@@ -18,7 +18,7 @@ Added (current-Claude filling in past-Claude's thin spots):
 -}
 
 import Expect
-import Game.Card exposing (Card, CardValue(..), OriginDeck(..), Suit(..), cardFromLabel)
+import Game.Rules.Card exposing (Card, CardValue(..), OriginDeck(..), Suit(..), cardFromLabel)
 import Game.CardStack
     exposing
         ( BoardCardState(..)
@@ -39,7 +39,7 @@ import Game.CardStack
         , stackType
         , stacksEqual
         )
-import Game.StackType exposing (CardStackType(..))
+import Game.Rules.StackType exposing (CardStackType(..))
 import Test exposing (Test, describe, test)
 
 

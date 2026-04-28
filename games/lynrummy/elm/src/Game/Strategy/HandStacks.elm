@@ -9,9 +9,9 @@ Mirrors `angry-gopher/lynrummy/tricks/hand_stacks.go`.
 -}
 
 import Dict exposing (Dict)
-import Game.Card exposing (cardValueToInt, suitToInt)
+import Game.Rules.Card exposing (cardValueToInt, suitToInt)
 import Game.CardStack exposing (CardStack, HandCard)
-import Game.StackType exposing (CardStackType(..), getStackType)
+import Game.Rules.StackType exposing (CardStackType(..), getStackType)
 import Game.Strategy.Helpers exposing (freshlyPlayed, pushNewStack)
 import Game.Strategy.Trick exposing (Play, Trick)
 
@@ -255,8 +255,8 @@ rbConsecutiveRuns sorted =
                                         + 1
 
                                 colorOK =
-                                    Game.Card.suitColor hc.card.suit
-                                        /= Game.Card.suitColor prev.card.suit
+                                    Game.Rules.Card.suitColor hc.card.suit
+                                        /= Game.Rules.Card.suitColor prev.card.suit
                             in
                             if valOK && colorOK then
                                 ( acc, hc :: current )

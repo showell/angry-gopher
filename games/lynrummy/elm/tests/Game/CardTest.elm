@@ -1,6 +1,6 @@
 module Game.CardTest exposing (suite)
 
-{-| Tests for `Game.Card`. Ported from
+{-| Tests for `Game.Rules.Card`. Ported from
 `angry-cat/src/lyn_rummy/core/card_test.ts`.
 
 Divergences from the TS source:
@@ -21,7 +21,7 @@ Divergences from the TS source:
 -}
 
 import Expect
-import Game.Card exposing (..)
+import Game.Rules.Card exposing (..)
 import Game.Random as R
 import Set
 import Test exposing (Test, describe, test)
@@ -29,7 +29,7 @@ import Test exposing (Test, describe, test)
 
 suite : Test
 suite =
-    describe "Game.Card"
+    describe "Game.Rules.Card"
         [ valueStrTests
         , suitEmojiStrTests
         , cardConstructionTests

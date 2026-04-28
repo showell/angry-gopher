@@ -14,13 +14,13 @@ import Game.Agent.Move as Move
         , Side(..)
         , SourceBucket(..)
         )
-import Game.Card exposing (Card, OriginDeck(..))
+import Game.Rules.Card exposing (Card, OriginDeck(..))
 import Test exposing (..)
 
 
 card : String -> Card
 card label =
-    case Game.Card.cardFromLabel label DeckOne of
+    case Game.Rules.Card.cardFromLabel label DeckOne of
         Just c ->
             c
 

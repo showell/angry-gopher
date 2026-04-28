@@ -28,12 +28,12 @@ status message.
 -}
 
 import Game.BoardGeometry as BoardGeometry exposing (BoardGeometryStatus(..))
-import Game.Card
+import Game.Rules.Card
 import Game.CardStack as CardStack exposing (CardStack)
 import Game.Game as Game
 import Game.Reducer as Reducer
 import Game.Score as Score
-import Game.StackType as StackType
+import Game.Rules.StackType as StackType
 import Game.WireAction as WA exposing (WireAction)
 import Main.State
     exposing
@@ -323,7 +323,7 @@ isCleanBoard board =
     List.all (stackCards >> StackType.getStackType >> isCompleteType) board
 
 
-stackCards : CardStack -> List Game.Card.Card
+stackCards : CardStack -> List Game.Rules.Card.Card
 stackCards stack =
     List.map .card stack.boardCards
 

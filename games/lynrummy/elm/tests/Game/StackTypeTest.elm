@@ -1,6 +1,6 @@
 module Game.StackTypeTest exposing (suite)
 
-{-| Tests for `Game.StackType`. Ported from
+{-| Tests for `Game.Rules.StackType`. Ported from
 `angry-cat/src/lyn_rummy/core/stack_type_test.ts`.
 
 Covers: `getStackType` classification over representative hands,
@@ -16,8 +16,8 @@ will rely on.
 -}
 
 import Expect
-import Game.Card exposing (Card, CardValue(..), OriginDeck(..), Suit(..), allCardValues, cardFromLabel)
-import Game.StackType
+import Game.Rules.Card exposing (Card, CardValue(..), OriginDeck(..), Suit(..), allCardValues, cardFromLabel)
+import Game.Rules.StackType
     exposing
         ( CardStackType(..)
         , getStackType
@@ -69,7 +69,7 @@ fallbackCard =
 
 suite : Test
 suite =
-    describe "Game.StackType"
+    describe "Game.Rules.StackType"
         [ getStackTypeTests
         , valueDistanceTests
         , successorTests

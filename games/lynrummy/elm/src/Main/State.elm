@@ -38,7 +38,7 @@ ripples in.
 -}
 
 import Game.Agent.Move exposing (Move)
-import Game.Card exposing (Card)
+import Game.Rules.Card exposing (Card)
 import Game.CardStack exposing (CardStack)
 import Game.Dealer
 import Game.GestureArbitration as GA

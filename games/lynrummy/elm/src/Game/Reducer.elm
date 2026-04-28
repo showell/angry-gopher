@@ -16,7 +16,7 @@ modeled here (and Undo is deliberately deferred in V1 replay).
 -}
 
 import Game.BoardActions as BoardActions
-import Game.Card exposing (Card)
+import Game.Rules.Card exposing (Card)
 import Game.CardStack as CardStack exposing (CardStack, HandCard, findStack, stacksEqual)
 import Game.Dealer
 import Game.Hand as Hand exposing (Hand)

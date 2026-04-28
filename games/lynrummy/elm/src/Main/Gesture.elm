@@ -63,7 +63,7 @@ for merge / place / move.
 
 import Browser.Dom
 import Game.BoardGeometry as BG
-import Game.Card exposing (Card)
+import Game.Rules.Card exposing (Card)
 import Game.CardStack as CardStack exposing (BoardLocation, CardStack, HandCard)
 import Game.GestureArbitration as GA
 import Game.WingOracle as WingOracle

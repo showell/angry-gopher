@@ -21,7 +21,7 @@ deeper.
 
 -}
 
-import Game.Card exposing (Card)
+import Game.Rules.Card exposing (Card)
 import Game.CardStack exposing (CardStack, HandCard)
 import Game.Hand exposing (Hand)
 import Game.Strategy.DirectPlay as DirectPlay

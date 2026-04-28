@@ -60,7 +60,7 @@ Intentional Elm divergences:
 
 -}
 
-import Game.Card
+import Game.Rules.Card
     exposing
         ( Card
         , OriginDeck
@@ -69,7 +69,7 @@ import Game.Card
         , cardStr
         , encodeCard
         )
-import Game.StackType
+import Game.Rules.StackType
     exposing
         ( CardStackType(..)
         , getStackType
@@ -621,7 +621,7 @@ cardStackDecoder =
         (Decode.field "loc" boardLocationDecoder)
 
 
-{-| Internal: same shape as `Game.Card.intDecoderVia`.
+{-| Internal: same shape as `Game.Rules.Card.intDecoderVia`.
 Duplicated rather than exported across module boundary; both
 modules need the helper privately.
 -}

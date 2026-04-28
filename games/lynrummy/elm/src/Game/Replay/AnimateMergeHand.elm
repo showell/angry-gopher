@@ -23,7 +23,7 @@ Companion: `Game.Replay.AnimatePlaceHand`.
 -}
 
 import Game.BoardActions exposing (Side)
-import Game.Card exposing (Card)
+import Game.Rules.Card exposing (Card)
 import Game.CardStack as CardStack exposing (CardStack)
 import Game.Replay.Space as Space
 import Game.WireAction as WA

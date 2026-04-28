@@ -57,7 +57,7 @@ when mining took over the catalog.)
   at `src/Game` replaced by source-directory sharing in
   `elm.json`: `../../elm/src` is a second source root).
 - `Main.State`, `Main.Msg` — via re-export.
-- `Game.Card`, `Game.CardStack`, `Game.Hand` — domain types
+- `Game.Rules.Card`, `Game.CardStack`, `Game.Hand` — domain types
   used when constructing Demo literals.
 
 ## Pointers

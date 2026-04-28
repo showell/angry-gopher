@@ -24,7 +24,7 @@ translation lives in `Game.Agent.Verbs`.
 -}
 
 import Game.Agent.Buckets exposing (Stack)
-import Game.Card
+import Game.Rules.Card
     exposing
         ( Card
         , OriginDeck(..)

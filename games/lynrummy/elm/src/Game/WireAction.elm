@@ -20,7 +20,7 @@ the reducer's reordering. See `games/lynrummy/WIRE.md`.
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode exposing (Value)
 import Game.BoardActions exposing (Side(..))
-import Game.Card as Card exposing (Card)
+import Game.Rules.Card as Card exposing (Card)
 import Game.CardStack exposing (BoardLocation, CardStack, boardLocationDecoder, cardStackDecoder, encodeBoardLocation, encodeCardStack)
 
 

@@ -11,7 +11,7 @@ Companion to `AnimateMergeHand` — same shape, different
 target endpoint (PlaceHand uses the payload's explicit `loc`).
 -}
 
-import Game.Card exposing (Card)
+import Game.Rules.Card exposing (Card)
 import Game.CardStack exposing (BoardLocation)
 import Game.Replay.Space as Space
 import Game.WireAction as WA

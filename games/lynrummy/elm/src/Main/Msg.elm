@@ -11,7 +11,7 @@ Extracted 2026-04-19 from the pre-split `Main.elm` monolith.
 
 import Browser.Dom
 import Http
-import Game.Card exposing (Card)
+import Game.Rules.Card exposing (Card)
 import Game.CardStack exposing (CardStack)
 import Game.Game exposing (CompleteTurnOutcome)
 import Main.State exposing (ActionLogBundle, Point)

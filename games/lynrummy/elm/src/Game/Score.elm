@@ -24,7 +24,7 @@ Intentional Elm divergences:
 -}
 
 import Game.CardStack as CardStack exposing (CardStack)
-import Game.StackType exposing (CardStackType(..))
+import Game.Rules.StackType exposing (CardStackType(..))
 
 
 {-| Points awarded per card for stacks of the given valid

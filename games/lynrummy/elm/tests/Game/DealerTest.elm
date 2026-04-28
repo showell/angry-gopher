@@ -17,7 +17,7 @@ Covered:
 -}
 
 import Expect
-import Game.Card as Card exposing (OriginDeck(..), Suit(..))
+import Game.Rules.Card as Card exposing (OriginDeck(..), Suit(..))
 import Game.Dealer as Dealer
 import Game.Hand as Hand
 import Game.Random as Random

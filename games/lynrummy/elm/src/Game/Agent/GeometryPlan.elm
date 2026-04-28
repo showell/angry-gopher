@@ -24,7 +24,7 @@ import Game.BoardGeometry
         , cardPitch
         , validateBoardGeometry
         )
-import Game.Card
+import Game.Rules.Card
 import Game.CardStack as CardStack exposing (CardStack, stacksEqual)
 import Game.PlaceStack as PlaceStack
 import Game.WireAction exposing (WireAction(..))
@@ -369,7 +369,7 @@ stackBoundingRect s =
     }
 
 
-stackKey : CardStack -> ( CardStack.BoardLocation, List Game.Card.Card )
+stackKey : CardStack -> ( CardStack.BoardLocation, List Game.Rules.Card.Card )
 stackKey s =
     ( s.loc, List.map .card s.boardCards )
 

@@ -12,13 +12,13 @@ import Expect
 import Game.Agent.Buckets exposing (Buckets)
 import Game.Agent.Enumerator as Enumerator exposing (enumerateMoves)
 import Game.Agent.Move as Move exposing (Move(..))
-import Game.Card exposing (Card, OriginDeck(..))
+import Game.Rules.Card exposing (Card, OriginDeck(..))
 import Test exposing (..)
 
 
 card : String -> Card
 card label =
-    case Game.Card.cardFromLabel label DeckOne of
+    case Game.Rules.Card.cardFromLabel label DeckOne of
         Just c ->
             c
 
@@ -28,7 +28,7 @@ card label =
 
 cardD2 : String -> Card
 cardD2 label =
-    case Game.Card.cardFromLabel label DeckTwo of
+    case Game.Rules.Card.cardFromLabel label DeckTwo of
         Just c ->
             c
 

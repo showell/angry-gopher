@@ -23,7 +23,7 @@ stale pinned math).
 -}
 
 import Game.BoardGeometry as BG
-import Game.Card exposing (Card, OriginDeck(..))
+import Game.Rules.Card exposing (Card, OriginDeck(..))
 
 
 {-| Viewport-left of the hand area. Aligned with the left of
@@ -70,9 +70,9 @@ DOM node.
 handCardDomId : Card -> String
 handCardDomId card =
     "hand-card-v"
-        ++ String.fromInt (Game.Card.cardValueToInt card.value)
+        ++ String.fromInt (Game.Rules.Card.cardValueToInt card.value)
         ++ "-s"
-        ++ String.fromInt (Game.Card.suitToInt card.suit)
+        ++ String.fromInt (Game.Rules.Card.suitToInt card.suit)
         ++ "-d"
         ++ (case card.originDeck of
                 DeckOne ->

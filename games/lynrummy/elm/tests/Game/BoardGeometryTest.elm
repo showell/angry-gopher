@@ -20,7 +20,7 @@ import Game.BoardGeometry
         , stackWidth
         , validateBoardGeometry
         )
-import Game.Card exposing (CardValue(..), OriginDeck(..), Suit(..))
+import Game.Rules.Card exposing (CardValue(..), OriginDeck(..), Suit(..))
 import Game.CardStack
     exposing
         ( BoardCard

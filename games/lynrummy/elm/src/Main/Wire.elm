@@ -35,7 +35,7 @@ Extracted 2026-04-19 from the pre-split `Main.elm` monolith.
 
 -}
 
-import Game.Card as Card
+import Game.Rules.Card as Card
 import Game.CardStack as CardStack
 import Game.Game exposing (CompleteTurnOutcome)
 import Game.Hand exposing (Hand)

@@ -8,7 +8,7 @@ Mirrors `angry-gopher/lynrummy/tricks/loose_card_play.go`.
 
 -}
 
-import Game.Card exposing (Card)
+import Game.Rules.Card exposing (Card)
 import Game.CardStack
     exposing
         ( CardStack
@@ -18,7 +18,7 @@ import Game.CardStack
         , rightMerge
         , stackType
         )
-import Game.StackType exposing (CardStackType(..))
+import Game.Rules.StackType exposing (CardStackType(..))
 import Game.Strategy.Helpers
     exposing
         ( extractCard

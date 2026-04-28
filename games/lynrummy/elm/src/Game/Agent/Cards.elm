@@ -7,13 +7,13 @@ module Game.Agent.Cards exposing
 {-| Agent-side card predicates the BFS planner consumes.
 
 `isLegalStack` is a thin filter on top of
-`Game.StackType.getStackType`. `isPartialOk` and `neighbors`
+`Game.Rules.StackType.getStackType`. `isPartialOk` and `neighbors`
 have no existing Elm equivalent — ported from
 `python/beginner.py`.
 
 -}
 
-import Game.Card
+import Game.Rules.Card
     exposing
         ( Card
         , CardValue
@@ -22,7 +22,7 @@ import Game.Card
         , cardColor
         , suitColor
         )
-import Game.StackType as StackType
+import Game.Rules.StackType as StackType
     exposing
         ( CardStackType(..)
         , predecessor

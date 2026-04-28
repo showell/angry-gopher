@@ -17,7 +17,7 @@ tests fail loudly.
 
 import Expect
 import Fixtures exposing (at, stackAt)
-import Game.Card exposing (Card, CardValue(..), OriginDeck(..), Suit(..))
+import Game.Rules.Card exposing (Card, CardValue(..), OriginDeck(..), Suit(..))
 import Game.CardStack exposing (CardStack, HandCard, HandCardState(..))
 import Main.Gesture as Gesture
 import Main.Play as Play

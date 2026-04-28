@@ -74,7 +74,7 @@ matches the TS original:
 | CompleteTurn | — | "Turn N — Player M to play." | Celebrate |
 | Undo | — | "Undone." | Inform |
 
-Clean-board detection uses `Game.StackType.getStackType` —
+Clean-board detection uses `Game.Rules.StackType.getStackType` —
 every stack must classify as Set / PureRun / RedBlackRun.
 
 On top of the primary message, a **tidiness overlay** can
@@ -159,11 +159,11 @@ awareness.
 
 - `Game.BoardGeometry` — BoardBounds type for
   `refereeBounds`.
-- `Game.Card`, `Game.CardStack` — domain types.
+- `Game.Rules.Card`, `Game.CardStack` — domain types.
 - `Game.Game` — `noteCardsPlayed`, `applyCompleteTurn`.
 - `Game.Reducer` — `applyAction` for the physics half.
 - `Game.Score` — `forStacks`.
-- `Game.StackType` — `getStackType` for clean-board detection.
+- `Game.Rules.StackType` — `getStackType` for clean-board detection.
 - `Game.WireAction` — `WireAction(..)` for the dispatch.
 - `Main.State` — Model, ActionOutcome, StatusKind,
   StatusMessage, activeHand, setActiveHand.

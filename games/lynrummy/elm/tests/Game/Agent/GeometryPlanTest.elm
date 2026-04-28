@@ -10,7 +10,7 @@ merges whose result would violate get a pre-flight
 import Expect
 import Game.Agent.GeometryPlan as GeometryPlan
 import Game.BoardActions as BoardActions
-import Game.Card exposing (Card, OriginDeck(..))
+import Game.Rules.Card exposing (Card, OriginDeck(..))
 import Game.CardStack exposing (BoardCard, BoardCardState(..), CardStack)
 import Game.WireAction exposing (WireAction(..))
 import Test exposing (..)
@@ -18,7 +18,7 @@ import Test exposing (..)
 
 card : String -> Card
 card label =
-    case Game.Card.cardFromLabel label DeckOne of
+    case Game.Rules.Card.cardFromLabel label DeckOne of
         Just c ->
             c
 

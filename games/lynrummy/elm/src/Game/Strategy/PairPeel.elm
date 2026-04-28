@@ -7,7 +7,7 @@ Mirrors `angry-gopher/lynrummy/tricks/pair_peel.go`.
 
 -}
 
-import Game.Card
+import Game.Rules.Card
     exposing
         ( Card
         , CardColor(..)
@@ -22,7 +22,7 @@ import Game.CardStack
         , HandCard
         , canExtract
         )
-import Game.StackType exposing (CardStackType(..), getStackType, predecessor, successor)
+import Game.Rules.StackType exposing (CardStackType(..), getStackType, predecessor, successor)
 import Game.Strategy.Helpers exposing (dummyLoc, extractCard, freshlyPlayed)
 import Game.Strategy.Trick exposing (Play, Trick)
 

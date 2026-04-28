@@ -24,9 +24,9 @@ import Game.Agent.Enumerator as Enumerator
         , Lineage
         )
 import Game.Agent.Move exposing (Move)
-import Game.Card exposing (Card, cardValueToInt, originDeckToInt, suitToInt)
+import Game.Rules.Card exposing (Card, cardValueToInt, originDeckToInt, suitToInt)
 import Game.CardStack exposing (CardStack)
-import Game.StackType as StackType
+import Game.Rules.StackType as StackType
 import Set exposing (Set)
 
 

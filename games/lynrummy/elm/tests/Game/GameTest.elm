@@ -22,7 +22,7 @@ everything is deterministic.
 -}
 
 import Expect
-import Game.Card exposing (Card, CardValue(..), OriginDeck(..), Suit(..))
+import Game.Rules.Card exposing (Card, CardValue(..), OriginDeck(..), Suit(..))
 import Game.CardStack exposing (HandCard, HandCardState(..))
 import Game.Game as Game exposing (GameState)
 import Game.Hand as Hand

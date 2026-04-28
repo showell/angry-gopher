@@ -1,4 +1,4 @@
-module Game.StackType exposing
+module Game.Rules.StackType exposing
     ( CardStackType(..)
     , getStackType
     , predecessor
@@ -11,13 +11,13 @@ what kind of stack do they form? Ported from
 `angry-cat/src/lyn_rummy/core/stack_type.ts`.
 
 Layout follows the TS source: `successor`, `predecessor`, and
-`valueDistance` live here (not in `Game.Card`) because the
+`valueDistance` live here (not in `Game.Rules.Card`) because the
 TS organization makes the same choice. Source-parity matters
 more than idiom during the port phase.
 
 -}
 
-import Game.Card
+import Game.Rules.Card
     exposing
         ( Card
         , CardValue(..)

@@ -8,9 +8,9 @@ Mirrors `angry-gopher/lynrummy/tricks/peel_for_run.go`.
 
 -}
 
-import Game.Card exposing (Card, cardValueToInt)
+import Game.Rules.Card exposing (Card, cardValueToInt)
 import Game.CardStack exposing (CardStack, HandCard, canExtract)
-import Game.StackType
+import Game.Rules.StackType
     exposing
         ( CardStackType(..)
         , getStackType
@@ -84,7 +84,7 @@ findPlaysForHandCard hc board =
 
 findPeelableAtValue :
     List CardStack
-    -> Game.Card.CardValue
+    -> Game.Rules.Card.CardValue
     -> Card
     -> List Neighbor
 findPeelableAtValue board value exclude =

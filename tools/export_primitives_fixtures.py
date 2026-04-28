@@ -525,7 +525,7 @@ import Game.Agent.Move as Move
         )
 import Game.Agent.Verbs as Verbs
 import Game.BoardActions as BA
-import Game.Card exposing (Card, CardValue(..), OriginDeck(..), Suit(..))
+import Game.Rules.Card exposing (Card, CardValue(..), OriginDeck(..), Suit(..))
 import Game.CardStack exposing (BoardCard, BoardCardState(..), CardStack)
 import Game.WireAction exposing (WireAction(..))
 import Test exposing (Test, describe, test)

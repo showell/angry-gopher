@@ -10,7 +10,7 @@ import Expect
 import Json.Decode as Decode
 import Json.Encode as Encode
 import Game.BoardActions exposing (Side(..))
-import Game.Card exposing (Card, CardValue(..), OriginDeck(..), Suit(..))
+import Game.Rules.Card exposing (Card, CardValue(..), OriginDeck(..), Suit(..))
 import Game.CardStack exposing (BoardCard, BoardCardState(..), CardStack)
 import Game.WireAction as WA exposing (WireAction(..))
 import Test exposing (Test, describe, test)

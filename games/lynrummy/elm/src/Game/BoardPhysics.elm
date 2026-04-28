@@ -21,7 +21,7 @@ Intentional Elm divergences:
 -}
 
 import Game.CardStack as CardStack exposing (CardStack)
-import Game.StackType exposing (CardStackType(..))
+import Game.Rules.StackType exposing (CardStackType(..))
 
 
 {-| Can this card be extracted from its stack without breaking

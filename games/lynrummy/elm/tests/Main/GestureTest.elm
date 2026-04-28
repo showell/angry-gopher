@@ -26,7 +26,7 @@ import Fixtures
         , withWings
         )
 import Game.BoardActions exposing (Side(..))
-import Game.Card exposing (Card, CardValue(..), OriginDeck(..), Suit(..))
+import Game.Rules.Card exposing (Card, CardValue(..), OriginDeck(..), Suit(..))
 import Game.CardStack as CardStack
 import Game.WireAction as WA
 import Main.Gesture as Gesture

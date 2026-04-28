@@ -13,7 +13,7 @@ list of `HandCard`s; operations add, remove, reset state, and
 query.
 -}
 
-import Game.Card exposing (Card)
+import Game.Rules.Card exposing (Card)
 import Game.CardStack exposing (HandCard, HandCardState(..), handCardSameCard)
 
 

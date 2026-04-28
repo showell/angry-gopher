@@ -36,7 +36,7 @@ are we on, has the beat elapsed, when does the next step fire?
 import Browser.Dom
 import Game.BoardActions as BoardActions
 import Game.BoardGeometry as BG
-import Game.Card exposing (Card)
+import Game.Rules.Card exposing (Card)
 import Game.CardStack as CardStack exposing (CardStack)
 import Game.WireAction as WA exposing (WireAction)
 import Main.State as State

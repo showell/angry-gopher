@@ -9,7 +9,7 @@ import Game.BoardActions as BA
     exposing
         ( Side(..)
         )
-import Game.Card exposing (Card, CardValue(..), OriginDeck(..), Suit(..), cardFromLabel)
+import Game.Rules.Card exposing (Card, CardValue(..), OriginDeck(..), Suit(..), cardFromLabel)
 import Game.CardStack
     exposing
         ( BoardCardState(..)

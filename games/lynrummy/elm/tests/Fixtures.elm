@@ -24,7 +24,7 @@ measured boardRect populated.
 
 -}
 
-import Game.Card exposing (Card, OriginDeck(..))
+import Game.Rules.Card exposing (Card, OriginDeck(..))
 import Game.CardStack as CardStack exposing (BoardLocation, CardStack)
 import Game.GestureArbitration as GA
 import Game.WingOracle exposing (WingId)

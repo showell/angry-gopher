@@ -1,4 +1,4 @@
-module Game.Card exposing
+module Game.Rules.Card exposing
     ( Card
     , CardColor(..)
     , CardValue(..)
@@ -56,7 +56,7 @@ right one for the right question:
     `originDeck`. Use when you mean "are these two cards
     duplicates by game rules?" Two AHs from different decks
     are a dup; same game-rules card type. The classifier
-    (`getStackType` in `Game.StackType`) uses this to
+    (`getStackType` in `Game.Rules.StackType`) uses this to
     detect dup sets.
 
 Multiple equality concepts is a normal property of domain

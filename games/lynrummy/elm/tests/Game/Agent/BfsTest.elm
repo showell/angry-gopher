@@ -8,13 +8,13 @@ shortest plan respecting the cap.
 
 import Expect
 import Game.Agent.Bfs as Bfs
-import Game.Card exposing (Card, OriginDeck(..))
+import Game.Rules.Card exposing (Card, OriginDeck(..))
 import Test exposing (..)
 
 
 card : String -> Card
 card label =
-    case Game.Card.cardFromLabel label DeckOne of
+    case Game.Rules.Card.cardFromLabel label DeckOne of
         Just c ->
             c
 

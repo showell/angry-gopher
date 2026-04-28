@@ -31,7 +31,7 @@ local seed.
 
 -}
 
-import Game.Card as Card exposing (Card, OriginDeck(..))
+import Game.Rules.Card as Card exposing (Card, OriginDeck(..))
 import Game.CardStack as CardStack exposing (BoardCardState(..), BoardLocation, CardStack)
 import Game.Hand as Hand exposing (Hand)
 import Game.Random as Random

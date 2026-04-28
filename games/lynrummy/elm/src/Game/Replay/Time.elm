@@ -34,7 +34,7 @@ the replay FSM + its Msg handlers in one module.
 -}
 
 import Browser.Dom
-import Game.Card
+import Game.Rules.Card
 import Game.HandLayout as HandLayout
 import Game.Replay.AnimateMergeHand as AnimateMergeHand
 import Game.Replay.AnimateMergeStack as AnimateMergeStack
@@ -543,7 +543,7 @@ the FSM.
 -}
 type alias HandPrepareResult =
     { source : State.DragSource
-    , handCardToMeasure : Game.Card.Card
+    , handCardToMeasure : Game.Rules.Card.Card
     }
 
 

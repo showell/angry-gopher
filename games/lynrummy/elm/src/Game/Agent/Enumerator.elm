@@ -31,7 +31,7 @@ import Game.Agent.Move
         , SourceBucket(..)
         , WhichEnd(..)
         )
-import Game.Card
+import Game.Rules.Card
     exposing
         ( Card
         , allSuits
@@ -40,7 +40,7 @@ import Game.Card
         , suitColor
         , suitToInt
         )
-import Game.StackType as StackType
+import Game.Rules.StackType as StackType
     exposing
         ( CardStackType(..)
         , predecessor
@@ -100,7 +100,7 @@ enumerateMoves state =
 
 
 -- ============================================================
--- Internal classification (wraps Game.StackType for the BFS)
+-- Internal classification (wraps Game.Rules.StackType for the BFS)
 -- ============================================================
 
 

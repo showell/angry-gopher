@@ -3,18 +3,18 @@ module Game.Agent.CardsTest exposing (suite)
 {-| Tests for `Game.Agent.Cards` — predicates the BFS
 planner consumes. Mirrors the cases in
 `python/beginner.py` for `partial_ok` and `neighbors` plus
-the legal-stack filter atop `Game.StackType.getStackType`.
+the legal-stack filter atop `Game.Rules.StackType.getStackType`.
 -}
 
 import Expect
 import Game.Agent.Cards as Cards
-import Game.Card exposing (Card, OriginDeck(..))
+import Game.Rules.Card exposing (Card, OriginDeck(..))
 import Test exposing (..)
 
 
 card : String -> Card
 card label =
-    case Game.Card.cardFromLabel label DeckOne of
+    case Game.Rules.Card.cardFromLabel label DeckOne of
         Just c ->
             c
 

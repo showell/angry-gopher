@@ -80,7 +80,7 @@ server for a current-state snapshot.
 Imports `Main.State` for `ActionLogBundle` and `Point`,
 `Game.Game` for `CompleteTurnOutcome` (moved there from
 `Main.State` 2026-04-22). Plus `Browser.Dom`, `Http`, `Time`,
-`Game.Card`, and `Game.CardStack`.
+`Game.Rules.Card`, and `Game.CardStack`.
 
 ## What this module deliberately does NOT do
 

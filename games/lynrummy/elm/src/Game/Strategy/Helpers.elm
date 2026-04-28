@@ -17,7 +17,7 @@ board and return a new board plus whatever they consumed.
 
 -}
 
-import Game.Card exposing (Card)
+import Game.Rules.Card exposing (Card)
 import Game.CardStack
     exposing
         ( BoardCard
@@ -29,7 +29,7 @@ import Game.CardStack
         , fromHandCard
         , stackType
         )
-import Game.StackType exposing (CardStackType(..))
+import Game.Rules.StackType exposing (CardStackType(..))
 
 
 {-| Default location for a freshly-created stack that a trick

@@ -21,7 +21,7 @@ import Game.Agent.Move
         , WhichEnd(..)
         )
 import Game.Agent.Verbs as Verbs
-import Game.Card exposing (Card, OriginDeck(..))
+import Game.Rules.Card exposing (Card, OriginDeck(..))
 import Game.CardStack exposing (BoardCard, BoardCardState(..), CardStack)
 import Game.WireAction exposing (WireAction(..))
 import Test exposing (..)
@@ -29,7 +29,7 @@ import Test exposing (..)
 
 card : String -> Card
 card label =
-    case Game.Card.cardFromLabel label DeckOne of
+    case Game.Rules.Card.cardFromLabel label DeckOne of
         Just c ->
             c
 
@@ -162,7 +162,7 @@ suite =
                     -- card record; we use a deck-2 5D so it's
                     -- distinguishable from the run's 5D.
                     looseCard =
-                        case Game.Card.cardFromLabel "5D" DeckTwo of
+                        case Game.Rules.Card.cardFromLabel "5D" DeckTwo of
                             Just c ->
                                 c
 
