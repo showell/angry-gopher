@@ -40,6 +40,7 @@ import Game.Replay.AnimateMergeHand as AnimateMergeHand
 import Game.Replay.AnimateMergeStack as AnimateMergeStack
 import Game.Replay.AnimateMoveStack as AnimateMoveStack
 import Game.Replay.AnimatePlaceHand as AnimatePlaceHand
+import Game.Replay.DragAnimation as DragAnimation
 import Game.Replay.Space as Space
 import Game.Score as Score
 import Game.WireAction as WA exposing (WireAction)
@@ -172,38 +173,22 @@ replayFrame nowMs model =
                                     nowMs
 
                     Animating anim ->
-                        let
-                            duration =
-                                Space.pathDuration anim.path
+                        case DragAnimation.step nowMs anim of
+                            DragAnimation.InProgress { drag } ->
+                                ( { model | drag = drag }
+                                , Cmd.none
+                                )
 
-                            elapsed =
-                                nowMs - anim.startMs
-                        in
-                        if elapsed >= duration then
-                            let
-                                modelAfter =
-                                    (Apply.applyAction anim.pendingAction { model | drag = NotDragging }).model
-                            in
-                            ( { modelAfter
-                                | replayAnim = Beating { untilMs = nowMs + 1000 }
-                              }
-                            , Cmd.none
-                            )
-
-                        else
-                            case Space.interpPath anim.path elapsed of
-                                Just cursor ->
-                                    ( { model | drag = Space.animatedDragState anim cursor }
-                                    , Cmd.none
-                                    )
-
-                                Nothing ->
-                                    -- Empty path means nothing to
-                                    -- interpolate; treat as animation
-                                    -- complete and move on.
-                                    ( { model | replayAnim = Beating { untilMs = nowMs + 1000 } }
-                                    , Cmd.none
-                                    )
+                            DragAnimation.Done { pendingAction } ->
+                                let
+                                    modelAfter =
+                                        (Apply.applyAction pendingAction { model | drag = NotDragging }).model
+                                in
+                                ( { modelAfter
+                                    | replayAnim = Beating { untilMs = nowMs + 1000 }
+                                  }
+                                , Cmd.none
+                                )
 
                     Beating { untilMs } ->
                         if nowMs >= untilMs then
