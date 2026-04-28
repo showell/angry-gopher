@@ -44,6 +44,7 @@ import Game.Score as Score
 import Game.Strategy.Hint as Hint
 import Game.WireAction as WA exposing (WireAction)
 import Html exposing (Html)
+import Http
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
 import Main.Apply exposing (applyAction, refereeBounds)
@@ -62,6 +63,7 @@ import Main.State as State
         , Model
         , PathFrame(..)
         , StatusKind(..)
+        , StatusMessage
         , activeHand
         , baseModel
         )
@@ -202,19 +204,7 @@ update msg model =
             ( model, Cmd.none, NoOutput )
 
         ActionSent (Err err) ->
-            let
-                _ =
-                    Debug.log "ActionSent err" err
-            in
-            ( { model
-                | status =
-                    { text = "Server rejected action — check console; state may be out of sync."
-                    , kind = Scold
-                    }
-              }
-            , Cmd.none
-            , NoOutput
-            )
+            logAndScold "ActionSent" err actionRejectedStatus model
 
         SessionReceived (Ok sid) ->
             -- Session created server-side. Fetch the bundle for
@@ -226,19 +216,7 @@ update msg model =
             )
 
         SessionReceived (Err err) ->
-            let
-                _ =
-                    Debug.log "SessionReceived err" err
-            in
-            ( { model
-                | status =
-                    { text = "Could not allocate a session — check console."
-                    , kind = Scold
-                    }
-              }
-            , Cmd.none
-            , NoOutput
-            )
+            logAndScold "SessionReceived" err sessionAllocFailedStatus model
 
         ClickCompleteTurn ->
             withNoOutput (clickCompleteTurn model)
@@ -247,19 +225,7 @@ update msg model =
             ( model, Cmd.none, NoOutput )
 
         CompleteTurnResponded (Err err) ->
-            let
-                _ =
-                    Debug.log "CompleteTurnResponded err" err
-            in
-            ( { model
-                | status =
-                    { text = "Server rejected complete-turn — check console."
-                    , kind = Scold
-                    }
-              }
-            , Cmd.none
-            , NoOutput
-            )
+            logAndScold "CompleteTurnResponded" err completeTurnRejectedStatus model
 
         PopupOk ->
             ( { model | popup = Nothing }, Cmd.none, NoOutput )
@@ -280,19 +246,7 @@ update msg model =
             ( bootstrapFromBundle bundle model, Cmd.none, NoOutput )
 
         ActionLogFetched (Err err) ->
-            let
-                _ =
-                    Debug.log "ActionLogFetched err" err
-            in
-            ( { model
-                | status =
-                    { text = "Could not load action log — check console."
-                    , kind = Scold
-                    }
-              }
-            , Cmd.none
-            , NoOutput
-            )
+            logAndScold "ActionLogFetched" err actionLogFetchFailedStatus model
 
         BoardRectReceived result ->
             withNoOutput (boardRectReceived result model)
@@ -307,6 +261,23 @@ update msg model =
 withNoOutput : ( Model, Cmd Msg ) -> ( Model, Cmd Msg, Output )
 withNoOutput ( m, c ) =
     ( m, c, NoOutput )
+
+
+{-| Shared shape for the four `Result.Err` branches in `update`
+that handle wire failures: log the underlying `Http.Error` to
+the console (so devtools has the gory details), set the
+model's status to a named Scold message, and return with
+`Cmd.none + NoOutput`. The `_ = Debug.log ...` binding pattern
+preserves the side-effect across the helper boundary —
+without the `_ =` binding Elm would optimize the call away.
+-}
+logAndScold : String -> Http.Error -> StatusMessage -> Model -> ( Model, Cmd Msg, Output )
+logAndScold label err status model =
+    let
+        _ =
+            Debug.log (label ++ " err") err
+    in
+    ( { model | status = status }, Cmd.none, NoOutput )
 
 
 
@@ -377,12 +348,7 @@ clickCompleteTurn : Model -> ( Model, Cmd Msg )
 clickCompleteTurn model =
     case Referee.validateTurnComplete model.board refereeBounds of
         Err refErr ->
-            ( { model
-                | status =
-                    { text = "Board isn't clean: " ++ refErr.message
-                    , kind = Scold
-                    }
-              }
+            ( { model | status = boardNotCleanStatus refErr.message }
             , Cmd.none
             )
 
@@ -576,12 +542,7 @@ clickAgentPlay model =
     -- replay or animation — wait for the current step to land
     -- before the user can advance.
     if model.replay /= Nothing then
-        ( { model
-            | status =
-                { text = "Animation in progress — wait for it to finish before clicking again."
-                , kind = Scold
-                }
-          }
+        ( { model | status = animationInProgressStatus }
         , Cmd.none
         )
 
@@ -669,13 +630,7 @@ runAgentMove move remaining model =
                 Debug.log "agent: move emitted no primitives" described
         in
         ( { model
-            | status =
-                { text =
-                    "Agent stalled: couldn't emit primitives for "
-                        ++ described
-                        ++ " — see console."
-                , kind = Scold
-                }
+            | status = agentStalledStatus described
             , agentProgram = Nothing
           }
         , Cmd.none
@@ -900,4 +855,68 @@ modelAtInitial initial model =
         , turnStartBoardScore = initial.turnStartBoardScore
         , score = Score.forStacks initial.board
         , replayBaseline = Just initial
+    }
+
+
+
+-- STATUS MESSAGES
+--
+-- Named StatusMessage values for each failure / interrupt
+-- site in this module, mirroring the convention used in
+-- Main.Apply (`splitStatus`, `placeHandStatus`, etc.).
+-- Lifting them to named values keeps the dispatch in
+-- `update` legible and makes "what's the full set of
+-- failure messages this module can produce?" a one-screen
+-- read.
+
+
+actionRejectedStatus : StatusMessage
+actionRejectedStatus =
+    { text = "Server rejected action — check console; state may be out of sync."
+    , kind = Scold
+    }
+
+
+sessionAllocFailedStatus : StatusMessage
+sessionAllocFailedStatus =
+    { text = "Could not allocate a session — check console."
+    , kind = Scold
+    }
+
+
+completeTurnRejectedStatus : StatusMessage
+completeTurnRejectedStatus =
+    { text = "Server rejected complete-turn — check console."
+    , kind = Scold
+    }
+
+
+actionLogFetchFailedStatus : StatusMessage
+actionLogFetchFailedStatus =
+    { text = "Could not load action log — check console."
+    , kind = Scold
+    }
+
+
+animationInProgressStatus : StatusMessage
+animationInProgressStatus =
+    { text = "Animation in progress — wait for it to finish before clicking again."
+    , kind = Scold
+    }
+
+
+boardNotCleanStatus : String -> StatusMessage
+boardNotCleanStatus refereeMessage =
+    { text = "Board isn't clean: " ++ refereeMessage
+    , kind = Scold
+    }
+
+
+agentStalledStatus : String -> StatusMessage
+agentStalledStatus describedMove =
+    { text =
+        "Agent stalled: couldn't emit primitives for "
+            ++ describedMove
+            ++ " — see console."
+    , kind = Scold
     }
