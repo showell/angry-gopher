@@ -28,6 +28,84 @@ not artificial**, **two coordinate frames** (board frame vs.
 viewport), and **agents plan then execute** are all directly
 load-bearing for why this subtree is shaped the way it is.
 
+## Agent orientation — about-to-do-active-work checklist
+
+If you're a sub-agent (or a fresh-session top-level Claude)
+about to do active work in this subtree, run through this
+checklist BEFORE editing anything. Most items take seconds
+and prevent mid-task surprises.
+
+**Step 1: Confirm baseline is green.** Run `./check.sh`
+from this directory. Expect every `test_*.py` to pass +
+113/113 conformance. If anything is red, **stop** — pre-
+existing failures are not permission to merge. Park your
+task and dispatch a fix-up first (see
+`memory/feedback_tests_arent_load_bearing_without_enforcement.md`).
+
+**Step 2: Check for in-flight plan state.** Look at
+`/home/steve/showell_repos/angry-gopher/.claude/plan-state.json`
+— it lists tasks across the active and recent plans. If a
+plan is in flight that overlaps your work, coordinate
+with the orchestrator before proceeding.
+
+**Step 3: Read the layered-shape sections of THIS file.**
+The "Class-1/2 segregation" section above tells you where
+rule content lives (`rules/`) vs strategy (`cards.py` +
+the planner modules) vs UX cadence (`move.py`'s `narrate`
+/ `hint`). Don't put new code in the wrong layer.
+
+**Step 4: Sidecar audit.** Run
+`python3 ../../../tools/sidecar_audit.py`. If sidecars are
+missing or `just_use` targets are broken, you're inheriting
+debt. The audit prints expected-sibling paths so you can
+fix them; new modules YOU add need sidecars in the same
+commit (per `feedback_segregate_by_volatility_class.md`'s
+test-discipline notes and the operating principles'
+"renames cross into prose by default").
+
+**Step 5: Know the corpus baseline.** The 21-puzzle
+regression target lives in `corpus/baseline_post_focus.txt`
+(canonical depth distribution
+`[2,5,2,4,5,4,6,4,1,7,2,5,2,1,1,2,3,1,2,5,1]`). The corpus
+is exercised via `test_dsl_conformance.py`'s
+`corpus_sid_*` scenarios from
+`conformance_fixtures.json` (compiled from
+`games/lynrummy/conformance/scenarios/planner_corpus.dsl`).
+Any solver-touching change must keep depths ≤ gold; longer
+plans are correctness failures.
+
+**Step 6: Ergonomics defaults (when you're refactoring or
+adding code).**
+
+- **Prefer rewrite over shim** when moving code between
+  modules. Update callers; don't leave a re-export shim
+  unless explicitly asked. Shims rot; physical moves
+  match the layering principle.
+- **Verb-eligibility predicates stay in `cards.py`**
+  (the agent strategy layer). Pure rule predicates
+  (classify, neighbors, is_partial_ok, successor) live
+  in `rules/`. If you're adding a predicate, ask: "is
+  this a game-rule fact, or an agent-strategy
+  judgment?" Rule = `rules/`. Judgment = `cards.py` or
+  the planner modules.
+- **Imports use the `from rules import X, Y` form**, not
+  `import rules` then `rules.X`. Matches the `from
+  buckets import ...` and `from move import ...`
+  conventions across the planner modules.
+- **No DB or HTTP in test paths.** Conformance tests
+  read `conformance_fixtures.json` (committed); tools
+  that need the DB (`tools/export_primitives_fixtures.py`,
+  `tools/mine_puzzles.py`) fail loud when the DB is empty.
+
+**Step 7: Validation methodology** for any change touching
+the BFS planner — see § "Validation methodology" below.
+For non-planner changes, `./check.sh` is the gate.
+
+If after this checklist the path forward isn't clear,
+**punt** with `status: blocked` rather than guessing —
+that's the signal that this orientation list needs
+sharpening.
+
 ## Class-1/2 segregation — Elm precedent, Python parallel landed
 
 The Elm side moved its locked-down rule code into a

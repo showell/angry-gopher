@@ -101,8 +101,19 @@ def check_just_use():
             continue
         sibling = claude_path.parent / target
         if not sibling.exists():
+            # Show the resolved sibling path so a sub-agent
+            # can see WHERE the tool tried to look — the
+            # `just_use` directive resolves relative to the
+            # sidecar's own directory, not the repo root.
+            # Surfaced as an IF in game_rules_lockdown
+            # python-segregation dispatch (2026-04-28) where
+            # `just_use rules/card.py` failed silently because
+            # the audit didn't show that it was looking for
+            # `rules/rules/card.py`.
+            resolved = sibling.relative_to(REPO).as_posix()
             broken.append(
-                f"{claude_path.relative_to(REPO).as_posix()} → {target}"
+                f"{claude_path.relative_to(REPO).as_posix()} → "
+                f"{target}  (expected sibling: {resolved})"
             )
     return sorted(broken)
 
