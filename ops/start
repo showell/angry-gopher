@@ -1,4 +1,10 @@
 #!/bin/bash
+# CANONICAL DEV-LOOP SCRIPT — DO NOT REINVENT.
+# Before writing a new ops/* script or composing an ad-hoc
+# shell command for build / launch / test / regen, run
+# `ops/list` to see what already exists. Drifted ops scripts
+# are how an hour disappears resurrecting things.
+#
 # Start prod Gopher server (port 9000) + Angry Cat frontend (port 8000).
 set -e
 

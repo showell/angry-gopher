@@ -1,15 +1,23 @@
 #!/bin/bash
+# CANONICAL DEV-LOOP SCRIPT — DO NOT REINVENT.
+# Before writing a new ops/* script or composing an ad-hoc
+# shell command for build / launch / test / regen, run
+# `ops/list` to see what already exists. Drifted ops scripts
+# are how an hour disappears resurrecting things.
+#
 # Conformance-only fast gate: regen fixtures, run Python +
 # Elm conformance tests. Subset of `ops/check` — use this for
 # tight conformance-iteration loops (edit a .dsl, re-gate in
-# under a minute).
+# under a minute). THIS is the script for "regen fixtures";
+# don't compose `go run ./cmd/fixturegen ...` ad-hoc.
 #
 # Three steps:
-#   1. cmd/fixturegen — DSL → Go + Elm + JSON; also surfaces
-#      registered-op manifest drift loudly (per
-#      cmd/fixturegen/ADDING_AN_OP.md).
+#   1. cmd/fixturegen — DSL → Elm + JSON + ops manifest; also
+#      surfaces registered-op manifest drift loudly (per
+#      cmd/fixturegen/ADDING_AN_OP.md). Go target retired
+#      2026-04-28 with the Go domain package.
 #   2. Python test_dsl_conformance — verifies its DISPATCH
-#      matches the manifest, then runs all 113 scenarios.
+#      matches the manifest, then runs all scenarios.
 #   3. Elm check.sh — compiles + runs the generated
 #      Elm conformance tests.
 #

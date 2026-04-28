@@ -1,4 +1,10 @@
 #!/bin/bash
+# CANONICAL DEV-LOOP SCRIPT — DO NOT REINVENT.
+# Before writing a new ops/* script or composing an ad-hoc
+# shell command for build / launch / test / regen, run
+# `ops/list` to see what already exists. Drifted ops scripts
+# are how an hour disappears resurrecting things.
+#
 # Compile the LynRummy Elm clients (Main.elm + Puzzles.elm) into
 # games/lynrummy/elm/{elm.js, puzzles.js}, the JS bundles served
 # by /gopher/lynrummy-elm/elm.js and /gopher/puzzles/puzzles.js.

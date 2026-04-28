@@ -1,0 +1,756 @@
+{
+  "created_at": 1777394809,
+  "initial_state": {
+    "active_player_index": 0,
+    "board": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "origin_deck": 0,
+              "suit": 2,
+              "value": 13
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "origin_deck": 0,
+              "suit": 2,
+              "value": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "origin_deck": 0,
+              "suit": 2,
+              "value": 2
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "origin_deck": 0,
+              "suit": 2,
+              "value": 3
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "left": 70,
+          "top": 20
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "origin_deck": 0,
+              "suit": 1,
+              "value": 10
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "origin_deck": 0,
+              "suit": 1,
+              "value": 11
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "origin_deck": 0,
+              "suit": 1,
+              "value": 12
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "origin_deck": 0,
+              "suit": 1,
+              "value": 13
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "left": 160,
+          "top": 80
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "origin_deck": 0,
+              "suit": 3,
+              "value": 2
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "origin_deck": 0,
+              "suit": 3,
+              "value": 3
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "origin_deck": 0,
+              "suit": 3,
+              "value": 4
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "left": 100,
+          "top": 140
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "origin_deck": 0,
+              "suit": 2,
+              "value": 7
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "origin_deck": 0,
+              "suit": 1,
+              "value": 7
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "origin_deck": 0,
+              "suit": 0,
+              "value": 7
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "left": 40,
+          "top": 200
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "origin_deck": 0,
+              "suit": 0,
+              "value": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "origin_deck": 0,
+              "suit": 1,
+              "value": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "origin_deck": 0,
+              "suit": 3,
+              "value": 1
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "left": 130,
+          "top": 260
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "origin_deck": 0,
+              "suit": 0,
+              "value": 2
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "origin_deck": 0,
+              "suit": 1,
+              "value": 3
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "origin_deck": 0,
+              "suit": 0,
+              "value": 4
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "origin_deck": 0,
+              "suit": 3,
+              "value": 5
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "origin_deck": 0,
+              "suit": 2,
+              "value": 6
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "origin_deck": 0,
+              "suit": 3,
+              "value": 7
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "left": 70,
+          "top": 320
+        }
+      }
+    ],
+    "cards_played_this_turn": 0,
+    "deck": [
+      {
+        "origin_deck": 0,
+        "suit": 1,
+        "value": 6
+      },
+      {
+        "origin_deck": 1,
+        "suit": 2,
+        "value": 10
+      },
+      {
+        "origin_deck": 0,
+        "suit": 2,
+        "value": 12
+      },
+      {
+        "origin_deck": 1,
+        "suit": 0,
+        "value": 11
+      },
+      {
+        "origin_deck": 0,
+        "suit": 1,
+        "value": 2
+      },
+      {
+        "origin_deck": 1,
+        "suit": 0,
+        "value": 10
+      },
+      {
+        "origin_deck": 0,
+        "suit": 3,
+        "value": 10
+      },
+      {
+        "origin_deck": 0,
+        "suit": 2,
+        "value": 11
+      },
+      {
+        "origin_deck": 1,
+        "suit": 2,
+        "value": 2
+      },
+      {
+        "origin_deck": 1,
+        "suit": 1,
+        "value": 1
+      },
+      {
+        "origin_deck": 1,
+        "suit": 0,
+        "value": 4
+      },
+      {
+        "origin_deck": 1,
+        "suit": 1,
+        "value": 4
+      },
+      {
+        "origin_deck": 0,
+        "suit": 3,
+        "value": 6
+      },
+      {
+        "origin_deck": 1,
+        "suit": 3,
+        "value": 1
+      },
+      {
+        "origin_deck": 1,
+        "suit": 0,
+        "value": 1
+      },
+      {
+        "origin_deck": 0,
+        "suit": 1,
+        "value": 4
+      },
+      {
+        "origin_deck": 1,
+        "suit": 2,
+        "value": 4
+      },
+      {
+        "origin_deck": 0,
+        "suit": 0,
+        "value": 8
+      },
+      {
+        "origin_deck": 0,
+        "suit": 0,
+        "value": 12
+      },
+      {
+        "origin_deck": 1,
+        "suit": 0,
+        "value": 2
+      },
+      {
+        "origin_deck": 0,
+        "suit": 0,
+        "value": 6
+      },
+      {
+        "origin_deck": 1,
+        "suit": 2,
+        "value": 3
+      },
+      {
+        "origin_deck": 1,
+        "suit": 0,
+        "value": 6
+      },
+      {
+        "origin_deck": 1,
+        "suit": 3,
+        "value": 8
+      },
+      {
+        "origin_deck": 1,
+        "suit": 1,
+        "value": 5
+      },
+      {
+        "origin_deck": 1,
+        "suit": 3,
+        "value": 2
+      },
+      {
+        "origin_deck": 0,
+        "suit": 2,
+        "value": 10
+      },
+      {
+        "origin_deck": 1,
+        "suit": 1,
+        "value": 9
+      },
+      {
+        "origin_deck": 0,
+        "suit": 0,
+        "value": 5
+      },
+      {
+        "origin_deck": 1,
+        "suit": 3,
+        "value": 11
+      },
+      {
+        "origin_deck": 1,
+        "suit": 2,
+        "value": 5
+      },
+      {
+        "origin_deck": 1,
+        "suit": 1,
+        "value": 8
+      },
+      {
+        "origin_deck": 1,
+        "suit": 1,
+        "value": 7
+      },
+      {
+        "origin_deck": 0,
+        "suit": 2,
+        "value": 8
+      },
+      {
+        "origin_deck": 1,
+        "suit": 1,
+        "value": 11
+      },
+      {
+        "origin_deck": 1,
+        "suit": 0,
+        "value": 5
+      },
+      {
+        "origin_deck": 0,
+        "suit": 1,
+        "value": 9
+      },
+      {
+        "origin_deck": 0,
+        "suit": 0,
+        "value": 10
+      },
+      {
+        "origin_deck": 0,
+        "suit": 1,
+        "value": 8
+      },
+      {
+        "origin_deck": 0,
+        "suit": 3,
+        "value": 13
+      },
+      {
+        "origin_deck": 1,
+        "suit": 2,
+        "value": 6
+      },
+      {
+        "origin_deck": 0,
+        "suit": 0,
+        "value": 13
+      },
+      {
+        "origin_deck": 1,
+        "suit": 3,
+        "value": 12
+      },
+      {
+        "origin_deck": 1,
+        "suit": 3,
+        "value": 10
+      },
+      {
+        "origin_deck": 1,
+        "suit": 3,
+        "value": 4
+      },
+      {
+        "origin_deck": 0,
+        "suit": 0,
+        "value": 9
+      },
+      {
+        "origin_deck": 1,
+        "suit": 2,
+        "value": 8
+      },
+      {
+        "origin_deck": 1,
+        "suit": 1,
+        "value": 12
+      },
+      {
+        "origin_deck": 1,
+        "suit": 1,
+        "value": 3
+      },
+      {
+        "origin_deck": 0,
+        "suit": 0,
+        "value": 3
+      },
+      {
+        "origin_deck": 1,
+        "suit": 2,
+        "value": 11
+      }
+    ],
+    "hands": [
+      {
+        "hand_cards": [
+          {
+            "card": {
+              "origin_deck": 1,
+              "suit": 3,
+              "value": 9
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "origin_deck": 1,
+              "suit": 0,
+              "value": 8
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "origin_deck": 0,
+              "suit": 2,
+              "value": 4
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "origin_deck": 0,
+              "suit": 3,
+              "value": 12
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "origin_deck": 0,
+              "suit": 3,
+              "value": 11
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "origin_deck": 1,
+              "suit": 2,
+              "value": 9
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "origin_deck": 1,
+              "suit": 0,
+              "value": 13
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "origin_deck": 1,
+              "suit": 3,
+              "value": 7
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "origin_deck": 1,
+              "suit": 2,
+              "value": 13
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "origin_deck": 1,
+              "suit": 1,
+              "value": 10
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "origin_deck": 0,
+              "suit": 2,
+              "value": 5
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "origin_deck": 0,
+              "suit": 2,
+              "value": 9
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "origin_deck": 1,
+              "suit": 0,
+              "value": 12
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "origin_deck": 1,
+              "suit": 2,
+              "value": 12
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "origin_deck": 0,
+              "suit": 3,
+              "value": 9
+            },
+            "state": 0
+          }
+        ]
+      },
+      {
+        "hand_cards": [
+          {
+            "card": {
+              "origin_deck": 1,
+              "suit": 2,
+              "value": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "origin_deck": 1,
+              "suit": 3,
+              "value": 13
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "origin_deck": 0,
+              "suit": 1,
+              "value": 5
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "origin_deck": 1,
+              "suit": 0,
+              "value": 9
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "origin_deck": 1,
+              "suit": 0,
+              "value": 7
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "origin_deck": 1,
+              "suit": 3,
+              "value": 6
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "origin_deck": 0,
+              "suit": 0,
+              "value": 11
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "origin_deck": 1,
+              "suit": 1,
+              "value": 13
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "origin_deck": 1,
+              "suit": 1,
+              "value": 2
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "origin_deck": 1,
+              "suit": 3,
+              "value": 3
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "origin_deck": 0,
+              "suit": 3,
+              "value": 8
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "origin_deck": 1,
+              "suit": 0,
+              "value": 3
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "origin_deck": 1,
+              "suit": 3,
+              "value": 5
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "origin_deck": 1,
+              "suit": 2,
+              "value": 7
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "origin_deck": 1,
+              "suit": 1,
+              "value": 6
+            },
+            "state": 0
+          }
+        ]
+      }
+    ],
+    "scores": [
+      0,
+      0
+    ],
+    "turn_index": 0,
+    "turn_start_board_score": 1760,
+    "victor_awarded": false
+  },
+  "label": ""
+}

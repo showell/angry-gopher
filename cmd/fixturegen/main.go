@@ -1,12 +1,16 @@
-// fixturegen: parse a LynRummy-DSL scenario file and emit native
-// test code for Go + Elm.
+// fixturegen: parse a LynRummy-DSL scenario file and emit
+// native test code for Elm + JSON fixtures for Python.
+//
+// DO NOT run this binary ad-hoc. The canonical way to
+// regenerate fixtures is `ops/check-conformance` (which also
+// runs Python + Elm conformance tests so drift surfaces
+// immediately). Drifted dev-loop scripts are how an hour
+// disappears resurrecting things.
 //
 // Pipeline (template-driven):
-//   parse .dsl → AST → render templates → goimports+gofmt → write
-//   → go build verify → idempotence check
+//   parse .dsl → AST → render templates → write → idempotence check
 //
-// Usage:
-//   go run ./cmd/fixturegen ./lynrummy/conformance/scenarios/*.dsl
+// Go target retired 2026-04-28 with the Go domain package.
 
 package main
 

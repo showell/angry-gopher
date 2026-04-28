@@ -1,5 +1,12 @@
 # Adding a new op kind to the DSL conformance pipeline
 
+> **To regenerate fixtures: run `ops/check-conformance`.** That script
+> invokes fixturegen + runs Python + Elm conformance. Do NOT compose
+> `go run ./cmd/fixturegen …` ad-hoc — that's how dev-loop scripts
+> drift and Steve loses an hour to resurrection. If you find yourself
+> wanting a "smaller" regen-only script, run `ops/list` first; if one
+> doesn't exist and you genuinely need it, propose adding it to ops/.
+
 The DSL has a small fixed set of ops today (`validate_game_move`,
 `enumerate_moves`, `solve`, `replay_invariant`, …). Adding a *scenario*
 that uses an existing op is one .dsl edit. Adding a brand-new *op kind*
@@ -8,10 +15,11 @@ costs more: it's the axis this doc is about.
 A new op kind needs four things, in roughly this order:
 
 1. **Registry row** in `cmd/fixturegen/main.go` — declares which targets
-   (Go / Elm / Python) run this op and points at the per-target emitters.
-2. **Per-target emitter functions** — Go and/or Elm test-body codegen.
-   Python is interpreted, so there's no codegen — the runner reads the
-   JSON fixtures at runtime.
+   (Elm / Python) run this op and points at the per-target emitters.
+2. **Per-target emitter functions** — Elm test-body codegen. Python is
+   interpreted, so there's no codegen — the runner reads the JSON
+   fixtures at runtime. (Go target retired 2026-04-28 with the Go
+   domain package.)
 3. **Python runner entry** in `games/lynrummy/python/test_dsl_conformance.py`
    — only if the op runs in Python.
 4. **Maybe parser + AST extensions** — only if the op needs new

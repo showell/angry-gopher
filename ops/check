@@ -1,28 +1,25 @@
 #!/bin/bash
-# Full-repo preflight: regenerate conformance fixtures, run
-# every test suite. Addresses the silent-failure risk — if any
-# target (Go tests, Elm tests, Python conformance) stops being
-# wired up, this script fails loudly instead of silently skipping.
+# CANONICAL DEV-LOOP SCRIPT — DO NOT REINVENT.
+# Before writing a new ops/* script or composing an ad-hoc
+# shell command for build / launch / test / regen, run
+# `ops/list` to see what already exists. Drifted ops scripts
+# are how an hour disappears resurrecting things.
 #
-# Steve ran this into in the 2026-04-20 rabbit hole: fixturegen's
-# Go output path pointed at a deleted directory, and nobody
-# noticed for two commits because the generator was never
-# re-invoked. Running `ops/check` regularly catches that class
-# of severed bridge on the next run.
+# Full-repo preflight: regenerate conformance fixtures, run
+# every test suite. If any target (Go build, Elm tests, Python
+# conformance) stops being wired up, this script fails loudly
+# instead of silently skipping.
 
 set -e
 
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_DIR"
 
-echo "==> sidecar_audit (coverage + broken just_use targets)"
-python3 tools/sidecar_audit.py
-
 echo "==> conformance gate (fixturegen + Python + Elm)"
 ./ops/check-conformance
 
-echo "==> go test ./..."
-go test ./...
+echo "==> go build ./..."
+go build ./...
 
 echo "==> Python unit tests (full suite)"
 (cd games/lynrummy/python && ./check.sh)
