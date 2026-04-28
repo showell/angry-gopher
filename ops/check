@@ -18,26 +18,14 @@ cd "$REPO_DIR"
 echo "==> sidecar_audit (coverage + broken just_use targets)"
 python3 tools/sidecar_audit.py
 
-echo "==> fixturegen (DSL → Go + Elm + JSON, build-gated)"
-go run ./cmd/fixturegen ./games/lynrummy/conformance/scenarios/*.dsl
+echo "==> conformance gate (fixturegen + Python + Elm)"
+./ops/check-conformance
 
 echo "==> go test ./..."
 go test ./...
 
-echo "==> Elm tests"
-(cd games/lynrummy/elm && ./check.sh)
-
-echo "==> Python conformance tests"
-python3 games/lynrummy/python/test_dsl_conformance.py
-
-echo "==> Gesture-synth unit tests"
-python3 games/lynrummy/python/test_gesture_synth.py
-
-echo "==> Plan-merge-hand unit tests"
-python3 games/lynrummy/python/test_plan_merge_hand.py
-
-echo "==> Follow-up merge unit tests"
-python3 games/lynrummy/python/test_follow_up_merges.py
+echo "==> Python unit tests (full suite)"
+(cd games/lynrummy/python && ./check.sh)
 
 echo
 echo "All preflight checks passed."
