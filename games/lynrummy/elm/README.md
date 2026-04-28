@@ -59,10 +59,65 @@ Starting points, organized by layer:
 ## Domain modules
 
 `src/Game/` also holds the Elm port of the game's domain
-types: `Card.claude`, `CardStack.claude`, `Hand.claude`,
-`Dealer.claude`, `StackType.claude`, etc. These mirror the
-Go package; each sidecar states where it stands relative to
-its Go counterpart.
+types: `CardStack.claude`, `Hand.claude`, `Dealer.claude`,
+etc. These mirror the Go package; each sidecar states
+where it stands relative to its Go counterpart.
+
+## Game/Rules/ — the locked-down rule layer
+
+`src/Game/Rules/` is the **Class-1/2 truth layer**: pure
+game rules and primitives that are battle-tested and not
+expected to change. Locked-down by rigorous property
+tests so any regression breaks loudly.
+
+What lives here today (extracted 2026-04-28 in the
+`game_rules_lockdown` plan):
+
+- **`Game.Rules.Card`** — the atomic Card type, suit/value
+  enums, parsers, encoders, double-deck construction.
+  ~22 exports, all Class-2 primitives.
+- **`Game.Rules.StackType`** — the 6-way classification
+  oracle (`Incomplete | Bogus | Dup | Set | PureRun |
+  RedBlackRun`), `successor`/`predecessor` on the
+  13-cycle, `valueDistance`, plus the rule predicates
+  `isLegalStack` / `isPartialOk` / `neighbors` (lifted
+  from `Game.Agent.Cards` since they're rules, not
+  agent strategy).
+
+What's NOT in `Game/Rules/` and the reasoning:
+
+- **`Game.CardStack`** — has presentation state
+  (`FreshlyPlayed`, `FreshlyPlayedByLastPlayer`); not
+  pure Class-1/2.
+- **`Game.Game`, `Game.Reducer`, `Game.Referee`** — these
+  consume rules but are themselves bigger than just-rules.
+  Could be revisited.
+- **`Game.Agent.*`** — agent strategy is Class-3 physics +
+  Class-4 search heuristics, not rules.
+
+**Test discipline.** Tests live in
+`tests/Game/CardTest.elm` and `tests/Game/StackTypeTest.elm`
+(NOT under a `tests/Game/Rules/` subtree — keep test paths
+flat and stable). Class-1/2 modules get
+**property + boundary tests** that lock the laws (e.g.
+"`getStackType` PureRun monotonic in length 3..13",
+"`valueDistance` triangle inequality over 13³",
+"`neighbors` cardinality is exactly 9, deck-invariant").
+Test count was 675 → 727 after the test-lock pass on
+2026-04-28.
+
+**Why this matters as a layering principle.** See the
+volatility-class memory at
+`~/.claude/projects/-home-steve-showell-repos-angry-gopher/memory/feedback_segregate_by_volatility_class.md`.
+Rules layer at the bottom; physics, UX cadence, and
+layout sit above it with progressively lighter test rigor.
+
+**Python parallel.** `../python/README.md` has a parallel
+section describing where the Python rule code currently
+lives (in `cards.py` + `buckets.py` etc., ungrouped) and
+the goal of mirroring Elm's `Game/Rules/` shape on the
+Python side. Cross-language sub-agents working on the
+parallel migration should read both READMEs.
 
 ## User-flow enumeration
 

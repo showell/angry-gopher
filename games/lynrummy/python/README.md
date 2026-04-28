@@ -28,6 +28,53 @@ not artificial**, **two coordinate frames** (board frame vs.
 viewport), and **agents plan then execute** are all directly
 load-bearing for why this subtree is shaped the way it is.
 
+## Class-1/2 segregation — Elm precedent, Python parallel-pending
+
+The Elm side recently moved its locked-down rule code
+into a `Game/Rules/` subtree (Card + StackType +
+predicates `isLegalStack` / `isPartialOk` / `neighbors`)
+plus property tests that lock the laws — see
+`../elm/README.md` § "Game/Rules/" for the precedent.
+
+**The Python side has the same code conceptually but it
+isn't grouped.** Class-1/2 rule content currently lives
+in:
+
+- **`cards.py`** — Card primitives (CardValue / Suit /
+  OriginDeck enums, classify, neighbors, isPartialOk,
+  successor, predecessor). Mix of Class-2 primitives +
+  Class-1 game rules. The closest analog to Elm's
+  `Game.Rules.Card` + `Game.Rules.StackType` combined.
+- **`buckets.py`** — 4-bucket BFS state shape,
+  `state_sig`, `trouble_count`, `is_victory`. Some
+  Class-2 type aliases mixed with Class-3-flavored
+  search-state helpers.
+- **`move.py`** — Move desc dataclasses + describe /
+  narrate / hint. Render functions are Class-4 (UX
+  flavor); the dataclasses themselves are Class-2.
+
+**The volatility-class principle in one paragraph:** code
+segregates by how often its underlying truth changes.
+**Class 1** = game rules (never change). **Class 2** =
+domain primitives (locked, battle-tested). **Class 3** =
+physics (deterministic functions, locked with property
+tests). **Class 4** = UX cadence (Steve's tuning). **Class
+5** = layout (fiddly). Test rigor scales to class:
+strict at the bottom, light at the top. Module seams
+should track class boundaries — physics living inside a
+UX module is a smell; rules tangled with strategy is a
+smell.
+
+**Goal of the Python parallel migration** (not yet
+scheduled): factor out the pure Class-1/2 content from
+`cards.py` (and possibly `buckets.py`) into a `rules/`
+subpackage that mirrors Elm's shape. The Python idiom for
+this is a directory containing an `__init__.py` plus
+per-concern modules, with imports like `from rules import
+classify, neighbors`. Sub-agents working on this migration
+should read both this README's section AND the Elm README's
+`Game/Rules/` section for the shape that landed there.
+
 ## Two strategic layers, one fading
 
 The Python agent has two pieces of strategy code:
