@@ -56,7 +56,7 @@ func initDB(path string) {
 	fmt.Printf("Database initialized at %s\n", path)
 }
 
-func seedData(includeWelcome bool) {
+func seedData() {
 	users := []struct {
 		id       int
 		fullName string
@@ -69,5 +69,4 @@ func seedData(includeWelcome bool) {
 		DB.Exec(`INSERT OR IGNORE INTO users (id, full_name, created_at) VALUES (?, ?, ?)`,
 			u.id, u.fullName, now)
 	}
-	_ = includeWelcome
 }

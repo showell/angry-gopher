@@ -17,9 +17,14 @@ actually uses.
 ## Quick start
 
 ```bash
-bash ops/start        # prod: Gopher 9000 + Angry Cat 8000
-bash ops/start_demo   # demo: disposable DB, seeded users
+bash ops/start        # Gopher 9000 + Angry Cat 8000
 ```
+
+Always use `ops/start`; do not invent ad-hoc `go run` /
+`nohup ./gopher-server` invocations. The script kills any
+process on 9000/8000 first, rebuilds the Go binary, recompiles
+the Elm clients, regenerates the puzzles catalog, and waits
+until both ports respond before exiting.
 
 Prod DB at `~/AngryGopher/prod/gopher.db`.
 
@@ -121,17 +126,15 @@ Server-rendered pages at `/gopher/*` with Basic auth:
 | `/gopher/puzzles/` | Curated puzzle gallery (study instrument) |
 | `/gopher/wiki/` | Wiki viewer over repo source |
 | `/gopher/docs/` | Markdown essay viewer |
-| `/gopher/code/` | Code browser |
 | `/gopher/claude/` | Pointer-out to claude-collab (port 9100) |
 | `/gopher/tour` | All CRUD pages |
 
 ## Ops
 
 ```
-ops/start         Start prod servers (9000 + 8000)
-ops/start_demo    Start demo servers with seeded data
-ops/import        Import external data
+ops/start         Start Gopher (9000) + Angry Cat (8000)
 ops/list          List ops commands
+ops/check         Run all tests across the repo
 ```
 
 ## Testing

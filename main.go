@@ -60,18 +60,9 @@ Example config (~/AngryGopher/prod.json):
       "port": 9000
   }
 
-Example config (~/AngryGopher/demo.json):
-
-  {
-      "mode": "demo",
-      "root": "/home/steve/AngryGopher/demo",
-      "port": 9000
-  }
-
 Usage:
 
   GOPHER_CONFIG=~/AngryGopher/prod.json ./gopher-server
-  GOPHER_CONFIG=~/AngryGopher/demo.json ./gopher-server
 
 Backup the production database:
 
@@ -93,17 +84,12 @@ Backup the production database:
 
 	serverConfig = config
 
-	if config.IsDemo() {
-		os.Setenv("GOPHER_RESET_DB", "1")
-	}
-
 	initDB(config.DBPath())
 	wireDB()
 
 	// Always seed the two canonical users (Steve=1, Claude=2) so the
-	// empty-DB case still yields a playable system. Welcome/test
-	// messages are demo-only.
-	seedData(config.IsDemo())
+	// empty-DB case still yields a playable system.
+	seedData()
 
 	mux := buildMux()
 

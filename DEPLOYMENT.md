@@ -8,10 +8,10 @@
 
 - **Safety over convenience.** No implicit defaults. Missing config →
   refuse to start with actionable error.
-- **Data lives outside code.** DB + uploads under `~/AngryGopher/<mode>/`;
+- **Data lives outside code.** DB + uploads under `~/AngryGopher/prod/`;
   `rm -rf` the source tree without affecting data (and vice versa).
-- **Explicit modes.** `prod` (persistent) vs `demo` (recreated every start).
-  Startup banner tells you which.
+- **Single mode.** `prod` is the only mode now (demo retired
+  2026-04-28; it was a Zulip-era artifact).
 
 ## Config
 
@@ -25,13 +25,16 @@ All fields required. Paths derived from `root`:
 
 ## Starting
 
+Use the canonical script:
+
 ```bash
-GOPHER_CONFIG=~/AngryGopher/prod.json ./gopher-server   # persistent
-GOPHER_CONFIG=~/AngryGopher/demo.json ./gopher-server   # disposable
+bash ops/start
 ```
 
-Demo mode destroys and recreates the DB on every start (seeds the
-two canonical users, Steve=1 and Claude=2).
+It kills any process on 9000/8000, rebuilds the Go binary,
+recompiles the Elm clients, regenerates the puzzles catalog,
+and waits for both ports before exiting. Don't invent ad-hoc
+`go run` invocations.
 
 ## Backups
 

@@ -22,11 +22,11 @@ go build -ldflags "-X main.gitCommit=$COMMIT" -o gopher-server .
 (cd games/lynrummy/elm && ./node_modules/.bin/elm make src/Puzzles.elm --output=puzzles.js >/dev/null 2>&1) \
     || echo "Warning: Puzzles Elm build failed; /gopher/puzzles/ will 404 on puzzles.js"
 
-# Regenerate the Puzzles catalog from the DB-mined
-# board-only puzzles. Resulting JSON is served at
-# /gopher/puzzles/catalog. puzzle_catalog.py reads
-# `lynrummy_puzzle_seeds` rows where puzzle_name LIKE 'mined_%'
-# and writes ../puzzles/puzzles.json relative to its own dir.
+# Regenerate the Puzzles catalog from the committed mined
+# seeds JSON (games/lynrummy/conformance/mined_seeds.json,
+# overwritten by tools/mine_puzzles.py). puzzle_catalog.py
+# reads it and writes ../puzzles/puzzles.json relative to its
+# own dir; the result is served at /gopher/puzzles/catalog.
 ( cd games/lynrummy/python && python3 puzzle_catalog.py >/dev/null 2>&1 ) \
     || echo "Warning: Puzzles catalog write failed; /gopher/puzzles/catalog will be stale"
 

@@ -23,7 +23,7 @@ import (
 )
 
 type ServerConfig struct {
-	Mode string `json:"mode"` // "prod" or "demo"
+	Mode string `json:"mode"` // "prod" — only mode now (demo retired 2026-04-28)
 	Root string `json:"root"` // root directory for data
 	Port int    `json:"port"` // port to listen on
 }
@@ -40,10 +40,6 @@ func (c *ServerConfig) ListenAddr() string {
 	return fmt.Sprintf(":%d", c.Port)
 }
 
-func (c *ServerConfig) IsDemo() bool {
-	return c.Mode == "demo"
-}
-
 func loadConfig(path string) (*ServerConfig, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -55,8 +51,8 @@ func loadConfig(path string) (*ServerConfig, error) {
 		return nil, fmt.Errorf("invalid config JSON: %w", err)
 	}
 
-	if config.Mode != "prod" && config.Mode != "demo" {
-		return nil, fmt.Errorf("mode must be \"prod\" or \"demo\", got %q", config.Mode)
+	if config.Mode != "prod" {
+		return nil, fmt.Errorf("mode must be \"prod\", got %q", config.Mode)
 	}
 	if config.Root == "" {
 		return nil, fmt.Errorf("root is required")
