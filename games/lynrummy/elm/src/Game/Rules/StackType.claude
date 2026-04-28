@@ -25,6 +25,15 @@ board-diff validation routes through this module.
   neighbors on the 13-cycle (K wraps to A).
 - `valueDistance : CardValue -> CardValue -> Int` — circular
   distance on the 13-cycle. Max is 6.
+- `isLegalStack` / `isPartialOk : List Card -> Bool` —
+  legal-stack and could-this-grow predicates (lifted from
+  `Game.Agent.Cards` 2026-04-28; pure rule predicates).
+- `neighbors : Card -> List (CardValue, Suit)` — the
+  card-graph adjacency law. **Returns exactly 9 entries
+  per card**, deck-invariant: 2 pure-run partners
+  (predecessor + successor of same suit) + 4 rb-run
+  partners (predecessor + successor of each opposite-color
+  suit) + 3 set partners (same value, other 3 suits).
 
 ## The six classifications
 

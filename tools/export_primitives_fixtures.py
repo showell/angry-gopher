@@ -297,6 +297,25 @@ def main():
         state = json.loads(state_json)
         all_fixtures.extend(fixtures_for_puzzle(puzzle_name, state))
 
+    if not all_fixtures:
+        # Fail-loud rather than silently overwriting with an
+        # empty file. The script depends on `lynrummy_puzzle_seeds`
+        # being populated; on a freshly-nuked DB it's empty (per
+        # `project_db_is_nukable.md`) and writing 0 fixtures would
+        # break the elm-test baseline silently. Surfaced as an IF
+        # in game_rules_lockdown phase 2 (2026-04-28).
+        print(
+            f"ERROR: 0 fixtures generated from "
+            f"{len(rows)} mined_% puzzle rows. The DB at "
+            f"{DB_PATH} is likely empty or doesn't have "
+            f"BFS-solvable mined puzzles. Refusing to overwrite "
+            f"{JSON_PATH} with an empty fixture set.\n"
+            f"To repopulate: run "
+            f"`python3 tools/mine_puzzles.py` first.",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+
     JSON_PATH.parent.mkdir(parents=True, exist_ok=True)
     JSON_PATH.write_text(json.dumps(all_fixtures, indent=2))
     print(f"wrote {JSON_PATH} ({len(all_fixtures)} fixtures)")
