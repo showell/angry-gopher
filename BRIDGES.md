@@ -72,17 +72,6 @@ wired.
 
 **Half bridges that could become full.**
 
-- *Sidecar ↔ source.* Every `.claude` sidecar is supposed to be
-  an always-up-to-date brief of its source file.
-  `tools/sidecar_audit.py` now covers PART of this: it verifies
-  every source file has a sidecar (coverage) and that each
-  sidecar's `just_use` target points at an existing file
-  (orphan check). What the script still does NOT verify is the
-  CONTENT: labels, maturity summaries, API descriptions can
-  still drift from the source silently. A full bridge would
-  parse structured claims (label, exposed API, dependencies)
-  and diff against the code. (See also TOP_DOWN_SWEEP as the
-  human-in-the-loop half.)
 - *STRUCTURE DSL ↔ filesystem layout.* The DSL describes the
   directory structure; the filesystem realizes it. Nothing
   enforces agreement. A full bridge would be a linter that
@@ -90,10 +79,10 @@ wired.
   compares them and reports drift (check-time).
 - *LABELS vocabulary ↔ code usage.* The glossary of labels
   (SPIKE / EARLY / WORKHORSE / INTRICATE / BUGGY /
-  CLEAN_INFRA / CANONICAL) is documented. But labels rot
-  because nothing verifies that their usage in sidecars
-  matches the rubric. A full bridge would parse every sidecar,
-  collect label usage, and cross-check against the glossary.
+  CLEAN_INFRA / CANONICAL) is documented. Labels now live
+  in module top-of-file comments after the 2026-04-28
+  sidecar rip. No automated check yet that label usage
+  matches the rubric.
 
 Any of the half bridges above could be promoted to full with
 a script. None of them require reshaping the product. Most of

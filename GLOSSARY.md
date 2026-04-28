@@ -8,7 +8,7 @@ Words Steve coined or borrowed that now carry real weight — in code identifier
 
 ## Dev harness — labels & maturity
 
-Labels that appear in `.claude` sidecars to signal the state and role of a file or module. Used by agents at tool-use time to pick the right mindset.
+Labels that signal the state and role of a file or module. Used by agents at tool-use time to pick the right mindset. Lived in `.claude` sidecars until 2026-04-28; now live in module top-of-file comments / docstrings and in `LABELS.md`.
 
 | Term | Meaning |
 |---|---|
@@ -28,7 +28,7 @@ Terms for how Steve and Claude work together. These shape process, not product.
 |---|---|
 | **Kitchen-table test** | Asking "would this feel right at an actual card table?" — Lyn Rummy's UX tie-breaker. |
 | **Rip** | Delete code fearlessly — removing an un-earning feature is a first-class skill, not a regret. |
-| **Consolidate knowledge** | The post-iteration exercise of promoting durable artifacts (sidecars, memories, essays, glossary entries, git tags) from a completed push of work. Done *in the flow*, not later — it both compresses what we just learned and pre-loads future-us. Named 2026-04-17 by Steve on the Writing the Sidecars essay. Canonical label for these exercises in commit messages and in-session framing. |
+| **Consolidate knowledge** | The post-iteration exercise of promoting durable artifacts (memories, essays, glossary entries, module docstrings, git tags) from a completed push of work. Done *in the flow*, not later — it both compresses what we just learned and pre-loads future-us. Named 2026-04-17 by Steve. Canonical label for these exercises in commit messages and in-session framing. |
 | **Ebb and flow** | The oscillating rhythm of our iteration: add complexity for realism and framing; scale back to study a single interaction; re-introduce the complexity. Neither pole alone is the answer — the study needs realistic conditions to matter, the tuning needs stripped-down conditions to move fast. Named 2026-04-17 on *Two Directions* (chosen from ~12 candidates including *breathing*, *pole-flipping*, *lab and field*). Canonical term in commit messages and in-session framing for iteration-phase work. |
 | **Zoom in / zoom out** | General-vocabulary verb pair for a *specific move* within ebb and flow. *Zoom in:* narrow focus, isolate a variable, drop context, tight feedback. *Zoom out:* widen focus, see the whole, re-engage complexity, sanity-check. **Caveat:** prone to false cognates — "zoom in" can mean literal camera-zoom, UI-zoom, mental-focus-on-detail, etc. Use when the *direction* (narrower vs wider) is the load-bearing meaning; reach for a more specific term if the semantics could conflate. |
 

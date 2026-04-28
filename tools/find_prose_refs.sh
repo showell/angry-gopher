@@ -6,10 +6,10 @@
 # Game.Card → Game.Rules.Card), call-site updates inside
 # .elm files are mechanical. The friction is prose
 # references in non-Elm files: Go template strings, Python
-# docstrings, markdown docs, .claude sidecars, .dsl
-# scenario files, etc. The renames-cross-into-prose
-# principle says these prose mentions must be updated in
-# the same commit as the source move.
+# docstrings, markdown docs, .dsl scenario files, etc.
+# The renames-cross-into-prose principle says these prose
+# mentions must be updated in the same commit as the
+# source move.
 #
 # This script greps every non-Elm file under games/lynrummy/
 # (plus angry-gopher/cmd/, tools/, top-level docs) for
@@ -51,7 +51,6 @@ echo "" >&2
 # - Go source (.go)
 # - Python (.py)
 # - Markdown (.md)
-# - Sidecars (.claude)
 # - DSL scenarios (.dsl)
 # - Plain text (.txt) — corpus baselines, etc.
 # - JSON (.json) only if it might embed Elm strings
@@ -63,7 +62,6 @@ grep -rn -E "$PATTERN" \
     --include="*.go" \
     --include="*.py" \
     --include="*.md" \
-    --include="*.claude" \
     --include="*.dsl" \
     --include="*.txt" \
     --include="*.json" \

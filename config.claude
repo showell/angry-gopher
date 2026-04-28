@@ -1,9 +1,0 @@
-just_use config.go
-
-# label: SIMPLE
-# role: supports feature — JSON config loader (mode/root/port)
-
-Two modes: "prod" (durable) vs "demo" (auto-nuke via GOPHER_RESET_DB=1).
-root must be creatable; gopher.db and uploads/ live under it. No env-var
-overrides — the whole config comes from one JSON file pointed at by
-GOPHER_CONFIG, which keeps deployment boringly explicit.

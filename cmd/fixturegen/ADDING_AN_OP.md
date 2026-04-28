@@ -162,7 +162,6 @@ are the Python contract; the manifest is the Python reachability check.
 ## Files involved
 
 - `cmd/fixturegen/main.go` — registry, parser, all three emitters.
-- `cmd/fixturegen/main.claude` — sidecar overview.
 - `games/lynrummy/conformance/scenarios/*.dsl` — scenario sources.
 - `games/lynrummy/referee_conformance_test.go` — generated Go tests.
 - `games/lynrummy/elm/tests/Game/DslConformanceTest.elm` — generated Elm tests.

@@ -1,9 +1,0 @@
-just_use admin_ops.go
-
-# label: WORKHORSE
-# role: supports feature — /admin/ops dashboard + /admin/health JSON
-
-Minimal ops surfaces since the messaging stack was ripped 2026-04-21: HTML
-dashboard showing server uptime, git commit, mode, db path, listen addr;
-admin-gated JSON health endpoint with uptime + git commit. No counters,
-no reset button — nothing in-memory to reset.

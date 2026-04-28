@@ -24,7 +24,7 @@
 //   # Elm file move (auto-detected when src ends in .elm and is
 //   # a file): renames the module declaration in the moved file
 //   # and rewrites every importer's bare/aliased/exposing/chain
-//   # form. Also moves any sibling .claude sidecar.
+//   # form.
 //   elm-mv games/lynrummy/elm/src/Game/Card.elm games/lynrummy/elm/src/Game/Rules/Card.elm
 //
 // Dry-run output shows every file that would be touched and every
@@ -77,7 +77,7 @@ type move struct {
 	newModulePrefix string // e.g. "Game" or "Game.Rules.Card"
 	// elmIsFile is true when src/dst end in .elm and src is a
 	// file (single-file move). The two flavours differ in:
-	//   - what we move: a directory tree vs a .elm + .claude pair
+	//   - what we move: a directory tree vs a single .elm file
 	//   - how rewrites match: directory mode requires `oldPrefix.X`
 	//     (a chain or `.*` wildcard); file mode also matches the
 	//     bare prefix (e.g. `import Game.Card` with no follow-up
@@ -227,24 +227,14 @@ func main() {
 			os.MkdirAll(parent, 0755)
 		}
 		if m.kind == kindElm && m.elmIsFile {
-			// File-level Elm move: git mv the .elm file and
-			// (if present) its sibling .claude sidecar. git mv
-			// keeps git's rename-detection clean and stages
-			// the move atomically with the rewrites.
+			// File-level Elm move: git mv keeps git's
+			// rename-detection clean and stages the move
+			// atomically with the rewrites.
 			if err := gitMv(m.src, m.dst); err != nil {
 				fmt.Fprintf(os.Stderr, "error git mv %s → %s: %v\n", m.src, m.dst, err)
 				os.Exit(1)
 			}
 			fmt.Printf("  git mv %s → %s\n", m.src, m.dst)
-			srcSidecar := strings.TrimSuffix(m.src, ".elm") + ".claude"
-			dstSidecar := strings.TrimSuffix(m.dst, ".elm") + ".claude"
-			if _, err := os.Stat(srcSidecar); err == nil {
-				if err := gitMv(srcSidecar, dstSidecar); err != nil {
-					fmt.Fprintf(os.Stderr, "error git mv %s → %s: %v\n", srcSidecar, dstSidecar, err)
-					os.Exit(1)
-				}
-				fmt.Printf("  git mv %s → %s\n", srcSidecar, dstSidecar)
-			}
 			continue
 		}
 		if err := os.Rename(m.src, m.dst); err != nil {
@@ -642,11 +632,9 @@ func scanGoPackageRewrites(moves []move) []rewrite {
 
 // --- Elm scanning ---
 
-// findElmFiles returns every file whose contents may legitimately
-// reference an Elm module name: .elm sources AND .claude sidecars.
-// Sidecars use module-qualified names just like source code does
-// (`LynRummy.Reducer`, `Main.Apply.applyAction`, etc.), so they
-// need the same rewrite sweep.
+// findElmFiles returns every .elm source file that may
+// legitimately reference an Elm module name and need a
+// rewrite sweep.
 func findElmFiles(root string) []string {
 	var files []string
 	filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
@@ -660,7 +648,7 @@ func findElmFiles(root string) []string {
 			}
 			return nil
 		}
-		if strings.HasSuffix(name, ".elm") || strings.HasSuffix(name, ".claude") {
+		if strings.HasSuffix(name, ".elm") {
 			files = append(files, path)
 		}
 		return nil

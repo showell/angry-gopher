@@ -47,8 +47,6 @@ OWN_PATH, OWN_CONTENT, REFED = "path", "content", "ref"
 
 def kind_of(path):
     rel = os.path.relpath(path, REPO)
-    if rel.endswith(".claude"):
-        return "sidecar"
     if rel.endswith(".md"):
         return "docs"
     if rel.startswith("cmd/") and rel.endswith(".go"):
@@ -192,7 +190,7 @@ def main(argv):
         by_kind[kind][1] += nmatch
         by_kind[kind][2] += floc
     print("By kind:")
-    for k in ("prod", "test", "cmd", "docs", "sidecar"):
+    for k in ("prod", "test", "cmd", "docs"):
         if k not in by_kind:
             continue
         f, m, l = by_kind[k]

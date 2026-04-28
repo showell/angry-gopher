@@ -43,8 +43,6 @@ func RegisterPages(mux *http.ServeMux) {
 	mux.HandleFunc("/gopher/claude/", HandleClaudeLanding)
 	mux.HandleFunc("/gopher/docs/", HandleDocs)
 	mux.HandleFunc("/gopher/docs", HandleDocs)
-	mux.HandleFunc("/gopher/code/", HandleCode)
-	mux.HandleFunc("/gopher/code", HandleCode)
 	mux.HandleFunc("/gopher/wiki/", HandleWikiLegacy)
 	mux.HandleFunc("/gopher/wiki", HandleWikiLegacy)
 	mux.HandleFunc("/gopher/lynrummy-elm/", HandleLynRummyElm)

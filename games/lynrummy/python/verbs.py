@@ -46,8 +46,7 @@ def move_to_primitives(desc, board):
     pass injects pre-flight `move_stack` primitives wherever
     the next primitive would land the board too close to a
     pre-existing stack (or off-board). This honors the
-    "pre-flight planning, never post-hoc tidy" convention
-    documented in `verbs.claude`.
+    "pre-flight planning, never post-hoc tidy" convention.
     """
     t = desc.type
     if isinstance(desc, ExtractAbsorbDesc):

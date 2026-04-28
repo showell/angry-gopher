@@ -34,34 +34,35 @@ each one is, see
 Elm boots (`Main.elm`, `Puzzles.elm`), server handlers, CLI
 tooling, and conformance test surfaces, with maturity notes.
 
-## Then — read sidecars
+## Then — read the load-bearing modules
 
-Every `.elm` file under `src/` has a sibling `.claude`
-sidecar. The sidecars describe each module's role within
-Elm's layering (capture / integration / execution / render).
+Per-module roles live in each file's top-of-file comment.
+The `.claude` sidecar system was retired 2026-04-28; commit
+history is now the authoritative record of design decisions.
 
-Starting points, organized by layer:
+Starting points, organized by Elm's capture / integration /
+execution / render layering:
 
-- **Capture.** `src/Main/Gesture.claude` (pointer events),
-  `src/Main/Wire.claude` (wire deliveries + the
-  action-log-entry decoder), and `src/Main/Msg.claude` (the
+- **Capture.** `src/Main/Gesture.elm` (pointer events),
+  `src/Main/Wire.elm` (wire deliveries + the
+  action-log-entry decoder), and `src/Main/Msg.elm` (the
   unified Msg type).
-- **Integration.** `src/Game/Referee.claude` (Elm's own
+- **Integration.** `src/Game/Referee.elm` (Elm's own
   referee — does NOT rely on the Go referee).
-- **Execution.** `src/Main/Apply.claude` (applyAction),
-  `src/Game/Reducer.claude` (the pure action-log
-  reducer), `src/Game/Game.claude` (turn transitions).
-- **Render.** `src/Main/View.claude` (top-level composition
-  + pinned layout), `src/Game/View.claude` (rendering
-  primitives), `src/Game/HandLayout.claude` and
-  `src/Game/BoardGeometry.claude` (frame constants).
+- **Execution.** `src/Main/Apply.elm` (applyAction),
+  `src/Game/Reducer.elm` (the pure action-log
+  reducer), `src/Game/Game.elm` (turn transitions).
+- **Render.** `src/Main/View.elm` (top-level composition
+  + pinned layout), `src/Game/View.elm` (rendering
+  primitives), `src/Game/HandLayout.elm` and
+  `src/Game/BoardGeometry.elm` (frame constants).
 
 ## Domain modules
 
 `src/Game/` also holds the Elm port of the game's domain
-types: `CardStack.claude`, `Hand.claude`, `Dealer.claude`,
-etc. These mirror the Go package; each sidecar states
-where it stands relative to its Go counterpart.
+types: `CardStack.elm`, `Hand.elm`, `Dealer.elm`, etc.
+These mirror the Go package; each top-of-file comment
+states where it stands relative to its Go counterpart.
 
 ## Game/Rules/ — the locked-down rule layer
 

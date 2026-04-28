@@ -254,8 +254,7 @@ Key invariants:
     board frame for intra-board drags, viewport frame for
     hand-origin drags. Path samples (in `gesturePath`) match.
   - Mousemove maintains `floaterTopLeft` by ADDING cursor
-    deltas (pure vectors, frame-agnostic). See
-    `Main.Gesture.claude` for the rationale.
+    deltas (pure vectors, frame-agnostic).
   - `cursor` is the current mouse position in viewport frame.
     Used only for live concerns — the `isCursorOverBoard`
     hit-test, `clickIntentAfterMove`. Never travels on the

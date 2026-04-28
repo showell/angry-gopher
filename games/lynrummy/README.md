@@ -16,31 +16,30 @@ system-wide Lyn Rummy architecture document. It explains the
 event-driven model, the per-actor log story, and where the Go
 subsystem fits relative to the Elm UI and Python agent.
 
-## Then — read sidecars
+## Then — read the load-bearing modules
 
-Every `.go` file here has a sibling `.claude` sidecar. The
-sidecar carries the module's role + domain knowledge +
-maturity label. Open the sidecar first when landing in a file
-you haven't touched before.
+Per-file domain knowledge lives in each module's top-of-file
+docstring. The `.claude` sidecar system was retired
+2026-04-28 — commit history is now the authoritative record
+of why decisions were made. Check `LABELS.md` at the repo
+root for the generated maturity-label index.
 
-Ordered by "load-bearing first" (check `LABELS.md` at the
-repo root for the generated label index):
+Ordered by "load-bearing first":
 
-- `wire_action.claude` — the wire format as seen from Go.
+- `wire_action.go` — the wire format as seen from Go.
   Primitives-only. The envelope shape.
-- `referee.claude` — move validation: protocol / geometry /
+- `referee.go` — move validation: protocol / geometry /
   semantics / inventory. Stateless.
-- `replay.claude` — the action-log reducer. Folds events
+- `replay.go` — the action-log reducer. Folds events
   forward from a deck seed.
-- `dealer.claude` — opening board + deck seed. Coordination
+- `dealer.go` — opening board + deck seed. Coordination
   artifact for multi-player sessions.
-- `board_geometry.claude` — bounds, overlap, viewport-pinning
+- `board_geometry.go` — bounds, overlap, viewport-pinning
   constants.
-- `card_stack.claude`, `card.claude`, `hand.claude`,
-  `stack_type.claude`, `score.claude`, `turn_result.claude`
-  — domain primitives.
-- `events.claude` — what's left of `events.go` after the
-  2026-04-20 rip. Currently vestigial.
+- `card_stack.go`, `card.go`, `hand.go`, `stack_type.go`,
+  `score.go`, `turn_result.go` — domain primitives.
+- `events.go` — what's left after the 2026-04-20 rip.
+  Currently vestigial.
 
 ## Subsystems inside `games/lynrummy/`
 
@@ -67,7 +66,7 @@ repo root for the generated label index):
 - `referee_conformance_test.go` is **generated** by
   `cmd/fixturegen` from the DSL scenarios under
   `conformance/scenarios/`. Don't hand-edit. See
-  `../../cmd/fixturegen/main.claude` for the pipeline.
+  `../../cmd/fixturegen/main.go` for the pipeline.
 
 ## Conformance DSL
 
@@ -88,7 +87,7 @@ via `cmd/fixturegen`:
   exercises these end-to-end after the focus-rule port
   (2026-04-26); needs a dedicated re-check.
 
-See `../../cmd/fixturegen/main.claude` for the codegen
+See `../../cmd/fixturegen/main.go` for the codegen
 pipeline and `python/test_dsl_conformance.py` for the
 Python runner.
 

@@ -535,10 +535,12 @@ them plainly here so they're not only implicit:
 - [`./python/README.md`](./python/README.md)
   — Python agent subsystem.
 
-Each subsystem README lists the load-bearing sidecars in
+Each subsystem README lists the load-bearing modules in
 "read-this-first" order. Read the architecture doc first
 (you're in it); then the relevant subsystem README; then the
-sidecars.
+module top-of-file docstrings. (The legacy `.claude` sidecar
+system was retired 2026-04-28; commit messages now carry the
+historical record.)
 
 ### First-class cross-cutting docs
 
@@ -554,7 +556,7 @@ sidecars.
 
 ### Conformance & testing
 
-- `../../cmd/fixturegen/main.claude` — the DSL → Go + Elm
+- `../../cmd/fixturegen/main.go` — the DSL → Go + Elm
   + JSON test generator. The mechanism behind our hint /
   invariant / referee cross-language bridges.
 - `games/lynrummy/conformance/scenarios/*.dsl` — the
@@ -677,8 +679,8 @@ methodology.
 
 Parked `STILL_EVOLVING`, last swept 2026-04-27
 (TOP_DOWN_SWEEP after the Lab → Puzzles rename — verified
-file paths, URLs, table names, and sidecar pointers align
-with the post-rename code). Prior sweep was 2026-04-23
+file paths, URLs, and table names align with the post-rename
+code). Prior sweep was 2026-04-23
 evening, after a full day of Puzzles-gallery refinement
 (margin 5→7, 25-puzzle v2 catalog, session-scoped
 annotations, agent mid-stack-split pre-move rule, Replay
@@ -691,7 +693,8 @@ sessions have been exercised out-of-band at best); expect
 that surface to move as real two-way play gets shaken out.
 
 Update this document whenever a conversation produces a
-durable architectural insight. Redundancy with other surfaces
-(memories, sidecars) is deliberate and fine — this doc's job
-is the over-arching principles; sidecars and memories carry
-the specifics and the examples.
+durable architectural insight. Redundancy with module
+docstrings and memories is deliberate and fine — this doc's
+job is the over-arching principles; the per-module
+docstrings and memory entries carry the specifics and the
+examples.

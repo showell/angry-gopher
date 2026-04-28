@@ -1,9 +1,0 @@
-just_use auth.go
-
-# label: TINY
-# role: encodes domain knowledge
-
-HTTP Basic auth over (email, api_key). Angry Cat sends the header on every
-request — there are no sessions for the API. api_key lives on users as
-plaintext: the DB itself is the trust boundary, and cmd/db_query is how
-admins look keys up. Changing this contract breaks Cat's wire protocol.

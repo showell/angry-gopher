@@ -1,7 +1,0 @@
-just_use admin.go
-
-# label: ROUTER
-# role: supports feature — dispatches /admin/* to login, ops, or table viewer
-
-Thin path-split router. Unauthenticated requests redirect to /admin/login;
-everything else falls through to the admin_auth / admin_ops / admin_tables trio.

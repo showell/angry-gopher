@@ -56,12 +56,11 @@ const AppChromeCSS = `
 `
 
 // AppChromeTop emits the global top bar. `current` should be one of
-// "games" / "code" / "docs" / "claude" / "" (when not in any area).
+// "games" / "docs" / "claude" / "" (when not in any area).
 // Pass empty for the home page or un-tagged pages.
 func AppChromeTop(w http.ResponseWriter, current string) {
 	areas := []struct{ key, label, href string }{
 		{"games", "Games", "/gopher/game-lobby"},
-		{"code", "Code", "/gopher/code/"},
 		{"docs", "Docs", "/gopher/docs/"},
 		{"claude", "Claude", "/gopher/claude"},
 	}
@@ -260,15 +259,6 @@ h1 { color: #000080; font-size: 34px; margin-bottom: 4px; }
     <ul>
       <li><a href="/gopher/lynrummy-elm/">Play</a></li>
       <li><a href="/gopher/lynrummy-elm/sessions">Sessions</a></li>
-    </ul>
-  </div>
-
-  <div class="card">
-    <h2><a href="/gopher/code/">Code</a></h2>
-    <p>Browse source files and <code>.claude</code> sidecars across all tracked repos.</p>
-    <ul>
-      <li><a href="/gopher/code/">Repo tree</a> <span class="muted">— full filesystem</span></li>
-      <li><a href="/gopher/code/views">views/</a> <span class="muted">— Gopher view handlers</span></li>
     </ul>
   </div>
 

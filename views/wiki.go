@@ -1,14 +1,8 @@
-// Wiki view — browser-based reader for repo docs, sidecars, and
-// source files. Serves multiple repos so Steve can navigate between
-// Gopher + sibling Elm projects in one browser tab.
+// Wiki view — browser-based reader for repo docs across all
+// tracked repos.
 //
-// Mounted at two roots with different framing:
-//
-//   /gopher/docs/<repo>/<path>  — "Docs" framing; landmarks-first sidebar
-//   /gopher/code/<repo>/<path>  — "Code" framing; tree-first sidebar
-//
-// Same handler, same files, different presentation. /gopher/wiki/*
-// is a legacy redirect into /gopher/docs/*.
+// Mounted at /gopher/docs/<repo>/<path>. /gopher/wiki/* is a
+// legacy redirect into /gopher/docs/*.
 //
 // Known repos live in wikiRepos. To add one, map a name to an
 // absolute path. Findability knob = 10: every repo Steve might want
@@ -64,10 +58,8 @@ func resolveRepoPath(repo, sub string) (string, bool) {
 	return cleaned, true
 }
 
-// HandleDocs and HandleCode are the public entry points. Both
-// dispatch into the same renderer with a different "section" tag.
+// HandleDocs is the public entry point.
 func HandleDocs(w http.ResponseWriter, r *http.Request) { handleWikiSection(w, r, "docs") }
-func HandleCode(w http.ResponseWriter, r *http.Request) { handleWikiSection(w, r, "code") }
 
 // HandleWikiLegacy 301-redirects any /gopher/wiki/* request to its
 // /gopher/docs/* equivalent. Docs is the more common entry point;
@@ -180,26 +172,7 @@ th { background: #000080; color: white; }
 }
 
 func wikiLanding(w http.ResponseWriter, section string) {
-	if section == "docs" {
-		renderDocsLanding(w)
-		return
-	}
-	if section == "code" {
-		renderCodeLanding(w)
-		return
-	}
-	wikiHeader(w, section, "Home", "/", "")
-	fmt.Fprint(w, `<p>Browser-based reader for Steve's dev harness. Pick a repo:</p><ul class="wiki-tree">`)
-	for _, name := range wikiRepoOrder {
-		root, ok := repoRoot(name)
-		if !ok {
-			continue
-		}
-		fmt.Fprintf(w, `<li><a href="/gopher/%s/%s/"><b>%s</b></a> <span class="muted">— %s</span></li>`,
-			html.EscapeString(section), html.EscapeString(name), html.EscapeString(name), html.EscapeString(root))
-	}
-	fmt.Fprint(w, `</ul>`)
-	wikiFooter(w)
+	renderDocsLanding(w)
 }
 
 // renderDocsLanding is the Docs landing: a Google-ish search box, a
@@ -386,345 +359,8 @@ func collectAllDocs() []docEntry {
 	return out
 }
 
-// renderCodeLanding is the Code landing: a centered, fully-expanded
-// tree of every tracked repo, one file per row. Generous indentation
-// + distinct dir/file typography. No preview pane; clicking a file
-// opens it full-page.
-func renderCodeLanding(w http.ResponseWriter) {
-	entries := collectAllCodeFiles()
-	exts := collectExtensions(entries)
-
-	fmt.Fprint(w, `<!DOCTYPE html>
-<html><head><title>Code — Angry Gopher</title>
-<style>
-body { margin: 0; padding: 0; display: flex; flex-direction: column; min-height: 100vh;
-       font-family: sans-serif; color: #222; background: #fff; }
-.code-layout { flex: 1; display: flex; flex-direction: column; min-height: 0; }
-.code-searchbar { padding: 16px 24px; background: #fafafa; border-bottom: 1px solid #ddd; }
-.code-searchbar input { width: 100%; max-width: 720px; display: block; margin: 0 auto;
-                        padding: 12px 16px; font-size: 17px; border: 1px solid #bbb;
-                        border-radius: 24px; box-sizing: border-box; outline: none; }
-.code-searchbar input:focus { border-color: #000080; box-shadow: 0 0 0 3px #e0e8ff; }
-.code-body { flex: 1; display: flex; min-height: 0; }
-.code-sidebar { width: 160px; background: #fafafa; border-right: 1px solid #ddd;
-                padding: 12px 0; overflow-y: auto; position: sticky; top: 0; }
-.code-sidebar h4 { margin: 0 12px 8px; font-size: 11px; text-transform: uppercase;
-                   letter-spacing: 0.06em; color: #888; }
-.code-sidebar ul { list-style: none; margin: 0; padding: 0; }
-.code-sidebar li { padding: 0; }
-.code-sidebar button { display: block; width: 100%%; background: none; border: none;
-                       text-align: left; padding: 6px 14px; font-family: "Courier New", monospace;
-                       font-size: 15px; color: #222; cursor: pointer; }
-.code-sidebar button:hover { background: #f0f0ff; }
-.code-sidebar button.active { background: #e6eaf6; font-weight: bold; color: #000080; }
-.code-sidebar .ext-count { color: #888; font-size: 11px; margin-left: 6px; }
-.code-main { flex: 1; max-width: 900px; padding: 24px 32px 60px; box-sizing: border-box;
-             overflow-y: auto; }
-.code-count { color: #888; font-size: 13px; margin-bottom: 12px; }
-.code-tree ul { list-style: none; margin: 0; padding: 0; }
-.code-tree li.hidden { display: none; }
-.code-tree li.dimmed { opacity: 0.2; }
-
-/* Repo headers: big section dividers. */
-.code-tree .repo-header { margin: 32px 0 14px; padding: 8px 14px;
-                          font-size: 26px; font-weight: bold; color: #000080;
-                          border-bottom: 3px solid #000080; }
-.code-tree .repo-header:first-child { margin-top: 0; }
-
-/* Dirs: obviously different from files — chunkier, colored, no monospace. */
-.code-tree .dir { margin: 14px 0 4px; padding: 6px 12px; font-size: 20px;
-                  font-weight: 700; color: #444; background: #f4f1e8;
-                  border-left: 5px solid #c9bfa7; border-radius: 3px;
-                  letter-spacing: 0.01em; transition: opacity 0.15s; }
-.code-tree .dir .dir-name::before { content: "📂 "; font-size: 18px; }
-
-/* Files: clean monospace rows, one per line, generous size. */
-.code-tree li.file { padding: 0; transition: opacity 0.15s; }
-.code-tree li.file a { display: block; padding: 4px 8px; color: #222;
-                       text-decoration: none; font-family: "Courier New", monospace;
-                       font-size: 17px; line-height: 1.5;
-                       border-left: 3px solid transparent; }
-.code-tree li.file a:hover { background: #f0f0ff; text-decoration: underline; }
-.code-tree .loc { display: inline-block; width: 4ch; text-align: right;
-                  color: #666; font-size: 15px; margin-right: 10px; }
-.code-tree .claude-sidecar a { color: #805500; }
-.code-tree .claude-sidecar a .name { background: #fff3a8; padding: 1px 6px;
-                                     border-radius: 3px; font-weight: bold; }
-
-@media (max-width: 720px) {
-  .code-body { flex-direction: column; }
-  .code-sidebar { width: 100%%; max-height: 120px; border-right: none;
-                  border-bottom: 1px solid #ddd; display: flex; flex-wrap: wrap; gap: 4px; padding: 8px; }
-  .code-sidebar h4 { display: none; }
-  .code-main { padding: 16px 12px 40px; }
-}
-` + AppChromeCSS + `
-</style>
-</head><body>`)
-	AppChromeTop(w, "code")
-	fmt.Fprint(w, `<div class="code-layout">
-<div class="code-searchbar">
-  <input id="code-search" type="search" placeholder="Filter by filename or path (e.g. wiki, auth, .claude)" autofocus>
-</div>
-<div class="code-body">
-<div class="code-sidebar">
-<h4>File types</h4>
-<ul>
-<li><button class="active" data-ext="*">All<span class="ext-count">`)
-	fmt.Fprintf(w, "%d", countCodeFiles(entries))
-	fmt.Fprint(w, `</span></button></li>`)
-	for _, ext := range exts {
-		fmt.Fprintf(w, `<li><button data-ext="%s">%s<span class="ext-count">%d</span></button></li>`,
-			html.EscapeString(ext.ext), html.EscapeString(ext.ext), ext.count)
-	}
-	fmt.Fprint(w, `</ul></div>
-<div class="code-main">`)
-	fmt.Fprintf(w, `<div class="code-count"><span id="code-count">%d</span> files</div>`, countCodeFiles(entries))
-	fmt.Fprint(w, `<div class="code-tree"><ul id="code-list">`)
-
-	lastRepo := ""
-	for _, repo := range wikiRepoOrder {
-		nodes, ok := entries[repo]
-		if !ok {
-			continue
-		}
-		if repo != lastRepo {
-			fmt.Fprintf(w, `<li class="repo-header" data-repo="%s">%s/</li>`,
-				html.EscapeString(repo), html.EscapeString(repo))
-			lastRepo = repo
-		}
-		for _, n := range nodes {
-			renderCodeTreeRow(w, repo, n)
-		}
-	}
-	fmt.Fprint(w, `</ul></div></div></div></div>
-<script>
-(function(){
-  var search = document.getElementById('code-search');
-  var list = document.getElementById('code-list');
-  var count = document.getElementById('code-count');
-  var items = Array.prototype.slice.call(list.querySelectorAll('li.file'));
-  var dirs = Array.prototype.slice.call(list.querySelectorAll('li.dir'));
-  var repoHeaders = Array.prototype.slice.call(list.querySelectorAll('li.repo-header'));
-  var sidebar = document.querySelector('.code-sidebar');
-  var activeExt = '*';
-
-  function applyFilters() {
-    var q = search.value.trim().toLowerCase();
-    var visible = 0;
-    var perRepo = {};
-
-    items.forEach(function(li){
-      var a = li.querySelector('a');
-      var ext = li.getAttribute('data-ext') || '';
-      var hay = (a.getAttribute('data-repo') + '/' + a.getAttribute('data-path')).toLowerCase();
-      var matchText = q === '' || hay.indexOf(q) !== -1;
-      var matchExt = activeExt === '*' || ext === activeExt;
-      var show = matchText && matchExt;
-      li.classList.toggle('hidden', !show);
-      if (show) {
-        visible++;
-        var r = a.getAttribute('data-repo');
-        perRepo[r] = (perRepo[r] || 0) + 1;
-      }
-    });
-
-    // Dirs: show always but dim if no visible children.
-    dirs.forEach(function(d){
-      var dirPath = d.getAttribute('data-dir');
-      var dirRepo = d.getAttribute('data-repo');
-      var anyVisible = items.some(function(li){
-        var a = li.querySelector('a');
-        return a.getAttribute('data-repo') === dirRepo &&
-               a.getAttribute('data-path').startsWith(dirPath + '/') &&
-               !li.classList.contains('hidden');
-      });
-      d.classList.remove('hidden');
-      d.classList.toggle('dimmed', !anyVisible);
-    });
-
-    repoHeaders.forEach(function(h){
-      h.classList.remove('hidden');
-      h.classList.toggle('dimmed', !perRepo[h.getAttribute('data-repo')]);
-    });
-    count.textContent = visible;
-  }
-
-  search.addEventListener('input', applyFilters);
-  search.addEventListener('keydown', function(e){
-    if (e.key === 'Enter') {
-      var first = items.find(function(li){ return !li.classList.contains('hidden'); });
-      if (first) first.querySelector('a').click();
-    } else if (e.key === 'Escape') {
-      search.value = '';
-      applyFilters();
-    }
-  });
-
-  sidebar.addEventListener('click', function(e){
-    var btn = e.target.closest('button');
-    if (!btn) return;
-    activeExt = btn.getAttribute('data-ext');
-    sidebar.querySelectorAll('button').forEach(function(b){ b.classList.remove('active'); });
-    btn.classList.add('active');
-    applyFilters();
-  });
-})();
-</script>`)
-	AppChromeBottom(w)
-	fmt.Fprint(w, `</body></html>`)
-}
-
-// treeNode is a file or directory marker in the pre-rendered tree.
-// Dirs are emitted as label rows; files as clickable rows.
-type treeNode struct {
-	rel   string // relative path from repo root
-	name  string // base name
-	ext   string // file extension including dot, e.g. ".go"
-	depth int    // number of path segments (0 for root-level)
-	isDir bool
-	loc   int    // lines of code (files only)
-}
-
-type extEntry struct {
-	ext   string
-	count int
-}
-
-func collectExtensions(entries map[string][]treeNode) []extEntry {
-	counts := map[string]int{}
-	for _, nodes := range entries {
-		for _, n := range nodes {
-			if !n.isDir && n.ext != "" {
-				counts[n.ext]++
-			}
-		}
-	}
-	var out []extEntry
-	for ext, c := range counts {
-		out = append(out, extEntry{ext, c})
-	}
-	sort.Slice(out, func(i, j int) bool { return out[i].ext < out[j].ext })
-	return out
-}
-
-// collectAllCodeFiles walks each tracked repo depth-first and returns
-// a per-repo slice of treeNodes in display order. Dirs appear before
-// their contents; entries within a dir are sorted A–Z with dirs
-// first.
-func collectAllCodeFiles() map[string][]treeNode {
-	skipDirs := map[string]bool{
-		"node_modules": true, "elm-stuff": true, ".git": true,
-		"dist": true, "build": true, "bin": true,
-	}
-	result := map[string][]treeNode{}
-	for _, repo := range wikiRepoOrder {
-		root, ok := repoRoot(repo)
-		if !ok {
-			continue
-		}
-		var nodes []treeNode
-		var walk func(dir, rel string, depth int)
-		walk = func(dir, rel string, depth int) {
-			ents, err := os.ReadDir(dir)
-			if err != nil {
-				return
-			}
-			sort.Slice(ents, func(i, j int) bool {
-				if ents[i].IsDir() != ents[j].IsDir() {
-					return !ents[i].IsDir()
-				}
-				return ents[i].Name() < ents[j].Name()
-			})
-			for _, e := range ents {
-				name := e.Name()
-				if strings.HasPrefix(name, ".") && name != ".gitignore" {
-					continue
-				}
-				if e.IsDir() && skipDirs[name] {
-					continue
-				}
-				childRel := name
-				if rel != "" {
-					childRel = rel + "/" + name
-				}
-				if e.IsDir() {
-					nodes = append(nodes, treeNode{
-						rel: childRel, name: name, depth: depth, isDir: true,
-					})
-					walk(filepath.Join(dir, name), childRel, depth+1)
-				} else {
-					ext := filepath.Ext(name)
-					loc := countLines(filepath.Join(dir, name))
-					nodes = append(nodes, treeNode{
-						rel: childRel, name: name, ext: ext,
-						depth: depth, isDir: false, loc: loc,
-					})
-				}
-			}
-		}
-		walk(root, "", 0)
-		result[repo] = nodes
-	}
-	return result
-}
-
-func countLines(path string) int {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return 0
-	}
-	if len(data) == 0 {
-		return 0
-	}
-	n := strings.Count(string(data), "\n")
-	if data[len(data)-1] != '\n' {
-		n++
-	}
-	return n
-}
-
-func countCodeFiles(m map[string][]treeNode) int {
-	n := 0
-	for _, nodes := range m {
-		for _, node := range nodes {
-			if !node.isDir {
-				n++
-			}
-		}
-	}
-	return n
-}
-
-func renderCodeTreeRow(w http.ResponseWriter, repo string, n treeNode) {
-	indent := (n.depth + 1) * 32
-	if n.isDir {
-		fmt.Fprintf(w,
-			`<li class="dir" data-repo="%s" data-dir="%s" style="margin-left:%dpx"><span class="dir-name">%s/</span></li>`,
-			html.EscapeString(repo), html.EscapeString(n.rel), indent, html.EscapeString(n.name),
-		)
-		return
-	}
-	cls := "file"
-	if strings.HasSuffix(n.name, ".claude") {
-		cls = "file claude-sidecar"
-	}
-	fmt.Fprintf(w,
-		`<li class="%s" data-ext="%s"><a href="/gopher/code/%s/%s" data-repo="%s" data-path="%s" style="padding-left:%dpx"><span class="loc">%4d</span> <span class="name">%s</span></a></li>`,
-		cls, html.EscapeString(n.ext),
-		html.EscapeString(repo), html.EscapeString(n.rel),
-		html.EscapeString(repo), html.EscapeString(n.rel), indent,
-		n.loc, html.EscapeString(n.name),
-	)
-}
-
 func sectionTitle(section string) string {
-	switch section {
-	case "code":
-		return "Code"
-	default:
-		return "Docs"
-	}
+	return "Docs"
 }
 
 // sectionCSS returns an extra <style> block that layers on top of the
@@ -790,9 +426,6 @@ func wikiRender(w http.ResponseWriter, section, repo, sub, displayPath string) {
 	}
 
 	wikiHeader(w, section, sub, displayPath, repo)
-	if link := sidecarLink(section, repo, sub); link != "" {
-		fmt.Fprint(w, link)
-	}
 	if strings.HasSuffix(sub, ".md") && RenderMarkdown != nil {
 		fmt.Fprint(w, `<div class="wiki-md">`)
 		fmt.Fprint(w, RenderMarkdown(string(body)))
@@ -804,63 +437,6 @@ func wikiRender(w http.ResponseWriter, section, repo, sub, displayPath string) {
 }
 
 
-// sidecarLink returns a small HTML snippet cross-linking a source
-// file to its .claude sidecar (or vice versa). Convention: sidecar
-// shares the basename — `foo.go` ↔ `foo.claude`, also package-style
-// `messages/messages.claude` ↔ `messages/messages.go`. Returns "" when
-// there is no obvious pairing.
-func sidecarLink(section, repo, sub string) string {
-	ext := filepath.Ext(sub)
-	if ext == "" {
-		return ""
-	}
-	base := strings.TrimSuffix(sub, ext)
-
-	if ext == ".claude" {
-		// Find a sibling file with a different extension.
-		dir := filepath.Dir(sub)
-		abs, ok := resolveRepoPath(repo, dir)
-		if !ok {
-			return ""
-		}
-		entries, err := os.ReadDir(abs)
-		if err != nil {
-			return ""
-		}
-		want := filepath.Base(base) + "."
-		self := filepath.Base(sub)
-		for _, e := range entries {
-			if e.IsDir() {
-				continue
-			}
-			name := e.Name()
-			if name == self {
-				continue
-			}
-			if strings.HasPrefix(name, want) && !strings.HasSuffix(name, ".claude") {
-				sib := filepath.Join(dir, name)
-				return fmt.Sprintf(
-					`<div class="wiki-sidecar">Source: <a href="/gopher/%s/%s/%s">%s</a></div>`,
-					html.EscapeString(section), html.EscapeString(repo), html.EscapeString(sib), html.EscapeString(sib),
-				)
-			}
-		}
-		return ""
-	}
-
-	sib := base + ".claude"
-	abs, ok := resolveRepoPath(repo, sib)
-	if !ok {
-		return ""
-	}
-	if _, err := os.Stat(abs); err != nil {
-		return ""
-	}
-	return fmt.Sprintf(
-		`<div class="wiki-sidecar">Sidecar: <a href="/gopher/%s/%s/%s">%s</a></div>`,
-		html.EscapeString(section), html.EscapeString(repo), html.EscapeString(sib), html.EscapeString(sib),
-	)
-}
 
 // renderSourceWithLines emits a <pre> where each source line is a
 // <span class="line" id="L<n>">. Fragment #L42 or #L42-L57 highlights
@@ -959,9 +535,6 @@ pre.wiki-src .line::before { content: counter(wikiline); display: inline-block;
                              border-right: 1px solid #ddd; padding-right: 0.5em; }
 pre.wiki-src .line.hilite { background: #fff3a8; }
 pre.wiki-src .line:target { background: #fff3a8; }
-.wiki-sidecar { background: #eef6ff; border: 1px solid #cfe2f7; padding: 6px 10px;
-                margin: 0 0 12px; font-size: 13px; border-radius: 3px; }
-.wiki-sidecar a { font-weight: bold; }
 code { background: #f0f0ec; padding: 1px 4px; border-radius: 2px; }
 pre code { background: none; padding: 0; }
 .wiki-md table { border-collapse: collapse; margin: 8px 0; }

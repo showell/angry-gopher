@@ -14,10 +14,11 @@ server for later witness.
 
 The agent code follows a disciplined functional-Python style:
 pure helpers, lists treated as immutable values, state
-threaded explicitly. See `bfs.claude` / `enumerator.claude`
-/ `move.claude` and `verbs.claude` for the conventions. The
-discipline is by convention, not by `frozen=True` types —
-Elm-readable shape, Python-idiomatic mechanics.
+threaded explicitly. See the top-of-file docstrings in
+`bfs.py`, `enumerator.py`, `move.py`, and `verbs.py` for
+the conventions. The discipline is by convention, not by
+`frozen=True` types — Elm-readable shape, Python-idiomatic
+mechanics.
 
 ## Before reading the Python code
 
@@ -32,7 +33,8 @@ load-bearing for why this subtree is shaped the way it is.
 
 If you're CONSUMING the agent (not modifying its planner), these
 are the externally-callable functions you almost certainly want.
-Each lives in the module named, with a sidecar of the same stem:
+Each lives in the module named — read the top-of-file docstring
+for full details:
 
 - **`dealer.deal(num_players=2, hand_size=15, rng=None)`** —
   produce a fresh, randomly shuffled `initial_state` dict
@@ -80,16 +82,7 @@ rule content lives (`rules/`) vs strategy (`cards.py` +
 the planner modules) vs UX cadence (`move.py`'s `narrate`
 / `hint`). Don't put new code in the wrong layer.
 
-**Step 4: Sidecar audit.** Run
-`python3 ../../../tools/sidecar_audit.py`. If sidecars are
-missing or `just_use` targets are broken, you're inheriting
-debt. The audit prints expected-sibling paths so you can
-fix them; new modules YOU add need sidecars in the same
-commit (per `feedback_segregate_by_volatility_class.md`'s
-test-discipline notes and the operating principles'
-"renames cross into prose by default").
-
-**Step 5: Know the corpus baseline.** The 21-puzzle
+**Step 4: Know the corpus baseline.** The 21-puzzle
 regression target lives in `corpus/baseline_post_focus.txt`
 (canonical depth distribution
 `[2,5,2,4,5,4,6,4,1,7,2,5,2,1,1,2,3,1,2,5,1]`). The corpus
@@ -100,7 +93,7 @@ is exercised via `test_dsl_conformance.py`'s
 Any solver-touching change must keep depths ≤ gold; longer
 plans are correctness failures.
 
-**Step 6: Ergonomics defaults (when you're refactoring or
+**Step 5: Ergonomics defaults (when you're refactoring or
 adding code).**
 
 - **Prefer rewrite over shim** when moving code between
@@ -128,7 +121,7 @@ adding code).**
   that need the DB (`tools/export_primitives_fixtures.py`,
   `tools/mine_puzzles.py`) fail loud when the DB is empty.
 
-**Step 7: Validation methodology** for any change touching
+**Step 6: Validation methodology** for any change touching
 the BFS planner — see § "Validation methodology" below.
 For non-planner changes, `./check.sh` is the gate.
 
@@ -209,7 +202,6 @@ The Python agent has two pieces of strategy code:
   - `bfs.py` — search engine
   Plus the `rules/` subpackage (Class-1/2 truth layer):
   card model + classification + rule predicates.
-  See per-module `*.claude` sidecars.
 
 - **`strategy.py` — the trick engine**, legacy. Per-trick
   emitters (`direct_play`, `pair_peel`, `split_for_set`, …)
@@ -237,60 +229,58 @@ Concrete examples of what this buys us:
   should rarely fire, and when it does it's a signal that
   the trick-specific emitter needs a plan upgrade.
 
-## Then — read sidecars
+## Then — read the load-bearing modules
 
-Full sidecar coverage as of 2026-04-25. Run
-`python3 ../../../tools/sidecar_audit.py` to verify.
+Per-module roles live in each file's top-of-file docstring.
+The `.claude` sidecar system was retired 2026-04-28; commit
+history is now the authoritative record of design decisions.
 
 Ordered by "load-bearing first":
 
 - **BFS planner — five-module split** (post-2026-04-26).
   **Start here for any planner-side work.**
-  - `bfs.claude` — the search engine (`solve`,
-    `bfs_with_cap`).
-  - `enumerator.claude` — INTRICATE move generator; focus
+  - `bfs.py` — the search engine (`solve`, `bfs_with_cap`).
+  - `enumerator.py` — INTRICATE move generator; focus
     rule + doomed-third filter + extractable index.
-  - `move.claude` — Move desc dataclasses + describe /
+  - `move.py` — Move desc dataclasses + describe /
     narrate / hint.
-  - `buckets.claude` — state shape + `state_sig` + type
+  - `buckets.py` — state shape + `state_sig` + type
     aliases.
-  - `cards.claude` — verb-eligibility predicates (agent
+  - `cards.py` — verb-eligibility predicates (agent
     strategy; the rule layer below it lives in `rules/`).
 - **Rules subpackage** (Class-1/2 truth layer; mirrors Elm
   `Game/Rules/`).
-  - `rules/card.claude` — card model + label
+  - `rules/card.py` — card model + label
     parser/renderers + suit color.
-  - `rules/stack_type.claude` — `successor` + `classify` +
+  - `rules/stack_type.py` — `successor` + `classify` +
     `is_partial_ok` + `neighbors`. The hottest function in
     BFS lives here.
-- `verbs.claude` — VERB → PRIMITIVE library; decomposes a
+- `verbs.py` — VERB → PRIMITIVE library; decomposes a
   BFS desc into UI primitives via content-based stack lookup.
-- `primitives.claude` — PRIMITIVE → GESTURE library;
+- `primitives.py` — PRIMITIVE → GESTURE library;
   to_wire_shape / apply_locally / send_one. The canonical
   send path used by every driver.
-- `agent_prelude.claude` — hand-aware outer loop;
+- `agent_prelude.py` — hand-aware outer loop;
   `find_play(hand, board)` returns a plausible play.
-- `agent_game.claude` — autonomous-play harness:
+- `agent_game.py` — autonomous-play harness:
   dealer.deal → loop find_play → place + plan → complete_turn.
-- `bfs_play.claude` — the replay driver: BFS plan executed
+- `bfs_play.py` — the replay driver: BFS plan executed
   on the actual board, watchable in the browser.
-- `strategy.claude` — the trick engine. PLANNED-LEGACY but
+- `strategy.py` — the trick engine. PLANNED-LEGACY but
   still wired. Per-trick emitters, primitive ordering
   discipline, plan-then-execute for `merge_hand`.
-- `geometry.claude` — board-frame geometry primitives
+- `geometry.py` — board-frame geometry primitives
   (find_open_loc, find_violation, pinned viewport
   constants).
-- `gesture_synth.claude` — synthesizes intra-board
+- `gesture_synth.py` — synthesizes intra-board
   floater-top-left paths where Python knows both endpoints.
-- `client.claude` — thin HTTP wrapper around the Gopher
+- `client.py` — thin HTTP wrapper around the Gopher
   endpoints.
 - `puzzle_catalog.py` — reads mined puzzles from
   `lynrummy_puzzle_seeds` and writes the JSON the Elm
   Puzzles gallery loads.
-- `telemetry.claude` — read-side of the DB's gesture
+- `telemetry.py` — read-side of the DB's gesture
   capture. Analysis, not gameplay.
-- Repo-wide tooling at `../../../tools/sidecar_audit.{claude,py}`
-  — drift + coverage check across all sidecars.
 
 ### Corpus regression
 
@@ -406,11 +396,6 @@ After any change touching the BFS planner modules
    Should finish in <10s with at least a few plays
    completed.
 
-5. **Sidecar audit** — every code file has its sidecar:
-   ```
-   python3 ../../../tools/sidecar_audit.py
-   ```
-
 Snapshot files are throwaway — re-capture periodically
 with `agent_game.py --offline --capture FILE` to get fresh
 representative samples.
@@ -452,8 +437,8 @@ shortened; full test suite green.
 
 ## TODO
 
-- Tag `strategy.claude` and friends PLANNED-LEGACY once the
-  abandonment plan is concrete.
+- Mark `strategy.py` and friends PLANNED-LEGACY in their
+  module docstrings once the abandonment plan is concrete.
 - The Elm port (`games/lynrummy/elm/src/Game/Agent/`) is
   feature-complete on the correctness/perf axis as of
   2026-04-26. Remaining drift is renderer-only:

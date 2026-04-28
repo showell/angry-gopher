@@ -1,7 +1,0 @@
-just_use main.go
-
-# label: TOOL
-# role: supports feature — one-shot SQL runner against a Gopher SQLite DB
-
-The canonical way to look up an api_key or inspect prod state without
-touching the admin UI. Steve reaches for this constantly.

@@ -1,9 +1,0 @@
-just_use admin_tables.go
-
-# label: WORKHORSE
-# role: supports feature — generic read-only table browser
-
-Index lists every sqlite_master table with row counts; click one to view up
-to 200 rows. isValidTable re-queries sqlite_master every request rather than
-caching, so new tables appear without a restart — fits the "schema is
-single source of truth, no migrations" discipline.

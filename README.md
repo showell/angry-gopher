@@ -32,14 +32,14 @@ Prod DB at `~/AngryGopher/prod/gopher.db`.
 | LynRummy wire format | [`games/lynrummy/WIRE.md`](games/lynrummy/WIRE.md) |
 | Deploy / modes / backups | `DEPLOYMENT.md` |
 | Test running, timings, lessons | `TESTING.md` |
-| Per-file domain knowledge | `<file>.claude` sidecar next to any `.go` file |
 | Module-label index | `LABELS.md` (generated) |
 | Pattern catalog / design vocabulary | `GLOSSARY.md`, `BRIDGES.md` |
 | Agent-collaboration conventions | `~/showell_repos/claude-collab/agent_collab/` |
 
-**Every `.go` file has a sibling `.claude` sidecar** carrying
-its maturity label + domain knowledge. When landing in
-unfamiliar code, read the sidecar first.
+Per-file domain knowledge lives in module top-of-file
+docstrings/comments and the subsystem READMEs. The legacy
+`.claude` sidecar system was retired 2026-04-28; commit
+messages are the authoritative history record.
 
 ## Packages
 

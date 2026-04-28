@@ -7,8 +7,7 @@ fetch state → `agent_prelude.find_play(hand, board)` → send
 the placements + the BFS plan → repeat until find_play returns
 None (turn complete) or the deck runs low.
 
-Replaces `auto_player.py`'s trick-engine driver. See
-`agent_game.claude` for the design.
+Replaces `auto_player.py`'s trick-engine driver.
 
 Usage:
     python3 games/lynrummy/python/agent_game.py
