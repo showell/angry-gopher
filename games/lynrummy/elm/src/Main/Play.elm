@@ -436,7 +436,7 @@ clickHint model =
     -- hand-driven Hint.buildSuggestions has nothing to say. Fall
     -- back to BFS: solve the current board, surface the first
     -- planned move as a status nudge.
-    if model.hideTurnControls then
+    if model.puzzleName /= Nothing then
         bfsHint model
 
     else
