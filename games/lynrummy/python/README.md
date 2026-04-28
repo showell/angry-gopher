@@ -28,6 +28,32 @@ not artificial**, **two coordinate frames** (board frame vs.
 viewport), and **agents plan then execute** are all directly
 load-bearing for why this subtree is shaped the way it is.
 
+## Public surface — entry points for using this subsystem
+
+If you're CONSUMING the agent (not modifying its planner), these
+are the externally-callable functions you almost certainly want.
+Each lives in the module named, with a sidecar of the same stem:
+
+- **`dealer.deal(num_players=2, hand_size=15, rng=None)`** —
+  produce a fresh, randomly shuffled `initial_state` dict
+  (board + hands + deck + discard + active player). The shape
+  the server accepts on `/new-session`.
+- **`agent_prelude.find_play(hand, board)`** — hand-aware outer
+  loop. Returns a plausible play (or `None` if the hand has no
+  immediate move).
+- **`bfs.solve(board, ...)`** — pure planner entry. Takes a
+  flat board, returns the shortest plan as a list of
+  description strings (or `None`).
+- **`client.*`** — thin HTTP wrapper around the Gopher server
+  endpoints (`new_session`, `post_action`, etc).
+- **`agent_game`** (CLI) — autonomous-play harness: deal, loop
+  `find_play`, place + plan, complete turn. Run with
+  `python3 agent_game.py --offline` for a smoke run.
+
+For modifying the planner itself, skip to the orientation
+checklist below — that's the editing path, not the consuming
+path.
+
 ## Agent orientation — about-to-do-active-work checklist
 
 If you're a sub-agent (or a fresh-session top-level Claude)
