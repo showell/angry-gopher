@@ -77,12 +77,14 @@ a new flow.
 The app is structured so `Main.Play` can be embedded into
 hosts other than `Main.elm` (for example the Puzzles
 gallery's `games/lynrummy/elm/src/Puzzles.elm`, where each
-puzzle panel embeds its own `Play.Model`). The split:
+puzzle panel embeds its own `Main.State.Model`). The split:
 
 - **`Main.Play`** — the embeddable component. Exposes
   `Config` (NewSession / ResumeSession / PuzzleSession),
-  `Model`, `Msg`, `Output`, plus `init / update / view /
-  subscriptions`.
+  `Output`, plus `init / update / view / subscriptions`
+  (and `mouseMove`). The component's `Model` lives in
+  `Main.State` and `Msg` in `Main.Msg`; hosts import them
+  directly from there.
 - **`Main.elm`** — thin harness (~70 lines): owns the
   URL-pinning port, `Browser.element` boot, and the
   viewport-filling outer shell. Routes Play's Output
