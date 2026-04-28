@@ -1,0 +1,33 @@
+#!/bin/bash
+# Conformance-only fast gate: regen fixtures, run Python +
+# Elm conformance tests. Subset of `ops/check` — use this for
+# tight conformance-iteration loops (edit a .dsl, re-gate in
+# under a minute).
+#
+# Three steps:
+#   1. cmd/fixturegen — DSL → Go + Elm + JSON; also surfaces
+#      registered-op manifest drift loudly (per
+#      cmd/fixturegen/ADDING_AN_OP.md).
+#   2. Python test_dsl_conformance — verifies its DISPATCH
+#      matches the manifest, then runs all 113 scenarios.
+#   3. Elm check.sh — compiles + runs the generated
+#      Elm conformance tests.
+#
+# Exits non-zero on any step's failure.
+
+set -e
+
+REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$REPO_DIR"
+
+echo "==> fixturegen"
+go run ./cmd/fixturegen ./games/lynrummy/conformance/scenarios/*.dsl
+
+echo "==> Python conformance"
+python3 games/lynrummy/python/test_dsl_conformance.py
+
+echo "==> Elm conformance"
+(cd games/lynrummy/elm && ./check.sh)
+
+echo
+echo "Conformance gate passed."
