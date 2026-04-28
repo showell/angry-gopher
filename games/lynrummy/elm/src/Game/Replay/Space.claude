@@ -34,7 +34,7 @@ frame); Space has no dependency on Time.
 ### Animation-record builders
 
 - `AnimationInfo` — type alias for the record a Time `Animating`
-  phase carries. Shape matches `State.ReplayAnimation.Animating`
+  phase carries. Shape matches `State.ReplayAnimationState.Animating`
   exactly; Elm's structural typing unifies them.
 - `buildReplayAnimation : WireAction -> List GesturePoint -> PathFrame -> Model -> Float -> Maybe AnimationInfo`
   — wrap a captured path in the bundle a Time `Animating` needs.

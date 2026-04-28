@@ -8,7 +8,7 @@ module Game.Replay.Time exposing
 {-| The temporal half of Instant Replay. Owns the FSM and the
 clock-driven Msg handlers.
 
-Phases, same as the `ReplayAnimation` sum type in `Main.State`:
+Phases, same as the `ReplayAnimationState` sum type in `Main.State`:
 
   - **PreRolling** — hold the rewound board for ~1s so the viewer
     registers the starting state before action 0 fires.
@@ -50,7 +50,7 @@ import Main.State as State
         ( DragState(..)
         , Model
         , PathFrame
-        , ReplayAnimation(..)
+        , ReplayAnimationState(..)
         , StatusKind(..)
         )
 import Task

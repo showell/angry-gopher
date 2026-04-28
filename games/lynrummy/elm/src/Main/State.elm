@@ -13,7 +13,7 @@ module Main.State exposing
     , Point
     , PopupContent
     , RemoteState
-    , ReplayAnimation(..)
+    , ReplayAnimationState(..)
     , ReplayProgress
     , StatusKind(..)
     , StatusMessage
@@ -98,7 +98,7 @@ type alias Model =
     , popup : Maybe PopupContent
     , actionLog : List ActionLogEntry
     , replay : Maybe ReplayProgress
-    , replayAnim : ReplayAnimation
+    , replayAnim : ReplayAnimationState
     , replayBaseline : Maybe RemoteState
 
     -- Live DOM-measured board offset used by the replay
@@ -184,7 +184,7 @@ Phases:
     returns to `NotAnimating` WITHOUT advancing `step`.
 
 -}
-type ReplayAnimation
+type ReplayAnimationState
     = NotAnimating
     | Animating
         { startMs : Float

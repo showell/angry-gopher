@@ -119,7 +119,7 @@ Imports:
   rather than flicker through every action's celebrate/scold.
 - `Main.Msg` — Msg(..) for Cmd production + pattern binds.
 - `Game.Replay.Space` — all spatial math.
-- `Main.State` — Model, ReplayAnimation, DragState, StatusKind.
+- `Main.State` — Model, ReplayAnimationState, DragState, StatusKind.
 - `Task`, `Time` — Task.attempt + Time.now / posixToMillis.
 
 ## Tests
