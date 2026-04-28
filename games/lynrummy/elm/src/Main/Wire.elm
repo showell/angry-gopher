@@ -52,16 +52,22 @@ import Main.State exposing (ActionLogBundle, ActionLogEntry, EnvelopeForGesture,
 -- OUTBOUND CALLS
 
 
-{-| Create a new session on the server. The server generates a
-deck seed, persists the session row, and returns the id. The
-client then fetches /state to hydrate the initial game state
-and sets the URL hash so reload resumes the same game.
+{-| Create a new session on the server. Elm has already dealt
+the game locally (Elm is the autonomous dealer); this call
+just registers the dealt state with the server so a reload can
+re-hydrate. Body: `{label, initial_state}`. Server returns id.
 -}
-fetchNewSession : Cmd Msg
-fetchNewSession =
+fetchNewSession : Value -> Cmd Msg
+fetchNewSession initialState =
     Http.post
         { url = "/gopher/lynrummy-elm/new-session"
-        , body = Http.emptyBody
+        , body =
+            Http.jsonBody
+                (Encode.object
+                    [ ( "label", Encode.string "" )
+                    , ( "initial_state", initialState )
+                    ]
+                )
         , expect = Http.expectJson SessionReceived sessionIdDecoder
         }
 
@@ -259,7 +265,7 @@ initialStateDecoder =
 actionLogDecoder : Decoder ActionLogBundle
 actionLogDecoder =
     Decode.map2 ActionLogBundle
-        (Decode.field "initial_state" initialStateDecoder)
+        (Decode.at [ "meta", "initial_state" ] initialStateDecoder)
         (Decode.field "actions" (Decode.list actionLogEntryDecoder))
 
 

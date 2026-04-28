@@ -40,7 +40,7 @@ configFromFlags flags =
             Play.ResumeSession sid
 
         Nothing ->
-            Play.NewSession
+            Play.NewSession flags.seedSource
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )

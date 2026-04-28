@@ -20,6 +20,7 @@ module Main.State exposing
     , activeHand
     , baseModel
     , boardDomIdFor
+    , encodeRemoteState
     , setActiveHand
     )
 
@@ -38,14 +39,15 @@ ripples in.
 -}
 
 import Game.Agent.Move exposing (Move)
-import Game.Rules.Card exposing (Card)
-import Game.CardStack exposing (CardStack)
+import Game.Rules.Card as Card exposing (Card)
+import Game.CardStack as CardStack exposing (CardStack)
 import Game.Dealer
 import Game.GestureArbitration as GA
 import Game.Hand as Hand exposing (Hand)
 import Game.Score as Score
 import Game.WingOracle exposing (WingId)
 import Game.WireAction exposing (WireAction)
+import Json.Encode as Encode exposing (Value)
 import Main.Util exposing (listAt)
 
 
@@ -354,12 +356,16 @@ type alias EnvelopeForGesture =
 -- FLAGS
 
 
-{-| Flags from the HTML harness. `initialSessionId` comes from
-the URL hash (e.g., "#12") — present on reload so the UI can
-resume the same game rather than dropping back to the lobby.
+{-| Flags from the HTML harness. `initialSessionId` is server-side
+rendered from the URL (present on reload so the UI resumes the
+same game rather than dropping back to the lobby); `seedSource`
+is `Date.now()` from the host page, used by `Play.init` to seed
+`Game.Dealer.dealFullGame` for fresh sessions.
 -}
 type alias Flags =
-    { initialSessionId : Maybe Int }
+    { initialSessionId : Maybe Int
+    , seedSource : Int
+    }
 
 
 
@@ -383,6 +389,31 @@ type alias RemoteState =
     , victorAwarded : Bool
     , turnStartBoardScore : Int
     }
+
+
+{-| Mirror of the `initialStateDecoder` shape on the wire — produces
+JSON that the server stores in `meta.initial_state` and that
+`initialStateDecoder` can read back on resume.
+-}
+encodeRemoteState : RemoteState -> Value
+encodeRemoteState rs =
+    Encode.object
+        [ ( "board", Encode.list CardStack.encodeCardStack rs.board )
+        , ( "hands", Encode.list encodeHand rs.hands )
+        , ( "scores", Encode.list Encode.int rs.scores )
+        , ( "active_player_index", Encode.int rs.activePlayerIndex )
+        , ( "turn_index", Encode.int rs.turnIndex )
+        , ( "deck", Encode.list Card.encodeCard rs.deck )
+        , ( "cards_played_this_turn", Encode.int rs.cardsPlayedThisTurn )
+        , ( "victor_awarded", Encode.bool rs.victorAwarded )
+        , ( "turn_start_board_score", Encode.int rs.turnStartBoardScore )
+        ]
+
+
+encodeHand : Hand -> Value
+encodeHand h =
+    Encode.object
+        [ ( "hand_cards", Encode.list CardStack.encodeHandCard h.handCards ) ]
 
 
 {-| Bundle returned by /sessions/:id/actions — the action log
@@ -476,9 +507,12 @@ Instant Replay rewind target.
 -}
 baseModel : Model
 baseModel =
-    { -- Game-state fields.
+    { -- Game-state fields. Hands start empty as a placeholder
+      -- before bootstrap; the real deal arrives from the
+      -- session bootstrap (existing session) or from
+      -- `Game.Dealer.dealFullGame` (fresh page load).
       board = Game.Dealer.initialBoard
-    , hands = [ Game.Dealer.openingHand, Hand.empty ]
+    , hands = [ Hand.empty, Hand.empty ]
     , scores = [ 0, 0 ]
     , activePlayerIndex = 0
     , turnIndex = 0

@@ -32,7 +32,7 @@ type alias State =
 initialState : State
 initialState =
     { board = Game.Dealer.initialBoard
-    , hand = Game.Dealer.openingHand
+    , hand = Hand.empty
     }
 
 

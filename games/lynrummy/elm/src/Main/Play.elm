@@ -35,8 +35,10 @@ import Game.Agent.Bfs as Bfs
 import Game.Agent.GeometryPlan as AgentGeometry
 import Game.Agent.Move as AgentMove exposing (Move)
 import Game.Agent.Verbs as AgentVerbs
+import Game.Dealer as Dealer
 import Game.Game as Game
 import Game.GestureArbitration as GA
+import Game.Random as Random
 import Game.Referee as Referee
 import Game.Replay.Space as ReplaySpace
 import Game.Replay.Time as ReplayTime
@@ -66,6 +68,7 @@ import Main.State as State
         , StatusMessage
         , activeHand
         , baseModel
+        , encodeRemoteState
         )
 import Main.View as View exposing (popupForCompleteTurn, statusForCompleteTurn)
 import Main.Wire as Wire exposing (fetchActionLog, fetchNewSession, sendCompleteTurn)
@@ -78,24 +81,22 @@ import Time
 
 
 {-| Bootstrap shapes Play can start in. Each one maps to a
-different init Cmd, but the resulting Model shape is the
+different init path, but the resulting Model shape is the
 same.
 
-  - `NewSession` — no session yet; fire `fetchNewSession` and
-    wait for the server to allocate one. Used by the main
-    app's default landing page.
+  - `NewSession seedSource` — no session yet; deal a fresh
+    game locally (Elm is the autonomous dealer) using
+    `seedSource` as PRNG entropy, then post the dealt
+    `initial_state` to the server so reloads can resume.
   - `ResumeSession sid` — URL says we're resuming session
-    `sid`; fetch its action log and reconstruct state.
-  - `PuzzleSession sid` — Puzzles created a puzzle session
-    (hand-crafted initial state stored in
-    `lynrummy_puzzle_seeds`). Same bootstrap as resume; the
-    distinct variant exists so the status message and
-    eventually-different UI can reflect "this is a puzzle,
-    not a saved game" without inspecting stored data.
+    `sid`; fetch its action log and `initial_state` from
+    the server.
+  - `PuzzleSession sid` — a puzzle session whose hand-crafted
+    initial state ships inline from the catalog.
 
 -}
 type Config
-    = NewSession
+    = NewSession Int
     | ResumeSession Int
       -- Puzzles puzzle. Carries the initial state inline (the
       -- catalog already has it), so init can bootstrap
@@ -136,8 +137,37 @@ that the bundle fetch will hydrate once it arrives).
 init : Config -> ( Model, Cmd Msg )
 init config =
     case config of
-        NewSession ->
-            ( baseModel, fetchNewSession )
+        NewSession seedSource ->
+            let
+                setup =
+                    Dealer.dealFullGame (Random.initSeed seedSource)
+
+                turnScore =
+                    Score.forStacks setup.board
+
+                dealtModel =
+                    { baseModel
+                        | board = setup.board
+                        , hands = setup.hands
+                        , deck = setup.deck
+                        , turnStartBoardScore = turnScore
+                        , score = turnScore
+                    }
+
+                initialStateValue =
+                    encodeRemoteState
+                        { board = dealtModel.board
+                        , hands = dealtModel.hands
+                        , scores = dealtModel.scores
+                        , activePlayerIndex = dealtModel.activePlayerIndex
+                        , turnIndex = dealtModel.turnIndex
+                        , deck = dealtModel.deck
+                        , cardsPlayedThisTurn = dealtModel.cardsPlayedThisTurn
+                        , victorAwarded = dealtModel.victorAwarded
+                        , turnStartBoardScore = dealtModel.turnStartBoardScore
+                        }
+            in
+            ( dealtModel, fetchNewSession initialStateValue )
 
         ResumeSession sid ->
             ( { baseModel
@@ -213,11 +243,12 @@ update msg model =
             logAndScold "ActionSent" err actionRejectedStatus model
 
         SessionReceived (Ok sid) ->
-            -- Session created server-side. Fetch the bundle for
-            -- local bootstrap; emit SessionChanged so the host
-            -- pins the URL.
+            -- Session id allocated by the server. The state was
+            -- already dealt locally during NewSession init —
+            -- nothing to fetch. Emit SessionChanged so the host
+            -- pins the URL for reload-resume.
             ( { model | sessionId = Just sid }
-            , fetchActionLog sid
+            , Cmd.none
             , SessionChanged sid
             )
 

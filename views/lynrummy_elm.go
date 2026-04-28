@@ -319,10 +319,11 @@ func lynrummyElmActionsShim(w http.ResponseWriter, r *http.Request) {
 
 // --- Session reads ---
 
-// lynrummyElmSessionBootstrap returns the bundle the Elm client
-// needs to hydrate a session: meta.json (so Elm has the
-// deck_seed / puzzle initial_state) plus the action log in seq
-// order. This is a thin file-reader; no replay.
+// lynrummyElmSessionBootstrap returns the dumb bundle: the
+// session's meta blob and its action log, both as the Elm
+// client posted them. No initial_state synthesis — Elm derives
+// that locally from meta.deck_seed (full-game) or
+// meta.initial_state (puzzle) using its own dealer.
 //
 // Response shape:
 //   {"session_id": N, "meta": {...}, "actions": [<envelope>...]}
@@ -540,7 +541,10 @@ func lynrummyElmPlayWithSession(w http.ResponseWriter, sessionID int64) {
   var initialSessionId = %s;
   var app = Elm.Main.init({
     node: document.getElementById("root"),
-    flags: { initialSessionId: initialSessionId },
+    flags: {
+      initialSessionId: initialSessionId,
+      seedSource: Date.now(),
+    },
   });
   app.ports.setSessionPath.subscribe(function(sid) {
     var url = sid === "" ? "/gopher/lynrummy-elm/"

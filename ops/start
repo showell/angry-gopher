@@ -12,15 +12,10 @@ cd "$GOPHER_DIR"
 COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 go build -ldflags "-X main.gitCommit=$COMMIT" -o gopher-server .
 
-# Compile the LynRummy Elm app's two entry points (Main.elm
-# for the full-game client, Puzzles.elm for Puzzles) into the
-# same project directory. Both share games/lynrummy/elm/'s
-# elm.json + node_modules + tests + review setup.
-(cd games/lynrummy/elm && ./node_modules/.bin/elm make src/Main.elm --output=elm.js >/dev/null 2>&1) \
-    || echo "Warning: Elm LynRummy build failed; /gopher/lynrummy-elm/ will 404 on elm.js (try \`npm install\` in games/lynrummy/elm/)"
-
-(cd games/lynrummy/elm && ./node_modules/.bin/elm make src/Puzzles.elm --output=puzzles.js >/dev/null 2>&1) \
-    || echo "Warning: Puzzles Elm build failed; /gopher/puzzles/ will 404 on puzzles.js"
+# Compile the LynRummy Elm clients via ops/build_elm. Failures
+# are warnings — the matching HTTP routes 404 with an actionable
+# error pointing back at the build script.
+"$(dirname "$0")/build_elm" || echo "Warning: ops/build_elm failed; /gopher/lynrummy-elm/ and /gopher/puzzles/ will 404 on their JS bundles"
 
 # Regenerate the Puzzles catalog from the committed mined
 # seeds JSON (games/lynrummy/conformance/mined_seeds.json,

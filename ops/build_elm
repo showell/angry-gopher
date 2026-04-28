@@ -1,0 +1,25 @@
+#!/bin/bash
+# Compile the LynRummy Elm clients (Main.elm + Puzzles.elm) into
+# games/lynrummy/elm/{elm.js, puzzles.js}, the JS bundles served
+# by /gopher/lynrummy-elm/elm.js and /gopher/puzzles/puzzles.js.
+#
+# Both entry points share the same elm.json + node_modules so a
+# single elm install covers both compiles. Failures are warnings,
+# not fatal — the matching HTTP route 404s with an actionable
+# error pointing back here.
+set -e
+
+source "$(dirname "$0")/_paths.sh"
+
+cd "$GOPHER_DIR/games/lynrummy/elm"
+
+if [ ! -x ./node_modules/.bin/elm ]; then
+    echo "Warning: ./node_modules/.bin/elm not found — try \`npm install\` in $(pwd)"
+    exit 1
+fi
+
+./node_modules/.bin/elm make src/Main.elm --output=elm.js >/dev/null 2>&1 \
+    || { echo "Warning: Main.elm build failed"; exit 1; }
+
+./node_modules/.bin/elm make src/Puzzles.elm --output=puzzles.js >/dev/null 2>&1 \
+    || { echo "Warning: Puzzles.elm build failed"; exit 1; }

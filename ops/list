@@ -3,5 +3,6 @@
 echo "Available ops commands (run from repo root):"
 echo ""
 echo "  ops/start       Start Gopher server (9000) + Angry Cat (8000)"
+echo "  ops/build_elm   Compile Main.elm + Puzzles.elm bundles"
 echo ""
 echo "Credentials convention: store in ~/AngryGopher/ (non-hidden, outside git)."
