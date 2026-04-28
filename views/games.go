@@ -63,21 +63,21 @@ func renderGamesHero(w http.ResponseWriter) {
 </div>`)
 }
 
-// renderRecentSessions lists the 10 most recent Elm LynRummy
-// sessions. Each links to /gopher/lynrummy-elm/play/N — the
-// server renders the Elm client with session N baked into the
-// init flag, so the URL is reload-safe.
+// renderRecentSessions lists the 10 most recent session
+// directories under games/lynrummy/data/. Each links to
+// /gopher/lynrummy-elm/play/N so the URL is reload-safe.
 func renderRecentSessions(w http.ResponseWriter) {
-	rows, err := DB.Query(`
-		SELECT s.id, s.created_at, s.label,
-		       (SELECT COUNT(*) FROM lynrummy_elm_actions WHERE session_id = s.id) AS n
-		FROM lynrummy_elm_sessions s
-		ORDER BY s.id DESC
-		LIMIT 10`)
+	ids, err := ListSessionIDs()
 	if err != nil {
 		return
 	}
-	defer rows.Close()
+	// Newest first, cap at 10.
+	for i, j := 0, len(ids)-1; i < j; i, j = i+1, j-1 {
+		ids[i], ids[j] = ids[j], ids[i]
+	}
+	if len(ids) > 10 {
+		ids = ids[:10]
+	}
 
 	eastern, _ := time.LoadLocation("America/New_York")
 
@@ -85,17 +85,17 @@ func renderRecentSessions(w http.ResponseWriter) {
 <h3>Recent sessions</h3>
 <table class="sessions-table">
 <tr><th>#</th><th>Created</th><th>Label</th><th class="n">Actions</th><th></th></tr>`)
-	any := false
-	for rows.Next() {
-		any = true
-		var id, createdAt int64
-		var n int
-		var label string
-		if err := rows.Scan(&id, &createdAt, &label, &n); err != nil {
-			continue
+	if len(ids) == 0 {
+		fmt.Fprint(w, `<tr><td colspan="5" class="muted">No sessions yet — click Play LynRummy above to start one.</td></tr>`)
+	}
+	for _, id := range ids {
+		meta, _ := ReadSessionMeta(id)
+		files, _ := ListActionFiles(id)
+		ts := ""
+		if t := SessionCreatedAt(meta); t > 0 {
+			ts = time.Unix(t, 0).In(eastern).Format("Jan 2, 2006 · 3:04 PM MST")
 		}
-		ts := time.Unix(createdAt, 0).In(eastern).Format("Jan 2, 2006 · 3:04 PM MST")
-		labelCell := label
+		labelCell := SessionLabel(meta)
 		if labelCell == "" {
 			labelCell = `<span class="muted">—</span>`
 		} else {
@@ -104,11 +104,8 @@ func renderRecentSessions(w http.ResponseWriter) {
 		fmt.Fprintf(w,
 			`<tr><td>%d</td><td>%s</td><td>%s</td><td class="n">%d</td>`+
 				`<td><a href="/gopher/lynrummy-elm/play/%d">Resume →</a></td></tr>`,
-			id, html.EscapeString(ts), labelCell, n, id,
+			id, html.EscapeString(ts), labelCell, len(files), id,
 		)
-	}
-	if !any {
-		fmt.Fprint(w, `<tr><td colspan="5" class="muted">No sessions yet — click Play LynRummy above to start one.</td></tr>`)
 	}
 	fmt.Fprint(w, `</table></div>`)
 }
