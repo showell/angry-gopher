@@ -107,7 +107,7 @@ Not current-work references.
 ## Agent-library port (in progress, with drift)
 
 The Python four-bucket BFS planner
-(`../python/bfs_solver.py` and friends) was ported to Elm
+(`../python/bfs.py` and friends) was ported to Elm
 under `src/Game/Agent/` — see Steve's MAJOR_GOAL kickoff
 2026-04-25. Modules landed:
 `Buckets`, `Cards`, `Move`, `Enumerator`, `Bfs`, `Verbs`,
@@ -185,7 +185,7 @@ passes the subset relevant to its current state.
 When the Elm port resumes, the port discipline is: take
 the current Python source, port the new feature, run the
 shared regression methodology
-(see `python/README.md` § Validation methodology), then
+(see `../python/README.md` § Validation methodology), then
 verify Elm conformance stubs flip to live where applicable.
 
 ## TODO (stub-level)
