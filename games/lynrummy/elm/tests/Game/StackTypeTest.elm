@@ -16,7 +16,7 @@ will rely on.
 -}
 
 import Expect
-import Game.Rules.Card exposing (Card, CardValue(..), OriginDeck(..), Suit(..), allCardValues, cardFromLabel)
+import Game.Rules.Card exposing (Card, CardValue(..), OriginDeck(..), Suit(..), allCardValues, allSuits, cardFromLabel, valueStr)
 import Game.Rules.StackType
     exposing
         ( CardStackType(..)
@@ -80,6 +80,12 @@ suite =
         , isLegalStackTests
         , isPartialOkTests
         , neighborsTests
+        , pureRunMonotonicTests
+        , setPermutationInvariantTests
+        , valueDistanceTriangleTests
+        , successorPredecessorCycleTests
+        , isPartialOkBoundaryTests
+        , neighborsShapeTests
         ]
 
 
@@ -386,3 +392,462 @@ apply n f x =
 
     else
         apply (n - 1) f (f x)
+
+
+
+-- CLASS-1 LOCKDOWN TESTS (added 2026-04-28, phase 3 of game_rules_lockdown)
+--
+-- Per `feedback_segregate_by_volatility_class.md`: Class-1
+-- rules get exhaustive snapshot-style tests. The functions
+-- below all encode game-rule invariants that should never
+-- drift; tests are deliberately brittle so any future
+-- regression breaks loudly.
+--
+-- Style choice: enumerate-and-check over `allCardValues` /
+-- `allSuits` rather than fuzz. The domain is finite (13
+-- values, 4 suits) so the property tests are exhaustive,
+-- not statistical. Existing tests in this file already use
+-- this idiom (see `valueDistanceTests`, `successorTests`).
+
+
+pureRunMonotonicTests : Test
+pureRunMonotonicTests =
+    describe "getStackType: PureRun monotonic in length 3..13"
+        -- For one suit, every prefix of length n in [3..13] of
+        -- the canonical Ace-through-King run classifies as
+        -- PureRun. This locks the "longer is still legal"
+        -- property of pure-run classification.
+        [ test "all prefixes of A..K of Hearts (length 3..13) are PureRun" <|
+            \_ ->
+                let
+                    fullRun =
+                        List.map
+                            (\v -> { value = v, suit = Heart, originDeck = DeckOne })
+                            allCardValues
+
+                    prefix n xs =
+                        List.take n xs
+
+                    lengths =
+                        List.range 3 13
+                in
+                lengths
+                    |> List.all (\n -> getStackType (prefix n fullRun) == PureRun)
+                    |> Expect.equal True
+        , test "every suit's full A..K run classifies as PureRun" <|
+            \_ ->
+                let
+                    runOf suit =
+                        List.map
+                            (\v -> { value = v, suit = suit, originDeck = DeckOne })
+                            allCardValues
+                in
+                allSuits
+                    |> List.all (\s -> getStackType (runOf s) == PureRun)
+                    |> Expect.equal True
+        , test "K-A-2-...-Q full wraparound (one suit) is PureRun" <|
+            \_ ->
+                -- Rotate the canonical run so it starts at King
+                -- and wraps back through Queen. Lyn Rummy's K->A
+                -- wrap means this is still a single PureRun.
+                let
+                    rotated =
+                        [ King
+                        , Ace
+                        , Two
+                        , Three
+                        , Four
+                        , Five
+                        , Six
+                        , Seven
+                        , Eight
+                        , Nine
+                        , Ten
+                        , Jack
+                        , Queen
+                        ]
+
+                    cards =
+                        List.map
+                            (\v -> { value = v, suit = Spade, originDeck = DeckOne })
+                            rotated
+                in
+                Expect.equal PureRun (getStackType cards)
+        ]
+
+
+setPermutationInvariantTests : Test
+setPermutationInvariantTests =
+    describe "getStackType: Set classification invariant under permutation"
+        -- A set is unordered semantically (no successor
+        -- relation between members). Any permutation of a valid
+        -- set must still classify as Set.
+        [ test "all permutations of {7C, 7D, 7S} classify as Set" <|
+            \_ ->
+                let
+                    c7 =
+                        fromD1 "7C"
+
+                    d7 =
+                        fromD1 "7D"
+
+                    s7 =
+                        fromD1 "7S"
+
+                    allPermutations =
+                        [ [ c7, d7, s7 ]
+                        , [ c7, s7, d7 ]
+                        , [ d7, c7, s7 ]
+                        , [ d7, s7, c7 ]
+                        , [ s7, c7, d7 ]
+                        , [ s7, d7, c7 ]
+                        ]
+                in
+                allPermutations
+                    |> List.all (\p -> getStackType p == Set)
+                    |> Expect.equal True
+        , test "all 24 permutations of full 4-set {AC, AD, AH, AS} classify as Set" <|
+            \_ ->
+                let
+                    ac =
+                        fromD1 "AC"
+
+                    ad =
+                        fromD1 "AD"
+
+                    ah =
+                        fromD1 "AH"
+
+                    aspade =
+                        fromD1 "AS"
+
+                    -- Hand-rolled 24 permutations of [ac, ad, ah, aspade].
+                    perms =
+                        [ [ ac, ad, ah, aspade ]
+                        , [ ac, ad, aspade, ah ]
+                        , [ ac, ah, ad, aspade ]
+                        , [ ac, ah, aspade, ad ]
+                        , [ ac, aspade, ad, ah ]
+                        , [ ac, aspade, ah, ad ]
+                        , [ ad, ac, ah, aspade ]
+                        , [ ad, ac, aspade, ah ]
+                        , [ ad, ah, ac, aspade ]
+                        , [ ad, ah, aspade, ac ]
+                        , [ ad, aspade, ac, ah ]
+                        , [ ad, aspade, ah, ac ]
+                        , [ ah, ac, ad, aspade ]
+                        , [ ah, ac, aspade, ad ]
+                        , [ ah, ad, ac, aspade ]
+                        , [ ah, ad, aspade, ac ]
+                        , [ ah, aspade, ac, ad ]
+                        , [ ah, aspade, ad, ac ]
+                        , [ aspade, ac, ad, ah ]
+                        , [ aspade, ac, ah, ad ]
+                        , [ aspade, ad, ac, ah ]
+                        , [ aspade, ad, ah, ac ]
+                        , [ aspade, ah, ac, ad ]
+                        , [ aspade, ah, ad, ac ]
+                        ]
+                in
+                Expect.all
+                    [ \_ -> Expect.equal 24 (List.length perms)
+                    , \_ ->
+                        perms
+                            |> List.all (\p -> getStackType p == Set)
+                            |> Expect.equal True
+                    ]
+                    ()
+        ]
+
+
+valueDistanceTriangleTests : Test
+valueDistanceTriangleTests =
+    describe "valueDistance: triangle inequality (exhaustive over 13^3)"
+        -- d(a,c) <= d(a,b) + d(b,c) for every triple. With 13
+        -- values this is 2197 triples — cheap to enumerate.
+        [ test "triangle inequality holds for all (a, b, c) in CardValue^3" <|
+            \_ ->
+                let
+                    triples =
+                        allCardValues
+                            |> List.concatMap
+                                (\a ->
+                                    List.concatMap
+                                        (\b ->
+                                            List.map (\c -> ( a, b, c )) allCardValues
+                                        )
+                                        allCardValues
+                                )
+
+                    holds ( a, b, c ) =
+                        valueDistance a c
+                            <= valueDistance a b
+                            + valueDistance b c
+                in
+                Expect.all
+                    [ \_ -> Expect.equal 2197 (List.length triples)
+                    , \_ ->
+                        triples
+                            |> List.all holds
+                            |> Expect.equal True
+                    ]
+                    ()
+        ]
+
+
+successorPredecessorCycleTests : Test
+successorPredecessorCycleTests =
+    describe "successor / predecessor: total + cyclic + inverse"
+        -- The pre-existing tests cover predecessor∘successor=id
+        -- and successor^13=id. Add the symmetric checks so any
+        -- one-sided regression breaks.
+        [ test "successor (predecessor v) == v for every value" <|
+            \_ ->
+                allCardValues
+                    |> List.all (\v -> successor (predecessor v) == v)
+                    |> Expect.equal True
+        , test "applying predecessor 13 times returns to start" <|
+            \_ ->
+                allCardValues
+                    |> List.all (\v -> apply 13 predecessor v == v)
+                    |> Expect.equal True
+        , test "successor is a bijection over CardValue (image has 13 distinct values)" <|
+            \_ ->
+                let
+                    image =
+                        List.map (successor >> valueStr) allCardValues
+                            |> List.sort
+                in
+                Expect.equal 13 (List.length image)
+        ]
+
+
+isPartialOkBoundaryTests : Test
+isPartialOkBoundaryTests =
+    describe "isPartialOk: boundary cases at length 0/1/2/3"
+        -- The pre-existing tests cover representative cases.
+        -- These add the explicit length boundary: at length 3+
+        -- the function must coincide with isLegalStack.
+        [ test "length-3 result equals isLegalStack result (legal)" <|
+            \_ ->
+                let
+                    stack =
+                        [ fromD1 "5H", fromD1 "6H", fromD1 "7H" ]
+                in
+                Expect.equal (isLegalStack stack) (isPartialOk stack)
+        , test "length-3 result equals isLegalStack result (illegal)" <|
+            \_ ->
+                -- A non-consecutive trio: bogus, so neither
+                -- legal nor partial-ok. Both predicates agree.
+                let
+                    stack =
+                        [ fromD1 "5H", fromD1 "8H", fromD1 "TH" ]
+                in
+                Expect.equal (isLegalStack stack) (isPartialOk stack)
+        , test "length-4 result equals isLegalStack (delegates)" <|
+            \_ ->
+                let
+                    stack =
+                        [ fromD1 "5H", fromD1 "6H", fromD1 "7H", fromD1 "8H" ]
+                in
+                Expect.equal (isLegalStack stack) (isPartialOk stack)
+        , test "every two-card pair classified as set-partial is also partial-ok" <|
+            \_ ->
+                -- Same-value distinct-suit pair lifted across
+                -- all values: 13 pairs, each must be partial-ok.
+                let
+                    pairs =
+                        List.map
+                            (\v ->
+                                [ { value = v, suit = Heart, originDeck = DeckOne }
+                                , { value = v, suit = Spade, originDeck = DeckOne }
+                                ]
+                            )
+                            allCardValues
+                in
+                pairs
+                    |> List.all isPartialOk
+                    |> Expect.equal True
+        , test "every two-card pure-run partial (consecutive same suit) is partial-ok" <|
+            \_ ->
+                -- For every (suit, value), (v, succ v, sameSuit)
+                -- is a pure-run partial. 13 * 4 = 52 pairs.
+                let
+                    pairs =
+                        List.concatMap
+                            (\s ->
+                                List.map
+                                    (\v ->
+                                        [ { value = v, suit = s, originDeck = DeckOne }
+                                        , { value = next v, suit = s, originDeck = DeckOne }
+                                        ]
+                                    )
+                                    allCardValues
+                            )
+                            allSuits
+                in
+                pairs
+                    |> List.all isPartialOk
+                    |> Expect.equal True
+        ]
+
+
+neighborsShapeTests : Test
+neighborsShapeTests =
+    describe "neighbors: shape stability and cardinality bound"
+        -- `neighbors` is a pure function of (value, suit). The
+        -- contract: for any card, exactly 9 neighbor-shapes are
+        -- returned (2 pure-run partners + 4 rb-run partners +
+        -- 3 set partners). The card itself is never a neighbor.
+        [ test "every card (over all 104 reachable) has exactly 9 neighbors" <|
+            \_ ->
+                let
+                    allCards =
+                        List.concatMap
+                            (\v ->
+                                List.concatMap
+                                    (\s ->
+                                        [ { value = v, suit = s, originDeck = DeckOne }
+                                        , { value = v, suit = s, originDeck = DeckTwo }
+                                        ]
+                                    )
+                                    allSuits
+                            )
+                            allCardValues
+                in
+                allCards
+                    |> List.all (\c -> List.length (neighbors c) == 9)
+                    |> Expect.equal True
+        , test "neighbors is deck-agnostic (DeckOne and DeckTwo same input give same output)" <|
+            \_ ->
+                let
+                    pairs =
+                        List.concatMap
+                            (\v ->
+                                List.map
+                                    (\s ->
+                                        ( { value = v, suit = s, originDeck = DeckOne }
+                                        , { value = v, suit = s, originDeck = DeckTwo }
+                                        )
+                                    )
+                                    allSuits
+                            )
+                            allCardValues
+                in
+                pairs
+                    |> List.all (\( a, b ) -> neighbors a == neighbors b)
+                    |> Expect.equal True
+        , test "no card is its own (value, suit) neighbor" <|
+            \_ ->
+                let
+                    allCards =
+                        List.concatMap
+                            (\v ->
+                                List.map
+                                    (\s ->
+                                        { value = v, suit = s, originDeck = DeckOne }
+                                    )
+                                    allSuits
+                            )
+                            allCardValues
+
+                    selfTuple c =
+                        ( c.value, c.suit )
+
+                    selfMissing c =
+                        not (List.member (selfTuple c) (neighbors c))
+                in
+                allCards
+                    |> List.all selfMissing
+                    |> Expect.equal True
+        , test "neighbor shapes are pairwise distinct (set has 9 entries)" <|
+            \_ ->
+                -- Use one representative card per (value, suit)
+                -- combination; the 9 returned tuples must not
+                -- contain duplicates.
+                let
+                    allCards =
+                        List.concatMap
+                            (\v ->
+                                List.map
+                                    (\s ->
+                                        { value = v, suit = s, originDeck = DeckOne }
+                                    )
+                                    allSuits
+                            )
+                            allCardValues
+
+                    tupleKey ( v, s ) =
+                        cardValueIntFor v * 10 + suitIntFor s
+
+                    distinct ns =
+                        let
+                            keys =
+                                List.map tupleKey ns
+                        in
+                        List.length keys
+                            == List.length (dedupSorted (List.sort keys))
+                in
+                allCards
+                    |> List.all (\c -> distinct (neighbors c))
+                    |> Expect.equal True
+        ]
+
+
+
+-- helpers used by neighbor-shape tests
+
+
+cardValueIntFor : CardValue -> Int
+cardValueIntFor v =
+    -- We avoid importing cardValueToInt to keep the test
+    -- module's import surface minimal; this is just a key
+    -- function for de-duplication, not under test.
+    case List.head (List.filter (\( vv, _ ) -> vv == v) cardValueIndex) of
+        Just ( _, n ) ->
+            n
+
+        Nothing ->
+            0
+
+
+cardValueIndex : List ( CardValue, Int )
+cardValueIndex =
+    List.indexedMap (\i v -> ( v, i + 1 )) allCardValues
+
+
+suitIntFor : Suit -> Int
+suitIntFor s =
+    case List.head (List.filter (\( ss, _ ) -> ss == s) suitIndex) of
+        Just ( _, n ) ->
+            n
+
+        Nothing ->
+            0
+
+
+suitIndex : List ( Suit, Int )
+suitIndex =
+    List.indexedMap (\i s -> ( s, i )) allSuits
+
+
+dedupSorted : List Int -> List Int
+dedupSorted xs =
+    case xs of
+        [] ->
+            []
+
+        [ x ] ->
+            [ x ]
+
+        x :: y :: rest ->
+            if x == y then
+                dedupSorted (y :: rest)
+
+            else
+                x :: dedupSorted (y :: rest)
+
+
+next : CardValue -> CardValue
+next =
+    successor

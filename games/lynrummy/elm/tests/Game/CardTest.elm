@@ -23,6 +23,8 @@ Divergences from the TS source:
 import Expect
 import Game.Rules.Card exposing (..)
 import Game.Random as R
+import Json.Decode as Decode
+import Json.Encode as Encode
 import Set
 import Test exposing (Test, describe, test)
 
@@ -37,6 +39,12 @@ suite =
         , allSuitsTests
         , parserRoundTripTests
         , buildFullDoubleDeckTests
+        , cardValueToIntTests
+        , suitToIntTests
+        , originDeckToIntTests
+        , allCardValuesCardinalityTests
+        , cardColorExhaustiveTests
+        , jsonRoundTripTests
         ]
 
 
@@ -326,4 +334,243 @@ parserRoundTripTests =
                     , \_ -> parseAndCheck "2S" { value = Two, suit = Spade, originDeck = DeckOne }
                     ]
                     ()
+        ]
+
+
+
+-- CLASS-1 LOCKDOWN TESTS (added 2026-04-28, phase 3 of game_rules_lockdown)
+--
+-- Per `feedback_segregate_by_volatility_class.md`: stable rule
+-- layer (Class 1/2) gets exhaustive snapshot-style tests. The
+-- enum mappings below all carry wire semantics (TS source pins
+-- the integers), so a brittle-on-purpose test that fails loudly
+-- when someone reorders a constructor is the goal — that's
+-- exactly what we want.
+--
+-- Style choice: exhaustive enumeration over `allCardValues` /
+-- `allSuits` rather than fuzz. The domain is finite and tiny
+-- (13 values, 4 suits, 2 decks), so enumerate-and-check is both
+-- complete AND deterministic. Existing tests in this file use
+-- the same idiom (e.g. parser round-trips); we follow.
+
+
+cardValueToIntTests : Test
+cardValueToIntTests =
+    describe "cardValueToInt (per-value, wire-semantic)"
+        [ test "Ace -> 1" <| \_ -> Expect.equal 1 (cardValueToInt Ace)
+        , test "Two -> 2" <| \_ -> Expect.equal 2 (cardValueToInt Two)
+        , test "Three -> 3" <| \_ -> Expect.equal 3 (cardValueToInt Three)
+        , test "Four -> 4" <| \_ -> Expect.equal 4 (cardValueToInt Four)
+        , test "Five -> 5" <| \_ -> Expect.equal 5 (cardValueToInt Five)
+        , test "Six -> 6" <| \_ -> Expect.equal 6 (cardValueToInt Six)
+        , test "Seven -> 7" <| \_ -> Expect.equal 7 (cardValueToInt Seven)
+        , test "Eight -> 8" <| \_ -> Expect.equal 8 (cardValueToInt Eight)
+        , test "Nine -> 9" <| \_ -> Expect.equal 9 (cardValueToInt Nine)
+        , test "Ten -> 10" <| \_ -> Expect.equal 10 (cardValueToInt Ten)
+        , test "Jack -> 11" <| \_ -> Expect.equal 11 (cardValueToInt Jack)
+        , test "Queen -> 12" <| \_ -> Expect.equal 12 (cardValueToInt Queen)
+        , test "King -> 13" <| \_ -> Expect.equal 13 (cardValueToInt King)
+        , test "all values map into [1..13] with no duplicates" <|
+            \_ ->
+                let
+                    ints =
+                        List.map cardValueToInt allCardValues
+                in
+                Expect.all
+                    [ \_ -> Expect.equal 13 (List.length ints)
+                    , \_ -> Expect.equal 13 (Set.size (Set.fromList ints))
+                    , \_ -> Expect.equal True (List.all (\n -> n >= 1 && n <= 13) ints)
+                    ]
+                    ()
+        ]
+
+
+suitToIntTests : Test
+suitToIntTests =
+    describe "suitToInt (per-constructor, wire-semantic)"
+        -- The TS source pins these specific integers. Don't
+        -- reorder — wire format depends on these values.
+        [ test "Club -> 0" <| \_ -> Expect.equal 0 (suitToInt Club)
+        , test "Diamond -> 1" <| \_ -> Expect.equal 1 (suitToInt Diamond)
+        , test "Spade -> 2" <| \_ -> Expect.equal 2 (suitToInt Spade)
+        , test "Heart -> 3" <| \_ -> Expect.equal 3 (suitToInt Heart)
+        , test "all four suits map to distinct ints in [0..3]" <|
+            \_ ->
+                let
+                    ints =
+                        List.map suitToInt allSuits
+                in
+                Expect.all
+                    [ \_ -> Expect.equal 4 (List.length ints)
+                    , \_ -> Expect.equal 4 (Set.size (Set.fromList ints))
+                    , \_ -> Expect.equal True (List.all (\n -> n >= 0 && n <= 3) ints)
+                    ]
+                    ()
+        ]
+
+
+originDeckToIntTests : Test
+originDeckToIntTests =
+    describe "originDeckToInt (per-constructor, wire-semantic)"
+        [ test "DeckOne -> 0" <| \_ -> Expect.equal 0 (originDeckToInt DeckOne)
+        , test "DeckTwo -> 1" <| \_ -> Expect.equal 1 (originDeckToInt DeckTwo)
+        , test "the two decks are distinct" <|
+            \_ ->
+                Expect.notEqual
+                    (originDeckToInt DeckOne)
+                    (originDeckToInt DeckTwo)
+        ]
+
+
+allCardValuesCardinalityTests : Test
+allCardValuesCardinalityTests =
+    describe "allCardValues cardinality"
+        [ test "has exactly 13 members" <|
+            \_ -> Expect.equal 13 (List.length allCardValues)
+        , test "members are pairwise distinct" <|
+            \_ ->
+                Expect.equal 13
+                    (Set.size (Set.fromList (List.map cardValueToInt allCardValues)))
+        ]
+
+
+cardColorExhaustiveTests : Test
+cardColorExhaustiveTests =
+    describe "cardColor (exhaustive over all 4 suits)"
+        -- Locks the suit -> color mapping for the whole deck
+        -- via a synthetic Card per suit. The originDeck is
+        -- arbitrary because color is a pure function of suit.
+        [ test "all Heart cards are Red" <|
+            \_ ->
+                Expect.equal Red
+                    (cardColor { value = Ace, suit = Heart, originDeck = DeckOne })
+        , test "all Diamond cards are Red" <|
+            \_ ->
+                Expect.equal Red
+                    (cardColor { value = Ace, suit = Diamond, originDeck = DeckOne })
+        , test "all Club cards are Black" <|
+            \_ ->
+                Expect.equal Black
+                    (cardColor { value = Ace, suit = Club, originDeck = DeckOne })
+        , test "all Spade cards are Black" <|
+            \_ ->
+                Expect.equal Black
+                    (cardColor { value = Ace, suit = Spade, originDeck = DeckOne })
+        , test "cardColor matches suitColor for every (suit, originDeck) pair" <|
+            \_ ->
+                let
+                    pairs =
+                        List.concatMap
+                            (\s -> [ ( s, DeckOne ), ( s, DeckTwo ) ])
+                            allSuits
+
+                    consistent ( s, d ) =
+                        cardColor { value = Ace, suit = s, originDeck = d } == suitColor s
+                in
+                pairs
+                    |> List.all consistent
+                    |> Expect.equal True
+        ]
+
+
+jsonRoundTripTests : Test
+jsonRoundTripTests =
+    describe "encodeCard / cardDecoder JSON round-trip"
+        -- For every reachable card (13 values × 4 suits × 2
+        -- decks = 104 distinct cards), encoding and decoding
+        -- must yield the same record. This locks the wire
+        -- format: any drift in the int<->enum mappings on
+        -- either side surfaces here.
+        [ test "encode then decode is identity for every card in the deck" <|
+            \_ ->
+                let
+                    allCards =
+                        List.concatMap
+                            (\v ->
+                                List.concatMap
+                                    (\s ->
+                                        [ { value = v, suit = s, originDeck = DeckOne }
+                                        , { value = v, suit = s, originDeck = DeckTwo }
+                                        ]
+                                    )
+                                    allSuits
+                            )
+                            allCardValues
+
+                    roundTrip card =
+                        encodeCard card
+                            |> Decode.decodeValue cardDecoder
+                            |> Result.map (\decoded -> decoded == card)
+                            |> Result.withDefault False
+                in
+                Expect.all
+                    [ \_ -> Expect.equal 104 (List.length allCards)
+                    , \_ ->
+                        allCards
+                            |> List.all roundTrip
+                            |> Expect.equal True
+                    ]
+                    ()
+        , test "decoder rejects out-of-range value field" <|
+            \_ ->
+                let
+                    bogus =
+                        Encode.object
+                            [ ( "value", Encode.int 99 )
+                            , ( "suit", Encode.int 0 )
+                            , ( "origin_deck", Encode.int 0 )
+                            ]
+                in
+                case Decode.decodeValue cardDecoder bogus of
+                    Ok _ ->
+                        Expect.fail "expected decoder to reject value=99"
+
+                    Err _ ->
+                        Expect.pass
+        , test "decoder rejects out-of-range suit field" <|
+            \_ ->
+                let
+                    bogus =
+                        Encode.object
+                            [ ( "value", Encode.int 1 )
+                            , ( "suit", Encode.int 9 )
+                            , ( "origin_deck", Encode.int 0 )
+                            ]
+                in
+                case Decode.decodeValue cardDecoder bogus of
+                    Ok _ ->
+                        Expect.fail "expected decoder to reject suit=9"
+
+                    Err _ ->
+                        Expect.pass
+        , test "decoder rejects out-of-range origin_deck field" <|
+            \_ ->
+                let
+                    bogus =
+                        Encode.object
+                            [ ( "value", Encode.int 1 )
+                            , ( "suit", Encode.int 0 )
+                            , ( "origin_deck", Encode.int 5 )
+                            ]
+                in
+                case Decode.decodeValue cardDecoder bogus of
+                    Ok _ ->
+                        Expect.fail "expected decoder to reject origin_deck=5"
+
+                    Err _ ->
+                        Expect.pass
+        , test "encoded JSON uses snake_case origin_deck field" <|
+            \_ ->
+                let
+                    encoded =
+                        encodeCard { value = Ace, suit = Heart, originDeck = DeckTwo }
+
+                    -- Decoder against the snake_case wire field
+                    -- should find the integer 1.
+                    deckField =
+                        Decode.decodeValue
+                            (Decode.field "origin_deck" Decode.int)
+                            encoded
+                in
+                Expect.equal (Ok 1) deckField
         ]
