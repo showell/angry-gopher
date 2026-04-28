@@ -3,14 +3,16 @@ just_use cards.py
 # label: WORKHORSE
 # role: card primitives — the BFS planner's bottom layer
 
-The Python equivalent of `Game.Agent.Cards.elm` plus the
-constants and small helpers that go with the agent-side card
-model.
+The Python equivalent of the Elm `Game.Rules.StackType` rule
+predicates plus the constants and small helpers that go with
+the agent-side card model.
 
 ## Status
 
-- **Mirrors:** `games/lynrummy/elm/src/Game/Agent/Cards.elm`
-  + bits of `Game.Card.elm` and `Game.StackType.elm`.
+- **Mirrors:** `games/lynrummy/elm/src/Game/Rules/StackType.elm`
+  (`isLegalStack` / `isPartialOk` / `neighbors`) + bits of
+  `Game.Rules.Card.elm`. (Predicates moved out of
+  `Game.Agent.Cards` into Rules/ on 2026-04-28.)
 - **Origin:** lifted out of the now-retired `beginner.py`
   on 2026-04-26 as the module split landed; the IDDFS
   planner cluster (`beginner` / `run_corpus_v2` /
@@ -45,7 +47,7 @@ model.
 
 ## Pointers
 
-- Elm sibling: `games/lynrummy/elm/src/Game/Agent/Cards.elm`
-  + `Game.Card.elm` + `Game.StackType.elm`.
+- Elm sibling: `games/lynrummy/elm/src/Game/Rules/StackType.elm`
+  + `Game.Rules.Card.elm`.
 - Tests: card primitives are exercised indirectly through
   `test_bfs_extract.py`, `test_bfs_enumerate.py`.

@@ -1,10 +1,11 @@
 """
 cards.py — card primitives the BFS planner sits on.
 
-Mirrors Elm's `Game.Agent.Cards` + `Game.Card` + part of
-`Game.StackType`. Holds the deck-agnostic predicates and
+Mirrors Elm's `Game.Rules.StackType` rule predicates +
+`Game.Rules.Card`. Holds the deck-agnostic predicates and
 verb-eligibility checks that the move enumerator + the
-extract physics consult.
+extract physics consult. (Elm-side predicates were moved out
+of `Game.Agent.Cards` into Rules/ on 2026-04-28.)
 
 Lifted from `beginner.py` on 2026-04-26 as the module split
 landed (per ALIGNMENT_REPORT.md). The legacy beginner

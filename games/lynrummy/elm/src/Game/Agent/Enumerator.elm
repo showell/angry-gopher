@@ -19,7 +19,6 @@ identical across implementations.
 
 import Dict exposing (Dict)
 import Game.Agent.Buckets exposing (Buckets, Stack)
-import Game.Agent.Cards as Cards
 import Game.Agent.Move
     exposing
         ( ExtractAbsorbDesc
@@ -43,6 +42,9 @@ import Game.Rules.Card
 import Game.Rules.StackType as StackType
     exposing
         ( CardStackType(..)
+        , isLegalStack
+        , isPartialOk
+        , neighbors
         , predecessor
         , successor
         )
@@ -352,7 +354,7 @@ graduate :
     -> List Stack
     -> ( List Stack, List Stack, Bool )
 graduate merged growing complete =
-    if Cards.isLegalStack merged then
+    if isLegalStack merged then
         ( growing, complete ++ [ merged ], True )
 
     else
@@ -578,7 +580,7 @@ somewhere in `inventory`. Mirrors Python's `_admissible_partial`.
 -}
 admissiblePartial : Stack -> Set ShapeKey -> Bool
 admissiblePartial merged inventory =
-    if not (Cards.isPartialOk merged) then
+    if not (isPartialOk merged) then
         False
 
     else if List.length merged == 2 && hasDoomedThird merged inventory then
@@ -870,7 +872,7 @@ parity — without it the same input puzzle yields different
 neighborShapes : Stack -> List ShapeKey
 neighborShapes target =
     target
-        |> List.concatMap Cards.neighbors
+        |> List.concatMap neighbors
         |> List.map (\( v, s ) -> ( cardValueToInt v, suitToInt s ))
         |> Set.fromList
         |> Set.toList
@@ -1529,8 +1531,8 @@ spliceCandidates state ti loose hi src n =
                                 >= 3
                                 && List.length right
                                 >= 3
-                                && Cards.isLegalStack left
-                                && Cards.isLegalStack right
+                                && isLegalStack left
+                                && isLegalStack right
                         then
                             let
                                 desc =
@@ -1602,7 +1604,7 @@ pushOnto state ti t helper =
                                         LeftSide ->
                                             t ++ h
                             in
-                            if not (Cards.isLegalStack merged) then
+                            if not (isLegalStack merged) then
                                 Nothing
 
                             else
@@ -1662,7 +1664,7 @@ engulfFromGrowing state gi g =
                                         LeftSide ->
                                             g ++ h
                             in
-                            if not (Cards.isLegalStack merged) then
+                            if not (isLegalStack merged) then
                                 Nothing
 
                             else

@@ -21,6 +21,9 @@ import Game.Rules.StackType
     exposing
         ( CardStackType(..)
         , getStackType
+        , isLegalStack
+        , isPartialOk
+        , neighbors
         , predecessor
         , successor
         , valueDistance
@@ -74,6 +77,9 @@ suite =
         , valueDistanceTests
         , successorTests
         , predecessorTests
+        , isLegalStackTests
+        , isPartialOkTests
+        , neighborsTests
         ]
 
 
@@ -218,6 +224,154 @@ predecessorTests =
                 allCardValues
                     |> List.all (\v -> predecessor (successor v) == v)
                     |> Expect.equal True
+        ]
+
+
+
+-- RULE PREDICATES (migrated from Game.Agent.CardsTest, 2026-04-28)
+--
+-- isLegalStack / isPartialOk / neighbors moved out of
+-- Game.Agent.Cards into Game.Rules.StackType in phase 2b of
+-- the rules-lockdown plan; tests followed.
+
+
+isLegalStackTests : Test
+isLegalStackTests =
+    describe "isLegalStack"
+        [ test "3-set classifies legal" <|
+            \_ ->
+                isLegalStack
+                    [ fromD1 "5C", fromD1 "5D", fromD1 "5S" ]
+                    |> Expect.equal True
+        , test "3-card pure run classifies legal" <|
+            \_ ->
+                isLegalStack
+                    [ fromD1 "5H", fromD1 "6H", fromD1 "7H" ]
+                    |> Expect.equal True
+        , test "3-card rb-run classifies legal" <|
+            \_ ->
+                isLegalStack
+                    [ fromD1 "5H", fromD1 "6S", fromD1 "7H" ]
+                    |> Expect.equal True
+        , test "2-card stack is not yet legal" <|
+            \_ ->
+                isLegalStack
+                    [ fromD1 "5H", fromD1 "6H" ]
+                    |> Expect.equal False
+        , test "wraparound K-A-2 pure run is legal" <|
+            \_ ->
+                isLegalStack
+                    [ fromD1 "KH", fromD1 "AH", fromD1 "2H" ]
+                    |> Expect.equal True
+        ]
+
+
+isPartialOkTests : Test
+isPartialOkTests =
+    describe "isPartialOk"
+        [ test "empty stack is OK" <|
+            \_ -> isPartialOk [] |> Expect.equal True
+        , test "singleton is OK" <|
+            \_ ->
+                isPartialOk [ fromD1 "5H" ]
+                    |> Expect.equal True
+        , test "consecutive same-suit pair is OK (pure-run partial)" <|
+            \_ ->
+                isPartialOk [ fromD1 "5H", fromD1 "6H" ]
+                    |> Expect.equal True
+        , test "consecutive opposite-color pair is OK (rb-run partial)" <|
+            \_ ->
+                isPartialOk [ fromD1 "5H", fromD1 "6C" ]
+                    |> Expect.equal True
+        , test "same-value distinct-suit pair is OK (set partial)" <|
+            \_ ->
+                isPartialOk [ fromD1 "5H", fromD1 "5C" ]
+                    |> Expect.equal True
+        , test "non-consecutive pair is NOT ok" <|
+            \_ ->
+                isPartialOk [ fromD1 "5H", fromD1 "9H" ]
+                    |> Expect.equal False
+        , test "consecutive same-color (different suits) NOT ok" <|
+            \_ ->
+                isPartialOk [ fromD1 "5H", fromD1 "6D" ]
+                    |> Expect.equal False
+        , test "3+ legal stack delegates to isLegalStack" <|
+            \_ ->
+                isPartialOk
+                    [ fromD1 "5H", fromD1 "6H", fromD1 "7H" ]
+                    |> Expect.equal True
+        ]
+
+
+neighborsTests : Test
+neighborsTests =
+    describe "neighbors"
+        [ test "5H neighbors include 4H and 6H (pure-run)" <|
+            \_ ->
+                let
+                    ns =
+                        neighbors (fromD1 "5H")
+
+                    h4 =
+                        ( (fromD1 "4H").value, (fromD1 "4H").suit )
+
+                    h6 =
+                        ( (fromD1 "6H").value, (fromD1 "6H").suit )
+                in
+                Expect.all
+                    [ \_ -> Expect.equal True (List.member h4 ns)
+                    , \_ -> Expect.equal True (List.member h6 ns)
+                    ]
+                    ()
+        , test "5H neighbors include opposite-color ±1 (rb-run)" <|
+            \_ ->
+                let
+                    ns =
+                        neighbors (fromD1 "5H")
+
+                    c4 =
+                        ( (fromD1 "4C").value, (fromD1 "4C").suit )
+
+                    s6 =
+                        ( (fromD1 "6S").value, (fromD1 "6S").suit )
+                in
+                Expect.all
+                    [ \_ -> Expect.equal True (List.member c4 ns)
+                    , \_ -> Expect.equal True (List.member s6 ns)
+                    ]
+                    ()
+        , test "5H neighbors include 5C, 5D, 5S (set partners)" <|
+            \_ ->
+                let
+                    ns =
+                        neighbors (fromD1 "5H")
+
+                    c5 =
+                        ( (fromD1 "5C").value, (fromD1 "5C").suit )
+
+                    d5 =
+                        ( (fromD1 "5D").value, (fromD1 "5D").suit )
+
+                    s5 =
+                        ( (fromD1 "5S").value, (fromD1 "5S").suit )
+                in
+                Expect.all
+                    [ \_ -> Expect.equal True (List.member c5 ns)
+                    , \_ -> Expect.equal True (List.member d5 ns)
+                    , \_ -> Expect.equal True (List.member s5 ns)
+                    ]
+                    ()
+        , test "5H neighbors do NOT include 5H itself" <|
+            \_ ->
+                let
+                    ns =
+                        neighbors (fromD1 "5H")
+
+                    h5 =
+                        ( (fromD1 "5H").value, (fromD1 "5H").suit )
+                in
+                List.member h5 ns
+                    |> Expect.equal False
         ]
 
 
