@@ -1,0 +1,32 @@
+# Main/Util.elm — EARLY
+
+Pure leaf utilities used across `Main.*` modules. Zero
+domain dependencies; safe for any `Main.*` module to import
+without import-cycle risk.
+
+## Status
+
+- **Label:** EARLY. Created 2026-04-28 during elm_cleanup
+  stage 3 dispatch 4 (MAIN_UTIL cluster) to consolidate
+  helpers that had been duplicated across `Main.State` and
+  `Main.View`.
+
+## Exports
+
+- `listAt : Int -> List a -> Maybe a` — safe positional
+  index. Previously duplicated in `Main.State` and
+  `Main.View`; identical copies also live in `Game.Game`
+  and `Game.GestureArbitration` (out of scope of the
+  current cleanup; future Game/-pass can import from here
+  or factor a Game-side twin).
+- `pluralize : Int -> String -> String` — render a
+  count + noun with English-style pluralization. Used by
+  `popupFromOutcome` in `Main.View`.
+
+## Pointers
+
+- Callers today: `Main.State` (listAt only),
+  `Main.View` (both).
+- elm_cleanup stage 1 inventory:
+  `~/showell_repos/claude-steve/elm_cleanup/outputs/01-smells.md`
+  smells A1 + A3.
