@@ -12,7 +12,7 @@ use attribute access (`desc.foo`) and dispatch via
 from dataclasses import dataclass, field
 
 from buckets import Side, Verb
-from cards import classify, card_label
+from rules import classify, card_label
 
 
 # --- Per-move dataclasses ---

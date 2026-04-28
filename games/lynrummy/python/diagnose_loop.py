@@ -154,7 +154,7 @@ def main():
         return
 
     # Reconstruct the initial state for the projection.
-    from cards import classify
+    from rules import classify
     augmented = list(board) + [list(map(tuple, proj["cards"]))]
     helper = [s for s in augmented if classify(s) != "other"]
     trouble = [s for s in augmented if classify(s) == "other"]

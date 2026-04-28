@@ -24,7 +24,7 @@ Search order (encodes game preference; no scoring layer):
 import time
 
 import bfs
-from cards import classify, is_partial_ok
+from rules import classify, is_partial_ok
 
 
 def find_play(hand, board, stats=None):

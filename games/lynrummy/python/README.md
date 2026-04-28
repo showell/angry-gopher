@@ -28,27 +28,39 @@ not artificial**, **two coordinate frames** (board frame vs.
 viewport), and **agents plan then execute** are all directly
 load-bearing for why this subtree is shaped the way it is.
 
-## Class-1/2 segregation — Elm precedent, Python parallel-pending
+## Class-1/2 segregation — Elm precedent, Python parallel landed
 
-The Elm side recently moved its locked-down rule code
-into a `Game/Rules/` subtree (Card + StackType +
-predicates `isLegalStack` / `isPartialOk` / `neighbors`)
-plus property tests that lock the laws — see
-`../elm/README.md` § "Game/Rules/" for the precedent.
+The Elm side moved its locked-down rule code into a
+`Game/Rules/` subtree (Card + StackType + predicates
+`isLegalStack` / `isPartialOk` / `neighbors`) plus property
+tests that lock the laws — see `../elm/README.md` §
+"Game/Rules/" for the precedent.
 
-**The Python side has the same code conceptually but it
-isn't grouped.** Class-1/2 rule content currently lives
-in:
+The Python parallel landed in the same shape. Class-1/2
+rule content lives under `rules/`:
 
-- **`cards.py`** — Card primitives (CardValue / Suit /
-  OriginDeck enums, classify, neighbors, isPartialOk,
-  successor, predecessor). Mix of Class-2 primitives +
-  Class-1 game rules. The closest analog to Elm's
-  `Game.Rules.Card` + `Game.Rules.StackType` combined.
-- **`buckets.py`** — 4-bucket BFS state shape,
-  `state_sig`, `trouble_count`, `is_victory`. Some
-  Class-2 type aliases mixed with Class-3-flavored
-  search-state helpers.
+- **`rules/card.py`** — Card primitives: `RANKS` / `SUITS`
+  / `RED` constants, `card(label, deck)` parser, `label` /
+  `card_label` renderers, `color`. Mirrors
+  `Game.Rules.Card`.
+- **`rules/stack_type.py`** — Value-cycle (`successor`),
+  classification (`classify`), and rule predicates
+  (`is_partial_ok`, `neighbors`). Mirrors
+  `Game.Rules.StackType`.
+- **`rules/__init__.py`** — re-exports the package's
+  public surface so callers write
+  `from rules import classify, neighbors, RED, ...`.
+
+What stayed where:
+
+- **`cards.py`** — agent-side verb-eligibility predicates
+  (`can_peel` / `can_pluck` / `can_yank` / `can_steal` /
+  `can_split_out`). Class-3 strategy, not rules. Mirrors
+  Elm's `Game.Agent.Cards`.
+- **`buckets.py`** — 4-bucket BFS state shape +
+  `state_sig` + `trouble_count` + `is_victory`. Same shape
+  as before — Elm keeps `Game.Agent.Buckets` outside
+  `Game/Rules/`, so the Python parallel keeps it here too.
 - **`move.py`** — Move desc dataclasses + describe /
   narrate / hint. Render functions are Class-4 (UX
   flavor); the dataclasses themselves are Class-2.
@@ -65,16 +77,6 @@ should track class boundaries — physics living inside a
 UX module is a smell; rules tangled with strategy is a
 smell.
 
-**Goal of the Python parallel migration** (not yet
-scheduled): factor out the pure Class-1/2 content from
-`cards.py` (and possibly `buckets.py`) into a `rules/`
-subpackage that mirrors Elm's shape. The Python idiom for
-this is a directory containing an `__init__.py` plus
-per-concern modules, with imports like `from rules import
-classify, neighbors`. Sub-agents working on this migration
-should read both this README's section AND the Elm README's
-`Game/Rules/` section for the shape that landed there.
-
 ## Two strategic layers, one fading
 
 The Python agent has two pieces of strategy code:
@@ -89,10 +91,13 @@ The Python agent has two pieces of strategy code:
   Lives in five focused modules mirroring Elm's
   `Game.Agent.*` tree:
   - `buckets.py` — state shape + state_sig + type aliases
-  - `cards.py` — card primitives + verb eligibility
+  - `cards.py` — verb-eligibility predicates (the rule
+    layer below it lives in `rules/`)
   - `move.py` — desc dataclasses + describe / narrate / hint
   - `enumerator.py` — move generator + focus rule + filters
   - `bfs.py` — search engine
+  Plus the `rules/` subpackage (Class-1/2 truth layer):
+  card model + classification + rule predicates.
   See per-module `*.claude` sidecars.
 
 - **`strategy.py` — the trick engine**, legacy. Per-trick
@@ -138,7 +143,15 @@ Ordered by "load-bearing first":
     narrate / hint.
   - `buckets.claude` — state shape + `state_sig` + type
     aliases.
-  - `cards.claude` — card primitives + verb eligibility.
+  - `cards.claude` — verb-eligibility predicates (agent
+    strategy; the rule layer below it lives in `rules/`).
+- **Rules subpackage** (Class-1/2 truth layer; mirrors Elm
+  `Game/Rules/`).
+  - `rules/card.claude` — card model + label
+    parser/renderers + suit color.
+  - `rules/stack_type.claude` — `successor` + `classify` +
+    `is_partial_ok` + `neighbors`. The hottest function in
+    BFS lives here.
 - `verbs.claude` — VERB → PRIMITIVE library; decomposes a
   BFS desc into UI primitives via content-based stack lookup.
 - `primitives.claude` — PRIMITIVE → GESTURE library;
@@ -238,7 +251,7 @@ The Python suite (run each test file directly) covers:
 
 After any change touching the BFS planner modules
 (`bfs.py` / `enumerator.py` / `move.py` / `cards.py` /
-`buckets.py`) or the `verbs.py` / `primitives.py` /
+`buckets.py` / `rules/`) or the `verbs.py` / `primitives.py` /
 `agent_prelude.py` layers, run all of:
 
 1. **Unit + conformance suite** — run the gate script:

@@ -1,53 +1,41 @@
 just_use cards.py
 
 # label: WORKHORSE
-# role: card primitives — the BFS planner's bottom layer
+# role: verb-eligibility predicates for the BFS planner
 
-The Python equivalent of the Elm `Game.Rules.StackType` rule
-predicates plus the constants and small helpers that go with
-the agent-side card model.
+The Python parallel of Elm's `Game.Agent.Cards`: the
+predicates that decide whether a given (kind, n, ci) shape
+admits each extract verb.
 
 ## Status
 
-- **Mirrors:** `games/lynrummy/elm/src/Game/Rules/StackType.elm`
-  (`isLegalStack` / `isPartialOk` / `neighbors`) + bits of
-  `Game.Rules.Card.elm`. (Predicates moved out of
-  `Game.Agent.Cards` into Rules/ on 2026-04-28.)
-- **Origin:** lifted out of the now-retired `beginner.py`
-  on 2026-04-26 as the module split landed; the IDDFS
-  planner cluster (`beginner` / `run_corpus_v2` /
-  `beginner_corpus`) was purged 2026-04-27. These
-  primitives now live here as the BFS planner's bottom
-  layer.
+- **Mirrors:** `games/lynrummy/elm/src/Game/Agent/Cards.elm`
+  (the `canPeel` / `canPluck` / etc. predicates inside
+  Enumerator's siblings).
+- **Origin:** the pure rule content (card model,
+  classifier, `is_partial_ok`, `neighbors`) used to live
+  here too. It moved into the `rules/` subpackage on the
+  Class-1/2 segregation migration (parallel to Elm's
+  `Game/Rules/` lockdown). What's left here is agent
+  strategy (Class-3), not rules (Class-1/2).
 
 ## What it owns
 
-- **Card model:** `RANKS`, `SUITS`, `RED` constants;
-  `card(label, deck)` parser; `label`, `label_d` renderers;
-  `succ`, `color` value helpers.
-- **Classification:** `classify(stack)` (the hottest
-  function in the search), `partial_ok(stack)`.
-- **Neighborhood:** `neighbors(c)` — every shape that could
-  sit adjacent to a card in some legal group.
-- **Verb eligibility:** `can_peel_kind`, `can_pluck_kind`,
-  `can_yank_kind`, `can_steal_kind`, `can_split_out_kind`.
-  Mirror the Elm `canPeel` / `canPluck` / etc. inside
-  `Enumerator.elm`.
+- **Verb eligibility:** `can_peel`, `can_pluck`, `can_yank`,
+  `can_steal`, `can_split_out`. Pure functions of
+  `(kind, n, ci)`; the enumerator dispatches via
+  `verb_for(...)` against these.
 
 ## What it doesn't own
 
-- Stack geometry (location, board layout): not part of the
-  agent's view; lives in `Game.CardStack` (Go) +
-  `Game.BoardGeometry` (Elm).
-- Trick / hint logic: that's `strategy.py` (legacy) +
-  not-yet-ported in Elm.
-- Stack-display rendering: `show_board.py` carries its own
-  `_label` helper for one-stack-per-line dict output (server
-  state shape). Not load-bearing for the planner.
+- Card model + classifier + rule predicates: those live in
+  `rules/`. Reach for them via `from rules import classify,
+  neighbors, is_partial_ok, ...`.
+- Stack geometry, trick logic, display rendering: as before.
 
 ## Pointers
 
-- Elm sibling: `games/lynrummy/elm/src/Game/Rules/StackType.elm`
-  + `Game.Rules.Card.elm`.
-- Tests: card primitives are exercised indirectly through
+- Elm sibling: `games/lynrummy/elm/src/Game/Agent/Cards.elm`
+  (verb eligibility lives there, not in `Game/Rules/`).
+- Tests: predicates are exercised indirectly through
   `test_bfs_extract.py`, `test_bfs_enumerate.py`.

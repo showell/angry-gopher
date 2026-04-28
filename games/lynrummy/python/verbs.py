@@ -18,7 +18,7 @@ bookkeeping that the server's split/merge semantics impose
 appends one).
 """
 
-import cards
+import rules
 import geometry_plan
 import primitives
 from move import (
@@ -149,7 +149,7 @@ def _extract_absorb_prims(desc, board):
     target_before = list(desc.target_before)
     side = desc.side
     verb = desc.verb
-    kind = cards.classify(source)
+    kind = rules.classify(source)
     ci = source.index(ext_card)
 
     sim = list(board)
@@ -304,7 +304,7 @@ def _shift_prims(desc, board):
 
     # 1. Isolate p_card from donor.
     pi = donor.index(p_card)
-    kind = cards.classify(donor)
+    kind = rules.classify(donor)
     prims, sim, _ext, donor_remnants = _isolate_card(
         sim, donor, pi, kind)
     out.extend(prims)

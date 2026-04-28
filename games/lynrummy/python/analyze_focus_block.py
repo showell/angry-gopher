@@ -29,7 +29,7 @@ import sys
 import bfs
 import enumerator
 import move
-from cards import classify, card_label
+from rules import classify, card_label
 from move import (
     ExtractAbsorbDesc, FreePullDesc, PushDesc,
     ShiftDesc, SpliceDesc,

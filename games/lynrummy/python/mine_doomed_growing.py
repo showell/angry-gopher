@@ -95,7 +95,7 @@ def main():
           f"board={len(board)}.")
 
     # Try each projection's initial state.
-    from cards import classify
+    from rules import classify
     found_total = 0
     for proj in rec["projections"]:
         extra = [list(map(tuple, proj["cards"]))]

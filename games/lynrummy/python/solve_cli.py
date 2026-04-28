@@ -13,7 +13,7 @@ import sqlite3
 import sys
 
 import bfs
-from cards import card_label
+from rules import card_label
 
 
 def main():

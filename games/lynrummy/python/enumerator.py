@@ -7,8 +7,8 @@ The Python equivalent of `Game.Agent.Enumerator.elm`. See
 """
 
 from buckets import Buckets, FocusedState
+from rules import RED, classify, neighbors, is_partial_ok
 from cards import (
-    RED, classify, neighbors, is_partial_ok,
     can_peel, can_pluck, can_yank,
     can_steal, can_split_out,
 )

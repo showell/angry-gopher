@@ -17,7 +17,7 @@ import sys
 
 import enumerator
 import move
-from cards import classify, card_label
+from rules import classify, card_label
 from analyze_focus_block import (
     _load_puzzle, _solve, _apply_desc, stack_label,
     _format_lineage, _what_did_step_touch,

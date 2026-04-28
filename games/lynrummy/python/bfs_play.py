@@ -27,7 +27,7 @@ import urllib.request
 
 import bfs
 import buckets
-import cards
+import rules
 import enumerator
 import move
 import primitives
@@ -112,7 +112,7 @@ def _initial_buckets(state):
     raw_board = raw_board + [[trouble_card]]
     helper, trouble = [], []
     for s in raw_board:
-        if cards.classify(s) == "other":
+        if rules.classify(s) == "other":
             trouble.append(s)
         else:
             helper.append(s)

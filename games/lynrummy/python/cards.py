@@ -1,197 +1,23 @@
 """
-cards.py — card primitives the BFS planner sits on.
+cards.py — verb-eligibility predicates for the BFS planner.
 
-Mirrors Elm's `Game.Rules.StackType` rule predicates +
-`Game.Rules.Card`. Holds the deck-agnostic predicates and
-verb-eligibility checks that the move enumerator + the
-extract physics consult. (Elm-side predicates were moved out
-of `Game.Agent.Cards` into Rules/ on 2026-04-28.)
+The Python parallel of Elm's `Game.Agent.Cards`: the
+predicates that decide whether a given (kind, n, ci) shape
+admits each extract verb. These are agent strategy
+(Class-3), NOT rules — the rule layer lives in `rules/`.
 
-Lifted from `beginner.py` on 2026-04-26 as the module split
-landed (per ALIGNMENT_REPORT.md). The legacy beginner
-planner is retiring; these primitives needed their own home
-so the BFS doesn't reach into a legacy module.
+The pure rule content that used to live here moved into the
+`rules/` subpackage on the Class-1/2 segregation migration
+(parallel to Elm's `Game/Rules/` lockdown). Card primitives,
+classification, and the legality predicates are now
+imported from `rules`.
+
+Mirrors Elm's `canPeel` / `canPluck` / `canYank` /
+`canSteal` / `canSplitOut` inside `Enumerator.elm` — the
+enumerator dispatches via `verb_for(kind, n, ci)` against
+these.
 """
 
-import functools
-
-# --- Card + board model ---
-
-RANKS = "A23456789TJQK"
-SUITS = "CDSH"           # Clubs Diamonds Spades Hearts
-RED = {1, 3}             # Diamonds, Hearts
-
-
-def card(label, deck=0):
-    """'5H' → (5, 3, 0). 'TC:1' → (10, 0, 1)."""
-    if ":" in label:
-        label, d = label.split(":")
-        deck = int(d)
-    return (RANKS.index(label[0]) + 1,
-            SUITS.index(label[1]),
-            deck)
-
-
-def label(c):
-    v, s, _ = c
-    return RANKS[v - 1] + SUITS[s]
-
-
-def card_label(c):
-    """Label that includes deck suffix when non-zero. Used
-    in DSL output where two cards of the same value+suit
-    can co-exist (one per deck) and need to be told apart."""
-    v, s, d = c
-    base = RANKS[v - 1] + SUITS[s]
-    return f"{base}:{d}" if d else base
-
-
-# --- Classification ---
-
-def successor(v):
-    return 1 if v == 13 else v + 1
-
-
-def color(s):
-    return "red" if s in RED else "black"
-
-
-def classify(stack):
-    """Single-pass classifier for length-3+ stacks. Early
-    exits on the first impossibility. Inlines successor and the
-    red-set membership check to avoid call overhead — this
-    is the hottest function in the search.
-
-    Thin wrapper that hashes the (mutable list-of-tuples) stack
-    into an immutable tuple key and delegates to the cached
-    implementation. Pure function: cached results are equivalent
-    to live results."""
-    return _classify_cached(tuple(stack))
-
-
-# maxsize=2**14 (16384) is a principled bound: large enough to
-# hold all unique stacks seen during a single corpus run
-# (~thousands of distinct stacks across 21 puzzles) without
-# evicting, while still bounding memory for long-running
-# processes (agent_game.py self-play). Profile evidence:
-# ~192k classify calls per dominator puzzle, but the unique
-# stack-content cardinality is tiny by comparison.
-@functools.lru_cache(maxsize=2**14)
-def _classify_cached(stack):
-    n = len(stack)
-    if n < 3:
-        return "other"
-    a0v, a0s, _ = stack[0]
-    a1v, a1s, _ = stack[1]
-
-    # Set: same value, distinct suits.
-    if a0v == a1v:
-        if a0s == a1s:
-            return "other"
-        seen_suits = {a0s, a1s}
-        for i in range(2, n):
-            cv, cs, _ = stack[i]
-            if cv != a0v or cs in seen_suits:
-                return "other"
-            seen_suits.add(cs)
-        return "set"
-
-    # Run: consecutive values starting a0v → a1v.
-    expected = 1 if a0v == 13 else a0v + 1
-    if a1v != expected:
-        return "other"
-
-    if a0s == a1s:
-        # Pure-run candidate: same suit throughout.
-        prev_v = a1v
-        for i in range(2, n):
-            cv, cs, _ = stack[i]
-            expected = 1 if prev_v == 13 else prev_v + 1
-            if cv != expected or cs != a0s:
-                return "other"
-            prev_v = cv
-        return "pure_run"
-
-    # RB-run candidate: alternating colors.
-    a0_red = a0s in RED
-    a1_red = a1s in RED
-    if a0_red == a1_red:
-        return "other"
-    prev_v = a1v
-    prev_red = a1_red
-    for i in range(2, n):
-        cv, cs, _ = stack[i]
-        expected = 1 if prev_v == 13 else prev_v + 1
-        if cv != expected:
-            return "other"
-        c_red = cs in RED
-        if c_red == prev_red:
-            return "other"
-        prev_v = cv
-        prev_red = c_red
-    return "rb_run"
-
-
-def is_partial_ok(stack):
-    """True if `stack` is a legal group OR a length-2 partial
-    that could grow into one. Used to validate intermediate
-    extends — a beginner is allowed to pair up two cards into a
-    transient they'll finish on the next move."""
-    n = len(stack)
-    if n == 0:
-        return True
-    if n == 1:
-        return True
-    if n >= 3:
-        return classify(stack) != "other"
-    a, b = stack
-    # Pair that could be a run partial:
-    if successor(a[0]) == b[0]:
-        if a[1] == b[1]:
-            return True  # pure-run partial
-        if color(a[1]) != color(b[1]):
-            return True  # rb-run partial
-    # Pair that could be a set partial:
-    if a[0] == b[0] and a[1] != b[1]:
-        return True
-    return False
-
-
-# --- Neighborhood ---
-
-# maxsize=None: input space is bounded at 104 distinct
-# (value, suit, deck) triples, so the cache can never grow
-# beyond that. Trivial memory; full retention beats LRU
-# eviction overhead. Pure function: cached results are
-# equivalent to live results.
-@functools.lru_cache(maxsize=None)
-def neighbors(c):
-    """(value, suit) shapes that could sit adjacent to `c` in
-    some valid group. Deck-agnostic."""
-    v, s, _ = c
-    c_color = color(s)
-    pred_v = 13 if v == 1 else v - 1
-    succ_v = successor(v)
-    out = set()
-    # pure run: same suit, ±1 value
-    out.add((pred_v, s))
-    out.add((succ_v, s))
-    # rb run: opposite color, ±1 value
-    for ss in range(4):
-        if color(ss) != c_color:
-            out.add((pred_v, ss))
-            out.add((succ_v, ss))
-    # set: same value, different suit
-    for ss in range(4):
-        if ss != s:
-            out.add((v, ss))
-    return out
-
-
-# --- Verb eligibility ---
-# Mirror Elm's `canPeel` / `canPluck` / etc. inside
-# Enumerator.elm. Each predicate is a pure function on
-# (kind, n, ci); the enumerator dispatches via verb_for.
 
 def can_peel(kind, n, ci):
     if kind == "set" and n >= 4:

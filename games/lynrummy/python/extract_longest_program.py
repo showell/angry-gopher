@@ -18,10 +18,10 @@ import sys
 
 sys.path.insert(0, ".")
 import buckets
-import cards
+import rules
 import enumerator
 import move
-from cards import classify
+from rules import classify, card_label
 
 
 def _parse_card(s):
@@ -121,9 +121,9 @@ def main():
         print(f"\nFinal state at the end of this program:")
         print(f"  helper: {len(helper2)} stacks")
         for s in helper2:
-            print(f"    {[cards.card_label(c) for c in s]}")
-        print(f"  trouble: {[[cards.card_label(c) for c in s] for s in trouble2]}")
-        print(f"  growing: {[[cards.card_label(c) for c in s] for s in growing2]}")
+            print(f"    {[card_label(c) for c in s]}")
+        print(f"  trouble: {[[card_label(c) for c in s] for s in trouble2]}")
+        print(f"  growing: {[[card_label(c) for c in s] for s in growing2]}")
         print(f"  complete: {len(complete2)} stacks")
 
 

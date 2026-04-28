@@ -9,7 +9,7 @@ from buckets import (
     Buckets, FocusedState,
     is_victory, state_sig, trouble_count,
 )
-from cards import classify
+from rules import classify
 from enumerator import enumerate_focused, initial_lineage
 from move import describe
 
