@@ -17,6 +17,7 @@ cd "$(dirname "$0")"
 # below runs elm ~30 times, so this matters.
 ELM_BIN="./node_modules/.bin/elm"
 ELM_TEST_BIN="./node_modules/.bin/elm-test"
+ELM_REVIEW_BIN="./node_modules/.bin/elm-review"
 
 if [ ! -x "$ELM_BIN" ] || [ ! -x "$ELM_TEST_BIN" ]; then
   echo "elm / elm-test not found in ./node_modules/.bin/. Run \`npm install\` in $(pwd)." >&2
@@ -37,6 +38,11 @@ echo "==> Building Main"
 "$ELM_BIN" make src/Main.elm --output=elm.js >/dev/null
 
 echo "==> Running LynRummy tests"
-"$ELM_TEST_BIN" --compiler "$ELM_BIN" >/dev/null
+"$ELM_TEST_BIN" --compiler "$ELM_BIN" 2>&1 | tail -3
 
-echo "All LynRummy modules compile and tests pass."
+if [ -x "$ELM_REVIEW_BIN" ]; then
+  echo "==> elm-review"
+  "$ELM_REVIEW_BIN" --compiler "$ELM_BIN" 2>&1 | tail -3
+fi
+
+echo "All LynRummy modules compile, tests pass, elm-review clean."
