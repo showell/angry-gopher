@@ -730,12 +730,12 @@ runAgentMove move remaining model =
         ( appended, Cmd.batch (boardRectCmd :: wireCmds) )
 
 
-sendOnePuzzle : Int -> String -> ( WireAction, Maybe { path : List State.GesturePoint, frame : PathFrame } ) -> Cmd Msg
+sendOnePuzzle : Int -> String -> ( WireAction, Maybe State.GestureEnvelope ) -> Cmd Msg
 sendOnePuzzle sid name ( prim, gesture ) =
     Wire.sendPuzzleAction sid name prim gesture
 
 
-sendOneFull : Int -> ( WireAction, Maybe { path : List State.GesturePoint, frame : PathFrame } ) -> Cmd Msg
+sendOneFull : Int -> ( WireAction, Maybe State.GestureEnvelope ) -> Cmd Msg
 sendOneFull sid ( prim, gesture ) =
     Wire.sendAction sid prim gesture
 
@@ -749,7 +749,7 @@ the sim before the next synthesis. Returns
 synthesizeAgentGestures :
     Model
     -> List WireAction
-    -> List ( WireAction, Maybe { path : List State.GesturePoint, frame : PathFrame } )
+    -> List ( WireAction, Maybe State.GestureEnvelope )
 synthesizeAgentGestures initialModel prims =
     let
         loop simModel acc remaining =
@@ -778,7 +778,7 @@ and forced replay to JIT-synthesize. Carrying the gesture
 here means Instant Replay finds a captured path and
 animates immediately.
 -}
-agentLogEntryWith : ( WireAction, Maybe { path : List State.GesturePoint, frame : PathFrame } ) -> State.ActionLogEntry
+agentLogEntryWith : ( WireAction, Maybe State.GestureEnvelope ) -> State.ActionLogEntry
 agentLogEntryWith ( action, gesture ) =
     { action = action
     , gesturePath = Maybe.map .path gesture

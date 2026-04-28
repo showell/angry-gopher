@@ -338,7 +338,7 @@ gestureForAction :
     WireAction
     -> List State.GesturePoint
     -> PathFrame
-    -> Maybe { path : List State.GesturePoint, frame : PathFrame }
+    -> Maybe State.GestureEnvelope
 gestureForAction action path pathFrame =
     case action of
         WA.MergeHand _ ->

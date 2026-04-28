@@ -6,6 +6,7 @@ module Main.State exposing
     , DragSource(..)
     , DragState(..)
     , Flags
+    , GestureEnvelope
     , GesturePoint
     , Model
     , PathFrame(..)
@@ -325,6 +326,28 @@ frame the containing path is tagged with (see `PathFrame`).
 -}
 type alias GesturePoint =
     { tMs : Float, x : Int, y : Int }
+
+
+{-| Captured drag telemetry attached to a wire-bound action. A
+sequence of timestamped points plus the coordinate frame those
+points live in. Travels alongside primitives on the wire (in
+`Main.Wire.encodeEnvelope`'s `gesture_metadata`) and through the
+in-process action-log entries that drive Instant Replay.
+
+Hand-origin actions (`MergeHand`, `PlaceHand`) ship as `Nothing`:
+they always replay via live DOM measurement, so a captured path
+would be dead weight. Drag-derived intra-board actions ship a
+`Just envelope` after translating viewport samples to board
+frame at the send boundary. Non-drag actions (button clicks,
+`CompleteTurn`) ship `Nothing`.
+
+The shape is also produced by the agent-gesture synthesizer
+(`Main.Play.synthesizeAgentGestures`) so agent-driven actions
+land in the action-log with the same envelope as human drags.
+
+-}
+type alias GestureEnvelope =
+    { path : List GesturePoint, frame : PathFrame }
 
 
 
