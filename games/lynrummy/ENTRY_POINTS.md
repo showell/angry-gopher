@@ -4,10 +4,9 @@
 
 A catch-up reference — what code is actually running today,
 what it does, and how mature each piece is. Companion to
-`ARCHITECTURE.md` (which covers principles and structure) and
-`WIRE.md` (which covers the action protocol). This one
-answers "where do I start reading" and "is this a SPIKE or
-production?".
+`ARCHITECTURE.md` (which covers principles and structure).
+This one answers "where do I start reading" and "is this a
+SPIKE or production?".
 
 ## Web entry points (Browser apps)
 
@@ -35,15 +34,23 @@ real use, and the rename to "Puzzles" landed 2026-04-27.
 
 ## Server-side handlers (Go)
 
+The Go server is dumb URL-keyed file storage for LynRummy
+session data (LEAN_PASS phase 2, 2026-04-28). No referee, no
+replay, no dealer — Elm owns all of that now.
+
 In `views/`:
 
-- `lynrummy_elm.go` — full-game HTTP surface: session
-  bootstrap, action log fetch, action persistence,
-  complete-turn validation. Writes to `lynrummy_elm_actions`.
-- `puzzles.go` — puzzle HTTP surface: catalog at page-load,
-  action persistence, annotations. Writes to
-  `lynrummy_elm_puzzle_actions` and
-  `lynrummy_puzzle_annotations`.
+- `lynrummy_elm.go` — full-game HTTP surface: allocates
+  sequential session ids (the one smart exception), writes
+  Elm-posted bodies verbatim to
+  `games/lynrummy/data/lynrummy-elm/sessions/<id>/{meta.json,actions/<seq>.json}`.
+- `puzzles.go` — puzzle HTTP surface: catalog at page-load
+  (allocates a session id), then puzzle plays write through
+  the unified `/sessions/<id>/actions/<seq>` URL space.
+  `/gopher/puzzles/annotate` survives as a small back-compat
+  shim that writes to `annotations/<seq>.json`.
+- `gamedata.go` — file-storage primitives shared by both
+  surfaces.
 - The broader `views/wiki_*.go` and friends host the rest of
   Angry Gopher. Unrelated to Lyn Rummy.
 
@@ -55,7 +62,8 @@ In `views/`:
 ### Mining + fixture generation (`tools/`)
 
 - `mine_puzzles.py` — generates puzzles from agent
-  gameplay snapshots; writes to `lynrummy_puzzle_seeds`.
+  gameplay snapshots; writes
+  `games/lynrummy/conformance/mined_seeds.json` directly.
   Stable; produces the corpus the Puzzles gallery serves.
 - `export_primitives_fixtures.py` — captures Python verbs +
   geometry_plan output per BFS plan step. Asserts the
@@ -72,15 +80,17 @@ In `views/`:
 All four exporters are stable, regenerate cleanly, and feed
 the same conformance pipeline.
 
-### DSL → test code (Go)
+### DSL → test code
 
 - `cmd/fixturegen` — reads
-  `games/lynrummy/conformance/scenarios/*.dsl`, emits Go test
-  code, Elm test code, and JSON fixtures. Op set:
-  `validate_game_move`, `validate_turn_complete`,
-  `build_suggestions`, `hint_invariant`, `enumerate_moves`,
-  `solve`, `find_open_loc`, `click_agent_play`,
-  `replay_invariant`. Most are mature.
+  `games/lynrummy/conformance/scenarios/*.dsl`, emits Elm test
+  code + JSON fixtures (consumed by Python conformance) +
+  ops manifest. Op set: `validate_game_move`,
+  `validate_turn_complete`, `build_suggestions`,
+  `hint_invariant`, `enumerate_moves`, `solve`,
+  `find_open_loc`, `click_agent_play`, `replay_invariant`.
+  Go target retired 2026-04-28 with the Go domain package.
+  **Run via `ops/check-conformance`**, not ad-hoc.
 
 ### Python agent core (`games/lynrummy/python/`)
 

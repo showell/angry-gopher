@@ -22,10 +22,14 @@ running.
 
 ## What Lyn Rummy is
 
-A two-player card game. The rules are domain-specific; they're
-not this document's subject. The mechanics matter here only
-insofar as they shape what the code has to do: validate moves,
-score turns, render a shared physical board, let a human drag
+A card game with two-player rules — but in this codebase
+**a single-human game** as of 2026-04-28: solitaire or
+human-vs-agent. Two-human multiplayer is out of scope (product
+decision: scheduling friction outweighs the value once Elm has
+agent capability built in). The rules are domain-specific;
+they're not this document's subject. The mechanics matter here
+only insofar as they shape what the code has to do: validate
+moves, score turns, render a physical board, let a human drag
 cards around, let an agent play convincingly too.
 
 One important piece of context: Steve wrote a working
@@ -55,9 +59,9 @@ the architecture:
    (Python) that plays full games. It talks to the same
    server, through the same wire, posting the same actions.
 3. **Watchable through the UI.** Whatever the agent did, the
-   human can replay it in the Elm UI afterward (or, in the
-   two-player shared-board version, witness it live). The
-   agent's play has to look like play, not like a log.
+   human can replay it in the Elm UI afterward, or watch it
+   live as the agent plays as their opponent. The agent's
+   play has to look like play, not like a log.
 
 The third constraint does a lot of quiet work. It means we
 can't treat "the agent sends wire actions" as the whole story
@@ -103,95 +107,75 @@ in a way that doesn't match how the system actually works.
 
 The truer picture: **each actor owns its own view of the
 world, including its own event log.** The Elm UI has a log.
-The Python agent has a log. The Go server has a log — but the
-server's log is a *coordination* log used when multiple
-players share a session, not a ground-truth canon above the
-clients' logs.
+The Python agent has a log. The Go server stores the events
+it observed (Elm POSTs each action) but doesn't run a
+referee against them.
 
-This has four direct consequences:
+Direct consequences:
 
 - **Autonomous play doesn't need the server.** An Elm client
-  running solo (or exploration mode) maintains its own action
-  log in memory, plays moves against its own referee, never
-  round-trips. Same for the Python agent in autonomous mode —
-  Python plays a complete game locally and only talks to the
-  server if someone else needs to see the result. This
-  became load-bearing true in the Elm client on 2026-04-22
-  (ELM_AUTONOMY_AUDIT): during a new-game session, the only
-  wire calls are outbound writes (`fetchNewSession` once,
-  `sendAction` per action, `sendCompleteTurn` per turn — all
-  fire-and-forget except the last, which waits purely for a
-  divergence-monitor payload). Zero inbound state reads
-  after bootstrap.
+  maintains its own action log in memory, plays moves against
+  its own referee, never round-trips for state. Same for the
+  Python agent in autonomous mode — Python plays a complete
+  game locally and only talks to the server if someone else
+  needs to see the result. The Elm client's only wire calls
+  during a session are outbound writes (`fetchNewSession`
+  once, `sendAction` per action — all fire-and-forget). Zero
+  inbound state reads after bootstrap.
 - **Each client is its own gatekeeper.** Elm has its OWN
   referee module; the Go referee was retired 2026-04-28
   (the entire Go domain package went with it). Python has
   its own referee-equivalent too.
-- **Clients do not blindly accept events from other sources.**
-  If the server delivers an opponent's move, the Elm client
-  decides whether to integrate it. The human may want to play
-  solitaire and ignore the opponent entirely; Elm honors that
-  by not force-integrating. Integration is a deliberate act.
-- **The server's log is a coordination log.** When two actors
-  share a session, the server's log is the agreed sequence
-  both can reconcile against. But each client's own log is
-  the authoritative view *for that client*.
+- **The server is observability, not coordination.** When the
+  Elm client posts events to the server, those events become
+  visible to anyone reading the data tree (a Python tool, a
+  human inspecting `games/lynrummy/data/`, a future replay
+  viewer). The server is not part of any decision loop.
 
 This flips the default expectation from "server central;
 clients are thin UIs" to "each actor is independent; the
-server is a rendezvous point when coordination is actually
-needed."
+server is a passive observer."
 
 ## The cast of components
 
-Four components collaborate on the event lifecycle. Each
-client is an independent actor in the sense above;
-connections to the server exist only when coordination is
-actually required.
+Three components collaborate. Lyn Rummy is a **single-human
+game** as of 2026-04-28 — solitaire or human-vs-agent. Two-
+human multiplayer is out of scope (product decision: scheduling
+friction outweighs the value once Elm has agent capability).
 
-- **Go server (Angry Gopher).** The rendezvous point for
-  multi-actor sessions. When an actor wants its events
-  visible to another actor, it posts them to the server,
-  which runs its own referee, appends to the session's
-  coordination log in SQLite, and serves the log back on
-  demand. The server also owns the dealer — opening deal +
-  deck seed — because when two actors share a session they
-  must start from the same cards. In a fully solo setup,
-  dealing could live client-side; it lives on the server
-  because coordinated play was always on the horizon.
-  The server does NOT decide which events are smart, does NOT
-  synthesize gestures, and does NOT help clients render.
-- **Elm UI.** A complete player that happens to have a
-  browser-based presentation layer. Originates events from
-  mouse drags + its own in-game hint logic, validates them
-  against its own referee, appends to its own action log,
-  and can replay its own log at any time. In multi-player
-  sessions it additionally posts events to the server and
-  integrates incoming opponent events on its own terms.
-- **Python agent.** A complete player that happens to have
-  no presentation layer. Originates events from its own
-  hint logic, validates against its own referee, appends to
-  its own log. It has no DOM — so it cannot speak pixel-
-  level viewport coords for a hand drag — but it absolutely
-  KNOWS the board frame and reasons about geometry there.
-  An important discipline: **constraints must be real, not
-  artificial.** "Python has no eyes" is not the same as
-  "Python has no geometry"; conflating them leads to leaving
-  information off the wire that Python could perfectly well
-  supply.
-- **SQLite.** The durable layer behind the server's
-  coordination log. Tables for sessions, action log,
-  gesture telemetry, puzzle seeds. Schema is ours
-  (controlled via `schema/schema.go`). Prod DB is nukable —
-  no durable-across-rebuilds assets live there.
+- **Elm UI.** The autonomous player. Deals locally
+  (`Game.Dealer.dealFullGame seed` produces the curated
+  opening board + random hands), runs its own referee,
+  appends to its own action log, can replay at any time.
+  Originates events from mouse drags or its own
+  hint/agent logic. Posts events to the Go server purely
+  for observability + reload-resume; nothing in the live
+  loop depends on the server's response.
+- **Python agent.** A complete player without a
+  presentation layer. Owns the four-bucket BFS planner
+  used by the Puzzles surface today (full-game UI swap
+  pending). It has no DOM — so it cannot speak pixel-level
+  viewport coords for a hand drag — but it KNOWS the board
+  frame and reasons about geometry there. Discipline:
+  **constraints must be real, not artificial.** "Python
+  has no eyes" is not the same as "Python has no geometry."
+- **Go server (Angry Gopher).** Dumb URL-keyed file
+  storage for LynRummy session data (LEAN_PASS phase 2,
+  2026-04-28). Sequential session-id allocation is the one
+  smart exception. The Go server does NOT deal, does NOT
+  referee, does NOT replay — all of that ran in Go until
+  2026-04-28 when the entire `games/lynrummy/` Go domain
+  package retired. SQLite hosts only the seeded `users`
+  table now; LynRummy session data lives as plain JSON
+  under `games/lynrummy/data/`.
 
 ## Multiple action logs, one event shape
 
 Because each actor owns its own view, there are **multiple
 action logs in play** at any given time — the Elm client's,
-the Python agent's, the server's coordination log. What
-holds them together isn't one-log-to-rule-them-all; it's
-that **events have the same shape wherever they live**.
+the Python agent's, the server's filesystem-backed log.
+What holds them together isn't one-log-to-rule-them-all;
+it's that **events have the same shape wherever they live**.
 
 Each entry in any of these logs is one wire action — one
 primitive a player could do: split a stack, merge two stacks,
@@ -247,9 +231,9 @@ hold from any actor's perspective:
 ## Elm is layered around source-aware events
 
 Inside the Elm UI, events arrive from multiple sources — the
-human's live mouse drags, Elm's own hint engine, the wire
-(opponent events delivered by the server), and the replay
-walker re-reading a stored log. When any of these sources
+human's live mouse drags, Elm's own hint engine, the agent
+playing as opponent, and the replay walker re-reading a
+stored log. When any of these sources
 delivers an event, Elm captures the **full information about
 its source** along with the event itself.
 
@@ -558,9 +542,11 @@ historical record.)
 
 ### Conformance & testing
 
-- `../../cmd/fixturegen/main.go` — the DSL → Go + Elm
-  + JSON test generator. The mechanism behind our hint /
-  invariant / referee cross-language bridges.
+- `../../cmd/fixturegen/main.go` — the DSL → Elm + JSON
+  test generator. The mechanism behind our cross-language
+  parity bridge between Elm and Python (the Go target
+  retired 2026-04-28 with the Go domain package). Don't run
+  ad-hoc; use `ops/check-conformance`.
 - `games/lynrummy/conformance/scenarios/*.dsl` — the
   canonical scenarios both sides test against.
 

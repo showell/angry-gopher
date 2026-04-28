@@ -31,10 +31,20 @@ Python relate.
   `/gopher/puzzles/`. The Python catalog is generated from
   `conformance/mined_seeds.json` via
   `python/puzzle_catalog.py`.
-- `data/` — file-system-backed session data
-  (`lynrummy-elm/sessions/<id>/{meta.json, actions/<seq>.json,
-  annotations/<seq>.json}`). All committed; `next-session-id.txt`
-  is the counter.
+- `data/` — file-system-backed session data. The counter
+  `next-session-id.txt` lives at the root of `data/`;
+  per-session directories live under `data/lynrummy-elm/sessions/<id>/`
+  with `meta.json` (created_at, label, full-game initial_state
+  if applicable), `actions/<seq>.json` (one envelope per
+  action), and `annotations/<seq>.json` (puzzle-only). All
+  committed.
+
+  Distinguishing **full-game vs puzzle** sessions: full-game
+  meta carries an `initial_state` block (board + hands + deck);
+  puzzle sessions are tagged `label: "puzzles page-load"`
+  with no `initial_state` (the puzzle's state lives in the
+  catalog). Action bodies for puzzle plays carry a
+  `puzzle_name` field; full-game bodies don't.
 - `conformance/scenarios/*.dsl` — cross-language scenario
   contract. Compiled to Elm tests + Python JSON fixtures
   via `cmd/fixturegen`. Single source of truth for Elm ↔

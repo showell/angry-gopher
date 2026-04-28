@@ -13,7 +13,7 @@ Stacks are referenced by their **full ordered card list**
 (`cards`, `source_cards`, `target_cards`), not by positional
 index. Cards are globally unique in the double deck, so a card
 list identifies a stack unambiguously AND stays stable under
-the reducer's reordering. See `games/lynrummy/WIRE.md`.
+the reducer's reordering.
 
 -}
 
