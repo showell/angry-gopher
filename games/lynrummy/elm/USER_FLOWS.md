@@ -89,7 +89,7 @@ verified ("button exists and fires Msg X"), it's a step.
 2. Client: `MouseDownOnHandCard` + fetchBoardRect. ✅
 3. Drag state becomes Dragging; a floating copy follows cursor. ✅
 4. User releases over an empty part of the board (no wing hover). ✅
-5. Client: `MouseUp` / `resolveGesture` — no wing, `cursorOverBoard` true. ✅
+5. Client: `MouseUp` / `resolveGesture` — no wing, `isCursorOverBoard` true. ✅
 6. Compute `loc = floaterTopLeft - boardRect` (viewport→board). ✅
 7. `WA.PlaceHand { handCard, loc }` sent to server. ✅
 8. Local model: card removed from active hand, new stack

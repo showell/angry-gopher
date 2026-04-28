@@ -44,13 +44,13 @@ Extracted 2026-04-19 from the pre-split `Main.elm` monolith.
 on a board card AND hasn't moved beyond the click threshold
 (tracked elsewhere via `GestureArbitration.clickIntentAfterMove`)
 yields a `Split` action. Only if the click intent has been
-killed do we dispatch on `(hoveredWing, source, cursorOverBoard)`
+killed do we dispatch on `(hoveredWing, source, isCursorOverBoard)`
 for merge / place / move.
 
 
 ## WireAction production — branch table
 
-| clickIntent | source | hoveredWing | cursorOverBoard | Result |
+| clickIntent | source | hoveredWing | isCursorOverBoard | Result |
 |---|---|---|---|---|
 | Just cardIdx | FromBoardStack stack | — | — | `Split { stack, cardIndex }` |
 | Nothing | FromBoardStack stack | Just wing | — | `MergeStack { source=stack, target=wing.target, side }` |
@@ -203,7 +203,7 @@ findHandCard target cards =
 
 
 {-| Fire a `Browser.Dom.getElement` Task to capture the board's
-viewport rectangle. Needed by `cursorOverBoard` and by hand-
+viewport rectangle. Needed by `isCursorOverBoard` and by hand-
 origin `dropLoc` to translate a viewport-frame floater into
 board frame; intra-board drags don't need it. The rect
 arrives via `BoardRectReceived` — usually within a frame, so
@@ -366,7 +366,7 @@ gestureForAction action path pathFrame =
 {-| Resolve a completed drag into the WireAction (if any)
 it should produce. Pure. Click precedence: if `clickIntent`
 survived, it's a `Split`; otherwise dispatch on
-`(hoveredWing, source, cursorOverBoard)` per the branch
+`(hoveredWing, source, isCursorOverBoard)` per the branch
 table in the module header.
 -}
 resolveGesture : DragInfo -> Maybe WireAction
@@ -396,10 +396,10 @@ resolveGesture info =
                         )
 
                 ( Nothing, FromHandCard card ) ->
-                    if cursorOverBoard info then
+                    if isCursorOverBoard info then
                         case dropLoc info of
                             Just loc ->
-                                if dropFootprintInBounds 1 loc then
+                                if isDropFootprintInBounds 1 loc then
                                     Just (WA.PlaceHand { handCard = card, loc = loc })
 
                                 else
@@ -412,10 +412,10 @@ resolveGesture info =
                         Nothing
 
                 ( Nothing, FromBoardStack stack ) ->
-                    if cursorOverBoard info then
+                    if isCursorOverBoard info then
                         case dropLoc info of
                             Just loc ->
-                                if dropFootprintInBounds (CardStack.size stack) loc then
+                                if isDropFootprintInBounds (CardStack.size stack) loc then
                                     Just (WA.MoveStack { stack = stack, newLoc = loc })
 
                                 else
@@ -428,8 +428,8 @@ resolveGesture info =
                         Nothing
 
 
-cursorOverBoard : DragInfo -> Bool
-cursorOverBoard info =
+isCursorOverBoard : DragInfo -> Bool
+isCursorOverBoard info =
     case info.boardRect of
         Just rect ->
             GA.cursorInRect info.cursor rect
@@ -448,7 +448,7 @@ authoritative drop-time check.
 floaterOverWing : DragInfo -> Maybe WingOracle.WingId
 floaterOverWing info =
     info.wings
-        |> List.filter (nearEventualLanding info)
+        |> List.filter (isNearEventualLanding info)
         |> List.head
 
 
@@ -469,8 +469,8 @@ is naturally board-frame; lift it into the floater's frame
 hand-origin drags) and compare directly. Hand-origin drags
 with no board rect yet return False rather than guess.
 -}
-nearEventualLanding : DragInfo -> WingOracle.WingId -> Bool
-nearEventualLanding info wing =
+isNearEventualLanding : DragInfo -> WingOracle.WingId -> Bool
+isNearEventualLanding info wing =
     let
         floaterWidth =
             case info.source of
@@ -557,8 +557,8 @@ discarded, and the source card returns to where it was picked
 up. No silent clamping.
 
 -}
-dropFootprintInBounds : Int -> BoardLocation -> Bool
-dropFootprintInBounds cardCount loc =
+isDropFootprintInBounds : Int -> BoardLocation -> Bool
+isDropFootprintInBounds cardCount loc =
     let
         bounds =
             Apply.refereeBounds
@@ -582,7 +582,7 @@ droppedOffBoardScold info =
         footprintCheck cardCount =
             case dropLoc info of
                 Just loc ->
-                    if not (dropFootprintInBounds cardCount loc) then
+                    if not (isDropFootprintInBounds cardCount loc) then
                         Just
                             { text =
                                 "Don't knock cards off the board, please. You're not a cat!"

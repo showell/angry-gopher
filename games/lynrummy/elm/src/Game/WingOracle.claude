@@ -48,7 +48,7 @@ two similar things, not one parameterized thing.
 
 - Consumers: `Main.Gesture.startBoardCardDrag` /
   `startHandDrag` (build the wings list at drag start);
-  `Main.Gesture.nearEventualLanding` (hit-test on MouseMove
+  `Main.Gesture.isNearEventualLanding` (hit-test on MouseMove
   and at drop resolution); `Main.View.viewWingAt` (render).
 - Depends on: `BoardActions.tryStackMerge` /
   `BoardActions.tryHandMerge`.

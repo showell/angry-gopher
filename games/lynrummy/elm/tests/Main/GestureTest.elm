@@ -176,7 +176,7 @@ suiteMoveStack =
 
                     info =
                         boardStackDragAt stack { x = 400, y = 300 }
-                            -- resolveGesture needs cursorOverBoard = True,
+                            -- resolveGesture needs isCursorOverBoard = True,
                             -- which requires cursor to be inside boardRect.
                             |> (\i ->
                                     { i
@@ -203,7 +203,7 @@ suiteMoveStack =
                         stackAt "2C,3D,4C" (at 100 200)
 
                     -- Floater at negative board-frame coords. The
-                    -- drop gets rejected via dropFootprintInBounds.
+                    -- drop gets rejected via isDropFootprintInBounds.
                     info =
                         boardStackDragAt stack { x = -50, y = -20 }
                             |> (\i ->

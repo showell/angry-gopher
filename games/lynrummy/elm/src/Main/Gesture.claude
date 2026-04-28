@@ -40,7 +40,7 @@ styling hook that renders the drag-affordance feedback.
 
 `resolveGesture` (internal helper for `handleMouseUp`)
 dispatches on `(clickIntent, source, hoveredWing,
-cursorOverBoard)`:
+isCursorOverBoard)`:
 
 | clickIntent | source | hoveredWing | overBoard | Result |
 |---|---|---|---|---|

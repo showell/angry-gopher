@@ -257,7 +257,7 @@ Key invariants:
     deltas (pure vectors, frame-agnostic). See
     `Main.Gesture.claude` for the rationale.
   - `cursor` is the current mouse position in viewport frame.
-    Used only for live concerns — the `cursorOverBoard`
+    Used only for live concerns — the `isCursorOverBoard`
     hit-test, `clickIntentAfterMove`. Never travels on the
     wire.
   - `originalCursor` is the cursor at mousedown, also
