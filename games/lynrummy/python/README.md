@@ -75,7 +75,7 @@ plan is in flight that overlaps your work, coordinate
 with the orchestrator before proceeding.
 
 **Step 3: Read the layered-shape sections of THIS file.**
-The "Class-1/2 segregation" section above tells you where
+The "Class-1/2 segregation" section below tells you where
 rule content lives (`rules/`) vs strategy (`cards.py` +
 the planner modules) vs UX cadence (`move.py`'s `narrate`
 / `hint`). Don't put new code in the wrong layer.
@@ -117,7 +117,12 @@ adding code).**
 - **Imports use the `from rules import X, Y` form**, not
   `import rules` then `rules.X`. Matches the `from
   buckets import ...` and `from move import ...`
-  conventions across the planner modules.
+  conventions across the planner modules. (This works
+  because every script and test runs from
+  `games/lynrummy/python/` as the working directory —
+  the directory is the implicit package root, not a
+  pip-installable package. Flat imports are the
+  convention here, not a style violation.)
 - **No DB or HTTP in test paths.** Conformance tests
   read `conformance_fixtures.json` (committed); tools
   that need the DB (`tools/export_primitives_fixtures.py`,
@@ -159,8 +164,10 @@ What stayed where:
 
 - **`cards.py`** — agent-side verb-eligibility predicates
   (`can_peel` / `can_pluck` / `can_yank` / `can_steal` /
-  `can_split_out`). Class-3 strategy, not rules. Mirrors
-  Elm's `Game.Agent.Cards`.
+  `can_split_out`). Class-3 strategy, not rules. The Elm
+  parallels (`canPeel` etc.) now live in
+  `Game.Agent.Enumerator` after the rule predicates split
+  out into `Game.Rules.StackType` on 2026-04-28.
 - **`buckets.py`** — 4-bucket BFS state shape +
   `state_sig` + `trouble_count` + `is_victory`. Same shape
   as before — Elm keeps `Game.Agent.Buckets` outside

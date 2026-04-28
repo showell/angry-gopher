@@ -19,8 +19,10 @@ matches Elm's:
 
 Verb-eligibility predicates (`can_peel` etc.) are NOT here
 — those are agent strategy, not rules. They live in
-`cards.py` (the Python parallel of Elm's
-`Game.Agent.Cards`).
+`cards.py`. (Elm's equivalents live in
+`Game.Agent.Enumerator` after the rule predicates split
+out on 2026-04-28; the now-removed `Game.Agent.Cards`
+module previously hosted both.)
 """
 
 from rules.card import (

@@ -554,8 +554,8 @@ sidecars.
 
 ### Conformance & testing
 
-- `cmd/fixturegen/main.claude` — the DSL → Go + Elm + JSON
-  test generator. The mechanism behind our hint /
+- `../../cmd/fixturegen/main.claude` — the DSL → Go + Elm
+  + JSON test generator. The mechanism behind our hint /
   invariant / referee cross-language bridges.
 - `games/lynrummy/conformance/scenarios/*.dsl` — the
   canonical scenarios both sides test against.

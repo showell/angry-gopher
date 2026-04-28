@@ -1,10 +1,13 @@
 """
 cards.py — verb-eligibility predicates for the BFS planner.
 
-The Python parallel of Elm's `Game.Agent.Cards`: the
-predicates that decide whether a given (kind, n, ci) shape
-admits each extract verb. These are agent strategy
+The predicates that decide whether a given (kind, n, ci)
+shape admits each extract verb. These are agent strategy
 (Class-3), NOT rules — the rule layer lives in `rules/`.
+The Elm parallels (`canPeel` etc.) now live in
+`Game.Agent.Enumerator` after the rule predicates split out
+into `Game.Rules.StackType` on 2026-04-28; the now-removed
+`Game.Agent.Cards` module previously hosted both.
 
 The pure rule content that used to live here moved into the
 `rules/` subpackage on the Class-1/2 segregation migration

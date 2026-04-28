@@ -70,6 +70,10 @@ game rules and primitives that are battle-tested and not
 expected to change. Locked-down by rigorous property
 tests so any regression breaks loudly.
 
+(Class-1 = game rules; Class-2 = locked domain primitives.
+The full five-class volatility taxonomy is laid out in
+`../python/README.md` § "Class-1/2 segregation".)
+
 What lives here today (extracted 2026-04-28 in the
 `game_rules_lockdown` plan):
 
@@ -81,8 +85,10 @@ What lives here today (extracted 2026-04-28 in the
   RedBlackRun`), `successor`/`predecessor` on the
   13-cycle, `valueDistance`, plus the rule predicates
   `isLegalStack` / `isPartialOk` / `neighbors` (lifted
-  from `Game.Agent.Cards` since they're rules, not
-  agent strategy).
+  from the now-removed `Game.Agent.Cards` module since
+  they're rules, not agent strategy; the agent-side
+  verb-eligibility predicates that used to share that
+  module now live in `Game.Agent.Enumerator`).
 
 What's NOT in `Game/Rules/` and the reasoning:
 

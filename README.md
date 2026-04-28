@@ -63,8 +63,10 @@ strategic engines:
   recognizers + hint priority (legacy, retiring).
 
 Elm has a near-complete port of the BFS planner under
-`games/lynrummy/elm/src/Game/Agent/` (Buckets, Cards,
-Move, Enumerator, Bfs, Verbs, GeometryPlan). All five
+`games/lynrummy/elm/src/Game/Agent/` (Buckets, Move,
+Enumerator, Bfs, Verbs, GeometryPlan), plus the
+locked-down rule layer at `Game/Rules/` (`Card`,
+`StackType`). All five
 extract verbs, the doomed-third filters (merge-time +
 state-level), and the focus rule + lineage tracking are
 live as of 2026-04-26. Remaining drift: loop inversion

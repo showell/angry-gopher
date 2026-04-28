@@ -13,8 +13,9 @@ are not expected to change.
 The Elm precedent kept these in a single `StackType` module
 because the rule predicates consult the classifier; the same
 coupling holds here. (Elm-side predicates were lifted out of
-`Game.Agent.Cards` into Rules/ on 2026-04-28; the Python
-parallel landed shortly after.)
+the now-removed `Game.Agent.Cards` module into
+`Game.Rules.StackType` on 2026-04-28; the Python parallel
+landed shortly after.)
 """
 
 import functools

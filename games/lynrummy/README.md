@@ -67,7 +67,7 @@ repo root for the generated label index):
 - `referee_conformance_test.go` is **generated** by
   `cmd/fixturegen` from the DSL scenarios under
   `conformance/scenarios/`. Don't hand-edit. See
-  `cmd/fixturegen/main.claude` for the pipeline.
+  `../../cmd/fixturegen/main.claude` for the pipeline.
 
 ## Conformance DSL
 
@@ -88,8 +88,9 @@ via `cmd/fixturegen`:
   exercises these end-to-end after the focus-rule port
   (2026-04-26); needs a dedicated re-check.
 
-See `cmd/fixturegen/main.claude` for the codegen pipeline
-and `python/test_dsl_conformance.py` for the Python runner.
+See `../../cmd/fixturegen/main.claude` for the codegen
+pipeline and `python/test_dsl_conformance.py` for the
+Python runner.
 
 ## TODO
 
