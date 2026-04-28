@@ -45,6 +45,12 @@ Python relate.
   with no `initial_state` (the puzzle's state lives in the
   catalog). Action bodies for puzzle plays carry a
   `puzzle_name` field; full-game bodies don't.
+
+  **Reading sessions in DSL form** (Steve's preferred chat
+  format): `python3 tools/show_session.py <session_id>`.
+  Renders cards as DSL shorthand (e.g. `8C'`, `KS`, `2H`) one
+  stack per row. Always use this when discussing a session in
+  conversation — never paste raw JSON envelopes.
 - `conformance/scenarios/*.dsl` — cross-language scenario
   contract. Compiled to Elm tests + Python JSON fixtures
   via `cmd/fixturegen`. Single source of truth for Elm ↔
