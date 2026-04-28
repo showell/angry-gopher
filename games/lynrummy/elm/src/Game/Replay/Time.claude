@@ -30,7 +30,7 @@ transitions and calls Space to fill in the spatial pieces.
 - `clickInstantReplay : Model -> ( Model, Cmd Msg )` — rewind
   to the session's pre-first-action baseline
   (`model.replayBaseline`), seed the walker, kick off a DOM
-  query for the live board rect. Enters PreRoll phase. No-op
+  query for the live board rect. Enters PreRolling phase. No-op
   if the baseline hasn't arrived yet — the earlier
   Dealer-hardcoded fallback fabricated P2's hand (`Hand.empty`)
   and produced replays that didn't match the actual game;
@@ -55,7 +55,7 @@ Internal (not exported but load-bearing):
 
 | Phase | Entered when | Exits to |
 |---|---|---|
-| `PreRoll` | ClickInstantReplay | NotAnimating on 1s elapse |
+| `PreRolling` | ClickInstantReplay | NotAnimating on 1s elapse |
 | `NotAnimating` | step advance | Animating / AwaitingHandRect / Beating (via prepareReplayStep) |
 | `Animating` | faithful path bundled | Beating on path elapsed |
 | `AwaitingHandRect` | hand-origin synthesis, Task fired | Animating on HandCardRectReceived Ok; Beating on Err |

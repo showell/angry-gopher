@@ -194,7 +194,7 @@ verify Elm conformance stubs flip to live where applicable.
 
 - Port `narrate` / `hint` renderers; flip the Elm
   conformance stubs to live assertions.
-- Document the replay state machine (`PreRoll` / `Animating`
+- Document the replay state machine (`PreRolling` / `Animating`
   / `Beating`) in terms of the capture-vs-synthesis
   distinction.
 - Document the pinned-viewport discipline explicitly once

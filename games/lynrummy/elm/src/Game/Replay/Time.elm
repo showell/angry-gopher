@@ -10,7 +10,7 @@ clock-driven Msg handlers.
 
 Phases, same as the `ReplayAnimation` sum type in `Main.State`:
 
-  - **PreRoll** — hold the rewound board for ~1s so the viewer
+  - **PreRolling** — hold the rewound board for ~1s so the viewer
     registers the starting state before action 0 fires.
   - **NotAnimating** — transient between step N-1 and step N.
     Looks up the next action; if none, replay is done; if yes,
@@ -65,7 +65,7 @@ import Time
 session's true pre-first-action baseline, seed the replay
 walker, and kick off a DOM query for the live board rect.
 
-The PreRoll phase keeps the rewound board on screen briefly so
+The PreRolling phase keeps the rewound board on screen briefly so
 the viewer registers the starting state before action 0 fires.
 
 Requires a baseline. The baseline is populated at session
@@ -101,7 +101,7 @@ clickInstantReplay model =
             ( { rewound
                 | status = { text = "Replaying…", kind = Inform }
                 , replay = Just { pending = model.actionLog, paused = False }
-                , replayAnim = PreRoll { untilMs = 0 }
+                , replayAnim = PreRolling { untilMs = 0 }
                 , drag = NotDragging
                 , replayBoardRect = Nothing
               }
@@ -226,7 +226,7 @@ replayFrame nowMs model =
                         -- very next frame.
                         ( model, Cmd.none )
 
-                    PreRoll { untilMs } ->
+                    PreRolling { untilMs } ->
                         if untilMs == 0 then
                             -- Lazy-initialize the deadline on the
                             -- first frame so the pre-roll lasts
@@ -235,7 +235,7 @@ replayFrame nowMs model =
                             -- "Order of a second between major
                             -- events" matches the between-action
                             -- Beating duration.
-                            ( { model | replayAnim = PreRoll { untilMs = nowMs + 1000 } }
+                            ( { model | replayAnim = PreRolling { untilMs = nowMs + 1000 } }
                             , Cmd.none
                             )
 

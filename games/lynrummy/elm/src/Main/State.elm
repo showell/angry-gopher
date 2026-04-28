@@ -178,7 +178,7 @@ Phases:
   - **Beating** — holding a 1-second gap between actions.
     When `nowMs ≥ untilMs`, advance `step` and return to
     `NotAnimating`.
-  - **PreRoll** — holding the rewound starting board on screen
+  - **PreRolling** — holding the rewound starting board on screen
     for a moment before the very first action fires, so the
     viewer registers the initial state. When `nowMs ≥ untilMs`,
     returns to `NotAnimating` WITHOUT advancing `step`.
@@ -194,7 +194,7 @@ type ReplayAnimation
         , pendingAction : WireAction
         }
     | Beating { untilMs : Float }
-    | PreRoll { untilMs : Float }
+    | PreRolling { untilMs : Float }
     | AwaitingHandRect
         { action : WireAction
         , source : DragSource
