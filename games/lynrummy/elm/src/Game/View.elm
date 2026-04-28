@@ -281,7 +281,8 @@ ascending. Empty suit rows are skipped. Faithful port of
 `attrsForCard` supplies the mousedown handler (and any other
 per-card attributes) keyed by hand-card index within the full
 hand list. We pass the index rather than the `HandCard` itself
-so Main.elm can dispatch `MouseDownOnHandCard index` cleanly.
+so Main.elm can dispatch `MouseDownOnHandCard { card, ... }`
+cleanly.
 
 -}
 viewHand :

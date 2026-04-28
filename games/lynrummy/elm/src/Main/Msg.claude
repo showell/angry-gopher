@@ -21,12 +21,16 @@ reference Msg constructors without cyclic imports.
 ## Constructor groups
 
 **Pointer gestures (drag):**
-- `MouseDownOnBoardCard { stack : CardStack, cardIndex : Int } Point Float`
+- `MouseDownOnBoardCard { stack : CardStack, cardIndex : Int, point : Point, time : Float }`
   — stack by content ref; cardIndex is the position within
-  the stack, needed by Split.
-- `MouseDownOnHandCard Card Point Float`
-- `MouseMove Point Float`
-- `MouseUp Point Float`
+  the stack, needed by Split. Point + time are the pointer
+  position and `MouseEvent.timeStamp` at press.
+- `MouseDownOnHandCard { card : Card, point : Point, time : Float }`
+- `MouseMove Point Float` — kept positional; lacks the
+  `MouseDownOn*` prefix because there's no per-target
+  distinction (mid-drag the target is pinned in `model.drag`).
+  See the U3 comment in Msg.elm.
+- `MouseUp Point Float` — same prefix exception as MouseMove.
 - `BoardRectReceived (Result Browser.Dom.Error Browser.Dom.Element)`
   — Task result for live-drag and replay board-rect lookup.
 - `HandCardRectReceived (Result Browser.Dom.Error (Browser.Dom.Element, Time.Posix))`

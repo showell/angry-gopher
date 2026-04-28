@@ -646,7 +646,7 @@ cardMouseDown stack cardIdx =
     [ Events.on "mousedown"
         (Decode.map
             (\( p, t ) ->
-                MouseDownOnBoardCard { stack = stack, cardIndex = cardIdx } p t
+                MouseDownOnBoardCard { stack = stack, cardIndex = cardIdx, point = p, time = t }
             )
             pointAndTimeDecoder
         )
@@ -680,7 +680,7 @@ handCardAttrs drag hintedCards hc =
                 NotDragging ->
                     [ Events.on "mousedown"
                         (Decode.map
-                            (\( p, t ) -> MouseDownOnHandCard hc.card p t)
+                            (\( p, t ) -> MouseDownOnHandCard { card = hc.card, point = p, time = t })
                             pointAndTimeDecoder
                         )
                     ]

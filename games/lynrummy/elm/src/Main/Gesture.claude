@@ -106,7 +106,7 @@ WireAction:
 
 1. **Hint highlight** — if `hc.card` is in `hintedCards`, add
    `background-color: lightgreen`.
-2. **Not dragging** — attach `MouseDownOnHandCard idx`.
+2. **Not dragging** — attach `MouseDownOnHandCard { card, ... }`.
 3. **Dragging, this is the source card** — `opacity: 0.35;
    pointer-events: none` (dim the source, let the floater
    show).

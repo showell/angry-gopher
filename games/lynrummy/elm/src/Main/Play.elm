@@ -188,11 +188,17 @@ init config =
 update : Msg -> Model -> ( Model, Cmd Msg, Output )
 update msg model =
     case msg of
-        MouseDownOnBoardCard ref clientPoint tMs ->
-            withNoOutput (startBoardCardDrag ref clientPoint tMs model)
+        MouseDownOnBoardCard { stack, cardIndex, point, time } ->
+            withNoOutput
+                (startBoardCardDrag
+                    { stack = stack, cardIndex = cardIndex }
+                    point
+                    time
+                    model
+                )
 
-        MouseDownOnHandCard idx clientPoint tMs ->
-            withNoOutput (startHandDrag idx clientPoint tMs model)
+        MouseDownOnHandCard { card, point, time } ->
+            withNoOutput (startHandDrag card point time model)
 
         MouseMove pos tMs ->
             withNoOutput (mouseMove pos tMs model)

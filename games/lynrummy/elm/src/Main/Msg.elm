@@ -36,9 +36,26 @@ import Time
     beat).
 
 -}
+{- MouseMove and MouseUp deliberately drop the `MouseDownOn*`
+   prefix family. The two `MouseDownOn*` siblings share a
+   prefix because each one names which target the press
+   landed on (board card vs hand card) — the target is
+   load-bearing for `update`'s dispatch. MouseMove and MouseUp
+   carry no per-target distinction: while a drag is live, the
+   only listeners are the document-level `Browser.Events`
+   subscriptions, and the gesture's target is already pinned in
+   `model.drag`. Renaming them to `MouseUpAnywhere` etc. would
+   be lying about a sub-pattern that doesn't exist.
+
+   Per `union_naming_three_calls.md` rule U3: when two siblings
+   share a prefix that encodes a sub-pattern, every sibling
+   that fits the sub-pattern should follow it, OR the prefix
+   should be dropped entirely on those that don't fit, with a
+   comment. This is the comment.
+-}
 type Msg
-    = MouseDownOnBoardCard { stack : CardStack, cardIndex : Int } Point Float
-    | MouseDownOnHandCard Card Point Float
+    = MouseDownOnBoardCard { stack : CardStack, cardIndex : Int, point : Point, time : Float }
+    | MouseDownOnHandCard { card : Card, point : Point, time : Float }
     | MouseMove Point Float
     | MouseUp Point Float
     | BoardRectReceived (Result Browser.Dom.Error Browser.Dom.Element)
