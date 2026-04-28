@@ -389,19 +389,6 @@ playerHands model =
 
 puzzleControls : Model -> List (Html Msg)
 puzzleControls model =
-    let
-        replayControl =
-            case model.replay of
-                Just progress ->
-                    if progress.paused then
-                        gameButton "Resume" ClickReplayPauseToggle
-
-                    else
-                        gameButton "Pause" ClickReplayPauseToggle
-
-                Nothing ->
-                    gameButton "Instant replay" ClickInstantReplay
-    in
     [ div
         [ style "padding-top" "12px"
         , style "display" "flex"
@@ -411,7 +398,7 @@ puzzleControls model =
         ]
         [ gameButton "Hint" ClickHint
         , gameButton "Let agent play" ClickAgentPlay
-        , replayControl
+        , viewReplayControl model
         ]
     ]
 
@@ -536,19 +523,6 @@ never reaches this.
 -}
 viewTurnControls : Model -> Html Msg
 viewTurnControls model =
-    let
-        replayControl =
-            case model.replay of
-                Just progress ->
-                    if progress.paused then
-                        gameButton "Resume" ClickReplayPauseToggle
-
-                    else
-                        gameButton "Pause" ClickReplayPauseToggle
-
-                Nothing ->
-                    gameButton "Instant replay" ClickInstantReplay
-    in
     div
         [ style "margin-top" "12px"
         , style "display" "flex"
@@ -557,9 +531,27 @@ viewTurnControls model =
         ]
         [ gameButton "Complete turn" ClickCompleteTurn
         , gameButton "Hint" ClickHint
-        , replayControl
+        , viewReplayControl model
         , gameLink "← Lobby" "/gopher/game-lobby"
         ]
+
+
+{-| Replay button — Resume / Pause when a replay is in
+progress, or "Instant replay" when not. Used by both
+`puzzleControls` and `viewTurnControls`.
+-}
+viewReplayControl : Model -> Html Msg
+viewReplayControl model =
+    case model.replay of
+        Just progress ->
+            if progress.paused then
+                gameButton "Resume" ClickReplayPauseToggle
+
+            else
+                gameButton "Pause" ClickReplayPauseToggle
+
+        Nothing ->
+            gameButton "Instant replay" ClickInstantReplay
 
 
 gameLink : String -> String -> Html Msg
