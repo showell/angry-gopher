@@ -267,7 +267,7 @@ def main() -> None:
     # Collect raw metric vectors, rank-normalize, composite.
     metric_names = ["size", "todo_count", "churn", "err_density", "escape_density"]
     if not has_go:
-        metric_names = [k for k in metric_names if k != "err_density"]
+        metric_names = [k for k in metric_names if k not in ("err_density", "escape_density")]
     raw: dict[str, list[float]] = {k: [] for k in metric_names}
     for f, m in per_file:
         raw["size"].append(m["size"])
