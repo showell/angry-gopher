@@ -1128,6 +1128,18 @@ func elmCompactCardList(cs []Card) string {
 }
 
 
+const elmFindOpenLocTmpl = `            let
+                existing =
+                    %s
+
+                got =
+                    Game.Physics.PlaceStack.findOpenLoc existing %d
+
+                expected =
+                    { top = %d, left = %d }
+            in
+            got |> Expect.equal expected`
+
 // elmFindOpenLoc emits a test body that constructs a list of
 // existing CardStacks and asserts `Game.Physics.PlaceStack.findOpenLoc`
 // returns the expected loc. Mirrors what
@@ -1139,11 +1151,10 @@ func elmFindOpenLoc(b *strings.Builder, sc Scenario) {
 		b.WriteString("            Expect.fail \"find_open_loc scenario missing expect.loc\"")
 		return
 	}
-	fmt.Fprintf(b, "            let\n                existing =\n                    %s\n\n                got =\n                    Game.Physics.PlaceStack.findOpenLoc existing %d\n\n                expected =\n                    { top = %d, left = %d }\n            in\n",
+	fmt.Fprintf(b, elmFindOpenLocTmpl,
 		elmStacks(sc.Existing, "                        "),
 		sc.CardCount,
 		sc.Expect.Loc.Top, sc.Expect.Loc.Left)
-	b.WriteString("            got |> Expect.equal expected")
 }
 
 
