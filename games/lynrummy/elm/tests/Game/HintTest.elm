@@ -19,8 +19,22 @@ Structure:
 import Expect
 import Game.Dealer as Dealer
 import Game.Hand as Hand
+import Game.Random as Random
 import Game.Strategy.Hint as Hint
 import Test exposing (Test, describe, test)
+
+
+{-| A deterministic 15-card hand dealt from seed 42. Used in
+place of the removed `Dealer.openingHand` export; seed 42 is
+arbitrary but stable — the tests only assert structural
+properties (existence, rank ordering, trick id), not specific
+cards.
+-}
+openingHand : Hand.Hand
+openingHand =
+    (Dealer.dealFullGame (Random.initSeed 42)).hands
+        |> List.head
+        |> Maybe.withDefault Hand.empty
 
 
 suite : Test
@@ -46,12 +60,12 @@ openingHandDirectPlayFirst =
     describe "opening hand vs opening board → direct_play wins priority"
         [ test "first suggestion exists" <|
             \_ ->
-                Hint.buildSuggestions Dealer.openingHand Dealer.initialBoard
+                Hint.buildSuggestions openingHand Dealer.initialBoard
                     |> List.head
                     |> Expect.notEqual Nothing
         , test "first suggestion trick_id = direct_play" <|
             \_ ->
-                case Hint.buildSuggestions Dealer.openingHand Dealer.initialBoard of
+                case Hint.buildSuggestions openingHand Dealer.initialBoard of
                     first :: _ ->
                         Expect.equal "direct_play" first.trickId
 
@@ -59,7 +73,7 @@ openingHandDirectPlayFirst =
                         Expect.fail "no suggestions produced"
         , test "first suggestion rank = 1" <|
             \_ ->
-                case Hint.buildSuggestions Dealer.openingHand Dealer.initialBoard of
+                case Hint.buildSuggestions openingHand Dealer.initialBoard of
                     first :: _ ->
                         Expect.equal 1 first.rank
 
@@ -67,7 +81,7 @@ openingHandDirectPlayFirst =
                         Expect.fail "no suggestions produced"
         , test "first suggestion carries exactly one hand card" <|
             \_ ->
-                case Hint.buildSuggestions Dealer.openingHand Dealer.initialBoard of
+                case Hint.buildSuggestions openingHand Dealer.initialBoard of
                     first :: _ ->
                         Expect.equal 1 (List.length first.handCards)
 
@@ -82,7 +96,7 @@ priorityOrderMonotonic =
         \_ ->
             let
                 suggestions =
-                    Hint.buildSuggestions Dealer.openingHand Dealer.initialBoard
+                    Hint.buildSuggestions openingHand Dealer.initialBoard
 
                 ranks =
                     List.map .rank suggestions
