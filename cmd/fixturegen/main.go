@@ -109,6 +109,7 @@ type WalkthroughStep struct {
 	ExpectUndoable     *bool         // expect_undoable: true | false
 	ExpectStack        []Card        // expect_stack: <cards> — stack with exactly these cards exists on board
 	ExpectHandContains *Card         // expect_hand_contains: <card> — card is in active hand
+	ExpectLoc          *Loc          // expect_loc: (top, left) — board has a stack at this exact location
 }
 
 // ReplayAction is one entry in a replay_invariant scenario's
@@ -1355,6 +1356,12 @@ func elmUndoWalkthrough(b *strings.Builder, sc Scenario) {
 			checks = append(checks, fmt.Sprintf(
 				"\\_ -> if List.any (\\hc -> hc.card == parseCard %s) (State.activeHand %s).handCards then Expect.pass else Expect.fail \"hand missing card %s\"",
 				card, model, label))
+		}
+		if step.ExpectLoc != nil {
+			loc := *step.ExpectLoc
+			checks = append(checks, fmt.Sprintf(
+				"\\_ -> if List.any (\\s -> s.loc == { top = %d, left = %d }) %s.board then Expect.pass else Expect.fail \"board missing stack at (%d, %d)\"",
+				loc.Top, loc.Left, model, loc.Top, loc.Left))
 		}
 	}
 
@@ -3375,6 +3382,12 @@ func parseWalkthroughSteps(children []line, path string) ([]WalkthroughStep, err
 					return nil, fmt.Errorf("%s:%d: expect_hand_contains: expected exactly one card", path, l.lineNum)
 				}
 				cur.ExpectHandContains = &cards[0]
+			case "expect_loc":
+				loc, err := parseLoc(strings.TrimSpace(val))
+				if err != nil {
+					return nil, fmt.Errorf("%s:%d: expect_loc: %w", path, l.lineNum, err)
+				}
+				cur.ExpectLoc = &loc
 			default:
 				return nil, fmt.Errorf("%s:%d: unknown step field %q", path, l.lineNum, key)
 			}

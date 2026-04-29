@@ -81,3 +81,61 @@ scenario undo_walkthrough_merge_hand
     at (200,40): 7S 7D 7C
     at (260,130): AC AD AH
     at (320,70): 2C 3D 4C 5H 6S 7H
+
+scenario undo_restores_position
+  desc: Undo of a move restores the stack to its exact original position, not just its card content.
+  op: undo_walkthrough
+  board:
+    at (20,70): KS AS 2S 3S
+    at (80,160): TD JD QD KD
+  steps:
+    - step: board has two stacks at their initial positions
+      expect_board_count: 2
+      expect_undoable: false
+    - step: player moves KS-AS-2S-3S to a new location
+      action: move_stack [KS AS 2S 3S] -> (400, 300)
+      expect_board_count: 2
+      expect_undoable: true
+      expect_loc: (400, 300)
+    - step: player undoes the move — stack snaps back to exact original position
+      action: undo
+      expect_board_count: 2
+      expect_undoable: false
+      expect_loc: (20, 70)
+  expect_final_board:
+    at (20,70): KS AS 2S 3S
+    at (80,160): TD JD QD KD
+
+scenario undo_split_piece_returns_to_split_position
+  desc: Undo of a move on a split piece restores it to the split position, not the pre-split position.
+  op: undo_walkthrough
+  board:
+    at (20,70): KS AS 2S 3S
+    at (80,160): TD JD QD KD
+  steps:
+    - step: board has two stacks at their initial positions
+      expect_board_count: 2
+      expect_undoable: false
+    - step: player splits KS-AS-2S-3S at midpoint — 2S-3S lands at its split position (top=16, left=140)
+      action: split [KS AS 2S 3S]@2
+      expect_board_count: 3
+      expect_undoable: true
+      expect_loc: (16, 140)
+    - step: player moves the 2S-3S piece to a distant spot
+      action: move_stack [2S 3S] -> (500, 400)
+      expect_board_count: 3
+      expect_undoable: true
+      expect_loc: (500, 400)
+    - step: undo the move — 2S-3S returns to its split position, not (20, 70)
+      action: undo
+      expect_board_count: 3
+      expect_undoable: true
+      expect_loc: (16, 140)
+    - step: undo the split — KS-AS-2S-3S reassembled at original position
+      action: undo
+      expect_board_count: 2
+      expect_undoable: false
+      expect_loc: (20, 70)
+  expect_final_board:
+    at (20,70): KS AS 2S 3S
+    at (80,160): TD JD QD KD

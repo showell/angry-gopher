@@ -4873,6 +4873,162 @@ turnCompleteRejectsIncomplete =
                         Expect.pass
 
 
+undoRestoresPosition : Test
+undoRestoresPosition =
+    test "undo_restores_position" <|
+        \_ ->
+            let
+                board =
+                    [ { boardCards = [ boardCard "KS1", boardCard "AS1", boardCard "2S1", boardCard "3S1" ], loc = { top = 20, left = 70 } }
+                        , { boardCards = [ boardCard "TD1", boardCard "JD1", boardCard "QD1", boardCard "KD1" ], loc = { top = 80, left = 160 } }
+                        ]
+
+                base =
+                    State.baseModel
+
+                m0 =
+                    { base | board = board, sessionId = Just 0 }
+
+                -- board has two stacks at their initial positions
+                m1 =
+                    m0
+
+                -- player moves KS-AS-2S-3S to a new location
+                spec2 =
+                    SpecMoveStack [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ] { top = 400, left = 300 }
+
+                action2 =
+                    resolveSpec spec2 m1.board
+
+                entry2 =
+                    { action = action2, gesturePath = Nothing, pathFrame = State.BoardFrame }
+
+                m2post =
+                    (Apply.applyAction action2 m1).model
+
+                m2 =
+                    { m2post | actionLog = m1.actionLog ++ [ entry2 ] }
+
+                -- player undoes the move — stack snaps back to exact original position
+                ( m3, _, _ ) =
+                    Play.update Msg.ClickUndo m2
+            in
+            Expect.all
+                [ \_ -> List.length m1.board |> Expect.equal 2
+                , \_ -> State.canUndoThisTurn m1 |> Expect.equal False
+                , \_ -> List.length m2.board |> Expect.equal 2
+                , \_ -> State.canUndoThisTurn m2 |> Expect.equal True
+                , \_ -> if List.any (\s -> s.loc == { top = 400, left = 300 }) m2.board then Expect.pass else Expect.fail "board missing stack at (400, 300)"
+                , \_ -> List.length m3.board |> Expect.equal 2
+                , \_ -> State.canUndoThisTurn m3 |> Expect.equal False
+                , \_ -> if List.any (\s -> s.loc == { top = 20, left = 70 }) m3.board then Expect.pass else Expect.fail "board missing stack at (20, 70)"
+                , \_ ->
+                    let
+                        byLoc =
+                            List.sortBy (\s -> ( s.loc.top, s.loc.left ))
+                        cardRows =
+                            List.map (.boardCards >> List.map .card)
+                        expectedFinalBoard =
+                            [ { boardCards = [ boardCard "KS1", boardCard "AS1", boardCard "2S1", boardCard "3S1" ], loc = { top = 20, left = 70 } }
+                            , { boardCards = [ boardCard "TD1", boardCard "JD1", boardCard "QD1", boardCard "KD1" ], loc = { top = 80, left = 160 } }
+                            ]
+                    in
+                    cardRows (byLoc m3.board) |> Expect.equal (cardRows (byLoc expectedFinalBoard))
+                ]
+                ()
+
+
+undoSplitPieceReturnsToSplitPosition : Test
+undoSplitPieceReturnsToSplitPosition =
+    test "undo_split_piece_returns_to_split_position" <|
+        \_ ->
+            let
+                board =
+                    [ { boardCards = [ boardCard "KS1", boardCard "AS1", boardCard "2S1", boardCard "3S1" ], loc = { top = 20, left = 70 } }
+                        , { boardCards = [ boardCard "TD1", boardCard "JD1", boardCard "QD1", boardCard "KD1" ], loc = { top = 80, left = 160 } }
+                        ]
+
+                base =
+                    State.baseModel
+
+                m0 =
+                    { base | board = board, sessionId = Just 0 }
+
+                -- board has two stacks at their initial positions
+                m1 =
+                    m0
+
+                -- player splits KS-AS-2S-3S at midpoint — 2S-3S lands at its split position (top=16, left=140)
+                spec2 =
+                    SpecSplit [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ] 2
+
+                action2 =
+                    resolveSpec spec2 m1.board
+
+                entry2 =
+                    { action = action2, gesturePath = Nothing, pathFrame = State.BoardFrame }
+
+                m2post =
+                    (Apply.applyAction action2 m1).model
+
+                m2 =
+                    { m2post | actionLog = m1.actionLog ++ [ entry2 ] }
+
+                -- player moves the 2S-3S piece to a distant spot
+                spec3 =
+                    SpecMoveStack [ parseCard "2S1", parseCard "3S1" ] { top = 500, left = 400 }
+
+                action3 =
+                    resolveSpec spec3 m2.board
+
+                entry3 =
+                    { action = action3, gesturePath = Nothing, pathFrame = State.BoardFrame }
+
+                m3post =
+                    (Apply.applyAction action3 m2).model
+
+                m3 =
+                    { m3post | actionLog = m2.actionLog ++ [ entry3 ] }
+
+                -- undo the move — 2S-3S returns to its split position, not (20, 70)
+                ( m4, _, _ ) =
+                    Play.update Msg.ClickUndo m3
+
+                -- undo the split — KS-AS-2S-3S reassembled at original position
+                ( m5, _, _ ) =
+                    Play.update Msg.ClickUndo m4
+            in
+            Expect.all
+                [ \_ -> List.length m1.board |> Expect.equal 2
+                , \_ -> State.canUndoThisTurn m1 |> Expect.equal False
+                , \_ -> List.length m2.board |> Expect.equal 3
+                , \_ -> State.canUndoThisTurn m2 |> Expect.equal True
+                , \_ -> if List.any (\s -> s.loc == { top = 16, left = 140 }) m2.board then Expect.pass else Expect.fail "board missing stack at (16, 140)"
+                , \_ -> List.length m3.board |> Expect.equal 3
+                , \_ -> State.canUndoThisTurn m3 |> Expect.equal True
+                , \_ -> if List.any (\s -> s.loc == { top = 500, left = 400 }) m3.board then Expect.pass else Expect.fail "board missing stack at (500, 400)"
+                , \_ -> List.length m4.board |> Expect.equal 3
+                , \_ -> State.canUndoThisTurn m4 |> Expect.equal True
+                , \_ -> if List.any (\s -> s.loc == { top = 16, left = 140 }) m4.board then Expect.pass else Expect.fail "board missing stack at (16, 140)"
+                , \_ -> List.length m5.board |> Expect.equal 2
+                , \_ -> State.canUndoThisTurn m5 |> Expect.equal False
+                , \_ -> if List.any (\s -> s.loc == { top = 20, left = 70 }) m5.board then Expect.pass else Expect.fail "board missing stack at (20, 70)"
+                , \_ ->
+                    let
+                        byLoc =
+                            List.sortBy (\s -> ( s.loc.top, s.loc.left ))
+                        cardRows =
+                            List.map (.boardCards >> List.map .card)
+                        expectedFinalBoard =
+                            [ { boardCards = [ boardCard "KS1", boardCard "AS1", boardCard "2S1", boardCard "3S1" ], loc = { top = 20, left = 70 } }
+                            , { boardCards = [ boardCard "TD1", boardCard "JD1", boardCard "QD1", boardCard "KD1" ], loc = { top = 80, left = 160 } }
+                            ]
+                    in
+                    cardRows (byLoc m5.board) |> Expect.equal (cardRows (byLoc expectedFinalBoard))
+                ]
+                ()
+
+
 undoWalkthroughMergeHand : Test
 undoWalkthroughMergeHand =
     test "undo_walkthrough_merge_hand" <|
@@ -6485,6 +6641,8 @@ suite =
         , spliceDup5dIntoPureDiamonds
         , turnCompleteCleanBoard
         , turnCompleteRejectsIncomplete
+        , undoRestoresPosition
+        , undoSplitPieceReturnsToSplitPosition
         , undoWalkthroughMergeHand
         , undoWalkthroughSplitThenMove
         , validExtendRunWith8H
