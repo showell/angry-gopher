@@ -33,7 +33,7 @@ import Game.CardStack
         , encodeHandCard
         , handCardDecoder
         )
-import Game.Referee
+import Game.Rules.Referee
     exposing
         ( RefereeError
         , RefereeMove

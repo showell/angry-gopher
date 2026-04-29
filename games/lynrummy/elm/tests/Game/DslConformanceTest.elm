@@ -22,7 +22,7 @@ import Game.CardStack
         )
 import Game.BoardActions as BoardActions
 import Game.PlaceStack
-import Game.Referee as Referee exposing (RefereeStage(..), refereeStageToString)
+import Game.Rules.Referee as Referee exposing (RefereeStage(..), refereeStageToString)
 import Game.Replay.Time as ReplayTime
 import Game.Rules.StackType as StackType
 import Game.Strategy.Hint as Hint

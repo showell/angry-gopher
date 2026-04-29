@@ -39,7 +39,7 @@ import Game.Dealer as Dealer
 import Game.Game as Game
 import Game.GestureArbitration as GA
 import Game.Random as Random
-import Game.Referee as Referee
+import Game.Rules.Referee as Referee
 import Game.Replay.Space as ReplaySpace
 import Game.Replay.Time as ReplayTime
 import Game.Score as Score

@@ -41,7 +41,7 @@ import Game.CardStack
         , HandCard
         , HandCardState(..)
         )
-import Game.Referee
+import Game.Rules.Referee
     exposing
         ( RefereeError
         , RefereeStage(..)
@@ -132,7 +132,7 @@ rule board opts =
 
 suite : Test
 suite =
-    describe "Game.Referee"
+    describe "Game.Rules.Referee"
         [ validGameSequence
         , midturnLeniency
         , splitThroughPipeline

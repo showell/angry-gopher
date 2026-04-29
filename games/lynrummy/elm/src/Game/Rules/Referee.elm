@@ -1,4 +1,4 @@
-module Game.Referee exposing
+module Game.Rules.Referee exposing
     ( RefereeError
     , RefereeMove
     , RefereeStage(..)
