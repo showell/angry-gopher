@@ -41,6 +41,39 @@ which are artifacts of an early shape). A lot of this
 document's claims earned their weight during that earlier
 implementation and carried over.
 
+## What the game feels like (read this first)
+
+Two primitives define the game's feel, and they're worth
+naming before anything else — because every architectural
+decision downstream traces back to one or both of them.
+
+**Board reorganization.** The shared board is a mutable
+structure of card stacks. A player's turn is largely an act
+of rearranging that structure: splitting runs, merging pieces,
+sliding things around to make room. The board is spatially
+expressive — you're reorganizing structure, not just placing
+tiles. This is what makes the game tactile and interesting to
+watch.
+
+**Hand↔board commitment.** Playing a card from your hand onto
+the board is a bet: you believe the board will hold it as part
+of a valid meld by the time your turn ends. Undo is the escape
+valve — while you're still in your turn you can walk back any
+primitive, including returning a hand card to your hand. Once
+you click End Turn, the commitment is permanent.
+
+Those two things together are the game. Board reorganization
+is the primary activity; hand↔board commitment is where the
+risk lives. The trickiest undo is the hand-card one, because
+it has to reverse both a board change and a hand change
+simultaneously.
+
+The most compact way to see both mechanics working is
+`conformance/scenarios/undo_walkthrough.dsl` — two short
+scenarios that read like game transcripts and cover exactly
+these two primitives. Read them before diving into the
+implementation.
+
 ## The mission
 
 The product is roughly: **a human plays Lyn Rummy through the
@@ -511,6 +544,24 @@ them plainly here so they're not only implicit:
 
 ## Where to find more
 
+### Build and run
+
+All build, launch, and test operations go through `ops/` scripts
+(repo root). Run `ops/list` for the current index with descriptions.
+The short version:
+
+- `ops/start` — kill stale processes, rebuild Go binary, recompile
+  Elm, regenerate Puzzles catalog, start both servers, wait for ready.
+- `ops/build_elm` — compile Main.elm + Puzzles.elm bundles.
+- `ops/check-conformance` — the conformance gate (fixturegen + Python
+  + Elm with elm-review). Run after every non-trivial Elm edit.
+- `ops/check` — full preflight (conformance + Go build + Python unit
+  tests).
+
+Do not hand-compose `go run .`, `elm make`, or `go test ./...` as
+your build/test step — those commands silently drop sequencing and
+cross-language consistency checks the scripts encode.
+
 ### Subsystem landing pages
 
 - [`./README.md`](./README.md) — repo-level overview (the Go
@@ -548,7 +599,14 @@ historical record.)
   retired 2026-04-28 with the Go domain package). Don't run
   ad-hoc; use `ops/check-conformance`.
 - `games/lynrummy/conformance/scenarios/*.dsl` — the
-  canonical scenarios both sides test against.
+  canonical scenarios both sides test against. **New agents:
+  read `undo_walkthrough.dsl` early.** Its two scenarios —
+  board-only split/move/undo and the trickier hand-card
+  merge/undo — are the most compact readable summary of how
+  the game's interaction model actually works: what an action
+  does to board and hand, what undo reverses, and what the
+  button-enable predicate tracks. The DSL reads like a game
+  transcript; that's intentional.
 
 ### Memory pointers
 

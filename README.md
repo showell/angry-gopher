@@ -149,8 +149,12 @@ ops/check         Run all tests across the repo
 ## Testing
 
 ```bash
-go test ./...          # all tests
-go test ./games/...    # game logic only
+ops/check              # full preflight: conformance + Go build + Python tests
+ops/check-conformance  # conformance gate only (fixturegen + Python + Elm)
 ```
 
-See `TESTING.md` for more.
+Do not hand-compose `go test ./...` or `elm make` calls — the ops
+scripts handle sequencing, prerequisites, and cross-language
+consistency checks that bare commands silently skip.
+
+See `TESTING.md` for timings and deeper notes.
