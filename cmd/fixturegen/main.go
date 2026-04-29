@@ -1203,16 +1203,35 @@ func elmHintInvariant(b *strings.Builder, sc Scenario, trickVar string) {
 }
 
 
+const elmBuildSuggestionsTmpl = `            let
+                handCards =
+                    %s
+
+                hand =
+                    { handCards = handCards }
+
+                board =
+                    %s
+
+                got =
+                    Hint.buildSuggestions hand board
+            in
+`
+
+const elmBuildSuggestionsCountCheckTmpl = `            if List.length got /= %d then
+                Expect.fail ("suggestion count: want %d, got " ++ String.fromInt (List.length got))
+`
+
 // elmBuildSuggestions emits a test body that calls
 // Hint.buildSuggestions and walks each expected row in order,
 // asserting trick_id + hand cards. Any mismatch short-circuits
 // via Expect.fail with a descriptive message.
 func elmBuildSuggestions(b *strings.Builder, sc Scenario) {
-	fmt.Fprintf(b, "            let\n                handCards =\n                    %s\n\n                hand =\n                    { handCards = handCards }\n\n                board =\n                    %s\n\n                got =\n                    Hint.buildSuggestions hand board\n            in\n",
+	fmt.Fprintf(b, elmBuildSuggestionsTmpl,
 		elmHandCards(sc.Hand),
 		elmStacks(sc.Board, "                        "))
 
-	fmt.Fprintf(b, "            if List.length got /= %d then\n                Expect.fail (\"suggestion count: want %d, got \" ++ String.fromInt (List.length got))\n", len(sc.Expect.Suggestions), len(sc.Expect.Suggestions))
+	fmt.Fprintf(b, elmBuildSuggestionsCountCheckTmpl, len(sc.Expect.Suggestions), len(sc.Expect.Suggestions))
 	b.WriteString("\n            else\n")
 	if len(sc.Expect.Suggestions) == 0 {
 		// No per-row assertions needed; count check is sufficient.
