@@ -9,7 +9,7 @@ no-ops here (turn-logic handled elsewhere).
 import Expect
 import Game.BoardActions exposing (Side(..))
 import Game.Rules.Card exposing (CardValue(..), OriginDeck(..), Suit(..))
-import Game.CardStack exposing (BoardCardState(..), CardStack)
+import Game.CardStack exposing (BoardCardState(..), CardStack, HandCardState(..))
 import Game.Hand as Hand
 import Game.Reducer as Reducer
 import Game.WireAction exposing (WireAction(..))
@@ -90,11 +90,12 @@ suite =
             [ test "removes 7H from hand and adds a singleton to the board" <|
                 \_ ->
                     let
-                        before =
-                            Reducer.initialState
-
                         card7H =
                             { value = Seven, suit = Heart, originDeck = DeckTwo }
+
+                        before =
+                            let s = Reducer.initialState
+                            in { s | hand = Hand.addCards [ card7H ] HandNormal s.hand }
 
                         after =
                             Reducer.applyAction
@@ -111,13 +112,14 @@ suite =
             [ test "7H onto the 7S,7D,7C set (right side) → set grows by 1, hand shrinks by 1" <|
                 \_ ->
                     let
-                        before =
-                            Reducer.initialState
-
-                        -- Stack index 3 in the opening board is "7S,7D,7C".
                         card7H =
                             { value = Seven, suit = Heart, originDeck = DeckTwo }
 
+                        before =
+                            let s = Reducer.initialState
+                            in { s | hand = Hand.addCards [ card7H ] HandNormal s.hand }
+
+                        -- Stack index 3 in the opening board is "7S,7D,7C".
                         after =
                             Reducer.applyAction
                                 (MergeHand

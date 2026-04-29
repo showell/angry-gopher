@@ -353,67 +353,72 @@ def enumerate_moves(state):
                         s for s in range(4)
                         if (s in RED) != anchor_red)
                 # Donor candidates: peel-eligible cards in
-                # length-4+ helpers — read out of the
-                # extractable index, filtered to peels.
-                for p_suit in needed_suits:
-                    for donor_idx, _ci, verb in \
-                            extractable.get((p_value, p_suit), ()):
-                        if verb != "peel" or donor_idx == src_idx:
+                # length-4+ helpers — collected across all needed
+                # suits then sorted by board position (donor_idx,
+                # card_idx) so iteration order is the same across
+                # platforms regardless of suit enumeration order.
+                candidates = sorted(
+                    (donor_idx, _ci)
+                    for p_suit in needed_suits
+                    for donor_idx, _ci, verb in
+                        extractable.get((p_value, p_suit), ())
+                    if verb == "peel"
+                    and donor_idx != src_idx
+                    and len(helper[donor_idx]) >= 4
+                )
+                for donor_idx, _ci in candidates:
+                    donor = helper[donor_idx]
+                    p_card = donor[_ci]
+                    # Compute new_donor: set drops the
+                    # peeled card; run drops the end card.
+                    if classify(donor) == "set":
+                        new_donor = [x for x in donor
+                                     if x != p_card]
+                    else:
+                        new_donor = (donor[1:] if _ci == 0
+                                     else donor[:-1])
+                    new_source = (
+                        [p_card, source[0], source[1]]
+                        if which_end == 2
+                        else [source[1], source[2], p_card])
+                    if classify(new_source) != kind:
+                        continue
+                    # Helper drop: src_idx + donor_idx
+                    # (descending so removals don't shift
+                    # each other), then append the rebuilt
+                    # source and shrunken donor.
+                    hi_lo = sorted((src_idx, donor_idx),
+                                   reverse=True)
+                    nh = list(helper)
+                    for i in hi_lo:
+                        nh = drop_at(nh, i)
+                    nh = nh + [new_source, new_donor]
+                    for absorb_side in ("right", "left"):
+                        merged = (
+                            [*target, stolen]
+                            if absorb_side == "right"
+                            else [stolen, *target])
+                        if not admissible_partial(merged, completion_inv):
                             continue
-                        donor = helper[donor_idx]
-                        if len(donor) < 4:
-                            continue
-                        p_card = donor[_ci]
-                        # Compute new_donor: set drops the
-                        # peeled card; run drops the end card.
-                        if classify(donor) == "set":
-                            new_donor = [x for x in donor
-                                         if x != p_card]
-                        else:
-                            new_donor = (donor[1:] if _ci == 0
-                                         else donor[:-1])
-                        new_source = (
-                            [p_card, source[0], source[1]]
-                            if which_end == 2
-                            else [source[1], source[2], p_card])
-                        if classify(new_source) != kind:
-                            continue
-                        # Helper drop: src_idx + donor_idx
-                        # (descending so removals don't shift
-                        # each other), then append the rebuilt
-                        # source and shrunken donor.
-                        hi_lo = sorted((src_idx, donor_idx),
-                                       reverse=True)
-                        nh = list(helper)
-                        for i in hi_lo:
-                            nh = drop_at(nh, i)
-                        nh = nh + [new_source, new_donor]
-                        for absorb_side in ("right", "left"):
-                            merged = (
-                                [*target, stolen]
-                                if absorb_side == "right"
-                                else [stolen, *target])
-                            if not admissible_partial(merged, completion_inv):
-                                continue
-                            nt_base, ng = remove_absorber(
-                                bucket, idx, trouble, growing)
-                            ng_final, nc, graduated = graduate(
-                                merged, ng, complete)
-                            desc = ShiftDesc(
-                                source=list(source),
-                                donor=list(donor),
-                                stolen=stolen,
-                                p_card=p_card,
-                                which_end=which_end,
-                                new_source=new_source,
-                                new_donor=new_donor,
-                                target_before=list(target),
-                                target_bucket_before=bucket,
-                                merged=merged,
-                                side=absorb_side,
-                                graduated=graduated,
-                            )
-                            yield desc, Buckets(nh, nt_base, ng_final, nc)
+                        nt_base, ng = remove_absorber(
+                            bucket, idx, trouble, growing)
+                        ng_final, nc, graduated = graduate(
+                            merged, ng, complete)
+                        desc = ShiftDesc(
+                            source=list(source),
+                            donor=list(donor),
+                            stolen=stolen,
+                            p_card=p_card,
+                            which_end=which_end,
+                            new_source=new_source,
+                            new_donor=new_donor,
+                            target_before=list(target),
+                            target_bucket_before=bucket,
+                            merged=merged,
+                            side=absorb_side,
+                            graduated=graduated,
+                        )
+                        yield desc, Buckets(nh, nt_base, ng_final, nc)
 
     # Move type (c): splice — insert a TROUBLE singleton
     # into a HELPER pure/rb run length 4+. The run splits

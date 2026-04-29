@@ -1262,6 +1262,10 @@ shiftFromEnd state inventory extractable absorber shapes srcIdx source kind whic
                 -- the extractable index (filtered to peels)
                 -- — same shape as Python's 2026-04-26
                 -- consolidation, no separate peelable index.
+                -- Collect across all needed suits then sort by
+                -- board position (hi, ci) so iteration order
+                -- matches Python's board-order traversal regardless
+                -- of suit enumeration order.
                 neededSuits
                     |> List.concatMap
                         (\pSuit ->
@@ -1271,26 +1275,21 @@ shiftFromEnd state inventory extractable absorber shapes srcIdx source kind whic
                             in
                             Dict.get key extractable
                                 |> Maybe.withDefault []
-                                |> List.concatMap
-                                    (\entry ->
-                                        if entry.verb /= Peel then
-                                            []
-
-                                        else if entry.hi == srcIdx then
-                                            []
-
-                                        else
-                                            shiftEmitFromEntry
-                                                state
-                                                inventory
-                                                absorber
-                                                srcIdx
-                                                source
-                                                kind
-                                                whichEnd
-                                                stolen
-                                                entry
-                                    )
+                        )
+                    |> List.filter (\entry -> entry.verb == Peel && entry.hi /= srcIdx)
+                    |> List.sortBy (\entry -> ( entry.hi, entry.ci ))
+                    |> List.concatMap
+                        (\entry ->
+                            shiftEmitFromEntry
+                                state
+                                inventory
+                                absorber
+                                srcIdx
+                                source
+                                kind
+                                whichEnd
+                                stolen
+                                entry
                         )
 
         _ ->
