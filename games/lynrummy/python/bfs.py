@@ -1,8 +1,70 @@
 """
-bfs.py — pure BFS by program length with iterative outer
-cap on trouble_count.
+bfs.py — BFS puzzle solver: finds the shortest sequence of
+moves that clears all TROUBLE stacks in a Lyn Rummy board.
 
 The Python equivalent of `Game.Agent.Bfs.elm`.
+
+## What the solver does
+
+A Lyn Rummy board is partitioned into four buckets:
+
+  HELPER   — stacks already in valid groups (kept as-is)
+  TROUBLE  — stacks that don't belong anywhere yet
+  GROWING  — partial groups being assembled
+  COMPLETE — finished legal groups (victory condition)
+
+Victory means TROUBLE and GROWING are both empty.  The
+solver finds the shortest sequence of agent moves (peels,
+plucks, yanks, steals, splits) that achieves this.
+
+The algorithm is BFS by program length: it expands every
+program of length N before considering any program of
+length N+1, so the first victory found is always a
+shortest solution under the current trouble cap.
+
+## The trouble cap
+
+`trouble_count` measures how much "out-of-place material"
+is currently active (TROUBLE + GROWING stacks combined).
+A cap prunes states whose trouble exceeds a threshold,
+keeping the frontier tractable on hard positions.
+
+The outer iterative loop (`solve_state_with_descs`) tries
+caps 1, 2, … up to `max_trouble_outer`.  Low caps fail
+fast when the puzzle genuinely needs more trouble-headroom;
+once the cap reaches the puzzle's true peak, the search
+succeeds quickly because the optimal path was never pruned.
+
+## Entry points
+
+  solve(board)                   — flat board → plan lines
+  solve_state(initial)           — Buckets → plan lines
+  solve_state_with_descs(initial)— Buckets → [(line, desc)]
+
+`solve_state_with_descs` is the canonical entry point for
+callers that need primitive-verb translations (e.g. the
+Elm UI bridge).  `solve` and `solve_state` are thin wrappers
+that classify the board and strip descriptors.
+
+`bfs_with_cap` is the inner workhorse; call it directly
+only when you need fine-grained diagnostics or a fixed cap.
+
+## When to use this solver vs. others
+
+- **Puzzles / hint generation**: use `solve_state_with_descs`
+  with the default caps.  The iterative-cap strategy handles
+  most curated puzzle boards in well under 10 000 state
+  expansions.
+- **Full-game agent play**: same entry point; the board is
+  already partitioned by game state.
+- **Runaway detection**: if `hit_max_states=True` comes back
+  from `bfs_with_cap`, the frontier exploded before finding a
+  plan.  The caller should either widen `max_states`, raise
+  `max_trouble_outer`, or conclude the position is unsolvable
+  within budget.
+- **Not suitable for**: multi-player coordination or
+  lookahead across opponent turns — the solver assumes a
+  single agent acting on a static board.
 """
 
 from buckets import (
