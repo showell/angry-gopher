@@ -27,6 +27,20 @@ import (
 	"text/template"
 )
 
+// --- Design principles (read before adding an op) ---
+//
+// 1. Parser genericness is a NON-GOAL. Each op gets a custom
+//    parser written for its exact DSL shape. Generic parsers
+//    don't scale to real problems; Claude writes custom ones fast.
+//
+// 2. Maximize compile-time safety. Each op has its own Expect*
+//    type — the compiler enforces that an op's emitter only sees
+//    its own fields. Adding a new op's fields never touches
+//    another op's type.
+//
+// 3. One op, one emitter. The Elm emitter function for op X reads
+//    only ExpectX. No shared emit paths that need op-kind guards.
+
 // --- AST (exported fields so text/template can access them) ---
 
 type Scenario struct {
