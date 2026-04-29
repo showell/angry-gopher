@@ -1330,20 +1330,25 @@ func elmRawCards(cs []Card) string {
 	return "[ " + strings.Join(parts, ", ") + " ]"
 }
 
-func elmTrickFirstPlay(b *strings.Builder, sc Scenario, trickVar string) {
-	fmt.Fprintf(b, "            let\n                hand =\n                    %s\n\n                board =\n                    %s\n\n                plays =\n                    %s.findPlays hand board\n            in\n",
-		elmHandCards(sc.Hand),
-		elmStacks(sc.Board, "                        "),
-		trickVar)
-	switch sc.Expect.Kind {
-	case "no_plays":
-		b.WriteString(`            if not (List.isEmpty plays) then
+const elmTrickFirstPlayTmpl = `            let
+                hand =
+                    %s
+
+                board =
+                    %s
+
+                plays =
+                    %s.findPlays hand board
+            in
+`
+
+const elmTrickFirstPlayNoPlays = `            if not (List.isEmpty plays) then
                 Expect.fail ("expected no plays, got " ++ String.fromInt (List.length plays))
 
             else
-                Expect.pass`)
-	case "play":
-		fmt.Fprintf(b, `            case plays of
+                Expect.pass`
+
+const elmTrickFirstPlayPlayTmpl = `            case plays of
                 [] ->
                     Expect.fail "expected a play, got none"
 
@@ -1365,7 +1370,18 @@ func elmTrickFirstPlay(b *strings.Builder, sc Scenario, trickVar string) {
                         Expect.fail ("board mismatch:\n  want " ++ Debug.toString wantBoard ++ "\n  got  " ++ Debug.toString gotBoard)
 
                     else
-                        Expect.pass`,
+                        Expect.pass`
+
+func elmTrickFirstPlay(b *strings.Builder, sc Scenario, trickVar string) {
+	fmt.Fprintf(b, elmTrickFirstPlayTmpl,
+		elmHandCards(sc.Hand),
+		elmStacks(sc.Board, "                        "),
+		trickVar)
+	switch sc.Expect.Kind {
+	case "no_plays":
+		b.WriteString(elmTrickFirstPlayNoPlays)
+	case "play":
+		fmt.Fprintf(b, elmTrickFirstPlayPlayTmpl,
 			elmHandCards(sc.Expect.HandPlayed),
 			elmStacks(sc.Expect.BoardAfter, "                            "))
 	default:
