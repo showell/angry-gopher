@@ -1,4 +1,4 @@
-module Game.PlaceStack exposing
+module Game.Physics.PlaceStack exposing
     ( findOpenLoc
     , stackWidth
     )

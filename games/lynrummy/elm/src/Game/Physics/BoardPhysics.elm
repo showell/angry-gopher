@@ -1,4 +1,4 @@
-module Game.BoardPhysics exposing
+module Game.Physics.BoardPhysics exposing
     ( canExtract
     , joinAdjacentRuns
     )

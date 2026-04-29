@@ -1,4 +1,4 @@
-module Game.WingOracle exposing
+module Game.Physics.WingOracle exposing
     ( WingId
     , eventualFloaterTopLeft
     , wingBoardRect
@@ -20,7 +20,7 @@ representation as the wire and the Main.State drag model).
 -}
 
 import Game.BoardActions as BoardActions exposing (Side(..))
-import Game.BoardGeometry as BG
+import Game.Physics.BoardGeometry as BG
 import Game.CardStack as CardStack exposing (CardStack, HandCard, isStacksEqual)
 
 

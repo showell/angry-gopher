@@ -27,7 +27,7 @@ status message.
 
 -}
 
-import Game.BoardGeometry as BoardGeometry exposing (BoardGeometryStatus(..))
+import Game.Physics.BoardGeometry as BoardGeometry exposing (BoardGeometryStatus(..))
 import Game.Rules.Card
 import Game.CardStack as CardStack exposing (CardStack)
 import Game.Game as Game

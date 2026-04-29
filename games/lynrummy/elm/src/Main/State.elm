@@ -42,10 +42,10 @@ import Game.Agent.Move exposing (Move)
 import Game.Rules.Card as Card exposing (Card)
 import Game.CardStack as CardStack exposing (CardStack)
 import Game.Dealer
-import Game.GestureArbitration as GA
+import Game.Physics.GestureArbitration as GA
 import Game.Hand as Hand exposing (Hand)
 import Game.Score as Score
-import Game.WingOracle exposing (WingId)
+import Game.Physics.WingOracle exposing (WingId)
 import Game.WireAction exposing (WireAction)
 import Json.Encode as Encode exposing (Value)
 import Main.Util exposing (listAt)

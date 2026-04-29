@@ -9,7 +9,7 @@ import Game.Agent.Bfs
 import Game.Agent.Buckets as AgentBuckets exposing (Buckets)
 import Game.Agent.Enumerator as AgentEnumerator
 import Game.Agent.Move as AgentMove exposing (Move(..))
-import Game.BoardGeometry exposing (BoardBounds)
+import Game.Physics.BoardGeometry exposing (BoardBounds)
 import Game.Rules.Card exposing (Card, CardValue(..), OriginDeck(..), Suit(..))
 import Game.CardStack
     exposing
@@ -21,7 +21,7 @@ import Game.CardStack
         , HandCardState(..)
         )
 import Game.BoardActions as BoardActions
-import Game.PlaceStack
+import Game.Physics.PlaceStack
 import Game.Rules.Referee as Referee exposing (RefereeStage(..), refereeStageToString)
 import Game.Replay.Time as ReplayTime
 import Game.Rules.StackType as StackType
@@ -2296,7 +2296,7 @@ findOpenLocBlockingPreferredOrigin =
                         ]
 
                 got =
-                    Game.PlaceStack.findOpenLoc existing 3
+                    Game.Physics.PlaceStack.findOpenLoc existing 3
 
                 expected =
                     { top = 167, left = 52 }
@@ -2313,7 +2313,7 @@ findOpenLocEmptyBoard =
                     []
 
                 got =
-                    Game.PlaceStack.findOpenLoc existing 3
+                    Game.Physics.PlaceStack.findOpenLoc existing 3
 
                 expected =
                     { top = 26, left = 26 }
@@ -2331,7 +2331,7 @@ findOpenLocLongStack =
                         ]
 
                 got =
-                    Game.PlaceStack.findOpenLoc existing 12
+                    Game.Physics.PlaceStack.findOpenLoc existing 12
 
                 expected =
                     { top = 92, left = 52 }
@@ -2351,7 +2351,7 @@ findOpenLocLotsOfTopRowStacks =
                         ]
 
                 got =
-                    Game.PlaceStack.findOpenLoc existing 3
+                    Game.Physics.PlaceStack.findOpenLoc existing 3
 
                 expected =
                     { top = 92, left = 52 }
@@ -2369,7 +2369,7 @@ findOpenLocOneStackTopLeft =
                         ]
 
                 got =
-                    Game.PlaceStack.findOpenLoc existing 3
+                    Game.Physics.PlaceStack.findOpenLoc existing 3
 
                 expected =
                     { top = 92, left = 52 }

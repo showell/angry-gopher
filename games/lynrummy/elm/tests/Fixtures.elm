@@ -26,8 +26,8 @@ measured boardRect populated.
 
 import Game.Rules.Card exposing (Card, OriginDeck(..))
 import Game.CardStack as CardStack exposing (BoardLocation, CardStack)
-import Game.GestureArbitration as GA
-import Game.WingOracle exposing (WingId)
+import Game.Physics.GestureArbitration as GA
+import Game.Physics.WingOracle exposing (WingId)
 import Main.State exposing (DragInfo, DragSource(..), PathFrame(..), Point)
 
 

@@ -22,7 +22,7 @@ are composed in `Main.elm` using these pieces.
 
 -}
 
-import Game.BoardGeometry as BG
+import Game.Physics.BoardGeometry as BG
 import Game.Rules.Card as Card exposing (Card, CardColor(..))
 import Game.CardStack as CardStack exposing (BoardCard, BoardCardState(..), CardStack, HandCard, HandCardState(..))
 import Game.Hand exposing (Hand)

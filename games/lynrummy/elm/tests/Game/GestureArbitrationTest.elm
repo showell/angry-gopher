@@ -13,7 +13,7 @@ pure has been pulled out into the module under test here.
 import Expect
 import Game.Rules.Card exposing (OriginDeck(..))
 import Game.CardStack as CardStack exposing (CardStack)
-import Game.GestureArbitration as GA
+import Game.Physics.GestureArbitration as GA
 import Test exposing (Test, describe, test)
 
 

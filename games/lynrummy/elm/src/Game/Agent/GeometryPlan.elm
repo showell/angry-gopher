@@ -18,7 +18,7 @@ emits a logical primitive sequence (geometry-agnostic);
 -}
 
 import Game.BoardActions as BoardActions
-import Game.BoardGeometry
+import Game.Physics.BoardGeometry
     exposing
         ( BoardBounds
         , cardPitch
@@ -26,7 +26,7 @@ import Game.BoardGeometry
         )
 import Game.Rules.Card
 import Game.CardStack as CardStack exposing (CardStack, isStacksEqual)
-import Game.PlaceStack as PlaceStack
+import Game.Physics.PlaceStack as PlaceStack
 import Game.WireAction exposing (WireAction(..))
 
 

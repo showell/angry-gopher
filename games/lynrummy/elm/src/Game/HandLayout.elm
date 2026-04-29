@@ -22,7 +22,7 @@ stale pinned math).
 
 -}
 
-import Game.BoardGeometry as BG
+import Game.Physics.BoardGeometry as BG
 import Game.Rules.Card exposing (Card, OriginDeck(..))
 
 

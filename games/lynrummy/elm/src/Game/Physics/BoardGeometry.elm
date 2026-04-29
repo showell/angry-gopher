@@ -1,4 +1,4 @@
-module Game.BoardGeometry exposing
+module Game.Physics.BoardGeometry exposing
     ( BoardBounds
     , BoardGeometryStatus(..)
     , GeometryError

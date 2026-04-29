@@ -37,7 +37,7 @@ import Game.Agent.Move as AgentMove exposing (Move)
 import Game.Agent.Verbs as AgentVerbs
 import Game.Dealer as Dealer
 import Game.Game as Game
-import Game.GestureArbitration as GA
+import Game.Physics.GestureArbitration as GA
 import Game.Random as Random
 import Game.Rules.Referee as Referee
 import Game.Replay.Space as ReplaySpace

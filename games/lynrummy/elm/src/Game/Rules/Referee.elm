@@ -53,7 +53,7 @@ how many moves per turn. Those are social rules, not physics.
 
 -}
 
-import Game.BoardGeometry exposing (BoardBounds, validateBoardGeometry)
+import Game.Physics.BoardGeometry exposing (BoardBounds, validateBoardGeometry)
 import Game.Rules.Card exposing (Card)
 import Game.CardStack
     exposing

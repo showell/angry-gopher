@@ -48,13 +48,13 @@ drag math honest.
 
 -}
 
-import Game.BoardGeometry as BoardGeometry
+import Game.Physics.BoardGeometry as BoardGeometry
 import Game.CardStack as CardStack exposing (CardStack)
 import Game.Game exposing (CompleteTurnOutcome)
 import Game.Hand exposing (Hand)
 import Game.PlayerTurn exposing (CompleteTurnResult(..))
 import Game.View as View
-import Game.WingOracle as WingOracle exposing (WingId)
+import Game.Physics.WingOracle as WingOracle exposing (WingId)
 import Html exposing (Html, div)
 import Html.Attributes exposing (href, id, style)
 import Html.Events as Events

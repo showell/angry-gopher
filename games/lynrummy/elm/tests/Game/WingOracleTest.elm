@@ -18,7 +18,7 @@ import Expect
 import Game.BoardActions exposing (Side(..))
 import Game.Rules.Card exposing (OriginDeck(..))
 import Game.CardStack as CardStack exposing (BoardLocation, CardStack)
-import Game.WingOracle as WingOracle
+import Game.Physics.WingOracle as WingOracle
 import Test exposing (Test, describe, test)
 
 

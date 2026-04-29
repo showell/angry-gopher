@@ -1,4 +1,4 @@
-module Game.GestureArbitration exposing
+module Game.Physics.GestureArbitration exposing
     ( Point
     , Rect
     , applySplit

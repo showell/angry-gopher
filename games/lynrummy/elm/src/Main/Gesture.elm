@@ -62,11 +62,11 @@ for merge / place / move.
 -}
 
 import Browser.Dom
-import Game.BoardGeometry as BG
+import Game.Physics.BoardGeometry as BG
 import Game.Rules.Card exposing (Card)
 import Game.CardStack as CardStack exposing (BoardLocation, CardStack, HandCard)
-import Game.GestureArbitration as GA
-import Game.WingOracle as WingOracle
+import Game.Physics.GestureArbitration as GA
+import Game.Physics.WingOracle as WingOracle
 import Game.WireAction as WA exposing (WireAction)
 import Html
 import Html.Attributes exposing (style)

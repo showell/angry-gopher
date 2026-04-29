@@ -14,7 +14,7 @@ literal JSON, the three impls share a common wire format.
 import Expect
 import Json.Decode as Decode
 import Json.Encode as Encode
-import Game.BoardGeometry exposing (BoardBounds, GeometryError, GeometryErrorKind(..), boardBoundsDecoder, encodeBoardBounds, encodeGeometryError, geometryErrorDecoder)
+import Game.Physics.BoardGeometry exposing (BoardBounds, GeometryError, GeometryErrorKind(..), boardBoundsDecoder, encodeBoardBounds, encodeGeometryError, geometryErrorDecoder)
 import Game.Rules.Card exposing (Card, CardValue(..), OriginDeck(..), Suit(..), cardDecoder, encodeCard)
 import Game.CardStack
     exposing

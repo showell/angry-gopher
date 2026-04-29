@@ -9,7 +9,7 @@ dependencies on protocol\_validation or PRNG.
 -}
 
 import Expect
-import Game.BoardGeometry
+import Game.Physics.BoardGeometry
     exposing
         ( BoardBounds
         , BoardGeometryStatus(..)

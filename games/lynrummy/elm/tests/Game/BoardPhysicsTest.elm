@@ -12,7 +12,7 @@ finding."
 -}
 
 import Expect
-import Game.BoardPhysics exposing (canExtract, joinAdjacentRuns)
+import Game.Physics.BoardPhysics exposing (canExtract, joinAdjacentRuns)
 import Game.Rules.Card exposing (Card, CardValue(..), OriginDeck(..), Suit(..), cardFromLabel)
 import Game.CardStack
     exposing

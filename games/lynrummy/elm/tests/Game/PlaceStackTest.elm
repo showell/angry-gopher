@@ -8,7 +8,7 @@ generated into `Game.DslConformanceTest`.
 -}
 
 import Expect
-import Game.PlaceStack as PS
+import Game.Physics.PlaceStack as PS
 import Test exposing (Test, describe, test)
 
 
