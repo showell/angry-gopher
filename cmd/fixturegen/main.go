@@ -896,15 +896,49 @@ func elmStatusKind(s string) string {
 // fulfill. Agent-emitted action logs (the primary worry) only
 // use board-origin shapes, so the gate covers the case that
 // matters most.
+const elmReplayInvariantTmpl = `            let
+                board =
+                    %s
+
+                base =
+                    State.baseModel
+
+                initialModel =
+                    { base | board = board, sessionId = Just 0 }
+
+                ( eagerModel, actions ) =
+                    buildEagerAndActions initialModel
+                        [ %s ]
+
+                replayedModel =
+                    runReplay initialModel actions
+            in
+`
+
+const elmReplayInvariantChecks = `            Expect.all
+                [ \_ -> Expect.equal eagerModel.board replayedModel.board
+                , \_ -> Expect.equal eagerModel.hands replayedModel.hands
+                , \_ -> Expect.equal eagerModel.scores replayedModel.scores
+                , \_ -> Expect.equal eagerModel.activePlayerIndex replayedModel.activePlayerIndex
+                , \_ -> Expect.equal eagerModel.turnIndex replayedModel.turnIndex`
+
+const elmReplayInvariantVictoryChecks = `
+                , \_ -> if List.all isCleanStack eagerModel.board then Expect.pass else Expect.fail ("final eager board not victory; incomplete stacks present: " ++ Debug.toString (firstIncompleteStack eagerModel.board))
+                , \_ -> if List.all isCleanStack replayedModel.board then Expect.pass else Expect.fail ("final replayed board not victory; incomplete stacks present: " ++ Debug.toString (firstIncompleteStack replayedModel.board))`
+
+const elmReplayInvariantClose = `
+                ]
+                ()`
+
 func elmReplayInvariant(b *strings.Builder, sc Scenario) {
-	fmt.Fprintf(b, "            let\n                board =\n                    %s\n\n                base =\n                    State.baseModel\n\n                initialModel =\n                    { base | board = board, sessionId = Just 0 }\n\n                ( eagerModel, actions ) =\n                    buildEagerAndActions initialModel\n                        [ %s ]\n\n                replayedModel =\n                    runReplay initialModel actions\n            in\n",
+	fmt.Fprintf(b, elmReplayInvariantTmpl,
 		elmStacks(sc.Board, "                        "),
 		elmReplaySpecList(sc.ReplayActions))
-	b.WriteString("            Expect.all\n                [ \\_ -> Expect.equal eagerModel.board replayedModel.board\n                , \\_ -> Expect.equal eagerModel.hands replayedModel.hands\n                , \\_ -> Expect.equal eagerModel.scores replayedModel.scores\n                , \\_ -> Expect.equal eagerModel.activePlayerIndex replayedModel.activePlayerIndex\n                , \\_ -> Expect.equal eagerModel.turnIndex replayedModel.turnIndex")
+	b.WriteString(elmReplayInvariantChecks)
 	if sc.Expect.FinalBoardVictory != nil && *sc.Expect.FinalBoardVictory {
-		b.WriteString("\n                , \\_ -> if List.all isCleanStack eagerModel.board then Expect.pass else Expect.fail (\"final eager board not victory; incomplete stacks present: \" ++ Debug.toString (firstIncompleteStack eagerModel.board))\n                , \\_ -> if List.all isCleanStack replayedModel.board then Expect.pass else Expect.fail (\"final replayed board not victory; incomplete stacks present: \" ++ Debug.toString (firstIncompleteStack replayedModel.board))")
+		b.WriteString(elmReplayInvariantVictoryChecks)
 	}
-	b.WriteString("\n                ]\n                ()")
+	b.WriteString(elmReplayInvariantClose)
 }
 
 
