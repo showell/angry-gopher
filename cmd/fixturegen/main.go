@@ -40,6 +40,15 @@ import (
 //
 // 3. One op, one emitter. The Elm emitter function for op X reads
 //    only ExpectX. No shared emit paths that need op-kind guards.
+//
+// 4. Be kind to the Elm compiler. Emitters should NOT inline large
+//    record literals (Card, CardStack, etc.) as compile-time
+//    constants — the Elm compiler type-checks every literal and
+//    slows down on verbose data. Prefer runtime construction:
+//    decode from a JSON string, call a helper that builds the
+//    value from compact primitives, or use a Fixtures.elm helper.
+//    The card representation approach (JSON-decoded at runtime,
+//    not inlined) is the established pattern — follow it.
 
 // --- AST (exported fields so text/template can access them) ---
 
