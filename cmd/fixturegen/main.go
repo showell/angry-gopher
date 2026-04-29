@@ -414,6 +414,55 @@ standardBounds =
     { maxWidth = 800, maxHeight = 600, margin = 7 }
 
 
+parseCard : String -> Card
+parseCard s =
+    let
+        chars =
+            String.toList s
+
+        value =
+            case List.head chars of
+                Just 'A' -> Ace
+                Just '2' -> Two
+                Just '3' -> Three
+                Just '4' -> Four
+                Just '5' -> Five
+                Just '6' -> Six
+                Just '7' -> Seven
+                Just '8' -> Eight
+                Just '9' -> Nine
+                Just 'T' -> Ten
+                Just 'J' -> Jack
+                Just 'Q' -> Queen
+                Just 'K' -> King
+                _ -> Ace
+
+        suit =
+            case chars |> List.drop 1 |> List.head of
+                Just 'C' -> Club
+                Just 'D' -> Diamond
+                Just 'S' -> Spade
+                Just 'H' -> Heart
+                _ -> Club
+
+        deck =
+            case chars |> List.drop 2 |> List.head of
+                Just '2' -> DeckTwo
+                _ -> DeckOne
+    in
+    { value = value, suit = suit, originDeck = deck }
+
+
+boardCard : String -> BoardCard
+boardCard s =
+    { card = parseCard s, state = FirmlyOnBoard }
+
+
+handCard : String -> HandCard
+handCard s =
+    { card = parseCard s, state = HandNormal }
+
+
 -- Invariant check: every stack must classify as a complete group
 -- (Set, PureRun, or RedBlackRun). Anything else (Incomplete /
 -- Bogus / Dup) means the trick's emission broke the board.
@@ -1173,7 +1222,11 @@ func elmStacks(ss []Stack, indent string) string {
 func elmStackLit(s Stack) string {
 	var bcs []string
 	for _, c := range s.Cards {
-		bcs = append(bcs, fmt.Sprintf("{ card = %s, state = %s }", elmCardLit(c), elmBoardState(c.BoardState)))
+		if c.BoardState == 0 {
+			bcs = append(bcs, "boardCard "+elmCompactCard(c))
+		} else {
+			bcs = append(bcs, fmt.Sprintf("{ card = parseCard %s, state = %s }", elmCompactCard(c), elmBoardState(c.BoardState)))
+		}
 	}
 	return fmt.Sprintf("{ boardCards = [ %s ], loc = { top = %d, left = %d } }",
 		strings.Join(bcs, ", "), s.Top, s.Left)
@@ -1185,14 +1238,20 @@ func elmHandCards(cs []Card) string {
 	}
 	var parts []string
 	for _, c := range cs {
-		parts = append(parts, fmt.Sprintf("{ card = %s, state = HandNormal }", elmCardLit(c)))
+		parts = append(parts, "handCard "+elmCompactCard(c))
 	}
 	return "[ " + strings.Join(parts, ", ") + " ]"
 }
 
+func elmCompactCard(c Card) string {
+	v := []string{"", "A", "2", "3", "4", "5", "6", "7", "8", "9", "T", "J", "Q", "K"}[c.Value]
+	s := []string{"C", "D", "S", "H"}[c.Suit]
+	d := []string{"1", "2"}[c.Deck]
+	return `"` + v + s + d + `"`
+}
+
 func elmCardLit(c Card) string {
-	return fmt.Sprintf("{ value = %s, suit = %s, originDeck = %s }",
-		elmValue(c.Value), elmSuit(c.Suit), elmDeck(c.Deck))
+	return "parseCard " + elmCompactCard(c)
 }
 
 func elmValue(v int) string {

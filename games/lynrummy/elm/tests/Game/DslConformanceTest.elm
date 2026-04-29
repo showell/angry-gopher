@@ -46,6 +46,55 @@ standardBounds =
     { maxWidth = 800, maxHeight = 600, margin = 7 }
 
 
+parseCard : String -> Card
+parseCard s =
+    let
+        chars =
+            String.toList s
+
+        value =
+            case List.head chars of
+                Just 'A' -> Ace
+                Just '2' -> Two
+                Just '3' -> Three
+                Just '4' -> Four
+                Just '5' -> Five
+                Just '6' -> Six
+                Just '7' -> Seven
+                Just '8' -> Eight
+                Just '9' -> Nine
+                Just 'T' -> Ten
+                Just 'J' -> Jack
+                Just 'Q' -> Queen
+                Just 'K' -> King
+                _ -> Ace
+
+        suit =
+            case chars |> List.drop 1 |> List.head of
+                Just 'C' -> Club
+                Just 'D' -> Diamond
+                Just 'S' -> Spade
+                Just 'H' -> Heart
+                _ -> Club
+
+        deck =
+            case chars |> List.drop 2 |> List.head of
+                Just '2' -> DeckTwo
+                _ -> DeckOne
+    in
+    { value = value, suit = suit, originDeck = deck }
+
+
+boardCard : String -> BoardCard
+boardCard s =
+    { card = parseCard s, state = FirmlyOnBoard }
+
+
+handCard : String -> HandCard
+handCard s =
+    { card = parseCard s, state = HandNormal }
+
+
 -- Invariant check: every stack must classify as a complete group
 -- (Set, PureRun, or RedBlackRun). Anything else (Incomplete /
 -- Bogus / Dup) means the trick's emission broke the board.
@@ -198,8 +247,8 @@ clickAgentPlayAlreadyClean =
         \_ ->
             let
                 board =
-                    [ { boardCards = [ { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 50, left = 50 } }
-                        , { boardCards = [ { card = { value = Two, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Four, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 100, left = 50 } }
+                    [ { boardCards = [ boardCard "AC1", boardCard "AD1", boardCard "AH1" ], loc = { top = 50, left = 50 } }
+                        , { boardCards = [ boardCard "2C1", boardCard "3D2", boardCard "4C1", boardCard "5H1", boardCard "6S1", boardCard "7H1" ], loc = { top = 100, left = 50 } }
                         ]
 
                 base =
@@ -239,8 +288,8 @@ clickAgentPlaySimplePeel =
         \_ ->
             let
                 board =
-                    [ { boardCards = [ { card = { value = Ten, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 50, left = 50 } }
-                        , { boardCards = [ { card = { value = Nine, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 100, left = 200 } }
+                    [ { boardCards = [ boardCard "TC1", boardCard "JD1", boardCard "QS1", boardCard "KH1" ], loc = { top = 50, left = 50 } }
+                        , { boardCards = [ boardCard "9D1" ], loc = { top = 100, left = 200 } }
                         ]
 
                 base =
@@ -282,8 +331,8 @@ clickAgentPlayUnsolvableBoard =
         \_ ->
             let
                 board =
-                    [ { boardCards = [ { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 50, left = 50 } }
-                        , { boardCards = [ { card = { value = Nine, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 100, left = 200 } }
+                    [ { boardCards = [ boardCard "5H1" ], loc = { top = 50, left = 50 } }
+                        , { boardCards = [ boardCard "9D1" ], loc = { top = 100, left = 200 } }
                         ]
 
                 base =
@@ -325,24 +374,24 @@ corpusSid108 =
             let
                 state : Buckets
                 state =
-                    { helper = [ [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Three, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckTwo } ]
-                        , [ { value = Eight, suit = Diamond, originDeck = DeckOne }, { value = Nine, suit = Spade, originDeck = DeckTwo }, { value = Ten, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Nine, suit = Club, originDeck = DeckOne }, { value = Ten, suit = Club, originDeck = DeckTwo }, { value = Jack, suit = Club, originDeck = DeckTwo } ]
-                        , [ { value = Five, suit = Heart, originDeck = DeckOne }, { value = Five, suit = Diamond, originDeck = DeckTwo }, { value = Five, suit = Spade, originDeck = DeckTwo } ]
-                        , [ { value = Six, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne }, { value = Six, suit = Club, originDeck = DeckTwo }, { value = Six, suit = Diamond, originDeck = DeckTwo } ]
-                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckTwo } ]
-                        , [ { value = Queen, suit = Spade, originDeck = DeckTwo }, { value = King, suit = Spade, originDeck = DeckTwo }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Eight, suit = Club, originDeck = DeckOne }, { value = Eight, suit = Diamond, originDeck = DeckTwo }, { value = Eight, suit = Spade, originDeck = DeckOne }, { value = Eight, suit = Heart, originDeck = DeckTwo } ]
-                        , [ { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Ten, suit = Diamond, originDeck = DeckTwo }, { value = Ten, suit = Heart, originDeck = DeckTwo }, { value = Ten, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Diamond, originDeck = DeckOne }, { value = Six, suit = Club, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckTwo }, { value = Eight, suit = Spade, originDeck = DeckTwo } ]
-                        , [ { value = Ten, suit = Spade, originDeck = DeckOne }, { value = Jack, suit = Spade, originDeck = DeckOne }, { value = Queen, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Ace, suit = Heart, originDeck = DeckTwo }, { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckTwo }, { value = Six, suit = Heart, originDeck = DeckTwo }, { value = Seven, suit = Heart, originDeck = DeckOne }, { value = Eight, suit = Heart, originDeck = DeckOne }, { value = Nine, suit = Heart, originDeck = DeckOne }, { value = Ten, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = King, suit = Spade, originDeck = DeckOne }, { value = King, suit = Heart, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckTwo } ]
-                        , [ { value = Ace, suit = Club, originDeck = DeckTwo }, { value = Two, suit = Diamond, originDeck = DeckTwo }, { value = Three, suit = Club, originDeck = DeckTwo }, { value = Four, suit = Diamond, originDeck = DeckTwo } ]
+                    { helper = [ [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "3S1", parseCard "3C1", parseCard "3D2" ]
+                        , [ parseCard "8D1", parseCard "9S2", parseCard "TD1" ]
+                        , [ parseCard "9C1", parseCard "TC2", parseCard "JC2" ]
+                        , [ parseCard "5H1", parseCard "5D2", parseCard "5S2" ]
+                        , [ parseCard "6H1", parseCard "6S1", parseCard "6C2", parseCard "6D2" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1", parseCard "7H2" ]
+                        , [ parseCard "QS2", parseCard "KS2", parseCard "AS1", parseCard "2S1" ]
+                        , [ parseCard "8C1", parseCard "8D2", parseCard "8S1", parseCard "8H2" ]
+                        , [ parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "TD2", parseCard "TH2", parseCard "TC1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5D1", parseCard "6C1", parseCard "7D2", parseCard "8S2" ]
+                        , [ parseCard "TS1", parseCard "JS1", parseCard "QS1" ]
+                        , [ parseCard "AH2", parseCard "2H1", parseCard "3H1", parseCard "4H1", parseCard "5H2", parseCard "6H2", parseCard "7H1", parseCard "8H1", parseCard "9H1", parseCard "TH1" ]
+                        , [ parseCard "KS1", parseCard "KH1", parseCard "KD2" ]
+                        , [ parseCard "AC2", parseCard "2D2", parseCard "3C2", parseCard "4D2" ]
                         ]
-                    , trouble = [ [ { value = Queen, suit = Diamond, originDeck = DeckTwo } ]
+                    , trouble = [ [ parseCard "QD2" ]
                         ]
                     , growing = []
                     , complete = []
@@ -371,25 +420,25 @@ corpusSid110 =
             let
                 state : Buckets
                 state =
-                    { helper = [ [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Four, suit = Diamond, originDeck = DeckTwo }, { value = Five, suit = Diamond, originDeck = DeckOne }, { value = Six, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckTwo }, { value = Two, suit = Diamond, originDeck = DeckTwo } ]
-                        , [ { value = Jack, suit = Club, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckTwo }, { value = Jack, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckTwo }, { value = Three, suit = Heart, originDeck = DeckTwo } ]
-                        , [ { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Heart, originDeck = DeckTwo }, { value = Queen, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Eight, suit = Diamond, originDeck = DeckOne }, { value = Nine, suit = Diamond, originDeck = DeckTwo }, { value = Ten, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Seven, suit = Spade, originDeck = DeckTwo }, { value = Eight, suit = Spade, originDeck = DeckTwo }, { value = Nine, suit = Spade, originDeck = DeckTwo } ]
-                        , [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Two, suit = Club, originDeck = DeckTwo }, { value = Three, suit = Club, originDeck = DeckTwo }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Club, originDeck = DeckTwo } ]
-                        , [ { value = Ten, suit = Club, originDeck = DeckTwo }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Spade, originDeck = DeckTwo }, { value = King, suit = Heart, originDeck = DeckTwo }, { value = Ace, suit = Club, originDeck = DeckTwo } ]
-                        , [ { value = Four, suit = Club, originDeck = DeckTwo }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne }, { value = Eight, suit = Club, originDeck = DeckTwo } ]
-                        , [ { value = King, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckTwo }, { value = Two, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Ten, suit = Heart, originDeck = DeckTwo }, { value = Jack, suit = Club, originDeck = DeckTwo }, { value = Queen, suit = Diamond, originDeck = DeckTwo }, { value = King, suit = Spade, originDeck = DeckTwo } ]
-                        , [ { value = Four, suit = Heart, originDeck = DeckTwo }, { value = Five, suit = Heart, originDeck = DeckTwo }, { value = Six, suit = Heart, originDeck = DeckTwo }, { value = Seven, suit = Heart, originDeck = DeckTwo }, { value = Eight, suit = Heart, originDeck = DeckTwo }, { value = Nine, suit = Heart, originDeck = DeckOne }, { value = Ten, suit = Heart, originDeck = DeckOne } ]
+                    { helper = [ [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "4D2", parseCard "5D1", parseCard "6D1" ]
+                        , [ parseCard "2C1", parseCard "2S2", parseCard "2D2" ]
+                        , [ parseCard "JC1", parseCard "JD2", parseCard "JS1" ]
+                        , [ parseCard "3D1", parseCard "3S2", parseCard "3H2" ]
+                        , [ parseCard "QD1", parseCard "QH2", parseCard "QC1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "8D1", parseCard "9D2", parseCard "TD1" ]
+                        , [ parseCard "7S2", parseCard "8S2", parseCard "9S2" ]
+                        , [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "2C2", parseCard "3C2", parseCard "4C1", parseCard "5C2" ]
+                        , [ parseCard "TC2", parseCard "JD1", parseCard "QS2", parseCard "KH2", parseCard "AC2" ]
+                        , [ parseCard "4C2", parseCard "5H1", parseCard "6S1", parseCard "7H1", parseCard "8C2" ]
+                        , [ parseCard "KD1", parseCard "AD2", parseCard "2D1" ]
+                        , [ parseCard "TH2", parseCard "JC2", parseCard "QD2", parseCard "KS2" ]
+                        , [ parseCard "4H2", parseCard "5H2", parseCard "6H2", parseCard "7H2", parseCard "8H2", parseCard "9H1", parseCard "TH1" ]
                         ]
-                    , trouble = [ [ { value = Ten, suit = Club, originDeck = DeckOne } ]
+                    , trouble = [ [ parseCard "TC1" ]
                         ]
                     , growing = []
                     , complete = []
@@ -418,31 +467,31 @@ corpusSid112 =
             let
                 state : Buckets
                 state =
-                    { helper = [ [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Nine, suit = Spade, originDeck = DeckTwo }, { value = Nine, suit = Club, originDeck = DeckTwo }, { value = Nine, suit = Diamond, originDeck = DeckTwo } ]
-                        , [ { value = Eight, suit = Heart, originDeck = DeckTwo }, { value = Nine, suit = Heart, originDeck = DeckTwo }, { value = Ten, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Five, suit = Club, originDeck = DeckTwo }, { value = Six, suit = Heart, originDeck = DeckTwo }, { value = Seven, suit = Spade, originDeck = DeckTwo }, { value = Eight, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Jack, suit = Diamond, originDeck = DeckTwo }, { value = Jack, suit = Heart, originDeck = DeckOne }, { value = Jack, suit = Spade, originDeck = DeckTwo } ]
-                        , [ { value = Jack, suit = Club, originDeck = DeckOne }, { value = Queen, suit = Club, originDeck = DeckTwo }, { value = King, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Ten, suit = Heart, originDeck = DeckTwo }, { value = Ten, suit = Club, originDeck = DeckTwo } ]
-                        , [ { value = Eight, suit = Spade, originDeck = DeckTwo }, { value = Nine, suit = Spade, originDeck = DeckOne }, { value = Ten, suit = Spade, originDeck = DeckTwo } ]
-                        , [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne }, { value = Four, suit = Spade, originDeck = DeckOne }, { value = Five, suit = Spade, originDeck = DeckTwo }, { value = Six, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Queen, suit = Spade, originDeck = DeckOne }, { value = Queen, suit = Heart, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckTwo } ]
-                        , [ { value = Queen, suit = Heart, originDeck = DeckTwo }, { value = King, suit = Spade, originDeck = DeckTwo }, { value = Ace, suit = Diamond, originDeck = DeckTwo }, { value = Two, suit = Club, originDeck = DeckTwo }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Diamond, originDeck = DeckTwo }, { value = Six, suit = Club, originDeck = DeckTwo }, { value = Seven, suit = Heart, originDeck = DeckOne }, { value = Eight, suit = Club, originDeck = DeckTwo }, { value = Nine, suit = Heart, originDeck = DeckOne }, { value = Ten, suit = Spade, originDeck = DeckOne }, { value = Jack, suit = Heart, originDeck = DeckTwo }, { value = Queen, suit = Spade, originDeck = DeckTwo }, { value = King, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Club, originDeck = DeckTwo }, { value = Two, suit = Diamond, originDeck = DeckTwo }, { value = Three, suit = Club, originDeck = DeckTwo } ]
-                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckTwo } ]
-                        , [ { value = Six, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Eight, suit = Diamond, originDeck = DeckTwo } ]
-                        , [ { value = Two, suit = Heart, originDeck = DeckTwo }, { value = Two, suit = Club, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckTwo }, { value = Two, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Four, suit = Spade, originDeck = DeckTwo }, { value = Four, suit = Diamond, originDeck = DeckTwo }, { value = Four, suit = Club, originDeck = DeckTwo } ]
-                        , [ { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckTwo }, { value = Five, suit = Heart, originDeck = DeckTwo } ]
-                        , [ { value = King, suit = Heart, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckTwo }, { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckTwo }, { value = Four, suit = Heart, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Nine, suit = Club, originDeck = DeckOne }, { value = Ten, suit = Club, originDeck = DeckOne }, { value = Jack, suit = Club, originDeck = DeckTwo }, { value = Queen, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Ten, suit = Diamond, originDeck = DeckTwo }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = King, suit = Club, originDeck = DeckTwo }, { value = King, suit = Diamond, originDeck = DeckTwo }, { value = King, suit = Heart, originDeck = DeckTwo } ]
-                        , [ { value = Six, suit = Spade, originDeck = DeckTwo }, { value = Seven, suit = Diamond, originDeck = DeckTwo }, { value = Eight, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Six, suit = Diamond, originDeck = DeckTwo }, { value = Seven, suit = Club, originDeck = DeckTwo }, { value = Eight, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Five, suit = Diamond, originDeck = DeckOne }, { value = Five, suit = Spade, originDeck = DeckOne }, { value = Five, suit = Club, originDeck = DeckOne } ]
+                    { helper = [ [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "9S2", parseCard "9C2", parseCard "9D2" ]
+                        , [ parseCard "8H2", parseCard "9H2", parseCard "TH1" ]
+                        , [ parseCard "5C2", parseCard "6H2", parseCard "7S2", parseCard "8H1" ]
+                        , [ parseCard "JD2", parseCard "JH1", parseCard "JS2" ]
+                        , [ parseCard "JC1", parseCard "QC2", parseCard "KC1" ]
+                        , [ parseCard "TD1", parseCard "TH2", parseCard "TC2" ]
+                        , [ parseCard "8S2", parseCard "9S1", parseCard "TS2" ]
+                        , [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1", parseCard "4S1", parseCard "5S2", parseCard "6S1" ]
+                        , [ parseCard "QS1", parseCard "QH1", parseCard "QD2" ]
+                        , [ parseCard "QH2", parseCard "KS2", parseCard "AD2", parseCard "2C2", parseCard "3D1", parseCard "4C1", parseCard "5D2", parseCard "6C2", parseCard "7H1", parseCard "8C2", parseCard "9H1", parseCard "TS1", parseCard "JH2", parseCard "QS2", parseCard "KD1", parseCard "AC2", parseCard "2D2", parseCard "3C2" ]
+                        , [ parseCard "7S1", parseCard "7C1", parseCard "7H2" ]
+                        , [ parseCard "6D1", parseCard "7D1", parseCard "8D2" ]
+                        , [ parseCard "2H2", parseCard "2C1", parseCard "2S2", parseCard "2D1" ]
+                        , [ parseCard "4S2", parseCard "4D2", parseCard "4C2" ]
+                        , [ parseCard "3H1", parseCard "4H2", parseCard "5H2" ]
+                        , [ parseCard "KH1", parseCard "AH2", parseCard "2H1", parseCard "3H2", parseCard "4H1", parseCard "5H1" ]
+                        , [ parseCard "9C1", parseCard "TC1", parseCard "JC2", parseCard "QC1" ]
+                        , [ parseCard "TD2", parseCard "JD1", parseCard "QD1" ]
+                        , [ parseCard "KC2", parseCard "KD2", parseCard "KH2" ]
+                        , [ parseCard "6S2", parseCard "7D2", parseCard "8C1" ]
+                        , [ parseCard "6D2", parseCard "7C2", parseCard "8D1" ]
+                        , [ parseCard "5D1", parseCard "5S1", parseCard "5C1" ]
                         ]
-                    , trouble = [ [ { value = Three, suit = Club, originDeck = DeckOne } ]
+                    , trouble = [ [ parseCard "3C1" ]
                         ]
                     , growing = []
                     , complete = []
@@ -471,28 +520,28 @@ corpusSid114 =
             let
                 state : Buckets
                 state =
-                    { helper = [ [ { value = Five, suit = Club, originDeck = DeckOne }, { value = Five, suit = Diamond, originDeck = DeckOne }, { value = Five, suit = Spade, originDeck = DeckTwo } ]
-                        , [ { value = Jack, suit = Club, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckTwo }, { value = Jack, suit = Spade, originDeck = DeckTwo } ]
-                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckTwo } ]
-                        , [ { value = Three, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckTwo }, { value = Three, suit = Club, originDeck = DeckTwo } ]
-                        , [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckTwo }, { value = Ace, suit = Diamond, originDeck = DeckTwo } ]
-                        , [ { value = Three, suit = Spade, originDeck = DeckTwo }, { value = Four, suit = Diamond, originDeck = DeckTwo }, { value = Five, suit = Spade, originDeck = DeckOne }, { value = Six, suit = Heart, originDeck = DeckOne }, { value = Seven, suit = Spade, originDeck = DeckTwo } ]
-                        , [ { value = Eight, suit = Heart, originDeck = DeckOne }, { value = Nine, suit = Heart, originDeck = DeckOne }, { value = Ten, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = King, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Two, suit = Diamond, originDeck = DeckTwo } ]
-                        , [ { value = Nine, suit = Diamond, originDeck = DeckTwo }, { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = King, suit = Heart, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne }, { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Heart, originDeck = DeckOne }, { value = Queen, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Nine, suit = Club, originDeck = DeckTwo }, { value = Ten, suit = Club, originDeck = DeckOne }, { value = Jack, suit = Club, originDeck = DeckTwo } ]
-                        , [ { value = Four, suit = Club, originDeck = DeckTwo }, { value = Five, suit = Club, originDeck = DeckTwo }, { value = Six, suit = Club, originDeck = DeckTwo }, { value = Seven, suit = Club, originDeck = DeckTwo } ]
-                        , [ { value = Queen, suit = Spade, originDeck = DeckTwo }, { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckTwo } ]
-                        , [ { value = King, suit = Diamond, originDeck = DeckTwo }, { value = King, suit = Heart, originDeck = DeckTwo }, { value = King, suit = Spade, originDeck = DeckTwo } ]
-                        , [ { value = King, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Club, originDeck = DeckTwo }, { value = Two, suit = Club, originDeck = DeckTwo } ]
-                        , [ { value = Ten, suit = Heart, originDeck = DeckTwo }, { value = Jack, suit = Spade, originDeck = DeckOne }, { value = Queen, suit = Heart, originDeck = DeckTwo } ]
-                        , [ { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne }, { value = Eight, suit = Club, originDeck = DeckTwo } ]
-                        , [ { value = Nine, suit = Club, originDeck = DeckOne }, { value = Nine, suit = Diamond, originDeck = DeckOne }, { value = Nine, suit = Spade, originDeck = DeckOne } ]
+                    { helper = [ [ parseCard "5C1", parseCard "5D1", parseCard "5S2" ]
+                        , [ parseCard "JC1", parseCard "JD2", parseCard "JS2" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1", parseCard "7H2" ]
+                        , [ parseCard "3S1", parseCard "3D2", parseCard "3C2" ]
+                        , [ parseCard "2C1", parseCard "2S1", parseCard "2D1" ]
+                        , [ parseCard "AC1", parseCard "AS2", parseCard "AD2" ]
+                        , [ parseCard "3S2", parseCard "4D2", parseCard "5S1", parseCard "6H1", parseCard "7S2" ]
+                        , [ parseCard "8H1", parseCard "9H1", parseCard "TH1" ]
+                        , [ parseCard "KD1", parseCard "AD1", parseCard "2D2" ]
+                        , [ parseCard "9D2", parseCard "TD1", parseCard "JD1" ]
+                        , [ parseCard "KH1", parseCard "AH1", parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "QD1", parseCard "QH1", parseCard "QS1" ]
+                        , [ parseCard "9C2", parseCard "TC1", parseCard "JC2" ]
+                        , [ parseCard "4C2", parseCard "5C2", parseCard "6C2", parseCard "7C2" ]
+                        , [ parseCard "QS2", parseCard "KS1", parseCard "AS1", parseCard "2S2" ]
+                        , [ parseCard "KD2", parseCard "KH2", parseCard "KS2" ]
+                        , [ parseCard "KC1", parseCard "AC2", parseCard "2C2" ]
+                        , [ parseCard "TH2", parseCard "JS1", parseCard "QH2" ]
+                        , [ parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1", parseCard "8C2" ]
+                        , [ parseCard "9C1", parseCard "9D1", parseCard "9S1" ]
                         ]
-                    , trouble = [ [ { value = Six, suit = Diamond, originDeck = DeckOne } ]
+                    , trouble = [ [ parseCard "6D1" ]
                         ]
                     , growing = []
                     , complete = []
@@ -521,27 +570,27 @@ corpusSid116 =
             let
                 state : Buckets
                 state =
-                    { helper = [ [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne }, { value = Eight, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = King, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Spade, originDeck = DeckOne }, { value = King, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = King, suit = Heart, originDeck = DeckTwo }, { value = Ace, suit = Heart, originDeck = DeckTwo }, { value = Two, suit = Heart, originDeck = DeckTwo } ]
-                        , [ { value = Two, suit = Diamond, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckTwo }, { value = Four, suit = Diamond, originDeck = DeckTwo } ]
-                        , [ { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckTwo }, { value = Ace, suit = Club, originDeck = DeckTwo } ]
-                        , [ { value = Ten, suit = Spade, originDeck = DeckOne }, { value = Jack, suit = Spade, originDeck = DeckTwo }, { value = Queen, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckTwo } ]
-                        , [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Ten, suit = Spade, originDeck = DeckTwo }, { value = Ten, suit = Heart, originDeck = DeckOne }, { value = Ten, suit = Club, originDeck = DeckTwo } ]
-                        , [ { value = Five, suit = Spade, originDeck = DeckOne }, { value = Five, suit = Diamond, originDeck = DeckOne }, { value = Five, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckTwo } ]
-                        , [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Two, suit = Club, originDeck = DeckTwo }, { value = Three, suit = Club, originDeck = DeckTwo } ]
-                        , [ { value = Seven, suit = Spade, originDeck = DeckTwo }, { value = Eight, suit = Heart, originDeck = DeckTwo }, { value = Nine, suit = Club, originDeck = DeckTwo }, { value = Ten, suit = Diamond, originDeck = DeckTwo }, { value = Jack, suit = Club, originDeck = DeckTwo } ]
-                        , [ { value = Nine, suit = Spade, originDeck = DeckOne }, { value = Ten, suit = Heart, originDeck = DeckTwo }, { value = Jack, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Six, suit = Diamond, originDeck = DeckTwo }, { value = Seven, suit = Diamond, originDeck = DeckTwo }, { value = Eight, suit = Diamond, originDeck = DeckTwo } ]
-                        , [ { value = Three, suit = Spade, originDeck = DeckTwo }, { value = Four, suit = Heart, originDeck = DeckTwo }, { value = Five, suit = Club, originDeck = DeckTwo } ]
-                        , [ { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne }, { value = Four, suit = Spade, originDeck = DeckTwo }, { value = Five, suit = Spade, originDeck = DeckTwo } ]
+                    { helper = [ [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "6S1", parseCard "7H1", parseCard "8S1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1" ]
+                        , [ parseCard "KD1", parseCard "KS1", parseCard "KC1" ]
+                        , [ parseCard "KH2", parseCard "AH2", parseCard "2H2" ]
+                        , [ parseCard "2D1", parseCard "3D2", parseCard "4D2" ]
+                        , [ parseCard "AS1", parseCard "AD2", parseCard "AC2" ]
+                        , [ parseCard "TS1", parseCard "JS2", parseCard "QS1" ]
+                        , [ parseCard "JD1", parseCard "QD1", parseCard "KD2" ]
+                        , [ parseCard "TD1", parseCard "TS2", parseCard "TH1", parseCard "TC2" ]
+                        , [ parseCard "5S1", parseCard "5D1", parseCard "5C1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1", parseCard "5H1", parseCard "6H1" ]
+                        , [ parseCard "AD1", parseCard "AH1", parseCard "AS2" ]
+                        , [ parseCard "AC1", parseCard "2C2", parseCard "3C2" ]
+                        , [ parseCard "7S2", parseCard "8H2", parseCard "9C2", parseCard "TD2", parseCard "JC2" ]
+                        , [ parseCard "9S1", parseCard "TH2", parseCard "JC1" ]
+                        , [ parseCard "6D2", parseCard "7D2", parseCard "8D2" ]
+                        , [ parseCard "3S2", parseCard "4H2", parseCard "5C2" ]
+                        , [ parseCard "2S1", parseCard "3S1", parseCard "4S2", parseCard "5S2" ]
                         ]
-                    , trouble = [ [ { value = Jack, suit = Spade, originDeck = DeckOne } ]
+                    , trouble = [ [ parseCard "JS1" ]
                         ]
                     , growing = []
                     , complete = []
@@ -570,24 +619,24 @@ corpusSid118 =
             let
                 state : Buckets
                 state =
-                    { helper = [ [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Nine, suit = Diamond, originDeck = DeckOne }, { value = Nine, suit = Heart, originDeck = DeckOne }, { value = Nine, suit = Club, originDeck = DeckTwo } ]
-                        , [ { value = Queen, suit = Club, originDeck = DeckOne }, { value = King, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Club, originDeck = DeckOne }, { value = Two, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Ten, suit = Spade, originDeck = DeckOne }, { value = Ten, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Two, suit = Club, originDeck = DeckTwo }, { value = Three, suit = Diamond, originDeck = DeckTwo }, { value = Four, suit = Club, originDeck = DeckTwo }, { value = Five, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Five, suit = Spade, originDeck = DeckTwo }, { value = Six, suit = Spade, originDeck = DeckTwo }, { value = Seven, suit = Spade, originDeck = DeckTwo } ]
-                        , [ { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckTwo }, { value = Three, suit = Heart, originDeck = DeckTwo } ]
-                        , [ { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckTwo } ]
-                        , [ { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckTwo } ]
-                        , [ { value = Ten, suit = Diamond, originDeck = DeckTwo }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckTwo } ]
-                        , [ { value = Five, suit = Club, originDeck = DeckOne }, { value = Six, suit = Diamond, originDeck = DeckTwo }, { value = Seven, suit = Club, originDeck = DeckTwo }, { value = Eight, suit = Diamond, originDeck = DeckTwo } ]
-                        , [ { value = Jack, suit = Club, originDeck = DeckTwo }, { value = Jack, suit = Heart, originDeck = DeckTwo }, { value = Jack, suit = Diamond, originDeck = DeckTwo } ]
-                        , [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne }, { value = Ace, suit = Club, originDeck = DeckTwo } ]
-                        , [ { value = Ten, suit = Spade, originDeck = DeckTwo }, { value = Jack, suit = Spade, originDeck = DeckTwo }, { value = Queen, suit = Spade, originDeck = DeckOne }, { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Ace, suit = Spade, originDeck = DeckTwo }, { value = Two, suit = Spade, originDeck = DeckTwo }, { value = Three, suit = Spade, originDeck = DeckOne } ]
+                    { helper = [ [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "9D1", parseCard "9H1", parseCard "9C2" ]
+                        , [ parseCard "QC1", parseCard "KC1", parseCard "AC1", parseCard "2C1" ]
+                        , [ parseCard "TD1", parseCard "TS1", parseCard "TH1" ]
+                        , [ parseCard "2C2", parseCard "3D2", parseCard "4C2", parseCard "5D1" ]
+                        , [ parseCard "5S2", parseCard "6S2", parseCard "7S2" ]
+                        , [ parseCard "3D1", parseCard "3S2", parseCard "3H2" ]
+                        , [ parseCard "7D1", parseCard "7C1", parseCard "7H2" ]
+                        , [ parseCard "4C1", parseCard "5H1", parseCard "6S1" ]
+                        , [ parseCard "7S1", parseCard "7H1", parseCard "7D2" ]
+                        , [ parseCard "TD2", parseCard "JD1", parseCard "QD1", parseCard "KD1", parseCard "AD2" ]
+                        , [ parseCard "5C1", parseCard "6D2", parseCard "7C2", parseCard "8D2" ]
+                        , [ parseCard "JC2", parseCard "JH2", parseCard "JD2" ]
+                        , [ parseCard "AD1", parseCard "AH1", parseCard "AC2" ]
+                        , [ parseCard "TS2", parseCard "JS2", parseCard "QS1", parseCard "KS1", parseCard "AS1", parseCard "2S1" ]
+                        , [ parseCard "AS2", parseCard "2S2", parseCard "3S1" ]
                         ]
-                    , trouble = [ [ { value = Queen, suit = Club, originDeck = DeckTwo } ]
+                    , trouble = [ [ parseCard "QC2" ]
                         ]
                     , growing = []
                     , complete = []
@@ -616,29 +665,29 @@ corpusSid120 =
             let
                 state : Buckets
                 state =
-                    { helper = [ [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Nine, suit = Club, originDeck = DeckTwo }, { value = Nine, suit = Spade, originDeck = DeckTwo }, { value = Nine, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Two, suit = Heart, originDeck = DeckOne }, { value = Two, suit = Diamond, originDeck = DeckTwo } ]
-                        , [ { value = Queen, suit = Diamond, originDeck = DeckTwo }, { value = Queen, suit = Spade, originDeck = DeckOne }, { value = Queen, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Six, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Club, originDeck = DeckTwo }, { value = Six, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = King, suit = Spade, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckTwo }, { value = Seven, suit = Spade, originDeck = DeckTwo } ]
-                        , [ { value = Five, suit = Club, originDeck = DeckTwo }, { value = Six, suit = Club, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Eight, suit = Heart, originDeck = DeckOne }, { value = Eight, suit = Spade, originDeck = DeckOne }, { value = Eight, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Five, suit = Spade, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Five, suit = Heart, originDeck = DeckTwo }, { value = Six, suit = Heart, originDeck = DeckTwo }, { value = Seven, suit = Heart, originDeck = DeckOne }, { value = Eight, suit = Heart, originDeck = DeckTwo } ]
-                        , [ { value = Nine, suit = Heart, originDeck = DeckTwo }, { value = Ten, suit = Club, originDeck = DeckTwo }, { value = Jack, suit = Diamond, originDeck = DeckTwo } ]
-                        , [ { value = Nine, suit = Club, originDeck = DeckOne }, { value = Ten, suit = Diamond, originDeck = DeckTwo }, { value = Jack, suit = Spade, originDeck = DeckTwo } ]
-                        , [ { value = Four, suit = Diamond, originDeck = DeckTwo }, { value = Five, suit = Club, originDeck = DeckOne }, { value = Six, suit = Diamond, originDeck = DeckTwo } ]
-                        , [ { value = Ten, suit = Spade, originDeck = DeckOne }, { value = Jack, suit = Heart, originDeck = DeckOne }, { value = Queen, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Ten, suit = Heart, originDeck = DeckOne }, { value = Jack, suit = Heart, originDeck = DeckTwo }, { value = Queen, suit = Heart, originDeck = DeckTwo } ]
-                        , [ { value = King, suit = Diamond, originDeck = DeckTwo }, { value = King, suit = Heart, originDeck = DeckOne }, { value = King, suit = Club, originDeck = DeckTwo } ]
+                    { helper = [ [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "9C2", parseCard "9S2", parseCard "9H1" ]
+                        , [ parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1" ]
+                        , [ parseCard "2C1", parseCard "2H1", parseCard "2D2" ]
+                        , [ parseCard "QD2", parseCard "QS1", parseCard "QH1" ]
+                        , [ parseCard "3H1", parseCard "4H1", parseCard "5H1" ]
+                        , [ parseCard "6H1", parseCard "6C2", parseCard "6D1" ]
+                        , [ parseCard "KS1", parseCard "KD1", parseCard "KC1" ]
+                        , [ parseCard "3D1", parseCard "4C1", parseCard "5D1" ]
+                        , [ parseCard "7D1", parseCard "7H2", parseCard "7S2" ]
+                        , [ parseCard "5C2", parseCard "6C1", parseCard "7C1" ]
+                        , [ parseCard "8H1", parseCard "8S1", parseCard "8D1" ]
+                        , [ parseCard "5S1", parseCard "6S1", parseCard "7S1" ]
+                        , [ parseCard "5H2", parseCard "6H2", parseCard "7H1", parseCard "8H2" ]
+                        , [ parseCard "9H2", parseCard "TC2", parseCard "JD2" ]
+                        , [ parseCard "9C1", parseCard "TD2", parseCard "JS2" ]
+                        , [ parseCard "4D2", parseCard "5C1", parseCard "6D2" ]
+                        , [ parseCard "TS1", parseCard "JH1", parseCard "QC1" ]
+                        , [ parseCard "TH1", parseCard "JH2", parseCard "QH2" ]
+                        , [ parseCard "KD2", parseCard "KH1", parseCard "KC2" ]
                         ]
-                    , trouble = [ [ { value = Jack, suit = Club, originDeck = DeckTwo } ]
+                    , trouble = [ [ parseCard "JC2" ]
                         ]
                     , growing = []
                     , complete = []
@@ -667,27 +716,27 @@ corpusSid122 =
             let
                 state : Buckets
                 state =
-                    { helper = [ [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = King, suit = Club, originDeck = DeckOne }, { value = King, suit = Spade, originDeck = DeckTwo }, { value = King, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckTwo }, { value = Two, suit = Diamond, originDeck = DeckTwo } ]
-                        , [ { value = Queen, suit = Club, originDeck = DeckTwo }, { value = Queen, suit = Heart, originDeck = DeckTwo }, { value = Queen, suit = Diamond, originDeck = DeckTwo } ]
-                        , [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Nine, suit = Diamond, originDeck = DeckTwo }, { value = Nine, suit = Heart, originDeck = DeckOne }, { value = Nine, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Two, suit = Diamond, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = King, suit = Heart, originDeck = DeckTwo }, { value = Ace, suit = Heart, originDeck = DeckTwo }, { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Queen, suit = Club, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Club, originDeck = DeckTwo } ]
-                        , [ { value = Jack, suit = Spade, originDeck = DeckOne }, { value = Jack, suit = Heart, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckTwo } ]
-                        , [ { value = Seven, suit = Club, originDeck = DeckTwo }, { value = Eight, suit = Club, originDeck = DeckTwo }, { value = Nine, suit = Club, originDeck = DeckTwo }, { value = Ten, suit = Club, originDeck = DeckTwo } ]
-                        , [ { value = Five, suit = Heart, originDeck = DeckTwo }, { value = Six, suit = Spade, originDeck = DeckTwo }, { value = Seven, suit = Diamond, originDeck = DeckTwo } ]
-                        , [ { value = Nine, suit = Spade, originDeck = DeckTwo }, { value = Ten, suit = Diamond, originDeck = DeckTwo }, { value = Jack, suit = Spade, originDeck = DeckTwo } ]
-                        , [ { value = Five, suit = Club, originDeck = DeckTwo }, { value = Six, suit = Heart, originDeck = DeckTwo }, { value = Seven, suit = Spade, originDeck = DeckTwo } ]
-                        , [ { value = Eight, suit = Spade, originDeck = DeckTwo }, { value = Eight, suit = Heart, originDeck = DeckOne }, { value = Eight, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Queen, suit = Spade, originDeck = DeckOne }, { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne }, { value = Four, suit = Spade, originDeck = DeckTwo } ]
-                        , [ { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckTwo } ]
-                        , [ { value = Five, suit = Spade, originDeck = DeckTwo }, { value = Six, suit = Diamond, originDeck = DeckTwo }, { value = Seven, suit = Spade, originDeck = DeckOne } ]
+                    { helper = [ [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "KC1", parseCard "KS2", parseCard "KH1" ]
+                        , [ parseCard "2C1", parseCard "2S2", parseCard "2D2" ]
+                        , [ parseCard "QC2", parseCard "QH2", parseCard "QD2" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1" ]
+                        , [ parseCard "9D2", parseCard "9H1", parseCard "9C1" ]
+                        , [ parseCard "2D1", parseCard "3D1", parseCard "4D1" ]
+                        , [ parseCard "KH2", parseCard "AH2", parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        , [ parseCard "QC1", parseCard "KD1", parseCard "AC2" ]
+                        , [ parseCard "JS1", parseCard "JH1", parseCard "JD2" ]
+                        , [ parseCard "7C2", parseCard "8C2", parseCard "9C2", parseCard "TC2" ]
+                        , [ parseCard "5H2", parseCard "6S2", parseCard "7D2" ]
+                        , [ parseCard "9S2", parseCard "TD2", parseCard "JS2" ]
+                        , [ parseCard "5C2", parseCard "6H2", parseCard "7S2" ]
+                        , [ parseCard "8S2", parseCard "8H1", parseCard "8D1" ]
+                        , [ parseCard "QS1", parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1", parseCard "4S2" ]
+                        , [ parseCard "7D1", parseCard "7C1", parseCard "7H2" ]
+                        , [ parseCard "5S2", parseCard "6D2", parseCard "7S1" ]
                         ]
-                    , trouble = [ [ { value = Ten, suit = Heart, originDeck = DeckTwo } ]
+                    , trouble = [ [ parseCard "TH2" ]
                         ]
                     , growing = []
                     , complete = []
@@ -716,23 +765,23 @@ corpusSid124 =
             let
                 state : Buckets
                 state =
-                    { helper = [ [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Nine, suit = Club, originDeck = DeckTwo }, { value = Nine, suit = Spade, originDeck = DeckTwo }, { value = Nine, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckTwo }, { value = Seven, suit = Diamond, originDeck = DeckTwo } ]
-                        , [ { value = Five, suit = Diamond, originDeck = DeckTwo }, { value = Five, suit = Spade, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckTwo } ]
-                        , [ { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Spade, originDeck = DeckOne }, { value = Jack, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Two, suit = Diamond, originDeck = DeckTwo }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Club, originDeck = DeckTwo } ]
-                        , [ { value = Queen, suit = Heart, originDeck = DeckTwo }, { value = King, suit = Heart, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckTwo }, { value = Two, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckTwo }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne }, { value = Eight, suit = Club, originDeck = DeckTwo }, { value = Nine, suit = Heart, originDeck = DeckTwo } ]
-                        , [ { value = Queen, suit = Spade, originDeck = DeckTwo }, { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckTwo } ]
-                        , [ { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Eight, suit = Diamond, originDeck = DeckTwo }, { value = Nine, suit = Diamond, originDeck = DeckTwo }, { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckTwo }, { value = Queen, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = King, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Spade, originDeck = DeckTwo }, { value = King, suit = Heart, originDeck = DeckTwo } ]
-                        , [ { value = Ace, suit = Diamond, originDeck = DeckTwo }, { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Five, suit = Club, originDeck = DeckTwo }, { value = Six, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Spade, originDeck = DeckTwo } ]
-                        , [ { value = Queen, suit = Club, originDeck = DeckTwo }, { value = King, suit = Diamond, originDeck = DeckTwo }, { value = Ace, suit = Club, originDeck = DeckTwo }, { value = Two, suit = Heart, originDeck = DeckTwo }, { value = Three, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Four, suit = Club, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Diamond, originDeck = DeckTwo } ]
+                    { helper = [ [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "9C2", parseCard "9S2", parseCard "9H1" ]
+                        , [ parseCard "7S1", parseCard "7C1", parseCard "7H2", parseCard "7D2" ]
+                        , [ parseCard "5D2", parseCard "5S1", parseCard "5H2" ]
+                        , [ parseCard "JD1", parseCard "JS1", parseCard "JC1" ]
+                        , [ parseCard "2D2", parseCard "2S1", parseCard "2C2" ]
+                        , [ parseCard "QH2", parseCard "KH1", parseCard "AH2", parseCard "2H1" ]
+                        , [ parseCard "3H1", parseCard "4C2", parseCard "5H1", parseCard "6S1", parseCard "7H1", parseCard "8C2", parseCard "9H2" ]
+                        , [ parseCard "QS2", parseCard "KS1", parseCard "AS1", parseCard "2S2" ]
+                        , [ parseCard "7D1", parseCard "8D2", parseCard "9D2", parseCard "TD1", parseCard "JD2", parseCard "QD1" ]
+                        , [ parseCard "KD1", parseCard "KS2", parseCard "KH2" ]
+                        , [ parseCard "AD2", parseCard "2C1", parseCard "3D1" ]
+                        , [ parseCard "5C2", parseCard "6D1", parseCard "7S2" ]
+                        , [ parseCard "QC2", parseCard "KD2", parseCard "AC2", parseCard "2H2", parseCard "3S1" ]
+                        , [ parseCard "4C1", parseCard "4H1", parseCard "4D2" ]
                         ]
-                    , trouble = [ [ { value = Six, suit = Spade, originDeck = DeckTwo } ]
+                    , trouble = [ [ parseCard "6S2" ]
                         ]
                     , growing = []
                     , complete = []
@@ -761,23 +810,23 @@ corpusSid126 =
             let
                 state : Buckets
                 state =
-                    { helper = [ [ { value = King, suit = Spade, originDeck = DeckTwo }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne }, { value = Four, suit = Spade, originDeck = DeckTwo } ]
-                        , [ { value = Ten, suit = Club, originDeck = DeckTwo }, { value = Ten, suit = Spade, originDeck = DeckTwo }, { value = Ten, suit = Heart, originDeck = DeckTwo } ]
-                        , [ { value = Seven, suit = Diamond, originDeck = DeckTwo }, { value = Eight, suit = Diamond, originDeck = DeckOne }, { value = Nine, suit = Diamond, originDeck = DeckOne }, { value = Ten, suit = Diamond, originDeck = DeckTwo }, { value = Jack, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Eight, suit = Spade, originDeck = DeckTwo }, { value = Nine, suit = Spade, originDeck = DeckTwo } ]
-                        , [ { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckTwo }, { value = Seven, suit = Spade, originDeck = DeckTwo } ]
-                        , [ { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne }, { value = Eight, suit = Club, originDeck = DeckTwo } ]
-                        , [ { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckTwo }, { value = Three, suit = Club, originDeck = DeckTwo } ]
-                        , [ { value = King, suit = Heart, originDeck = DeckTwo }, { value = Ace, suit = Heart, originDeck = DeckTwo }, { value = Two, suit = Heart, originDeck = DeckTwo } ]
-                        , [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = King, suit = Spade, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckTwo } ]
-                        , [ { value = Queen, suit = Club, originDeck = DeckTwo }, { value = King, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckTwo }, { value = Four, suit = Club, originDeck = DeckTwo }, { value = Five, suit = Heart, originDeck = DeckTwo } ]
-                        , [ { value = Nine, suit = Club, originDeck = DeckTwo }, { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Spade, originDeck = DeckTwo }, { value = Queen, suit = Heart, originDeck = DeckOne }, { value = King, suit = Club, originDeck = DeckTwo } ]
-                        , [ { value = Jack, suit = Diamond, originDeck = DeckTwo }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckTwo }, { value = Ace, suit = Diamond, originDeck = DeckTwo }, { value = Two, suit = Diamond, originDeck = DeckTwo } ]
+                    { helper = [ [ parseCard "KS2", parseCard "AS1", parseCard "2S1", parseCard "3S1", parseCard "4S2" ]
+                        , [ parseCard "TC2", parseCard "TS2", parseCard "TH2" ]
+                        , [ parseCard "7D2", parseCard "8D1", parseCard "9D1", parseCard "TD2", parseCard "JD1" ]
+                        , [ parseCard "7S1", parseCard "8S2", parseCard "9S2" ]
+                        , [ parseCard "7D1", parseCard "7C1", parseCard "7H2", parseCard "7S2" ]
+                        , [ parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1", parseCard "8C2" ]
+                        , [ parseCard "3D1", parseCard "3S2", parseCard "3C2" ]
+                        , [ parseCard "KH2", parseCard "AH2", parseCard "2H2" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "KS1", parseCard "KD1", parseCard "KH1" ]
+                        , [ parseCard "AD1", parseCard "AH1", parseCard "AS2" ]
+                        , [ parseCard "QC2", parseCard "KC1", parseCard "AC1" ]
+                        , [ parseCard "2C1", parseCard "3H2", parseCard "4C2", parseCard "5H2" ]
+                        , [ parseCard "9C2", parseCard "TD1", parseCard "JS2", parseCard "QH1", parseCard "KC2" ]
+                        , [ parseCard "JD2", parseCard "QD1", parseCard "KD2", parseCard "AD2", parseCard "2D2" ]
                         ]
-                    , trouble = [ [ { value = Five, suit = Club, originDeck = DeckTwo } ]
+                    , trouble = [ [ parseCard "5C2" ]
                         ]
                     , growing = []
                     , complete = []
@@ -806,24 +855,24 @@ corpusSid128 =
             let
                 state : Buckets
                 state =
-                    { helper = [ [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Three, suit = Heart, originDeck = DeckTwo }, { value = Four, suit = Club, originDeck = DeckTwo }, { value = Five, suit = Diamond, originDeck = DeckOne }, { value = Six, suit = Club, originDeck = DeckTwo } ]
-                        , [ { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Eight, suit = Club, originDeck = DeckOne }, { value = Nine, suit = Club, originDeck = DeckOne }, { value = Ten, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Three, suit = Diamond, originDeck = DeckTwo }, { value = Three, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Club, originDeck = DeckTwo } ]
-                        , [ { value = Four, suit = Spade, originDeck = DeckTwo }, { value = Five, suit = Diamond, originDeck = DeckTwo }, { value = Six, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Two, suit = Heart, originDeck = DeckTwo }, { value = Two, suit = Diamond, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckTwo } ]
-                        , [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Diamond, originDeck = DeckTwo } ]
-                        , [ { value = Nine, suit = Diamond, originDeck = DeckTwo }, { value = Ten, suit = Spade, originDeck = DeckTwo }, { value = Jack, suit = Diamond, originDeck = DeckTwo } ]
-                        , [ { value = Queen, suit = Heart, originDeck = DeckTwo }, { value = Queen, suit = Spade, originDeck = DeckOne }, { value = Queen, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Seven, suit = Spade, originDeck = DeckTwo }, { value = Eight, suit = Heart, originDeck = DeckOne }, { value = Nine, suit = Spade, originDeck = DeckOne }, { value = Ten, suit = Heart, originDeck = DeckTwo }, { value = Jack, suit = Club, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckTwo } ]
-                        , [ { value = Ten, suit = Spade, originDeck = DeckOne }, { value = Jack, suit = Spade, originDeck = DeckTwo }, { value = Queen, suit = Spade, originDeck = DeckTwo }, { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Nine, suit = Diamond, originDeck = DeckOne }, { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckTwo } ]
-                        , [ { value = King, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Club, originDeck = DeckTwo }, { value = Two, suit = Heart, originDeck = DeckOne } ]
+                    { helper = [ [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "3H2", parseCard "4C2", parseCard "5D1", parseCard "6C2" ]
+                        , [ parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        , [ parseCard "8C1", parseCard "9C1", parseCard "TC1" ]
+                        , [ parseCard "3D2", parseCard "3S1", parseCard "3C2" ]
+                        , [ parseCard "4S2", parseCard "5D2", parseCard "6C1" ]
+                        , [ parseCard "2H2", parseCard "2D1", parseCard "2S2" ]
+                        , [ parseCard "2C1", parseCard "2S1", parseCard "2D2" ]
+                        , [ parseCard "9D2", parseCard "TS2", parseCard "JD2" ]
+                        , [ parseCard "QH2", parseCard "QS1", parseCard "QC1" ]
+                        , [ parseCard "7S2", parseCard "8H1", parseCard "9S1", parseCard "TH2", parseCard "JC1", parseCard "QD2" ]
+                        , [ parseCard "TS1", parseCard "JS2", parseCard "QS2", parseCard "KS1", parseCard "AS1" ]
+                        , [ parseCard "9D1", parseCard "TD1", parseCard "JD1", parseCard "QD1" ]
+                        , [ parseCard "3H1", parseCard "4H1", parseCard "5H2" ]
+                        , [ parseCard "KD1", parseCard "AC2", parseCard "2H1" ]
                         ]
-                    , trouble = [ [ { value = Five, suit = Spade, originDeck = DeckOne } ]
+                    , trouble = [ [ parseCard "5S1" ]
                         ]
                     , growing = []
                     , complete = []
@@ -852,28 +901,28 @@ corpusSid130 =
             let
                 state : Buckets
                 state =
-                    { helper = [ [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Ten, suit = Club, originDeck = DeckTwo }, { value = Ten, suit = Spade, originDeck = DeckTwo }, { value = Ten, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckTwo } ]
-                        , [ { value = Ace, suit = Heart, originDeck = DeckTwo }, { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Eight, suit = Diamond, originDeck = DeckOne }, { value = Nine, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Three, suit = Spade, originDeck = DeckOne }, { value = Four, suit = Diamond, originDeck = DeckTwo }, { value = Five, suit = Club, originDeck = DeckTwo } ]
-                        , [ { value = Eight, suit = Spade, originDeck = DeckOne }, { value = Nine, suit = Spade, originDeck = DeckOne }, { value = Ten, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Queen, suit = Spade, originDeck = DeckTwo }, { value = Queen, suit = Club, originDeck = DeckTwo }, { value = Queen, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Two, suit = Diamond, originDeck = DeckTwo }, { value = Three, suit = Diamond, originDeck = DeckTwo }, { value = Four, suit = Diamond, originDeck = DeckOne }, { value = Five, suit = Diamond, originDeck = DeckTwo } ]
-                        , [ { value = Four, suit = Club, originDeck = DeckTwo }, { value = Five, suit = Diamond, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = King, suit = Club, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckTwo }, { value = King, suit = Spade, originDeck = DeckTwo } ]
-                        , [ { value = Eight, suit = Heart, originDeck = DeckOne }, { value = Nine, suit = Club, originDeck = DeckTwo }, { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Club, originDeck = DeckTwo }, { value = Queen, suit = Heart, originDeck = DeckTwo } ]
-                        , [ { value = King, suit = Club, originDeck = DeckTwo }, { value = Ace, suit = Club, originDeck = DeckTwo }, { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Club, originDeck = DeckTwo } ]
-                        , [ { value = Five, suit = Heart, originDeck = DeckTwo }, { value = Six, suit = Heart, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne }, { value = Eight, suit = Heart, originDeck = DeckTwo } ]
-                        , [ { value = Nine, suit = Heart, originDeck = DeckOne }, { value = Nine, suit = Spade, originDeck = DeckTwo }, { value = Nine, suit = Club, originDeck = DeckOne }, { value = Nine, suit = Diamond, originDeck = DeckTwo } ]
-                        , [ { value = Three, suit = Club, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne }, { value = Five, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Six, suit = Club, originDeck = DeckOne }, { value = Six, suit = Diamond, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckTwo } ]
-                        , [ { value = Two, suit = Club, originDeck = DeckTwo }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Club, originDeck = DeckTwo } ]
+                    { helper = [ [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "TC2", parseCard "TS2", parseCard "TH1" ]
+                        , [ parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "7S1", parseCard "7C1", parseCard "7H2" ]
+                        , [ parseCard "AH2", parseCard "2H1", parseCard "3H1" ]
+                        , [ parseCard "7D1", parseCard "8D1", parseCard "9D1" ]
+                        , [ parseCard "3S1", parseCard "4D2", parseCard "5C2" ]
+                        , [ parseCard "8S1", parseCard "9S1", parseCard "TS1" ]
+                        , [ parseCard "KS1", parseCard "AS1", parseCard "2S1" ]
+                        , [ parseCard "QS2", parseCard "QC2", parseCard "QH1" ]
+                        , [ parseCard "2D2", parseCard "3D2", parseCard "4D1", parseCard "5D2" ]
+                        , [ parseCard "4C2", parseCard "5D1", parseCard "6S1" ]
+                        , [ parseCard "KC1", parseCard "KD2", parseCard "KS2" ]
+                        , [ parseCard "8H1", parseCard "9C2", parseCard "TD1", parseCard "JC2", parseCard "QH2" ]
+                        , [ parseCard "KC2", parseCard "AC2", parseCard "2C1", parseCard "3C2" ]
+                        , [ parseCard "5H2", parseCard "6H1", parseCard "7H1", parseCard "8H2" ]
+                        , [ parseCard "9H1", parseCard "9S2", parseCard "9C1", parseCard "9D2" ]
+                        , [ parseCard "3C1", parseCard "4H1", parseCard "5S1" ]
+                        , [ parseCard "6C1", parseCard "6D1", parseCard "6S2" ]
+                        , [ parseCard "2C2", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6C2" ]
                         ]
-                    , trouble = [ [ { value = Jack, suit = Heart, originDeck = DeckOne } ]
+                    , trouble = [ [ parseCard "JH1" ]
                         ]
                     , growing = []
                     , complete = []
@@ -902,27 +951,27 @@ corpusSid132 =
             let
                 state : Buckets
                 state =
-                    { helper = [ [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Four, suit = Heart, originDeck = DeckTwo }, { value = Five, suit = Heart, originDeck = DeckTwo }, { value = Six, suit = Heart, originDeck = DeckTwo } ]
-                        , [ { value = Seven, suit = Heart, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckTwo }, { value = Seven, suit = Club, originDeck = DeckTwo } ]
-                        , [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Two, suit = Heart, originDeck = DeckOne }, { value = Two, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Four, suit = Heart, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Three, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckTwo }, { value = Three, suit = Diamond, originDeck = DeckTwo } ]
-                        , [ { value = Jack, suit = Diamond, originDeck = DeckTwo }, { value = Queen, suit = Diamond, originDeck = DeckTwo }, { value = King, suit = Diamond, originDeck = DeckTwo } ]
-                        , [ { value = Four, suit = Spade, originDeck = DeckTwo }, { value = Five, suit = Spade, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Ten, suit = Spade, originDeck = DeckTwo }, { value = Jack, suit = Spade, originDeck = DeckOne }, { value = Queen, suit = Spade, originDeck = DeckTwo }, { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Eight, suit = Diamond, originDeck = DeckTwo }, { value = Nine, suit = Club, originDeck = DeckTwo }, { value = Ten, suit = Heart, originDeck = DeckTwo } ]
-                        , [ { value = Five, suit = Spade, originDeck = DeckTwo }, { value = Six, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Spade, originDeck = DeckTwo }, { value = Eight, suit = Heart, originDeck = DeckOne }, { value = Nine, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Two, suit = Club, originDeck = DeckTwo }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Diamond, originDeck = DeckTwo } ]
-                        , [ { value = Six, suit = Diamond, originDeck = DeckTwo }, { value = Six, suit = Spade, originDeck = DeckTwo }, { value = Six, suit = Club, originDeck = DeckTwo } ]
-                        , [ { value = Ten, suit = Heart, originDeck = DeckOne }, { value = Jack, suit = Heart, originDeck = DeckTwo }, { value = Queen, suit = Heart, originDeck = DeckTwo } ]
-                        , [ { value = King, suit = Heart, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Club, originDeck = DeckTwo } ]
-                        , [ { value = Queen, suit = Club, originDeck = DeckTwo }, { value = King, suit = Heart, originDeck = DeckTwo }, { value = Ace, suit = Club, originDeck = DeckTwo }, { value = Two, suit = Heart, originDeck = DeckTwo }, { value = Three, suit = Spade, originDeck = DeckOne }, { value = Four, suit = Diamond, originDeck = DeckOne }, { value = Five, suit = Club, originDeck = DeckTwo } ]
-                        , [ { value = Eight, suit = Diamond, originDeck = DeckOne }, { value = Nine, suit = Diamond, originDeck = DeckOne }, { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Eight, suit = Heart, originDeck = DeckTwo }, { value = Nine, suit = Spade, originDeck = DeckTwo }, { value = Ten, suit = Diamond, originDeck = DeckTwo }, { value = Jack, suit = Spade, originDeck = DeckTwo }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Club, originDeck = DeckOne } ]
+                    { helper = [ [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "4H2", parseCard "5H2", parseCard "6H2" ]
+                        , [ parseCard "7H1", parseCard "7D2", parseCard "7C2" ]
+                        , [ parseCard "2C1", parseCard "2H1", parseCard "2D1" ]
+                        , [ parseCard "4H1", parseCard "5H1", parseCard "6H1" ]
+                        , [ parseCard "3H1", parseCard "3S2", parseCard "3D2" ]
+                        , [ parseCard "JD2", parseCard "QD2", parseCard "KD2" ]
+                        , [ parseCard "4S2", parseCard "5S1", parseCard "6S1" ]
+                        , [ parseCard "TS2", parseCard "JS1", parseCard "QS2", parseCard "KS1", parseCard "AS1", parseCard "2S1" ]
+                        , [ parseCard "8D2", parseCard "9C2", parseCard "TH2" ]
+                        , [ parseCard "5S2", parseCard "6D1", parseCard "7S2", parseCard "8H1", parseCard "9C1" ]
+                        , [ parseCard "2C2", parseCard "3D1", parseCard "4C1", parseCard "5D2" ]
+                        , [ parseCard "6D2", parseCard "6S2", parseCard "6C2" ]
+                        , [ parseCard "TH1", parseCard "JH2", parseCard "QH2" ]
+                        , [ parseCard "KH1", parseCard "KD1", parseCard "KC2" ]
+                        , [ parseCard "QC2", parseCard "KH2", parseCard "AC2", parseCard "2H2", parseCard "3S1", parseCard "4D1", parseCard "5C2" ]
+                        , [ parseCard "8D1", parseCard "9D1", parseCard "TD1", parseCard "JD1" ]
+                        , [ parseCard "8H2", parseCard "9S2", parseCard "TD2", parseCard "JS2", parseCard "QD1", parseCard "KC1" ]
                         ]
-                    , trouble = [ [ { value = Queen, suit = Club, originDeck = DeckOne } ]
+                    , trouble = [ [ parseCard "QC1" ]
                         ]
                     , growing = []
                     , complete = []
@@ -951,25 +1000,25 @@ corpusSid134 =
             let
                 state : Buckets
                 state =
-                    { helper = [ [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = King, suit = Spade, originDeck = DeckOne }, { value = King, suit = Heart, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckTwo } ]
-                        , [ { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Spade, originDeck = DeckOne }, { value = Jack, suit = Heart, originDeck = DeckTwo } ]
-                        , [ { value = Two, suit = Club, originDeck = DeckTwo }, { value = Three, suit = Diamond, originDeck = DeckTwo }, { value = Four, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckTwo } ]
-                        , [ { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Three, suit = Club, originDeck = DeckTwo }, { value = Three, suit = Spade, originDeck = DeckTwo } ]
-                        , [ { value = King, suit = Spade, originDeck = DeckTwo }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne }, { value = Four, suit = Spade, originDeck = DeckTwo } ]
-                        , [ { value = Queen, suit = Spade, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckTwo }, { value = Queen, suit = Club, originDeck = DeckTwo } ]
-                        , [ { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckTwo }, { value = Two, suit = Diamond, originDeck = DeckTwo } ]
-                        , [ { value = Eight, suit = Diamond, originDeck = DeckTwo }, { value = Eight, suit = Heart, originDeck = DeckTwo }, { value = Eight, suit = Club, originDeck = DeckTwo } ]
-                        , [ { value = Nine, suit = Spade, originDeck = DeckTwo }, { value = Ten, suit = Heart, originDeck = DeckOne }, { value = Jack, suit = Spade, originDeck = DeckTwo } ]
-                        , [ { value = Ace, suit = Club, originDeck = DeckTwo }, { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Club, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckTwo }, { value = Five, suit = Club, originDeck = DeckTwo }, { value = Six, suit = Club, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne }, { value = Eight, suit = Club, originDeck = DeckOne }, { value = Nine, suit = Club, originDeck = DeckOne }, { value = Ten, suit = Club, originDeck = DeckOne }, { value = Jack, suit = Club, originDeck = DeckOne }, { value = Queen, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Ace, suit = Heart, originDeck = DeckTwo }, { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Five, suit = Diamond, originDeck = DeckOne }, { value = Six, suit = Diamond, originDeck = DeckTwo }, { value = Seven, suit = Diamond, originDeck = DeckTwo }, { value = Eight, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne }, { value = Eight, suit = Spade, originDeck = DeckOne }, { value = Nine, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Ten, suit = Club, originDeck = DeckTwo }, { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Ten, suit = Spade, originDeck = DeckTwo } ]
-                        , [ { value = Four, suit = Diamond, originDeck = DeckTwo }, { value = Five, suit = Club, originDeck = DeckOne }, { value = Six, suit = Heart, originDeck = DeckOne }, { value = Seven, suit = Spade, originDeck = DeckTwo }, { value = Eight, suit = Heart, originDeck = DeckOne }, { value = Nine, suit = Spade, originDeck = DeckOne } ]
+                    { helper = [ [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "KS1", parseCard "KH1", parseCard "KD2" ]
+                        , [ parseCard "JD1", parseCard "JS1", parseCard "JH2" ]
+                        , [ parseCard "2C2", parseCard "3D2", parseCard "4S1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7H2" ]
+                        , [ parseCard "3D1", parseCard "3C2", parseCard "3S2" ]
+                        , [ parseCard "KS2", parseCard "AS1", parseCard "2S1", parseCard "3S1", parseCard "4S2" ]
+                        , [ parseCard "QS1", parseCard "QD2", parseCard "QC2" ]
+                        , [ parseCard "QD1", parseCard "KD1", parseCard "AD2", parseCard "2D2" ]
+                        , [ parseCard "8D2", parseCard "8H2", parseCard "8C2" ]
+                        , [ parseCard "9S2", parseCard "TH1", parseCard "JS2" ]
+                        , [ parseCard "AC2", parseCard "2C1", parseCard "3C1", parseCard "4C2", parseCard "5C2", parseCard "6C1", parseCard "7C1", parseCard "8C1", parseCard "9C1", parseCard "TC1", parseCard "JC1", parseCard "QC1" ]
+                        , [ parseCard "AH2", parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "5D1", parseCard "6D2", parseCard "7D2", parseCard "8D1" ]
+                        , [ parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1", parseCard "8S1", parseCard "9H1" ]
+                        , [ parseCard "TC2", parseCard "TD1", parseCard "TS2" ]
+                        , [ parseCard "4D2", parseCard "5C1", parseCard "6H1", parseCard "7S2", parseCard "8H1", parseCard "9S1" ]
                         ]
-                    , trouble = [ [ { value = Six, suit = Heart, originDeck = DeckTwo } ]
+                    , trouble = [ [ parseCard "6H2" ]
                         ]
                     , growing = []
                     , complete = []
@@ -998,23 +1047,23 @@ corpusSid136 =
             let
                 state : Buckets
                 state =
-                    { helper = [ [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckTwo } ]
-                        , [ { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckTwo } ]
-                        , [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Two, suit = Heart, originDeck = DeckOne }, { value = Two, suit = Diamond, originDeck = DeckTwo } ]
-                        , [ { value = Five, suit = Diamond, originDeck = DeckTwo }, { value = Six, suit = Club, originDeck = DeckTwo }, { value = Seven, suit = Diamond, originDeck = DeckTwo } ]
-                        , [ { value = Three, suit = Club, originDeck = DeckTwo }, { value = Four, suit = Diamond, originDeck = DeckTwo }, { value = Five, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne }, { value = Four, suit = Spade, originDeck = DeckTwo }, { value = Five, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Eight, suit = Spade, originDeck = DeckTwo }, { value = Nine, suit = Spade, originDeck = DeckTwo } ]
-                        , [ { value = Ten, suit = Spade, originDeck = DeckTwo }, { value = Ten, suit = Club, originDeck = DeckTwo }, { value = Ten, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Ten, suit = Club, originDeck = DeckOne }, { value = Jack, suit = Heart, originDeck = DeckTwo }, { value = Queen, suit = Spade, originDeck = DeckOne }, { value = King, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Seven, suit = Club, originDeck = DeckTwo }, { value = Eight, suit = Diamond, originDeck = DeckOne }, { value = Nine, suit = Club, originDeck = DeckOne }, { value = Ten, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Ten, suit = Diamond, originDeck = DeckTwo }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Eight, suit = Heart, originDeck = DeckOne }, { value = Nine, suit = Club, originDeck = DeckTwo }, { value = Ten, suit = Heart, originDeck = DeckTwo }, { value = Jack, suit = Club, originDeck = DeckOne }, { value = Queen, suit = Heart, originDeck = DeckTwo }, { value = King, suit = Club, originDeck = DeckTwo } ]
-                        , [ { value = Queen, suit = Diamond, originDeck = DeckTwo }, { value = King, suit = Diamond, originDeck = DeckTwo }, { value = Ace, suit = Diamond, originDeck = DeckTwo }, { value = Two, suit = Diamond, originDeck = DeckOne } ]
+                    { helper = [ [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "7D1", parseCard "7C1", parseCard "7H2" ]
+                        , [ parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        , [ parseCard "3H1", parseCard "4H1", parseCard "5H2" ]
+                        , [ parseCard "2C1", parseCard "2H1", parseCard "2D2" ]
+                        , [ parseCard "5D2", parseCard "6C2", parseCard "7D2" ]
+                        , [ parseCard "3C2", parseCard "4D2", parseCard "5C1" ]
+                        , [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1", parseCard "4S2", parseCard "5S1" ]
+                        , [ parseCard "7S1", parseCard "8S2", parseCard "9S2" ]
+                        , [ parseCard "TS2", parseCard "TC2", parseCard "TH1" ]
+                        , [ parseCard "TC1", parseCard "JH2", parseCard "QS1", parseCard "KH1" ]
+                        , [ parseCard "7C2", parseCard "8D1", parseCard "9C1", parseCard "TD1" ]
+                        , [ parseCard "TD2", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "8H1", parseCard "9C2", parseCard "TH2", parseCard "JC1", parseCard "QH2", parseCard "KC2" ]
+                        , [ parseCard "QD2", parseCard "KD2", parseCard "AD2", parseCard "2D1" ]
                         ]
-                    , trouble = [ [ { value = Five, suit = Diamond, originDeck = DeckOne } ]
+                    , trouble = [ [ parseCard "5D1" ]
                         ]
                     , growing = []
                     , complete = []
@@ -1043,26 +1092,26 @@ corpusSid138 =
             let
                 state : Buckets
                 state =
-                    { helper = [ [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = King, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Club, originDeck = DeckOne }, { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Nine, suit = Diamond, originDeck = DeckTwo }, { value = Nine, suit = Heart, originDeck = DeckOne }, { value = Nine, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Ten, suit = Spade, originDeck = DeckTwo }, { value = Jack, suit = Spade, originDeck = DeckTwo }, { value = Queen, suit = Spade, originDeck = DeckTwo } ]
-                        , [ { value = Five, suit = Heart, originDeck = DeckTwo }, { value = Five, suit = Club, originDeck = DeckTwo }, { value = Five, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckTwo }, { value = Ace, suit = Club, originDeck = DeckTwo } ]
-                        , [ { value = Four, suit = Diamond, originDeck = DeckOne }, { value = Five, suit = Diamond, originDeck = DeckTwo }, { value = Six, suit = Diamond, originDeck = DeckTwo } ]
-                        , [ { value = Five, suit = Club, originDeck = DeckOne }, { value = Six, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Spade, originDeck = DeckTwo }, { value = Eight, suit = Heart, originDeck = DeckTwo }, { value = Nine, suit = Spade, originDeck = DeckTwo }, { value = Ten, suit = Diamond, originDeck = DeckTwo } ]
-                        , [ { value = Queen, suit = Spade, originDeck = DeckOne }, { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Jack, suit = Club, originDeck = DeckTwo }, { value = Jack, suit = Spade, originDeck = DeckOne }, { value = Jack, suit = Heart, originDeck = DeckTwo } ]
-                        , [ { value = Jack, suit = Heart, originDeck = DeckOne }, { value = Queen, suit = Heart, originDeck = DeckTwo }, { value = King, suit = Heart, originDeck = DeckTwo }, { value = Ace, suit = Heart, originDeck = DeckOne }, { value = Two, suit = Heart, originDeck = DeckTwo } ]
-                        , [ { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckTwo }, { value = Two, suit = Diamond, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Diamond, originDeck = DeckTwo } ]
-                        , [ { value = Ten, suit = Heart, originDeck = DeckTwo }, { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Ten, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Three, suit = Spade, originDeck = DeckTwo }, { value = Four, suit = Spade, originDeck = DeckOne }, { value = Five, suit = Spade, originDeck = DeckTwo } ]
-                        , [ { value = Six, suit = Spade, originDeck = DeckOne }, { value = Six, suit = Club, originDeck = DeckTwo }, { value = Six, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Two, suit = Club, originDeck = DeckTwo }, { value = Three, suit = Diamond, originDeck = DeckTwo }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckTwo }, { value = Seven, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Eight, suit = Club, originDeck = DeckTwo }, { value = Eight, suit = Spade, originDeck = DeckOne }, { value = Eight, suit = Diamond, originDeck = DeckTwo } ]
+                    { helper = [ [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "KC1", parseCard "AC1", parseCard "2C1", parseCard "3C1" ]
+                        , [ parseCard "9D2", parseCard "9H1", parseCard "9C1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "TS2", parseCard "JS2", parseCard "QS2" ]
+                        , [ parseCard "5H2", parseCard "5C2", parseCard "5D1" ]
+                        , [ parseCard "AD1", parseCard "AS2", parseCard "AC2" ]
+                        , [ parseCard "4D1", parseCard "5D2", parseCard "6D2" ]
+                        , [ parseCard "5C1", parseCard "6D1", parseCard "7S2", parseCard "8H2", parseCard "9S2", parseCard "TD2" ]
+                        , [ parseCard "QS1", parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "JC2", parseCard "JS1", parseCard "JH2" ]
+                        , [ parseCard "JH1", parseCard "QH2", parseCard "KH2", parseCard "AH1", parseCard "2H2" ]
+                        , [ parseCard "JD1", parseCard "QD1", parseCard "KD1", parseCard "AD2", parseCard "2D1", parseCard "3D1", parseCard "4D2" ]
+                        , [ parseCard "TH2", parseCard "TD1", parseCard "TC1" ]
+                        , [ parseCard "3S2", parseCard "4S1", parseCard "5S2" ]
+                        , [ parseCard "6S1", parseCard "6C2", parseCard "6H1" ]
+                        , [ parseCard "2C2", parseCard "3D2", parseCard "4C1", parseCard "5H1", parseCard "6S2", parseCard "7H1" ]
+                        , [ parseCard "8C2", parseCard "8S1", parseCard "8D2" ]
                         ]
-                    , trouble = [ [ { value = Ten, suit = Club, originDeck = DeckTwo } ]
+                    , trouble = [ [ parseCard "TC2" ]
                         ]
                     , growing = []
                     , complete = []
@@ -1091,27 +1140,27 @@ corpusSid140 =
             let
                 state : Buckets
                 state =
-                    { helper = [ [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Four, suit = Diamond, originDeck = DeckOne }, { value = Five, suit = Diamond, originDeck = DeckOne }, { value = Six, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Jack, suit = Club, originDeck = DeckTwo }, { value = Jack, suit = Diamond, originDeck = DeckTwo }, { value = Jack, suit = Heart, originDeck = DeckTwo } ]
-                        , [ { value = Eight, suit = Club, originDeck = DeckOne }, { value = Eight, suit = Heart, originDeck = DeckOne }, { value = Eight, suit = Spade, originDeck = DeckTwo } ]
-                        , [ { value = Eight, suit = Heart, originDeck = DeckTwo }, { value = Eight, suit = Club, originDeck = DeckTwo }, { value = Eight, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Ace, suit = Heart, originDeck = DeckTwo }, { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Six, suit = Spade, originDeck = DeckTwo }, { value = Seven, suit = Spade, originDeck = DeckTwo }, { value = Eight, suit = Spade, originDeck = DeckOne }, { value = Nine, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Ten, suit = Diamond, originDeck = DeckTwo }, { value = Jack, suit = Spade, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckTwo }, { value = King, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckTwo }, { value = Two, suit = Diamond, originDeck = DeckTwo } ]
-                        , [ { value = Nine, suit = Club, originDeck = DeckTwo }, { value = Nine, suit = Diamond, originDeck = DeckOne }, { value = Nine, suit = Heart, originDeck = DeckTwo } ]
-                        , [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckTwo } ]
-                        , [ { value = Two, suit = Diamond, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckTwo }, { value = Five, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Five, suit = Heart, originDeck = DeckTwo }, { value = Six, suit = Heart, originDeck = DeckTwo }, { value = Seven, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Four, suit = Spade, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Diamond, originDeck = DeckTwo } ]
-                        , [ { value = Three, suit = Club, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckTwo }, { value = Five, suit = Club, originDeck = DeckTwo } ]
-                        , [ { value = Queen, suit = Club, originDeck = DeckOne }, { value = King, suit = Club, originDeck = DeckTwo }, { value = Ace, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Queen, suit = Spade, originDeck = DeckTwo }, { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckTwo } ]
-                        , [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckTwo }, { value = Four, suit = Spade, originDeck = DeckTwo } ]
+                    { helper = [ [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "4D1", parseCard "5D1", parseCard "6D1" ]
+                        , [ parseCard "JC2", parseCard "JD2", parseCard "JH2" ]
+                        , [ parseCard "8C1", parseCard "8H1", parseCard "8S2" ]
+                        , [ parseCard "8H2", parseCard "8C2", parseCard "8D1" ]
+                        , [ parseCard "AH2", parseCard "2H1", parseCard "3H1" ]
+                        , [ parseCard "6S2", parseCard "7S2", parseCard "8S1", parseCard "9S1" ]
+                        , [ parseCard "TD2", parseCard "JS1", parseCard "QD2", parseCard "KC1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1", parseCard "AD2", parseCard "2D2" ]
+                        , [ parseCard "9C2", parseCard "9D1", parseCard "9H2" ]
+                        , [ parseCard "AD1", parseCard "AH1", parseCard "AS2" ]
+                        , [ parseCard "2D1", parseCard "3S1", parseCard "4H2", parseCard "5C1" ]
+                        , [ parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1" ]
+                        , [ parseCard "5H2", parseCard "6H2", parseCard "7H1" ]
+                        , [ parseCard "4S1", parseCard "4H1", parseCard "4D2" ]
+                        , [ parseCard "3C1", parseCard "4C2", parseCard "5C2" ]
+                        , [ parseCard "QC1", parseCard "KC2", parseCard "AC1" ]
+                        , [ parseCard "QS2", parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S2" ]
+                        , [ parseCard "2C1", parseCard "3H2", parseCard "4S2" ]
                         ]
-                    , trouble = [ [ { value = Jack, suit = Heart, originDeck = DeckOne } ]
+                    , trouble = [ [ parseCard "JH1" ]
                         ]
                     , growing = []
                     , complete = []
@@ -1140,28 +1189,28 @@ corpusSid142 =
             let
                 state : Buckets
                 state =
-                    { helper = [ [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Ten, suit = Club, originDeck = DeckTwo }, { value = Ten, suit = Heart, originDeck = DeckTwo } ]
-                        , [ { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckTwo } ]
-                        , [ { value = Five, suit = Heart, originDeck = DeckOne }, { value = Five, suit = Spade, originDeck = DeckOne }, { value = Five, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Eight, suit = Spade, originDeck = DeckOne }, { value = Nine, suit = Spade, originDeck = DeckTwo }, { value = Ten, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne }, { value = Four, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Jack, suit = Spade, originDeck = DeckTwo }, { value = Jack, suit = Heart, originDeck = DeckOne }, { value = Jack, suit = Club, originDeck = DeckTwo }, { value = Jack, suit = Diamond, originDeck = DeckTwo } ]
-                        , [ { value = Queen, suit = Diamond, originDeck = DeckTwo }, { value = Queen, suit = Heart, originDeck = DeckOne }, { value = Queen, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = King, suit = Spade, originDeck = DeckOne }, { value = King, suit = Heart, originDeck = DeckTwo }, { value = King, suit = Diamond, originDeck = DeckTwo } ]
-                        , [ { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckTwo }, { value = Two, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Three, suit = Club, originDeck = DeckTwo }, { value = Three, suit = Diamond, originDeck = DeckTwo }, { value = Three, suit = Heart, originDeck = DeckTwo } ]
-                        , [ { value = Four, suit = Diamond, originDeck = DeckOne }, { value = Five, suit = Club, originDeck = DeckTwo }, { value = Six, suit = Heart, originDeck = DeckOne }, { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Eight, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Queen, suit = Spade, originDeck = DeckTwo }, { value = King, suit = Spade, originDeck = DeckTwo }, { value = Ace, suit = Spade, originDeck = DeckTwo }, { value = Two, suit = Spade, originDeck = DeckTwo }, { value = Three, suit = Spade, originDeck = DeckTwo }, { value = Four, suit = Spade, originDeck = DeckTwo }, { value = Five, suit = Spade, originDeck = DeckTwo }, { value = Six, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Seven, suit = Heart, originDeck = DeckOne }, { value = Eight, suit = Spade, originDeck = DeckTwo }, { value = Nine, suit = Diamond, originDeck = DeckTwo } ]
-                        , [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckTwo }, { value = Six, suit = Club, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckTwo }, { value = Eight, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Eight, suit = Club, originDeck = DeckTwo }, { value = Nine, suit = Club, originDeck = DeckOne }, { value = Ten, suit = Club, originDeck = DeckOne }, { value = Jack, suit = Club, originDeck = DeckOne }, { value = Queen, suit = Club, originDeck = DeckOne }, { value = King, suit = Club, originDeck = DeckTwo }, { value = Ace, suit = Club, originDeck = DeckTwo }, { value = Two, suit = Club, originDeck = DeckTwo }, { value = Three, suit = Club, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckTwo } ]
-                        , [ { value = Six, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckTwo }, { value = Eight, suit = Diamond, originDeck = DeckOne }, { value = Nine, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Two, suit = Heart, originDeck = DeckTwo }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Queen, suit = Heart, originDeck = DeckTwo }, { value = King, suit = Heart, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckTwo }, { value = Two, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Five, suit = Club, originDeck = DeckOne }, { value = Six, suit = Diamond, originDeck = DeckTwo }, { value = Seven, suit = Spade, originDeck = DeckTwo }, { value = Eight, suit = Diamond, originDeck = DeckTwo }, { value = Nine, suit = Club, originDeck = DeckTwo }, { value = Ten, suit = Heart, originDeck = DeckOne } ]
+                    { helper = [ [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "TD1", parseCard "TC2", parseCard "TH2" ]
+                        , [ parseCard "7D1", parseCard "7C1", parseCard "7H2" ]
+                        , [ parseCard "5H1", parseCard "5S1", parseCard "5D1" ]
+                        , [ parseCard "8S1", parseCard "9S2", parseCard "TS1" ]
+                        , [ parseCard "AS1", parseCard "2S1", parseCard "3S1", parseCard "4S1" ]
+                        , [ parseCard "JS2", parseCard "JH1", parseCard "JC2", parseCard "JD2" ]
+                        , [ parseCard "QD2", parseCard "QH1", parseCard "QS1" ]
+                        , [ parseCard "KS1", parseCard "KH2", parseCard "KD2" ]
+                        , [ parseCard "JD1", parseCard "QD1", parseCard "KD1", parseCard "AD2", parseCard "2D1" ]
+                        , [ parseCard "3C2", parseCard "3D2", parseCard "3H2" ]
+                        , [ parseCard "4D1", parseCard "5C2", parseCard "6H1", parseCard "7S1", parseCard "8H1" ]
+                        , [ parseCard "QS2", parseCard "KS2", parseCard "AS2", parseCard "2S2", parseCard "3S2", parseCard "4S2", parseCard "5S2", parseCard "6S1" ]
+                        , [ parseCard "7H1", parseCard "8S2", parseCard "9D2" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H2", parseCard "6C1", parseCard "7D2", parseCard "8C1" ]
+                        , [ parseCard "8C2", parseCard "9C1", parseCard "TC1", parseCard "JC1", parseCard "QC1", parseCard "KC2", parseCard "AC2", parseCard "2C2", parseCard "3C1", parseCard "4C2" ]
+                        , [ parseCard "6D1", parseCard "7C2", parseCard "8D1", parseCard "9S1" ]
+                        , [ parseCard "2H2", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "QH2", parseCard "KH1", parseCard "AH2", parseCard "2H1" ]
+                        , [ parseCard "5C1", parseCard "6D2", parseCard "7S2", parseCard "8D2", parseCard "9C2", parseCard "TH1" ]
                         ]
-                    , trouble = [ [ { value = Eight, suit = Heart, originDeck = DeckTwo } ]
+                    , trouble = [ [ parseCard "8H2" ]
                         ]
                     , growing = []
                     , complete = []
@@ -1190,23 +1239,23 @@ corpusSid144 =
             let
                 state : Buckets
                 state =
-                    { helper = [ [ { value = Eight, suit = Diamond, originDeck = DeckTwo }, { value = Nine, suit = Diamond, originDeck = DeckOne }, { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = King, suit = Club, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckTwo }, { value = King, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Two, suit = Heart, originDeck = DeckTwo }, { value = Two, suit = Spade, originDeck = DeckTwo } ]
-                        , [ { value = Seven, suit = Heart, originDeck = DeckOne }, { value = Eight, suit = Club, originDeck = DeckTwo }, { value = Nine, suit = Heart, originDeck = DeckTwo }, { value = Ten, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Six, suit = Spade, originDeck = DeckOne }, { value = Six, suit = Heart, originDeck = DeckTwo }, { value = Six, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Ace, suit = Heart, originDeck = DeckTwo }, { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Three, suit = Spade, originDeck = DeckTwo }, { value = Four, suit = Spade, originDeck = DeckTwo }, { value = Five, suit = Spade, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckTwo }, { value = Seven, suit = Spade, originDeck = DeckTwo } ]
-                        , [ { value = Jack, suit = Spade, originDeck = DeckOne }, { value = Queen, suit = Spade, originDeck = DeckTwo }, { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckTwo } ]
-                        , [ { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Four, suit = Heart, originDeck = DeckOne }, { value = Five, suit = Spade, originDeck = DeckTwo }, { value = Six, suit = Heart, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckTwo }, { value = Eight, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Ace, suit = Club, originDeck = DeckTwo }, { value = Two, suit = Club, originDeck = DeckTwo }, { value = Three, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckTwo } ]
-                        , [ { value = Eight, suit = Heart, originDeck = DeckTwo }, { value = Nine, suit = Heart, originDeck = DeckOne }, { value = Ten, suit = Heart, originDeck = DeckOne }, { value = Jack, suit = Heart, originDeck = DeckTwo } ]
-                        , [ { value = Ten, suit = Heart, originDeck = DeckTwo }, { value = Jack, suit = Club, originDeck = DeckTwo }, { value = Queen, suit = Diamond, originDeck = DeckTwo } ]
+                    { helper = [ [ parseCard "8D2", parseCard "9D1", parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "KC1", parseCard "KD2", parseCard "KH1" ]
+                        , [ parseCard "2C1", parseCard "2H2", parseCard "2S2" ]
+                        , [ parseCard "7H1", parseCard "8C2", parseCard "9H2", parseCard "TS1" ]
+                        , [ parseCard "6S1", parseCard "6H2", parseCard "6D1" ]
+                        , [ parseCard "AH2", parseCard "2H1", parseCard "3H1" ]
+                        , [ parseCard "3S2", parseCard "4S2", parseCard "5S1", parseCard "6S2", parseCard "7S2" ]
+                        , [ parseCard "JS1", parseCard "QS2", parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1", parseCard "7H2" ]
+                        , [ parseCard "3D1", parseCard "4C1", parseCard "5H1" ]
+                        , [ parseCard "4H1", parseCard "5S2", parseCard "6H1", parseCard "7C2", parseCard "8D1" ]
+                        , [ parseCard "AC2", parseCard "2C2", parseCard "3C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1", parseCard "AS2" ]
+                        , [ parseCard "8H2", parseCard "9H1", parseCard "TH1", parseCard "JH2" ]
+                        , [ parseCard "TH2", parseCard "JC2", parseCard "QD2" ]
                         ]
-                    , trouble = [ [ { value = Five, suit = Club, originDeck = DeckTwo } ]
+                    , trouble = [ [ parseCard "5C2" ]
                         ]
                     , growing = []
                     , complete = []
@@ -1235,23 +1284,23 @@ corpusSid146 =
             let
                 state : Buckets
                 state =
-                    { helper = [ [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Two, suit = Club, originDeck = DeckTwo }, { value = Two, suit = Diamond, originDeck = DeckTwo } ]
-                        , [ { value = Two, suit = Spade, originDeck = DeckTwo }, { value = Three, suit = Spade, originDeck = DeckOne }, { value = Four, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Two, suit = Heart, originDeck = DeckTwo }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckTwo }, { value = Six, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Five, suit = Spade, originDeck = DeckTwo }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Five, suit = Diamond, originDeck = DeckTwo }, { value = Five, suit = Club, originDeck = DeckTwo } ]
-                        , [ { value = Four, suit = Spade, originDeck = DeckTwo }, { value = Five, suit = Spade, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Four, suit = Heart, originDeck = DeckTwo }, { value = Five, suit = Club, originDeck = DeckOne }, { value = Six, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Spade, originDeck = DeckTwo }, { value = Eight, suit = Heart, originDeck = DeckTwo } ]
-                        , [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Eight, suit = Diamond, originDeck = DeckOne }, { value = Nine, suit = Spade, originDeck = DeckOne }, { value = Ten, suit = Diamond, originDeck = DeckTwo }, { value = Jack, suit = Spade, originDeck = DeckOne }, { value = Queen, suit = Heart, originDeck = DeckTwo } ]
-                        , [ { value = Nine, suit = Spade, originDeck = DeckTwo }, { value = Nine, suit = Diamond, originDeck = DeckTwo }, { value = Nine, suit = Club, originDeck = DeckTwo }, { value = Nine, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Queen, suit = Diamond, originDeck = DeckTwo }, { value = King, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckTwo }, { value = Two, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Six, suit = Club, originDeck = DeckTwo }, { value = Seven, suit = Heart, originDeck = DeckOne }, { value = Eight, suit = Spade, originDeck = DeckOne }, { value = Nine, suit = Diamond, originDeck = DeckOne }, { value = Ten, suit = Spade, originDeck = DeckTwo }, { value = Jack, suit = Diamond, originDeck = DeckTwo }, { value = Queen, suit = Club, originDeck = DeckOne } ]
+                    { helper = [ [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "KS1", parseCard "AS1", parseCard "2S1" ]
+                        , [ parseCard "2H1", parseCard "2C2", parseCard "2D2" ]
+                        , [ parseCard "2S2", parseCard "3S1", parseCard "4S1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1" ]
+                        , [ parseCard "2H2", parseCard "3H1", parseCard "4H1", parseCard "5H2", parseCard "6H1" ]
+                        , [ parseCard "5S2", parseCard "5H1", parseCard "5D2", parseCard "5C2" ]
+                        , [ parseCard "4S2", parseCard "5S1", parseCard "6S1" ]
+                        , [ parseCard "4H2", parseCard "5C1", parseCard "6D1", parseCard "7S2", parseCard "8H2" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1" ]
+                        , [ parseCard "8D1", parseCard "9S1", parseCard "TD2", parseCard "JS1", parseCard "QH2" ]
+                        , [ parseCard "9S2", parseCard "9D2", parseCard "9C2", parseCard "9H1" ]
+                        , [ parseCard "QD2", parseCard "KD1", parseCard "AD2", parseCard "2D1" ]
+                        , [ parseCard "6C2", parseCard "7H1", parseCard "8S1", parseCard "9D1", parseCard "TS2", parseCard "JD2", parseCard "QC1" ]
                         ]
-                    , trouble = [ [ { value = Ace, suit = Club, originDeck = DeckTwo } ]
+                    , trouble = [ [ parseCard "AC2" ]
                         ]
                     , growing = []
                     , complete = []
@@ -1280,26 +1329,26 @@ corpusSid148 =
             let
                 state : Buckets
                 state =
-                    { helper = [ [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Ten, suit = Club, originDeck = DeckTwo }, { value = Ten, suit = Spade, originDeck = DeckTwo } ]
-                        , [ { value = Jack, suit = Club, originDeck = DeckOne }, { value = Jack, suit = Heart, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckTwo } ]
-                        , [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckTwo }, { value = Two, suit = Club, originDeck = DeckTwo }, { value = Three, suit = Heart, originDeck = DeckTwo } ]
-                        , [ { value = Queen, suit = Heart, originDeck = DeckTwo }, { value = Queen, suit = Diamond, originDeck = DeckTwo }, { value = Queen, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = King, suit = Heart, originDeck = DeckTwo }, { value = Ace, suit = Club, originDeck = DeckTwo }, { value = Two, suit = Diamond, originDeck = DeckTwo }, { value = Three, suit = Club, originDeck = DeckOne }, { value = Four, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckTwo }, { value = Eight, suit = Spade, originDeck = DeckTwo } ]
-                        , [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Club, originDeck = DeckTwo }, { value = Four, suit = Heart, originDeck = DeckTwo }, { value = Five, suit = Spade, originDeck = DeckOne }, { value = Six, suit = Heart, originDeck = DeckTwo }, { value = Seven, suit = Spade, originDeck = DeckTwo } ]
-                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Five, suit = Club, originDeck = DeckOne }, { value = Six, suit = Club, originDeck = DeckTwo }, { value = Seven, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Three, suit = Spade, originDeck = DeckTwo }, { value = Four, suit = Spade, originDeck = DeckOne }, { value = Five, suit = Spade, originDeck = DeckTwo }, { value = Six, suit = Spade, originDeck = DeckTwo } ]
-                        , [ { value = Two, suit = Heart, originDeck = DeckTwo }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Six, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Club, originDeck = DeckOne }, { value = Six, suit = Diamond, originDeck = DeckTwo } ]
-                        , [ { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Seven, suit = Club, originDeck = DeckTwo }, { value = Eight, suit = Club, originDeck = DeckOne }, { value = Nine, suit = Club, originDeck = DeckTwo } ]
-                        , [ { value = Ten, suit = Diamond, originDeck = DeckTwo }, { value = Ten, suit = Club, originDeck = DeckOne }, { value = Ten, suit = Spade, originDeck = DeckOne } ]
+                    { helper = [ [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "TD1", parseCard "TC2", parseCard "TS2" ]
+                        , [ parseCard "JC1", parseCard "JH1", parseCard "JD2" ]
+                        , [ parseCard "KS1", parseCard "AD2", parseCard "2C2", parseCard "3H2" ]
+                        , [ parseCard "QH2", parseCard "QD2", parseCard "QS1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1" ]
+                        , [ parseCard "KH2", parseCard "AC2", parseCard "2D2", parseCard "3C1", parseCard "4D1" ]
+                        , [ parseCard "6S1", parseCard "7D2", parseCard "8S2" ]
+                        , [ parseCard "2H1", parseCard "3C2", parseCard "4H2", parseCard "5S1", parseCard "6H2", parseCard "7S2" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7H1" ]
+                        , [ parseCard "5C1", parseCard "6C2", parseCard "7C1" ]
+                        , [ parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "3S2", parseCard "4S1", parseCard "5S2", parseCard "6S2" ]
+                        , [ parseCard "2H2", parseCard "3H1", parseCard "4H1", parseCard "5H1" ]
+                        , [ parseCard "6H1", parseCard "6C1", parseCard "6D2" ]
+                        , [ parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "7C2", parseCard "8C1", parseCard "9C2" ]
+                        , [ parseCard "TD2", parseCard "TC1", parseCard "TS1" ]
                         ]
-                    , trouble = [ [ { value = Two, suit = Diamond, originDeck = DeckOne } ]
+                    , trouble = [ [ parseCard "2D1" ]
                         ]
                     , growing = []
                     , complete = []
@@ -1327,13 +1376,13 @@ deckIdentityMismatchInRemove =
         \_ ->
             let
                 move =
-                    { boardBefore = [ { boardCards = [ { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 10, left = 10 } }
+                    { boardBefore = [ { boardCards = [ boardCard "5H1", boardCard "6H1", boardCard "7H1" ], loc = { top = 10, left = 10 } }
                         ]
-                    , stacksToRemove = [ { boardCards = [ { card = { value = Five, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Six, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 10, left = 10 } }
+                    , stacksToRemove = [ { boardCards = [ boardCard "5H2", boardCard "6H2", boardCard "7H2" ], loc = { top = 10, left = 10 } }
                         ]
-                    , stacksToAdd = [ { boardCards = [ { card = { value = Five, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Six, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Eight, suit = Heart, originDeck = DeckTwo }, state = FreshlyPlayed } ], loc = { top = 10, left = 10 } }
+                    , stacksToAdd = [ { boardCards = [ boardCard "5H2", boardCard "6H2", boardCard "7H2", { card = parseCard "8H2", state = FreshlyPlayed } ], loc = { top = 10, left = 10 } }
                         ]
-                    , handCardsPlayed = [ { card = { value = Eight, suit = Heart, originDeck = DeckTwo }, state = HandNormal } ]
+                    , handCardsPlayed = [ handCard "8H2" ]
                     }
             in
             case Referee.validateGameMove move standardBounds of
@@ -1356,10 +1405,10 @@ engulfGrowing2partialIntoLegalRun =
             let
                 state : Buckets
                 state =
-                    { helper = [ [ { value = Three, suit = Spade, originDeck = DeckOne }, { value = Four, suit = Diamond, originDeck = DeckOne }, { value = Five, suit = Club, originDeck = DeckOne } ]
+                    { helper = [ [ parseCard "3S1", parseCard "4D1", parseCard "5C1" ]
                         ]
                     , trouble = []
-                    , growing = [ [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Two, suit = Diamond, originDeck = DeckOne } ]
+                    , growing = [ [ parseCard "AC1", parseCard "2D1" ]
                         ]
                     , complete = []
                     }
@@ -1384,16 +1433,16 @@ extra001JCJDp =
             let
                 state : Buckets
                 state =
-                    { helper = [ [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Nine, suit = Spade, originDeck = DeckTwo }, { value = Ten, suit = Spade, originDeck = DeckOne }, { value = Jack, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Seven, suit = Heart, originDeck = DeckTwo }, { value = Seven, suit = Club, originDeck = DeckTwo }, { value = Seven, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ]
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "9S2", parseCard "TS1", parseCard "JS1" ]
+                        , [ parseCard "7H2", parseCard "7C2", parseCard "7D1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1" ]
+                        , [ parseCard "7S1", parseCard "7C1", parseCard "7H1" ]
                         ]
-                    , trouble = [ [ { value = Jack, suit = Club, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckTwo } ]
+                    , trouble = [ [ parseCard "JC1", parseCard "JD2" ]
                         ]
                     , growing = []
                     , complete = []
@@ -1417,17 +1466,17 @@ extra002JCJDp =
             let
                 state : Buckets
                 state =
-                    { helper = [ [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Nine, suit = Spade, originDeck = DeckTwo }, { value = Ten, suit = Spade, originDeck = DeckOne }, { value = Jack, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Seven, suit = Heart, originDeck = DeckTwo }, { value = Seven, suit = Club, originDeck = DeckTwo }, { value = Seven, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Three, suit = Spade, originDeck = DeckTwo }, { value = Four, suit = Diamond, originDeck = DeckOne }, { value = Five, suit = Club, originDeck = DeckOne } ]
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "9S2", parseCard "TS1", parseCard "JS1" ]
+                        , [ parseCard "7H2", parseCard "7C2", parseCard "7D1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1" ]
+                        , [ parseCard "7S1", parseCard "7C1", parseCard "7H1" ]
+                        , [ parseCard "3S2", parseCard "4D1", parseCard "5C1" ]
                         ]
-                    , trouble = [ [ { value = Jack, suit = Club, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckTwo } ]
+                    , trouble = [ [ parseCard "JC1", parseCard "JD2" ]
                         ]
                     , growing = []
                     , complete = []
@@ -1451,18 +1500,18 @@ extra0035D6C =
             let
                 state : Buckets
                 state =
-                    { helper = [ [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Nine, suit = Spade, originDeck = DeckTwo }, { value = Ten, suit = Spade, originDeck = DeckOne }, { value = Jack, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Seven, suit = Heart, originDeck = DeckTwo }, { value = Seven, suit = Club, originDeck = DeckTwo }, { value = Seven, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Three, suit = Spade, originDeck = DeckTwo }, { value = Four, suit = Diamond, originDeck = DeckOne }, { value = Five, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Jack, suit = Diamond, originDeck = DeckTwo }, { value = Queen, suit = Spade, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ]
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "9S2", parseCard "TS1", parseCard "JS1" ]
+                        , [ parseCard "7H2", parseCard "7C2", parseCard "7D1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1" ]
+                        , [ parseCard "7S1", parseCard "7C1", parseCard "7H1" ]
+                        , [ parseCard "3S2", parseCard "4D1", parseCard "5C1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1" ]
+                        , [ parseCard "JD2", parseCard "QS1", parseCard "KD1" ]
                         ]
-                    , trouble = [ [ { value = Five, suit = Diamond, originDeck = DeckOne }, { value = Six, suit = Club, originDeck = DeckOne } ]
+                    , trouble = [ [ parseCard "5D1", parseCard "6C1" ]
                         ]
                     , growing = []
                     , complete = []
@@ -1486,18 +1535,18 @@ extra0045D6C =
             let
                 state : Buckets
                 state =
-                    { helper = [ [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Nine, suit = Spade, originDeck = DeckTwo }, { value = Ten, suit = Spade, originDeck = DeckOne }, { value = Jack, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Seven, suit = Heart, originDeck = DeckTwo }, { value = Seven, suit = Club, originDeck = DeckTwo }, { value = Seven, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Three, suit = Spade, originDeck = DeckTwo }, { value = Four, suit = Diamond, originDeck = DeckOne }, { value = Five, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Jack, suit = Diamond, originDeck = DeckTwo }, { value = Queen, suit = Spade, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Ace, suit = Diamond, originDeck = DeckTwo }, { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne } ]
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "9S2", parseCard "TS1", parseCard "JS1" ]
+                        , [ parseCard "7H2", parseCard "7C2", parseCard "7D1" ]
+                        , [ parseCard "7S1", parseCard "7C1", parseCard "7H1" ]
+                        , [ parseCard "3S2", parseCard "4D1", parseCard "5C1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1" ]
+                        , [ parseCard "JD2", parseCard "QS1", parseCard "KD1" ]
+                        , [ parseCard "AD2", parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1" ]
                         ]
-                    , trouble = [ [ { value = Five, suit = Diamond, originDeck = DeckOne }, { value = Six, suit = Club, originDeck = DeckOne } ]
+                    , trouble = [ [ parseCard "5D1", parseCard "6C1" ]
                         ]
                     , growing = []
                     , complete = []
@@ -1521,19 +1570,19 @@ extra005JC =
             let
                 state : Buckets
                 state =
-                    { helper = [ [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Nine, suit = Spade, originDeck = DeckTwo }, { value = Ten, suit = Spade, originDeck = DeckOne }, { value = Jack, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Seven, suit = Heart, originDeck = DeckTwo }, { value = Seven, suit = Club, originDeck = DeckTwo }, { value = Seven, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Three, suit = Spade, originDeck = DeckTwo }, { value = Four, suit = Diamond, originDeck = DeckOne }, { value = Five, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Jack, suit = Diamond, originDeck = DeckTwo }, { value = Queen, suit = Spade, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Ace, suit = Diamond, originDeck = DeckTwo }, { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Diamond, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne } ]
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "9S2", parseCard "TS1", parseCard "JS1" ]
+                        , [ parseCard "7H2", parseCard "7C2", parseCard "7D1" ]
+                        , [ parseCard "7S1", parseCard "7C1", parseCard "7H1" ]
+                        , [ parseCard "3S2", parseCard "4D1", parseCard "5C1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1" ]
+                        , [ parseCard "JD2", parseCard "QS1", parseCard "KD1" ]
+                        , [ parseCard "AD2", parseCard "2C1", parseCard "3D1" ]
+                        , [ parseCard "4C1", parseCard "5D1", parseCard "6S1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1", parseCard "5H1" ]
                         ]
-                    , trouble = [ [ { value = Jack, suit = Club, originDeck = DeckOne } ]
+                    , trouble = [ [ parseCard "JC1" ]
                         ]
                     , growing = []
                     , complete = []
@@ -1557,19 +1606,19 @@ extra006JC =
             let
                 state : Buckets
                 state =
-                    { helper = [ [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Nine, suit = Spade, originDeck = DeckTwo }, { value = Ten, suit = Spade, originDeck = DeckOne }, { value = Jack, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Jack, suit = Diamond, originDeck = DeckTwo }, { value = Queen, suit = Spade, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Ace, suit = Diamond, originDeck = DeckTwo }, { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckTwo }, { value = Four, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Five, suit = Club, originDeck = DeckOne }, { value = Six, suit = Club, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckTwo } ]
-                        , [ { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Diamond, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckTwo } ]
-                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne } ]
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "9S2", parseCard "TS1", parseCard "JS1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1" ]
+                        , [ parseCard "JD2", parseCard "QS1", parseCard "KD1" ]
+                        , [ parseCard "AD2", parseCard "2C1", parseCard "3D1" ]
+                        , [ parseCard "3H1", parseCard "4H1", parseCard "5H1" ]
+                        , [ parseCard "2H1", parseCard "3S2", parseCard "4D1" ]
+                        , [ parseCard "5C1", parseCard "6C1", parseCard "7C2" ]
+                        , [ parseCard "4C1", parseCard "5D1", parseCard "6S1", parseCard "7H2" ]
+                        , [ parseCard "7S1", parseCard "7C1", parseCard "7H1", parseCard "7D1" ]
                         ]
-                    , trouble = [ [ { value = Jack, suit = Club, originDeck = DeckOne } ]
+                    , trouble = [ [ parseCard "JC1" ]
                         ]
                     , growing = []
                     , complete = []
@@ -1593,17 +1642,17 @@ extra0074S5Dp =
             let
                 state : Buckets
                 state =
-                    { helper = [ [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Six, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Diamond, originDeck = DeckTwo }, { value = Six, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Ace, suit = Spade, originDeck = DeckTwo }, { value = Two, suit = Spade, originDeck = DeckTwo }, { value = Three, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Eight, suit = Club, originDeck = DeckOne }, { value = Nine, suit = Diamond, originDeck = DeckTwo }, { value = Ten, suit = Spade, originDeck = DeckTwo } ]
+                    { helper = [ [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1" ]
+                        , [ parseCard "6H1", parseCard "6D2", parseCard "6S1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1", parseCard "7H1" ]
+                        , [ parseCard "KS1", parseCard "AS1", parseCard "2S1" ]
+                        , [ parseCard "AS2", parseCard "2S2", parseCard "3S1" ]
+                        , [ parseCard "8C1", parseCard "9D2", parseCard "TS2" ]
                         ]
-                    , trouble = [ [ { value = Four, suit = Spade, originDeck = DeckOne }, { value = Five, suit = Diamond, originDeck = DeckTwo } ]
+                    , trouble = [ [ parseCard "4S1", parseCard "5D2" ]
                         ]
                     , growing = []
                     , complete = []
@@ -1627,18 +1676,18 @@ extra0084S5Dp =
             let
                 state : Buckets
                 state =
-                    { helper = [ [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Six, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Diamond, originDeck = DeckTwo }, { value = Six, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Ace, suit = Spade, originDeck = DeckTwo }, { value = Two, suit = Spade, originDeck = DeckTwo }, { value = Three, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Eight, suit = Club, originDeck = DeckOne }, { value = Nine, suit = Diamond, originDeck = DeckTwo }, { value = Ten, suit = Spade, originDeck = DeckTwo } ]
-                        , [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Heart, originDeck = DeckTwo }, { value = Seven, suit = Heart, originDeck = DeckOne } ]
+                    { helper = [ [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "6H1", parseCard "6D2", parseCard "6S1" ]
+                        , [ parseCard "KS1", parseCard "AS1", parseCard "2S1" ]
+                        , [ parseCard "AS2", parseCard "2S2", parseCard "3S1" ]
+                        , [ parseCard "8C1", parseCard "9D2", parseCard "TS2" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "5H1", parseCard "6H2", parseCard "7H1" ]
                         ]
-                    , trouble = [ [ { value = Four, suit = Spade, originDeck = DeckOne }, { value = Five, suit = Diamond, originDeck = DeckTwo } ]
+                    , trouble = [ [ parseCard "4S1", parseCard "5D2" ]
                         ]
                     , growing = []
                     , complete = []
@@ -1662,18 +1711,18 @@ extra009KHp =
             let
                 state : Buckets
                 state =
-                    { helper = [ [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Six, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Diamond, originDeck = DeckTwo }, { value = Six, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Club, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Eight, suit = Club, originDeck = DeckOne }, { value = Nine, suit = Diamond, originDeck = DeckTwo }, { value = Ten, suit = Spade, originDeck = DeckTwo }, { value = Jack, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Two, suit = Spade, originDeck = DeckTwo }, { value = Three, suit = Spade, originDeck = DeckOne }, { value = Four, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = King, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckTwo }, { value = Two, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Heart, originDeck = DeckTwo }, { value = Seven, suit = Heart, originDeck = DeckOne } ]
+                    { helper = [ [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "6H1", parseCard "6D2", parseCard "6S1" ]
+                        , [ parseCard "KS1", parseCard "AS1", parseCard "2S1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "TD1", parseCard "JC1", parseCard "QD1" ]
+                        , [ parseCard "8C1", parseCard "9D2", parseCard "TS2", parseCard "JD1" ]
+                        , [ parseCard "2S2", parseCard "3S1", parseCard "4S1" ]
+                        , [ parseCard "KD1", parseCard "AS2", parseCard "2H1" ]
+                        , [ parseCard "3H1", parseCard "4H1", parseCard "5H1", parseCard "6H2", parseCard "7H1" ]
                         ]
-                    , trouble = [ [ { value = King, suit = Heart, originDeck = DeckTwo } ]
+                    , trouble = [ [ parseCard "KH2" ]
                         ]
                     , growing = []
                     , complete = []
@@ -1697,19 +1746,19 @@ extra010KHp =
             let
                 state : Buckets
                 state =
-                    { helper = [ [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Six, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Diamond, originDeck = DeckTwo }, { value = Six, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Club, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Two, suit = Spade, originDeck = DeckTwo }, { value = Three, suit = Spade, originDeck = DeckOne }, { value = Four, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = King, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckTwo }, { value = Two, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Nine, suit = Diamond, originDeck = DeckTwo }, { value = Ten, suit = Spade, originDeck = DeckTwo }, { value = Jack, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Heart, originDeck = DeckTwo } ]
-                        , [ { value = Seven, suit = Heart, originDeck = DeckOne }, { value = Eight, suit = Club, originDeck = DeckOne }, { value = Nine, suit = Diamond, originDeck = DeckOne } ]
+                    { helper = [ [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "6H1", parseCard "6D2", parseCard "6S1" ]
+                        , [ parseCard "KS1", parseCard "AS1", parseCard "2S1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "TD1", parseCard "JC1", parseCard "QD1" ]
+                        , [ parseCard "2S2", parseCard "3S1", parseCard "4S1" ]
+                        , [ parseCard "KD1", parseCard "AS2", parseCard "2H1" ]
+                        , [ parseCard "9D2", parseCard "TS2", parseCard "JD1" ]
+                        , [ parseCard "3H1", parseCard "4H1", parseCard "5H1", parseCard "6H2" ]
+                        , [ parseCard "7H1", parseCard "8C1", parseCard "9D1" ]
                         ]
-                    , trouble = [ [ { value = King, suit = Heart, originDeck = DeckTwo } ]
+                    , trouble = [ [ parseCard "KH2" ]
                         ]
                     , growing = []
                     , complete = []
@@ -1733,19 +1782,19 @@ extra011THp =
             let
                 state : Buckets
                 state =
-                    { helper = [ [ { value = Six, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Diamond, originDeck = DeckTwo }, { value = Six, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Club, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Nine, suit = Diamond, originDeck = DeckTwo }, { value = Ten, suit = Spade, originDeck = DeckTwo }, { value = Jack, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Seven, suit = Heart, originDeck = DeckOne }, { value = Eight, suit = Club, originDeck = DeckOne }, { value = Nine, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = King, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckTwo }, { value = Two, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = King, suit = Heart, originDeck = DeckTwo }, { value = Ace, suit = Club, originDeck = DeckOne }, { value = Two, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Four, suit = Heart, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Heart, originDeck = DeckTwo } ]
-                        , [ { value = Ace, suit = Heart, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckTwo }, { value = Three, suit = Spade, originDeck = DeckOne }, { value = Four, suit = Spade, originDeck = DeckOne } ]
+                    { helper = [ [ parseCard "6H1", parseCard "6D2", parseCard "6S1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "TD1", parseCard "JC1", parseCard "QD1" ]
+                        , [ parseCard "9D2", parseCard "TS2", parseCard "JD1" ]
+                        , [ parseCard "7H1", parseCard "8C1", parseCard "9D1" ]
+                        , [ parseCard "KD1", parseCard "AS2", parseCard "2D1" ]
+                        , [ parseCard "KH2", parseCard "AC1", parseCard "2H1" ]
+                        , [ parseCard "AD1", parseCard "2C1", parseCard "3D1", parseCard "4C1" ]
+                        , [ parseCard "4H1", parseCard "5H1", parseCard "6H2" ]
+                        , [ parseCard "AH1", parseCard "2S1", parseCard "3H1" ]
+                        , [ parseCard "KS1", parseCard "AS1", parseCard "2S2", parseCard "3S1", parseCard "4S1" ]
                         ]
-                    , trouble = [ [ { value = Ten, suit = Heart, originDeck = DeckTwo } ]
+                    , trouble = [ [ parseCard "TH2" ]
                         ]
                     , growing = []
                     , complete = []
@@ -1769,19 +1818,19 @@ extra012THp =
             let
                 state : Buckets
                 state =
-                    { helper = [ [ { value = Six, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Diamond, originDeck = DeckTwo }, { value = Six, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Club, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Nine, suit = Diamond, originDeck = DeckTwo }, { value = Ten, suit = Spade, originDeck = DeckTwo }, { value = Jack, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Seven, suit = Heart, originDeck = DeckOne }, { value = Eight, suit = Club, originDeck = DeckOne }, { value = Nine, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = King, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckTwo }, { value = Two, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = King, suit = Heart, originDeck = DeckTwo }, { value = Ace, suit = Club, originDeck = DeckOne }, { value = Two, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Four, suit = Heart, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Heart, originDeck = DeckTwo } ]
-                        , [ { value = Ace, suit = Heart, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckTwo }, { value = Three, suit = Spade, originDeck = DeckOne }, { value = Four, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Diamond, originDeck = DeckTwo } ]
+                    { helper = [ [ parseCard "6H1", parseCard "6D2", parseCard "6S1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "TD1", parseCard "JC1", parseCard "QD1" ]
+                        , [ parseCard "9D2", parseCard "TS2", parseCard "JD1" ]
+                        , [ parseCard "7H1", parseCard "8C1", parseCard "9D1" ]
+                        , [ parseCard "KD1", parseCard "AS2", parseCard "2D1" ]
+                        , [ parseCard "KH2", parseCard "AC1", parseCard "2H1" ]
+                        , [ parseCard "4H1", parseCard "5H1", parseCard "6H2" ]
+                        , [ parseCard "AH1", parseCard "2S1", parseCard "3H1" ]
+                        , [ parseCard "KS1", parseCard "AS1", parseCard "2S2", parseCard "3S1", parseCard "4S1" ]
+                        , [ parseCard "AD1", parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5D2" ]
                         ]
-                    , trouble = [ [ { value = Ten, suit = Heart, originDeck = DeckTwo } ]
+                    , trouble = [ [ parseCard "TH2" ]
                         ]
                     , growing = []
                     , complete = []
@@ -1805,14 +1854,14 @@ extra0138D8C =
             let
                 state : Buckets
                 state =
-                    { helper = [ [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Queen, suit = Club, originDeck = DeckTwo }, { value = King, suit = Club, originDeck = DeckTwo }, { value = Ace, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Ace, suit = Heart, originDeck = DeckOne }, { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ]
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        , [ parseCard "QC2", parseCard "KC2", parseCard "AC1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1", parseCard "AD1" ]
+                        , [ parseCard "AH1", parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
                         ]
-                    , trouble = [ [ { value = Eight, suit = Diamond, originDeck = DeckOne }, { value = Eight, suit = Club, originDeck = DeckOne } ]
+                    , trouble = [ [ parseCard "8D1", parseCard "8C1" ]
                         ]
                     , growing = []
                     , complete = []
@@ -1836,15 +1885,15 @@ extra0148D8C =
             let
                 state : Buckets
                 state =
-                    { helper = [ [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Queen, suit = Club, originDeck = DeckTwo }, { value = King, suit = Club, originDeck = DeckTwo }, { value = Ace, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Ace, suit = Heart, originDeck = DeckOne }, { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Five, suit = Diamond, originDeck = DeckTwo }, { value = Six, suit = Club, originDeck = DeckTwo }, { value = Seven, suit = Heart, originDeck = DeckOne } ]
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "QC2", parseCard "KC2", parseCard "AC1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1", parseCard "AD1" ]
+                        , [ parseCard "AH1", parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1" ]
+                        , [ parseCard "5D2", parseCard "6C2", parseCard "7H1" ]
                         ]
-                    , trouble = [ [ { value = Eight, suit = Diamond, originDeck = DeckOne }, { value = Eight, suit = Club, originDeck = DeckOne } ]
+                    , trouble = [ [ parseCard "8D1", parseCard "8C1" ]
                         ]
                     , growing = []
                     , complete = []
@@ -1868,16 +1917,16 @@ extra0158D8C =
             let
                 state : Buckets
                 state =
-                    { helper = [ [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Queen, suit = Club, originDeck = DeckTwo }, { value = King, suit = Club, originDeck = DeckTwo }, { value = Ace, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Ace, suit = Heart, originDeck = DeckOne }, { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Five, suit = Diamond, originDeck = DeckTwo }, { value = Six, suit = Club, originDeck = DeckTwo }, { value = Seven, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Ten, suit = Spade, originDeck = DeckTwo }, { value = Ten, suit = Club, originDeck = DeckOne }, { value = Ten, suit = Diamond, originDeck = DeckOne } ]
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "QC2", parseCard "KC2", parseCard "AC1" ]
+                        , [ parseCard "AH1", parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1" ]
+                        , [ parseCard "5D2", parseCard "6C2", parseCard "7H1" ]
+                        , [ parseCard "JD1", parseCard "QD1", parseCard "KD1", parseCard "AD1" ]
+                        , [ parseCard "TS2", parseCard "TC1", parseCard "TD1" ]
                         ]
-                    , trouble = [ [ { value = Eight, suit = Diamond, originDeck = DeckOne }, { value = Eight, suit = Club, originDeck = DeckOne } ]
+                    , trouble = [ [ parseCard "8D1", parseCard "8C1" ]
                         ]
                     , growing = []
                     , complete = []
@@ -1901,15 +1950,15 @@ extra0167Hp7Cp =
             let
                 state : Buckets
                 state =
-                    { helper = [ [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Nine, suit = Spade, originDeck = DeckTwo }, { value = Ten, suit = Spade, originDeck = DeckOne }, { value = Jack, suit = Spade, originDeck = DeckOne } ]
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        , [ parseCard "9S2", parseCard "TS1", parseCard "JS1" ]
                         ]
-                    , trouble = [ [ { value = Seven, suit = Heart, originDeck = DeckTwo }, { value = Seven, suit = Club, originDeck = DeckTwo } ]
+                    , trouble = [ [ parseCard "7H2", parseCard "7C2" ]
                         ]
                     , growing = []
                     , complete = []
@@ -1938,14 +1987,14 @@ extra0176H6Dp =
             let
                 state : Buckets
                 state =
-                    { helper = [ [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ]
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
                         ]
-                    , trouble = [ [ { value = Six, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Diamond, originDeck = DeckTwo } ]
+                    , trouble = [ [ parseCard "6H1", parseCard "6D2" ]
                         ]
                     , growing = []
                     , complete = []
@@ -1974,15 +2023,15 @@ extra018ASp2Sp =
             let
                 state : Buckets
                 state =
-                    { helper = [ [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Six, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Diamond, originDeck = DeckTwo }, { value = Six, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ]
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1" ]
+                        , [ parseCard "6H1", parseCard "6D2", parseCard "6S1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1", parseCard "7H1" ]
                         ]
-                    , trouble = [ [ { value = Ace, suit = Spade, originDeck = DeckTwo }, { value = Two, suit = Spade, originDeck = DeckTwo } ]
+                    , trouble = [ [ parseCard "AS2", parseCard "2S2" ]
                         ]
                     , growing = []
                     , complete = []
@@ -2011,18 +2060,18 @@ extra019JC =
             let
                 state : Buckets
                 state =
-                    { helper = [ [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Six, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Diamond, originDeck = DeckTwo }, { value = Six, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Eight, suit = Club, originDeck = DeckOne }, { value = Nine, suit = Diamond, originDeck = DeckTwo }, { value = Ten, suit = Spade, originDeck = DeckTwo } ]
-                        , [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Heart, originDeck = DeckTwo }, { value = Seven, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Ace, suit = Spade, originDeck = DeckTwo }, { value = Two, suit = Spade, originDeck = DeckTwo }, { value = Three, suit = Spade, originDeck = DeckOne }, { value = Four, suit = Spade, originDeck = DeckOne } ]
+                    { helper = [ [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "6H1", parseCard "6D2", parseCard "6S1" ]
+                        , [ parseCard "KS1", parseCard "AS1", parseCard "2S1" ]
+                        , [ parseCard "8C1", parseCard "9D2", parseCard "TS2" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "5H1", parseCard "6H2", parseCard "7H1" ]
+                        , [ parseCard "AS2", parseCard "2S2", parseCard "3S1", parseCard "4S1" ]
                         ]
-                    , trouble = [ [ { value = Jack, suit = Club, originDeck = DeckOne } ]
+                    , trouble = [ [ parseCard "JC1" ]
                         ]
                     , growing = []
                     , complete = []
@@ -2051,19 +2100,19 @@ extra020KHp =
             let
                 state : Buckets
                 state =
-                    { helper = [ [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Six, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Diamond, originDeck = DeckTwo }, { value = Six, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Club, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Two, suit = Spade, originDeck = DeckTwo }, { value = Three, suit = Spade, originDeck = DeckOne }, { value = Four, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Nine, suit = Diamond, originDeck = DeckTwo }, { value = Ten, suit = Spade, originDeck = DeckTwo }, { value = Jack, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Seven, suit = Heart, originDeck = DeckOne }, { value = Eight, suit = Club, originDeck = DeckOne }, { value = Nine, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = King, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckTwo }, { value = Two, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Heart, originDeck = DeckTwo } ]
+                    { helper = [ [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "6H1", parseCard "6D2", parseCard "6S1" ]
+                        , [ parseCard "KS1", parseCard "AS1", parseCard "2S1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "TD1", parseCard "JC1", parseCard "QD1" ]
+                        , [ parseCard "2S2", parseCard "3S1", parseCard "4S1" ]
+                        , [ parseCard "9D2", parseCard "TS2", parseCard "JD1" ]
+                        , [ parseCard "7H1", parseCard "8C1", parseCard "9D1" ]
+                        , [ parseCard "KD1", parseCard "AS2", parseCard "2D1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1", parseCard "5H1", parseCard "6H2" ]
                         ]
-                    , trouble = [ [ { value = King, suit = Heart, originDeck = DeckTwo } ]
+                    , trouble = [ [ parseCard "KH2" ]
                         ]
                     , growing = []
                     , complete = []
@@ -2092,17 +2141,17 @@ extra0212D =
             let
                 state : Buckets
                 state =
-                    { helper = [ [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Ace, suit = Heart, originDeck = DeckOne }, { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Five, suit = Diamond, originDeck = DeckTwo }, { value = Six, suit = Club, originDeck = DeckTwo }, { value = Seven, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Ten, suit = Spade, originDeck = DeckTwo }, { value = Ten, suit = Club, originDeck = DeckOne }, { value = Ten, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = King, suit = Club, originDeck = DeckTwo }, { value = Ace, suit = Club, originDeck = DeckOne }, { value = Two, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Queen, suit = Heart, originDeck = DeckTwo }, { value = Queen, suit = Spade, originDeck = DeckTwo }, { value = Queen, suit = Club, originDeck = DeckTwo } ]
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AH1", parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "5D2", parseCard "6C2", parseCard "7H1" ]
+                        , [ parseCard "JD1", parseCard "QD1", parseCard "KD1", parseCard "AD1" ]
+                        , [ parseCard "TS2", parseCard "TC1", parseCard "TD1" ]
+                        , [ parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1" ]
+                        , [ parseCard "KC2", parseCard "AC1", parseCard "2C1" ]
+                        , [ parseCard "QH2", parseCard "QS2", parseCard "QC2" ]
                         ]
-                    , trouble = [ [ { value = Two, suit = Diamond, originDeck = DeckOne } ]
+                    , trouble = [ [ parseCard "2D1" ]
                         ]
                     , growing = []
                     , complete = []
@@ -2131,17 +2180,17 @@ extra0223Hp =
             let
                 state : Buckets
                 state =
-                    { helper = [ [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Ace, suit = Heart, originDeck = DeckOne }, { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Five, suit = Diamond, originDeck = DeckTwo }, { value = Six, suit = Club, originDeck = DeckTwo }, { value = Seven, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Ten, suit = Spade, originDeck = DeckTwo }, { value = Ten, suit = Club, originDeck = DeckOne }, { value = Ten, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = King, suit = Club, originDeck = DeckTwo }, { value = Ace, suit = Club, originDeck = DeckOne }, { value = Two, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Queen, suit = Heart, originDeck = DeckTwo }, { value = Queen, suit = Spade, originDeck = DeckTwo }, { value = Queen, suit = Club, originDeck = DeckTwo } ]
-                        , [ { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Two, suit = Diamond, originDeck = DeckOne } ]
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AH1", parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "5D2", parseCard "6C2", parseCard "7H1" ]
+                        , [ parseCard "TS2", parseCard "TC1", parseCard "TD1" ]
+                        , [ parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1" ]
+                        , [ parseCard "KC2", parseCard "AC1", parseCard "2C1" ]
+                        , [ parseCard "QH2", parseCard "QS2", parseCard "QC2" ]
+                        , [ parseCard "JD1", parseCard "QD1", parseCard "KD1", parseCard "AD1", parseCard "2D1" ]
                         ]
-                    , trouble = [ [ { value = Three, suit = Heart, originDeck = DeckTwo } ]
+                    , trouble = [ [ parseCard "3H2" ]
                         ]
                     , growing = []
                     , complete = []
@@ -2170,18 +2219,18 @@ extra023TCp =
             let
                 state : Buckets
                 state =
-                    { helper = [ [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Ace, suit = Heart, originDeck = DeckOne }, { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Five, suit = Diamond, originDeck = DeckTwo }, { value = Six, suit = Club, originDeck = DeckTwo }, { value = Seven, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Ten, suit = Spade, originDeck = DeckTwo }, { value = Ten, suit = Club, originDeck = DeckOne }, { value = Ten, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = King, suit = Club, originDeck = DeckTwo }, { value = Ace, suit = Club, originDeck = DeckOne }, { value = Two, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Queen, suit = Heart, originDeck = DeckTwo }, { value = Queen, suit = Spade, originDeck = DeckTwo }, { value = Queen, suit = Club, originDeck = DeckTwo } ]
-                        , [ { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Two, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Three, suit = Heart, originDeck = DeckTwo }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ]
+                    { helper = [ [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AH1", parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "5D2", parseCard "6C2", parseCard "7H1" ]
+                        , [ parseCard "TS2", parseCard "TC1", parseCard "TD1" ]
+                        , [ parseCard "KC2", parseCard "AC1", parseCard "2C1" ]
+                        , [ parseCard "QH2", parseCard "QS2", parseCard "QC2" ]
+                        , [ parseCard "JD1", parseCard "QD1", parseCard "KD1", parseCard "AD1", parseCard "2D1" ]
+                        , [ parseCard "4C1", parseCard "5H1", parseCard "6S1" ]
+                        , [ parseCard "KS1", parseCard "AS1", parseCard "2S1" ]
+                        , [ parseCard "3H2", parseCard "3D1", parseCard "3S1" ]
                         ]
-                    , trouble = [ [ { value = Ten, suit = Club, originDeck = DeckTwo } ]
+                    , trouble = [ [ parseCard "TC2" ]
                         ]
                     , growing = []
                     , complete = []
@@ -2210,19 +2259,19 @@ extra0242Cp =
             let
                 state : Buckets
                 state =
-                    { helper = [ [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Ace, suit = Heart, originDeck = DeckOne }, { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Five, suit = Diamond, originDeck = DeckTwo }, { value = Six, suit = Club, originDeck = DeckTwo }, { value = Seven, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Ten, suit = Spade, originDeck = DeckTwo }, { value = Ten, suit = Club, originDeck = DeckOne }, { value = Ten, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = King, suit = Club, originDeck = DeckTwo }, { value = Ace, suit = Club, originDeck = DeckOne }, { value = Two, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Three, suit = Heart, originDeck = DeckTwo }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Ten, suit = Club, originDeck = DeckTwo }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Club, originDeck = DeckTwo } ]
-                        , [ { value = King, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Two, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Queen, suit = Heart, originDeck = DeckTwo }, { value = Queen, suit = Spade, originDeck = DeckTwo }, { value = Queen, suit = Diamond, originDeck = DeckOne } ]
+                    { helper = [ [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AH1", parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "5D2", parseCard "6C2", parseCard "7H1" ]
+                        , [ parseCard "TS2", parseCard "TC1", parseCard "TD1" ]
+                        , [ parseCard "KC2", parseCard "AC1", parseCard "2C1" ]
+                        , [ parseCard "4C1", parseCard "5H1", parseCard "6S1" ]
+                        , [ parseCard "KS1", parseCard "AS1", parseCard "2S1" ]
+                        , [ parseCard "3H2", parseCard "3D1", parseCard "3S1" ]
+                        , [ parseCard "TC2", parseCard "JD1", parseCard "QC2" ]
+                        , [ parseCard "KD1", parseCard "AD1", parseCard "2D1" ]
+                        , [ parseCard "QH2", parseCard "QS2", parseCard "QD1" ]
                         ]
-                    , trouble = [ [ { value = Two, suit = Club, originDeck = DeckTwo } ]
+                    , trouble = [ [ parseCard "2C2" ]
                         ]
                     , growing = []
                     , complete = []
@@ -2251,19 +2300,19 @@ extra0258C =
             let
                 state : Buckets
                 state =
-                    { helper = [ [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Five, suit = Diamond, originDeck = DeckTwo }, { value = Six, suit = Club, originDeck = DeckTwo }, { value = Seven, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Ten, suit = Spade, originDeck = DeckTwo }, { value = Ten, suit = Club, originDeck = DeckOne }, { value = Ten, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = King, suit = Club, originDeck = DeckTwo }, { value = Ace, suit = Club, originDeck = DeckOne }, { value = Two, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Ten, suit = Club, originDeck = DeckTwo }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Club, originDeck = DeckTwo } ]
-                        , [ { value = King, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Two, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Queen, suit = Heart, originDeck = DeckTwo }, { value = Queen, suit = Spade, originDeck = DeckTwo }, { value = Queen, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Ace, suit = Heart, originDeck = DeckOne }, { value = Two, suit = Club, originDeck = DeckTwo }, { value = Three, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Three, suit = Heart, originDeck = DeckTwo }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ]
+                    { helper = [ [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "5D2", parseCard "6C2", parseCard "7H1" ]
+                        , [ parseCard "TS2", parseCard "TC1", parseCard "TD1" ]
+                        , [ parseCard "KC2", parseCard "AC1", parseCard "2C1" ]
+                        , [ parseCard "TC2", parseCard "JD1", parseCard "QC2" ]
+                        , [ parseCard "KD1", parseCard "AD1", parseCard "2D1" ]
+                        , [ parseCard "QH2", parseCard "QS2", parseCard "QD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "AH1", parseCard "2C2", parseCard "3D1" ]
+                        , [ parseCard "3H2", parseCard "4C1", parseCard "5H1", parseCard "6S1" ]
+                        , [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
                         ]
-                    , trouble = [ [ { value = Eight, suit = Club, originDeck = DeckOne } ]
+                    , trouble = [ [ parseCard "8C1" ]
                         ]
                     , growing = []
                     , complete = []
@@ -2291,8 +2340,8 @@ findOpenLocBlockingPreferredOrigin =
         \_ ->
             let
                 existing =
-                    [ { boardCards = [ { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 0, left = 0 } }
-                        , { boardCards = [ { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 90, left = 50 } }
+                    [ { boardCards = [ boardCard "AC1", boardCard "AC1", boardCard "AC1", boardCard "AC1", boardCard "AC1" ], loc = { top = 0, left = 0 } }
+                        , { boardCards = [ boardCard "AC1", boardCard "AC1", boardCard "AC1", boardCard "AC1", boardCard "AC1" ], loc = { top = 90, left = 50 } }
                         ]
 
                 got =
@@ -2327,7 +2376,7 @@ findOpenLocLongStack =
         \_ ->
             let
                 existing =
-                    [ { boardCards = [ { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 0, left = 0 } }
+                    [ { boardCards = [ boardCard "AC1", boardCard "AC1", boardCard "AC1", boardCard "AC1", boardCard "AC1" ], loc = { top = 0, left = 0 } }
                         ]
 
                 got =
@@ -2345,9 +2394,9 @@ findOpenLocLotsOfTopRowStacks =
         \_ ->
             let
                 existing =
-                    [ { boardCards = [ { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 0, left = 0 } }
-                        , { boardCards = [ { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 0, left = 200 } }
-                        , { boardCards = [ { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 0, left = 400 } }
+                    [ { boardCards = [ boardCard "AC1", boardCard "AC1", boardCard "AC1", boardCard "AC1", boardCard "AC1" ], loc = { top = 0, left = 0 } }
+                        , { boardCards = [ boardCard "AC1", boardCard "AC1", boardCard "AC1", boardCard "AC1", boardCard "AC1" ], loc = { top = 0, left = 200 } }
+                        , { boardCards = [ boardCard "AC1", boardCard "AC1", boardCard "AC1", boardCard "AC1", boardCard "AC1" ], loc = { top = 0, left = 400 } }
                         ]
 
                 got =
@@ -2365,7 +2414,7 @@ findOpenLocOneStackTopLeft =
         \_ ->
             let
                 existing =
-                    [ { boardCards = [ { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 0, left = 0 } }
+                    [ { boardCards = [ boardCard "AC1", boardCard "AC1", boardCard "AC1", boardCard "AC1", boardCard "AC1" ], loc = { top = 0, left = 0 } }
                         ]
 
                 got =
@@ -2385,10 +2434,10 @@ freePullSingletonOntoRunGrowing =
                 state : Buckets
                 state =
                     { helper = []
-                    , trouble = [ [ { value = Four, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Five, suit = Heart, originDeck = DeckOne } ]
+                    , trouble = [ [ parseCard "4H1" ]
+                        , [ parseCard "5H1" ]
                         ]
-                    , growing = [ [ { value = Six, suit = Heart, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ]
+                    , growing = [ [ parseCard "6H1", parseCard "7H1" ]
                         ]
                     , complete = []
                     }
@@ -2414,10 +2463,10 @@ geometryCrowded =
                 move =
                     { boardBefore = []
                     , stacksToRemove = []
-                    , stacksToAdd = [ { boardCards = [ { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = FreshlyPlayed } ], loc = { top = 10, left = 10 } }
-                        , { boardCards = [ { card = { value = Two, suit = Spade, originDeck = DeckOne }, state = FreshlyPlayed } ], loc = { top = 10, left = 40 } }
+                    , stacksToAdd = [ { boardCards = [ { card = parseCard "AH1", state = FreshlyPlayed } ], loc = { top = 10, left = 10 } }
+                        , { boardCards = [ { card = parseCard "2S1", state = FreshlyPlayed } ], loc = { top = 10, left = 40 } }
                         ]
-                    , handCardsPlayed = [ { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = HandNormal }, { card = { value = Two, suit = Spade, originDeck = DeckOne }, state = HandNormal } ]
+                    , handCardsPlayed = [ handCard "AH1", handCard "2S1" ]
                     }
             in
             case Referee.validateGameMove move standardBounds of
@@ -2441,9 +2490,9 @@ geometryOutOfBounds =
                 move =
                     { boardBefore = []
                     , stacksToRemove = []
-                    , stacksToAdd = [ { boardCards = [ { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = FreshlyPlayed } ], loc = { top = 10, left = 790 } }
+                    , stacksToAdd = [ { boardCards = [ { card = parseCard "AH1", state = FreshlyPlayed } ], loc = { top = 10, left = 790 } }
                         ]
-                    , handCardsPlayed = [ { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = HandNormal } ]
+                    , handCardsPlayed = [ handCard "AH1" ]
                     }
             in
             case Referee.validateGameMove move standardBounds of
@@ -2467,10 +2516,10 @@ geometryOverlap =
                 move =
                     { boardBefore = []
                     , stacksToRemove = []
-                    , stacksToAdd = [ { boardCards = [ { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = FreshlyPlayed } ], loc = { top = 10, left = 10 } }
-                        , { boardCards = [ { card = { value = Two, suit = Spade, originDeck = DeckOne }, state = FreshlyPlayed } ], loc = { top = 10, left = 10 } }
+                    , stacksToAdd = [ { boardCards = [ { card = parseCard "AH1", state = FreshlyPlayed } ], loc = { top = 10, left = 10 } }
+                        , { boardCards = [ { card = parseCard "2S1", state = FreshlyPlayed } ], loc = { top = 10, left = 10 } }
                         ]
-                    , handCardsPlayed = [ { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = HandNormal }, { card = { value = Two, suit = Spade, originDeck = DeckOne }, state = HandNormal } ]
+                    , handCardsPlayed = [ handCard "AH1", handCard "2S1" ]
                     }
             in
             case Referee.validateGameMove move standardBounds of
@@ -2492,18 +2541,18 @@ hintDirectPlayWinsPriorityOnOpeningBoard =
         \_ ->
             let
                 handCards =
-                    [ { card = { value = Seven, suit = Heart, originDeck = DeckTwo }, state = HandNormal } ]
+                    [ handCard "7H2" ]
 
                 hand =
                     { handCards = handCards }
 
                 board =
-                    [ { boardCards = [ { card = { value = King, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 70, left = 20 } }
-                        , { boardCards = [ { card = { value = Ten, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 160, left = 80 } }
-                        , { boardCards = [ { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 100, left = 140 } }
-                        , { boardCards = [ { card = { value = Seven, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 40, left = 200 } }
-                        , { boardCards = [ { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 130, left = 260 } }
-                        , { boardCards = [ { card = { value = Two, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 70, left = 320 } }
+                    [ { boardCards = [ boardCard "KS1", boardCard "AS1", boardCard "2S1", boardCard "3S1" ], loc = { top = 70, left = 20 } }
+                        , { boardCards = [ boardCard "TD1", boardCard "JD1", boardCard "QD1", boardCard "KD1" ], loc = { top = 160, left = 80 } }
+                        , { boardCards = [ boardCard "2H1", boardCard "3H1", boardCard "4H1" ], loc = { top = 100, left = 140 } }
+                        , { boardCards = [ boardCard "7S1", boardCard "7D1", boardCard "7C1" ], loc = { top = 40, left = 200 } }
+                        , { boardCards = [ boardCard "AC1", boardCard "AD1", boardCard "AH1" ], loc = { top = 130, left = 260 } }
+                        , { boardCards = [ boardCard "2C1", boardCard "3D1", boardCard "4C1", boardCard "5H1", boardCard "6S1", boardCard "7H1" ], loc = { top = 70, left = 320 } }
                         ]
 
                 got =
@@ -2515,7 +2564,7 @@ hintDirectPlayWinsPriorityOnOpeningBoard =
             else
                 let
                     want0 =
-                        { trickId = "direct_play", handCards = [ { value = Seven, suit = Heart, originDeck = DeckTwo } ] }
+                        { trickId = "direct_play", handCards = [ parseCard "7H2" ] }
 
                 in
                 Expect.all
@@ -2536,9 +2585,9 @@ hintEmptyHandNoSuggestions =
                     { handCards = handCards }
 
                 board =
-                    [ { boardCards = [ { card = { value = King, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 70, left = 20 } }
-                        , { boardCards = [ { card = { value = Ten, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 160, left = 80 } }
-                        , { boardCards = [ { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 100, left = 140 } }
+                    [ { boardCards = [ boardCard "KS1", boardCard "AS1", boardCard "2S1", boardCard "3S1" ], loc = { top = 70, left = 20 } }
+                        , { boardCards = [ boardCard "TD1", boardCard "JD1", boardCard "QD1", boardCard "KD1" ], loc = { top = 160, left = 80 } }
+                        , { boardCards = [ boardCard "2H1", boardCard "3H1", boardCard "4H1" ], loc = { top = 100, left = 140 } }
                         ]
 
                 got =
@@ -2557,10 +2606,10 @@ hintInvariantDirectPlayCompleteSet =
         \_ ->
             let
                 handCards =
-                    [ { card = { value = Five, suit = Diamond, originDeck = DeckTwo }, state = HandNormal } ]
+                    [ handCard "5D2" ]
 
                 board =
-                    [ { boardCards = [ { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 40, left = 40 } }
+                    [ { boardCards = [ boardCard "5H1", boardCard "5C1", boardCard "5S1" ], loc = { top = 40, left = 40 } }
                         ]
 
                 plays =
@@ -2594,11 +2643,11 @@ hintInvariantDirectPlayExtendPureRun =
         \_ ->
             let
                 handCards =
-                    [ { card = { value = Nine, suit = Diamond, originDeck = DeckTwo }, state = HandNormal } ]
+                    [ handCard "9D2" ]
 
                 board =
-                    [ { boardCards = [ { card = { value = Six, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Eight, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 40, left = 40 } }
-                        , { boardCards = [ { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 180, left = 40 } }
+                    [ { boardCards = [ boardCard "6D1", boardCard "7D1", boardCard "8D1" ], loc = { top = 40, left = 40 } }
+                        , { boardCards = [ boardCard "AC1", boardCard "2C1", boardCard "3C1" ], loc = { top = 180, left = 40 } }
                         ]
 
                 plays =
@@ -2632,10 +2681,10 @@ hintInvariantHandStacksPureRunReversedHand =
         \_ ->
             let
                 handCards =
-                    [ { card = { value = Seven, suit = Heart, originDeck = DeckTwo }, state = HandNormal }, { card = { value = Six, suit = Heart, originDeck = DeckTwo }, state = HandNormal }, { card = { value = Five, suit = Heart, originDeck = DeckTwo }, state = HandNormal } ]
+                    [ handCard "7H2", handCard "6H2", handCard "5H2" ]
 
                 board =
-                    [ { boardCards = [ { card = { value = Jack, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 40, left = 40 } }
+                    [ { boardCards = [ boardCard "JC1", boardCard "QC1", boardCard "KC1" ], loc = { top = 40, left = 40 } }
                         ]
 
                 plays =
@@ -2669,10 +2718,10 @@ hintInvariantHandStacksPureRunThreeCard =
         \_ ->
             let
                 handCards =
-                    [ { card = { value = Five, suit = Heart, originDeck = DeckTwo }, state = HandNormal }, { card = { value = Six, suit = Heart, originDeck = DeckTwo }, state = HandNormal }, { card = { value = Seven, suit = Heart, originDeck = DeckTwo }, state = HandNormal } ]
+                    [ handCard "5H2", handCard "6H2", handCard "7H2" ]
 
                 board =
-                    [ { boardCards = [ { card = { value = Jack, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 40, left = 40 } }
+                    [ { boardCards = [ boardCard "JC1", boardCard "QC1", boardCard "KC1" ], loc = { top = 40, left = 40 } }
                         ]
 
                 plays =
@@ -2706,10 +2755,10 @@ hintInvariantHandStacksRbRunThreeCard =
         \_ ->
             let
                 handCards =
-                    [ { card = { value = Five, suit = Heart, originDeck = DeckTwo }, state = HandNormal }, { card = { value = Six, suit = Club, originDeck = DeckTwo }, state = HandNormal }, { card = { value = Seven, suit = Heart, originDeck = DeckTwo }, state = HandNormal } ]
+                    [ handCard "5H2", handCard "6C2", handCard "7H2" ]
 
                 board =
-                    [ { boardCards = [ { card = { value = Jack, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 40, left = 40 } }
+                    [ { boardCards = [ boardCard "JC1", boardCard "QC1", boardCard "KC1" ], loc = { top = 40, left = 40 } }
                         ]
 
                 plays =
@@ -2743,10 +2792,10 @@ hintInvariantHandStacksSetThreeOfAKind =
         \_ ->
             let
                 handCards =
-                    [ { card = { value = Four, suit = Heart, originDeck = DeckTwo }, state = HandNormal }, { card = { value = Four, suit = Spade, originDeck = DeckTwo }, state = HandNormal }, { card = { value = Four, suit = Diamond, originDeck = DeckTwo }, state = HandNormal } ]
+                    [ handCard "4H2", handCard "4S2", handCard "4D2" ]
 
                 board =
-                    [ { boardCards = [ { card = { value = Jack, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 40, left = 40 } }
+                    [ { boardCards = [ boardCard "JC1", boardCard "QC1", boardCard "KC1" ], loc = { top = 40, left = 40 } }
                         ]
 
                 plays =
@@ -2780,11 +2829,11 @@ hintInvariantLooseCardPlayPeelSetToRun =
         \_ ->
             let
                 handCards =
-                    [ { card = { value = Three, suit = Club, originDeck = DeckTwo }, state = HandNormal } ]
+                    [ handCard "3C2" ]
 
                 board =
-                    [ { boardCards = [ { card = { value = Four, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 40, left = 40 } }
-                        , { boardCards = [ { card = { value = Five, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 40, left = 300 } }
+                    [ { boardCards = [ boardCard "4C1", boardCard "4D1", boardCard "4H1", boardCard "4S1" ], loc = { top = 40, left = 40 } }
+                        , { boardCards = [ boardCard "5C1", boardCard "6C1", boardCard "7C1" ], loc = { top = 40, left = 300 } }
                         ]
 
                 plays =
@@ -2818,10 +2867,10 @@ hintInvariantPairPeelRunPairPureEdge =
         \_ ->
             let
                 handCards =
-                    [ { card = { value = Five, suit = Heart, originDeck = DeckTwo }, state = HandNormal }, { card = { value = Six, suit = Heart, originDeck = DeckTwo }, state = HandNormal } ]
+                    [ handCard "5H2", handCard "6H2" ]
 
                 board =
-                    [ { boardCards = [ { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Eight, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Nine, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ten, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 40, left = 40 } }
+                    [ { boardCards = [ boardCard "7H1", boardCard "8H1", boardCard "9H1", boardCard "TH1" ], loc = { top = 40, left = 40 } }
                         ]
 
                 plays =
@@ -2855,10 +2904,10 @@ hintInvariantPairPeelRunPairReversedHand =
         \_ ->
             let
                 handCards =
-                    [ { card = { value = Six, suit = Heart, originDeck = DeckTwo }, state = HandNormal }, { card = { value = Five, suit = Heart, originDeck = DeckTwo }, state = HandNormal } ]
+                    [ handCard "6H2", handCard "5H2" ]
 
                 board =
-                    [ { boardCards = [ { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Eight, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Nine, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ten, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 40, left = 40 } }
+                    [ { boardCards = [ boardCard "7H1", boardCard "8H1", boardCard "9H1", boardCard "TH1" ], loc = { top = 40, left = 40 } }
                         ]
 
                 plays =
@@ -2892,10 +2941,10 @@ hintInvariantPairPeelSetPairEdge =
         \_ ->
             let
                 handCards =
-                    [ { card = { value = Five, suit = Heart, originDeck = DeckTwo }, state = HandNormal }, { card = { value = Five, suit = Spade, originDeck = DeckTwo }, state = HandNormal } ]
+                    [ handCard "5H2", handCard "5S2" ]
 
                 board =
-                    [ { boardCards = [ { card = { value = Five, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Eight, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 40, left = 40 } }
+                    [ { boardCards = [ boardCard "5D1", boardCard "6D1", boardCard "7D1", boardCard "8D1" ], loc = { top = 40, left = 40 } }
                         ]
 
                 plays =
@@ -2929,10 +2978,10 @@ hintInvariantPairPeelSetPairMiddle =
         \_ ->
             let
                 handCards =
-                    [ { card = { value = Five, suit = Heart, originDeck = DeckTwo }, state = HandNormal }, { card = { value = Five, suit = Spade, originDeck = DeckTwo }, state = HandNormal } ]
+                    [ handCard "5H2", handCard "5S2" ]
 
                 board =
-                    [ { boardCards = [ { card = { value = Two, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Eight, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Nine, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 40, left = 40 } }
+                    [ { boardCards = [ boardCard "2D1", boardCard "3D1", boardCard "4D1", boardCard "5D1", boardCard "6D1", boardCard "7D1", boardCard "8D1", boardCard "9D1" ], loc = { top = 40, left = 40 } }
                         ]
 
                 plays =
@@ -2966,11 +3015,11 @@ hintInvariantPeelForRunRbEdges =
         \_ ->
             let
                 handCards =
-                    [ { card = { value = Ten, suit = Diamond, originDeck = DeckTwo }, state = HandNormal } ]
+                    [ handCard "TD2" ]
 
                 board =
-                    [ { boardCards = [ { card = { value = Six, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Eight, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Nine, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 40, left = 40 } }
-                        , { boardCards = [ { card = { value = Jack, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 40, left = 300 } }
+                    [ { boardCards = [ boardCard "6C1", boardCard "7C1", boardCard "8C1", boardCard "9C1" ], loc = { top = 40, left = 40 } }
+                        , { boardCards = [ boardCard "JC1", boardCard "QC1", boardCard "KC1", boardCard "AC1" ], loc = { top = 40, left = 300 } }
                         ]
 
                 plays =
@@ -3004,12 +3053,12 @@ hintInvariantRbSwapMiddleSwapClubsHome =
         \_ ->
             let
                 handCards =
-                    [ { card = { value = Four, suit = Spade, originDeck = DeckTwo }, state = HandNormal } ]
+                    [ handCard "4S2" ]
 
                 board =
-                    [ { boardCards = [ { card = { value = Three, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 40, left = 40 } }
-                        , { boardCards = [ { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 40, left = 300 } }
-                        , { boardCards = [ { card = { value = Nine, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ten, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 180, left = 40 } }
+                    [ { boardCards = [ boardCard "3D1", boardCard "4C1", boardCard "5D1", boardCard "6C1" ], loc = { top = 40, left = 40 } }
+                        , { boardCards = [ boardCard "AC1", boardCard "2C1", boardCard "3C1" ], loc = { top = 40, left = 300 } }
+                        , { boardCards = [ boardCard "9H1", boardCard "TH1", boardCard "JH1" ], loc = { top = 180, left = 40 } }
                         ]
 
                 plays =
@@ -3043,11 +3092,11 @@ hintInvariantSplitForSetBothEdges =
         \_ ->
             let
                 handCards =
-                    [ { card = { value = Five, suit = Heart, originDeck = DeckTwo }, state = HandNormal } ]
+                    [ handCard "5H2" ]
 
                 board =
-                    [ { boardCards = [ { card = { value = Five, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Eight, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 40, left = 40 } }
-                        , { boardCards = [ { card = { value = Five, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Eight, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 40, left = 300 } }
+                    [ { boardCards = [ boardCard "5D1", boardCard "6D1", boardCard "7D1", boardCard "8D1" ], loc = { top = 40, left = 40 } }
+                        , { boardCards = [ boardCard "5S1", boardCard "6S1", boardCard "7S1", boardCard "8S1" ], loc = { top = 40, left = 300 } }
                         ]
 
                 plays =
@@ -3081,11 +3130,11 @@ hintInvariantSplitForSetOneMiddleOneEdge =
         \_ ->
             let
                 handCards =
-                    [ { card = { value = Five, suit = Heart, originDeck = DeckTwo }, state = HandNormal } ]
+                    [ handCard "5H2" ]
 
                 board =
-                    [ { boardCards = [ { card = { value = Two, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Eight, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Nine, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 40, left = 40 } }
-                        , { boardCards = [ { card = { value = Five, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Eight, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 40, left = 400 } }
+                    [ { boardCards = [ boardCard "2D1", boardCard "3D1", boardCard "4D1", boardCard "5D1", boardCard "6D1", boardCard "7D1", boardCard "8D1", boardCard "9D1" ], loc = { top = 40, left = 40 } }
+                        , { boardCards = [ boardCard "5S1", boardCard "6S1", boardCard "7S1", boardCard "8S1" ], loc = { top = 40, left = 400 } }
                         ]
 
                 plays =
@@ -3119,13 +3168,13 @@ hintNoPlaysForLonelyUnplayableCard =
         \_ ->
             let
                 handCards =
-                    [ { card = { value = Nine, suit = Spade, originDeck = DeckOne }, state = HandNormal } ]
+                    [ handCard "9S1" ]
 
                 hand =
                     { handCards = handCards }
 
                 board =
-                    [ { boardCards = [ { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 70, left = 20 } }
+                    [ { boardCards = [ boardCard "2H1", boardCard "3H1", boardCard "4H1" ], loc = { top = 70, left = 20 } }
                         ]
 
                 got =
@@ -3160,13 +3209,13 @@ identityReorderBreaksMatch =
         \_ ->
             let
                 move =
-                    { boardBefore = [ { boardCards = [ { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 100, left = 100 } }
+                    { boardBefore = [ { boardCards = [ boardCard "5H1", boardCard "5C1", boardCard "5S1" ], loc = { top = 100, left = 100 } }
                         ]
-                    , stacksToRemove = [ { boardCards = [ { card = { value = Five, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 100, left = 100 } }
+                    , stacksToRemove = [ { boardCards = [ boardCard "5C1", boardCard "5S1", boardCard "5H1" ], loc = { top = 100, left = 100 } }
                         ]
-                    , stacksToAdd = [ { boardCards = [ { card = { value = Five, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Diamond, originDeck = DeckOne }, state = FreshlyPlayed } ], loc = { top = 100, left = 100 } }
+                    , stacksToAdd = [ { boardCards = [ boardCard "5C1", boardCard "5S1", boardCard "5H1", { card = parseCard "5D1", state = FreshlyPlayed } ], loc = { top = 100, left = 100 } }
                         ]
-                    , handCardsPlayed = [ { card = { value = Five, suit = Diamond, originDeck = DeckOne }, state = HandNormal } ]
+                    , handCardsPlayed = [ handCard "5D1" ]
                     }
             in
             case Referee.validateGameMove move standardBounds of
@@ -3190,9 +3239,9 @@ inventoryCardFromNowhere =
                 move =
                     { boardBefore = []
                     , stacksToRemove = []
-                    , stacksToAdd = [ { boardCards = [ { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = FreshlyPlayed }, { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = FreshlyPlayed }, { card = { value = Three, suit = Heart, originDeck = DeckOne }, state = FreshlyPlayed } ], loc = { top = 10, left = 10 } }
+                    , stacksToAdd = [ { boardCards = [ { card = parseCard "AH1", state = FreshlyPlayed }, { card = parseCard "2H1", state = FreshlyPlayed }, { card = parseCard "3H1", state = FreshlyPlayed } ], loc = { top = 10, left = 10 } }
                         ]
-                    , handCardsPlayed = [ { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = HandNormal }, { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = HandNormal } ]
+                    , handCardsPlayed = [ handCard "AH1", handCard "2H1" ]
                     }
             in
             case Referee.validateGameMove move standardBounds of
@@ -3216,9 +3265,9 @@ midturnAllowsBogus =
                 move =
                     { boardBefore = []
                     , stacksToRemove = []
-                    , stacksToAdd = [ { boardCards = [ { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = FreshlyPlayed }, { card = { value = Five, suit = Club, originDeck = DeckOne }, state = FreshlyPlayed }, { card = { value = King, suit = Diamond, originDeck = DeckOne }, state = FreshlyPlayed } ], loc = { top = 10, left = 10 } }
+                    , stacksToAdd = [ { boardCards = [ { card = parseCard "AH1", state = FreshlyPlayed }, { card = parseCard "5C1", state = FreshlyPlayed }, { card = parseCard "KD1", state = FreshlyPlayed } ], loc = { top = 10, left = 10 } }
                         ]
-                    , handCardsPlayed = [ { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = HandNormal }, { card = { value = Five, suit = Club, originDeck = DeckOne }, state = HandNormal }, { card = { value = King, suit = Diamond, originDeck = DeckOne }, state = HandNormal } ]
+                    , handCardsPlayed = [ handCard "AH1", handCard "5C1", handCard "KD1" ]
                     }
             in
             case Referee.validateGameMove move standardBounds of
@@ -3236,19 +3285,19 @@ minedMined0012Hp1 =
             let
                 state : Buckets
                 state =
-                    { helper = [ [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Ace, suit = Spade, originDeck = DeckTwo }, { value = Two, suit = Diamond, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Jack, suit = Heart, originDeck = DeckOne }, { value = Queen, suit = Heart, originDeck = DeckTwo }, { value = King, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Four, suit = Spade, originDeck = DeckTwo }, { value = Five, suit = Diamond, originDeck = DeckTwo }, { value = Six, suit = Spade, originDeck = DeckTwo } ]
-                        , [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Eight, suit = Spade, originDeck = DeckTwo }, { value = Nine, suit = Diamond, originDeck = DeckOne }, { value = Ten, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Spade, originDeck = DeckOne } ]
+                    { helper = [ [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "KS1", parseCard "AS1", parseCard "2S1" ]
+                        , [ parseCard "AS2", parseCard "2D1", parseCard "3S1" ]
+                        , [ parseCard "JH1", parseCard "QH2", parseCard "KH1" ]
+                        , [ parseCard "4S2", parseCard "5D2", parseCard "6S2" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "8S2", parseCard "9D1", parseCard "TS1" ]
+                        , [ parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4S1" ]
                         ]
-                    , trouble = [ [ { value = Two, suit = Heart, originDeck = DeckTwo } ]
+                    , trouble = [ [ parseCard "2H2" ]
                         ]
                     , growing = []
                     , complete = []
@@ -3277,17 +3326,17 @@ minedMined0025D5C =
             let
                 state : Buckets
                 state =
-                    { helper = [ [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Three, suit = Club, originDeck = DeckTwo }, { value = Four, suit = Diamond, originDeck = DeckOne }, { value = Five, suit = Club, originDeck = DeckTwo } ]
-                        , [ { value = Eight, suit = Heart, originDeck = DeckOne }, { value = Eight, suit = Club, originDeck = DeckOne }, { value = Eight, suit = Diamond, originDeck = DeckTwo } ]
-                        , [ { value = Seven, suit = Heart, originDeck = DeckTwo }, { value = Eight, suit = Spade, originDeck = DeckOne }, { value = Nine, suit = Diamond, originDeck = DeckOne } ]
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        , [ parseCard "3C2", parseCard "4D1", parseCard "5C2" ]
+                        , [ parseCard "8H1", parseCard "8C1", parseCard "8D2" ]
+                        , [ parseCard "7H2", parseCard "8S1", parseCard "9D1" ]
                         ]
-                    , trouble = [ [ { value = Five, suit = Diamond, originDeck = DeckOne }, { value = Five, suit = Club, originDeck = DeckOne } ]
+                    , trouble = [ [ parseCard "5D1", parseCard "5C1" ]
                         ]
                     , growing = []
                     , complete = []
@@ -3316,18 +3365,18 @@ minedMined003JCp1 =
             let
                 state : Buckets
                 state =
-                    { helper = [ [ { value = Eight, suit = Heart, originDeck = DeckOne }, { value = Eight, suit = Club, originDeck = DeckOne }, { value = Eight, suit = Diamond, originDeck = DeckTwo } ]
-                        , [ { value = Five, suit = Diamond, originDeck = DeckOne }, { value = Five, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne }, { value = Eight, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckTwo } ]
-                        , [ { value = Nine, suit = Diamond, originDeck = DeckOne }, { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckTwo }, { value = Three, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Club, originDeck = DeckTwo }, { value = Four, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Ace, suit = Heart, originDeck = DeckOne }, { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Three, suit = Spade, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne }, { value = Five, suit = Club, originDeck = DeckTwo }, { value = Six, suit = Heart, originDeck = DeckTwo } ]
+                    { helper = [ [ parseCard "8H1", parseCard "8C1", parseCard "8D2" ]
+                        , [ parseCard "5D1", parseCard "5C1", parseCard "5H1" ]
+                        , [ parseCard "6S1", parseCard "7H1", parseCard "8S1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1", parseCard "7H2" ]
+                        , [ parseCard "9D1", parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "AD1", parseCard "2S2", parseCard "3H1" ]
+                        , [ parseCard "KS1", parseCard "AS1", parseCard "2S1" ]
+                        , [ parseCard "AC1", parseCard "2H1", parseCard "3C2", parseCard "4D1" ]
+                        , [ parseCard "AH1", parseCard "2C1", parseCard "3D1", parseCard "4C1" ]
+                        , [ parseCard "3S1", parseCard "4H1", parseCard "5C2", parseCard "6H2" ]
                         ]
-                    , trouble = [ [ { value = Jack, suit = Club, originDeck = DeckTwo } ]
+                    , trouble = [ [ parseCard "JC2" ]
                         ]
                     , growing = []
                     , complete = []
@@ -3356,19 +3405,19 @@ minedMined0046H =
             let
                 state : Buckets
                 state =
-                    { helper = [ [ { value = Eight, suit = Heart, originDeck = DeckOne }, { value = Eight, suit = Club, originDeck = DeckOne }, { value = Eight, suit = Diamond, originDeck = DeckTwo } ]
-                        , [ { value = Five, suit = Diamond, originDeck = DeckOne }, { value = Five, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne }, { value = Eight, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckTwo } ]
-                        , [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckTwo }, { value = Three, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Ace, suit = Heart, originDeck = DeckOne }, { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Nine, suit = Diamond, originDeck = DeckOne }, { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Four, suit = Heart, originDeck = DeckOne }, { value = Five, suit = Club, originDeck = DeckTwo }, { value = Six, suit = Heart, originDeck = DeckTwo } ]
-                        , [ { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Jack, suit = Club, originDeck = DeckTwo }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = King, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Club, originDeck = DeckOne }, { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Club, originDeck = DeckTwo }, { value = Four, suit = Diamond, originDeck = DeckOne } ]
+                    { helper = [ [ parseCard "8H1", parseCard "8C1", parseCard "8D2" ]
+                        , [ parseCard "5D1", parseCard "5C1", parseCard "5H1" ]
+                        , [ parseCard "6S1", parseCard "7H1", parseCard "8S1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1", parseCard "7H2" ]
+                        , [ parseCard "AD1", parseCard "2S2", parseCard "3H1" ]
+                        , [ parseCard "AH1", parseCard "2C1", parseCard "3D1", parseCard "4C1" ]
+                        , [ parseCard "9D1", parseCard "TD1", parseCard "JD1" ]
+                        , [ parseCard "4H1", parseCard "5C2", parseCard "6H2" ]
+                        , [ parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "JC2", parseCard "QD1", parseCard "KS1" ]
+                        , [ parseCard "KD1", parseCard "AC1", parseCard "2H1", parseCard "3C2", parseCard "4D1" ]
                         ]
-                    , trouble = [ [ { value = Six, suit = Heart, originDeck = DeckOne } ]
+                    , trouble = [ [ parseCard "6H1" ]
                         ]
                     , growing = []
                     , complete = []
@@ -3397,15 +3446,15 @@ minedMined0057Cp17Hp1 =
             let
                 state : Buckets
                 state =
-                    { helper = [ [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = King, suit = Heart, originDeck = DeckTwo }, { value = King, suit = Diamond, originDeck = DeckTwo }, { value = King, suit = Club, originDeck = DeckTwo } ]
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        , [ parseCard "KH2", parseCard "KD2", parseCard "KC2" ]
                         ]
-                    , trouble = [ [ { value = Seven, suit = Club, originDeck = DeckTwo }, { value = Seven, suit = Heart, originDeck = DeckTwo } ]
+                    , trouble = [ [ parseCard "7C2", parseCard "7H2" ]
                         ]
                     , growing = []
                     , complete = []
@@ -3434,16 +3483,16 @@ minedMined0062Cp1 =
             let
                 state : Buckets
                 state =
-                    { helper = [ [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Four, suit = Spade, originDeck = DeckOne }, { value = Five, suit = Diamond, originDeck = DeckOne }, { value = Six, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Six, suit = Diamond, originDeck = DeckOne }, { value = Six, suit = Club, originDeck = DeckTwo }, { value = Six, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ]
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "4S1", parseCard "5D1", parseCard "6C1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1" ]
+                        , [ parseCard "6D1", parseCard "6C2", parseCard "6S1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1", parseCard "7H1" ]
                         ]
-                    , trouble = [ [ { value = Two, suit = Club, originDeck = DeckTwo } ]
+                    , trouble = [ [ parseCard "2C2" ]
                         ]
                     , growing = []
                     , complete = []
@@ -3472,17 +3521,17 @@ minedMined0074D =
             let
                 state : Buckets
                 state =
-                    { helper = [ [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Six, suit = Diamond, originDeck = DeckOne }, { value = Six, suit = Club, originDeck = DeckTwo }, { value = Six, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Five, suit = Diamond, originDeck = DeckOne }, { value = Six, suit = Club, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Two, suit = Club, originDeck = DeckTwo }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ]
+                    { helper = [ [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1" ]
+                        , [ parseCard "6D1", parseCard "6C2", parseCard "6S1" ]
+                        , [ parseCard "7S1", parseCard "7C1", parseCard "7H1" ]
+                        , [ parseCard "5D1", parseCard "6C1", parseCard "7D1" ]
+                        , [ parseCard "2C2", parseCard "3H1", parseCard "4S1" ]
+                        , [ parseCard "KS1", parseCard "AS1", parseCard "2S1" ]
+                        , [ parseCard "2H1", parseCard "3S1", parseCard "4H1" ]
                         ]
-                    , trouble = [ [ { value = Four, suit = Diamond, originDeck = DeckOne } ]
+                    , trouble = [ [ parseCard "4D1" ]
                         ]
                     , growing = []
                     , complete = []
@@ -3511,17 +3560,17 @@ minedMined008QDp1 =
             let
                 state : Buckets
                 state =
-                    { helper = [ [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Six, suit = Diamond, originDeck = DeckOne }, { value = Six, suit = Club, originDeck = DeckTwo }, { value = Six, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Five, suit = Diamond, originDeck = DeckOne }, { value = Six, suit = Club, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Four, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Spade, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Two, suit = Club, originDeck = DeckTwo }, { value = Three, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Ace, suit = Heart, originDeck = DeckOne }, { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = King, suit = Heart, originDeck = DeckTwo }, { value = Ace, suit = Club, originDeck = DeckOne }, { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne }, { value = Four, suit = Diamond, originDeck = DeckTwo } ]
+                    { helper = [ [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "6D1", parseCard "6C2", parseCard "6S1" ]
+                        , [ parseCard "7S1", parseCard "7C1", parseCard "7H1" ]
+                        , [ parseCard "5D1", parseCard "6C1", parseCard "7D1" ]
+                        , [ parseCard "KS1", parseCard "AS1", parseCard "2S1" ]
+                        , [ parseCard "4D1", parseCard "4S1", parseCard "4H1" ]
+                        , [ parseCard "AD1", parseCard "2C2", parseCard "3H1" ]
+                        , [ parseCard "AH1", parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1" ]
+                        , [ parseCard "KH2", parseCard "AC1", parseCard "2H1", parseCard "3S1", parseCard "4D2" ]
                         ]
-                    , trouble = [ [ { value = Queen, suit = Diamond, originDeck = DeckTwo } ]
+                    , trouble = [ [ parseCard "QD2" ]
                         ]
                     , growing = []
                     , complete = []
@@ -3558,9 +3607,9 @@ peelLeftEdgeIntoSingletonTrouble =
             let
                 state : Buckets
                 state =
-                    { helper = [ [ { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Heart, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne }, { value = Eight, suit = Heart, originDeck = DeckOne } ]
+                    { helper = [ [ parseCard "5H1", parseCard "6H1", parseCard "7H1", parseCard "8H1" ]
                         ]
-                    , trouble = [ [ { value = Four, suit = Heart, originDeck = DeckOne } ]
+                    , trouble = [ [ parseCard "4H1" ]
                         ]
                     , growing = []
                     , complete = []
@@ -3586,9 +3635,9 @@ pushPartialPairOntoHelperRun =
             let
                 state : Buckets
                 state =
-                    { helper = [ [ { value = Nine, suit = Club, originDeck = DeckOne }, { value = Ten, suit = Club, originDeck = DeckOne }, { value = Jack, suit = Club, originDeck = DeckOne } ]
+                    { helper = [ [ parseCard "9C1", parseCard "TC1", parseCard "JC1" ]
                         ]
-                    , trouble = [ [ { value = Queen, suit = Club, originDeck = DeckOne }, { value = King, suit = Club, originDeck = DeckOne } ]
+                    , trouble = [ [ parseCard "QC1", parseCard "KC1" ]
                         ]
                     , growing = []
                     , complete = []
@@ -3614,11 +3663,11 @@ shiftEightClubsPopsJackClubs =
             let
                 state : Buckets
                 state =
-                    { helper = [ [ { value = Nine, suit = Club, originDeck = DeckOne }, { value = Ten, suit = Club, originDeck = DeckOne }, { value = Jack, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Eight, suit = Diamond, originDeck = DeckOne }, { value = Eight, suit = Spade, originDeck = DeckOne }, { value = Eight, suit = Heart, originDeck = DeckOne }, { value = Eight, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = King, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Club, originDeck = DeckOne }, { value = Two, suit = Club, originDeck = DeckOne } ]
+                    { helper = [ [ parseCard "9C1", parseCard "TC1", parseCard "JC1" ]
+                        , [ parseCard "8D1", parseCard "8S1", parseCard "8H1", parseCard "8C1" ]
+                        , [ parseCard "KC1", parseCard "AC1", parseCard "2C1" ]
                         ]
-                    , trouble = [ [ { value = Queen, suit = Heart, originDeck = DeckOne } ]
+                    , trouble = [ [ parseCard "QH1" ]
                         ]
                     , growing = []
                     , complete = []
@@ -3644,9 +3693,9 @@ solveDisjointHelperNoPlan =
             let
                 state : Buckets
                 state =
-                    { helper = [ [ { value = Jack, suit = Spade, originDeck = DeckOne }, { value = Queen, suit = Spade, originDeck = DeckOne }, { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne } ]
+                    { helper = [ [ parseCard "JS1", parseCard "QS1", parseCard "KS1", parseCard "AS1" ]
                         ]
-                    , trouble = [ [ { value = Five, suit = Heart, originDeck = DeckOne } ]
+                    , trouble = [ [ parseCard "5H1" ]
                         ]
                     , growing = []
                     , complete = []
@@ -3670,10 +3719,10 @@ solveEngulfInOneLine =
             let
                 state : Buckets
                 state =
-                    { helper = [ [ { value = Three, suit = Spade, originDeck = DeckOne }, { value = Four, suit = Diamond, originDeck = DeckOne }, { value = Five, suit = Club, originDeck = DeckOne } ]
+                    { helper = [ [ parseCard "3S1", parseCard "4D1", parseCard "5C1" ]
                         ]
                     , trouble = []
-                    , growing = [ [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Two, suit = Diamond, originDeck = DeckOne } ]
+                    , growing = [ [ parseCard "AC1", parseCard "2D1" ]
                         ]
                     , complete = []
                     }
@@ -3697,7 +3746,7 @@ solveLoneSingletonNoPlan =
                 state : Buckets
                 state =
                     { helper = []
-                    , trouble = [ [ { value = Five, suit = Heart, originDeck = DeckOne } ]
+                    , trouble = [ [ parseCard "5H1" ]
                         ]
                     , growing = []
                     , complete = []
@@ -3721,11 +3770,11 @@ solveLonelyTroubleAmidRichHelpers =
             let
                 state : Buckets
                 state =
-                    { helper = [ [ { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne }, { value = Four, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Jack, suit = Club, originDeck = DeckOne }, { value = Queen, suit = Club, originDeck = DeckOne }, { value = King, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Eight, suit = Diamond, originDeck = DeckOne }, { value = Nine, suit = Diamond, originDeck = DeckOne }, { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne } ]
+                    { helper = [ [ parseCard "AS1", parseCard "2S1", parseCard "3S1", parseCard "4S1" ]
+                        , [ parseCard "JC1", parseCard "QC1", parseCard "KC1", parseCard "AC1" ]
+                        , [ parseCard "8D1", parseCard "9D1", parseCard "TD1", parseCard "JD1" ]
                         ]
-                    , trouble = [ [ { value = Five, suit = Heart, originDeck = DeckOne } ]
+                    , trouble = [ [ parseCard "5H1" ]
                         ]
                     , growing = []
                     , complete = []
@@ -3749,10 +3798,10 @@ solvePartialCompletableButStranded =
             let
                 state : Buckets
                 state =
-                    { helper = [ [ { value = Three, suit = Club, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Club, originDeck = DeckOne }, { value = Six, suit = Club, originDeck = DeckOne } ]
-                        , [ { value = Jack, suit = Spade, originDeck = DeckOne }, { value = Queen, suit = Spade, originDeck = DeckOne }, { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne } ]
+                    { helper = [ [ parseCard "3C1", parseCard "4C1", parseCard "5C1", parseCard "6C1" ]
+                        , [ parseCard "JS1", parseCard "QS1", parseCard "KS1", parseCard "AS1" ]
                         ]
-                    , trouble = [ [ { value = Five, suit = Heart, originDeck = DeckOne } ]
+                    , trouble = [ [ parseCard "5H1" ]
                         ]
                     , growing = []
                     , complete = []
@@ -3776,9 +3825,9 @@ solveRunPartialUncompletable =
             let
                 state : Buckets
                 state =
-                    { helper = [ [ { value = Jack, suit = Spade, originDeck = DeckOne }, { value = Queen, suit = Spade, originDeck = DeckOne }, { value = King, suit = Spade, originDeck = DeckOne } ]
+                    { helper = [ [ parseCard "JS1", parseCard "QS1", parseCard "KS1" ]
                         ]
-                    , trouble = [ [ { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Heart, originDeck = DeckOne } ]
+                    , trouble = [ [ parseCard "5H1", parseCard "6H1" ]
                         ]
                     , growing = []
                     , complete = []
@@ -3802,9 +3851,9 @@ solveSetPartialUncompletable =
             let
                 state : Buckets
                 state =
-                    { helper = [ [ { value = Jack, suit = Spade, originDeck = DeckOne }, { value = Queen, suit = Spade, originDeck = DeckOne }, { value = King, suit = Spade, originDeck = DeckOne } ]
+                    { helper = [ [ parseCard "JS1", parseCard "QS1", parseCard "KS1" ]
                         ]
-                    , trouble = [ [ { value = Ace, suit = Heart, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne } ]
+                    , trouble = [ [ parseCard "AH1", parseCard "AS1" ]
                         ]
                     , growing = []
                     , complete = []
@@ -3828,9 +3877,9 @@ solveSimplePeelInOneLine =
             let
                 state : Buckets
                 state =
-                    { helper = [ [ { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Heart, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne }, { value = Eight, suit = Heart, originDeck = DeckOne } ]
+                    { helper = [ [ parseCard "5H1", parseCard "6H1", parseCard "7H1", parseCard "8H1" ]
                         ]
-                    , trouble = [ [ { value = Four, suit = Heart, originDeck = DeckOne } ]
+                    , trouble = [ [ parseCard "4H1" ]
                         ]
                     , growing = []
                     , complete = []
@@ -3854,11 +3903,11 @@ solveTwoPartialTroublesNoPaths =
             let
                 state : Buckets
                 state =
-                    { helper = [ [ { value = Eight, suit = Diamond, originDeck = DeckOne }, { value = Nine, suit = Diamond, originDeck = DeckOne }, { value = Ten, suit = Diamond, originDeck = DeckOne } ]
-                        , [ { value = Eight, suit = Spade, originDeck = DeckOne }, { value = Nine, suit = Spade, originDeck = DeckOne }, { value = Ten, suit = Spade, originDeck = DeckOne } ]
+                    { helper = [ [ parseCard "8D1", parseCard "9D1", parseCard "TD1" ]
+                        , [ parseCard "8S1", parseCard "9S1", parseCard "TS1" ]
                         ]
-                    , trouble = [ [ { value = Ace, suit = Heart, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne } ]
-                        , [ { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Heart, originDeck = DeckOne } ]
+                    , trouble = [ [ parseCard "AH1", parseCard "AS1" ]
+                        , [ parseCard "5H1", parseCard "6H1" ]
                         ]
                     , growing = []
                     , complete = []
@@ -3883,8 +3932,8 @@ solveTwoUnrelatedSingletons =
                 state : Buckets
                 state =
                     { helper = []
-                    , trouble = [ [ { value = Five, suit = Heart, originDeck = DeckOne } ]
-                        , [ { value = Jack, suit = Club, originDeck = DeckOne } ]
+                    , trouble = [ [ parseCard "5H1" ]
+                        , [ parseCard "JC1" ]
                         ]
                     , growing = []
                     , complete = []
@@ -3908,9 +3957,9 @@ spliceDup5dIntoPureDiamonds =
             let
                 state : Buckets
                 state =
-                    { helper = [ [ { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Diamond, originDeck = DeckOne }, { value = Five, suit = Diamond, originDeck = DeckOne }, { value = Six, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Eight, suit = Diamond, originDeck = DeckOne } ]
+                    { helper = [ [ parseCard "3D1", parseCard "4D1", parseCard "5D1", parseCard "6D1", parseCard "7D1", parseCard "8D1" ]
                         ]
-                    , trouble = [ [ { value = Five, suit = Diamond, originDeck = DeckTwo } ]
+                    , trouble = [ [ parseCard "5D2" ]
                         ]
                     , growing = []
                     , complete = []
@@ -3935,8 +3984,8 @@ turnCompleteCleanBoard =
         \_ ->
             let
                 board =
-                    [ { boardCards = [ { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 10, left = 10 } }
-                    , { boardCards = [ { card = { value = King, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 10, left = 200 } }
+                    [ { boardCards = [ boardCard "AH1", boardCard "2H1", boardCard "3H1" ], loc = { top = 10, left = 10 } }
+                    , { boardCards = [ boardCard "KC1", boardCard "KD1", boardCard "KS1" ], loc = { top = 10, left = 200 } }
                     ]
             in
             case Referee.validateTurnComplete board standardBounds of
@@ -3953,7 +4002,7 @@ turnCompleteRejectsIncomplete =
         \_ ->
             let
                 board =
-                    [ { boardCards = [ { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 10, left = 10 } }
+                    [ { boardCards = [ boardCard "AH1", boardCard "2H1" ], loc = { top = 10, left = 10 } }
                     ]
             in
             case Referee.validateTurnComplete board standardBounds of
@@ -3975,13 +4024,13 @@ validExtendRunWith8H =
         \_ ->
             let
                 move =
-                    { boardBefore = [ { boardCards = [ { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 10, left = 10 } }
+                    { boardBefore = [ { boardCards = [ boardCard "5H1", boardCard "6H1", boardCard "7H1" ], loc = { top = 10, left = 10 } }
                         ]
-                    , stacksToRemove = [ { boardCards = [ { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 10, left = 10 } }
+                    , stacksToRemove = [ { boardCards = [ boardCard "5H1", boardCard "6H1", boardCard "7H1" ], loc = { top = 10, left = 10 } }
                         ]
-                    , stacksToAdd = [ { boardCards = [ { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Eight, suit = Heart, originDeck = DeckOne }, state = FreshlyPlayed } ], loc = { top = 10, left = 10 } }
+                    , stacksToAdd = [ { boardCards = [ boardCard "5H1", boardCard "6H1", boardCard "7H1", { card = parseCard "8H1", state = FreshlyPlayed } ], loc = { top = 10, left = 10 } }
                         ]
-                    , handCardsPlayed = [ { card = { value = Eight, suit = Heart, originDeck = DeckOne }, state = HandNormal } ]
+                    , handCardsPlayed = [ handCard "8H1" ]
                     }
             in
             case Referee.validateGameMove move standardBounds of
@@ -3998,16 +4047,16 @@ walkthroughMined0014S4Cp1 =
         \_ ->
             let
                 board =
-                    [ { boardCards = [ { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 26, left = 26 } }
-                        , { boardCards = [ { card = { value = Seven, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 107, left = 52 } }
-                        , { boardCards = [ { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 182, left = 52 } }
-                        , { boardCards = [ { card = { value = Two, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 257, left = 52 } }
-                        , { boardCards = [ { card = { value = Two, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Three, suit = Spade, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Four, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 332, left = 52 } }
-                        , { boardCards = [ { card = { value = Ace, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 407, left = 52 } }
-                        , { boardCards = [ { card = { value = King, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = King, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = King, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 482, left = 52 } }
-                        , { boardCards = [ { card = { value = Jack, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 92, left = 187 } }
-                        , { boardCards = [ { card = { value = Ten, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ten, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Ten, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 167, left = 187 } }
-                        , { boardCards = [ { card = { value = Four, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 332, left = 187 } }
+                    [ { boardCards = [ boardCard "2H1", boardCard "3H1", boardCard "4H1" ], loc = { top = 26, left = 26 } }
+                        , { boardCards = [ boardCard "7S1", boardCard "7D1", boardCard "7C1" ], loc = { top = 107, left = 52 } }
+                        , { boardCards = [ boardCard "AC1", boardCard "AD1", boardCard "AH1" ], loc = { top = 182, left = 52 } }
+                        , { boardCards = [ boardCard "2C1", boardCard "3D1", boardCard "4C1", boardCard "5H1", boardCard "6S1", boardCard "7H1" ], loc = { top = 257, left = 52 } }
+                        , { boardCards = [ boardCard "2D2", boardCard "3S2", boardCard "4D2" ], loc = { top = 332, left = 52 } }
+                        , { boardCards = [ boardCard "AS1", boardCard "2S1", boardCard "3S1" ], loc = { top = 407, left = 52 } }
+                        , { boardCards = [ boardCard "KD2", boardCard "KH2", boardCard "KS1" ], loc = { top = 482, left = 52 } }
+                        , { boardCards = [ boardCard "JD1", boardCard "QD1", boardCard "KD1" ], loc = { top = 92, left = 187 } }
+                        , { boardCards = [ boardCard "TS1", boardCard "TC2", boardCard "TD1" ], loc = { top = 167, left = 187 } }
+                        , { boardCards = [ boardCard "4S1", boardCard "4C2" ], loc = { top = 332, left = 187 } }
                         ]
 
                 base =
@@ -4018,15 +4067,15 @@ walkthroughMined0014S4Cp1 =
 
                 ( eagerModel, actions ) =
                     buildEagerAndActions initialModel
-                        [ SpecSplit [ { value = Two, suit = Diamond, originDeck = DeckTwo }, { value = Three, suit = Spade, originDeck = DeckTwo }, { value = Four, suit = Diamond, originDeck = DeckTwo } ] 2
-                        , SpecMergeStack [ { value = Four, suit = Diamond, originDeck = DeckTwo } ] [ { value = Four, suit = Spade, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckTwo } ] BoardActions.Right
-                        , SpecSplit [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] 0
-                        , SpecMoveStack [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] { top = 407, left = 187 }
-                        , SpecSplit [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] 0
-                        , SpecMergeStack [ { value = Ace, suit = Club, originDeck = DeckOne } ] [ { value = Two, suit = Diamond, originDeck = DeckTwo }, { value = Three, suit = Spade, originDeck = DeckTwo } ] BoardActions.Left
-                        , SpecMergeStack [ { value = Ace, suit = Diamond, originDeck = DeckOne } ] [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ] BoardActions.Left
-                        , SpecMoveStack [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ] { top = 407, left = 220 }
-                        , SpecMergeStack [ { value = Ace, suit = Heart, originDeck = DeckOne } ] [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ] BoardActions.Left ]
+                        [ SpecSplit [ parseCard "2D2", parseCard "3S2", parseCard "4D2" ] 2
+                        , SpecMergeStack [ parseCard "4D2" ] [ parseCard "4S1", parseCard "4C2" ] BoardActions.Right
+                        , SpecSplit [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ] 0
+                        , SpecMoveStack [ parseCard "AD1", parseCard "AH1" ] { top = 407, left = 187 }
+                        , SpecSplit [ parseCard "AD1", parseCard "AH1" ] 0
+                        , SpecMergeStack [ parseCard "AC1" ] [ parseCard "2D2", parseCard "3S2" ] BoardActions.Left
+                        , SpecMergeStack [ parseCard "AD1" ] [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ] BoardActions.Left
+                        , SpecMoveStack [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ] { top = 407, left = 220 }
+                        , SpecMergeStack [ parseCard "AH1" ] [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ] BoardActions.Left ]
 
                 replayedModel =
                     runReplay initialModel actions
@@ -4049,18 +4098,18 @@ walkthroughMined002QDp1 =
         \_ ->
             let
                 board =
-                    [ { boardCards = [ { card = { value = Seven, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 26, left = 26 } }
-                        , { boardCards = [ { card = { value = Ace, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 107, left = 52 } }
-                        , { boardCards = [ { card = { value = King, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = King, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = King, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 182, left = 52 } }
-                        , { boardCards = [ { card = { value = Jack, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 257, left = 52 } }
-                        , { boardCards = [ { card = { value = Ten, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ten, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Ten, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 332, left = 52 } }
-                        , { boardCards = [ { card = { value = Four, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Four, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 407, left = 52 } }
-                        , { boardCards = [ { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Three, suit = Spade, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 482, left = 52 } }
-                        , { boardCards = [ { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 92, left = 187 } }
-                        , { boardCards = [ { card = { value = Ace, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 167, left = 187 } }
-                        , { boardCards = [ { card = { value = Six, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Eight, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 242, left = 187 } }
-                        , { boardCards = [ { card = { value = Five, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 317, left = 187 } }
-                        , { boardCards = [ { card = { value = Queen, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 392, left = 187 } }
+                    [ { boardCards = [ boardCard "7S1", boardCard "7D1", boardCard "7C1" ], loc = { top = 26, left = 26 } }
+                        , { boardCards = [ boardCard "AS1", boardCard "2S1", boardCard "3S1" ], loc = { top = 107, left = 52 } }
+                        , { boardCards = [ boardCard "KD2", boardCard "KH2", boardCard "KS1" ], loc = { top = 182, left = 52 } }
+                        , { boardCards = [ boardCard "JD1", boardCard "QD1", boardCard "KD1" ], loc = { top = 257, left = 52 } }
+                        , { boardCards = [ boardCard "TS1", boardCard "TC2", boardCard "TD1" ], loc = { top = 332, left = 52 } }
+                        , { boardCards = [ boardCard "4S1", boardCard "4C2", boardCard "4D2" ], loc = { top = 407, left = 52 } }
+                        , { boardCards = [ boardCard "AC1", boardCard "2D2", boardCard "3S2" ], loc = { top = 482, left = 52 } }
+                        , { boardCards = [ boardCard "AH1", boardCard "2H1", boardCard "3H1", boardCard "4H1" ], loc = { top = 92, left = 187 } }
+                        , { boardCards = [ boardCard "AD1", boardCard "2C1", boardCard "3D1", boardCard "4C1" ], loc = { top = 167, left = 187 } }
+                        , { boardCards = [ boardCard "6S1", boardCard "7H1", boardCard "8S1" ], loc = { top = 242, left = 187 } }
+                        , { boardCards = [ boardCard "5C1", boardCard "5D1", boardCard "5H1" ], loc = { top = 317, left = 187 } }
+                        , { boardCards = [ boardCard "QD2" ], loc = { top = 392, left = 187 } }
                         ]
 
                 base =
@@ -4071,18 +4120,18 @@ walkthroughMined002QDp1 =
 
                 ( eagerModel, actions ) =
                     buildEagerAndActions initialModel
-                        [ SpecSplit [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne } ] 0
-                        , SpecMoveStack [ { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ] { top = 467, left = 187 }
-                        , SpecMergeStack [ { value = Ace, suit = Diamond, originDeck = DeckOne } ] [ { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ] BoardActions.Right
-                        , SpecSplit [ { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne } ] 0
-                        , SpecMoveStack [ { value = Queen, suit = Diamond, originDeck = DeckTwo } ] { top = 257, left = 85 }
-                        , SpecMergeStack [ { value = Jack, suit = Diamond, originDeck = DeckOne } ] [ { value = Queen, suit = Diamond, originDeck = DeckTwo } ] BoardActions.Left
-                        , SpecSplit [ { value = King, suit = Diamond, originDeck = DeckTwo }, { value = King, suit = Heart, originDeck = DeckTwo }, { value = King, suit = Spade, originDeck = DeckOne } ] 0
-                        , SpecMoveStack [ { value = King, suit = Heart, originDeck = DeckTwo }, { value = King, suit = Spade, originDeck = DeckOne } ] { top = 392, left = 187 }
-                        , SpecSplit [ { value = King, suit = Heart, originDeck = DeckTwo }, { value = King, suit = Spade, originDeck = DeckOne } ] 0
-                        , SpecMergeStack [ { value = King, suit = Diamond, originDeck = DeckTwo } ] [ { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckTwo } ] BoardActions.Right
-                        , SpecMergeStack [ { value = King, suit = Heart, originDeck = DeckTwo } ] [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Two, suit = Diamond, originDeck = DeckTwo }, { value = Three, suit = Spade, originDeck = DeckTwo } ] BoardActions.Left
-                        , SpecMergeStack [ { value = King, suit = Spade, originDeck = DeckOne } ] [ { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ] BoardActions.Left ]
+                        [ SpecSplit [ parseCard "AD1", parseCard "2C1", parseCard "3D1", parseCard "4C1" ] 0
+                        , SpecMoveStack [ parseCard "JD1", parseCard "QD1", parseCard "KD1" ] { top = 467, left = 187 }
+                        , SpecMergeStack [ parseCard "AD1" ] [ parseCard "JD1", parseCard "QD1", parseCard "KD1" ] BoardActions.Right
+                        , SpecSplit [ parseCard "JD1", parseCard "QD1", parseCard "KD1", parseCard "AD1" ] 0
+                        , SpecMoveStack [ parseCard "QD2" ] { top = 257, left = 85 }
+                        , SpecMergeStack [ parseCard "JD1" ] [ parseCard "QD2" ] BoardActions.Left
+                        , SpecSplit [ parseCard "KD2", parseCard "KH2", parseCard "KS1" ] 0
+                        , SpecMoveStack [ parseCard "KH2", parseCard "KS1" ] { top = 392, left = 187 }
+                        , SpecSplit [ parseCard "KH2", parseCard "KS1" ] 0
+                        , SpecMergeStack [ parseCard "KD2" ] [ parseCard "JD1", parseCard "QD2" ] BoardActions.Right
+                        , SpecMergeStack [ parseCard "KH2" ] [ parseCard "AC1", parseCard "2D2", parseCard "3S2" ] BoardActions.Left
+                        , SpecMergeStack [ parseCard "KS1" ] [ parseCard "AS1", parseCard "2S1", parseCard "3S1" ] BoardActions.Left ]
 
                 replayedModel =
                     runReplay initialModel actions
@@ -4105,18 +4154,18 @@ walkthroughMined0036D =
         \_ ->
             let
                 board =
-                    [ { boardCards = [ { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 26, left = 26 } }
-                        , { boardCards = [ { card = { value = Seven, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 107, left = 52 } }
-                        , { boardCards = [ { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 182, left = 52 } }
-                        , { boardCards = [ { card = { value = Three, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 257, left = 52 } }
-                        , { boardCards = [ { card = { value = Two, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Two, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Two, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 332, left = 52 } }
-                        , { boardCards = [ { card = { value = Jack, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 407, left = 52 } }
-                        , { boardCards = [ { card = { value = Eight, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Nine, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ten, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 482, left = 52 } }
-                        , { boardCards = [ { card = { value = Seven, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Eight, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Nine, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 92, left = 187 } }
-                        , { boardCards = [ { card = { value = Queen, suit = Spade, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 167, left = 187 } }
-                        , { boardCards = [ { card = { value = Ace, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 332, left = 187 } }
-                        , { boardCards = [ { card = { value = King, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = King, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = King, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 407, left = 187 } }
-                        , { boardCards = [ { card = { value = Six, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 482, left = 187 } }
+                    [ { boardCards = [ boardCard "2H1", boardCard "3H1", boardCard "4H1" ], loc = { top = 26, left = 26 } }
+                        , { boardCards = [ boardCard "7S1", boardCard "7D1", boardCard "7C1" ], loc = { top = 107, left = 52 } }
+                        , { boardCards = [ boardCard "AC1", boardCard "AD1", boardCard "AH1" ], loc = { top = 182, left = 52 } }
+                        , { boardCards = [ boardCard "3D1", boardCard "4C1", boardCard "5H1", boardCard "6S1", boardCard "7H1" ], loc = { top = 257, left = 52 } }
+                        , { boardCards = [ boardCard "2D2", boardCard "2H2", boardCard "2C1" ], loc = { top = 332, left = 52 } }
+                        , { boardCards = [ boardCard "JD1", boardCard "QD1", boardCard "KD1" ], loc = { top = 407, left = 52 } }
+                        , { boardCards = [ boardCard "8D2", boardCard "9C1", boardCard "TD1" ], loc = { top = 482, left = 52 } }
+                        , { boardCards = [ boardCard "7H2", boardCard "8S1", boardCard "9H2" ], loc = { top = 92, left = 187 } }
+                        , { boardCards = [ boardCard "QS2", boardCard "QC2", boardCard "QH1" ], loc = { top = 167, left = 187 } }
+                        , { boardCards = [ boardCard "AS1", boardCard "2S1", boardCard "3S1" ], loc = { top = 332, left = 187 } }
+                        , { boardCards = [ boardCard "KD2", boardCard "KC2", boardCard "KS1" ], loc = { top = 407, left = 187 } }
+                        , { boardCards = [ boardCard "6D1" ], loc = { top = 482, left = 187 } }
                         ]
 
                 base =
@@ -4127,15 +4176,15 @@ walkthroughMined0036D =
 
                 ( eagerModel, actions ) =
                     buildEagerAndActions initialModel
-                        [ SpecSplit [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ] 2
-                        , SpecMoveStack [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne } ] { top = 242, left = 247 }
-                        , SpecSplit [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne } ] 0
-                        , SpecMergeStack [ { value = Seven, suit = Club, originDeck = DeckOne } ] [ { value = Six, suit = Diamond, originDeck = DeckOne } ] BoardActions.Right
-                        , SpecMoveStack [ { value = Eight, suit = Diamond, originDeck = DeckTwo }, { value = Nine, suit = Club, originDeck = DeckOne }, { value = Ten, suit = Diamond, originDeck = DeckOne } ] { top = 482, left = 118 }
-                        , SpecMergeStack [ { value = Six, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ] [ { value = Eight, suit = Diamond, originDeck = DeckTwo }, { value = Nine, suit = Club, originDeck = DeckOne }, { value = Ten, suit = Diamond, originDeck = DeckOne } ] BoardActions.Left
-                        , SpecMergeStack [ { value = Seven, suit = Diamond, originDeck = DeckOne } ] [ { value = Seven, suit = Spade, originDeck = DeckOne } ] BoardActions.Right
-                        , SpecSplit [ { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ] 4
-                        , SpecMergeStack [ { value = Seven, suit = Heart, originDeck = DeckOne } ] [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne } ] BoardActions.Right ]
+                        [ SpecSplit [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ] 2
+                        , SpecMoveStack [ parseCard "7S1", parseCard "7D1" ] { top = 242, left = 247 }
+                        , SpecSplit [ parseCard "7S1", parseCard "7D1" ] 0
+                        , SpecMergeStack [ parseCard "7C1" ] [ parseCard "6D1" ] BoardActions.Right
+                        , SpecMoveStack [ parseCard "8D2", parseCard "9C1", parseCard "TD1" ] { top = 482, left = 118 }
+                        , SpecMergeStack [ parseCard "6D1", parseCard "7C1" ] [ parseCard "8D2", parseCard "9C1", parseCard "TD1" ] BoardActions.Left
+                        , SpecMergeStack [ parseCard "7D1" ] [ parseCard "7S1" ] BoardActions.Right
+                        , SpecSplit [ parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ] 4
+                        , SpecMergeStack [ parseCard "7H1" ] [ parseCard "7S1", parseCard "7D1" ] BoardActions.Right ]
 
                 replayedModel =
                     runReplay initialModel actions
@@ -4158,14 +4207,14 @@ walkthroughMined0045C6Dp1 =
         \_ ->
             let
                 board =
-                    [ { boardCards = [ { card = { value = King, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 26, left = 26 } }
-                        , { boardCards = [ { card = { value = Ten, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 107, left = 52 } }
-                        , { boardCards = [ { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 182, left = 52 } }
-                        , { boardCards = [ { card = { value = Seven, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 257, left = 52 } }
-                        , { boardCards = [ { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 332, left = 52 } }
-                        , { boardCards = [ { card = { value = Two, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 407, left = 52 } }
-                        , { boardCards = [ { card = { value = Four, suit = Spade, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Five, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Six, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 482, left = 52 } }
-                        , { boardCards = [ { card = { value = Five, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 182, left = 187 } }
+                    [ { boardCards = [ boardCard "KS1", boardCard "AS1", boardCard "2S1", boardCard "3S1" ], loc = { top = 26, left = 26 } }
+                        , { boardCards = [ boardCard "TD1", boardCard "JD1", boardCard "QD1", boardCard "KD1" ], loc = { top = 107, left = 52 } }
+                        , { boardCards = [ boardCard "2H1", boardCard "3H1", boardCard "4H1" ], loc = { top = 182, left = 52 } }
+                        , { boardCards = [ boardCard "7S1", boardCard "7D1", boardCard "7C1" ], loc = { top = 257, left = 52 } }
+                        , { boardCards = [ boardCard "AC1", boardCard "AD1", boardCard "AH1" ], loc = { top = 332, left = 52 } }
+                        , { boardCards = [ boardCard "2C1", boardCard "3D1", boardCard "4C1", boardCard "5H1", boardCard "6S1", boardCard "7H1" ], loc = { top = 407, left = 52 } }
+                        , { boardCards = [ boardCard "4S2", boardCard "5D2", boardCard "6C1" ], loc = { top = 482, left = 52 } }
+                        , { boardCards = [ boardCard "5C1", boardCard "6D2" ], loc = { top = 182, left = 187 } }
                         ]
 
                 base =
@@ -4176,13 +4225,13 @@ walkthroughMined0045C6Dp1 =
 
                 ( eagerModel, actions ) =
                     buildEagerAndActions initialModel
-                        [ SpecSplit [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ] 2
-                        , SpecMoveStack [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne } ] { top = 257, left = 187 }
-                        , SpecSplit [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne } ] 0
-                        , SpecMergeStack [ { value = Seven, suit = Club, originDeck = DeckOne } ] [ { value = Five, suit = Club, originDeck = DeckOne }, { value = Six, suit = Diamond, originDeck = DeckTwo } ] BoardActions.Right
-                        , SpecMergeStack [ { value = Seven, suit = Diamond, originDeck = DeckOne } ] [ { value = Seven, suit = Spade, originDeck = DeckOne } ] BoardActions.Right
-                        , SpecSplit [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ] 5
-                        , SpecMergeStack [ { value = Seven, suit = Heart, originDeck = DeckOne } ] [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne } ] BoardActions.Right ]
+                        [ SpecSplit [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ] 2
+                        , SpecMoveStack [ parseCard "7S1", parseCard "7D1" ] { top = 257, left = 187 }
+                        , SpecSplit [ parseCard "7S1", parseCard "7D1" ] 0
+                        , SpecMergeStack [ parseCard "7C1" ] [ parseCard "5C1", parseCard "6D2" ] BoardActions.Right
+                        , SpecMergeStack [ parseCard "7D1" ] [ parseCard "7S1" ] BoardActions.Right
+                        , SpecSplit [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ] 5
+                        , SpecMergeStack [ parseCard "7H1" ] [ parseCard "7S1", parseCard "7D1" ] BoardActions.Right ]
 
                 replayedModel =
                     runReplay initialModel actions
@@ -4205,15 +4254,15 @@ walkthroughMined0052Hp1 =
         \_ ->
             let
                 board =
-                    [ { boardCards = [ { card = { value = King, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 26, left = 26 } }
-                        , { boardCards = [ { card = { value = Ten, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 107, left = 52 } }
-                        , { boardCards = [ { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 182, left = 52 } }
-                        , { boardCards = [ { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 257, left = 52 } }
-                        , { boardCards = [ { card = { value = Four, suit = Spade, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Five, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Six, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 332, left = 52 } }
-                        , { boardCards = [ { card = { value = Five, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 407, left = 52 } }
-                        , { boardCards = [ { card = { value = Two, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 482, left = 52 } }
-                        , { boardCards = [ { card = { value = Seven, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 182, left = 187 } }
-                        , { boardCards = [ { card = { value = Two, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 257, left = 187 } }
+                    [ { boardCards = [ boardCard "KS1", boardCard "AS1", boardCard "2S1", boardCard "3S1" ], loc = { top = 26, left = 26 } }
+                        , { boardCards = [ boardCard "TD1", boardCard "JD1", boardCard "QD1", boardCard "KD1" ], loc = { top = 107, left = 52 } }
+                        , { boardCards = [ boardCard "2H1", boardCard "3H1", boardCard "4H1" ], loc = { top = 182, left = 52 } }
+                        , { boardCards = [ boardCard "AC1", boardCard "AD1", boardCard "AH1" ], loc = { top = 257, left = 52 } }
+                        , { boardCards = [ boardCard "4S2", boardCard "5D2", boardCard "6C1" ], loc = { top = 332, left = 52 } }
+                        , { boardCards = [ boardCard "5C1", boardCard "6D2", boardCard "7C1" ], loc = { top = 407, left = 52 } }
+                        , { boardCards = [ boardCard "2C1", boardCard "3D1", boardCard "4C1", boardCard "5H1", boardCard "6S1" ], loc = { top = 482, left = 52 } }
+                        , { boardCards = [ boardCard "7S1", boardCard "7D1", boardCard "7H1" ], loc = { top = 182, left = 187 } }
+                        , { boardCards = [ boardCard "2H2" ], loc = { top = 257, left = 187 } }
                         ]
 
                 base =
@@ -4224,14 +4273,14 @@ walkthroughMined0052Hp1 =
 
                 ( eagerModel, actions ) =
                     buildEagerAndActions initialModel
-                        [ SpecSplit [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ] 3
-                        , SpecMergeStack [ { value = Three, suit = Spade, originDeck = DeckOne } ] [ { value = Two, suit = Heart, originDeck = DeckTwo } ] BoardActions.Right
-                        , SpecSplit [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] 0
-                        , SpecMoveStack [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] { top = 332, left = 187 }
-                        , SpecSplit [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] 0
-                        , SpecMergeStack [ { value = Ace, suit = Club, originDeck = DeckOne } ] [ { value = Two, suit = Heart, originDeck = DeckTwo }, { value = Three, suit = Spade, originDeck = DeckOne } ] BoardActions.Left
-                        , SpecMergeStack [ { value = Ace, suit = Diamond, originDeck = DeckOne } ] [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ] BoardActions.Right
-                        , SpecMergeStack [ { value = Ace, suit = Heart, originDeck = DeckOne } ] [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ] BoardActions.Left ]
+                        [ SpecSplit [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ] 3
+                        , SpecMergeStack [ parseCard "3S1" ] [ parseCard "2H2" ] BoardActions.Right
+                        , SpecSplit [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ] 0
+                        , SpecMoveStack [ parseCard "AD1", parseCard "AH1" ] { top = 332, left = 187 }
+                        , SpecSplit [ parseCard "AD1", parseCard "AH1" ] 0
+                        , SpecMergeStack [ parseCard "AC1" ] [ parseCard "2H2", parseCard "3S1" ] BoardActions.Left
+                        , SpecMergeStack [ parseCard "AD1" ] [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ] BoardActions.Right
+                        , SpecMergeStack [ parseCard "AH1" ] [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ] BoardActions.Left ]
 
                 replayedModel =
                     runReplay initialModel actions
@@ -4254,17 +4303,17 @@ walkthroughMined0066Cp1 =
         \_ ->
             let
                 board =
-                    [ { boardCards = [ { card = { value = Four, suit = Spade, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Five, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Six, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 26, left = 26 } }
-                        , { boardCards = [ { card = { value = Five, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 107, left = 52 } }
-                        , { boardCards = [ { card = { value = Seven, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 182, left = 52 } }
-                        , { boardCards = [ { card = { value = King, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 257, left = 52 } }
-                        , { boardCards = [ { card = { value = Three, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 332, left = 52 } }
-                        , { boardCards = [ { card = { value = King, suit = Spade, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 407, left = 52 } }
-                        , { boardCards = [ { card = { value = Ten, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 482, left = 52 } }
-                        , { boardCards = [ { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 92, left = 187 } }
-                        , { boardCards = [ { card = { value = Queen, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 167, left = 187 } }
-                        , { boardCards = [ { card = { value = Ace, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Two, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Three, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 242, left = 187 } }
-                        , { boardCards = [ { card = { value = Six, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 407, left = 187 } }
+                    [ { boardCards = [ boardCard "4S2", boardCard "5D2", boardCard "6C1" ], loc = { top = 26, left = 26 } }
+                        , { boardCards = [ boardCard "5C1", boardCard "6D2", boardCard "7C1" ], loc = { top = 107, left = 52 } }
+                        , { boardCards = [ boardCard "7S1", boardCard "7D1", boardCard "7H1" ], loc = { top = 182, left = 52 } }
+                        , { boardCards = [ boardCard "KS1", boardCard "AS1", boardCard "2S1" ], loc = { top = 257, left = 52 } }
+                        , { boardCards = [ boardCard "3D1", boardCard "4C1", boardCard "5H1", boardCard "6S1" ], loc = { top = 332, left = 52 } }
+                        , { boardCards = [ boardCard "KS2", boardCard "AD1", boardCard "2C1" ], loc = { top = 407, left = 52 } }
+                        , { boardCards = [ boardCard "TD1", boardCard "JD1", boardCard "QD1" ], loc = { top = 482, left = 52 } }
+                        , { boardCards = [ boardCard "AH1", boardCard "2H1", boardCard "3H1" ], loc = { top = 92, left = 187 } }
+                        , { boardCards = [ boardCard "QC1", boardCard "KD1", boardCard "AC1" ], loc = { top = 167, left = 187 } }
+                        , { boardCards = [ boardCard "AC2", boardCard "2H2", boardCard "3S1", boardCard "4H1" ], loc = { top = 242, left = 187 } }
+                        , { boardCards = [ boardCard "6C2" ], loc = { top = 407, left = 187 } }
                         ]
 
                 base =
@@ -4275,15 +4324,15 @@ walkthroughMined0066Cp1 =
 
                 ( eagerModel, actions ) =
                     buildEagerAndActions initialModel
-                        [ SpecSplit [ { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne } ] 3
-                        , SpecMergeStack [ { value = Six, suit = Spade, originDeck = DeckOne } ] [ { value = Six, suit = Club, originDeck = DeckTwo } ] BoardActions.Right
-                        , SpecSplit [ { value = Five, suit = Club, originDeck = DeckOne }, { value = Six, suit = Diamond, originDeck = DeckTwo }, { value = Seven, suit = Club, originDeck = DeckOne } ] 0
-                        , SpecMoveStack [ { value = Six, suit = Diamond, originDeck = DeckTwo }, { value = Seven, suit = Club, originDeck = DeckOne } ] { top = 332, left = 172 }
-                        , SpecSplit [ { value = Six, suit = Diamond, originDeck = DeckTwo }, { value = Seven, suit = Club, originDeck = DeckOne } ] 0
-                        , SpecMergeStack [ { value = Six, suit = Diamond, originDeck = DeckTwo } ] [ { value = Six, suit = Club, originDeck = DeckTwo }, { value = Six, suit = Spade, originDeck = DeckOne } ] BoardActions.Right
-                        , SpecMergeStack [ { value = Five, suit = Club, originDeck = DeckOne } ] [ { value = Ace, suit = Club, originDeck = DeckTwo }, { value = Two, suit = Heart, originDeck = DeckTwo }, { value = Three, suit = Spade, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ] BoardActions.Right
-                        , SpecMoveStack [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ] { top = 332, left = 172 }
-                        , SpecMergeStack [ { value = Seven, suit = Club, originDeck = DeckOne } ] [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ] BoardActions.Right ]
+                        [ SpecSplit [ parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1" ] 3
+                        , SpecMergeStack [ parseCard "6S1" ] [ parseCard "6C2" ] BoardActions.Right
+                        , SpecSplit [ parseCard "5C1", parseCard "6D2", parseCard "7C1" ] 0
+                        , SpecMoveStack [ parseCard "6D2", parseCard "7C1" ] { top = 332, left = 172 }
+                        , SpecSplit [ parseCard "6D2", parseCard "7C1" ] 0
+                        , SpecMergeStack [ parseCard "6D2" ] [ parseCard "6C2", parseCard "6S1" ] BoardActions.Right
+                        , SpecMergeStack [ parseCard "5C1" ] [ parseCard "AC2", parseCard "2H2", parseCard "3S1", parseCard "4H1" ] BoardActions.Right
+                        , SpecMoveStack [ parseCard "7S1", parseCard "7D1", parseCard "7H1" ] { top = 332, left = 172 }
+                        , SpecMergeStack [ parseCard "7C1" ] [ parseCard "7S1", parseCard "7D1", parseCard "7H1" ] BoardActions.Right ]
 
                 replayedModel =
                     runReplay initialModel actions
@@ -4306,14 +4355,14 @@ walkthroughMined0075Cp16C =
         \_ ->
             let
                 board =
-                    [ { boardCards = [ { card = { value = King, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 26, left = 26 } }
-                        , { boardCards = [ { card = { value = Ten, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 107, left = 52 } }
-                        , { boardCards = [ { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 182, left = 52 } }
-                        , { boardCards = [ { card = { value = Seven, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 257, left = 52 } }
-                        , { boardCards = [ { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 332, left = 52 } }
-                        , { boardCards = [ { card = { value = Two, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 407, left = 52 } }
-                        , { boardCards = [ { card = { value = Nine, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Ten, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 482, left = 52 } }
-                        , { boardCards = [ { card = { value = Five, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Six, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 182, left = 187 } }
+                    [ { boardCards = [ boardCard "KS1", boardCard "AS1", boardCard "2S1", boardCard "3S1" ], loc = { top = 26, left = 26 } }
+                        , { boardCards = [ boardCard "TD1", boardCard "JD1", boardCard "QD1", boardCard "KD1" ], loc = { top = 107, left = 52 } }
+                        , { boardCards = [ boardCard "2H1", boardCard "3H1", boardCard "4H1" ], loc = { top = 182, left = 52 } }
+                        , { boardCards = [ boardCard "7S1", boardCard "7D1", boardCard "7C1" ], loc = { top = 257, left = 52 } }
+                        , { boardCards = [ boardCard "AC1", boardCard "AD1", boardCard "AH1" ], loc = { top = 332, left = 52 } }
+                        , { boardCards = [ boardCard "2C1", boardCard "3D1", boardCard "4C1", boardCard "5H1", boardCard "6S1", boardCard "7H1" ], loc = { top = 407, left = 52 } }
+                        , { boardCards = [ boardCard "9H2", boardCard "TC2", boardCard "JH1" ], loc = { top = 482, left = 52 } }
+                        , { boardCards = [ boardCard "5C2", boardCard "6C1" ], loc = { top = 182, left = 187 } }
                         ]
 
                 base =
@@ -4324,13 +4373,13 @@ walkthroughMined0075Cp16C =
 
                 ( eagerModel, actions ) =
                     buildEagerAndActions initialModel
-                        [ SpecSplit [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ] 2
-                        , SpecMoveStack [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne } ] { top = 257, left = 187 }
-                        , SpecSplit [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne } ] 0
-                        , SpecMergeStack [ { value = Seven, suit = Club, originDeck = DeckOne } ] [ { value = Five, suit = Club, originDeck = DeckTwo }, { value = Six, suit = Club, originDeck = DeckOne } ] BoardActions.Right
-                        , SpecMergeStack [ { value = Seven, suit = Diamond, originDeck = DeckOne } ] [ { value = Seven, suit = Spade, originDeck = DeckOne } ] BoardActions.Right
-                        , SpecSplit [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ] 5
-                        , SpecMergeStack [ { value = Seven, suit = Heart, originDeck = DeckOne } ] [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne } ] BoardActions.Right ]
+                        [ SpecSplit [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ] 2
+                        , SpecMoveStack [ parseCard "7S1", parseCard "7D1" ] { top = 257, left = 187 }
+                        , SpecSplit [ parseCard "7S1", parseCard "7D1" ] 0
+                        , SpecMergeStack [ parseCard "7C1" ] [ parseCard "5C2", parseCard "6C1" ] BoardActions.Right
+                        , SpecMergeStack [ parseCard "7D1" ] [ parseCard "7S1" ] BoardActions.Right
+                        , SpecSplit [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ] 5
+                        , SpecMergeStack [ parseCard "7H1" ] [ parseCard "7S1", parseCard "7D1" ] BoardActions.Right ]
 
                 replayedModel =
                     runReplay initialModel actions
@@ -4353,16 +4402,16 @@ walkthroughMined008QHp1 =
         \_ ->
             let
                 board =
-                    [ { boardCards = [ { card = { value = Ten, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 26, left = 26 } }
-                        , { boardCards = [ { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 107, left = 52 } }
-                        , { boardCards = [ { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 182, left = 52 } }
-                        , { boardCards = [ { card = { value = Nine, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Ten, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 257, left = 52 } }
-                        , { boardCards = [ { card = { value = Five, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Six, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 332, left = 52 } }
-                        , { boardCards = [ { card = { value = Two, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 407, left = 52 } }
-                        , { boardCards = [ { card = { value = Seven, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 482, left = 52 } }
-                        , { boardCards = [ { card = { value = Ace, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 92, left = 187 } }
-                        , { boardCards = [ { card = { value = Jack, suit = Spade, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Spade, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = King, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 167, left = 187 } }
-                        , { boardCards = [ { card = { value = Queen, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 242, left = 187 } }
+                    [ { boardCards = [ boardCard "TD1", boardCard "JD1", boardCard "QD1", boardCard "KD1" ], loc = { top = 26, left = 26 } }
+                        , { boardCards = [ boardCard "2H1", boardCard "3H1", boardCard "4H1" ], loc = { top = 107, left = 52 } }
+                        , { boardCards = [ boardCard "AC1", boardCard "AD1", boardCard "AH1" ], loc = { top = 182, left = 52 } }
+                        , { boardCards = [ boardCard "9H2", boardCard "TC2", boardCard "JH1" ], loc = { top = 257, left = 52 } }
+                        , { boardCards = [ boardCard "5C2", boardCard "6C1", boardCard "7C1" ], loc = { top = 332, left = 52 } }
+                        , { boardCards = [ boardCard "2C1", boardCard "3D1", boardCard "4C1", boardCard "5H1", boardCard "6S1" ], loc = { top = 407, left = 52 } }
+                        , { boardCards = [ boardCard "7S1", boardCard "7D1", boardCard "7H1" ], loc = { top = 482, left = 52 } }
+                        , { boardCards = [ boardCard "AS1", boardCard "2S1", boardCard "3S1" ], loc = { top = 92, left = 187 } }
+                        , { boardCards = [ boardCard "JS2", boardCard "QS2", boardCard "KS1" ], loc = { top = 167, left = 187 } }
+                        , { boardCards = [ boardCard "QH2" ], loc = { top = 242, left = 187 } }
                         ]
 
                 base =
@@ -4373,15 +4422,15 @@ walkthroughMined008QHp1 =
 
                 ( eagerModel, actions ) =
                     buildEagerAndActions initialModel
-                        [ SpecSplit [ { value = Jack, suit = Spade, originDeck = DeckTwo }, { value = Queen, suit = Spade, originDeck = DeckTwo }, { value = King, suit = Spade, originDeck = DeckOne } ] 0
-                        , SpecMoveStack [ { value = Queen, suit = Heart, originDeck = DeckTwo } ] { top = 242, left = 220 }
-                        , SpecMergeStack [ { value = Jack, suit = Spade, originDeck = DeckTwo } ] [ { value = Queen, suit = Heart, originDeck = DeckTwo } ] BoardActions.Left
-                        , SpecMoveStack [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ] { top = 317, left = 187 }
-                        , SpecSplit [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ] 0
-                        , SpecMoveStack [ { value = Jack, suit = Spade, originDeck = DeckTwo }, { value = Queen, suit = Heart, originDeck = DeckTwo } ] { top = 242, left = 220 }
-                        , SpecMergeStack [ { value = Ten, suit = Diamond, originDeck = DeckOne } ] [ { value = Jack, suit = Spade, originDeck = DeckTwo }, { value = Queen, suit = Heart, originDeck = DeckTwo } ] BoardActions.Left
-                        , SpecMoveStack [ { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ] { top = 92, left = 253 }
-                        , SpecMergeStack [ { value = Queen, suit = Spade, originDeck = DeckTwo }, { value = King, suit = Spade, originDeck = DeckOne } ] [ { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ] BoardActions.Left ]
+                        [ SpecSplit [ parseCard "JS2", parseCard "QS2", parseCard "KS1" ] 0
+                        , SpecMoveStack [ parseCard "QH2" ] { top = 242, left = 220 }
+                        , SpecMergeStack [ parseCard "JS2" ] [ parseCard "QH2" ] BoardActions.Left
+                        , SpecMoveStack [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ] { top = 317, left = 187 }
+                        , SpecSplit [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ] 0
+                        , SpecMoveStack [ parseCard "JS2", parseCard "QH2" ] { top = 242, left = 220 }
+                        , SpecMergeStack [ parseCard "TD1" ] [ parseCard "JS2", parseCard "QH2" ] BoardActions.Left
+                        , SpecMoveStack [ parseCard "AS1", parseCard "2S1", parseCard "3S1" ] { top = 92, left = 253 }
+                        , SpecMergeStack [ parseCard "QS2", parseCard "KS1" ] [ parseCard "AS1", parseCard "2S1", parseCard "3S1" ] BoardActions.Left ]
 
                 replayedModel =
                     runReplay initialModel actions
@@ -4404,16 +4453,16 @@ walkthroughMined009JC =
         \_ ->
             let
                 board =
-                    [ { boardCards = [ { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 26, left = 26 } }
-                        , { boardCards = [ { card = { value = Nine, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Ten, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 107, left = 52 } }
-                        , { boardCards = [ { card = { value = Five, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Six, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 182, left = 52 } }
-                        , { boardCards = [ { card = { value = Two, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 257, left = 52 } }
-                        , { boardCards = [ { card = { value = Seven, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 332, left = 52 } }
-                        , { boardCards = [ { card = { value = Jack, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 407, left = 52 } }
-                        , { boardCards = [ { card = { value = Queen, suit = Spade, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = King, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 482, left = 52 } }
-                        , { boardCards = [ { card = { value = Nine, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ten, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Spade, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 92, left = 187 } }
-                        , { boardCards = [ { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 167, left = 187 } }
-                        , { boardCards = [ { card = { value = Jack, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 332, left = 187 } }
+                    [ { boardCards = [ boardCard "AC1", boardCard "AD1", boardCard "AH1" ], loc = { top = 26, left = 26 } }
+                        , { boardCards = [ boardCard "9H2", boardCard "TC2", boardCard "JH1" ], loc = { top = 107, left = 52 } }
+                        , { boardCards = [ boardCard "5C2", boardCard "6C1", boardCard "7C1" ], loc = { top = 182, left = 52 } }
+                        , { boardCards = [ boardCard "2C1", boardCard "3D1", boardCard "4C1", boardCard "5H1", boardCard "6S1" ], loc = { top = 257, left = 52 } }
+                        , { boardCards = [ boardCard "7S1", boardCard "7D1", boardCard "7H1" ], loc = { top = 332, left = 52 } }
+                        , { boardCards = [ boardCard "JD1", boardCard "QD1", boardCard "KD1" ], loc = { top = 407, left = 52 } }
+                        , { boardCards = [ boardCard "QS2", boardCard "KS1", boardCard "AS1", boardCard "2S1", boardCard "3S1" ], loc = { top = 482, left = 52 } }
+                        , { boardCards = [ boardCard "9S1", boardCard "TD1", boardCard "JS2", boardCard "QH2" ], loc = { top = 92, left = 187 } }
+                        , { boardCards = [ boardCard "2H1", boardCard "3H1", boardCard "4H1", boardCard "5H2" ], loc = { top = 167, left = 187 } }
+                        , { boardCards = [ boardCard "JC1" ], loc = { top = 332, left = 187 } }
                         ]
 
                 base =
@@ -4424,14 +4473,14 @@ walkthroughMined009JC =
 
                 ( eagerModel, actions ) =
                     buildEagerAndActions initialModel
-                        [ SpecSplit [ { value = Nine, suit = Spade, originDeck = DeckOne }, { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Spade, originDeck = DeckTwo }, { value = Queen, suit = Heart, originDeck = DeckTwo } ] 3
-                        , SpecMergeStack [ { value = Queen, suit = Heart, originDeck = DeckTwo } ] [ { value = Jack, suit = Club, originDeck = DeckOne } ] BoardActions.Right
-                        , SpecSplit [ { value = Queen, suit = Spade, originDeck = DeckTwo }, { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ] 0
-                        , SpecMoveStack [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ] { top = 482, left = 112 }
-                        , SpecSplit [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ] 0
-                        , SpecMergeStack [ { value = King, suit = Spade, originDeck = DeckOne } ] [ { value = Jack, suit = Club, originDeck = DeckOne }, { value = Queen, suit = Heart, originDeck = DeckTwo } ] BoardActions.Right
-                        , SpecMoveStack [ { value = Nine, suit = Heart, originDeck = DeckTwo }, { value = Ten, suit = Club, originDeck = DeckTwo }, { value = Jack, suit = Heart, originDeck = DeckOne } ] { top = 407, left = 187 }
-                        , SpecMergeStack [ { value = Queen, suit = Spade, originDeck = DeckTwo } ] [ { value = Nine, suit = Heart, originDeck = DeckTwo }, { value = Ten, suit = Club, originDeck = DeckTwo }, { value = Jack, suit = Heart, originDeck = DeckOne } ] BoardActions.Right ]
+                        [ SpecSplit [ parseCard "9S1", parseCard "TD1", parseCard "JS2", parseCard "QH2" ] 3
+                        , SpecMergeStack [ parseCard "QH2" ] [ parseCard "JC1" ] BoardActions.Right
+                        , SpecSplit [ parseCard "QS2", parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ] 0
+                        , SpecMoveStack [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ] { top = 482, left = 112 }
+                        , SpecSplit [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ] 0
+                        , SpecMergeStack [ parseCard "KS1" ] [ parseCard "JC1", parseCard "QH2" ] BoardActions.Right
+                        , SpecMoveStack [ parseCard "9H2", parseCard "TC2", parseCard "JH1" ] { top = 407, left = 187 }
+                        , SpecMergeStack [ parseCard "QS2" ] [ parseCard "9H2", parseCard "TC2", parseCard "JH1" ] BoardActions.Right ]
 
                 replayedModel =
                     runReplay initialModel actions
@@ -4454,17 +4503,17 @@ walkthroughMined0103Hp1 =
         \_ ->
             let
                 board =
-                    [ { boardCards = [ { card = { value = Ten, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 26, left = 26 } }
-                        , { boardCards = [ { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 107, left = 52 } }
-                        , { boardCards = [ { card = { value = Seven, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 182, left = 52 } }
-                        , { boardCards = [ { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 257, left = 52 } }
-                        , { boardCards = [ { card = { value = Nine, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Nine, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Nine, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 332, left = 52 } }
-                        , { boardCards = [ { card = { value = Two, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 407, left = 52 } }
-                        , { boardCards = [ { card = { value = Five, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Six, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 482, left = 52 } }
-                        , { boardCards = [ { card = { value = Ace, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 92, left = 187 } }
-                        , { boardCards = [ { card = { value = King, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = King, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = King, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 167, left = 187 } }
-                        , { boardCards = [ { card = { value = Ten, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 242, left = 187 } }
-                        , { boardCards = [ { card = { value = Three, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 317, left = 187 } }
+                    [ { boardCards = [ boardCard "TD1", boardCard "JD1", boardCard "QD1", boardCard "KD1" ], loc = { top = 26, left = 26 } }
+                        , { boardCards = [ boardCard "2H1", boardCard "3H1", boardCard "4H1" ], loc = { top = 107, left = 52 } }
+                        , { boardCards = [ boardCard "7S1", boardCard "7D1", boardCard "7C1" ], loc = { top = 182, left = 52 } }
+                        , { boardCards = [ boardCard "AC1", boardCard "AD1", boardCard "AH1" ], loc = { top = 257, left = 52 } }
+                        , { boardCards = [ boardCard "9H2", boardCard "9C1", boardCard "9D1" ], loc = { top = 332, left = 52 } }
+                        , { boardCards = [ boardCard "2C1", boardCard "3D1", boardCard "4C1", boardCard "5H1", boardCard "6S1" ], loc = { top = 407, left = 52 } }
+                        , { boardCards = [ boardCard "5D2", boardCard "6C2", boardCard "7H1" ], loc = { top = 482, left = 52 } }
+                        , { boardCards = [ boardCard "AS1", boardCard "2S1", boardCard "3S1" ], loc = { top = 92, left = 187 } }
+                        , { boardCards = [ boardCard "KC2", boardCard "KD2", boardCard "KS1" ], loc = { top = 167, left = 187 } }
+                        , { boardCards = [ boardCard "TC2", boardCard "JD2", boardCard "QS1" ], loc = { top = 242, left = 187 } }
+                        , { boardCards = [ boardCard "3H2" ], loc = { top = 317, left = 187 } }
                         ]
 
                 base =
@@ -4475,18 +4524,18 @@ walkthroughMined0103Hp1 =
 
                 ( eagerModel, actions ) =
                     buildEagerAndActions initialModel
-                        [ SpecSplit [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne } ] 0
-                        , SpecMoveStack [ { value = Three, suit = Heart, originDeck = DeckTwo } ] { top = 317, left = 220 }
-                        , SpecMergeStack [ { value = Two, suit = Club, originDeck = DeckOne } ] [ { value = Three, suit = Heart, originDeck = DeckTwo } ] BoardActions.Left
-                        , SpecSplit [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] 0
-                        , SpecMoveStack [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] { top = 482, left = 187 }
-                        , SpecSplit [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] 0
-                        , SpecMoveStack [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckTwo } ] { top = 317, left = 220 }
-                        , SpecMergeStack [ { value = Ace, suit = Diamond, originDeck = DeckOne } ] [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckTwo } ] BoardActions.Left
-                        , SpecSplit [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ] 3
-                        , SpecMergeStack [ { value = King, suit = Diamond, originDeck = DeckOne } ] [ { value = Ace, suit = Club, originDeck = DeckOne } ] BoardActions.Left
-                        , SpecMergeStack [ { value = King, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Club, originDeck = DeckOne } ] [ { value = Ten, suit = Club, originDeck = DeckTwo }, { value = Jack, suit = Diamond, originDeck = DeckTwo }, { value = Queen, suit = Spade, originDeck = DeckOne } ] BoardActions.Right
-                        , SpecMergeStack [ { value = Ace, suit = Heart, originDeck = DeckOne } ] [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ] BoardActions.Left ]
+                        [ SpecSplit [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1" ] 0
+                        , SpecMoveStack [ parseCard "3H2" ] { top = 317, left = 220 }
+                        , SpecMergeStack [ parseCard "2C1" ] [ parseCard "3H2" ] BoardActions.Left
+                        , SpecSplit [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ] 0
+                        , SpecMoveStack [ parseCard "AD1", parseCard "AH1" ] { top = 482, left = 187 }
+                        , SpecSplit [ parseCard "AD1", parseCard "AH1" ] 0
+                        , SpecMoveStack [ parseCard "2C1", parseCard "3H2" ] { top = 317, left = 220 }
+                        , SpecMergeStack [ parseCard "AD1" ] [ parseCard "2C1", parseCard "3H2" ] BoardActions.Left
+                        , SpecSplit [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ] 3
+                        , SpecMergeStack [ parseCard "KD1" ] [ parseCard "AC1" ] BoardActions.Left
+                        , SpecMergeStack [ parseCard "KD1", parseCard "AC1" ] [ parseCard "TC2", parseCard "JD2", parseCard "QS1" ] BoardActions.Right
+                        , SpecMergeStack [ parseCard "AH1" ] [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ] BoardActions.Left ]
 
                 replayedModel =
                     runReplay initialModel actions
@@ -4509,18 +4558,18 @@ walkthroughMined011JC =
         \_ ->
             let
                 board =
-                    [ { boardCards = [ { card = { value = Seven, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 26, left = 26 } }
-                        , { boardCards = [ { card = { value = Nine, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Nine, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Nine, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 107, left = 52 } }
-                        , { boardCards = [ { card = { value = Ace, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 182, left = 52 } }
-                        , { boardCards = [ { card = { value = King, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = King, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = King, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 257, left = 52 } }
-                        , { boardCards = [ { card = { value = Ace, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 332, left = 52 } }
-                        , { boardCards = [ { card = { value = Ten, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 407, left = 52 } }
-                        , { boardCards = [ { card = { value = Ten, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 482, left = 52 } }
-                        , { boardCards = [ { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 92, left = 187 } }
-                        , { boardCards = [ { card = { value = Four, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 167, left = 187 } }
-                        , { boardCards = [ { card = { value = Six, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Eight, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 242, left = 187 } }
-                        , { boardCards = [ { card = { value = Three, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 317, left = 187 } }
-                        , { boardCards = [ { card = { value = Jack, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 392, left = 187 } }
+                    [ { boardCards = [ boardCard "7S1", boardCard "7D1", boardCard "7C1" ], loc = { top = 26, left = 26 } }
+                        , { boardCards = [ boardCard "9H2", boardCard "9C1", boardCard "9D1" ], loc = { top = 107, left = 52 } }
+                        , { boardCards = [ boardCard "AS1", boardCard "2S1", boardCard "3S1" ], loc = { top = 182, left = 52 } }
+                        , { boardCards = [ boardCard "KC2", boardCard "KD2", boardCard "KS1" ], loc = { top = 257, left = 52 } }
+                        , { boardCards = [ boardCard "AD1", boardCard "2C1", boardCard "3H2" ], loc = { top = 332, left = 52 } }
+                        , { boardCards = [ boardCard "TD1", boardCard "JD1", boardCard "QD1" ], loc = { top = 407, left = 52 } }
+                        , { boardCards = [ boardCard "TC2", boardCard "JD2", boardCard "QS1", boardCard "KD1", boardCard "AC1" ], loc = { top = 482, left = 52 } }
+                        , { boardCards = [ boardCard "AH1", boardCard "2H1", boardCard "3H1", boardCard "4H1" ], loc = { top = 92, left = 187 } }
+                        , { boardCards = [ boardCard "4C1", boardCard "5H1", boardCard "6S1" ], loc = { top = 167, left = 187 } }
+                        , { boardCards = [ boardCard "6C2", boardCard "7H1", boardCard "8S1" ], loc = { top = 242, left = 187 } }
+                        , { boardCards = [ boardCard "3D1", boardCard "4D1", boardCard "5D2" ], loc = { top = 317, left = 187 } }
+                        , { boardCards = [ boardCard "JC1" ], loc = { top = 392, left = 187 } }
                         ]
 
                 base =
@@ -4531,16 +4580,16 @@ walkthroughMined011JC =
 
                 ( eagerModel, actions ) =
                     buildEagerAndActions initialModel
-                        [ SpecSplit [ { value = Ten, suit = Club, originDeck = DeckTwo }, { value = Jack, suit = Diamond, originDeck = DeckTwo }, { value = Queen, suit = Spade, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Club, originDeck = DeckOne } ] 0
-                        , SpecMoveStack [ { value = Jack, suit = Club, originDeck = DeckOne } ] { top = 392, left = 220 }
-                        , SpecMergeStack [ { value = Ten, suit = Club, originDeck = DeckTwo } ] [ { value = Jack, suit = Club, originDeck = DeckOne } ] BoardActions.Left
-                        , SpecSplit [ { value = Nine, suit = Heart, originDeck = DeckTwo }, { value = Nine, suit = Club, originDeck = DeckOne }, { value = Nine, suit = Diamond, originDeck = DeckOne } ] 0
-                        , SpecMoveStack [ { value = Nine, suit = Club, originDeck = DeckOne }, { value = Nine, suit = Diamond, originDeck = DeckOne } ] { top = 467, left = 262 }
-                        , SpecSplit [ { value = Nine, suit = Club, originDeck = DeckOne }, { value = Nine, suit = Diamond, originDeck = DeckOne } ] 0
-                        , SpecMoveStack [ { value = Ten, suit = Club, originDeck = DeckTwo }, { value = Jack, suit = Club, originDeck = DeckOne } ] { top = 392, left = 220 }
-                        , SpecMergeStack [ { value = Nine, suit = Club, originDeck = DeckOne } ] [ { value = Ten, suit = Club, originDeck = DeckTwo }, { value = Jack, suit = Club, originDeck = DeckOne } ] BoardActions.Left
-                        , SpecMergeStack [ { value = Nine, suit = Heart, originDeck = DeckTwo } ] [ { value = Six, suit = Club, originDeck = DeckTwo }, { value = Seven, suit = Heart, originDeck = DeckOne }, { value = Eight, suit = Spade, originDeck = DeckOne } ] BoardActions.Right
-                        , SpecMergeStack [ { value = Nine, suit = Diamond, originDeck = DeckOne } ] [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne } ] BoardActions.Left ]
+                        [ SpecSplit [ parseCard "TC2", parseCard "JD2", parseCard "QS1", parseCard "KD1", parseCard "AC1" ] 0
+                        , SpecMoveStack [ parseCard "JC1" ] { top = 392, left = 220 }
+                        , SpecMergeStack [ parseCard "TC2" ] [ parseCard "JC1" ] BoardActions.Left
+                        , SpecSplit [ parseCard "9H2", parseCard "9C1", parseCard "9D1" ] 0
+                        , SpecMoveStack [ parseCard "9C1", parseCard "9D1" ] { top = 467, left = 262 }
+                        , SpecSplit [ parseCard "9C1", parseCard "9D1" ] 0
+                        , SpecMoveStack [ parseCard "TC2", parseCard "JC1" ] { top = 392, left = 220 }
+                        , SpecMergeStack [ parseCard "9C1" ] [ parseCard "TC2", parseCard "JC1" ] BoardActions.Left
+                        , SpecMergeStack [ parseCard "9H2" ] [ parseCard "6C2", parseCard "7H1", parseCard "8S1" ] BoardActions.Right
+                        , SpecMergeStack [ parseCard "9D1" ] [ parseCard "TD1", parseCard "JD1", parseCard "QD1" ] BoardActions.Left ]
 
                 replayedModel =
                     runReplay initialModel actions
@@ -4563,14 +4612,14 @@ walkthroughMined012QCKC =
         \_ ->
             let
                 board =
-                    [ { boardCards = [ { card = { value = King, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 26, left = 26 } }
-                        , { boardCards = [ { card = { value = Ten, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 107, left = 52 } }
-                        , { boardCards = [ { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 182, left = 52 } }
-                        , { boardCards = [ { card = { value = Seven, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 257, left = 52 } }
-                        , { boardCards = [ { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 332, left = 52 } }
-                        , { boardCards = [ { card = { value = Two, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 407, left = 52 } }
-                        , { boardCards = [ { card = { value = Four, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Five, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 482, left = 52 } }
-                        , { boardCards = [ { card = { value = Queen, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 182, left = 187 } }
+                    [ { boardCards = [ boardCard "KS1", boardCard "AS1", boardCard "2S1", boardCard "3S1" ], loc = { top = 26, left = 26 } }
+                        , { boardCards = [ boardCard "TD1", boardCard "JD1", boardCard "QD1", boardCard "KD1" ], loc = { top = 107, left = 52 } }
+                        , { boardCards = [ boardCard "2H1", boardCard "3H1", boardCard "4H1" ], loc = { top = 182, left = 52 } }
+                        , { boardCards = [ boardCard "7S1", boardCard "7D1", boardCard "7C1" ], loc = { top = 257, left = 52 } }
+                        , { boardCards = [ boardCard "AC1", boardCard "AD1", boardCard "AH1" ], loc = { top = 332, left = 52 } }
+                        , { boardCards = [ boardCard "2C1", boardCard "3D1", boardCard "4C1", boardCard "5H1", boardCard "6S1", boardCard "7H1" ], loc = { top = 407, left = 52 } }
+                        , { boardCards = [ boardCard "4D2", boardCard "5S1", boardCard "6D2" ], loc = { top = 482, left = 52 } }
+                        , { boardCards = [ boardCard "QC1", boardCard "KC1" ], loc = { top = 182, left = 187 } }
                         ]
 
                 base =
@@ -4581,12 +4630,12 @@ walkthroughMined012QCKC =
 
                 ( eagerModel, actions ) =
                     buildEagerAndActions initialModel
-                        [ SpecSplit [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] 0
-                        , SpecMoveStack [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] { top = 332, left = 112 }
-                        , SpecSplit [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] 0
-                        , SpecMergeStack [ { value = Ace, suit = Club, originDeck = DeckOne } ] [ { value = Queen, suit = Club, originDeck = DeckOne }, { value = King, suit = Club, originDeck = DeckOne } ] BoardActions.Right
-                        , SpecMergeStack [ { value = Ace, suit = Diamond, originDeck = DeckOne } ] [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ] BoardActions.Right
-                        , SpecMergeStack [ { value = Ace, suit = Heart, originDeck = DeckOne } ] [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ] BoardActions.Left ]
+                        [ SpecSplit [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ] 0
+                        , SpecMoveStack [ parseCard "AD1", parseCard "AH1" ] { top = 332, left = 112 }
+                        , SpecSplit [ parseCard "AD1", parseCard "AH1" ] 0
+                        , SpecMergeStack [ parseCard "AC1" ] [ parseCard "QC1", parseCard "KC1" ] BoardActions.Right
+                        , SpecMergeStack [ parseCard "AD1" ] [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ] BoardActions.Right
+                        , SpecMergeStack [ parseCard "AH1" ] [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ] BoardActions.Left ]
 
                 replayedModel =
                     runReplay initialModel actions
@@ -4609,16 +4658,16 @@ walkthroughMined013AHp1 =
         \_ ->
             let
                 board =
-                    [ { boardCards = [ { card = { value = King, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 26, left = 26 } }
-                        , { boardCards = [ { card = { value = Seven, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 107, left = 52 } }
-                        , { boardCards = [ { card = { value = Ten, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 182, left = 52 } }
-                        , { boardCards = [ { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 257, left = 52 } }
-                        , { boardCards = [ { card = { value = Four, suit = Spade, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Four, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 332, left = 52 } }
-                        , { boardCards = [ { card = { value = Two, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Four, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Five, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 407, left = 52 } }
-                        , { boardCards = [ { card = { value = Three, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 482, left = 52 } }
-                        , { boardCards = [ { card = { value = King, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 92, left = 187 } }
-                        , { boardCards = [ { card = { value = Ten, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 257, left = 187 } }
-                        , { boardCards = [ { card = { value = Ace, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 332, left = 187 } }
+                    [ { boardCards = [ boardCard "KS1", boardCard "AS1", boardCard "2S1", boardCard "3S1" ], loc = { top = 26, left = 26 } }
+                        , { boardCards = [ boardCard "7S1", boardCard "7D1", boardCard "7C1" ], loc = { top = 107, left = 52 } }
+                        , { boardCards = [ boardCard "TD1", boardCard "JD1", boardCard "QD1", boardCard "KD1", boardCard "AD1" ], loc = { top = 182, left = 52 } }
+                        , { boardCards = [ boardCard "AH1", boardCard "2H1", boardCard "3H1" ], loc = { top = 257, left = 52 } }
+                        , { boardCards = [ boardCard "4S2", boardCard "4D1", boardCard "4H1" ], loc = { top = 332, left = 52 } }
+                        , { boardCards = [ boardCard "2D1", boardCard "3C2", boardCard "4D2", boardCard "5S1", boardCard "6D2" ], loc = { top = 407, left = 52 } }
+                        , { boardCards = [ boardCard "3D1", boardCard "4C1", boardCard "5H1", boardCard "6S1", boardCard "7H1" ], loc = { top = 482, left = 52 } }
+                        , { boardCards = [ boardCard "KC1", boardCard "AC1", boardCard "2C1" ], loc = { top = 92, left = 187 } }
+                        , { boardCards = [ boardCard "TC2", boardCard "JH1", boardCard "QC1" ], loc = { top = 257, left = 187 } }
+                        , { boardCards = [ boardCard "AH2" ], loc = { top = 332, left = 187 } }
                         ]
 
                 base =
@@ -4629,18 +4678,18 @@ walkthroughMined013AHp1 =
 
                 ( eagerModel, actions ) =
                     buildEagerAndActions initialModel
-                        [ SpecMoveStack [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ] { top = 167, left = 247 }
-                        , SpecSplit [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ] 0
-                        , SpecMoveStack [ { value = Ace, suit = Heart, originDeck = DeckTwo } ] { top = 332, left = 220 }
-                        , SpecMergeStack [ { value = King, suit = Spade, originDeck = DeckOne } ] [ { value = Ace, suit = Heart, originDeck = DeckTwo } ] BoardActions.Left
-                        , SpecSplit [ { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ] 0
-                        , SpecMoveStack [ { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ] { top = 407, left = 247 }
-                        , SpecSplit [ { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ] 0
-                        , SpecMergeStack [ { value = Two, suit = Spade, originDeck = DeckOne } ] [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckTwo } ] BoardActions.Right
-                        , SpecMergeStack [ { value = Ace, suit = Spade, originDeck = DeckOne } ] [ { value = Two, suit = Diamond, originDeck = DeckOne }, { value = Three, suit = Club, originDeck = DeckTwo }, { value = Four, suit = Diamond, originDeck = DeckTwo }, { value = Five, suit = Spade, originDeck = DeckOne }, { value = Six, suit = Diamond, originDeck = DeckTwo } ] BoardActions.Left
-                        , SpecSplit [ { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Diamond, originDeck = DeckOne }, { value = Three, suit = Club, originDeck = DeckTwo }, { value = Four, suit = Diamond, originDeck = DeckTwo }, { value = Five, suit = Spade, originDeck = DeckOne }, { value = Six, suit = Diamond, originDeck = DeckTwo } ] 1
-                        , SpecMoveStack [ { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Diamond, originDeck = DeckOne } ] { top = 167, left = 247 }
-                        , SpecMergeStack [ { value = Three, suit = Spade, originDeck = DeckOne } ] [ { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Diamond, originDeck = DeckOne } ] BoardActions.Right ]
+                        [ SpecMoveStack [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ] { top = 167, left = 247 }
+                        , SpecSplit [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ] 0
+                        , SpecMoveStack [ parseCard "AH2" ] { top = 332, left = 220 }
+                        , SpecMergeStack [ parseCard "KS1" ] [ parseCard "AH2" ] BoardActions.Left
+                        , SpecSplit [ parseCard "AS1", parseCard "2S1", parseCard "3S1" ] 0
+                        , SpecMoveStack [ parseCard "2S1", parseCard "3S1" ] { top = 407, left = 247 }
+                        , SpecSplit [ parseCard "2S1", parseCard "3S1" ] 0
+                        , SpecMergeStack [ parseCard "2S1" ] [ parseCard "KS1", parseCard "AH2" ] BoardActions.Right
+                        , SpecMergeStack [ parseCard "AS1" ] [ parseCard "2D1", parseCard "3C2", parseCard "4D2", parseCard "5S1", parseCard "6D2" ] BoardActions.Left
+                        , SpecSplit [ parseCard "AS1", parseCard "2D1", parseCard "3C2", parseCard "4D2", parseCard "5S1", parseCard "6D2" ] 1
+                        , SpecMoveStack [ parseCard "AS1", parseCard "2D1" ] { top = 167, left = 247 }
+                        , SpecMergeStack [ parseCard "3S1" ] [ parseCard "AS1", parseCard "2D1" ] BoardActions.Right ]
 
                 replayedModel =
                     runReplay initialModel actions
@@ -4663,17 +4712,17 @@ walkthroughMined0145C =
         \_ ->
             let
                 board =
-                    [ { boardCards = [ { card = { value = Seven, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 26, left = 26 } }
-                        , { boardCards = [ { card = { value = Ten, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 107, left = 52 } }
-                        , { boardCards = [ { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 182, left = 52 } }
-                        , { boardCards = [ { card = { value = Four, suit = Spade, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Four, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 257, left = 52 } }
-                        , { boardCards = [ { card = { value = Three, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 332, left = 52 } }
-                        , { boardCards = [ { card = { value = King, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 407, left = 52 } }
-                        , { boardCards = [ { card = { value = Ten, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 482, left = 52 } }
-                        , { boardCards = [ { card = { value = King, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Two, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 182, left = 187 } }
-                        , { boardCards = [ { card = { value = Three, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Four, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Five, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 257, left = 187 } }
-                        , { boardCards = [ { card = { value = Ace, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 407, left = 187 } }
-                        , { boardCards = [ { card = { value = Five, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 482, left = 187 } }
+                    [ { boardCards = [ boardCard "7S1", boardCard "7D1", boardCard "7C1" ], loc = { top = 26, left = 26 } }
+                        , { boardCards = [ boardCard "TD1", boardCard "JD1", boardCard "QD1", boardCard "KD1", boardCard "AD1" ], loc = { top = 107, left = 52 } }
+                        , { boardCards = [ boardCard "AH1", boardCard "2H1", boardCard "3H1" ], loc = { top = 182, left = 52 } }
+                        , { boardCards = [ boardCard "4S2", boardCard "4D1", boardCard "4H1" ], loc = { top = 257, left = 52 } }
+                        , { boardCards = [ boardCard "3D1", boardCard "4C1", boardCard "5H1", boardCard "6S1", boardCard "7H1" ], loc = { top = 332, left = 52 } }
+                        , { boardCards = [ boardCard "KC1", boardCard "AC1", boardCard "2C1" ], loc = { top = 407, left = 52 } }
+                        , { boardCards = [ boardCard "TC2", boardCard "JH1", boardCard "QC1" ], loc = { top = 482, left = 52 } }
+                        , { boardCards = [ boardCard "KS1", boardCard "AH2", boardCard "2S1" ], loc = { top = 182, left = 187 } }
+                        , { boardCards = [ boardCard "3C2", boardCard "4D2", boardCard "5S1", boardCard "6D2" ], loc = { top = 257, left = 187 } }
+                        , { boardCards = [ boardCard "AS1", boardCard "2D1", boardCard "3S1" ], loc = { top = 407, left = 187 } }
+                        , { boardCards = [ boardCard "5C1" ], loc = { top = 482, left = 187 } }
                         ]
 
                 base =
@@ -4684,15 +4733,15 @@ walkthroughMined0145C =
 
                 ( eagerModel, actions ) =
                     buildEagerAndActions initialModel
-                        [ SpecSplit [ { value = Three, suit = Club, originDeck = DeckTwo }, { value = Four, suit = Diamond, originDeck = DeckTwo }, { value = Five, suit = Spade, originDeck = DeckOne }, { value = Six, suit = Diamond, originDeck = DeckTwo } ] 3
-                        , SpecMergeStack [ { value = Six, suit = Diamond, originDeck = DeckTwo } ] [ { value = Five, suit = Club, originDeck = DeckOne } ] BoardActions.Right
-                        , SpecSplit [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ] 2
-                        , SpecMoveStack [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne } ] { top = 92, left = 247 }
-                        , SpecSplit [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne } ] 0
-                        , SpecMergeStack [ { value = Seven, suit = Club, originDeck = DeckOne } ] [ { value = Five, suit = Club, originDeck = DeckOne }, { value = Six, suit = Diamond, originDeck = DeckTwo } ] BoardActions.Right
-                        , SpecMergeStack [ { value = Seven, suit = Diamond, originDeck = DeckOne } ] [ { value = Seven, suit = Spade, originDeck = DeckOne } ] BoardActions.Right
-                        , SpecSplit [ { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ] 4
-                        , SpecMergeStack [ { value = Seven, suit = Heart, originDeck = DeckOne } ] [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne } ] BoardActions.Right ]
+                        [ SpecSplit [ parseCard "3C2", parseCard "4D2", parseCard "5S1", parseCard "6D2" ] 3
+                        , SpecMergeStack [ parseCard "6D2" ] [ parseCard "5C1" ] BoardActions.Right
+                        , SpecSplit [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ] 2
+                        , SpecMoveStack [ parseCard "7S1", parseCard "7D1" ] { top = 92, left = 247 }
+                        , SpecSplit [ parseCard "7S1", parseCard "7D1" ] 0
+                        , SpecMergeStack [ parseCard "7C1" ] [ parseCard "5C1", parseCard "6D2" ] BoardActions.Right
+                        , SpecMergeStack [ parseCard "7D1" ] [ parseCard "7S1" ] BoardActions.Right
+                        , SpecSplit [ parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ] 4
+                        , SpecMergeStack [ parseCard "7H1" ] [ parseCard "7S1", parseCard "7D1" ] BoardActions.Right ]
 
                 replayedModel =
                     runReplay initialModel actions
@@ -4715,16 +4764,16 @@ walkthroughMined0153Cp1 =
         \_ ->
             let
                 board =
-                    [ { boardCards = [ { card = { value = King, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 26, left = 26 } }
-                        , { boardCards = [ { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 107, left = 52 } }
-                        , { boardCards = [ { card = { value = Seven, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 182, left = 52 } }
-                        , { boardCards = [ { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 257, left = 52 } }
-                        , { boardCards = [ { card = { value = Two, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 332, left = 52 } }
-                        , { boardCards = [ { card = { value = Nine, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ten, suit = Spade, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 407, left = 52 } }
-                        , { boardCards = [ { card = { value = Jack, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 482, left = 52 } }
-                        , { boardCards = [ { card = { value = Eight, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Nine, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ten, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 92, left = 187 } }
-                        , { boardCards = [ { card = { value = Two, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Two, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Two, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 167, left = 187 } }
-                        , { boardCards = [ { card = { value = Three, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 242, left = 187 } }
+                    [ { boardCards = [ boardCard "KS1", boardCard "AS1", boardCard "2S1", boardCard "3S1" ], loc = { top = 26, left = 26 } }
+                        , { boardCards = [ boardCard "2H1", boardCard "3H1", boardCard "4H1" ], loc = { top = 107, left = 52 } }
+                        , { boardCards = [ boardCard "7S1", boardCard "7D1", boardCard "7C1" ], loc = { top = 182, left = 52 } }
+                        , { boardCards = [ boardCard "AC1", boardCard "AD1", boardCard "AH1" ], loc = { top = 257, left = 52 } }
+                        , { boardCards = [ boardCard "2C1", boardCard "3D1", boardCard "4C1", boardCard "5H1", boardCard "6S1", boardCard "7H1" ], loc = { top = 332, left = 52 } }
+                        , { boardCards = [ boardCard "9S1", boardCard "TS2", boardCard "JS1" ], loc = { top = 407, left = 52 } }
+                        , { boardCards = [ boardCard "JD1", boardCard "QD1", boardCard "KD1" ], loc = { top = 482, left = 52 } }
+                        , { boardCards = [ boardCard "8D1", boardCard "9D1", boardCard "TD1" ], loc = { top = 92, left = 187 } }
+                        , { boardCards = [ boardCard "2H2", boardCard "2C2", boardCard "2D1" ], loc = { top = 167, left = 187 } }
+                        , { boardCards = [ boardCard "3C2" ], loc = { top = 242, left = 187 } }
                         ]
 
                 base =
@@ -4735,16 +4784,16 @@ walkthroughMined0153Cp1 =
 
                 ( eagerModel, actions ) =
                     buildEagerAndActions initialModel
-                        [ SpecSplit [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ] 0
-                        , SpecMoveStack [ { value = Three, suit = Club, originDeck = DeckTwo } ] { top = 242, left = 220 }
-                        , SpecMergeStack [ { value = Two, suit = Club, originDeck = DeckOne } ] [ { value = Three, suit = Club, originDeck = DeckTwo } ] BoardActions.Left
-                        , SpecSplit [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] 0
-                        , SpecMoveStack [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] { top = 407, left = 187 }
-                        , SpecSplit [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] 0
-                        , SpecMoveStack [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Club, originDeck = DeckTwo } ] { top = 257, left = 85 }
-                        , SpecMergeStack [ { value = Ace, suit = Club, originDeck = DeckOne } ] [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Club, originDeck = DeckTwo } ] BoardActions.Left
-                        , SpecMergeStack [ { value = Ace, suit = Diamond, originDeck = DeckOne } ] [ { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ] BoardActions.Right
-                        , SpecMergeStack [ { value = Ace, suit = Heart, originDeck = DeckOne } ] [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ] BoardActions.Left ]
+                        [ SpecSplit [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ] 0
+                        , SpecMoveStack [ parseCard "3C2" ] { top = 242, left = 220 }
+                        , SpecMergeStack [ parseCard "2C1" ] [ parseCard "3C2" ] BoardActions.Left
+                        , SpecSplit [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ] 0
+                        , SpecMoveStack [ parseCard "AD1", parseCard "AH1" ] { top = 407, left = 187 }
+                        , SpecSplit [ parseCard "AD1", parseCard "AH1" ] 0
+                        , SpecMoveStack [ parseCard "2C1", parseCard "3C2" ] { top = 257, left = 85 }
+                        , SpecMergeStack [ parseCard "AC1" ] [ parseCard "2C1", parseCard "3C2" ] BoardActions.Left
+                        , SpecMergeStack [ parseCard "AD1" ] [ parseCard "JD1", parseCard "QD1", parseCard "KD1" ] BoardActions.Right
+                        , SpecMergeStack [ parseCard "AH1" ] [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ] BoardActions.Left ]
 
                 replayedModel =
                     runReplay initialModel actions
@@ -4767,17 +4816,17 @@ walkthroughMined016TCp1 =
         \_ ->
             let
                 board =
-                    [ { boardCards = [ { card = { value = Seven, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 26, left = 26 } }
-                        , { boardCards = [ { card = { value = Eight, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Nine, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ten, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 107, left = 52 } }
-                        , { boardCards = [ { card = { value = Two, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Two, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Two, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 182, left = 52 } }
-                        , { boardCards = [ { card = { value = Three, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 257, left = 52 } }
-                        , { boardCards = [ { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 332, left = 52 } }
-                        , { boardCards = [ { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 407, left = 52 } }
-                        , { boardCards = [ { card = { value = Ace, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 482, left = 52 } }
-                        , { boardCards = [ { card = { value = Jack, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 92, left = 187 } }
-                        , { boardCards = [ { card = { value = Queen, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 167, left = 187 } }
-                        , { boardCards = [ { card = { value = Nine, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ten, suit = Spade, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 332, left = 187 } }
-                        , { boardCards = [ { card = { value = Ten, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 482, left = 187 } }
+                    [ { boardCards = [ boardCard "7S1", boardCard "7D1", boardCard "7C1" ], loc = { top = 26, left = 26 } }
+                        , { boardCards = [ boardCard "8D1", boardCard "9D1", boardCard "TD1" ], loc = { top = 107, left = 52 } }
+                        , { boardCards = [ boardCard "2H2", boardCard "2C2", boardCard "2D1" ], loc = { top = 182, left = 52 } }
+                        , { boardCards = [ boardCard "3D1", boardCard "4C1", boardCard "5H1", boardCard "6S1", boardCard "7H1" ], loc = { top = 257, left = 52 } }
+                        , { boardCards = [ boardCard "AC1", boardCard "2C1", boardCard "3C2" ], loc = { top = 332, left = 52 } }
+                        , { boardCards = [ boardCard "AH1", boardCard "2H1", boardCard "3H1", boardCard "4H1" ], loc = { top = 407, left = 52 } }
+                        , { boardCards = [ boardCard "AS1", boardCard "2S1", boardCard "3S1" ], loc = { top = 482, left = 52 } }
+                        , { boardCards = [ boardCard "JD1", boardCard "QD1", boardCard "KD1" ], loc = { top = 92, left = 187 } }
+                        , { boardCards = [ boardCard "QH1", boardCard "KS1", boardCard "AD1" ], loc = { top = 167, left = 187 } }
+                        , { boardCards = [ boardCard "9S1", boardCard "TS2", boardCard "JS1", boardCard "QS1" ], loc = { top = 332, left = 187 } }
+                        , { boardCards = [ boardCard "TC2" ], loc = { top = 482, left = 187 } }
                         ]
 
                 base =
@@ -4788,14 +4837,14 @@ walkthroughMined016TCp1 =
 
                 ( eagerModel, actions ) =
                     buildEagerAndActions initialModel
-                        [ SpecSplit [ { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ] 0
-                        , SpecMergeStack [ { value = Jack, suit = Diamond, originDeck = DeckOne } ] [ { value = Ten, suit = Club, originDeck = DeckTwo } ] BoardActions.Right
-                        , SpecSplit [ { value = Nine, suit = Spade, originDeck = DeckOne }, { value = Ten, suit = Spade, originDeck = DeckTwo }, { value = Jack, suit = Spade, originDeck = DeckOne }, { value = Queen, suit = Spade, originDeck = DeckOne } ] 3
-                        , SpecMergeStack [ { value = Queen, suit = Spade, originDeck = DeckOne } ] [ { value = Ten, suit = Club, originDeck = DeckTwo }, { value = Jack, suit = Diamond, originDeck = DeckOne } ] BoardActions.Right
-                        , SpecSplit [ { value = Queen, suit = Heart, originDeck = DeckOne }, { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne } ] 2
-                        , SpecMergeStack [ { value = Ace, suit = Diamond, originDeck = DeckOne } ] [ { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ] BoardActions.Right
-                        , SpecSplit [ { value = Ace, suit = Heart, originDeck = DeckOne }, { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ] 0
-                        , SpecMergeStack [ { value = Ace, suit = Heart, originDeck = DeckOne } ] [ { value = Queen, suit = Heart, originDeck = DeckOne }, { value = King, suit = Spade, originDeck = DeckOne } ] BoardActions.Right ]
+                        [ SpecSplit [ parseCard "JD1", parseCard "QD1", parseCard "KD1" ] 0
+                        , SpecMergeStack [ parseCard "JD1" ] [ parseCard "TC2" ] BoardActions.Right
+                        , SpecSplit [ parseCard "9S1", parseCard "TS2", parseCard "JS1", parseCard "QS1" ] 3
+                        , SpecMergeStack [ parseCard "QS1" ] [ parseCard "TC2", parseCard "JD1" ] BoardActions.Right
+                        , SpecSplit [ parseCard "QH1", parseCard "KS1", parseCard "AD1" ] 2
+                        , SpecMergeStack [ parseCard "AD1" ] [ parseCard "QD1", parseCard "KD1" ] BoardActions.Right
+                        , SpecSplit [ parseCard "AH1", parseCard "2H1", parseCard "3H1", parseCard "4H1" ] 0
+                        , SpecMergeStack [ parseCard "AH1" ] [ parseCard "QH1", parseCard "KS1" ] BoardActions.Right ]
 
                 replayedModel =
                     runReplay initialModel actions
@@ -4818,13 +4867,13 @@ walkthroughMined0175Dp16Dp1 =
         \_ ->
             let
                 board =
-                    [ { boardCards = [ { card = { value = King, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 26, left = 26 } }
-                        , { boardCards = [ { card = { value = Ten, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 107, left = 52 } }
-                        , { boardCards = [ { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 182, left = 52 } }
-                        , { boardCards = [ { card = { value = Seven, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 257, left = 52 } }
-                        , { boardCards = [ { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 332, left = 52 } }
-                        , { boardCards = [ { card = { value = Two, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 407, left = 52 } }
-                        , { boardCards = [ { card = { value = Five, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Six, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 482, left = 52 } }
+                    [ { boardCards = [ boardCard "KS1", boardCard "AS1", boardCard "2S1", boardCard "3S1" ], loc = { top = 26, left = 26 } }
+                        , { boardCards = [ boardCard "TD1", boardCard "JD1", boardCard "QD1", boardCard "KD1" ], loc = { top = 107, left = 52 } }
+                        , { boardCards = [ boardCard "2H1", boardCard "3H1", boardCard "4H1" ], loc = { top = 182, left = 52 } }
+                        , { boardCards = [ boardCard "7S1", boardCard "7D1", boardCard "7C1" ], loc = { top = 257, left = 52 } }
+                        , { boardCards = [ boardCard "AC1", boardCard "AD1", boardCard "AH1" ], loc = { top = 332, left = 52 } }
+                        , { boardCards = [ boardCard "2C1", boardCard "3D1", boardCard "4C1", boardCard "5H1", boardCard "6S1", boardCard "7H1" ], loc = { top = 407, left = 52 } }
+                        , { boardCards = [ boardCard "5D2", boardCard "6D2" ], loc = { top = 482, left = 52 } }
                         ]
 
                 base =
@@ -4835,13 +4884,13 @@ walkthroughMined0175Dp16Dp1 =
 
                 ( eagerModel, actions ) =
                     buildEagerAndActions initialModel
-                        [ SpecSplit [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ] 0
-                        , SpecMoveStack [ { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ] { top = 257, left = 112 }
-                        , SpecSplit [ { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ] 0
-                        , SpecMergeStack [ { value = Seven, suit = Diamond, originDeck = DeckOne } ] [ { value = Five, suit = Diamond, originDeck = DeckTwo }, { value = Six, suit = Diamond, originDeck = DeckTwo } ] BoardActions.Right
-                        , SpecMergeStack [ { value = Seven, suit = Club, originDeck = DeckOne } ] [ { value = Seven, suit = Spade, originDeck = DeckOne } ] BoardActions.Right
-                        , SpecSplit [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ] 5
-                        , SpecMergeStack [ { value = Seven, suit = Heart, originDeck = DeckOne } ] [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ] BoardActions.Right ]
+                        [ SpecSplit [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ] 0
+                        , SpecMoveStack [ parseCard "7D1", parseCard "7C1" ] { top = 257, left = 112 }
+                        , SpecSplit [ parseCard "7D1", parseCard "7C1" ] 0
+                        , SpecMergeStack [ parseCard "7D1" ] [ parseCard "5D2", parseCard "6D2" ] BoardActions.Right
+                        , SpecMergeStack [ parseCard "7C1" ] [ parseCard "7S1" ] BoardActions.Right
+                        , SpecSplit [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ] 5
+                        , SpecMergeStack [ parseCard "7H1" ] [ parseCard "7S1", parseCard "7C1" ] BoardActions.Right ]
 
                 replayedModel =
                     runReplay initialModel actions
@@ -4864,16 +4913,16 @@ walkthroughMined0182Sp13Hp1 =
         \_ ->
             let
                 board =
-                    [ { boardCards = [ { card = { value = King, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 26, left = 26 } }
-                        , { boardCards = [ { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 107, left = 52 } }
-                        , { boardCards = [ { card = { value = Seven, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 182, left = 52 } }
-                        , { boardCards = [ { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 257, left = 52 } }
-                        , { boardCards = [ { card = { value = Two, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 332, left = 52 } }
-                        , { boardCards = [ { card = { value = Seven, suit = Spade, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Eight, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Nine, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 407, left = 52 } }
-                        , { boardCards = [ { card = { value = Three, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Four, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Five, suit = Spade, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 482, left = 52 } }
-                        , { boardCards = [ { card = { value = Jack, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 92, left = 187 } }
-                        , { boardCards = [ { card = { value = Ten, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ten, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ten, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 167, left = 187 } }
-                        , { boardCards = [ { card = { value = Two, suit = Spade, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Three, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 242, left = 187 } }
+                    [ { boardCards = [ boardCard "KS1", boardCard "AS1", boardCard "2S1", boardCard "3S1" ], loc = { top = 26, left = 26 } }
+                        , { boardCards = [ boardCard "2H1", boardCard "3H1", boardCard "4H1" ], loc = { top = 107, left = 52 } }
+                        , { boardCards = [ boardCard "7S1", boardCard "7D1", boardCard "7C1" ], loc = { top = 182, left = 52 } }
+                        , { boardCards = [ boardCard "AC1", boardCard "AD1", boardCard "AH1" ], loc = { top = 257, left = 52 } }
+                        , { boardCards = [ boardCard "2C1", boardCard "3D1", boardCard "4C1", boardCard "5H1", boardCard "6S1", boardCard "7H1" ], loc = { top = 332, left = 52 } }
+                        , { boardCards = [ boardCard "7S2", boardCard "8D2", boardCard "9C2" ], loc = { top = 407, left = 52 } }
+                        , { boardCards = [ boardCard "3C2", boardCard "4H2", boardCard "5S2" ], loc = { top = 482, left = 52 } }
+                        , { boardCards = [ boardCard "JD1", boardCard "QD1", boardCard "KD1" ], loc = { top = 92, left = 187 } }
+                        , { boardCards = [ boardCard "TS1", boardCard "TC1", boardCard "TD1" ], loc = { top = 167, left = 187 } }
+                        , { boardCards = [ boardCard "2S2", boardCard "3H2" ], loc = { top = 242, left = 187 } }
                         ]
 
                 base =
@@ -4884,19 +4933,19 @@ walkthroughMined0182Sp13Hp1 =
 
                 ( eagerModel, actions ) =
                     buildEagerAndActions initialModel
-                        [ SpecSplit [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] 0
-                        , SpecMoveStack [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] { top = 407, left = 187 }
-                        , SpecSplit [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] 0
-                        , SpecMoveStack [ { value = Two, suit = Spade, originDeck = DeckTwo }, { value = Three, suit = Heart, originDeck = DeckTwo } ] { top = 257, left = 145 }
-                        , SpecMergeStack [ { value = Ace, suit = Diamond, originDeck = DeckOne } ] [ { value = Two, suit = Spade, originDeck = DeckTwo }, { value = Three, suit = Heart, originDeck = DeckTwo } ] BoardActions.Left
-                        , SpecSplit [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ] 0
-                        , SpecMoveStack [ { value = Ace, suit = Club, originDeck = DeckOne } ] { top = 482, left = 187 }
-                        , SpecMergeStack [ { value = Two, suit = Club, originDeck = DeckOne } ] [ { value = Ace, suit = Club, originDeck = DeckOne } ] BoardActions.Right
-                        , SpecSplit [ { value = Three, suit = Club, originDeck = DeckTwo }, { value = Four, suit = Heart, originDeck = DeckTwo }, { value = Five, suit = Spade, originDeck = DeckTwo } ] 0
-                        , SpecMergeStack [ { value = Three, suit = Club, originDeck = DeckTwo } ] [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Two, suit = Club, originDeck = DeckOne } ] BoardActions.Right
-                        , SpecMergeStack [ { value = Ace, suit = Heart, originDeck = DeckOne } ] [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ] BoardActions.Left
-                        , SpecSplit [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ] 3
-                        , SpecMergeStack [ { value = Three, suit = Spade, originDeck = DeckOne } ] [ { value = Four, suit = Heart, originDeck = DeckTwo }, { value = Five, suit = Spade, originDeck = DeckTwo } ] BoardActions.Left ]
+                        [ SpecSplit [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ] 0
+                        , SpecMoveStack [ parseCard "AD1", parseCard "AH1" ] { top = 407, left = 187 }
+                        , SpecSplit [ parseCard "AD1", parseCard "AH1" ] 0
+                        , SpecMoveStack [ parseCard "2S2", parseCard "3H2" ] { top = 257, left = 145 }
+                        , SpecMergeStack [ parseCard "AD1" ] [ parseCard "2S2", parseCard "3H2" ] BoardActions.Left
+                        , SpecSplit [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ] 0
+                        , SpecMoveStack [ parseCard "AC1" ] { top = 482, left = 187 }
+                        , SpecMergeStack [ parseCard "2C1" ] [ parseCard "AC1" ] BoardActions.Right
+                        , SpecSplit [ parseCard "3C2", parseCard "4H2", parseCard "5S2" ] 0
+                        , SpecMergeStack [ parseCard "3C2" ] [ parseCard "AC1", parseCard "2C1" ] BoardActions.Right
+                        , SpecMergeStack [ parseCard "AH1" ] [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ] BoardActions.Left
+                        , SpecSplit [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ] 3
+                        , SpecMergeStack [ parseCard "3S1" ] [ parseCard "4H2", parseCard "5S2" ] BoardActions.Left ]
 
                 replayedModel =
                     runReplay initialModel actions
@@ -4919,17 +4968,17 @@ walkthroughMined0192D =
         \_ ->
             let
                 board =
-                    [ { boardCards = [ { card = { value = Seven, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 26, left = 26 } }
-                        , { boardCards = [ { card = { value = Jack, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 107, left = 52 } }
-                        , { boardCards = [ { card = { value = Ten, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Ten, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ten, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 182, left = 52 } }
-                        , { boardCards = [ { card = { value = Five, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Six, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 257, left = 52 } }
-                        , { boardCards = [ { card = { value = Six, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Eight, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 332, left = 52 } }
-                        , { boardCards = [ { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Three, suit = Spade, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 407, left = 52 } }
-                        , { boardCards = [ { card = { value = Ace, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 482, left = 52 } }
-                        , { boardCards = [ { card = { value = King, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 92, left = 187 } }
-                        , { boardCards = [ { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 167, left = 187 } }
-                        , { boardCards = [ { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 242, left = 187 } }
-                        , { boardCards = [ { card = { value = Two, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 317, left = 187 } }
+                    [ { boardCards = [ boardCard "7S1", boardCard "7D1", boardCard "7C1" ], loc = { top = 26, left = 26 } }
+                        , { boardCards = [ boardCard "JD1", boardCard "QD1", boardCard "KD1" ], loc = { top = 107, left = 52 } }
+                        , { boardCards = [ boardCard "TC2", boardCard "TH1", boardCard "TD1" ], loc = { top = 182, left = 52 } }
+                        , { boardCards = [ boardCard "5C2", boardCard "6D1", boardCard "7C2" ], loc = { top = 257, left = 52 } }
+                        , { boardCards = [ boardCard "6S1", boardCard "7H1", boardCard "8C2" ], loc = { top = 332, left = 52 } }
+                        , { boardCards = [ boardCard "AC1", boardCard "2D2", boardCard "3S2" ], loc = { top = 407, left = 52 } }
+                        , { boardCards = [ boardCard "AS1", boardCard "2S1", boardCard "3S1" ], loc = { top = 482, left = 52 } }
+                        , { boardCards = [ boardCard "KS1", boardCard "AD1", boardCard "2C2" ], loc = { top = 92, left = 187 } }
+                        , { boardCards = [ boardCard "2H1", boardCard "3H1", boardCard "4H1", boardCard "5H1" ], loc = { top = 167, left = 187 } }
+                        , { boardCards = [ boardCard "AH1", boardCard "2C1", boardCard "3D1", boardCard "4C1" ], loc = { top = 242, left = 187 } }
+                        , { boardCards = [ boardCard "2D1" ], loc = { top = 317, left = 187 } }
                         ]
 
                 base =
@@ -4940,18 +4989,18 @@ walkthroughMined0192D =
 
                 ( eagerModel, actions ) =
                     buildEagerAndActions initialModel
-                        [ SpecSplit [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Two, suit = Club, originDeck = DeckTwo } ] 0
-                        , SpecMoveStack [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Two, suit = Club, originDeck = DeckTwo } ] { top = 392, left = 187 }
-                        , SpecSplit [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Two, suit = Club, originDeck = DeckTwo } ] 0
-                        , SpecMoveStack [ { value = Two, suit = Diamond, originDeck = DeckOne } ] { top = 317, left = 220 }
-                        , SpecMergeStack [ { value = Ace, suit = Diamond, originDeck = DeckOne } ] [ { value = Two, suit = Diamond, originDeck = DeckOne } ] BoardActions.Left
-                        , SpecMoveStack [ { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ] { top = 317, left = 187 }
-                        , SpecMergeStack [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Two, suit = Diamond, originDeck = DeckOne } ] [ { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ] BoardActions.Right
-                        , SpecMoveStack [ { value = Ace, suit = Heart, originDeck = DeckOne }, { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne } ] { top = 92, left = 190 }
-                        , SpecMergeStack [ { value = King, suit = Spade, originDeck = DeckOne } ] [ { value = Ace, suit = Heart, originDeck = DeckOne }, { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne } ] BoardActions.Left
-                        , SpecSplit [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne }, { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne } ] 1
-                        , SpecMoveStack [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] { top = 107, left = 52 }
-                        , SpecMergeStack [ { value = Two, suit = Club, originDeck = DeckTwo } ] [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] BoardActions.Right ]
+                        [ SpecSplit [ parseCard "KS1", parseCard "AD1", parseCard "2C2" ] 0
+                        , SpecMoveStack [ parseCard "AD1", parseCard "2C2" ] { top = 392, left = 187 }
+                        , SpecSplit [ parseCard "AD1", parseCard "2C2" ] 0
+                        , SpecMoveStack [ parseCard "2D1" ] { top = 317, left = 220 }
+                        , SpecMergeStack [ parseCard "AD1" ] [ parseCard "2D1" ] BoardActions.Left
+                        , SpecMoveStack [ parseCard "JD1", parseCard "QD1", parseCard "KD1" ] { top = 317, left = 187 }
+                        , SpecMergeStack [ parseCard "AD1", parseCard "2D1" ] [ parseCard "JD1", parseCard "QD1", parseCard "KD1" ] BoardActions.Right
+                        , SpecMoveStack [ parseCard "AH1", parseCard "2C1", parseCard "3D1", parseCard "4C1" ] { top = 92, left = 190 }
+                        , SpecMergeStack [ parseCard "KS1" ] [ parseCard "AH1", parseCard "2C1", parseCard "3D1", parseCard "4C1" ] BoardActions.Left
+                        , SpecSplit [ parseCard "KS1", parseCard "AH1", parseCard "2C1", parseCard "3D1", parseCard "4C1" ] 1
+                        , SpecMoveStack [ parseCard "KS1", parseCard "AH1" ] { top = 107, left = 52 }
+                        , SpecMergeStack [ parseCard "2C2" ] [ parseCard "KS1", parseCard "AH1" ] BoardActions.Right ]
 
                 replayedModel =
                     runReplay initialModel actions
@@ -4974,15 +5023,15 @@ walkthroughMined0202Dp13Cp1 =
         \_ ->
             let
                 board =
-                    [ { boardCards = [ { card = { value = King, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 26, left = 26 } }
-                        , { boardCards = [ { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 107, left = 52 } }
-                        , { boardCards = [ { card = { value = Seven, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 182, left = 52 } }
-                        , { boardCards = [ { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 257, left = 52 } }
-                        , { boardCards = [ { card = { value = Two, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 332, left = 52 } }
-                        , { boardCards = [ { card = { value = Jack, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 407, left = 52 } }
-                        , { boardCards = [ { card = { value = Ten, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ten, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ten, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 482, left = 52 } }
-                        , { boardCards = [ { card = { value = Nine, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Nine, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Nine, suit = Spade, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 92, left = 187 } }
-                        , { boardCards = [ { card = { value = Two, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Three, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 167, left = 187 } }
+                    [ { boardCards = [ boardCard "KS1", boardCard "AS1", boardCard "2S1", boardCard "3S1" ], loc = { top = 26, left = 26 } }
+                        , { boardCards = [ boardCard "2H1", boardCard "3H1", boardCard "4H1" ], loc = { top = 107, left = 52 } }
+                        , { boardCards = [ boardCard "7S1", boardCard "7D1", boardCard "7C1" ], loc = { top = 182, left = 52 } }
+                        , { boardCards = [ boardCard "AC1", boardCard "AD1", boardCard "AH1" ], loc = { top = 257, left = 52 } }
+                        , { boardCards = [ boardCard "2C1", boardCard "3D1", boardCard "4C1", boardCard "5H1", boardCard "6S1", boardCard "7H1" ], loc = { top = 332, left = 52 } }
+                        , { boardCards = [ boardCard "JD1", boardCard "QD1", boardCard "KD1" ], loc = { top = 407, left = 52 } }
+                        , { boardCards = [ boardCard "TC1", boardCard "TH1", boardCard "TD1" ], loc = { top = 482, left = 52 } }
+                        , { boardCards = [ boardCard "9D1", boardCard "9C2", boardCard "9S2" ], loc = { top = 92, left = 187 } }
+                        , { boardCards = [ boardCard "2D2", boardCard "3C2" ], loc = { top = 167, left = 187 } }
                         ]
 
                 base =
@@ -4993,13 +5042,13 @@ walkthroughMined0202Dp13Cp1 =
 
                 ( eagerModel, actions ) =
                     buildEagerAndActions initialModel
-                        [ SpecSplit [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] 0
-                        , SpecMoveStack [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] { top = 257, left = 112 }
-                        , SpecSplit [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] 0
-                        , SpecMoveStack [ { value = Two, suit = Diamond, originDeck = DeckTwo }, { value = Three, suit = Club, originDeck = DeckTwo } ] { top = 167, left = 220 }
-                        , SpecMergeStack [ { value = Ace, suit = Club, originDeck = DeckOne } ] [ { value = Two, suit = Diamond, originDeck = DeckTwo }, { value = Three, suit = Club, originDeck = DeckTwo } ] BoardActions.Left
-                        , SpecMergeStack [ { value = Ace, suit = Diamond, originDeck = DeckOne } ] [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ] BoardActions.Left
-                        , SpecMergeStack [ { value = Ace, suit = Heart, originDeck = DeckOne } ] [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ] BoardActions.Left ]
+                        [ SpecSplit [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ] 0
+                        , SpecMoveStack [ parseCard "AD1", parseCard "AH1" ] { top = 257, left = 112 }
+                        , SpecSplit [ parseCard "AD1", parseCard "AH1" ] 0
+                        , SpecMoveStack [ parseCard "2D2", parseCard "3C2" ] { top = 167, left = 220 }
+                        , SpecMergeStack [ parseCard "AC1" ] [ parseCard "2D2", parseCard "3C2" ] BoardActions.Left
+                        , SpecMergeStack [ parseCard "AD1" ] [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ] BoardActions.Left
+                        , SpecMergeStack [ parseCard "AH1" ] [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ] BoardActions.Left ]
 
                 replayedModel =
                     runReplay initialModel actions
@@ -5022,16 +5071,16 @@ walkthroughMined0218Dp1 =
         \_ ->
             let
                 board =
-                    [ { boardCards = [ { card = { value = King, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 26, left = 26 } }
-                        , { boardCards = [ { card = { value = Ten, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 107, left = 52 } }
-                        , { boardCards = [ { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 182, left = 52 } }
-                        , { boardCards = [ { card = { value = Seven, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 257, left = 52 } }
-                        , { boardCards = [ { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 332, left = 52 } }
-                        , { boardCards = [ { card = { value = Two, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 407, left = 52 } }
-                        , { boardCards = [ { card = { value = Jack, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 482, left = 52 } }
-                        , { boardCards = [ { card = { value = Four, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Five, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Six, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 182, left = 187 } }
-                        , { boardCards = [ { card = { value = Six, suit = Spade, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Eight, suit = Club, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Nine, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 257, left = 187 } }
-                        , { boardCards = [ { card = { value = Eight, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 332, left = 187 } }
+                    [ { boardCards = [ boardCard "KS1", boardCard "AS1", boardCard "2S1", boardCard "3S1" ], loc = { top = 26, left = 26 } }
+                        , { boardCards = [ boardCard "TD1", boardCard "JD1", boardCard "QD1", boardCard "KD1" ], loc = { top = 107, left = 52 } }
+                        , { boardCards = [ boardCard "2H1", boardCard "3H1", boardCard "4H1" ], loc = { top = 182, left = 52 } }
+                        , { boardCards = [ boardCard "7S1", boardCard "7D1", boardCard "7C1" ], loc = { top = 257, left = 52 } }
+                        , { boardCards = [ boardCard "AC1", boardCard "AD1", boardCard "AH1" ], loc = { top = 332, left = 52 } }
+                        , { boardCards = [ boardCard "2C1", boardCard "3D1", boardCard "4C1", boardCard "5H1", boardCard "6S1", boardCard "7H1" ], loc = { top = 407, left = 52 } }
+                        , { boardCards = [ boardCard "JH2", boardCard "JD2", boardCard "JC1" ], loc = { top = 482, left = 52 } }
+                        , { boardCards = [ boardCard "4H2", boardCard "5C2", boardCard "6D2" ], loc = { top = 182, left = 187 } }
+                        , { boardCards = [ boardCard "6S2", boardCard "7H2", boardCard "8C2", boardCard "9H1" ], loc = { top = 257, left = 187 } }
+                        , { boardCards = [ boardCard "8D2" ], loc = { top = 332, left = 187 } }
                         ]
 
                 base =
@@ -5042,19 +5091,19 @@ walkthroughMined0218Dp1 =
 
                 ( eagerModel, actions ) =
                     buildEagerAndActions initialModel
-                        [ SpecSplit [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ] 2
-                        , SpecMoveStack [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne } ] { top = 482, left = 187 }
-                        , SpecSplit [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne } ] 0
-                        , SpecMoveStack [ { value = Eight, suit = Diamond, originDeck = DeckTwo } ] { top = 257, left = 85 }
-                        , SpecMergeStack [ { value = Seven, suit = Club, originDeck = DeckOne } ] [ { value = Eight, suit = Diamond, originDeck = DeckTwo } ] BoardActions.Left
-                        , SpecSplit [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ] 3
-                        , SpecMoveStack [ { value = Four, suit = Heart, originDeck = DeckTwo }, { value = Five, suit = Club, originDeck = DeckTwo }, { value = Six, suit = Diamond, originDeck = DeckTwo } ] { top = 182, left = 220 }
-                        , SpecMergeStack [ { value = Three, suit = Spade, originDeck = DeckOne } ] [ { value = Four, suit = Heart, originDeck = DeckTwo }, { value = Five, suit = Club, originDeck = DeckTwo }, { value = Six, suit = Diamond, originDeck = DeckTwo } ] BoardActions.Left
-                        , SpecSplit [ { value = Three, suit = Spade, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckTwo }, { value = Five, suit = Club, originDeck = DeckTwo }, { value = Six, suit = Diamond, originDeck = DeckTwo } ] 3
-                        , SpecMergeStack [ { value = Six, suit = Diamond, originDeck = DeckTwo } ] [ { value = Seven, suit = Club, originDeck = DeckOne }, { value = Eight, suit = Diamond, originDeck = DeckTwo } ] BoardActions.Left
-                        , SpecMergeStack [ { value = Seven, suit = Diamond, originDeck = DeckOne } ] [ { value = Seven, suit = Spade, originDeck = DeckOne } ] BoardActions.Right
-                        , SpecSplit [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ] 5
-                        , SpecMergeStack [ { value = Seven, suit = Heart, originDeck = DeckOne } ] [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne } ] BoardActions.Right ]
+                        [ SpecSplit [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ] 2
+                        , SpecMoveStack [ parseCard "7S1", parseCard "7D1" ] { top = 482, left = 187 }
+                        , SpecSplit [ parseCard "7S1", parseCard "7D1" ] 0
+                        , SpecMoveStack [ parseCard "8D2" ] { top = 257, left = 85 }
+                        , SpecMergeStack [ parseCard "7C1" ] [ parseCard "8D2" ] BoardActions.Left
+                        , SpecSplit [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ] 3
+                        , SpecMoveStack [ parseCard "4H2", parseCard "5C2", parseCard "6D2" ] { top = 182, left = 220 }
+                        , SpecMergeStack [ parseCard "3S1" ] [ parseCard "4H2", parseCard "5C2", parseCard "6D2" ] BoardActions.Left
+                        , SpecSplit [ parseCard "3S1", parseCard "4H2", parseCard "5C2", parseCard "6D2" ] 3
+                        , SpecMergeStack [ parseCard "6D2" ] [ parseCard "7C1", parseCard "8D2" ] BoardActions.Left
+                        , SpecMergeStack [ parseCard "7D1" ] [ parseCard "7S1" ] BoardActions.Right
+                        , SpecSplit [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ] 5
+                        , SpecMergeStack [ parseCard "7H1" ] [ parseCard "7S1", parseCard "7D1" ] BoardActions.Right ]
 
                 replayedModel =
                     runReplay initialModel actions
@@ -5077,14 +5126,14 @@ walkthroughMined022AHp1ADp1 =
         \_ ->
             let
                 board =
-                    [ { boardCards = [ { card = { value = King, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 26, left = 26 } }
-                        , { boardCards = [ { card = { value = Ten, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 107, left = 52 } }
-                        , { boardCards = [ { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 182, left = 52 } }
-                        , { boardCards = [ { card = { value = Seven, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 257, left = 52 } }
-                        , { boardCards = [ { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 332, left = 52 } }
-                        , { boardCards = [ { card = { value = Two, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 407, left = 52 } }
-                        , { boardCards = [ { card = { value = Nine, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ten, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 482, left = 52 } }
-                        , { boardCards = [ { card = { value = Ace, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 182, left = 187 } }
+                    [ { boardCards = [ boardCard "KS1", boardCard "AS1", boardCard "2S1", boardCard "3S1" ], loc = { top = 26, left = 26 } }
+                        , { boardCards = [ boardCard "TD1", boardCard "JD1", boardCard "QD1", boardCard "KD1" ], loc = { top = 107, left = 52 } }
+                        , { boardCards = [ boardCard "2H1", boardCard "3H1", boardCard "4H1" ], loc = { top = 182, left = 52 } }
+                        , { boardCards = [ boardCard "7S1", boardCard "7D1", boardCard "7C1" ], loc = { top = 257, left = 52 } }
+                        , { boardCards = [ boardCard "AC1", boardCard "AD1", boardCard "AH1" ], loc = { top = 332, left = 52 } }
+                        , { boardCards = [ boardCard "2C1", boardCard "3D1", boardCard "4C1", boardCard "5H1", boardCard "6S1", boardCard "7H1" ], loc = { top = 407, left = 52 } }
+                        , { boardCards = [ boardCard "9C1", boardCard "TH1", boardCard "JS1" ], loc = { top = 482, left = 52 } }
+                        , { boardCards = [ boardCard "AH2", boardCard "AD2" ], loc = { top = 182, left = 187 } }
                         ]
 
                 base =
@@ -5095,12 +5144,12 @@ walkthroughMined022AHp1ADp1 =
 
                 ( eagerModel, actions ) =
                     buildEagerAndActions initialModel
-                        [ SpecSplit [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] 0
-                        , SpecMoveStack [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] { top = 332, left = 112 }
-                        , SpecSplit [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] 0
-                        , SpecMergeStack [ { value = Ace, suit = Club, originDeck = DeckOne } ] [ { value = Ace, suit = Heart, originDeck = DeckTwo }, { value = Ace, suit = Diamond, originDeck = DeckTwo } ] BoardActions.Right
-                        , SpecMergeStack [ { value = Ace, suit = Diamond, originDeck = DeckOne } ] [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ] BoardActions.Right
-                        , SpecMergeStack [ { value = Ace, suit = Heart, originDeck = DeckOne } ] [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ] BoardActions.Left ]
+                        [ SpecSplit [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ] 0
+                        , SpecMoveStack [ parseCard "AD1", parseCard "AH1" ] { top = 332, left = 112 }
+                        , SpecSplit [ parseCard "AD1", parseCard "AH1" ] 0
+                        , SpecMergeStack [ parseCard "AC1" ] [ parseCard "AH2", parseCard "AD2" ] BoardActions.Right
+                        , SpecMergeStack [ parseCard "AD1" ] [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ] BoardActions.Right
+                        , SpecMergeStack [ parseCard "AH1" ] [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ] BoardActions.Left ]
 
                 replayedModel =
                     runReplay initialModel actions
@@ -5123,15 +5172,15 @@ walkthroughMined0233C =
         \_ ->
             let
                 board =
-                    [ { boardCards = [ { card = { value = King, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 26, left = 26 } }
-                        , { boardCards = [ { card = { value = Nine, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ten, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 107, left = 52 } }
-                        , { boardCards = [ { card = { value = Ace, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Diamond, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 182, left = 52 } }
-                        , { boardCards = [ { card = { value = Ten, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 257, left = 52 } }
-                        , { boardCards = [ { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 332, left = 52 } }
-                        , { boardCards = [ { card = { value = Seven, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 407, left = 52 } }
-                        , { boardCards = [ { card = { value = Four, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 482, left = 52 } }
-                        , { boardCards = [ { card = { value = Two, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Spade, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 92, left = 187 } }
-                        , { boardCards = [ { card = { value = Three, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 167, left = 187 } }
+                    [ { boardCards = [ boardCard "KS1", boardCard "AS1", boardCard "2S1", boardCard "3S1" ], loc = { top = 26, left = 26 } }
+                        , { boardCards = [ boardCard "9C1", boardCard "TH1", boardCard "JS1" ], loc = { top = 107, left = 52 } }
+                        , { boardCards = [ boardCard "AH2", boardCard "AD2", boardCard "AC1" ], loc = { top = 182, left = 52 } }
+                        , { boardCards = [ boardCard "TD1", boardCard "JD1", boardCard "QD1", boardCard "KD1", boardCard "AD1" ], loc = { top = 257, left = 52 } }
+                        , { boardCards = [ boardCard "AH1", boardCard "2H1", boardCard "3H1", boardCard "4H1" ], loc = { top = 332, left = 52 } }
+                        , { boardCards = [ boardCard "7S1", boardCard "7D1", boardCard "7C1", boardCard "7H2" ], loc = { top = 407, left = 52 } }
+                        , { boardCards = [ boardCard "4C1", boardCard "5H1", boardCard "6S1", boardCard "7H1" ], loc = { top = 482, left = 52 } }
+                        , { boardCards = [ boardCard "2C1", boardCard "3D1", boardCard "4S2" ], loc = { top = 92, left = 187 } }
+                        , { boardCards = [ boardCard "3C1" ], loc = { top = 167, left = 187 } }
                         ]
 
                 base =
@@ -5142,12 +5191,12 @@ walkthroughMined0233C =
 
                 ( eagerModel, actions ) =
                     buildEagerAndActions initialModel
-                        [ SpecSplit [ { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ] 0
-                        , SpecMergeStack [ { value = Four, suit = Club, originDeck = DeckOne } ] [ { value = Three, suit = Club, originDeck = DeckOne } ] BoardActions.Right
-                        , SpecSplit [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Spade, originDeck = DeckTwo } ] 0
-                        , SpecMoveStack [ { value = Three, suit = Club, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne } ] { top = 167, left = 220 }
-                        , SpecMergeStack [ { value = Two, suit = Club, originDeck = DeckOne } ] [ { value = Three, suit = Club, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne } ] BoardActions.Left
-                        , SpecMergeStack [ { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Spade, originDeck = DeckTwo } ] [ { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ] BoardActions.Left ]
+                        [ SpecSplit [ parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ] 0
+                        , SpecMergeStack [ parseCard "4C1" ] [ parseCard "3C1" ] BoardActions.Right
+                        , SpecSplit [ parseCard "2C1", parseCard "3D1", parseCard "4S2" ] 0
+                        , SpecMoveStack [ parseCard "3C1", parseCard "4C1" ] { top = 167, left = 220 }
+                        , SpecMergeStack [ parseCard "2C1" ] [ parseCard "3C1", parseCard "4C1" ] BoardActions.Left
+                        , SpecMergeStack [ parseCard "3D1", parseCard "4S2" ] [ parseCard "5H1", parseCard "6S1", parseCard "7H1" ] BoardActions.Left ]
 
                 replayedModel =
                     runReplay initialModel actions
@@ -5170,15 +5219,15 @@ walkthroughMined0242D =
         \_ ->
             let
                 board =
-                    [ { boardCards = [ { card = { value = King, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 26, left = 26 } }
-                        , { boardCards = [ { card = { value = Ten, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 107, left = 52 } }
-                        , { boardCards = [ { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 182, left = 52 } }
-                        , { boardCards = [ { card = { value = Seven, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 257, left = 52 } }
-                        , { boardCards = [ { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 332, left = 52 } }
-                        , { boardCards = [ { card = { value = Two, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 407, left = 52 } }
-                        , { boardCards = [ { card = { value = Eight, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Nine, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ten, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 482, left = 52 } }
-                        , { boardCards = [ { card = { value = Nine, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ten, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 182, left = 187 } }
-                        , { boardCards = [ { card = { value = Two, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 257, left = 187 } }
+                    [ { boardCards = [ boardCard "KS1", boardCard "AS1", boardCard "2S1", boardCard "3S1" ], loc = { top = 26, left = 26 } }
+                        , { boardCards = [ boardCard "TD1", boardCard "JD1", boardCard "QD1", boardCard "KD1" ], loc = { top = 107, left = 52 } }
+                        , { boardCards = [ boardCard "2H1", boardCard "3H1", boardCard "4H1" ], loc = { top = 182, left = 52 } }
+                        , { boardCards = [ boardCard "7S1", boardCard "7D1", boardCard "7C1" ], loc = { top = 257, left = 52 } }
+                        , { boardCards = [ boardCard "AC1", boardCard "AD1", boardCard "AH1" ], loc = { top = 332, left = 52 } }
+                        , { boardCards = [ boardCard "2C1", boardCard "3D1", boardCard "4C1", boardCard "5H1", boardCard "6S1", boardCard "7H1" ], loc = { top = 407, left = 52 } }
+                        , { boardCards = [ boardCard "8H1", boardCard "9S1", boardCard "TH2" ], loc = { top = 482, left = 52 } }
+                        , { boardCards = [ boardCard "9C1", boardCard "TH1", boardCard "JC1" ], loc = { top = 182, left = 187 } }
+                        , { boardCards = [ boardCard "2D1" ], loc = { top = 257, left = 187 } }
                         ]
 
                 base =
@@ -5189,15 +5238,15 @@ walkthroughMined0242D =
 
                 ( eagerModel, actions ) =
                     buildEagerAndActions initialModel
-                        [ SpecSplit [ { value = King, suit = Spade, originDeck = DeckOne }, { value = Ace, suit = Spade, originDeck = DeckOne }, { value = Two, suit = Spade, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ] 3
-                        , SpecMergeStack [ { value = Three, suit = Spade, originDeck = DeckOne } ] [ { value = Two, suit = Diamond, originDeck = DeckOne } ] BoardActions.Right
-                        , SpecSplit [ { value = Ace, suit = Club, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] 0
-                        , SpecMoveStack [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] { top = 332, left = 112 }
-                        , SpecSplit [ { value = Ace, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Heart, originDeck = DeckOne } ] 0
-                        , SpecMoveStack [ { value = Two, suit = Diamond, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ] { top = 257, left = 220 }
-                        , SpecMergeStack [ { value = Ace, suit = Club, originDeck = DeckOne } ] [ { value = Two, suit = Diamond, originDeck = DeckOne }, { value = Three, suit = Spade, originDeck = DeckOne } ] BoardActions.Left
-                        , SpecMergeStack [ { value = Ace, suit = Diamond, originDeck = DeckOne } ] [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne } ] BoardActions.Right
-                        , SpecMergeStack [ { value = Ace, suit = Heart, originDeck = DeckOne } ] [ { value = Two, suit = Heart, originDeck = DeckOne }, { value = Three, suit = Heart, originDeck = DeckOne }, { value = Four, suit = Heart, originDeck = DeckOne } ] BoardActions.Left ]
+                        [ SpecSplit [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ] 3
+                        , SpecMergeStack [ parseCard "3S1" ] [ parseCard "2D1" ] BoardActions.Right
+                        , SpecSplit [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ] 0
+                        , SpecMoveStack [ parseCard "AD1", parseCard "AH1" ] { top = 332, left = 112 }
+                        , SpecSplit [ parseCard "AD1", parseCard "AH1" ] 0
+                        , SpecMoveStack [ parseCard "2D1", parseCard "3S1" ] { top = 257, left = 220 }
+                        , SpecMergeStack [ parseCard "AC1" ] [ parseCard "2D1", parseCard "3S1" ] BoardActions.Left
+                        , SpecMergeStack [ parseCard "AD1" ] [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ] BoardActions.Right
+                        , SpecMergeStack [ parseCard "AH1" ] [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ] BoardActions.Left ]
 
                 replayedModel =
                     runReplay initialModel actions
@@ -5220,16 +5269,16 @@ walkthroughMined025TSp1 =
         \_ ->
             let
                 board =
-                    [ { boardCards = [ { card = { value = Seven, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 26, left = 26 } }
-                        , { boardCards = [ { card = { value = Two, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Five, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Six, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Seven, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 107, left = 52 } }
-                        , { boardCards = [ { card = { value = Eight, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Nine, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ten, suit = Heart, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 182, left = 52 } }
-                        , { boardCards = [ { card = { value = Nine, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ten, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 257, left = 52 } }
-                        , { boardCards = [ { card = { value = King, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 332, left = 52 } }
-                        , { boardCards = [ { card = { value = Ace, suit = Club, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Spade, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 407, left = 52 } }
-                        , { boardCards = [ { card = { value = Ten, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Jack, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Queen, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = King, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Ace, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 482, left = 52 } }
-                        , { boardCards = [ { card = { value = Ace, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Two, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Three, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 182, left = 187 } }
-                        , { boardCards = [ { card = { value = Four, suit = Diamond, originDeck = DeckOne }, state = FirmlyOnBoard }, { card = { value = Four, suit = Spade, originDeck = DeckTwo }, state = FirmlyOnBoard }, { card = { value = Four, suit = Heart, originDeck = DeckOne }, state = FirmlyOnBoard } ], loc = { top = 257, left = 187 } }
-                        , { boardCards = [ { card = { value = Ten, suit = Spade, originDeck = DeckTwo }, state = FirmlyOnBoard } ], loc = { top = 332, left = 187 } }
+                    [ { boardCards = [ boardCard "7S1", boardCard "7D1", boardCard "7C1" ], loc = { top = 26, left = 26 } }
+                        , { boardCards = [ boardCard "2C1", boardCard "3D1", boardCard "4C1", boardCard "5H1", boardCard "6S1", boardCard "7H1" ], loc = { top = 107, left = 52 } }
+                        , { boardCards = [ boardCard "8H1", boardCard "9S1", boardCard "TH2" ], loc = { top = 182, left = 52 } }
+                        , { boardCards = [ boardCard "9C1", boardCard "TH1", boardCard "JC1" ], loc = { top = 257, left = 52 } }
+                        , { boardCards = [ boardCard "KS1", boardCard "AS1", boardCard "2S1" ], loc = { top = 332, left = 52 } }
+                        , { boardCards = [ boardCard "AC1", boardCard "2D1", boardCard "3S1" ], loc = { top = 407, left = 52 } }
+                        , { boardCards = [ boardCard "TD1", boardCard "JD1", boardCard "QD1", boardCard "KD1", boardCard "AD1" ], loc = { top = 482, left = 52 } }
+                        , { boardCards = [ boardCard "AH1", boardCard "2H1", boardCard "3H1" ], loc = { top = 182, left = 187 } }
+                        , { boardCards = [ boardCard "4D1", boardCard "4S2", boardCard "4H1" ], loc = { top = 257, left = 187 } }
+                        , { boardCards = [ boardCard "TS2" ], loc = { top = 332, left = 187 } }
                         ]
 
                 base =
@@ -5240,17 +5289,17 @@ walkthroughMined025TSp1 =
 
                 ( eagerModel, actions ) =
                     buildEagerAndActions initialModel
-                        [ SpecSplit [ { value = Ten, suit = Diamond, originDeck = DeckOne }, { value = Jack, suit = Diamond, originDeck = DeckOne }, { value = Queen, suit = Diamond, originDeck = DeckOne }, { value = King, suit = Diamond, originDeck = DeckOne }, { value = Ace, suit = Diamond, originDeck = DeckOne } ] 0
-                        , SpecMergeStack [ { value = Ten, suit = Diamond, originDeck = DeckOne } ] [ { value = Ten, suit = Spade, originDeck = DeckTwo } ] BoardActions.Right
-                        , SpecSplit [ { value = Eight, suit = Heart, originDeck = DeckOne }, { value = Nine, suit = Spade, originDeck = DeckOne }, { value = Ten, suit = Heart, originDeck = DeckTwo } ] 2
-                        , SpecMergeStack [ { value = Ten, suit = Heart, originDeck = DeckTwo } ] [ { value = Ten, suit = Spade, originDeck = DeckTwo }, { value = Ten, suit = Diamond, originDeck = DeckOne } ] BoardActions.Right
-                        , SpecSplit [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne }, { value = Seven, suit = Club, originDeck = DeckOne } ] 2
-                        , SpecMoveStack [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne } ] { top = 407, left = 187 }
-                        , SpecSplit [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne } ] 0
-                        , SpecMergeStack [ { value = Seven, suit = Club, originDeck = DeckOne } ] [ { value = Eight, suit = Heart, originDeck = DeckOne }, { value = Nine, suit = Spade, originDeck = DeckOne } ] BoardActions.Left
-                        , SpecMergeStack [ { value = Seven, suit = Diamond, originDeck = DeckOne } ] [ { value = Seven, suit = Spade, originDeck = DeckOne } ] BoardActions.Right
-                        , SpecSplit [ { value = Two, suit = Club, originDeck = DeckOne }, { value = Three, suit = Diamond, originDeck = DeckOne }, { value = Four, suit = Club, originDeck = DeckOne }, { value = Five, suit = Heart, originDeck = DeckOne }, { value = Six, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Heart, originDeck = DeckOne } ] 5
-                        , SpecMergeStack [ { value = Seven, suit = Heart, originDeck = DeckOne } ] [ { value = Seven, suit = Spade, originDeck = DeckOne }, { value = Seven, suit = Diamond, originDeck = DeckOne } ] BoardActions.Right ]
+                        [ SpecSplit [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1", parseCard "AD1" ] 0
+                        , SpecMergeStack [ parseCard "TD1" ] [ parseCard "TS2" ] BoardActions.Right
+                        , SpecSplit [ parseCard "8H1", parseCard "9S1", parseCard "TH2" ] 2
+                        , SpecMergeStack [ parseCard "TH2" ] [ parseCard "TS2", parseCard "TD1" ] BoardActions.Right
+                        , SpecSplit [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ] 2
+                        , SpecMoveStack [ parseCard "7S1", parseCard "7D1" ] { top = 407, left = 187 }
+                        , SpecSplit [ parseCard "7S1", parseCard "7D1" ] 0
+                        , SpecMergeStack [ parseCard "7C1" ] [ parseCard "8H1", parseCard "9S1" ] BoardActions.Left
+                        , SpecMergeStack [ parseCard "7D1" ] [ parseCard "7S1" ] BoardActions.Right
+                        , SpecSplit [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ] 5
+                        , SpecMergeStack [ parseCard "7H1" ] [ parseCard "7S1", parseCard "7D1" ] BoardActions.Right ]
 
                 replayedModel =
                     runReplay initialModel actions

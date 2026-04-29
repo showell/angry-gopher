@@ -5,11 +5,12 @@
 # `ops/list` to see what already exists. Drifted ops scripts
 # are how an hour disappears resurrecting things.
 #
-# Conformance-only fast gate: regen fixtures, run Python +
-# Elm conformance tests. Subset of `ops/check` — use this for
-# tight conformance-iteration loops (edit a .dsl, re-gate in
-# under a minute). THIS is the script for "regen fixtures";
-# don't compose `go run ./cmd/fixturegen ...` ad-hoc.
+# STANDARD GATE: run after every non-trivial Elm edit, and
+# always before reporting a task done. Sub-agents dispatched
+# to do Elm work must include this in their completion step.
+# The elm-review pass (NoUnused.CustomTypeConstructors et al.)
+# catches dead code that elm-test alone misses — skipping it
+# is how orphaned type constructors survive undetected.
 #
 # Three steps:
 #   1. cmd/fixturegen — DSL → Elm + JSON + ops manifest; also
@@ -18,8 +19,8 @@
 #      2026-04-28 with the Go domain package.
 #   2. Python test_dsl_conformance — verifies its DISPATCH
 #      matches the manifest, then runs all scenarios.
-#   3. Elm check.sh — compiles + runs the generated
-#      Elm conformance tests.
+#   3. Elm check.sh — standalone type-checks, elm-test (700+),
+#      elm make, elm-review.
 #
 # Exits non-zero on any step's failure.
 
