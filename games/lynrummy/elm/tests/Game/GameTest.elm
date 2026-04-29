@@ -23,10 +23,21 @@ everything is deterministic.
 
 import Expect
 import Game.Rules.Card exposing (Card, CardValue(..), OriginDeck(..), Suit(..))
-import Game.CardStack exposing (HandCard, HandCardState(..))
+import Game.CardStack exposing (BoardCardState(..), CardStack, HandCard, HandCardState(..))
 import Game.Game as Game exposing (GameState)
 import Game.Hand as Hand
+import Game.Physics.BoardGeometry exposing (BoardBounds)
+import Game.PlayerTurn exposing (CompleteTurnResult(..))
 import Test exposing (Test, describe, test)
+
+
+{-| Wide bounds that won't trigger geometry failures for
+well-placed stacks. Used so tests exercise the semantic
+path, not the layout path.
+-}
+wideBounds : BoardBounds
+wideBounds =
+    { maxWidth = 5000, maxHeight = 5000, margin = 0 }
 
 
 {-| Thin wrapper for tests that only care about the post-turn
@@ -36,7 +47,7 @@ inspect the state.
 -}
 applyTurn : GameState a -> GameState a
 applyTurn =
-    Tuple.first << Game.applyCompleteTurn
+    Tuple.first << Game.applyCompleteTurn wideBounds
 
 
 
@@ -109,6 +120,7 @@ suite =
         , victorAwardedOnce
         , cardsPlayedResets
         , turnStartBoardScoreAdvances
+        , dirtyBoardBranch
         ]
 
 
@@ -285,3 +297,42 @@ turnStartBoardScoreAdvances =
                 |> applyTurn
                 |> .turnStartBoardScore
                 |> Expect.equal 0
+
+
+{-| A singleton stack (1 card) is not a valid LynRummy meld, so
+the referee rejects it. applyCompleteTurn must return Failure
+and leave the state unchanged.
+-}
+dirtyBoardBranch : Test
+dirtyBoardBranch =
+    let
+        singletonStack : CardStack
+        singletonStack =
+            { boardCards =
+                [ { card = { value = King, suit = Spade, originDeck = DeckOne }
+                  , state = FirmlyOnBoard
+                  }
+                ]
+            , loc = { top = 100, left = 100 }
+            }
+
+        dirtyState =
+            { baseState
+                | board = [ singletonStack ]
+                , cardsPlayedThisTurn = 1
+            }
+    in
+    describe "dirty board → Failure, state unchanged"
+        [ test "result is Failure" <|
+            \_ ->
+                Game.applyCompleteTurn wideBounds dirtyState
+                    |> Tuple.second
+                    |> .result
+                    |> Expect.equal Failure
+        , test "state is unchanged (turn does not advance)" <|
+            \_ ->
+                Game.applyCompleteTurn wideBounds dirtyState
+                    |> Tuple.first
+                    |> .turnIndex
+                    |> Expect.equal dirtyState.turnIndex
+        ]

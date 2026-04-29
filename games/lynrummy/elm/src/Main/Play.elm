@@ -37,9 +37,9 @@ import Game.Agent.Move as AgentMove exposing (Move)
 import Game.Agent.Verbs as AgentVerbs
 import Game.Dealer as Dealer
 import Game.Game as Game
+import Game.PlayerTurn exposing (CompleteTurnResult(..))
 import Game.Physics.GestureArbitration as GA
 import Game.Random as Random
-import Game.Rules.Referee as Referee
 import Game.Replay.Space as ReplaySpace
 import Game.Replay.Time as ReplayTime
 import Game.Score as Score
@@ -375,35 +375,35 @@ mouseMove pos tMs model =
 
 clickCompleteTurn : Model -> ( Model, Cmd Msg )
 clickCompleteTurn model =
-    case Referee.validateTurnComplete model.board refereeBounds of
-        Err refErr ->
-            ( { model | status = boardNotCleanStatus refErr.message }
+    let
+        ( afterTurn, turnOutcome ) =
+            Game.applyCompleteTurn refereeBounds model
+    in
+    case turnOutcome.result of
+        Failure ->
+            ( { model
+                | status = statusForCompleteTurn (Ok turnOutcome)
+                , popup = popupForCompleteTurn (Ok turnOutcome)
+              }
             , Cmd.none
             )
 
-        Ok () ->
+        _ ->
             let
+                seq =
+                    model.nextSeq
+
                 completeTurnEntry =
                     { action = WA.CompleteTurn
                     , gesturePath = Nothing
                     , pathFrame = State.ViewportFrame
                     }
 
-                seq =
-                    model.nextSeq
-
-                withEntry =
-                    { model
-                        | actionLog = model.actionLog ++ [ completeTurnEntry ]
-                        , nextSeq = seq + 1
-                    }
-
-                ( afterTurn, turnOutcome ) =
-                    Game.applyCompleteTurn withEntry
-
                 newModel =
                     { afterTurn
-                        | score = Score.forStacks afterTurn.board
+                        | actionLog = model.actionLog ++ [ completeTurnEntry ]
+                        , nextSeq = seq + 1
+                        , score = Score.forStacks afterTurn.board
                         , status = statusForCompleteTurn (Ok turnOutcome)
                         , popup = popupForCompleteTurn (Ok turnOutcome)
                     }
@@ -925,13 +925,6 @@ actionLogFetchFailedStatus =
 animationInProgressStatus : StatusMessage
 animationInProgressStatus =
     { text = "Animation in progress — wait for it to finish before clicking again."
-    , kind = Scold
-    }
-
-
-boardNotCleanStatus : String -> StatusMessage
-boardNotCleanStatus refereeMessage =
-    { text = "Board isn't clean: " ++ refereeMessage
     , kind = Scold
     }
 

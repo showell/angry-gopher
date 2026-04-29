@@ -174,7 +174,7 @@ applyCompleteTurn : Model -> ActionOutcome
 applyCompleteTurn model =
     let
         ( afterTurn, _ ) =
-            Game.applyCompleteTurn model
+            Game.applyCompleteTurn refereeBounds model
 
         withScore =
             { afterTurn | score = Score.forStacks afterTurn.board }

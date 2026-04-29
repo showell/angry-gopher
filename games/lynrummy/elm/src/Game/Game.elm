@@ -28,7 +28,9 @@ to the incoming party. In the Go path that decision flows from
 import Game.Rules.Card exposing (Card)
 import Game.CardStack as CardStack exposing (CardStack, HandCardState(..))
 import Game.Hand as Hand exposing (Hand)
+import Game.Physics.BoardGeometry exposing (BoardBounds)
 import Game.PlayerTurn as PlayerTurn exposing (CompleteTurnResult(..))
+import Game.Rules.Referee as Referee
 import Game.Score as Score
 
 
@@ -97,8 +99,20 @@ No I/O, no randomness — the deck is drawn in order. Callers
 who want shuffling seed it before passing it in.
 
 -}
-applyCompleteTurn : GameState a -> ( GameState a, CompleteTurnOutcome )
-applyCompleteTurn state =
+applyCompleteTurn : BoardBounds -> GameState a -> ( GameState a, CompleteTurnOutcome )
+applyCompleteTurn bounds state =
+    case Referee.validateTurnComplete state.board bounds of
+        Err _ ->
+            ( state
+            , { result = Failure, turnScore = 0, cardsDrawn = 0, dealtCards = [] }
+            )
+
+        Ok () ->
+            applyValidTurn state
+
+
+applyValidTurn : GameState a -> ( GameState a, CompleteTurnOutcome )
+applyValidTurn state =
     let
         outgoingIdx =
             state.activePlayerIndex
