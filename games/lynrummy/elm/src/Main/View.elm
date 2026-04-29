@@ -386,6 +386,13 @@ puzzleControls model =
         ]
         [ gameButton "Hint" ClickHint
         , gameButton "Let agent play" ClickAgentPlay
+        , (if canUndoThisTurn model then
+            gameButton "Undo" ClickUndo
+
+           else
+            disabledGameButton "Undo"
+          )
+        , gameButton "Reset" ClickReset
         , viewReplayControl model
         ]
     ]

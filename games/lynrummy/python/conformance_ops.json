@@ -8,6 +8,7 @@
     "replay_invariant",
     "solve",
     "trick_first_play",
+    "undo_walkthrough",
     "validate_game_move",
     "validate_turn_complete"
   ],

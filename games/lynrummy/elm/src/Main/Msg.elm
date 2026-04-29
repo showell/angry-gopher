@@ -62,6 +62,7 @@ type Msg
     | SessionReceived (Result Http.Error Int)
     | ClickCompleteTurn
     | ClickUndo
+    | ClickReset
     | ClickHint
     | ClickAgentPlay
     | PopupOk

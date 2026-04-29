@@ -4019,6 +4019,177 @@ turnCompleteRejectsIncomplete =
                         Expect.pass
 
 
+undoWalkthroughMergeHand : Test
+undoWalkthroughMergeHand =
+    test "undo_walkthrough_merge_hand" <|
+        \_ ->
+            let
+                board =
+                    [ { boardCards = [ boardCard "KS1", boardCard "AS1", boardCard "2S1", boardCard "3S1" ], loc = { top = 20, left = 70 } }
+                        , { boardCards = [ boardCard "TD1", boardCard "JD1", boardCard "QD1", boardCard "KD1" ], loc = { top = 80, left = 160 } }
+                        , { boardCards = [ boardCard "2H1", boardCard "3H1", boardCard "4H1" ], loc = { top = 140, left = 100 } }
+                        , { boardCards = [ boardCard "7S1", boardCard "7D1", boardCard "7C1" ], loc = { top = 200, left = 40 } }
+                        , { boardCards = [ boardCard "AC1", boardCard "AD1", boardCard "AH1" ], loc = { top = 260, left = 130 } }
+                        , { boardCards = [ boardCard "2C1", boardCard "3D1", boardCard "4C1", boardCard "5H1", boardCard "6S1", boardCard "7H1" ], loc = { top = 320, left = 70 } }
+                        ]
+
+                base =
+                    State.baseModel
+
+                m0 =
+                    State.setActiveHand { handCards = [ handCard "7H2" ] }
+                        { base | board = board, sessionId = Just 0 }
+
+                -- one card in hand, six stacks on board, nothing to undo
+                m1 =
+                    m0
+
+                -- player merges 7H' from hand onto the 7S-7D-7C set on the right
+                action2 =
+                    WA.MergeHand { handCard = parseCard "7H2", target = findStackByContent [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ] m1.board, side = BoardActions.Right }
+
+                entry2 =
+                    { action = action2, gesturePath = Nothing, pathFrame = State.BoardFrame }
+
+                m2post =
+                    (Apply.applyAction action2 m1).model
+
+                m2 =
+                    { m2post | actionLog = m1.actionLog ++ [ entry2 ] }
+
+                -- player undoes the merge — 7H' returns to hand, set shrinks back
+                ( m3, _, _ ) =
+                    Play.update Msg.ClickUndo m2
+            in
+            Expect.all
+                [ \_ -> List.length m1.board |> Expect.equal 6
+                , \_ -> List.length (State.activeHand m1).handCards |> Expect.equal 1
+                , \_ -> State.canUndoThisTurn m1 |> Expect.equal False
+                , \_ -> List.length m2.board |> Expect.equal 6
+                , \_ -> List.length (State.activeHand m2).handCards |> Expect.equal 0
+                , \_ -> State.canUndoThisTurn m2 |> Expect.equal True
+                , \_ -> if List.any (\s -> List.map .card s.boardCards == [ parseCard "7S1", parseCard "7D1", parseCard "7C1", parseCard "7H2" ]) m2.board then Expect.pass else Expect.fail "board missing stack [7S 7D 7C 7H']"
+                , \_ -> List.length m3.board |> Expect.equal 6
+                , \_ -> List.length (State.activeHand m3).handCards |> Expect.equal 1
+                , \_ -> State.canUndoThisTurn m3 |> Expect.equal False
+                , \_ -> if List.any (\s -> List.map .card s.boardCards == [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]) m3.board then Expect.pass else Expect.fail "board missing stack [7S 7D 7C]"
+                , \_ -> if List.any (\hc -> hc.card == parseCard "7H2") (State.activeHand m3).handCards then Expect.pass else Expect.fail "hand missing card 7H'"
+                , \_ ->
+                    let
+                        byLoc =
+                            List.sortBy (\s -> ( s.loc.top, s.loc.left ))
+                        cardRows =
+                            List.map (.boardCards >> List.map .card)
+                        expectedFinalBoard =
+                            [ { boardCards = [ boardCard "KS1", boardCard "AS1", boardCard "2S1", boardCard "3S1" ], loc = { top = 20, left = 70 } }
+                            , { boardCards = [ boardCard "TD1", boardCard "JD1", boardCard "QD1", boardCard "KD1" ], loc = { top = 80, left = 160 } }
+                            , { boardCards = [ boardCard "2H1", boardCard "3H1", boardCard "4H1" ], loc = { top = 140, left = 100 } }
+                            , { boardCards = [ boardCard "7S1", boardCard "7D1", boardCard "7C1" ], loc = { top = 200, left = 40 } }
+                            , { boardCards = [ boardCard "AC1", boardCard "AD1", boardCard "AH1" ], loc = { top = 260, left = 130 } }
+                            , { boardCards = [ boardCard "2C1", boardCard "3D1", boardCard "4C1", boardCard "5H1", boardCard "6S1", boardCard "7H1" ], loc = { top = 320, left = 70 } }
+                            ]
+                    in
+                    cardRows (byLoc m3.board) |> Expect.equal (cardRows (byLoc expectedFinalBoard))
+                ]
+                ()
+
+
+undoWalkthroughSplitThenMove : Test
+undoWalkthroughSplitThenMove =
+    test "undo_walkthrough_split_then_move" <|
+        \_ ->
+            let
+                board =
+                    [ { boardCards = [ boardCard "KS1", boardCard "AS1", boardCard "2S1", boardCard "3S1" ], loc = { top = 20, left = 70 } }
+                        , { boardCards = [ boardCard "TD1", boardCard "JD1", boardCard "QD1", boardCard "KD1" ], loc = { top = 80, left = 160 } }
+                        , { boardCards = [ boardCard "2H1", boardCard "3H1", boardCard "4H1" ], loc = { top = 140, left = 100 } }
+                        , { boardCards = [ boardCard "7S1", boardCard "7D1", boardCard "7C1" ], loc = { top = 200, left = 40 } }
+                        , { boardCards = [ boardCard "AC1", boardCard "AD1", boardCard "AH1" ], loc = { top = 260, left = 130 } }
+                        , { boardCards = [ boardCard "2C1", boardCard "3D1", boardCard "4C1", boardCard "5H1", boardCard "6S1", boardCard "7H1" ], loc = { top = 320, left = 70 } }
+                        ]
+
+                base =
+                    State.baseModel
+
+                m0 =
+                    { base | board = board, sessionId = Just 0 }
+
+                -- board starts with six stacks, nothing to undo yet
+                m1 =
+                    m0
+
+                -- player splits the KS-AS-2S-3S run at the midpoint
+                spec2 =
+                    SpecSplit [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ] 2
+
+                action2 =
+                    resolveSpec spec2 m1.board
+
+                entry2 =
+                    { action = action2, gesturePath = Nothing, pathFrame = State.BoardFrame }
+
+                m2post =
+                    (Apply.applyAction action2 m1).model
+
+                m2 =
+                    { m2post | actionLog = m1.actionLog ++ [ entry2 ] }
+
+                -- player slides the 2S-3S piece to a new spot
+                spec3 =
+                    SpecMoveStack [ parseCard "2S1", parseCard "3S1" ] { top = 400, left = 300 }
+
+                action3 =
+                    resolveSpec spec3 m2.board
+
+                entry3 =
+                    { action = action3, gesturePath = Nothing, pathFrame = State.BoardFrame }
+
+                m3post =
+                    (Apply.applyAction action3 m2).model
+
+                m3 =
+                    { m3post | actionLog = m2.actionLog ++ [ entry3 ] }
+
+                -- player undoes the slide — piece snaps back to split position
+                ( m4, _, _ ) =
+                    Play.update Msg.ClickUndo m3
+
+                -- player undoes the split — KS-AS-2S-3S run is whole again
+                ( m5, _, _ ) =
+                    Play.update Msg.ClickUndo m4
+            in
+            Expect.all
+                [ \_ -> List.length m1.board |> Expect.equal 6
+                , \_ -> State.canUndoThisTurn m1 |> Expect.equal False
+                , \_ -> List.length m2.board |> Expect.equal 7
+                , \_ -> State.canUndoThisTurn m2 |> Expect.equal True
+                , \_ -> List.length m3.board |> Expect.equal 7
+                , \_ -> State.canUndoThisTurn m3 |> Expect.equal True
+                , \_ -> List.length m4.board |> Expect.equal 7
+                , \_ -> State.canUndoThisTurn m4 |> Expect.equal True
+                , \_ -> List.length m5.board |> Expect.equal 6
+                , \_ -> State.canUndoThisTurn m5 |> Expect.equal False
+                , \_ -> if List.any (\s -> List.map .card s.boardCards == [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]) m5.board then Expect.pass else Expect.fail "board missing stack [KS AS 2S 3S]"
+                , \_ ->
+                    let
+                        byLoc =
+                            List.sortBy (\s -> ( s.loc.top, s.loc.left ))
+                        cardRows =
+                            List.map (.boardCards >> List.map .card)
+                        expectedFinalBoard =
+                            [ { boardCards = [ boardCard "KS1", boardCard "AS1", boardCard "2S1", boardCard "3S1" ], loc = { top = 20, left = 70 } }
+                            , { boardCards = [ boardCard "TD1", boardCard "JD1", boardCard "QD1", boardCard "KD1" ], loc = { top = 80, left = 160 } }
+                            , { boardCards = [ boardCard "2H1", boardCard "3H1", boardCard "4H1" ], loc = { top = 140, left = 100 } }
+                            , { boardCards = [ boardCard "7S1", boardCard "7D1", boardCard "7C1" ], loc = { top = 200, left = 40 } }
+                            , { boardCards = [ boardCard "AC1", boardCard "AD1", boardCard "AH1" ], loc = { top = 260, left = 130 } }
+                            , { boardCards = [ boardCard "2C1", boardCard "3D1", boardCard "4C1", boardCard "5H1", boardCard "6S1", boardCard "7H1" ], loc = { top = 320, left = 70 } }
+                            ]
+                    in
+                    cardRows (byLoc m5.board) |> Expect.equal (cardRows (byLoc expectedFinalBoard))
+                ]
+                ()
+
+
 validExtendRunWith8H : Test
 validExtendRunWith8H =
     test "valid_extend_run_with_8H" <|
@@ -5428,6 +5599,8 @@ suite =
         , spliceDup5dIntoPureDiamonds
         , turnCompleteCleanBoard
         , turnCompleteRejectsIncomplete
+        , undoWalkthroughMergeHand
+        , undoWalkthroughSplitThenMove
         , validExtendRunWith8H
         , walkthroughMined0014S4Cp1
         , walkthroughMined002QDp1

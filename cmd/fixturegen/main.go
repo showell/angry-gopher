@@ -51,7 +51,24 @@ type Scenario struct {
 	CardCount int
 	// Replay-invariant op (`replay_invariant`).
 	ReplayActions []ReplayAction
-	Expect        Expectation
+	// Undo-walkthrough op (`undo_walkthrough`).
+	Steps            []WalkthroughStep
+	ExpectFinalBoard []Stack // expect_final_board: — full board state after all steps
+	Expect           Expectation
+}
+
+// WalkthroughStep is one step in an `undo_walkthrough` scenario.
+// The DSL reads like a game transcript: each step carries an
+// optional action (board primitive OR the special "undo" token)
+// and optional per-step assertions.
+type WalkthroughStep struct {
+	Label              string
+	Action             *ReplayAction // nil = observation step (no action)
+	ExpectBoardCount   *int          // expect_board_count: N
+	ExpectHandCount    *int          // expect_hand_count: N
+	ExpectUndoable     *bool         // expect_undoable: true | false
+	ExpectStack        []Card        // expect_stack: <cards> — stack with exactly these cards exists on board
+	ExpectHandContains *Card         // expect_hand_contains: <card> — card is in active hand
 }
 
 // ReplayAction is one entry in a replay_invariant scenario's
@@ -211,6 +228,11 @@ var opRegistry = []OpKind{
 		Name:    "replay_invariant",
 		Elm:     true,
 		EmitElm: elmReplayInvariant,
+	},
+	{
+		Name:    "undo_walkthrough",
+		Elm:     true,
+		EmitElm: elmUndoWalkthrough,
 	},
 	{
 		// Legacy: no scenarios reference this op today, but the
@@ -931,6 +953,179 @@ func elmReplaySide(s string) string {
 // signature stays compatible with both ExpectedSuggestion-style
 // and ReplayAction-style call sites.
 func cardsFromCards(cs []Card) []Card { return cs }
+
+
+// elmUndoWalkthrough emits a test body that walks a sequence of
+// board + hand actions plus undo steps, asserting board count,
+// hand count, canUndoThisTurn, and specific card-content after
+// each step. The scenario DSL reads like a human game transcript.
+//
+// Non-undo action steps apply physics via Apply.applyAction and
+// manually append the log entry so canUndoThisTurn has correct
+// state. Undo steps delegate to Play.update Msg.ClickUndo, which
+// exercises the full click path (log collapse, Reducer.undoAction,
+// board + hand update).
+func elmUndoWalkthrough(b *strings.Builder, sc Scenario) {
+	ind := "            " // 12 spaces — inside test thunk
+
+	b.WriteString(ind + "let\n")
+	fmt.Fprintf(b, "%s    board =\n%s        %s\n\n",
+		ind, ind, elmStacks(sc.Board, ind+"            "))
+	fmt.Fprintf(b, "%s    base =\n%s        State.baseModel\n\n", ind, ind)
+
+	// Build m0: inject board, sessionId, and optional hand cards.
+	if len(sc.Hand) > 0 {
+		fmt.Fprintf(b, "%s    m0 =\n%s        State.setActiveHand { handCards = %s }\n%s            { base | board = board, sessionId = Just 0 }\n",
+			ind, ind, elmHandCards(sc.Hand), ind)
+	} else {
+		fmt.Fprintf(b, "%s    m0 =\n%s        { base | board = board, sessionId = Just 0 }\n", ind, ind)
+	}
+
+	for i, step := range sc.Steps {
+		cur := fmt.Sprintf("m%d", i+1)
+		prev := fmt.Sprintf("m%d", i)
+
+		fmt.Fprintf(b, "\n%s    -- %s\n", ind, step.Label)
+
+		if step.Action == nil {
+			// Observation-only step: alias the previous model.
+			fmt.Fprintf(b, "%s    %s =\n%s        %s\n", ind, cur, ind, prev)
+
+		} else if step.Action.Kind == "undo" {
+			// Undo step: full click path via Play.update.
+			fmt.Fprintf(b, "%s    ( %s, _, _ ) =\n%s        Play.update Msg.ClickUndo %s\n",
+				ind, cur, ind, prev)
+
+		} else if step.Action.Kind == "place_hand" || step.Action.Kind == "merge_hand" {
+			// Hand-origin step: construct WireAction directly (no resolveSpec).
+			act := fmt.Sprintf("action%d", i+1)
+			entry := fmt.Sprintf("entry%d", i+1)
+			post := fmt.Sprintf("m%dpost", i+1)
+
+			fmt.Fprintf(b, "%s    %s =\n%s        %s\n\n",
+				ind, act, ind, elmHandAction(*step.Action, prev))
+			fmt.Fprintf(b, "%s    %s =\n%s        { action = %s, gesturePath = Nothing, pathFrame = State.BoardFrame }\n\n",
+				ind, entry, ind, act)
+			fmt.Fprintf(b, "%s    %s =\n%s        (Apply.applyAction %s %s).model\n\n",
+				ind, post, ind, act, prev)
+			fmt.Fprintf(b, "%s    %s =\n%s        { %s | actionLog = %s.actionLog ++ [ %s ] }\n",
+				ind, cur, ind, post, prev, entry)
+
+		} else {
+			// Board-primitive step: apply physics + thread the log.
+			spec := fmt.Sprintf("spec%d", i+1)
+			act := fmt.Sprintf("action%d", i+1)
+			entry := fmt.Sprintf("entry%d", i+1)
+			post := fmt.Sprintf("m%dpost", i+1)
+
+			fmt.Fprintf(b, "%s    %s =\n%s        %s\n\n",
+				ind, spec, ind, elmReplaySpec(*step.Action))
+			fmt.Fprintf(b, "%s    %s =\n%s        resolveSpec %s %s.board\n\n",
+				ind, act, ind, spec, prev)
+			fmt.Fprintf(b, "%s    %s =\n%s        { action = %s, gesturePath = Nothing, pathFrame = State.BoardFrame }\n\n",
+				ind, entry, ind, act)
+			fmt.Fprintf(b, "%s    %s =\n%s        (Apply.applyAction %s %s).model\n\n",
+				ind, post, ind, act, prev)
+			fmt.Fprintf(b, "%s    %s =\n%s        { %s | actionLog = %s.actionLog ++ [ %s ] }\n",
+				ind, cur, ind, post, prev, entry)
+		}
+	}
+
+	b.WriteString(ind + "in\n")
+
+	var checks []string
+	for i, step := range sc.Steps {
+		model := fmt.Sprintf("m%d", i+1)
+		if step.ExpectBoardCount != nil {
+			checks = append(checks, fmt.Sprintf(
+				"\\_ -> List.length %s.board |> Expect.equal %d", model, *step.ExpectBoardCount))
+		}
+		if step.ExpectHandCount != nil {
+			checks = append(checks, fmt.Sprintf(
+				"\\_ -> List.length (State.activeHand %s).handCards |> Expect.equal %d", model, *step.ExpectHandCount))
+		}
+		if step.ExpectUndoable != nil {
+			checks = append(checks, fmt.Sprintf(
+				"\\_ -> State.canUndoThisTurn %s |> Expect.equal %s", model, elmBool(*step.ExpectUndoable)))
+		}
+		if len(step.ExpectStack) > 0 {
+			cards := elmRawCards(step.ExpectStack)
+			label := elmCompactCardList(step.ExpectStack)
+			checks = append(checks, fmt.Sprintf(
+				"\\_ -> if List.any (\\s -> List.map .card s.boardCards == %s) %s.board then Expect.pass else Expect.fail \"board missing stack [%s]\"",
+				cards, model, label))
+		}
+		if step.ExpectHandContains != nil {
+			card := elmCompactCard(*step.ExpectHandContains)
+			label := elmCompactCardList([]Card{*step.ExpectHandContains})
+			checks = append(checks, fmt.Sprintf(
+				"\\_ -> if List.any (\\hc -> hc.card == parseCard %s) (State.activeHand %s).handCards then Expect.pass else Expect.fail \"hand missing card %s\"",
+				card, model, label))
+		}
+	}
+
+	// Final-board assertion: sort both boards by (top, left) and
+	// compare card lists, ignoring BoardCard.state differences that
+	// arise from FreshlyPlayed vs FirmlyOnBoard bookkeeping.
+	if len(sc.ExpectFinalBoard) > 0 {
+		lastModel := fmt.Sprintf("m%d", len(sc.Steps))
+		checks = append(checks, fmt.Sprintf(
+			"\\_ ->\n%s        let\n%s            byLoc =\n%s                List.sortBy (\\s -> ( s.loc.top, s.loc.left ))\n%s            cardRows =\n%s                List.map (.boardCards >> List.map .card)\n%s            expectedFinalBoard =\n%s                %s\n%s        in\n%s        cardRows (byLoc %s.board) |> Expect.equal (cardRows (byLoc expectedFinalBoard))",
+			ind, ind, ind, ind, ind, ind, ind,
+			elmStacks(sc.ExpectFinalBoard, ind+"                "),
+			ind, ind, lastModel))
+	}
+
+	if len(checks) == 0 {
+		b.WriteString(ind + "Expect.pass")
+		return
+	}
+
+	fmt.Fprintf(b, "%sExpect.all\n%s    [ %s", ind, ind, checks[0])
+	for _, c := range checks[1:] {
+		fmt.Fprintf(b, "\n%s    , %s", ind, c)
+	}
+	fmt.Fprintf(b, "\n%s    ]\n%s    ()", ind, ind)
+}
+
+
+// elmHandAction renders a hand-origin WireAction (place_hand or
+// merge_hand) as an Elm literal. Unlike board-origin actions,
+// these don't go through resolveSpec — the hand card is explicit
+// and the target stack (for merge_hand) is content-addressed
+// against the model board at the time of the step.
+func elmHandAction(a ReplayAction, prevModel string) string {
+	card := elmCompactCard(a.Source[0])
+	switch a.Kind {
+	case "place_hand":
+		return fmt.Sprintf("WA.PlaceHand { handCard = parseCard %s, loc = { top = %d, left = %d } }",
+			card, a.NewLoc.Top, a.NewLoc.Left)
+	case "merge_hand":
+		return fmt.Sprintf("WA.MergeHand { handCard = parseCard %s, target = findStackByContent %s %s.board, side = %s }",
+			card,
+			elmRawCards(cardsFromCards(a.Target)),
+			prevModel,
+			elmReplaySide(a.Side))
+	}
+	return fmt.Sprintf("Debug.todo \"unknown hand action kind %s\"", a.Kind)
+}
+
+
+// elmCompactCardList renders a space-separated human-readable card
+// label string (no quotes), used in Expect.fail messages.
+func elmCompactCardList(cs []Card) string {
+	var parts []string
+	for _, c := range cs {
+		v := []string{"", "A", "2", "3", "4", "5", "6", "7", "8", "9", "T", "J", "Q", "K"}[c.Value]
+		s := []string{"C", "D", "S", "H"}[c.Suit]
+		d := ""
+		if c.Deck == 1 {
+			d = "'"
+		}
+		parts = append(parts, v+s+d)
+	}
+	return strings.Join(parts, " ")
+}
 
 
 // elmFindOpenLoc emits a test body that constructs a list of
@@ -1676,6 +1871,18 @@ func applyBlockField(sc *Scenario, key string, children []line, path string) err
 			return err
 		}
 		sc.ReplayActions = acts
+	case "steps":
+		steps, err := parseWalkthroughSteps(children, path)
+		if err != nil {
+			return err
+		}
+		sc.Steps = steps
+	case "expect_final_board":
+		stacks, err := parseStacks(children, path)
+		if err != nil {
+			return err
+		}
+		sc.ExpectFinalBoard = stacks
 	case "expect":
 		return parseExpectBlock(&sc.Expect, children, path)
 	default:
@@ -1915,9 +2122,105 @@ func parseReplayActions(children []line, path string) ([]ReplayAction, error) {
 }
 
 
+// parseWalkthroughSteps parses a `steps:` block inside an
+// `undo_walkthrough` scenario. The block is a list of step
+// groups, each starting with `- step: <label>` followed by
+// optional sub-fields (`action:`, `expect_board_count:`,
+// `expect_hand_count:`, `expect_undoable:`).
+//
+// Indentation convention (relative to the scenario body):
+//   `steps:` itself is at indent 1.
+//   `- step:` entries are at indent 2.
+//   Sub-fields are at indent 3.
+func parseWalkthroughSteps(children []line, path string) ([]WalkthroughStep, error) {
+	var steps []WalkthroughStep
+	var cur *WalkthroughStep
+	baseIndent := -1
+
+	for _, l := range children {
+		if baseIndent == -1 {
+			baseIndent = l.indent
+		}
+		switch {
+		case l.indent == baseIndent:
+			// Step header: "- step: <label>"
+			t := strings.TrimSpace(l.content)
+			if !strings.HasPrefix(t, "- step:") {
+				return nil, fmt.Errorf("%s:%d: expected '- step: <label>', got %q", path, l.lineNum, t)
+			}
+			if cur != nil {
+				steps = append(steps, *cur)
+			}
+			label := strings.TrimSpace(t[len("- step:"):])
+			cur = &WalkthroughStep{Label: label}
+
+		case l.indent == baseIndent+1:
+			// Sub-field of the current step.
+			if cur == nil {
+				return nil, fmt.Errorf("%s:%d: step sub-field outside a step block", path, l.lineNum)
+			}
+			key, val, _ := splitField(strings.TrimSpace(l.content))
+			switch key {
+			case "action":
+				act, err := parseReplayAction(strings.TrimSpace(val))
+				if err != nil {
+					return nil, fmt.Errorf("%s:%d: action: %w", path, l.lineNum, err)
+				}
+				cur.Action = &act
+			case "expect_board_count":
+				n, err := atoi(strings.TrimSpace(val))
+				if err != nil {
+					return nil, fmt.Errorf("%s:%d: expect_board_count: %w", path, l.lineNum, err)
+				}
+				cur.ExpectBoardCount = &n
+			case "expect_hand_count":
+				n, err := atoi(strings.TrimSpace(val))
+				if err != nil {
+					return nil, fmt.Errorf("%s:%d: expect_hand_count: %w", path, l.lineNum, err)
+				}
+				cur.ExpectHandCount = &n
+			case "expect_undoable":
+				v, err := parseBool(strings.TrimSpace(val))
+				if err != nil {
+					return nil, fmt.Errorf("%s:%d: expect_undoable: %w", path, l.lineNum, err)
+				}
+				cur.ExpectUndoable = &v
+			case "expect_stack":
+				cards, err := parseCards(strings.TrimSpace(val))
+				if err != nil {
+					return nil, fmt.Errorf("%s:%d: expect_stack: %w", path, l.lineNum, err)
+				}
+				cur.ExpectStack = cards
+			case "expect_hand_contains":
+				cards, err := parseCards(strings.TrimSpace(val))
+				if err != nil {
+					return nil, fmt.Errorf("%s:%d: expect_hand_contains: %w", path, l.lineNum, err)
+				}
+				if len(cards) != 1 {
+					return nil, fmt.Errorf("%s:%d: expect_hand_contains: expected exactly one card", path, l.lineNum)
+				}
+				cur.ExpectHandContains = &cards[0]
+			default:
+				return nil, fmt.Errorf("%s:%d: unknown step field %q", path, l.lineNum, key)
+			}
+
+		default:
+			return nil, fmt.Errorf("%s:%d: unexpected indent in steps block", path, l.lineNum)
+		}
+	}
+	if cur != nil {
+		steps = append(steps, *cur)
+	}
+	return steps, nil
+}
+
+
 func parseReplayAction(body string) (ReplayAction, error) {
 	if body == "complete_turn" {
 		return ReplayAction{Kind: "complete_turn"}, nil
+	}
+	if body == "undo" {
+		return ReplayAction{Kind: "undo"}, nil
 	}
 	if strings.HasPrefix(body, "split ") {
 		return parseReplaySplit(body[len("split "):])
@@ -1927,6 +2230,12 @@ func parseReplayAction(body string) (ReplayAction, error) {
 	}
 	if strings.HasPrefix(body, "move_stack ") {
 		return parseReplayMoveStack(body[len("move_stack "):])
+	}
+	if strings.HasPrefix(body, "place_hand ") {
+		return parsePlaceHand(body[len("place_hand "):])
+	}
+	if strings.HasPrefix(body, "merge_hand ") {
+		return parseMergeHand(body[len("merge_hand "):])
 	}
 	return ReplayAction{}, fmt.Errorf("unknown action kind: %q", body)
 }
@@ -2002,6 +2311,61 @@ func parseReplayMoveStack(rest string) (ReplayAction, error) {
 		return ReplayAction{}, fmt.Errorf("move_stack loc: %w", err)
 	}
 	return ReplayAction{Kind: "move_stack", Source: cards, NewLoc: &loc}, nil
+}
+
+
+func parsePlaceHand(rest string) (ReplayAction, error) {
+	// shape: <card> -> (<top>, <left>)
+	arrow := strings.Index(rest, "->")
+	if arrow < 0 {
+		return ReplayAction{}, fmt.Errorf("place_hand missing '->'")
+	}
+	cardStr := strings.TrimSpace(rest[:arrow])
+	locStr := strings.TrimSpace(rest[arrow+2:])
+	cards, err := parseCards(cardStr)
+	if err != nil {
+		return ReplayAction{}, fmt.Errorf("place_hand card: %w", err)
+	}
+	if len(cards) != 1 {
+		return ReplayAction{}, fmt.Errorf("place_hand: expected exactly one card, got %d", len(cards))
+	}
+	loc, err := parseLoc(locStr)
+	if err != nil {
+		return ReplayAction{}, fmt.Errorf("place_hand loc: %w", err)
+	}
+	return ReplayAction{Kind: "place_hand", Source: cards, NewLoc: &loc}, nil
+}
+
+
+func parseMergeHand(rest string) (ReplayAction, error) {
+	// shape: <card> -> [<target_cards>] /<side>
+	arrow := strings.Index(rest, "->")
+	if arrow < 0 {
+		return ReplayAction{}, fmt.Errorf("merge_hand missing '->'")
+	}
+	cardStr := strings.TrimSpace(rest[:arrow])
+	tail := strings.TrimSpace(rest[arrow+2:])
+	slash := strings.LastIndex(tail, "/")
+	if slash < 0 {
+		return ReplayAction{}, fmt.Errorf("merge_hand missing '/<side>'")
+	}
+	tgtStr := strings.TrimSpace(tail[:slash])
+	sideStr := strings.TrimSpace(tail[slash+1:])
+	cards, err := parseCards(cardStr)
+	if err != nil {
+		return ReplayAction{}, fmt.Errorf("merge_hand card: %w", err)
+	}
+	if len(cards) != 1 {
+		return ReplayAction{}, fmt.Errorf("merge_hand: expected exactly one card, got %d", len(cards))
+	}
+	tgt, err := parseBracketed(tgtStr)
+	if err != nil {
+		return ReplayAction{}, fmt.Errorf("merge_hand target: %w", err)
+	}
+	if sideStr != "left" && sideStr != "right" {
+		return ReplayAction{}, fmt.Errorf("merge_hand side must be left|right, got %q", sideStr)
+	}
+	return ReplayAction{Kind: "merge_hand", Source: cards, Target: tgt, Side: sideStr}, nil
 }
 
 

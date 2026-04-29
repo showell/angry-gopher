@@ -130,6 +130,11 @@ type alias Model =
     -- A user gesture between clicks invalidates the cache by
     -- clearing this back to Nothing.
     , agentProgram : Maybe (List Move)
+
+    -- The decoded initial board/hand state for the current
+    -- puzzle, stored at bootstrap so Reset can restore it
+    -- without a server round-trip. Nothing for full-game sessions.
+    , puzzleInitialState : Maybe RemoteState
     }
 
 
@@ -597,4 +602,5 @@ baseModel =
     , gameId = "default"
     , hideTurnControls = False
     , agentProgram = Nothing
+    , puzzleInitialState = Nothing
     }

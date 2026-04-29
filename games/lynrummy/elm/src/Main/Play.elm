@@ -263,6 +263,9 @@ update msg model =
         ClickUndo ->
             withNoOutput (clickUndo model)
 
+        ClickReset ->
+            withNoOutput (clickReset model)
+
         PopupOk ->
             ( { model | popup = Nothing }, Cmd.none, NoOutput )
 
@@ -485,6 +488,26 @@ clickUndo model =
                             Cmd.none
             in
             ( newModel, persistCmd )
+
+
+clickReset : Model -> ( Model, Cmd Msg )
+clickReset model =
+    case model.puzzleInitialState of
+        Nothing ->
+            ( model, Cmd.none )
+
+        Just initial ->
+            ( modelAtInitial initial
+                { model
+                    | actionLog = []
+                    , agentProgram = Nothing
+                    , drag = NotDragging
+                    , replay = Nothing
+                    , replayAnim = State.NotAnimating
+                    , status = { text = "Puzzle reset.", kind = Inform }
+                }
+            , Cmd.none
+            )
 
 
 lastUndoableAction : Model -> Maybe WA.WireAction
@@ -944,6 +967,7 @@ bootstrapPuzzle initial puzzleName model =
     modelAtInitial initial
         { model
             | actionLog = []
+            , puzzleInitialState = Just initial
             , status =
                 { text = "Puzzle " ++ puzzleName ++ " loaded."
                 , kind = Inform
