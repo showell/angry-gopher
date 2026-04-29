@@ -67,7 +67,7 @@ parseCard s =
                 Just 'J' -> Jack
                 Just 'Q' -> Queen
                 Just 'K' -> King
-                _ -> Ace
+                _ -> Debug.todo ("parseCard: bad value in " ++ s)
 
         suit =
             case chars |> List.drop 1 |> List.head of
@@ -75,12 +75,13 @@ parseCard s =
                 Just 'D' -> Diamond
                 Just 'S' -> Spade
                 Just 'H' -> Heart
-                _ -> Club
+                _ -> Debug.todo ("parseCard: bad suit in " ++ s)
 
         deck =
             case chars |> List.drop 2 |> List.head of
+                Just '1' -> DeckOne
                 Just '2' -> DeckTwo
-                _ -> DeckOne
+                _ -> Debug.todo ("parseCard: bad deck in " ++ s)
     in
     { value = value, suit = suit, originDeck = deck }
 
