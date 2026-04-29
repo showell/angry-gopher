@@ -1417,16 +1417,56 @@ func elmEnumerateMoves(b *strings.Builder, sc Scenario) {
 }
 
 // elmSolve emits a test body that builds the scenario's
+const elmSolveTmpl = `            let
+                state : Buckets
+                state =
+                    { helper = %s
+                    , trouble = %s
+                    , growing = %s
+                    , complete = %s
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+`
+
+const elmSolveNoPlanCheck = `            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))`
+
+const elmSolvePlanLinesTmpl = `            let
+                expected =
+                    %s
+            in
+            case result of
+                Just plan ->
+                    List.map AgentMove.describe plan
+                        |> Expect.equal expected
+
+                Nothing ->
+                    Expect.fail ("expected plan; got Nothing")`
+
+const elmSolvePlanLengthTmpl = `            case result of
+                Just plan ->
+                    List.length plan |> Expect.equal %d
+
+                Nothing ->
+                    Expect.fail "expected plan of length %d; got Nothing"`
+
 // 4-bucket state, runs Game.Agent.Bfs.solve, and asserts on
 // either no_plan or an exact plan_length.
 func elmSolve(b *strings.Builder, sc Scenario) {
-	fmt.Fprintf(b, "            let\n                state : Buckets\n                state =\n                    { helper = %s\n                    , trouble = %s\n                    , growing = %s\n                    , complete = %s\n                    }\n\n                result =\n                    Game.Agent.Bfs.solve state\n            in\n",
+	fmt.Fprintf(b, elmSolveTmpl,
 		elmAgentStacks(sc.Helper, "                        "),
 		elmAgentStacks(sc.Trouble, "                        "),
 		elmAgentStacks(sc.Growing, "                        "),
 		elmAgentStacks(sc.Complete, "                        "))
 	if sc.Expect.NoPlan {
-		b.WriteString("            case result of\n                Nothing ->\n                    Expect.pass\n\n                Just plan ->\n                    Expect.fail (\"expected no plan; got plan of length \" ++ String.fromInt (List.length plan))")
+		b.WriteString(elmSolveNoPlanCheck)
 	} else if len(sc.Expect.PlanLines) > 0 {
 		// Snapshot match: every line of describe(move) must
 		// equal the pinned canonical plan_lines from Python.
@@ -1439,11 +1479,9 @@ func elmSolve(b *strings.Builder, sc Scenario) {
 			listLits.WriteString(strconv.Quote(line))
 		}
 		listLits.WriteString(" ]")
-		fmt.Fprintf(b, "            let\n                expected =\n                    %s\n            in\n            case result of\n                Just plan ->\n                    List.map AgentMove.describe plan\n                        |> Expect.equal expected\n\n                Nothing ->\n                    Expect.fail (\"expected plan; got Nothing\")",
-			listLits.String())
+		fmt.Fprintf(b, elmSolvePlanLinesTmpl, listLits.String())
 	} else if sc.Expect.PlanLength > 0 {
-		fmt.Fprintf(b, "            case result of\n                Just plan ->\n                    List.length plan |> Expect.equal %d\n\n                Nothing ->\n                    Expect.fail \"expected plan of length %d; got Nothing\"",
-			sc.Expect.PlanLength, sc.Expect.PlanLength)
+		fmt.Fprintf(b, elmSolvePlanLengthTmpl, sc.Expect.PlanLength, sc.Expect.PlanLength)
 	} else {
 		b.WriteString("            Expect.fail \"solve scenario missing expectation (no_plan or plan_length or plan_lines)\"")
 	}
