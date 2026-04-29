@@ -1158,13 +1158,25 @@ func elmFindOpenLoc(b *strings.Builder, sc Scenario) {
 }
 
 
+const elmHintInvariantTmpl = `            let
+                handCards =
+                    %s
+
+                board =
+                    %s
+
+                plays =
+                    %s.findPlays handCards board
+            in
+`
+
 // elmHintInvariant emits a test body that runs the named trick
 // against the scenario's (hand, board), applies the first Play,
 // and asserts every resulting stack classifies as a complete
 // group. An Elm Play's `apply` returns (newBoard, consumedHand)
 // directly, so no primitive replay is needed.
 func elmHintInvariant(b *strings.Builder, sc Scenario, trickVar string) {
-	fmt.Fprintf(b, "            let\n                handCards =\n                    %s\n\n                board =\n                    %s\n\n                plays =\n                    %s.findPlays handCards board\n            in\n",
+	fmt.Fprintf(b, elmHintInvariantTmpl,
 		elmHandCards(sc.Hand),
 		elmStacks(sc.Board, "                        "),
 		trickVar)
