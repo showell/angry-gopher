@@ -97,7 +97,7 @@ cursorOf result =
     case result of
         DA.InProgress { drag } ->
             case drag of
-                Dragging d ->
+                Dragging d _ _ ->
                     Just d.floaterTopLeft
 
                 NotDragging ->

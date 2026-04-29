@@ -1605,7 +1605,7 @@ func elmFloaterTopLeft(b *strings.Builder, sc Scenario) {
 		fmt.Fprintf(b, "%s    ( afterMove, _ ) =\n%s        Play.mouseMove\n%s            { x = mousedownClient.x + delta.x, y = mousedownClient.y + delta.y }\n%s            100\n%s            afterDown\n", ind, ind, ind, ind, ind)
 		b.WriteString(ind + "in\n")
 		b.WriteString(ind + "case ( afterDown.drag, afterMove.drag ) of\n")
-		b.WriteString(ind + "    ( State.Dragging before, State.Dragging after ) ->\n")
+		b.WriteString(ind + "    ( State.Dragging before _ _, State.Dragging after _ _ ) ->\n")
 		b.WriteString(ind + "        Expect.equal\n")
 		b.WriteString(ind + "            { x = before.floaterTopLeft.x + delta.x\n")
 		b.WriteString(ind + "            , y = before.floaterTopLeft.y + delta.y\n")
@@ -1645,7 +1645,7 @@ func elmFloaterTopLeft(b *strings.Builder, sc Scenario) {
 		b.WriteString(ind + "                    afterDown\n")
 		b.WriteString(ind + "        in\n")
 		b.WriteString(ind + "        case ( afterDown.drag, afterMove.drag ) of\n")
-		b.WriteString(ind + "            ( State.Dragging before, State.Dragging after ) ->\n")
+		b.WriteString(ind + "            ( State.Dragging before _ _, State.Dragging after _ _ ) ->\n")
 		b.WriteString(ind + "                Just\n")
 		b.WriteString(ind + "                    { x = after.floaterTopLeft.x - before.floaterTopLeft.x\n")
 		b.WriteString(ind + "                    , y = after.floaterTopLeft.y - before.floaterTopLeft.y\n")
@@ -1719,7 +1719,7 @@ func elmPathFrame(b *strings.Builder, sc Scenario) {
 	if dpf.InitialFloater != nil {
 		fl := dpf.InitialFloater
 		b.WriteString(ind + "case afterDown.drag of\n")
-		b.WriteString(ind + "    State.Dragging info ->\n")
+		b.WriteString(ind + "    State.Dragging info _ _ ->\n")
 		fmt.Fprintf(b, "%s        Expect.equal { x = %d, y = %d } info.floaterTopLeft\n\n", ind, fl.X, fl.Y)
 		b.WriteString(ind + "    _ ->\n")
 		b.WriteString(ind + "        Expect.fail \"expected Dragging state\"")
@@ -1737,7 +1737,7 @@ func elmPathFrame(b *strings.Builder, sc Scenario) {
 			frameExpr = "Debug.todo \"unknown pathFrame: " + dpf.Frame + "\""
 		}
 		b.WriteString(ind + "case afterDown.drag of\n")
-		b.WriteString(ind + "    State.Dragging info ->\n")
+		b.WriteString(ind + "    State.Dragging info _ _ ->\n")
 		fmt.Fprintf(b, "%s        Expect.equal %s info.pathFrame\n\n", ind, frameExpr)
 		b.WriteString(ind + "    _ ->\n")
 		b.WriteString(ind + "        Expect.fail \"expected Dragging state\"")
@@ -1803,8 +1803,8 @@ func elmGesturePathFrame(sc Scenario) string {
 }
 
 // elmGestureSplit emits a test body for the `gesture_split` op.
-// Constructs a DragInfo with clickIntent set and asserts
-// resolveGesture returns Split with the expected cardIndex.
+// Constructs DragInfo/DragContext/ClickArbiter with clickIntent set and
+// asserts resolveGesture returns Split with the expected cardIndex.
 func elmGestureSplit(b *strings.Builder, sc Scenario) {
 	ind := "            "
 	gs := sc.Expect.GestureSplit
@@ -1818,17 +1818,16 @@ func elmGestureSplit(b *strings.Builder, sc Scenario) {
 	fmt.Fprintf(b, "%s    info =\n", ind)
 	fmt.Fprintf(b, "%s        { source = source\n", ind)
 	fmt.Fprintf(b, "%s        , cursor = { x = 0, y = 0 }\n", ind)
-	fmt.Fprintf(b, "%s        , originalCursor = { x = 0, y = 0 }\n", ind)
 	fmt.Fprintf(b, "%s        , floaterTopLeft = floater\n", ind)
-	fmt.Fprintf(b, "%s        , wings = []\n", ind)
-	fmt.Fprintf(b, "%s        , hoveredWing = Nothing\n", ind)
-	fmt.Fprintf(b, "%s        , boardRect = Nothing\n", ind)
-	fmt.Fprintf(b, "%s        , clickIntent = Just %d\n", ind, ci)
 	fmt.Fprintf(b, "%s        , gesturePath = []\n", ind)
 	fmt.Fprintf(b, "%s        , pathFrame = %s\n", ind, elmGesturePathFrame(sc))
 	fmt.Fprintf(b, "%s        }\n\n", ind)
+	fmt.Fprintf(b, "%s    ctx =\n", ind)
+	fmt.Fprintf(b, "%s        { wings = [], boardRect = Nothing }\n\n", ind)
+	fmt.Fprintf(b, "%s    arb =\n", ind)
+	fmt.Fprintf(b, "%s        { clickIntent = Just %d, originalCursor = { x = 0, y = 0 } }\n\n", ind, ci)
 	b.WriteString(ind + "in\n")
-	b.WriteString(ind + "case Gesture.resolveGesture info of\n")
+	b.WriteString(ind + "case Gesture.resolveGesture info ctx arb of\n")
 	b.WriteString(ind + "    Just (WA.Split p) ->\n")
 	fmt.Fprintf(b, "%s        Expect.equal %d p.cardIndex\n\n", ind, gs.CardIndex)
 	b.WriteString(ind + "    other ->\n")
@@ -1836,8 +1835,8 @@ func elmGestureSplit(b *strings.Builder, sc Scenario) {
 }
 
 // elmGestureMergeStack emits a test body for the `gesture_merge_stack` op.
-// Constructs a DragInfo with hoveredWing set and asserts
-// resolveGesture returns MergeStack with the expected side.
+// Registers the wing in ctx.wings; floater_at must be within snap tolerance
+// of the wing's eventual landing so floaterOverWing fires geometrically.
 func elmGestureMergeStack(b *strings.Builder, sc Scenario) {
 	ind := "            "
 	gm := sc.Expect.GestureMergeStack
@@ -1850,17 +1849,16 @@ func elmGestureMergeStack(b *strings.Builder, sc Scenario) {
 	fmt.Fprintf(b, "%s    info =\n", ind)
 	fmt.Fprintf(b, "%s        { source = source\n", ind)
 	fmt.Fprintf(b, "%s        , cursor = { x = 0, y = 0 }\n", ind)
-	fmt.Fprintf(b, "%s        , originalCursor = { x = 0, y = 0 }\n", ind)
 	fmt.Fprintf(b, "%s        , floaterTopLeft = floater\n", ind)
-	fmt.Fprintf(b, "%s        , wings = []\n", ind)
-	fmt.Fprintf(b, "%s        , hoveredWing = Just wing\n", ind)
-	fmt.Fprintf(b, "%s        , boardRect = Nothing\n", ind)
-	fmt.Fprintf(b, "%s        , clickIntent = Nothing\n", ind)
 	fmt.Fprintf(b, "%s        , gesturePath = []\n", ind)
 	fmt.Fprintf(b, "%s        , pathFrame = %s\n", ind, elmGesturePathFrame(sc))
 	fmt.Fprintf(b, "%s        }\n\n", ind)
+	fmt.Fprintf(b, "%s    ctx =\n", ind)
+	fmt.Fprintf(b, "%s        { wings = [ wing ], boardRect = Nothing }\n\n", ind)
+	fmt.Fprintf(b, "%s    arb =\n", ind)
+	fmt.Fprintf(b, "%s        { clickIntent = Nothing, originalCursor = { x = 0, y = 0 } }\n\n", ind)
 	b.WriteString(ind + "in\n")
-	b.WriteString(ind + "case Gesture.resolveGesture info of\n")
+	b.WriteString(ind + "case Gesture.resolveGesture info ctx arb of\n")
 	b.WriteString(ind + "    Just (WA.MergeStack p) ->\n")
 	fmt.Fprintf(b, "%s        Expect.equal %s p.side\n\n", ind, sideExpr)
 	b.WriteString(ind + "    other ->\n")
@@ -1868,8 +1866,9 @@ func elmGestureMergeStack(b *strings.Builder, sc Scenario) {
 }
 
 // elmGestureMergeHand emits a test body for the `gesture_merge_hand` op.
-// Constructs a DragInfo with a hand-card source + hoveredWing and asserts
-// resolveGesture returns MergeHand with the expected side.
+// Registers the wing in ctx.wings with boardRect set; floater_at must be
+// within snap tolerance of the wing's viewport-frame eventual landing so
+// floaterOverWing fires geometrically.
 func elmGestureMergeHand(b *strings.Builder, sc Scenario) {
 	ind := "            "
 	gm := sc.Expect.GestureMergeHand
@@ -1882,17 +1881,16 @@ func elmGestureMergeHand(b *strings.Builder, sc Scenario) {
 	fmt.Fprintf(b, "%s    info =\n", ind)
 	fmt.Fprintf(b, "%s        { source = source\n", ind)
 	fmt.Fprintf(b, "%s        , cursor = { x = 0, y = 0 }\n", ind)
-	fmt.Fprintf(b, "%s        , originalCursor = { x = 0, y = 0 }\n", ind)
 	fmt.Fprintf(b, "%s        , floaterTopLeft = floater\n", ind)
-	fmt.Fprintf(b, "%s        , wings = []\n", ind)
-	fmt.Fprintf(b, "%s        , hoveredWing = Just wing\n", ind)
-	fmt.Fprintf(b, "%s        , boardRect = Just %s\n", ind, gestureBoardRectLit)
-	fmt.Fprintf(b, "%s        , clickIntent = Nothing\n", ind)
 	fmt.Fprintf(b, "%s        , gesturePath = []\n", ind)
 	fmt.Fprintf(b, "%s        , pathFrame = %s\n", ind, elmGesturePathFrame(sc))
 	fmt.Fprintf(b, "%s        }\n\n", ind)
+	fmt.Fprintf(b, "%s    ctx =\n", ind)
+	fmt.Fprintf(b, "%s        { wings = [ wing ], boardRect = Just %s }\n\n", ind, gestureBoardRectLit)
+	fmt.Fprintf(b, "%s    arb =\n", ind)
+	fmt.Fprintf(b, "%s        { clickIntent = Nothing, originalCursor = { x = 0, y = 0 } }\n\n", ind)
 	b.WriteString(ind + "in\n")
-	b.WriteString(ind + "case Gesture.resolveGesture info of\n")
+	b.WriteString(ind + "case Gesture.resolveGesture info ctx arb of\n")
 	b.WriteString(ind + "    Just (WA.MergeHand p) ->\n")
 	fmt.Fprintf(b, "%s        Expect.equal %s p.side\n\n", ind, sideExpr)
 	b.WriteString(ind + "    other ->\n")
@@ -1900,9 +1898,9 @@ func elmGestureMergeHand(b *strings.Builder, sc Scenario) {
 }
 
 // elmGestureMoveStack emits a test body for the `gesture_move_stack` op.
-// Constructs a DragInfo with boardRect + cursor and asserts
-// resolveGesture returns MoveStack with expected newLoc, or Nothing if
-// ExpectGestureMoveStack.Rejected is true.
+// Constructs DragInfo/DragContext/ClickArbiter with boardRect + cursor and
+// asserts resolveGesture returns MoveStack with expected newLoc, or Nothing
+// if ExpectGestureMoveStack.Rejected is true.
 func elmGestureMoveStack(b *strings.Builder, sc Scenario) {
 	ind := "            "
 	gm := sc.Expect.GestureMoveStack
@@ -1917,21 +1915,20 @@ func elmGestureMoveStack(b *strings.Builder, sc Scenario) {
 	fmt.Fprintf(b, "%s    info =\n", ind)
 	fmt.Fprintf(b, "%s        { source = source\n", ind)
 	fmt.Fprintf(b, "%s        , cursor = { x = %d, y = %d }\n", ind, cursorX, cursorY)
-	fmt.Fprintf(b, "%s        , originalCursor = { x = 0, y = 0 }\n", ind)
 	fmt.Fprintf(b, "%s        , floaterTopLeft = floater\n", ind)
-	fmt.Fprintf(b, "%s        , wings = []\n", ind)
-	fmt.Fprintf(b, "%s        , hoveredWing = Nothing\n", ind)
-	fmt.Fprintf(b, "%s        , boardRect = Just %s\n", ind, gestureBoardRectLit)
-	fmt.Fprintf(b, "%s        , clickIntent = Nothing\n", ind)
 	fmt.Fprintf(b, "%s        , gesturePath = []\n", ind)
 	fmt.Fprintf(b, "%s        , pathFrame = %s\n", ind, elmGesturePathFrame(sc))
 	fmt.Fprintf(b, "%s        }\n\n", ind)
+	fmt.Fprintf(b, "%s    ctx =\n", ind)
+	fmt.Fprintf(b, "%s        { wings = [], boardRect = Just %s }\n\n", ind, gestureBoardRectLit)
+	fmt.Fprintf(b, "%s    arb =\n", ind)
+	fmt.Fprintf(b, "%s        { clickIntent = Nothing, originalCursor = { x = 0, y = 0 } }\n\n", ind)
 	b.WriteString(ind + "in\n")
 	if gm.Rejected {
-		b.WriteString(ind + "Gesture.resolveGesture info\n")
+		b.WriteString(ind + "Gesture.resolveGesture info ctx arb\n")
 		b.WriteString(ind + "    |> Expect.equal Nothing")
 	} else {
-		b.WriteString(ind + "case Gesture.resolveGesture info of\n")
+		b.WriteString(ind + "case Gesture.resolveGesture info ctx arb of\n")
 		b.WriteString(ind + "    Just (WA.MoveStack p) ->\n")
 		b.WriteString(ind + "        Expect.all\n")
 		fmt.Fprintf(b, "%s            [ \\_ -> Expect.equal %d p.newLoc.left\n", ind, gm.NewLocLeft)
@@ -1944,8 +1941,9 @@ func elmGestureMoveStack(b *strings.Builder, sc Scenario) {
 }
 
 // elmGesturePlaceHand emits a test body for the `gesture_place_hand` op.
-// Constructs a DragInfo with a hand-card source + boardRect + cursor and
-// asserts resolveGesture returns PlaceHand with expected loc.
+// Constructs DragInfo/DragContext/ClickArbiter with a hand-card source +
+// boardRect + cursor and asserts resolveGesture returns PlaceHand with
+// expected loc.
 func elmGesturePlaceHand(b *strings.Builder, sc Scenario) {
 	ind := "            "
 	gp := sc.Expect.GesturePlaceHand
@@ -1960,17 +1958,16 @@ func elmGesturePlaceHand(b *strings.Builder, sc Scenario) {
 	fmt.Fprintf(b, "%s    info =\n", ind)
 	fmt.Fprintf(b, "%s        { source = source\n", ind)
 	fmt.Fprintf(b, "%s        , cursor = { x = %d, y = %d }\n", ind, cursorX, cursorY)
-	fmt.Fprintf(b, "%s        , originalCursor = { x = 0, y = 0 }\n", ind)
 	fmt.Fprintf(b, "%s        , floaterTopLeft = floater\n", ind)
-	fmt.Fprintf(b, "%s        , wings = []\n", ind)
-	fmt.Fprintf(b, "%s        , hoveredWing = Nothing\n", ind)
-	fmt.Fprintf(b, "%s        , boardRect = Just %s\n", ind, gestureBoardRectLit)
-	fmt.Fprintf(b, "%s        , clickIntent = Nothing\n", ind)
 	fmt.Fprintf(b, "%s        , gesturePath = []\n", ind)
 	fmt.Fprintf(b, "%s        , pathFrame = %s\n", ind, elmGesturePathFrame(sc))
 	fmt.Fprintf(b, "%s        }\n\n", ind)
+	fmt.Fprintf(b, "%s    ctx =\n", ind)
+	fmt.Fprintf(b, "%s        { wings = [], boardRect = Just %s }\n\n", ind, gestureBoardRectLit)
+	fmt.Fprintf(b, "%s    arb =\n", ind)
+	fmt.Fprintf(b, "%s        { clickIntent = Nothing, originalCursor = { x = 0, y = 0 } }\n\n", ind)
 	b.WriteString(ind + "in\n")
-	b.WriteString(ind + "case Gesture.resolveGesture info of\n")
+	b.WriteString(ind + "case Gesture.resolveGesture info ctx arb of\n")
 	b.WriteString(ind + "    Just (WA.PlaceHand p) ->\n")
 	b.WriteString(ind + "        Expect.all\n")
 	fmt.Fprintf(b, "%s            [ \\_ -> Expect.equal %d p.loc.left\n", ind, gp.LocLeft)
@@ -1982,8 +1979,8 @@ func elmGesturePlaceHand(b *strings.Builder, sc Scenario) {
 }
 
 // elmGestureFloaterOverWing emits a test body for the
-// `gesture_floater_over_wing` op. Constructs a DragInfo with the given
-// source + floater + a single registered wing, and asserts
+// `gesture_floater_over_wing` op. Constructs DragInfo + DragContext with the
+// given source + floater + a single registered wing, and asserts
 // floaterOverWing returns Just wing (HasWing=true) or Nothing (HasWing=false).
 func elmGestureFloaterOverWing(b *strings.Builder, sc Scenario) {
 	ind := "            "
@@ -1997,21 +1994,18 @@ func elmGestureFloaterOverWing(b *strings.Builder, sc Scenario) {
 	fmt.Fprintf(b, "%s    info =\n", ind)
 	fmt.Fprintf(b, "%s        { source = source\n", ind)
 	fmt.Fprintf(b, "%s        , cursor = { x = 0, y = 0 }\n", ind)
-	fmt.Fprintf(b, "%s        , originalCursor = { x = 0, y = 0 }\n", ind)
 	fmt.Fprintf(b, "%s        , floaterTopLeft = floater\n", ind)
-	fmt.Fprintf(b, "%s        , wings = [ wing ]\n", ind)
-	fmt.Fprintf(b, "%s        , hoveredWing = Nothing\n", ind)
-	fmt.Fprintf(b, "%s        , boardRect = Nothing\n", ind)
-	fmt.Fprintf(b, "%s        , clickIntent = Nothing\n", ind)
 	fmt.Fprintf(b, "%s        , gesturePath = []\n", ind)
 	fmt.Fprintf(b, "%s        , pathFrame = %s\n", ind, elmGesturePathFrame(sc))
 	fmt.Fprintf(b, "%s        }\n\n", ind)
+	fmt.Fprintf(b, "%s    ctx =\n", ind)
+	fmt.Fprintf(b, "%s        { wings = [ wing ], boardRect = Nothing }\n\n", ind)
 	b.WriteString(ind + "in\n")
 	if gf.HasWing {
-		b.WriteString(ind + "Gesture.floaterOverWing info\n")
+		b.WriteString(ind + "Gesture.floaterOverWing ctx info\n")
 		fmt.Fprintf(b, "%s    |> Expect.equal (Just wing)", ind)
 	} else {
-		b.WriteString(ind + "Gesture.floaterOverWing info\n")
+		b.WriteString(ind + "Gesture.floaterOverWing ctx info\n")
 		b.WriteString(ind + "    |> Expect.equal Nothing")
 	}
 }

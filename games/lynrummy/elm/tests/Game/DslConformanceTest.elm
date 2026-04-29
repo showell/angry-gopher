@@ -1670,7 +1670,7 @@ dragInvariantBoardDragInitialFloater =
                         model
             in
             case afterDown.drag of
-                State.Dragging info ->
+                State.Dragging info _ _ ->
                     Expect.equal { x = 100, y = 200 } info.floaterTopLeft
 
                 _ ->
@@ -1699,7 +1699,7 @@ dragInvariantBoardDragPathFrame =
                         model
             in
             case afterDown.drag of
-                State.Dragging info ->
+                State.Dragging info _ _ ->
                     Expect.equal State.BoardFrame info.pathFrame
 
                 _ ->
@@ -1740,7 +1740,7 @@ dragInvariantFloaterShift =
                         afterDown
             in
             case ( afterDown.drag, afterMove.drag ) of
-                ( State.Dragging before, State.Dragging after ) ->
+                ( State.Dragging before _ _, State.Dragging after _ _ ) ->
                     Expect.equal
                         { x = before.floaterTopLeft.x + delta.x
                         , y = before.floaterTopLeft.y + delta.y
@@ -1784,7 +1784,7 @@ dragInvariantGrabPointInvariant =
                                 afterDown
                     in
                     case ( afterDown.drag, afterMove.drag ) of
-                        ( State.Dragging before, State.Dragging after ) ->
+                        ( State.Dragging before _ _, State.Dragging after _ _ ) ->
                             Just
                                 { x = after.floaterTopLeft.x - before.floaterTopLeft.x
                                 , y = after.floaterTopLeft.y - before.floaterTopLeft.y
@@ -1821,7 +1821,7 @@ dragInvariantHandDragPathFrame =
                         model
             in
             case afterDown.drag of
-                State.Dragging info ->
+                State.Dragging info _ _ ->
                     Expect.equal State.ViewportFrame info.pathFrame
 
                 _ ->
@@ -2988,18 +2988,16 @@ gestureFloaterOverWingLeftFires =
                 info =
                     { source = source
                     , cursor = { x = 0, y = 0 }
-                    , originalCursor = { x = 0, y = 0 }
                     , floaterTopLeft = floater
-                    , wings = [ wing ]
-                    , hoveredWing = Nothing
-                    , boardRect = Nothing
-                    , clickIntent = Nothing
                     , gesturePath = []
                     , pathFrame = State.BoardFrame
                     }
 
+                ctx =
+                    { wings = [ wing ], boardRect = Nothing }
+
             in
-            Gesture.floaterOverWing info
+            Gesture.floaterOverWing ctx info
                 |> Expect.equal (Just wing)
 
 
@@ -3026,18 +3024,16 @@ gestureFloaterOverWingPastTolerance =
                 info =
                     { source = source
                     , cursor = { x = 0, y = 0 }
-                    , originalCursor = { x = 0, y = 0 }
                     , floaterTopLeft = floater
-                    , wings = [ wing ]
-                    , hoveredWing = Nothing
-                    , boardRect = Nothing
-                    , clickIntent = Nothing
                     , gesturePath = []
                     , pathFrame = State.BoardFrame
                     }
 
+                ctx =
+                    { wings = [ wing ], boardRect = Nothing }
+
             in
-            Gesture.floaterOverWing info
+            Gesture.floaterOverWing ctx info
                 |> Expect.equal Nothing
 
 
@@ -3064,18 +3060,16 @@ gestureFloaterOverWingRightFires =
                 info =
                     { source = source
                     , cursor = { x = 0, y = 0 }
-                    , originalCursor = { x = 0, y = 0 }
                     , floaterTopLeft = floater
-                    , wings = [ wing ]
-                    , hoveredWing = Nothing
-                    , boardRect = Nothing
-                    , clickIntent = Nothing
                     , gesturePath = []
                     , pathFrame = State.BoardFrame
                     }
 
+                ctx =
+                    { wings = [ wing ], boardRect = Nothing }
+
             in
-            Gesture.floaterOverWing info
+            Gesture.floaterOverWing ctx info
                 |> Expect.equal (Just wing)
 
 
@@ -3102,18 +3096,16 @@ gestureFloaterOverWingWayOff =
                 info =
                     { source = source
                     , cursor = { x = 0, y = 0 }
-                    , originalCursor = { x = 0, y = 0 }
                     , floaterTopLeft = floater
-                    , wings = [ wing ]
-                    , hoveredWing = Nothing
-                    , boardRect = Nothing
-                    , clickIntent = Nothing
                     , gesturePath = []
                     , pathFrame = State.BoardFrame
                     }
 
+                ctx =
+                    { wings = [ wing ], boardRect = Nothing }
+
             in
-            Gesture.floaterOverWing info
+            Gesture.floaterOverWing ctx info
                 |> Expect.equal Nothing
 
 
@@ -3132,7 +3124,7 @@ gestureMergeHandCardOntoBoardWing =
                     { boardCards = [ boardCard "3C1", boardCard "4D1", boardCard "5C1" ], loc = { top = 200, left = 100 } }
 
                 floater =
-                    { x = 0, y = 0 }
+                    { x = 499, y = 300 }
 
                 wing =
                     { target = targetStack, side = BoardActions.Right }
@@ -3140,18 +3132,19 @@ gestureMergeHandCardOntoBoardWing =
                 info =
                     { source = source
                     , cursor = { x = 0, y = 0 }
-                    , originalCursor = { x = 0, y = 0 }
                     , floaterTopLeft = floater
-                    , wings = []
-                    , hoveredWing = Just wing
-                    , boardRect = Just { x = 300, y = 100, width = 800, height = 600 }
-                    , clickIntent = Nothing
                     , gesturePath = []
                     , pathFrame = State.ViewportFrame
                     }
 
+                ctx =
+                    { wings = [ wing ], boardRect = Just { x = 300, y = 100, width = 800, height = 600 } }
+
+                arb =
+                    { clickIntent = Nothing, originalCursor = { x = 0, y = 0 } }
+
             in
-            case Gesture.resolveGesture info of
+            case Gesture.resolveGesture info ctx arb of
                 Just (WA.MergeHand p) ->
                     Expect.equal BoardActions.Right p.side
 
@@ -3182,18 +3175,19 @@ gestureMergeStack234Onto567Left =
                 info =
                     { source = source
                     , cursor = { x = 0, y = 0 }
-                    , originalCursor = { x = 0, y = 0 }
                     , floaterTopLeft = floater
-                    , wings = []
-                    , hoveredWing = Just wing
-                    , boardRect = Nothing
-                    , clickIntent = Nothing
                     , gesturePath = []
                     , pathFrame = State.BoardFrame
                     }
 
+                ctx =
+                    { wings = [ wing ], boardRect = Nothing }
+
+                arb =
+                    { clickIntent = Nothing, originalCursor = { x = 0, y = 0 } }
+
             in
-            case Gesture.resolveGesture info of
+            case Gesture.resolveGesture info ctx arb of
                 Just (WA.MergeStack p) ->
                     Expect.equal BoardActions.Left p.side
 
@@ -3224,18 +3218,19 @@ gestureMergeStack567Onto234Right =
                 info =
                     { source = source
                     , cursor = { x = 0, y = 0 }
-                    , originalCursor = { x = 0, y = 0 }
                     , floaterTopLeft = floater
-                    , wings = []
-                    , hoveredWing = Just wing
-                    , boardRect = Nothing
-                    , clickIntent = Nothing
                     , gesturePath = []
                     , pathFrame = State.BoardFrame
                     }
 
+                ctx =
+                    { wings = [ wing ], boardRect = Nothing }
+
+                arb =
+                    { clickIntent = Nothing, originalCursor = { x = 0, y = 0 } }
+
             in
-            case Gesture.resolveGesture info of
+            case Gesture.resolveGesture info ctx arb of
                 Just (WA.MergeStack p) ->
                     Expect.equal BoardActions.Right p.side
 
@@ -3260,18 +3255,19 @@ gestureMoveStackOffBoardRejected =
                 info =
                     { source = source
                     , cursor = { x = 700, y = 400 }
-                    , originalCursor = { x = 0, y = 0 }
                     , floaterTopLeft = floater
-                    , wings = []
-                    , hoveredWing = Nothing
-                    , boardRect = Just { x = 300, y = 100, width = 800, height = 600 }
-                    , clickIntent = Nothing
                     , gesturePath = []
                     , pathFrame = State.BoardFrame
                     }
 
+                ctx =
+                    { wings = [], boardRect = Just { x = 300, y = 100, width = 800, height = 600 } }
+
+                arb =
+                    { clickIntent = Nothing, originalCursor = { x = 0, y = 0 } }
+
             in
-            Gesture.resolveGesture info
+            Gesture.resolveGesture info ctx arb
                 |> Expect.equal Nothing
 
 
@@ -3292,18 +3288,19 @@ gestureMoveStackValidDrop =
                 info =
                     { source = source
                     , cursor = { x = 700, y = 400 }
-                    , originalCursor = { x = 0, y = 0 }
                     , floaterTopLeft = floater
-                    , wings = []
-                    , hoveredWing = Nothing
-                    , boardRect = Just { x = 300, y = 100, width = 800, height = 600 }
-                    , clickIntent = Nothing
                     , gesturePath = []
                     , pathFrame = State.BoardFrame
                     }
 
+                ctx =
+                    { wings = [], boardRect = Just { x = 300, y = 100, width = 800, height = 600 } }
+
+                arb =
+                    { clickIntent = Nothing, originalCursor = { x = 0, y = 0 } }
+
             in
-            case Gesture.resolveGesture info of
+            case Gesture.resolveGesture info ctx arb of
                 Just (WA.MoveStack p) ->
                     Expect.all
                         [ \_ -> Expect.equal 400 p.newLoc.left
@@ -3332,18 +3329,19 @@ gesturePlaceHandDropsToBoard =
                 info =
                     { source = source
                     , cursor = { x = 750, y = 450 }
-                    , originalCursor = { x = 0, y = 0 }
                     , floaterTopLeft = floater
-                    , wings = []
-                    , hoveredWing = Nothing
-                    , boardRect = Just { x = 300, y = 100, width = 800, height = 600 }
-                    , clickIntent = Nothing
                     , gesturePath = []
                     , pathFrame = State.ViewportFrame
                     }
 
+                ctx =
+                    { wings = [], boardRect = Just { x = 300, y = 100, width = 800, height = 600 } }
+
+                arb =
+                    { clickIntent = Nothing, originalCursor = { x = 0, y = 0 } }
+
             in
-            case Gesture.resolveGesture info of
+            case Gesture.resolveGesture info ctx arb of
                 Just (WA.PlaceHand p) ->
                     Expect.all
                         [ \_ -> Expect.equal 450 p.loc.left
@@ -3372,18 +3370,19 @@ gestureSplitSurvivingClickIntent =
                 info =
                     { source = source
                     , cursor = { x = 0, y = 0 }
-                    , originalCursor = { x = 0, y = 0 }
                     , floaterTopLeft = floater
-                    , wings = []
-                    , hoveredWing = Nothing
-                    , boardRect = Nothing
-                    , clickIntent = Just 3
                     , gesturePath = []
                     , pathFrame = State.BoardFrame
                     }
 
+                ctx =
+                    { wings = [], boardRect = Nothing }
+
+                arb =
+                    { clickIntent = Just 3, originalCursor = { x = 0, y = 0 } }
+
             in
-            case Gesture.resolveGesture info of
+            case Gesture.resolveGesture info ctx arb of
                 Just (WA.Split p) ->
                     Expect.equal 3 p.cardIndex
 

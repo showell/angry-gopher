@@ -60,7 +60,7 @@ scenario gesture_merge_hand_card_onto_board_wing
   hand_card: 6H
   target:
     at (200, 100): 3C 4D 5C
-  floater_at: (0, 0)
+  floater_at: (499, 300)
   hovered_side: Right
   expect:
     side: Right

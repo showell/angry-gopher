@@ -64,7 +64,7 @@ suiteCaptureInvariant =
                         Play.mouseMove mousemoveClient 100 afterDown
                 in
                 case ( afterDown.drag, afterMove.drag ) of
-                    ( State.Dragging before, State.Dragging after ) ->
+                    ( State.Dragging before _ _, State.Dragging after _ _ ) ->
                         Expect.equal
                             { x = before.floaterTopLeft.x + delta.x
                             , y = before.floaterTopLeft.y + delta.y
@@ -107,7 +107,7 @@ suiteCaptureInvariant =
                                     afterDown
                         in
                         case ( afterDown.drag, afterMove.drag ) of
-                            ( State.Dragging before, State.Dragging after ) ->
+                            ( State.Dragging before _ _, State.Dragging after _ _ ) ->
                                 Just
                                     { x = after.floaterTopLeft.x - before.floaterTopLeft.x
                                     , y = after.floaterTopLeft.y - before.floaterTopLeft.y
@@ -141,7 +141,7 @@ suitePathFrame =
                             (modelWithStack stack)
                 in
                 case afterDown.drag of
-                    State.Dragging info ->
+                    State.Dragging info _ _ ->
                         Expect.equal BoardFrame info.pathFrame
 
                     _ ->
@@ -164,7 +164,7 @@ suitePathFrame =
                             (modelWithHand handCard)
                 in
                 case afterDown.drag of
-                    State.Dragging info ->
+                    State.Dragging info _ _ ->
                         Expect.equal ViewportFrame info.pathFrame
 
                     _ ->
@@ -183,7 +183,7 @@ suitePathFrame =
                             (modelWithStack stack)
                 in
                 case afterDown.drag of
-                    State.Dragging info ->
+                    State.Dragging info _ _ ->
                         Expect.equal { x = 100, y = 200 } info.floaterTopLeft
 
                     _ ->
