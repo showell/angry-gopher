@@ -383,7 +383,7 @@ import Game.Agent.Bfs
 import Game.Agent.Buckets as AgentBuckets exposing (Buckets)
 import Game.Agent.Enumerator as AgentEnumerator
 import Game.Agent.Move as AgentMove exposing (Move(..))
-import Game.BoardGeometry exposing (BoardBounds)
+import Game.Physics.BoardGeometry exposing (BoardBounds)
 import Game.Rules.Card exposing (Card, CardValue(..), OriginDeck(..), Suit(..))
 import Game.CardStack
     exposing
@@ -395,8 +395,8 @@ import Game.CardStack
         , HandCardState(..)
         )
 import Game.BoardActions as BoardActions
-import Game.PlaceStack
-import Game.Referee as Referee exposing (RefereeStage(..), refereeStageToString)
+import Game.Physics.PlaceStack
+import Game.Rules.Referee as Referee exposing (RefereeStage(..), refereeStageToString)
 import Game.Replay.Time as ReplayTime
 import Game.Rules.StackType as StackType
 import Game.Strategy.Hint as Hint
@@ -884,7 +884,7 @@ func cardsFromCards(cs []Card) []Card { return cs }
 
 
 // elmFindOpenLoc emits a test body that constructs a list of
-// existing CardStacks and asserts `Game.PlaceStack.findOpenLoc`
+// existing CardStacks and asserts `Game.Physics.PlaceStack.findOpenLoc`
 // returns the expected loc. Mirrors what
 // `python/test_dsl_conformance.py::_run_find_open_loc` does on
 // the Python side. Cards in the existing stacks are shape-only;
@@ -894,7 +894,7 @@ func elmFindOpenLoc(b *strings.Builder, sc Scenario) {
 		b.WriteString("            Expect.fail \"find_open_loc scenario missing expect.loc\"")
 		return
 	}
-	fmt.Fprintf(b, "            let\n                existing =\n                    %s\n\n                got =\n                    Game.PlaceStack.findOpenLoc existing %d\n\n                expected =\n                    { top = %d, left = %d }\n            in\n",
+	fmt.Fprintf(b, "            let\n                existing =\n                    %s\n\n                got =\n                    Game.Physics.PlaceStack.findOpenLoc existing %d\n\n                expected =\n                    { top = %d, left = %d }\n            in\n",
 		elmStacks(sc.Existing, "                        "),
 		sc.CardCount,
 		sc.Expect.Loc.Top, sc.Expect.Loc.Left)
