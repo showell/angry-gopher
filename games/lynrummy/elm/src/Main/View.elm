@@ -62,7 +62,8 @@ import Main.Gesture as Gesture
 import Main.Msg exposing (Msg(..))
 import Main.State
     exposing
-        ( DragInfo
+        ( DragContext
+        , DragInfo
         , DragSource(..)
         , DragState(..)
         , Model
@@ -627,8 +628,8 @@ boardChildren model =
 
         wingNodes =
             case model.drag of
-                Dragging info ->
-                    List.map (viewWingAt info) info.wings
+                Dragging info ctx _ ->
+                    List.map (viewWingAt ctx info) ctx.wings
 
                 NotDragging ->
                     []
@@ -647,8 +648,8 @@ boardChildren model =
 viewStackForBoard : DragState -> CardStack -> Html Msg
 viewStackForBoard drag stack =
     case drag of
-        Dragging info ->
-            case ( info.source, info.clickIntent ) of
+        Dragging info _ arb ->
+            case ( info.source, arb.clickIntent ) of
                 ( FromBoardStack source, Nothing ) ->
                     -- Drag confirmed (click intent dropped).
                     -- Hide the source stack; the floater takes over.
@@ -672,14 +673,14 @@ viewStackForBoard drag stack =
             View.viewStackWithCardAttrs (Gesture.cardMouseDown stack) stack
 
 
-viewWingAt : DragInfo -> WingId -> Html Msg
-viewWingAt info wing =
+viewWingAt : DragContext -> DragInfo -> WingId -> Html Msg
+viewWingAt ctx info wing =
     let
         rect =
             WingOracle.wingBoardRect wing
 
         hovering =
-            info.hoveredWing == Just wing
+            Gesture.floaterOverWing ctx info == Just wing
 
         bgColor =
             if hovering then
@@ -710,8 +711,8 @@ then discard it.
 draggedOverlay : Model -> Html Msg
 draggedOverlay model =
     case model.drag of
-        Dragging info ->
-            if info.clickIntent /= Nothing then
+        Dragging info _ arb ->
+            if arb.clickIntent /= Nothing then
                 Html.text ""
 
             else
@@ -733,8 +734,8 @@ board-frame top/left. Renders intra-board drags.
 boardDragOverlay : Model -> Maybe (Html Msg)
 boardDragOverlay model =
     case model.drag of
-        Dragging info ->
-            if info.clickIntent /= Nothing then
+        Dragging info _ arb ->
+            if arb.clickIntent /= Nothing then
                 Nothing
 
             else

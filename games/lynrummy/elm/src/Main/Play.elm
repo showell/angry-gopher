@@ -326,10 +326,10 @@ logAndScold label err status model =
 mouseMove : State.Point -> Float -> Model -> ( Model, Cmd Msg )
 mouseMove pos tMs model =
     case model.drag of
-        Dragging info ->
+        Dragging info ctx arb ->
             let
                 nextIntent =
-                    GA.clickIntentAfterMove info.originalCursor pos info.clickIntent
+                    GA.clickIntentAfterMove arb.originalCursor pos arb.clickIntent
 
                 -- Apply the cursor delta to the floater. Pure
                 -- vector, frame-agnostic — floaterTopLeft stays
@@ -353,19 +353,21 @@ mouseMove pos tMs model =
                     { info
                         | cursor = pos
                         , floaterTopLeft = nextFloater
-                        , clickIntent = nextIntent
                         , gesturePath = nextPath
                     }
 
-                hoveredWing =
-                    Gesture.floaterOverWing nextInfo
+                nextArb =
+                    { arb | clickIntent = nextIntent }
 
-                withHover =
-                    { nextInfo | hoveredWing = hoveredWing }
+                currentHover =
+                    Gesture.floaterOverWing ctx info
+
+                nextHover =
+                    Gesture.floaterOverWing ctx nextInfo
 
                 statusAfterMove =
-                    if hoveredWing /= info.hoveredWing then
-                        case hoveredWing of
+                    if nextHover /= currentHover then
+                        case nextHover of
                             Just _ ->
                                 Gesture.wingHoverStatus
 
@@ -375,7 +377,7 @@ mouseMove pos tMs model =
                     else
                         model.status
             in
-            ( { model | drag = Dragging withHover, status = statusAfterMove }
+            ( { model | drag = Dragging nextInfo ctx nextArb, status = statusAfterMove }
             , Cmd.none
             )
 
@@ -542,8 +544,8 @@ boardRectReceived result model =
 
                 updatedDrag =
                     case model.drag of
-                        Dragging info ->
-                            Dragging { info | boardRect = Just rect }
+                        Dragging info ctx arb ->
+                            Dragging info { ctx | boardRect = Just rect } arb
 
                         other ->
                             other
@@ -904,7 +906,7 @@ subscriptions model =
     let
         dragSubs =
             case model.drag of
-                Dragging _ ->
+                Dragging _ _ _ ->
                     [ Browser.Events.onMouseMove mouseMoveDecoder
                     , Browser.Events.onMouseUp mouseUpDecoder
                     ]

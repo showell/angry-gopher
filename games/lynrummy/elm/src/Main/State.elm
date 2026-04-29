@@ -2,6 +2,8 @@ module Main.State exposing
     ( ActionLogBundle
     , ActionLogEntry
     , ActionOutcome
+    , ClickArbiter
+    , DragContext
     , DragInfo
     , DragSource(..)
     , DragState(..)
@@ -244,10 +246,11 @@ type StatusKind
 
 type DragState
     = NotDragging
-    | Dragging DragInfo
+    | Dragging DragInfo DragContext ClickArbiter
 
 
-{-| Live-drag bookkeeping.
+{-| Intrinsic live-drag state: fields that change on every
+MouseMove and are consumed by replay.
 
 The RENDER-CANONICAL field is `floaterTopLeft` — the one
 thing the View layer reads to position the drag floater.
@@ -263,28 +266,47 @@ Key invariants:
     deltas (pure vectors, frame-agnostic).
   - `cursor` is the current mouse position in viewport frame.
     Used only for live concerns — the `isCursorOverBoard`
-    hit-test, `clickIntentAfterMove`. Never travels on the
-    wire.
-  - `originalCursor` is the cursor at mousedown, also
-    viewport. Used only by `clickIntentAfterMove` to measure
-    drift.
+    hit-test. Never travels on the wire.
   - No `grabOffset` field. For intra-board drags it isn't
     needed at all (the floater starts at `stack.loc`). For
     hand-origin drags it's applied at mousedown to derive the
     initial viewport floater position, then forgotten.
+  - `gesturePath` accumulates during the drag and is consumed
+    by replay — it is a critical feature, not a cache.
 
 -}
 type alias DragInfo =
     { source : DragSource
     , cursor : Point
-    , originalCursor : Point
     , floaterTopLeft : Point
-    , wings : List WingId
-    , hoveredWing : Maybe WingId
-    , boardRect : Maybe GA.Rect
-    , clickIntent : Maybe Int
-    , gesturePath : List GesturePoint
     , pathFrame : PathFrame
+    , gesturePath : List GesturePoint
+    }
+
+
+{-| Stable snapshot captured once at mousedown. Passed as a
+parameter to gesture resolution functions rather than stored
+inside DragInfo. The board geometry (boardRect) starts as
+Nothing and is filled in by BoardRectReceived; wings are
+computed from the drag source at mousedown and never change.
+-}
+type alias DragContext =
+    { wings : List WingId
+    , boardRect : Maybe GA.Rect
+    }
+
+
+{-| Click-vs-drag arbitration state. Lives alongside the drag
+(only exists while dragging) so it is cleared atomically when
+the drag ends via NotDragging. Board-card drags start with
+`clickIntent = Just cardIndex`; hand-card drags start with
+`Nothing`. Mousemove calls `GA.clickIntentAfterMove` to kill
+the intent once the cursor drifts past the threshold — death
+is permanent within a gesture.
+-}
+type alias ClickArbiter =
+    { clickIntent : Maybe Int
+    , originalCursor : Point
     }
 
 

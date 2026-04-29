@@ -463,9 +463,9 @@ handCardSource card model =
 
 {-| Synthesize a DragState from an animation bundle + current
 floater top-left. `floaterTopLeft` is the one field the View
-layer reads to position the drag overlay; live-only fields
-(cursor, originalCursor, wings, hoveredWing, boardRect,
-clickIntent) get stubs — replay doesn't use them.
+layer reads to position the drag overlay. The `DragContext`
+and `ClickArbiter` stubs carry empty/Nothing values — replay
+doesn't use them.
 -}
 animatedDragState :
     { a | source : DragSource, pathFrame : PathFrame }
@@ -475,12 +475,9 @@ animatedDragState anim floaterTopLeft =
     Dragging
         { source = anim.source
         , cursor = { x = 0, y = 0 }
-        , originalCursor = { x = 0, y = 0 }
         , floaterTopLeft = floaterTopLeft
-        , wings = []
-        , hoveredWing = Nothing
-        , boardRect = Nothing
-        , clickIntent = Nothing
-        , gesturePath = []
         , pathFrame = anim.pathFrame
+        , gesturePath = []
         }
+        { wings = [], boardRect = Nothing }
+        { clickIntent = Nothing, originalCursor = { x = 0, y = 0 } }

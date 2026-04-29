@@ -76,7 +76,9 @@ import Main.Apply as Apply
 import Main.Msg exposing (Msg(..))
 import Main.State as State
     exposing
-        ( DragInfo
+        ( ClickArbiter
+        , DragContext
+        , DragInfo
         , DragSource(..)
         , DragState(..)
         , Model
@@ -129,21 +131,18 @@ startBoardCardDrag { stack, cardIndex } clientPoint tMs model =
                     Dragging
                         { source = FromBoardStack stack
                         , cursor = clientPoint
-                        , originalCursor = clientPoint
                         , floaterTopLeft = initialFloater
-                        , wings = wings
-                        , hoveredWing = Nothing
-                        , boardRect = Nothing
-                        , clickIntent = Just cardIndex
+                        , pathFrame = BoardFrame
                         , gesturePath =
                             [ { tMs = tMs, x = initialFloater.x, y = initialFloater.y } ]
-                        , pathFrame = BoardFrame
                         }
+                        { wings = wings, boardRect = Nothing }
+                        { clickIntent = Just cardIndex, originalCursor = clientPoint }
               }
             , fetchBoardRect model.gameId
             )
 
-        Dragging _ ->
+        Dragging _ _ _ ->
             ( model, Cmd.none )
 
 
@@ -179,16 +178,13 @@ startHandDrag card clientPoint tMs model =
                     Dragging
                         { source = FromHandCard card
                         , cursor = clientPoint
-                        , originalCursor = clientPoint
                         , floaterTopLeft = initialFloater
-                        , wings = wings
-                        , hoveredWing = Nothing
-                        , boardRect = Nothing
-                        , clickIntent = Nothing
+                        , pathFrame = ViewportFrame
                         , gesturePath =
                             [ { tMs = tMs, x = initialFloater.x, y = initialFloater.y } ]
-                        , pathFrame = ViewportFrame
                         }
+                        { wings = wings, boardRect = Nothing }
+                        { clickIntent = Nothing, originalCursor = clientPoint }
               }
             , fetchBoardRect model.gameId
             )
@@ -232,7 +228,7 @@ handleMouseUp releasePoint tMs model =
         NotDragging ->
             ( model, Cmd.none )
 
-        Dragging info ->
+        Dragging info ctx arb ->
             let
                 -- Apply the mouseup cursor delta to the floater
                 -- (same invariant as mousemove). Append the
@@ -261,7 +257,7 @@ handleMouseUp releasePoint tMs model =
                     }
 
                 maybeAction =
-                    resolveGesture infoFull
+                    resolveGesture infoFull ctx arb
 
                 modelAfterDragClear =
                     clearDrag model
@@ -279,7 +275,7 @@ handleMouseUp releasePoint tMs model =
                                 |> (\m -> { m | agentProgram = Nothing })
 
                         Nothing ->
-                            case droppedOffBoardScold infoFull of
+                            case droppedOffBoardScold infoFull ctx of
                                 Just status ->
                                     { modelAfterDragClear | status = status }
 
@@ -374,14 +370,18 @@ survived, it's a `Split`; otherwise dispatch on
 `(hoveredWing, source, isCursorOverBoard)` per the branch
 table in the module header.
 -}
-resolveGesture : DragInfo -> Maybe WireAction
-resolveGesture info =
-    case ( info.clickIntent, info.source ) of
+resolveGesture : DragInfo -> DragContext -> ClickArbiter -> Maybe WireAction
+resolveGesture info ctx arb =
+    case ( arb.clickIntent, info.source ) of
         ( Just cardIdx, FromBoardStack stack ) ->
             Just (WA.Split { stack = stack, cardIndex = cardIdx })
 
         _ ->
-            case ( info.hoveredWing, info.source ) of
+            let
+                hovered =
+                    hoveredWing ctx info
+            in
+            case ( hovered, info.source ) of
                 ( Just wing, FromBoardStack source ) ->
                     Just
                         (WA.MergeStack
@@ -401,8 +401,8 @@ resolveGesture info =
                         )
 
                 ( Nothing, FromHandCard card ) ->
-                    if isCursorOverBoard info then
-                        case dropLoc info of
+                    if isCursorOverBoard info ctx then
+                        case dropLoc info ctx of
                             Just loc ->
                                 if isDropFootprintInBounds 1 loc then
                                     Just (WA.PlaceHand { handCard = card, loc = loc })
@@ -417,8 +417,8 @@ resolveGesture info =
                         Nothing
 
                 ( Nothing, FromBoardStack stack ) ->
-                    if isCursorOverBoard info then
-                        case dropLoc info of
+                    if isCursorOverBoard info ctx then
+                        case dropLoc info ctx of
                             Just loc ->
                                 if isDropFootprintInBounds (CardStack.size stack) loc then
                                     Just (WA.MoveStack { stack = stack, newLoc = loc })
@@ -433,9 +433,9 @@ resolveGesture info =
                         Nothing
 
 
-isCursorOverBoard : DragInfo -> Bool
-isCursorOverBoard info =
-    case info.boardRect of
+isCursorOverBoard : DragInfo -> DragContext -> Bool
+isCursorOverBoard info ctx =
+    case ctx.boardRect of
         Just rect ->
             GA.isCursorInRect info.cursor rect
 
@@ -450,11 +450,19 @@ the browser's DOM hit-test; called from every MouseMove to
 drive the wing-highlight and from `resolveGesture` as the
 authoritative drop-time check.
 -}
-floaterOverWing : DragInfo -> Maybe WingOracle.WingId
-floaterOverWing info =
-    info.wings
-        |> List.filter (isNearEventualLanding info)
+floaterOverWing : DragContext -> DragInfo -> Maybe WingOracle.WingId
+floaterOverWing ctx info =
+    ctx.wings
+        |> List.filter (isNearEventualLanding info ctx)
         |> List.head
+
+
+{-| Derived on demand: which wing (if any) the floater is
+currently over. Not cached in any record.
+-}
+hoveredWing : DragContext -> DragInfo -> Maybe WingOracle.WingId
+hoveredWing =
+    floaterOverWing
 
 
 {-| Half a card-pitch of slop in each axis around the
@@ -474,8 +482,8 @@ is naturally board-frame; lift it into the floater's frame
 hand-origin drags) and compare directly. Hand-origin drags
 with no board rect yet return False rather than guess.
 -}
-isNearEventualLanding : DragInfo -> WingOracle.WingId -> Bool
-isNearEventualLanding info wing =
+isNearEventualLanding : DragInfo -> DragContext -> WingOracle.WingId -> Bool
+isNearEventualLanding info ctx wing =
     let
         floaterWidth =
             case info.source of
@@ -494,7 +502,7 @@ isNearEventualLanding info wing =
                     Just { x = eventualBoard.left, y = eventualBoard.top }
 
                 ViewportFrame ->
-                    info.boardRect
+                    ctx.boardRect
                         |> Maybe.map
                             (\rect ->
                                 { x = eventualBoard.left + rect.x
@@ -532,8 +540,8 @@ offset + board rect. `Nothing` if the board rect hasn't
 arrived yet (race between drag-start and
 `Browser.Dom.getElement` completing).
 -}
-dropLoc : DragInfo -> Maybe BoardLocation
-dropLoc info =
+dropLoc : DragInfo -> DragContext -> Maybe BoardLocation
+dropLoc info ctx =
     case info.pathFrame of
         BoardFrame ->
             -- Intra-board: floaterTopLeft IS the drop loc.
@@ -542,7 +550,7 @@ dropLoc info =
         ViewportFrame ->
             -- Hand-origin: translate viewport → board by
             -- subtracting the board div's viewport origin.
-            info.boardRect
+            ctx.boardRect
                 |> Maybe.map
                     (\rect ->
                         { left = info.floaterTopLeft.x - rect.x
@@ -581,11 +589,11 @@ at mouseup — a slip past the corner typically ends with the
 cursor technically just outside the widget, and we still want
 to explain why the stack snapped back.
 -}
-droppedOffBoardScold : DragInfo -> Maybe State.StatusMessage
-droppedOffBoardScold info =
+droppedOffBoardScold : DragInfo -> DragContext -> Maybe State.StatusMessage
+droppedOffBoardScold info ctx =
     let
         footprintCheck cardCount =
-            case dropLoc info of
+            case dropLoc info ctx of
                 Just loc ->
                     if not (isDropFootprintInBounds cardCount loc) then
                         Just
@@ -690,7 +698,7 @@ handCardAttrs drag hintedCards hc =
                         )
                     ]
 
-                Dragging info ->
+                Dragging info _ _ ->
                     case info.source of
                         FromHandCard sourceCard ->
                             if sourceCard == hc.card then
