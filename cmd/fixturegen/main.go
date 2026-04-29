@@ -803,6 +803,35 @@ func emitElmTrickFirstPlay(b *strings.Builder, sc Scenario) {
 }
 
 
+const elmClickAgentPlayTmpl = `            let
+                board =
+                    %s
+
+                base =
+                    State.baseModel
+
+                model0 =
+                    { base | board = board, sessionId = Just 0 }
+
+                ( newModel, _, _ ) =
+                    Play.update Msg.ClickAgentPlay model0
+
+                logAppended =
+                    List.length newModel.actionLog - List.length model0.actionLog
+
+                replayStarted =
+                    newModel.replay /= Nothing
+
+                programSize =
+                    case newModel.agentProgram of
+                        Just lst ->
+                            List.length lst
+
+                        Nothing ->
+                            0
+            in
+`
+
 // elmClickAgentPlay emits a test body that constructs a Play
 // model from the scenario's `board:` block, dispatches a
 // `ClickAgentPlay` Msg through Play.update, and asserts on the
@@ -813,8 +842,7 @@ func emitElmTrickFirstPlay(b *strings.Builder, sc Scenario) {
 // Only Elm runs this op (Python doesn't have an Elm-style
 // reducer). Go and Python skip — the JSON gate filters by op.
 func elmClickAgentPlay(b *strings.Builder, sc Scenario) {
-	fmt.Fprintf(b, "            let\n                board =\n                    %s\n\n                base =\n                    State.baseModel\n\n                model0 =\n                    { base | board = board, sessionId = Just 0 }\n\n                ( newModel, _, _ ) =\n                    Play.update Msg.ClickAgentPlay model0\n\n                logAppended =\n                    List.length newModel.actionLog - List.length model0.actionLog\n\n                replayStarted =\n                    newModel.replay /= Nothing\n\n                programSize =\n                    case newModel.agentProgram of\n                        Just lst ->\n                            List.length lst\n\n                        Nothing ->\n                            0\n            in\n",
-		elmStacks(sc.Board, "                        "))
+	fmt.Fprintf(b, elmClickAgentPlayTmpl, elmStacks(sc.Board, "                        "))
 	b.WriteString("            Expect.all\n                [ ")
 	first := true
 	emitCheck := func(s string) {
