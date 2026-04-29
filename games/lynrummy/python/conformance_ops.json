@@ -1,14 +1,17 @@
 {
   "elm": [
     "build_suggestions",
+    "classify_board_geometry",
     "click_agent_play",
     "enumerate_moves",
     "find_open_loc",
     "hint_invariant",
     "replay_invariant",
     "solve",
+    "stack_height_constant",
     "trick_first_play",
     "undo_walkthrough",
+    "validate_board_geometry",
     "validate_game_move",
     "validate_turn_complete"
   ],

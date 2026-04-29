@@ -9,7 +9,15 @@ import Game.Agent.Bfs
 import Game.Agent.Buckets as AgentBuckets exposing (Buckets)
 import Game.Agent.Enumerator as AgentEnumerator
 import Game.Agent.Move as AgentMove exposing (Move(..))
-import Game.Physics.BoardGeometry exposing (BoardBounds)
+import Game.Physics.BoardGeometry
+    exposing
+        ( BoardBounds
+        , BoardGeometryStatus(..)
+        , GeometryErrorKind(..)
+        , classifyBoardGeometry
+        , stackHeight
+        , validateBoardGeometry
+        )
 import Game.Rules.Card exposing (Card, CardValue(..), OriginDeck(..), Suit(..))
 import Game.CardStack
     exposing
@@ -240,6 +248,246 @@ runReplayLoop model nowMs budget =
                 in
                 runReplayLoop next (nowMs + 50) (budget - 1)
 
+
+
+boardGeometryClassifyCleanlySpaced : Test
+boardGeometryClassifyCleanlySpaced =
+    test "board_geometry_classify_cleanly_spaced" <|
+        \_ ->
+            Game.Physics.BoardGeometry.classifyBoardGeometry
+                [ { boardCards = [ boardCard "AC1", boardCard "AC1", boardCard "AC1" ], loc = { top = 10, left = 10 } }
+                    , { boardCards = [ boardCard "AC1", boardCard "AC1", boardCard "AC1" ], loc = { top = 100, left = 10 } }
+                    ]
+                standardBounds
+            |> Expect.equal CleanlySpaced
+
+
+boardGeometryClassifyCrowded : Test
+boardGeometryClassifyCrowded =
+    test "board_geometry_classify_crowded" <|
+        \_ ->
+            Game.Physics.BoardGeometry.classifyBoardGeometry
+                [ { boardCards = [ boardCard "AC1", boardCard "AC1", boardCard "AC1" ], loc = { top = 10, left = 10 } }
+                    , { boardCards = [ boardCard "AC1", boardCard "AC1", boardCard "AC1" ], loc = { top = 10, left = 104 } }
+                    ]
+                standardBounds
+            |> Expect.equal Crowded
+
+
+boardGeometryClassifyIllegalOutOfBounds : Test
+boardGeometryClassifyIllegalOutOfBounds =
+    test "board_geometry_classify_illegal_out_of_bounds" <|
+        \_ ->
+            Game.Physics.BoardGeometry.classifyBoardGeometry
+                [ { boardCards = [ boardCard "AC1", boardCard "AC1", boardCard "AC1" ], loc = { top = 10, left = 790 } }
+                    ]
+                standardBounds
+            |> Expect.equal Illegal
+
+
+boardGeometryClassifyIllegalOverlap : Test
+boardGeometryClassifyIllegalOverlap =
+    test "board_geometry_classify_illegal_overlap" <|
+        \_ ->
+            Game.Physics.BoardGeometry.classifyBoardGeometry
+                [ { boardCards = [ boardCard "AC1", boardCard "AC1", boardCard "AC1" ], loc = { top = 10, left = 10 } }
+                    , { boardCards = [ boardCard "AC1", boardCard "AC1", boardCard "AC1" ], loc = { top = 10, left = 10 } }
+                    ]
+                standardBounds
+            |> Expect.equal Illegal
+
+
+boardGeometryEmptyBoard : Test
+boardGeometryEmptyBoard =
+    test "board_geometry_empty_board" <|
+        \_ ->
+            let
+                errors =
+                    Game.Physics.BoardGeometry.validateBoardGeometry
+                        []
+                        standardBounds
+            in
+            errors |> Expect.equal []
+
+
+boardGeometryHorizontalPartialOverlap : Test
+boardGeometryHorizontalPartialOverlap =
+    test "board_geometry_horizontal_partial_overlap" <|
+        \_ ->
+            let
+                errors =
+                    Game.Physics.BoardGeometry.validateBoardGeometry
+                        [ { boardCards = [ boardCard "AC1", boardCard "AC1", boardCard "AC1", boardCard "AC1", boardCard "AC1" ], loc = { top = 10, left = 10 } }
+                        , { boardCards = [ boardCard "AC1", boardCard "AC1", boardCard "AC1", boardCard "AC1", boardCard "AC1" ], loc = { top = 10, left = 50 } }
+                        ]
+                        standardBounds
+            in
+            Expect.all
+                [ List.any (\e -> e.kind == Overlap) >> Expect.equal True
+                ]
+                errors
+
+
+boardGeometryIdenticalPositionsOverlap : Test
+boardGeometryIdenticalPositionsOverlap =
+    test "board_geometry_identical_positions_overlap" <|
+        \_ ->
+            let
+                errors =
+                    Game.Physics.BoardGeometry.validateBoardGeometry
+                        [ { boardCards = [ boardCard "AC1", boardCard "AC1", boardCard "AC1" ], loc = { top = 10, left = 10 } }
+                        , { boardCards = [ boardCard "AC1", boardCard "AC1", boardCard "AC1" ], loc = { top = 10, left = 10 } }
+                        ]
+                        standardBounds
+            in
+            Expect.all
+                [ List.any (\e -> e.kind == Overlap) >> Expect.equal True
+                ]
+                errors
+
+
+boardGeometryOutOfBoundsBottom : Test
+boardGeometryOutOfBoundsBottom =
+    test "board_geometry_out_of_bounds_bottom" <|
+        \_ ->
+            let
+                errors =
+                    Game.Physics.BoardGeometry.validateBoardGeometry
+                        [ { boardCards = [ boardCard "AC1", boardCard "AC1", boardCard "AC1" ], loc = { top = 570, left = 10 } }
+                        ]
+                        standardBounds
+            in
+            Expect.all
+                [ List.length >> Expect.equal 1
+                , List.any (\e -> e.kind == OutOfBounds) >> Expect.equal True
+                ]
+                errors
+
+
+boardGeometryOutOfBoundsNegativeX : Test
+boardGeometryOutOfBoundsNegativeX =
+    test "board_geometry_out_of_bounds_negative_x" <|
+        \_ ->
+            let
+                errors =
+                    Game.Physics.BoardGeometry.validateBoardGeometry
+                        [ { boardCards = [ boardCard "AC1", boardCard "AC1", boardCard "AC1" ], loc = { top = 10, left = -5 } }
+                        ]
+                        standardBounds
+            in
+            Expect.all
+                [ List.length >> Expect.equal 1
+                , List.any (\e -> e.kind == OutOfBounds) >> Expect.equal True
+                ]
+                errors
+
+
+boardGeometryOutOfBoundsRight : Test
+boardGeometryOutOfBoundsRight =
+    test "board_geometry_out_of_bounds_right" <|
+        \_ ->
+            let
+                errors =
+                    Game.Physics.BoardGeometry.validateBoardGeometry
+                        [ { boardCards = [ boardCard "AC1", boardCard "AC1", boardCard "AC1" ], loc = { top = 10, left = 780 } }
+                        ]
+                        standardBounds
+            in
+            Expect.all
+                [ List.length >> Expect.equal 1
+                , List.any (\e -> e.kind == OutOfBounds) >> Expect.equal True
+                ]
+                errors
+
+
+boardGeometrySideBySideWithMarginValid : Test
+boardGeometrySideBySideWithMarginValid =
+    test "board_geometry_side_by_side_with_margin_valid" <|
+        \_ ->
+            let
+                errors =
+                    Game.Physics.BoardGeometry.validateBoardGeometry
+                        [ { boardCards = [ boardCard "AC1", boardCard "AC1", boardCard "AC1" ], loc = { top = 10, left = 10 } }
+                        , { boardCards = [ boardCard "AC1", boardCard "AC1", boardCard "AC1" ], loc = { top = 10, left = 111 } }
+                        ]
+                        standardBounds
+            in
+            errors |> Expect.equal []
+
+
+boardGeometrySingleStackValid : Test
+boardGeometrySingleStackValid =
+    test "board_geometry_single_stack_valid" <|
+        \_ ->
+            let
+                errors =
+                    Game.Physics.BoardGeometry.validateBoardGeometry
+                        [ { boardCards = [ boardCard "AC1", boardCard "AC1", boardCard "AC1" ], loc = { top = 10, left = 10 } }
+                        ]
+                        standardBounds
+            in
+            errors |> Expect.equal []
+
+
+boardGeometryStackHeightIs40 : Test
+boardGeometryStackHeightIs40 =
+    test "board_geometry_stack_height_is_40" <|
+        \_ ->
+            Game.Physics.BoardGeometry.stackHeight |> Expect.equal 40
+
+
+boardGeometryThreeStacksOnlyOverlappingPair : Test
+boardGeometryThreeStacksOnlyOverlappingPair =
+    test "board_geometry_three_stacks_only_overlapping_pair" <|
+        \_ ->
+            let
+                errors =
+                    Game.Physics.BoardGeometry.validateBoardGeometry
+                        [ { boardCards = [ boardCard "AC1", boardCard "AC1", boardCard "AC1" ], loc = { top = 10, left = 10 } }
+                        , { boardCards = [ boardCard "AC1", boardCard "AC1", boardCard "AC1" ], loc = { top = 100, left = 10 } }
+                        , { boardCards = [ boardCard "AC1", boardCard "AC1", boardCard "AC1" ], loc = { top = 10, left = 10 } }
+                        ]
+                        standardBounds
+            in
+            Expect.all
+                [ List.filter (\e -> e.kind == Overlap) >> List.length >> Expect.equal 1
+                , List.filter (\e -> e.kind == Overlap) >> List.head >> Maybe.map .stackIndices >> Expect.equal (Just [ 0, 2 ])
+                ]
+                errors
+
+
+boardGeometryTooCloseNotOverlap : Test
+boardGeometryTooCloseNotOverlap =
+    test "board_geometry_too_close_not_overlap" <|
+        \_ ->
+            let
+                errors =
+                    Game.Physics.BoardGeometry.validateBoardGeometry
+                        [ { boardCards = [ boardCard "AC1", boardCard "AC1", boardCard "AC1" ], loc = { top = 10, left = 10 } }
+                        , { boardCards = [ boardCard "AC1", boardCard "AC1", boardCard "AC1" ], loc = { top = 10, left = 109 } }
+                        ]
+                        standardBounds
+            in
+            Expect.all
+                [ List.any (\e -> e.kind == TooClose) >> Expect.equal True
+                , List.any (\e -> e.kind == Overlap) >> Expect.equal False
+                ]
+                errors
+
+
+boardGeometryTwoNonOverlappingValid : Test
+boardGeometryTwoNonOverlappingValid =
+    test "board_geometry_two_non_overlapping_valid" <|
+        \_ ->
+            let
+                errors =
+                    Game.Physics.BoardGeometry.validateBoardGeometry
+                        [ { boardCards = [ boardCard "AC1", boardCard "AC1", boardCard "AC1" ], loc = { top = 10, left = 10 } }
+                        , { boardCards = [ boardCard "AC1", boardCard "AC1", boardCard "AC1", boardCard "AC1" ], loc = { top = 100, left = 10 } }
+                        ]
+                        standardBounds
+            in
+            errors |> Expect.equal []
 
 
 clickAgentPlayAlreadyClean : Test
@@ -5491,7 +5739,23 @@ walkthroughMined025TSp1 =
 suite : Test
 suite =
     describe "DSL conformance"
-        [ clickAgentPlayAlreadyClean
+        [ boardGeometryClassifyCleanlySpaced
+        , boardGeometryClassifyCrowded
+        , boardGeometryClassifyIllegalOutOfBounds
+        , boardGeometryClassifyIllegalOverlap
+        , boardGeometryEmptyBoard
+        , boardGeometryHorizontalPartialOverlap
+        , boardGeometryIdenticalPositionsOverlap
+        , boardGeometryOutOfBoundsBottom
+        , boardGeometryOutOfBoundsNegativeX
+        , boardGeometryOutOfBoundsRight
+        , boardGeometrySideBySideWithMarginValid
+        , boardGeometrySingleStackValid
+        , boardGeometryStackHeightIs40
+        , boardGeometryThreeStacksOnlyOverlappingPair
+        , boardGeometryTooCloseNotOverlap
+        , boardGeometryTwoNonOverlappingValid
+        , clickAgentPlayAlreadyClean
         , clickAgentPlaySimplePeel
         , clickAgentPlayUnsolvableBoard
         , corpusSid108

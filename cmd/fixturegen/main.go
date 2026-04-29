@@ -117,6 +117,15 @@ type Expectation struct {
 	StatusContains   string // expect: status_contains: "..."
 	// Replay-invariant expectations (op `replay_invariant`).
 	FinalBoardVictory *bool // expect: final_board_victory: true | false
+	// Board-geometry expectations (ops `validate_board_geometry` /
+	// `classify_board_geometry` / `stack_height_constant`).
+	ErrorCount          *int    // expect: error_count: N — validateBoardGeometry returns exactly N errors
+	AnyErrorKind        string  // expect: any_error_kind: out_of_bounds|overlap|too_close
+	NoErrorKind         string  // expect: no_error_kind: out_of_bounds|overlap|too_close
+	OverlapCount        *int    // expect: overlap_count: N — exactly N Overlap errors
+	OverlapStackIndices []int   // expect: overlap_stack_indices: i j — first Overlap error has these stackIndices
+	GeometryStatus      string  // expect: geometry_status: CleanlySpaced|Crowded|Illegal
+	StackHeight         *int    // expect: stack_height_40 / stack_height: N
 }
 
 // ExpectedSuggestion — one row inside an `expect: suggestions`
@@ -241,6 +250,25 @@ var opRegistry = []OpKind{
 		Name:    "trick_first_play",
 		Elm:     true,
 		EmitElm: emitElmTrickFirstPlay,
+	},
+	{
+		// Elm-only: Python's find_violation / out_of_bounds cover
+		// related ground but don't match the typed-error API shape.
+		Name:    "validate_board_geometry",
+		Elm:     true,
+		EmitElm: elmValidateBoardGeometry,
+	},
+	{
+		// Elm-only: classifyBoardGeometry has no Python equivalent.
+		Name:    "classify_board_geometry",
+		Elm:     true,
+		EmitElm: elmClassifyBoardGeometry,
+	},
+	{
+		// Elm-only: asserts stackHeight == 40 (the shared constant).
+		Name:    "stack_height_constant",
+		Elm:     true,
+		EmitElm: elmStackHeightConstant,
 	},
 }
 
@@ -405,7 +433,15 @@ import Game.Agent.Bfs
 import Game.Agent.Buckets as AgentBuckets exposing (Buckets)
 import Game.Agent.Enumerator as AgentEnumerator
 import Game.Agent.Move as AgentMove exposing (Move(..))
-import Game.Physics.BoardGeometry exposing (BoardBounds)
+import Game.Physics.BoardGeometry
+    exposing
+        ( BoardBounds
+        , BoardGeometryStatus(..)
+        , GeometryErrorKind(..)
+        , classifyBoardGeometry
+        , stackHeight
+        , validateBoardGeometry
+        )
 import Game.Rules.Card exposing (Card, CardValue(..), OriginDeck(..), Suit(..))
 import Game.CardStack
     exposing
@@ -1217,6 +1253,118 @@ func elmFindOpenLoc(b *strings.Builder, sc Scenario) {
 		elmStacks(sc.Existing, "                        "),
 		sc.CardCount,
 		sc.Expect.Loc.Top, sc.Expect.Loc.Left)
+}
+
+
+// elmGeometryKindExpr converts a DSL kind string to its Elm
+// GeometryErrorKind constructor name.
+func elmGeometryKindExpr(kind string) string {
+	switch kind {
+	case "out_of_bounds":
+		return "OutOfBounds"
+	case "overlap":
+		return "Overlap"
+	case "too_close":
+		return "TooClose"
+	default:
+		return "Debug.todo \"unknown geometry kind: " + kind + "\""
+	}
+}
+
+// elmValidateBoardGeometry emits a test body that calls
+// Game.Physics.BoardGeometry.validateBoardGeometry on `sc.Board`
+// with standardBounds and asserts the error list matches the
+// expectation. Supported assertions (all optional, applied in
+// order):
+//
+//   - Kind == "ok"               → Expect.equal []
+//   - ErrorCount                 → List.length == N
+//   - AnyErrorKind               → List.any (\e -> e.kind == X)
+//   - NoErrorKind                → not (List.any (\e -> e.kind == X))
+//   - OverlapCount               → count of Overlap errors == N
+//   - OverlapStackIndices        → first Overlap error has these stackIndices
+func elmValidateBoardGeometry(b *strings.Builder, sc Scenario) {
+	exp := sc.Expect
+	fmt.Fprintf(b, "            let\n                errors =\n                    Game.Physics.BoardGeometry.validateBoardGeometry\n                        %s\n                        standardBounds\n            in\n",
+		elmStacks(sc.Board, "                        "))
+
+	if exp.Kind == "ok" {
+		b.WriteString("            errors |> Expect.equal []")
+		return
+	}
+
+	// Build a list of checks for Expect.all.
+	var checks []string
+
+	if exp.ErrorCount != nil {
+		checks = append(checks, fmt.Sprintf(
+			"List.length >> Expect.equal %d", *exp.ErrorCount))
+	}
+	if exp.AnyErrorKind != "" {
+		elmKind := elmGeometryKindExpr(exp.AnyErrorKind)
+		checks = append(checks, fmt.Sprintf(
+			"List.any (\\e -> e.kind == %s) >> Expect.equal True", elmKind))
+	}
+	if exp.NoErrorKind != "" {
+		elmKind := elmGeometryKindExpr(exp.NoErrorKind)
+		checks = append(checks, fmt.Sprintf(
+			"List.any (\\e -> e.kind == %s) >> Expect.equal False", elmKind))
+	}
+	if exp.OverlapCount != nil {
+		checks = append(checks, fmt.Sprintf(
+			"List.filter (\\e -> e.kind == Overlap) >> List.length >> Expect.equal %d", *exp.OverlapCount))
+	}
+	if len(exp.OverlapStackIndices) > 0 {
+		idxStrs := make([]string, len(exp.OverlapStackIndices))
+		for i, idx := range exp.OverlapStackIndices {
+			idxStrs[i] = fmt.Sprintf("%d", idx)
+		}
+		indicesElm := "[ " + strings.Join(idxStrs, ", ") + " ]"
+		checks = append(checks, fmt.Sprintf(
+			"List.filter (\\e -> e.kind == Overlap) >> List.head >> Maybe.map .stackIndices >> Expect.equal (Just %s)", indicesElm))
+	}
+
+	if len(checks) == 0 {
+		b.WriteString("            Expect.fail \"validate_board_geometry scenario missing assertions\"")
+		return
+	}
+
+	b.WriteString("            Expect.all\n                [ ")
+	for i, ch := range checks {
+		if i > 0 {
+			b.WriteString("\n                , ")
+		}
+		b.WriteString(ch)
+	}
+	b.WriteString("\n                ]\n                errors")
+}
+
+// elmClassifyBoardGeometry emits a test body that calls
+// Game.Physics.BoardGeometry.classifyBoardGeometry and asserts
+// the result matches the expected BoardGeometryStatus constructor.
+func elmClassifyBoardGeometry(b *strings.Builder, sc Scenario) {
+	status := sc.Expect.GeometryStatus
+	if status == "" {
+		b.WriteString("            Expect.fail \"classify_board_geometry scenario missing geometry_status\"")
+		return
+	}
+	var statusExpr string
+	switch status {
+	case "CleanlySpaced", "Crowded", "Illegal":
+		statusExpr = status
+	default:
+		statusExpr = "Debug.todo \"unknown geometry status: " + status + "\""
+	}
+	fmt.Fprintf(b, "            Game.Physics.BoardGeometry.classifyBoardGeometry\n                %s\n                standardBounds\n            |> Expect.equal %s",
+		elmStacks(sc.Board, "                    "),
+		statusExpr)
+}
+
+// elmStackHeightConstant emits a test body that asserts
+// Game.Physics.BoardGeometry.stackHeight == 40.
+func elmStackHeightConstant(b *strings.Builder, sc Scenario) {
+	_ = sc // no scenario fields needed
+	b.WriteString("            Game.Physics.BoardGeometry.stackHeight |> Expect.equal 40")
 }
 
 
@@ -2238,6 +2386,33 @@ func parseExpectBlock(e *Expectation, children []line, path string) error {
 					return fmt.Errorf("%s:%d: final_board_victory: %w", path, l.lineNum, err)
 				}
 				e.FinalBoardVictory = &v
+			case "error_count":
+				n, err := atoi(val)
+				if err != nil {
+					return fmt.Errorf("%s:%d: error_count: %w", path, l.lineNum, err)
+				}
+				e.ErrorCount = &n
+			case "any_error_kind":
+				e.AnyErrorKind = val
+			case "no_error_kind":
+				e.NoErrorKind = val
+			case "overlap_count":
+				n, err := atoi(val)
+				if err != nil {
+					return fmt.Errorf("%s:%d: overlap_count: %w", path, l.lineNum, err)
+				}
+				e.OverlapCount = &n
+			case "overlap_stack_indices":
+				parts := strings.Fields(val)
+				for _, p := range parts {
+					idx, err := atoi(p)
+					if err != nil {
+						return fmt.Errorf("%s:%d: overlap_stack_indices: %w", path, l.lineNum, err)
+					}
+					e.OverlapStackIndices = append(e.OverlapStackIndices, idx)
+				}
+			case "geometry_status":
+				e.GeometryStatus = val
 			default:
 				return fmt.Errorf("%s:%d: unknown expect field %q", path, l.lineNum, key)
 			}
