@@ -22,6 +22,11 @@
 #   3. Elm check.sh — standalone type-checks, elm-test (700+),
 #      elm make, elm-review.
 #
+# KNOWN: total wall time ~26s, dominated by Elm compiling the
+# generated DslConformanceTest.elm (~277KB). Accepted for now —
+# further optimization adds complexity not worth the tradeoff
+# at current test count. Revisit if the suite grows substantially.
+#
 # Exits non-zero on any step's failure.
 
 set -e
