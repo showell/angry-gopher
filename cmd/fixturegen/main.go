@@ -1389,30 +1389,31 @@ func elmTrickFirstPlay(b *strings.Builder, sc Scenario, trickVar string) {
 	}
 }
 
-func elmValidateMove(b *strings.Builder, sc Scenario, turnComplete bool) {
-	if turnComplete {
-		fmt.Fprintf(b, "            let\n                board =\n                    %s\n            in\n", elmStacks(sc.Board, "                    "))
-		b.WriteString("            case Referee.validateTurnComplete board standardBounds of\n")
-	} else {
-		fmt.Fprintf(b, "            let\n                move =\n                    { boardBefore = %s\n                    , stacksToRemove = %s\n                    , stacksToAdd = %s\n                    , handCardsPlayed = %s\n                    }\n            in\n",
-			elmStacks(sc.Board, "                        "),
-			elmStacks(sc.Removed, "                        "),
-			elmStacks(sc.Added, "                        "),
-			elmHandCards(sc.HandPlayed),
-		)
-		b.WriteString("            case Referee.validateGameMove move standardBounds of\n")
-	}
-	switch sc.Expect.Kind {
-	case "ok":
-		b.WriteString(`                Ok _ ->
+const elmValidateMoveTurnCompleteTmpl = `            let
+                board =
+                    %s
+            in
+            case Referee.validateTurnComplete board standardBounds of
+`
+
+const elmValidateMoveGameMoveTmpl = `            let
+                move =
+                    { boardBefore = %s
+                    , stacksToRemove = %s
+                    , stacksToAdd = %s
+                    , handCardsPlayed = %s
+                    }
+            in
+            case Referee.validateGameMove move standardBounds of
+`
+
+const elmValidateMoveOk = `                Ok _ ->
                     Expect.pass
 
                 Err err ->
-                    Expect.fail (refereeStageToString err.stage ++ ": " ++ err.message)`)
-	case "error":
-		stageQ := `"` + sc.Expect.Stage + `"`
-		msgQ := `"` + sc.Expect.MessageSubstr + `"`
-		fmt.Fprintf(b, `                Ok _ ->
+                    Expect.fail (refereeStageToString err.stage ++ ": " ++ err.message)`
+
+const elmValidateMoveErrorTmpl = `                Ok _ ->
                     Expect.fail ("expected error at stage " ++ %s ++ ", got ok")
 
                 Err err ->
@@ -1421,8 +1422,26 @@ func elmValidateMove(b *strings.Builder, sc Scenario, turnComplete bool) {
                     else if not (String.contains %s err.message) then
                         Expect.fail ("message substring " ++ %s ++ " not found in " ++ err.message)
                     else
-                        Expect.pass`,
-			stageQ, stageQ, stageQ, msgQ, msgQ)
+                        Expect.pass`
+
+func elmValidateMove(b *strings.Builder, sc Scenario, turnComplete bool) {
+	if turnComplete {
+		fmt.Fprintf(b, elmValidateMoveTurnCompleteTmpl, elmStacks(sc.Board, "                    "))
+	} else {
+		fmt.Fprintf(b, elmValidateMoveGameMoveTmpl,
+			elmStacks(sc.Board, "                        "),
+			elmStacks(sc.Removed, "                        "),
+			elmStacks(sc.Added, "                        "),
+			elmHandCards(sc.HandPlayed),
+		)
+	}
+	switch sc.Expect.Kind {
+	case "ok":
+		b.WriteString(elmValidateMoveOk)
+	case "error":
+		stageQ := `"` + sc.Expect.Stage + `"`
+		msgQ := `"` + sc.Expect.MessageSubstr + `"`
+		fmt.Fprintf(b, elmValidateMoveErrorTmpl, stageQ, stageQ, stageQ, msgQ, msgQ)
 	}
 }
 
