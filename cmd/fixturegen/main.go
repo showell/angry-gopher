@@ -1375,6 +1375,26 @@ func elmAgentStackLit(s Stack) string {
 
 // elmEnumerateMoves emits a test body that builds the
 // scenario's 4-bucket state, walks the enumerator, and
+const elmEnumerateMovesTmpl = `            let
+                state : Buckets
+                state =
+                    { helper = %s
+                    , trouble = %s
+                    , growing = %s
+                    , complete = %s
+                    }
+
+                moves =
+                    AgentEnumerator.enumerateMoves state
+            in
+`
+
+const elmEnumerateMovesCheckTmpl = `            if List.any (\( m, _ ) -> %s) moves then
+                Expect.pass
+
+            else
+                Expect.fail ("no %s move yielded; got " ++ String.fromInt (List.length moves) ++ " moves")`
+
 // asserts at least one yielded move matches the
 // expect.yields type. Scenarios whose only assertion is
 // narrate_contains / hint_contains compile to Expect.pass
@@ -1388,13 +1408,12 @@ func elmEnumerateMoves(b *strings.Builder, sc Scenario) {
 		return
 	}
 	matcher := elmMoveMatcher(yields)
-	fmt.Fprintf(b, "            let\n                state : Buckets\n                state =\n                    { helper = %s\n                    , trouble = %s\n                    , growing = %s\n                    , complete = %s\n                    }\n\n                moves =\n                    AgentEnumerator.enumerateMoves state\n            in\n",
+	fmt.Fprintf(b, elmEnumerateMovesTmpl,
 		elmAgentStacks(sc.Helper, "                        "),
 		elmAgentStacks(sc.Trouble, "                        "),
 		elmAgentStacks(sc.Growing, "                        "),
 		elmAgentStacks(sc.Complete, "                        "))
-	fmt.Fprintf(b, "            if List.any (\\( m, _ ) -> %s) moves then\n                Expect.pass\n\n            else\n                Expect.fail (\"no %s move yielded; got \" ++ String.fromInt (List.length moves) ++ \" moves\")",
-		matcher, yields)
+	fmt.Fprintf(b, elmEnumerateMovesCheckTmpl, matcher, yields)
 }
 
 // elmSolve emits a test body that builds the scenario's
