@@ -40,6 +40,9 @@ import (
 //
 // 3. One op, one emitter. The Elm emitter function for op X reads
 //    only ExpectX. No shared emit paths that need op-kind guards.
+//    When a hand-written Elm test is fully superseded by DSL scenarios,
+//    mark it `-- SUPERSEDED by <dsl-file>.dsl` at the top so future
+//    deletion is safe without a full re-audit.
 //
 // 4. Be kind to the Elm compiler. Emitters should NOT inline large
 //    record literals (Card, CardStack, etc.) as compile-time
