@@ -36,6 +36,7 @@ import Game.Rules.StackType as StackType
 import Game.Strategy.Hint as Hint
 import Game.WireAction as WA exposing (WireAction)
 import Main.Apply as Apply
+import Main.Gesture as Gesture
 import Main.Msg as Msg
 import Main.Play as Play
 import Main.State as State
@@ -1645,6 +1646,186 @@ deckIdentityMismatchInRemove =
                         Expect.fail ("message substring " ++ "not on the board" ++ " not found in " ++ err.message)
                     else
                         Expect.pass
+
+
+dragInvariantBoardDragInitialFloater : Test
+dragInvariantBoardDragInitialFloater =
+    test "drag_invariant_board_drag_initial_floater" <|
+        \_ ->
+            let
+                stack =
+                    { boardCards = [ boardCard "2C1", boardCard "3D1", boardCard "4C1" ], loc = { top = 200, left = 100 } }
+
+                base =
+                    State.baseModel
+
+                model =
+                    { base | board = [ stack ] }
+
+                ( afterDown, _ ) =
+                    Gesture.startBoardCardDrag
+                        { stack = stack, cardIndex = 0 }
+                        { x = 410, y = 310 }
+                        0
+                        model
+            in
+            case afterDown.drag of
+                State.Dragging info ->
+                    Expect.equal { x = 100, y = 200 } info.floaterTopLeft
+
+                _ ->
+                    Expect.fail "expected Dragging state"
+
+
+dragInvariantBoardDragPathFrame : Test
+dragInvariantBoardDragPathFrame =
+    test "drag_invariant_board_drag_path_frame" <|
+        \_ ->
+            let
+                stack =
+                    { boardCards = [ boardCard "2C1", boardCard "3D1", boardCard "4C1" ], loc = { top = 200, left = 100 } }
+
+                base =
+                    State.baseModel
+
+                model =
+                    { base | board = [ stack ] }
+
+                ( afterDown, _ ) =
+                    Gesture.startBoardCardDrag
+                        { stack = stack, cardIndex = 0 }
+                        { x = 410, y = 310 }
+                        0
+                        model
+            in
+            case afterDown.drag of
+                State.Dragging info ->
+                    Expect.equal State.BoardFrame info.pathFrame
+
+                _ ->
+                    Expect.fail "expected Dragging state"
+
+
+dragInvariantFloaterShift : Test
+dragInvariantFloaterShift =
+    test "drag_invariant_floater_shift" <|
+        \_ ->
+            let
+                stack =
+                    { boardCards = [ boardCard "2C1", boardCard "3D1", boardCard "4C1" ], loc = { top = 200, left = 100 } }
+
+                base =
+                    State.baseModel
+
+                model =
+                    { base | board = [ stack ] }
+
+                mousedownClient =
+                    { x = 540, y = 310 }
+
+                ( afterDown, _ ) =
+                    Gesture.startBoardCardDrag
+                        { stack = stack, cardIndex = 2 }
+                        mousedownClient
+                        0
+                        model
+
+                delta =
+                    { x = 20, y = -5 }
+
+                ( afterMove, _ ) =
+                    Play.mouseMove
+                        { x = mousedownClient.x + delta.x, y = mousedownClient.y + delta.y }
+                        100
+                        afterDown
+            in
+            case ( afterDown.drag, afterMove.drag ) of
+                ( State.Dragging before, State.Dragging after ) ->
+                    Expect.equal
+                        { x = before.floaterTopLeft.x + delta.x
+                        , y = before.floaterTopLeft.y + delta.y
+                        }
+                        after.floaterTopLeft
+            
+                _ ->
+                    Expect.fail "expected both states to be Dragging"
+
+
+dragInvariantGrabPointInvariant : Test
+dragInvariantGrabPointInvariant =
+    test "drag_invariant_grab_point_invariant" <|
+        \_ ->
+            let
+                stack =
+                    { boardCards = [ boardCard "2C1", boardCard "3D1", boardCard "4C1" ], loc = { top = 200, left = 100 } }
+
+                base =
+                    State.baseModel
+
+                model =
+                    { base | board = [ stack ] }
+
+                delta =
+                    { x = 15, y = 8 }
+
+                shiftFor down =
+                    let
+                        ( afterDown, _ ) =
+                            Gesture.startBoardCardDrag
+                                { stack = stack, cardIndex = 0 }
+                                down
+                                0
+                                model
+
+                        ( afterMove, _ ) =
+                            Play.mouseMove
+                                { x = down.x + delta.x, y = down.y + delta.y }
+                                100
+                                afterDown
+                    in
+                    case ( afterDown.drag, afterMove.drag ) of
+                        ( State.Dragging before, State.Dragging after ) ->
+                            Just
+                                { x = after.floaterTopLeft.x - before.floaterTopLeft.x
+                                , y = after.floaterTopLeft.y - before.floaterTopLeft.y
+                                }
+            
+                        _ ->
+                            Nothing
+            in
+            Expect.equal (shiftFor { x = 410, y = 310 }) (shiftFor { x = 500, y = 320 })
+
+
+dragInvariantHandDragPathFrame : Test
+dragInvariantHandDragPathFrame =
+    test "drag_invariant_hand_drag_path_frame" <|
+        \_ ->
+            let
+                card =
+                    parseCard "6H1"
+
+                hc =
+                    { card = card, state = HandNormal }
+
+                base =
+                    State.baseModel
+
+                model =
+                    State.setActiveHand { handCards = [ hc ] } base
+
+                ( afterDown, _ ) =
+                    Gesture.startHandDrag
+                        card
+                        { x = 50, y = 120 }
+                        0
+                        model
+            in
+            case afterDown.drag of
+                State.Dragging info ->
+                    Expect.equal State.ViewportFrame info.pathFrame
+
+                _ ->
+                    Expect.fail "expected Dragging state"
 
 
 engulfGrowing2partialIntoLegalRun : Test
@@ -5780,6 +5961,11 @@ suite =
         , corpusSid146
         , corpusSid148
         , deckIdentityMismatchInRemove
+        , dragInvariantBoardDragInitialFloater
+        , dragInvariantBoardDragPathFrame
+        , dragInvariantFloaterShift
+        , dragInvariantGrabPointInvariant
+        , dragInvariantHandDragPathFrame
         , engulfGrowing2partialIntoLegalRun
         , extra001JCJDp
         , extra002JCJDp

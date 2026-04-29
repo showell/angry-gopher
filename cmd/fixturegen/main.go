@@ -68,7 +68,15 @@ type Scenario struct {
 	// Undo-walkthrough op (`undo_walkthrough`).
 	Steps            []WalkthroughStep
 	ExpectFinalBoard []Stack // expect_final_board: — full board state after all steps
-	Expect           Expectation
+	// Drag-invariant ops (`floater_top_left`, `path_frame`).
+	DragCardIndex   int    // card_index: N
+	MousedownPoint  *XY    // mousedown: (x, y)
+	MousemoveDelta  *XY    // mousemove_delta: (dx, dy)
+	MousedownA      *XY    // mousedown_a: (x, y)
+	MousedownB      *XY    // mousedown_b: (x, y)
+	MousedownDelta  *XY    // delta: (dx, dy)
+	DragHandCard    string // hand_card: <token>
+	Expect          Expectation
 }
 
 // WalkthroughStep is one step in an `undo_walkthrough` scenario.
@@ -104,6 +112,12 @@ type ReplayAction struct {
 // find_open_loc scenarios.
 type Loc struct {
 	Top, Left int
+}
+
+// XY is a (x, y) cursor-point pair used by drag-invariant
+// scenario fields (mousedown, mousemove_delta, etc.).
+type XY struct {
+	X, Y int
 }
 
 // ExpectBase covers fields that are shared across multiple ops:
@@ -146,6 +160,18 @@ type ExpectGeometry struct {
 	StackHeight         *int   // expect: stack_height: N
 }
 
+// ExpectDragFloater holds expectations for the `floater_top_left` op.
+type ExpectDragFloater struct {
+	ShiftEqualsDelta   bool // shift_equals_delta: true — before + delta == after
+	GrabPointInvariant bool // grab_point_invariant: true — shift(downA) == shift(downB)
+}
+
+// ExpectDragPathFrame holds expectations for the `path_frame` op.
+type ExpectDragPathFrame struct {
+	Frame          string // frame: BoardFrame|ViewportFrame
+	InitialFloater *XY    // initial_floater_at: (x, y)
+}
+
 // ExpectClickAgent holds expectations for the `click_agent_play` op.
 type ExpectClickAgent struct {
 	ReplayStarted    *bool  // expect: replay_started: true | false
@@ -165,11 +191,13 @@ type ExpectReplay struct {
 // shared across multiple ops.
 type Expectation struct {
 	ExpectBase
-	Planner    ExpectPlanner
-	Solve      ExpectSolve
-	Geometry   ExpectGeometry
-	ClickAgent ExpectClickAgent
-	Replay     ExpectReplay
+	Planner      ExpectPlanner
+	Solve        ExpectSolve
+	Geometry     ExpectGeometry
+	ClickAgent   ExpectClickAgent
+	Replay       ExpectReplay
+	DragFloater  ExpectDragFloater
+	DragPathFrame ExpectDragPathFrame
 }
 
 // ExpectedSuggestion — one row inside an `expect: suggestions`
@@ -313,6 +341,21 @@ var opRegistry = []OpKind{
 		Name:    "stack_height_constant",
 		Elm:     true,
 		EmitElm: elmStackHeightConstant,
+	},
+	{
+		// Elm-only: no Python drag layer. Asserts floaterTopLeft
+		// shifts by exactly the cursor delta on mousemove,
+		// regardless of grab point.
+		Name:    "floater_top_left",
+		Elm:     true,
+		EmitElm: elmFloaterTopLeft,
+	},
+	{
+		// Elm-only: no Python drag layer. Asserts pathFrame is
+		// set correctly on mousedown for each drag origin type.
+		Name:    "path_frame",
+		Elm:     true,
+		EmitElm: elmPathFrame,
 	},
 }
 
@@ -504,6 +547,7 @@ import Game.Rules.StackType as StackType
 import Game.Strategy.Hint as Hint
 import Game.WireAction as WA exposing (WireAction)
 import Main.Apply as Apply
+import Main.Gesture as Gesture
 import Main.Msg as Msg
 import Main.Play as Play
 import Main.State as State
@@ -1414,6 +1458,192 @@ func elmStackHeightConstant(b *strings.Builder, sc Scenario) {
 }
 
 
+// elmStackVar emits a single-stack `let` binding named `stack`
+// from sc.Board[0]. Used by both drag-invariant emitters, which
+// always operate on exactly one stack.
+func elmStackVar(b *strings.Builder, sc Scenario, ind string) {
+	if len(sc.Board) == 0 {
+		fmt.Fprintf(b, "%s    stack =\n%s        Debug.todo \"floater_top_left/path_frame scenario missing board:\"\n\n", ind, ind)
+		return
+	}
+	s := sc.Board[0]
+	fmt.Fprintf(b, "%s    stack =\n%s        %s\n\n", ind, ind, elmStackLit(s))
+}
+
+
+// elmFloaterTopLeft emits a test body for the `floater_top_left`
+// op. Two sub-cases are distinguished by which ExpectDragFloater
+// field is set:
+//
+//   - ShiftEqualsDelta: assert before.floaterTopLeft + delta ==
+//     after.floaterTopLeft after one mousemove.
+//   - GrabPointInvariant: assert that two distinct grab points
+//     produce the same floater shift for the same delta.
+func elmFloaterTopLeft(b *strings.Builder, sc Scenario) {
+	ind := "            " // 12 spaces — inside test thunk
+	df := sc.Expect.DragFloater
+
+	if df.ShiftEqualsDelta {
+		if sc.MousedownPoint == nil || sc.MousemoveDelta == nil {
+			b.WriteString(ind + "Expect.fail \"floater_top_left shift_equals_delta scenario missing mousedown or mousemove_delta\"")
+			return
+		}
+		md := sc.MousedownPoint
+		dlt := sc.MousemoveDelta
+		b.WriteString(ind + "let\n")
+		elmStackVar(b, sc, ind)
+		fmt.Fprintf(b, "%s    base =\n%s        State.baseModel\n\n", ind, ind)
+		fmt.Fprintf(b, "%s    model =\n%s        { base | board = [ stack ] }\n\n", ind, ind)
+		fmt.Fprintf(b, "%s    mousedownClient =\n%s        { x = %d, y = %d }\n\n", ind, ind, md.X, md.Y)
+		fmt.Fprintf(b, "%s    ( afterDown, _ ) =\n%s        Gesture.startBoardCardDrag\n%s            { stack = stack, cardIndex = %d }\n%s            mousedownClient\n%s            0\n%s            model\n\n",
+			ind, ind, ind, sc.DragCardIndex, ind, ind, ind)
+		fmt.Fprintf(b, "%s    delta =\n%s        { x = %d, y = %d }\n\n", ind, ind, dlt.X, dlt.Y)
+		fmt.Fprintf(b, "%s    ( afterMove, _ ) =\n%s        Play.mouseMove\n%s            { x = mousedownClient.x + delta.x, y = mousedownClient.y + delta.y }\n%s            100\n%s            afterDown\n", ind, ind, ind, ind, ind)
+		b.WriteString(ind + "in\n")
+		b.WriteString(ind + "case ( afterDown.drag, afterMove.drag ) of\n")
+		b.WriteString(ind + "    ( State.Dragging before, State.Dragging after ) ->\n")
+		b.WriteString(ind + "        Expect.equal\n")
+		b.WriteString(ind + "            { x = before.floaterTopLeft.x + delta.x\n")
+		b.WriteString(ind + "            , y = before.floaterTopLeft.y + delta.y\n")
+		b.WriteString(ind + "            }\n")
+		b.WriteString(ind + "            after.floaterTopLeft\n")
+		b.WriteString(ind + "\n")
+		b.WriteString(ind + "    _ ->\n")
+		b.WriteString(ind + "        Expect.fail \"expected both states to be Dragging\"")
+		return
+	}
+
+	if df.GrabPointInvariant {
+		if sc.MousedownA == nil || sc.MousedownB == nil || sc.MousedownDelta == nil {
+			b.WriteString(ind + "Expect.fail \"floater_top_left grab_point_invariant scenario missing mousedown_a, mousedown_b, or delta\"")
+			return
+		}
+		a := sc.MousedownA
+		bpt := sc.MousedownB
+		dlt := sc.MousedownDelta
+		b.WriteString(ind + "let\n")
+		elmStackVar(b, sc, ind)
+		fmt.Fprintf(b, "%s    base =\n%s        State.baseModel\n\n", ind, ind)
+		fmt.Fprintf(b, "%s    model =\n%s        { base | board = [ stack ] }\n\n", ind, ind)
+		fmt.Fprintf(b, "%s    delta =\n%s        { x = %d, y = %d }\n\n", ind, ind, dlt.X, dlt.Y)
+		b.WriteString(ind + "    shiftFor down =\n")
+		b.WriteString(ind + "        let\n")
+		b.WriteString(ind + "            ( afterDown, _ ) =\n")
+		b.WriteString(ind + "                Gesture.startBoardCardDrag\n")
+		b.WriteString(ind + "                    { stack = stack, cardIndex = 0 }\n")
+		b.WriteString(ind + "                    down\n")
+		b.WriteString(ind + "                    0\n")
+		b.WriteString(ind + "                    model\n\n")
+		b.WriteString(ind + "            ( afterMove, _ ) =\n")
+		b.WriteString(ind + "                Play.mouseMove\n")
+		b.WriteString(ind + "                    { x = down.x + delta.x, y = down.y + delta.y }\n")
+		b.WriteString(ind + "                    100\n")
+		b.WriteString(ind + "                    afterDown\n")
+		b.WriteString(ind + "        in\n")
+		b.WriteString(ind + "        case ( afterDown.drag, afterMove.drag ) of\n")
+		b.WriteString(ind + "            ( State.Dragging before, State.Dragging after ) ->\n")
+		b.WriteString(ind + "                Just\n")
+		b.WriteString(ind + "                    { x = after.floaterTopLeft.x - before.floaterTopLeft.x\n")
+		b.WriteString(ind + "                    , y = after.floaterTopLeft.y - before.floaterTopLeft.y\n")
+		b.WriteString(ind + "                    }\n")
+		b.WriteString(ind + "\n")
+		b.WriteString(ind + "            _ ->\n")
+		b.WriteString(ind + "                Nothing\n")
+		fmt.Fprintf(b, "%sin\n", ind)
+		fmt.Fprintf(b, "%sExpect.equal (shiftFor { x = %d, y = %d }) (shiftFor { x = %d, y = %d })",
+			ind, a.X, a.Y, bpt.X, bpt.Y)
+		return
+	}
+
+	b.WriteString(ind + "Expect.fail \"floater_top_left scenario missing shift_equals_delta or grab_point_invariant\"")
+}
+
+
+// elmPathFrame emits a test body for the `path_frame` op.
+// Three sub-cases are distinguished by ExpectDragPathFrame:
+//
+//   - Frame set: assert info.pathFrame == BoardFrame|ViewportFrame.
+//     For hand drags (DragHandCard set) it uses Gesture.startHandDrag;
+//     otherwise Gesture.startBoardCardDrag.
+//   - InitialFloater set: assert info.floaterTopLeft == (x, y)
+//     (always a board drag).
+func elmPathFrame(b *strings.Builder, sc Scenario) {
+	ind := "            " // 12 spaces — inside test thunk
+	dpf := sc.Expect.DragPathFrame
+
+	isHandDrag := sc.DragHandCard != ""
+
+	// Build the shared let-block open
+	b.WriteString(ind + "let\n")
+
+	if isHandDrag {
+		// Hand-drag setup: parse the hand card, build a one-card hand.
+		c, _ := parseCard(sc.DragHandCard)
+		cardToken := elmCompactCard(c)
+		fmt.Fprintf(b, "%s    card =\n%s        parseCard %s\n\n", ind, ind, cardToken)
+		fmt.Fprintf(b, "%s    hc =\n%s        { card = card, state = HandNormal }\n\n", ind, ind)
+		fmt.Fprintf(b, "%s    base =\n%s        State.baseModel\n\n", ind, ind)
+		fmt.Fprintf(b, "%s    model =\n%s        State.setActiveHand { handCards = [ hc ] } base\n\n", ind, ind)
+	} else {
+		elmStackVar(b, sc, ind)
+		fmt.Fprintf(b, "%s    base =\n%s        State.baseModel\n\n", ind, ind)
+		fmt.Fprintf(b, "%s    model =\n%s        { base | board = [ stack ] }\n\n", ind, ind)
+	}
+
+	// Emit the drag start call.
+	if isHandDrag {
+		md := sc.MousedownPoint
+		if md == nil {
+			b.WriteString(ind + "    _ =\n" + ind + "        Debug.todo \"path_frame hand-drag scenario missing mousedown\"\n")
+		} else {
+			fmt.Fprintf(b, "%s    ( afterDown, _ ) =\n%s        Gesture.startHandDrag\n%s            card\n%s            { x = %d, y = %d }\n%s            0\n%s            model\n",
+				ind, ind, ind, ind, md.X, md.Y, ind, ind)
+		}
+	} else {
+		md := sc.MousedownPoint
+		if md == nil {
+			b.WriteString(ind + "    _ =\n" + ind + "        Debug.todo \"path_frame board-drag scenario missing mousedown\"\n")
+		} else {
+			fmt.Fprintf(b, "%s    ( afterDown, _ ) =\n%s        Gesture.startBoardCardDrag\n%s            { stack = stack, cardIndex = %d }\n%s            { x = %d, y = %d }\n%s            0\n%s            model\n",
+				ind, ind, ind, sc.DragCardIndex, ind, md.X, md.Y, ind, ind)
+		}
+	}
+
+	b.WriteString(ind + "in\n")
+
+	// Emit the assertion.
+	if dpf.InitialFloater != nil {
+		fl := dpf.InitialFloater
+		b.WriteString(ind + "case afterDown.drag of\n")
+		b.WriteString(ind + "    State.Dragging info ->\n")
+		fmt.Fprintf(b, "%s        Expect.equal { x = %d, y = %d } info.floaterTopLeft\n\n", ind, fl.X, fl.Y)
+		b.WriteString(ind + "    _ ->\n")
+		b.WriteString(ind + "        Expect.fail \"expected Dragging state\"")
+		return
+	}
+
+	if dpf.Frame != "" {
+		var frameExpr string
+		switch dpf.Frame {
+		case "BoardFrame":
+			frameExpr = "State.BoardFrame"
+		case "ViewportFrame":
+			frameExpr = "State.ViewportFrame"
+		default:
+			frameExpr = "Debug.todo \"unknown pathFrame: " + dpf.Frame + "\""
+		}
+		b.WriteString(ind + "case afterDown.drag of\n")
+		b.WriteString(ind + "    State.Dragging info ->\n")
+		fmt.Fprintf(b, "%s        Expect.equal %s info.pathFrame\n\n", ind, frameExpr)
+		b.WriteString(ind + "    _ ->\n")
+		b.WriteString(ind + "        Expect.fail \"expected Dragging state\"")
+		return
+	}
+
+	b.WriteString(ind + "Expect.fail \"path_frame scenario missing frame or initial_floater_at\"")
+}
+
+
 const elmHintInvariantTmpl = `            let
                 handCards =
                     %s
@@ -2188,6 +2418,49 @@ func applyScalarField(sc *Scenario, key, val string, ln int, path string) error 
 			return fmt.Errorf("%s:%d: card_count: %w", path, ln, err)
 		}
 		sc.CardCount = n
+	// --- drag-invariant ops (floater_top_left, path_frame) ---
+	case "card_index":
+		n, err := atoi(val)
+		if err != nil {
+			return fmt.Errorf("%s:%d: card_index: %w", path, ln, err)
+		}
+		sc.DragCardIndex = n
+	case "mousedown":
+		p, err := parseXY(val)
+		if err != nil {
+			return fmt.Errorf("%s:%d: mousedown: %w", path, ln, err)
+		}
+		sc.MousedownPoint = &p
+	case "mousemove_delta":
+		p, err := parseXY(val)
+		if err != nil {
+			return fmt.Errorf("%s:%d: mousemove_delta: %w", path, ln, err)
+		}
+		sc.MousemoveDelta = &p
+	case "mousedown_a":
+		p, err := parseXY(val)
+		if err != nil {
+			return fmt.Errorf("%s:%d: mousedown_a: %w", path, ln, err)
+		}
+		sc.MousedownA = &p
+	case "mousedown_b":
+		p, err := parseXY(val)
+		if err != nil {
+			return fmt.Errorf("%s:%d: mousedown_b: %w", path, ln, err)
+		}
+		sc.MousedownB = &p
+	case "delta":
+		p, err := parseXY(val)
+		if err != nil {
+			return fmt.Errorf("%s:%d: delta: %w", path, ln, err)
+		}
+		sc.MousedownDelta = &p
+	case "hand_card":
+		_, err := parseCard(val)
+		if err != nil {
+			return fmt.Errorf("%s:%d: hand_card: %w", path, ln, err)
+		}
+		sc.DragHandCard = val
 	case "expect":
 		sc.Expect.Kind = val
 		if val == "no_plan" {
@@ -2468,6 +2741,28 @@ func parseExpectBlock(e *Expectation, children []line, path string) error {
 					return fmt.Errorf("%s:%d: final_board_victory: %w", path, l.lineNum, err)
 				}
 				e.Replay.FinalBoardVictory = &v
+			// --- floater_top_left (DragFloater) ---
+			case "shift_equals_delta":
+				v, err := parseBool(val)
+				if err != nil {
+					return fmt.Errorf("%s:%d: shift_equals_delta: %w", path, l.lineNum, err)
+				}
+				e.DragFloater.ShiftEqualsDelta = v
+			case "grab_point_invariant":
+				v, err := parseBool(val)
+				if err != nil {
+					return fmt.Errorf("%s:%d: grab_point_invariant: %w", path, l.lineNum, err)
+				}
+				e.DragFloater.GrabPointInvariant = v
+			// --- path_frame (DragPathFrame) ---
+			case "frame":
+				e.DragPathFrame.Frame = val
+			case "initial_floater_at":
+				p, err := parseXY(val)
+				if err != nil {
+					return fmt.Errorf("%s:%d: initial_floater_at: %w", path, l.lineNum, err)
+				}
+				e.DragPathFrame.InitialFloater = &p
 			default:
 				return fmt.Errorf("%s:%d: unknown expect field %q", path, l.lineNum, key)
 			}
@@ -2919,6 +3214,25 @@ func parseLoc(s string) (Loc, error) {
 		return Loc{}, fmt.Errorf("non-integer in loc")
 	}
 	return Loc{Top: top, Left: left}, nil
+}
+
+// parseXY parses a "(x, y)" cursor-point string.
+func parseXY(s string) (XY, error) {
+	t := strings.TrimSpace(s)
+	if !strings.HasPrefix(t, "(") || !strings.HasSuffix(t, ")") {
+		return XY{}, fmt.Errorf("expected (x, y) form")
+	}
+	body := t[1 : len(t)-1]
+	parts := strings.Split(body, ",")
+	if len(parts) != 2 {
+		return XY{}, fmt.Errorf("expected two integers")
+	}
+	x, err1 := atoi(strings.TrimSpace(parts[0]))
+	y, err2 := atoi(strings.TrimSpace(parts[1]))
+	if err1 != nil || err2 != nil {
+		return XY{}, fmt.Errorf("non-integer in xy")
+	}
+	return XY{X: x, Y: y}, nil
 }
 
 
