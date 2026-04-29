@@ -45,7 +45,12 @@ SKIP_DIRS = {
 # Skip files matching any of these patterns.
 SKIP_BASENAME_RE = re.compile(r"(\.min\.(js|css)|\.pb\.go|^elm\.js$)")
 
-GENERATED_MARKER_RE = re.compile(r"GENERATED.*DO NOT EDIT", re.IGNORECASE)
+GENERATED_MARKER_RE = re.compile(
+    r"GENERATED.*DO NOT EDIT"           # standard generated-file header
+    r"|^\(function\(scope\)\{"          # Elm-compiled JS bundle
+    r"|^/\*\* @license\b",              # minified/compiled JS preamble
+    re.IGNORECASE,
+)
 
 TODO_RE = re.compile(r"\b(?:TODO|FIXME|HACK|XXX)\b")
 ERR_RE = re.compile(r"^\s*if err != nil\s*\{")
