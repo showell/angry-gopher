@@ -2965,6 +2965,432 @@ geometryOverlap =
                         Expect.pass
 
 
+gestureFloaterOverWingLeftFires : Test
+gestureFloaterOverWingLeftFires =
+    test "gesture_floater_over_wing_left_fires" <|
+        \_ ->
+            let
+                sourceStack =
+                    { boardCards = [ boardCard "2C1", boardCard "3D1", boardCard "4C1" ], loc = { top = 20, left = 20 } }
+
+                source =
+                    State.FromBoardStack sourceStack
+
+                targetStack =
+                    { boardCards = [ boardCard "5H1", boardCard "6S1", boardCard "7H1" ], loc = { top = 20, left = 300 } }
+
+                floater =
+                    { x = 201, y = 20 }
+
+                wing =
+                    { target = targetStack, side = BoardActions.Left }
+
+                info =
+                    { source = source
+                    , cursor = { x = 0, y = 0 }
+                    , originalCursor = { x = 0, y = 0 }
+                    , floaterTopLeft = floater
+                    , wings = [ wing ]
+                    , hoveredWing = Nothing
+                    , boardRect = Nothing
+                    , clickIntent = Nothing
+                    , gesturePath = []
+                    , pathFrame = State.BoardFrame
+                    }
+
+            in
+            Gesture.floaterOverWing info
+                |> Expect.equal (Just wing)
+
+
+gestureFloaterOverWingPastTolerance : Test
+gestureFloaterOverWingPastTolerance =
+    test "gesture_floater_over_wing_past_tolerance" <|
+        \_ ->
+            let
+                sourceStack =
+                    { boardCards = [ boardCard "2C1", boardCard "3D1", boardCard "4C1" ], loc = { top = 20, left = 20 } }
+
+                source =
+                    State.FromBoardStack sourceStack
+
+                targetStack =
+                    { boardCards = [ boardCard "5H1", boardCard "6S1", boardCard "7H1" ], loc = { top = 20, left = 300 } }
+
+                floater =
+                    { x = 437, y = 20 }
+
+                wing =
+                    { target = targetStack, side = BoardActions.Right }
+
+                info =
+                    { source = source
+                    , cursor = { x = 0, y = 0 }
+                    , originalCursor = { x = 0, y = 0 }
+                    , floaterTopLeft = floater
+                    , wings = [ wing ]
+                    , hoveredWing = Nothing
+                    , boardRect = Nothing
+                    , clickIntent = Nothing
+                    , gesturePath = []
+                    , pathFrame = State.BoardFrame
+                    }
+
+            in
+            Gesture.floaterOverWing info
+                |> Expect.equal Nothing
+
+
+gestureFloaterOverWingRightFires : Test
+gestureFloaterOverWingRightFires =
+    test "gesture_floater_over_wing_right_fires" <|
+        \_ ->
+            let
+                sourceStack =
+                    { boardCards = [ boardCard "2C1", boardCard "3D1", boardCard "4C1" ], loc = { top = 20, left = 20 } }
+
+                source =
+                    State.FromBoardStack sourceStack
+
+                targetStack =
+                    { boardCards = [ boardCard "5H1", boardCard "6S1", boardCard "7H1" ], loc = { top = 20, left = 300 } }
+
+                floater =
+                    { x = 399, y = 20 }
+
+                wing =
+                    { target = targetStack, side = BoardActions.Right }
+
+                info =
+                    { source = source
+                    , cursor = { x = 0, y = 0 }
+                    , originalCursor = { x = 0, y = 0 }
+                    , floaterTopLeft = floater
+                    , wings = [ wing ]
+                    , hoveredWing = Nothing
+                    , boardRect = Nothing
+                    , clickIntent = Nothing
+                    , gesturePath = []
+                    , pathFrame = State.BoardFrame
+                    }
+
+            in
+            Gesture.floaterOverWing info
+                |> Expect.equal (Just wing)
+
+
+gestureFloaterOverWingWayOff : Test
+gestureFloaterOverWingWayOff =
+    test "gesture_floater_over_wing_way_off" <|
+        \_ ->
+            let
+                sourceStack =
+                    { boardCards = [ boardCard "2C1", boardCard "3D1", boardCard "4C1" ], loc = { top = 20, left = 20 } }
+
+                source =
+                    State.FromBoardStack sourceStack
+
+                targetStack =
+                    { boardCards = [ boardCard "5H1", boardCard "6S1", boardCard "7H1" ], loc = { top = 20, left = 300 } }
+
+                floater =
+                    { x = 50, y = 400 }
+
+                wing =
+                    { target = targetStack, side = BoardActions.Right }
+
+                info =
+                    { source = source
+                    , cursor = { x = 0, y = 0 }
+                    , originalCursor = { x = 0, y = 0 }
+                    , floaterTopLeft = floater
+                    , wings = [ wing ]
+                    , hoveredWing = Nothing
+                    , boardRect = Nothing
+                    , clickIntent = Nothing
+                    , gesturePath = []
+                    , pathFrame = State.BoardFrame
+                    }
+
+            in
+            Gesture.floaterOverWing info
+                |> Expect.equal Nothing
+
+
+gestureMergeHandCardOntoBoardWing : Test
+gestureMergeHandCardOntoBoardWing =
+    test "gesture_merge_hand_card_onto_board_wing" <|
+        \_ ->
+            let
+                handCard_ =
+                    parseCard "6H1"
+
+                source =
+                    State.FromHandCard handCard_
+
+                targetStack =
+                    { boardCards = [ boardCard "3C1", boardCard "4D1", boardCard "5C1" ], loc = { top = 200, left = 100 } }
+
+                floater =
+                    { x = 0, y = 0 }
+
+                wing =
+                    { target = targetStack, side = BoardActions.Right }
+
+                info =
+                    { source = source
+                    , cursor = { x = 0, y = 0 }
+                    , originalCursor = { x = 0, y = 0 }
+                    , floaterTopLeft = floater
+                    , wings = []
+                    , hoveredWing = Just wing
+                    , boardRect = Just { x = 300, y = 100, width = 800, height = 600 }
+                    , clickIntent = Nothing
+                    , gesturePath = []
+                    , pathFrame = State.ViewportFrame
+                    }
+
+            in
+            case Gesture.resolveGesture info of
+                Just (WA.MergeHand p) ->
+                    Expect.equal BoardActions.Right p.side
+
+                other ->
+                    Expect.fail ("expected MergeHand; got " ++ Debug.toString other)
+
+
+gestureMergeStack234Onto567Left : Test
+gestureMergeStack234Onto567Left =
+    test "gesture_merge_stack_234_onto_567_left" <|
+        \_ ->
+            let
+                sourceStack =
+                    { boardCards = [ boardCard "2C1", boardCard "3D1", boardCard "4C1" ], loc = { top = 200, left = 100 } }
+
+                source =
+                    State.FromBoardStack sourceStack
+
+                targetStack =
+                    { boardCards = [ boardCard "5H1", boardCard "6S1", boardCard "7H1" ], loc = { top = 200, left = 300 } }
+
+                floater =
+                    { x = 207, y = 200 }
+
+                wing =
+                    { target = targetStack, side = BoardActions.Left }
+
+                info =
+                    { source = source
+                    , cursor = { x = 0, y = 0 }
+                    , originalCursor = { x = 0, y = 0 }
+                    , floaterTopLeft = floater
+                    , wings = []
+                    , hoveredWing = Just wing
+                    , boardRect = Nothing
+                    , clickIntent = Nothing
+                    , gesturePath = []
+                    , pathFrame = State.BoardFrame
+                    }
+
+            in
+            case Gesture.resolveGesture info of
+                Just (WA.MergeStack p) ->
+                    Expect.equal BoardActions.Left p.side
+
+                other ->
+                    Expect.fail ("expected MergeStack; got " ++ Debug.toString other)
+
+
+gestureMergeStack567Onto234Right : Test
+gestureMergeStack567Onto234Right =
+    test "gesture_merge_stack_567_onto_234_right" <|
+        \_ ->
+            let
+                sourceStack =
+                    { boardCards = [ boardCard "5H1", boardCard "6S1", boardCard "7H1" ], loc = { top = 200, left = 300 } }
+
+                source =
+                    State.FromBoardStack sourceStack
+
+                targetStack =
+                    { boardCards = [ boardCard "2C1", boardCard "3D1", boardCard "4C1" ], loc = { top = 200, left = 100 } }
+
+                floater =
+                    { x = 193, y = 200 }
+
+                wing =
+                    { target = targetStack, side = BoardActions.Right }
+
+                info =
+                    { source = source
+                    , cursor = { x = 0, y = 0 }
+                    , originalCursor = { x = 0, y = 0 }
+                    , floaterTopLeft = floater
+                    , wings = []
+                    , hoveredWing = Just wing
+                    , boardRect = Nothing
+                    , clickIntent = Nothing
+                    , gesturePath = []
+                    , pathFrame = State.BoardFrame
+                    }
+
+            in
+            case Gesture.resolveGesture info of
+                Just (WA.MergeStack p) ->
+                    Expect.equal BoardActions.Right p.side
+
+                other ->
+                    Expect.fail ("expected MergeStack; got " ++ Debug.toString other)
+
+
+gestureMoveStackOffBoardRejected : Test
+gestureMoveStackOffBoardRejected =
+    test "gesture_move_stack_off_board_rejected" <|
+        \_ ->
+            let
+                sourceStack =
+                    { boardCards = [ boardCard "2C1", boardCard "3D1", boardCard "4C1" ], loc = { top = 200, left = 100 } }
+
+                source =
+                    State.FromBoardStack sourceStack
+
+                floater =
+                    { x = -50, y = -20 }
+
+                info =
+                    { source = source
+                    , cursor = { x = 700, y = 400 }
+                    , originalCursor = { x = 0, y = 0 }
+                    , floaterTopLeft = floater
+                    , wings = []
+                    , hoveredWing = Nothing
+                    , boardRect = Just { x = 300, y = 100, width = 800, height = 600 }
+                    , clickIntent = Nothing
+                    , gesturePath = []
+                    , pathFrame = State.BoardFrame
+                    }
+
+            in
+            Gesture.resolveGesture info
+                |> Expect.equal Nothing
+
+
+gestureMoveStackValidDrop : Test
+gestureMoveStackValidDrop =
+    test "gesture_move_stack_valid_drop" <|
+        \_ ->
+            let
+                sourceStack =
+                    { boardCards = [ boardCard "2C1", boardCard "3D1", boardCard "4C1" ], loc = { top = 200, left = 100 } }
+
+                source =
+                    State.FromBoardStack sourceStack
+
+                floater =
+                    { x = 400, y = 300 }
+
+                info =
+                    { source = source
+                    , cursor = { x = 700, y = 400 }
+                    , originalCursor = { x = 0, y = 0 }
+                    , floaterTopLeft = floater
+                    , wings = []
+                    , hoveredWing = Nothing
+                    , boardRect = Just { x = 300, y = 100, width = 800, height = 600 }
+                    , clickIntent = Nothing
+                    , gesturePath = []
+                    , pathFrame = State.BoardFrame
+                    }
+
+            in
+            case Gesture.resolveGesture info of
+                Just (WA.MoveStack p) ->
+                    Expect.all
+                        [ \_ -> Expect.equal 400 p.newLoc.left
+                        , \_ -> Expect.equal 300 p.newLoc.top
+                        ]
+                        ()
+
+                other ->
+                    Expect.fail ("expected MoveStack; got " ++ Debug.toString other)
+
+
+gesturePlaceHandDropsToBoard : Test
+gesturePlaceHandDropsToBoard =
+    test "gesture_place_hand_drops_to_board" <|
+        \_ ->
+            let
+                handCard_ =
+                    parseCard "6H1"
+
+                source =
+                    State.FromHandCard handCard_
+
+                floater =
+                    { x = 750, y = 450 }
+
+                info =
+                    { source = source
+                    , cursor = { x = 750, y = 450 }
+                    , originalCursor = { x = 0, y = 0 }
+                    , floaterTopLeft = floater
+                    , wings = []
+                    , hoveredWing = Nothing
+                    , boardRect = Just { x = 300, y = 100, width = 800, height = 600 }
+                    , clickIntent = Nothing
+                    , gesturePath = []
+                    , pathFrame = State.ViewportFrame
+                    }
+
+            in
+            case Gesture.resolveGesture info of
+                Just (WA.PlaceHand p) ->
+                    Expect.all
+                        [ \_ -> Expect.equal 450 p.loc.left
+                        , \_ -> Expect.equal 350 p.loc.top
+                        ]
+                        ()
+
+                other ->
+                    Expect.fail ("expected PlaceHand; got " ++ Debug.toString other)
+
+
+gestureSplitSurvivingClickIntent : Test
+gestureSplitSurvivingClickIntent =
+    test "gesture_split_surviving_click_intent" <|
+        \_ ->
+            let
+                sourceStack =
+                    { boardCards = [ boardCard "2C1", boardCard "3D1", boardCard "4C1", boardCard "5H1", boardCard "6S1", boardCard "7H1" ], loc = { top = 20, left = 20 } }
+
+                source =
+                    State.FromBoardStack sourceStack
+
+                floater =
+                    { x = 20, y = 20 }
+
+                info =
+                    { source = source
+                    , cursor = { x = 0, y = 0 }
+                    , originalCursor = { x = 0, y = 0 }
+                    , floaterTopLeft = floater
+                    , wings = []
+                    , hoveredWing = Nothing
+                    , boardRect = Nothing
+                    , clickIntent = Just 3
+                    , gesturePath = []
+                    , pathFrame = State.BoardFrame
+                    }
+
+            in
+            case Gesture.resolveGesture info of
+                Just (WA.Split p) ->
+                    Expect.equal 3 p.cardIndex
+
+                other ->
+                    Expect.fail ("expected Split; got " ++ Debug.toString other)
+
+
 hintDirectPlayWinsPriorityOnOpeningBoard : Test
 hintDirectPlayWinsPriorityOnOpeningBoard =
     test "hint_direct_play_wins_priority_on_opening_board" <|
@@ -6001,6 +6427,17 @@ suite =
         , geometryCrowded
         , geometryOutOfBounds
         , geometryOverlap
+        , gestureFloaterOverWingLeftFires
+        , gestureFloaterOverWingPastTolerance
+        , gestureFloaterOverWingRightFires
+        , gestureFloaterOverWingWayOff
+        , gestureMergeHandCardOntoBoardWing
+        , gestureMergeStack234Onto567Left
+        , gestureMergeStack567Onto234Right
+        , gestureMoveStackOffBoardRejected
+        , gestureMoveStackValidDrop
+        , gesturePlaceHandDropsToBoard
+        , gestureSplitSurvivingClickIntent
         , hintDirectPlayWinsPriorityOnOpeningBoard
         , hintEmptyHandNoSuggestions
         , hintInvariantDirectPlayCompleteSet
