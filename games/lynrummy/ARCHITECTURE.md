@@ -614,7 +614,11 @@ cross-language consistency checks the scripts encode.
 - [`./elm/README.md`](./elm/README.md) —
   Elm UI subsystem.
 - [`./python/README.md`](./python/README.md)
-  — Python agent subsystem.
+  — Python agent subsystem. **If you're about to edit Python,
+  read § "Agent orientation" first** — it's a 6-step checklist
+  (baseline green → plan state → layering → corpus → ergonomics →
+  validation). There's also a self-test quiz:
+  [`QUIZ_AGENT_ORIENTATION.md`](./python/QUIZ_AGENT_ORIENTATION.md).
 
 Each subsystem README lists the load-bearing modules in
 "read-this-first" order. Read the architecture doc first

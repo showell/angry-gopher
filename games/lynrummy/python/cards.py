@@ -13,7 +13,8 @@ The pure rule content that used to live here moved into the
 `rules/` subpackage on the Class-1/2 segregation migration
 (parallel to Elm's `Game/Rules/` lockdown). Card primitives,
 classification, and the legality predicates are now
-imported from `rules`.
+imported from `rules`. (Looking for the `card()` constructor or
+`Card` type? That lives in `rules/card.py`, not here.)
 
 Mirrors Elm's `canPeel` / `canPluck` / `canYank` /
 `canSteal` / `canSplitOut` inside `Enumerator.elm` — the
