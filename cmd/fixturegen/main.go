@@ -92,40 +92,70 @@ type Loc struct {
 	Top, Left int
 }
 
-type Expectation struct {
+// ExpectBase covers fields that are shared across multiple ops:
+// the kind sentinel, move-validator stage/message/board fields,
+// and build_suggestions rows.
+type ExpectBase struct {
 	Kind          string
 	HandPlayed    []Card
 	BoardAfter    []Stack
 	Stage         string
 	MessageSubstr string
 	Suggestions   []ExpectedSuggestion // expect: suggestions
-	// Planner expectations (op `enumerate_moves`).
-	Yields           string // "push" / "extract_absorb" / etc. — at least one yielded move has this type
-	NarrateContains  string // at least one yielded move's narrate() contains this substring
-	HintContains     string // at least one yielded move's hint() contains this substring
-	// Solver expectations (op `solve`).
+}
+
+// ExpectPlanner holds expectations for the `enumerate_moves` op.
+type ExpectPlanner struct {
+	Yields          string // at least one yielded move has this type
+	NarrateContains string // at least one yielded move's narrate() contains this substring
+	HintContains    string // at least one yielded move's hint() contains this substring
+}
+
+// ExpectSolve holds expectations for the `solve` op.
+type ExpectSolve struct {
 	NoPlan     bool     // expect: no_plan — assert solve returns None
-	PlanLength int      // expect: plan_length: N — assert plan has exactly N lines (-1 = not set)
-	PlanLines  []string // expect: plan_lines — assert plan describe() output matches line-by-line (snapshot)
-	// Geometry expectations (op `find_open_loc`).
-	Loc *Loc // expect: loc: (top, left) — assert findOpenLoc returns this exact loc
-	// Click-agent-play expectations (op `click_agent_play`).
+	PlanLength int      // expect: plan_length: N
+	PlanLines  []string // expect: plan_lines — snapshot match
+}
+
+// ExpectGeometry holds expectations for `find_open_loc`,
+// `validate_board_geometry`, `classify_board_geometry`, and
+// `stack_height_constant`.
+type ExpectGeometry struct {
+	Loc                 *Loc   // expect: loc: (top, left) — findOpenLoc result
+	ErrorCount          *int   // expect: error_count: N
+	AnyErrorKind        string // expect: any_error_kind: out_of_bounds|overlap|too_close
+	NoErrorKind         string // expect: no_error_kind: out_of_bounds|overlap|too_close
+	OverlapCount        *int   // expect: overlap_count: N
+	OverlapStackIndices []int  // expect: overlap_stack_indices: i j
+	GeometryStatus      string // expect: geometry_status: CleanlySpaced|Crowded|Illegal
+	StackHeight         *int   // expect: stack_height: N
+}
+
+// ExpectClickAgent holds expectations for the `click_agent_play` op.
+type ExpectClickAgent struct {
 	ReplayStarted    *bool  // expect: replay_started: true | false
-	LogAppended      *int   // expect: log_appended: N — exact entries appended to actionLog
-	AgentProgramSize *int   // expect: agent_program_size: N — Just (List of length N) or 0 = Nothing
+	LogAppended      *int   // expect: log_appended: N
+	AgentProgramSize *int   // expect: agent_program_size: N
 	StatusKind       string // expect: status_kind: inform | scold | celebrate
 	StatusContains   string // expect: status_contains: "..."
-	// Replay-invariant expectations (op `replay_invariant`).
+}
+
+// ExpectReplay holds expectations for the `replay_invariant` op.
+type ExpectReplay struct {
 	FinalBoardVictory *bool // expect: final_board_victory: true | false
-	// Board-geometry expectations (ops `validate_board_geometry` /
-	// `classify_board_geometry` / `stack_height_constant`).
-	ErrorCount          *int    // expect: error_count: N — validateBoardGeometry returns exactly N errors
-	AnyErrorKind        string  // expect: any_error_kind: out_of_bounds|overlap|too_close
-	NoErrorKind         string  // expect: no_error_kind: out_of_bounds|overlap|too_close
-	OverlapCount        *int    // expect: overlap_count: N — exactly N Overlap errors
-	OverlapStackIndices []int   // expect: overlap_stack_indices: i j — first Overlap error has these stackIndices
-	GeometryStatus      string  // expect: geometry_status: CleanlySpaced|Crowded|Illegal
-	StackHeight         *int    // expect: stack_height_40 / stack_height: N
+}
+
+// Expectation is the top-level container stored on Scenario.
+// Each op reads only its own sub-struct; the base covers fields
+// shared across multiple ops.
+type Expectation struct {
+	ExpectBase
+	Planner    ExpectPlanner
+	Solve      ExpectSolve
+	Geometry   ExpectGeometry
+	ClickAgent ExpectClickAgent
+	Replay     ExpectReplay
 }
 
 // ExpectedSuggestion — one row inside an `expect: suggestions`
@@ -888,20 +918,21 @@ func elmClickAgentPlay(b *strings.Builder, sc Scenario) {
 		first = false
 		b.WriteString(s)
 	}
-	if sc.Expect.ReplayStarted != nil {
-		emitCheck(fmt.Sprintf("\\_ -> Expect.equal %s replayStarted", elmBool(*sc.Expect.ReplayStarted)))
+	ca := sc.Expect.ClickAgent
+	if ca.ReplayStarted != nil {
+		emitCheck(fmt.Sprintf("\\_ -> Expect.equal %s replayStarted", elmBool(*ca.ReplayStarted)))
 	}
-	if sc.Expect.LogAppended != nil {
-		emitCheck(fmt.Sprintf("\\_ -> Expect.equal %d logAppended", *sc.Expect.LogAppended))
+	if ca.LogAppended != nil {
+		emitCheck(fmt.Sprintf("\\_ -> Expect.equal %d logAppended", *ca.LogAppended))
 	}
-	if sc.Expect.AgentProgramSize != nil {
-		emitCheck(fmt.Sprintf("\\_ -> Expect.equal %d programSize", *sc.Expect.AgentProgramSize))
+	if ca.AgentProgramSize != nil {
+		emitCheck(fmt.Sprintf("\\_ -> Expect.equal %d programSize", *ca.AgentProgramSize))
 	}
-	if sc.Expect.StatusKind != "" {
-		emitCheck(fmt.Sprintf("\\_ -> Expect.equal %s newModel.status.kind", elmStatusKind(sc.Expect.StatusKind)))
+	if ca.StatusKind != "" {
+		emitCheck(fmt.Sprintf("\\_ -> Expect.equal %s newModel.status.kind", elmStatusKind(ca.StatusKind)))
 	}
-	if sc.Expect.StatusContains != "" {
-		emitCheck(fmt.Sprintf("\\_ -> if String.contains %q newModel.status.text then Expect.pass else Expect.fail (\"status missing %s; got: \" ++ newModel.status.text)", sc.Expect.StatusContains, sc.Expect.StatusContains))
+	if ca.StatusContains != "" {
+		emitCheck(fmt.Sprintf("\\_ -> if String.contains %q newModel.status.text then Expect.pass else Expect.fail (\"status missing %s; got: \" ++ newModel.status.text)", ca.StatusContains, ca.StatusContains))
 	}
 	if first {
 		// No expectations supplied — at minimum verify the
@@ -999,7 +1030,7 @@ func elmReplayInvariant(b *strings.Builder, sc Scenario) {
 		elmStacks(sc.Board, "                        "),
 		elmReplaySpecList(sc.ReplayActions))
 	b.WriteString(elmReplayInvariantChecks)
-	if sc.Expect.FinalBoardVictory != nil && *sc.Expect.FinalBoardVictory {
+	if sc.Expect.Replay.FinalBoardVictory != nil && *sc.Expect.Replay.FinalBoardVictory {
 		b.WriteString(elmReplayInvariantVictoryChecks)
 	}
 	b.WriteString(elmReplayInvariantClose)
@@ -1245,14 +1276,14 @@ const elmFindOpenLocTmpl = `            let
 // the Python side. Cards in the existing stacks are shape-only;
 // findOpenLoc only reads loc + boardCards length.
 func elmFindOpenLoc(b *strings.Builder, sc Scenario) {
-	if sc.Expect.Loc == nil {
+	if sc.Expect.Geometry.Loc == nil {
 		b.WriteString("            Expect.fail \"find_open_loc scenario missing expect.loc\"")
 		return
 	}
 	fmt.Fprintf(b, elmFindOpenLocTmpl,
 		elmStacks(sc.Existing, "                        "),
 		sc.CardCount,
-		sc.Expect.Loc.Top, sc.Expect.Loc.Left)
+		sc.Expect.Geometry.Loc.Top, sc.Expect.Geometry.Loc.Left)
 }
 
 
@@ -1284,11 +1315,12 @@ func elmGeometryKindExpr(kind string) string {
 //   - OverlapCount               → count of Overlap errors == N
 //   - OverlapStackIndices        → first Overlap error has these stackIndices
 func elmValidateBoardGeometry(b *strings.Builder, sc Scenario) {
-	exp := sc.Expect
+	base := sc.Expect.ExpectBase
+	geo := sc.Expect.Geometry
 	fmt.Fprintf(b, "            let\n                errors =\n                    Game.Physics.BoardGeometry.validateBoardGeometry\n                        %s\n                        standardBounds\n            in\n",
 		elmStacks(sc.Board, "                        "))
 
-	if exp.Kind == "ok" {
+	if base.Kind == "ok" {
 		b.WriteString("            errors |> Expect.equal []")
 		return
 	}
@@ -1296,27 +1328,27 @@ func elmValidateBoardGeometry(b *strings.Builder, sc Scenario) {
 	// Build a list of checks for Expect.all.
 	var checks []string
 
-	if exp.ErrorCount != nil {
+	if geo.ErrorCount != nil {
 		checks = append(checks, fmt.Sprintf(
-			"List.length >> Expect.equal %d", *exp.ErrorCount))
+			"List.length >> Expect.equal %d", *geo.ErrorCount))
 	}
-	if exp.AnyErrorKind != "" {
-		elmKind := elmGeometryKindExpr(exp.AnyErrorKind)
+	if geo.AnyErrorKind != "" {
+		elmKind := elmGeometryKindExpr(geo.AnyErrorKind)
 		checks = append(checks, fmt.Sprintf(
 			"List.any (\\e -> e.kind == %s) >> Expect.equal True", elmKind))
 	}
-	if exp.NoErrorKind != "" {
-		elmKind := elmGeometryKindExpr(exp.NoErrorKind)
+	if geo.NoErrorKind != "" {
+		elmKind := elmGeometryKindExpr(geo.NoErrorKind)
 		checks = append(checks, fmt.Sprintf(
 			"List.any (\\e -> e.kind == %s) >> Expect.equal False", elmKind))
 	}
-	if exp.OverlapCount != nil {
+	if geo.OverlapCount != nil {
 		checks = append(checks, fmt.Sprintf(
-			"List.filter (\\e -> e.kind == Overlap) >> List.length >> Expect.equal %d", *exp.OverlapCount))
+			"List.filter (\\e -> e.kind == Overlap) >> List.length >> Expect.equal %d", *geo.OverlapCount))
 	}
-	if len(exp.OverlapStackIndices) > 0 {
-		idxStrs := make([]string, len(exp.OverlapStackIndices))
-		for i, idx := range exp.OverlapStackIndices {
+	if len(geo.OverlapStackIndices) > 0 {
+		idxStrs := make([]string, len(geo.OverlapStackIndices))
+		for i, idx := range geo.OverlapStackIndices {
 			idxStrs[i] = fmt.Sprintf("%d", idx)
 		}
 		indicesElm := "[ " + strings.Join(idxStrs, ", ") + " ]"
@@ -1343,7 +1375,7 @@ func elmValidateBoardGeometry(b *strings.Builder, sc Scenario) {
 // Game.Physics.BoardGeometry.classifyBoardGeometry and asserts
 // the result matches the expected BoardGeometryStatus constructor.
 func elmClassifyBoardGeometry(b *strings.Builder, sc Scenario) {
-	status := sc.Expect.GeometryStatus
+	status := sc.Expect.Geometry.GeometryStatus
 	if status == "" {
 		b.WriteString("            Expect.fail \"classify_board_geometry scenario missing geometry_status\"")
 		return
@@ -1441,21 +1473,22 @@ func elmBuildSuggestions(b *strings.Builder, sc Scenario) {
 		elmHandCards(sc.Hand),
 		elmStacks(sc.Board, "                        "))
 
-	fmt.Fprintf(b, elmBuildSuggestionsCountCheckTmpl, len(sc.Expect.Suggestions), len(sc.Expect.Suggestions))
+	sugs := sc.Expect.Suggestions
+	fmt.Fprintf(b, elmBuildSuggestionsCountCheckTmpl, len(sugs), len(sugs))
 	b.WriteString("\n            else\n")
-	if len(sc.Expect.Suggestions) == 0 {
+	if len(sugs) == 0 {
 		// No per-row assertions needed; count check is sufficient.
 		b.WriteString("                Expect.pass")
 		return
 	}
 	b.WriteString("                let\n")
-	for i, sug := range sc.Expect.Suggestions {
+	for i, sug := range sugs {
 		fmt.Fprintf(b, "                    want%d =\n                        { trickId = %q, handCards = %s }\n\n",
 			i, sug.TrickID, elmRawCards(sug.HandCards))
 	}
 	b.WriteString("                in\n")
 	b.WriteString("                Expect.all\n                    [")
-	for i := range sc.Expect.Suggestions {
+	for i := range sugs {
 		if i > 0 {
 			b.WriteString("\n                    ,")
 		}
@@ -1645,7 +1678,7 @@ const elmEnumerateMovesCheckTmpl = `            if List.any (\( m, _ ) -> %s) mo
 // narrate_contains / hint_contains compile to Expect.pass
 // stubs on the Elm side until those renderers port.
 func elmEnumerateMoves(b *strings.Builder, sc Scenario) {
-	yields := sc.Expect.Yields
+	yields := sc.Expect.Planner.Yields
 	if yields == "" {
 		// narrate_contains / hint_contains only — stub on Elm
 		// until the renderers port.
@@ -1710,14 +1743,15 @@ func elmSolve(b *strings.Builder, sc Scenario) {
 		elmAgentStacks(sc.Trouble, "                        "),
 		elmAgentStacks(sc.Growing, "                        "),
 		elmAgentStacks(sc.Complete, "                        "))
-	if sc.Expect.NoPlan {
+	sv := sc.Expect.Solve
+	if sv.NoPlan {
 		b.WriteString(elmSolveNoPlanCheck)
-	} else if len(sc.Expect.PlanLines) > 0 {
+	} else if len(sv.PlanLines) > 0 {
 		// Snapshot match: every line of describe(move) must
 		// equal the pinned canonical plan_lines from Python.
 		var listLits strings.Builder
 		listLits.WriteString("[ ")
-		for i, line := range sc.Expect.PlanLines {
+		for i, line := range sv.PlanLines {
 			if i > 0 {
 				listLits.WriteString(", ")
 			}
@@ -1725,8 +1759,8 @@ func elmSolve(b *strings.Builder, sc Scenario) {
 		}
 		listLits.WriteString(" ]")
 		fmt.Fprintf(b, elmSolvePlanLinesTmpl, listLits.String())
-	} else if sc.Expect.PlanLength > 0 {
-		fmt.Fprintf(b, elmSolvePlanLengthTmpl, sc.Expect.PlanLength, sc.Expect.PlanLength)
+	} else if sv.PlanLength > 0 {
+		fmt.Fprintf(b, elmSolvePlanLengthTmpl, sv.PlanLength, sv.PlanLength)
 	} else {
 		b.WriteString("            Expect.fail \"solve scenario missing expectation (no_plan or plan_length or plan_lines)\"")
 	}
@@ -1952,15 +1986,15 @@ func toJSONScenario(sc Scenario) jsonScenario {
 	}
 	js.Expect = jsonExpect{
 		Kind:            sc.Expect.Kind,
-		Yields:          sc.Expect.Yields,
-		NarrateContains: sc.Expect.NarrateContains,
-		HintContains:    sc.Expect.HintContains,
-		NoPlan:          sc.Expect.NoPlan,
-		PlanLength:      sc.Expect.PlanLength,
-		PlanLines:       sc.Expect.PlanLines,
+		Yields:          sc.Expect.Planner.Yields,
+		NarrateContains: sc.Expect.Planner.NarrateContains,
+		HintContains:    sc.Expect.Planner.HintContains,
+		NoPlan:          sc.Expect.Solve.NoPlan,
+		PlanLength:      sc.Expect.Solve.PlanLength,
+		PlanLines:       sc.Expect.Solve.PlanLines,
 	}
-	if sc.Expect.Loc != nil {
-		js.Expect.Loc = &jsonLoc{Top: sc.Expect.Loc.Top, Left: sc.Expect.Loc.Left}
+	if sc.Expect.Geometry.Loc != nil {
+		js.Expect.Loc = &jsonLoc{Top: sc.Expect.Geometry.Loc.Top, Left: sc.Expect.Geometry.Loc.Left}
 	}
 	for _, es := range sc.Expect.Suggestions {
 		js.Expect.Suggestions = append(js.Expect.Suggestions, jsonSuggestion{
@@ -2082,7 +2116,7 @@ func parseBody(name string, body []line, path string) (Scenario, error) {
 		case key == "expect":
 			sc.Expect.Kind = val
 			if val == "no_plan" {
-				sc.Expect.NoPlan = true
+				sc.Expect.Solve.NoPlan = true
 			}
 			if len(children) > 0 {
 				if err := parseExpectBlock(&sc.Expect, children, path); err != nil {
@@ -2143,7 +2177,7 @@ func applyScalarField(sc *Scenario, key, val string, ln int, path string) error 
 	case "expect":
 		sc.Expect.Kind = val
 		if val == "no_plan" {
-			sc.Expect.NoPlan = true
+			sc.Expect.Solve.NoPlan = true
 		}
 	default:
 		return fmt.Errorf("%s:%d: unknown field %q", path, ln, key)
@@ -2265,7 +2299,7 @@ func parseExpectBlock(e *Expectation, children []line, path string) error {
 		if !strings.Contains(c, ":") && (c == "ok" || c == "no_plays" || c == "play" || c == "error" || c == "suggestions" || c == "no_plan") {
 			e.Kind = c
 			if c == "no_plan" {
-				e.NoPlan = true
+				e.Solve.NoPlan = true
 			}
 			i++
 		}
@@ -2310,12 +2344,13 @@ func parseExpectBlock(e *Expectation, children []line, path string) error {
 					}
 					lines = append(lines, unquoted)
 				}
-				e.PlanLines = lines
+				e.Solve.PlanLines = lines
 			default:
 				return fmt.Errorf("%s:%d: unknown expect block %q", path, l.lineNum, key)
 			}
 		} else {
 			switch key {
+			// --- base fields (shared across multiple ops) ---
 			case "hand_played":
 				cards, err := parseCards(val)
 				if err != nil {
@@ -2332,76 +2367,44 @@ func parseExpectBlock(e *Expectation, children []line, path string) error {
 					return fmt.Errorf("%s:%d: suggestion: %w", path, l.lineNum, err)
 				}
 				e.Suggestions = append(e.Suggestions, sug)
+			// --- enumerate_moves (Planner) ---
 			case "yields":
-				e.Yields = val
+				e.Planner.Yields = val
 			case "narrate_contains":
-				e.NarrateContains = val
+				e.Planner.NarrateContains = val
 			case "hint_contains":
-				e.HintContains = val
+				e.Planner.HintContains = val
+			// --- solve (Solve) ---
 			case "plan_length":
 				n := 0
 				if _, err := fmt.Sscanf(val, "%d", &n); err != nil {
 					return fmt.Errorf("%s:%d: plan_length: %w", path, l.lineNum, err)
 				}
-				e.PlanLength = n
+				e.Solve.PlanLength = n
+			// --- find_open_loc / validate_board_geometry /
+			//     classify_board_geometry / stack_height_constant (Geometry) ---
 			case "loc":
 				loc, err := parseLoc(val)
 				if err != nil {
 					return fmt.Errorf("%s:%d: loc: %w", path, l.lineNum, err)
 				}
-				e.Loc = &loc
-			case "replay_started":
-				v, err := parseBool(val)
-				if err != nil {
-					return fmt.Errorf("%s:%d: replay_started: %w", path, l.lineNum, err)
-				}
-				e.ReplayStarted = &v
-			case "log_appended":
-				n, err := atoi(val)
-				if err != nil {
-					return fmt.Errorf("%s:%d: log_appended: %w", path, l.lineNum, err)
-				}
-				e.LogAppended = &n
-			case "agent_program_size":
-				n, err := atoi(val)
-				if err != nil {
-					return fmt.Errorf("%s:%d: agent_program_size: %w", path, l.lineNum, err)
-				}
-				e.AgentProgramSize = &n
-			case "status_kind":
-				e.StatusKind = val
-			case "status_contains":
-				if len(val) >= 2 && val[0] == '"' && val[len(val)-1] == '"' {
-					unquoted, err := strconv.Unquote(val)
-					if err != nil {
-						return fmt.Errorf("%s:%d: status_contains: %w", path, l.lineNum, err)
-					}
-					e.StatusContains = unquoted
-				} else {
-					e.StatusContains = val
-				}
-			case "final_board_victory":
-				v, err := parseBool(val)
-				if err != nil {
-					return fmt.Errorf("%s:%d: final_board_victory: %w", path, l.lineNum, err)
-				}
-				e.FinalBoardVictory = &v
+				e.Geometry.Loc = &loc
 			case "error_count":
 				n, err := atoi(val)
 				if err != nil {
 					return fmt.Errorf("%s:%d: error_count: %w", path, l.lineNum, err)
 				}
-				e.ErrorCount = &n
+				e.Geometry.ErrorCount = &n
 			case "any_error_kind":
-				e.AnyErrorKind = val
+				e.Geometry.AnyErrorKind = val
 			case "no_error_kind":
-				e.NoErrorKind = val
+				e.Geometry.NoErrorKind = val
 			case "overlap_count":
 				n, err := atoi(val)
 				if err != nil {
 					return fmt.Errorf("%s:%d: overlap_count: %w", path, l.lineNum, err)
 				}
-				e.OverlapCount = &n
+				e.Geometry.OverlapCount = &n
 			case "overlap_stack_indices":
 				parts := strings.Fields(val)
 				for _, p := range parts {
@@ -2409,10 +2412,48 @@ func parseExpectBlock(e *Expectation, children []line, path string) error {
 					if err != nil {
 						return fmt.Errorf("%s:%d: overlap_stack_indices: %w", path, l.lineNum, err)
 					}
-					e.OverlapStackIndices = append(e.OverlapStackIndices, idx)
+					e.Geometry.OverlapStackIndices = append(e.Geometry.OverlapStackIndices, idx)
 				}
 			case "geometry_status":
-				e.GeometryStatus = val
+				e.Geometry.GeometryStatus = val
+			// --- click_agent_play (ClickAgent) ---
+			case "replay_started":
+				v, err := parseBool(val)
+				if err != nil {
+					return fmt.Errorf("%s:%d: replay_started: %w", path, l.lineNum, err)
+				}
+				e.ClickAgent.ReplayStarted = &v
+			case "log_appended":
+				n, err := atoi(val)
+				if err != nil {
+					return fmt.Errorf("%s:%d: log_appended: %w", path, l.lineNum, err)
+				}
+				e.ClickAgent.LogAppended = &n
+			case "agent_program_size":
+				n, err := atoi(val)
+				if err != nil {
+					return fmt.Errorf("%s:%d: agent_program_size: %w", path, l.lineNum, err)
+				}
+				e.ClickAgent.AgentProgramSize = &n
+			case "status_kind":
+				e.ClickAgent.StatusKind = val
+			case "status_contains":
+				if len(val) >= 2 && val[0] == '"' && val[len(val)-1] == '"' {
+					unquoted, err := strconv.Unquote(val)
+					if err != nil {
+						return fmt.Errorf("%s:%d: status_contains: %w", path, l.lineNum, err)
+					}
+					e.ClickAgent.StatusContains = unquoted
+				} else {
+					e.ClickAgent.StatusContains = val
+				}
+			// --- replay_invariant (Replay) ---
+			case "final_board_victory":
+				v, err := parseBool(val)
+				if err != nil {
+					return fmt.Errorf("%s:%d: final_board_victory: %w", path, l.lineNum, err)
+				}
+				e.Replay.FinalBoardVictory = &v
 			default:
 				return fmt.Errorf("%s:%d: unknown expect field %q", path, l.lineNum, key)
 			}
