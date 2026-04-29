@@ -14,8 +14,9 @@ Each metric is rank-normalized across files (0..1), then combined
 as a weighted sum. Higher composite = more painful.
 
 Usage:
-  tools/pain_rank.py                 # rank all source files in .
-  tools/pain_rank.py --top 20        # show top 20
+  tools/pain_rank.py                      # rank all source files in .
+  tools/pain_rank.py --repo /path/to/repo # specify repo root explicitly
+  tools/pain_rank.py --top 20             # show top 20
   tools/pain_rank.py --weights size=2,todo=3  # override weights
 
 Filters: generated files (per header), vendored, .min.js, tests.
@@ -27,8 +28,6 @@ import re
 import subprocess
 import sys
 from pathlib import Path
-
-REPO_ROOT = Path("/home/steve/showell_repos/angry-gopher")
 
 # File extensions we consider "source" for pain purposes.
 SOURCE_EXTS = {".go", ".py", ".ts", ".elm", ".js"}
@@ -97,12 +96,12 @@ def file_metrics(path: Path) -> dict:
     }
 
 
-def churn_counts(files: list[Path]) -> dict[Path, int]:
+def churn_counts(files: list[Path], repo_root: Path) -> dict[Path, int]:
     """Git-log churn per file. Single invocation for speed."""
     try:
         out = subprocess.check_output(
             ["git", "log", "--format=", "--name-only"],
-            cwd=REPO_ROOT,
+            cwd=repo_root,
             text=True,
         )
     except subprocess.CalledProcessError:
@@ -113,7 +112,7 @@ def churn_counts(files: list[Path]) -> dict[Path, int]:
         if raw:
             counts[raw] = counts.get(raw, 0) + 1
     return {
-        f: counts.get(str(f.relative_to(REPO_ROOT)), 0)
+        f: counts.get(str(f.relative_to(repo_root)), 0)
         for f in files
     }
 
@@ -168,9 +167,9 @@ def parse_weights(spec: str) -> dict[str, float]:
 # --- Discovery ---
 
 
-def iter_source_files() -> list[Path]:
+def iter_source_files(repo_root: Path) -> list[Path]:
     out: list[Path] = []
-    for dirpath, dirnames, filenames in os.walk(REPO_ROOT):
+    for dirpath, dirnames, filenames in os.walk(repo_root):
         dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS]
         for name in filenames:
             if SKIP_BASENAME_RE.search(name):
@@ -187,7 +186,7 @@ def iter_source_files() -> list[Path]:
 # --- Main ---
 
 
-def adjacency_churn(max_commit_size: int = 15) -> list[tuple[tuple[str, str], int]]:
+def adjacency_churn(repo_root: Path, max_commit_size: int = 15) -> list[tuple[tuple[str, str], int]]:
     """File pairs that change together in small commits.
 
     Skips commits that touched > max_commit_size files — those are
@@ -199,7 +198,7 @@ def adjacency_churn(max_commit_size: int = 15) -> list[tuple[tuple[str, str], in
     """
     out = subprocess.check_output(
         ["git", "log", "--format=---%n%H", "--name-only"],
-        cwd=REPO_ROOT,
+        cwd=repo_root,
         text=True,
     )
     pairs: dict[tuple[str, str], int] = {}
@@ -221,6 +220,7 @@ def adjacency_churn(max_commit_size: int = 15) -> list[tuple[tuple[str, str], in
 
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument("--repo", default=".", help="path to repo root (default: .)")
     p.add_argument("--top", type=int, default=15, help="how many files to show")
     p.add_argument("--weights", default="", help="override default metric weights")
     p.add_argument("--include-tests", action="store_true")
@@ -238,8 +238,10 @@ def main() -> None:
     )
     args = p.parse_args()
 
+    repo_root = Path(args.repo).resolve()
+
     if args.adjacency:
-        pairs = adjacency_churn(args.max_commit_size)
+        pairs = adjacency_churn(repo_root, args.max_commit_size)
         print(
             f"Top {args.top} file pairs by small-commit adjacency"
             f" (max {args.max_commit_size} files/commit)\n"
@@ -252,22 +254,27 @@ def main() -> None:
 
     weights = parse_weights(args.weights)
 
-    files = iter_source_files()
+    files = iter_source_files(repo_root)
     if not args.include_tests:
         files = [f for f in files if not is_test_file(f)]
 
+    has_go = any(f.suffix == ".go" for f in files)
+
     per_file = [(f, file_metrics(f)) for f in files]
     per_file = [(f, m) for f, m in per_file if m]  # drop unreadable
-    churn = churn_counts([f for f, _ in per_file])
+    churn = churn_counts([f for f, _ in per_file], repo_root)
 
     # Collect raw metric vectors, rank-normalize, composite.
     metric_names = ["size", "todo_count", "churn", "err_density", "escape_density"]
+    if not has_go:
+        metric_names = [k for k in metric_names if k != "err_density"]
     raw: dict[str, list[float]] = {k: [] for k in metric_names}
     for f, m in per_file:
         raw["size"].append(m["size"])
         raw["todo_count"].append(m["todo_count"])
         raw["churn"].append(churn.get(f, 0))
-        raw["err_density"].append(m["err_density"])
+        if has_go:
+            raw["err_density"].append(m["err_density"])
         raw["escape_density"].append(m["escape_density"])
 
     normalized = {k: rank_normalize(v) for k, v in raw.items()}
@@ -282,19 +289,27 @@ def main() -> None:
     scored.sort(key=lambda row: row[0], reverse=True)
 
     print(f"Top {args.top} painful files (composite rank-normalized score, higher = more painful)\n")
-    print(f"{'score':>6}  {'lines':>5}  {'churn':>5}  {'TODO':>4}  {'err':>4}  path")
+    if has_go:
+        print(f"{'score':>6}  {'lines':>5}  {'churn':>5}  {'TODO':>4}  {'err':>4}  path")
+    else:
+        print(f"{'score':>6}  {'lines':>5}  {'churn':>5}  {'TODO':>4}  path")
     print("-" * 80)
     for composite, f, m, _, ch in scored[: args.top]:
-        rel = f.relative_to(REPO_ROOT)
-        print(
-            f"{composite:6.2f}  {m['size']:5d}  {ch:5d}  {m['todo_count']:4d}  "
-            f"{int(m['err_density'] * m['size']):4d}  {rel}"
-        )
+        rel = f.relative_to(repo_root)
+        if has_go:
+            print(
+                f"{composite:6.2f}  {m['size']:5d}  {ch:5d}  {m['todo_count']:4d}  "
+                f"{int(m['err_density'] * m['size']):4d}  {rel}"
+            )
+        else:
+            print(
+                f"{composite:6.2f}  {m['size']:5d}  {ch:5d}  {m['todo_count']:4d}  {rel}"
+            )
 
     if args.verbose:
         print("\n--- per-metric normalized breakdown (top N) ---")
         for composite, f, _, norms, _ in scored[: args.top]:
-            rel = f.relative_to(REPO_ROOT)
+            rel = f.relative_to(repo_root)
             print(f"\n{rel} (composite={composite:.2f})")
             for k in metric_names:
                 print(f"  {k:18}  {norms[k]:.2f}  (w={weights[k]})")
