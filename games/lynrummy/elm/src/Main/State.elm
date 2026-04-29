@@ -20,6 +20,8 @@ module Main.State exposing
     , activeHand
     , baseModel
     , boardDomIdFor
+    , canUndoThisTurn
+    , collapseUndos
     , encodeRemoteState
     , setActiveHand
     )
@@ -46,7 +48,7 @@ import Game.Physics.GestureArbitration as GA
 import Game.Hand as Hand exposing (Hand)
 import Game.Score as Score
 import Game.Physics.WingOracle exposing (WingId)
-import Game.WireAction exposing (WireAction)
+import Game.WireAction exposing (WireAction(..))
 import Json.Encode as Encode exposing (Value)
 import Main.Util exposing (listAt)
 
@@ -431,6 +433,66 @@ type alias ActionLogEntry =
     , gesturePath : Maybe (List GesturePoint)
     , pathFrame : PathFrame
     }
+
+
+
+-- ACTION LOG HELPERS
+
+
+{-| Collapse Undo tokens: each Undo cancels the most recent
+non-CompleteTurn entry. The result is the effective action
+sequence — what replay and bootstrap should actually apply.
+
+Used by bootstrapFromBundle (to fold only effective actions)
+and clickInstantReplay (so replay never animates Undo tokens).
+-}
+collapseUndos : List ActionLogEntry -> List ActionLogEntry
+collapseUndos entries =
+    List.foldl
+        (\entry stack ->
+            case entry.action of
+                Undo ->
+                    popLastUndoable stack
+
+                _ ->
+                    stack ++ [ entry ]
+        )
+        []
+        entries
+
+
+popLastUndoable : List ActionLogEntry -> List ActionLogEntry
+popLastUndoable entries =
+    case List.reverse entries of
+        [] ->
+            entries
+
+        last :: rest ->
+            case last.action of
+                CompleteTurn ->
+                    entries
+
+                _ ->
+                    List.reverse rest
+
+
+{-| True when clicking Undo would do something — the effective
+action list has at least one non-CompleteTurn entry in the
+current turn.
+-}
+canUndoThisTurn : Model -> Bool
+canUndoThisTurn model =
+    case List.reverse (collapseUndos model.actionLog) of
+        [] ->
+            False
+
+        last :: _ ->
+            case last.action of
+                CompleteTurn ->
+                    False
+
+                _ ->
+                    True
 
 
 

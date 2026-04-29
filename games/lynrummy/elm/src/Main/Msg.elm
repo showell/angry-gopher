@@ -25,7 +25,7 @@ import Time
     BoardRectReceived. Wing hover is NOT a Msg — wing
     detection is computed in Elm on every MouseMove from the
     floater's rect, not dispatched by DOM events.
-  - **Button clicks** — ClickCompleteTurn, ClickHint,
+  - **Button clicks** — ClickCompleteTurn, ClickUndo, ClickHint,
     ClickInstantReplay, ClickReplayPauseToggle, PopupOk.
   - **HTTP responses** — ActionSent (fire-and-forget),
     SessionReceived, ActionLogFetched.
@@ -61,6 +61,7 @@ type Msg
     | ActionSent (Result Http.Error ())
     | SessionReceived (Result Http.Error Int)
     | ClickCompleteTurn
+    | ClickUndo
     | ClickHint
     | ClickAgentPlay
     | PopupOk

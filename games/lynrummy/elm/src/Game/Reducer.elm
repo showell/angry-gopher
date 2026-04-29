@@ -2,6 +2,7 @@ module Game.Reducer exposing
     ( State
     , applyAction
     , initialState
+    , undoAction
     )
 
 {-| Pure action reducer: take a `WireAction` and apply it to a
@@ -127,6 +128,106 @@ applyAction action state =
 
                 Nothing ->
                     state
+
+        CompleteTurn ->
+            state
+
+        Undo ->
+            state
+
+
+{-| Reverse a WireAction on (board, hand) — the undo primitive.
+Each action carries its pre-action stacks in the payload, so the
+post-action stacks are fully derivable: MoveStack's destination
+is newLoc, Split's pieces are CardStack.split, Merge's result is
+tryStackMerge/tryHandMerge. Swapping remove/add restores the
+pre-action board; handCardsToRelease cards return to hand.
+
+CompleteTurn and Undo are no-ops here; callers guard against them.
+-}
+undoAction : WireAction -> State -> State
+undoAction action state =
+    case action of
+        MoveStack { stack, newLoc } ->
+            let
+                change =
+                    { stacksToRemove = [ { stack | loc = newLoc } ]
+                    , stacksToAdd = [ stack ]
+                    , handCardsToRelease = []
+                    }
+            in
+            { state | board = applyChange change state.board }
+
+        Split { stack, cardIndex } ->
+            let
+                change =
+                    { stacksToRemove = CardStack.split cardIndex stack
+                    , stacksToAdd = [ stack ]
+                    , handCardsToRelease = []
+                    }
+            in
+            { state | board = applyChange change state.board }
+
+        MergeStack { source, target, side } ->
+            case BoardActions.tryStackMerge target source side of
+                Just mergeChange ->
+                    case mergeChange.stacksToAdd of
+                        [ merged ] ->
+                            let
+                                change =
+                                    { stacksToRemove = [ merged ]
+                                    , stacksToAdd = [ target, source ]
+                                    , handCardsToRelease = []
+                                    }
+                            in
+                            { state | board = applyChange change state.board }
+
+                        _ ->
+                            state
+
+                Nothing ->
+                    state
+
+        MergeHand { handCard, target, side } ->
+            let
+                hc =
+                    { card = handCard, state = CardStack.HandNormal }
+            in
+            case BoardActions.tryHandMerge target hc side of
+                Just mergeChange ->
+                    case mergeChange.stacksToAdd of
+                        [ merged ] ->
+                            let
+                                change =
+                                    { stacksToRemove = [ merged ]
+                                    , stacksToAdd = [ target ]
+                                    , handCardsToRelease = []
+                                    }
+                            in
+                            { board = applyChange change state.board
+                            , hand = Hand.addHandCards [ hc ] state.hand
+                            }
+
+                        _ ->
+                            state
+
+                Nothing ->
+                    state
+
+        PlaceHand { handCard, loc } ->
+            let
+                hc =
+                    { card = handCard, state = CardStack.HandNormal }
+
+                change =
+                    { stacksToRemove = [ CardStack.fromHandCard hc loc ]
+                    , stacksToAdd = []
+                    , handCardsToRelease = []
+                    }
+            in
+            { board = applyChange change state.board
+            , hand = Hand.addHandCards [ hc ] state.hand
+            }
 
         CompleteTurn ->
             state

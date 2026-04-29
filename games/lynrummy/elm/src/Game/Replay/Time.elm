@@ -101,7 +101,7 @@ clickInstantReplay model =
             in
             ( { rewound
                 | status = { text = "Replaying…", kind = Inform }
-                , replay = Just { pending = model.actionLog, paused = False }
+                , replay = Just { pending = State.collapseUndos model.actionLog, paused = False }
                 , replayAnim = PreRolling { untilMs = 0 }
                 , drag = NotDragging
                 , replayBoardRect = Nothing

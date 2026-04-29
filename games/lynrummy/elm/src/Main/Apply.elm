@@ -74,7 +74,11 @@ describes the outcome — generated at the point of mutation.
     `cardsPlayedThisTurn`.
   - `CompleteTurn` — full autonomous turn transition via
     `Game.applyCompleteTurn`.
-  - `Undo` — no-op (V1 has no Undo button; deferred).
+  - `Undo` — unreachable here: live undo is handled by
+    `Main.Play.clickUndo` (direct inversion via
+    `Reducer.undoAction`); replay/bootstrap fold through
+    `collapseUndos` which strips Undo tokens before this
+    function is called. Branch kept for exhaustiveness.
 
 The physics branches all share `applyPhysics`: delegate the
 (board, hand) transition to `Reducer.applyAction`, then thread

@@ -71,6 +71,7 @@ import Main.State
         , StatusKind(..)
         , StatusMessage
         , boardDomIdFor
+        , canUndoThisTurn
         )
 import Main.Util exposing (listAt, pluralize)
 
@@ -517,6 +518,12 @@ viewTurnControls model =
         , style "flex-wrap" "wrap"
         ]
         [ gameButton "Complete turn" ClickCompleteTurn
+        , (if canUndoThisTurn model then
+            gameButton "Undo" ClickUndo
+
+           else
+            disabledGameButton "Undo"
+          )
         , gameButton "Hint" ClickHint
         , viewReplayControl model
         , gameLink "← Lobby" "/gopher/game-lobby"
@@ -568,6 +575,21 @@ gameButton label msg =
         , style "color" View.navy
         , style "border-radius" "3px"
         , style "cursor" "pointer"
+        ]
+        [ Html.text label ]
+
+
+disabledGameButton : String -> Html Msg
+disabledGameButton label =
+    Html.button
+        [ Html.Attributes.disabled True
+        , style "padding" "6px 12px"
+        , style "font-size" "14px"
+        , style "border" "1px solid #bbb"
+        , style "background" "#f5f5f5"
+        , style "color" "#bbb"
+        , style "border-radius" "3px"
+        , style "cursor" "not-allowed"
         ]
         [ Html.text label ]
 

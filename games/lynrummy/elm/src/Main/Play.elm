@@ -36,6 +36,7 @@ import Game.Agent.GeometryPlan as AgentGeometry
 import Game.Agent.Move as AgentMove exposing (Move)
 import Game.Agent.Verbs as AgentVerbs
 import Game.Dealer as Dealer
+import Game.Reducer as Reducer
 import Game.Game as Game
 import Game.PlayerTurn exposing (CompleteTurnResult(..))
 import Game.Physics.GestureArbitration as GA
@@ -68,7 +69,9 @@ import Main.State as State
         , StatusMessage
         , activeHand
         , baseModel
+        , collapseUndos
         , encodeRemoteState
+        , setActiveHand
         )
 import Main.View as View exposing (popupForCompleteTurn, statusForCompleteTurn)
 import Main.Wire as Wire exposing (fetchActionLog, fetchNewSession)
@@ -145,6 +148,19 @@ init config =
                 turnScore =
                     Score.forStacks setup.board
 
+                initialRS : State.RemoteState
+                initialRS =
+                    { board = setup.board
+                    , hands = setup.hands
+                    , scores = [ 0, 0 ]
+                    , activePlayerIndex = 0
+                    , turnIndex = 0
+                    , deck = setup.deck
+                    , cardsPlayedThisTurn = 0
+                    , victorAwarded = False
+                    , turnStartBoardScore = turnScore
+                    }
+
                 dealtModel =
                     { baseModel
                         | board = setup.board
@@ -152,22 +168,10 @@ init config =
                         , deck = setup.deck
                         , turnStartBoardScore = turnScore
                         , score = turnScore
+                        , replayBaseline = Just initialRS
                     }
-
-                initialStateValue =
-                    encodeRemoteState
-                        { board = dealtModel.board
-                        , hands = dealtModel.hands
-                        , scores = dealtModel.scores
-                        , activePlayerIndex = dealtModel.activePlayerIndex
-                        , turnIndex = dealtModel.turnIndex
-                        , deck = dealtModel.deck
-                        , cardsPlayedThisTurn = dealtModel.cardsPlayedThisTurn
-                        , victorAwarded = dealtModel.victorAwarded
-                        , turnStartBoardScore = dealtModel.turnStartBoardScore
-                        }
             in
-            ( dealtModel, fetchNewSession initialStateValue )
+            ( dealtModel, fetchNewSession (encodeRemoteState initialRS) )
 
         ResumeSession sid ->
             ( { baseModel
@@ -255,6 +259,9 @@ update msg model =
 
         ClickCompleteTurn ->
             withNoOutput (clickCompleteTurn model)
+
+        ClickUndo ->
+            withNoOutput (clickUndo model)
 
         PopupOk ->
             ( { model | popup = Nothing }, Cmd.none, NoOutput )
@@ -417,6 +424,82 @@ clickCompleteTurn model =
                             Cmd.none
             in
             ( newModel, persistCmd )
+
+
+clickUndo : Model -> ( Model, Cmd Msg )
+clickUndo model =
+    case lastUndoableAction model of
+        Nothing ->
+            ( model, Cmd.none )
+
+        Just lastAction ->
+            let
+                pre =
+                    { board = model.board, hand = activeHand model }
+
+                post =
+                    Reducer.undoAction lastAction pre
+
+                undoEntry =
+                    { action = WA.Undo
+                    , gesturePath = Nothing
+                    , pathFrame = State.ViewportFrame
+                    }
+
+                seq =
+                    model.nextSeq
+
+                cardsAdjust =
+                    case lastAction of
+                        WA.MergeHand _ ->
+                            -1
+
+                        WA.PlaceHand _ ->
+                            -1
+
+                        _ ->
+                            0
+
+                newModel =
+                    setActiveHand post.hand
+                        { model
+                            | board = post.board
+                            , score = Score.forStacks post.board
+                            , cardsPlayedThisTurn = model.cardsPlayedThisTurn + cardsAdjust
+                            , actionLog = model.actionLog ++ [ undoEntry ]
+                            , nextSeq = seq + 1
+                            , status = { text = "Undone.", kind = Inform }
+                            , hintedCards = []
+                            , agentProgram = Nothing
+                            , drag = NotDragging
+                            , replay = Nothing
+                            , replayAnim = State.NotAnimating
+                        }
+
+                persistCmd =
+                    case model.sessionId of
+                        Just sid ->
+                            Wire.sendAction sid seq model.puzzleName WA.Undo Nothing
+
+                        Nothing ->
+                            Cmd.none
+            in
+            ( newModel, persistCmd )
+
+
+lastUndoableAction : Model -> Maybe WA.WireAction
+lastUndoableAction model =
+    case List.reverse (collapseUndos model.actionLog) of
+        [] ->
+            Nothing
+
+        last :: _ ->
+            case last.action of
+                WA.CompleteTurn ->
+                    Nothing
+
+                _ ->
+                    Just last.action
 
 
 boardRectReceived :
@@ -847,7 +930,7 @@ bootstrapFromBundle bundle model =
     List.foldl
         (\entry m -> .model (applyAction entry.action m))
         atInitial
-        bundle.actions
+        (collapseUndos bundle.actions)
 
 
 {-| Synchronous bootstrap for Puzzles. The catalog

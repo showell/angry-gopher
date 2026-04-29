@@ -1,6 +1,7 @@
 module Game.Hand exposing
     ( Hand
     , addCards
+    , addHandCards
     , empty
     , removeHandCard
     , resetState
@@ -38,6 +39,11 @@ addCards cards state h =
             List.map (\c -> { card = c, state = state }) cards
     in
     { h | handCards = h.handCards ++ newHandCards }
+
+
+addHandCards : List HandCard -> Hand -> Hand
+addHandCards cards h =
+    { h | handCards = h.handCards ++ cards }
 
 
 {-| Remove the first hand card with the same card-identity as
