@@ -34,10 +34,11 @@ shuffle passes.
 
 ## What this quiz is testing
 
-Whether the orientation section in the README leads you to the
-right entry point quickly. If you find yourself rebuilding a deck
-or computing card values from scratch, you missed the orientation —
-back up and re-read it.
+Whether the orientation section in [`README.md`](README.md) (§
+"Public surface — entry points for using this subsystem") leads
+you to the right entry point quickly. If you find yourself
+rebuilding a deck or computing card values from scratch, you
+missed the orientation — back up and re-read that section.
 
 When done, briefly tell the orchestrator:
 1. Which file/function you used.

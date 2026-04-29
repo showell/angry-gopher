@@ -10,6 +10,8 @@ somewhere in the Lyn Rummy tree and isn't sure how the pieces
 fit together. It exists because every day we worked on this
 without it, we paid a tax.
 
+**Essay surface:** for any structured or multi-part reply, write to `~/showell_repos/claude-steve/randomNNN.md` and return `http://localhost:9100/steve/randomNNN.md`. Full workflow: `~/showell_repos/claude-collab/agent_collab/ESSAY_SURFACE.md`.
+
 The scope is Lyn Rummy specifically. Angry Gopher — the broader
 Go server that hosts it — only shows up as context when a
 Lyn Rummy concern crosses into it.
@@ -19,6 +21,44 @@ boots, server handlers, CLI tools) and how mature each one
 is, see [`ENTRY_POINTS.md`](ENTRY_POINTS.md). This document
 covers principles; that one covers the actual artifacts
 running.
+
+## Cold-agent orientation
+
+**If you're arriving with no session context,** read this
+paragraph before reading anything else. The architecture
+principles below are stable, but the implementation
+landscape changed substantially in late April 2026.
+
+Key anchors for calibrating doc freshness:
+
+- **LEAN_PASS phase 2 (2026-04-28):** The entire
+  `games/lynrummy/` Go domain package was retired —
+  dealer, referee, replay, scoring, all of it. Any doc
+  or comment that refers to a Go referee, Go dealer, or
+  Go replay logic is stale. Elm now owns all of that.
+  The Go server is dumb file storage only.
+- **Sidecar rip (2026-04-28):** The `.claude/` sidecar
+  documentation system was retired. Per-module context
+  now lives in module top-of-file docstrings. References
+  to `.claude/*.md` files are stale.
+- **Per-sequence URL contract (2026-04-28):** Session
+  data writes one action per file at
+  `sessions/<id>/actions/<seq>.json`. Older references
+  to bulk or differently shaped write endpoints are
+  stale.
+- **Go rules retired (2026-04-28):** elm-review's
+  `NoUnused` rules now catch orphaned Elm type
+  constructors. Always run `ops/check-conformance` (not
+  just `elm-test`) before committing any Elm change.
+
+If you encounter prose that seems to describe a Go
+component doing domain work, treat it as pre-LEAN_PASS
+and flag it rather than acting on it.
+
+For cross-cutting working-style conventions (essay
+surface, ops scripts, commit patterns), see the
+agent-collaboration docs at
+`~/showell_repos/claude-collab/agent_collab/`.
 
 ## What Lyn Rummy is
 
@@ -553,8 +593,12 @@ The short version:
 - `ops/start` — kill stale processes, rebuild Go binary, recompile
   Elm, regenerate Puzzles catalog, start both servers, wait for ready.
 - `ops/build_elm` — compile Main.elm + Puzzles.elm bundles.
-- `ops/check-conformance` — the conformance gate (fixturegen + Python
-  + Elm with elm-review). Run after every non-trivial Elm edit.
+- `ops/check-conformance` — **the commit gate for Elm work.**
+  Runs fixturegen + Python conformance + elm-test + elm-review
+  (including `NoUnused.CustomTypeConstructors`). Do not commit an
+  Elm change without a passing run. `elm-test` alone is not
+  sufficient — elm-review catches orphaned constructors and other
+  classes of drift that elm-test misses.
 - `ops/check` — full preflight (conformance + Go build + Python unit
   tests).
 

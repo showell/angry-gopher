@@ -130,6 +130,13 @@ If after this checklist the path forward isn't clear,
 that's the signal that this orientation list needs
 sharpening.
 
+**Self-test.** If you want to verify you can find your way
+around before editing anything real, see
+[`QUIZ_AGENT_ORIENTATION.md`](QUIZ_AGENT_ORIENTATION.md)
+— a one-task exercise (produce a valid game state using
+only the public API above) with an automated verifier.
+Run it once and you'll know the orientation stuck.
+
 ## Class-1/2 segregation — Elm precedent, Python parallel landed
 
 The Elm side moved its locked-down rule code into a
