@@ -14,7 +14,7 @@ query.
 -}
 
 import Game.Rules.Card exposing (Card)
-import Game.CardStack exposing (HandCard, HandCardState(..), handCardSameCard)
+import Game.CardStack exposing (HandCard, HandCardState(..), isHandCardSameCard)
 
 
 type alias Hand =
@@ -57,7 +57,7 @@ removeFirstMatch target cards =
             []
 
         c :: rest ->
-            if handCardSameCard c target then
+            if isHandCardSameCard c target then
                 rest
 
             else

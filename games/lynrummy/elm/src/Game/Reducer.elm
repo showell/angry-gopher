@@ -17,7 +17,7 @@ modeled here (and Undo is deliberately deferred in V1 replay).
 
 import Game.BoardActions as BoardActions
 import Game.Rules.Card exposing (Card)
-import Game.CardStack as CardStack exposing (CardStack, HandCard, findStack, stacksEqual)
+import Game.CardStack as CardStack exposing (CardStack, HandCard, findStack, isStacksEqual)
 import Game.Dealer
 import Game.Hand as Hand exposing (Hand)
 import Game.WireAction exposing (WireAction(..))
@@ -44,7 +44,7 @@ applyAction action state =
                 Just real ->
                     { state
                         | board =
-                            List.filter (not << stacksEqual real) state.board
+                            List.filter (not << isStacksEqual real) state.board
                                 ++ CardStack.split cardIndex real
                     }
 
@@ -106,7 +106,7 @@ applyAction action state =
                 Just hc ->
                     let
                         change =
-                            BoardActions.placeHandCard hc loc
+                            BoardActions.placeHandCardAt hc loc
                     in
                     { state
                         | board = applyChange change state.board
@@ -121,7 +121,7 @@ applyAction action state =
                 Just real ->
                     let
                         change =
-                            BoardActions.moveStack real newLoc
+                            BoardActions.moveStackTo real newLoc
                     in
                     { state | board = applyChange change state.board }
 
@@ -141,7 +141,7 @@ applyAction action state =
 
 applyChange : BoardActions.BoardChange -> List CardStack -> List CardStack
 applyChange change board =
-    List.filter (\s -> not (List.any (stacksEqual s) change.stacksToRemove)) board
+    List.filter (\s -> not (List.any (isStacksEqual s) change.stacksToRemove)) board
         ++ change.stacksToAdd
 
 
@@ -153,5 +153,5 @@ matters for rendering.
 findHandCard : Card -> Hand -> Maybe HandCard
 findHandCard card hand =
     hand.handCards
-        |> List.filter (\hc -> CardStack.handCardSameCard hc { card = card, state = CardStack.HandNormal })
+        |> List.filter (\hc -> CardStack.isHandCardSameCard hc { card = card, state = CardStack.HandNormal })
         |> List.head

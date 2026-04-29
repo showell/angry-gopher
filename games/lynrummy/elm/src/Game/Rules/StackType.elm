@@ -212,12 +212,12 @@ hasDuplicateCards cards =
 {-| True if every adjacent pair in the list classifies as the
 same stack type. (Lists of length 0 or 1 trivially pass.)
 -}
-followsConsistentPattern : CardStackType -> List Card -> Bool
-followsConsistentPattern stackType cards =
+isFollowsConsistentPattern : CardStackType -> List Card -> Bool
+isFollowsConsistentPattern stackType cards =
     case cards of
         a :: b :: rest ->
             (cardPairStackType a b == stackType)
-                && followsConsistentPattern stackType (b :: rest)
+                && isFollowsConsistentPattern stackType (b :: rest)
 
         _ ->
             True
@@ -260,7 +260,7 @@ getStackType cards =
                         -- Prevent dups within a provisional SET.
                         Dup
 
-                    else if not (followsConsistentPattern provisional cards) then
+                    else if not (isFollowsConsistentPattern provisional cards) then
                         -- Prevent mixing up types of stacks.
                         Bogus
 

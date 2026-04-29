@@ -623,7 +623,7 @@ viewStackForBoard drag stack =
                 ( FromBoardStack source, Nothing ) ->
                     -- Drag confirmed (click intent dropped).
                     -- Hide the source stack; the floater takes over.
-                    if CardStack.stacksEqual source stack then
+                    if CardStack.isStacksEqual source stack then
                         Html.text ""
 
                     else

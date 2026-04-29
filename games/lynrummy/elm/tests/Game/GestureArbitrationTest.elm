@@ -86,35 +86,35 @@ suite =
         , describe "cursorInRect"
             [ test "point strictly inside" <|
                 \_ ->
-                    GA.cursorInRect { x = 50, y = 50 } sampleRect
+                    GA.isCursorInRect { x = 50, y = 50 } sampleRect
                         |> Expect.equal True
             , test "top-left corner is inside (half-open)" <|
                 \_ ->
-                    GA.cursorInRect { x = 10, y = 20 } sampleRect
+                    GA.isCursorInRect { x = 10, y = 20 } sampleRect
                         |> Expect.equal True
             , test "bottom-right corner is outside (half-open)" <|
                 \_ ->
-                    GA.cursorInRect { x = 110, y = 120 } sampleRect
+                    GA.isCursorInRect { x = 110, y = 120 } sampleRect
                         |> Expect.equal False
             , test "just inside right edge" <|
                 \_ ->
-                    GA.cursorInRect { x = 109, y = 50 } sampleRect
+                    GA.isCursorInRect { x = 109, y = 50 } sampleRect
                         |> Expect.equal True
             , test "just inside bottom edge" <|
                 \_ ->
-                    GA.cursorInRect { x = 50, y = 119 } sampleRect
+                    GA.isCursorInRect { x = 50, y = 119 } sampleRect
                         |> Expect.equal True
             , test "outside left" <|
                 \_ ->
-                    GA.cursorInRect { x = 5, y = 50 } sampleRect
+                    GA.isCursorInRect { x = 5, y = 50 } sampleRect
                         |> Expect.equal False
             , test "outside above" <|
                 \_ ->
-                    GA.cursorInRect { x = 50, y = 5 } sampleRect
+                    GA.isCursorInRect { x = 50, y = 5 } sampleRect
                         |> Expect.equal False
             , test "far outside" <|
                 \_ ->
-                    GA.cursorInRect { x = 500, y = 500 } sampleRect
+                    GA.isCursorInRect { x = 500, y = 500 } sampleRect
                         |> Expect.equal False
             ]
         , describe "applySplit"
@@ -136,7 +136,7 @@ suite =
                         result =
                             GA.applySplit 0 1 [ stack3 ]
                     in
-                    List.any (CardStack.stacksEqual stack3) result
+                    List.any (CardStack.isStacksEqual stack3) result
                         |> Expect.equal False
             , test "split preserves other stacks on the board" <|
                 \_ ->
@@ -150,7 +150,7 @@ suite =
                         result =
                             GA.applySplit 1 1 [ keeper, target ]
                     in
-                    List.any (CardStack.stacksEqual keeper) result
+                    List.any (CardStack.isStacksEqual keeper) result
                         |> Expect.equal True
             , test "splitting at index 0 of a 3-card stack still yields 2 stacks" <|
                 \_ ->
@@ -181,7 +181,7 @@ suite =
                     in
                     Expect.all
                         [ \r -> List.length r |> Expect.equal 1
-                        , \r -> List.any (CardStack.stacksEqual stack1) r |> Expect.equal True
+                        , \r -> List.any (CardStack.isStacksEqual stack1) r |> Expect.equal True
                         ]
                         result
             , test "out-of-bounds stack index leaves the board unchanged" <|

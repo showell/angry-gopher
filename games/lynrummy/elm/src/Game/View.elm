@@ -162,7 +162,7 @@ viewStackInternal :
 viewStackInternal stackExtraAttrs attrsForCard stack =
     let
         isIncomplete =
-            CardStack.incomplete stack
+            CardStack.isIncomplete stack
 
         baseAttrs =
             [ style "user-select" "none"

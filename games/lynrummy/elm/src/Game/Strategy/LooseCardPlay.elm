@@ -95,12 +95,12 @@ tryDestinations board stranded src srcStack ci peeled =
                                 single =
                                     singleStackFromCard peeled
                             in
-                            case mergeEitherSide destStack single of
+                            case mergeSingleIntoTarget destStack single of
                                 Nothing ->
                                     []
 
                                 Just merged ->
-                                    if mergedIsProblematic merged then
+                                    if isMergeProblematic merged then
                                         []
 
                                     else
@@ -135,8 +135,8 @@ firstBoardCard stack =
     List.head stack.boardCards |> Maybe.map .card
 
 
-mergeEitherSide : CardStack -> CardStack -> Maybe CardStack
-mergeEitherSide target single =
+mergeSingleIntoTarget : CardStack -> CardStack -> Maybe CardStack
+mergeSingleIntoTarget target single =
     case leftMerge target single of
         Just m ->
             Just m
@@ -145,8 +145,8 @@ mergeEitherSide target single =
             rightMerge target single
 
 
-mergedIsProblematic : CardStack -> Bool
-mergedIsProblematic s =
+isMergeProblematic : CardStack -> Bool
+isMergeProblematic s =
     let
         t =
             stackType s
@@ -281,12 +281,12 @@ applyLooseCardPlay m board =
                                         single =
                                             singleStackFromCard peeled.card
                                     in
-                                    case mergeEitherSide destStack single of
+                                    case mergeSingleIntoTarget destStack single of
                                         Nothing ->
                                             ( board, [] )
 
                                         Just merged ->
-                                            if mergedIsProblematic merged then
+                                            if isMergeProblematic merged then
                                                 ( board, [] )
 
                                             else

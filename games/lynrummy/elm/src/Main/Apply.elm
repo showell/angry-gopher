@@ -51,10 +51,8 @@ import Main.State
 
 
 {-| Bounds the client's referee uses to validate end-of-turn
-layouts. Matches the server's constant (see
-`views/lynrummy_elm.go` — the CompleteTurn handler uses the
-same 800 × 600, margin 5). Kept in one place so client and
-server agree on what "clean" means.
+layouts. The server no longer validates (dumb file storage as of
+LEAN_PASS phase 2); this is purely client-side.
 -}
 refereeBounds : BoardGeometry.BoardBounds
 refereeBounds =

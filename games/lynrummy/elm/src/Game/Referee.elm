@@ -46,7 +46,7 @@ how many moves per turn. Those are social rules, not physics.
   - Protocol and geometry stages are currently stubbed via
     `Game.BoardGeometry` and a pass-through here. Real
     implementations will be ported later.
-  - `stacks_to_remove` is matched by `stacksEqual`, which
+  - `stacks_to_remove` is matched by `isStacksEqual`, which
     compares full card identity including `originDeck` so
     inventory accounting stays conservative on double-deck
     boards.
@@ -63,7 +63,7 @@ import Game.CardStack
         , encodeCardStack
         , encodeHandCard
         , handCardDecoder
-        , stacksEqual
+        , isStacksEqual
         )
 import Game.Rules.StackType exposing (CardStackType(..), getStackType)
 import Json.Decode as Decode exposing (Decoder)
@@ -363,7 +363,7 @@ findFirstDuplicate cards =
 --
 -- Remove the stacks_to_remove, then append the stacks_to_add.
 -- Returns Err if any stack in stacks_to_remove wasn't on the
--- board. Matches stacks via `stacksEqual` (full card identity
+-- board. Matches stacks via `isStacksEqual` (full card identity
 -- including originDeck).
 
 
@@ -388,7 +388,7 @@ subtractStacks board toRemove =
             Ok board
 
         s :: rest ->
-            case removeFirst (stacksEqual s) board of
+            case removeFirst (isStacksEqual s) board of
                 Just newBoard ->
                     subtractStacks newBoard rest
 

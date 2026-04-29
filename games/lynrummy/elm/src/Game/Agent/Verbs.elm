@@ -27,7 +27,7 @@ import Game.Agent.Move as Move
         )
 import Game.BoardActions as BoardActions
 import Game.Rules.Card exposing (Card)
-import Game.CardStack as CardStack exposing (CardStack, stacksEqual)
+import Game.CardStack as CardStack exposing (CardStack, isStacksEqual)
 import Game.WireAction exposing (WireAction(..))
 
 
@@ -80,7 +80,7 @@ applyOnBoard action board =
         Split { stack, cardIndex } ->
             case findReal stack board of
                 Just real ->
-                    List.filter (not << stacksEqual real) board
+                    List.filter (not << isStacksEqual real) board
                         ++ CardStack.split cardIndex real
 
                 Nothing ->
@@ -103,7 +103,7 @@ applyOnBoard action board =
             case findReal stack board of
                 Just real ->
                     applyChange
-                        (BoardActions.moveStack real newLoc)
+                        (BoardActions.moveStackTo real newLoc)
                         board
 
                 Nothing ->
@@ -115,13 +115,13 @@ applyOnBoard action board =
 
 findReal : CardStack -> List CardStack -> Maybe CardStack
 findReal target =
-    List.filter (stacksEqual target) >> List.head
+    List.filter (isStacksEqual target) >> List.head
 
 
 applyChange : BoardActions.BoardChange -> List CardStack -> List CardStack
 applyChange change board =
     List.filter
-        (\s -> not (List.any (stacksEqual s) change.stacksToRemove))
+        (\s -> not (List.any (isStacksEqual s) change.stacksToRemove))
         board
         ++ change.stacksToAdd
 
@@ -203,7 +203,7 @@ extractAbsorbPrims board d =
 
 isStealFromSet : ExtractAbsorbDesc -> Bool
 isStealFromSet d =
-    d.verb == Steal && allSameValue d.source && List.length d.source == 3
+    d.verb == Steal && isAllSameValue d.source && List.length d.source == 3
 
 
 stealFromSetPrims :
@@ -387,7 +387,7 @@ shiftPrims board d =
                     indexOf d.pCard d.donor
 
                 donorIsSet =
-                    allSameValue d.donor
+                    isAllSameValue d.donor
 
                 ( donorPrims, postDonor ) =
                     isolateCard board d.donor pi
@@ -563,7 +563,7 @@ isInteriorSetPeel d =
         n =
             List.length d.source
     in
-    d.verb == Peel && allSameValue d.source && ci > 0 && ci < n - 1
+    d.verb == Peel && isAllSameValue d.source && ci > 0 && ci < n - 1
 
 
 interiorSetReassemble :
@@ -642,8 +642,8 @@ splitCardIndex k n =
         k
 
 
-allSameValue : List Card -> Bool
-allSameValue cards =
+isAllSameValue : List Card -> Bool
+isAllSameValue cards =
     case cards of
         [] ->
             True

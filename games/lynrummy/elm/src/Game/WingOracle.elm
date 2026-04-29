@@ -21,7 +21,7 @@ representation as the wire and the Main.State drag model).
 
 import Game.BoardActions as BoardActions exposing (Side(..))
 import Game.BoardGeometry as BG
-import Game.CardStack as CardStack exposing (CardStack, HandCard, stacksEqual)
+import Game.CardStack as CardStack exposing (CardStack, HandCard, isStacksEqual)
 
 
 type alias WingId =
@@ -43,7 +43,7 @@ wingsForStack source board =
 
 stackWingsForTarget : CardStack -> CardStack -> List WingId
 stackWingsForTarget source target =
-    if stacksEqual target source then
+    if isStacksEqual target source then
         []
 
     else

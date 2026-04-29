@@ -5,8 +5,8 @@ module Game.BoardActions exposing
     , StackMergeResult
     , findAllHandMerges
     , findAllStackMerges
-    , moveStack
-    , placeHandCard
+    , moveStackTo
+    , placeHandCardAt
     , tryHandMerge
     , tryStackMerge
     )
@@ -26,7 +26,7 @@ import Game.CardStack as CardStack
         ( BoardLocation
         , CardStack
         , HandCard
-        , stacksEqual
+        , isStacksEqual
         )
 
 
@@ -137,16 +137,16 @@ tryStackMerge stack other side =
 -- PLACE AND MOVE
 
 
-placeHandCard : HandCard -> BoardLocation -> BoardChange
-placeHandCard handCard loc =
+placeHandCardAt : HandCard -> BoardLocation -> BoardChange
+placeHandCardAt handCard loc =
     { stacksToRemove = []
     , stacksToAdd = [ CardStack.fromHandCard handCard loc ]
     , handCardsToRelease = [ handCard ]
     }
 
 
-moveStack : CardStack -> BoardLocation -> BoardChange
-moveStack stack newLoc =
+moveStackTo : CardStack -> BoardLocation -> BoardChange
+moveStackTo stack newLoc =
     { stacksToRemove = [ stack ]
     , stacksToAdd = [ { stack | loc = newLoc } ]
     , handCardsToRelease = []
@@ -160,13 +160,13 @@ moveStack stack newLoc =
 {-| Enumerate every merge of `target` onto any other stack
 from the given board. Filters out `target` itself by
 structural equality (TS uses reference equality; outcomes
-match because `maybeMerge` already rejects stacksEqual pairs).
+match because `maybeMerge` already rejects `isStacksEqual` pairs).
 -}
 findAllStackMerges : CardStack -> List CardStack -> List StackMergeResult
 findAllStackMerges target allStacks =
     let
         others =
-            List.filter (\s -> not (stacksEqual s target)) allStacks
+            List.filter (\s -> not (isStacksEqual s target)) allStacks
     in
     List.concatMap (tryBothSidesStack target) others
 

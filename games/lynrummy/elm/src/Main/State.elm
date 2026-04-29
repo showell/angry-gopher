@@ -86,13 +86,9 @@ type alias Model =
     , sessionId : Maybe Int
 
     -- When this Play instance is hosting a puzzle, names
-    -- which puzzle. Used by `Main.Wire.sendAction` to dispatch
-    -- to the puzzles actions endpoint (which writes to
-    -- `lynrummy_elm_puzzle_actions`) instead of the full-game
-    -- endpoint. Nothing for full-game sessions. The wire layer
-    -- treats (sessionId=Just, puzzleName=Just) as "puzzle
-    -- write" and (sessionId=Just, puzzleName=Nothing) as
-    -- "full-game write."
+    -- which puzzle. Rides in the JSON body of every action for
+    -- forensics (so logs can attribute moves to their puzzle).
+    -- Nothing for full-game sessions.
     , puzzleName : Maybe String
     , status : StatusMessage
     , score : Int

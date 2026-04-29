@@ -25,7 +25,7 @@ import Game.BoardGeometry
         , validateBoardGeometry
         )
 import Game.Rules.Card
-import Game.CardStack as CardStack exposing (CardStack, stacksEqual)
+import Game.CardStack as CardStack exposing (CardStack, isStacksEqual)
 import Game.PlaceStack as PlaceStack
 import Game.WireAction exposing (WireAction(..))
 
@@ -179,7 +179,7 @@ preFlightSplit board stack cardIndex =
             List.length stack.boardCards
 
         others =
-            List.filter (not << stacksEqual stack) board
+            List.filter (not << isStacksEqual stack) board
 
         newLoc =
             PlaceStack.findOpenLoc others sourceSize
@@ -233,7 +233,7 @@ preFlightMerge board source target side =
 
         others =
             List.filter
-                (\s -> not (stacksEqual s source) && not (stacksEqual s target))
+                (\s -> not (isStacksEqual s source) && not (isStacksEqual s target))
                 board
 
         finalLoc =
@@ -315,11 +315,11 @@ isCleanAfterAction preBoard postBoard =
         False
 
     else
-        not (List.any (anyPackGapOverlap preExisting) newStacks)
+        not (List.any (isAnyPackGapOverlap preExisting) newStacks)
 
 
-anyPackGapOverlap : List CardStack -> CardStack -> Bool
-anyPackGapOverlap preExisting newStack =
+isAnyPackGapOverlap : List CardStack -> CardStack -> Bool
+isAnyPackGapOverlap preExisting newStack =
     let
         rect =
             stackBoundingRect newStack
@@ -392,7 +392,7 @@ applyOnBoard action board =
         Split { stack, cardIndex } ->
             case findReal stack board of
                 Just real ->
-                    List.filter (not << stacksEqual real) board
+                    List.filter (not << isStacksEqual real) board
                         ++ CardStack.split cardIndex real
 
                 Nothing ->
@@ -415,7 +415,7 @@ applyOnBoard action board =
             case findReal stack board of
                 Just real ->
                     applyChange
-                        (BoardActions.moveStack real newLoc)
+                        (BoardActions.moveStackTo real newLoc)
                         board
 
                 Nothing ->
@@ -427,12 +427,12 @@ applyOnBoard action board =
 
 findReal : CardStack -> List CardStack -> Maybe CardStack
 findReal target =
-    List.filter (stacksEqual target) >> List.head
+    List.filter (isStacksEqual target) >> List.head
 
 
 applyChange : BoardActions.BoardChange -> List CardStack -> List CardStack
 applyChange change board =
     List.filter
-        (\s -> not (List.any (stacksEqual s) change.stacksToRemove))
+        (\s -> not (List.any (isStacksEqual s) change.stacksToRemove))
         board
         ++ change.stacksToAdd

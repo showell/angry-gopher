@@ -27,17 +27,17 @@ import Game.CardStack
         , HandCardState(..)
         , agedFromPriorTurn
         , boardCardAgedState
-        , boardCardSameCard
+        , isBoardCardSameCard
         , fromHandCard
         , fromShorthand
-        , handCardSameCard
-        , incomplete
+        , isHandCardSameCard
+        , isIncomplete
         , maybeMerge
-        , problematic
+        , isProblematic
         , size
         , stackStr
         , stackType
-        , stacksEqual
+        , isStacksEqual
         )
 import Game.Rules.StackType exposing (CardStackType(..))
 import Test exposing (Test, describe, test)
@@ -114,9 +114,9 @@ incompleteProblematicTests : Test
 incompleteProblematicTests =
     describe "incomplete / problematic"
         [ test "one card is incomplete" <|
-            \_ -> Expect.equal True (incomplete (stackOf [ "AH" ]))
+            \_ -> Expect.equal True (isIncomplete (stackOf [ "AH" ]))
         , test "a valid run is NOT incomplete" <|
-            \_ -> Expect.equal False (incomplete (stackOf [ "AH", "2H", "3H" ]))
+            \_ -> Expect.equal False (isIncomplete (stackOf [ "AH", "2H", "3H" ]))
         , test "a dup stack is problematic" <|
             \_ ->
                 let
@@ -128,15 +128,15 @@ incompleteProblematicTests =
                         , loc = origin
                         }
                 in
-                Expect.equal True (problematic dupStack)
+                Expect.equal True (isProblematic dupStack)
         , test "a valid run is NOT problematic" <|
-            \_ -> Expect.equal False (problematic (stackOf [ "AH", "2H", "3H" ]))
+            \_ -> Expect.equal False (isProblematic (stackOf [ "AH", "2H", "3H" ]))
         ]
 
 
 strAndEqualsTests : Test
 strAndEqualsTests =
-    describe "stackStr and stacksEqual"
+    describe "stackStr and isStacksEqual"
         [ test "stackStr uses value + suit-emoji, comma-joined" <|
             \_ ->
                 Expect.equal "A♥,2♥,3♥"
@@ -144,14 +144,14 @@ strAndEqualsTests =
         , test "two stacks with the same cards + loc are equal" <|
             \_ ->
                 Expect.equal True
-                    (stacksEqual
+                    (isStacksEqual
                         (stackOf [ "AH", "2H", "3H" ])
                         (stackOf [ "AH", "2H", "3H" ])
                     )
         , test "different cards -> not equal" <|
             \_ ->
                 Expect.equal False
-                    (stacksEqual
+                    (isStacksEqual
                         (stackOf [ "AH", "2H", "3H" ])
                         (stackOf [ "AH", "2H", "3D" ])
                     )
@@ -164,7 +164,7 @@ strAndEqualsTests =
                     s2 =
                         { s1 | loc = { top = 10, left = 20 } }
                 in
-                Expect.equal False (stacksEqual s1 s2)
+                Expect.equal False (isStacksEqual s1 s2)
         , test "deck-aware: same value+suit from different decks -> NOT equal (mirrors TS; inventory accounting must distinguish decks)" <|
             \_ ->
                 let
@@ -178,14 +178,14 @@ strAndEqualsTests =
                         , loc = origin
                         }
                 in
-                Expect.equal False (stacksEqual d1 d2)
+                Expect.equal False (isStacksEqual d1 d2)
         ]
 
 
 sameCardEqualityTests : Test
 sameCardEqualityTests =
-    describe "boardCardSameCard / handCardSameCard ignore state"
-        [ test "boardCardSameCard: same card, different states → True" <|
+    describe "isBoardCardSameCard / isHandCardSameCard ignore state"
+        [ test "isBoardCardSameCard: same card, different states → True" <|
             \_ ->
                 let
                     a =
@@ -194,8 +194,8 @@ sameCardEqualityTests =
                     b =
                         { card = card "AH" DeckOne, state = FreshlyPlayed }
                 in
-                Expect.equal True (boardCardSameCard a b)
-        , test "boardCardSameCard: different cards (same state) → False" <|
+                Expect.equal True (isBoardCardSameCard a b)
+        , test "isBoardCardSameCard: different cards (same state) → False" <|
             \_ ->
                 let
                     a =
@@ -204,8 +204,8 @@ sameCardEqualityTests =
                     b =
                         { card = card "2H" DeckOne, state = FirmlyOnBoard }
                 in
-                Expect.equal False (boardCardSameCard a b)
-        , test "boardCardSameCard: same value+suit, different deck → False (Card == is deck-aware)" <|
+                Expect.equal False (isBoardCardSameCard a b)
+        , test "isBoardCardSameCard: same value+suit, different deck → False (Card == is deck-aware)" <|
             \_ ->
                 let
                     a =
@@ -214,8 +214,8 @@ sameCardEqualityTests =
                     b =
                         { card = card "AH" DeckTwo, state = FirmlyOnBoard }
                 in
-                Expect.equal False (boardCardSameCard a b)
-        , test "handCardSameCard: same card, different states → True" <|
+                Expect.equal False (isBoardCardSameCard a b)
+        , test "isHandCardSameCard: same card, different states → True" <|
             \_ ->
                 let
                     a =
@@ -224,8 +224,8 @@ sameCardEqualityTests =
                     b =
                         { card = card "KD" DeckOne, state = FreshlyDrawn }
                 in
-                Expect.equal True (handCardSameCard a b)
-        , test "handCardSameCard: different cards → False" <|
+                Expect.equal True (isHandCardSameCard a b)
+        , test "isHandCardSameCard: different cards → False" <|
             \_ ->
                 let
                     a =
@@ -234,7 +234,7 @@ sameCardEqualityTests =
                     b =
                         { card = card "QD" DeckOne, state = HandNormal }
                 in
-                Expect.equal False (handCardSameCard a b)
+                Expect.equal False (isHandCardSameCard a b)
         ]
 
 

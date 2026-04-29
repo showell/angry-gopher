@@ -76,7 +76,7 @@ applyDirectPlay hc targetIdx board =
             ( board, [] )
 
         Just targetStack ->
-            case mergeEitherSide targetStack single of
+            case mergeSingleIntoTarget targetStack single of
                 Just merged ->
                     ( replaceAt targetIdx merged board, [ hc ] )
 
@@ -87,8 +87,8 @@ applyDirectPlay hc targetIdx board =
 {-| Prefer right-merge when both would work — matches the TS / Go
 convention.
 -}
-mergeEitherSide : CardStack -> CardStack -> Maybe CardStack
-mergeEitherSide target single =
+mergeSingleIntoTarget : CardStack -> CardStack -> Maybe CardStack
+mergeSingleIntoTarget target single =
     case rightMerge target single of
         Just m ->
             Just m

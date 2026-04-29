@@ -8,7 +8,7 @@ module Game.CardStack exposing
     , agedFromPriorTurn
     , boardCardAgedState
     , boardCardDecoder
-    , boardCardSameCard
+    , isBoardCardSameCard
     , boardLocationDecoder
     , canExtract
     , cardStackDecoder
@@ -21,11 +21,11 @@ module Game.CardStack exposing
     , fromHandCard
     , fromShorthand
     , handCardDecoder
-    , handCardSameCard
-    , incomplete
+    , isHandCardSameCard
+    , isIncomplete
     , leftMerge
     , maybeMerge
-    , problematic
+    , isProblematic
     , rightMerge
     , size
     , split
@@ -33,7 +33,7 @@ module Game.CardStack exposing
     , stackPitch
     , stackStr
     , stackType
-    , stacksEqual
+    , isStacksEqual
     )
 
 {-| CardStack domain types and operations. Ported from
@@ -44,7 +44,7 @@ Intentional Elm divergences:
   - `CardStack.stackType` is a function (derived on demand), not
     a stored field. Insight #5 — don't carry state that's a pure
     function of other state.
-  - `stacksEqual` compares full card identity (including
+  - `isStacksEqual` compares full card identity (including
     `originDeck`) so inventory accounting is conservative on
     double-deck boards. BoardCard `state` (recency) is still
     ignored — it's a turn-accounting concern, not identity.
@@ -201,12 +201,12 @@ held — and the referee couldn't tell. Full-identity equality
 keeps `stacks_to_remove` honest.
 
 -}
-stacksEqual : CardStack -> CardStack -> Bool
-stacksEqual a b =
-    locsEqual a.loc b.loc && cardsEqualInOrder a.boardCards b.boardCards
+isStacksEqual : CardStack -> CardStack -> Bool
+isStacksEqual a b =
+    isLocsEqual a.loc b.loc && isCardsEqualInOrder a.boardCards b.boardCards
 
 
-{-| Find the stack in `board` that matches `ref` via `stacksEqual`.
+{-| Find the stack in `board` that matches `ref` via `isStacksEqual`.
 The wire-layer resolver — client sends a CardStack reference,
 server finds the current matching board stack at apply time.
 Returns Nothing if no stack matches.
@@ -214,7 +214,7 @@ Returns Nothing if no stack matches.
 findStack : CardStack -> List CardStack -> Maybe CardStack
 findStack ref board =
     board
-        |> List.filter (stacksEqual ref)
+        |> List.filter (isStacksEqual ref)
         |> List.head
 
 
@@ -222,21 +222,21 @@ findStack ref board =
 same order. `state` flags are ignored (turn-accounting, not
 identity).
 -}
-cardsEqualInOrder : List BoardCard -> List BoardCard -> Bool
-cardsEqualInOrder xs ys =
+isCardsEqualInOrder : List BoardCard -> List BoardCard -> Bool
+isCardsEqualInOrder xs ys =
     case ( xs, ys ) of
         ( [], [] ) ->
             True
 
         ( x :: xrest, y :: yrest ) ->
-            x.card == y.card && cardsEqualInOrder xrest yrest
+            x.card == y.card && isCardsEqualInOrder xrest yrest
 
         _ ->
             False
 
 
-locsEqual : BoardLocation -> BoardLocation -> Bool
-locsEqual a b =
+isLocsEqual : BoardLocation -> BoardLocation -> Bool
+isLocsEqual a b =
     a.top == b.top && a.left == b.left
 
 
@@ -245,26 +245,26 @@ mean "do these two BoardCards wrap the same `Card`?" — recency
 markers don't participate. For full identity (including state),
 use `==` on the records directly.
 -}
-boardCardSameCard : BoardCard -> BoardCard -> Bool
-boardCardSameCard a b =
+isBoardCardSameCard : BoardCard -> BoardCard -> Bool
+isBoardCardSameCard a b =
     a.card == b.card
 
 
 {-| `HandCard` equality that ignores `state`. Same shape and
-rationale as `boardCardSameCard`.
+rationale as `isBoardCardSameCard`.
 -}
-handCardSameCard : HandCard -> HandCard -> Bool
-handCardSameCard a b =
+isHandCardSameCard : HandCard -> HandCard -> Bool
+isHandCardSameCard a b =
     a.card == b.card
 
 
-incomplete : CardStack -> Bool
-incomplete s =
+isIncomplete : CardStack -> Bool
+isIncomplete s =
     stackType s == Incomplete
 
 
-problematic : CardStack -> Bool
-problematic s =
+isProblematic : CardStack -> Bool
+isProblematic s =
     case stackType s of
         Bogus ->
             True
@@ -432,17 +432,17 @@ rightSplit leftCount s =
 
 {-| Attempt a merge. Returns `Nothing` if:
 
-  - The two stacks are `stacksEqual` (prevents merging a stack
+  - The two stacks are `isStacksEqual` (prevents merging a stack
     with itself — also prevents merging two identical piles,
     which can never produce a valid result).
-  - The combined result is problematic (Bogus or Dup).
+  - The combined result is `isProblematic` (Bogus or Dup).
 
 Otherwise returns `Just` the merged stack positioned at `loc`.
 
 -}
 maybeMerge : CardStack -> CardStack -> BoardLocation -> Maybe CardStack
 maybeMerge s1 s2 loc =
-    if stacksEqual s1 s2 then
+    if isStacksEqual s1 s2 then
         Nothing
 
     else
@@ -452,7 +452,7 @@ maybeMerge s1 s2 loc =
                 , loc = loc
                 }
         in
-        if problematic merged then
+        if isProblematic merged then
             Nothing
 
         else

@@ -116,7 +116,7 @@ findKickedHome board skip kicked =
                     if j == skip then
                         go (j + 1) rest
 
-                    else if homeAccepts target kicked then
+                    else if isValidSwapTarget target kicked then
                         Just j
 
                     else
@@ -125,8 +125,8 @@ findKickedHome board skip kicked =
     go 0 board
 
 
-homeAccepts : CardStack -> Card -> Bool
-homeAccepts target kicked =
+isValidSwapTarget : CardStack -> Card -> Bool
+isValidSwapTarget target kicked =
     let
         tst =
             stackType target

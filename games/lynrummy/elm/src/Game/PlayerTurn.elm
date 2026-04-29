@@ -1,10 +1,10 @@
 module Game.PlayerTurn exposing
     ( CompleteTurnResult(..)
     , PlayerTurn
-    , emptiedHand
+    , wasHandEmptied
     , getNumCardsPlayed
     , getScore
-    , gotVictoryBonus
+    , wasVictoryBonusGained
     , new
     , revokeEmptyHandBonuses
     , turnResult
@@ -82,13 +82,13 @@ getNumCardsPlayed t =
     t.cardsPlayedDuringTurn
 
 
-emptiedHand : PlayerTurn -> Bool
-emptiedHand t =
+wasHandEmptied : PlayerTurn -> Bool
+wasHandEmptied t =
     t.emptyHandBonus > 0
 
 
-gotVictoryBonus : PlayerTurn -> Bool
-gotVictoryBonus t =
+wasVictoryBonusGained : PlayerTurn -> Bool
+wasVictoryBonusGained t =
     t.victoryBonus > 0
 
 
@@ -135,8 +135,8 @@ turnResult t =
     if getNumCardsPlayed t == 0 then
         SuccessButNeedsCards
 
-    else if emptiedHand t then
-        if gotVictoryBonus t then
+    else if wasHandEmptied t then
+        if wasVictoryBonusGained t then
             SuccessAsVictor
 
         else

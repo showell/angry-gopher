@@ -71,7 +71,7 @@ handPairs hand =
                     |> List.indexedMap Tuple.pair
                     |> List.filterMap
                         (\( j, b ) ->
-                            if j > i && not (cardsEqual a.card b.card) then
+                            if j > i && not (isCardsEqual a.card b.card) then
                                 Just ( a, b )
 
                             else
@@ -80,8 +80,8 @@ handPairs hand =
             )
 
 
-cardsEqual : Card -> Card -> Bool
-cardsEqual a b =
+isCardsEqual : Card -> Card -> Bool
+isCardsEqual a b =
     a.value == b.value && a.suit == b.suit && a.originDeck == b.originDeck
 
 
@@ -187,7 +187,7 @@ applyPairPeel hca hcb si ci peelTarget board =
                     ( board, [] )
 
                 Just bc ->
-                    if not (cardsEqual bc.card peelTarget) then
+                    if not (isCardsEqual bc.card peelTarget) then
                         ( board, [] )
 
                     else if not (canExtract stack ci) then

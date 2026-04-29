@@ -28,8 +28,7 @@ import Time
   - **Button clicks** — ClickCompleteTurn, ClickHint,
     ClickInstantReplay, ClickReplayPauseToggle, PopupOk.
   - **HTTP responses** — ActionSent (fire-and-forget),
-    SessionReceived, CompleteTurnResponded,
-    ActionLogFetched.
+    SessionReceived, ActionLogFetched.
   - **Timer** — ReplayFrame (fires via onAnimationFrame
     during replay; drives drag re-animation + inter-action
     beat).

@@ -3,7 +3,7 @@ module Game.GestureArbitration exposing
     , Rect
     , applySplit
     , clickIntentAfterMove
-    , cursorInRect
+    , isCursorInRect
     , distSquared
     )
 
@@ -23,7 +23,7 @@ The rule:
 
 -}
 
-import Game.CardStack as CardStack exposing (CardStack, stacksEqual)
+import Game.CardStack as CardStack exposing (CardStack, isStacksEqual)
 
 
 type alias Point =
@@ -40,8 +40,8 @@ bottom/right edge is outside. Used at drop time to decide whether
 a snap-back should apply — the decision is a drop-time predicate,
 not a flag tracked during the drag.
 -}
-cursorInRect : Point -> Rect -> Bool
-cursorInRect p r =
+isCursorInRect : Point -> Rect -> Bool
+isCursorInRect p r =
     (p.x >= r.x)
         && (p.x < r.x + r.width)
         && (p.y >= r.y)
@@ -110,7 +110,7 @@ applySplit stackIndex cardIndex board =
                 newStacks =
                     CardStack.split cardIndex stack
             in
-            List.filter (\s -> not (stacksEqual s stack)) board
+            List.filter (\s -> not (isStacksEqual s stack)) board
                 ++ newStacks
 
 

@@ -97,7 +97,7 @@ findPeelableAtValue board value exclude =
                             if
                                 bc.card.value
                                     == value
-                                    && not (cardsEqual bc.card exclude)
+                                    && not (isCardsEqual bc.card exclude)
                                     && canExtract stack ci
                             then
                                 Just { stackIdx = si, cardIdx = ci, card = bc.card }
@@ -108,8 +108,8 @@ findPeelableAtValue board value exclude =
             )
 
 
-cardsEqual : Card -> Card -> Bool
-cardsEqual a b =
+isCardsEqual : Card -> Card -> Bool
+isCardsEqual a b =
     a.value == b.value && a.suit == b.suit && a.originDeck == b.originDeck
 
 
@@ -205,7 +205,7 @@ findInStack stack target =
                     Nothing
 
                 bc :: rest ->
-                    if cardsEqual bc.card target && canExtract stack ci then
+                    if isCardsEqual bc.card target && canExtract stack ci then
                         Just ci
 
                     else

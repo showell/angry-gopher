@@ -7,7 +7,7 @@ module Game.Replay.Space exposing
     , interpPath
     , linearPath
     , pathDuration
-    , pathStillValid
+    , isPathStillValid
     , pointInLiveViewport
     , stackLandingInLiveViewport
     , synthesizeBoardPath
@@ -349,8 +349,8 @@ and paths are recorded with the exact loc), so this isn't a
 fuzzy match.
 
 -}
-pathStillValid : List State.GesturePoint -> WireAction -> Model -> Bool
-pathStillValid path action model =
+isPathStillValid : List State.GesturePoint -> WireAction -> Model -> Bool
+isPathStillValid path action model =
     case ( List.head path, expectedStartFor action model ) of
         ( Just first, Just expected ) ->
             first.x == expected.x && first.y == expected.y

@@ -359,7 +359,7 @@ prepareReplayStep action maybePath frame model nowMs =
     in
     case maybePath of
         Just (p :: rest) ->
-            if Space.pathStillValid (p :: rest) action model then
+            if Space.isPathStillValid (p :: rest) action model then
                 animateFromCaptured (p :: rest)
 
             else

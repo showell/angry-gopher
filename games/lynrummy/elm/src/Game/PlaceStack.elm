@@ -130,8 +130,8 @@ stackRect stack =
     }
 
 
-rectsOverlap : Rect -> Rect -> Bool
-rectsOverlap a b =
+isRectsOverlap : Rect -> Rect -> Bool
+isRectsOverlap a b =
     a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top
 
 
@@ -260,15 +260,15 @@ packedScanTop args left top =
     if top > args.maxTop then
         Nothing
 
-    else if packGapClears args.existingRects left top args.newW args.newH then
+    else if isPackGapClear args.existingRects left top args.newW args.newH then
         Just { left = left, top = top }
 
     else
         packedScanTop args left (top + packStep)
 
 
-packGapClears : List Rect -> Int -> Int -> Int -> Int -> Bool
-packGapClears rects left top newW newH =
+isPackGapClear : List Rect -> Int -> Int -> Int -> Int -> Bool
+isPackGapClear rects left top newW newH =
     let
         padded =
             { left = left - packGapX
@@ -277,7 +277,7 @@ packGapClears rects left top newW newH =
             , bottom = top + newH + packGapY
             }
     in
-    not (List.any (rectsOverlap padded) rects)
+    not (List.any (isRectsOverlap padded) rects)
 
 
 {-| Crowded-board fallback: row-major sweep at placeStep with
@@ -323,7 +323,7 @@ gridSweepRow rects newW newH top left =
                 }
 
             collides =
-                List.any (rectsOverlap padded) rects
+                List.any (isRectsOverlap padded) rects
         in
         if collides then
             gridSweepRow rects newW newH top (left + placeStep)

@@ -64,7 +64,7 @@ order so within-level sort produces identical BFS behavior.
 The state-level doomed-growing filter (top of the function)
 short-circuits to `[]` if any growing 2-partial has no
 completion candidate left on the extractable board. The
-merge-time doomed-third filter (in `admissiblePartial`)
+merge-time doomed-third filter (in `isAdmissiblePartial`)
 catches the same condition for newly-formed length-2
 absorbs. Together they prune dead-ended search branches so
 the BFS doesn't waste expansions on doomed states.
@@ -578,8 +578,8 @@ hasDoomedThird partial inventory =
 legal as a partial AND have at least one completion candidate
 somewhere in `inventory`. Mirrors Python's `_admissible_partial`.
 -}
-admissiblePartial : Stack -> Set ShapeKey -> Bool
-admissiblePartial merged inventory =
+isAdmissiblePartial : Stack -> Set ShapeKey -> Bool
+isAdmissiblePartial merged inventory =
     if not (isPartialOk merged) then
         False
 
@@ -960,7 +960,7 @@ emitExtractAbsorb state inventory absorber hi src ci extCard verb =
                             LeftSide ->
                                 extCard :: absorber.target
                 in
-                if not (admissiblePartial merged inventory) then
+                if not (isAdmissiblePartial merged inventory) then
                     Nothing
 
                 else
@@ -1053,7 +1053,7 @@ emitFreePull state inventory absorber li loose =
                             LeftSide ->
                                 loose :: absorber.target
                 in
-                if not (admissiblePartial merged inventory) then
+                if not (isAdmissiblePartial merged inventory) then
                     Nothing
 
                 else
@@ -1387,7 +1387,7 @@ shiftEmit state inventory absorber srcIdx source kind whichEnd stolen pCard dono
                                 LeftSide ->
                                     stolen :: absorber.target
                     in
-                    if not (admissiblePartial merged inventory) then
+                    if not (isAdmissiblePartial merged inventory) then
                         Nothing
 
                     else

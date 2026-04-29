@@ -437,7 +437,7 @@ isCursorOverBoard : DragInfo -> Bool
 isCursorOverBoard info =
     case info.boardRect of
         Just rect ->
-            GA.cursorInRect info.cursor rect
+            GA.isCursorInRect info.cursor rect
 
         Nothing ->
             False

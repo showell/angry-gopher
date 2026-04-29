@@ -50,10 +50,10 @@ canExtract stack cardIndex =
             stSize >= 4
 
         PureRun ->
-            runPeelLegal stSize cardIndex
+            isRunPeelLegal stSize cardIndex
 
         RedBlackRun ->
-            runPeelLegal stSize cardIndex
+            isRunPeelLegal stSize cardIndex
 
         _ ->
             False
@@ -63,8 +63,8 @@ canExtract stack cardIndex =
 legal? End peel requires size >= 4. Middle peel requires both
 halves to be 3+ cards long.
 -}
-runPeelLegal : Int -> Int -> Bool
-runPeelLegal stSize cardIndex =
+isRunPeelLegal : Int -> Int -> Bool
+isRunPeelLegal stSize cardIndex =
     let
         endPeel =
             stSize >= 4 && (cardIndex == 0 || cardIndex == stSize - 1)

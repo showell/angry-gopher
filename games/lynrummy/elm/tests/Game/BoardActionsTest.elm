@@ -177,7 +177,7 @@ placeHandCardTests =
             \_ ->
                 let
                     change =
-                        BA.placeHandCard (hc "KS") { top = 100, left = 200 }
+                        BA.placeHandCardAt (hc "KS") { top = 100, left = 200 }
                 in
                 Expect.all
                     [ \_ -> Expect.equal 0 (List.length change.stacksToRemove)
@@ -205,7 +205,7 @@ moveStackTests =
                         bs [ "4H", "5H", "6H" ]
 
                     change =
-                        BA.moveStack stack { top = 50, left = 300 }
+                        BA.moveStackTo stack { top = 50, left = 300 }
                 in
                 Expect.all
                     [ \_ -> Expect.equal 1 (List.length change.stacksToRemove)

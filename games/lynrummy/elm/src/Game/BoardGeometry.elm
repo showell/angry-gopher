@@ -135,8 +135,8 @@ stackRect s =
     }
 
 
-rectsOverlap : Rect -> Rect -> Bool
-rectsOverlap a b =
+isRectsOverlap : Rect -> Rect -> Bool
+isRectsOverlap a b =
     a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top
 
 
@@ -224,7 +224,7 @@ collectPairErrors margin rects =
 
 checkPair : Int -> ( Int, Rect ) -> ( Int, Rect ) -> Maybe GeometryError
 checkPair margin ( i, a ) ( j, b ) =
-    if rectsOverlap a b then
+    if isRectsOverlap a b then
         Just
             { kind = Overlap
             , message =
@@ -236,7 +236,7 @@ checkPair margin ( i, a ) ( j, b ) =
             , stackIndices = [ i, j ]
             }
 
-    else if rectsOverlap (padRect margin a) b then
+    else if isRectsOverlap (padRect margin a) b then
         Just
             { kind = TooClose
             , message =

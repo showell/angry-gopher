@@ -93,7 +93,7 @@ emptyHandBonusTests =
                             |> PT.updateScoreForEmptyHand False
                 in
                 Expect.all
-                    [ \_ -> Expect.equal True (PT.emptiedHand t)
+                    [ \_ -> Expect.equal True (PT.wasHandEmptied t)
                     , \_ -> Expect.equal (Score.forCardsPlayed 1 + 1000) (PT.getScore 0 t)
                     ]
                     ()
@@ -107,7 +107,7 @@ emptyHandBonusTests =
                             |> PT.revokeEmptyHandBonuses
                 in
                 Expect.all
-                    [ \_ -> Expect.equal False (PT.emptiedHand t)
+                    [ \_ -> Expect.equal False (PT.wasHandEmptied t)
                     , \_ -> Expect.equal (Score.forCardsPlayed 1) (PT.getScore 0 t)
                     ]
                     ()
@@ -126,7 +126,7 @@ victoryBonusTests =
                             |> PT.updateScoreForEmptyHand True
                 in
                 Expect.all
-                    [ \_ -> Expect.equal True (PT.gotVictoryBonus t)
+                    [ \_ -> Expect.equal True (PT.wasVictoryBonusGained t)
                     , \_ -> Expect.equal (Score.forCardsPlayed 1 + 1000 + 500) (PT.getScore 0 t)
                     ]
                     ()

@@ -174,7 +174,7 @@ pullOneLabel : String -> ( List { card : Card, state : BoardCardState }, List Ca
 pullOneLabel label ( accBCs, deck ) =
     case Card.cardFromLabel label DeckOne of
         Just target ->
-            case pullCard target deck of
+            case pullCardFrom target deck of
                 Just newDeck ->
                     ( accBCs ++ [ { card = target, state = FirmlyOnBoard } ], newDeck )
 
@@ -185,9 +185,9 @@ pullOneLabel label ( accBCs, deck ) =
             ( accBCs, deck )
 
 
-pullCard : Card -> List Card -> Maybe (List Card)
-pullCard target deck =
-    case findIndex (cardEq target) deck of
+pullCardFrom : Card -> List Card -> Maybe (List Card)
+pullCardFrom target deck =
+    case findIndex (isCardsEqual target) deck of
         Just i ->
             Just (List.take i deck ++ List.drop (i + 1) deck)
 
@@ -195,8 +195,8 @@ pullCard target deck =
             Nothing
 
 
-cardEq : Card -> Card -> Bool
-cardEq a b =
+isCardsEqual : Card -> Card -> Bool
+isCardsEqual a b =
     a.value == b.value && a.suit == b.suit && a.originDeck == b.originDeck
 
 
