@@ -171,6 +171,9 @@ ops/check-conformance  ← runs all of the above
 
 ## Deferred
 
-- Elm emitter in fixturegen (needs `findPlay` + `formatHint` in Elm first)
+- **Elm emitter in fixturegen** — `hint_for_hand` op is currently `Python: true` only.
+  The Elm test file emits `Expect.pass` for these scenarios (not a real assertion).
+  When `findPlay` + `formatHint` land in Elm, set `Elm: true`, add `EmitElm`, and
+  replace the `Expect.pass` stubs with real tests.
 - Pair-projection scenarios (seed-42 already exercises turns 1 and 3 with pairs)
 - Explicit `stuck` scenario (no hint) — easy to add once infrastructure is in

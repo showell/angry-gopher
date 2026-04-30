@@ -655,6 +655,16 @@ historical record.)
   does to board and hand, what undo reverses, and what the
   button-enable predicate tracks. The DSL reads like a game
   transcript; that's intentional.
+- `games/lynrummy/DSL_CONVERSION_GUIDE.md` — how to extend
+  the DSL scenario coverage: why (dispute resolution),
+  selection criteria for what's worth porting, step-by-step
+  process, current coverage inventory, and prioritized
+  remaining work.
+- `games/lynrummy/elm/src/Game/Strategy/ELM_HINTS.md` —
+  orientation for the ELM_HINTS project: replacing the legacy
+  trick-based hint system with BFS-driven hints. Lives in
+  `Game/Strategy/` and expires naturally when that directory
+  is deleted.
 
 ### Memory pointers
 
