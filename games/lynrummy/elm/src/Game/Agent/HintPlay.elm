@@ -1,7 +1,8 @@
 module Game.Agent.HintPlay exposing (HintResult, findPlay, formatHint)
 
 {-| Hint-for-hand: project each hand card as a singleton onto
-the board, run BFS, and return the first card that has a plan.
+the board, run BFS, and return the candidate with the shortest
+plan — i.e. the easiest play for the human.
 
 Singleton-only MVP — no pair projection logic yet.
 
@@ -21,23 +22,15 @@ type alias HintResult =
     }
 
 
-{-| For each hand card (in order), build a projected board:
-`board ++ [ fromHandCard hc { top = 0, left = 0 } ]`
-and run `Bfs.solveBoard`. Return `Just` for the first card
-whose projection yields a plan; `Nothing` if none does.
+{-| For each hand card, build a projected board and run BFS.
+Collect all candidates that have a plan, then return the one
+with the fewest steps — the easiest play for the human.
+Returns `Nothing` if no hand card yields a solvable board.
 -}
 findPlay : List HandCard -> List CardStack -> Maybe HintResult
 findPlay handCards board =
-    findFirst handCards board
-
-
-findFirst : List HandCard -> List CardStack -> Maybe HintResult
-findFirst handCards board =
-    case handCards of
-        [] ->
-            Nothing
-
-        hc :: rest ->
+    let
+        tryCard hc =
             let
                 projected =
                     board ++ [ fromHandCard hc { top = 0, left = 0 } ]
@@ -47,7 +40,14 @@ findFirst handCards board =
                     Just { placements = [ hc.card ], plan = plan }
 
                 Nothing ->
-                    findFirst rest board
+                    Nothing
+
+        candidates =
+            List.filterMap tryCard handCards
+    in
+    candidates
+        |> List.sortBy (\r -> List.length r.plan)
+        |> List.head
 
 
 {-| Render a `Maybe HintResult` as a `List String`.

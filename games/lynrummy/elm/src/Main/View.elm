@@ -328,6 +328,7 @@ viewStatusBar status =
         , style "font-size" "15px"
         , style "color" color
         , style "border-bottom" "1px solid #eee"
+        , style "white-space" "pre-wrap"
         ]
         [ Html.text status.text ]
 

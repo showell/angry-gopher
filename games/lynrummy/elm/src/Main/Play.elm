@@ -601,10 +601,7 @@ handHint model =
             ( { model
                 | hintedCards = result.placements
                 , status =
-                    { text =
-                        HintPlay.formatHint (Just result)
-                            |> List.head
-                            |> Maybe.withDefault "No hint."
+                    { text = HintPlay.formatHint (Just result) |> String.join "\n"
                     , kind = Inform
                     }
               }
