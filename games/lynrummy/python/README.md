@@ -82,16 +82,20 @@ rule content lives (`rules/`) vs strategy (`cards.py` +
 the planner modules) vs UX cadence (`move.py`'s `narrate`
 / `hint`). Don't put new code in the wrong layer.
 
-**Step 4: Know the corpus baseline.** The 21-puzzle
-regression target lives in `corpus/baseline_post_focus.txt`
+**Step 4: Know the corpus baseline.** The correctness
+regression target is `corpus/baseline_post_focus.txt`
 (canonical depth distribution
 `[2,5,2,4,5,4,6,4,1,7,2,5,2,1,1,2,3,1,2,5,1]`). The corpus
-is exercised via `test_dsl_conformance.py`'s
-`corpus_sid_*` scenarios from
-`conformance_fixtures.json` (compiled from
-`games/lynrummy/conformance/scenarios/planner_corpus.dsl`).
-Any solver-touching change must keep depths ≤ gold; longer
-plans are correctness failures.
+is exercised via `ops/check-conformance` (not `./check.sh`,
+which is Python-only). Correctness scenarios live in two DSL
+files: `planner_corpus.dsl` (21 solvable puzzles, `corpus_sid_*`)
+and `planner_corpus_extras.dsl` (extras including `no_plan`
+cases and SOLVER_SPEED timing benchmarks). Any solver-touching
+change must keep depths ≤ gold; longer plans are correctness
+failures. For SOLVER_SPEED work specifically, re-time the
+`extra_026_2Sp` / `extra_027_3Hp` / `extra_028_KDp` scenarios
+by hand against the baseline recorded in their DSL comments
+(pre-optimization: 1176ms / 267ms / 138ms respectively).
 
 **Step 5: Ergonomics defaults (when you're refactoring or
 adding code).**
@@ -291,12 +295,17 @@ Ordered by "load-bearing first":
 
 ### Corpus regression
 
-The 21-puzzle corpus regression target lives in
-`corpus/baseline_post_focus.txt`. The corpus is exercised
-via `test_dsl_conformance.py` against the
-`corpus_sid_*` scenarios in `conformance_fixtures.json`
-(compiled from
-`games/lynrummy/conformance/scenarios/planner_corpus.dsl`).
+The corpus regression target lives in
+`corpus/baseline_post_focus.txt`. Two DSL files contribute
+corpus scenarios: `planner_corpus.dsl` (21 solvable puzzles,
+`corpus_sid_*`) and `planner_corpus_extras.dsl` (unsolvable
+and SOLVER_SPEED timing benchmarks, `extra_*`). Run via
+`ops/check-conformance` — that invokes `cmd/fixturegen` to
+compile fixtures, then Python `test_dsl_conformance.py`, then
+the Elm suite. To add a new benchmark case, add a scenario to
+`planner_corpus_extras.dsl` and re-run `ops/check-conformance`
+to regenerate `conformance_fixtures.json` and the Elm test
+file.
 
 The pre-DSL corpus tooling (`corpus_report.py`,
 `corpus_lab_catalog.py`) and the agent-vs-human harness
@@ -312,19 +321,22 @@ DSL conformance pipeline plus replay walkthroughs.
 
 Python + Elm both exercise the same scenarios, defined once
 in `games/lynrummy/conformance/scenarios/*.dsl` and compiled
-by `cmd/fixturegen` into Python JSON fixtures + Elm
-Elm-test files. Central cross-language bridge per
-`BRIDGES.md`. Three scenario files today:
+by `cmd/fixturegen` into Python JSON fixtures + Elm test
+files. Central cross-language bridge per `BRIDGES.md`.
+Scenario files (run `ops/check-conformance` to regenerate
+after any DSL edit):
 
-- `referee.dsl` — referee ops (Go + Elm).
-- `tricks.dsl` — hint/trick invariants (Elm + Python;
-  retiring with the trick engine).
-- `planner.dsl` — `enumerate_moves` over the four-bucket
-  state. Python today; Elm gains live assertions when the
-  BFS planner ports.
+- `planner_corpus.dsl` — 21 solvable corpus puzzles (`corpus_sid_*`).
+- `planner_corpus_extras.dsl` — unsolvable cases + SOLVER_SPEED
+  timing benchmarks (`extra_*`). Hand-editable; new benchmark
+  cases go here.
+- `planner.dsl` — `enumerate_moves` unit scenarios.
+- `hint_game_seed42.dsl` — `hint_for_hand` conformance (Python only).
+- `referee.dsl`, `board_geometry.dsl`, `drag_invariant.dsl`,
+  `gesture.dsl` — UI/referee ops (Elm-primary).
 
-`test_dsl_conformance.py` is the Python runner — 24/24
-scenarios pass as of 2026-04-25.
+`test_dsl_conformance.py` is the Python runner; `ops/check-conformance`
+is the full gate (fixturegen + Python + Elm).
 
 ## Test contracts
 
