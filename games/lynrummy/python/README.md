@@ -294,10 +294,10 @@ Ordered by "load-bearing first":
   (a) triple-in-hand (zero BFS, best outcome), (b) pair-via-BFS,
   (c) singleton-via-BFS. `find_play_with_budget` is the budgeted
   variant; `find_play` uses defaults.
-- `bench_outer_shell.py` — benchmarks the outer shell on N random
-  15-card hands from the Game 17 remaining 81 cards. Compares
+- `bench_outer_shell.py` — benchmarks the outer shell on the fixed
+  60×6-card corpus from the Game 17 remaining 81 cards. Compares
   singleton-only vs. full (triple + pair + singleton) for plan
-  quality and wall time. Run with `python3 bench_outer_shell.py`.
+  quality and wall time. Gold output in `bench_outer_shell_gold.txt`.
 - `agent_game.py` — autonomous-play harness:
   dealer.deal → loop find_play → place + plan → complete_turn.
 - `bfs_play.py` — the replay driver: BFS plan executed
@@ -458,13 +458,21 @@ After any change touching the BFS planner modules
 
 5. **Outer shell benchmark** (for changes to `agent_prelude.py`) —
    compare singleton-only vs. full (triple + pair + singleton)
-   across 20 random 15-card hands from the Game 17 pool:
+   across the fixed 60×6-card corpus:
    ```
    python3 bench_outer_shell.py
    ```
-   Check plan quality (better/same/worse counts) and wall ratio.
+   Diff the output against the gold file:
+   ```
+   diff <(python3 bench_outer_shell.py) bench_outer_shell_gold.txt
+   ```
    A regression looks like: full becomes slower *and* plan quality
-   drops vs. the singleton-only baseline.
+   drops vs. the singleton-only baseline. If the solver genuinely
+   improved, regenerate the gold file:
+   ```
+   python3 bench_outer_shell.py > bench_outer_shell_gold.txt
+   ```
+   then commit it.
 
 Snapshot files are throwaway — re-capture periodically
 with `agent_game.py --offline --capture FILE` to get fresh
