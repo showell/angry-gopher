@@ -87,15 +87,33 @@ regression target is `corpus/baseline_post_focus.txt`
 (canonical depth distribution
 `[2,5,2,4,5,4,6,4,1,7,2,5,2,1,1,2,3,1,2,5,1]`). The corpus
 is exercised via `ops/check-conformance` (not `./check.sh`,
-which is Python-only). Correctness scenarios live in two DSL
-files: `planner_corpus.dsl` (21 solvable puzzles, `corpus_sid_*`)
-and `planner_corpus_extras.dsl` (extras including `no_plan`
-cases and SOLVER_SPEED timing benchmarks). Any solver-touching
+which is Python-only). Correctness scenarios live in three DSL
+files: `planner_corpus.dsl` (21 solvable puzzles, `corpus_sid_*`),
+`planner_corpus_extras.dsl` (extras including `no_plan` cases
+and hand-added SOLVER_SPEED benchmarks), and `baseline_board_81.dsl`
+(the 81-card baseline suite — one trouble singleton per
+remaining card on the Game 17 opening board). Any solver-touching
 change must keep depths ≤ gold; longer plans are correctness
-failures. For SOLVER_SPEED work specifically, re-time the
-`extra_026_2Sp` / `extra_027_3Hp` / `extra_028_KDp` scenarios
-by hand against the baseline recorded in their DSL comments
-(pre-optimization: 1176ms / 267ms / 138ms respectively).
+failures.
+
+For performance regression testing, use the automated timing checker:
+```
+python3 check_baseline_timing.py
+```
+This reads `baseline_board_81_timing.json` (stored baseline) and
+times each of the 81 scenarios against the live solver. Only
+scenarios with baseline > 200ms are checked (Python timer noise
+dominates below that); currently that covers three "live-but-hard"
+singletons (2S'≈663ms, 2C'≈517ms, 3H'≈280ms). A >10% slowdown
+on any of those is flagged as a regression.
+
+To regenerate the baseline after a solver improvement:
+```
+python3 tools/gen_baseline_board.py    # writes DSL + timing JSON
+ops/check-conformance                  # picks up any DSL changes
+python3 check_baseline_timing.py       # verify new baseline passes
+```
+Commit both `baseline_board_81.dsl` and `baseline_board_81_timing.json`.
 
 **Step 5: Ergonomics defaults (when you're refactoring or
 adding code).**
@@ -296,16 +314,19 @@ Ordered by "load-bearing first":
 ### Corpus regression
 
 The corpus regression target lives in
-`corpus/baseline_post_focus.txt`. Two DSL files contribute
+`corpus/baseline_post_focus.txt`. Three DSL files contribute
 corpus scenarios: `planner_corpus.dsl` (21 solvable puzzles,
-`corpus_sid_*`) and `planner_corpus_extras.dsl` (unsolvable
-and SOLVER_SPEED timing benchmarks, `extra_*`). Run via
-`ops/check-conformance` — that invokes `cmd/fixturegen` to
-compile fixtures, then Python `test_dsl_conformance.py`, then
-the Elm suite. To add a new benchmark case, add a scenario to
-`planner_corpus_extras.dsl` and re-run `ops/check-conformance`
-to regenerate `conformance_fixtures.json` and the Elm test
-file.
+`corpus_sid_*`), `planner_corpus_extras.dsl` (unsolvable cases
+and SOLVER_SPEED timing benchmarks, `extra_*`), and
+`baseline_board_81.dsl` (auto-generated 81-card baseline suite,
+`baseline_board_*`). Run via `ops/check-conformance` — that
+invokes `cmd/fixturegen` to compile fixtures, then Python
+`test_dsl_conformance.py`, then the Elm suite.
+
+To add a hand-crafted benchmark case, add it to
+`planner_corpus_extras.dsl` and re-run `ops/check-conformance`.
+To regenerate the full 81-card suite after a solver change, use
+`tools/gen_baseline_board.py` (see § "Agent orientation" Step 4).
 
 The pre-DSL corpus tooling (`corpus_report.py`,
 `corpus_lab_catalog.py`) and the agent-vs-human harness
@@ -330,6 +351,9 @@ after any DSL edit):
 - `planner_corpus_extras.dsl` — unsolvable cases + SOLVER_SPEED
   timing benchmarks (`extra_*`). Hand-editable; new benchmark
   cases go here.
+- `baseline_board_81.dsl` — auto-generated 81-card baseline suite
+  (`baseline_board_*`). Do not hand-edit; regenerate via
+  `tools/gen_baseline_board.py`.
 - `planner.dsl` — `enumerate_moves` unit scenarios.
 - `hint_game_seed42.dsl` — `hint_for_hand` conformance (Python only).
 - `referee.dsl`, `board_geometry.dsl`, `drag_invariant.dsl`,
@@ -398,14 +422,24 @@ After any change touching the BFS planner modules
    `baseline.txt`) are kept as historical milestones, not
    the regression target.
 
-3. **Snapshot perf check** — re-time captured snapshots
-   against the new code:
+3. **Baseline timing check** — verify no regressions on the
+   81-card baseline suite:
    ```
-   python3 perf_harness.py /tmp/perf_snapshots.jsonl \
-       --top 5 --repeats 3
+   python3 check_baseline_timing.py
    ```
-   Compare against the previous wall numbers in commit
-   messages. Flag any wall regression > 25%.
+   Flags any scenario whose baseline exceeds 200ms and whose
+   current time is >10% slower. Currently covers the three
+   "live-but-hard" singletons (2S', 2C', 3H'). Exit code 1
+   means a regression was detected.
+
+   If the solver genuinely improved, regenerate the baseline:
+   ```
+   python3 tools/gen_baseline_board.py
+   ops/check-conformance
+   python3 check_baseline_timing.py
+   ```
+   then commit both `baseline_board_81.dsl` and
+   `baseline_board_81_timing.json`.
 
 4. **Offline self-play smoke** — quick "does autonomous
    play still terminate" check:
