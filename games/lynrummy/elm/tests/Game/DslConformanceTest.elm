@@ -253,6 +253,2677 @@ runReplayLoop model nowMs budget =
 
 
 
+baselineBoard2Cp : Test
+baselineBoard2Cp =
+    test "baseline_board_2Cp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "2C2" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+baselineBoard2D : Test
+baselineBoard2D =
+    test "baseline_board_2D" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "2D1" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            let
+                expected =
+                    [ "peel 3S from HELPER [KS AS 2S 3S], absorb onto trouble [2D] → [2D 3S]", "steal AC from HELPER [AC AD AH], absorb onto growing [2D 3S] → [AC 2D 3S] [→COMPLETE] ; spawn TROUBLE: [AD], [AH]", "push TROUBLE [AD] onto HELPER [TD JD QD KD] → [TD JD QD KD AD]", "push TROUBLE [AH] onto HELPER [2H 3H 4H] → [AH 2H 3H 4H]" ]
+            in
+            case result of
+                Just plan ->
+                    List.map AgentMove.describe plan
+                        |> Expect.equal expected
+
+                Nothing ->
+                    Expect.fail ("expected plan; got Nothing")
+
+
+baselineBoard2Dp : Test
+baselineBoard2Dp =
+    test "baseline_board_2Dp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "2D2" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            let
+                expected =
+                    [ "peel 3S from HELPER [KS AS 2S 3S], absorb onto trouble [2D:1] → [2D:1 3S]", "steal AC from HELPER [AC AD AH], absorb onto growing [2D:1 3S] → [AC 2D:1 3S] [→COMPLETE] ; spawn TROUBLE: [AD], [AH]", "push TROUBLE [AD] onto HELPER [TD JD QD KD] → [TD JD QD KD AD]", "push TROUBLE [AH] onto HELPER [2H 3H 4H] → [AH 2H 3H 4H]" ]
+            in
+            case result of
+                Just plan ->
+                    List.map AgentMove.describe plan
+                        |> Expect.equal expected
+
+                Nothing ->
+                    Expect.fail ("expected plan; got Nothing")
+
+
+baselineBoard2Hp : Test
+baselineBoard2Hp =
+    test "baseline_board_2Hp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "2H2" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            let
+                expected =
+                    [ "peel 3S from HELPER [KS AS 2S 3S], absorb onto trouble [2H:1] → [2H:1 3S]", "steal AC from HELPER [AC AD AH], absorb onto growing [2H:1 3S] → [AC 2H:1 3S] [→COMPLETE] ; spawn TROUBLE: [AD], [AH]", "push TROUBLE [AD] onto HELPER [TD JD QD KD] → [TD JD QD KD AD]", "push TROUBLE [AH] onto HELPER [2H 3H 4H] → [AH 2H 3H 4H]" ]
+            in
+            case result of
+                Just plan ->
+                    List.map AgentMove.describe plan
+                        |> Expect.equal expected
+
+                Nothing ->
+                    Expect.fail ("expected plan; got Nothing")
+
+
+baselineBoard2Sp : Test
+baselineBoard2Sp =
+    test "baseline_board_2Sp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "2S2" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+baselineBoard3C : Test
+baselineBoard3C =
+    test "baseline_board_3C" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "3C1" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            let
+                expected =
+                    [ "peel 2C from HELPER [2C 3D 4C 5H 6S 7H], absorb onto trouble [3C] → [2C 3C]", "steal AC from HELPER [AC AD AH], absorb onto growing [2C 3C] → [AC 2C 3C] [→COMPLETE] ; spawn TROUBLE: [AD], [AH]", "push TROUBLE [AD] onto HELPER [TD JD QD KD] → [TD JD QD KD AD]", "push TROUBLE [AH] onto HELPER [2H 3H 4H] → [AH 2H 3H 4H]" ]
+            in
+            case result of
+                Just plan ->
+                    List.map AgentMove.describe plan
+                        |> Expect.equal expected
+
+                Nothing ->
+                    Expect.fail ("expected plan; got Nothing")
+
+
+baselineBoard3Cp : Test
+baselineBoard3Cp =
+    test "baseline_board_3Cp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "3C2" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            let
+                expected =
+                    [ "peel 2C from HELPER [2C 3D 4C 5H 6S 7H], absorb onto trouble [3C:1] → [2C 3C:1]", "steal AC from HELPER [AC AD AH], absorb onto growing [2C 3C:1] → [AC 2C 3C:1] [→COMPLETE] ; spawn TROUBLE: [AD], [AH]", "push TROUBLE [AD] onto HELPER [TD JD QD KD] → [TD JD QD KD AD]", "push TROUBLE [AH] onto HELPER [2H 3H 4H] → [AH 2H 3H 4H]" ]
+            in
+            case result of
+                Just plan ->
+                    List.map AgentMove.describe plan
+                        |> Expect.equal expected
+
+                Nothing ->
+                    Expect.fail ("expected plan; got Nothing")
+
+
+baselineBoard3Dp : Test
+baselineBoard3Dp =
+    test "baseline_board_3Dp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "3D2" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+baselineBoard3Hp : Test
+baselineBoard3Hp =
+    test "baseline_board_3Hp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "3H2" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+baselineBoard3Sp : Test
+baselineBoard3Sp =
+    test "baseline_board_3Sp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "3S2" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+baselineBoard4Cp : Test
+baselineBoard4Cp =
+    test "baseline_board_4Cp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "4C2" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            let
+                expected =
+                    [ "splice [4C:1] into HELPER [2C 3D 4C 5H 6S 7H] → [2C 3D 4C:1] + [4C 5H 6S 7H]" ]
+            in
+            case result of
+                Just plan ->
+                    List.map AgentMove.describe plan
+                        |> Expect.equal expected
+
+                Nothing ->
+                    Expect.fail ("expected plan; got Nothing")
+
+
+baselineBoard4D : Test
+baselineBoard4D =
+    test "baseline_board_4D" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "4D1" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+baselineBoard4Dp : Test
+baselineBoard4Dp =
+    test "baseline_board_4Dp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "4D2" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+baselineBoard4Hp : Test
+baselineBoard4Hp =
+    test "baseline_board_4Hp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "4H2" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+baselineBoard4S : Test
+baselineBoard4S =
+    test "baseline_board_4S" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "4S1" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            let
+                expected =
+                    [ "splice [4S] into HELPER [2C 3D 4C 5H 6S 7H] → [2C 3D 4S] + [4C 5H 6S 7H]" ]
+            in
+            case result of
+                Just plan ->
+                    List.map AgentMove.describe plan
+                        |> Expect.equal expected
+
+                Nothing ->
+                    Expect.fail ("expected plan; got Nothing")
+
+
+baselineBoard4Sp : Test
+baselineBoard4Sp =
+    test "baseline_board_4Sp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "4S2" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            let
+                expected =
+                    [ "splice [4S:1] into HELPER [2C 3D 4C 5H 6S 7H] → [2C 3D 4S:1] + [4C 5H 6S 7H]" ]
+            in
+            case result of
+                Just plan ->
+                    List.map AgentMove.describe plan
+                        |> Expect.equal expected
+
+                Nothing ->
+                    Expect.fail ("expected plan; got Nothing")
+
+
+baselineBoard5C : Test
+baselineBoard5C =
+    test "baseline_board_5C" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "5C1" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+baselineBoard5Cp : Test
+baselineBoard5Cp =
+    test "baseline_board_5Cp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "5C2" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+baselineBoard5D : Test
+baselineBoard5D =
+    test "baseline_board_5D" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "5D1" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            let
+                expected =
+                    [ "splice [5D] into HELPER [2C 3D 4C 5H 6S 7H] → [2C 3D 4C 5D] + [5H 6S 7H]" ]
+            in
+            case result of
+                Just plan ->
+                    List.map AgentMove.describe plan
+                        |> Expect.equal expected
+
+                Nothing ->
+                    Expect.fail ("expected plan; got Nothing")
+
+
+baselineBoard5Dp : Test
+baselineBoard5Dp =
+    test "baseline_board_5Dp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "5D2" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            let
+                expected =
+                    [ "splice [5D:1] into HELPER [2C 3D 4C 5H 6S 7H] → [2C 3D 4C 5D:1] + [5H 6S 7H]" ]
+            in
+            case result of
+                Just plan ->
+                    List.map AgentMove.describe plan
+                        |> Expect.equal expected
+
+                Nothing ->
+                    Expect.fail ("expected plan; got Nothing")
+
+
+baselineBoard5Hp : Test
+baselineBoard5Hp =
+    test "baseline_board_5Hp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "5H2" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            let
+                expected =
+                    [ "splice [5H:1] into HELPER [2C 3D 4C 5H 6S 7H] → [2C 3D 4C 5H:1] + [5H 6S 7H]" ]
+            in
+            case result of
+                Just plan ->
+                    List.map AgentMove.describe plan
+                        |> Expect.equal expected
+
+                Nothing ->
+                    Expect.fail ("expected plan; got Nothing")
+
+
+baselineBoard5S : Test
+baselineBoard5S =
+    test "baseline_board_5S" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "5S1" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            let
+                expected =
+                    [ "yank 6S from HELPER [2C 3D 4C 5H 6S 7H], absorb onto trouble [5S] → [5S 6S] ; spawn TROUBLE: [7H]", "steal 7S from HELPER [7S 7D 7C], absorb onto growing [5S 6S] → [5S 6S 7S] [→COMPLETE] ; spawn TROUBLE: [7D], [7C]", "pull 7D onto trouble [7H] → [7H 7D]", "pull 7C onto growing [7H 7D] → [7H 7D 7C] [→COMPLETE]" ]
+            in
+            case result of
+                Just plan ->
+                    List.map AgentMove.describe plan
+                        |> Expect.equal expected
+
+                Nothing ->
+                    Expect.fail ("expected plan; got Nothing")
+
+
+baselineBoard5Sp : Test
+baselineBoard5Sp =
+    test "baseline_board_5Sp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "5S2" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            let
+                expected =
+                    [ "yank 6S from HELPER [2C 3D 4C 5H 6S 7H], absorb onto trouble [5S:1] → [5S:1 6S] ; spawn TROUBLE: [7H]", "steal 7S from HELPER [7S 7D 7C], absorb onto growing [5S:1 6S] → [5S:1 6S 7S] [→COMPLETE] ; spawn TROUBLE: [7D], [7C]", "pull 7D onto trouble [7H] → [7H 7D]", "pull 7C onto growing [7H 7D] → [7H 7D 7C] [→COMPLETE]" ]
+            in
+            case result of
+                Just plan ->
+                    List.map AgentMove.describe plan
+                        |> Expect.equal expected
+
+                Nothing ->
+                    Expect.fail ("expected plan; got Nothing")
+
+
+baselineBoard6C : Test
+baselineBoard6C =
+    test "baseline_board_6C" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "6C1" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+baselineBoard6Cp : Test
+baselineBoard6Cp =
+    test "baseline_board_6Cp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "6C2" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+baselineBoard6D : Test
+baselineBoard6D =
+    test "baseline_board_6D" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "6D1" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+baselineBoard6Dp : Test
+baselineBoard6Dp =
+    test "baseline_board_6Dp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "6D2" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+baselineBoard6H : Test
+baselineBoard6H =
+    test "baseline_board_6H" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "6H1" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+baselineBoard6Hp : Test
+baselineBoard6Hp =
+    test "baseline_board_6Hp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "6H2" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+baselineBoard6Sp : Test
+baselineBoard6Sp =
+    test "baseline_board_6Sp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "6S2" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+baselineBoard7Cp : Test
+baselineBoard7Cp =
+    test "baseline_board_7Cp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "7C2" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+baselineBoard7Dp : Test
+baselineBoard7Dp =
+    test "baseline_board_7Dp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "7D2" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            let
+                expected =
+                    [ "yank 6S from HELPER [2C 3D 4C 5H 6S 7H], absorb onto trouble [7D:1] → [6S 7D:1] ; spawn TROUBLE: [7H]", "peel 5H from HELPER [2C 3D 4C 5H], absorb onto growing [6S 7D:1] → [5H 6S 7D:1] [→COMPLETE]", "push TROUBLE [7H] onto HELPER [7S 7D 7C] → [7S 7D 7C 7H]" ]
+            in
+            case result of
+                Just plan ->
+                    List.map AgentMove.describe plan
+                        |> Expect.equal expected
+
+                Nothing ->
+                    Expect.fail ("expected plan; got Nothing")
+
+
+baselineBoard7Hp : Test
+baselineBoard7Hp =
+    test "baseline_board_7Hp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "7H2" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            let
+                expected =
+                    [ "push TROUBLE [7H:1] onto HELPER [7S 7D 7C] → [7S 7D 7C 7H:1]" ]
+            in
+            case result of
+                Just plan ->
+                    List.map AgentMove.describe plan
+                        |> Expect.equal expected
+
+                Nothing ->
+                    Expect.fail ("expected plan; got Nothing")
+
+
+baselineBoard7Sp : Test
+baselineBoard7Sp =
+    test "baseline_board_7Sp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "7S2" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+baselineBoard8C : Test
+baselineBoard8C =
+    test "baseline_board_8C" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "8C1" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            let
+                expected =
+                    [ "push TROUBLE [8C] onto HELPER [2C 3D 4C 5H 6S 7H] → [2C 3D 4C 5H 6S 7H 8C]" ]
+            in
+            case result of
+                Just plan ->
+                    List.map AgentMove.describe plan
+                        |> Expect.equal expected
+
+                Nothing ->
+                    Expect.fail ("expected plan; got Nothing")
+
+
+baselineBoard8Cp : Test
+baselineBoard8Cp =
+    test "baseline_board_8Cp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "8C2" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            let
+                expected =
+                    [ "push TROUBLE [8C:1] onto HELPER [2C 3D 4C 5H 6S 7H] → [2C 3D 4C 5H 6S 7H 8C:1]" ]
+            in
+            case result of
+                Just plan ->
+                    List.map AgentMove.describe plan
+                        |> Expect.equal expected
+
+                Nothing ->
+                    Expect.fail ("expected plan; got Nothing")
+
+
+baselineBoard8D : Test
+baselineBoard8D =
+    test "baseline_board_8D" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "8D1" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+baselineBoard8Dp : Test
+baselineBoard8Dp =
+    test "baseline_board_8Dp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "8D2" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+baselineBoard8H : Test
+baselineBoard8H =
+    test "baseline_board_8H" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "8H1" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+baselineBoard8Hp : Test
+baselineBoard8Hp =
+    test "baseline_board_8Hp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "8H2" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+baselineBoard8S : Test
+baselineBoard8S =
+    test "baseline_board_8S" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "8S1" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            let
+                expected =
+                    [ "push TROUBLE [8S] onto HELPER [2C 3D 4C 5H 6S 7H] → [2C 3D 4C 5H 6S 7H 8S]" ]
+            in
+            case result of
+                Just plan ->
+                    List.map AgentMove.describe plan
+                        |> Expect.equal expected
+
+                Nothing ->
+                    Expect.fail ("expected plan; got Nothing")
+
+
+baselineBoard8Sp : Test
+baselineBoard8Sp =
+    test "baseline_board_8Sp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "8S2" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            let
+                expected =
+                    [ "push TROUBLE [8S:1] onto HELPER [2C 3D 4C 5H 6S 7H] → [2C 3D 4C 5H 6S 7H 8S:1]" ]
+            in
+            case result of
+                Just plan ->
+                    List.map AgentMove.describe plan
+                        |> Expect.equal expected
+
+                Nothing ->
+                    Expect.fail ("expected plan; got Nothing")
+
+
+baselineBoard9C : Test
+baselineBoard9C =
+    test "baseline_board_9C" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "9C1" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+baselineBoard9Cp : Test
+baselineBoard9Cp =
+    test "baseline_board_9Cp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "9C2" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+baselineBoard9D : Test
+baselineBoard9D =
+    test "baseline_board_9D" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "9D1" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            let
+                expected =
+                    [ "push TROUBLE [9D] onto HELPER [TD JD QD KD] → [9D TD JD QD KD]" ]
+            in
+            case result of
+                Just plan ->
+                    List.map AgentMove.describe plan
+                        |> Expect.equal expected
+
+                Nothing ->
+                    Expect.fail ("expected plan; got Nothing")
+
+
+baselineBoard9Dp : Test
+baselineBoard9Dp =
+    test "baseline_board_9Dp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "9D2" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            let
+                expected =
+                    [ "push TROUBLE [9D:1] onto HELPER [TD JD QD KD] → [9D:1 TD JD QD KD]" ]
+            in
+            case result of
+                Just plan ->
+                    List.map AgentMove.describe plan
+                        |> Expect.equal expected
+
+                Nothing ->
+                    Expect.fail ("expected plan; got Nothing")
+
+
+baselineBoard9H : Test
+baselineBoard9H =
+    test "baseline_board_9H" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "9H1" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+baselineBoard9Hp : Test
+baselineBoard9Hp =
+    test "baseline_board_9Hp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "9H2" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+baselineBoard9S : Test
+baselineBoard9S =
+    test "baseline_board_9S" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "9S1" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+baselineBoard9Sp : Test
+baselineBoard9Sp =
+    test "baseline_board_9Sp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "9S2" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+baselineBoardACp : Test
+baselineBoardACp =
+    test "baseline_board_ACp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "AC2" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+baselineBoardADp : Test
+baselineBoardADp =
+    test "baseline_board_ADp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "AD2" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            let
+                expected =
+                    [ "push TROUBLE [AD:1] onto HELPER [TD JD QD KD] → [TD JD QD KD AD:1]" ]
+            in
+            case result of
+                Just plan ->
+                    List.map AgentMove.describe plan
+                        |> Expect.equal expected
+
+                Nothing ->
+                    Expect.fail ("expected plan; got Nothing")
+
+
+baselineBoardAHp : Test
+baselineBoardAHp =
+    test "baseline_board_AHp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "AH2" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            let
+                expected =
+                    [ "push TROUBLE [AH:1] onto HELPER [2H 3H 4H] → [AH:1 2H 3H 4H]" ]
+            in
+            case result of
+                Just plan ->
+                    List.map AgentMove.describe plan
+                        |> Expect.equal expected
+
+                Nothing ->
+                    Expect.fail ("expected plan; got Nothing")
+
+
+baselineBoardASp : Test
+baselineBoardASp =
+    test "baseline_board_ASp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "AS2" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            let
+                expected =
+                    [ "push TROUBLE [AS:1] onto HELPER [AC AD AH] → [AC AD AH AS:1]" ]
+            in
+            case result of
+                Just plan ->
+                    List.map AgentMove.describe plan
+                        |> Expect.equal expected
+
+                Nothing ->
+                    Expect.fail ("expected plan; got Nothing")
+
+
+baselineBoardJC : Test
+baselineBoardJC =
+    test "baseline_board_JC" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "JC1" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+baselineBoardJCp : Test
+baselineBoardJCp =
+    test "baseline_board_JCp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "JC2" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+baselineBoardJDp : Test
+baselineBoardJDp =
+    test "baseline_board_JDp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "JD2" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+baselineBoardJH : Test
+baselineBoardJH =
+    test "baseline_board_JH" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "JH1" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+baselineBoardJHp : Test
+baselineBoardJHp =
+    test "baseline_board_JHp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "JH2" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+baselineBoardJS : Test
+baselineBoardJS =
+    test "baseline_board_JS" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "JS1" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+baselineBoardJSp : Test
+baselineBoardJSp =
+    test "baseline_board_JSp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "JS2" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+baselineBoardKC : Test
+baselineBoardKC =
+    test "baseline_board_KC" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "KC1" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            let
+                expected =
+                    [ "peel KD from HELPER [TD JD QD KD], absorb onto trouble [KC] → [KC KD]", "peel KS from HELPER [KS AS 2S 3S], absorb onto growing [KC KD] → [KC KD KS] [→COMPLETE]" ]
+            in
+            case result of
+                Just plan ->
+                    List.map AgentMove.describe plan
+                        |> Expect.equal expected
+
+                Nothing ->
+                    Expect.fail ("expected plan; got Nothing")
+
+
+baselineBoardKCp : Test
+baselineBoardKCp =
+    test "baseline_board_KCp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "KC2" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            let
+                expected =
+                    [ "peel KD from HELPER [TD JD QD KD], absorb onto trouble [KC:1] → [KC:1 KD]", "peel KS from HELPER [KS AS 2S 3S], absorb onto growing [KC:1 KD] → [KC:1 KD KS] [→COMPLETE]" ]
+            in
+            case result of
+                Just plan ->
+                    List.map AgentMove.describe plan
+                        |> Expect.equal expected
+
+                Nothing ->
+                    Expect.fail ("expected plan; got Nothing")
+
+
+baselineBoardKDp : Test
+baselineBoardKDp =
+    test "baseline_board_KDp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "KD2" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+baselineBoardKH : Test
+baselineBoardKH =
+    test "baseline_board_KH" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "KH1" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            let
+                expected =
+                    [ "peel KD from HELPER [TD JD QD KD], absorb onto trouble [KH] → [KH KD]", "peel KS from HELPER [KS AS 2S 3S], absorb onto growing [KH KD] → [KH KD KS] [→COMPLETE]" ]
+            in
+            case result of
+                Just plan ->
+                    List.map AgentMove.describe plan
+                        |> Expect.equal expected
+
+                Nothing ->
+                    Expect.fail ("expected plan; got Nothing")
+
+
+baselineBoardKHp : Test
+baselineBoardKHp =
+    test "baseline_board_KHp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "KH2" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            let
+                expected =
+                    [ "peel KD from HELPER [TD JD QD KD], absorb onto trouble [KH:1] → [KH:1 KD]", "peel KS from HELPER [KS AS 2S 3S], absorb onto growing [KH:1 KD] → [KH:1 KD KS] [→COMPLETE]" ]
+            in
+            case result of
+                Just plan ->
+                    List.map AgentMove.describe plan
+                        |> Expect.equal expected
+
+                Nothing ->
+                    Expect.fail ("expected plan; got Nothing")
+
+
+baselineBoardKSp : Test
+baselineBoardKSp =
+    test "baseline_board_KSp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "KS2" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+baselineBoardQC : Test
+baselineBoardQC =
+    test "baseline_board_QC" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "QC1" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            let
+                expected =
+                    [ "peel KD from HELPER [TD JD QD KD], absorb onto trouble [QC] → [QC KD]", "steal AC from HELPER [AC AD AH], absorb onto growing [QC KD] → [QC KD AC] [→COMPLETE] ; spawn TROUBLE: [AD], [AH]", "push TROUBLE [AD] onto HELPER [2C 3D 4C 5H 6S 7H] → [AD 2C 3D 4C 5H 6S 7H]", "push TROUBLE [AH] onto HELPER [2H 3H 4H] → [AH 2H 3H 4H]" ]
+            in
+            case result of
+                Just plan ->
+                    List.map AgentMove.describe plan
+                        |> Expect.equal expected
+
+                Nothing ->
+                    Expect.fail ("expected plan; got Nothing")
+
+
+baselineBoardQCp : Test
+baselineBoardQCp =
+    test "baseline_board_QCp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "QC2" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            let
+                expected =
+                    [ "peel KD from HELPER [TD JD QD KD], absorb onto trouble [QC:1] → [QC:1 KD]", "steal AC from HELPER [AC AD AH], absorb onto growing [QC:1 KD] → [QC:1 KD AC] [→COMPLETE] ; spawn TROUBLE: [AD], [AH]", "push TROUBLE [AD] onto HELPER [2C 3D 4C 5H 6S 7H] → [AD 2C 3D 4C 5H 6S 7H]", "push TROUBLE [AH] onto HELPER [2H 3H 4H] → [AH 2H 3H 4H]" ]
+            in
+            case result of
+                Just plan ->
+                    List.map AgentMove.describe plan
+                        |> Expect.equal expected
+
+                Nothing ->
+                    Expect.fail ("expected plan; got Nothing")
+
+
+baselineBoardQDp : Test
+baselineBoardQDp =
+    test "baseline_board_QDp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "QD2" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+baselineBoardQH : Test
+baselineBoardQH =
+    test "baseline_board_QH" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "QH1" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+baselineBoardQHp : Test
+baselineBoardQHp =
+    test "baseline_board_QHp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "QH2" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+baselineBoardQS : Test
+baselineBoardQS =
+    test "baseline_board_QS" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "QS1" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            let
+                expected =
+                    [ "push TROUBLE [QS] onto HELPER [KS AS 2S 3S] → [QS KS AS 2S 3S]" ]
+            in
+            case result of
+                Just plan ->
+                    List.map AgentMove.describe plan
+                        |> Expect.equal expected
+
+                Nothing ->
+                    Expect.fail ("expected plan; got Nothing")
+
+
+baselineBoardQSp : Test
+baselineBoardQSp =
+    test "baseline_board_QSp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "QS2" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            let
+                expected =
+                    [ "push TROUBLE [QS:1] onto HELPER [KS AS 2S 3S] → [QS:1 KS AS 2S 3S]" ]
+            in
+            case result of
+                Just plan ->
+                    List.map AgentMove.describe plan
+                        |> Expect.equal expected
+
+                Nothing ->
+                    Expect.fail ("expected plan; got Nothing")
+
+
+baselineBoardTC : Test
+baselineBoardTC =
+    test "baseline_board_TC" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "TC1" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+baselineBoardTCp : Test
+baselineBoardTCp =
+    test "baseline_board_TCp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "TC2" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+baselineBoardTDp : Test
+baselineBoardTDp =
+    test "baseline_board_TDp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "TD2" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+baselineBoardTH : Test
+baselineBoardTH =
+    test "baseline_board_TH" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "TH1" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+baselineBoardTHp : Test
+baselineBoardTHp =
+    test "baseline_board_THp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "TH2" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+baselineBoardTS : Test
+baselineBoardTS =
+    test "baseline_board_TS" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "TS1" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+baselineBoardTSp : Test
+baselineBoardTSp =
+    test "baseline_board_TSp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "TS2" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
 boardGeometryClassifyCleanlySpaced : Test
 boardGeometryClassifyCleanlySpaced =
     test "board_geometry_classify_cleanly_spaced" <|
@@ -7048,7 +9719,88 @@ wingsForStackSelfExcluded =
 suite : Test
 suite =
     describe "DSL conformance"
-        [ boardGeometryClassifyCleanlySpaced
+        [ baselineBoard2Cp
+        , baselineBoard2D
+        , baselineBoard2Dp
+        , baselineBoard2Hp
+        , baselineBoard2Sp
+        , baselineBoard3C
+        , baselineBoard3Cp
+        , baselineBoard3Dp
+        , baselineBoard3Hp
+        , baselineBoard3Sp
+        , baselineBoard4Cp
+        , baselineBoard4D
+        , baselineBoard4Dp
+        , baselineBoard4Hp
+        , baselineBoard4S
+        , baselineBoard4Sp
+        , baselineBoard5C
+        , baselineBoard5Cp
+        , baselineBoard5D
+        , baselineBoard5Dp
+        , baselineBoard5Hp
+        , baselineBoard5S
+        , baselineBoard5Sp
+        , baselineBoard6C
+        , baselineBoard6Cp
+        , baselineBoard6D
+        , baselineBoard6Dp
+        , baselineBoard6H
+        , baselineBoard6Hp
+        , baselineBoard6Sp
+        , baselineBoard7Cp
+        , baselineBoard7Dp
+        , baselineBoard7Hp
+        , baselineBoard7Sp
+        , baselineBoard8C
+        , baselineBoard8Cp
+        , baselineBoard8D
+        , baselineBoard8Dp
+        , baselineBoard8H
+        , baselineBoard8Hp
+        , baselineBoard8S
+        , baselineBoard8Sp
+        , baselineBoard9C
+        , baselineBoard9Cp
+        , baselineBoard9D
+        , baselineBoard9Dp
+        , baselineBoard9H
+        , baselineBoard9Hp
+        , baselineBoard9S
+        , baselineBoard9Sp
+        , baselineBoardACp
+        , baselineBoardADp
+        , baselineBoardAHp
+        , baselineBoardASp
+        , baselineBoardJC
+        , baselineBoardJCp
+        , baselineBoardJDp
+        , baselineBoardJH
+        , baselineBoardJHp
+        , baselineBoardJS
+        , baselineBoardJSp
+        , baselineBoardKC
+        , baselineBoardKCp
+        , baselineBoardKDp
+        , baselineBoardKH
+        , baselineBoardKHp
+        , baselineBoardKSp
+        , baselineBoardQC
+        , baselineBoardQCp
+        , baselineBoardQDp
+        , baselineBoardQH
+        , baselineBoardQHp
+        , baselineBoardQS
+        , baselineBoardQSp
+        , baselineBoardTC
+        , baselineBoardTCp
+        , baselineBoardTDp
+        , baselineBoardTH
+        , baselineBoardTHp
+        , baselineBoardTS
+        , baselineBoardTSp
+        , boardGeometryClassifyCleanlySpaced
         , boardGeometryClassifyCrowded
         , boardGeometryClassifyIllegalOutOfBounds
         , boardGeometryClassifyIllegalOverlap
