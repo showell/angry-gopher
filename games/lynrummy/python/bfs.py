@@ -197,6 +197,42 @@ def solve_state(initial, *, max_trouble_outer=8, max_states=10000,
     return [line for line, _desc in plan]
 
 
+def _singleton_is_live(c, pool):
+    """True if card c can be part of any valid 3-card group
+    using cards from pool (which must not contain c)."""
+    for i, c1 in enumerate(pool):
+        for c2 in pool[i + 1:]:
+            for triple in ([c, c1, c2], [c1, c, c2], [c1, c2, c]):
+                if classify(triple) != "other":
+                    return True
+    return False
+
+
+def _all_trouble_singletons_live(b):
+    """Return False if any trouble singleton cannot be part of
+    any valid 3-card group given all cards currently on the
+    board. A dead singleton means no BFS plan can ever succeed.
+
+    Dead-trouble-singleton filter: companion to the doomed-third
+    filter (2-partials) and the state-level doomed-growing filter
+    (growing 2-partials). This one fires once before the outer
+    cap loop to short-circuit provably unsolvable projections."""
+    pool = (
+        [c for s in b.helper for c in s]
+        + [c for s in b.trouble for c in s]
+        + [c for s in b.growing for c in s]
+        + [c for s in b.complete for c in s]
+    )
+    for t_stack in b.trouble:
+        if len(t_stack) != 1:
+            continue
+        c = t_stack[0]
+        others = [x for x in pool if x is not c]
+        if not _singleton_is_live(c, others):
+            return False
+    return True
+
+
 def solve_state_with_descs(initial, *, max_trouble_outer=8,
                            max_states=10000,
                            on_cap_exhausted=None,
@@ -222,6 +258,8 @@ def solve_state_with_descs(initial, *, max_trouble_outer=8,
         return None
     if is_victory(initial.trouble, initial.growing):
         return []
+    if not _all_trouble_singletons_live(initial):
+        return None
     # Wrap the Buckets into a FocusedState by attaching the
     # initial lineage (the trouble entries in board order).
     initial5 = FocusedState(
