@@ -499,6 +499,16 @@ filter outright (no valid 3-card group exists in the pool at all)
 and is rejected in O(1) before BFS even starts. Tantalizing cards
 are the hard case; dead cards are cheap.
 
+**Deferred optimization idea — card-tracker query accelerator**: a 104-element
+array indexed by card ID, precomputed neighbor tables per card, and O(k)
+liveness checks instead of the current O(pool²) scan. See
+[BFS_CARD_TRACKER.md](BFS_CARD_TRACKER.md) for the full design sketch.
+The dynamic doomed-singleton filter experiment
+([BFS_DOOMED_SINGLETON.md](BFS_DOOMED_SINGLETON.md),
+branch `experiment/dynamic-doomed-singleton`) established that per-state
+O(pool²) liveness checks are net-negative; the card-tracker accelerator
+is the proposed remedy.
+
 ## OPTIMIZE_PYTHON pruning landmarks (2026-04-25 / 26)
 
 - **Loop inversion** in `enumerate_moves`: 35% reduction in
