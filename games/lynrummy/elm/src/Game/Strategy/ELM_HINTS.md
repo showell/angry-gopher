@@ -94,23 +94,29 @@ See `python/HINT_INFRASTRUCTURE.md` for the build-out record.
 The conformance pipeline is live: `hint_game_seed42.dsl` has 3 `hint_for_hand`
 scenarios that verify Python `find_play` + `format_hint` end-to-end.
 
-## Elm port: what to build
+## Elm port: status
 
-### 1. `Game.Agent.HintPlay` (new module)
+### 1. `Game.Agent.HintPlay` — DONE ✓
 
-```elm
-findPlay : List Card -> List CardStack -> Maybe { placements : List Card, plan : Plan }
-```
+`HintPlay.elm` exists and ships two levels of search:
 
-Singleton-only for MVP — iterate hand cards, project each as a singleton `CardStack`,
-call `Bfs.solveBoard`, return the first card whose projection has a plan.
+- **(a) Triple-in-hand** — `findTripleInHand` scans all hand triples using
+  `StackType.isPartialOk` + `StackType.isLegalStack`. Zero BFS calls; returns
+  immediately when found. With 15-card hands this fires ~100% of the time.
+- **(b) Singleton BFS** — `findBestSingleton` falls through when no triple exists;
+  projects each hand card as a singleton and returns the shortest BFS plan.
 
-```elm
-formatHint : Maybe { placements : List Card, plan : Plan } -> List String
-```
+**Pair-via-BFS (step b in Python's `agent_prelude.find_play`)** is not yet ported.
+It matters for late-game hands (6–10 cards) where no triple remains but a pair
+projection may yield a cleaner plan than any singleton.
 
-Step 0 is `"place [" ++ cardLabels placements ++ "] from hand"`.
-Steps 1..n are `AgentMove.describe` applied to each plan move.
+**Game arc insight**: early in the game large hands → triple fires every time and
+pair/singleton BFS is never reached. Late game the hand shrinks and the inherently
+tricky cards accumulate on the board — that's when singleton/pair BFS matters.
+
+`formatHint : Maybe HintResult -> List String` emits:
+- Step 0: `"place [JD:1 QD:1] from hand"` (explicit placement)
+- Steps 1..n: `Move.describe` applied to each BFS plan step.
 
 ### 2. Wire into `Main/Play.elm`
 
@@ -134,12 +140,14 @@ handHint model =
 The two-path `clickHint` logic (puzzle vs. full game) simplifies to one BFS-based
 path: the board-only puzzle path is just `findPlay [] board` with an empty hand.
 
-### 3. Conformance
+### 3. Conformance — pending wiring
 
-Once `findPlay` + `formatHint` exist in Elm:
+`HintPlay.findPlay` and `HintPlay.formatHint` exist. The 3 seed-42 `hint_for_hand`
+scenarios in `conformance_fixtures.json` currently have `Expect.pass` stubs in the
+Elm suite. To harden:
 - Set `Elm: true` on the `hint_for_hand` fixturegen op
 - Add an `EmitElm` emitter
-- The 3 seed-42 scenarios become real Elm assertions (replacing the current `Expect.pass` stubs)
+- Replace the `Expect.pass` stubs with real assertions against `HintPlay.findPlay`
 
 ### 4. Delete `Game/Strategy/`
 

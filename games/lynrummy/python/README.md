@@ -41,8 +41,9 @@ for full details:
   (board + hands + deck + discard + active player). The shape
   the server accepts on `/new-session`.
 - **`agent_prelude.find_play(hand, board)`** — hand-aware outer
-  loop. Returns a plausible play (or `None` if the hand has no
-  immediate move).
+  loop. Search order: (a) triple-in-hand (zero BFS, best outcome),
+  (b) pair-via-BFS, (c) singleton-via-BFS. Returns the candidate
+  with the shortest plan, or `None` if stuck.
 - **`bfs.solve(board, ...)`** — pure planner entry. Takes a
   flat board, returns the shortest plan as a list of
   description strings (or `None`).
@@ -289,8 +290,14 @@ Ordered by "load-bearing first":
 - `primitives.py` — PRIMITIVE → GESTURE library;
   to_wire_shape / apply_locally / send_one. The canonical
   send path used by every driver.
-- `agent_prelude.py` — hand-aware outer loop;
-  `find_play(hand, board)` returns a plausible play.
+- `agent_prelude.py` — hand-aware outer loop. Search order:
+  (a) triple-in-hand (zero BFS, best outcome), (b) pair-via-BFS,
+  (c) singleton-via-BFS. `find_play_with_budget` is the budgeted
+  variant; `find_play` uses defaults.
+- `bench_outer_shell.py` — benchmarks the outer shell on N random
+  15-card hands from the Game 17 remaining 81 cards. Compares
+  singleton-only vs. full (triple + pair + singleton) for plan
+  quality and wall time. Run with `python3 bench_outer_shell.py`.
 - `agent_game.py` — autonomous-play harness:
   dealer.deal → loop find_play → place + plan → complete_turn.
 - `bfs_play.py` — the replay driver: BFS plan executed
@@ -448,6 +455,16 @@ After any change touching the BFS planner modules
    ```
    Should finish in <10s with at least a few plays
    completed.
+
+5. **Outer shell benchmark** (for changes to `agent_prelude.py`) —
+   compare singleton-only vs. full (triple + pair + singleton)
+   across 20 random 15-card hands from the Game 17 pool:
+   ```
+   python3 bench_outer_shell.py
+   ```
+   Check plan quality (better/same/worse counts) and wall ratio.
+   A regression looks like: full becomes slower *and* plan quality
+   drops vs. the singleton-only baseline.
 
 Snapshot files are throwaway — re-capture periodically
 with `agent_game.py --offline --capture FILE` to get fresh

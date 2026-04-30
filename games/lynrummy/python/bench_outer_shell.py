@@ -1,8 +1,15 @@
 #!/usr/bin/env python3
 """bench_outer_shell.py — Compare outer-shell modes on random hands.
 
-Generates N random 15-card hands from the 81 cards not on the Game 17
-opening board (6 helpers, 23 cards). Runs each hand through two modes:
+Fixed corpus: 60 random 6-card hands drawn from the 81 cards not on
+the Game 17 opening board (6 helpers, 23 cards), seed 42.
+
+NOTE: 6-card hands are used here solely to exercise all four outcome
+types (triple, pair, single, stuck) within a manageable corpus. Real
+Lyn Rummy hands start at 15 cards; hand size shrinks as cards are
+played to the board.
+
+Two modes compared:
 
   singleton-only  skip pair/triple steps; project each hand card as a
                   singleton trouble, pick the shortest BFS plan.
@@ -11,19 +18,10 @@ opening board (6 helpers, 23 cards). Runs each hand through two modes:
                   as a 2-partial trouble, then every singleton; pick
                   shortest plan overall. This is agent_prelude.find_play.
 
-Reports per-hand timings and plan quality, then an aggregate comparison.
-
-The pair/triple step always adds BFS calls (more projections), so full
-is typically slower in wall time — the question is whether the plan
-quality improvement justifies the extra work.
-
 Usage:
-  python3 bench_outer_shell.py             # N=20, seed=42
-  python3 bench_outer_shell.py --n 10 --seed 7
-  python3 bench_outer_shell.py --max-states 5000
+  python3 bench_outer_shell.py
 """
 
-import argparse
 import random
 import time
 import os
@@ -34,8 +32,12 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import bfs
 import agent_prelude
 from rules import classify, is_partial_ok
-from rules.card import RANKS, SUITS, card as make_card, card_label
+from rules.card import card as make_card, card_label
 
+_N = 60
+_HAND_SIZE = 6   # benchmark only — not actual gameplay hand size
+_SEED = 42
+_MAX_STATES = 5000
 
 # ── Fixed board ──────────────────────────────────────────────────────────────
 
@@ -71,7 +73,7 @@ def _remaining_cards():
 
 # ── Singleton-only mode ───────────────────────────────────────────────────────
 
-def _project_singleton(board, c, max_states):
+def _project_singleton(board, c):
     """BFS with `c` as a singleton trouble. Returns (plan_or_None, ms)."""
     augmented = board + [[c]]
     helper = [s for s in augmented if classify(s) != "other"]
@@ -80,20 +82,20 @@ def _project_singleton(board, c, max_states):
     plan = bfs.solve_state_with_descs(
         (helper, trouble, [], []),
         max_trouble_outer=10,
-        max_states=max_states,
+        max_states=_MAX_STATES,
         verbose=False,
     )
     return plan, (time.perf_counter() - t0) * 1000
 
 
-def find_play_singletons_only(hand, board, max_states):
+def find_play_singletons_only(hand, board):
     """Singleton-only: try every hand card as a trouble singleton,
     return the one with the shortest BFS plan (or None if stuck)."""
     candidates = []
     total_ms = 0.0
     projections = 0
     for c in hand:
-        plan, ms = _project_singleton(board, c, max_states)
+        plan, ms = _project_singleton(board, c)
         total_ms += ms
         projections += 1
         if plan is not None:
@@ -105,15 +107,14 @@ def find_play_singletons_only(hand, board, max_states):
 
 # ── Full mode ─────────────────────────────────────────────────────────────────
 
-def find_play_full(hand, board, max_states):
+def find_play_full(hand, board):
     """Full mode via agent_prelude.find_play_with_budget."""
     t0 = time.perf_counter()
     result = agent_prelude.find_play_with_budget(
-        hand, board, max_states=max_states
+        hand, board, max_states=_MAX_STATES
     )
     total_ms = (time.perf_counter() - t0) * 1000
-    # Count projections: pairs + singletons attempted.
-    # Rough proxy: C(n_valid_pairs, 1) + n_hand; for display only.
+    # Rough projection count: valid pairs + singletons; for display only.
     n_pairs = sum(
         1 for i, c1 in enumerate(hand)
         for c2 in hand[i + 1:]
@@ -143,25 +144,27 @@ def _placement_count(result):
     return 0 if result is None else len(result["placements"])
 
 
+def _outcome(result):
+    if result is None:
+        return "stuck"
+    n = len(result["placements"])
+    if n >= 3:
+        return "triple"
+    if n == 2:
+        return "pair"
+    return "single"
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
-    ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--n", type=int, default=20,
-                    help="Number of hands (default 20)")
-    ap.add_argument("--seed", type=int, default=42,
-                    help="Random seed for hand generation (default 42)")
-    ap.add_argument("--max-states", type=int, default=5000,
-                    help="BFS state budget per projection (default 5000)")
-    args = ap.parse_args()
-
     remaining = _remaining_cards()
-    rng = random.Random(args.seed)
-    hands = [rng.sample(remaining, 15) for _ in range(args.n)]
+    rng = random.Random(_SEED)
+    hands = [rng.sample(remaining, _HAND_SIZE) for _ in range(_N)]
     board = _make_board()
 
-    print(f"Game 17 board  ·  {args.n} hands of 15  ·  seed={args.seed}"
-          f"  ·  max_states={args.max_states}")
+    print(f"Game 17 board  ·  {_N} hands of {_HAND_SIZE} (benchmark size)  ·  "
+          f"seed={_SEED}  ·  max_states={_MAX_STATES}")
     print()
 
     col = 44  # width for result column
@@ -171,28 +174,28 @@ def main():
     solo_times = []
     solo_results = []
     for i, hand in enumerate(hands):
-        result, ms, n_proj = find_play_singletons_only(hand, board, args.max_states)
+        result, ms, n_proj = find_play_singletons_only(hand, board)
         solo_times.append(ms)
         solo_results.append(result)
         desc = _fmt_result(result)
         print(f"  hand {i+1:2}  {desc:<{col}}  {ms:7.1f}ms  ({n_proj} projections)")
     solo_total = sum(solo_times)
     solo_stuck = sum(1 for r in solo_results if r is None)
-    print(f"  ── total {solo_total:.0f}ms  ·  stuck {solo_stuck}/{args.n}\n")
+    print(f"  ── total {solo_total:.0f}ms  ·  stuck {solo_stuck}/{_N}\n")
 
     # ── full pass ────────────────────────────────────────────────────────
     print("=== full (triple-in-hand + pair-BFS + singleton) ===")
     full_times = []
     full_results = []
     for i, hand in enumerate(hands):
-        result, ms, n_proj = find_play_full(hand, board, args.max_states)
+        result, ms, n_proj = find_play_full(hand, board)
         full_times.append(ms)
         full_results.append(result)
         desc = _fmt_result(result)
         print(f"  hand {i+1:2}  {desc:<{col}}  {ms:7.1f}ms  (~{n_proj} projections)")
     full_total = sum(full_times)
     full_stuck = sum(1 for r in full_results if r is None)
-    print(f"  ── total {full_total:.0f}ms  ·  stuck {full_stuck}/{args.n}\n")
+    print(f"  ── total {full_total:.0f}ms  ·  stuck {full_stuck}/{_N}\n")
 
     # ── per-hand comparison ───────────────────────────────────────────────
     better_plan = 0
@@ -211,11 +214,15 @@ def main():
         if fc > sc:
             more_placements += 1
 
+    # ── outcome coverage (full mode) ────────────────────────────────────
+    outcomes = [_outcome(r) for r in full_results]
+    counts = {k: outcomes.count(k) for k in ("triple", "pair", "single", "stuck")}
+
     # ── summary ──────────────────────────────────────────────────────────
     ratio = full_total / max(solo_total, 0.001)
     print("=== summary ===")
-    print(f"  singleton-only  {solo_total:7.0f}ms total  stuck {solo_stuck}/{args.n}")
-    print(f"  full            {full_total:7.0f}ms total  stuck {full_stuck}/{args.n}")
+    print(f"  singleton-only  {solo_total:7.0f}ms total  stuck {solo_stuck}/{_N}")
+    print(f"  full            {full_total:7.0f}ms total  stuck {full_stuck}/{_N}")
     print(f"  wall ratio (full/solo): {ratio:.2f}x", end="")
     if ratio > 1:
         print(f"  (full is {(ratio-1)*100:.0f}% slower in wall time)")
@@ -223,7 +230,10 @@ def main():
         print(f"  (full is {(1-ratio)*100:.0f}% faster in wall time)")
     print(f"  plan improvement: better={better_plan}  same={same_plan}"
           f"  worse={worse_plan}  more-placements={more_placements}"
-          f"  (out of {args.n} hands)")
+          f"  (out of {_N} hands)")
+    print(f"  outcome coverage (full): "
+          f"triple={counts['triple']}  pair={counts['pair']}  "
+          f"single={counts['single']}  stuck={counts['stuck']}")
 
 
 if __name__ == "__main__":
