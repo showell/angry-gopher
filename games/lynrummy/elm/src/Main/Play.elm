@@ -44,7 +44,7 @@ import Game.Random as Random
 import Game.Replay.Space as ReplaySpace
 import Game.Replay.Time as ReplayTime
 import Game.Score as Score
-import Game.Strategy.Hint as Hint
+import Game.Agent.HintPlay as HintPlay
 import Game.WireAction as WA exposing (WireAction)
 import Html exposing (Html)
 import Http
@@ -576,9 +576,9 @@ boardRectReceived result model =
 clickHint : Model -> ( Model, Cmd Msg )
 clickHint model =
     -- In puzzle context the active hand is always empty, so the
-    -- hand-driven Hint.buildSuggestions has nothing to say. Fall
-    -- back to BFS: solve the current board, surface the first
-    -- planned move as a status nudge.
+    -- hand-driven hint has nothing to say. Fall back to BFS:
+    -- solve the current board, surface the first planned move
+    -- as a status nudge.
     if model.puzzleName /= Nothing then
         bfsHint model
 
@@ -588,27 +588,23 @@ clickHint model =
 
 handHint : Model -> ( Model, Cmd Msg )
 handHint model =
-    let
-        suggestions =
-            Hint.buildSuggestions (activeHand model) model.board
-    in
-    case suggestions of
-        first :: _ ->
+    case HintPlay.findPlay (activeHand model).handCards model.board of
+        Nothing ->
             ( { model
-                | hintedCards = first.handCards
-                , status =
-                    { text = first.description
-                    , kind = Inform
-                    }
+                | hintedCards = []
+                , status = { text = "No hint — no obvious play for this hand on this board.", kind = Inform }
               }
             , Cmd.none
             )
 
-        [] ->
+        Just result ->
             ( { model
-                | hintedCards = []
+                | hintedCards = result.placements
                 , status =
-                    { text = "No hint — no obvious play for this hand on this board."
+                    { text =
+                        HintPlay.formatHint (Just result)
+                            |> List.head
+                            |> Maybe.withDefault "No hint."
                     , kind = Inform
                     }
               }

@@ -9,6 +9,7 @@ module Game.Agent.Move exposing
     , SourceBucket(..)
     , SpliceDesc
     , WhichEnd(..)
+    , cardLabel
     , describe
     )
 
