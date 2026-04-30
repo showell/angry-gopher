@@ -87,13 +87,73 @@ solveBoard board =
 
 solveWithCap : Int -> Buckets -> Maybe Plan
 solveWithCap maxOuter buckets =
+    if not (allTroubleSingletonsLive buckets) then
+        Nothing
+
+    else
+        let
+            initial =
+                { buckets = buckets
+                , lineage = Enumerator.initialLineage buckets
+                }
+        in
+        solveLoop 1 maxOuter initial
+
+
+{-| Dead-trouble-singleton filter. Return False if any trouble
+singleton cannot be part of any valid 3-card group given all
+cards on the board. A dead singleton means no BFS plan can
+ever succeed. Companion to the doomed-third and state-level
+doomed-growing filters in Enumerator.
+-}
+allTroubleSingletonsLive : Buckets -> Bool
+allTroubleSingletonsLive b =
     let
-        initial =
-            { buckets = buckets
-            , lineage = Enumerator.initialLineage buckets
-            }
+        pool =
+            List.concat b.helper
+                ++ List.concat b.trouble
+                ++ List.concat b.growing
+                ++ List.concat b.complete
+
+        checkStack stack =
+            case stack of
+                [ c ] ->
+                    let
+                        others =
+                            List.filter (\x -> x /= c) pool
+                    in
+                    singletonIsLive c others
+
+                _ ->
+                    True
     in
-    solveLoop 1 maxOuter initial
+    List.all checkStack b.trouble
+
+
+{-| True if card `c` can be part of any valid 3-card group
+using cards from `pool` (which must not contain `c`).
+-}
+singletonIsLive : Card -> List Card -> Bool
+singletonIsLive c pool =
+    List.any
+        (\( c1, c2 ) ->
+            StackType.isLegalStack [ c, c1, c2 ]
+                || StackType.isLegalStack [ c1, c, c2 ]
+                || StackType.isLegalStack [ c1, c2, c ]
+        )
+        (allPairs pool)
+
+
+{-| All unordered pairs from a list. O(n²).
+-}
+allPairs : List a -> List ( a, a )
+allPairs xs =
+    case xs of
+        [] ->
+            []
+
+        h :: t ->
+            List.map (Tuple.pair h) t ++ allPairs t
 
 
 solveLoop : Int -> Int -> FocusedState -> Maybe Plan
