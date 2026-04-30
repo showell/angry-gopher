@@ -366,6 +366,10 @@ split cardIndex s =
         rightSplit cardIndex s
 
 
+{-| Split with the left piece as the "primary" (stays near origin).
+Offsets from original loc: left piece top-=4 left-=2; right piece top+=0 left+=leftCount*stackPitch+8.
+Example: stack at (top=20,left=70), leftCount=2 → left at (16,68), right at (20,136).
+-}
 leftSplit : Int -> CardStack -> List CardStack
 leftSplit leftCount s =
     let
@@ -396,6 +400,10 @@ leftSplit leftCount s =
     ]
 
 
+{-| Split with the right piece as the "primary" (stays near origin).
+Offsets from original loc: left piece top+=0 left-=8; right piece top-=4 left+=leftCount*stackPitch+4.
+Example: stack at (top=20,left=70), leftCount=2 → left at (20,62), right at (16,140).
+-}
 rightSplit : Int -> CardStack -> List CardStack
 rightSplit leftCount s =
     let

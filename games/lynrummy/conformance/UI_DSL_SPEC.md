@@ -180,8 +180,9 @@ scenario replay_preserves_floater_path
 
 ## Notes on syntax conventions
 
-- Coordinates are always `(left, top)` — consistent with
-  `floaterTopLeft`.
+- Coordinates are always `(top, left)` — matching Elm's
+  `{ top, left }` record field order. e.g. `at (20, 70)` means
+  top=20, left=70.
 - Card notation: `KS` = deck 1, `KS'` = deck 2, `KS*` =
   played from hand.
 - `expect_feedback` values match wire format strings exactly:
