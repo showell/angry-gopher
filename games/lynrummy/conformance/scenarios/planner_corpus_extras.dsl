@@ -481,3 +481,50 @@ scenario extra_025_8C
     plan_lines:
       - "push TROUBLE [8C] onto HELPER [5D:1 6C:1 7H] \u2192 [5D:1 6C:1 7H 8C]"
 
+# Hand-added 2026-04-30: game 17 initial board, singleton projections.
+# Benchmarks the "live-but-hard" slow class for SOLVER_SPEED work.
+# Board is the standard opening deal (6 helpers, all clean).
+# All three cards are theoretically live (valid group exists in pool)
+# but no plan exists on this specific board \u2014 BFS exhausts all caps.
+
+scenario extra_026_2Sp
+  desc: Game 17 board, trouble 2S'. Live singleton, no plan. SOLVER_SPEED benchmark.
+  op: solve
+  helper:
+    at (0,0): KS AS 2S 3S
+    at (0,0): TD JD QD KD
+    at (0,0): 2H 3H 4H
+    at (0,0): 7S 7D 7C
+    at (0,0): AC AD AH
+    at (0,0): 2C 3D 4C 5H 6S 7H
+  trouble:
+    at (0,0): 2S'
+  expect: no_plan
+
+scenario extra_027_3Hp
+  desc: Game 17 board, trouble 3H'. Live singleton, no plan. SOLVER_SPEED benchmark.
+  op: solve
+  helper:
+    at (0,0): KS AS 2S 3S
+    at (0,0): TD JD QD KD
+    at (0,0): 2H 3H 4H
+    at (0,0): 7S 7D 7C
+    at (0,0): AC AD AH
+    at (0,0): 2C 3D 4C 5H 6S 7H
+  trouble:
+    at (0,0): 3H'
+  expect: no_plan
+
+scenario extra_028_KDp
+  desc: Game 17 board, trouble KD'. Live singleton, no plan. SOLVER_SPEED benchmark.
+  op: solve
+  helper:
+    at (0,0): KS AS 2S 3S
+    at (0,0): TD JD QD KD
+    at (0,0): 2H 3H 4H
+    at (0,0): 7S 7D 7C
+    at (0,0): AC AD AH
+    at (0,0): 2C 3D 4C 5H 6S 7H
+  trouble:
+    at (0,0): KD'
+  expect: no_plan

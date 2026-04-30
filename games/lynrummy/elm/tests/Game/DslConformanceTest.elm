@@ -2835,6 +2835,99 @@ extra0258C =
                     Expect.fail ("expected plan; got Nothing")
 
 
+extra0262Sp : Test
+extra0262Sp =
+    test "extra_026_2Sp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "2S2" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+extra0273Hp : Test
+extra0273Hp =
+    test "extra_027_3Hp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "3H2" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
+extra028KDp : Test
+extra028KDp =
+    test "extra_028_KDp" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        , [ parseCard "2H1", parseCard "3H1", parseCard "4H1" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]
+                        , [ parseCard "AC1", parseCard "AD1", parseCard "AH1" ]
+                        , [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ]
+                        ]
+                    , trouble = [ [ parseCard "KD2" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            case result of
+                Nothing ->
+                    Expect.pass
+
+                Just plan ->
+                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
+
+
 findOpenLocBlockingPreferredOrigin : Test
 findOpenLocBlockingPreferredOrigin =
     test "find_open_loc_blocking_preferred_origin" <|
@@ -7035,6 +7128,9 @@ suite =
         , extra023TCp
         , extra0242Cp
         , extra0258C
+        , extra0262Sp
+        , extra0273Hp
+        , extra028KDp
         , findOpenLocBlockingPreferredOrigin
         , findOpenLocEmptyBoard
         , findOpenLocLongStack

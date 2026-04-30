@@ -23855,6 +23855,795 @@
     }
   },
   {
+    "name": "extra_026_2Sp",
+    "desc": "Game 17 board, trouble 2S'. Live singleton, no plan. SOLVER_SPEED benchmark.",
+    "op": "solve",
+    "hand": [],
+    "board": [],
+    "helper": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 13,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 2,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 10,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 11,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 12,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 13,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 2,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 7,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 1,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 2,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 5,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 6,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "trouble": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 2,
+              "suit": 2,
+              "origin_deck": 1
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "expect": {
+      "kind": "no_plan",
+      "no_plan": true
+    }
+  },
+  {
+    "name": "extra_027_3Hp",
+    "desc": "Game 17 board, trouble 3H'. Live singleton, no plan. SOLVER_SPEED benchmark.",
+    "op": "solve",
+    "hand": [],
+    "board": [],
+    "helper": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 13,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 2,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 10,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 11,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 12,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 13,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 2,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 7,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 1,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 2,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 5,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 6,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "trouble": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 3,
+              "suit": 3,
+              "origin_deck": 1
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "expect": {
+      "kind": "no_plan",
+      "no_plan": true
+    }
+  },
+  {
+    "name": "extra_028_KDp",
+    "desc": "Game 17 board, trouble KD'. Live singleton, no plan. SOLVER_SPEED benchmark.",
+    "op": "solve",
+    "hand": [],
+    "board": [],
+    "helper": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 13,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 2,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 10,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 11,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 12,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 13,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 2,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 7,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 1,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      },
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 2,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 5,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 6,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 7,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "trouble": [
+      {
+        "board_cards": [
+          {
+            "card": {
+              "value": 13,
+              "suit": 1,
+              "origin_deck": 1
+            },
+            "state": 0
+          }
+        ],
+        "loc": {
+          "top": 0,
+          "left": 0
+        }
+      }
+    ],
+    "expect": {
+      "kind": "no_plan",
+      "no_plan": true
+    }
+  },
+  {
     "name": "find_open_loc_blocking_preferred_origin",
     "desc": "Stack camped at the preferred origin (90, 50) forces the placer down. Python's column-major scan with packStep=15 + pack-gap=30 finds (167, 52) — three step-15 ticks below the blocker, plus anti-align.",
     "op": "find_open_loc",
