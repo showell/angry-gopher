@@ -162,43 +162,66 @@ solveLoop cap maxOuter initial =
         Nothing
 
     else
-        case bfsWithCap cap initial of
+        let
+            ( maybePlan, maxTroubleSeen ) =
+                bfsWithCap cap initial
+        in
+        case maybePlan of
             Just plan ->
                 Just plan
 
             Nothing ->
-                solveLoop (cap + 1) maxOuter initial
+                -- Plateau detection: if no generated candidate
+                -- (admitted or pruned) exceeded maxTroubleSeen,
+                -- no move from any reachable state leads to higher
+                -- trouble. Higher caps admit nothing new — stop.
+                -- Includes pruned candidates because troubleCount
+                -- can jump by >1 per move (e.g. 1→3 on a yank).
+                if maxTroubleSeen < cap then
+                    Nothing
+
+                else
+                    solveLoop (cap + 1) maxOuter initial
 
 
 {-| Inner BFS: pure breadth-first by program length, every
 state filtered against the cap. Within each level, frontier
 is sorted by trouble count so victory-adjacent states are
 expanded earlier.
+
+Returns (Maybe Plan, maxTroubleSeen) where maxTroubleSeen is
+the highest troubleCount seen across ALL generated candidates
+(admitted or pruned). Used by solveLoop for plateau detection.
 -}
-bfsWithCap : Int -> FocusedState -> Maybe Plan
+bfsWithCap : Int -> FocusedState -> ( Maybe Plan, Int )
 bfsWithCap cap initial =
     if Buckets.troubleCount initial.buckets > cap then
-        Nothing
+        -- Sentinel: return cap so plateau check (maxTroubleSeen < cap)
+        -- does not fire. Higher caps may admit this initial state.
+        ( Nothing, cap )
 
     else if Buckets.isVictory initial.buckets then
-        Just []
+        ( Just [], 0 )
 
     else
         let
             initialSig =
                 signature initial
+
+            initialTrouble =
+                Buckets.troubleCount initial.buckets
         in
-        bfsStep cap [ ( initial, [] ) ] (Set.singleton initialSig)
+        bfsStep cap [ ( initial, [] ) ] (Set.singleton initialSig) initialTrouble
 
 
 type alias Frontier =
     List ( FocusedState, Plan )
 
 
-bfsStep : Int -> Frontier -> Set String -> Maybe Plan
-bfsStep cap currentLevel seen =
+bfsStep : Int -> Frontier -> Set String -> Int -> ( Maybe Plan, Int )
+bfsStep cap currentLevel seen maxTroubleSeen =
     if List.isEmpty currentLevel then
-        Nothing
+        ( Nothing, maxTroubleSeen )
 
     else
         let
@@ -207,23 +230,20 @@ bfsStep cap currentLevel seen =
                     (\( s, _ ) -> Buckets.troubleCount s.buckets)
                     currentLevel
 
-            -- Walk the level, accumulating next-level entries
-            -- and dedup'd seen-set. Short-circuit on first
-            -- victory.
             stepResult =
-                walkLevel cap sorted seen []
+                walkLevel cap sorted seen [] maxTroubleSeen
         in
         case stepResult of
             Found plan ->
-                Just plan
+                ( Just plan, 0 )
 
-            Continue nextLevel newSeen ->
-                bfsStep cap nextLevel newSeen
+            Continue nextLevel newSeen newMax ->
+                bfsStep cap nextLevel newSeen newMax
 
 
 type StepResult
     = Found Plan
-    | Continue Frontier (Set String)
+    | Continue Frontier (Set String) Int
 
 
 walkLevel :
@@ -231,27 +251,28 @@ walkLevel :
     -> Frontier
     -> Set String
     -> Frontier
+    -> Int
     -> StepResult
-walkLevel cap frontier seen acc =
+walkLevel cap frontier seen acc maxTroubleSeen =
     case frontier of
         [] ->
             -- Reverse once at end-of-level so order matches
             -- enumeration order rather than reverse-of-it.
-            Continue (List.reverse acc) seen
+            Continue (List.reverse acc) seen maxTroubleSeen
 
         ( state, program ) :: rest ->
-            case expandState cap state program seen acc of
+            case expandState cap state program seen acc maxTroubleSeen of
                 Found plan ->
                     Found plan
 
-                Continue updatedAcc updatedSeen ->
-                    walkLevel cap rest updatedSeen updatedAcc
+                Continue updatedAcc updatedSeen updatedMax ->
+                    walkLevel cap rest updatedSeen updatedAcc updatedMax
 
 
 {-| Expand a single state. For each enumerated move, check
 the cap, dedup against `seen`, check victory, otherwise add
 to the accumulator. Returns either a victorious plan or
-the updated (acc, seen) pair.
+the updated (acc, seen, maxTroubleSeen) triple.
 -}
 expandState :
     Int
@@ -259,13 +280,14 @@ expandState :
     -> Plan
     -> Set String
     -> Frontier
+    -> Int
     -> StepResult
-expandState cap state program seen acc =
+expandState cap state program seen acc maxTroubleSeen =
     let
         moves =
             Enumerator.enumerateFocused state
     in
-    expandMoves cap program moves seen acc
+    expandMoves cap program moves seen acc maxTroubleSeen
 
 
 expandMoves :
@@ -274,15 +296,26 @@ expandMoves :
     -> List ( Move, FocusedState )
     -> Set String
     -> Frontier
+    -> Int
     -> StepResult
-expandMoves cap program moves seen acc =
+expandMoves cap program moves seen acc maxTroubleSeen =
     case moves of
         [] ->
-            Continue acc seen
+            Continue acc seen maxTroubleSeen
 
         ( move, newState ) :: rest ->
-            if Buckets.troubleCount newState.buckets > cap then
-                expandMoves cap program rest seen acc
+            let
+                tc =
+                    Buckets.troubleCount newState.buckets
+
+                -- Track ALL candidates (pruned or admitted).
+                -- troubleCount can jump by >1 per move, so
+                -- admitted-only tracking fires plateau too early.
+                newMax =
+                    max maxTroubleSeen tc
+            in
+            if tc > cap then
+                expandMoves cap program rest seen acc newMax
 
             else
                 let
@@ -290,7 +323,7 @@ expandMoves cap program moves seen acc =
                         signature newState
                 in
                 if Set.member sig seen then
-                    expandMoves cap program rest seen acc
+                    expandMoves cap program rest seen acc newMax
 
                 else
                     let
@@ -309,6 +342,7 @@ expandMoves cap program moves seen acc =
                             rest
                             newSeen
                             (( newState, newProgram ) :: acc)
+                            newMax
 
 
 

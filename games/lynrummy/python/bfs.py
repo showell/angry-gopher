@@ -91,8 +91,13 @@ def bfs_with_cap(initial, max_trouble, max_states, *,
     or consume it.
 
     Returns (plan_or_None, hit_max_states, expansions,
-    seen_count). `hit_max_states=True` means the cap was hit
-    by exhausting the state budget — the runaway signal.
+    seen_count, max_trouble_seen). `hit_max_states=True` means
+    the cap was hit by exhausting the state budget — the runaway
+    signal. `max_trouble_seen` is the highest trouble_count among
+    all generated candidates (pruned or admitted). Includes pruned
+    states because trouble_count can jump by >1 per move, so
+    admitted-only tracking fires plateau too early on solvable
+    boards where the plan path skips intermediate trouble values.
 
     `diagnostics`, if provided, is a mutable dict populated
     with trouble_histogram / level_widths / sample_states.
@@ -100,13 +105,17 @@ def bfs_with_cap(initial, max_trouble, max_states, *,
     """
     b = initial.buckets
     if trouble_count(b.trouble, b.growing) > max_trouble:
-        return None, False, 0, 0
+        # Cap was the binding constraint — return max_trouble so
+        # the caller's plateau check (max_trouble_seen < cap) does
+        # not fire. Higher caps may admit this initial state.
+        return None, False, 0, 0, max_trouble
     if is_victory(b.trouble, b.growing):
-        return [], False, 0, 1
+        return [], False, 0, 1, 0
     seen = {(state_sig(*b), initial.lineage)}
     current_level = [(initial, [])]
     expansions = 0
     level = 0
+    max_trouble_seen = trouble_count(b.trouble, b.growing)
     if diagnostics is not None:
         diagnostics.setdefault("trouble_histogram", {})
         diagnostics.setdefault("level_widths", [1])
@@ -129,7 +138,10 @@ def bfs_with_cap(initial, max_trouble, max_states, *,
             expansions += 1
             for desc, new_state in enumerate_focused(state):
                 nb = new_state.buckets
-                if trouble_count(nb.trouble, nb.growing) > max_trouble:
+                tc = trouble_count(nb.trouble, nb.growing)
+                if tc > max_trouble_seen:
+                    max_trouble_seen = tc  # track all candidates, not just admitted
+                if tc > max_trouble:
                     continue
                 sig = (state_sig(*nb), new_state.lineage)
                 if sig in seen:
@@ -137,7 +149,6 @@ def bfs_with_cap(initial, max_trouble, max_states, *,
                 seen.add(sig)
                 new_program = program + [(describe(desc), desc)]
                 if diagnostics is not None:
-                    tc = trouble_count(nb.trouble, nb.growing)
                     h = diagnostics["trouble_histogram"]
                     h[tc] = h.get(tc, 0) + 1
                 if is_victory(nb.trouble, nb.growing):
@@ -146,7 +157,7 @@ def bfs_with_cap(initial, max_trouble, max_states, *,
                               f"{len(new_program)}-line plan, "
                               f"{expansions} expansions, "
                               f"{len(seen)} states")
-                    return new_program, False, expansions, len(seen)
+                    return new_program, False, expansions, len(seen), max_trouble_seen
                 next_level.append((new_state, new_program))
             if expansions >= max_states:
                 if verbose:
@@ -156,14 +167,14 @@ def bfs_with_cap(initial, max_trouble, max_states, *,
                         (s, [line for line, _ in prog])
                         for s, prog in next_level[-5:]
                     ]
-                return None, True, expansions, len(seen)
+                return None, True, expansions, len(seen), max_trouble_seen
         if diagnostics is not None:
             diagnostics["level_widths"].append(len(next_level))
         if verbose:
             print(f"  level {level} → "
                   f"{len(next_level)} program(s) at level {level + 1}")
         current_level = next_level
-    return None, False, expansions, len(seen)
+    return None, False, expansions, len(seen), max_trouble_seen
 
 
 def solve(board, *, max_trouble_outer=8, max_states=10000,
@@ -271,7 +282,7 @@ def solve_state_with_descs(initial, *, max_trouble_outer=8,
             print(f"\n========== outer pass: max_trouble={cap} "
                   f"==========")
         diags = {} if on_cap_exhausted is not None else None
-        result, exhausted, expansions, seen_n = bfs_with_cap(
+        result, exhausted, expansions, seen_n, max_trouble_seen = bfs_with_cap(
             initial5, cap, max_states,
             diagnostics=diags, verbose=verbose)
         if result is not None:
@@ -281,10 +292,21 @@ def solve_state_with_descs(initial, *, max_trouble_outer=8,
             return result
         if verbose:
             print(f"  → cap={cap} exhausted "
-                  f"({expansions} expansions, {seen_n} states)")
+                  f"({expansions} expansions, {seen_n} states, "
+                  f"max_trouble={max_trouble_seen})")
         if on_cap_exhausted is not None:
             on_cap_exhausted(cap=cap, expansions=expansions,
                              seen_count=seen_n,
                              hit_max_states=exhausted,
+                             max_trouble_seen=max_trouble_seen,
                              diagnostics=diags)
+        # Plateau detection: if no generated candidate (admitted or
+        # pruned) exceeded max_trouble_seen, and the frontier
+        # exhausted naturally, then no move from any reachable state
+        # leads to trouble_count > max_trouble_seen. Higher caps
+        # admit nothing new — stop. Counting pruned candidates is
+        # required: trouble_count jumps by >1 per move, so a cap-2
+        # run can have max_admitted=1 while max_attempted=3.
+        if not exhausted and max_trouble_seen < cap:
+            return None
     return None
