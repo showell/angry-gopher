@@ -75,6 +75,10 @@ type Scenario struct {
 	// Geometry op (`find_open_loc`).
 	Existing  []Stack
 	CardCount int
+	// Hint op (`hint_for_hand`). Board is a flat list of card lists
+	// (no location info). Steps are plain text lines.
+	HintBoard [][]Card
+	HintSteps []string
 	// Replay-invariant op (`replay_invariant`).
 	ReplayActions []ReplayAction
 	// Undo-walkthrough op (`undo_walkthrough`).
@@ -94,6 +98,14 @@ type Scenario struct {
 	GestureCursor       *XY    // cursor: (x, y)
 	GestureClickIntent  *int   // gesture_click_intent: N
 	GestureTarget       []Stack // target: block — target stack for merge/floater ops
+	// click_arbitration op.
+	CurrentPoint      *XY  // current: (x, y) — current cursor position
+	InitialClickIntent *int // initial_click_intent: N — absent means Nothing
+	PreKillAt          *XY  // pre_kill_at: (x, y) — optional: kill intent here before main call
+	// wings_for_stack op.
+	WFSSource         []Stack // source: block — source stack for wingsForStack
+	// wings_for_hand_card op.
+	WFSHandCard       string  // hand_card: <token> — hand card for wingsForHandCard
 	Expect              Expectation
 }
 
@@ -230,6 +242,32 @@ type ExpectGestureFloaterOverWing struct {
 	Side    string // side: Left|Right (only checked when HasWing=true)
 }
 
+// ExpectClickArbitration holds expectations for the `click_arbitration` op.
+// ExpectNothing=true means the result must be Nothing;
+// otherwise ExpectValue holds the expected Just N.
+type ExpectClickArbitration struct {
+	ExpectNothing bool // expect_click_intent: nothing
+	ExpectValue   *int // expect_click_intent: N
+}
+
+// WingExpect is one entry in an `expect_wings:` list.
+// TargetCards identifies the target stack by card content;
+// Side is "Left" or "Right".
+type WingExpect struct {
+	TargetCards []Card // target: <cards>
+	Side        string // side: Left|Right
+}
+
+// ExpectWingsForStack holds expectations for the `wings_for_stack` op.
+type ExpectWingsForStack struct {
+	Wings []WingExpect // expect_wings: block or []
+}
+
+// ExpectWingsForHandCard holds expectations for the `wings_for_hand_card` op.
+type ExpectWingsForHandCard struct {
+	Wings []WingExpect // expect_wings: block or []
+}
+
 // ExpectClickAgent holds expectations for the `click_agent_play` op.
 type ExpectClickAgent struct {
 	ReplayStarted    *bool  // expect: replay_started: true | false
@@ -262,6 +300,9 @@ type Expectation struct {
 	GestureMoveStack     ExpectGestureMoveStack
 	GesturePlaceHand     ExpectGesturePlaceHand
 	GestureFloaterOverWing ExpectGestureFloaterOverWing
+	ClickArbitration     ExpectClickArbitration
+	WingsForStack        ExpectWingsForStack
+	WingsForHandCard     ExpectWingsForHandCard
 }
 
 // ExpectedSuggestion — one row inside an `expect: suggestions`
@@ -465,6 +506,34 @@ var opRegistry = []OpKind{
 		Elm:     true,
 		EmitElm: elmGestureFloaterOverWing,
 	},
+	{
+		// Elm-only: no Python gesture layer. Tests
+		// GA.clickIntentAfterMove — the click-vs-drag threshold rule.
+		Name:    "click_arbitration",
+		Elm:     true,
+		EmitElm: elmClickArbitration,
+	},
+	{
+		// Elm-only: no Python wing-oracle layer. Tests
+		// WingOracle.wingsForStack — merge-target discovery.
+		Name:    "wings_for_stack",
+		Elm:     true,
+		EmitElm: elmWingsForStack,
+	},
+	{
+		// Elm-only: no Python wing-oracle layer. Tests
+		// WingOracle.wingsForHandCard — merge-target discovery for
+		// a hand card being dragged onto board stacks.
+		Name:    "wings_for_hand_card",
+		Elm:     true,
+		EmitElm: elmWingsForHandCard,
+	},
+	{
+		// Python-only: no Elm hint-for-hand layer. Tests
+		// agent_prelude.find_play + format_hint end-to-end.
+		Name:   "hint_for_hand",
+		Python: true,
+	},
 }
 
 var opByName = func() map[string]*OpKind {
@@ -648,7 +717,9 @@ import Game.CardStack
         , HandCardState(..)
         )
 import Game.BoardActions as BoardActions
+import Game.Physics.GestureArbitration as GA
 import Game.Physics.PlaceStack
+import Game.Physics.WingOracle as WingOracle
 import Game.Rules.Referee as Referee exposing (RefereeStage(..), refereeStageToString)
 import Game.Replay.Time as ReplayTime
 import Game.Rules.StackType as StackType
@@ -997,14 +1068,24 @@ func pascalToSnake(s string) string {
 }
 
 // elmScenarioBody emits the inside of an Elm test thunk via the
-// op registry. The Elm runner is the target-of-record (every op
-// is expected to have an Elm emitter), so an unregistered op
-// here is a registry bug.
+// op registry. For Python-only ops (Elm=false), emitting Expect.pass
+// keeps the Elm test file structurally valid without a spurious failure.
+// A true registry bug (nil op, or Elm=true with no emitter) is still
+// a hard Expect.fail so drift surfaces immediately.
 func elmScenarioBody(sc Scenario) string {
 	var b strings.Builder
 	op := opByName[sc.Op]
-	if op == nil || !op.Elm || op.EmitElm == nil {
-		fmt.Fprintf(&b, "            Expect.fail %q", "registry/emitter mismatch for op "+sc.Op)
+	if op == nil {
+		fmt.Fprintf(&b, "            Expect.fail %q", "unregistered op "+sc.Op)
+		return b.String()
+	}
+	if !op.Elm {
+		// Python-only scenario — no Elm coverage by design.
+		fmt.Fprintf(&b, "            Expect.pass")
+		return b.String()
+	}
+	if op.EmitElm == nil {
+		fmt.Fprintf(&b, "            Expect.fail %q", "Elm=true but no emitter for op "+sc.Op)
 		return b.String()
 	}
 	op.EmitElm(&b, sc)
@@ -2021,6 +2102,158 @@ func elmGestureFloaterOverWing(b *strings.Builder, sc Scenario) {
 }
 
 
+// elmClickArbitration emits a test body for the `click_arbitration` op.
+// Calls GA.clickIntentAfterMove with mousedown, current, and optional
+// initial click intent, and asserts the result is Just N or Nothing.
+//
+// If pre_kill_at is set, a preliminary call is made first to simulate
+// "death is permanent" — the intent is killed by a large move, then the
+// main call uses the result as input.
+func elmClickArbitration(b *strings.Builder, sc Scenario) {
+	ind := "            "
+	ca := sc.Expect.ClickArbitration
+
+	md := sc.MousedownPoint
+	cur := sc.CurrentPoint
+	if md == nil || cur == nil {
+		b.WriteString(ind + "Expect.fail \"click_arbitration scenario missing mousedown or current\"")
+		return
+	}
+
+	// Build the initial intent Elm expression.
+	var intentExpr string
+	if sc.InitialClickIntent != nil {
+		intentExpr = fmt.Sprintf("(Just %d)", *sc.InitialClickIntent)
+	} else {
+		intentExpr = "Nothing"
+	}
+
+	// Build the expected-result Elm expression.
+	var expectedExpr string
+	if ca.ExpectNothing {
+		expectedExpr = "Nothing"
+	} else if ca.ExpectValue != nil {
+		expectedExpr = fmt.Sprintf("(Just %d)", *ca.ExpectValue)
+	} else {
+		b.WriteString(ind + "Expect.fail \"click_arbitration scenario missing expect_click_intent\"")
+		return
+	}
+
+	if sc.PreKillAt != nil {
+		// Two-step: first kill the intent, then re-call with the original mousedown.
+		pk := sc.PreKillAt
+		b.WriteString(ind + "let\n")
+		fmt.Fprintf(b, "%s    afterKill =\n%s        GA.clickIntentAfterMove { x = %d, y = %d } { x = %d, y = %d } %s\n\n",
+			ind, ind, md.X, md.Y, pk.X, pk.Y, intentExpr)
+		b.WriteString(ind + "in\n")
+		fmt.Fprintf(b, "%sGA.clickIntentAfterMove { x = %d, y = %d } { x = %d, y = %d } afterKill\n",
+			ind, md.X, md.Y, cur.X, cur.Y)
+		fmt.Fprintf(b, "%s    |> Expect.equal %s", ind, expectedExpr)
+	} else {
+		fmt.Fprintf(b, "%sGA.clickIntentAfterMove { x = %d, y = %d } { x = %d, y = %d } %s\n",
+			ind, md.X, md.Y, cur.X, cur.Y, intentExpr)
+		fmt.Fprintf(b, "%s    |> Expect.equal %s", ind, expectedExpr)
+	}
+}
+
+
+// elmWingsForStack emits a test body for the `wings_for_stack` op.
+// Calls WingOracle.wingsForStack sourceStack board and asserts the result
+// matches the expected list of wings (matched by target card content + side).
+//
+// Wings are compared by stripping loc: toKey extracts (List Card, Side) from
+// each wing, so the assertion is location-independent and free of any runtime
+// board lookup. A typo in expect_wings produces a direct card-mismatch error
+// rather than a confusing "wing not found" with the correct wing in the output.
+func elmWingsForStack(b *strings.Builder, sc Scenario) {
+	ind := "            "
+	wfs := sc.Expect.WingsForStack
+
+	if len(sc.WFSSource) == 0 {
+		b.WriteString(ind + "Expect.fail \"wings_for_stack scenario missing source block\"")
+		return
+	}
+
+	sourceStack := sc.WFSSource[0]
+	b.WriteString(ind + "let\n")
+	fmt.Fprintf(b, "%s    board =\n%s        %s\n\n", ind, ind,
+		elmStacks(sc.Board, ind+"            "))
+	fmt.Fprintf(b, "%s    sourceStack =\n%s        %s\n\n", ind, ind, elmStackLit(sourceStack))
+	fmt.Fprintf(b, "%s    result =\n%s        WingOracle.wingsForStack sourceStack board\n\n", ind, ind)
+
+	if len(wfs.Wings) == 0 {
+		b.WriteString(ind + "in\n")
+		b.WriteString(ind + "result |> Expect.equal []")
+		return
+	}
+
+	// Compare by card content + side only — loc is stripped via toKey.
+	b.WriteString(ind + "    toKey w =\n")
+	b.WriteString(ind + "        ( List.map .card w.target.boardCards, w.side )\n\n")
+	b.WriteString(ind + "    resultKeys =\n")
+	b.WriteString(ind + "        List.map toKey result\n\n")
+
+	var wantParts []string
+	for _, w := range wfs.Wings {
+		cards := elmRawCards(w.TargetCards)
+		sideExpr := "BoardActions." + w.Side
+		wantParts = append(wantParts, fmt.Sprintf("( %s, %s )", cards, sideExpr))
+	}
+	fmt.Fprintf(b, "%s    wantKeys =\n%s        [ %s ]\n", ind, ind, strings.Join(wantParts, "\n"+ind+"        , "))
+	b.WriteString(ind + "in\n")
+	b.WriteString(ind + "resultKeys |> Expect.equal wantKeys")
+}
+
+
+// elmWingsForHandCard emits a test body for the `wings_for_hand_card` op.
+// Calls WingOracle.wingsForHandCard handCard board and asserts the result
+// matches the expected list of wings (matched by target card content + side).
+//
+// Wings are compared by stripping loc: toKey extracts (List Card, Side) from
+// each wing, so the assertion is location-independent. Mirrors the pattern
+// in elmWingsForStack.
+func elmWingsForHandCard(b *strings.Builder, sc Scenario) {
+	ind := "            "
+	wfhc := sc.Expect.WingsForHandCard
+
+	if sc.WFSHandCard == "" {
+		b.WriteString(ind + "Expect.fail \"wings_for_hand_card scenario missing hand_card\"")
+		return
+	}
+
+	c, _ := parseCard(sc.WFSHandCard)
+	cardToken := elmCompactCard(c)
+
+	b.WriteString(ind + "let\n")
+	fmt.Fprintf(b, "%s    board =\n%s        %s\n\n", ind, ind,
+		elmStacks(sc.Board, ind+"            "))
+	fmt.Fprintf(b, "%s    handCard_ =\n%s        handCard %s\n\n", ind, ind, cardToken)
+	fmt.Fprintf(b, "%s    result =\n%s        WingOracle.wingsForHandCard handCard_ board\n\n", ind, ind)
+
+	if len(wfhc.Wings) == 0 {
+		b.WriteString(ind + "in\n")
+		b.WriteString(ind + "result |> Expect.equal []")
+		return
+	}
+
+	// Compare by card content + side only — loc is stripped via toKey.
+	b.WriteString(ind + "    toKey w =\n")
+	b.WriteString(ind + "        ( List.map .card w.target.boardCards, w.side )\n\n")
+	b.WriteString(ind + "    resultKeys =\n")
+	b.WriteString(ind + "        List.map toKey result\n\n")
+
+	var wantParts []string
+	for _, w := range wfhc.Wings {
+		cards := elmRawCards(w.TargetCards)
+		sideExpr := "BoardActions." + w.Side
+		wantParts = append(wantParts, fmt.Sprintf("( %s, %s )", cards, sideExpr))
+	}
+	fmt.Fprintf(b, "%s    wantKeys =\n%s        [ %s ]\n", ind, ind, strings.Join(wantParts, "\n"+ind+"        , "))
+	b.WriteString(ind + "in\n")
+	b.WriteString(ind + "resultKeys |> Expect.equal wantKeys")
+}
+
+
 const elmHintInvariantTmpl = `            let
                 handCards =
                     %s
@@ -2537,6 +2770,11 @@ type jsonScenario struct {
 	// Geometry op (`find_open_loc`).
 	Existing  []jsonStack `json:"existing,omitempty"`
 	CardCount int         `json:"card_count,omitempty"`
+	// Hint op (`hint_for_hand`). Flat label strings so the Python
+	// handler can call agent_prelude.find_play directly.
+	HintHand  []string   `json:"hint_hand,omitempty"`
+	HintBoard [][]string `json:"hint_board,omitempty"`
+	HintSteps []string   `json:"hint_steps,omitempty"`
 	Expect    jsonExpect  `json:"expect"`
 }
 
@@ -2604,6 +2842,9 @@ func toJSONScenario(sc Scenario) jsonScenario {
 		Complete:  toJSONBoard(sc.Complete),
 		Existing:  toJSONBoard(sc.Existing),
 		CardCount: sc.CardCount,
+		HintHand:  toHintHandLabels(sc.Hand),
+		HintBoard: toHintBoardLabels(sc.HintBoard),
+		HintSteps: sc.HintSteps,
 	}
 	js.Expect = jsonExpect{
 		Kind:            sc.Expect.Kind,
@@ -2658,6 +2899,54 @@ func toJSONCards(cs []Card) []jsonCard {
 		out = append(out, jsonCard{Value: c.Value, Suit: c.Suit, OriginDeck: c.Deck})
 	}
 	return out
+}
+
+// toHintHandLabels converts a []Card to the label-string form used
+// by hint_for_hand JSON output (e.g. "3S:1", "4S"). The `:N` deck
+// suffix is included only when the deck is non-zero, matching the
+// card_label function in agent_prelude.
+func toHintHandLabels(cs []Card) []string {
+	if len(cs) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(cs))
+	for _, c := range cs {
+		out = append(out, cardLabel(c))
+	}
+	return out
+}
+
+// toHintBoardLabels converts a [][]Card (hint board) to [][]string.
+func toHintBoardLabels(stacks [][]Card) [][]string {
+	if len(stacks) == 0 {
+		return nil
+	}
+	out := make([][]string, 0, len(stacks))
+	for _, stack := range stacks {
+		row := make([]string, 0, len(stack))
+		for _, c := range stack {
+			row = append(row, cardLabel(c))
+		}
+		out = append(out, row)
+	}
+	return out
+}
+
+// cardLabel renders a Card as a hint-DSL shorthand: "<value><suit>"
+// or "<value><suit>:<deck>" when deck > 0.
+func cardLabel(c Card) string {
+	const ranks = "A23456789TJQK"
+	const suits = "CDSH"
+	v := c.Value
+	s := c.Suit
+	if v < 1 || v > 13 || s < 0 || s > 3 {
+		return "??"
+	}
+	base := string(ranks[v-1]) + string(suits[s])
+	if c.Deck != 0 {
+		return base + ":" + strconv.Itoa(c.Deck)
+	}
+	return base
 }
 
 // --- Parser (unchanged) ---
@@ -2778,7 +3067,15 @@ func applyScalarField(sc *Scenario, key, val string, ln int, path string) error 
 	case "trick":
 		sc.Trick = val
 	case "hand":
-		cards, err := parseCards(val)
+		// hint_for_hand uses ":N" deck suffix; other ops use "'".
+		// Detect ":N" form by checking for ":" in any token.
+		var cards []Card
+		var err error
+		if strings.ContainsRune(val, ':') {
+			cards, err = parseHintCards(val)
+		} else {
+			cards, err = parseCards(val)
+		}
 		if err != nil {
 			return fmt.Errorf("%s:%d: hand: %w", path, ln, err)
 		}
@@ -2838,6 +3135,7 @@ func applyScalarField(sc *Scenario, key, val string, ln int, path string) error 
 			return fmt.Errorf("%s:%d: hand_card: %w", path, ln, err)
 		}
 		sc.DragHandCard = val
+		sc.WFSHandCard = val // also used by wings_for_hand_card
 	// --- gesture ops (gesture_split, gesture_merge_*, etc.) ---
 	case "floater_at":
 		p, err := parseXY(val)
@@ -2862,6 +3160,50 @@ func applyScalarField(sc *Scenario, key, val string, ln int, path string) error 
 			return fmt.Errorf("%s:%d: gesture_click_intent: %w", path, ln, err)
 		}
 		sc.GestureClickIntent = &n
+	// --- click_arbitration op ---
+	case "current":
+		p, err := parseXY(val)
+		if err != nil {
+			return fmt.Errorf("%s:%d: current: %w", path, ln, err)
+		}
+		sc.CurrentPoint = &p
+	case "initial_click_intent":
+		n, err := atoi(val)
+		if err != nil {
+			return fmt.Errorf("%s:%d: initial_click_intent: %w", path, ln, err)
+		}
+		sc.InitialClickIntent = &n
+	case "pre_kill_at":
+		p, err := parseXY(val)
+		if err != nil {
+			return fmt.Errorf("%s:%d: pre_kill_at: %w", path, ln, err)
+		}
+		sc.PreKillAt = &p
+	case "expect_click_intent":
+		if val == "nothing" {
+			sc.Expect.ClickArbitration.ExpectNothing = true
+		} else {
+			n, err := atoi(val)
+			if err != nil {
+				return fmt.Errorf("%s:%d: expect_click_intent: %w", path, ln, err)
+			}
+			sc.Expect.ClickArbitration.ExpectValue = &n
+		}
+	// --- hint_for_hand op ---
+	case "expect_steps":
+		if val == "[]" {
+			sc.HintSteps = []string{}
+		} else {
+			return fmt.Errorf("%s:%d: expect_steps scalar must be '[]'; use block form for non-empty lists", path, ln)
+		}
+	// --- wings_for_stack / wings_for_hand_card op (scalar empty-list form) ---
+	case "expect_wings":
+		if val == "[]" {
+			sc.Expect.WingsForStack.Wings = []WingExpect{}
+			sc.Expect.WingsForHandCard.Wings = []WingExpect{}
+		} else {
+			return fmt.Errorf("%s:%d: expect_wings scalar must be '[]'; use block form for non-empty lists", path, ln)
+		}
 	case "expect":
 		sc.Expect.Kind = val
 		if val == "no_plan" {
@@ -2876,12 +3218,22 @@ func applyScalarField(sc *Scenario, key, val string, ln int, path string) error 
 func applyBlockField(sc *Scenario, key string, children []line, path string) error {
 	switch key {
 	case "board":
-		stacks, err := parseStacks(children, path)
-		if err != nil {
-			return err
+		// hint_for_hand uses "- card1 card2 ..." rows (no location).
+		// Other ops use "at (t,l): card1 card2 ..." rows.
+		if len(children) > 0 && strings.HasPrefix(strings.TrimSpace(children[0].content), "- ") {
+			stacks, err := parseHintBoard(children, path)
+			if err != nil {
+				return err
+			}
+			sc.HintBoard = stacks
+		} else {
+			stacks, err := parseStacks(children, path)
+			if err != nil {
+				return err
+			}
+			sc.Board = stacks
+			sc.BoardVar = "board"
 		}
-		sc.Board = stacks
-		sc.BoardVar = "board"
 	case "board_before":
 		stacks, err := parseStacks(children, path)
 		if err != nil {
@@ -2955,6 +3307,28 @@ func applyBlockField(sc *Scenario, key string, children []line, path string) err
 			return err
 		}
 		sc.GestureTarget = stacks
+	// wings_for_stack op.
+	case "source":
+		stacks, err := parseStacks(children, path)
+		if err != nil {
+			return err
+		}
+		sc.WFSSource = stacks
+	case "expect_wings":
+		wings, err := parseWingExpects(children, path)
+		if err != nil {
+			return err
+		}
+		// Shared by wings_for_stack and wings_for_hand_card; each emitter
+		// reads from its own sub-struct, so both are populated here.
+		sc.Expect.WingsForStack.Wings = wings
+		sc.Expect.WingsForHandCard.Wings = wings
+	case "expect_steps":
+		steps, err := parseDashLines(children, path)
+		if err != nil {
+			return err
+		}
+		sc.HintSteps = steps
 	case "expect":
 		return parseExpectBlock(&sc.Expect, children, path)
 	default:
@@ -2962,6 +3336,67 @@ func applyBlockField(sc *Scenario, key string, children []line, path string) err
 	}
 	return nil
 }
+
+// parseWingExpects parses the children of an `expect_wings:` block.
+// Each entry is a pair of lines:
+//
+//	- target: <cards>     ← starts a new entry (baseIndent)
+//	  side: Left|Right    ← attribute of the current entry (baseIndent+1)
+//
+// The `- ` prefix on the target line is stripped before parsing.
+func parseWingExpects(children []line, path string) ([]WingExpect, error) {
+	var wings []WingExpect
+	baseIndent := -1
+	var cur *WingExpect
+	for _, l := range children {
+		if baseIndent == -1 {
+			baseIndent = l.indent
+		}
+		t := strings.TrimSpace(l.content)
+		switch l.indent {
+		case baseIndent:
+			// Start of a new wing entry: "- target: <cards>"
+			if !strings.HasPrefix(t, "- ") {
+				return nil, fmt.Errorf("%s:%d: expect_wings entry must start with '- '", path, l.lineNum)
+			}
+			body := strings.TrimSpace(t[2:])
+			key, val, _ := splitField(body)
+			if key != "target" {
+				return nil, fmt.Errorf("%s:%d: expect_wings entry must start with 'target:', got %q", path, l.lineNum, key)
+			}
+			cards, err := parseCards(val)
+			if err != nil {
+				return nil, fmt.Errorf("%s:%d: expect_wings target: %w", path, l.lineNum, err)
+			}
+			if cur != nil {
+				wings = append(wings, *cur)
+			}
+			cur = &WingExpect{TargetCards: cards}
+		case baseIndent + 1:
+			// Attribute of the current entry: "side: Left|Right"
+			if cur == nil {
+				return nil, fmt.Errorf("%s:%d: expect_wings attribute outside a wing entry", path, l.lineNum)
+			}
+			key, val, _ := splitField(t)
+			switch key {
+			case "side":
+				if val != "Left" && val != "Right" {
+					return nil, fmt.Errorf("%s:%d: expect_wings side: expected Left or Right, got %q", path, l.lineNum, val)
+				}
+				cur.Side = val
+			default:
+				return nil, fmt.Errorf("%s:%d: unknown expect_wings attribute %q", path, l.lineNum, key)
+			}
+		default:
+			return nil, fmt.Errorf("%s:%d: unexpected indent in expect_wings block", path, l.lineNum)
+		}
+	}
+	if cur != nil {
+		wings = append(wings, *cur)
+	}
+	return wings, nil
+}
+
 
 func parseSuggestionRow(s string) (ExpectedSuggestion, error) {
 	// Format: "<trick_id>, <card card ...>"
@@ -3019,6 +3454,14 @@ func parseExpectBlock(e *Expectation, children []line, path string) error {
 					return err
 				}
 				e.BoardAfter = stacks
+			// --- wings_for_stack / wings_for_hand_card (block list form) ---
+			case "expect_wings":
+				wings, err := parseWingExpects(sub, path)
+				if err != nil {
+					return err
+				}
+				e.WingsForStack.Wings = wings
+				e.WingsForHandCard.Wings = wings
 			case "plan_lines":
 				// Each sub line is `- "string"`. Strip the
 				// leading `- ` and the surrounding quotes.
@@ -3224,6 +3667,26 @@ func parseExpectBlock(e *Expectation, children []line, path string) error {
 					return fmt.Errorf("%s:%d: has_wing: %w", path, l.lineNum, err)
 				}
 				e.GestureFloaterOverWing.HasWing = v
+			// --- click_arbitration ---
+			case "expect_click_intent":
+				if val == "nothing" {
+					e.ClickArbitration.ExpectNothing = true
+				} else {
+					n, err := atoi(val)
+					if err != nil {
+						return fmt.Errorf("%s:%d: expect_click_intent: %w", path, l.lineNum, err)
+					}
+					e.ClickArbitration.ExpectValue = &n
+				}
+			// --- wings_for_stack / wings_for_hand_card (scalar empty-list form) ---
+			case "expect_wings":
+				if val == "[]" {
+					// Empty list — no wings expected. Wings slice stays nil/empty.
+					e.WingsForStack.Wings = []WingExpect{}
+					e.WingsForHandCard.Wings = []WingExpect{}
+				} else {
+					return fmt.Errorf("%s:%d: expect_wings scalar must be '[]'; use block form for non-empty lists", path, l.lineNum)
+				}
 			default:
 				return fmt.Errorf("%s:%d: unknown expect field %q", path, l.lineNum, key)
 			}
@@ -3617,6 +4080,97 @@ func parseCard(tok string) (Card, error) {
 		return Card{}, fmt.Errorf("trailing chars in card: %q", tok)
 	}
 	return c, nil
+}
+
+// parseHintBoard parses children of a `board:` block in a
+// hint_for_hand scenario. Each child line is:
+//
+//	- card1 card2 ...
+//
+// Each line becomes one stack (a []Card). The deck suffix `:N`
+// on card tokens is parsed by parseCard via parseCards.
+func parseHintBoard(children []line, path string) ([][]Card, error) {
+	var out [][]Card
+	for _, l := range children {
+		t := strings.TrimSpace(l.content)
+		if !strings.HasPrefix(t, "- ") {
+			return nil, fmt.Errorf("%s:%d: hint board line must start with '- '", path, l.lineNum)
+		}
+		cardStr := strings.TrimSpace(t[2:])
+		cards, err := parseHintCards(cardStr)
+		if err != nil {
+			return nil, fmt.Errorf("%s:%d: %w", path, l.lineNum, err)
+		}
+		out = append(out, cards)
+	}
+	return out, nil
+}
+
+// parseHintCards parses space-separated card tokens that may carry
+// a `:N` deck suffix (e.g. "3S:1 4S 8D:1"). The `:N` form is
+// canonical in hint DSL files; absent suffix means deck 0.
+func parseHintCards(s string) ([]Card, error) {
+	if s == "" {
+		return nil, nil
+	}
+	var cards []Card
+	for _, tok := range strings.Fields(s) {
+		c, err := parseHintCard(tok)
+		if err != nil {
+			return nil, err
+		}
+		cards = append(cards, c)
+	}
+	return cards, nil
+}
+
+// parseHintCard parses one card token in hint DSL format:
+//
+//	<value><suit>          (deck 0, e.g. "4S")
+//	<value><suit>:<deck>   (explicit deck, e.g. "3S:1")
+//
+// Value letters: A 2 3 4 5 6 7 8 9 T J Q K
+// Suit letters:  C D S H
+func parseHintCard(tok string) (Card, error) {
+	deck := 0
+	base := tok
+	if idx := strings.Index(tok, ":"); idx >= 0 {
+		var err error
+		deck, err = atoi(tok[idx+1:])
+		if err != nil {
+			return Card{}, fmt.Errorf("bad deck in card token %q: %w", tok, err)
+		}
+		base = tok[:idx]
+	}
+	if len(base) < 2 {
+		return Card{}, fmt.Errorf("card token too short: %q", tok)
+	}
+	v := valueFromLetter(base[0])
+	if v == 0 {
+		return Card{}, fmt.Errorf("bad value letter in card token %q", tok)
+	}
+	s := suitFromLetter(base[1])
+	if s == -1 {
+		return Card{}, fmt.Errorf("bad suit letter in card token %q", tok)
+	}
+	if len(base) != 2 {
+		return Card{}, fmt.Errorf("trailing chars in card token %q", tok)
+	}
+	return Card{Value: v, Suit: s, Deck: deck}, nil
+}
+
+// parseDashLines parses children of a block where each line is
+// "- <text>" and returns the text portions as a []string.
+func parseDashLines(children []line, path string) ([]string, error) {
+	var out []string
+	for _, l := range children {
+		t := strings.TrimSpace(l.content)
+		if !strings.HasPrefix(t, "- ") {
+			return nil, fmt.Errorf("%s:%d: expected '- <text>', got %q", path, l.lineNum, t)
+		}
+		out = append(out, strings.TrimSpace(t[2:]))
+	}
+	return out, nil
 }
 
 func valueFromLetter(b byte) int {

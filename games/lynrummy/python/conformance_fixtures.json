@@ -24592,6 +24592,9 @@
         }
       }
     ],
+    "hint_hand": [
+      "7H:1"
+    ],
     "expect": {
       "kind": "suggestions",
       "suggestions": [
@@ -24780,6 +24783,9 @@
         }
       }
     ],
+    "hint_hand": [
+      "5D:1"
+    ],
     "expect": {
       "kind": "invariant_holds"
     }
@@ -24865,6 +24871,9 @@
         }
       }
     ],
+    "hint_hand": [
+      "9D:1"
+    ],
     "expect": {
       "kind": "invariant_holds"
     }
@@ -24933,6 +24942,11 @@
           "left": 40
         }
       }
+    ],
+    "hint_hand": [
+      "7H:1",
+      "6H:1",
+      "5H:1"
     ],
     "expect": {
       "kind": "invariant_holds"
@@ -25003,6 +25017,11 @@
         }
       }
     ],
+    "hint_hand": [
+      "5H:1",
+      "6H:1",
+      "7H:1"
+    ],
     "expect": {
       "kind": "invariant_holds"
     }
@@ -25072,6 +25091,11 @@
         }
       }
     ],
+    "hint_hand": [
+      "5H:1",
+      "6C:1",
+      "7H:1"
+    ],
     "expect": {
       "kind": "invariant_holds"
     }
@@ -25140,6 +25164,11 @@
           "left": 40
         }
       }
+    ],
+    "hint_hand": [
+      "4H:1",
+      "4S:1",
+      "4D:1"
     ],
     "expect": {
       "kind": "invariant_holds"
@@ -25234,6 +25263,9 @@
         }
       }
     ],
+    "hint_hand": [
+      "3C:1"
+    ],
     "expect": {
       "kind": "invariant_holds"
     }
@@ -25302,6 +25334,10 @@
           "left": 40
         }
       }
+    ],
+    "hint_hand": [
+      "5H:1",
+      "6H:1"
     ],
     "expect": {
       "kind": "invariant_holds"
@@ -25372,6 +25408,10 @@
         }
       }
     ],
+    "hint_hand": [
+      "6H:1",
+      "5H:1"
+    ],
     "expect": {
       "kind": "invariant_holds"
     }
@@ -25440,6 +25480,10 @@
           "left": 40
         }
       }
+    ],
+    "hint_hand": [
+      "5H:1",
+      "5S:1"
     ],
     "expect": {
       "kind": "invariant_holds"
@@ -25542,6 +25586,10 @@
         }
       }
     ],
+    "hint_hand": [
+      "5H:1",
+      "5S:1"
+    ],
     "expect": {
       "kind": "invariant_holds"
     }
@@ -25642,6 +25690,9 @@
           "left": 300
         }
       }
+    ],
+    "hint_hand": [
+      "TD:1"
     ],
     "expect": {
       "kind": "invariant_holds"
@@ -25768,6 +25819,9 @@
         }
       }
     ],
+    "hint_hand": [
+      "4S:1"
+    ],
     "expect": {
       "kind": "invariant_holds"
     }
@@ -25868,6 +25922,9 @@
           "left": 300
         }
       }
+    ],
+    "hint_hand": [
+      "5H:1"
     ],
     "expect": {
       "kind": "invariant_holds"
@@ -26002,6 +26059,9 @@
         }
       }
     ],
+    "hint_hand": [
+      "5H:1"
+    ],
     "expect": {
       "kind": "invariant_holds"
     }
@@ -26053,6 +26113,9 @@
           "left": 20
         }
       }
+    ],
+    "hint_hand": [
+      "9S"
     ],
     "expect": {
       "kind": "suggestions"
@@ -30465,6 +30528,380 @@
     "expect": {
       "kind": "",
       "yields": "splice"
+    }
+  },
+  {
+    "name": "turn_1_hint",
+    "desc": "",
+    "op": "hint_for_hand",
+    "hand": [
+      {
+        "card": {
+          "value": 3,
+          "suit": 2,
+          "origin_deck": 1
+        },
+        "state": 0
+      },
+      {
+        "card": {
+          "value": 4,
+          "suit": 2,
+          "origin_deck": 0
+        },
+        "state": 0
+      },
+      {
+        "card": {
+          "value": 8,
+          "suit": 1,
+          "origin_deck": 1
+        },
+        "state": 0
+      },
+      {
+        "card": {
+          "value": 11,
+          "suit": 1,
+          "origin_deck": 1
+        },
+        "state": 0
+      },
+      {
+        "card": {
+          "value": 4,
+          "suit": 0,
+          "origin_deck": 1
+        },
+        "state": 0
+      },
+      {
+        "card": {
+          "value": 6,
+          "suit": 1,
+          "origin_deck": 0
+        },
+        "state": 0
+      },
+      {
+        "card": {
+          "value": 12,
+          "suit": 1,
+          "origin_deck": 1
+        },
+        "state": 0
+      }
+    ],
+    "board": [],
+    "hint_hand": [
+      "3S:1",
+      "4S",
+      "8D:1",
+      "JD:1",
+      "4C:1",
+      "6D",
+      "QD:1"
+    ],
+    "hint_board": [
+      [
+        "KS",
+        "AS",
+        "2S",
+        "3S"
+      ],
+      [
+        "TD",
+        "JD",
+        "QD",
+        "KD"
+      ],
+      [
+        "2H",
+        "3H",
+        "4H"
+      ],
+      [
+        "7S",
+        "7D",
+        "7C"
+      ],
+      [
+        "AC",
+        "AD",
+        "AH"
+      ],
+      [
+        "2C",
+        "3D",
+        "4C",
+        "5H",
+        "6S",
+        "7H"
+      ]
+    ],
+    "hint_steps": [
+      "place [JD:1 QD:1] from hand",
+      "peel TD from HELPER [TD JD QD KD], absorb onto trouble [JD:1 QD:1] → [TD JD:1 QD:1] [→COMPLETE]"
+    ],
+    "expect": {
+      "kind": ""
+    }
+  },
+  {
+    "name": "turn_2_hint",
+    "desc": "",
+    "op": "hint_for_hand",
+    "hand": [
+      {
+        "card": {
+          "value": 3,
+          "suit": 2,
+          "origin_deck": 1
+        },
+        "state": 0
+      },
+      {
+        "card": {
+          "value": 4,
+          "suit": 2,
+          "origin_deck": 0
+        },
+        "state": 0
+      },
+      {
+        "card": {
+          "value": 8,
+          "suit": 1,
+          "origin_deck": 1
+        },
+        "state": 0
+      },
+      {
+        "card": {
+          "value": 4,
+          "suit": 0,
+          "origin_deck": 1
+        },
+        "state": 0
+      },
+      {
+        "card": {
+          "value": 6,
+          "suit": 1,
+          "origin_deck": 0
+        },
+        "state": 0
+      },
+      {
+        "card": {
+          "value": 8,
+          "suit": 3,
+          "origin_deck": 0
+        },
+        "state": 0
+      },
+      {
+        "card": {
+          "value": 11,
+          "suit": 2,
+          "origin_deck": 1
+        },
+        "state": 0
+      }
+    ],
+    "board": [],
+    "hint_hand": [
+      "3S:1",
+      "4S",
+      "8D:1",
+      "4C:1",
+      "6D",
+      "8H",
+      "JS:1"
+    ],
+    "hint_board": [
+      [
+        "KS",
+        "AS",
+        "2S",
+        "3S"
+      ],
+      [
+        "TD",
+        "JD",
+        "QD",
+        "KD"
+      ],
+      [
+        "2H",
+        "3H",
+        "4H"
+      ],
+      [
+        "7S",
+        "7D",
+        "7C"
+      ],
+      [
+        "AC",
+        "AD",
+        "AH"
+      ],
+      [
+        "2C",
+        "3D",
+        "4C",
+        "5H",
+        "6S",
+        "7H"
+      ],
+      [
+        "JD:1",
+        "QD:1"
+      ]
+    ],
+    "hint_steps": [
+      "place [4S] from hand",
+      "peel TD from HELPER [TD JD QD KD], absorb onto trouble [JD:1 QD:1] → [TD JD:1 QD:1] [→COMPLETE]",
+      "splice [4S] into HELPER [2C 3D 4C 5H 6S 7H] → [2C 3D 4S] + [4C 5H 6S 7H]"
+    ],
+    "expect": {
+      "kind": ""
+    }
+  },
+  {
+    "name": "turn_3_hint",
+    "desc": "",
+    "op": "hint_for_hand",
+    "hand": [
+      {
+        "card": {
+          "value": 3,
+          "suit": 2,
+          "origin_deck": 1
+        },
+        "state": 0
+      },
+      {
+        "card": {
+          "value": 8,
+          "suit": 1,
+          "origin_deck": 1
+        },
+        "state": 0
+      },
+      {
+        "card": {
+          "value": 4,
+          "suit": 0,
+          "origin_deck": 1
+        },
+        "state": 0
+      },
+      {
+        "card": {
+          "value": 6,
+          "suit": 1,
+          "origin_deck": 0
+        },
+        "state": 0
+      },
+      {
+        "card": {
+          "value": 8,
+          "suit": 3,
+          "origin_deck": 0
+        },
+        "state": 0
+      },
+      {
+        "card": {
+          "value": 11,
+          "suit": 2,
+          "origin_deck": 1
+        },
+        "state": 0
+      },
+      {
+        "card": {
+          "value": 2,
+          "suit": 2,
+          "origin_deck": 1
+        },
+        "state": 0
+      },
+      {
+        "card": {
+          "value": 2,
+          "suit": 1,
+          "origin_deck": 1
+        },
+        "state": 0
+      }
+    ],
+    "board": [],
+    "hint_hand": [
+      "3S:1",
+      "8D:1",
+      "4C:1",
+      "6D",
+      "8H",
+      "JS:1",
+      "2S:1",
+      "2D:1"
+    ],
+    "hint_board": [
+      [
+        "KS",
+        "AS",
+        "2S",
+        "3S"
+      ],
+      [
+        "TD",
+        "JD",
+        "QD",
+        "KD"
+      ],
+      [
+        "2H",
+        "3H",
+        "4H"
+      ],
+      [
+        "7S",
+        "7D",
+        "7C"
+      ],
+      [
+        "AC",
+        "AD",
+        "AH"
+      ],
+      [
+        "2C",
+        "3D",
+        "4C",
+        "5H",
+        "6S",
+        "7H"
+      ],
+      [
+        "JD:1",
+        "QD:1"
+      ],
+      [
+        "4S"
+      ]
+    ],
+    "hint_steps": [
+      "place [2S:1 2D:1] from hand",
+      "peel TD from HELPER [TD JD QD KD], absorb onto trouble [JD:1 QD:1] → [TD JD:1 QD:1] [→COMPLETE]",
+      "push TROUBLE [4S] onto HELPER [KS AS 2S 3S] → [KS AS 2S 3S 4S]",
+      "peel 2C from HELPER [2C 3D 4C 5H 6S 7H], absorb onto trouble [2S:1 2D:1] → [2S:1 2D:1 2C] [→COMPLETE]"
+    ],
+    "expect": {
+      "kind": ""
     }
   }
 ]

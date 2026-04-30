@@ -3,6 +3,7 @@
     "build_suggestions",
     "classify_board_geometry",
     "click_agent_play",
+    "click_arbitration",
     "enumerate_moves",
     "find_open_loc",
     "floater_top_left",
@@ -21,12 +22,15 @@
     "undo_walkthrough",
     "validate_board_geometry",
     "validate_game_move",
-    "validate_turn_complete"
+    "validate_turn_complete",
+    "wings_for_hand_card",
+    "wings_for_stack"
   ],
   "python": [
     "build_suggestions",
     "enumerate_moves",
     "find_open_loc",
+    "hint_for_hand",
     "hint_invariant",
     "solve"
   ]

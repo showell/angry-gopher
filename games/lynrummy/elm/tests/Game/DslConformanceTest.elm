@@ -29,7 +29,9 @@ import Game.CardStack
         , HandCardState(..)
         )
 import Game.BoardActions as BoardActions
+import Game.Physics.GestureArbitration as GA
 import Game.Physics.PlaceStack
+import Game.Physics.WingOracle as WingOracle
 import Game.Rules.Referee as Referee exposing (RefereeStage(..), refereeStageToString)
 import Game.Replay.Time as ReplayTime
 import Game.Rules.StackType as StackType
@@ -615,6 +617,75 @@ clickAgentPlayUnsolvableBoard =
                 , \_ -> if String.contains "could not find a plan" newModel.status.text then Expect.pass else Expect.fail ("status missing could not find a plan; got: " ++ newModel.status.text)
                 ]
                 ()
+
+
+clickIntentDeathIsPermanent : Test
+clickIntentDeathIsPermanent =
+    test "click_intent_death_is_permanent" <|
+        \_ ->
+            let
+                afterKill =
+                    GA.clickIntentAfterMove { x = 0, y = 0 } { x = 50, y = 50 } (Just 2)
+
+            in
+            GA.clickIntentAfterMove { x = 0, y = 0 } { x = 0, y = 0 } afterKill
+                |> Expect.equal Nothing
+
+
+clickIntentJustDiesLargeMovement : Test
+clickIntentJustDiesLargeMovement =
+    test "click_intent_just_dies_large_movement" <|
+        \_ ->
+            GA.clickIntentAfterMove { x = 0, y = 0 } { x = 50, y = 50 } (Just 2)
+                |> Expect.equal Nothing
+
+
+clickIntentJustDiesPastThreshold : Test
+clickIntentJustDiesPastThreshold =
+    test "click_intent_just_dies_past_threshold" <|
+        \_ ->
+            GA.clickIntentAfterMove { x = 0, y = 0 } { x = 4, y = 0 } (Just 2)
+                |> Expect.equal Nothing
+
+
+clickIntentJustSurvivesAxisJitter3px : Test
+clickIntentJustSurvivesAxisJitter3px =
+    test "click_intent_just_survives_axis_jitter_3px" <|
+        \_ ->
+            GA.clickIntentAfterMove { x = 0, y = 0 } { x = 3, y = 0 } (Just 2)
+                |> Expect.equal (Just 2)
+
+
+clickIntentJustSurvivesSmallDiagonalJitter : Test
+clickIntentJustSurvivesSmallDiagonalJitter =
+    test "click_intent_just_survives_small_diagonal_jitter" <|
+        \_ ->
+            GA.clickIntentAfterMove { x = 0, y = 0 } { x = 2, y = 2 } (Just 2)
+                |> Expect.equal (Just 2)
+
+
+clickIntentJustSurvivesZeroMovement : Test
+clickIntentJustSurvivesZeroMovement =
+    test "click_intent_just_survives_zero_movement" <|
+        \_ ->
+            GA.clickIntentAfterMove { x = 5, y = 5 } { x = 5, y = 5 } (Just 2)
+                |> Expect.equal (Just 2)
+
+
+clickIntentNothingInNothingOutLargeDistance : Test
+clickIntentNothingInNothingOutLargeDistance =
+    test "click_intent_nothing_in_nothing_out_large_distance" <|
+        \_ ->
+            GA.clickIntentAfterMove { x = 0, y = 0 } { x = 100, y = 100 } Nothing
+                |> Expect.equal Nothing
+
+
+clickIntentNothingInNothingOutZeroDistance : Test
+clickIntentNothingInNothingOutZeroDistance =
+    test "click_intent_nothing_in_nothing_out_zero_distance" <|
+        \_ ->
+            GA.clickIntentAfterMove { x = 0, y = 0 } { x = 0, y = 0 } Nothing
+                |> Expect.equal Nothing
 
 
 corpusSid108 : Test
@@ -4833,6 +4904,27 @@ spliceDup5dIntoPureDiamonds =
                 Expect.fail ("no splice move yielded; got " ++ String.fromInt (List.length moves) ++ " moves")
 
 
+turn1Hint : Test
+turn1Hint =
+    test "turn_1_hint" <|
+        \_ ->
+            Expect.pass
+
+
+turn2Hint : Test
+turn2Hint =
+    test "turn_2_hint" <|
+        \_ ->
+            Expect.pass
+
+
+turn3Hint : Test
+turn3Hint =
+    test "turn_3_hint" <|
+        \_ ->
+            Expect.pass
+
+
 turnCompleteCleanBoard : Test
 turnCompleteCleanBoard =
     test "turn_complete_clean_board" <|
@@ -5083,6 +5175,150 @@ undoWalkthroughMergeHand =
                 , \_ -> List.length (State.activeHand m3).handCards |> Expect.equal 1
                 , \_ -> State.canUndoThisTurn m3 |> Expect.equal False
                 , \_ -> if List.any (\s -> List.map .card s.boardCards == [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]) m3.board then Expect.pass else Expect.fail "board missing stack [7S 7D 7C]"
+                , \_ -> if List.any (\hc -> hc.card == parseCard "7H2") (State.activeHand m3).handCards then Expect.pass else Expect.fail "hand missing card 7H'"
+                , \_ ->
+                    let
+                        byLoc =
+                            List.sortBy (\s -> ( s.loc.top, s.loc.left ))
+                        cardRows =
+                            List.map (.boardCards >> List.map .card)
+                        expectedFinalBoard =
+                            [ { boardCards = [ boardCard "KS1", boardCard "AS1", boardCard "2S1", boardCard "3S1" ], loc = { top = 20, left = 70 } }
+                            , { boardCards = [ boardCard "TD1", boardCard "JD1", boardCard "QD1", boardCard "KD1" ], loc = { top = 80, left = 160 } }
+                            , { boardCards = [ boardCard "2H1", boardCard "3H1", boardCard "4H1" ], loc = { top = 140, left = 100 } }
+                            , { boardCards = [ boardCard "7S1", boardCard "7D1", boardCard "7C1" ], loc = { top = 200, left = 40 } }
+                            , { boardCards = [ boardCard "AC1", boardCard "AD1", boardCard "AH1" ], loc = { top = 260, left = 130 } }
+                            , { boardCards = [ boardCard "2C1", boardCard "3D1", boardCard "4C1", boardCard "5H1", boardCard "6S1", boardCard "7H1" ], loc = { top = 320, left = 70 } }
+                            ]
+                    in
+                    cardRows (byLoc m3.board) |> Expect.equal (cardRows (byLoc expectedFinalBoard))
+                ]
+                ()
+
+
+undoWalkthroughMergeStack : Test
+undoWalkthroughMergeStack =
+    test "undo_walkthrough_merge_stack" <|
+        \_ ->
+            let
+                board =
+                    [ { boardCards = [ boardCard "4H1", boardCard "5H1", boardCard "6H1" ], loc = { top = 20, left = 70 } }
+                        , { boardCards = [ boardCard "7H1", boardCard "8H1", boardCard "9H1" ], loc = { top = 80, left = 160 } }
+                        ]
+
+                base =
+                    State.baseModel
+
+                m0 =
+                    { base | board = board, sessionId = Just 0 }
+
+                -- two stacks on board, nothing to undo
+                m1 =
+                    m0
+
+                -- player merges 7H-8H-9H onto the right of 4H-5H-6H
+                spec2 =
+                    SpecMergeStack [ parseCard "7H1", parseCard "8H1", parseCard "9H1" ] [ parseCard "4H1", parseCard "5H1", parseCard "6H1" ] BoardActions.Right
+
+                action2 =
+                    resolveSpec spec2 m1.board
+
+                entry2 =
+                    { action = action2, gesturePath = Nothing, pathFrame = State.BoardFrame }
+
+                m2post =
+                    (Apply.applyAction action2 m1).model
+
+                m2 =
+                    { m2post | actionLog = m1.actionLog ++ [ entry2 ] }
+
+                -- player undoes the merge — both original stacks reappear; source is back
+                ( m3, _, _ ) =
+                    Play.update Msg.ClickUndo m2
+
+                -- target is back too
+                m4 =
+                    m3
+            in
+            Expect.all
+                [ \_ -> List.length m1.board |> Expect.equal 2
+                , \_ -> State.canUndoThisTurn m1 |> Expect.equal False
+                , \_ -> List.length m2.board |> Expect.equal 1
+                , \_ -> State.canUndoThisTurn m2 |> Expect.equal True
+                , \_ -> if List.any (\s -> List.map .card s.boardCards == [ parseCard "4H1", parseCard "5H1", parseCard "6H1", parseCard "7H1", parseCard "8H1", parseCard "9H1" ]) m2.board then Expect.pass else Expect.fail "board missing stack [4H 5H 6H 7H 8H 9H]"
+                , \_ -> List.length m3.board |> Expect.equal 2
+                , \_ -> State.canUndoThisTurn m3 |> Expect.equal False
+                , \_ -> if List.any (\s -> List.map .card s.boardCards == [ parseCard "7H1", parseCard "8H1", parseCard "9H1" ]) m3.board then Expect.pass else Expect.fail "board missing stack [7H 8H 9H]"
+                , \_ -> List.length m4.board |> Expect.equal 2
+                , \_ -> if List.any (\s -> List.map .card s.boardCards == [ parseCard "4H1", parseCard "5H1", parseCard "6H1" ]) m4.board then Expect.pass else Expect.fail "board missing stack [4H 5H 6H]"
+                , \_ ->
+                    let
+                        byLoc =
+                            List.sortBy (\s -> ( s.loc.top, s.loc.left ))
+                        cardRows =
+                            List.map (.boardCards >> List.map .card)
+                        expectedFinalBoard =
+                            [ { boardCards = [ boardCard "4H1", boardCard "5H1", boardCard "6H1" ], loc = { top = 20, left = 70 } }
+                            , { boardCards = [ boardCard "7H1", boardCard "8H1", boardCard "9H1" ], loc = { top = 80, left = 160 } }
+                            ]
+                    in
+                    cardRows (byLoc m4.board) |> Expect.equal (cardRows (byLoc expectedFinalBoard))
+                ]
+                ()
+
+
+undoWalkthroughPlaceHand : Test
+undoWalkthroughPlaceHand =
+    test "undo_walkthrough_place_hand" <|
+        \_ ->
+            let
+                board =
+                    [ { boardCards = [ boardCard "KS1", boardCard "AS1", boardCard "2S1", boardCard "3S1" ], loc = { top = 20, left = 70 } }
+                        , { boardCards = [ boardCard "TD1", boardCard "JD1", boardCard "QD1", boardCard "KD1" ], loc = { top = 80, left = 160 } }
+                        , { boardCards = [ boardCard "2H1", boardCard "3H1", boardCard "4H1" ], loc = { top = 140, left = 100 } }
+                        , { boardCards = [ boardCard "7S1", boardCard "7D1", boardCard "7C1" ], loc = { top = 200, left = 40 } }
+                        , { boardCards = [ boardCard "AC1", boardCard "AD1", boardCard "AH1" ], loc = { top = 260, left = 130 } }
+                        , { boardCards = [ boardCard "2C1", boardCard "3D1", boardCard "4C1", boardCard "5H1", boardCard "6S1", boardCard "7H1" ], loc = { top = 320, left = 70 } }
+                        ]
+
+                base =
+                    State.baseModel
+
+                m0 =
+                    State.setActiveHand { handCards = [ handCard "7H2" ] }
+                        { base | board = board, sessionId = Just 0 }
+
+                -- one card in hand, six stacks on board, nothing to undo
+                m1 =
+                    m0
+
+                -- player places 7H' from hand onto an open board location
+                action2 =
+                    WA.PlaceHand { handCard = parseCard "7H2", loc = { top = 400, left = 300 } }
+
+                entry2 =
+                    { action = action2, gesturePath = Nothing, pathFrame = State.BoardFrame }
+
+                m2post =
+                    (Apply.applyAction action2 m1).model
+
+                m2 =
+                    { m2post | actionLog = m1.actionLog ++ [ entry2 ] }
+
+                -- player undoes the place — 7H' returns to hand, board shrinks back
+                ( m3, _, _ ) =
+                    Play.update Msg.ClickUndo m2
+            in
+            Expect.all
+                [ \_ -> List.length m1.board |> Expect.equal 6
+                , \_ -> List.length (State.activeHand m1).handCards |> Expect.equal 1
+                , \_ -> State.canUndoThisTurn m1 |> Expect.equal False
+                , \_ -> List.length m2.board |> Expect.equal 7
+                , \_ -> List.length (State.activeHand m2).handCards |> Expect.equal 0
+                , \_ -> State.canUndoThisTurn m2 |> Expect.equal True
+                , \_ -> List.length m3.board |> Expect.equal 6
+                , \_ -> List.length (State.activeHand m3).handCards |> Expect.equal 1
+                , \_ -> State.canUndoThisTurn m3 |> Expect.equal False
                 , \_ -> if List.any (\hc -> hc.card == parseCard "7H2") (State.activeHand m3).handCards then Expect.pass else Expect.fail "hand missing card 7H'"
                 , \_ ->
                     let
@@ -6498,6 +6734,224 @@ walkthroughMined025TSp1 =
                 ()
 
 
+wingsForHandCard7SOnto7setRight : Test
+wingsForHandCard7SOnto7setRight =
+    test "wings_for_hand_card_7S_onto_7set_right" <|
+        \_ ->
+            let
+                board =
+                    [ { boardCards = [ boardCard "7H1", boardCard "7D1", boardCard "7C1" ], loc = { top = 200, left = 100 } }
+                        ]
+
+                handCard_ =
+                    handCard "7S1"
+
+                result =
+                    WingOracle.wingsForHandCard handCard_ board
+
+                toKey w =
+                    ( List.map .card w.target.boardCards, w.side )
+
+                resultKeys =
+                    List.map toKey result
+
+                wantKeys =
+                    [ ( [ parseCard "7H1", parseCard "7D1", parseCard "7C1" ], BoardActions.Left )
+                    , ( [ parseCard "7H1", parseCard "7D1", parseCard "7C1" ], BoardActions.Right ) ]
+            in
+            resultKeys |> Expect.equal wantKeys
+
+
+wingsForHandCardDuplicateRejected : Test
+wingsForHandCardDuplicateRejected =
+    test "wings_for_hand_card_duplicate_rejected" <|
+        \_ ->
+            let
+                board =
+                    [ { boardCards = [ boardCard "7H1", boardCard "7D1", boardCard "7C1" ], loc = { top = 200, left = 100 } }
+                        ]
+
+                handCard_ =
+                    handCard "7H1"
+
+                result =
+                    WingOracle.wingsForHandCard handCard_ board
+
+            in
+            result |> Expect.equal []
+
+
+wingsForHandCardNoValidGroup : Test
+wingsForHandCardNoValidGroup =
+    test "wings_for_hand_card_no_valid_group" <|
+        \_ ->
+            let
+                board =
+                    [ { boardCards = [ boardCard "4H1", boardCard "5H1", boardCard "6H1" ], loc = { top = 200, left = 100 } }
+                        ]
+
+                handCard_ =
+                    handCard "KS1"
+
+                result =
+                    WingOracle.wingsForHandCard handCard_ board
+
+            in
+            result |> Expect.equal []
+
+
+wingsForHandCardOntoRunRight : Test
+wingsForHandCardOntoRunRight =
+    test "wings_for_hand_card_onto_run_right" <|
+        \_ ->
+            let
+                board =
+                    [ { boardCards = [ boardCard "4H1", boardCard "5H1", boardCard "6H1" ], loc = { top = 200, left = 100 } }
+                        ]
+
+                handCard_ =
+                    handCard "7H1"
+
+                result =
+                    WingOracle.wingsForHandCard handCard_ board
+
+                toKey w =
+                    ( List.map .card w.target.boardCards, w.side )
+
+                resultKeys =
+                    List.map toKey result
+
+                wantKeys =
+                    [ ( [ parseCard "4H1", parseCard "5H1", parseCard "6H1" ], BoardActions.Right ) ]
+            in
+            resultKeys |> Expect.equal wantKeys
+
+
+wingsForStack234Onto567Left : Test
+wingsForStack234Onto567Left =
+    test "wings_for_stack_234_onto_567_left" <|
+        \_ ->
+            let
+                board =
+                    [ { boardCards = [ boardCard "2C1", boardCard "3D1", boardCard "4C1" ], loc = { top = 200, left = 100 } }
+                        , { boardCards = [ boardCard "5H1", boardCard "6S1", boardCard "7H1" ], loc = { top = 200, left = 300 } }
+                        ]
+
+                sourceStack =
+                    { boardCards = [ boardCard "2C1", boardCard "3D1", boardCard "4C1" ], loc = { top = 200, left = 100 } }
+
+                result =
+                    WingOracle.wingsForStack sourceStack board
+
+                toKey w =
+                    ( List.map .card w.target.boardCards, w.side )
+
+                resultKeys =
+                    List.map toKey result
+
+                wantKeys =
+                    [ ( [ parseCard "5H1", parseCard "6S1", parseCard "7H1" ], BoardActions.Left ) ]
+            in
+            resultKeys |> Expect.equal wantKeys
+
+
+wingsForStack567Onto234Right : Test
+wingsForStack567Onto234Right =
+    test "wings_for_stack_567_onto_234_right" <|
+        \_ ->
+            let
+                board =
+                    [ { boardCards = [ boardCard "2C1", boardCard "3D1", boardCard "4C1" ], loc = { top = 200, left = 100 } }
+                        , { boardCards = [ boardCard "5H1", boardCard "6S1", boardCard "7H1" ], loc = { top = 200, left = 300 } }
+                        ]
+
+                sourceStack =
+                    { boardCards = [ boardCard "5H1", boardCard "6S1", boardCard "7H1" ], loc = { top = 200, left = 300 } }
+
+                result =
+                    WingOracle.wingsForStack sourceStack board
+
+                toKey w =
+                    ( List.map .card w.target.boardCards, w.side )
+
+                resultKeys =
+                    List.map toKey result
+
+                wantKeys =
+                    [ ( [ parseCard "2C1", parseCard "3D1", parseCard "4C1" ], BoardActions.Right ) ]
+            in
+            resultKeys |> Expect.equal wantKeys
+
+
+wingsForStackDualDeckBothAreTargets : Test
+wingsForStackDualDeckBothAreTargets =
+    test "wings_for_stack_dual_deck_both_are_targets" <|
+        \_ ->
+            let
+                board =
+                    [ { boardCards = [ boardCard "2C1", boardCard "3D1", boardCard "4C1" ], loc = { top = 200, left = 100 } }
+                        , { boardCards = [ boardCard "2C2", boardCard "3D2", boardCard "4C2" ], loc = { top = 200, left = 300 } }
+                        , { boardCards = [ boardCard "5H1", boardCard "6S1", boardCard "7H1" ], loc = { top = 200, left = 500 } }
+                        ]
+
+                sourceStack =
+                    { boardCards = [ boardCard "5H1", boardCard "6S1", boardCard "7H1" ], loc = { top = 200, left = 500 } }
+
+                result =
+                    WingOracle.wingsForStack sourceStack board
+
+                toKey w =
+                    ( List.map .card w.target.boardCards, w.side )
+
+                resultKeys =
+                    List.map toKey result
+
+                wantKeys =
+                    [ ( [ parseCard "2C1", parseCard "3D1", parseCard "4C1" ], BoardActions.Right )
+                    , ( [ parseCard "2C2", parseCard "3D2", parseCard "4C2" ], BoardActions.Right ) ]
+            in
+            resultKeys |> Expect.equal wantKeys
+
+
+wingsForStackNoValidMerge : Test
+wingsForStackNoValidMerge =
+    test "wings_for_stack_no_valid_merge" <|
+        \_ ->
+            let
+                board =
+                    [ { boardCards = [ boardCard "AC1", boardCard "AD1", boardCard "AH1" ], loc = { top = 200, left = 100 } }
+                        , { boardCards = [ boardCard "7C1", boardCard "7D1", boardCard "7H1" ], loc = { top = 200, left = 300 } }
+                        ]
+
+                sourceStack =
+                    { boardCards = [ boardCard "AC1", boardCard "AD1", boardCard "AH1" ], loc = { top = 200, left = 100 } }
+
+                result =
+                    WingOracle.wingsForStack sourceStack board
+
+            in
+            result |> Expect.equal []
+
+
+wingsForStackSelfExcluded : Test
+wingsForStackSelfExcluded =
+    test "wings_for_stack_self_excluded" <|
+        \_ ->
+            let
+                board =
+                    [ { boardCards = [ boardCard "2C1", boardCard "3D1", boardCard "4C1" ], loc = { top = 200, left = 100 } }
+                        ]
+
+                sourceStack =
+                    { boardCards = [ boardCard "2C1", boardCard "3D1", boardCard "4C1" ], loc = { top = 200, left = 100 } }
+
+                result =
+                    WingOracle.wingsForStack sourceStack board
+
+            in
+            result |> Expect.equal []
+
+
 suite : Test
 suite =
     describe "DSL conformance"
@@ -6520,6 +6974,14 @@ suite =
         , clickAgentPlayAlreadyClean
         , clickAgentPlaySimplePeel
         , clickAgentPlayUnsolvableBoard
+        , clickIntentDeathIsPermanent
+        , clickIntentJustDiesLargeMovement
+        , clickIntentJustDiesPastThreshold
+        , clickIntentJustSurvivesAxisJitter3px
+        , clickIntentJustSurvivesSmallDiagonalJitter
+        , clickIntentJustSurvivesZeroMovement
+        , clickIntentNothingInNothingOutLargeDistance
+        , clickIntentNothingInNothingOutZeroDistance
         , corpusSid108
         , corpusSid110
         , corpusSid112
@@ -6639,11 +7101,16 @@ suite =
         , solveTwoPartialTroublesNoPaths
         , solveTwoUnrelatedSingletons
         , spliceDup5dIntoPureDiamonds
+        , turn1Hint
+        , turn2Hint
+        , turn3Hint
         , turnCompleteCleanBoard
         , turnCompleteRejectsIncomplete
         , undoRestoresPosition
         , undoSplitPieceReturnsToSplitPosition
         , undoWalkthroughMergeHand
+        , undoWalkthroughMergeStack
+        , undoWalkthroughPlaceHand
         , undoWalkthroughSplitThenMove
         , validExtendRunWith8H
         , walkthroughMined0014S4Cp1
@@ -6671,4 +7138,13 @@ suite =
         , walkthroughMined0233C
         , walkthroughMined0242D
         , walkthroughMined025TSp1
+        , wingsForHandCard7SOnto7setRight
+        , wingsForHandCardDuplicateRejected
+        , wingsForHandCardNoValidGroup
+        , wingsForHandCardOntoRunRight
+        , wingsForStack234Onto567Left
+        , wingsForStack567Onto234Right
+        , wingsForStackDualDeckBothAreTargets
+        , wingsForStackNoValidMerge
+        , wingsForStackSelfExcluded
         ]

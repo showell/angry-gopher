@@ -36,7 +36,9 @@ import bfs
 import enumerator
 import move
 import strategy
+import agent_prelude
 from geometry import find_violation
+from rules.card import card as parse_card_label
 
 FIXTURES_PATH = Path(__file__).parent / "conformance_fixtures.json"
 OPS_MANIFEST_PATH = Path(__file__).parent / "conformance_ops.json"
@@ -273,12 +275,42 @@ def _run_find_open_loc(sc):
                    f"got ({got['top']},{got['left']})")
 
 
+def _run_hint_for_hand(sc):
+    """End-to-end hint test: parse hand + board from label strings,
+    run agent_prelude.find_play + format_hint, assert steps match."""
+    hand = [parse_card_label(tok) for tok in sc["hint_hand"]]
+    board = [
+        [parse_card_label(tok) for tok in stack]
+        for stack in sc["hint_board"]
+    ]
+    result = agent_prelude.find_play(hand, board)
+    got = agent_prelude.format_hint(result)
+    want = sc["hint_steps"]
+    if got == want:
+        return True, f"OK — {len(got)} steps"
+    if len(got) != len(want):
+        return False, (
+            f"step count: want {len(want)}, got {len(got)}\n"
+            f"  want: {want}\n"
+            f"  got:  {got}"
+        )
+    for i, (g, w) in enumerate(zip(got, want)):
+        if g != w:
+            return False, (
+                f"step[{i}] mismatch:\n"
+                f"  want: {w!r}\n"
+                f"  got:  {g!r}"
+            )
+    return False, f"steps differ (lengths match but no single divergence found)"
+
+
 DISPATCH = {
     "build_suggestions": _run_build_suggestions,
     "hint_invariant":    _run_hint_invariant,
     "enumerate_moves":   _run_enumerate_moves,
     "solve":             _run_solve,
     "find_open_loc":     _run_find_open_loc,
+    "hint_for_hand":     _run_hint_for_hand,
 }
 
 

@@ -24,7 +24,7 @@ Search order (encodes game preference; no scoring layer):
 import time
 
 import bfs
-from rules import classify, is_partial_ok
+from rules import card_label, classify, is_partial_ok
 
 
 def find_play(hand, board, stats=None):
@@ -173,6 +173,48 @@ def find_play_with_budget(hand, board, *, max_states, stats=None):
         return find_play(hand, board, stats=stats)
     finally:
         _PROJECTION_MAX_STATES["value"] = original_max
+
+
+def format_hint(result):
+    """Return hint steps as a [str] for display and conformance testing.
+
+    Step 0 is always "place [<cards>] from hand"; remaining steps are
+    the BFS plan line descriptions. Returns [] when result is None
+    (stuck — no playable card found).
+    """
+    if result is None:
+        return []
+    labels = " ".join(card_label(c) for c in result["placements"])
+    steps = [f"place [{labels}] from hand"]
+    steps.extend(line for line, _desc in result["plan"])
+    return steps
+
+
+def hint_scenario_dsl(name, hand, board, result):
+    """Produce DSL text for one hint_for_hand conformance scenario.
+
+    `name` is the scenario identifier (e.g. "turn_1_hint").
+    `hand` is a list of card-tuples.
+    `board` is a list of stacks (each a list of card-tuples).
+    `result` is the find_play result (dict or None).
+    """
+    hand_str = " ".join(card_label(c) for c in hand)
+    board_block = "\n".join(
+        "    - " + " ".join(card_label(c) for c in stack)
+        for stack in board
+    )
+    steps = format_hint(result)
+    if steps:
+        steps_block = "  expect_steps:\n" + "\n".join(f"    - {s}" for s in steps)
+    else:
+        steps_block = "  expect_steps: []"
+    return (
+        f"scenario {name}\n"
+        f"  op: hint_for_hand\n"
+        f"  hand: {hand_str}\n"
+        f"  board:\n{board_block}\n"
+        f"{steps_block}\n"
+    )
 
 
 # Default BFS state budget per projection. Lowered to 5000

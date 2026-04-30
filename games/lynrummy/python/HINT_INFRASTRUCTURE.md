@@ -47,16 +47,16 @@ transcript to stdout. File path:
 Each of the 3 turns became one `hint_for_hand` scenario. Example:
 
 ```
-scenario: turn_1_hint
-op: hint_for_hand
-hand: 3S:1 4S 8D:1 JD:1 4C:1 6D QD:1
-board:
-  - KS AS 2S 3S
-  - TD JD QD KD
-  - ... (remaining stacks)
-expect_steps:
-  - place [JD:1 QD:1] from hand
-  - peel TD from HELPER [TD JD QD KD], absorb onto trouble [JD:1 QD:1] → [TD JD:1 QD:1] [→COMPLETE]
+scenario turn_1_hint
+  op: hint_for_hand
+  hand: 3S:1 4S 8D:1 JD:1 4C:1 6D QD:1
+  board:
+    - KS AS 2S 3S
+    - TD JD QD KD
+    - ... (remaining stacks)
+  expect_steps:
+    - place [JD:1 QD:1] from hand
+    - peel TD from HELPER [TD JD QD KD], absorb onto trouble [JD:1 QD:1] → [TD JD:1 QD:1] [→COMPLETE]
 ```
 
 `hint_scenario_dsl(name, hand, board, result)` in `agent_prelude.py`
@@ -75,43 +75,78 @@ run once, inspect output, commit as fixture).
 
 ---
 
-## Step 3 — fixturegen + `test_dsl_conformance.py`
+## Step 3 — fixturegen + `test_dsl_conformance.py` ✓
 
 ### fixturegen (`cmd/fixturegen/main.go`)
 
-A `hint_for_hand` op is added:
+The `hint_for_hand` op was added to the op registry (Python=true, Elm=false):
 
 ```go
 {
-    Name:    "hint_for_hand",
-    Python:  true,
-    // Elm: deferred until Elm port is ready
+    Name:   "hint_for_hand",
+    Python: true,
+    // No Elm emitter — Python-only for now.
 },
 ```
 
-Fixturegen parses:
-- `hand:` scalar — space-separated card shorthands
-- `board:` block — one stack per line, space-separated cards
-- `expect_steps:` block — one step string per line
+The DSL format uses 2-space-indented fields (matching all other scenarios):
 
-The op writes raw scenario data into `conformance_fixtures.json`.
-No Elm emitter yet.
+```
+scenario turn_1_hint
+  op: hint_for_hand
+  hand: 3S:1 4S 8D:1 JD:1 4C:1 6D QD:1
+  board:
+    - KS AS 2S 3S
+    - TD JD QD KD
+    ...
+  expect_steps:
+    - place [JD:1 QD:1] from hand
+    - peel TD from HELPER [...] → [...] [→COMPLETE]
+```
+
+Fixturegen parses:
+- `hand:` scalar — space-separated card shorthands with `:N` deck suffix
+- `board:` block — `- card1 card2 ...` rows (one stack per line, no location)
+- `expect_steps:` — block of `- <text>` lines, OR scalar `[]` for stuck/no-hint
+
+Three new JSON fields in `conformance_fixtures.json` carry the hint data in
+label-string form so the Python handler can call `agent_prelude` directly:
+- `"hint_hand"`: `["3S:1", "4S", "8D:1", ...]`
+- `"hint_board"`: `[["KS", "AS", ...], ...]`
+- `"hint_steps"`: `["place [...] from hand", ...]`
+
+The `elmScenarioBody` function was updated to emit `Expect.pass` (not
+`Expect.fail`) for Python-only ops so they appear in the Elm test file
+without spurious failures.
+
+`hint_scenario_dsl` in `agent_prelude.py` was also corrected to output
+the proper indented DSL format (2 spaces for fields, 4 spaces for block
+item lines).
 
 ### `test_dsl_conformance.py`
 
-A `_run_hint_for_hand(sc)` handler is added:
+A `_run_hint_for_hand(sc)` handler was added:
 
 ```python
 def _run_hint_for_hand(sc):
-    hand = parse_hand(sc["hand"])
-    board = parse_board(sc["board"])
+    hand = [parse_card_label(tok) for tok in sc["hint_hand"]]
+    board = [[parse_card_label(tok) for tok in stack]
+             for stack in sc["hint_board"]]
     result = agent_prelude.find_play(hand, board)
-    steps = agent_prelude.format_hint(result)
-    assert steps == sc["expect_steps"], f"..."
+    got = agent_prelude.format_hint(result)
+    want = sc["hint_steps"]
+    # ... assert got == want with clear diff message
 ```
 
-`"hint_for_hand"` is added to the dispatch table and to
-`conformance_ops.json`.
+`parse_card_label` is `rules.card.card` — the existing parser that
+handles `"3S:1"` → `(3, 2, 1)`, `"4S"` → `(4, 2, 0)`, etc.
+
+`"hint_for_hand"` was added to the DISPATCH table. The manifest
+cross-check (`_verify_dispatch_matches_manifest`) catches any future
+drift between the Go registry and the Python runner.
+
+All 3 hint scenarios pass (`turn_1_hint`, `turn_2_hint`, `turn_3_hint`)
+and the full `ops/check-conformance` gate is green (773 Elm + 99 Python).
 
 ---
 
