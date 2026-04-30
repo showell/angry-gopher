@@ -47,13 +47,11 @@ def find_play(hand, board, stats=None):
         stats.setdefault("projections", [])
     t_total = time.time()
 
-    # (a) + (b): pair search.
+    # (a) Triple in hand — always 0 BFS steps, best possible.
     for i, c1 in enumerate(hand):
         for c2 in hand[i + 1:]:
             if not is_partial_ok([c1, c2]):
                 continue
-
-            # (a) Third in hand?
             ordered = _find_completing_third([c1, c2], hand)
             if ordered is not None:
                 _finish(stats, t_total)
@@ -62,34 +60,33 @@ def find_play(hand, board, stats=None):
                     "plan": [],
                 }
 
-            # (b) Project the pair onto the board, run BFS.
+    # Collect all solvable pair + singleton candidates, then
+    # return the one with the shortest plan (easiest for human).
+    candidates = []
+
+    for i, c1 in enumerate(hand):
+        for c2 in hand[i + 1:]:
+            if not is_partial_ok([c1, c2]):
+                continue
             plan = _try_projection(board, [[c1, c2]],
                                    stats=stats,
                                    kind="pair",
                                    cards=[c1, c2])
             if plan is not None:
-                _finish(stats, t_total)
-                return {
-                    "placements": [c1, c2],
-                    "plan": plan,
-                }
+                candidates.append({"placements": [c1, c2], "plan": plan})
 
-    # (c) Singletons.
     for c in hand:
         plan = _try_projection(board, [[c]],
                                stats=stats,
                                kind="singleton",
                                cards=[c])
         if plan is not None:
-            _finish(stats, t_total)
-            return {
-                "placements": [c],
-                "plan": plan,
-            }
+            candidates.append({"placements": [c], "plan": plan})
 
-    # (d) Nothing fired.
     _finish(stats, t_total)
-    return None
+    if not candidates:
+        return None
+    return min(candidates, key=lambda r: len(r["plan"]))
 
 
 def _finish(stats, t_start):
