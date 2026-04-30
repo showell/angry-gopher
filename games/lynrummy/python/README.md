@@ -478,6 +478,27 @@ Snapshot files are throwaway — re-capture periodically
 with `agent_game.py --offline --capture FILE` to get fresh
 representative samples.
 
+## BFS performance vocabulary
+
+**Tantalizing card** — a hand card that passes the
+`_all_trouble_singletons_live` filter (a valid group using board
+cards theoretically exists) but has no actual BFS solution. BFS
+climbs through many cap levels before the plateau fires and confirms
+`no_plan`. Tantalizing cards are the dominant driver of worst-case
+outer-shell benchmark times; their apparent neighbors are locked
+inside helper stacks whose dismantling causes cascading partial
+stacks that cannot be reassembled.
+
+Example: `2C:1` on the Game 17 board. Its set partners `2H:0` and
+`2S:0` both exist on the board but are locked inside two separate
+runs; freeing either one breaks a helper that cannot be repaired
+without further dismantling.
+
+Contrast with a **dead card** — one that fails the live-singleton
+filter outright (no valid 3-card group exists in the pool at all)
+and is rejected in O(1) before BFS even starts. Tantalizing cards
+are the hard case; dead cards are cheap.
+
 ## OPTIMIZE_PYTHON pruning landmarks (2026-04-25 / 26)
 
 - **Loop inversion** in `enumerate_moves`: 35% reduction in
