@@ -1,0 +1,10 @@
+{
+  "name": "lynrummy-ts",
+  "version": "0.0.0",
+  "type": "module",
+  "private": true,
+  "description": "TypeScript port of the Lyn Rummy BFS solver. Sibling to the python/ and elm/ subtrees; consumes the same DSL conformance fixtures.",
+  "scripts": {
+    "test:leaf": "node test/test_conformance_leaf.ts"
+  }
+}
