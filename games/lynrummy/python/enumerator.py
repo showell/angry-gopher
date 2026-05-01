@@ -360,23 +360,40 @@ def _yield_extract_absorbs(absorber, helper, trouble, growing, complete,
                            extractable, completion_inv):
     """Source: HELPER stack via extract. Inverted loop — iterate the
     ABSORBER's neighbor shapes and look up extractable cards directly,
-    instead of walking every helper × position to filter."""
+    instead of walking every helper × position to filter.
+
+    The absorb probe is run BEFORE the extract: the probe earns the
+    "can't extend on either side" knowledge from a single look at the
+    target boundary, so when it fails we skip do_extract entirely and
+    save its CCS allocations + helper-list slicing."""
     bucket, idx, target, shapes, _shapes_set = absorber
     target_cards_list = list(target.cards)
+    nt_base = None  # built lazily on first probe success
+    ng = None
     for shape in shapes:
         for hi, ci, verb in extractable.get(shape, ()):
-            new_helper, spawned, ext_card, source_cards = \
+            ext_card = helper[hi].cards[ci]
+            # Probe both sides without paying for the extract.
+            right_kind = kind_after_absorb_right(target, ext_card)
+            left_kind = kind_after_absorb_left(target, ext_card)
+            if right_kind is None and left_kind is None:
+                continue
+            # At least one side absorbs; now do the extract.
+            new_helper, spawned, _ext, source_cards = \
                 do_extract(helper, hi, ci, verb)
             spawned_lists = [list(s.cards) for s in spawned]
-            for side in ("right", "left"):
-                merged = _absorb_one_side(target, ext_card, side)
-                if merged is None:
+            if nt_base is None:
+                nt_base, ng = remove_absorber(bucket, idx, trouble, growing)
+            nt = nt_base + spawned
+            for side, new_kind, executor in (
+                ("right", right_kind, absorb_right),
+                ("left", left_kind, absorb_left),
+            ):
+                if new_kind is None:
                     continue
+                merged = executor(target, ext_card, new_kind)
                 if not admissible_merged(merged, completion_inv):
                     continue
-                nt_base, ng = remove_absorber(
-                    bucket, idx, trouble, growing)
-                nt = nt_base + spawned
                 ng_final, nc, graduated = graduate(merged, ng, complete)
                 desc = ExtractAbsorbDesc(
                     verb=verb,
