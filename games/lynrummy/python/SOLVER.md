@@ -1,0 +1,439 @@
+# SOLVER.md — Lyn Rummy BFS planner
+
+> **READ THIS FIRST if your work touches the BFS solver.** The solver
+> is the #1 active asset of the Python codebase. The Elm UI is
+> largely self-sufficient at this point; the solver is where active
+> algorithmic development happens, and it's where regressions are
+> most expensive. Sub-agents dispatched to do solver work must be
+> told to read this file. README.md is the front door; SOLVER.md is
+> the workshop floor.
+
+The solver lives in five modules:
+
+  - `bfs.py` — the search engine.
+  - `enumerator.py` — the move generator.
+  - `classified_card_stack.py` — the data type + verb library.
+  - `move.py` — descriptor types + plan-line rendering.
+  - `buckets.py` — 4-bucket state shape + boundary helper.
+
+Plus a small accelerator at `card_neighbors.py` and a benchmark
+harness at `bench_timing.py`.
+
+## Core principle: earn knowledge, use earned knowledge
+
+Every computation in the solver should EARN knowledge that the rest
+of the algorithm uses, and every hot-loop operation should CONSUME
+already-earned knowledge instead of re-deriving it. When you find
+yourself dispatching on `kind` in a hot inner loop, or
+re-classifying a stack you already classified upstream, or
+boundary-checking the same target against many cards, the question
+is not "how do I make this branch faster?" It's "why doesn't the
+data already know?"
+
+The corollary that's easy to get wrong:
+
+  - **Earned knowledge** = a fact the algorithm has *already
+    established* through prior steps that committed to using it.
+    Storing it is making available something *already there for
+    the taking*.
+  - **Speculation** = trying something to find out whether knowledge
+    is worth earning. Speculation is essential — it's the mechanism
+    by which knowledge gets earned. It only goes wrong when we
+    commit to a speculative shape before it's been proven.
+
+Speculative pre-computation is the most common solver bug: building
+caches or tables on every instance of a data type when most
+instances are never queried. That's not earned, just reserved on
+spec. Push the work to the COMMITMENT POINT — the place in the
+algorithm that's already decided to use the result many times.
+
+See `memory/feedback_earn_and_use_knowledge.md` for the lesson with
+its receipts.
+
+## Data shape
+
+### `ClassifiedCardStack` (CCS) — what BFS uses internally
+
+Every stack inside the BFS is a `ClassifiedCardStack`. Five slot
+reads cover every access:
+
+  - `stack.cards` — tuple of `(value, suit, deck)` triples.
+  - `stack.kind` — one of seven: `run` / `rb` / `set` / `pair_run`
+    / `pair_rb` / `pair_set` / `singleton`. NO `KIND_OTHER`.
+  - `stack.n` — cached length.
+  - `stack.extends_left` / `stack.extends_right` / `stack.set_extenders` —
+    earned absorb tables (see "Three-bucket extends" below).
+
+There are NO dunder methods. `len(stack)`, `for c in stack`, `stack[i]`
+all raise. This is intentional:
+
+1. **Speed**: dunder dispatch is slow on the hot path; slot reads
+   of named fields are direct attribute hits.
+2. **Elm portability**: the Elm port has no equivalent of `__iter__`
+   / `__getitem__` / `__len__` — every access goes through record
+   fields. Mirroring that here makes the (deferred) Elm/TS port a
+   near-mechanical translation.
+
+### The boundary classifies once
+
+`solve_state_with_descs` calls `classify_buckets`, which converts a
+raw input `Buckets` of card-list stacks into a `Buckets` of CCS.
+Any stack that fails to classify into one of the seven kinds raises
+`ValueError`. That's a caller bug, not a BFS bug. The "no
+KIND_OTHER" invariant holds inside the BFS by construction;
+downstream code consumes `stack.kind` directly.
+
+### Probes earn the kind; executors consume it
+
+The pattern across every operation that mutates a stack:
+
+```python
+new_kind = kind_after_absorb_right(target, card)
+if new_kind is None:
+    return None
+result = absorb_right(target, card, new_kind)
+```
+
+The probe asks "can I do this, and what would the result be?" and
+short-circuits on failure with no allocations. The executor assumes
+the precondition holds and builds the result without re-validating.
+
+Same pattern for the splice probe + executor and for the
+source-side verbs (`peel` / `pluck` / `yank` / `steal` /
+`split_out`, each paired with a `can_X` predicate). The verb
+executors derive remnant kinds from the parent's kind family +
+length — no full reclassification.
+
+### Three-bucket extends — earned knowledge at the commitment point
+
+Each absorber stack carries three precomputed dicts in canonical
+**reading order** (`left, right, set`):
+
+  - `left_extenders`: `{(value, suit) → result_kind}` for cards that
+    legally absorb on the left edge.
+  - `right_extenders`: same for the right edge.
+  - `set_extenders`: same for set-mode absorbs (sets are unordered
+    so both sides accept these shapes).
+
+The three dicts are mutually disjoint — a card's shape lives in at
+most one of them. They encode the target's commitment shape:
+
+  - **run / rb / pair_run / pair_rb** (committed to a run-family
+    direction): `left` and `right` populated; `set` empty.
+  - **set / pair_set** (committed to set, unordered): only `set`
+    populated.
+  - **singleton** (uncommitted): all three populated. Singletons
+    are the only kind where a single card can land in any of three
+    modes.
+
+Built ONCE per absorber, in `_build_absorber_shapes`, at the moment
+the BFS commits to iterating an absorber against many sources. The
+hot-path callers iterate the sorted union of shapes per absorber;
+every entry guarantees a legal absorb in one of the three modes.
+No per-card probe call.
+
+This is the canonical "earned knowledge at the commitment point"
+pattern. An earlier attempt put extends tables on every CCS at
+construction — that was speculative (most CCSs are never probed
+as absorbers) and lost the trade-off. The fix was pushing the work
+to where commitment exists.
+
+## Don't manufacture symmetry — left and right are different operations
+
+Left and right look symmetric on the surface but are not. **Never
+pass `side` as a parameter** to a function in the solver. If you
+find yourself writing `if side == "left": ... else: ...`, split
+the function into `_left` and `_right` variants and let each one
+do its own job. The branching doesn't go away when you parameterize
+— it moves into the helper, where the caller's commitment to "I'm
+handling the right edge" is lost.
+
+Concrete examples that already exist in the code:
+
+  - `kind_after_absorb_right` / `kind_after_absorb_left` — separate
+    probes, no `side` arg.
+  - `absorb_right` / `absorb_left` — separate executors.
+  - `_absorb_seq_right` / `_absorb_seq_left` — separate sequential
+    absorb primitives for push/engulf.
+  - `splice_left` / `splice_right`, `kinds_after_splice_left` /
+    `kinds_after_splice_right`, `_splice_halves_left` /
+    `_splice_halves_right`, `_kinds_after_splice_run_left` /
+    `_kinds_after_splice_run_right`.
+
+The pattern: action verbs and their probes get split per side;
+data layout (the three-bucket extends, descriptor `side` field)
+stays unified because it's data, not action.
+
+For sets specifically: sets are *truly* symmetric (unordered), so
+they get a single `set_extenders` bucket and yield both right and
+left descriptors per entry to preserve plan-output. They're not
+"left or right"; they're an unordered third mode.
+
+See `memory/feedback_no_side_parameter.md`.
+
+## Iteration order is the cross-language canon
+
+The BFS produces deterministic plan-line output that depends on
+iteration order in the move-generator callers. The existing Elm BFS
+(`Game.Agent.Enumerator`) and the DSL conformance fixtures pin the
+canonical iteration order. Python and Elm must agree.
+
+**Don't change Python iteration order without porting Elm in
+lockstep.** The DSL conformance suite catches drift, but a half-
+done port leaves the Elm UI broken in production.
+
+The current canon:
+
+  - **Iterate the sorted union** of all extending shapes per absorber.
+    Within each shape, action order is **right → left → set** (right
+    is the natural human-first action; set is the unordered case
+    yielding both side descriptors).
+  - **Data layout** is `(left, right, set)` (reading order). The
+    action order and the data-layout order are different on purpose:
+    data is read left-to-right; actions execute right-first.
+
+When the Elm BFS is retired in favor of the upcoming TypeScript
+port, this iteration order can be cleaned up (e.g., per-bucket
+iteration is cleaner but reorders plan lines). Until then, leave
+it alone.
+
+See `memory/feedback_iteration_order_is_canon.md`.
+
+## Module map
+
+### `bfs.py` — search engine
+
+  - `bfs_with_cap` — pure BFS by program length, bounded by max
+    trouble count.
+  - `solve_state_with_descs` — outer iterative-deepening loop;
+    the canonical entry point.
+  - `solve_state` / `solve` — thin wrappers.
+  - Boundary: `solve_state_with_descs` calls `classify_buckets`,
+    promoting raw input to CCS once at entry. The "no KIND_OTHER"
+    invariant holds for everything downstream.
+  - Doomed-singleton filters via `card_neighbors.py`.
+
+### `enumerator.py` — move generator dispatcher
+
+`enumerate_moves(state)` is a 25-line dispatcher; each move type
+has its own focused helper:
+
+  - `_yield_extract_absorbs` — extract-then-absorb (move type a).
+  - `_yield_free_pulls` — TROUBLE singleton onto absorber (a').
+  - `_yield_shifts` — shift moves (d).
+  - `_yield_splices` — splice moves (c).
+  - `_yield_pushes` — push TROUBLE onto HELPER (b).
+  - `_yield_engulfs` — GROWING engulfs HELPER (b').
+
+Plus the precomputation phase: `_build_absorber_shapes` (earns the
+three-bucket extends per absorber), `_eligible_splice_helpers`,
+`_eligible_shift_helpers`, `extractable_index`.
+
+### `classified_card_stack.py` — CCS data type + verb library
+
+  - The `ClassifiedCardStack` dataclass.
+  - 7-kind alphabet (`KIND_RUN` etc.) and family helpers.
+  - `classify_stack` — the rigorous classifier (boundary use only).
+  - `extends_tables` — earned-knowledge constructor for absorbers.
+  - Source-side verbs: `peel` / `pluck` / `yank` / `steal` /
+    `split_out` plus their `can_X` predicates.
+  - Target-side absorb: `kind_after_absorb_right/left` probes +
+    `absorb_right/left` executors.
+  - Splice: `kinds_after_splice_left/right` probes + `splice_left/
+    right` executors.
+
+Most BFS hot-path arithmetic lives here.
+
+### `move.py` — descriptor types + plan rendering
+
+`ExtractAbsorbDesc` / `FreePullDesc` / `PushDesc` / `ShiftDesc` /
+`SpliceDesc` carry raw card tuples / lists, NOT CCS objects, for
+plan-line stability and downstream serialization. `describe`,
+`narrate`, `hint` render plans for various consumers.
+
+### `buckets.py` — state shape + boundary
+
+`Buckets` (4-bucket NamedTuple), `FocusedState`, `state_sig`,
+`trouble_count`, `is_victory`, and `classify_buckets` — the
+boundary helper that converts raw input to CCS-shaped state.
+
+### `card_neighbors.py` — liveness accelerator
+
+104-element `card_loc` bucket-tag array + precomputed `NEIGHBORS`
+partner-pair table. O(72) liveness queries instead of O(pool²)
+classify scans. See [BFS_CARD_TRACKER.md](BFS_CARD_TRACKER.md).
+
+## Validation methodology — gates for every solver-touching change
+
+Run **all five** gates after any change touching `bfs.py` /
+`enumerator.py` / `move.py` / `classified_card_stack.py` /
+`buckets.py` / `rules/` or the `verbs.py` / `primitives.py` /
+`agent_prelude.py` layers. No exceptions; the cost of a missed
+regression in this part of the codebase is high.
+
+### 1. Unit + conformance suite
+
+```
+./check.sh
+```
+
+Runs every `test_*.py` in the python directory. Exits non-zero on
+any failure (either non-zero exit code OR an inline `FAIL`
+marker). Tests aren't load-bearing without enforcement; this
+script IS the enforcement.
+
+### 2. DSL cross-language conformance
+
+```
+ops/check-conformance
+```
+
+Runs `cmd/fixturegen` to compile DSL → fixtures, then Python
+conformance, then the Elm test suite. Catches Python/Elm
+divergence on plan-line output. **The Elm BFS is the active
+production code; iteration-order changes that break the Elm side
+must be coordinated, not committed unilaterally.**
+
+### 3. Baseline timing check
+
+```
+python3 check_baseline_timing.py
+```
+
+Measures all 81 baseline scenarios under `bench_timing.py`
+(warmup + GC-disabled + `process_time` + min-of-20). Compares
+against the gold at `baseline_board_81_gold.txt`. Flags any
+scenario whose time exceeds gold by more than the tolerance
+(default 10%) AND whose gold itself is above the noise floor
+(default 200ms). Single-pass for fast feedback; the gate is the
+fast feedback loop.
+
+### 4. Outer-shell benchmark
+
+```
+python3 bench_outer_shell.py
+diff <(python3 bench_outer_shell.py) bench_outer_shell_gold.txt
+```
+
+Compares singleton-only vs. full (triple + pair + singleton)
+across the fixed 60×6-card corpus. Plan quality must stay
+`better=19 same=41 worse=0`. A regression is full *both* slower
+*and* lower plan quality.
+
+### 5. Offline self-play smoke
+
+```
+python3 agent_game.py --offline --max-actions 200
+```
+
+Should finish in <10s with at least a few plays completed. Catches
+"BFS hangs" or "agent stuck" failures that gates 1-4 might miss.
+
+## Bench gold files
+
+Two gold files live in `python/`:
+
+  - `baseline_board_81_gold.txt` — 81-card baseline (one trouble
+    singleton per remaining card on the Game 17 board). Line-
+    oriented, sorted by id. The most precise per-scenario regression
+    detector.
+  - `bench_outer_shell_gold.txt` — outer-shell benchmark output.
+
+**Naming convention:** every benchmark gets a gold file named
+`<bench_name>_gold.txt`. Plain text. Diff-friendly. Sortable.
+
+### Capture process
+
+The 81-card gold uses a deliberately careful capture process to
+reduce between-capture variance:
+
+```
+python3 tools/gen_baseline_board.py
+```
+
+Internally, this:
+
+1. Runs a **pre-suite warmup pass** (all 81 scenarios untimed)
+   so subsequent timing isn't biased by interpreter cold-start,
+   lazy table builds, or branch-predictor warmup.
+2. Then measures each scenario via `bench_timing.time_solver`
+   (warmup + GC-disabled + `process_time` + min-of-20).
+3. Writes the gold + the regenerated DSL.
+
+Even with that discipline, between-capture variance is real —
+~5-10% on the hot scenarios depending on system thermal state and
+load. **Refresh gold only when you believe you've earned a clear
+win.** When you do, capture two or three times and confirm the
+numbers are stable before committing. (Future option C from the
+bench-robustness essay: multi-capture median; not yet built.)
+
+### Regenerate after solver changes
+
+```
+python3 tools/gen_baseline_board.py
+ops/check-conformance     # to regenerate DSL fixtures
+python3 check_baseline_timing.py
+```
+
+Then commit both `baseline_board_81.dsl` and
+`baseline_board_81_gold.txt`.
+
+## BFS performance vocabulary
+
+**Tantalizing card** — a hand card that passes the
+`_all_trouble_singletons_live` filter (a valid group using board
+cards theoretically exists) but has no actual BFS solution. BFS
+climbs through many cap levels before the plateau fires and
+confirms `no_plan`. Tantalizing cards drive worst-case timing;
+their apparent neighbors are locked inside helper stacks whose
+dismantling causes cascading partials.
+
+Example: `2C:1` on the Game 17 board. Its set partners `2H:0`
+and `2S:0` exist on the board but are locked inside two separate
+runs; freeing either one breaks a helper that cannot be repaired.
+
+**Dead card** — fails the live-singleton filter outright (no
+valid 3-card group exists in the pool). Rejected in O(1) before
+BFS starts.
+
+**Card-tracker accelerator** — `card_neighbors.py`'s `card_loc`
++ `NEIGHBORS`. Used at two BFS sites: the static pre-BFS
+dead-singleton filter and a dynamic per-state prune gated on
+group-completion events. See
+[BFS_CARD_TRACKER.md](BFS_CARD_TRACKER.md).
+
+## Pre-port discipline (TypeScript engine, when it lands)
+
+The plan: replace the Elm BFS with a TypeScript engine running in
+the browser, called from Elm via ports. See
+`~/.claude/projects/-home-steve-showell-repos-angry-gopher/memory/project_ts_solver_decision.md`
+for the rationale.
+
+What carries forward:
+
+  - The 7-kind alphabet, the no-KIND_OTHER invariant.
+  - Probe + executor pattern.
+  - Earned-knowledge structure at the commitment point.
+  - The `_left` / `_right` / `_set` separation discipline.
+  - The DSL conformance fixtures as the cross-language contract.
+
+What gets reconsidered (carefully) at port time:
+
+  - Iteration order can be cleaned up once Elm is retired.
+  - Whether the descriptor types stay raw-card-shaped or become
+    typed.
+
+Until the port lands, treat the Python solver and the Elm BFS as
+a paired system. Any change that would break the Elm side without
+compensating Elm work needs to wait.
+
+## Outstanding TODOs
+
+  - Iteration order cleanup (left → right → set per-bucket
+    instead of sorted-union) — deferred until Elm retirement.
+  - Multi-capture median for gold (proposal C from
+    `random211_bench.md`) — reach for it when locking in a clear
+    win.
+  - Leaf DSL conformance fixtures — `classify_stack.dsl` landed;
+    next is the absorb-probe DSL, then verb predicates/executors,
+    then `kinds_after_splice`.

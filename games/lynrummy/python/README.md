@@ -1,5 +1,13 @@
 # LynRummy — Python agent subsystem
 
+> **Working on the BFS solver?** Stop and read
+> [`SOLVER.md`](SOLVER.md) FIRST. The solver is the #1 active
+> asset of the Python codebase — its data shapes, validation
+> gates, and design principles are documented there. Sub-agents
+> dispatched to do solver work must be told to read it. This
+> README is the front door to the subtree as a whole;
+> `SOLVER.md` is the workshop floor for solver work.
+
 **Status:** `WORKHORSE` for the BFS planner; legacy trick
 engine (`strategy.py`) kept as a comparable baseline pending
 its own retirement. Currently the canonical home for
@@ -145,9 +153,12 @@ adding code).**
   that need the DB (`tools/export_primitives_fixtures.py`,
   `tools/mine_puzzles.py`) fail loud when the DB is empty.
 
-**Step 6: Validation methodology** for any change touching
-the BFS planner — see § "Validation methodology" below.
-For non-planner changes, `./check.sh` is the gate.
+**Step 6: Validation methodology.** For any change touching the
+BFS solver (planner modules + adjacent layers), open
+[`SOLVER.md`](SOLVER.md) and run the five-gate validation it
+documents. The solver is where regressions hurt most; the gates
+are non-negotiable. For non-solver changes, `./check.sh` is the
+gate.
 
 If after this checklist the path forward isn't clear,
 **punt** with `status: blocked` rather than guessing —
@@ -425,170 +436,35 @@ The Python suite (run each test file directly) covers:
   fallback, stuck → None, pair-priority).
 - `test_gesture_synth.py` — 7 tests for drag-path synthesis.
 
-## Validation methodology (preventing solver regressions)
+## Solver work — see SOLVER.md
 
-After any change touching the BFS planner modules
-(`bfs.py` / `enumerator.py` / `move.py` /
-`classified_card_stack.py` / `buckets.py` / `rules/`) or the
-`verbs.py` / `primitives.py` / `agent_prelude.py` layers,
-run all of:
+If your work touches the BFS solver (`bfs.py`, `enumerator.py`,
+`classified_card_stack.py`, `move.py`, `buckets.py`, the `rules/`
+subpackage, or the `verbs.py` / `primitives.py` / `agent_prelude.py`
+adjacent layers), [`SOLVER.md`](SOLVER.md) is the canonical
+reference. It documents:
 
-1. **Unit + conformance suite** — run the gate script:
-   ```
-   ./check.sh
-   ```
-   `check.sh` runs every `test_*.py` in this directory and
-   exits non-zero if any file fails (either by non-zero
-   exit code OR by printing a `FAIL`/`FAILED` marker
-   inline). Tests aren't load-bearing without enforcement;
-   this script IS the enforcement. Solver-touching work
-   must run it before commit. See
-   `memory/feedback_tests_arent_load_bearing_without_enforcement.md`.
+  - The core principle (earn knowledge, use earned knowledge —
+    commitment vs. speculation).
+  - The BFS data shape (CCS, the 7-kind alphabet, three-bucket
+    extends, no-dunder discipline).
+  - The "no side parameter" rule.
+  - The cross-language iteration-order canon (don't break Elm).
+  - The five-gate validation methodology that every solver-touching
+    change must run.
+  - Bench gold files (`baseline_board_81_gold.txt`,
+    `bench_outer_shell_gold.txt`) and their capture process.
+  - Pre-port discipline for the upcoming TypeScript engine.
 
-2. **Corpus regression** — depths must match the gold
-   baseline at `corpus/baseline_post_focus.txt` (current
-   gold; rerun 2026-04-27). Canonical depth distribution:
-   `[2,5,2,4,5,4,6,4,1,7,2,5,2,1,1,2,3,1,2,5,1]`. The
-   corpus is the 21 scenarios named `corpus_sid_*` in
-   `conformance_fixtures.json` (compiled from
-   `games/lynrummy/conformance/scenarios/planner_corpus.dsl`).
-   Earlier baselines (`baseline_post_engulf.txt`,
-   `baseline_pre_engulf.txt`, `baseline_bfs.txt`,
-   `baseline.txt`) are kept as historical milestones, not
-   the regression target.
+Sub-agents dispatched to solver work must be told to read
+`SOLVER.md`. The cost of a missed regression in the solver is high.
 
-3. **Baseline timing check** — verify no regressions on the
-   81-card baseline suite:
-   ```
-   python3 check_baseline_timing.py
-   ```
-   Flags any scenario whose baseline exceeds 200ms and whose
-   current time is >10% slower. Currently covers the three
-   "live-but-hard" singletons (2S', 2C', 3H'). Exit code 1
-   means a regression was detected.
+For the broader `corpus/baseline_post_focus.txt` correctness
+regression target (depth distribution
+`[2,5,2,4,5,4,6,4,1,7,2,5,2,1,1,2,3,1,2,5,1]`, 21 scenarios named
+`corpus_sid_*`), see SOLVER.md § Validation methodology.
 
-   If the solver genuinely improved, regenerate the baseline:
-   ```
-   python3 tools/gen_baseline_board.py
-   ops/check-conformance
-   python3 check_baseline_timing.py
-   ```
-   then commit both `baseline_board_81.dsl` and
-   `baseline_board_81_gold.txt`.
-
-4. **Offline self-play smoke** — quick "does autonomous
-   play still terminate" check:
-   ```
-   python3 agent_game.py --offline --max-actions 200
-   ```
-   Should finish in <10s with at least a few plays
-   completed.
-
-5. **Outer shell benchmark** (for changes to `agent_prelude.py`) —
-   compare singleton-only vs. full (triple + pair + singleton)
-   across the fixed 60×6-card corpus:
-   ```
-   python3 bench_outer_shell.py
-   ```
-   Diff the output against the gold file:
-   ```
-   diff <(python3 bench_outer_shell.py) bench_outer_shell_gold.txt
-   ```
-   A regression looks like: full becomes slower *and* plan quality
-   drops vs. the singleton-only baseline. If the solver genuinely
-   improved, regenerate the gold file:
-   ```
-   python3 bench_outer_shell.py > bench_outer_shell_gold.txt
-   ```
-   then commit it.
-
-Snapshot files are throwaway — re-capture periodically
-with `agent_game.py --offline --capture FILE` to get fresh
-representative samples.
-
-## BFS performance vocabulary
-
-**Tantalizing card** — a hand card that passes the
-`_all_trouble_singletons_live` filter (a valid group using board
-cards theoretically exists) but has no actual BFS solution. BFS
-climbs through many cap levels before the plateau fires and confirms
-`no_plan`. Tantalizing cards are the dominant driver of worst-case
-outer-shell benchmark times; their apparent neighbors are locked
-inside helper stacks whose dismantling causes cascading partial
-stacks that cannot be reassembled.
-
-Example: `2C:1` on the Game 17 board. Its set partners `2H:0` and
-`2S:0` both exist on the board but are locked inside two separate
-runs; freeing either one breaks a helper that cannot be repaired
-without further dismantling.
-
-Contrast with a **dead card** — one that fails the live-singleton
-filter outright (no valid 3-card group exists in the pool at all)
-and is rejected in O(1) before BFS even starts. Tantalizing cards
-are the hard case; dead cards are cheap.
-
-**Card-tracker query accelerator**: `card_neighbors.py` exposes
-a 104-element `card_loc` bucket-tag array plus a precomputed `NEIGHBORS`
-partner-pair table. Liveness queries are O(72) lookups instead of
-O(pool²) classify scans. Used at two BFS sites: the static pre-BFS
-dead-singleton filter and a dynamic per-state prune gated on
-group-completion events. See [BFS_CARD_TRACKER.md](BFS_CARD_TRACKER.md).
-
-## BFS data shape — the earned-knowledge model
-
-The BFS solver is organized around a single principle: **every
-computation should earn knowledge that the rest of the algorithm
-uses, and every hot-loop operation should consume already-earned
-knowledge instead of re-deriving it.** Where this conflicts with the
-naive shape ("re-classify whenever you need to know what kind of
-stack this is"), the data structure changes.
-
-The pieces:
-
-- **`ClassifiedCardStack` (CCS)** is the data shape inside BFS. Each
-  CCS holds three slot reads: `cards` (tuple), `kind` (one of seven
-  — `run` / `rb` / `set` / `pair_run` / `pair_rb` / `pair_set` /
-  `singleton`), and `n` (cached length). No dunders — `len(stack)`,
-  `for c in stack`, `stack[i]` all raise. Slot reads are direct;
-  dunder dispatch is slow AND non-portable to Elm records.
-
-- **The boundary classifies once.** `solve_state_with_descs` calls
-  `classify_buckets`, which converts a raw input `Buckets` of
-  card-list stacks into a `Buckets` of CCS. Any stack that fails
-  to classify into one of the seven kinds raises `ValueError` —
-  caller bug, not BFS bug. The "no `KIND_OTHER`" invariant holds
-  inside; downstream code consumes `stack.kind` directly.
-
-- **Probes earn the kind; executors consume it.**
-  `kind_after_absorb_right(target, card)` returns the kind of the
-  merged stack (or None). `absorb_right(target, card, kind)` builds
-  the result with no re-validation. Same pattern for the splice
-  probe + executor and for the source-side verbs (`peel` / `pluck`
-  / `yank` / `steal` / `split_out`, each paired with a `can_X`
-  predicate). The verb executors derive remnant kinds from the
-  parent's kind family + length — no full reclassification.
-
-- **Earned knowledge lives at the commitment point, not at
-  speculative construction.** When the BFS commits to iterating one
-  absorber against many candidate sources,
-  `_build_absorber_shapes` earns the absorber's
-  `extends: {(value, suit) → (right_kind, left_kind)}` table once.
-  Hot-path callers iterate this dict — every entry guarantees at
-  least one absorbing side, every (right_kind, left_kind) is the
-  kind of the merged stack. No per-card probe call, no
-  re-derivation. (An earlier attempt put extends tables on every
-  CCS at construction; that was speculative pre-computation, not
-  earned knowledge — most CCSs are never probed as absorbers, and
-  paying construction cost for everyone lost the trade. The fix was
-  to push the work to the absorber loop, where commitment exists.)
-
-- **Validation is gated.** `check_baseline_timing.py` measures the
-  81-card baseline suite under `bench_timing.py` (warmup +
-  GC-disabled + `process_time` + min-of-20). Any hot scenario that
-  regresses >10% versus the gold in `baseline_board_81_gold.txt`
-  fails the gate. Gold is refreshed only when the solver genuinely
-  improves (regenerate via `tools/gen_baseline_board.py`, then
-  commit both the JSON and the regenerated DSL).
+For non-solver changes, `./check.sh` is the gate.
 
 ## TODO
 
