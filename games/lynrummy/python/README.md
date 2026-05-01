@@ -499,15 +499,18 @@ filter outright (no valid 3-card group exists in the pool at all)
 and is rejected in O(1) before BFS even starts. Tantalizing cards
 are the hard case; dead cards are cheap.
 
-**Deferred optimization idea — card-tracker query accelerator**: a 104-element
-array indexed by card ID, precomputed neighbor tables per card, and O(k)
-liveness checks instead of the current O(pool²) scan. See
-[BFS_CARD_TRACKER.md](BFS_CARD_TRACKER.md) for the full design sketch.
-The dynamic doomed-singleton filter experiment
-([BFS_DOOMED_SINGLETON.md](BFS_DOOMED_SINGLETON.md),
-branch `experiment/dynamic-doomed-singleton`) established that per-state
-O(pool²) liveness checks are net-negative; the card-tracker accelerator
-is the proposed remedy.
+**Card-tracker query accelerator (landed)**: `card_neighbors.py` exposes
+a 104-element `card_loc` bucket-tag array plus a precomputed `NEIGHBORS`
+partner-pair table. Liveness queries are O(72) lookups instead of
+O(pool²) classify scans. Used at two BFS sites: the static pre-BFS
+dead-singleton filter and a dynamic per-state prune gated on
+group-completion events. See [BFS_CARD_TRACKER.md](BFS_CARD_TRACKER.md)
+for the design + delivery summary + open structural items.
+
+Cumulative BFS speedup as of 2026-05-01: `bench_outer_shell` full
+6238ms → 4288ms (−31%); `baseline_board_2Sp` 664ms → ~517ms (−22%).
+Plan quality unchanged. Next: profiler-driven follow-up on the
+remaining tantalizing-card edge cases.
 
 ## OPTIMIZE_PYTHON pruning landmarks (2026-04-25 / 26)
 

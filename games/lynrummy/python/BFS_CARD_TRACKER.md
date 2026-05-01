@@ -1,157 +1,131 @@
-# Card-tracker query accelerator — design sketch
+# Card-tracker query accelerator
 
-## Status
+## Status: landed across three phases (2026-05-01)
 
-**Phase 1 (hoisting) — landed.** Commits `fa5d4f4`, `b759682` (2026-05-01).
-Lifted redundant per-state work from `bfs.py` / `enumerator.py`
-(`classify`, `neighbors`, splice/shift eligibility, push-trouble filter,
-frontier `tc` cache) and fixed a 3-of-6 ordering bug in
-`_singleton_is_live`. The hoisted call sites (`helper_kinds`,
-`splice_helpers`, `shift_helpers`, `absorber_shapes`) shaped the
-accelerator's input contract.
+The accelerator is in production. The high-level shape:
 
-**Phase 2 (accelerator) — landed.** Commit `31d3801` (2026-05-01).
-`card_neighbors.py` exposes `card_id`, `NEIGHBORS`, `build_card_loc`,
-and `is_live`. `_all_trouble_singletons_live` in `bfs.py` now uses the
-accelerator; the standalone `_singleton_is_live` helper is gone. 19%
-speedup on `bench_outer_shell` full (6280ms → 5114ms); plan quality
-unchanged.
+- A 104-element `card_loc` array maps card-id → bucket tag, built per
+  state from a `Buckets` namedtuple.
+- A precomputed `NEIGHBORS[c]` table (built once at import) gives every
+  partner pair `(c1, c2)` such that `{c, c1, c2}` is a legal 3-card
+  group. 72 pairs per card; uniform across the 104-card space because
+  Lyn Rummy run values wrap K → A.
+- `is_live(c, card_loc)` answers "can c form a triple with two
+  accessible partners?" in one short loop over `NEIGHBORS[c]` — no
+  classify, no permutations, no allocations.
 
-**Phase 3 (gated dynamic doomed-singleton prune) — landed.** Commit
-`6b1b27b` (2026-05-01). `_any_trouble_singleton_newly_doomed` runs
-inside `bfs_with_cap`'s child loop, gated on
-`len(nb.complete) > parent_complete_count`. The gate matters: the
-ungated version was net-negative (+11–17% on `bench_outer_shell`)
-because the per-state `build_card_loc` cost dominated on the larger
-population of non-graduating states. Restricting the check to states
-that just completed a group — the only way a partner can move out of
-the accessible pool — makes the work track its actual cause.
+Two BFS call sites use it:
 
-5-run means after Phase 3:
-- `baseline_board_2Cp`: 504 → 435ms (−14%)
-- `baseline_board_2Sp`: 624 → 517ms (−17%)
-- `bench_outer_shell` singleton-only: 6581 → 5428ms (−18%)
-- `bench_outer_shell` full: 5684 → 4479ms (−21%)
+1. **Static pre-BFS filter** (`_all_trouble_singletons_live`): rules
+   out boards where some trouble singleton has no live partner triple
+   even at the start. Runs once per `solve_state_with_descs` call.
+2. **Dynamic per-state prune** (`_any_trouble_singleton_newly_doomed`):
+   inside `bfs_with_cap`, gated on group-completion events
+   (`len(nb.complete) > parent_complete_count`). Catches singletons
+   whose only partners just got sealed into COMPLETE.
 
-The earlier sections describe the design as implemented.
+The gating on the dynamic check is load-bearing — see "What we tried"
+below — without it, the per-state cost dominates the prune savings on
+the broader corpus.
 
-## The core structure
+## Cumulative numbers vs pre-session master
 
-104 entries, one per card (value 1–13, suit 0–3, deck 0–1 → id = (value−1)×8 + suit×2 + deck).
-Each entry holds a bucket tag: `helper | trouble | growing | complete | absent`.
+| metric | before | after | delta |
+|---|---|---|---|
+| `bench_outer_shell` full | 6238ms | 4288ms | **−31%** |
+| `bench_outer_shell` solo | 7844ms | 5332ms | **−32%** |
+| `baseline_board_2Cp` | 517ms | ~435ms | **−16%** |
+| `baseline_board_2Sp` | 664ms | ~517ms | **−22%** |
+| plan quality | better=19 same=41 worse=0 | identical | ✓ |
+
+## What we tried
+
+A lot of plausible-looking optimizations turned out to be net-negative.
+The pattern that won: the accelerator wins when the alternative is
+*genuinely expensive* (full classify with permutations, O(pool²)
+liveness scans). It loses against early-return rule checks and against
+per-state overhead with no consumer.
+
+What landed:
+- **Hoisting pass** (commits `fa5d4f4`, `b759682`): lifted redundant
+  per-state work in `enumerate_moves` (`classify`, `neighbors`,
+  splice/shift eligibility, push-trouble filter, frontier `tc` cache),
+  and fixed a 3-of-6 ordering bug in the legacy `_singleton_is_live`
+  along the way. Made the call sites' precondition shapes visible —
+  the input contract the accelerator wanted.
+- **Static filter via accelerator** (commit `31d3801`): replaced the
+  O(pool²) classify-with-permutations scan with the O(72)
+  neighbor-table lookup.
+- **Gated dynamic prune** (commit `6b1b27b`): ran the same accelerator
+  query per state, but only when a group just completed in the move
+  that produced the state. The gating idea is what flipped this from
+  net-negative to a 18–21% bench win.
+
+What didn't land (don't re-derive these):
+- Replacing `is_partial_ok` length-2 with a precomputed pair-partner
+  set. The "5-branch tower" framing was misleading — `is_partial_ok`
+  is an early-return chain that exits in ~3 ops for the dominant
+  case, while a hash lookup needs ~10 ops.
+- Hoisting `card_loc` into `enumerate_moves` as plumbing for future
+  consumers. Building it per state without an immediate consumer is
+  pure overhead.
+- Pushing the dynamic doomed-singleton prune unconditionally on every
+  state. The per-state cost dominated the prune savings; the gating
+  on graduation events fixed it.
+
+## Data shapes (reference)
+
+`card_neighbors.py` exposes:
 
 ```python
-card_loc = [ABSENT] * 104   # filled from a Buckets state
+def card_id(card): ...                  # (v, s, d) → 0..103
+NEIGHBORS: list[list[tuple[int, int]]]  # 104 entries; each a list of partner pairs
+ABSENT, HELPER, TROUBLE, GROWING, COMPLETE = 0, 1, 2, 3, 4
+def build_card_loc(buckets): ...        # Buckets → 104-element list
+def is_live(c, card_loc): ...           # bool, scans NEIGHBORS[card_id(c)]
 ```
 
-Building it from a `Buckets` namedtuple is O(total board cards) ≈ O(50) in practice.
-Reading it is a single array index.
+Bucket tag membership is tested by range: `0 < loc < 4` covers HELPER,
+TROUBLE, GROWING (the accessible buckets). COMPLETE and ABSENT both
+fall outside.
 
----
+## Group-membership semantics
 
-## The neighbor table
+The accelerator tracks bucket placement, not stack identity. Two
+consequences:
 
-Precomputed once at module load, never changes.
+- **Sufficient for liveness** because liveness only needs "is this
+  card accessible?", not "which stack is it in?". Existing `state_sig`
+  + lineage machinery handles stack identity for dedup.
+- **Conservative on GROWING**: cards in a growing 2-partial are
+  treated as accessible partners. They can't actually be released by
+  any BFS move (growing isn't an extract source), so this is a
+  correctness-safe over-approximation: false-positive liveness, never
+  false-negative. Plan quality is preserved on every gate run we've
+  done.
 
-For each card `c`, `NEIGHBORS[c]` is the list of all pairs `(c1, c2)` such that
-`{c, c1, c2}` forms a valid group — either a set or a run.
+## Next: profiling
 
-**Sets**: same value, any two of the other seven same-value cards (across both decks).
-For a card with 7 same-value companions, that's C(7,2) = 21 pairs.
+Working code with some edge cases that are still expensive
+(tantalizing-card hands, the 2C'/2S' worst cases). The cheap
+analytical wins are exhausted — the next move is to run a profiler on
+`baseline_board_2Sp` (the worst remaining hot case) and find where the
+seconds actually go. Likely candidates: `state_sig` (sort-of-sorts per
+child), descriptor allocations in `enumerate_moves`, focus filtering
+overhead. We've earned the wall-time spend.
 
-**Runs**: alternating-color triples that include `c`. Cards at positions c−2, c−1, c+1, c+2
-(within value bounds), subject to the red/black alternation constraint. The triple can
-place `c` at any of the three slots. Rough count: maybe 8–12 valid run pairs per card,
-fewer near the value boundaries.
+## Open structural items (not yet attempted)
 
-Total neighbor pairs per card: somewhere in the 20–30 range. A flat list — tiny and
-cache-friendly.
-
----
-
-## What the liveness check looks like
-
-Current `_singleton_is_live(c, pool)`: iterates all unordered pairs from `pool`, tries
-6 orderings for each — O(|pool|²).
-
-With the accelerator:
-
-```python
-def _singleton_is_live_fast(c, card_loc):
-    for c1, c2 in NEIGHBORS[c]:
-        loc1 = card_loc[card_id(c1)]
-        loc2 = card_loc[card_id(c2)]
-        if loc1 in ACCESSIBLE and loc2 in ACCESSIBLE:
-            return True
-    return False
-```
-
-O(k) where k ≈ 25. No classification call, no triple construction, no list iteration.
-For a pool of 40 accessible cards, the speedup is roughly 40² / 25 ≈ 64×.
-
-`ACCESSIBLE = {HELPER, TROUBLE, GROWING}` — the three non-sealed buckets.
-
----
-
-## The sync question: derived vs. carried
-
-Two options:
-
-**Derive on demand**: `build_card_loc(buckets)` whenever the liveness check fires.
-No persistent state, no sync bugs. Cost: O(50) to build, then O(k) to query.
-For the dynamic doomed-singleton check (which only fires when `b.complete` is
-non-empty), this is probably sufficient.
-
-**Carry as part of BFS state**: each `FocusedState` holds a `card_loc` array alongside
-`buckets` and `lineage`. Each BFS step copies and patches only the moved cards
-(O(moved cards) ≈ O(3–5) per step). The copy itself is O(104) — cheap enough that
-it likely pays off if the accelerator is used frequently within a step.
-
-For now, "derive on demand" is the right starting point. The carried version becomes
-attractive only if profiling shows repeated rebuilding is the bottleneck.
-
----
-
-## What group membership the accelerator skips
-
-The accelerator doesn't encode which cards share a stack. It just answers "which bucket
-is this card in?" That's sufficient for liveness: liveness only needs to know whether a
-card is accessible (any of helper/trouble/growing) or sealed (complete/absent).
-
-The existing `state_sig` + dedup machinery already handles group identity through the
-`Buckets` stacks. The accelerator doesn't need to replicate that — it's a read-only
-query layer, not a state-transition layer.
-
-The one place group membership matters for liveness that this misses: a card in a
-**growing** partial can only be "separated out" via specific BFS moves. The accelerator
-conservatively treats growing cards as accessible, which may keep some doomed singletons
-alive in the liveness check when they shouldn't be. Whether that causes false negatives
-(failed pruning) in practice is an empirical question.
-
----
-
-## What else the accelerator might enable
-
-- **Fast "is c already complete?"**: one array read instead of iterating `b.complete`.
-- **Targeted doom propagation**: when a group completes, iterate the newly sealed cards'
-  `NEIGHBORS` to find which trouble singletons lost their last valid partner — instead of
-  rechecking all trouble singletons from scratch.
-- **Speculative liveness during enumeration**: before generating a move, quickly check
-  whether it would doom any singleton — prune before even constructing the new state.
-
-The targeted doom propagation is potentially the most valuable: instead of O(|trouble| × k)
-after each group completes, only recalculate for singletons whose neighbor sets overlap the
-newly sealed cards. In practice that's 0–2 singletons per completion event.
-
----
-
-## Open questions
-
-1. **Run partner encoding**: Lyn Rummy runs can grow beyond 3. Does `NEIGHBORS[c]` need
-   to encode "c1 and c2 adjacent to c" only, or also non-adjacent pairs like (c−2, c+1)?
-   For liveness (3-card group), only minimal triples matter — pairs that bracket or flank c.
-
-2. **Two-deck identity**: cards are `(value, suit, deck)` tuples. The neighbor table must
-   treat deck-0 and deck-1 copies as distinct cards with overlapping group memberships —
-   both copies of 3H are valid run members but count separately. The table handles this
-   naturally since each of the 104 slots is a distinct card.
+- **H9 / H10**: push the focus filter into `enumerate_moves` so
+  non-focus moves aren't generated at all (currently
+  `enumerate_focused` post-filters); specialize per-absorber. Largest
+  unlanded structural win on the table.
+- **Carry `card_loc` as state**: patch the array incrementally per
+  move rather than rebuilding. Saves O(50) per state in exchange for
+  an O(104) copy. Re-evaluate after profiling tells us where time
+  actually goes.
+- **Targeted doom propagation on completion events**: when a group
+  graduates, iterate the newly-sealed cards' `NEIGHBORS` rather than
+  re-scanning all trouble singletons. Phase 3's gated check already
+  bounds the cost; further refinement only matters if profiling shows
+  this branch is hot.
