@@ -24,7 +24,8 @@ Search order (encodes game preference; no scoring layer):
 import time
 
 import bfs
-from rules import card_label, classify, is_partial_ok
+from rules import card_label, is_partial_ok
+from classified_card_stack import classify_stack
 
 
 def find_play(hand, board, stats=None):
@@ -110,7 +111,8 @@ def _find_completing_third(pair, hand):
                 [pair[0], c, pair[1]],
                 [c, pair[0], pair[1]],
         ):
-            if classify(ordered) != "other":
+            ccs = classify_stack(ordered)
+            if ccs is not None and len(ccs) >= 3:
                 return ordered
     return None
 
@@ -131,8 +133,17 @@ def _try_projection(board, extra_stacks, *, stats=None, kind="?",
     the state budget (a runaway candidate, NOT a clean
     no-plan-exists termination)."""
     augmented = list(board) + list(extra_stacks)
-    helper = [s for s in augmented if classify(s) != "other"]
-    trouble = [s for s in augmented if classify(s) == "other"]
+    # Partition: length-3+ legal groups → HELPER; everything
+    # else (length-1/2 partials, or stacks that don't classify
+    # at all) → TROUBLE. Matches bfs.solve()'s partition rule
+    # under the new alphabet.
+    helper, trouble = [], []
+    for s in augmented:
+        ccs = classify_stack(s)
+        if ccs is None or len(ccs) < 3:
+            trouble.append(s)
+        else:
+            helper.append(s)
     initial = (helper, trouble, [], [])
     exhaustions = []
     t0 = time.time()
