@@ -34,6 +34,7 @@ from rules.card import card as parse_card_label
 from classified_card_stack import (
     classify_stack,
     kind_after_absorb_left, kind_after_absorb_right,
+    can_peel, peel,
 )
 
 
@@ -159,10 +160,96 @@ def _run_left_absorb(args, expected):
     return None
 
 
+# --- Source-side verbs (peel / pluck / yank / steal / split_out) -----
+#
+# Each takes (stack, position) and returns a tuple of CCS pieces. The
+# DSL syntax is:
+#
+#     <verb> <cards>... @ <position> → <piece1_cards> | <piece2_cards> | ...
+#     <verb> <cards>... @ <position> → none      (predicate returns False)
+#
+# `@ <int>` separates the stack from the position. The runner parses
+# the LHS into (cards, position) and the RHS into a list of card-tuple
+# lists, then verifies (a) the predicate matches the expected legal/
+# illegal status and (b) the executor's pieces match cards exactly.
+
+
+def _split_at_at(args):
+    """Verbs that act on a stack at a given position use `@ <int>`
+    to separate. Returns (target_tokens, position_int)."""
+    if "@" not in args:
+        raise ValueError(f"verb scenario missing '@': {args!r}")
+    sep = args.index("@")
+    target_tokens = args[:sep]
+    after = args[sep + 1:]
+    if len(after) != 1:
+        raise ValueError(
+            f"verb scenario must have exactly one position after '@', "
+            f"got {after!r}")
+    return target_tokens, int(after[0])
+
+
+def _parse_pieces(expected):
+    """Parse a `|`-separated piece list into a list of card-tuple
+    lists. Each piece is whitespace-separated card labels."""
+    pieces = []
+    for piece in expected.split("|"):
+        tokens = piece.split()
+        if not tokens:
+            raise ValueError(
+                f"empty piece in expected: {expected!r}")
+        pieces.append([parse_card_label(t) for t in tokens])
+    return pieces
+
+
+def _verb_target(target_tokens):
+    """Classify the target stack from its label tokens. Raises if
+    the target itself doesn't classify."""
+    cards = [parse_card_label(t) for t in target_tokens]
+    target = classify_stack(cards)
+    if target is None:
+        raise ValueError(
+            f"verb target does not classify: {target_tokens!r}")
+    return target
+
+
+def _check_verb(target_tokens, position, expected,
+                predicate, executor, expected_piece_count=None):
+    """Common runner: predicate gates execution; executor produces
+    pieces that must match cards exactly (kinds are validated
+    implicitly through the existing classifier coverage).
+
+    `expected_piece_count` (optional) sanity-checks the executor's
+    return shape — e.g., peel returns 2 pieces, pluck returns 3."""
+    target = _verb_target(target_tokens)
+    if expected == "none":
+        if predicate(target, position):
+            return f"expected {predicate.__name__} false, got true"
+        return None
+    if not predicate(target, position):
+        return f"expected {predicate.__name__} true, got false"
+    pieces = executor(target, position)
+    if expected_piece_count is not None and len(pieces) != expected_piece_count:
+        return (f"expected {expected_piece_count} pieces, "
+                f"got {len(pieces)}: {pieces}")
+    actual = [list(p.cards) for p in pieces]
+    expected_cards = _parse_pieces(expected)
+    if actual != expected_cards:
+        return f"expected pieces {expected_cards}, got {actual}"
+    return None
+
+
+def _run_peel(args, expected):
+    target_tokens, position = _split_at_at(args)
+    return _check_verb(target_tokens, position, expected,
+                       can_peel, peel, expected_piece_count=2)
+
+
 _RUNNERS = {
     "classify": _run_classify,
     "right_absorb": _run_right_absorb,
     "left_absorb": _run_left_absorb,
+    "peel": _run_peel,
 }
 
 
