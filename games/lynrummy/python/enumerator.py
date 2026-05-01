@@ -31,8 +31,7 @@ from classified_card_stack import (
     absorb_right, absorb_left,
     splice_left, splice_right,
     extends_tables,
-    _kinds_after_splice_run_left,
-    _kinds_after_splice_run_right,
+    find_splice_candidates,
 )
 from move import (
     ExtractAbsorbDesc, FreePullDesc, PushDesc,
@@ -779,7 +778,13 @@ def _shift_rebuild_helper(helper, src_idx, donor_idx, new_source, new_donor):
 def _yield_splices(helper, trouble, growing, complete, splice_helpers):
     """Insert a TROUBLE singleton into a HELPER pure/rb run length 4+.
     The run splits around the inserted card; both halves must be legal
-    length-3+. One physical gesture in actual Lyn Rummy."""
+    length-3+. One physical gesture in actual Lyn Rummy.
+
+    Uses the same-value-match heuristic via `find_splice_candidates`:
+    instead of probing every interior position of every length-4+ run/rb
+    helper, we directly enumerate the (side, position) pairs that yield
+    a length-3+ splice. Each candidate is guaranteed valid; no
+    probe/admissibility re-check is needed inside this loop."""
     growing_snapshot = None  # build lazily on first yield
     complete_snapshot = None
     for ti, t in enumerate(trouble):
@@ -787,62 +792,30 @@ def _yield_splices(helper, trouble, growing, complete, splice_helpers):
             continue
         loose = t.cards[0]
         for hi, src in splice_helpers:
-            # `splice_helpers` already filtered to KIND_RUN / KIND_RB,
-            # so family == src.kind. Bypass the kinds_after_splice
-            # wrappers (they re-derive family) and call the run/rb
-            # specializations directly.
-            family = src.kind
-            src_cards = src.cards
-            n = src.n
-            for k in range(1, n):
-                # LEFT splice variant.
-                kinds = _kinds_after_splice_run_left(
-                    src_cards, loose, k, family)
-                if (kinds is not None
-                        and kinds[0] in _LEGAL_LEN3_KINDS
-                        and kinds[1] in _LEGAL_LEN3_KINDS):
-                    left_kind, right_kind = kinds
+            for cand in find_splice_candidates(src, loose):
+                if cand.side == "left":
                     left, right = splice_left(
-                        src, loose, k, left_kind, right_kind)
-                    nh = drop_at(helper, hi) + [left, right]
-                    nt = drop_at(trouble, ti)
-                    if growing_snapshot is None:
-                        growing_snapshot = list(growing)
-                        complete_snapshot = list(complete)
-                    desc = SpliceDesc(
-                        loose=loose,
-                        source=list(src.cards),
-                        k=k, side="left",
-                        left_result=list(left.cards),
-                        right_result=list(right.cards),
-                    )
-                    yield desc, Buckets(nh, nt,
-                                        list(growing_snapshot),
-                                        list(complete_snapshot))
-                # RIGHT splice variant.
-                kinds = _kinds_after_splice_run_right(
-                    src_cards, loose, k, family)
-                if (kinds is not None
-                        and kinds[0] in _LEGAL_LEN3_KINDS
-                        and kinds[1] in _LEGAL_LEN3_KINDS):
-                    left_kind, right_kind = kinds
+                        src, loose, cand.position,
+                        cand.left_kind, cand.right_kind)
+                else:
                     left, right = splice_right(
-                        src, loose, k, left_kind, right_kind)
-                    nh = drop_at(helper, hi) + [left, right]
-                    nt = drop_at(trouble, ti)
-                    if growing_snapshot is None:
-                        growing_snapshot = list(growing)
-                        complete_snapshot = list(complete)
-                    desc = SpliceDesc(
-                        loose=loose,
-                        source=list(src.cards),
-                        k=k, side="right",
-                        left_result=list(left.cards),
-                        right_result=list(right.cards),
-                    )
-                    yield desc, Buckets(nh, nt,
-                                        list(growing_snapshot),
-                                        list(complete_snapshot))
+                        src, loose, cand.position,
+                        cand.left_kind, cand.right_kind)
+                nh = drop_at(helper, hi) + [left, right]
+                nt = drop_at(trouble, ti)
+                if growing_snapshot is None:
+                    growing_snapshot = list(growing)
+                    complete_snapshot = list(complete)
+                desc = SpliceDesc(
+                    loose=loose,
+                    source=list(src.cards),
+                    k=cand.position, side=cand.side,
+                    left_result=list(left.cards),
+                    right_result=list(right.cards),
+                )
+                yield desc, Buckets(nh, nt,
+                                    list(growing_snapshot),
+                                    list(complete_snapshot))
 
 
 # --- Move type (b): push TROUBLE onto HELPER ---

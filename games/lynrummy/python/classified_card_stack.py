@@ -32,6 +32,7 @@ returns None for them; the input boundary converts that None into an
 error before anything else runs.
 """
 
+from collections import namedtuple
 from dataclasses import dataclass, field
 
 from rules.card import RED
@@ -649,6 +650,88 @@ def splice_right(stack, card, position, left_kind, right_kind):
     left_cards, right_cards = _splice_halves_right(stack, card, position)
     return (ClassifiedCardStack(left_cards, left_kind),
             ClassifiedCardStack(right_cards, right_kind))
+
+
+# --- Splice candidates (earned-knowledge accelerator for the BFS) ----------
+#
+# `find_splice_candidates(parent, card)` enumerates every legal splice of
+# `card` into `parent` that yields TWO LENGTH-3+ family-kind halves.
+# This is the BFS-useful subset of splice positions; partial-pair halves
+# (length-2 with-card halves like the `pair_set | rb` case in splice.dsl)
+# are excluded by design.
+#
+# Algorithm: same-value-match scan. A human looking for a splice asks
+# "is there a position m where parent[m] has the same value as my insert
+# card?" — every BFS-useful splice arises from exactly such a match.
+# Proof: for left_splice@p with both halves length-3+, the with-card
+# half boundary requires successor(parent[p-1].value) = card.value, i.e.
+# card.value = parent[p].value. For right_splice@p, the with-card half
+# boundary requires successor(card.value) = parent[p].value, i.e.
+# card.value = parent[p-1].value. So every BFS-useful splice has a
+# matching parent[m] with the same value as the card, and the per-match
+# emission rule is:
+#
+#     match at m  →  left_splice@m AND right_splice@(m+1)
+#
+# Both candidates require m ∈ [2, n-3] so each half has length ≥ 3.
+# At length n=4, [2, 1] is empty; this is why we skip n<5 parents.
+#
+# Validity per family:
+#   - rb parent: card must match parent[m]'s color (the rb alternation
+#     re-establishes when card takes parent[m]'s color slot adjacent
+#     to it).
+#   - run parent: card must match parent[m]'s suit (so the inserted
+#     card preserves the pure-suit invariant on both adjacent
+#     boundaries). This is the cross-deck case in practice — same
+#     (value, suit) across decks is the only realistic way to hit it.
+#
+# Each emitted candidate is a guaranteed-valid splice; no probe call is
+# needed. The kinds are known a priori from the family because both
+# halves are length-3+ family-kind slices of the parent's family.
+
+# A BFS-useful splice candidate. `side` is "left" or "right";
+# `left_kind` and `right_kind` are the result kinds of the two halves
+# (both family-equal for a successful candidate).
+SpliceCandidate = namedtuple(
+    "SpliceCandidate", ("side", "position", "left_kind", "right_kind"))
+
+
+def find_splice_candidates(parent, card):
+    """Find every splice of `card` into `parent` that yields two
+    length-3+ legal halves. Uses the same-value-match heuristic; each
+    returned candidate is guaranteed valid (no probe needed). Iteration
+    order is by ascending parent match position `m`, with `left@m`
+    emitted before `right@(m+1)` for each match.
+
+    Parent must be KIND_RUN or KIND_RB (raises otherwise; mirrors the
+    splice probes' run/rb-only contract)."""
+    if parent.kind != KIND_RUN and parent.kind != KIND_RB:
+        raise ValueError(
+            f"find_splice_candidates requires run or rb parent, "
+            f"got {parent.kind!r}")
+    n = parent.n
+    if n < 5:
+        return []
+    cards = parent.cards
+    cv, cs, _ = card
+    family = parent.kind
+    c_red = cs in RED
+    out = []
+    for m in range(2, n - 2):  # m ∈ [2, n-3]
+        pm = cards[m]
+        if pm[0] != cv:
+            continue
+        if family == KIND_RB:
+            # Card must match parent[m]'s color (rb alternation).
+            if (pm[1] in RED) != c_red:
+                continue
+        else:
+            # KIND_RUN: card must match parent[m]'s suit (pure-run).
+            if pm[1] != cs:
+                continue
+        out.append(SpliceCandidate("left", m, family, family))
+        out.append(SpliceCandidate("right", m + 1, family, family))
+    return out
 
 
 # --- Internal helpers ------------------------------------------------------

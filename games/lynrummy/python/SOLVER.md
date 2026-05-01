@@ -104,6 +104,41 @@ source-side verbs (`peel` / `pluck` / `yank` / `steal` /
 executors derive remnant kinds from the parent's kind family +
 length — no full reclassification.
 
+### Splice — run/rb-only and same-value-matched
+
+Splice is the BFS move that inserts a TROUBLE singleton into a
+length-4+ HELPER run/rb such that both halves remain length-3+
+legal groups. The contract is **run/rb-only**: set parents extend
+via the absorb operation (the `set_extenders` bucket on the
+absorber); a "set splice" is a misnomer that produces zero
+BFS-useful moves and the splice probes raise on non-run/rb parents.
+
+The earned-knowledge accelerator is `find_splice_candidates(parent,
+card)` — a **same-value-match scan** that emits exactly the (side,
+position) pairs where a splice yields two length-3+ family-kind
+halves. The proof, in one paragraph: every BFS-useful splice forces
+the inserted card's value to equal some parent[m]'s value (the
+boundary check on the with-card half collapses to that). So the
+candidate set is enumerable in one walk of `parent.cards` looking
+for value matches; per match at index m, two candidates fire —
+`left@m` and `right@(m+1)` — provided `m ∈ [2, n-3]` and the
+per-family compatibility check passes:
+
+  - **rb parent**: card must match parent[m]'s color.
+  - **run parent**: card must match parent[m]'s suit (the cross-deck
+    case in practice — same value+suit across decks is the only
+    realistic way to hit it).
+
+Each emitted candidate is guaranteed valid; no probe call is needed
+in the BFS hot path. This is the human pattern: a player scanning
+for splice opportunities looks for a same-value match in a helper
+run, not for every interior position. The data structure now
+matches the way the algorithm is naturally explored.
+
+The probes (`kinds_after_splice_left/_right`) remain available for
+generic callers (tests, the leaf DSL conformance suite). The BFS
+hot path consumes `find_splice_candidates` directly.
+
 ### Three-bucket extends — earned knowledge at the commitment point
 
 Each absorber stack carries three precomputed dicts in canonical
@@ -240,7 +275,9 @@ three-bucket extends per absorber), `_eligible_splice_helpers`,
   - Target-side absorb: `kind_after_absorb_right/left` probes +
     `absorb_right/left` executors.
   - Splice: `kinds_after_splice_left/right` probes + `splice_left/
-    right` executors.
+    right` executors (run/rb only — see "Splice" section above).
+  - `find_splice_candidates` — same-value-match accelerator;
+    consumed directly by `_yield_splices` in the enumerator.
 
 Most BFS hot-path arithmetic lives here.
 
