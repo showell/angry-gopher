@@ -128,3 +128,139 @@ export function classifyStack(cards: readonly Card[]): ClassifiedCardStack | nul
   if (kind === null) return null;
   return { cards, kind, n: cards.length };
 }
+
+// --- Absorb probes ---------------------------------------------------------
+//
+// Per SOLVER.md's no-side-parameter discipline these are TWO SEPARATE
+// FUNCTIONS, not one with a `side` parameter. Each does its own job.
+
+/** Family lookup keyed by full kind. Singleton has no family — handled
+ *  inline as a special case. Mirrors python's `_FAMILY_OF_KIND`. */
+function familyOfKind(kind: Kind): Kind | null {
+  switch (kind) {
+    case KIND_RUN:
+    case KIND_PAIR_RUN:
+      return KIND_RUN;
+    case KIND_RB:
+    case KIND_PAIR_RB:
+      return KIND_RB;
+    case KIND_SET:
+    case KIND_PAIR_SET:
+      return KIND_SET;
+    default:
+      return null;
+  }
+}
+
+/** Length-3+ family kind → its pair-form kind. Mirrors python's `_PAIR_OF`. */
+function pairOf(family: Kind): Kind {
+  switch (family) {
+    case KIND_RUN:
+      return KIND_PAIR_RUN;
+    case KIND_RB:
+      return KIND_PAIR_RB;
+    case KIND_SET:
+      return KIND_PAIR_SET;
+    default:
+      throw new Error(`pairOf: unexpected family ${family}`);
+  }
+}
+
+/** Family two cards form when adjacent in (c1, c2) order, or null if no
+ *  legal pair. Mirrors python's `_family_for_two_cards`. Order matters
+ *  for run/rb (successor is directional); set is symmetric on value. */
+function familyForTwoCards(c1: Card, c2: Card): Kind | null {
+  const v1 = c1[0], s1 = c1[1];
+  const v2 = c2[0], s2 = c2[1];
+  if (v1 === v2) {
+    if (s1 === s2) return null;
+    return KIND_SET;
+  }
+  if (successor(v1) !== v2) return null;
+  if (s1 === s2) return KIND_RUN;
+  if (RED.has(s1) !== RED.has(s2)) return KIND_RB;
+  return null;
+}
+
+/**
+ * Probe: what kind would (target.cards + [card]) classify as, or null
+ * if illegal. Mirrors python's `kind_after_absorb_right`.
+ */
+export function kindAfterAbsorbRight(
+  target: ClassifiedCardStack,
+  card: Card,
+): Kind | null {
+  const targetKind = target.kind;
+  const nNew = target.n + 1;
+
+  if (targetKind === KIND_SINGLETON) {
+    const only = target.cards[0]!;
+    const family = familyForTwoCards(only, card); // boundary order: only, card
+    if (family === null) return null;
+    return pairOf(family);
+  }
+
+  const family = familyOfKind(targetKind)!;
+  const last = target.cards[target.cards.length - 1]!;
+  const av = last[0], asu = last[1];
+  const bv = card[0], bsu = card[1];
+
+  if (family === KIND_RUN) {
+    if (asu !== bsu || (av === 13 ? 1 : av + 1) !== bv) return null;
+  } else if (family === KIND_RB) {
+    if ((av === 13 ? 1 : av + 1) !== bv) return null;
+    if (RED.has(asu) === RED.has(bsu)) return null;
+  } else {
+    // KIND_SET
+    if (av !== bv || asu === bsu) return null;
+    if (nNew > 4) return null;
+    for (const c of target.cards) {
+      if (c[1] === bsu) return null;
+    }
+  }
+
+  if (nNew >= 3) return family;
+  return pairOf(family);
+}
+
+/**
+ * Probe: what kind would ([card] + target.cards) classify as, or null
+ * if illegal. Mirrors python's `kind_after_absorb_left`.
+ */
+export function kindAfterAbsorbLeft(
+  target: ClassifiedCardStack,
+  card: Card,
+): Kind | null {
+  const targetKind = target.kind;
+  const nNew = target.n + 1;
+
+  if (targetKind === KIND_SINGLETON) {
+    const only = target.cards[0]!;
+    const family = familyForTwoCards(card, only); // boundary order: card, only
+    if (family === null) return null;
+    return pairOf(family);
+  }
+
+  const family = familyOfKind(targetKind)!;
+  const av = card[0], asu = card[1];
+  const first = target.cards[0]!;
+  const bv = first[0], bsu = first[1];
+
+  if (family === KIND_RUN) {
+    if (asu !== bsu || (av === 13 ? 1 : av + 1) !== bv) return null;
+  } else if (family === KIND_RB) {
+    if ((av === 13 ? 1 : av + 1) !== bv) return null;
+    if (RED.has(asu) === RED.has(bsu)) return null;
+  } else {
+    // KIND_SET
+    if (av !== bv || asu === bsu) return null;
+    if (nNew > 4) return null;
+    // Card's suit is `asu` (card sits on the left of target).
+    for (const c of target.cards) {
+      if (c[1] === asu) return null;
+    }
+  }
+
+  if (nNew >= 3) return family;
+  return pairOf(family);
+}

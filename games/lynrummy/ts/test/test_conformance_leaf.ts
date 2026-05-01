@@ -12,7 +12,11 @@ import { fileURLToPath } from "node:url";
 
 import type { Card } from "../src/rules/card.ts";
 import { parseCardLabel } from "../src/rules/card.ts";
-import { classifyStack } from "../src/classified_card_stack.ts";
+import {
+  classifyStack,
+  kindAfterAbsorbLeft,
+  kindAfterAbsorbRight,
+} from "../src/classified_card_stack.ts";
 
 const ARROW = "→";
 
@@ -94,8 +98,57 @@ function runClassify(args: readonly string[], expected: string): RunResult {
   return null;
 }
 
+/** Split absorb args at the `+` separator into (target_cards, inserted_card). */
+function splitAbsorbArgs(args: readonly string[]): [string[], string] {
+  const plusIdx = args.indexOf("+");
+  if (plusIdx < 0) {
+    throw new Error(`absorb scenario missing '+' separator: ${args.join(" ")}`);
+  }
+  const targetTokens = args.slice(0, plusIdx);
+  const cardTokens = args.slice(plusIdx + 1);
+  if (targetTokens.length === 0) {
+    throw new Error(`absorb scenario missing target cards: ${args.join(" ")}`);
+  }
+  if (cardTokens.length !== 1) {
+    throw new Error(`absorb scenario expects exactly 1 card after '+': ${args.join(" ")}`);
+  }
+  return [targetTokens, cardTokens[0]!];
+}
+
+function runRightAbsorb(args: readonly string[], expected: string): RunResult {
+  const [targetTokens, cardToken] = splitAbsorbArgs(args);
+  const target = classifyStack(targetTokens.map(parseCardLabel));
+  if (target === null) {
+    return `target failed to classify: ${targetTokens.join(" ")}`;
+  }
+  const card = parseCardLabel(cardToken);
+  const result = kindAfterAbsorbRight(target, card);
+  const actual = result === null ? "none" : result;
+  if (actual !== expected) {
+    return `expected ${expected}, got ${actual}`;
+  }
+  return null;
+}
+
+function runLeftAbsorb(args: readonly string[], expected: string): RunResult {
+  const [targetTokens, cardToken] = splitAbsorbArgs(args);
+  const target = classifyStack(targetTokens.map(parseCardLabel));
+  if (target === null) {
+    return `target failed to classify: ${targetTokens.join(" ")}`;
+  }
+  const card = parseCardLabel(cardToken);
+  const result = kindAfterAbsorbLeft(target, card);
+  const actual = result === null ? "none" : result;
+  if (actual !== expected) {
+    return `expected ${expected}, got ${actual}`;
+  }
+  return null;
+}
+
 const RUNNERS: Readonly<Record<string, Runner>> = {
   classify: runClassify,
+  right_absorb: runRightAbsorb,
+  left_absorb: runLeftAbsorb,
 };
 
 // --- Driver ------------------------------------------------------------
