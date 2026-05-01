@@ -118,17 +118,20 @@ def admissible_partial(merged, inventory):
 
 # --- Extract physics ---
 
-def extract_pieces(source, ci, verb):
+def extract_pieces(source, ci, verb, kind):
     """Return (helper_pieces, spawned_pieces) — the post-extract
     pieces of `source` after removing the card at `ci` per
     `verb`. Helper pieces are length-3+ legal stacks that stay
     in HELPER; spawned pieces are short remnants that land in
     TROUBLE.
 
+    `kind` is the precomputed `classify(source)` (caller already
+    knows it from `extractable_index`). Used by peel/steal to
+    distinguish set-vs-run dismantling.
+
     Pure: takes a stack, returns lists. No mutation."""
     c = source[ci]
     if verb == "peel":
-        kind = classify(source)
         if kind == "set":
             remnant = [x for x in source if x != c]
         elif ci == 0:
@@ -147,7 +150,6 @@ def extract_pieces(source, ci, verb):
         spawned = [s for s in (left, right) if len(s) < 3]
         return helpers, spawned
     if verb == "steal":
-        kind = classify(source)
         if kind == "set":
             return [], [[x] for x in source if x != c]
         remnant = source[1:] if ci == 0 else source[:-1]
@@ -155,14 +157,16 @@ def extract_pieces(source, ci, verb):
     raise ValueError(f"unknown verb {verb}")
 
 
-def do_extract(helper, src_idx, ci, verb):
+def do_extract(helper, src_idx, ci, verb, kind):
     """Extract a card from HELPER. Returns
     (new_helper, spawned_trouble_pieces, ext_card, source_before).
+
+    `kind` is the precomputed `classify(source)`.
 
     Pure: produces a fresh helper list via concatenation; no
     mutation of the input."""
     source = helper[src_idx]
-    helper_pieces, spawned = extract_pieces(source, ci, verb)
+    helper_pieces, spawned = extract_pieces(source, ci, verb, kind)
     new_helper = (helper[:src_idx] + helper[src_idx + 1:]
                   + helper_pieces)
     return new_helper, spawned, source[ci], list(source)
@@ -182,11 +186,15 @@ def verb_for(kind, n, ci):
     return None
 
 
-def extractable_index(helper):
+def extractable_index(helper, helper_kinds):
     """One-pass scan over HELPER, classifying each stack and
-    determining which (helper_idx, ci, verb) tuples are
+    determining which (helper_idx, ci, verb, kind) tuples are
     legal extracts. Maps `(value, suit)` shape →
-    list of (helper_idx, ci, verb).
+    list of (helper_idx, ci, verb, kind).
+
+    `helper_kinds[hi]` is the precomputed `classify(helper[hi])`
+    so the caller can share the classify pass with sibling
+    pre-passes (splice/shift filters).
 
     Built once per state. The absorber loop inverts the old
     "for-each-card check shape" pattern into a direct
@@ -196,17 +204,19 @@ def extractable_index(helper):
     classify() runs once per helper here, not once per
     (helper × absorber) as before. verb_for runs once per
     (helper × ci), not once per (absorber × helper × ci).
+    The `kind` is threaded through to `do_extract` so peel/
+    steal don't reclassify the source they were drawn from.
     """
     out = {}
     for hi, src in enumerate(helper):
-        kind = classify(src)
+        kind = helper_kinds[hi]
         n = len(src)
         for ci, c in enumerate(src):
             verb = verb_for(kind, n, ci)
             if verb is None:
                 continue
             out.setdefault((c[0], c[1]), []).append(
-                (hi, ci, verb))
+                (hi, ci, verb, kind))
     return out
 
 
@@ -232,30 +242,52 @@ def enumerate_moves(state):
             if not (shapes & completion_inv):
                 return
 
-    extractable = extractable_index(helper)
+    # Single classify pass over helpers, shared by extractable_
+    # index, splice_helpers, shift_helpers, and the donor branch
+    # of the shift loop. Avoids repeated `classify(helper[i])`
+    # calls inside the per-absorber / per-trouble inner loops.
+    helper_kinds = [classify(s) for s in helper]
+    extractable = extractable_index(helper, helper_kinds)
+
+    # Pre-filter helpers by their splice / shift eligibility
+    # so the inner loops below don't rescan all of HELPER each
+    # iteration. Splice wants length-4+ pure/rb runs; shift
+    # wants length-3 pure/rb runs.
+    splice_helpers = [
+        (hi, helper[hi], helper_kinds[hi])
+        for hi in range(len(helper))
+        if len(helper[hi]) >= 4
+        and helper_kinds[hi] in ("pure_run", "rb_run")
+    ]
+    shift_helpers = [
+        (hi, helper[hi], helper_kinds[hi])
+        for hi in range(len(helper))
+        if len(helper[hi]) == 3
+        and helper_kinds[hi] in ("pure_run", "rb_run")
+    ]
 
     # All targets for absorption (move type a). Each entry:
-    # (bucket_name, idx_in_bucket, target_stack).
-    absorbers = (
+    # (bucket_name, idx_in_bucket, target_stack, sorted_shapes,
+    # shapes_set). Sorted shapes drive deterministic iteration
+    # in the absorb loop (matching the Elm port's order); the
+    # set form is for O(1) membership tests in free-pull / shift.
+    absorber_shapes = []
+    for bucket, idx, t in (
         [("trouble", ti, t) for ti, t in enumerate(trouble)]
         + [("growing", gi, g) for gi, g in enumerate(growing)]
-    )
+    ):
+        s_set = set().union(*(neighbors(c) for c in t))
+        absorber_shapes.append((bucket, idx, t, sorted(s_set), s_set))
 
-    for bucket, idx, target in absorbers:
-        # Neighbor shapes for this absorber. Sorted so move
-        # enumeration is deterministic across runs AND across
-        # the Python/Elm port (Elm's shapes are list-ordered;
-        # we sort to match).
-        shapes = sorted(set().union(*(neighbors(c) for c in target)))
-
+    for bucket, idx, target, shapes, shapes_set in absorber_shapes:
         # Source: HELPER stack via extract. Inverted loop —
         # iterate the ABSORBER's neighbor shapes and look up
         # extractable cards directly, instead of walking every
         # helper × position to filter.
         for shape in shapes:
-            for hi, ci, verb in extractable.get(shape, ()):
+            for hi, ci, verb, kind in extractable.get(shape, ()):
                 new_helper, spawned, ext_card, source = \
-                    do_extract(helper, hi, ci, verb)
+                    do_extract(helper, hi, ci, verb, kind)
                 for side in ("right", "left"):
                     merged = ([*target, ext_card] if side == "right"
                               else [ext_card, *target])
@@ -286,7 +318,7 @@ def enumerate_moves(state):
             if bucket == "trouble" and li == idx:
                 continue  # can't absorb a stack onto itself
             loose = loose_stack[0]
-            if (loose[0], loose[1]) not in shapes:
+            if (loose[0], loose[1]) not in shapes_set:
                 continue
             for side in ("right", "left"):
                 merged = ([*target, loose] if side == "right"
@@ -325,17 +357,11 @@ def enumerate_moves(state):
     # the stolen card. Source stays length-3 legal; donor
     # stays legal; the popped card absorbs onto trouble like
     # a steal-pull would. NO sacrifice.
-    for bucket, idx, target in absorbers:
-        shapes = set().union(*(neighbors(c) for c in target))
-        for src_idx, source in enumerate(helper):
-            if len(source) != 3:
-                continue
-            kind = classify(source)
-            if kind not in ("pure_run", "rb_run"):
-                continue
+    for bucket, idx, target, _shapes, shapes_set in absorber_shapes:
+        for src_idx, source, kind in shift_helpers:
             for which_end in (0, 2):
                 stolen = source[which_end]
-                if (stolen[0], stolen[1]) not in shapes:
+                if (stolen[0], stolen[1]) not in shapes_set:
                     continue
                 # Compute replacement card requirement at the
                 # OPPOSITE end of source.
@@ -360,7 +386,7 @@ def enumerate_moves(state):
                 candidates = sorted(
                     (donor_idx, _ci)
                     for p_suit in needed_suits
-                    for donor_idx, _ci, verb in
+                    for donor_idx, _ci, verb, _k in
                         extractable.get((p_value, p_suit), ())
                     if verb == "peel"
                     and donor_idx != src_idx
@@ -371,7 +397,7 @@ def enumerate_moves(state):
                     p_card = donor[_ci]
                     # Compute new_donor: set drops the
                     # peeled card; run drops the end card.
-                    if classify(donor) == "set":
+                    if helper_kinds[donor_idx] == "set":
                         new_donor = [x for x in donor
                                      if x != p_card]
                     else:
@@ -440,10 +466,8 @@ def enumerate_moves(state):
         if len(t) != 1:
             continue
         loose = t[0]
-        for hi, src in enumerate(helper):
+        for hi, src, _kind in splice_helpers:
             n = len(src)
-            if n < 4 or classify(src) not in ("pure_run", "rb_run"):
-                continue
             for k in range(1, n):
                 for side in ("left", "right"):
                     left, right = _splice_halves(

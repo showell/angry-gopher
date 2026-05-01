@@ -112,10 +112,15 @@ def bfs_with_cap(initial, max_trouble, max_states, *,
     if is_victory(b.trouble, b.growing):
         return [], False, 0, 1, 0
     seen = {(state_sig(*b), initial.lineage)}
-    current_level = [(initial, [])]
+    initial_tc = trouble_count(b.trouble, b.growing)
+    # Frontier entries are (tc, state, program). The tc is
+    # carried so the per-level sort doesn't recompute
+    # trouble_count for every state — it was already computed
+    # when the state was generated as a child.
+    current_level = [(initial_tc, initial, [])]
     expansions = 0
     level = 0
-    max_trouble_seen = trouble_count(b.trouble, b.growing)
+    max_trouble_seen = initial_tc
     if diagnostics is not None:
         diagnostics.setdefault("trouble_histogram", {})
         diagnostics.setdefault("level_widths", [1])
@@ -127,14 +132,12 @@ def bfs_with_cap(initial, max_trouble, max_states, *,
         # doesn't affect which plans are reachable, but
         # lowest-trouble-first means victory-bearing states
         # get expanded earliest and we exit on first hit.
-        current_level.sort(
-            key=lambda e: trouble_count(e[0].buckets.trouble,
-                                        e[0].buckets.growing))
+        current_level.sort(key=lambda e: e[0])
         if verbose:
             print(f"\n--- level {level}: expanding "
                   f"{len(current_level)} program(s) ---")
         next_level = []
-        for state, program in current_level:
+        for _parent_tc, state, program in current_level:
             expansions += 1
             for desc, new_state in enumerate_focused(state):
                 nb = new_state.buckets
@@ -158,14 +161,14 @@ def bfs_with_cap(initial, max_trouble, max_states, *,
                               f"{expansions} expansions, "
                               f"{len(seen)} states")
                     return new_program, False, expansions, len(seen), max_trouble_seen
-                next_level.append((new_state, new_program))
+                next_level.append((tc, new_state, new_program))
             if expansions >= max_states:
                 if verbose:
                     print(f"  EXHAUSTED max_states={max_states}")
                 if diagnostics is not None:
                     diagnostics["sample_states"] = [
                         (s, [line for line, _ in prog])
-                        for s, prog in next_level[-5:]
+                        for _t, s, prog in next_level[-5:]
                     ]
                 return None, True, expansions, len(seen), max_trouble_seen
         if diagnostics is not None:

@@ -19,6 +19,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import enumerator
+from rules import classify
 
 
 C, D, S, H = 0, 1, 2, 3
@@ -36,7 +37,7 @@ def _assert(label, ok, detail=""):
 def test_peel_left_edge_run():
     """Peel 5H from [5H 6H 7H 8H] → remnant [6H 7H 8H]."""
     src = [(5, H, 0), (6, H, 0), (7, H, 0), (8, H, 0)]
-    helpers, spawned = enumerator.extract_pieces(src, 0, "peel")
+    helpers, spawned = enumerator.extract_pieces(src, 0, "peel", classify(src))
     _assert("peel-left-edge helpers",
             helpers == [[(6, H, 0), (7, H, 0), (8, H, 0)]],
             f"got {helpers}")
@@ -47,7 +48,7 @@ def test_peel_left_edge_run():
 def test_peel_right_edge_run():
     """Peel 8H from [5H 6H 7H 8H] → remnant [5H 6H 7H]."""
     src = [(5, H, 0), (6, H, 0), (7, H, 0), (8, H, 0)]
-    helpers, spawned = enumerator.extract_pieces(src, 3, "peel")
+    helpers, spawned = enumerator.extract_pieces(src, 3, "peel", classify(src))
     _assert("peel-right-edge helpers",
             helpers == [[(5, H, 0), (6, H, 0), (7, H, 0)]],
             f"got {helpers}")
@@ -56,7 +57,7 @@ def test_peel_right_edge_run():
 def test_peel_from_set_keeps_remaining_three():
     """Peel any card from a 4-set: remnant is the other three."""
     src = [(7, C, 0), (7, D, 0), (7, S, 0), (7, H, 0)]
-    helpers, spawned = enumerator.extract_pieces(src, 1, "peel")
+    helpers, spawned = enumerator.extract_pieces(src, 1, "peel", classify(src))
     _assert("peel-set keeps three",
             helpers == [[(7, C, 0), (7, S, 0), (7, H, 0)]],
             f"got {helpers}")
@@ -69,7 +70,7 @@ def test_pluck_interior_run_yields_two_helpers():
     [8H 9H]. Both end up in helper_pieces (regardless of length;
     `do_extract` is the layer that filters)."""
     src = [(5, H, 0), (6, H, 0), (7, H, 0), (8, H, 0), (9, H, 0)]
-    helpers, spawned = enumerator.extract_pieces(src, 2, "pluck")
+    helpers, spawned = enumerator.extract_pieces(src, 2, "pluck", classify(src))
     _assert("pluck-interior helpers split into two",
             helpers == [[(5, H, 0), (6, H, 0)],
                         [(8, H, 0), (9, H, 0)]],
@@ -85,7 +86,7 @@ def test_yank_keeps_long_helpers_spawns_short():
     (length 2, spawn), right [8H 9H 10H] (length 3, helper)."""
     src = [(5, H, 0), (6, H, 0), (7, H, 0),
            (8, H, 0), (9, H, 0), (10, H, 0)]
-    helpers, spawned = enumerator.extract_pieces(src, 2, "yank")
+    helpers, spawned = enumerator.extract_pieces(src, 2, "yank", classify(src))
     _assert("yank long-right stays helper",
             helpers == [[(8, H, 0), (9, H, 0), (10, H, 0)]],
             f"got {helpers}")
@@ -98,7 +99,7 @@ def test_yank_two_long_helpers_no_spawn():
     """Yank from middle of a 7-card run: both halves length-3."""
     src = [(2, H, 0), (3, H, 0), (4, H, 0),
            (5, H, 0), (6, H, 0), (7, H, 0), (8, H, 0)]
-    helpers, spawned = enumerator.extract_pieces(src, 3, "yank")
+    helpers, spawned = enumerator.extract_pieces(src, 3, "yank", classify(src))
     _assert("yank both halves stay helper",
             len(helpers) == 2 and spawned == [],
             f"got helpers={helpers}, spawned={spawned}")
@@ -110,7 +111,7 @@ def test_steal_set_dismantles_to_singletons():
     """Steal from length-3 set: spawn each remaining card as a
     singleton."""
     src = [(7, S, 0), (7, H, 0), (7, D, 0)]
-    helpers, spawned = enumerator.extract_pieces(src, 0, "steal")
+    helpers, spawned = enumerator.extract_pieces(src, 0, "steal", classify(src))
     _assert("steal-set no helpers", helpers == [],
             f"got {helpers}")
     _assert("steal-set spawns two singletons",
@@ -121,7 +122,7 @@ def test_steal_set_dismantles_to_singletons():
 def test_steal_run_left_edge_spawns_pair():
     """Steal from left edge of length-3 run: spawn the 2-partial."""
     src = [(5, H, 0), (6, H, 0), (7, H, 0)]
-    helpers, spawned = enumerator.extract_pieces(src, 0, "steal")
+    helpers, spawned = enumerator.extract_pieces(src, 0, "steal", classify(src))
     _assert("steal-run-left no helpers", helpers == [],
             f"got {helpers}")
     _assert("steal-run-left spawns the pair",
@@ -133,7 +134,7 @@ def test_steal_run_right_edge_spawns_pair():
     """Steal from right edge of length-3 run: spawn the
     leading 2-partial."""
     src = [(5, H, 0), (6, H, 0), (7, H, 0)]
-    helpers, spawned = enumerator.extract_pieces(src, 2, "steal")
+    helpers, spawned = enumerator.extract_pieces(src, 2, "steal", classify(src))
     _assert("steal-run-right spawns the leading pair",
             spawned == [[(5, H, 0), (6, H, 0)]],
             f"got {spawned}")
@@ -143,7 +144,7 @@ def test_split_out_run_interior_spawns_two_singletons():
     """split_out the middle of a length-3 run: both endpoints
     fall to TROUBLE as singletons; no helper remnant."""
     src = [(5, H, 0), (6, H, 0), (7, H, 0)]
-    helpers, spawned = enumerator.extract_pieces(src, 1, "split_out")
+    helpers, spawned = enumerator.extract_pieces(src, 1, "split_out", classify(src))
     _assert("split_out yields no helper remnant",
             helpers == [], f"got {helpers}")
     _assert("split_out spawns left singleton then right",
@@ -223,7 +224,7 @@ def test_do_extract_does_not_mutate_input_helper():
     helper = [h0, h1]
     helper_snapshot = [list(s) for s in helper]
     new_helper, spawned, ext, src = enumerator.do_extract(
-        helper, 0, 0, "peel")
+        helper, 0, 0, "peel", classify(h0))
     _assert("input helper list is unchanged",
             helper == helper_snapshot,
             f"helper mutated: {helper} vs {helper_snapshot}")
