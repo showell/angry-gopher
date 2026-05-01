@@ -39,6 +39,7 @@ from classified_card_stack import (
     can_yank, yank,
     can_steal, steal,
     can_split_out, split_out,
+    kinds_after_splice_left, kinds_after_splice_right,
 )
 
 
@@ -277,6 +278,66 @@ def _run_split_out(args, expected):
                        can_split_out, split_out, expected_piece_count=3)
 
 
+# --- Splice probes -----------------------------------------------------
+#
+# Format: <verb> <target>... + <card> @ <pos> → <left_kind> | <right_kind>
+# Output is a kind tuple, not a card-piece list. Use `none` when either
+# half fails to classify.
+
+
+def _split_splice_args(args):
+    """Splice DSL: target tokens, then `+`, then card, then `@`,
+    then position. Returns (target_tokens, card_token, position)."""
+    if "+" not in args or "@" not in args:
+        raise ValueError(f"splice scenario needs '+' and '@': {args!r}")
+    plus_at = args.index("+")
+    at_at = args.index("@")
+    if at_at < plus_at:
+        raise ValueError(f"'+' must come before '@' in splice: {args!r}")
+    target_tokens = args[:plus_at]
+    card_tokens = args[plus_at + 1:at_at]
+    pos_tokens = args[at_at + 1:]
+    if len(card_tokens) != 1 or len(pos_tokens) != 1:
+        raise ValueError(f"splice scenario malformed: {args!r}")
+    return target_tokens, card_tokens[0], int(pos_tokens[0])
+
+
+def _parse_kind_pair(expected):
+    """Splice expected output is `<left_kind> | <right_kind>`. Returns
+    a (left, right) tuple of kind strings."""
+    parts = [p.strip() for p in expected.split("|")]
+    if len(parts) != 2:
+        raise ValueError(
+            f"splice expected must be `<left> | <right>`: {expected!r}")
+    return tuple(parts)
+
+
+def _check_splice(args, expected, probe):
+    target_tokens, card_token, position = _split_splice_args(args)
+    target = _verb_target(target_tokens)
+    card = parse_card_label(card_token)
+    result = probe(target, card, position)
+    if expected == "none":
+        if result is not None:
+            return f"expected none, got {result}"
+        return None
+    if result is None:
+        return f"expected {expected}, got none"
+    expected_pair = _parse_kind_pair(expected)
+    actual_pair = result  # already (left, right)
+    if actual_pair != expected_pair:
+        return f"expected {expected_pair}, got {actual_pair}"
+    return None
+
+
+def _run_right_splice(args, expected):
+    return _check_splice(args, expected, kinds_after_splice_right)
+
+
+def _run_left_splice(args, expected):
+    return _check_splice(args, expected, kinds_after_splice_left)
+
+
 _RUNNERS = {
     "classify": _run_classify,
     "right_absorb": _run_right_absorb,
@@ -286,6 +347,8 @@ _RUNNERS = {
     "yank": _run_yank,
     "steal": _run_steal,
     "split_out": _run_split_out,
+    "right_splice": _run_right_splice,
+    "left_splice": _run_left_splice,
 }
 
 
