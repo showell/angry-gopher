@@ -31,7 +31,10 @@ import traceback
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from rules.card import card as parse_card_label
-from classified_card_stack import classify_stack
+from classified_card_stack import (
+    classify_stack,
+    kind_after_absorb_left, kind_after_absorb_right,
+)
 
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -106,8 +109,60 @@ def _run_classify(args, expected):
     return None
 
 
+def _split_at_plus(args):
+    """Absorb DSLs use `+` to separate the target card list from
+    the candidate card. Returns (target_tokens, card_token) or
+    raises ValueError if the format is wrong."""
+    if "+" not in args:
+        raise ValueError(f"absorb scenario missing '+': {args!r}")
+    sep = args.index("+")
+    target_tokens = args[:sep]
+    after = args[sep + 1:]
+    if len(after) != 1:
+        raise ValueError(
+            f"absorb scenario must have exactly one card after '+', "
+            f"got {after!r}")
+    return target_tokens, after[0]
+
+
+def _absorb_target(target_tokens):
+    """Classify the target stack from its label tokens. Raises if
+    the target itself is invalid — every absorb scenario presumes a
+    valid target."""
+    cards = [parse_card_label(t) for t in target_tokens]
+    target = classify_stack(cards)
+    if target is None:
+        raise ValueError(
+            f"absorb target does not classify: {target_tokens!r}")
+    return target
+
+
+def _run_right_absorb(args, expected):
+    target_tokens, card_token = _split_at_plus(args)
+    target = _absorb_target(target_tokens)
+    card = parse_card_label(card_token)
+    result_kind = kind_after_absorb_right(target, card)
+    actual = "none" if result_kind is None else result_kind
+    if actual != expected:
+        return f"expected {expected}, got {actual}"
+    return None
+
+
+def _run_left_absorb(args, expected):
+    target_tokens, card_token = _split_at_plus(args)
+    target = _absorb_target(target_tokens)
+    card = parse_card_label(card_token)
+    result_kind = kind_after_absorb_left(target, card)
+    actual = "none" if result_kind is None else result_kind
+    if actual != expected:
+        return f"expected {expected}, got {actual}"
+    return None
+
+
 _RUNNERS = {
     "classify": _run_classify,
+    "right_absorb": _run_right_absorb,
+    "left_absorb": _run_left_absorb,
 }
 
 
