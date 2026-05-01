@@ -30,6 +30,7 @@ from classified_card_stack import (
     kind_after_absorb_right, kind_after_absorb_left,
     absorb_right, absorb_left,
     kinds_after_splice, splice,
+    _kinds_after_splice_run,  # fast path: caller-knows-family entry
 )
 from move import (
     ExtractAbsorbDesc, FreePullDesc, PushDesc,
@@ -620,10 +621,17 @@ def _yield_splices(helper, trouble, growing, complete, splice_helpers):
             continue
         loose = t.cards[0]
         for hi, src in splice_helpers:
+            # `splice_helpers` already filtered to KIND_RUN / KIND_RB,
+            # so family == src.kind. Bypass `kinds_after_splice`
+            # (which re-derives family per call) and call the run/rb
+            # specialization directly.
+            family = src.kind
+            src_cards = src.cards
             n = src.n
             for k in range(1, n):
                 for side in ("left", "right"):
-                    kinds = kinds_after_splice(src, loose, k, side)
+                    kinds = _kinds_after_splice_run(
+                        src_cards, loose, k, side, family)
                     if kinds is None:
                         continue
                     left_kind, right_kind = kinds
