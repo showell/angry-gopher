@@ -5,6 +5,8 @@
   "private": true,
   "description": "TypeScript port of the Lyn Rummy BFS solver. Sibling to the python/ and elm/ subtrees; consumes the same DSL conformance fixtures.",
   "scripts": {
-    "test:leaf": "node test/test_conformance_leaf.ts"
+    "test:leaf": "node test/test_conformance_leaf.ts",
+    "test:engine": "node test/test_engine_conformance.ts",
+    "test": "node test/test_conformance_leaf.ts && node test/test_engine_conformance.ts"
   }
 }
