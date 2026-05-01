@@ -583,3 +583,165 @@ export function splitOut(
     singletonStack(stack.cards[2]!),
   ];
 }
+
+// --- Splice probes ---------------------------------------------------------
+//
+// Per SOLVER.md's no-side-parameter discipline these are TWO SEPARATE
+// FUNCTIONS named kindsAfterSpliceLeft and kindsAfterSpliceRight, NOT one
+// function with a `side` parameter. Each does its own job.
+
+/** Kind of a contiguous n-card slice of a run/rb-family stack. Returns
+ *  null when the slice is empty. Mirrors python's `_slice_kind`. */
+function sliceKind(family: Kind, n: number): Kind | null {
+  if (n <= 0) return null;
+  if (n === 1) return KIND_SINGLETON;
+  if (n === 2) return pairOf(family);
+  return family;
+}
+
+/** Single-boundary legality check for `family`. Caller has already
+ *  determined the family from the parent kinds. Mirrors python's
+ *  `_boundary_ok`. */
+function boundaryOk(a: Card, b: Card, family: Kind): boolean {
+  const av = a[0], asu = a[1];
+  const bv = b[0], bsu = b[1];
+  if (family === KIND_SET) {
+    return av === bv && asu !== bsu;
+  }
+  if (family === KIND_RUN) {
+    return asu === bsu && successor(av) === bv;
+  }
+  if (family === KIND_RB) {
+    if (successor(av) !== bv) return false;
+    return RED.has(asu) !== RED.has(bsu);
+  }
+  return false;
+}
+
+/** LEFT splice halves: with-card half first, pure slice second. Mirrors
+ *  python's `_splice_halves_left`. */
+function spliceHalvesLeft(
+  stack: ClassifiedCardStack,
+  card: Card,
+  position: number,
+): [Card[], Card[]] {
+  const left: Card[] = stack.cards.slice(0, position).concat([card]);
+  const right: Card[] = stack.cards.slice(position);
+  return [left, right];
+}
+
+/** RIGHT splice halves: pure slice first, with-card half second. Mirrors
+ *  python's `_splice_halves_right`. */
+function spliceHalvesRight(
+  stack: ClassifiedCardStack,
+  card: Card,
+  position: number,
+): [Card[], Card[]] {
+  const left: Card[] = stack.cards.slice(0, position);
+  const right: Card[] = [card, ...stack.cards.slice(position)];
+  return [left, right];
+}
+
+/** Run/rb-specialized LEFT splice probe. Mirrors python's
+ *  `_kinds_after_splice_run_left`. */
+function kindsAfterSpliceRunLeft(
+  parentCards: readonly Card[],
+  card: Card,
+  position: number,
+  family: Kind,
+): readonly [Kind, Kind] | null {
+  const n = parentCards.length;
+  const sliceLen = n - position;
+  const withCardLen = position + 1;
+  const rightKind = sliceKind(family, sliceLen);
+  if (rightKind === null) return null;
+  let leftKind: Kind;
+  if (withCardLen === 1) {
+    leftKind = KIND_SINGLETON;
+  } else if (withCardLen === 2) {
+    const k = classifyPair([parentCards[0]!, card]);
+    if (k === null) return null;
+    leftKind = k;
+  } else {
+    if (!boundaryOk(parentCards[position - 1]!, card, family)) return null;
+    leftKind = family;
+  }
+  return [leftKind, rightKind];
+}
+
+/** Run/rb-specialized RIGHT splice probe. Mirrors python's
+ *  `_kinds_after_splice_run_right`. */
+function kindsAfterSpliceRunRight(
+  parentCards: readonly Card[],
+  card: Card,
+  position: number,
+  family: Kind,
+): readonly [Kind, Kind] | null {
+  const n = parentCards.length;
+  const sliceLen = position;
+  const withCardLen = n - position + 1;
+  const leftKind = sliceKind(family, sliceLen);
+  if (leftKind === null) return null;
+  let rightKind: Kind;
+  if (withCardLen === 1) {
+    rightKind = KIND_SINGLETON;
+  } else if (withCardLen === 2) {
+    const k = classifyPair([card, parentCards[position]!]);
+    if (k === null) return null;
+    rightKind = k;
+  } else {
+    if (!boundaryOk(card, parentCards[position]!, family)) return null;
+    rightKind = family;
+  }
+  return [leftKind, rightKind];
+}
+
+/**
+ * Probe for the LEFT splice variant.
+ *     left  = stack.cards[:position] + [card]    ← with-card half
+ *     right = stack.cards[position:]             ← pure slice
+ * Returns `[leftKind, rightKind]` if both halves classify, else null.
+ * Mirrors python's `kinds_after_splice_left`.
+ */
+export function kindsAfterSpliceLeft(
+  stack: ClassifiedCardStack,
+  card: Card,
+  position: number,
+): readonly [Kind, Kind] | null {
+  const family = familyOfKind(stack.kind);
+  if (family === KIND_RUN || family === KIND_RB) {
+    return kindsAfterSpliceRunLeft(stack.cards, card, position, family);
+  }
+  // Fallback for non-run/rb parents: rigorous classify of both halves.
+  const [leftCards, rightCards] = spliceHalvesLeft(stack, card, position);
+  const leftKind = classifyRaw(leftCards);
+  if (leftKind === null) return null;
+  const rightKind = classifyRaw(rightCards);
+  if (rightKind === null) return null;
+  return [leftKind, rightKind];
+}
+
+/**
+ * Probe for the RIGHT splice variant.
+ *     left  = stack.cards[:position]             ← pure slice
+ *     right = [card] + stack.cards[position:]    ← with-card half
+ * Returns `[leftKind, rightKind]` if both halves classify, else null.
+ * Mirrors python's `kinds_after_splice_right`.
+ */
+export function kindsAfterSpliceRight(
+  stack: ClassifiedCardStack,
+  card: Card,
+  position: number,
+): readonly [Kind, Kind] | null {
+  const family = familyOfKind(stack.kind);
+  if (family === KIND_RUN || family === KIND_RB) {
+    return kindsAfterSpliceRunRight(stack.cards, card, position, family);
+  }
+  // Fallback for non-run/rb parents: rigorous classify of both halves.
+  const [leftCards, rightCards] = spliceHalvesRight(stack, card, position);
+  const leftKind = classifyRaw(leftCards);
+  if (leftKind === null) return null;
+  const rightKind = classifyRaw(rightCards);
+  if (rightKind === null) return null;
+  return [leftKind, rightKind];
+}

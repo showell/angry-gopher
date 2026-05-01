@@ -22,6 +22,8 @@ import {
   extendsTables,
   kindAfterAbsorbLeft,
   kindAfterAbsorbRight,
+  kindsAfterSpliceLeft,
+  kindsAfterSpliceRight,
   peel,
   pluck,
   shapeFrom,
@@ -312,6 +314,87 @@ const runYank = makeSourceVerbRunner("yank", canYank, yank);
 const runSteal = makeSourceVerbRunner("steal", canSteal, steal);
 const runSplitOut = makeSourceVerbRunner("split_out", canSplitOut, splitOut);
 
+// --- Splice runners ----------------------------------------------------
+
+/** Split splice args at `+` and `@` separators into
+ *  (target_tokens, card_token, position). */
+function splitSpliceArgs(args: readonly string[]): [string[], string, number] {
+  const plusIdx = args.indexOf("+");
+  if (plusIdx < 0) {
+    throw new Error(`splice scenario missing '+' separator: ${args.join(" ")}`);
+  }
+  const atIdx = args.indexOf("@");
+  if (atIdx < 0) {
+    throw new Error(`splice scenario missing '@' separator: ${args.join(" ")}`);
+  }
+  if (atIdx <= plusIdx) {
+    throw new Error(`splice scenario '@' must follow '+': ${args.join(" ")}`);
+  }
+  const targetTokens = args.slice(0, plusIdx);
+  const cardTokens = args.slice(plusIdx + 1, atIdx);
+  const posTokens = args.slice(atIdx + 1);
+  if (targetTokens.length === 0) {
+    throw new Error(`splice scenario missing target cards: ${args.join(" ")}`);
+  }
+  if (cardTokens.length !== 1) {
+    throw new Error(
+      `splice scenario expects exactly 1 card between '+' and '@': ${args.join(" ")}`,
+    );
+  }
+  if (posTokens.length !== 1) {
+    throw new Error(
+      `splice scenario expects exactly 1 token after '@': ${args.join(" ")}`,
+    );
+  }
+  const pos = parseInt(posTokens[0]!, 10);
+  if (!Number.isInteger(pos)) {
+    throw new Error(`splice position not an int: ${posTokens[0]}`);
+  }
+  return [targetTokens, cardTokens[0]!, pos];
+}
+
+/** Build a runner for one splice variant. The runner parses the
+ *  `<target>... + <card> @ <pos>` syntax, classifies the target, calls
+ *  the probe, and compares against the `<left_kind> | <right_kind>`
+ *  expected RHS (or `none`). */
+function makeSpliceRunner(
+  verbName: string,
+  probe: (
+    stack: ClassifiedCardStack,
+    card: Card,
+    position: number,
+  ) => readonly [Kind, Kind] | null,
+): Runner {
+  return (args, expected) => {
+    const [targetTokens, cardToken, pos] = splitSpliceArgs(args);
+    const target = classifyStack(targetTokens.map(parseCardLabel));
+    if (target === null) {
+      return `${verbName} target failed to classify: ${targetTokens.join(" ")}`;
+    }
+    const card = parseCardLabel(cardToken);
+    const result = probe(target, card, pos);
+    if (expected === "none") {
+      if (result === null) return null;
+      return `expected none, got ${result[0]} | ${result[1]}`;
+    }
+    if (result === null) {
+      return `expected ${expected}, got none`;
+    }
+    const parts = expected.split("|").map(p => p.trim()).filter(Boolean);
+    if (parts.length !== 2) {
+      return `splice expected RHS must be '<left_kind> | <right_kind>': ${expected}`;
+    }
+    const [wantLeft, wantRight] = parts as [string, string];
+    if (result[0] !== wantLeft || result[1] !== wantRight) {
+      return `expected ${wantLeft} | ${wantRight}, got ${result[0]} | ${result[1]}`;
+    }
+    return null;
+  };
+}
+
+const runLeftSplice = makeSpliceRunner("left_splice", kindsAfterSpliceLeft);
+const runRightSplice = makeSpliceRunner("right_splice", kindsAfterSpliceRight);
+
 // --- Multi-line block runner: extenders --------------------------------
 
 type MultiRunner = (args: readonly string[], body: readonly BodyLine[]) => RunResult;
@@ -422,6 +505,8 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
   yank: runYank,
   steal: runSteal,
   split_out: runSplitOut,
+  left_splice: runLeftSplice,
+  right_splice: runRightSplice,
 };
 
 const RUNNERS_MULTI: Readonly<Record<string, MultiRunner>> = {
