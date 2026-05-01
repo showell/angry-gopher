@@ -488,10 +488,11 @@ def enumerate_moves(state):
 
     # Move type (b): push a TROUBLE 1- or 2-partial onto a
     # HELPER stack so the result stays legal (the helper grows
-    # by 1 or 2 cards).
-    for ti, t in enumerate(trouble):
-        if len(t) > 2:
-            continue
+    # by 1 or 2 cards). Pre-filter the eligible trouble entries
+    # so the inner helper loop doesn't re-check len(t) per helper.
+    pushable_trouble = [(ti, t) for ti, t in enumerate(trouble)
+                        if len(t) <= 2]
+    for ti, t in pushable_trouble:
         for hi, h in enumerate(helper):
             for side in ("right", "left"):
                 merged = ([*h, *t] if side == "right"

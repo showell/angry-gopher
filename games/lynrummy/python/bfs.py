@@ -213,10 +213,27 @@ def solve_state(initial, *, max_trouble_outer=8, max_states=10000,
 
 def _singleton_is_live(c, pool):
     """True if card c can be part of any valid 3-card group
-    using cards from pool (which must not contain c)."""
+    using cards from `pool`. `c` may be in `pool` — same-identity
+    matches are skipped so the caller doesn't have to rebuild the
+    pool minus `c` for each query.
+
+    Tries all 6 orderings of (c, c1, c2). Three-of-six was a
+    silent bug — `classify` only accepts a stack in canonical
+    run-order, and a partner pair like (c1, c2) where c1 is c's
+    successor and c2 is c's predecessor wouldn't match any of the
+    three orderings tried before. False negatives caused the
+    static `_all_trouble_singletons_live` filter to miss live
+    cards and short-circuit solvable projections.
+    """
     for i, c1 in enumerate(pool):
+        if c1 is c:
+            continue
         for c2 in pool[i + 1:]:
-            for triple in ([c, c1, c2], [c1, c, c2], [c1, c2, c]):
+            if c2 is c:
+                continue
+            for triple in ([c, c1, c2], [c, c2, c1],
+                           [c1, c, c2], [c2, c, c1],
+                           [c1, c2, c], [c2, c1, c]):
                 if classify(triple) != "other":
                     return True
     return False
@@ -240,9 +257,7 @@ def _all_trouble_singletons_live(b):
     for t_stack in b.trouble:
         if len(t_stack) != 1:
             continue
-        c = t_stack[0]
-        others = [x for x in pool if x is not c]
-        if not _singleton_is_live(c, others):
+        if not _singleton_is_live(t_stack[0], pool):
             return False
     return True
 
