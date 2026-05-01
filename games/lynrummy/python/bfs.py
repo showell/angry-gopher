@@ -140,6 +140,7 @@ def bfs_with_cap(initial, max_trouble, max_states, *,
         next_level = []
         for _parent_tc, state, program in current_level:
             expansions += 1
+            parent_complete_count = len(state.buckets.complete)
             for desc, new_state in enumerate_focused(state):
                 nb = new_state.buckets
                 tc = trouble_count(nb.trouble, nb.growing)
@@ -149,6 +150,14 @@ def bfs_with_cap(initial, max_trouble, max_states, *,
                     continue
                 sig = (state_sig(*nb), new_state.lineage)
                 if sig in seen:
+                    continue
+                # Dynamic doomed-singleton check, gated on "this move
+                # graduated a group" — which is the only way a partner
+                # can have transitioned out of the accessible pool
+                # since the parent state was validated. Cheap to check;
+                # firing it indiscriminately was net-negative.
+                if (len(nb.complete) > parent_complete_count
+                        and _any_trouble_singleton_newly_doomed(nb)):
                     continue
                 seen.add(sig)
                 new_program = program + [(describe(desc), desc)]
@@ -237,6 +246,36 @@ def _all_trouble_singletons_live(b):
         if not is_live(t_stack[0], card_loc):
             return False
     return True
+
+
+def _any_trouble_singleton_newly_doomed(b):
+    """Dynamic companion to `_all_trouble_singletons_live`. Returns
+    True if any trouble singleton has lost all its accessible
+    partners — i.e. partners have been sealed into COMPLETE and
+    the singleton is now provably dead.
+
+    Caller must gate invocation: this is meant to fire ONLY on
+    states where a group just completed in the move that produced
+    them (parent's complete count < child's). Firing it on every
+    state is net negative on real corpora — the per-state cost of
+    `build_card_loc` plus the per-singleton liveness scan dominates
+    on the (much larger) population of states where no completion
+    has occurred. Gating on "group completion just happened" makes
+    the prune track its actual cause: the only way a partner can
+    become inaccessible mid-BFS is by graduating to COMPLETE.
+
+    Backed by the card-tracker accelerator (same machinery as the
+    static filter). O(72) per singleton instead of O(pool²).
+    """
+    if not any(len(t) == 1 for t in b.trouble):
+        return False
+    card_loc = build_card_loc(b)
+    for t_stack in b.trouble:
+        if len(t_stack) != 1:
+            continue
+        if not is_live(t_stack[0], card_loc):
+            return True
+    return False
 
 
 def solve_state_with_descs(initial, *, max_trouble_outer=8,
