@@ -129,6 +129,30 @@ def _format_scenario(c, plan):
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
+def _warmup_full_pass(cards):
+    """Run a full pass of every scenario UNTIMED before measuring.
+
+    The function-level warmup inside `time_solver` primes one
+    scenario at a time, but the very first scenarios in any capture
+    eat suite-level cold-start costs (interpreter caches, lazy
+    `NEIGHPORS` table build, branch-predictor priming, OS file-cache
+    state). Running the whole suite once first means every scenario's
+    real measurement starts against a fully-warmed system, not just
+    a function-warmed one.
+
+    Cost: one extra pass (~30s for the 81-card suite). Worth it for
+    gold capture; not done in `check_baseline_timing` where the speed
+    of the feedback loop matters more than between-capture stability."""
+    print("[warmup] priming the suite (untimed pass)...", flush=True)
+    for i, c in enumerate(cards):
+        helpers = _helpers_as_tuples()
+        state = Buckets(helpers, [[c]], [], [])
+        # Use the same boundary path that real measurement uses.
+        # Throw away timing; we only care about warming caches.
+        time_solver(state, n_runs=1)
+    print(f"[warmup] done ({len(cards)} scenarios primed).", flush=True)
+
+
 def main():
     repo_root = os.path.dirname(os.path.dirname(os.path.dirname(_PYTHON_DIR)))
     dsl_out = os.path.join(
@@ -139,6 +163,8 @@ def main():
 
     cards = _all_remaining()
     assert len(cards) == 81, f"Expected 81, got {len(cards)}"
+
+    _warmup_full_pass(cards)
 
     timing = {}
     header = (
