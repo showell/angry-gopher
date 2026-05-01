@@ -547,6 +547,45 @@ def test_splice_zero_position_left_gives_singleton():
     assert kinds == (KIND_SINGLETON, KIND_RUN)
 
 
+def test_splice_run_parent_parity_with_classifier():
+    """Cross-check the parent-kind shortcut against the rigorous
+    classifier across many positions and insert cards. Any disagreement
+    is a bug in the fast path."""
+    from classified_card_stack import _classify_raw, _splice_halves
+    parents = [
+        _ccs("AC", "2C", "3C", "4C", "5C"),         # length-5 run
+        _ccs("AC", "2D", "3C", "4D", "5C"),         # length-5 rb
+        _ccs("AC", "2C", "3C", "4C", "5C", "6C"),   # length-6 run
+        _ccs("9C", "TC", "JC", "QC", "KC"),         # length-5 run high
+    ]
+    insert_cards = [
+        card("AC"), card("AD"), card("3C"), card("3D"),
+        card("5S"), card("5H"), card("KC"), card("6C"), card("6D"),
+    ]
+    for parent in parents:
+        n = len(parent)
+        for pos in range(0, n + 1):
+            for c in insert_cards:
+                if c in parent.cards:
+                    continue
+                for side in ("left", "right"):
+                    fast = kinds_after_splice(parent, c, pos, side)
+                    left_cards, right_cards = _splice_halves(
+                        parent, c, pos, side)
+                    expected_left = _classify_raw(left_cards)
+                    expected_right = _classify_raw(right_cards)
+                    if expected_left is None or expected_right is None:
+                        assert fast is None, (
+                            f"fast={fast} expected=None at parent={parent.cards} "
+                            f"card={c} pos={pos} side={side}")
+                    else:
+                        assert fast == (expected_left, expected_right), (
+                            f"fast={fast} expected="
+                            f"{(expected_left, expected_right)} at "
+                            f"parent={parent.cards} card={c} "
+                            f"pos={pos} side={side}")
+
+
 # --- Equality + hashing -----------------------------------------------------
 
 def test_equality_by_value():

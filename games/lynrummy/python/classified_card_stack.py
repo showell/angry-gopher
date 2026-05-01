@@ -32,7 +32,7 @@ returns None for them; the input boundary converts that None into an
 error before anything else runs.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from rules.card import RED
 
@@ -71,13 +71,20 @@ _FAMILY_OF_KIND = {
 
 @dataclass(frozen=True, slots=True)
 class ClassifiedCardStack:
-    """Immutable card sequence + cached kind. Construction goes through
-    the module functions; the type itself is inert."""
+    """Immutable card sequence + cached kind + cached length.
+    Construction goes through the module functions; the type itself
+    is inert. `n` is the length, computed once at construction so
+    hot paths can do `stack.n` (a single slot read) instead of
+    going through `len(stack)`."""
     cards: tuple
     kind: str
+    n: int = field(init=False)
+
+    def __post_init__(self):
+        object.__setattr__(self, "n", len(self.cards))
 
     def __len__(self):
-        return len(self.cards)
+        return self.n
 
     def __iter__(self):
         return iter(self.cards)
@@ -199,7 +206,7 @@ def to_singletons(stack):
 def can_peel(stack, i):
     """Peel: drop an end card from a length-4+ run/rb, or any card from
     a length-4+ set (sets are unordered)."""
-    n = len(stack)
+    n = stack.n
     if stack.kind == KIND_SET and n >= 4:
         return True
     if stack.kind in (KIND_RUN, KIND_RB) and n >= 4 and (i == 0 or i == n - 1):
@@ -213,8 +220,7 @@ def can_pluck(stack, i):
     i in [3, n-4]."""
     if stack.kind not in (KIND_RUN, KIND_RB):
         return False
-    n = len(stack)
-    return 3 <= i <= n - 4
+    return 3 <= i <= stack.n - 4
 
 
 def can_yank(stack, i):
@@ -223,7 +229,7 @@ def can_yank(stack, i):
     positions outside peel (ends) and pluck (deep interior)."""
     if stack.kind not in (KIND_RUN, KIND_RB):
         return False
-    n = len(stack)
+    n = stack.n
     if i == 0 or i == n - 1 or 3 <= i <= n - 4:
         return False
     left_len = i
@@ -234,7 +240,7 @@ def can_yank(stack, i):
 def can_steal(stack, i):
     """Steal: only on length-3 stacks. End positions for run/rb;
     any position for set."""
-    if len(stack) != 3:
+    if stack.n != 3:
         return False
     if stack.kind in (KIND_RUN, KIND_RB):
         return i == 0 or i == 2
@@ -245,7 +251,7 @@ def can_split_out(stack, i):
     """Split-out: extract the middle card of a length-3 run/rb. Both
     halves are singletons."""
     return (stack.kind in (KIND_RUN, KIND_RB)
-            and len(stack) == 3 and i == 1)
+            and stack.n == 3 and i == 1)
 
 
 def verb_for_position(stack, i):
@@ -386,11 +392,18 @@ def kinds_after_splice(stack, card, position, side):
     side='right': left  = stack.cards[:position]
                   right = (card,) + stack.cards[position:]
 
-    For correctness-first this routes through the rigorous classifier;
-    optimization to parent-kind dispatch can come later when profiling
-    flags it."""
+    Fast path for run/rb parents (the splice hot path): the pure-slice
+    half's kind is derived from parent family + slice length; the
+    with-card half needs at most a single boundary check (length-3+) or
+    a 2-card pair classification (length-2). No full reclassification.
+    Other parent kinds fall through to the rigorous classifier."""
     if side not in ("left", "right"):
         raise ValueError(f"side must be 'left' or 'right', got {side!r}")
+    family = _FAMILY_OF_KIND.get(stack.kind)
+    if family == KIND_RUN or family == KIND_RB:
+        return _kinds_after_splice_run(
+            stack.cards, card, position, side, family)
+    # Fallback: non-run/rb parent (set, partial, singleton). Rigorous.
     left_cards, right_cards = _splice_halves(stack, card, position, side)
     left_kind = _classify_raw(left_cards)
     if left_kind is None:
@@ -399,6 +412,62 @@ def kinds_after_splice(stack, card, position, side):
     if right_kind is None:
         return None
     return (left_kind, right_kind)
+
+
+def _kinds_after_splice_run(parent_cards, card, position, side, family):
+    """Splice-probe specialization for run/rb parent. Caller has
+    confirmed family in (KIND_RUN, KIND_RB)."""
+    n = len(parent_cards)
+    if side == "left":
+        # left  = parent[:position] + (card,)
+        # right = parent[position:]
+        slice_len = n - position
+        with_card_len = position + 1
+        right_kind = _slice_kind(family, slice_len)
+        if right_kind is None:
+            return None
+        if with_card_len == 1:
+            left_kind = KIND_SINGLETON
+        elif with_card_len == 2:
+            left_kind = _classify_pair((parent_cards[0], card))
+            if left_kind is None:
+                return None
+        else:
+            if not _boundary_ok(parent_cards[position - 1], card, family):
+                return None
+            left_kind = family
+        return (left_kind, right_kind)
+    # side == "right"
+    # left  = parent[:position]
+    # right = (card,) + parent[position:]
+    slice_len = position
+    with_card_len = n - position + 1
+    left_kind = _slice_kind(family, slice_len)
+    if left_kind is None:
+        return None
+    if with_card_len == 1:
+        right_kind = KIND_SINGLETON
+    elif with_card_len == 2:
+        right_kind = _classify_pair((card, parent_cards[position]))
+        if right_kind is None:
+            return None
+    else:
+        if not _boundary_ok(card, parent_cards[position], family):
+            return None
+        right_kind = family
+    return (left_kind, right_kind)
+
+
+def _slice_kind(family, n):
+    """Kind of a contiguous n-card slice of a run/rb-family stack.
+    Returns None when the slice is empty."""
+    if n <= 0:
+        return None
+    if n == 1:
+        return KIND_SINGLETON
+    if n == 2:
+        return _PAIR_OF[family]
+    return family
 
 
 def splice(stack, card, position, side, left_kind, right_kind):
@@ -429,7 +498,7 @@ def _absorb_kind(target, card, side):
 
     For sets, a cross-stack suit-uniqueness check fires (boundary
     alone misses non-adjacent duplicates)."""
-    n_new = len(target) + 1
+    n_new = target.n + 1
 
     if target.kind == KIND_SINGLETON:
         # 2-card result: family inferred from the two cards in

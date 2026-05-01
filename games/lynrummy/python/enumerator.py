@@ -137,7 +137,7 @@ def admissible_merged(merged, completion_inv):
     classified successfully already (probe returned non-None),
     so legality is given. Only the doomed-third gate fires for
     length-2 results."""
-    if len(merged) == 2 and has_doomed_third(merged.cards, completion_inv):
+    if merged.n == 2 and has_doomed_third(merged.cards, completion_inv):
         return False
     return True
 
@@ -186,7 +186,7 @@ def _extract_pieces(source, ci, verb):
         helpers = []
         spawned = []
         for piece in (left, right):
-            (helpers if len(piece) >= 3 else spawned).append(piece)
+            (helpers if piece.n >= 3 else spawned).append(piece)
         return helpers, spawned
     if verb == "split_out":
         _ext, left, right = split_out(source, ci)
@@ -282,7 +282,7 @@ def enumerate_moves(state):
     # (helper + trouble-singletons) inventory, the partial
     # will NEVER graduate. The state is dead — yield nothing.
     for g in growing:
-        if len(g) == 2:
+        if g.n == 2:
             shapes = completion_shapes(g.cards)
             if not (shapes & completion_inv):
                 return
@@ -294,16 +294,14 @@ def enumerate_moves(state):
     # iteration. Splice wants length-4+ pure/rb runs; shift
     # wants length-3 pure/rb runs.
     splice_helpers = [
-        (hi, helper[hi])
-        for hi in range(len(helper))
-        if len(helper[hi]) >= 4
-        and helper[hi].kind in _RUN_FAMILY_KINDS
+        (hi, h)
+        for hi, h in enumerate(helper)
+        if h.n >= 4 and h.kind in _RUN_FAMILY_KINDS
     ]
     shift_helpers = [
-        (hi, helper[hi])
-        for hi in range(len(helper))
-        if len(helper[hi]) == 3
-        and helper[hi].kind in _RUN_FAMILY_KINDS
+        (hi, h)
+        for hi, h in enumerate(helper)
+        if h.n == 3 and h.kind in _RUN_FAMILY_KINDS
     ]
 
     # All targets for absorption (move type a). Each entry:
@@ -361,7 +359,7 @@ def enumerate_moves(state):
 
         # Source: TROUBLE singleton (free pull).
         for li, loose_stack in enumerate(trouble):
-            if len(loose_stack) != 1:
+            if loose_stack.n != 1:
                 continue
             if bucket == "trouble" and li == idx:
                 continue  # can't absorb a stack onto itself
@@ -437,7 +435,7 @@ def enumerate_moves(state):
                         extractable.get((p_value, p_suit), ())
                     if verb == "peel"
                     and donor_idx != src_idx
-                    and len(helper[donor_idx]) >= 4
+                    and helper[donor_idx].n >= 4
                 )
                 for donor_idx, _ci in candidates:
                     donor = helper[donor_idx]
@@ -497,11 +495,11 @@ def enumerate_moves(state):
     # HELPER pure/rb run length 4+. The run splits around the
     # inserted card; both halves must be legal length-3+.
     for ti, t in enumerate(trouble):
-        if len(t) != 1:
+        if t.n != 1:
             continue
         loose = t.cards[0]
         for hi, src in splice_helpers:
-            n = len(src)
+            n = src.n
             for k in range(1, n):
                 for side in ("left", "right"):
                     kinds = kinds_after_splice(src, loose, k, side)
@@ -529,7 +527,7 @@ def enumerate_moves(state):
     # Move type (b): push a TROUBLE 1- or 2-partial onto a
     # HELPER stack so the result stays legal.
     pushable_trouble = [(ti, t) for ti, t in enumerate(trouble)
-                        if len(t) <= 2]
+                        if t.n <= 2]
     for ti, t in pushable_trouble:
         for hi, h in enumerate(helper):
             for side in ("right", "left"):
