@@ -697,51 +697,44 @@ function kindsAfterSpliceRunRight(
 }
 
 /**
- * Probe for the LEFT splice variant.
+ * Probe for the LEFT splice variant on a run or rb parent.
  *     left  = stack.cards[:position] + [card]    ← with-card half
  *     right = stack.cards[position:]             ← pure slice
  * Returns `[leftKind, rightKind]` if both halves classify, else null.
- * Mirrors python's `kinds_after_splice_left`.
+ *
+ * Splice is a run/rb-only operation. Set parents extend via the
+ * absorb operation (set_extenders bucket); there's no such thing as
+ * a "set splice" in human play. Calling this probe on a non-run/rb
+ * parent throws.
  */
 export function kindsAfterSpliceLeft(
   stack: ClassifiedCardStack,
   card: Card,
   position: number,
 ): readonly [Kind, Kind] | null {
-  const family = familyOfKind(stack.kind);
-  if (family === KIND_RUN || family === KIND_RB) {
-    return kindsAfterSpliceRunLeft(stack.cards, card, position, family);
+  if (stack.kind !== KIND_RUN && stack.kind !== KIND_RB) {
+    throw new Error(
+      `splice probe requires run or rb parent, got ${stack.kind}`,
+    );
   }
-  // Fallback for non-run/rb parents: rigorous classify of both halves.
-  const [leftCards, rightCards] = spliceHalvesLeft(stack, card, position);
-  const leftKind = classifyRaw(leftCards);
-  if (leftKind === null) return null;
-  const rightKind = classifyRaw(rightCards);
-  if (rightKind === null) return null;
-  return [leftKind, rightKind];
+  return kindsAfterSpliceRunLeft(stack.cards, card, position, stack.kind);
 }
 
 /**
- * Probe for the RIGHT splice variant.
+ * Probe for the RIGHT splice variant on a run or rb parent.
  *     left  = stack.cards[:position]             ← pure slice
  *     right = [card] + stack.cards[position:]    ← with-card half
- * Returns `[leftKind, rightKind]` if both halves classify, else null.
- * Mirrors python's `kinds_after_splice_right`.
+ * See `kindsAfterSpliceLeft` for the run/rb-only contract.
  */
 export function kindsAfterSpliceRight(
   stack: ClassifiedCardStack,
   card: Card,
   position: number,
 ): readonly [Kind, Kind] | null {
-  const family = familyOfKind(stack.kind);
-  if (family === KIND_RUN || family === KIND_RB) {
-    return kindsAfterSpliceRunRight(stack.cards, card, position, family);
+  if (stack.kind !== KIND_RUN && stack.kind !== KIND_RB) {
+    throw new Error(
+      `splice probe requires run or rb parent, got ${stack.kind}`,
+    );
   }
-  // Fallback for non-run/rb parents: rigorous classify of both halves.
-  const [leftCards, rightCards] = spliceHalvesRight(stack, card, position);
-  const leftKind = classifyRaw(leftCards);
-  if (leftKind === null) return null;
-  const rightKind = classifyRaw(rightCards);
-  if (rightKind === null) return null;
-  return [leftKind, rightKind];
+  return kindsAfterSpliceRunRight(stack.cards, card, position, stack.kind);
 }

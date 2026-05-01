@@ -58,9 +58,10 @@ right_splice AC 2C 3C 4C + 5C @ 0 → none
 # left_splice @ 5 (= n): right = empty → none
 left_splice AC 2C 3C 4C 5C + 6C @ 5 → none
 
-# --- non-run/rb parent kinds: probe routes through rigorous classifier ---
-# For sets / pair_X / singletons, the splice probe falls back to the
-# rigorous classifier. Cover representative cases.
-right_splice AC AD AH + AS @ 2 → pair_set | pair_set    # set splice — rare path
-right_splice AC AD AH + 2C @ 0 → none                   # set splice with mismatched value
+# Splice is run/rb-only. Set parents extend via the absorb operation
+# (the set_extenders bucket on the absorber); attempting to "splice"
+# a card into a set is the wrong vocabulary and never produces a
+# BFS-useful move. The probe raises if called on a non-run/rb parent;
+# the BFS hot path's `_eligible_splice_helpers` already filters to
+# run/rb so it never hits that case.
 

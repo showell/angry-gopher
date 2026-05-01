@@ -551,42 +551,34 @@ def absorb_left(target, card, new_kind):
 # --- Splice ----------------------------------------------------------------
 
 def kinds_after_splice_left(stack, card, position):
-    """Probe for the LEFT splice variant.
+    """Probe for the LEFT splice variant on a run or rb parent.
         left  = stack.cards[:position] + (card,)   ← with-card half
         right = stack.cards[position:]              ← pure slice
-    Returns (left_kind, right_kind) if both halves classify, else None."""
-    family = _FAMILY_OF_KIND.get(stack.kind)
-    if family == KIND_RUN or family == KIND_RB:
-        return _kinds_after_splice_run_left(
-            stack.cards, card, position, family)
-    # Fallback for non-run/rb parents: rigorous classify.
-    left_cards, right_cards = _splice_halves_left(stack, card, position)
-    left_kind = _classify_raw(left_cards)
-    if left_kind is None:
-        return None
-    right_kind = _classify_raw(right_cards)
-    if right_kind is None:
-        return None
-    return (left_kind, right_kind)
+    Returns (left_kind, right_kind) if both halves classify, else None.
+
+    Splice is a run/rb-only operation. Set parents extend via the
+    absorb operation (set_extenders bucket); there's no such thing
+    as a "set splice" in human play — the set-style outputs of an
+    earlier fallback path were arithmetic byproducts that produced
+    zero BFS-useful moves. Calling this probe on a non-run/rb parent
+    is a caller bug."""
+    if stack.kind != KIND_RUN and stack.kind != KIND_RB:
+        raise ValueError(
+            f"splice probe requires run or rb parent, got {stack.kind!r}")
+    return _kinds_after_splice_run_left(
+        stack.cards, card, position, stack.kind)
 
 
 def kinds_after_splice_right(stack, card, position):
-    """Probe for the RIGHT splice variant.
+    """Probe for the RIGHT splice variant on a run or rb parent.
         left  = stack.cards[:position]              ← pure slice
         right = (card,) + stack.cards[position:]    ← with-card half
-    Returns (left_kind, right_kind) if both halves classify, else None."""
-    family = _FAMILY_OF_KIND.get(stack.kind)
-    if family == KIND_RUN or family == KIND_RB:
-        return _kinds_after_splice_run_right(
-            stack.cards, card, position, family)
-    left_cards, right_cards = _splice_halves_right(stack, card, position)
-    left_kind = _classify_raw(left_cards)
-    if left_kind is None:
-        return None
-    right_kind = _classify_raw(right_cards)
-    if right_kind is None:
-        return None
-    return (left_kind, right_kind)
+    See `kinds_after_splice_left` for the run/rb-only contract."""
+    if stack.kind != KIND_RUN and stack.kind != KIND_RB:
+        raise ValueError(
+            f"splice probe requires run or rb parent, got {stack.kind!r}")
+    return _kinds_after_splice_run_right(
+        stack.cards, card, position, stack.kind)
 
 
 def _kinds_after_splice_run_left(parent_cards, card, position, family):
