@@ -207,7 +207,7 @@ def solve(board, *, max_trouble_outer=8, max_states=10000,
     helper, trouble = [], []
     for s in board:
         ccs = classify_stack(s)
-        if ccs is None or len(ccs) < 3:
+        if ccs is None or ccs.n < 3:
             trouble.append(s)
         else:
             helper.append(s)
@@ -249,13 +249,13 @@ def _all_trouble_singletons_live(b):
     the O(|pool|²) classify-based scan it replaces. Skips array
     construction entirely when no trouble singleton exists.
     """
-    if not any(len(t) == 1 for t in b.trouble):
+    if not any(t.n == 1 for t in b.trouble):
         return True
     card_loc = build_card_loc(b)
     for t_stack in b.trouble:
-        if len(t_stack) != 1:
+        if t_stack.n != 1:
             continue
-        if not is_live(t_stack[0], card_loc):
+        if not is_live(t_stack.cards[0], card_loc):
             return False
     return True
 
@@ -279,13 +279,13 @@ def _any_trouble_singleton_newly_doomed(b):
     Backed by the card-tracker accelerator (same machinery as the
     static filter). O(72) per singleton instead of O(pool²).
     """
-    if not any(len(t) == 1 for t in b.trouble):
+    if not any(t.n == 1 for t in b.trouble):
         return False
     card_loc = build_card_loc(b)
     for t_stack in b.trouble:
-        if len(t_stack) != 1:
+        if t_stack.n != 1:
             continue
-        if not is_live(t_stack[0], card_loc):
+        if not is_live(t_stack.cards[0], card_loc):
             return True
     return False
 

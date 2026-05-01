@@ -280,8 +280,8 @@ def test_doomed_growing_partial_is_reachable():
     inv = enumerator.completion_inventory(helper2, trouble2)
     doomed = []
     for g in growing2:
-        if len(g) == 2:
-            shapes = enumerator.completion_shapes(g)
+        if g.n == 2:
+            shapes = enumerator.completion_shapes(g.cards)
             if not (shapes & inv):
                 doomed.append(g)
     _assert("at least one growing partial is doomed in the "

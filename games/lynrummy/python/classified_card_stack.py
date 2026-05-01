@@ -73,24 +73,22 @@ _FAMILY_OF_KIND = {
 class ClassifiedCardStack:
     """Immutable card sequence + cached kind + cached length.
     Construction goes through the module functions; the type itself
-    is inert. `n` is the length, computed once at construction so
-    hot paths can do `stack.n` (a single slot read) instead of
-    going through `len(stack)`."""
+    is inert. Three slot reads — `stack.cards`, `stack.kind`,
+    `stack.n` — cover every access. No dunder methods on purpose:
+    `len(stack)`, `for c in stack`, and `stack[i]` all raise. This
+    is two things at once:
+      1. Speed: dunder dispatch is slow on the BFS hot path; slot
+         reads of `.cards`, `.kind`, `.n` are direct attribute hits.
+      2. Elm portability: the Elm port has no equivalent of
+         `__iter__` / `__getitem__` / `__len__` — every access goes
+         through the record fields. Mirroring that here makes the
+         port a near-mechanical translation."""
     cards: tuple
     kind: str
     n: int = field(init=False)
 
     def __post_init__(self):
         object.__setattr__(self, "n", len(self.cards))
-
-    def __len__(self):
-        return self.n
-
-    def __iter__(self):
-        return iter(self.cards)
-
-    def __getitem__(self, i):
-        return self.cards[i]
 
 
 # --- Internal classifier ----------------------------------------------------
@@ -283,7 +281,7 @@ def peel(stack, i):
     For run/rb at end position: remnant is the contiguous (n-1) cards
     on the opposite side. Family preserved; length-driven kind."""
     assert can_peel(stack, i), \
-        f"can_peel({stack.kind} len={len(stack)}, {i}) is False"
+        f"can_peel({stack.kind} len={stack.n}, {i}) is False"
     extracted = singleton(stack.cards[i])
     if stack.kind == KIND_SET:
         rest = stack.cards[:i] + stack.cards[i + 1:]
@@ -300,7 +298,7 @@ def pluck(stack, i):
 
     Both halves are length-3+ runs of the parent family."""
     assert can_pluck(stack, i), \
-        f"can_pluck({stack.kind} len={len(stack)}, {i}) is False"
+        f"can_pluck({stack.kind} len={stack.n}, {i}) is False"
     family = stack.kind
     extracted = singleton(stack.cards[i])
     left_cards = stack.cards[:i]
@@ -316,7 +314,7 @@ def yank(stack, i):
     One half is length-3+ run-family, the other is length-1 (singleton)
     or length-2 (pair_X). Both non-empty by yank precondition."""
     assert can_yank(stack, i), \
-        f"can_yank({stack.kind} len={len(stack)}, {i}) is False"
+        f"can_yank({stack.kind} len={stack.n}, {i}) is False"
     family = stack.kind
     extracted = singleton(stack.cards[i])
     left_cards = stack.cards[:i]
@@ -335,7 +333,7 @@ def steal(stack, i):
     rather than persisting as one pair_set.)
     For run/rb (n=3, i=0 or i=2): returns (extracted, length-2 partial)."""
     assert can_steal(stack, i), \
-        f"can_steal({stack.kind} len={len(stack)}, {i}) is False"
+        f"can_steal({stack.kind} len={stack.n}, {i}) is False"
     extracted = singleton(stack.cards[i])
     if stack.kind == KIND_SET:
         others = tuple(singleton(c) for j, c in enumerate(stack.cards) if j != i)
@@ -349,7 +347,7 @@ def split_out(stack, i):
     """Assumes can_split_out(stack, i). Length-3 run or rb, i=1.
     Returns (extracted, left_singleton, right_singleton)."""
     assert can_split_out(stack, i), \
-        f"can_split_out({stack.kind} len={len(stack)}, {i}) is False"
+        f"can_split_out({stack.kind} len={stack.n}, {i}) is False"
     return (singleton(stack.cards[1]),
             singleton(stack.cards[0]),
             singleton(stack.cards[2]))

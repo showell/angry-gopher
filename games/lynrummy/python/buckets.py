@@ -54,18 +54,29 @@ class FocusedState(NamedTuple):
 def state_sig(helper, trouble, growing, complete):
     """Memoization key. Bucket order matters (HELPER vs
     COMPLETE differ in role) but stack order within a bucket
-    doesn't."""
+    doesn't. Stacks must be `ClassifiedCardStack` (the data
+    shape inside BFS); access goes through `.cards`."""
     def s(stacks):
-        return tuple(sorted(tuple(sorted(st)) for st in stacks))
+        return tuple(sorted(tuple(sorted(st.cards)) for st in stacks))
     return (s(helper), s(trouble), s(growing), s(complete))
 
 
 def trouble_count(trouble, growing):
-    return sum(len(s) for s in trouble) + sum(len(s) for s in growing)
+    n = 0
+    for s in trouble:
+        n += s.n
+    for s in growing:
+        n += s.n
+    return n
 
 
 def is_victory(trouble, growing):
-    return not trouble and all(len(s) >= 3 for s in growing)
+    if trouble:
+        return False
+    for g in growing:
+        if g.n < 3:
+            return False
+    return True
 
 
 # --- Boundary conversion ---------------------------------------------------

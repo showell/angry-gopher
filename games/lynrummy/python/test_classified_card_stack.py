@@ -563,7 +563,7 @@ def test_splice_run_parent_parity_with_classifier():
         card("5S"), card("5H"), card("KC"), card("6C"), card("6D"),
     ]
     for parent in parents:
-        n = len(parent)
+        n = parent.n
         for pos in range(0, n + 1):
             for c in insert_cards:
                 if c in parent.cards:

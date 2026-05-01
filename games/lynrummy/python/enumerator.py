@@ -85,11 +85,11 @@ def completion_inventory(helper, trouble):
     """
     inv = set()
     for stack in helper:
-        for c in stack:
+        for c in stack.cards:
             inv.add((c[0], c[1]))
     for stack in trouble:
-        if len(stack) == 1:
-            c = stack[0]
+        if stack.n == 1:
+            c = stack.cards[0]
             inv.add((c[0], c[1]))
     return inv
 

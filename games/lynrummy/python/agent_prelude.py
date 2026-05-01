@@ -112,7 +112,7 @@ def _find_completing_third(pair, hand):
                 [c, pair[0], pair[1]],
         ):
             ccs = classify_stack(ordered)
-            if ccs is not None and len(ccs) >= 3:
+            if ccs is not None and ccs.n >= 3:
                 return ordered
     return None
 
@@ -140,7 +140,7 @@ def _try_projection(board, extra_stacks, *, stats=None, kind="?",
     helper, trouble = [], []
     for s in augmented:
         ccs = classify_stack(s)
-        if ccs is None or len(ccs) < 3:
+        if ccs is None or ccs.n < 3:
             trouble.append(s)
         else:
             helper.append(s)
