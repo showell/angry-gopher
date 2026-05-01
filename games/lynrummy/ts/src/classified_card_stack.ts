@@ -738,3 +738,95 @@ export function kindsAfterSpliceRight(
   }
   return kindsAfterSpliceRunRight(stack.cards, card, position, stack.kind);
 }
+
+// --- Splice candidates (earned-knowledge accelerator for the BFS) ----------
+//
+// `findSpliceCandidates(parent, card)` enumerates every legal splice of
+// `card` into `parent` that yields TWO LENGTH-3+ family-kind halves.
+// This is the BFS-useful subset of splice positions; partial-pair halves
+// (length-2 with-card halves like the `pair_set | rb` cases in
+// splice.dsl) are excluded by design.
+//
+// Algorithm: same-value-match scan. A human looking for a splice asks
+// "is there a position m where parent[m] has the same value as my insert
+// card?" — every BFS-useful splice arises from exactly such a match.
+// Proof: for left_splice@p with both halves length-3+, the with-card
+// half boundary requires successor(parent[p-1].value) = card.value, i.e.
+// card.value = parent[p].value. For right_splice@p, the with-card half
+// boundary requires successor(card.value) = parent[p].value, i.e.
+// card.value = parent[p-1].value. So every BFS-useful splice has a
+// matching parent[m] with the same value as the card, and the per-match
+// emission rule is:
+//
+//     match at m  →  left_splice@m AND right_splice@(m+1)
+//
+// Both candidates require m ∈ [2, n-3] (so each half has length ≥ 3).
+// At length n=4, [2, 1] is empty; this is why we skip n<5 parents.
+//
+// Validity per family:
+//   - rb parent: card same color as parent[m] (the rb alternation
+//     re-establishes when card takes parent[m]'s color slot adjacent
+//     to it; suit equality is allowed because boundary checks only
+//     same-color, not same-suit, and the alt-color invariant of the
+//     remaining halves is unaffected).
+//   - run parent: card same suit as parent[m] (so the inserted card
+//     preserves the pure-suit invariant on both adjacent boundaries).
+//     This is the cross-deck case in practice — same (value, suit)
+//     across decks is the only realistic way to hit it.
+//
+// Each emitted candidate is a guaranteed-valid splice; no probe call
+// is needed. The kinds are known a priori from the family because both
+// halves are length-3+ family-kind slices of the parent's family.
+
+/** A BFS-useful splice candidate: left/right side, position, and the
+ *  guaranteed left/right half kinds. Both halves are length-3+
+ *  family-kind stacks; no reclassification needed. */
+export interface SpliceCandidate {
+  readonly side: "left" | "right";
+  readonly position: number;
+  readonly leftKind: Kind;
+  readonly rightKind: Kind;
+}
+
+/**
+ * Find every splice of `card` into `parent` that yields two length-3+
+ * legal halves. Uses the same-value-match heuristic; each returned
+ * candidate is guaranteed valid (no probe needed). Iteration order is
+ * by ascending parent match position `m`, with `left@m` emitted before
+ * `right@(m+1)` for each match.
+ *
+ * Parent must be KIND_RUN or KIND_RB (raises otherwise; mirrors the
+ * splice probes' run/rb-only contract).
+ */
+export function findSpliceCandidates(
+  parent: ClassifiedCardStack,
+  card: Card,
+): readonly SpliceCandidate[] {
+  if (parent.kind !== KIND_RUN && parent.kind !== KIND_RB) {
+    throw new Error(
+      `findSpliceCandidates requires run or rb parent, got ${parent.kind}`,
+    );
+  }
+  const n = parent.n;
+  if (n < 5) return [];
+  const cards = parent.cards;
+  const cv = card[0];
+  const cs = card[1];
+  const family = parent.kind;
+  const cRed = RED.has(cs);
+  const out: SpliceCandidate[] = [];
+  for (let m = 2; m <= n - 3; m++) {
+    const pm = cards[m]!;
+    if (pm[0] !== cv) continue;
+    if (family === KIND_RB) {
+      // Card must match parent[m]'s color (rb alternation continuation).
+      if (RED.has(pm[1]) !== cRed) continue;
+    } else {
+      // KIND_RUN: card must match parent[m]'s suit (pure-run invariant).
+      if (pm[1] !== cs) continue;
+    }
+    out.push({ side: "left", position: m, leftKind: family, rightKind: family });
+    out.push({ side: "right", position: m + 1, leftKind: family, rightKind: family });
+  }
+  return out;
+}

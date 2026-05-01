@@ -20,10 +20,13 @@ import {
   canYank,
   classifyStack,
   extendsTables,
+  findSpliceCandidates,
   kindAfterAbsorbLeft,
   kindAfterAbsorbRight,
   kindsAfterSpliceLeft,
   kindsAfterSpliceRight,
+  KIND_RB,
+  KIND_RUN,
   peel,
   pluck,
   shapeFrom,
@@ -34,6 +37,7 @@ import {
   type ClassifiedCardStack,
   type ExtenderMap,
   type Kind,
+  type SpliceCandidate,
 } from "../src/classified_card_stack.ts";
 
 const ARROW = "→";
@@ -395,6 +399,99 @@ function makeSpliceRunner(
 const runLeftSplice = makeSpliceRunner("left_splice", kindsAfterSpliceLeft);
 const runRightSplice = makeSpliceRunner("right_splice", kindsAfterSpliceRight);
 
+// --- splice_targets runner ---------------------------------------------
+//
+// Format: `splice_targets <parent>... + <card> → <cand>, <cand>, ...`
+// where each <cand> is `<side>@<pos> <leftKind>|<rightKind>`. RHS `none`
+// means no candidates. The order of candidates in the RHS must exactly
+// match `findSpliceCandidates`'s emission order (ascending m, then
+// left@m before right@(m+1)).
+
+/** Split splice_targets args at `+` into (target_tokens, card_token).
+ *  No `@` suffix on the LHS — position lives in the RHS list. */
+function splitSpliceTargetsArgs(args: readonly string[]): [string[], string] {
+  const plusIdx = args.indexOf("+");
+  if (plusIdx < 0) {
+    throw new Error(`splice_targets scenario missing '+' separator: ${args.join(" ")}`);
+  }
+  const targetTokens = args.slice(0, plusIdx);
+  const cardTokens = args.slice(plusIdx + 1);
+  if (targetTokens.length === 0) {
+    throw new Error(`splice_targets scenario missing target cards: ${args.join(" ")}`);
+  }
+  if (cardTokens.length !== 1) {
+    throw new Error(
+      `splice_targets scenario expects exactly 1 card after '+': ${args.join(" ")}`,
+    );
+  }
+  return [targetTokens, cardTokens[0]!];
+}
+
+function renderCandidate(c: SpliceCandidate): string {
+  return `${c.side}@${c.position} ${c.leftKind}|${c.rightKind}`;
+}
+
+function parseCandidate(text: string, ctx: string): SpliceCandidate {
+  // Format: "<side>@<pos> <lkind>|<rkind>"
+  const parts = text.trim().split(/\s+/);
+  if (parts.length !== 2) {
+    throw new Error(`${ctx}: candidate must be '<side>@<pos> <lkind>|<rkind>': ${text}`);
+  }
+  const [head, kinds] = parts as [string, string];
+  const atIdx = head.indexOf("@");
+  if (atIdx < 0) {
+    throw new Error(`${ctx}: candidate head missing '@': ${head}`);
+  }
+  const sideStr = head.slice(0, atIdx);
+  const posStr = head.slice(atIdx + 1);
+  if (sideStr !== "left" && sideStr !== "right") {
+    throw new Error(`${ctx}: candidate side must be 'left' or 'right', got: ${sideStr}`);
+  }
+  const pos = parseInt(posStr, 10);
+  if (!Number.isInteger(pos)) {
+    throw new Error(`${ctx}: candidate position not an int: ${posStr}`);
+  }
+  const pipeIdx = kinds.indexOf("|");
+  if (pipeIdx < 0) {
+    throw new Error(`${ctx}: candidate kinds missing '|': ${kinds}`);
+  }
+  const leftKind = kinds.slice(0, pipeIdx) as Kind;
+  const rightKind = kinds.slice(pipeIdx + 1) as Kind;
+  return { side: sideStr as "left" | "right", position: pos, leftKind, rightKind };
+}
+
+function candidatesEqual(a: SpliceCandidate, b: SpliceCandidate): boolean {
+  return a.side === b.side
+    && a.position === b.position
+    && a.leftKind === b.leftKind
+    && a.rightKind === b.rightKind;
+}
+
+function runSpliceTargets(args: readonly string[], expected: string): RunResult {
+  const [targetTokens, cardToken] = splitSpliceTargetsArgs(args);
+  const target = classifyStack(targetTokens.map(parseCardLabel));
+  if (target === null) {
+    return `splice_targets target failed to classify: ${targetTokens.join(" ")}`;
+  }
+  const card = parseCardLabel(cardToken);
+  const result = findSpliceCandidates(target, card);
+  const expectedCands: SpliceCandidate[] =
+    expected === "none"
+      ? []
+      : expected.split(",").map((p, i) => parseCandidate(p, `candidate ${i}`));
+  if (result.length !== expectedCands.length) {
+    const got = result.map(renderCandidate).join(", ") || "none";
+    const want = expectedCands.map(renderCandidate).join(", ") || "none";
+    return `expected ${expectedCands.length} candidates [${want}], got ${result.length} [${got}]`;
+  }
+  for (let i = 0; i < result.length; i++) {
+    if (!candidatesEqual(result[i]!, expectedCands[i]!)) {
+      return `candidate ${i}: expected ${renderCandidate(expectedCands[i]!)}, got ${renderCandidate(result[i]!)}`;
+    }
+  }
+  return null;
+}
+
 // --- Multi-line block runner: extenders --------------------------------
 
 type MultiRunner = (args: readonly string[], body: readonly BodyLine[]) => RunResult;
@@ -507,6 +604,7 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
   split_out: runSplitOut,
   left_splice: runLeftSplice,
   right_splice: runRightSplice,
+  splice_targets: runSpliceTargets,
 };
 
 const RUNNERS_MULTI: Readonly<Record<string, MultiRunner>> = {
@@ -565,11 +663,180 @@ function runFile(filepath: string): FileResult {
   return { total, passed: total - failures, failed: failures, skipped };
 }
 
+// --- Splice-candidates cross-check -------------------------------------
+//
+// Independently validates `findSpliceCandidates` against the existing
+// `kindsAfterSpliceLeft/Right` probes. For each (parent, card) pair in
+// a generated sweep, we compute:
+//
+//   - PROBE_SET: every (side, position) where the corresponding probe
+//     returns a length-3+/length-3+ family-kind result.
+//   - CAND_SET:  every (side, position) returned by findSpliceCandidates.
+//
+// The two sets must be EQUAL. Any mismatch surfaces a real bug rather
+// than a paper-over. Runs once at startup before the DSL files.
+
+function isLengthThreePlus(k: Kind): boolean {
+  return k === KIND_RUN || k === KIND_RB;
+}
+
+function probeSetFor(parent: ClassifiedCardStack, card: Card): Set<string> {
+  const out = new Set<string>();
+  const n = parent.n;
+  for (let p = 0; p <= n; p++) {
+    const lr = kindsAfterSpliceLeft(parent, card, p);
+    if (lr !== null && isLengthThreePlus(lr[0]) && isLengthThreePlus(lr[1])) {
+      out.add(`left@${p} ${lr[0]}|${lr[1]}`);
+    }
+    const rr = kindsAfterSpliceRight(parent, card, p);
+    if (rr !== null && isLengthThreePlus(rr[0]) && isLengthThreePlus(rr[1])) {
+      out.add(`right@${p} ${rr[0]}|${rr[1]}`);
+    }
+  }
+  return out;
+}
+
+function candSetFor(parent: ClassifiedCardStack, card: Card): Set<string> {
+  const out = new Set<string>();
+  for (const c of findSpliceCandidates(parent, card)) {
+    out.add(`${c.side}@${c.position} ${c.leftKind}|${c.rightKind}`);
+  }
+  return out;
+}
+
+/** Generate rb run starting at (startValue, startSuit) with given length.
+ *  Alternates colors strictly (each step flips red/black). Returns null
+ *  if no rb of that length is buildable (e.g., wraparound conflict). */
+function buildRbCards(startV: number, startSuit: number, len: number, deck = 0): Card[] | null {
+  const cards: Card[] = [[startV, startSuit, deck]];
+  let v = startV;
+  let prevRed = [1, 3].includes(startSuit);
+  // Pick a fixed alternating partner pattern: black ↔ red.
+  // Choose suits 0=C (black), 1=D (red), 2=S (black), 3=H (red).
+  const blackSuits = [0, 2];
+  const redSuits = [1, 3];
+  let blackIdx = blackSuits.indexOf(startSuit);
+  let redIdx = redSuits.indexOf(startSuit);
+  for (let i = 1; i < len; i++) {
+    v = v === 13 ? 1 : v + 1;
+    let s: number;
+    if (prevRed) {
+      blackIdx = (blackIdx + 1) % blackSuits.length;
+      s = blackSuits[blackIdx]!;
+    } else {
+      redIdx = (redIdx + 1) % redSuits.length;
+      s = redSuits[redIdx]!;
+    }
+    cards.push([v, s, deck]);
+    prevRed = !prevRed;
+  }
+  return cards;
+}
+
+function buildRunCards(startV: number, suit: number, len: number, deck = 0): Card[] {
+  const cards: Card[] = [];
+  let v = startV;
+  for (let i = 0; i < len; i++) {
+    cards.push([v, suit, deck]);
+    v = v === 13 ? 1 : v + 1;
+  }
+  return cards;
+}
+
+function spliceCrossCheck(): void {
+  let parents = 0;
+  let pairs = 0;
+  // RB sweep: lengths 4..8, starting values 1..10, two starting suit choices.
+  for (let len = 4; len <= 8; len++) {
+    for (let startV = 1; startV <= 10; startV++) {
+      for (const startSuit of [0, 1]) {
+        const cards = buildRbCards(startV, startSuit, len);
+        if (cards === null) continue;
+        const stack = classifyStack(cards);
+        if (stack === null || stack.kind !== KIND_RB) continue;
+        parents++;
+        // Sweep insert cards over a useful range: every (value, suit).
+        for (let cv = 1; cv <= 13; cv++) {
+          for (let cs = 0; cs < 4; cs++) {
+            for (const cd of [0, 1]) {
+              const card: Card = [cv, cs, cd];
+              const ps = probeSetFor(stack, card);
+              const cs2 = candSetFor(stack, card);
+              pairs++;
+              if (ps.size !== cs2.size) {
+                throw new Error(
+                  `crosscheck mismatch: parent=[${renderCards(cards)}] card=${renderCards([card])} probe={${[...ps].sort().join(",")}} cand={${[...cs2].sort().join(",")}}`,
+                );
+              }
+              for (const e of ps) {
+                if (!cs2.has(e)) {
+                  throw new Error(
+                    `crosscheck missing-candidate: parent=[${renderCards(cards)}] card=${renderCards([card])} probe-has=${e} cand={${[...cs2].sort().join(",")}}`,
+                  );
+                }
+              }
+              for (const e of cs2) {
+                if (!ps.has(e)) {
+                  throw new Error(
+                    `crosscheck spurious-candidate: parent=[${renderCards(cards)}] card=${renderCards([card])} cand-has=${e} probe={${[...ps].sort().join(",")}}`,
+                  );
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  // Pure-run sweep: lengths 4..8, starting values 1..10, all four suits.
+  for (let len = 4; len <= 8; len++) {
+    for (let startV = 1; startV <= 10; startV++) {
+      for (let suit = 0; suit < 4; suit++) {
+        const cards = buildRunCards(startV, suit, len);
+        const stack = classifyStack(cards);
+        if (stack === null || stack.kind !== KIND_RUN) continue;
+        parents++;
+        for (let cv = 1; cv <= 13; cv++) {
+          for (let cs = 0; cs < 4; cs++) {
+            for (const cd of [0, 1]) {
+              const card: Card = [cv, cs, cd];
+              const ps = probeSetFor(stack, card);
+              const cs2 = candSetFor(stack, card);
+              pairs++;
+              if (ps.size !== cs2.size) {
+                throw new Error(
+                  `crosscheck mismatch: parent=[${renderCards(cards)}] card=${renderCards([card])} probe={${[...ps].sort().join(",")}} cand={${[...cs2].sort().join(",")}}`,
+                );
+              }
+              for (const e of ps) {
+                if (!cs2.has(e)) {
+                  throw new Error(
+                    `crosscheck missing-candidate: parent=[${renderCards(cards)}] card=${renderCards([card])} probe-has=${e} cand={${[...cs2].sort().join(",")}}`,
+                  );
+                }
+              }
+              for (const e of cs2) {
+                if (!ps.has(e)) {
+                  throw new Error(
+                    `crosscheck spurious-candidate: parent=[${renderCards(cards)}] card=${renderCards([card])} cand-has=${e} probe={${[...ps].sort().join(",")}}`,
+                  );
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  console.log(`splice-candidates crosscheck: ${parents} parents × insert sweep = ${pairs} pairs verified.`);
+}
+
 function main(): void {
   if (!fs.existsSync(LEAF_DSL_DIR)) {
     console.error(`no leaf-DSL dir at ${LEAF_DSL_DIR}`);
     process.exit(1);
   }
+  spliceCrossCheck();
   const files = fs
     .readdirSync(LEAF_DSL_DIR)
     .filter(f => f.endsWith(".dsl"))
