@@ -35,6 +35,10 @@ from classified_card_stack import (
     classify_stack,
     kind_after_absorb_left, kind_after_absorb_right,
     can_peel, peel,
+    can_pluck, pluck,
+    can_yank, yank,
+    can_steal, steal,
+    can_split_out, split_out,
 )
 
 
@@ -245,11 +249,43 @@ def _run_peel(args, expected):
                        can_peel, peel, expected_piece_count=2)
 
 
+def _run_pluck(args, expected):
+    target_tokens, position = _split_at_at(args)
+    return _check_verb(target_tokens, position, expected,
+                       can_pluck, pluck, expected_piece_count=3)
+
+
+def _run_yank(args, expected):
+    target_tokens, position = _split_at_at(args)
+    return _check_verb(target_tokens, position, expected,
+                       can_yank, yank, expected_piece_count=3)
+
+
+def _run_steal(args, expected):
+    target_tokens, position = _split_at_at(args)
+    # `steal` returns 2 pieces for run/rb (extracted + pair) and 3
+    # pieces for set (extracted + 2 singletons). Don't enforce a
+    # fixed piece count — the executor's actual return shape gets
+    # compared by `_parse_pieces`.
+    return _check_verb(target_tokens, position, expected,
+                       can_steal, steal)
+
+
+def _run_split_out(args, expected):
+    target_tokens, position = _split_at_at(args)
+    return _check_verb(target_tokens, position, expected,
+                       can_split_out, split_out, expected_piece_count=3)
+
+
 _RUNNERS = {
     "classify": _run_classify,
     "right_absorb": _run_right_absorb,
     "left_absorb": _run_left_absorb,
     "peel": _run_peel,
+    "pluck": _run_pluck,
+    "yank": _run_yank,
+    "steal": _run_steal,
+    "split_out": _run_split_out,
 }
 
 
