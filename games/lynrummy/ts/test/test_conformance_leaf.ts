@@ -14,8 +14,13 @@ import type { Card } from "../src/rules/card.ts";
 import { parseCardLabel } from "../src/rules/card.ts";
 import {
   classifyStack,
+  extendsTables,
   kindAfterAbsorbLeft,
   kindAfterAbsorbRight,
+  shapeFrom,
+  shapeId,
+  type ExtenderMap,
+  type Kind,
 } from "../src/classified_card_stack.ts";
 
 const ARROW = "→";
@@ -30,50 +35,101 @@ const LEAF_DSL_DIR = path.resolve(__dirname, "../../conformance/leaf");
 // the `extenders` fixture). The TS port adds those as new leaves get
 // implemented. Until then, header lines without `→` are skipped.
 
+interface BodyLine {
+  readonly lineno: number;
+  readonly text: string; // stripped, no inline comment
+  readonly comment: string;
+}
+
 interface Scenario {
   readonly lineno: number;
   readonly raw: string;
   readonly verb: string;
   readonly args: readonly string[];
-  readonly expected: string;
+  readonly expected: string | null; // null for multi-line block scenarios
   readonly comment: string;
+  readonly body: readonly BodyLine[] | null;
+}
+
+function stripComment(line: string): { line: string; comment: string } {
+  if (!line.includes("#")) return { line, comment: "" };
+  const idx = line.indexOf("#");
+  return {
+    line: line.slice(0, idx).trimEnd(),
+    comment: line.slice(idx + 1).trim(),
+  };
 }
 
 function parseDsl(filepath: string): Scenario[] {
   const content = fs.readFileSync(filepath, "utf8");
   const lines = content.split("\n");
   const out: Scenario[] = [];
-  for (let i = 0; i < lines.length; i++) {
+  let i = 0;
+  while (i < lines.length) {
     const raw = lines[i]!;
     const lineno = i + 1;
     const stripped = raw.trim();
-    if (!stripped || stripped.startsWith("#")) continue;
-    if (raw[0] === " " || raw[0] === "\t") continue; // indented body — multi-line block, skip for now
-    let line = raw;
-    let comment = "";
-    if (line.includes("#")) {
-      const idx = line.indexOf("#");
-      comment = line.slice(idx + 1).trim();
-      line = line.slice(0, idx).trimEnd();
-    }
-    if (!line.includes(ARROW)) {
-      // header line of a multi-line block — skip until parser supports it.
+    if (!stripped || stripped.startsWith("#")) {
+      i++;
       continue;
     }
-    const arrowIdx = line.indexOf(ARROW);
-    const lhs = line.slice(0, arrowIdx);
-    const rhs = line.slice(arrowIdx + ARROW.length);
-    const tokens = lhs.trim().split(/\s+/).filter(Boolean);
-    if (tokens.length === 0) {
-      throw new Error(`${filepath}:${lineno}: scenario has no verb`);
+    if (raw[0] === " " || raw[0] === "\t") {
+      throw new Error(
+        `${filepath}:${lineno}: indented line outside a block: ${raw}`,
+      );
     }
-    const verb = tokens[0]!;
-    const args = tokens.slice(1);
-    const expected = rhs.trim();
-    if (!expected) {
-      throw new Error(`${filepath}:${lineno}: scenario missing expected value`);
+    const { line: noComment, comment } = stripComment(raw);
+    if (noComment.includes(ARROW)) {
+      // Single-line scenario.
+      const arrowIdx = noComment.indexOf(ARROW);
+      const lhs = noComment.slice(0, arrowIdx);
+      const rhs = noComment.slice(arrowIdx + ARROW.length);
+      const tokens = lhs.trim().split(/\s+/).filter(Boolean);
+      if (tokens.length === 0) {
+        throw new Error(`${filepath}:${lineno}: scenario has no verb`);
+      }
+      const verb = tokens[0]!;
+      const args = tokens.slice(1);
+      const expected = rhs.trim();
+      if (!expected) {
+        throw new Error(`${filepath}:${lineno}: scenario missing expected value`);
+      }
+      out.push({ lineno, raw: noComment, verb, args, expected, comment, body: null });
+      i++;
+      continue;
     }
-    out.push({ lineno, raw: line, verb, args, expected, comment });
+    // Multi-line block scenario: header opens it, indented lines are body.
+    const headerTokens = noComment.trim().split(/\s+/).filter(Boolean);
+    if (headerTokens.length === 0) {
+      throw new Error(`${filepath}:${lineno}: empty header line`);
+    }
+    const verb = headerTokens[0]!;
+    const args = headerTokens.slice(1);
+    const body: BodyLine[] = [];
+    i++;
+    while (i < lines.length) {
+      const braw = lines[i]!;
+      const bstripped = braw.trim();
+      if (!bstripped || bstripped.startsWith("#")) {
+        i++;
+        continue;
+      }
+      if (braw[0] !== " " && braw[0] !== "\t") {
+        break; // next column-0 line ends the block
+      }
+      const { line: bline, comment: bcomment } = stripComment(braw);
+      body.push({ lineno: i + 1, text: bline.trim(), comment: bcomment });
+      i++;
+    }
+    out.push({
+      lineno,
+      raw: noComment,
+      verb,
+      args,
+      expected: null,
+      comment,
+      body,
+    });
   }
   return out;
 }
@@ -145,10 +201,115 @@ function runLeftAbsorb(args: readonly string[], expected: string): RunResult {
   return null;
 }
 
+// --- Multi-line block runner: extenders --------------------------------
+
+type MultiRunner = (args: readonly string[], body: readonly BodyLine[]) => RunResult;
+
+/** Parse the body of an `extenders` block into expected per-bucket
+ *  shape→kind maps. */
+function parseExtenderBody(body: readonly BodyLine[]): {
+  left: ExtenderMap;
+  right: ExtenderMap;
+  set: ExtenderMap;
+} {
+  const expected = {
+    left: new Map<number, Kind>(),
+    right: new Map<number, Kind>(),
+    set: new Map<number, Kind>(),
+  };
+  const seen = new Set<string>();
+  for (const bl of body) {
+    const colonIdx = bl.text.indexOf(":");
+    if (colonIdx < 0) {
+      throw new Error(
+        `line ${bl.lineno}: bucket line missing ':': ${bl.text}`,
+      );
+    }
+    const bucket = bl.text.slice(0, colonIdx).trim();
+    const rest = bl.text.slice(colonIdx + 1).trim();
+    if (bucket !== "left" && bucket !== "right" && bucket !== "set") {
+      throw new Error(
+        `line ${bl.lineno}: unknown bucket '${bucket}' (must be left / right / set)`,
+      );
+    }
+    if (seen.has(bucket)) {
+      throw new Error(`line ${bl.lineno}: bucket '${bucket}' listed twice`);
+    }
+    seen.add(bucket);
+    if (rest === "-") continue;
+    for (const entryRaw of rest.split(",")) {
+      const entry = entryRaw.trim();
+      const eqIdx = entry.indexOf("=");
+      if (eqIdx < 0) {
+        throw new Error(`line ${bl.lineno}: entry missing '=': ${entry}`);
+      }
+      const cardLabel = entry.slice(0, eqIdx).trim();
+      const kindStr = entry.slice(eqIdx + 1).trim() as Kind;
+      const card = parseCardLabel(cardLabel);
+      const id = shapeId(card[0], card[1]);
+      const map = expected[bucket];
+      if (map.has(id)) {
+        throw new Error(
+          `line ${bl.lineno}: duplicate shape ${cardLabel} in bucket '${bucket}'`,
+        );
+      }
+      map.set(id, kindStr);
+    }
+  }
+  return expected;
+}
+
+function shapeLabel(id: number): string {
+  const [v, s] = shapeFrom(id);
+  // Render as "value,suit" — adequate for failure messages.
+  return `(${v},${s})`;
+}
+
+function diffMap(
+  bucketName: string,
+  expected: ExtenderMap,
+  actual: ExtenderMap,
+  errors: string[],
+): void {
+  for (const [id, kind] of expected) {
+    if (!actual.has(id)) {
+      errors.push(`${bucketName}: missing entry ${shapeLabel(id)}=${kind}`);
+    } else if (actual.get(id) !== kind) {
+      errors.push(
+        `${bucketName}: ${shapeLabel(id)} expected=${kind} got=${actual.get(id)}`,
+      );
+    }
+  }
+  for (const [id, kind] of actual) {
+    if (!expected.has(id)) {
+      errors.push(`${bucketName}: unexpected entry ${shapeLabel(id)}=${kind}`);
+    }
+  }
+}
+
+function runExtenders(args: readonly string[], body: readonly BodyLine[]): RunResult {
+  const cards = args.map(parseCardLabel);
+  const target = classifyStack(cards);
+  if (target === null) {
+    return `extenders target does not classify: ${args.join(" ")}`;
+  }
+  const expected = parseExtenderBody(body);
+  const [actualLeft, actualRight, actualSet] = extendsTables(target);
+  const errors: string[] = [];
+  diffMap("left", expected.left, actualLeft, errors);
+  diffMap("right", expected.right, actualRight, errors);
+  diffMap("set", expected.set, actualSet, errors);
+  return errors.length > 0 ? errors.join("; ") : null;
+}
+
 const RUNNERS: Readonly<Record<string, Runner>> = {
   classify: runClassify,
   right_absorb: runRightAbsorb,
   left_absorb: runLeftAbsorb,
+};
+
+const RUNNERS_MULTI: Readonly<Record<string, MultiRunner>> = {
+  extenders: runExtenders,
 };
 
 // --- Driver ------------------------------------------------------------
@@ -166,18 +327,33 @@ function runFile(filepath: string): FileResult {
   let failures = 0;
   let skipped = 0;
   for (const sc of scenarios) {
-    const runner = RUNNERS[sc.verb];
-    if (!runner) {
-      skipped++;
-      continue;
-    }
-    total++;
     let err: string | null;
-    try {
-      err = runner(sc.args, sc.expected);
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      err = `${e instanceof Error ? e.constructor.name : "Error"}: ${msg}`;
+    if (sc.body === null) {
+      const runner = RUNNERS[sc.verb];
+      if (!runner) {
+        skipped++;
+        continue;
+      }
+      total++;
+      try {
+        err = runner(sc.args, sc.expected!);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        err = `${e instanceof Error ? e.constructor.name : "Error"}: ${msg}`;
+      }
+    } else {
+      const runner = RUNNERS_MULTI[sc.verb];
+      if (!runner) {
+        skipped++;
+        continue;
+      }
+      total++;
+      try {
+        err = runner(sc.args, sc.body);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        err = `${e instanceof Error ? e.constructor.name : "Error"}: ${msg}`;
+      }
     }
     if (err !== null) {
       const label = sc.comment || sc.raw;

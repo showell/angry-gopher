@@ -223,6 +223,119 @@ export function kindAfterAbsorbRight(
   return pairOf(family);
 }
 
+// --- Extenders (earned-knowledge structure on absorbers) -------------------
+//
+// `extendsTables(target)` returns three Maps in canonical reading
+// order: (left, right, set). Each maps a SHAPE id (encoded as
+// `value * 4 + suit`) to the result kind that absorbing a card of
+// that shape would produce. The three Maps are mutually disjoint —
+// a shape lives in at most one of them. Mirrors python's
+// `extends_tables`. See SOLVER.md § Three-bucket extends.
+
+/** Encode a (value, suit) pair as a single primitive key. value ∈ [1,13],
+ *  suit ∈ [0,3]; the product is unique, dense, and comparable in O(1). */
+export type ExtenderShape = number;
+
+export function shapeId(value: number, suit: number): ExtenderShape {
+  return value * 4 + suit;
+}
+
+/** Decode a shape id back into (value, suit). Used for diagnostics
+ *  and the conformance runner. */
+export function shapeFrom(id: ExtenderShape): readonly [number, number] {
+  return [Math.floor(id / 4), id % 4] as const;
+}
+
+export type ExtenderMap = Map<ExtenderShape, Kind>;
+export type ExtendersTriple = readonly [ExtenderMap, ExtenderMap, ExtenderMap];
+
+function extendsForSingleton(only: Card): ExtendersTriple {
+  const v = only[0];
+  const s = only[1];
+  const succV = v === 13 ? 1 : v + 1;
+  const predV = v === 1 ? 13 : v - 1;
+  const onlyRed = RED.has(s);
+
+  const left: ExtenderMap = new Map();
+  const right: ExtenderMap = new Map();
+  // Pair_run: same suit at pred (left) / succ (right).
+  left.set(shapeId(predV, s), KIND_PAIR_RUN);
+  right.set(shapeId(succV, s), KIND_PAIR_RUN);
+  // Pair_rb: opp-color suits at pred (left) / succ (right).
+  for (let ss = 0; ss < 4; ss++) {
+    if (RED.has(ss) !== onlyRed) {
+      left.set(shapeId(predV, ss), KIND_PAIR_RB);
+      right.set(shapeId(succV, ss), KIND_PAIR_RB);
+    }
+  }
+  // Pair_set: same value, different suit. Symmetric → set bucket.
+  const setMap: ExtenderMap = new Map();
+  for (let ss = 0; ss < 4; ss++) {
+    if (ss !== s) setMap.set(shapeId(v, ss), KIND_PAIR_SET);
+  }
+  return [left, right, setMap];
+}
+
+/**
+ * Earned shape tables for an absorber target. Returns three maps in
+ * (left, right, set) reading order. Built once per absorber at the
+ * commitment point; the BFS hot path consumes them via lookups.
+ *
+ * Mirrors python's `extends_tables`.
+ */
+export function extendsTables(target: ClassifiedCardStack): ExtendersTriple {
+  const cards = target.cards;
+  const kind = target.kind;
+  const n = target.n;
+
+  if (kind === KIND_SINGLETON) {
+    return extendsForSingleton(cards[0]!);
+  }
+
+  const family = familyOfKind(kind)!;
+  const nNew = n + 1;
+  const resultKind: Kind = nNew >= 3 ? family : pairOf(family);
+
+  if (family === KIND_RUN) {
+    const last = cards[cards.length - 1]!;
+    const first = cards[0]!;
+    const succV = last[0] === 13 ? 1 : last[0] + 1;
+    const predV = first[0] === 1 ? 13 : first[0] - 1;
+    const left: ExtenderMap = new Map([[shapeId(predV, first[1]), resultKind]]);
+    const right: ExtenderMap = new Map([[shapeId(succV, last[1]), resultKind]]);
+    return [left, right, new Map()];
+  }
+
+  if (family === KIND_RB) {
+    const last = cards[cards.length - 1]!;
+    const first = cards[0]!;
+    const succV = last[0] === 13 ? 1 : last[0] + 1;
+    const predV = first[0] === 1 ? 13 : first[0] - 1;
+    const lastRed = RED.has(last[1]);
+    const firstRed = RED.has(first[1]);
+    const left: ExtenderMap = new Map();
+    const right: ExtenderMap = new Map();
+    for (let s = 0; s < 4; s++) {
+      if (RED.has(s) !== firstRed) left.set(shapeId(predV, s), resultKind);
+      if (RED.has(s) !== lastRed) right.set(shapeId(succV, s), resultKind);
+    }
+    return [left, right, new Map()];
+  }
+
+  // KIND_SET / KIND_PAIR_SET — sets are unordered.
+  if (nNew > 4) {
+    return [new Map(), new Map(), new Map()];
+  }
+  const setValue = cards[0]![0];
+  const usedSuits = new Set<number>();
+  for (const c of cards) usedSuits.add(c[1]);
+  const setMap: ExtenderMap = new Map();
+  for (let s = 0; s < 4; s++) {
+    if (!usedSuits.has(s)) setMap.set(shapeId(setValue, s), resultKind);
+  }
+  return [new Map(), new Map(), setMap];
+}
+
 /**
  * Probe: what kind would ([card] + target.cards) classify as, or null
  * if illegal. Mirrors python's `kind_after_absorb_left`.
