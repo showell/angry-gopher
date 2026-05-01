@@ -272,228 +272,293 @@ def _maybe_classify(buckets):
 def enumerate_moves(state):
     """Yield (description_dict, new_state) for every legal
     1-line extension. `state` is a Buckets of CCS-shaped stacks
-    (raw card-list input is coerced once at entry)."""
+    (raw card-list input is coerced once at entry).
+
+    Orchestrates six move-type generators (one per move kind). Each
+    is a small focused helper; the body here is dispatch only."""
     state = _maybe_classify(state)
     helper, trouble, growing, complete = state
     completion_inv = completion_inventory(helper, trouble)
 
-    # State-level doomed-growing filter. If any growing
-    # 2-partial has no completion candidate in this state's
-    # (helper + trouble-singletons) inventory, the partial
-    # will NEVER graduate. The state is dead — yield nothing.
-    for g in growing:
-        if g.n == 2:
-            shapes = completion_shapes(g.cards)
-            if not (shapes & completion_inv):
-                return
+    if _state_has_doomed_growing(growing, completion_inv):
+        return
 
     extractable = extractable_index(helper)
+    splice_helpers = _eligible_splice_helpers(helper)
+    shift_helpers = _eligible_shift_helpers(helper)
+    absorber_shapes = _build_absorber_shapes(trouble, growing)
 
-    # Pre-filter helpers by their splice / shift eligibility
-    # so the inner loops below don't rescan all of HELPER each
-    # iteration. Splice wants length-4+ pure/rb runs; shift
-    # wants length-3 pure/rb runs.
-    splice_helpers = [
+    for absorber in absorber_shapes:
+        yield from _yield_extract_absorbs(
+            absorber, helper, trouble, growing, complete,
+            extractable, completion_inv)
+        yield from _yield_free_pulls(
+            absorber, helper, trouble, growing, complete,
+            completion_inv)
+
+    yield from _yield_shifts(
+        absorber_shapes, helper, trouble, growing, complete,
+        shift_helpers, extractable, completion_inv)
+    yield from _yield_splices(helper, trouble, growing, complete,
+                              splice_helpers)
+    yield from _yield_pushes(helper, trouble, growing, complete)
+    yield from _yield_engulfs(helper, trouble, growing, complete)
+
+
+def _state_has_doomed_growing(growing, completion_inv):
+    """True if any growing 2-partial has no completion candidate in
+    `completion_inv` — i.e., the partial can't graduate from any
+    reachable child state. The state is dead; the caller short-
+    circuits by yielding nothing."""
+    for g in growing:
+        if g.n == 2:
+            if not (completion_shapes(g.cards) & completion_inv):
+                return True
+    return False
+
+
+def _eligible_splice_helpers(helper):
+    """HELPER stacks eligible to host a splice insertion: length-4+
+    pure or rb runs (length-3 runs can't split into two length-3
+    halves around an inserted card)."""
+    return [
         (hi, h)
         for hi, h in enumerate(helper)
         if h.n >= 4 and h.kind in _RUN_FAMILY_KINDS
     ]
-    shift_helpers = [
+
+
+def _eligible_shift_helpers(helper):
+    """HELPER stacks eligible to be the SHIFT source: exactly
+    length-3 pure or rb runs."""
+    return [
         (hi, h)
         for hi, h in enumerate(helper)
         if h.n == 3 and h.kind in _RUN_FAMILY_KINDS
     ]
 
-    # All targets for absorption (move type a). Each entry:
-    # (bucket_name, idx_in_bucket, target_stack, sorted_shapes,
-    # shapes_set). Sorted shapes drive deterministic iteration
-    # in the absorb loop (matching the Elm port's order); the
-    # set form is for O(1) membership tests in free-pull / shift.
-    absorber_shapes = []
-    for bucket, idx, t in (
-        [("trouble", ti, t) for ti, t in enumerate(trouble)]
-        + [("growing", gi, g) for gi, g in enumerate(growing)]
-    ):
+
+def _build_absorber_shapes(trouble, growing):
+    """Return [(bucket_name, idx, target_stack, sorted_shapes,
+    shapes_set), ...] for every absorber (TROUBLE entry or GROWING
+    partial). `sorted_shapes` drives deterministic iteration in the
+    absorb loop (matching the Elm port's order); `shapes_set` is for
+    O(1) membership tests in free-pull / shift."""
+    out = []
+    for ti, t in enumerate(trouble):
         s_set = set().union(*(neighbors(c) for c in t.cards))
-        absorber_shapes.append((bucket, idx, t, sorted(s_set), s_set))
+        out.append(("trouble", ti, t, sorted(s_set), s_set))
+    for gi, g in enumerate(growing):
+        s_set = set().union(*(neighbors(c) for c in g.cards))
+        out.append(("growing", gi, g, sorted(s_set), s_set))
+    return out
 
-    for bucket, idx, target, shapes, shapes_set in absorber_shapes:
-        # Source: HELPER stack via extract. Inverted loop —
-        # iterate the ABSORBER's neighbor shapes and look up
-        # extractable cards directly, instead of walking every
-        # helper × position to filter.
-        for shape in shapes:
-            for hi, ci, verb in extractable.get(shape, ()):
-                new_helper, spawned, ext_card, source_cards = \
-                    do_extract(helper, hi, ci, verb)
-                for side in ("right", "left"):
-                    if side == "right":
-                        new_kind = kind_after_absorb_right(target, ext_card)
-                    else:
-                        new_kind = kind_after_absorb_left(target, ext_card)
-                    if new_kind is None:
-                        continue
-                    if side == "right":
-                        merged = absorb_right(target, ext_card, new_kind)
-                    else:
-                        merged = absorb_left(target, ext_card, new_kind)
-                    if not admissible_merged(merged, completion_inv):
-                        continue
-                    nt_base, ng = remove_absorber(
-                        bucket, idx, trouble, growing)
-                    nt = nt_base + spawned
-                    ng_final, nc, graduated = graduate(
-                        merged, ng, complete)
-                    desc = ExtractAbsorbDesc(
-                        verb=verb,
-                        source=source_cards,
-                        ext_card=ext_card,
-                        target_before=list(target.cards),
-                        target_bucket_before=bucket,
-                        result=list(merged.cards),
-                        side=side,
-                        graduated=graduated,
-                        spawned=[list(s.cards) for s in spawned],
-                    )
-                    yield desc, Buckets(new_helper, nt, ng_final, nc)
 
-        # Source: TROUBLE singleton (free pull).
-        for li, loose_stack in enumerate(trouble):
-            if loose_stack.n != 1:
-                continue
-            if bucket == "trouble" and li == idx:
-                continue  # can't absorb a stack onto itself
-            loose = loose_stack.cards[0]
-            if (loose[0], loose[1]) not in shapes_set:
-                continue
+# --- Move type (a): extract+absorb ---
+
+def _yield_extract_absorbs(absorber, helper, trouble, growing, complete,
+                           extractable, completion_inv):
+    """Source: HELPER stack via extract. Inverted loop — iterate the
+    ABSORBER's neighbor shapes and look up extractable cards directly,
+    instead of walking every helper × position to filter."""
+    bucket, idx, target, shapes, _shapes_set = absorber
+    target_cards_list = list(target.cards)
+    for shape in shapes:
+        for hi, ci, verb in extractable.get(shape, ()):
+            new_helper, spawned, ext_card, source_cards = \
+                do_extract(helper, hi, ci, verb)
+            spawned_lists = [list(s.cards) for s in spawned]
             for side in ("right", "left"):
-                if side == "right":
-                    new_kind = kind_after_absorb_right(target, loose)
-                else:
-                    new_kind = kind_after_absorb_left(target, loose)
-                if new_kind is None:
+                merged = _absorb_one_side(target, ext_card, side)
+                if merged is None:
                     continue
-                if side == "right":
-                    merged = absorb_right(target, loose, new_kind)
-                else:
-                    merged = absorb_left(target, loose, new_kind)
                 if not admissible_merged(merged, completion_inv):
                     continue
-                # Both the absorber AND the loose-source come
-                # out of TROUBLE — drop both at once.
                 nt_base, ng = remove_absorber(
                     bucket, idx, trouble, growing)
-                if bucket == "trouble":
-                    li_in_base = li - 1 if li > idx else li
-                    nt = drop_at(nt_base, li_in_base)
-                else:
-                    nt = drop_at(nt_base, li)
-                ng_final, nc, graduated = graduate(
-                    merged, ng, complete)
-                desc = FreePullDesc(
-                    loose=loose,
-                    target_before=list(target.cards),
+                nt = nt_base + spawned
+                ng_final, nc, graduated = graduate(merged, ng, complete)
+                desc = ExtractAbsorbDesc(
+                    verb=verb,
+                    source=source_cards,
+                    ext_card=ext_card,
+                    target_before=target_cards_list,
                     target_bucket_before=bucket,
                     result=list(merged.cards),
                     side=side,
                     graduated=graduated,
+                    spawned=spawned_lists,
                 )
-                yield desc, Buckets(list(helper), nt, ng_final, nc)
+                yield desc, Buckets(new_helper, nt, ng_final, nc)
 
-    # Move type (d): SHIFT — when an end-card of a length-3
-    # pure/rb run would normally be steal-pulled, scan HELPER for
-    # a peel-eligible donor with the right replacement card.
-    for bucket, idx, target, _shapes, shapes_set in absorber_shapes:
+
+# --- Move type (a'): free pull (TROUBLE singleton onto absorber) ---
+
+def _yield_free_pulls(absorber, helper, trouble, growing, complete,
+                      completion_inv):
+    """Source: a TROUBLE singleton, absorbed onto another absorber.
+    Both the absorber and the loose source come out of TROUBLE/GROWING
+    in one move."""
+    bucket, idx, target, _shapes, shapes_set = absorber
+    for li, loose_stack in enumerate(trouble):
+        if loose_stack.n != 1:
+            continue
+        if bucket == "trouble" and li == idx:
+            continue  # can't absorb a stack onto itself
+        loose = loose_stack.cards[0]
+        if (loose[0], loose[1]) not in shapes_set:
+            continue
+        for side in ("right", "left"):
+            merged = _absorb_one_side(target, loose, side)
+            if merged is None:
+                continue
+            if not admissible_merged(merged, completion_inv):
+                continue
+            nt_base, ng = remove_absorber(bucket, idx, trouble, growing)
+            if bucket == "trouble":
+                li_in_base = li - 1 if li > idx else li
+                nt = drop_at(nt_base, li_in_base)
+            else:
+                nt = drop_at(nt_base, li)
+            ng_final, nc, graduated = graduate(merged, ng, complete)
+            desc = FreePullDesc(
+                loose=loose,
+                target_before=list(target.cards),
+                target_bucket_before=bucket,
+                result=list(merged.cards),
+                side=side,
+                graduated=graduated,
+            )
+            yield desc, Buckets(list(helper), nt, ng_final, nc)
+
+
+# --- Move type (d): SHIFT ---
+
+def _yield_shifts(absorber_shapes, helper, trouble, growing, complete,
+                  shift_helpers, extractable, completion_inv):
+    """SHIFT — when an end-card of a length-3 pure/rb run would
+    normally be steal-pulled (sacrificing the 2-partial remnant),
+    scan HELPER for a peel-eligible donor with the right replacement
+    card. The run shifts: peel donor's P, push P onto source's other
+    end, pop the stolen card. Source stays length-3 legal; donor stays
+    legal; the popped card absorbs onto trouble like a steal-pull
+    would. NO sacrifice."""
+    for absorber in absorber_shapes:
         for src_idx, source in shift_helpers:
-            kind = source.kind  # KIND_RUN or KIND_RB
             for which_end in (0, 2):
-                stolen = source.cards[which_end]
-                if (stolen[0], stolen[1]) not in shapes_set:
-                    continue
-                # Compute replacement card requirement at the
-                # OPPOSITE end of source.
-                if which_end == 2:
-                    anchor = source.cards[0]
-                    p_value = 13 if anchor[0] == 1 else anchor[0] - 1
-                else:
-                    anchor = source.cards[2]
-                    p_value = 1 if anchor[0] == 13 else anchor[0] + 1
-                anchor_red = anchor[1] in RED
-                if kind == KIND_RUN:
-                    needed_suits = (anchor[1],)
-                else:
-                    needed_suits = tuple(
-                        s for s in range(4)
-                        if (s in RED) != anchor_red)
-                # Donor candidates: peel-eligible cards in
-                # length-4+ helpers — collected across all needed
-                # suits then sorted by board position.
-                candidates = sorted(
-                    (donor_idx, _ci)
-                    for p_suit in needed_suits
-                    for donor_idx, _ci, verb in
-                        extractable.get((p_value, p_suit), ())
-                    if verb == "peel"
-                    and donor_idx != src_idx
-                    and helper[donor_idx].n >= 4
-                )
-                for donor_idx, _ci in candidates:
-                    donor = helper[donor_idx]
-                    p_card = donor.cards[_ci]
-                    # Compute new_donor via the peel executor.
-                    _ext, new_donor = peel(donor, _ci)
-                    # Compute new_source: rebuild around p_card.
-                    if which_end == 2:
-                        new_source_cards = (p_card, source.cards[0], source.cards[1])
-                    else:
-                        new_source_cards = (source.cards[1], source.cards[2], p_card)
-                    new_source = classify_stack(new_source_cards)
-                    if new_source is None or new_source.kind != kind:
-                        continue
-                    # Helper drop: src_idx + donor_idx
-                    # (descending so removals don't shift each other),
-                    # then append the rebuilt source and shrunken donor.
-                    hi_lo = sorted((src_idx, donor_idx), reverse=True)
-                    nh = list(helper)
-                    for i in hi_lo:
-                        nh = drop_at(nh, i)
-                    nh = nh + [new_source, new_donor]
-                    for absorb_side in ("right", "left"):
-                        if absorb_side == "right":
-                            new_kind = kind_after_absorb_right(target, stolen)
-                        else:
-                            new_kind = kind_after_absorb_left(target, stolen)
-                        if new_kind is None:
-                            continue
-                        if absorb_side == "right":
-                            merged = absorb_right(target, stolen, new_kind)
-                        else:
-                            merged = absorb_left(target, stolen, new_kind)
-                        if not admissible_merged(merged, completion_inv):
-                            continue
-                        nt_base, ng = remove_absorber(
-                            bucket, idx, trouble, growing)
-                        ng_final, nc, graduated = graduate(
-                            merged, ng, complete)
-                        desc = ShiftDesc(
-                            source=list(source.cards),
-                            donor=list(donor.cards),
-                            stolen=stolen,
-                            p_card=p_card,
-                            which_end=which_end,
-                            new_source=list(new_source.cards),
-                            new_donor=list(new_donor.cards),
-                            target_before=list(target.cards),
-                            target_bucket_before=bucket,
-                            merged=list(merged.cards),
-                            side=absorb_side,
-                            graduated=graduated,
-                        )
-                        yield desc, Buckets(nh, nt_base, ng_final, nc)
+                yield from _yield_shifts_for_endpoint(
+                    absorber, helper, trouble, growing, complete,
+                    src_idx, source, which_end,
+                    extractable, completion_inv)
 
-    # Move type (c): splice — insert a TROUBLE singleton into a
-    # HELPER pure/rb run length 4+. The run splits around the
-    # inserted card; both halves must be legal length-3+.
+
+def _yield_shifts_for_endpoint(absorber, helper, trouble, growing, complete,
+                               src_idx, source, which_end,
+                               extractable, completion_inv):
+    """All shift moves rooted at (source, which_end) for one absorber."""
+    bucket, idx, target, _shapes, shapes_set = absorber
+    stolen = source.cards[which_end]
+    if (stolen[0], stolen[1]) not in shapes_set:
+        return
+    p_value, needed_suits = _shift_replacement_requirement(source, which_end)
+    candidates = _shift_donor_candidates(
+        helper, src_idx, p_value, needed_suits, extractable)
+    for donor_idx, _ci in candidates:
+        donor = helper[donor_idx]
+        p_card = donor.cards[_ci]
+        _ext, new_donor = peel(donor, _ci)
+        new_source = _shift_rebuild_source(source, p_card, which_end)
+        if new_source is None or new_source.kind != source.kind:
+            continue
+        nh = _shift_rebuild_helper(helper, src_idx, donor_idx,
+                                   new_source, new_donor)
+        for absorb_side in ("right", "left"):
+            merged = _absorb_one_side(target, stolen, absorb_side)
+            if merged is None:
+                continue
+            if not admissible_merged(merged, completion_inv):
+                continue
+            nt_base, ng = remove_absorber(bucket, idx, trouble, growing)
+            ng_final, nc, graduated = graduate(merged, ng, complete)
+            desc = ShiftDesc(
+                source=list(source.cards),
+                donor=list(donor.cards),
+                stolen=stolen,
+                p_card=p_card,
+                which_end=which_end,
+                new_source=list(new_source.cards),
+                new_donor=list(new_donor.cards),
+                target_before=list(target.cards),
+                target_bucket_before=bucket,
+                merged=list(merged.cards),
+                side=absorb_side,
+                graduated=graduated,
+            )
+            yield desc, Buckets(nh, nt_base, ng_final, nc)
+
+
+def _shift_replacement_requirement(source, which_end):
+    """Compute the (value, allowed_suits) signature that the
+    replacement card P must meet to extend `source` at the OPPOSITE
+    end after `which_end` is stolen."""
+    if which_end == 2:
+        anchor = source.cards[0]
+        p_value = 13 if anchor[0] == 1 else anchor[0] - 1
+    else:
+        anchor = source.cards[2]
+        p_value = 1 if anchor[0] == 13 else anchor[0] + 1
+    anchor_red = anchor[1] in RED
+    if source.kind == KIND_RUN:
+        needed_suits = (anchor[1],)
+    else:
+        needed_suits = tuple(s for s in range(4)
+                             if (s in RED) != anchor_red)
+    return p_value, needed_suits
+
+
+def _shift_donor_candidates(helper, src_idx, p_value, needed_suits,
+                            extractable):
+    """Peel-eligible donor cards in length-4+ helpers matching
+    (p_value, suit) for any suit in `needed_suits`. Sorted by
+    (donor_idx, ci) for deterministic iteration order."""
+    return sorted(
+        (donor_idx, ci)
+        for p_suit in needed_suits
+        for donor_idx, ci, verb in extractable.get((p_value, p_suit), ())
+        if verb == "peel"
+        and donor_idx != src_idx
+        and helper[donor_idx].n >= 4
+    )
+
+
+def _shift_rebuild_source(source, p_card, which_end):
+    """The shifted source: drop the stolen end, push p_card onto the
+    other end. Returns the classified CCS or None if it doesn't
+    classify."""
+    if which_end == 2:
+        new_cards = (p_card, source.cards[0], source.cards[1])
+    else:
+        new_cards = (source.cards[1], source.cards[2], p_card)
+    return classify_stack(new_cards)
+
+
+def _shift_rebuild_helper(helper, src_idx, donor_idx, new_source, new_donor):
+    """Drop both src and donor (descending so removals don't shift
+    each other), then append the rebuilt source and shrunken donor."""
+    nh = list(helper)
+    for i in sorted((src_idx, donor_idx), reverse=True):
+        nh = drop_at(nh, i)
+    return nh + [new_source, new_donor]
+
+
+# --- Move type (c): splice ---
+
+def _yield_splices(helper, trouble, growing, complete, splice_helpers):
+    """Insert a TROUBLE singleton into a HELPER pure/rb run length 4+.
+    The run splits around the inserted card; both halves must be legal
+    length-3+. One physical gesture in actual Lyn Rummy."""
+    growing_snapshot = None  # build lazily on first yield
+    complete_snapshot = None
     for ti, t in enumerate(trouble):
         if t.n != 1:
             continue
@@ -506,14 +571,16 @@ def enumerate_moves(state):
                     if kinds is None:
                         continue
                     left_kind, right_kind = kinds
-                    # Both halves must be length-3+ legal groups
-                    # for splice (no length-2 allowed in splice).
                     if (left_kind not in _LEGAL_LEN3_KINDS
                             or right_kind not in _LEGAL_LEN3_KINDS):
                         continue
-                    left, right = splice(src, loose, k, side, left_kind, right_kind)
+                    left, right = splice(src, loose, k, side,
+                                         left_kind, right_kind)
                     nh = drop_at(helper, hi) + [left, right]
                     nt = drop_at(trouble, ti)
+                    if growing_snapshot is None:
+                        growing_snapshot = list(growing)
+                        complete_snapshot = list(complete)
                     desc = SpliceDesc(
                         loose=loose,
                         source=list(src.cards),
@@ -521,20 +588,22 @@ def enumerate_moves(state):
                         left_result=list(left.cards),
                         right_result=list(right.cards),
                     )
-                    yield desc, Buckets(nh, nt, list(growing),
-                                        list(complete))
+                    yield desc, Buckets(nh, nt,
+                                        list(growing_snapshot),
+                                        list(complete_snapshot))
 
-    # Move type (b): push a TROUBLE 1- or 2-partial onto a
-    # HELPER stack so the result stays legal.
-    pushable_trouble = [(ti, t) for ti, t in enumerate(trouble)
-                        if t.n <= 2]
-    for ti, t in pushable_trouble:
+
+# --- Move type (b): push TROUBLE onto HELPER ---
+
+def _yield_pushes(helper, trouble, growing, complete):
+    """Push a TROUBLE 1- or 2-partial onto a HELPER stack so the
+    result stays legal (the helper grows by 1 or 2 cards)."""
+    for ti, t in enumerate(trouble):
+        if t.n > 2:
+            continue
         for hi, h in enumerate(helper):
             for side in ("right", "left"):
-                if side == "right":
-                    merged = _absorb_seq(h, t.cards, "right")
-                else:
-                    merged = _absorb_seq(h, t.cards, "left")
+                merged = _absorb_seq(h, t.cards, side)
                 if merged is None:
                     continue
                 nh = drop_at(helper, hi) + [merged]
@@ -547,14 +616,17 @@ def enumerate_moves(state):
                 )
                 yield desc, Buckets(nh, nt, list(growing), list(complete))
 
-    # Move type (b'): a GROWING 2-partial engulfs a HELPER stack.
+
+# --- Move type (b'): a GROWING 2-partial engulfs a HELPER stack ---
+
+def _yield_engulfs(helper, trouble, growing, complete):
+    """A GROWING 2-partial engulfs a HELPER stack — the growing build
+    absorbs the helper into a single legal stack and graduates to
+    COMPLETE."""
     for gi, g in enumerate(growing):
         for hi, h in enumerate(helper):
             for side in ("right", "left"):
-                if side == "right":
-                    merged = _absorb_seq(h, g.cards, "right")
-                else:
-                    merged = _absorb_seq(h, g.cards, "left")
+                merged = _absorb_seq(h, g.cards, side)
                 if merged is None:
                     continue
                 nh = drop_at(helper, hi)
@@ -567,6 +639,24 @@ def enumerate_moves(state):
                     side=side,
                 )
                 yield desc, Buckets(nh, list(trouble), ng, nc)
+
+
+# --- Absorb-side primitives shared by multiple move types ---
+
+def _absorb_one_side(target, card, side):
+    """Probe + execute one (target, card, side) absorb. Returns the
+    resulting CCS or None if the side doesn't classify."""
+    if side == "right":
+        new_kind = kind_after_absorb_right(target, card)
+        if new_kind is None:
+            return None
+        return absorb_right(target, card, new_kind)
+    new_kind = kind_after_absorb_left(target, card)
+    if new_kind is None:
+        return None
+    return absorb_left(target, card, new_kind)
+
+
 
 
 # --- Focus rule + lineage tracking ---
