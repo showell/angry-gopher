@@ -15,7 +15,25 @@ accelerator's input contract.
 and `is_live`. `_all_trouble_singletons_live` in `bfs.py` now uses the
 accelerator; the standalone `_singleton_is_live` helper is gone. 19%
 speedup on `bench_outer_shell` full (6280ms → 5114ms); plan quality
-unchanged. The remaining sections describe the design as implemented.
+unchanged.
+
+**Phase 3 (gated dynamic doomed-singleton prune) — landed.** Commit
+`6b1b27b` (2026-05-01). `_any_trouble_singleton_newly_doomed` runs
+inside `bfs_with_cap`'s child loop, gated on
+`len(nb.complete) > parent_complete_count`. The gate matters: the
+ungated version was net-negative (+11–17% on `bench_outer_shell`)
+because the per-state `build_card_loc` cost dominated on the larger
+population of non-graduating states. Restricting the check to states
+that just completed a group — the only way a partner can move out of
+the accessible pool — makes the work track its actual cause.
+
+5-run means after Phase 3:
+- `baseline_board_2Cp`: 504 → 435ms (−14%)
+- `baseline_board_2Sp`: 624 → 517ms (−17%)
+- `bench_outer_shell` singleton-only: 6581 → 5428ms (−18%)
+- `bench_outer_shell` full: 5684 → 4479ms (−21%)
+
+The earlier sections describe the design as implemented.
 
 ## The core structure
 
