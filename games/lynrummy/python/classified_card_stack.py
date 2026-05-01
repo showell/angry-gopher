@@ -358,14 +358,85 @@ def split_out(stack, i):
 def kind_after_absorb_right(target, card):
     """Probe: what kind would (target.cards + (card,)) classify as, or
     None if illegal. O(1) for run/rb (single boundary check); bounded
-    for set (cross-stack suit uniqueness, max 4 cards)."""
-    return _absorb_kind(target, card, side="right")
+    for set (cross-stack suit uniqueness, max 4 cards).
+
+    Side-specialized + boundary-inlined for speed: this is the BFS
+    hot probe, called ~300k times per scenario."""
+    target_kind = target.kind
+    n_new = target.n + 1
+
+    if target_kind == KIND_SINGLETON:
+        only = target.cards[0]
+        family = _family_for_two_cards(only, card)  # boundary order: only, card
+        if family is None:
+            return None
+        return _PAIR_OF[family]
+
+    family = _FAMILY_OF_KIND[target_kind]
+    av, asu, _ = target.cards[-1]
+    bv, bsu, _ = card
+
+    if family == KIND_RUN:
+        if asu != bsu or (1 if av == 13 else av + 1) != bv:
+            return None
+    elif family == KIND_RB:
+        if (1 if av == 13 else av + 1) != bv:
+            return None
+        if (asu in RED) == (bsu in RED):
+            return None
+    else:  # KIND_SET
+        if av != bv or asu == bsu:
+            return None
+        if n_new > 4:
+            return None
+        for c in target.cards:
+            if c[1] == bsu:
+                return None
+
+    if n_new >= 3:
+        return family
+    return _PAIR_OF[family]
 
 
 def kind_after_absorb_left(target, card):
     """Probe: what kind would ((card,) + target.cards) classify as, or
-    None if illegal."""
-    return _absorb_kind(target, card, side="left")
+    None if illegal. Mirror of kind_after_absorb_right with the
+    boundary on the LEFT edge of target."""
+    target_kind = target.kind
+    n_new = target.n + 1
+
+    if target_kind == KIND_SINGLETON:
+        only = target.cards[0]
+        family = _family_for_two_cards(card, only)  # boundary order: card, only
+        if family is None:
+            return None
+        return _PAIR_OF[family]
+
+    family = _FAMILY_OF_KIND[target_kind]
+    av, asu, _ = card
+    bv, bsu, _ = target.cards[0]
+
+    if family == KIND_RUN:
+        if asu != bsu or (1 if av == 13 else av + 1) != bv:
+            return None
+    elif family == KIND_RB:
+        if (1 if av == 13 else av + 1) != bv:
+            return None
+        if (asu in RED) == (bsu in RED):
+            return None
+    else:  # KIND_SET
+        if av != bv or asu == bsu:
+            return None
+        if n_new > 4:
+            return None
+        # Card's suit is `asu` (card sits on the left of target).
+        for c in target.cards:
+            if c[1] == asu:
+                return None
+
+    if n_new >= 3:
+        return family
+    return _PAIR_OF[family]
 
 
 def absorb_right(target, card, new_kind):
@@ -486,53 +557,6 @@ def _splice_halves(stack, card, position, side):
         return stack.cards[:position] + (card,), stack.cards[position:]
     # side == "right"
     return stack.cards[:position], (card,) + stack.cards[position:]
-
-
-def _absorb_kind(target, card, side):
-    """Shared kind-probe for absorb_right and absorb_left.
-
-    side='right': boundary is (target.cards[-1], card) — target precedes
-    side='left':  boundary is (card, target.cards[0]) — card precedes
-
-    For sets, a cross-stack suit-uniqueness check fires (boundary
-    alone misses non-adjacent duplicates)."""
-    n_new = target.n + 1
-
-    if target.kind == KIND_SINGLETON:
-        # 2-card result: family inferred from the two cards in
-        # boundary order.
-        only = target.cards[0]
-        if side == "right":
-            family = _family_for_two_cards(only, card)
-        else:
-            family = _family_for_two_cards(card, only)
-        if family is None:
-            return None
-        return _PAIR_OF[family]
-
-    family = _FAMILY_OF_KIND[target.kind]
-
-    # Boundary check between adjacent cards in resulting stack.
-    if side == "right":
-        boundary_a, boundary_b = target.cards[-1], card
-    else:
-        boundary_a, boundary_b = card, target.cards[0]
-    if not _boundary_ok(boundary_a, boundary_b, family):
-        return None
-
-    # Set family additionally needs cross-stack suit uniqueness +
-    # max-length cap (4 distinct suits).
-    if family == KIND_SET:
-        if n_new > 4:
-            return None
-        new_suit = card[1]
-        for c in target.cards:
-            if c[1] == new_suit:
-                return None
-
-    if n_new >= 3:
-        return family
-    return _PAIR_OF[family]
 
 
 def _family_for_two_cards(c1, c2):
