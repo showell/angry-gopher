@@ -136,21 +136,31 @@ NEIGHBORS = _build_neighbors()
 
 def build_card_loc(buckets):
     """From a `Buckets` state, return a 104-element list mapping
-    card_id → bucket tag. Cards not on the board are ABSENT."""
+    card_id → bucket tag. Cards not on the board are ABSENT.
+
+    Each bucket may hold either raw card-list stacks or CCS
+    objects; both expose a card iteration via __iter__, but
+    going through `.cards` on CCS is a hair faster than the
+    iterator wrapper. `_iter_cards` papers over the difference."""
     loc = [ABSENT] * 104
     for stack in buckets.helper:
-        for c in stack:
+        for c in _iter_cards(stack):
             loc[card_id(c)] = HELPER
     for stack in buckets.trouble:
-        for c in stack:
+        for c in _iter_cards(stack):
             loc[card_id(c)] = TROUBLE
     for stack in buckets.growing:
-        for c in stack:
+        for c in _iter_cards(stack):
             loc[card_id(c)] = GROWING
     for stack in buckets.complete:
-        for c in stack:
+        for c in _iter_cards(stack):
             loc[card_id(c)] = COMPLETE
     return loc
+
+
+def _iter_cards(stack):
+    cards = getattr(stack, "cards", None)
+    return cards if cards is not None else stack
 
 
 def is_live(c, card_loc):
