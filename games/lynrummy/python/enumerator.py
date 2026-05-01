@@ -207,17 +207,56 @@ def extractable_index(helper):
     Caller (the absorber loop) inverts the old "for-each-card
     check shape" pattern into a direct "for-each-target-shape
     lookup" — helpers whose cards aren't neighbors of any
-    absorber are never visited. `verb_for_position` runs once
-    per (helper × ci); kind is read directly off each CCS, no
-    classify pass needed."""
+    absorber are never visited.
+
+    Kind dispatch happens ONCE per stack here; the per-position
+    inner loop uses precomputed (n, ci) → verb logic specialized
+    to the stack's kind. Skips pair_*/singleton stacks entirely
+    (nothing extracts from them)."""
     out = {}
     for hi, src in enumerate(helper):
-        for ci, c in enumerate(src.cards):
-            verb = verb_for_position(src, ci)
-            if verb is None:
-                continue
-            out.setdefault((c[0], c[1]), []).append((hi, ci, verb))
+        kind = src.kind
+        n = src.n
+        cards = src.cards
+        if kind == KIND_RUN or kind == KIND_RB:
+            # Run / rb: peel(end, n>=4), pluck(deep interior, n>=7),
+            # yank(shallow non-end, n>=4), steal(n=3, end), split_out(n=3, i=1).
+            if n == 3:
+                # Length-3 run: ends are steal, middle is split_out.
+                _add(out, cards, 0, hi, "steal")
+                _add(out, cards, 1, hi, "split_out")
+                _add(out, cards, 2, hi, "steal")
+            else:
+                # n >= 4: peel ends, pluck/yank interior.
+                last = n - 1
+                _add(out, cards, 0, hi, "peel")
+                _add(out, cards, last, hi, "peel")
+                # Interior positions 1..n-2.
+                for ci in range(1, last):
+                    if 3 <= ci <= n - 4:
+                        verb = "pluck"
+                    elif max(ci, n - ci - 1) >= 3 and min(ci, n - ci - 1) >= 1:
+                        verb = "yank"
+                    else:
+                        continue
+                    _add(out, cards, ci, hi, verb)
+        elif kind == KIND_SET:
+            if n >= 4:
+                # peel any position
+                for ci in range(n):
+                    _add(out, cards, ci, hi, "peel")
+            elif n == 3:
+                # steal any position
+                for ci in range(n):
+                    _add(out, cards, ci, hi, "steal")
+        # KIND_PAIR_RUN / KIND_PAIR_RB / KIND_PAIR_SET / KIND_SINGLETON:
+        # nothing extracts. Skip the inner loop entirely.
     return out
+
+
+def _add(out, cards, ci, hi, verb):
+    c = cards[ci]
+    out.setdefault((c[0], c[1]), []).append((hi, ci, verb))
 
 
 # --- Push / engulf merge primitive ---
