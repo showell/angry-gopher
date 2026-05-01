@@ -69,6 +69,7 @@ only when you need fine-grained diagnostics or a fixed cap.
 
 from buckets import (
     Buckets, FocusedState,
+    classify_buckets,
     is_victory, state_sig, trouble_count,
 )
 from rules import classify
@@ -299,6 +300,10 @@ def solve_state_with_descs(initial, *, max_trouble_outer=8,
     # Buckets if needed.
     if not isinstance(initial, Buckets):
         initial = Buckets(*initial)
+    # Boundary: every input stack must classify into one of the 7
+    # valid kinds. Raises on invalid input — that's a caller bug,
+    # not a BFS bug. The "no KIND_OTHER" invariant holds inside.
+    classify_buckets(initial)
     if trouble_count(initial.trouble, initial.growing) > max_trouble_outer:
         return None
     if is_victory(initial.trouble, initial.growing):
