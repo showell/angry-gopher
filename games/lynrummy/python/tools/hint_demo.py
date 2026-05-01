@@ -9,8 +9,9 @@ No server required. Runs directly from the python/ directory:
 
     python3 tools/hint_demo.py
 
-Seed 42 is fixed so the output is deterministic and can be
-cross-referenced against HINT_PROJECTION.md.
+Seed 42 is fixed so the output is deterministic. The hint
+projection mechanics (search order, dirty-board constraint) are
+documented in `python/SOLVER.md` § "Hint projection".
 """
 
 import random

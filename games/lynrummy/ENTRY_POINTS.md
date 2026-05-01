@@ -1,6 +1,6 @@
 # Lyn Rummy — entry points and maturity
 
-**Status:** Living document. Last refreshed 2026-04-27.
+**Status:** Living document. Last refreshed 2026-05-01.
 
 A catch-up reference — what code is actually running today,
 what it does, and how mature each piece is. Companion to
@@ -59,7 +59,9 @@ In `views/`:
 
 ## CLI / agent tooling
 
-### Mining + fixture generation (`tools/`)
+### Mining + fixture generation (repo-root `tools/`)
+
+These live at `/tools/` (repo root), not `games/lynrummy/python/tools/`.
 
 - `mine_puzzles.py` — generates puzzles from agent
   gameplay snapshots; writes
@@ -77,8 +79,12 @@ In `views/`:
   emit BFS plan-text scenarios. The corpus side is older;
   the mined side is the post-mining sibling.
 
-All four exporters are stable, regenerate cleanly, and feed
-the same conformance pipeline.
+A separate `games/lynrummy/python/tools/` holds solver-side
+utilities (`gen_baseline_board.py` for the 81-card timing
+gold, `hint_demo.py` for end-to-end hint output).
+
+All exporters are stable, regenerate cleanly, and feed the
+same conformance pipeline.
 
 ### DSL → test code
 
@@ -95,34 +101,52 @@ the same conformance pipeline.
 ### Python agent core (`games/lynrummy/python/`)
 
 - `bfs.py` — four-bucket BFS solver with focus rule, iterative
-  cap, doomed-third filter. Mature (21/21 corpus + 25 mined).
+  cap, doomed-third filter. The experimentation surface for
+  solver work; see [`python/SOLVER.md`](python/SOLVER.md).
+- `classified_card_stack.py` — the CCS data type + verb
+  library + absorb / splice probes & executors. Most BFS
+  hot-path arithmetic.
 - `verbs.py` — verb-to-primitive layer (geometry-agnostic).
-  Restructured 2026-04-27: per-verb pre-flight logic moved
-  out into the unified planner.
-- `geometry_plan.py` — the unified geometry post-pass. Walks
+- `geometry_plan.py` — unified geometry post-pass. Walks
   primitive sequences, injects pre-flights at points where
-  the next primitive would crowd a pre-existing stack. Newly
-  introduced in the same restructuring.
+  the next primitive would crowd a pre-existing stack.
 
-Older but stable: `referee.py`, `dealer.py`, `cards.py`,
-`strategy.py`, etc.
+Older but stable: `dealer.py`, `strategy.py`. (PLANNED-LEGACY:
+`strategy.py` will retire when the BFS planner takes over the
+full-game hint path.)
+
+### TypeScript BFS engine (`games/lynrummy/ts/`)
+
+- `src/classified_card_stack.ts`, `src/buckets.ts`,
+  `src/move.ts`, `src/enumerator.ts`, `src/bfs.ts` — the BFS
+  engine, sibling to Python's solver. Matches Python plan-line-
+  for-plan-line via the DSL conformance contract. Will replace
+  the Elm `Game.Agent.*` BFS in the browser via Elm ports.
+- Run tests with `npm test` from `games/lynrummy/ts/` — Node
+  v24's native TS support runs `.ts` files directly, no compile
+  step. See [`ts/README.md`](ts/README.md).
 
 
 ## Conformance test surfaces
 
 From `games/lynrummy/elm/`:
 
-- `npx elm-test` — 665 tests pass. Mix of unit (e.g.,
+- `npx elm-test` — full Elm suite. Mix of unit (e.g.,
   `Game.PlaceStackTest`), integration
   (`Game.AgentPlayThroughTest`, drives click+drain through
   `Play.update`), and DSL conformance.
-- `npx elm-review` — installed at the project's root level.
-  `NoUnused.*` rules with generated-tests + test-Exports
-  exemptions. Currently zero findings.
+- `npx elm-review` — `NoUnused.*` rules with generated-tests
+  + test-Exports exemptions.
 
 From `games/lynrummy/python/`:
 
-- `python3 test_dsl_conformance.py` — 113 tests pass.
+- `./check.sh` — runs every `test_*.py` in the directory,
+  including `test_dsl_conformance.py`.
+
+From `games/lynrummy/ts/`:
+
+- `npm test` — leaf primitive conformance + engine plan-line
+  cross-check vs the Python-emitted fixtures.
 
 The single canonical run point for both elm-test and
 elm-review is `games/lynrummy/elm/`. The Puzzles gallery

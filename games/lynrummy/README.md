@@ -65,19 +65,34 @@ Python relate.
 ## Conformance DSL
 
 The DSL under `conformance/scenarios/` is the cross-language
-contract. Scenario files compile to two targets via
-`cmd/fixturegen`:
+contract. Scenario files compile to Elm tests + Python JSON
+fixtures via `cmd/fixturegen`. Current files (read
+`undo_walkthrough.dsl` first if you're new — it reads like a
+game transcript and shows the interaction model concretely):
 
-- `referee.dsl` — referee ops (Elm only; Go referee retired
-  with the package 2026-04-28).
-- `tricks.dsl` — hint/trick invariants (Elm + Python; will
-  retire as the trick engine retires).
+**Solver / planner:**
 - `planner.dsl`, `planner_corpus.dsl`, `planner_corpus_extras.dsl`,
-  `planner_mined.dsl` — `enumerate_moves` + `solve` ops for the
-  four-bucket BFS planner. Elm + Python.
-- `place_stack.dsl` — `find_open_loc` ops. Elm + Python.
-- `click_agent_play.dsl` — agent-click invariants (Elm).
-- `replay_walkthroughs.dsl` — replay invariants (Elm).
+  `planner_mined.dsl` — `enumerate_moves` + `solve` ops.
+- `baseline_board_81.dsl` — auto-generated 81-card baseline
+  suite (regenerate via `python/tools/gen_baseline_board.py`).
+- `hint_game_seed42.dsl` — `hint_for_hand` ops (Python only).
+
+**Referee / rules:**
+- `referee.dsl` — referee ops.
+- `tricks.dsl` — hint/trick invariants (will retire as the
+  trick engine retires).
+
+**UI / interaction:**
+- `place_stack.dsl` — `find_open_loc` ops.
+- `click_agent_play.dsl`, `click_arbitration.dsl` — agent-click
+  + click-arbitration invariants.
+- `drag_invariant.dsl`, `gesture.dsl` — drag state machine,
+  floaterTopLeft invariant, pathFrame correctness.
+- `board_geometry.dsl` — typed board-geometry validation.
+- `wing_oracle.dsl` — wing-detection invariants.
+- `replay_walkthroughs.dsl` — replay invariants.
+- `undo_walkthrough.dsl` — board-only and hand-card undo
+  scenarios (read first as a primer).
 
 See `../../cmd/fixturegen/main.go` for the codegen pipeline
 and `python/test_dsl_conformance.py` for the Python runner.

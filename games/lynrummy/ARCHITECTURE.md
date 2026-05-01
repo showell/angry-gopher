@@ -31,6 +31,12 @@ landscape changed substantially in late April 2026.
 
 Key anchors for calibrating doc freshness:
 
+- **TS BFS engine v1 landed (2026-05-01):** A TypeScript
+  port of the BFS solver lives at `games/lynrummy/ts/`.
+  It is the going-forward browser BFS engine. The Elm
+  `Game.Agent.*` BFS is on **life-support** — works in
+  production, not actively maintained. Don't invest in
+  Elm-side BFS catch-up to Python.
 - **LEAN_PASS phase 2 (2026-04-28):** The entire
   `games/lynrummy/` Go domain package was retired —
   dealer, referee, replay, scoring, all of it. Any doc
@@ -211,7 +217,7 @@ server is a passive observer."
 
 ## The cast of components
 
-Three components collaborate. Lyn Rummy is a **single-human
+Four components collaborate. Lyn Rummy is a **single-human
 game** as of 2026-04-28 — solitaire or human-vs-agent. Two-
 human multiplayer is out of scope (product decision: scheduling
 friction outweighs the value once Elm has agent capability).
@@ -225,13 +231,19 @@ friction outweighs the value once Elm has agent capability).
   for observability + reload-resume; nothing in the live
   loop depends on the server's response.
 - **Python agent.** A complete player without a
-  presentation layer. Owns the four-bucket BFS planner
-  used by the Puzzles surface today (full-game UI swap
-  pending). It has no DOM — so it cannot speak pixel-level
-  viewport coords for a hand drag — but it KNOWS the board
-  frame and reasons about geometry there. Discipline:
+  presentation layer. Owns the four-bucket BFS planner —
+  the experimentation surface where solver work happens.
+  It has no DOM — so it cannot speak pixel-level viewport
+  coords for a hand drag — but it KNOWS the board frame and
+  reasons about geometry there. Discipline:
   **constraints must be real, not artificial.** "Python
   has no eyes" is not the same as "Python has no geometry."
+- **TypeScript BFS engine.** Sibling to Python's solver,
+  living at `games/lynrummy/ts/`. Mirrors Python plan-line-
+  for-plan-line via the DSL conformance contract; will
+  replace the Elm BFS in the browser via Elm ports. Browser
+  integration pending. The Elm `Game.Agent.*` BFS is on
+  life-support until then.
 - **Go server (Angry Gopher).** Dumb URL-keyed file
   storage for LynRummy session data (LEAN_PASS phase 2,
   2026-04-28). Sequential session-id allocation is the one
@@ -612,13 +624,18 @@ cross-language consistency checks the scripts encode.
   domain package was retired 2026-04-28; the Go server is now
   dumb file storage).
 - [`./elm/README.md`](./elm/README.md) —
-  Elm UI subsystem.
+  Elm UI subsystem. (The `Game.Agent.*` BFS port here is on
+  life-support; new BFS work goes to `./ts/`.)
 - [`./python/README.md`](./python/README.md)
   — Python agent subsystem. **If you're about to edit Python,
   read § "Agent orientation" first** — it's a 6-step checklist
   (baseline green → plan state → layering → corpus → ergonomics →
   validation). There's also a self-test quiz:
   [`QUIZ_AGENT_ORIENTATION.md`](./python/QUIZ_AGENT_ORIENTATION.md).
+  For solver-specific work, see also [`./python/SOLVER.md`](./python/SOLVER.md).
+- [`./ts/README.md`](./ts/README.md) — TypeScript BFS engine
+  subsystem. Sibling to Python's solver; the going-forward
+  browser BFS engine.
 
 Each subsystem README lists the load-bearing modules in
 "read-this-first" order. Read the architecture doc first
@@ -660,11 +677,6 @@ historical record.)
   selection criteria for what's worth porting, step-by-step
   process, current coverage inventory, and prioritized
   remaining work.
-- `games/lynrummy/elm/src/Game/Strategy/ELM_HINTS.md` —
-  orientation for the ELM_HINTS project: replacing the legacy
-  trick-based hint system with BFS-driven hints. Lives in
-  `Game/Strategy/` and expires naturally when that directory
-  is deleted.
 
 ### Memory pointers
 
@@ -731,19 +743,17 @@ play on curated mid-game situations and feed divergences
 back into the agent:
 
 - Catalog: `games/lynrummy/python/puzzle_catalog.py` reads
-  mined puzzles from `lynrummy_puzzle_seeds` and writes
+  `games/lynrummy/conformance/mined_seeds.json` and writes
   the JSON the Elm gallery loads. Go serves it at
-  `/gopher/puzzles/catalog`.
+  `/gopher/puzzles/catalog`. (Per the no-DB policy: mined
+  seeds live in the repo as JSON, not in SQLite.)
 - Elm gallery: a panel per puzzle, auto-creating its
   puzzle session on page load. Human plays inline; drags
   capture via the normal telemetry pipeline.
-- DB correlation: `lynrummy_puzzle_seeds.puzzle_name`
-  carries the catalog id. Per-attempt rows live in
-  `lynrummy_elm_puzzle_actions`; `SELECT ... FROM
-  lynrummy_elm_puzzle_actions WHERE puzzle_name = ?`
-  enumerates every attempt at a named puzzle.
-- Annotations: `lynrummy_puzzle_annotations` carry a
-  `session_id` anchor so each reply ties to a specific play.
+- Per-attempt session data: each puzzle play creates a
+  session under `data/lynrummy-elm/sessions/<id>/` with the
+  puzzle's name in the meta. Annotations land at
+  `annotations/<seq>.json` alongside the action log.
 
 The apparatus lets us name concrete divergences between
 human and agent play and feed them back into the agent's

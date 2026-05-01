@@ -88,8 +88,8 @@ has 2 trouble stacks means BFS must clean all 3 in one plan.
 `agent_prelude.find_play` implements this strategy exactly. `format_hint(result)`
 produces the step-list with the explicit "place from hand" step 0.
 
-See `python/HINT_PROJECTION.md` for a full transcript (3 turns, seed 42).
-See `python/HINT_INFRASTRUCTURE.md` for the build-out record.
+See `python/SOLVER.md` § "Hint projection" for the search order +
+dirty-board constraint mechanics.
 
 The conformance pipeline is live: `hint_game_seed42.dsl` has 3 `hint_for_hand`
 scenarios that verify Python `find_play` + `format_hint` end-to-end.

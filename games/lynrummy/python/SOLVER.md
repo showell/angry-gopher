@@ -10,11 +10,12 @@
 >
 > **The Python solver has a sibling.** A TypeScript port of the
 > engine lives at `../ts/` and matches Python plan-line-for-plan-line
-> on the full 148-scenario conformance suite. Python remains the
-> experimentation surface (this doc); the TS engine will replace the
-> Elm BFS in the browser. See [`../ts/README.md`](../ts/README.md).
-> The Elm BFS (`Game.Agent.*`) is on life-support — drifting from
-> Python, kept alive only until TS integration lands.
+> via the DSL conformance suite (run `npm test` in `../ts/` to
+> verify). Python remains the experimentation surface (this doc);
+> the TS engine will replace the Elm BFS in the browser. See
+> [`../ts/README.md`](../ts/README.md). The Elm BFS (`Game.Agent.*`)
+> is on life-support — drifting from Python, kept alive only until
+> TS integration lands.
 
 The solver lives in five modules:
 
@@ -242,6 +243,55 @@ cleaner but reorders plan lines). Until then, leave it alone.
 
 See `memory/feedback_iteration_order_is_canon.md`.
 
+## Hint projection — how `find_play` uses BFS for hand cards
+
+`agent_prelude.find_play(hand, board)` is the hand-aware outer
+loop. It returns:
+
+```python
+{"placements": [card, ...], "plan": [(line, desc), ...]}
+```
+
+or `None` if no play was found.
+
+**Search order** (encodes game preference; no scoring):
+
+  - **(a) Pairs with a completing third in hand** — three cards
+    leave the hand in one move, no BFS needed. Tried first across
+    all meldable pairs (`rules.is_partial_ok([c1, c2])` predicate).
+  - **(b) Pairs without a third** — project the pair as a 2-card
+    trouble stack onto the board, run BFS. First pair that yields
+    a plan returns.
+  - **(c) Singletons** — project each remaining card as a 1-card
+    trouble stack onto the board, run BFS. First card that yields
+    a plan returns.
+  - **(d) Nothing fired** — return `None`.
+
+**The dirty-board constraint** (`_try_projection`):
+
+When projecting a candidate (singleton or pair) onto the board,
+BFS must clear **all** trouble — not just the newly placed cards.
+The augmented board is `board + extra_stacks`; classify every
+stack; HELPER stacks pass through; everything else (pre-existing
+partials AND the newly placed cards) goes into TROUBLE; BFS gets
+`(helper, trouble, [], [])` and must produce a plan that resolves
+the entire trouble bucket. If it can't, the placement is rejected.
+
+This is the core constraint: projecting onto a board that already
+has 2 trouble stacks means BFS must clean all 3 in one plan. The
+agent is not allowed to leave the board dirtier than it found it.
+
+**Renderer:** `format_hint(result)` wraps `find_play`'s return into
+a `[str]` step list with the placement step explicit ("place [JD:1
+QD:1] from hand"), suitable for direct display or DSL serialization.
+Conformance scenarios live in `conformance/scenarios/hint_game_seed42.dsl`.
+
+The TS port will eventually mirror this surface. The key invariant
+that any reimplementation must preserve: **the classifier and the
+BFS engine must agree on what "trouble" means** — same classify
+logic, same BFS state machine. If those diverge, hint results
+won't match across implementations.
+
 ## Module map
 
 ### `bfs.py` — search engine
@@ -451,13 +501,15 @@ group-completion events. See
 
 The TS engine at `../ts/` is the next-gen browser BFS. Status:
 
-  - **Leaves**: complete. 214 DSL scenarios pass.
-  - **Engine**: complete v1. 148 solve scenarios produce identical
-    plan lines to Python.
+  - **Leaves**: complete. Full DSL conformance passes.
+  - **Engine**: complete v1. Plan-line-for-plan-line cross-check
+    vs Python via the DSL conformance contract.
   - **Card-tracker liveness accelerator**: not yet ported.
     Correctness is unaffected; perf on tantalizing-card scenarios
     will lag Python until ported.
   - **Browser integration**: not yet wired.
+
+Run `npm test` in `../ts/` to see live status.
 
 What carries forward verbatim from this doc:
 

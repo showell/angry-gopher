@@ -110,8 +110,6 @@ flat and stable). Class-1/2 modules get
 "`getStackType` PureRun monotonic in length 3..13",
 "`valueDistance` triangle inequality over 13³",
 "`neighbors` cardinality is exactly 9, deck-invariant").
-Test count was 675 → 727 after the test-lock pass on
-2026-04-28.
 
 **Why this matters as a layering principle.** See the
 volatility-class memory at
@@ -173,8 +171,9 @@ Not current-work references.
 `src/Game/Agent/` is an Elm port of the Python BFS planner. It
 works in production but is **not actively maintained**. The
 canonical browser BFS engine going forward is the TypeScript port
-at `../ts/` (148/148 plan-line cross-check vs Python; browser
-integration via Elm ports pending).
+at `../ts/` (plan-line-for-plan-line cross-check vs Python via the
+DSL conformance contract; browser integration via Elm ports
+pending).
 
 When the TS engine ships, the Elm `Game.Agent.*` modules will be
 retired. Until then, don't invest in catching up to Python-side

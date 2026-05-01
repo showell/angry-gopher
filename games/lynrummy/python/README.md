@@ -73,9 +73,9 @@ checklist BEFORE editing anything. Most items take seconds
 and prevent mid-task surprises.
 
 **Step 1: Confirm baseline is green.** Run `./check.sh`
-from this directory. Expect every `test_*.py` to pass +
-113/113 conformance. If anything is red, **stop** — pre-
-existing failures are not permission to merge. Park your
+from this directory. Expect every `test_*.py` to pass and
+the conformance suite to pass. If anything is red, **stop** —
+pre-existing failures are not permission to merge. Park your
 task and dispatch a fix-up first (see
 `memory/feedback_tests_arent_load_bearing_without_enforcement.md`).
 
@@ -202,9 +202,10 @@ What stayed where:
   predicates (`can_peel` etc.) + verb executors (`peel` / `pluck`
   / `yank` / `steal` / `split_out`) + the absorb probes
   (`kind_after_absorb_right` / `_left`, `extends_tables`) +
-  `kinds_after_splice` / `splice`. Class-3 strategy. The Elm
-  parallels live in `Game.Agent.Enumerator` and the upcoming
-  `Game.Agent.ClassifiedCardStack` port.
+  `kinds_after_splice` / `splice`. Class-3 strategy. The TS
+  sibling at `../ts/src/classified_card_stack.ts` mirrors
+  this shape. The Elm `Game.Agent.Enumerator` port is on
+  life-support.
 - **`buckets.py`** — 4-bucket BFS state shape +
   `state_sig` + `trouble_count` + `is_victory`. Same shape
   as before — Elm keeps `Game.Agent.Buckets` outside
@@ -340,9 +341,10 @@ Ordered by "load-bearing first":
   floater-top-left paths where Python knows both endpoints.
 - `client.py` — thin HTTP wrapper around the Gopher
   endpoints.
-- `puzzle_catalog.py` — reads mined puzzles from
-  `lynrummy_puzzle_seeds` and writes the JSON the Elm
-  Puzzles gallery loads.
+- `puzzle_catalog.py` — reads
+  `games/lynrummy/conformance/mined_seeds.json` and writes
+  the JSON the Elm Puzzles gallery loads. (Per the no-DB
+  policy: mined seeds live in the repo as JSON.)
 - `telemetry.py` — read-side of the DB's gesture
   capture. Analysis, not gameplay.
 
@@ -401,40 +403,35 @@ is the full gate (fixturegen + Python + Elm).
 
 The Python suite (run each test file directly) covers:
 
-- `test_classified_card_stack.py` — 76 tests covering the
-  CCS data type, the 7-kind classifier, the five verb
-  predicates + executors, the absorb probes, and the splice
-  probe + executor (including a parity test that diffs the
-  parent-kind splice shortcut against the rigorous
+- `test_classified_card_stack.py` — CCS data type, 7-kind
+  classifier, the five verb predicates + executors, absorb
+  probes, splice probe + executor (including a parity test
+  diffing the parent-kind splice shortcut against the rigorous
   classifier across many positions).
-- `test_buckets_boundary.py` — 23 tests covering
-  `classify_buckets` (the BFS input boundary) and the state
-  ops (`state_sig`, `trouble_count`, `is_victory`) under
-  CCS-shaped buckets.
-- `test_bfs_extract.py` — 16 tests pinning the verb-executor
-  decomposition (`_extract_pieces` per verb + purity
-  contracts on `do_extract`, `remove_absorber`, `graduate`).
-- `test_bfs_enumerate.py` — 8 tests: snapshot per move
-  type + doomed-third filter pinning
-  (`test_doomed_partial_pruned`,
+- `test_buckets_boundary.py` — `classify_buckets` (the BFS
+  input boundary) and state ops (`state_sig`, `trouble_count`,
+  `is_victory`) under CCS-shaped buckets.
+- `test_bfs_extract.py` — verb-executor decomposition
+  (`_extract_pieces` per verb + purity contracts on
+  `do_extract`, `remove_absorber`, `graduate`).
+- `test_bfs_enumerate.py` — snapshot per move type +
+  doomed-third filter pinning (`test_doomed_partial_pruned`,
   `test_doomed_growing_partial_is_reachable`).
-- `test_bfs_failure.py` — 8 wall-time-guarded tests pinning
+- `test_bfs_failure.py` — wall-time-guarded tests pinning
   futility detection (singleton with no board, set partial
   with no third, lonely-trouble-rich-helpers, etc).
-- `test_verbs.py` — 7 tests across all 5 BFS desc types,
-  asserting both primitive shape and post-trick geometry.
-- `test_plan_merge_hand.py` — 3 tests for the geometry
-  pre-flight planner.
-- `test_follow_up_merges.py` — 7 tests for the post-trick
-  follow-up scan.
-- `test_dsl_conformance.py` — 183 cross-language scenarios
+- `test_verbs.py` — all 5 BFS desc types, asserting both
+  primitive shape and post-trick geometry.
+- `test_plan_merge_hand.py` — geometry pre-flight planner.
+- `test_follow_up_merges.py` — post-trick follow-up scan.
+- `test_dsl_conformance.py` — cross-language scenarios
   compiled from the conformance DSL (referee + hint +
   planner; planner.dsl includes futility cases via
   `expect: no_plan`).
-- `test_agent_prelude.py` — 7 tests for the hand-aware
-  outer loop (pair-with-third, pair-via-BFS, singleton
-  fallback, stuck → None, pair-priority).
-- `test_gesture_synth.py` — 7 tests for drag-path synthesis.
+- `test_agent_prelude.py` — hand-aware outer loop
+  (pair-with-third, pair-via-BFS, singleton fallback,
+  stuck → None, pair-priority).
+- `test_gesture_synth.py` — drag-path synthesis.
 
 ## Solver work — see SOLVER.md
 

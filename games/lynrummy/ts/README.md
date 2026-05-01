@@ -20,19 +20,22 @@ in `../conformance/leaf/`.
 
 ## Status
 
-  - **Leaf primitives**: complete. 214 DSL scenarios pass —
+  - **Leaf primitives**: complete. Full DSL conformance passes —
     `classifyStack`, both absorb probes, `extendsTables`, all five
     source verbs (peel / pluck / yank / steal / split_out), both
     splice probes, `findSpliceCandidates` (the same-value-match
     accelerator).
-  - **Engine**: complete v1. 148 solve scenarios produce identical
-    plan lines to Python; 35 in the gated v1 allowlist.
+  - **Engine**: complete v1. Plan-line-for-plan-line cross-check
+    vs Python via the same DSL conformance fixtures the Python
+    solver uses.
   - **Card-tracker liveness accelerator** (`card_neighbors.py` ↔
     `card_neighbors.ts`): not yet ported. Correctness is unaffected;
     perf on tantalizing-card scenarios will lag Python until ported.
   - **Browser integration**: not yet wired. Engine runs under Node
     via `npm test`; Elm port wiring will come when we replace the
     Elm BFS with this engine.
+
+Run `npm test` to see live status.
 
 ## Layout
 
@@ -86,7 +89,7 @@ Every design principle in `../python/SOLVER.md` applies here verbatim:
     named fields.
   - **Iteration order is canon.** Plan-line output depends on the
     order moves are yielded. The TS engine matches Python bit-for-bit
-    (verified by 148/148 plan-line cross-check).
+    (verified by the DSL conformance suite).
   - **Splice is run/rb-only.** Set parents extend via the absorb
     operation, not splice; `findSpliceCandidates` uses the
     same-value-match human heuristic.
