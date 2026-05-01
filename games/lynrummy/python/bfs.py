@@ -72,7 +72,7 @@ from buckets import (
     classify_buckets,
     is_victory, state_sig, trouble_count,
 )
-from rules import classify
+from classified_card_stack import classify_stack
 from enumerator import enumerate_focused, initial_lineage
 from move import describe
 from card_neighbors import build_card_loc, is_live
@@ -198,8 +198,19 @@ def solve(board, *, max_trouble_outer=8, max_states=10000,
     TROUBLE before running the inner BFS. Returns a list of
     plan lines (no descs). For descs, see
     `solve_state_with_descs`."""
-    helper = [s for s in board if classify(s) != "other"]
-    trouble = [s for s in board if classify(s) == "other"]
+    # Partition the flat board: stacks that classify into one of
+    # the 7 valid kinds go to HELPER (or stay as singletons in
+    # TROUBLE if length-1); stacks that don't classify at all are
+    # kept in TROUBLE as raw lists (caller bug — invariant says
+    # every stack should classify, but `solve()` is a tolerant
+    # entry that accepts mid-game raw boards).
+    helper, trouble = [], []
+    for s in board:
+        ccs = classify_stack(s)
+        if ccs is None or len(ccs) < 3:
+            trouble.append(s)
+        else:
+            helper.append(s)
     initial = Buckets(helper, trouble, [], [])
     return solve_state(initial,
                        max_trouble_outer=max_trouble_outer,
@@ -300,10 +311,11 @@ def solve_state_with_descs(initial, *, max_trouble_outer=8,
     # Buckets if needed.
     if not isinstance(initial, Buckets):
         initial = Buckets(*initial)
-    # Boundary: every input stack must classify into one of the 7
-    # valid kinds. Raises on invalid input — that's a caller bug,
-    # not a BFS bug. The "no KIND_OTHER" invariant holds inside.
-    classify_buckets(initial)
+    # Boundary: classify every input stack and replace the raw
+    # `Buckets` with a CCS-shaped one. Raises on invalid input
+    # (caller bug, not BFS). After this, the "no KIND_OTHER"
+    # invariant holds and all internal state flows as CCS.
+    initial = classify_buckets(initial)
     if trouble_count(initial.trouble, initial.growing) > max_trouble_outer:
         return None
     if is_victory(initial.trouble, initial.growing):
