@@ -188,43 +188,47 @@ def singleton(card):
 
 
 def extends_tables(target):
-    """Earned shape tables for an absorber. Returns a single dict
-    mapping `(value, suit) → (right_kind, left_kind)` — entries
-    present iff the shape legally extends the target on at least
-    one side. Either side may be None (extends on the other side
-    only); both sides cannot be None (no entry exists in that case).
+    """Earned shape tables for an absorber. Returns a tuple of three
+    dicts in canonical order:
 
-    Built ONCE per absorber, at the moment the BFS commits to
-    iterating the absorber against many sources. Replaces the
-    per-(target, card, side) absorb probe in the hot loop with a
-    single dict lookup."""
-    right, left = _build_extends_for(target.cards, target.kind, target.n)
-    out = {}
-    for shape, rk in right.items():
-        out[shape] = (rk, left.get(shape))
-    for shape, lk in left.items():
-        if shape not in out:
-            out[shape] = (None, lk)
-    return out
+        (left_extenders, right_extenders, set_extenders)
 
+    Each is a `(value, suit) → result_kind` dict. The three are
+    mutually disjoint (a card's shape lives in at most one), and they
+    encode the target's commitment shape:
 
-def _build_extends_for(cards, kind, n):
-    """Return (extends_right, extends_left) dicts. Each maps
-    `(value, suit) → result_kind` for cards that legally absorb on
-    that side. Internal — `extends_tables` merges them."""
+      - `run` / `rb` / `pair_run` / `pair_rb` (committed to a run-
+        family direction): `left` and `right` populated; `set` empty.
+      - `set` / `pair_set` (committed to set, unordered): only `set`
+        populated.
+      - `singleton` (uncommitted): all three populated. Singletons are
+        the only kind where a card can land in any of the three modes
+        depending on its shape.
+
+    Built ONCE per absorber, at the moment the BFS commits to iterating
+    against many sources. The hot-loop callers iterate each dict
+    separately — every entry guarantees a legal absorb in that mode,
+    no per-card probe needed."""
+    cards = target.cards
+    kind = target.kind
+    n = target.n
+
     if kind == KIND_SINGLETON:
         return _extends_for_singleton(cards[0])
+
     family = _FAMILY_OF_KIND[kind]
     n_new = n + 1
     result_kind = family if n_new >= 3 else _PAIR_OF[family]
+
     if family == KIND_RUN:
         last = cards[-1]
         first = cards[0]
         succ_v = 1 if last[0] == 13 else last[0] + 1
         pred_v = 13 if first[0] == 1 else first[0] - 1
         return (
-            {(succ_v, last[1]): result_kind},
-            {(pred_v, first[1]): result_kind},
+            {(pred_v, first[1]): result_kind},  # left
+            {(succ_v, last[1]): result_kind},   # right
+            {},                                  # set
         )
     if family == KIND_RB:
         last = cards[-1]
@@ -234,42 +238,51 @@ def _build_extends_for(cards, kind, n):
         last_red = last[1] in RED
         first_red = first[1] in RED
         return (
-            {(succ_v, s): result_kind
-             for s in range(4) if (s in RED) != last_red},
-            {(pred_v, s): result_kind
+            {(pred_v, s): result_kind  # left
              for s in range(4) if (s in RED) != first_red},
+            {(succ_v, s): result_kind  # right
+             for s in range(4) if (s in RED) != last_red},
+            {},                          # set
         )
-    # KIND_SET. Sets are unordered: same shapes extend on either side.
+    # KIND_SET / KIND_PAIR_SET — sets are unordered.
     if n_new > 4:
-        return ({}, {})
+        return ({}, {}, {})
     set_value = cards[0][0]
     used_suits = {c[1] for c in cards}
-    table = {(set_value, s): result_kind
-             for s in range(4) if s not in used_suits}
-    return (table, table)
+    return (
+        {},                                                          # left
+        {},                                                          # right
+        {(set_value, s): result_kind                                 # set
+         for s in range(4) if s not in used_suits},
+    )
 
 
 def _extends_for_singleton(only):
-    """Singleton extends: pair_run (same suit, successive value),
-    pair_rb (opposite color, successive value), pair_set (same value,
-    distinct suit). Side determines whether successive means succ-v
-    (right: only-then-card) or pred-v (left: card-then-only). Pair_set
-    shapes are symmetric and appear in both right and left."""
+    """Singleton hasn't committed to any family yet — every absorb is
+    a different mode. Returns (left, right, set) in canonical order:
+
+      - left:  cards at pred-value (pair_run same suit, pair_rb opp
+        color).
+      - right: cards at succ-value (pair_run same suit, pair_rb opp
+        color).
+      - set:   cards at same value, different suit (pair_set).
+    """
     v, s, _ = only
     succ_v = 1 if v == 13 else v + 1
     pred_v = 13 if v == 1 else v - 1
     only_red = s in RED
-    extends_right = {(succ_v, s): KIND_PAIR_RUN}
-    extends_left = {(pred_v, s): KIND_PAIR_RUN}
+
+    left_extenders = {(pred_v, s): KIND_PAIR_RUN}
+    right_extenders = {(succ_v, s): KIND_PAIR_RUN}
     for ss in range(4):
         if (ss in RED) != only_red:
-            extends_right[(succ_v, ss)] = KIND_PAIR_RB
-            extends_left[(pred_v, ss)] = KIND_PAIR_RB
-    for ss in range(4):
-        if ss != s:
-            extends_right[(v, ss)] = KIND_PAIR_SET
-            extends_left[(v, ss)] = KIND_PAIR_SET
-    return (extends_right, extends_left)
+            left_extenders[(pred_v, ss)] = KIND_PAIR_RB
+            right_extenders[(succ_v, ss)] = KIND_PAIR_RB
+
+    set_extenders = {(v, ss): KIND_PAIR_SET
+                     for ss in range(4) if ss != s}
+
+    return (left_extenders, right_extenders, set_extenders)
 
 
 def to_singletons(stack):
