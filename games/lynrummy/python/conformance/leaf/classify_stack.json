@@ -1,0 +1,152 @@
+{
+  "version": 1,
+  "function": "classify_stack",
+  "doc": "Classifies a card-list as one of the 7 kinds (run / rb / set / pair_run / pair_rb / pair_set / singleton) or null if it doesn't form any legal stack. Card labels: rank+suit, e.g. 'AC' = ace of clubs. K→A wraps for runs.",
+
+  "scenarios": [
+
+    { "name": "empty_is_invalid",
+      "cards": [],
+      "expected_kind": null },
+
+    { "name": "single_card_is_singleton",
+      "cards": ["AC"],
+      "expected_kind": "singleton" },
+
+
+    {
+      "_section": "length-2 pairs"
+    },
+
+    { "name": "successive_same_suit_is_pair_run",
+      "cards": ["AC", "2C"],
+      "expected_kind": "pair_run" },
+
+    { "name": "successive_opposite_color_is_pair_rb",
+      "cards": ["AC", "2D"],
+      "expected_kind": "pair_rb" },
+
+    { "name": "same_value_distinct_suits_is_pair_set",
+      "cards": ["AC", "AD"],
+      "expected_kind": "pair_set" },
+
+    { "name": "same_value_two_black_suits_is_still_pair_set",
+      "cards": ["AC", "AS"],
+      "expected_kind": "pair_set" },
+
+    { "name": "same_card_twice_is_invalid",
+      "cards": ["AC", "AC"],
+      "expected_kind": null },
+
+    { "name": "successive_same_color_different_suit_is_invalid",
+      "cards": ["AC", "2S"],
+      "expected_kind": null },
+
+    { "name": "non_successive_same_suit_is_invalid",
+      "cards": ["AC", "4C"],
+      "expected_kind": null },
+
+    { "name": "K_then_A_same_suit_is_pair_run_via_wrap",
+      "cards": ["KC", "AC"],
+      "expected_kind": "pair_run" },
+
+    { "name": "A_then_K_does_not_wrap_is_invalid",
+      "cards": ["AC", "KC"],
+      "expected_kind": null },
+
+
+    {
+      "_section": "length-3 runs (pure)"
+    },
+
+    { "name": "three_consecutive_same_suit_is_run",
+      "cards": ["AC", "2C", "3C"],
+      "expected_kind": "run" },
+
+    { "name": "K_to_A_wrap_run",
+      "cards": ["QC", "KC", "AC"],
+      "expected_kind": "run" },
+
+    { "name": "run_breaks_when_third_changes_suit",
+      "cards": ["AC", "2C", "3D"],
+      "expected_kind": null },
+
+
+    {
+      "_section": "length-3 rb runs"
+    },
+
+    { "name": "alternating_colors_successive_is_rb",
+      "cards": ["AC", "2D", "3C"],
+      "expected_kind": "rb" },
+
+    { "name": "rb_breaks_when_two_consecutive_same_color",
+      "cards": ["AC", "2D", "3D"],
+      "expected_kind": null },
+
+
+    {
+      "_section": "length-3 sets"
+    },
+
+    { "name": "same_value_three_distinct_suits_is_set",
+      "cards": ["AC", "AD", "AH"],
+      "expected_kind": "set" },
+
+    { "name": "set_with_duplicate_suit_is_invalid",
+      "cards": ["AC", "AD", "AC"],
+      "expected_kind": null },
+
+    { "name": "mixed_values_is_not_a_set",
+      "cards": ["AC", "AD", "2H"],
+      "expected_kind": null },
+
+
+    {
+      "_section": "length-4 stacks"
+    },
+
+    { "name": "four_consecutive_same_suit_is_run",
+      "cards": ["5H", "6H", "7H", "8H"],
+      "expected_kind": "run" },
+
+    { "name": "four_alternating_colors_successive_is_rb",
+      "cards": ["AC", "2D", "3C", "4H"],
+      "expected_kind": "rb" },
+
+    { "name": "rb_breaks_at_fourth_card_same_color",
+      "cards": ["AC", "2D", "3C", "4S"],
+      "expected_kind": null },
+
+    { "name": "all_four_suits_same_value_is_set",
+      "cards": ["7C", "7D", "7S", "7H"],
+      "expected_kind": "set" },
+
+
+    {
+      "_section": "length-5+ stacks"
+    },
+
+    { "name": "five_consecutive_same_suit_is_run",
+      "cards": ["9C", "TC", "JC", "QC", "KC"],
+      "expected_kind": "run" },
+
+    { "name": "five_alternating_colors_successive_is_rb",
+      "cards": ["AC", "2D", "3C", "4D", "5C"],
+      "expected_kind": "rb" },
+
+
+    {
+      "_section": "two-deck disambiguation"
+    },
+
+    { "name": "set_can_use_same_value_across_decks_if_suits_distinct",
+      "cards": ["AC", "AD:1", "AH"],
+      "expected_kind": "set" },
+
+    { "name": "set_with_duplicate_suit_across_decks_is_invalid",
+      "cards": ["AC", "AC:1", "AD"],
+      "expected_kind": null }
+
+  ]
+}
