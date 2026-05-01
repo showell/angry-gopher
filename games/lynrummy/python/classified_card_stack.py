@@ -537,28 +537,17 @@ def absorb_left(target, card, new_kind):
 
 # --- Splice ----------------------------------------------------------------
 
-def kinds_after_splice(stack, card, position, side):
-    """Probe: returns (left_kind, right_kind) if both halves classify,
-    None otherwise.
-
-    side='left':  left  = stack.cards[:position] + (card,)
-                  right = stack.cards[position:]
-    side='right': left  = stack.cards[:position]
-                  right = (card,) + stack.cards[position:]
-
-    Fast path for run/rb parents (the splice hot path): the pure-slice
-    half's kind is derived from parent family + slice length; the
-    with-card half needs at most a single boundary check (length-3+) or
-    a 2-card pair classification (length-2). No full reclassification.
-    Other parent kinds fall through to the rigorous classifier."""
-    if side not in ("left", "right"):
-        raise ValueError(f"side must be 'left' or 'right', got {side!r}")
+def kinds_after_splice_left(stack, card, position):
+    """Probe for the LEFT splice variant.
+        left  = stack.cards[:position] + (card,)   ← with-card half
+        right = stack.cards[position:]              ← pure slice
+    Returns (left_kind, right_kind) if both halves classify, else None."""
     family = _FAMILY_OF_KIND.get(stack.kind)
     if family == KIND_RUN or family == KIND_RB:
-        return _kinds_after_splice_run(
-            stack.cards, card, position, side, family)
-    # Fallback: non-run/rb parent (set, partial, singleton). Rigorous.
-    left_cards, right_cards = _splice_halves(stack, card, position, side)
+        return _kinds_after_splice_run_left(
+            stack.cards, card, position, family)
+    # Fallback for non-run/rb parents: rigorous classify.
+    left_cards, right_cards = _splice_halves_left(stack, card, position)
     left_kind = _classify_raw(left_cards)
     if left_kind is None:
         return None
@@ -568,32 +557,49 @@ def kinds_after_splice(stack, card, position, side):
     return (left_kind, right_kind)
 
 
-def _kinds_after_splice_run(parent_cards, card, position, side, family):
-    """Splice-probe specialization for run/rb parent. Caller has
-    confirmed family in (KIND_RUN, KIND_RB)."""
+def kinds_after_splice_right(stack, card, position):
+    """Probe for the RIGHT splice variant.
+        left  = stack.cards[:position]              ← pure slice
+        right = (card,) + stack.cards[position:]    ← with-card half
+    Returns (left_kind, right_kind) if both halves classify, else None."""
+    family = _FAMILY_OF_KIND.get(stack.kind)
+    if family == KIND_RUN or family == KIND_RB:
+        return _kinds_after_splice_run_right(
+            stack.cards, card, position, family)
+    left_cards, right_cards = _splice_halves_right(stack, card, position)
+    left_kind = _classify_raw(left_cards)
+    if left_kind is None:
+        return None
+    right_kind = _classify_raw(right_cards)
+    if right_kind is None:
+        return None
+    return (left_kind, right_kind)
+
+
+def _kinds_after_splice_run_left(parent_cards, card, position, family):
+    """Run/rb-specialized LEFT splice probe."""
     n = len(parent_cards)
-    if side == "left":
-        # left  = parent[:position] + (card,)
-        # right = parent[position:]
-        slice_len = n - position
-        with_card_len = position + 1
-        right_kind = _slice_kind(family, slice_len)
-        if right_kind is None:
+    slice_len = n - position
+    with_card_len = position + 1
+    right_kind = _slice_kind(family, slice_len)
+    if right_kind is None:
+        return None
+    if with_card_len == 1:
+        left_kind = KIND_SINGLETON
+    elif with_card_len == 2:
+        left_kind = _classify_pair((parent_cards[0], card))
+        if left_kind is None:
             return None
-        if with_card_len == 1:
-            left_kind = KIND_SINGLETON
-        elif with_card_len == 2:
-            left_kind = _classify_pair((parent_cards[0], card))
-            if left_kind is None:
-                return None
-        else:
-            if not _boundary_ok(parent_cards[position - 1], card, family):
-                return None
-            left_kind = family
-        return (left_kind, right_kind)
-    # side == "right"
-    # left  = parent[:position]
-    # right = (card,) + parent[position:]
+    else:
+        if not _boundary_ok(parent_cards[position - 1], card, family):
+            return None
+        left_kind = family
+    return (left_kind, right_kind)
+
+
+def _kinds_after_splice_run_right(parent_cards, card, position, family):
+    """Run/rb-specialized RIGHT splice probe."""
+    n = len(parent_cards)
     slice_len = position
     with_card_len = n - position + 1
     left_kind = _slice_kind(family, slice_len)
@@ -624,23 +630,31 @@ def _slice_kind(family, n):
     return family
 
 
-def splice(stack, card, position, side, left_kind, right_kind):
-    """Executor. Builds the two halves with the given kinds. Assumes
-    kinds_after_splice returned (left_kind, right_kind)."""
-    if side not in ("left", "right"):
-        raise ValueError(f"side must be 'left' or 'right', got {side!r}")
-    left_cards, right_cards = _splice_halves(stack, card, position, side)
+def splice_left(stack, card, position, left_kind, right_kind):
+    """Executor for LEFT splice. Assumes kinds_after_splice_left
+    returned (left_kind, right_kind) for these inputs."""
+    left_cards, right_cards = _splice_halves_left(stack, card, position)
+    return (ClassifiedCardStack(left_cards, left_kind),
+            ClassifiedCardStack(right_cards, right_kind))
+
+
+def splice_right(stack, card, position, left_kind, right_kind):
+    """Executor for RIGHT splice. Assumes kinds_after_splice_right
+    returned (left_kind, right_kind) for these inputs."""
+    left_cards, right_cards = _splice_halves_right(stack, card, position)
     return (ClassifiedCardStack(left_cards, left_kind),
             ClassifiedCardStack(right_cards, right_kind))
 
 
 # --- Internal helpers ------------------------------------------------------
 
-def _splice_halves(stack, card, position, side):
-    """Cards-tuple builder shared by the splice probe and executor."""
-    if side == "left":
-        return stack.cards[:position] + (card,), stack.cards[position:]
-    # side == "right"
+def _splice_halves_left(stack, card, position):
+    """LEFT splice halves: with-card half first, pure slice second."""
+    return stack.cards[:position] + (card,), stack.cards[position:]
+
+
+def _splice_halves_right(stack, card, position):
+    """RIGHT splice halves: pure slice first, with-card half second."""
     return stack.cards[:position], (card,) + stack.cards[position:]
 
 

@@ -29,9 +29,10 @@ from classified_card_stack import (
     peel, pluck, yank, steal, split_out,
     kind_after_absorb_right, kind_after_absorb_left,
     absorb_right, absorb_left,
-    kinds_after_splice, splice,
+    splice_left, splice_right,
     extends_tables,
-    _kinds_after_splice_run,  # fast path: caller-knows-family entry
+    _kinds_after_splice_run_left,
+    _kinds_after_splice_run_right,
 )
 from move import (
     ExtractAbsorbDesc, FreePullDesc, PushDesc,
@@ -263,26 +264,26 @@ def _add(out, cards, ci, hi, verb):
 
 # --- Push / engulf merge primitive ---
 
-def _absorb_seq(target, cards_to_add, side):
-    """Sequentially absorb each card in `cards_to_add` onto `target`
-    via the probe + executor pair on `side`. Returns the resulting
-    CCS, or None if any absorption step is illegal.
-
-    For side='right': cards append in order to the right of target.
-    For side='left':  cards prepend in REVERSE order so the resulting
-    stack is `cards_to_add ++ target.cards` (i.e., the leftmost card
-    of cards_to_add ends up leftmost in the merged stack)."""
+def _absorb_seq_right(target, cards_to_add):
+    """Sequentially absorb each card in `cards_to_add` onto the RIGHT
+    of `target`. Cards append in order. Returns the resulting CCS, or
+    None if any absorption step is illegal."""
     current = target
-    if side == "right":
-        for c in cards_to_add:
-            new_kind = kind_after_absorb_right(current, c)
-            if new_kind is None:
-                return None
-            current = absorb_right(current, c, new_kind)
-        return current
-    # side == "left": prepend in reverse so each card lands at the
-    # current left edge, accumulating to the original left-prepended
-    # order overall.
+    for c in cards_to_add:
+        new_kind = kind_after_absorb_right(current, c)
+        if new_kind is None:
+            return None
+        current = absorb_right(current, c, new_kind)
+    return current
+
+
+def _absorb_seq_left(target, cards_to_add):
+    """Sequentially absorb each card in `cards_to_add` onto the LEFT
+    of `target`. Cards are prepended in REVERSE order so the resulting
+    stack is `cards_to_add ++ target.cards` (i.e., the leftmost card
+    of cards_to_add ends up leftmost in the merged stack). Returns
+    the resulting CCS, or None if any absorption step is illegal."""
+    current = target
     for c in reversed(cards_to_add):
         new_kind = kind_after_absorb_left(current, c)
         if new_kind is None:
@@ -426,28 +427,38 @@ def _yield_extract_absorbs(absorber, helper, trouble, growing, complete,
             if nt_base is None:
                 nt_base, ng = remove_absorber(bucket, idx, trouble, growing)
             nt = nt_base + spawned
-            for side, new_kind, executor in (
-                ("right", right_kind, absorb_right),
-                ("left", left_kind, absorb_left),
-            ):
-                if new_kind is None:
-                    continue
-                merged = executor(target, ext_card, new_kind)
-                if not admissible_merged(merged, completion_inv):
-                    continue
-                ng_final, nc, graduated = graduate(merged, ng, complete)
-                desc = ExtractAbsorbDesc(
-                    verb=verb,
-                    source=source_cards,
-                    ext_card=ext_card,
-                    target_before=target_cards_list,
-                    target_bucket_before=bucket,
-                    result=list(merged.cards),
-                    side=side,
-                    graduated=graduated,
-                    spawned=spawned_lists,
-                )
-                yield desc, Buckets(new_helper, nt, ng_final, nc)
+            if right_kind is not None:
+                merged = absorb_right(target, ext_card, right_kind)
+                if admissible_merged(merged, completion_inv):
+                    ng_final, nc, graduated = graduate(merged, ng, complete)
+                    desc = ExtractAbsorbDesc(
+                        verb=verb,
+                        source=source_cards,
+                        ext_card=ext_card,
+                        target_before=target_cards_list,
+                        target_bucket_before=bucket,
+                        result=list(merged.cards),
+                        side="right",
+                        graduated=graduated,
+                        spawned=spawned_lists,
+                    )
+                    yield desc, Buckets(new_helper, nt, ng_final, nc)
+            if left_kind is not None:
+                merged = absorb_left(target, ext_card, left_kind)
+                if admissible_merged(merged, completion_inv):
+                    ng_final, nc, graduated = graduate(merged, ng, complete)
+                    desc = ExtractAbsorbDesc(
+                        verb=verb,
+                        source=source_cards,
+                        ext_card=ext_card,
+                        target_before=target_cards_list,
+                        target_bucket_before=bucket,
+                        result=list(merged.cards),
+                        side="left",
+                        graduated=graduated,
+                        spawned=spawned_lists,
+                    )
+                    yield desc, Buckets(new_helper, nt, ng_final, nc)
 
 
 # --- Move type (a'): free pull (TROUBLE singleton onto absorber) ---
@@ -469,31 +480,44 @@ def _yield_free_pulls(absorber, helper, trouble, growing, complete,
         if kinds is None:
             continue
         right_kind, left_kind = kinds
-        for side, new_kind, executor in (
-            ("right", right_kind, absorb_right),
-            ("left", left_kind, absorb_left),
-        ):
-            if new_kind is None:
-                continue
-            merged = executor(target, loose, new_kind)
-            if not admissible_merged(merged, completion_inv):
-                continue
-            nt_base, ng = remove_absorber(bucket, idx, trouble, growing)
-            if bucket == "trouble":
-                li_in_base = li - 1 if li > idx else li
-                nt = drop_at(nt_base, li_in_base)
-            else:
-                nt = drop_at(nt_base, li)
-            ng_final, nc, graduated = graduate(merged, ng, complete)
-            desc = FreePullDesc(
-                loose=loose,
-                target_before=target_cards_list,
-                target_bucket_before=bucket,
-                result=list(merged.cards),
-                side=side,
-                graduated=graduated,
-            )
-            yield desc, Buckets(list(helper), nt, ng_final, nc)
+        if right_kind is not None:
+            merged = absorb_right(target, loose, right_kind)
+            if admissible_merged(merged, completion_inv):
+                nt_base, ng = remove_absorber(bucket, idx, trouble, growing)
+                if bucket == "trouble":
+                    li_in_base = li - 1 if li > idx else li
+                    nt = drop_at(nt_base, li_in_base)
+                else:
+                    nt = drop_at(nt_base, li)
+                ng_final, nc, graduated = graduate(merged, ng, complete)
+                desc = FreePullDesc(
+                    loose=loose,
+                    target_before=target_cards_list,
+                    target_bucket_before=bucket,
+                    result=list(merged.cards),
+                    side="right",
+                    graduated=graduated,
+                )
+                yield desc, Buckets(list(helper), nt, ng_final, nc)
+        if left_kind is not None:
+            merged = absorb_left(target, loose, left_kind)
+            if admissible_merged(merged, completion_inv):
+                nt_base, ng = remove_absorber(bucket, idx, trouble, growing)
+                if bucket == "trouble":
+                    li_in_base = li - 1 if li > idx else li
+                    nt = drop_at(nt_base, li_in_base)
+                else:
+                    nt = drop_at(nt_base, li)
+                ng_final, nc, graduated = graduate(merged, ng, complete)
+                desc = FreePullDesc(
+                    loose=loose,
+                    target_before=target_cards_list,
+                    target_bucket_before=bucket,
+                    result=list(merged.cards),
+                    side="left",
+                    graduated=graduated,
+                )
+                yield desc, Buckets(list(helper), nt, ng_final, nc)
 
 
 # --- Move type (d): SHIFT ---
@@ -538,32 +562,46 @@ def _yield_shifts_for_endpoint(absorber, helper, trouble, growing, complete,
             continue
         nh = _shift_rebuild_helper(helper, src_idx, donor_idx,
                                    new_source, new_donor)
-        for absorb_side, new_kind, executor in (
-            ("right", right_kind, absorb_right),
-            ("left", left_kind, absorb_left),
-        ):
-            if new_kind is None:
-                continue
-            merged = executor(target, stolen, new_kind)
-            if not admissible_merged(merged, completion_inv):
-                continue
-            nt_base, ng = remove_absorber(bucket, idx, trouble, growing)
-            ng_final, nc, graduated = graduate(merged, ng, complete)
-            desc = ShiftDesc(
-                source=list(source.cards),
-                donor=list(donor.cards),
-                stolen=stolen,
-                p_card=p_card,
-                which_end=which_end,
-                new_source=list(new_source.cards),
-                new_donor=list(new_donor.cards),
-                target_before=list(target.cards),
-                target_bucket_before=bucket,
-                merged=list(merged.cards),
-                side=absorb_side,
-                graduated=graduated,
-            )
-            yield desc, Buckets(nh, nt_base, ng_final, nc)
+        if right_kind is not None:
+            merged = absorb_right(target, stolen, right_kind)
+            if admissible_merged(merged, completion_inv):
+                nt_base, ng = remove_absorber(bucket, idx, trouble, growing)
+                ng_final, nc, graduated = graduate(merged, ng, complete)
+                desc = ShiftDesc(
+                    source=list(source.cards),
+                    donor=list(donor.cards),
+                    stolen=stolen,
+                    p_card=p_card,
+                    which_end=which_end,
+                    new_source=list(new_source.cards),
+                    new_donor=list(new_donor.cards),
+                    target_before=list(target.cards),
+                    target_bucket_before=bucket,
+                    merged=list(merged.cards),
+                    side="right",
+                    graduated=graduated,
+                )
+                yield desc, Buckets(nh, nt_base, ng_final, nc)
+        if left_kind is not None:
+            merged = absorb_left(target, stolen, left_kind)
+            if admissible_merged(merged, completion_inv):
+                nt_base, ng = remove_absorber(bucket, idx, trouble, growing)
+                ng_final, nc, graduated = graduate(merged, ng, complete)
+                desc = ShiftDesc(
+                    source=list(source.cards),
+                    donor=list(donor.cards),
+                    stolen=stolen,
+                    p_card=p_card,
+                    which_end=which_end,
+                    new_source=list(new_source.cards),
+                    new_donor=list(new_donor.cards),
+                    target_before=list(target.cards),
+                    target_bucket_before=bucket,
+                    merged=list(merged.cards),
+                    side="left",
+                    graduated=graduated,
+                )
+                yield desc, Buckets(nh, nt_base, ng_final, nc)
 
 
 def _shift_replacement_requirement(source, which_end):
@@ -634,24 +672,22 @@ def _yield_splices(helper, trouble, growing, complete, splice_helpers):
         loose = t.cards[0]
         for hi, src in splice_helpers:
             # `splice_helpers` already filtered to KIND_RUN / KIND_RB,
-            # so family == src.kind. Bypass `kinds_after_splice`
-            # (which re-derives family per call) and call the run/rb
-            # specialization directly.
+            # so family == src.kind. Bypass the kinds_after_splice
+            # wrappers (they re-derive family) and call the run/rb
+            # specializations directly.
             family = src.kind
             src_cards = src.cards
             n = src.n
             for k in range(1, n):
-                for side in ("left", "right"):
-                    kinds = _kinds_after_splice_run(
-                        src_cards, loose, k, side, family)
-                    if kinds is None:
-                        continue
+                # LEFT splice variant.
+                kinds = _kinds_after_splice_run_left(
+                    src_cards, loose, k, family)
+                if (kinds is not None
+                        and kinds[0] in _LEGAL_LEN3_KINDS
+                        and kinds[1] in _LEGAL_LEN3_KINDS):
                     left_kind, right_kind = kinds
-                    if (left_kind not in _LEGAL_LEN3_KINDS
-                            or right_kind not in _LEGAL_LEN3_KINDS):
-                        continue
-                    left, right = splice(src, loose, k, side,
-                                         left_kind, right_kind)
+                    left, right = splice_left(
+                        src, loose, k, left_kind, right_kind)
                     nh = drop_at(helper, hi) + [left, right]
                     nt = drop_at(trouble, ti)
                     if growing_snapshot is None:
@@ -660,7 +696,31 @@ def _yield_splices(helper, trouble, growing, complete, splice_helpers):
                     desc = SpliceDesc(
                         loose=loose,
                         source=list(src.cards),
-                        k=k, side=side,
+                        k=k, side="left",
+                        left_result=list(left.cards),
+                        right_result=list(right.cards),
+                    )
+                    yield desc, Buckets(nh, nt,
+                                        list(growing_snapshot),
+                                        list(complete_snapshot))
+                # RIGHT splice variant.
+                kinds = _kinds_after_splice_run_right(
+                    src_cards, loose, k, family)
+                if (kinds is not None
+                        and kinds[0] in _LEGAL_LEN3_KINDS
+                        and kinds[1] in _LEGAL_LEN3_KINDS):
+                    left_kind, right_kind = kinds
+                    left, right = splice_right(
+                        src, loose, k, left_kind, right_kind)
+                    nh = drop_at(helper, hi) + [left, right]
+                    nt = drop_at(trouble, ti)
+                    if growing_snapshot is None:
+                        growing_snapshot = list(growing)
+                        complete_snapshot = list(complete)
+                    desc = SpliceDesc(
+                        loose=loose,
+                        source=list(src.cards),
+                        k=k, side="right",
                         left_result=list(left.cards),
                         right_result=list(right.cards),
                     )
@@ -678,17 +738,28 @@ def _yield_pushes(helper, trouble, growing, complete):
         if t.n > 2:
             continue
         for hi, h in enumerate(helper):
-            for side in ("right", "left"):
-                merged = _absorb_seq(h, t.cards, side)
-                if merged is None:
-                    continue
+            # RIGHT push.
+            merged = _absorb_seq_right(h, t.cards)
+            if merged is not None:
                 nh = drop_at(helper, hi) + [merged]
                 nt = drop_at(trouble, ti)
                 desc = PushDesc(
                     trouble_before=list(t.cards),
                     target_before=list(h.cards),
                     result=list(merged.cards),
-                    side=side,
+                    side="right",
+                )
+                yield desc, Buckets(nh, nt, list(growing), list(complete))
+            # LEFT push.
+            merged = _absorb_seq_left(h, t.cards)
+            if merged is not None:
+                nh = drop_at(helper, hi) + [merged]
+                nt = drop_at(trouble, ti)
+                desc = PushDesc(
+                    trouble_before=list(t.cards),
+                    target_before=list(h.cards),
+                    result=list(merged.cards),
+                    side="left",
                 )
                 yield desc, Buckets(nh, nt, list(growing), list(complete))
 
@@ -701,10 +772,9 @@ def _yield_engulfs(helper, trouble, growing, complete):
     COMPLETE."""
     for gi, g in enumerate(growing):
         for hi, h in enumerate(helper):
-            for side in ("right", "left"):
-                merged = _absorb_seq(h, g.cards, side)
-                if merged is None:
-                    continue
+            # RIGHT engulf.
+            merged = _absorb_seq_right(h, g.cards)
+            if merged is not None:
                 nh = drop_at(helper, hi)
                 ng = drop_at(growing, gi)
                 nc = complete + [merged]
@@ -712,7 +782,20 @@ def _yield_engulfs(helper, trouble, growing, complete):
                     trouble_before=list(g.cards),
                     target_before=list(h.cards),
                     result=list(merged.cards),
-                    side=side,
+                    side="right",
+                )
+                yield desc, Buckets(nh, list(trouble), ng, nc)
+            # LEFT engulf.
+            merged = _absorb_seq_left(h, g.cards)
+            if merged is not None:
+                nh = drop_at(helper, hi)
+                ng = drop_at(growing, gi)
+                nc = complete + [merged]
+                desc = PushDesc(
+                    trouble_before=list(g.cards),
+                    target_before=list(h.cards),
+                    result=list(merged.cards),
+                    side="left",
                 )
                 yield desc, Buckets(nh, list(trouble), ng, nc)
 

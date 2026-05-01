@@ -27,7 +27,8 @@ from classified_card_stack import (
     peel, pluck, yank, steal, split_out,
     kind_after_absorb_right, kind_after_absorb_left,
     absorb_right, absorb_left,
-    kinds_after_splice, splice,
+    kinds_after_splice_left, kinds_after_splice_right,
+    splice_left, splice_right,
 )
 
 
@@ -494,56 +495,46 @@ def test_absorb_left_executor_builds_correctly():
 
 # --- splice ----------------------------------------------------------------
 
-def test_kinds_after_splice_pure_run_breaks_suit_none():
+def test_kinds_after_splice_left_pure_run_breaks_suit_none():
     s = _ccs("AC", "2C", "3C", "4C", "5C")
-    assert kinds_after_splice(s, card("3D"), 2, "left") is None
+    assert kinds_after_splice_left(s, card("3D"), 2) is None
 
 
-def test_kinds_after_splice_rb_legal_set_partial_split():
-    # rb_run [AC,2D,3C,4D] + AS at position 1, side='left':
+def test_kinds_after_splice_left_rb_legal_set_partial_split():
+    # rb_run [AC,2D,3C,4D] + AS at position 1, LEFT splice:
     #   left  = [AC, AS]      → pair_set
     #   right = [2D, 3C, 4D]  → rb
     s = _ccs("AC", "2D", "3C", "4D")
-    kinds = kinds_after_splice(s, card("AS"), 1, "left")
+    kinds = kinds_after_splice_left(s, card("AS"), 1)
     assert kinds == (KIND_PAIR_SET, KIND_RB)
 
 
-def test_kinds_after_splice_rb_legal_right_side():
-    # rb_run [AC,2D,3C,4D] + 4S at position 3, side='right':
+def test_kinds_after_splice_right_legal_set_partial_split():
+    # rb_run [AC,2D,3C,4D] + 4S at position 3, RIGHT splice:
     #   left  = [AC, 2D, 3C]
     #   right = [4S, 4D]
     s = _ccs("AC", "2D", "3C", "4D")
-    kinds = kinds_after_splice(s, card("4S"), 3, "right")
+    kinds = kinds_after_splice_right(s, card("4S"), 3)
     assert kinds == (KIND_RB, KIND_PAIR_SET)
 
 
-def test_kinds_after_splice_invalid_side_raises():
-    s = _ccs("AC", "2C", "3C", "4C")
-    try:
-        kinds_after_splice(s, card("5C"), 2, "middle")
-    except ValueError:
-        return
-    raise AssertionError("expected ValueError")
-
-
-def test_splice_executor_builds_correctly():
+def test_splice_left_executor_builds_correctly():
     s = _ccs("AC", "2D", "3C", "4D")
-    kinds = kinds_after_splice(s, card("AS"), 1, "left")
+    kinds = kinds_after_splice_left(s, card("AS"), 1)
     assert kinds is not None
     left_kind, right_kind = kinds
-    left, right = splice(s, card("AS"), 1, "left", left_kind, right_kind)
+    left, right = splice_left(s, card("AS"), 1, left_kind, right_kind)
     assert left.kind == KIND_PAIR_SET
     assert left.cards == _stack("AC", "AS")
     assert right.kind == KIND_RB
     assert right.cards == _stack("2D", "3C", "4D")
 
 
-def test_splice_zero_position_left_gives_singleton():
-    # k=0, side='left': left = (card,) (just the card alone),
-    # right = full stack. Both classify; the splice "acts like" a
-    # left-prepend that fails to merge.
+def test_splice_left_zero_position_gives_singleton():
+    # k=0, LEFT splice: left = (card,) (just the card alone),
+    # right = full stack.
     s = _ccs("AC", "2C", "3C", "4C")
-    kinds = kinds_after_splice(s, card("5C"), 0, "left")
+    kinds = kinds_after_splice_left(s, card("5C"), 0)
     assert kinds == (KIND_SINGLETON, KIND_RUN)
 
 
@@ -551,7 +542,9 @@ def test_splice_run_parent_parity_with_classifier():
     """Cross-check the parent-kind shortcut against the rigorous
     classifier across many positions and insert cards. Any disagreement
     is a bug in the fast path."""
-    from classified_card_stack import _classify_raw, _splice_halves
+    from classified_card_stack import (
+        _classify_raw, _splice_halves_left, _splice_halves_right,
+    )
     parents = [
         _ccs("AC", "2C", "3C", "4C", "5C"),         # length-5 run
         _ccs("AC", "2D", "3C", "4D", "5C"),         # length-5 rb
@@ -568,22 +561,36 @@ def test_splice_run_parent_parity_with_classifier():
             for c in insert_cards:
                 if c in parent.cards:
                     continue
-                for side in ("left", "right"):
-                    fast = kinds_after_splice(parent, c, pos, side)
-                    left_cards, right_cards = _splice_halves(
-                        parent, c, pos, side)
-                    expected_left = _classify_raw(left_cards)
-                    expected_right = _classify_raw(right_cards)
-                    if expected_left is None or expected_right is None:
-                        assert fast is None, (
-                            f"fast={fast} expected=None at parent={parent.cards} "
-                            f"card={c} pos={pos} side={side}")
-                    else:
-                        assert fast == (expected_left, expected_right), (
-                            f"fast={fast} expected="
-                            f"{(expected_left, expected_right)} at "
-                            f"parent={parent.cards} card={c} "
-                            f"pos={pos} side={side}")
+                # LEFT variant.
+                fast = kinds_after_splice_left(parent, c, pos)
+                left_cards, right_cards = _splice_halves_left(
+                    parent, c, pos)
+                expected_left = _classify_raw(left_cards)
+                expected_right = _classify_raw(right_cards)
+                if expected_left is None or expected_right is None:
+                    assert fast is None, (
+                        f"LEFT fast={fast} expected=None at "
+                        f"parent={parent.cards} card={c} pos={pos}")
+                else:
+                    assert fast == (expected_left, expected_right), (
+                        f"LEFT fast={fast} expected="
+                        f"{(expected_left, expected_right)} at "
+                        f"parent={parent.cards} card={c} pos={pos}")
+                # RIGHT variant.
+                fast = kinds_after_splice_right(parent, c, pos)
+                left_cards, right_cards = _splice_halves_right(
+                    parent, c, pos)
+                expected_left = _classify_raw(left_cards)
+                expected_right = _classify_raw(right_cards)
+                if expected_left is None or expected_right is None:
+                    assert fast is None, (
+                        f"RIGHT fast={fast} expected=None at "
+                        f"parent={parent.cards} card={c} pos={pos}")
+                else:
+                    assert fast == (expected_left, expected_right), (
+                        f"RIGHT fast={fast} expected="
+                        f"{(expected_left, expected_right)} at "
+                        f"parent={parent.cards} card={c} pos={pos}")
 
 
 # --- Equality + hashing -----------------------------------------------------
