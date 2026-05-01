@@ -1,5 +1,15 @@
 # Card-tracker query accelerator — design sketch
 
+## Status
+
+Pre-work done (commits `fa5d4f4`, `b759682`, 2026-05-01): a hoisting
+pass H1–H8 over `bfs.py` and `enumerator.py` lifted redundant per-state
+work (`classify`, `neighbors`, splice/shift eligibility, push-trouble
+filter, frontier `tc` cache) and fixed a 3-of-6 ordering bug in
+`_singleton_is_live`. The accelerator builds on top of that — the
+hoisted call sites (`helper_kinds`, `splice_helpers`, `shift_helpers`,
+`absorber_shapes`) are the input shape this design wants to consume.
+
 ## The core structure
 
 104 entries, one per card (value 1–13, suit 0–3, deck 0–1 → id = (value−1)×8 + suit×2 + deck).
