@@ -17,14 +17,20 @@ Python relate.
 
 - `elm/` — the human-facing client (Main.Play + Game.* +
   Main.* harness). Served at `/gopher/lynrummy-elm/`.
-  Includes the BFS planner port (`src/Game/Agent/`),
   Game.Rules locked-down primitives, the dealer (Game.Dealer),
-  and a referee (Game.Referee). Elm is autonomous; the Go
+  and a referee (Game.Referee). The BFS planner port at
+  `src/Game/Agent/` is on life-support — TS is the
+  going-forward browser BFS. Elm is autonomous; the Go
   server is observational at most.
-- `python/` — agent tools: BFS planner, hand-aware outer
-  loop, verb/primitive translators, autonomous self-play
-  harness, DSL conformance runner. `agent_game.py` is the
-  driver.
+- `python/` — agent tools: BFS planner (the experimentation
+  surface), hand-aware outer loop, verb/primitive translators,
+  autonomous self-play harness, DSL conformance runner.
+  `agent_game.py` is the driver. See `python/SOLVER.md` for
+  solver-specific design.
+- `ts/` — TypeScript port of the BFS engine. Sibling to
+  `python/`; matches Python plan-line-for-plan-line on the
+  148-scenario conformance suite. Will replace the Elm BFS in
+  the browser via Elm ports. See `ts/README.md`.
 - `puzzles/` — curated puzzle gallery (added 2026-04-23).
   Elm sub-app compiled from `elm/src/Puzzles.elm`,
   embedding `Main.Play` per panel. Served at
@@ -78,6 +84,10 @@ and `python/test_dsl_conformance.py` for the Python runner.
 
 ## TODO
 
+- **Browser BFS swap.** Replace the Elm `Game.Agent.*` BFS
+  with the TS engine via Elm ports. Possibly expand the TS
+  surface to handle hand-to-board interactions too, so the
+  Elm/TS split doesn't bisect feature work. Open question.
 - Retire the trick engine (`Game.Strategy.Hint` on the Elm
   side, `strategy.py` on the Python side). The BFS planner
   is the replacement; full-game UI swap pending per

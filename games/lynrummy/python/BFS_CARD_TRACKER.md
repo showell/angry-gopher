@@ -1,8 +1,11 @@
 # Card-tracker query accelerator
 
-## Status: in production.
+## Status: in production (Python only).
 
-The accelerator is in production. The high-level shape:
+The accelerator is in production on the Python side. **Not yet
+ported to TS** (`games/lynrummy/ts/`); correctness is unaffected
+but TS perf on tantalizing-card scenarios will lag Python until
+ported. The high-level shape:
 
 - A 104-element `card_loc` array maps card-id → bucket tag, built per
   state from a `Buckets` namedtuple.

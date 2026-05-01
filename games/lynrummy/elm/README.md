@@ -168,89 +168,21 @@ REFACTOR_ELM_REPLAY).
 the TS → Elm port. Process reflections, mapping references.
 Not current-work references.
 
-## Agent-library port (in progress, with drift)
+## Agent-library port — on life-support
 
-The Python four-bucket BFS planner
-(`../python/bfs.py` and friends) was ported to Elm
-under `src/Game/Agent/` — see Steve's MAJOR_GOAL kickoff
-2026-04-25. Modules landed:
-`Buckets`, `Cards`, `Move`, `Enumerator`, `Bfs`, `Verbs`,
-`GeometryPlan`. 47 agent-specific tests + 6 conformance
-scenarios live on both sides.
+`src/Game/Agent/` is an Elm port of the Python BFS planner. It
+works in production but is **not actively maintained**. The
+canonical browser BFS engine going forward is the TypeScript port
+at `../ts/` (148/148 plan-line cross-check vs Python; browser
+integration via Elm ports pending).
 
-**Drift since the port (Python-side OPTIMIZE_PYTHON work,
-2026-04-25 / 26).** Python evolved further while the Elm
-agent stayed at the phase-5 snapshot. Status as of
-2026-04-26:
+When the TS engine ships, the Elm `Game.Agent.*` modules will be
+retired. Until then, don't invest in catching up to Python-side
+solver evolution here. Bug fixes for production behavior are in
+scope; feature ports are not.
 
-**Already ported (2026-04-26):**
-
-- **`SplitOut` extract verb** — fifth verb, fills the
-  interior-of-length-3-run gap so every helper card is
-  reachable for absorption. Test:
-  `tests/Game/Agent/EnumeratorTest.elm`.
-- **Doomed-third filter** (merge-time) — `admissiblePartial`
-  in `Enumerator.elm` rejects length-2 merges whose
-  completion candidates are absent from the board's
-  inventory.
-- **State-level doomed-growing filter** — `enumerateMoves`
-  short-circuits to `[]` when any growing 2-partial has
-  no completion candidate left.
-- **Focus rule + lineage tracking** — `FocusedState =
-  { buckets, lineage }`; the BFS engine wraps every state
-  with a lineage queue (initialized as `trouble ++
-  growing`) and only yields moves that grow or consume
-  `lineage[0]`. Helpers `moveTouchesFocus`,
-  `updateLineage`, `enumerateFocused`, `initialLineage`
-  in `Enumerator.elm`. Bfs sig encodes lineage in queue
-  order. Public `solve : Buckets -> Maybe Plan` API
-  unchanged — the focused state is built internally.
-- **Loop inversion via `extractableIndex`** — built once
-  per state from the helper bucket; absorb path iterates
-  the absorber's neighbor shapes and looks up matching
-  helper positions in `O(1)` per shape rather than
-  scanning every (helper × ci) and filtering. Shift's
-  donor lookup also reads the index (filtered to peels)
-  instead of building a separate peelable index. Mirrors
-  Python's 2026-04-26 consolidation; ~75 lines of
-  `peelableCards` + `runEnds` retired.
-
-**Not yet ported:**
-- **Budget cap drop** — `_PROJECTION_MAX_STATES` 200000
-  → 5000 in Python after the filters made the cap headroom
-  unnecessary.
-- **`narrate(desc)` / `hint(desc)`** — Python-side renderers
-  for Steve-facing evocative output and player-facing
-  vague nudges. Elm conformance stubs `Expect.pass` for
-  scenarios asserting on these.
-- **`solve_state_with_descs(... on_cap_exhausted=...)`** —
-  Python-side diagnostics callback (cap, expansions, seen,
-  hit_max_states, trouble-count histogram, sample states).
-- **`agent_prelude.find_play(stats=...)` + `_with_budget`** —
-  Python instrumentation for per-projection timing +
-  cap-exhaustion records.
-- **`agent_game.py --offline`** — Python's BFS-only
-  self-play mode. No Elm equivalent (and may not need one
-  given Elm's natural single-process loop).
-
-The Python side also has a host of OPTIMIZE_PYTHON
-diagnostic tools (`perf_harness.py`, `mine_doomed_growing.py`,
-`diagnose_loop.py`, `runaway_puzzles.py`, etc.) that don't
-need direct Elm equivalents — they're profiling tools, not
-gameplay code. Their LESSONS (e.g., the doomed-third filter)
-do need to port.
-
-**Conformance bridge holds**: `planner.dsl` scenarios have
-6 cases live on both sides, plus several `expect:
-narrate_contains` / `hint_contains` stubbed on the Elm
-side until the renderers port. Python passes 37/37; Elm
-passes the subset relevant to its current state.
-
-When the Elm port resumes, the port discipline is: take
-the current Python source, port the new feature, run the
-shared regression methodology
-(see `../python/README.md` § Validation methodology), then
-verify Elm conformance stubs flip to live where applicable.
+The DSL conformance bridge still runs; the Elm side passes the
+subset of scenarios its frozen feature surface supports.
 
 ## TODO (stub-level)
 

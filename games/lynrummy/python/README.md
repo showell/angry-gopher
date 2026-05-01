@@ -466,13 +466,21 @@ regression target (depth distribution
 
 For non-solver changes, `./check.sh` is the gate.
 
+## Sibling: TypeScript engine
+
+A TS port of the BFS engine lives at `../ts/`. Status: leaves
+complete (214 DSL scenarios), engine v1 complete (148 plan-line
+cross-check vs Python), browser integration pending. The TS engine
+will replace the Elm BFS in the browser. Python remains the
+experimentation surface; TS tracks Python via the DSL conformance
+contract. See [`../ts/README.md`](../ts/README.md) and
+[`SOLVER.md`](SOLVER.md) § "TypeScript sibling — landed v1".
+
+The Elm BFS (`elm/src/Game/Agent/`) is on life-support — it works
+in production but has drifted from Python and is not actively
+maintained. Don't invest in further Elm-side BFS work.
+
 ## TODO
 
 - Mark `strategy.py` and friends PLANNED-LEGACY in their
   module docstrings once the abandonment plan is concrete.
-- The Elm port (`games/lynrummy/elm/src/Game/Agent/`) is
-  feature-complete on the correctness/perf axis as of
-  2026-04-26. Remaining drift is renderer-only:
-  `narrate` / `hint` aren't ported, and the
-  `solve_state_with_descs` diagnostics callback isn't
-  ported. Neither is load-bearing.

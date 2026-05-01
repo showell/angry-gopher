@@ -7,6 +7,14 @@
 > most expensive. Sub-agents dispatched to do solver work must be
 > told to read this file. README.md is the front door; SOLVER.md is
 > the workshop floor.
+>
+> **The Python solver has a sibling.** A TypeScript port of the
+> engine lives at `../ts/` and matches Python plan-line-for-plan-line
+> on the full 148-scenario conformance suite. Python remains the
+> experimentation surface (this doc); the TS engine will replace the
+> Elm BFS in the browser. See [`../ts/README.md`](../ts/README.md).
+> The Elm BFS (`Game.Agent.*`) is on life-support — drifting from
+> Python, kept alive only until TS integration lands.
 
 The solver lives in five modules:
 
@@ -209,13 +217,14 @@ See `memory/feedback_no_side_parameter.md`.
 ## Iteration order is the cross-language canon
 
 The BFS produces deterministic plan-line output that depends on
-iteration order in the move-generator callers. The existing Elm BFS
-(`Game.Agent.Enumerator`) and the DSL conformance fixtures pin the
-canonical iteration order. Python and Elm must agree.
+iteration order in the move-generator callers. The DSL conformance
+fixtures pin the canonical iteration order; Python, the Elm BFS,
+and the TS engine all match plan-line-for-plan-line.
 
-**Don't change Python iteration order without porting Elm in
-lockstep.** The DSL conformance suite catches drift, but a half-
-done port leaves the Elm UI broken in production.
+**Don't change Python iteration order without porting in lockstep.**
+The TS engine is the durable target (148/148 cross-check); the Elm
+BFS is on life-support but still in production until TS integration
+lands.
 
 The current canon:
 
@@ -227,10 +236,9 @@ The current canon:
     action order and the data-layout order are different on purpose:
     data is read left-to-right; actions execute right-first.
 
-When the Elm BFS is retired in favor of the upcoming TypeScript
-port, this iteration order can be cleaned up (e.g., per-bucket
-iteration is cleaner but reorders plan lines). Until then, leave
-it alone.
+After the Elm BFS is retired and TS is the only sibling, the
+iteration order can be cleaned up (e.g., per-bucket iteration is
+cleaner but reorders plan lines). Until then, leave it alone.
 
 See `memory/feedback_iteration_order_is_canon.md`.
 
@@ -439,30 +447,30 @@ dead-singleton filter and a dynamic per-state prune gated on
 group-completion events. See
 [BFS_CARD_TRACKER.md](BFS_CARD_TRACKER.md).
 
-## Pre-port discipline (TypeScript engine, when it lands)
+## TypeScript sibling — landed v1
 
-The plan: replace the Elm BFS with a TypeScript engine running in
-the browser, called from Elm via ports. See
-`~/.claude/projects/-home-steve-showell-repos-angry-gopher/memory/project_ts_solver_decision.md`
-for the rationale.
+The TS engine at `../ts/` is the next-gen browser BFS. Status:
 
-What carries forward:
+  - **Leaves**: complete. 214 DSL scenarios pass.
+  - **Engine**: complete v1. 148 solve scenarios produce identical
+    plan lines to Python.
+  - **Card-tracker liveness accelerator**: not yet ported.
+    Correctness is unaffected; perf on tantalizing-card scenarios
+    will lag Python until ported.
+  - **Browser integration**: not yet wired.
 
-  - The 7-kind alphabet, the no-KIND_OTHER invariant.
+What carries forward verbatim from this doc:
+
+  - 7-kind alphabet, no-KIND_OTHER invariant.
   - Probe + executor pattern.
   - Earned-knowledge structure at the commitment point.
   - The `_left` / `_right` / `_set` separation discipline.
   - The DSL conformance fixtures as the cross-language contract.
 
-What gets reconsidered (carefully) at port time:
-
-  - Iteration order can be cleaned up once Elm is retired.
-  - Whether the descriptor types stay raw-card-shaped or become
-    typed.
-
-Until the port lands, treat the Python solver and the Elm BFS as
-a paired system. Any change that would break the Elm side without
-compensating Elm work needs to wait.
+When iterating on the algorithm, the Python solver remains the
+experimentation surface. Port confirmed-good changes to TS via the
+DSL conformance contract. The Elm BFS continues to track Python by
+necessity (it's still production) but is on life-support.
 
 ## Outstanding TODOs
 
@@ -471,6 +479,7 @@ compensating Elm work needs to wait.
   - Multi-capture median for gold (proposal C from
     `random211_bench.md`) — reach for it when locking in a clear
     win.
-  - Leaf DSL conformance fixtures — `classify_stack.dsl` landed;
-    next is the absorb-probe DSL, then verb predicates/executors,
-    then `kinds_after_splice`.
+  - Port `card_neighbors` to TS for liveness-filter parity.
+  - Hoist absorb/splice executors out of TS `enumerator.ts` into
+    `classified_card_stack.ts` proper (sub-agent kept them local
+    in v1).
