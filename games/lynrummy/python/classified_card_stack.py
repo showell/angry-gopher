@@ -1,32 +1,35 @@
 """classified_card_stack.py — Card stack with cached classification.
 
 A `ClassifiedCardStack` is the data: an immutable cards tuple plus its
-kind. All operations on it are module-level pure functions, not methods.
+kind. Operations come in pairs: a probe that earns the kind knowledge,
+and a custom executor that uses that knowledge to build the result.
 
-Why pure functions: the data structure should be inert, and the BFS
-algorithm composes operations on it; methods that produce new instances
-hide the algorithmic shape inside the type. Free functions read like
-the steps of an extraction.
+Pattern:
+
+    new_kind = kind_after_absorb_right(target, card)
+    if new_kind is None:
+        return None
+    result = absorb_right(target, card, new_kind)
+
+The probe asks "can I do this, and what would the result be?" and
+short-circuits on failure with no allocations. The executor assumes
+the precondition holds and builds the result trivially.
+
+Source-side verbs (`peel` / `pluck` / `yank` / `steal` / `split_out`)
+follow the same pattern with `verb_for_position` as the probe — it
+returns the single verb that applies (or None), and each verb has its
+own custom executor that uses the parent's kind family to derive the
+remnant kinds without re-classifying.
 
 Kind alphabet (7):
   - run, rb, set         — length-3+ legal groups
-  - pair_run, pair_rb,   — length-2 partials that complete to their
-    pair_set               corresponding length-3+ kind
+  - pair_run, pair_rb,   — length-2 partials
+    pair_set
   - singleton            — length-1
 
 Stacks that fit none of these are invalid input. `classify_stack`
-returns None for them; callers that want to enforce validity convert
-that None into an error at the boundary.
-
-Pure functions provided:
-  - classify_stack(cards)              construct from raw cards
-  - singleton(card)                    construct a length-1 stack
-  - remove_card(stack, card)           1-3 pieces after removing card
-  - insert_right(stack, card)          extend on the right; None if illegal
-  - insert_left(stack, card)           extend on the left; None if illegal
-  - concat(left, right)                concatenate two stacks; None if illegal
-  - splice(stack, card, position, side) insert into middle; (left,right) or None
-  - to_singletons(stack)               atomize into individual cards
+returns None for them; the input boundary converts that None into an
+error before anything else runs.
 """
 
 from dataclasses import dataclass
@@ -34,7 +37,8 @@ from dataclasses import dataclass
 from rules.card import RED
 
 
-# Kind tags. Module-level constants for fast equality + IDE friendliness.
+# --- Kind alphabet ----------------------------------------------------------
+
 KIND_RUN = "run"
 KIND_RB = "rb"
 KIND_SET = "set"
@@ -46,24 +50,29 @@ KIND_SINGLETON = "singleton"
 _LEN3_KINDS = (KIND_RUN, KIND_RB, KIND_SET)
 _PAIR_KINDS = (KIND_PAIR_RUN, KIND_PAIR_RB, KIND_PAIR_SET)
 
-# Maps length-3+ kind to its length-2 partial form.
+# Length-3+ kind ⇄ pair-form kind.
 _PAIR_OF = {KIND_RUN: KIND_PAIR_RUN, KIND_RB: KIND_PAIR_RB, KIND_SET: KIND_PAIR_SET}
-# Inverse: length-2 partial to its full-form kind.
 _FULL_OF = {v: k for k, v in _PAIR_OF.items()}
 
+# A "family" is one of run / rb / set — we use the full-form kind tag
+# as the family identifier so the same vocabulary serves both purposes.
+_FAMILY_OF_KIND = {
+    KIND_RUN: KIND_RUN,
+    KIND_PAIR_RUN: KIND_RUN,
+    KIND_RB: KIND_RB,
+    KIND_PAIR_RB: KIND_RB,
+    KIND_SET: KIND_SET,
+    KIND_PAIR_SET: KIND_SET,
+    # KIND_SINGLETON has no family yet — handled as a special case.
+}
 
-# --- Data structure ---
+
+# --- Data structure ---------------------------------------------------------
 
 @dataclass(frozen=True, slots=True)
 class ClassifiedCardStack:
-    """Immutable card sequence + cached kind.
-
-    Equality and hash are structural over (cards, kind). Container
-    delegation (__len__, __iter__, __getitem__) makes a CCS read like
-    a sequence at sites that don't need the kind.
-
-    Construction is via the module functions, not methods, so the
-    type stays inert."""
+    """Immutable card sequence + cached kind. Construction goes through
+    the module functions; the type itself is inert."""
     cards: tuple
     kind: str
 
@@ -77,17 +86,13 @@ class ClassifiedCardStack:
         return self.cards[i]
 
 
-# --- Internal classifier ---
-# These are the rigorous classifier; everything else is layered on top.
-# Kept module-private so the public surface is the named functions below.
-
+# --- Internal classifier ----------------------------------------------------
 
 def _successor(v):
     return 1 if v == 13 else v + 1
 
 
 def _classify_raw(cards):
-    """Return one of the 7 kinds, or None if `cards` doesn't fit any."""
     n = len(cards)
     if n == 0:
         return None
@@ -102,10 +107,8 @@ def _classify_pair(cards):
     a, b = cards
     av, asu, _ = a
     bv, bsu, _ = b
-    # Set partial: same value, distinct suits.
     if av == bv:
         return KIND_PAIR_SET if asu != bsu else None
-    # Run partial: consecutive values (a's successor is b).
     if _successor(av) != bv:
         return None
     if asu == bsu:
@@ -120,7 +123,6 @@ def _classify_long(cards):
     a1v, a1s, _ = cards[1]
     n = len(cards)
 
-    # Set: same value, all distinct suits.
     if a0v == a1v:
         if a0s == a1s:
             return None
@@ -132,12 +134,10 @@ def _classify_long(cards):
             seen.add(cs)
         return KIND_SET
 
-    # Run candidate.
     if _successor(a0v) != a1v:
         return None
 
     if a0s == a1s:
-        # Pure run — same suit throughout.
         prev_v = a1v
         for i in range(2, n):
             cv, cs, _ = cards[i]
@@ -146,7 +146,6 @@ def _classify_long(cards):
             prev_v = cv
         return KIND_RUN
 
-    # rb run candidate: alternating colors.
     a0_red = a0s in RED
     a1_red = a1s in RED
     if a0_red == a1_red:
@@ -165,15 +164,12 @@ def _classify_long(cards):
     return KIND_RB
 
 
-# --- Public constructors ---
+# --- Public constructors ----------------------------------------------------
 
 def classify_stack(cards):
-    """Run the rigorous classifier on `cards`. Returns
-    ClassifiedCardStack on success, None on invalid input.
-
-    Use this at the input boundary (loading state, validating raw
-    fixture data) and inside `splice` / `concat` / `insert_*` where
-    the result of an operation needs verification."""
+    """Run the rigorous classifier. Returns CCS on success, None on
+    invalid input. Use this at the input boundary; afterwards every
+    stack is already classified."""
     cards_t = tuple(cards)
     kind = _classify_raw(cards_t)
     if kind is None:
@@ -182,153 +178,332 @@ def classify_stack(cards):
 
 
 def singleton(card):
-    """Build a length-1 ClassifiedCardStack. No classification work."""
+    """Build a length-1 ClassifiedCardStack."""
     return ClassifiedCardStack((card,), KIND_SINGLETON)
 
 
-# --- Stack operations ---
-
-def remove_card(stack, card):
-    """Remove `card` from `stack`. Returns a tuple of 1, 2, or 3
-    ClassifiedCardStacks.
-
-    The FIRST piece is always the extracted card as a singleton.
-    Subsequent pieces are the remnants:
-
-      - run / rb (length 3+): up to two pieces — left prefix and
-        right suffix, in original order. Empty halves are dropped,
-        so the tuple has 2 or 3 entries depending on whether the
-        card was at an end (2) or interior (3).
-      - set (length 3+): one combined remainder piece (sets are
-        unordered, so prefix+suffix concatenate naturally). 2 entries.
-      - pair_run / pair_rb / pair_set: two singletons (extracted +
-        the other card). 2 entries.
-      - singleton: just the card itself; the original stack is fully
-        consumed. 1 entry.
-
-    Remnant kinds are derived from the parent's kind family + the
-    new length, NOT by re-running the rigorous classifier — slicing
-    a run leaves the family intact.
-
-    Raises ValueError if `card` is not in `stack`.
-    """
-    idx = _find_card_index(stack, card)
-    if idx is None:
-        raise ValueError(f"card {card} not in stack {stack.cards}")
-
-    extracted = singleton(card)
-
-    if stack.kind == KIND_SINGLETON:
-        return (extracted,)
-
-    if stack.kind in _PAIR_KINDS:
-        # Length 2: the other card becomes a singleton.
-        other = stack.cards[1 - idx]
-        return (extracted, ClassifiedCardStack((other,), KIND_SINGLETON))
-
-    # Length 3+ from here on.
-    if stack.kind == KIND_SET:
-        # Sets are unordered: prefix + suffix join naturally into one
-        # remainder. Family preserved; new length determines kind tag.
-        rest = stack.cards[:idx] + stack.cards[idx + 1:]
-        return (extracted,
-                ClassifiedCardStack(rest, _set_kind_for_length(len(rest))))
-
-    # run / rb: split into left prefix and right suffix; drop empties.
-    family = stack.kind  # KIND_RUN or KIND_RB
-    pieces = [extracted]
-    if idx > 0:
-        left = stack.cards[:idx]
-        pieces.append(ClassifiedCardStack(left, _run_kind_for_length(family, len(left))))
-    if idx < len(stack) - 1:
-        right = stack.cards[idx + 1:]
-        pieces.append(ClassifiedCardStack(right, _run_kind_for_length(family, len(right))))
-    return tuple(pieces)
-
-
-def insert_right(stack, card):
-    """Build a new stack with `card` appended on the right. Returns
-    ClassifiedCardStack on legal extension, None otherwise.
-
-    Goes through the rigorous classifier — extension can change the
-    kind family (singleton + card → pair_X for any of three flavors,
-    pair_X + card → run/rb/set, etc.) so a shortcut path would
-    duplicate the classifier's logic."""
-    return classify_stack(stack.cards + (card,))
-
-
-def insert_left(stack, card):
-    """Build a new stack with `card` prepended. Returns
-    ClassifiedCardStack on legal extension, None otherwise."""
-    return classify_stack((card,) + stack.cards)
-
-
-def concat(left, right):
-    """Concatenate two stacks end-to-end. Returns ClassifiedCardStack
-    on legal result, None otherwise.
-
-    Used by 'push' moves where a trouble pair is appended onto a
-    helper stack, and by 'engulf' where a growing 2-partial absorbs
-    a helper run. Order matters: `left.cards + right.cards`."""
-    return classify_stack(left.cards + right.cards)
-
-
-def splice(stack, card, position, side):
-    """Insert `card` at `position` in `stack`, fragmenting the result
-    into two halves.
-
-    `side` controls which half the inserted card joins:
-      - 'left': card goes at the END of the left half
-                (left = cards[:position] + (card,), right = cards[position:])
-      - 'right': card goes at the START of the right half
-                 (left = cards[:position], right = (card,) + cards[position:])
-
-    Returns (left_half, right_half) as ClassifiedCardStacks if both
-    halves classify as legal stacks; None otherwise.
-
-    The BFS splice move only fires on length-4+ pure_run / rb_run
-    sources; this function doesn't enforce that — callers may try a
-    splice and inspect the None result. Both halves go through the
-    rigorous classifier."""
-    if side == "left":
-        left_cards = stack.cards[:position] + (card,)
-        right_cards = stack.cards[position:]
-    elif side == "right":
-        left_cards = stack.cards[:position]
-        right_cards = (card,) + stack.cards[position:]
-    else:
-        raise ValueError(f"side must be 'left' or 'right', got {side!r}")
-
-    left = classify_stack(left_cards)
-    right = classify_stack(right_cards)
-    if left is None or right is None:
-        return None
-    return (left, right)
-
-
 def to_singletons(stack):
-    """Break `stack` into one ClassifiedCardStack per card, each a
-    singleton. Used by the BFS 'steal' verb on sets, where the
-    remaining cards become individual trouble singletons rather
-    than one combined pair_set."""
+    """Atomize a stack into one ClassifiedCardStack per card. Used by
+    `steal` on sets, where the BFS algorithm wants the remaining cards
+    as separate trouble singletons rather than one combined pair_set."""
     return tuple(singleton(c) for c in stack.cards)
 
 
-# --- Internal helpers ---
+# --- Source-side verbs ------------------------------------------------------
+#
+# The five extraction verbs: peel, pluck, yank, steal, split_out.
+# Each pair: a `can_X(stack, i)` predicate + a custom `X(stack, i)`
+# executor. `verb_for_position` is the dispatching probe — it asks
+# which (if any) verb applies at position i.
 
-def _find_card_index(stack, card):
-    """Linear scan; cards within a single legal stack are unique by
-    (value, suit, deck) — runs are sequential, sets have distinct
-    suits, partials and singletons are short. Returns None if not found."""
-    for i, c in enumerate(stack.cards):
-        if c == card:
-            return i
+def can_peel(stack, i):
+    """Peel: drop an end card from a length-4+ run/rb, or any card from
+    a length-4+ set (sets are unordered)."""
+    n = len(stack)
+    if stack.kind == KIND_SET and n >= 4:
+        return True
+    if stack.kind in (KIND_RUN, KIND_RB) and n >= 4 and (i == 0 or i == n - 1):
+        return True
+    return False
+
+
+def can_pluck(stack, i):
+    """Pluck: drop an interior card of a run/rb such that BOTH halves
+    remain length-3+ runs of the same family. Requires n >= 7 with
+    i in [3, n-4]."""
+    if stack.kind not in (KIND_RUN, KIND_RB):
+        return False
+    n = len(stack)
+    return 3 <= i <= n - 4
+
+
+def can_yank(stack, i):
+    """Yank: drop a card from a run/rb at a position where one half is
+    length-3+ and the other is length 1 or 2 (non-empty). Covers the
+    positions outside peel (ends) and pluck (deep interior)."""
+    if stack.kind not in (KIND_RUN, KIND_RB):
+        return False
+    n = len(stack)
+    if i == 0 or i == n - 1 or 3 <= i <= n - 4:
+        return False
+    left_len = i
+    right_len = n - i - 1
+    return max(left_len, right_len) >= 3 and min(left_len, right_len) >= 1
+
+
+def can_steal(stack, i):
+    """Steal: only on length-3 stacks. End positions for run/rb;
+    any position for set."""
+    if len(stack) != 3:
+        return False
+    if stack.kind in (KIND_RUN, KIND_RB):
+        return i == 0 or i == 2
+    return stack.kind == KIND_SET
+
+
+def can_split_out(stack, i):
+    """Split-out: extract the middle card of a length-3 run/rb. Both
+    halves are singletons."""
+    return (stack.kind in (KIND_RUN, KIND_RB)
+            and len(stack) == 3 and i == 1)
+
+
+def verb_for_position(stack, i):
+    """Probe: returns the single verb that applies at position i, or None.
+
+    Verbs are mutually exclusive at any (stack, i) — the predicates
+    partition the legal extraction positions into one verb each."""
+    if can_peel(stack, i):
+        return "peel"
+    if can_pluck(stack, i):
+        return "pluck"
+    if can_yank(stack, i):
+        return "yank"
+    if can_steal(stack, i):
+        return "steal"
+    if can_split_out(stack, i):
+        return "split_out"
     return None
 
 
+# Custom executors. Each ASSUMES its precondition; we assert in case of
+# caller bug.
+
+def peel(stack, i):
+    """Assumes can_peel(stack, i). Returns (extracted_singleton, remnant).
+
+    For set: remnant has the same value, one less suit. Length n-1
+    where n was >= 4; remnant kind is set or pair_set by length.
+    For run/rb at end position: remnant is the contiguous (n-1) cards
+    on the opposite side. Family preserved; length-driven kind."""
+    assert can_peel(stack, i), \
+        f"can_peel({stack.kind} len={len(stack)}, {i}) is False"
+    extracted = singleton(stack.cards[i])
+    if stack.kind == KIND_SET:
+        rest = stack.cards[:i] + stack.cards[i + 1:]
+        return (extracted,
+                ClassifiedCardStack(rest, _set_kind_for_length(len(rest))))
+    family = stack.kind
+    rest = stack.cards[1:] if i == 0 else stack.cards[:-1]
+    return (extracted,
+            ClassifiedCardStack(rest, _run_kind_for_length(family, len(rest))))
+
+
+def pluck(stack, i):
+    """Assumes can_pluck(stack, i). Returns (extracted, left, right).
+
+    Both halves are length-3+ runs of the parent family."""
+    assert can_pluck(stack, i), \
+        f"can_pluck({stack.kind} len={len(stack)}, {i}) is False"
+    family = stack.kind
+    extracted = singleton(stack.cards[i])
+    left_cards = stack.cards[:i]
+    right_cards = stack.cards[i + 1:]
+    return (extracted,
+            ClassifiedCardStack(left_cards, family),
+            ClassifiedCardStack(right_cards, family))
+
+
+def yank(stack, i):
+    """Assumes can_yank(stack, i). Returns (extracted, left, right).
+
+    One half is length-3+ run-family, the other is length-1 (singleton)
+    or length-2 (pair_X). Both non-empty by yank precondition."""
+    assert can_yank(stack, i), \
+        f"can_yank({stack.kind} len={len(stack)}, {i}) is False"
+    family = stack.kind
+    extracted = singleton(stack.cards[i])
+    left_cards = stack.cards[:i]
+    right_cards = stack.cards[i + 1:]
+    return (extracted,
+            ClassifiedCardStack(left_cards, _run_kind_for_length(family, len(left_cards))),
+            ClassifiedCardStack(right_cards, _run_kind_for_length(family, len(right_cards))))
+
+
+def steal(stack, i):
+    """Assumes can_steal(stack, i). Returns 2-3 pieces.
+
+    For set (n=3): atomizes — returns (extracted, *other_two_singletons)
+    so 3 pieces total. (BFS rule: stealing from a set destroys the set
+    and the remaining cards become independent trouble singletons,
+    rather than persisting as one pair_set.)
+    For run/rb (n=3, i=0 or i=2): returns (extracted, length-2 partial)."""
+    assert can_steal(stack, i), \
+        f"can_steal({stack.kind} len={len(stack)}, {i}) is False"
+    extracted = singleton(stack.cards[i])
+    if stack.kind == KIND_SET:
+        others = tuple(singleton(c) for j, c in enumerate(stack.cards) if j != i)
+        return (extracted,) + others
+    family = stack.kind
+    rest = stack.cards[1:] if i == 0 else stack.cards[:-1]
+    return (extracted, ClassifiedCardStack(rest, _PAIR_OF[family]))
+
+
+def split_out(stack, i):
+    """Assumes can_split_out(stack, i). Length-3 run or rb, i=1.
+    Returns (extracted, left_singleton, right_singleton)."""
+    assert can_split_out(stack, i), \
+        f"can_split_out({stack.kind} len={len(stack)}, {i}) is False"
+    return (singleton(stack.cards[1]),
+            singleton(stack.cards[0]),
+            singleton(stack.cards[2]))
+
+
+# --- Target-side: absorb a card --------------------------------------------
+
+def kind_after_absorb_right(target, card):
+    """Probe: what kind would (target.cards + (card,)) classify as, or
+    None if illegal. O(1) for run/rb (single boundary check); bounded
+    for set (cross-stack suit uniqueness, max 4 cards)."""
+    return _absorb_kind(target, card, side="right")
+
+
+def kind_after_absorb_left(target, card):
+    """Probe: what kind would ((card,) + target.cards) classify as, or
+    None if illegal."""
+    return _absorb_kind(target, card, side="left")
+
+
+def absorb_right(target, card, new_kind):
+    """Executor. Assumes new_kind == kind_after_absorb_right(target, card).
+    Trivial — appends card and tags with the earned kind."""
+    return ClassifiedCardStack(target.cards + (card,), new_kind)
+
+
+def absorb_left(target, card, new_kind):
+    """Executor. Assumes new_kind == kind_after_absorb_left(target, card)."""
+    return ClassifiedCardStack((card,) + target.cards, new_kind)
+
+
+# --- Splice ----------------------------------------------------------------
+
+def kinds_after_splice(stack, card, position, side):
+    """Probe: returns (left_kind, right_kind) if both halves classify,
+    None otherwise.
+
+    side='left':  left  = stack.cards[:position] + (card,)
+                  right = stack.cards[position:]
+    side='right': left  = stack.cards[:position]
+                  right = (card,) + stack.cards[position:]
+
+    For correctness-first this routes through the rigorous classifier;
+    optimization to parent-kind dispatch can come later when profiling
+    flags it."""
+    if side not in ("left", "right"):
+        raise ValueError(f"side must be 'left' or 'right', got {side!r}")
+    left_cards, right_cards = _splice_halves(stack, card, position, side)
+    left_kind = _classify_raw(left_cards)
+    if left_kind is None:
+        return None
+    right_kind = _classify_raw(right_cards)
+    if right_kind is None:
+        return None
+    return (left_kind, right_kind)
+
+
+def splice(stack, card, position, side, left_kind, right_kind):
+    """Executor. Builds the two halves with the given kinds. Assumes
+    kinds_after_splice returned (left_kind, right_kind)."""
+    if side not in ("left", "right"):
+        raise ValueError(f"side must be 'left' or 'right', got {side!r}")
+    left_cards, right_cards = _splice_halves(stack, card, position, side)
+    return (ClassifiedCardStack(left_cards, left_kind),
+            ClassifiedCardStack(right_cards, right_kind))
+
+
+# --- Internal helpers ------------------------------------------------------
+
+def _splice_halves(stack, card, position, side):
+    """Cards-tuple builder shared by the splice probe and executor."""
+    if side == "left":
+        return stack.cards[:position] + (card,), stack.cards[position:]
+    # side == "right"
+    return stack.cards[:position], (card,) + stack.cards[position:]
+
+
+def _absorb_kind(target, card, side):
+    """Shared kind-probe for absorb_right and absorb_left.
+
+    side='right': boundary is (target.cards[-1], card) — target precedes
+    side='left':  boundary is (card, target.cards[0]) — card precedes
+
+    For sets, a cross-stack suit-uniqueness check fires (boundary
+    alone misses non-adjacent duplicates)."""
+    n_new = len(target) + 1
+
+    if target.kind == KIND_SINGLETON:
+        # 2-card result: family inferred from the two cards in
+        # boundary order.
+        only = target.cards[0]
+        if side == "right":
+            family = _family_for_two_cards(only, card)
+        else:
+            family = _family_for_two_cards(card, only)
+        if family is None:
+            return None
+        return _PAIR_OF[family]
+
+    family = _FAMILY_OF_KIND[target.kind]
+
+    # Boundary check between adjacent cards in resulting stack.
+    if side == "right":
+        boundary_a, boundary_b = target.cards[-1], card
+    else:
+        boundary_a, boundary_b = card, target.cards[0]
+    if not _boundary_ok(boundary_a, boundary_b, family):
+        return None
+
+    # Set family additionally needs cross-stack suit uniqueness +
+    # max-length cap (4 distinct suits).
+    if family == KIND_SET:
+        if n_new > 4:
+            return None
+        new_suit = card[1]
+        for c in target.cards:
+            if c[1] == new_suit:
+                return None
+
+    if n_new >= 3:
+        return family
+    return _PAIR_OF[family]
+
+
+def _family_for_two_cards(c1, c2):
+    """Return the family two cards form when adjacent in (c1, c2) order,
+    or None if they don't form any legal pair."""
+    v1, s1, _ = c1
+    v2, s2, _ = c2
+    if v1 == v2:
+        if s1 == s2:
+            return None
+        return KIND_SET
+    if _successor(v1) != v2:
+        return None
+    if s1 == s2:
+        return KIND_RUN
+    if (s1 in RED) != (s2 in RED):
+        return KIND_RB
+    return None
+
+
+def _boundary_ok(a, b, family):
+    """Single-boundary legality check for `family`. Caller has already
+    determined the family from the parent kinds."""
+    av, asu, _ = a
+    bv, bsu, _ = b
+    if family == KIND_SET:
+        return av == bv and asu != bsu
+    if family == KIND_RUN:
+        return asu == bsu and _successor(av) == bv
+    if family == KIND_RB:
+        if _successor(av) != bv:
+            return False
+        return (asu in RED) != (bsu in RED)
+    return False
+
+
 def _run_kind_for_length(family, n):
-    """Map a (run-family, length) to the resulting kind tag.
-    `family` is KIND_RUN or KIND_RB. Length 0 is invalid here."""
+    """Kind tag for a slice of a run/rb with n cards remaining."""
     if n >= 3:
         return family
     if n == 2:
@@ -339,7 +514,7 @@ def _run_kind_for_length(family, n):
 
 
 def _set_kind_for_length(n):
-    """Map remaining-length to the kind for a set fragment."""
+    """Kind tag for a remainder of a set with n cards."""
     if n >= 3:
         return KIND_SET
     if n == 2:
