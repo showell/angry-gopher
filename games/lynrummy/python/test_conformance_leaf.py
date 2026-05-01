@@ -40,6 +40,7 @@ from classified_card_stack import (
     can_steal, steal,
     can_split_out, split_out,
     kinds_after_splice_left, kinds_after_splice_right,
+    extends_tables,
 )
 
 
@@ -63,26 +64,59 @@ _ARROW = "→"
 
 
 def _parse_dsl(path):
-    """Parse a leaf DSL file. Returns a list of (line_number, raw_line,
-    verb, args, expected, comment) tuples — one per scenario line.
-    Comment-only and blank lines are skipped."""
-    out = []
+    """Parse a leaf DSL file. Returns a list of scenario dicts.
+
+    Two scenario shapes:
+
+      Single-line (most leaves):
+          <verb> <token>... → <expected>            [# inline comment]
+        Yields {"lineno", "raw", "verb", "args", "expected",
+                "comment", "body": None}
+
+      Multi-line block (extenders):
+          <verb> <token>...                          [# header comment]
+            <bucket>: <entries>                      [# inline comment]
+            <bucket>: <entries>                      ...
+        The block opens at a column-0 verb line WITHOUT `→`. Subsequent
+        whitespace-prefixed lines are body. The block ends at the next
+        column-0 line or EOF.
+        Yields {"lineno", "raw", "verb", "args", "expected": None,
+                "comment", "body": list of (lineno, body_line, comment)}
+
+    Comment-only and blank lines are skipped between scenarios.
+    """
     with open(path) as f:
-        for lineno, raw in enumerate(f, start=1):
-            line = raw.rstrip("\n")
-            stripped = line.lstrip()
-            if not stripped or stripped.startswith("#"):
-                continue
-            # Split off any inline comment.
-            comment = ""
-            if "#" in line:
-                pre, _, post = line.partition("#")
-                line = pre.rstrip()
-                comment = post.strip()
-            if _ARROW not in line:
-                raise ValueError(
-                    f"{path}:{lineno}: scenario missing '{_ARROW}': {raw!r}")
-            lhs, _, rhs = line.partition(_ARROW)
+        lines = list(enumerate(f, start=1))
+
+    def _strip_comment(line):
+        comment = ""
+        if "#" in line:
+            pre, _, post = line.partition("#")
+            line = pre.rstrip()
+            comment = post.strip()
+        return line, comment
+
+    def _is_indented(raw):
+        return raw and raw[0] in " \t"
+
+    out = []
+    i = 0
+    while i < len(lines):
+        lineno, raw = lines[i]
+        line = raw.rstrip("\n")
+        stripped = line.lstrip()
+        if not stripped or stripped.startswith("#"):
+            i += 1
+            continue
+        # Column-0 line — opens a scenario.
+        if _is_indented(raw):
+            # Stray indented line outside a block.
+            raise ValueError(
+                f"{path}:{lineno}: indented line outside a block: {raw!r}")
+        body_line, comment = _strip_comment(line)
+        if _ARROW in body_line:
+            # Single-line scenario.
+            lhs, _, rhs = body_line.partition(_ARROW)
             tokens = lhs.split()
             if not tokens:
                 raise ValueError(
@@ -92,7 +126,45 @@ def _parse_dsl(path):
             if not expected:
                 raise ValueError(
                     f"{path}:{lineno}: scenario missing expected value: {raw!r}")
-            out.append((lineno, raw.rstrip("\n"), verb, args, expected, comment))
+            out.append({
+                "lineno": lineno,
+                "raw": line,
+                "verb": verb,
+                "args": args,
+                "expected": expected,
+                "comment": comment,
+                "body": None,
+            })
+            i += 1
+            continue
+        # Multi-line block: header line opens it.
+        tokens = body_line.split()
+        if not tokens:
+            raise ValueError(
+                f"{path}:{lineno}: empty header line: {raw!r}")
+        verb, args = tokens[0], tokens[1:]
+        body = []
+        i += 1
+        while i < len(lines):
+            blineno, braw = lines[i]
+            bstripped = braw.lstrip()
+            if not bstripped or bstripped.startswith("#"):
+                i += 1
+                continue
+            if not _is_indented(braw):
+                break  # next column-0 line ends the block
+            bline, bcomment = _strip_comment(braw.rstrip("\n"))
+            body.append((blineno, bline.strip(), bcomment))
+            i += 1
+        out.append({
+            "lineno": lineno,
+            "raw": line,
+            "verb": verb,
+            "args": args,
+            "expected": None,
+            "comment": comment,
+            "body": body,
+        })
     return out
 
 
@@ -338,6 +410,89 @@ def _run_left_splice(args, expected):
     return _check_splice(args, expected, kinds_after_splice_left)
 
 
+# --- Multi-line block runner: extenders -------------------------------
+#
+# Header line:   extenders <target_cards>...
+# Body lines:    <bucket>: <entries>
+#
+# Where:
+#   <bucket>  is one of `left`, `right`, `set`.
+#   <entries> is `-` (empty bucket) OR a comma-separated list of
+#             `<card_label>=<kind>` items.
+#
+# Semantics: the DSL is a complete spec of the target's three
+# extender dicts. Every entry the DSL lists must appear in the
+# function's output, and every entry the function returns must
+# appear in the DSL. Missing OR extra entries fail.
+
+
+def _parse_extender_body(body):
+    """Parse extenders body lines into a {bucket: dict} structure
+    where each inner dict maps `(value, suit) → kind_string`."""
+    expected = {"left": {}, "right": {}, "set": {}}
+    seen_buckets = set()
+    for lineno, line, _comment in body:
+        if ":" not in line:
+            raise ValueError(
+                f"line {lineno}: bucket line missing ':': {line!r}")
+        bucket, _, rest = line.partition(":")
+        bucket = bucket.strip()
+        rest = rest.strip()
+        if bucket not in expected:
+            raise ValueError(
+                f"line {lineno}: unknown bucket {bucket!r}: must be "
+                "one of left / right / set")
+        if bucket in seen_buckets:
+            raise ValueError(
+                f"line {lineno}: bucket {bucket!r} listed twice")
+        seen_buckets.add(bucket)
+        if rest == "-":
+            continue  # explicitly empty
+        # Comma-separated entries: <card>=<kind>, <card>=<kind>, ...
+        for entry in rest.split(","):
+            entry = entry.strip()
+            if "=" not in entry:
+                raise ValueError(
+                    f"line {lineno}: entry missing '=': {entry!r}")
+            card_label, _, kind = entry.partition("=")
+            card_label = card_label.strip()
+            kind = kind.strip()
+            card = parse_card_label(card_label)
+            shape = (card[0], card[1])
+            if shape in expected[bucket]:
+                raise ValueError(
+                    f"line {lineno}: duplicate shape {shape!r} in "
+                    f"bucket {bucket!r}")
+            expected[bucket][shape] = kind
+    # Buckets not listed default to empty.
+    return expected
+
+
+def _run_extenders(args, body):
+    target = _verb_target(args)
+    expected = _parse_extender_body(body)
+    actual_left, actual_right, actual_set = extends_tables(target)
+    actual = {"left": actual_left, "right": actual_right, "set": actual_set}
+    errors = []
+    for bucket in ("left", "right", "set"):
+        exp = expected[bucket]
+        act = actual[bucket]
+        for shape, kind in exp.items():
+            if shape not in act:
+                errors.append(
+                    f"{bucket}: missing entry {shape}={kind}")
+            elif act[shape] != kind:
+                errors.append(
+                    f"{bucket}: {shape} expected={kind} got={act[shape]}")
+        for shape, kind in act.items():
+            if shape not in exp:
+                errors.append(
+                    f"{bucket}: unexpected entry {shape}={kind}")
+    if errors:
+        return "; ".join(errors)
+    return None
+
+
 _RUNNERS = {
     "classify": _run_classify,
     "right_absorb": _run_right_absorb,
@@ -351,22 +506,42 @@ _RUNNERS = {
     "left_splice": _run_left_splice,
 }
 
+_RUNNERS_MULTI = {
+    "extenders": _run_extenders,
+}
+
 
 # --- Driver ---------------------------------------------------------------
 
 def _run_dsl(path):
     scenarios = _parse_dsl(path)
     failures = 0
-    for lineno, raw_line, verb, args, expected, comment in scenarios:
-        runner = _RUNNERS.get(verb)
-        if runner is None:
-            print(f"SKIP {path}:{lineno} unknown verb {verb!r}: {raw_line}")
-            continue
-        try:
-            err = runner(args, expected)
-        except Exception as e:
-            err = f"{type(e).__name__}: {e}"
-            traceback.print_exc()
+    for sc in scenarios:
+        verb = sc["verb"]
+        lineno = sc["lineno"]
+        raw_line = sc["raw"]
+        comment = sc["comment"]
+        if sc["body"] is None:
+            runner = _RUNNERS.get(verb)
+            if runner is None:
+                print(f"SKIP {path}:{lineno} unknown verb {verb!r}: {raw_line}")
+                continue
+            try:
+                err = runner(sc["args"], sc["expected"])
+            except Exception as e:
+                err = f"{type(e).__name__}: {e}"
+                traceback.print_exc()
+        else:
+            runner = _RUNNERS_MULTI.get(verb)
+            if runner is None:
+                print(f"SKIP {path}:{lineno} unknown multi-line verb "
+                      f"{verb!r}: {raw_line}")
+                continue
+            try:
+                err = runner(sc["args"], sc["body"])
+            except Exception as e:
+                err = f"{type(e).__name__}: {e}"
+                traceback.print_exc()
         if err is not None:
             label = comment or raw_line
             print(f"FAIL {path}:{lineno} ({label}): {err}")
