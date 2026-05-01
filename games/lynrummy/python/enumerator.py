@@ -33,21 +33,11 @@ def remove_absorber(bucket_name, idx, trouble, growing):
     return list(trouble), drop_at(growing, idx)
 
 
-def graduate(merged, growing, complete, kind=None):
+def graduate(merged, growing, complete):
     """If `merged` classifies as a complete legal group,
     append it to COMPLETE; otherwise append it to GROWING.
-    Returns (new_growing, new_complete, graduated_flag). Pure.
-
-    `kind` is an optional precomputed `classify(merged)`. Hot
-    callers (extract_absorb / free_pull / shift) already have it
-    from `admissible_partial`; threading it through avoids a
-    second classify on the same stack."""
-    if kind is None:
-        # Length-2 mergeds and any non-hot caller fall here:
-        # classify handles all stack lengths (returns "other"
-        # for n < 3) so no special-casing required.
-        kind = classify(merged)
-    if kind != "other":
+    Returns (new_growing, new_complete, graduated_flag). Pure."""
+    if classify(merged) != "other":
         return list(growing), complete + [merged], True
     return growing + [merged], list(complete), False
 
@@ -118,27 +108,12 @@ def admissible_partial(merged, inventory):
     """Gate every absorbed result: legal as a partial AND (if
     length-2) has a completion candidate somewhere in
     `inventory`. Lifted from the three sites
-    (extract_absorb / free_pull / shift) that share the gate.
-
-    Returns (ok, kind):
-      - ok: True iff the partial is admissible.
-      - kind: classify(merged) when len(merged) >= 3 and ok;
-              None otherwise. Hot callers thread this into
-              graduate() so the same stack isn't re-classified.
-    """
-    n = len(merged)
-    if n >= 3:
-        kind = classify(merged)
-        if kind == "other":
-            return False, None
-        return True, kind
-    # len == 2: is_partial_ok handles the pair-rule check
-    # (no classify needed); doomed-third gates the result.
+    (extract_absorb / free_pull / shift) that share the gate."""
     if not is_partial_ok(merged):
-        return False, None
-    if has_doomed_third(merged, inventory):
-        return False, None
-    return True, None
+        return False
+    if len(merged) == 2 and has_doomed_third(merged, inventory):
+        return False
+    return True
 
 
 # --- Extract physics ---
@@ -316,15 +291,13 @@ def enumerate_moves(state):
                 for side in ("right", "left"):
                     merged = ([*target, ext_card] if side == "right"
                               else [ext_card, *target])
-                    ok, merged_kind = admissible_partial(
-                        merged, completion_inv)
-                    if not ok:
+                    if not admissible_partial(merged, completion_inv):
                         continue
                     nt_base, ng = remove_absorber(
                         bucket, idx, trouble, growing)
                     nt = nt_base + spawned
                     ng_final, nc, graduated = graduate(
-                        merged, ng, complete, kind=merged_kind)
+                        merged, ng, complete)
                     desc = ExtractAbsorbDesc(
                         verb=verb,
                         source=source,
@@ -350,9 +323,7 @@ def enumerate_moves(state):
             for side in ("right", "left"):
                 merged = ([*target, loose] if side == "right"
                           else [loose, *target])
-                ok, merged_kind = admissible_partial(
-                    merged, completion_inv)
-                if not ok:
+                if not admissible_partial(merged, completion_inv):
                     continue
                 # Both the absorber AND the loose-source come
                 # out of TROUBLE — drop both at once.
@@ -367,7 +338,7 @@ def enumerate_moves(state):
                 else:
                     nt = drop_at(nt_base, li)
                 ng_final, nc, graduated = graduate(
-                    merged, ng, complete, kind=merged_kind)
+                    merged, ng, complete)
                 desc = FreePullDesc(
                     loose=loose,
                     target_before=list(target),
@@ -453,14 +424,12 @@ def enumerate_moves(state):
                             [*target, stolen]
                             if absorb_side == "right"
                             else [stolen, *target])
-                        ok, merged_kind = admissible_partial(
-                            merged, completion_inv)
-                        if not ok:
+                        if not admissible_partial(merged, completion_inv):
                             continue
                         nt_base, ng = remove_absorber(
                             bucket, idx, trouble, growing)
                         ng_final, nc, graduated = graduate(
-                            merged, ng, complete, kind=merged_kind)
+                            merged, ng, complete)
                         desc = ShiftDesc(
                             source=list(source),
                             donor=list(donor),
