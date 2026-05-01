@@ -13,12 +13,23 @@ import { fileURLToPath } from "node:url";
 import type { Card } from "../src/rules/card.ts";
 import { parseCardLabel } from "../src/rules/card.ts";
 import {
+  canPeel,
+  canPluck,
+  canSplitOut,
+  canSteal,
+  canYank,
   classifyStack,
   extendsTables,
   kindAfterAbsorbLeft,
   kindAfterAbsorbRight,
+  peel,
+  pluck,
   shapeFrom,
   shapeId,
+  splitOut,
+  steal,
+  yank,
+  type ClassifiedCardStack,
   type ExtenderMap,
   type Kind,
 } from "../src/classified_card_stack.ts";
@@ -201,6 +212,106 @@ function runLeftAbsorb(args: readonly string[], expected: string): RunResult {
   return null;
 }
 
+// --- Source-side verb runners (peel / pluck / yank / steal / split_out) ---
+
+type SourceVerbPredicate = (stack: ClassifiedCardStack, i: number) => boolean;
+type SourceVerbExecutor = (
+  stack: ClassifiedCardStack,
+  i: number,
+) => readonly ClassifiedCardStack[];
+
+/** Split source-verb args at the `@` separator into (target_tokens, position). */
+function splitAtArgs(args: readonly string[]): [string[], number] {
+  const atIdx = args.indexOf("@");
+  if (atIdx < 0) {
+    throw new Error(`source-verb scenario missing '@' separator: ${args.join(" ")}`);
+  }
+  const targetTokens = args.slice(0, atIdx);
+  const posTokens = args.slice(atIdx + 1);
+  if (targetTokens.length === 0) {
+    throw new Error(`source-verb scenario missing target cards: ${args.join(" ")}`);
+  }
+  if (posTokens.length !== 1) {
+    throw new Error(
+      `source-verb scenario expects exactly 1 token after '@': ${args.join(" ")}`,
+    );
+  }
+  const pos = parseInt(posTokens[0]!, 10);
+  if (!Number.isInteger(pos)) {
+    throw new Error(`source-verb position not an int: ${posTokens[0]}`);
+  }
+  return [targetTokens, pos];
+}
+
+/** Compare two card lists for equality (deep, by component). */
+function cardsEqual(a: readonly Card[], b: readonly Card[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    const x = a[i]!;
+    const y = b[i]!;
+    if (x[0] !== y[0] || x[1] !== y[1] || x[2] !== y[2]) return false;
+  }
+  return true;
+}
+
+function renderCards(cards: readonly Card[]): string {
+  return cards.map(c => {
+    const base = "A23456789TJQK"[c[0] - 1]! + "CDSH"[c[1]]!;
+    return c[2] === 0 ? base : `${base}:${c[2]}`;
+  }).join(" ");
+}
+
+/** Build a runner for one source-side verb. The runner parses the
+ *  `@ <pos>` syntax, classifies the target, checks the predicate against
+ *  the expected legal/illegal status, and (when legal) verifies the
+ *  card content of each piece against the `|`-separated expected list. */
+function makeSourceVerbRunner(
+  verbName: string,
+  predicate: SourceVerbPredicate,
+  executor: SourceVerbExecutor,
+): Runner {
+  return (args, expected) => {
+    const [targetTokens, pos] = splitAtArgs(args);
+    const target = classifyStack(targetTokens.map(parseCardLabel));
+    if (target === null) {
+      return `${verbName} target failed to classify: ${targetTokens.join(" ")}`;
+    }
+    const predOk = predicate(target, pos);
+    if (expected === "none") {
+      return predOk ? `expected none, predicate returned true` : null;
+    }
+    if (!predOk) {
+      return `expected pieces, predicate returned false (expected ${expected})`;
+    }
+    // Parse expected pieces from the `|`-split RHS.
+    const pieces = expected.split("|").map(p => p.trim()).filter(Boolean);
+    if (pieces.length === 0) {
+      return `expected RHS has no pieces: ${expected}`;
+    }
+    const expectedCardLists: Card[][] = pieces.map(piece =>
+      piece.split(/\s+/).filter(Boolean).map(parseCardLabel),
+    );
+    const result = executor(target, pos);
+    if (result.length !== expectedCardLists.length) {
+      return `${verbName} returned ${result.length} pieces, expected ${expectedCardLists.length}`;
+    }
+    for (let k = 0; k < result.length; k++) {
+      const got = result[k]!.cards;
+      const want = expectedCardLists[k]!;
+      if (!cardsEqual(got, want)) {
+        return `piece ${k}: expected [${renderCards(want)}], got [${renderCards(got)}]`;
+      }
+    }
+    return null;
+  };
+}
+
+const runPeel = makeSourceVerbRunner("peel", canPeel, peel);
+const runPluck = makeSourceVerbRunner("pluck", canPluck, pluck);
+const runYank = makeSourceVerbRunner("yank", canYank, yank);
+const runSteal = makeSourceVerbRunner("steal", canSteal, steal);
+const runSplitOut = makeSourceVerbRunner("split_out", canSplitOut, splitOut);
+
 // --- Multi-line block runner: extenders --------------------------------
 
 type MultiRunner = (args: readonly string[], body: readonly BodyLine[]) => RunResult;
@@ -306,6 +417,11 @@ const RUNNERS: Readonly<Record<string, Runner>> = {
   classify: runClassify,
   right_absorb: runRightAbsorb,
   left_absorb: runLeftAbsorb,
+  peel: runPeel,
+  pluck: runPluck,
+  yank: runYank,
+  steal: runSteal,
+  split_out: runSplitOut,
 };
 
 const RUNNERS_MULTI: Readonly<Record<string, MultiRunner>> = {

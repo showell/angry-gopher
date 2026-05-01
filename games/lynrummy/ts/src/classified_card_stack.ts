@@ -377,3 +377,209 @@ export function kindAfterAbsorbLeft(
   if (nNew >= 3) return family;
   return pairOf(family);
 }
+
+// --- Source-side verbs -----------------------------------------------------
+//
+// The five extraction verbs: peel, pluck, yank, steal, split_out. Each
+// pair is a `canX(stack, i)` predicate plus a custom `x(stack, i)`
+// executor. Predicates are mutually exclusive at any (stack, i) — they
+// partition the legal extraction positions into one verb each.
+//
+// Executors assume their precondition holds; we throw on caller bug,
+// matching the no-silent-fallbacks doctrine. Remnant kinds derive from
+// the parent's kind family + remnant length via the helpers below — no
+// re-classification.
+
+/** Build a length-1 ClassifiedCardStack. Mirrors python's `singleton`. */
+function singletonStack(card: Card): ClassifiedCardStack {
+  return { cards: [card], kind: KIND_SINGLETON, n: 1 };
+}
+
+/** Kind tag for a slice of a run/rb-family stack with n cards remaining.
+ *  Mirrors python's `_run_kind_for_length`. */
+function runKindForLength(family: Kind, n: number): Kind {
+  if (n >= 3) return family;
+  if (n === 2) return pairOf(family);
+  if (n === 1) return KIND_SINGLETON;
+  throw new Error("zero-length run slice is not a valid stack");
+}
+
+/** Kind tag for a remainder of a set with n cards. Mirrors python's
+ *  `_set_kind_for_length`. */
+function setKindForLength(n: number): Kind {
+  if (n >= 3) return KIND_SET;
+  if (n === 2) return KIND_PAIR_SET;
+  if (n === 1) return KIND_SINGLETON;
+  throw new Error("zero-length set slice is not a valid stack");
+}
+
+/** Peel: drop an end card from a length-4+ run/rb, or any card from a
+ *  length-4+ set (sets are unordered). */
+export function canPeel(stack: ClassifiedCardStack, i: number): boolean {
+  const n = stack.n;
+  if (stack.kind === KIND_SET && n >= 4) return true;
+  if ((stack.kind === KIND_RUN || stack.kind === KIND_RB) && n >= 4
+      && (i === 0 || i === n - 1)) {
+    return true;
+  }
+  return false;
+}
+
+/** Pluck: drop an interior card of a run/rb such that BOTH halves remain
+ *  length-3+ runs of the same family. Requires n >= 7 with i in [3, n-4]. */
+export function canPluck(stack: ClassifiedCardStack, i: number): boolean {
+  if (stack.kind !== KIND_RUN && stack.kind !== KIND_RB) return false;
+  return 3 <= i && i <= stack.n - 4;
+}
+
+/** Yank: drop a card from a run/rb where one half is length-3+ and the
+ *  other is length 1 or 2 (non-empty). Covers positions outside peel
+ *  (ends) and pluck (deep interior). */
+export function canYank(stack: ClassifiedCardStack, i: number): boolean {
+  if (stack.kind !== KIND_RUN && stack.kind !== KIND_RB) return false;
+  const n = stack.n;
+  if (i === 0 || i === n - 1 || (3 <= i && i <= n - 4)) return false;
+  const leftLen = i;
+  const rightLen = n - i - 1;
+  return Math.max(leftLen, rightLen) >= 3 && Math.min(leftLen, rightLen) >= 1;
+}
+
+/** Steal: only on length-3 stacks. End positions for run/rb; any
+ *  position for set. */
+export function canSteal(stack: ClassifiedCardStack, i: number): boolean {
+  if (stack.n !== 3) return false;
+  if (stack.kind === KIND_RUN || stack.kind === KIND_RB) {
+    return i === 0 || i === 2;
+  }
+  return stack.kind === KIND_SET;
+}
+
+/** Split-out: extract the middle card of a length-3 run/rb. Both halves
+ *  are singletons. */
+export function canSplitOut(stack: ClassifiedCardStack, i: number): boolean {
+  return (stack.kind === KIND_RUN || stack.kind === KIND_RB)
+      && stack.n === 3 && i === 1;
+}
+
+/**
+ * Peel executor. Assumes `canPeel(stack, i)`. Returns
+ * `[extracted_singleton, remnant]`.
+ *
+ * For set: remnant is the other (n-1) cards (any value of i).
+ * For run/rb at end position: remnant is the contiguous (n-1) cards on
+ * the opposite side. Family preserved; length-driven kind.
+ */
+export function peel(
+  stack: ClassifiedCardStack,
+  i: number,
+): readonly ClassifiedCardStack[] {
+  if (!canPeel(stack, i)) {
+    throw new Error(`canPeel(${stack.kind} len=${stack.n}, ${i}) is False`);
+  }
+  const extracted = singletonStack(stack.cards[i]!);
+  if (stack.kind === KIND_SET) {
+    const rest: Card[] = stack.cards.slice(0, i).concat(stack.cards.slice(i + 1));
+    return [extracted, { cards: rest, kind: setKindForLength(rest.length), n: rest.length }];
+  }
+  const family = stack.kind;
+  const rest: Card[] =
+    i === 0 ? stack.cards.slice(1) : stack.cards.slice(0, -1);
+  return [extracted, { cards: rest, kind: runKindForLength(family, rest.length), n: rest.length }];
+}
+
+/**
+ * Pluck executor. Assumes `canPluck(stack, i)`. Returns
+ * `[extracted, left, right]`. Both halves are length-3+ runs of the
+ * parent family.
+ */
+export function pluck(
+  stack: ClassifiedCardStack,
+  i: number,
+): readonly ClassifiedCardStack[] {
+  if (!canPluck(stack, i)) {
+    throw new Error(`canPluck(${stack.kind} len=${stack.n}, ${i}) is False`);
+  }
+  const family = stack.kind;
+  const extracted = singletonStack(stack.cards[i]!);
+  const leftCards: Card[] = stack.cards.slice(0, i);
+  const rightCards: Card[] = stack.cards.slice(i + 1);
+  return [
+    extracted,
+    { cards: leftCards, kind: family, n: leftCards.length },
+    { cards: rightCards, kind: family, n: rightCards.length },
+  ];
+}
+
+/**
+ * Yank executor. Assumes `canYank(stack, i)`. Returns
+ * `[extracted, left, right]`. One half is length-3+ run-family, the
+ * other is length-1 (singleton) or length-2 (pair_X). Both non-empty
+ * by yank precondition.
+ */
+export function yank(
+  stack: ClassifiedCardStack,
+  i: number,
+): readonly ClassifiedCardStack[] {
+  if (!canYank(stack, i)) {
+    throw new Error(`canYank(${stack.kind} len=${stack.n}, ${i}) is False`);
+  }
+  const family = stack.kind;
+  const extracted = singletonStack(stack.cards[i]!);
+  const leftCards: Card[] = stack.cards.slice(0, i);
+  const rightCards: Card[] = stack.cards.slice(i + 1);
+  return [
+    extracted,
+    { cards: leftCards, kind: runKindForLength(family, leftCards.length), n: leftCards.length },
+    { cards: rightCards, kind: runKindForLength(family, rightCards.length), n: rightCards.length },
+  ];
+}
+
+/**
+ * Steal executor. Assumes `canSteal(stack, i)`. Returns 2 or 3 pieces.
+ *
+ * For set (n=3): atomizes — returns `[extracted, *other_two_singletons]`
+ * (3 pieces). BFS rule: stealing from a set destroys the set and the
+ * remaining cards become independent trouble singletons rather than
+ * persisting as one pair_set.
+ *
+ * For run/rb (n=3, i=0 or i=2): returns `[extracted, length-2 partial]`
+ * (2 pieces).
+ */
+export function steal(
+  stack: ClassifiedCardStack,
+  i: number,
+): readonly ClassifiedCardStack[] {
+  if (!canSteal(stack, i)) {
+    throw new Error(`canSteal(${stack.kind} len=${stack.n}, ${i}) is False`);
+  }
+  const extracted = singletonStack(stack.cards[i]!);
+  if (stack.kind === KIND_SET) {
+    const others: ClassifiedCardStack[] = [];
+    for (let j = 0; j < stack.cards.length; j++) {
+      if (j !== i) others.push(singletonStack(stack.cards[j]!));
+    }
+    return [extracted, ...others];
+  }
+  const family = stack.kind;
+  const rest: Card[] =
+    i === 0 ? stack.cards.slice(1) : stack.cards.slice(0, -1);
+  return [extracted, { cards: rest, kind: pairOf(family), n: rest.length }];
+}
+
+/**
+ * Split-out executor. Assumes `canSplitOut(stack, i)`. Length-3 run or
+ * rb, i=1. Returns `[extracted, left_singleton, right_singleton]`.
+ */
+export function splitOut(
+  stack: ClassifiedCardStack,
+  i: number,
+): readonly ClassifiedCardStack[] {
+  if (!canSplitOut(stack, i)) {
+    throw new Error(`canSplitOut(${stack.kind} len=${stack.n}, ${i}) is False`);
+  }
+  return [
+    singletonStack(stack.cards[1]!),
+    singletonStack(stack.cards[0]!),
+    singletonStack(stack.cards[2]!),
+  ];
+}
