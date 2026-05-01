@@ -6,12 +6,15 @@ conformance_fixtures.json (DSL scenarios parsed by fixturegen).
 
 For each baseline_board_* scenario:
   - Builds the board state from the fixture
-  - Runs the BFS solver (--runs times, takes minimum)
+  - Runs the BFS solver (--runs times, takes minimum) via
+    bench_timing.time_solver — warmup + GC-disabled + process-time
   - Compares against the stored baseline
 
-Only scenarios with baseline_ms > MIN_BASELINE_MS (default 100ms) are
-checked. Python timing noise dominates below that threshold; correctness
-is covered by DSL conformance tests for the fast cases.
+We measure ALL 81 scenarios (in the same sort order as
+gen_baseline_board.py) so the CPU thermal trajectory matches the gold
+capture. Only scenarios with baseline_ms > MIN_BASELINE_MS are
+COMPARED; the fast ones are measured purely so the slow ones see the
+same CPU state they did at gold-capture time.
 
 A regression is flagged when: current_ms > baseline_ms * (1 + tolerance)
 
@@ -25,9 +28,8 @@ Exit code 0 = all pass; 1 = regressions found.
 import argparse
 import json
 import sys
-import time
 
-import bfs
+from bench_timing import time_solver
 from buckets import Buckets
 
 # Only check scenarios whose baseline exceeds this threshold.
@@ -63,13 +65,7 @@ def _time_scenario(sc, n_runs):
         _bucket_to_tuples(sc.get("growing", [])),
         _bucket_to_tuples(sc.get("complete", [])),
     )
-    best_ms = float("inf")
-    for _ in range(n_runs):
-        t0 = time.perf_counter()
-        bfs.solve_state_with_descs(
-            state, max_trouble_outer=10, max_states=200000, verbose=False
-        )
-        best_ms = min(best_ms, (time.perf_counter() - t0) * 1000)
+    _plan, best_ms = time_solver(state, n_runs=n_runs)
     return best_ms
 
 
@@ -80,8 +76,10 @@ def main():
         help="Allowed slowdown fraction (default 0.10 = 10%%)",
     )
     ap.add_argument(
-        "--runs", type=int, default=3,
-        help="Solver runs per scenario; minimum is used (default 3)",
+        "--runs", type=int, default=20,
+        help="Solver runs per scenario; minimum is used (default 20). "
+             "Combined with bench_timing's warmup + GC-disabled + "
+             "process-time methodology, gives <3%% noise on hot cases.",
     )
     ap.add_argument(
         "--fixtures", default="conformance_fixtures.json",
@@ -109,20 +107,24 @@ def main():
             sys.exit(1)
 
         base_ms = base_info["ms"]
+        is_hot = base_ms >= _MIN_BASELINE_MS
 
-        if base_ms < _MIN_BASELINE_MS:
-            continue  # too noisy to check reliably
+        # Measure every scenario so the CPU sees the same per-position
+        # thermal trajectory the gold capture did. Fast scenarios get a
+        # single short solver run (no point spending 20× on something
+        # that takes <10ms); the comparison gate only fires on hot ones.
+        n_runs = args.runs if is_hot else 1
+        current_ms = _time_scenario(sc, n_runs)
+
+        if not is_hot:
+            continue  # measured, but not compared (too noisy)
 
         threshold_ms = base_ms * (1 + args.tolerance)
-
-        print(f"[{i+1:2}/{total}] {sid:<35} ... ", end="", flush=True)
-        current_ms = _time_scenario(sc, args.runs)
-
         delta_ms = current_ms - base_ms
         pct = delta_ms / max(base_ms, 0.001) * 100
-
         is_regression = current_ms > threshold_ms
 
+        print(f"[{i+1:2}/{total}] {sid:<35} ... ", end="", flush=True)
         if is_regression:
             status = f"REGRESSION  +{pct:.0f}%  ({base_ms:.1f} → {current_ms:.1f}ms)"
             regressions.append((sid, base_ms, current_ms))

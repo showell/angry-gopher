@@ -19,7 +19,6 @@ the baseline; regenerate conformance fixtures with ops/check-conformance.
 import json
 import os
 import sys
-import time
 
 # Resolve python/ dir so imports work regardless of cwd.
 _PYTHON_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -28,7 +27,7 @@ sys.path.insert(0, _PYTHON_DIR)
 from buckets import Buckets
 from rules.card import RANKS, SUITS
 from rules.card import card as make_card
-import bfs
+from bench_timing import time_solver
 
 
 # ── Fixed board ──────────────────────────────────────────────────────────────
@@ -93,20 +92,12 @@ def _helpers_as_tuples():
 
 # ── Solver ────────────────────────────────────────────────────────────────────
 
-def _time_solve(trouble_card, n_runs=3):
-    """Run solver n_runs times; return (plan_or_None, min_ms)."""
+def _time_solve(trouble_card):
+    """Run solver via `bench_timing.time_solver` (warmup + GC-controlled
+    min-of-10). Returns (plan_or_None, min_ms)."""
     helpers = _helpers_as_tuples()
     state = Buckets(helpers, [[trouble_card]], [], [])
-    best_ms = float("inf")
-    plan = None
-    for _ in range(n_runs):
-        t0 = time.perf_counter()
-        result = bfs.solve_state_with_descs(
-            state, max_trouble_outer=10, max_states=200000, verbose=False
-        )
-        best_ms = min(best_ms, (time.perf_counter() - t0) * 1000)
-        plan = result
-    return plan, best_ms
+    return time_solver(state)
 
 
 # ── DSL formatting ────────────────────────────────────────────────────────────
