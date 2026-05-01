@@ -2,13 +2,20 @@
 
 ## Status
 
-Pre-work done (commits `fa5d4f4`, `b759682`, 2026-05-01): a hoisting
-pass H1–H8 over `bfs.py` and `enumerator.py` lifted redundant per-state
-work (`classify`, `neighbors`, splice/shift eligibility, push-trouble
-filter, frontier `tc` cache) and fixed a 3-of-6 ordering bug in
-`_singleton_is_live`. The accelerator builds on top of that — the
-hoisted call sites (`helper_kinds`, `splice_helpers`, `shift_helpers`,
-`absorber_shapes`) are the input shape this design wants to consume.
+**Phase 1 (hoisting) — landed.** Commits `fa5d4f4`, `b759682` (2026-05-01).
+Lifted redundant per-state work from `bfs.py` / `enumerator.py`
+(`classify`, `neighbors`, splice/shift eligibility, push-trouble filter,
+frontier `tc` cache) and fixed a 3-of-6 ordering bug in
+`_singleton_is_live`. The hoisted call sites (`helper_kinds`,
+`splice_helpers`, `shift_helpers`, `absorber_shapes`) shaped the
+accelerator's input contract.
+
+**Phase 2 (accelerator) — landed.** Commit `31d3801` (2026-05-01).
+`card_neighbors.py` exposes `card_id`, `NEIGHBORS`, `build_card_loc`,
+and `is_live`. `_all_trouble_singletons_live` in `bfs.py` now uses the
+accelerator; the standalone `_singleton_is_live` helper is gone. 19%
+speedup on `bench_outer_shell` full (6280ms → 5114ms); plan quality
+unchanged. The remaining sections describe the design as implemented.
 
 ## The core structure
 
