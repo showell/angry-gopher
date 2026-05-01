@@ -79,9 +79,10 @@ with the orchestrator before proceeding.
 
 **Step 3: Read the layered-shape sections of THIS file.**
 The "Class-1/2 segregation" section below tells you where
-rule content lives (`rules/`) vs strategy (`cards.py` +
-the planner modules) vs UX cadence (`move.py`'s `narrate`
-/ `hint`). Don't put new code in the wrong layer.
+rule content lives (`rules/`) vs strategy
+(`classified_card_stack.py` + the planner modules) vs UX
+cadence (`move.py`'s `narrate` / `hint`). Don't put new code
+in the wrong layer.
 
 **Step 4: Know the corpus baseline.** The correctness
 regression target is `corpus/baseline_post_focus.txt`
@@ -123,13 +124,13 @@ adding code).**
   modules. Update callers; don't leave a re-export shim
   unless explicitly asked. Shims rot; physical moves
   match the layering principle.
-- **Verb-eligibility predicates stay in `cards.py`**
-  (the agent strategy layer). Pure rule predicates
-  (classify, neighbors, is_partial_ok, successor) live
-  in `rules/`. If you're adding a predicate, ask: "is
-  this a game-rule fact, or an agent-strategy
-  judgment?" Rule = `rules/`. Judgment = `cards.py` or
-  the planner modules.
+- **Verb-eligibility predicates live on `ClassifiedCardStack`**
+  (`can_peel` / `can_pluck` / `can_yank` / `can_steal` /
+  `can_split_out` in `classified_card_stack.py`). Pure rule
+  predicates (`is_partial_ok`, `neighbors`, `successor`) live in
+  `rules/`. If you're adding a predicate, ask: "is this a
+  game-rule fact, or an agent-strategy judgment?" Rule = `rules/`.
+  Judgment = `classified_card_stack.py` or the planner modules.
 - **Imports use the `from rules import X, Y` form**, not
   `import rules` then `rules.X`. Matches the `from
   buckets import ...` and `from move import ...`
@@ -185,12 +186,14 @@ rule content lives under `rules/`:
 
 What stayed where:
 
-- **`cards.py`** — agent-side verb-eligibility predicates
-  (`can_peel` / `can_pluck` / `can_yank` / `can_steal` /
-  `can_split_out`). Class-3 strategy, not rules. The Elm
-  parallels (`canPeel` etc.) now live in
-  `Game.Agent.Enumerator` after the rule predicates split
-  out into `Game.Rules.StackType` on 2026-04-28.
+- **`classified_card_stack.py`** — the `ClassifiedCardStack`
+  data type (cards + cached kind + cached n) + verb-eligibility
+  predicates (`can_peel` etc.) + verb executors (`peel` / `pluck`
+  / `yank` / `steal` / `split_out`) + the absorb probes
+  (`kind_after_absorb_right` / `_left`, `extends_tables`) +
+  `kinds_after_splice` / `splice`. Class-3 strategy. The Elm
+  parallels live in `Game.Agent.Enumerator` and the upcoming
+  `Game.Agent.ClassifiedCardStack` port.
 - **`buckets.py`** — 4-bucket BFS state shape +
   `state_sig` + `trouble_count` + `is_victory`. Same shape
   as before — Elm keeps `Game.Agent.Buckets` outside
@@ -224,14 +227,19 @@ The Python agent has two pieces of strategy code:
   STRICTLY shorter than the pre-focus-rule baseline).
   Lives in five focused modules mirroring Elm's
   `Game.Agent.*` tree:
-  - `buckets.py` — state shape + state_sig + type aliases
-  - `cards.py` — verb-eligibility predicates (the rule
-    layer below it lives in `rules/`)
+  - `buckets.py` — state shape + state_sig + type aliases +
+    `classify_buckets` boundary helper
+  - `classified_card_stack.py` — the CCS data type + 7-kind
+    alphabet + verb predicates/executors + absorb probes
+    (`extends_tables`) + splice probe/executor
   - `move.py` — desc dataclasses + describe / narrate / hint
-  - `enumerator.py` — move generator + focus rule + filters
+  - `enumerator.py` — move generator dispatcher + per-move-
+    type helpers + focus rule + filters
   - `bfs.py` — search engine
   Plus the `rules/` subpackage (Class-1/2 truth layer):
-  card model + classification + rule predicates.
+  card model + rule predicates. (`classify` lives here too
+  for non-BFS callers; the BFS hot path uses
+  `ClassifiedCardStack.kind`.)
 
 - **`strategy.py` — the trick engine**, legacy. Per-trick
   emitters (`direct_play`, `pair_peel`, `split_for_set`, …)
@@ -267,24 +275,33 @@ history is now the authoritative record of design decisions.
 
 Ordered by "load-bearing first":
 
-- **BFS planner — five-module split** (post-2026-04-26).
+- **BFS planner — five-module split.**
   **Start here for any planner-side work.**
   - `bfs.py` — the search engine (`solve`, `bfs_with_cap`).
-  - `enumerator.py` — INTRICATE move generator; focus
-    rule + doomed-third filter + extractable index.
-  - `move.py` — Move desc dataclasses + describe /
-    narrate / hint.
-  - `buckets.py` — state shape + `state_sig` + type
-    aliases.
-  - `cards.py` — verb-eligibility predicates (agent
-    strategy; the rule layer below it lives in `rules/`).
+    Boundary: `solve_state_with_descs` calls `classify_buckets`,
+    promoting raw input to CCS once at entry.
+  - `enumerator.py` — move generator dispatcher; per move type
+    (extract+absorb, free pull, shift, splice, push, engulf)
+    a small focused helper. Focus rule + doomed-third filter
+    + extractable index.
+  - `classified_card_stack.py` — the `ClassifiedCardStack`
+    data type, the 7-kind alphabet, the verb predicates +
+    executors, the absorb probes (`kind_after_absorb_*`,
+    `extends_tables`), and the splice probe + executor.
+    Most of the BFS hot-path arithmetic lives here.
+  - `move.py` — Move desc dataclasses + describe / narrate
+    / hint.
+  - `buckets.py` — 4-bucket state shape + `classify_buckets`
+    boundary helper + `state_sig` + type aliases.
 - **Rules subpackage** (Class-1/2 truth layer; mirrors Elm
-  `Game/Rules/`).
-  - `rules/card.py` — card model + label
-    parser/renderers + suit color.
-  - `rules/stack_type.py` — `successor` + `classify` +
-    `is_partial_ok` + `neighbors`. The hottest function in
-    BFS lives here.
+  `Game/Rules/`). Used by callers OUTSIDE the BFS hot path —
+  see "BFS data shape" below for why.
+  - `rules/card.py` — card model + label parser/renderers +
+    suit color.
+  - `rules/stack_type.py` — `successor`, `is_partial_ok`,
+    `neighbors`. (`classify` also lives here for non-BFS
+    callers; the BFS hot path uses `ClassifiedCardStack.kind`
+    instead.)
 - `verbs.py` — VERB → PRIMITIVE library; decomposes a
   BFS desc into UI primitives via content-based stack lookup.
 - `primitives.py` — PRIMITIVE → GESTURE library;
@@ -373,9 +390,19 @@ is the full gate (fixturegen + Python + Elm).
 
 The Python suite (run each test file directly) covers:
 
-- `test_bfs_extract.py` — 15 tests pinning
-  `_extract_pieces` per verb plus purity contracts on
-  `_do_extract`, `_remove_absorber`, `_graduate`.
+- `test_classified_card_stack.py` — 76 tests covering the
+  CCS data type, the 7-kind classifier, the five verb
+  predicates + executors, the absorb probes, and the splice
+  probe + executor (including a parity test that diffs the
+  parent-kind splice shortcut against the rigorous
+  classifier across many positions).
+- `test_buckets_boundary.py` — 23 tests covering
+  `classify_buckets` (the BFS input boundary) and the state
+  ops (`state_sig`, `trouble_count`, `is_victory`) under
+  CCS-shaped buckets.
+- `test_bfs_extract.py` — 16 tests pinning the verb-executor
+  decomposition (`_extract_pieces` per verb + purity
+  contracts on `do_extract`, `remove_absorber`, `graduate`).
 - `test_bfs_enumerate.py` — 8 tests: snapshot per move
   type + doomed-third filter pinning
   (`test_doomed_partial_pruned`,
@@ -389,7 +416,7 @@ The Python suite (run each test file directly) covers:
   pre-flight planner.
 - `test_follow_up_merges.py` — 7 tests for the post-trick
   follow-up scan.
-- `test_dsl_conformance.py` — 37 cross-language scenarios
+- `test_dsl_conformance.py` — 183 cross-language scenarios
   compiled from the conformance DSL (referee + hint +
   planner; planner.dsl includes futility cases via
   `expect: no_plan`).
@@ -401,9 +428,10 @@ The Python suite (run each test file directly) covers:
 ## Validation methodology (preventing solver regressions)
 
 After any change touching the BFS planner modules
-(`bfs.py` / `enumerator.py` / `move.py` / `cards.py` /
-`buckets.py` / `rules/`) or the `verbs.py` / `primitives.py` /
-`agent_prelude.py` layers, run all of:
+(`bfs.py` / `enumerator.py` / `move.py` /
+`classified_card_stack.py` / `buckets.py` / `rules/`) or the
+`verbs.py` / `primitives.py` / `agent_prelude.py` layers,
+run all of:
 
 1. **Unit + conformance suite** — run the gate script:
    ```
@@ -499,53 +527,68 @@ filter outright (no valid 3-card group exists in the pool at all)
 and is rejected in O(1) before BFS even starts. Tantalizing cards
 are the hard case; dead cards are cheap.
 
-**Card-tracker query accelerator (landed)**: `card_neighbors.py` exposes
+**Card-tracker query accelerator**: `card_neighbors.py` exposes
 a 104-element `card_loc` bucket-tag array plus a precomputed `NEIGHBORS`
 partner-pair table. Liveness queries are O(72) lookups instead of
 O(pool²) classify scans. Used at two BFS sites: the static pre-BFS
 dead-singleton filter and a dynamic per-state prune gated on
-group-completion events. See [BFS_CARD_TRACKER.md](BFS_CARD_TRACKER.md)
-for the design + delivery summary + open structural items.
+group-completion events. See [BFS_CARD_TRACKER.md](BFS_CARD_TRACKER.md).
 
-Cumulative BFS speedup as of 2026-05-01: `bench_outer_shell` full
-6238ms → 4288ms (−31%); `baseline_board_2Sp` 664ms → ~517ms (−22%).
-Plan quality unchanged. Next: profiler-driven follow-up on the
-remaining tantalizing-card edge cases.
+## BFS data shape — the earned-knowledge model
 
-## OPTIMIZE_PYTHON pruning landmarks (2026-04-25 / 26)
+The BFS solver is organized around a single principle: **every
+computation should earn knowledge that the rest of the algorithm
+uses, and every hot-loop operation should consume already-earned
+knowledge instead of re-deriving it.** Where this conflicts with the
+naive shape ("re-classify whenever you need to know what kind of
+stack this is"), the data structure changes.
 
-- **Loop inversion** in `enumerate_moves`: 35% reduction in
-  `enumerate_moves` tottime via `_extractable_index`.
-- **Merge-time doomed-third filter**: rejects 2-partial
-  merges with no completion candidate in board inventory.
-  Lifted into the `_admissible_partial` helper 2026-04-26.
-- **State-level doomed-growing filter**: yields nothing
-  from any state where an existing growing 2-partial has
-  lost all its candidates.
-- **Budget cap drop**: `_PROJECTION_MAX_STATES` 200000 →
-  5000.
+The pieces:
 
-## Focus rule + SPLIT_OUT (2026-04-26)
+- **`ClassifiedCardStack` (CCS)** is the data shape inside BFS. Each
+  CCS holds three slot reads: `cards` (tuple), `kind` (one of seven
+  — `run` / `rb` / `set` / `pair_run` / `pair_rb` / `pair_set` /
+  `singleton`), and `n` (cached length). No dunders — `len(stack)`,
+  `for c in stack`, `stack[i]` all raise. Slot reads are direct;
+  dunder dispatch is slow AND non-portable to Elm records.
 
-- **`SplitOut` extract verb** — the missing fifth extraction
-  primitive. Extracts the interior of a length-3 run,
-  splitting it into two singleton TROUBLE fragments. Fills
-  the only gap in the verb vocabulary so every helper card
-  is reachable for absorption.
-- **Focus rule** — BFS state extends to 5-tuple
-  `(helper, trouble, growing, complete, lineage)` where
-  `lineage[0]` is the focus. Each step must grow or consume
-  the focus. Pruning win + canonical plan ordering.
-- Together: the runaway puzzles 226 / 228 (DUP_CYCLE /
-  EXCESSIVE_SACRIFICE) dissolved (10 / 11 lines instead of
-  exhausting cap=8). Puzzle 227 confirmed genuinely
-  unsolvable, proven in ~50ms via natural frontier
-  termination at every cap.
+- **The boundary classifies once.** `solve_state_with_descs` calls
+  `classify_buckets`, which converts a raw input `Buckets` of
+  card-list stacks into a `Buckets` of CCS. Any stack that fails
+  to classify into one of the seven kinds raises `ValueError` —
+  caller bug, not BFS bug. The "no `KIND_OTHER`" invariant holds
+  inside; downstream code consumes `stack.kind` directly.
 
-Cumulative effect: 4–44× speedups on captured worst-case
-projections (pre-focus); 2-3× additional on top of those
-post-focus on snapshot top-5; corpus depths preserved or
-shortened; full test suite green.
+- **Probes earn the kind; executors consume it.**
+  `kind_after_absorb_right(target, card)` returns the kind of the
+  merged stack (or None). `absorb_right(target, card, kind)` builds
+  the result with no re-validation. Same pattern for the splice
+  probe + executor and for the source-side verbs (`peel` / `pluck`
+  / `yank` / `steal` / `split_out`, each paired with a `can_X`
+  predicate). The verb executors derive remnant kinds from the
+  parent's kind family + length — no full reclassification.
+
+- **Earned knowledge lives at the commitment point, not at
+  speculative construction.** When the BFS commits to iterating one
+  absorber against many candidate sources,
+  `_build_absorber_shapes` earns the absorber's
+  `extends: {(value, suit) → (right_kind, left_kind)}` table once.
+  Hot-path callers iterate this dict — every entry guarantees at
+  least one absorbing side, every (right_kind, left_kind) is the
+  kind of the merged stack. No per-card probe call, no
+  re-derivation. (An earlier attempt put extends tables on every
+  CCS at construction; that was speculative pre-computation, not
+  earned knowledge — most CCSs are never probed as absorbers, and
+  paying construction cost for everyone lost the trade. The fix was
+  to push the work to the absorber loop, where commitment exists.)
+
+- **Validation is gated.** `check_baseline_timing.py` measures the
+  81-card baseline suite under `bench_timing.py` (warmup +
+  GC-disabled + `process_time` + min-of-20). Any hot scenario that
+  regresses >10% versus the gold in `baseline_board_81_timing.json`
+  fails the gate. Gold is refreshed only when the solver genuinely
+  improves (regenerate via `tools/gen_baseline_board.py`, then
+  commit both the JSON and the regenerated DSL).
 
 ## TODO
 
