@@ -30,6 +30,7 @@ from classified_card_stack import (
     kind_after_absorb_right, kind_after_absorb_left,
     absorb_right, absorb_left,
     kinds_after_splice, splice,
+    extends_tables,
     _kinds_after_splice_run,  # fast path: caller-knows-family entry
 )
 from move import (
@@ -379,18 +380,25 @@ def _eligible_shift_helpers(helper):
 
 
 def _build_absorber_shapes(trouble, growing):
-    """Return [(bucket_name, idx, target_stack, sorted_shapes,
-    shapes_set), ...] for every absorber (TROUBLE entry or GROWING
-    partial). `sorted_shapes` drives deterministic iteration in the
-    absorb loop (matching the Elm port's order); `shapes_set` is for
-    O(1) membership tests in free-pull / shift."""
+    """Return [(bucket_name, idx, target_stack, extends, sorted_shapes), ...]
+    for every absorber (TROUBLE entry or GROWING partial).
+
+    `extends` is a dict `{(value, suit) → (right_kind, left_kind)}`
+    earned at the moment the BFS commits to iterating this absorber:
+    for any candidate card whose shape isn't a key, neither side
+    legally absorbs it; for any key, one or both result kinds is non-
+    None. The hot-path callers iterate this dict directly — no per-
+    card probe.
+
+    `sorted_shapes` is the iteration order for determinism (matching
+    the Elm port). It's the keys of `extends`, sorted."""
     out = []
     for ti, t in enumerate(trouble):
-        s_set = set().union(*(neighbors(c) for c in t.cards))
-        out.append(("trouble", ti, t, sorted(s_set), s_set))
+        extends = extends_tables(t)
+        out.append(("trouble", ti, t, extends, sorted(extends)))
     for gi, g in enumerate(growing):
-        s_set = set().union(*(neighbors(c) for c in g.cards))
-        out.append(("growing", gi, g, sorted(s_set), s_set))
+        extends = extends_tables(g)
+        out.append(("growing", gi, g, extends, sorted(extends)))
     return out
 
 
@@ -398,27 +406,20 @@ def _build_absorber_shapes(trouble, growing):
 
 def _yield_extract_absorbs(absorber, helper, trouble, growing, complete,
                            extractable, completion_inv):
-    """Source: HELPER stack via extract. Inverted loop — iterate the
-    ABSORBER's neighbor shapes and look up extractable cards directly,
-    instead of walking every helper × position to filter.
+    """Source: HELPER stack via extract.
 
-    The absorb probe is run BEFORE the extract: the probe earns the
-    "can't extend on either side" knowledge from a single look at the
-    target boundary, so when it fails we skip do_extract entirely and
-    save its CCS allocations + helper-list slicing."""
-    bucket, idx, target, shapes, _shapes_set = absorber
+    Iterates the absorber's earned extends-shapes — every iteration
+    is guaranteed to have at least one absorbing side. No per-card
+    probe; (right_kind, left_kind) come straight from the absorber's
+    extends dict."""
+    bucket, idx, target, extends, sorted_shapes = absorber
     target_cards_list = list(target.cards)
-    nt_base = None  # built lazily on first probe success
+    nt_base = None  # built lazily on first yield-eligible candidate
     ng = None
-    for shape in shapes:
+    for shape in sorted_shapes:
+        right_kind, left_kind = extends[shape]
         for hi, ci, verb in extractable.get(shape, ()):
             ext_card = helper[hi].cards[ci]
-            # Probe both sides without paying for the extract.
-            right_kind = kind_after_absorb_right(target, ext_card)
-            left_kind = kind_after_absorb_left(target, ext_card)
-            if right_kind is None and left_kind is None:
-                continue
-            # At least one side absorbs; now do the extract.
             new_helper, spawned, _ext, source_cards = \
                 do_extract(helper, hi, ci, verb)
             spawned_lists = [list(s.cards) for s in spawned]
@@ -456,19 +457,25 @@ def _yield_free_pulls(absorber, helper, trouble, growing, complete,
     """Source: a TROUBLE singleton, absorbed onto another absorber.
     Both the absorber and the loose source come out of TROUBLE/GROWING
     in one move."""
-    bucket, idx, target, _shapes, shapes_set = absorber
+    bucket, idx, target, extends, _sorted_shapes = absorber
+    target_cards_list = list(target.cards)
     for li, loose_stack in enumerate(trouble):
         if loose_stack.n != 1:
             continue
         if bucket == "trouble" and li == idx:
             continue  # can't absorb a stack onto itself
         loose = loose_stack.cards[0]
-        if (loose[0], loose[1]) not in shapes_set:
+        kinds = extends.get((loose[0], loose[1]))
+        if kinds is None:
             continue
-        for side in ("right", "left"):
-            merged = _absorb_one_side(target, loose, side)
-            if merged is None:
+        right_kind, left_kind = kinds
+        for side, new_kind, executor in (
+            ("right", right_kind, absorb_right),
+            ("left", left_kind, absorb_left),
+        ):
+            if new_kind is None:
                 continue
+            merged = executor(target, loose, new_kind)
             if not admissible_merged(merged, completion_inv):
                 continue
             nt_base, ng = remove_absorber(bucket, idx, trouble, growing)
@@ -480,7 +487,7 @@ def _yield_free_pulls(absorber, helper, trouble, growing, complete,
             ng_final, nc, graduated = graduate(merged, ng, complete)
             desc = FreePullDesc(
                 loose=loose,
-                target_before=list(target.cards),
+                target_before=target_cards_list,
                 target_bucket_before=bucket,
                 result=list(merged.cards),
                 side=side,
@@ -513,10 +520,12 @@ def _yield_shifts_for_endpoint(absorber, helper, trouble, growing, complete,
                                src_idx, source, which_end,
                                extractable, completion_inv):
     """All shift moves rooted at (source, which_end) for one absorber."""
-    bucket, idx, target, _shapes, shapes_set = absorber
+    bucket, idx, target, extends, _sorted_shapes = absorber
     stolen = source.cards[which_end]
-    if (stolen[0], stolen[1]) not in shapes_set:
+    kinds = extends.get((stolen[0], stolen[1]))
+    if kinds is None:
         return
+    right_kind, left_kind = kinds
     p_value, needed_suits = _shift_replacement_requirement(source, which_end)
     candidates = _shift_donor_candidates(
         helper, src_idx, p_value, needed_suits, extractable)
@@ -529,10 +538,13 @@ def _yield_shifts_for_endpoint(absorber, helper, trouble, growing, complete,
             continue
         nh = _shift_rebuild_helper(helper, src_idx, donor_idx,
                                    new_source, new_donor)
-        for absorb_side in ("right", "left"):
-            merged = _absorb_one_side(target, stolen, absorb_side)
-            if merged is None:
+        for absorb_side, new_kind, executor in (
+            ("right", right_kind, absorb_right),
+            ("left", left_kind, absorb_left),
+        ):
+            if new_kind is None:
                 continue
+            merged = executor(target, stolen, new_kind)
             if not admissible_merged(merged, completion_inv):
                 continue
             nt_base, ng = remove_absorber(bucket, idx, trouble, growing)
@@ -705,20 +717,6 @@ def _yield_engulfs(helper, trouble, growing, complete):
                 yield desc, Buckets(nh, list(trouble), ng, nc)
 
 
-# --- Absorb-side primitives shared by multiple move types ---
-
-def _absorb_one_side(target, card, side):
-    """Probe + execute one (target, card, side) absorb. Returns the
-    resulting CCS or None if the side doesn't classify."""
-    if side == "right":
-        new_kind = kind_after_absorb_right(target, card)
-        if new_kind is None:
-            return None
-        return absorb_right(target, card, new_kind)
-    new_kind = kind_after_absorb_left(target, card)
-    if new_kind is None:
-        return None
-    return absorb_left(target, card, new_kind)
 
 
 

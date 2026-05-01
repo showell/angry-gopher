@@ -187,6 +187,91 @@ def singleton(card):
     return ClassifiedCardStack((card,), KIND_SINGLETON)
 
 
+def extends_tables(target):
+    """Earned shape tables for an absorber. Returns a single dict
+    mapping `(value, suit) → (right_kind, left_kind)` — entries
+    present iff the shape legally extends the target on at least
+    one side. Either side may be None (extends on the other side
+    only); both sides cannot be None (no entry exists in that case).
+
+    Built ONCE per absorber, at the moment the BFS commits to
+    iterating the absorber against many sources. Replaces the
+    per-(target, card, side) absorb probe in the hot loop with a
+    single dict lookup."""
+    right, left = _build_extends_for(target.cards, target.kind, target.n)
+    out = {}
+    for shape, rk in right.items():
+        out[shape] = (rk, left.get(shape))
+    for shape, lk in left.items():
+        if shape not in out:
+            out[shape] = (None, lk)
+    return out
+
+
+def _build_extends_for(cards, kind, n):
+    """Return (extends_right, extends_left) dicts. Each maps
+    `(value, suit) → result_kind` for cards that legally absorb on
+    that side. Internal — `extends_tables` merges them."""
+    if kind == KIND_SINGLETON:
+        return _extends_for_singleton(cards[0])
+    family = _FAMILY_OF_KIND[kind]
+    n_new = n + 1
+    result_kind = family if n_new >= 3 else _PAIR_OF[family]
+    if family == KIND_RUN:
+        last = cards[-1]
+        first = cards[0]
+        succ_v = 1 if last[0] == 13 else last[0] + 1
+        pred_v = 13 if first[0] == 1 else first[0] - 1
+        return (
+            {(succ_v, last[1]): result_kind},
+            {(pred_v, first[1]): result_kind},
+        )
+    if family == KIND_RB:
+        last = cards[-1]
+        first = cards[0]
+        succ_v = 1 if last[0] == 13 else last[0] + 1
+        pred_v = 13 if first[0] == 1 else first[0] - 1
+        last_red = last[1] in RED
+        first_red = first[1] in RED
+        return (
+            {(succ_v, s): result_kind
+             for s in range(4) if (s in RED) != last_red},
+            {(pred_v, s): result_kind
+             for s in range(4) if (s in RED) != first_red},
+        )
+    # KIND_SET. Sets are unordered: same shapes extend on either side.
+    if n_new > 4:
+        return ({}, {})
+    set_value = cards[0][0]
+    used_suits = {c[1] for c in cards}
+    table = {(set_value, s): result_kind
+             for s in range(4) if s not in used_suits}
+    return (table, table)
+
+
+def _extends_for_singleton(only):
+    """Singleton extends: pair_run (same suit, successive value),
+    pair_rb (opposite color, successive value), pair_set (same value,
+    distinct suit). Side determines whether successive means succ-v
+    (right: only-then-card) or pred-v (left: card-then-only). Pair_set
+    shapes are symmetric and appear in both right and left."""
+    v, s, _ = only
+    succ_v = 1 if v == 13 else v + 1
+    pred_v = 13 if v == 1 else v - 1
+    only_red = s in RED
+    extends_right = {(succ_v, s): KIND_PAIR_RUN}
+    extends_left = {(pred_v, s): KIND_PAIR_RUN}
+    for ss in range(4):
+        if (ss in RED) != only_red:
+            extends_right[(succ_v, ss)] = KIND_PAIR_RB
+            extends_left[(pred_v, ss)] = KIND_PAIR_RB
+    for ss in range(4):
+        if ss != s:
+            extends_right[(v, ss)] = KIND_PAIR_SET
+            extends_left[(v, ss)] = KIND_PAIR_SET
+    return (extends_right, extends_left)
+
+
 def to_singletons(stack):
     """Atomize a stack into one ClassifiedCardStack per card. Used by
     `steal` on sets, where the BFS algorithm wants the remaining cards
