@@ -74,6 +74,7 @@ from buckets import (
 from rules import classify
 from enumerator import enumerate_focused, initial_lineage
 from move import describe
+from card_neighbors import build_card_loc, is_live
 
 
 def bfs_with_cap(initial, max_trouble, max_states, *,
@@ -211,53 +212,29 @@ def solve_state(initial, *, max_trouble_outer=8, max_states=10000,
     return [line for line, _desc in plan]
 
 
-def _singleton_is_live(c, pool):
-    """True if card c can be part of any valid 3-card group
-    using cards from `pool`. `c` may be in `pool` — same-identity
-    matches are skipped so the caller doesn't have to rebuild the
-    pool minus `c` for each query.
-
-    Tries all 6 orderings of (c, c1, c2). Three-of-six was a
-    silent bug — `classify` only accepts a stack in canonical
-    run-order, and a partner pair like (c1, c2) where c1 is c's
-    successor and c2 is c's predecessor wouldn't match any of the
-    three orderings tried before. False negatives caused the
-    static `_all_trouble_singletons_live` filter to miss live
-    cards and short-circuit solvable projections.
-    """
-    for i, c1 in enumerate(pool):
-        if c1 is c:
-            continue
-        for c2 in pool[i + 1:]:
-            if c2 is c:
-                continue
-            for triple in ([c, c1, c2], [c, c2, c1],
-                           [c1, c, c2], [c2, c, c1],
-                           [c1, c2, c], [c2, c1, c]):
-                if classify(triple) != "other":
-                    return True
-    return False
-
-
 def _all_trouble_singletons_live(b):
     """Return False if any trouble singleton cannot be part of
-    any valid 3-card group given all cards currently on the
-    board. A dead singleton means no BFS plan can ever succeed.
+    any valid 3-card group using accessible cards on the board.
+    A dead singleton means no BFS plan can ever succeed.
 
     Dead-trouble-singleton filter: companion to the doomed-third
     filter (2-partials) and the state-level doomed-growing filter
     (growing 2-partials). This one fires once before the outer
-    cap loop to short-circuit provably unsolvable projections."""
-    pool = (
-        [c for s in b.helper for c in s]
-        + [c for s in b.trouble for c in s]
-        + [c for s in b.growing for c in s]
-        + [c for s in b.complete for c in s]
-    )
+    cap loop to short-circuit provably unsolvable projections.
+
+    Backed by the card-tracker accelerator: a 104-element bucket-
+    location array plus precomputed per-card partner-pair tables
+    (`card_neighbors.NEIGHBORS`). Each query is O(72) instead of
+    the O(|pool|²) classify-based scan it replaces. Skips array
+    construction entirely when no trouble singleton exists.
+    """
+    if not any(len(t) == 1 for t in b.trouble):
+        return True
+    card_loc = build_card_loc(b)
     for t_stack in b.trouble:
         if len(t_stack) != 1:
             continue
-        if not _singleton_is_live(t_stack[0], pool):
+        if not is_live(t_stack[0], card_loc):
             return False
     return True
 
