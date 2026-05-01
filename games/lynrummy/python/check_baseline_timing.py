@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """check_baseline_timing.py — Timing regression checker for the 81-card baseline.
 
-Reads baseline_board_81_timing.json (the stored baseline) and
+Reads baseline_board_81_gold.txt (the stored baseline) and
 conformance_fixtures.json (DSL scenarios parsed by fixturegen).
 
 For each baseline_board_* scenario:
@@ -53,9 +53,27 @@ def _load_fixtures(path="conformance_fixtures.json"):
         return {sc["name"]: sc for sc in json.load(f)}
 
 
-def _load_baseline(path="baseline_board_81_timing.json"):
+def _load_baseline(path="baseline_board_81_gold.txt"):
+    """Parse the line-oriented gold file. Skip blank lines and any
+    line starting with '#'. Each remaining line:
+        <scenario_id>  <ms>  <result>
+    columns separated by whitespace. Returns {sid: {"ms": float,
+    "result": str}}."""
+    out = {}
     with open(path) as f:
-        return json.load(f)
+        for raw in f:
+            line = raw.strip()
+            if not line or line.startswith("#"):
+                continue
+            parts = line.split()
+            if len(parts) < 3:
+                raise ValueError(
+                    f"{path}: malformed line: {raw!r}")
+            sid = parts[0]
+            ms = float(parts[1])
+            result = parts[2]
+            out[sid] = {"ms": ms, "result": result}
+    return out
 
 
 def _time_scenario(sc, n_runs):
@@ -86,8 +104,8 @@ def main():
         help="Path to conformance_fixtures.json",
     )
     ap.add_argument(
-        "--baseline", default="baseline_board_81_timing.json",
-        help="Path to timing baseline JSON",
+        "--baseline", default="baseline_board_81_gold.txt",
+        help="Path to the line-oriented gold file",
     )
     args = ap.parse_args()
 

@@ -102,7 +102,7 @@ For performance regression testing, use the automated timing checker:
 ```
 python3 check_baseline_timing.py
 ```
-This reads `baseline_board_81_timing.json` (stored baseline) and
+This reads `baseline_board_81_gold.txt` (stored baseline) and
 times each of the 81 scenarios against the live solver. Only
 scenarios with baseline > 200ms are checked (Python timer noise
 dominates below that); currently that covers three "live-but-hard"
@@ -115,7 +115,7 @@ python3 tools/gen_baseline_board.py    # writes DSL + timing JSON
 ops/check-conformance                  # picks up any DSL changes
 python3 check_baseline_timing.py       # verify new baseline passes
 ```
-Commit both `baseline_board_81.dsl` and `baseline_board_81_timing.json`.
+Commit both `baseline_board_81.dsl` and `baseline_board_81_gold.txt`.
 
 **Step 5: Ergonomics defaults (when you're refactoring or
 adding code).**
@@ -474,7 +474,7 @@ run all of:
    python3 check_baseline_timing.py
    ```
    then commit both `baseline_board_81.dsl` and
-   `baseline_board_81_timing.json`.
+   `baseline_board_81_gold.txt`.
 
 4. **Offline self-play smoke** — quick "does autonomous
    play still terminate" check:
@@ -585,7 +585,7 @@ The pieces:
 - **Validation is gated.** `check_baseline_timing.py` measures the
   81-card baseline suite under `bench_timing.py` (warmup +
   GC-disabled + `process_time` + min-of-20). Any hot scenario that
-  regresses >10% versus the gold in `baseline_board_81_timing.json`
+  regresses >10% versus the gold in `baseline_board_81_gold.txt`
   fails the gate. Gold is refreshed only when the solver genuinely
   improves (regenerate via `tools/gen_baseline_board.py`, then
   commit both the JSON and the regenerated DSL).
