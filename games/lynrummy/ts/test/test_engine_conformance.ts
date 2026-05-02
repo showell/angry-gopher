@@ -2,13 +2,17 @@
 //
 // Reads `python/conformance_fixtures.json` (the same JSON the Python
 // `test_dsl_conformance.py` consumes) and runs the TS engine against
-// the `enumerate_moves` and `solve` ops for at least the v1 surface:
+// the `enumerate_moves` and `solve` ops:
 //
 //   - All `enumerate_moves` scenarios — assert the matching `yields`
 //     type (or `narrate_contains` / `hint_contains` substring) is
 //     produced by the TS engine.
-//   - A hand-picked subset of `solve` scenarios — assert plan length
-//     OR plan lines (when the scenario provides them) match Python.
+//   - All `solve` scenarios with `no_plan: true` — admitted
+//     automatically; the BFS exhausting and returning null is a clean
+//     correctness signal that doesn't depend on plan ordering.
+//   - `solve` scenarios with `plan_lines` / `plan_length` expectations
+//     are gated by SOLVE_ALLOWLIST (hand-picked low-depth subset for v1
+//     until the allowlist widens to all 71 plan_lines scenarios).
 //
 // Other ops (build_suggestions, hint_invariant, find_open_loc,
 // hint_for_hand) are reported as SKIP — they live above the BFS layer
@@ -190,7 +194,11 @@ function main(): void {
     if (sc.op === "enumerate_moves") {
       res = runEnumerateMoves(sc);
     } else if (sc.op === "solve") {
-      if (!SOLVE_ALLOWLIST.has(sc.name)) {
+      // no_plan scenarios are admitted automatically (correctness
+      // signal independent of plan ordering); plan_lines / plan_length
+      // scenarios remain gated by the v1 hand-picked allowlist.
+      const isNoPlan = sc.expect["no_plan"] === true;
+      if (!isNoPlan && !SOLVE_ALLOWLIST.has(sc.name)) {
         skipped++;
         continue;
       }
