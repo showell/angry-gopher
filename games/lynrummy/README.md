@@ -74,13 +74,11 @@ game transcript and shows the interaction model concretely):
 - `planner.dsl`, `planner_corpus.dsl`, `planner_corpus_extras.dsl`,
   `planner_mined.dsl` — `enumerate_moves` + `solve` ops.
 - `baseline_board_81.dsl` — auto-generated 81-card baseline
-  suite (regenerate via `python/tools/gen_baseline_board.py`).
+  suite (regenerate via `npm run bench:gen-baseline` in `ts/`).
 - `hint_game_seed42.dsl` — `hint_for_hand` ops (Python only).
 
 **Referee / rules:**
 - `referee.dsl` — referee ops.
-- `tricks.dsl` — hint/trick invariants (will retire as the
-  trick engine retires).
 
 **UI / interaction:**
 - `place_stack.dsl` — `find_open_loc` ops.

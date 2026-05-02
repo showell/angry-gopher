@@ -80,8 +80,9 @@ These live at `/tools/` (repo root), not `games/lynrummy/python/tools/`.
   the mined side is the post-mining sibling.
 
 A separate `games/lynrummy/python/tools/` holds solver-side
-utilities (`gen_baseline_board.py` for the 81-card timing
-gold, `hint_demo.py` for end-to-end hint output).
+utilities (`hint_demo.py` for end-to-end hint output). The
+81-card timing gold is now generated from TS — see
+`games/lynrummy/ts/bench/gen_baseline_board.ts`.
 
 All exporters are stable, regenerate cleanly, and feed the
 same conformance pipeline.

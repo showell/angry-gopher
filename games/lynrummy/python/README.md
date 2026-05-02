@@ -106,24 +106,18 @@ remaining card on the Game 17 opening board). Any solver-touching
 change must keep depths ≤ gold; longer plans are correctness
 failures.
 
-For performance regression testing, use the automated timing checker:
-```
-python3 check_baseline_timing.py
-```
-This reads `baseline_board_81_gold.txt` (stored baseline) and
-times each of the 81 scenarios against the live solver. Only
-scenarios with baseline > 200ms are checked (Python timer noise
-dominates below that); currently that covers three "live-but-hard"
-singletons (2S'≈663ms, 2C'≈517ms, 3H'≈280ms). A >10% slowdown
-on any of those is flagged as a regression.
+Performance benchmarks now live in TS at `../ts/bench/`. Run via
+npm from `../ts/`:
 
-To regenerate the baseline after a solver improvement:
 ```
-python3 tools/gen_baseline_board.py    # writes DSL + timing JSON
-ops/check-conformance                  # picks up any DSL changes
-python3 check_baseline_timing.py       # verify new baseline passes
+npm run bench:check-baseline   # regression-check the 81-card suite
+npm run bench:gen-baseline     # regenerate gold after solver change
+npm run bench:outer-shell      # 60-hand outer-shell comparison
 ```
-Commit both `baseline_board_81.dsl` and `baseline_board_81_gold.txt`.
+
+The paired DSL (`conformance/scenarios/baseline_board_81.dsl`)
+remains language-neutral. Gold timings live next to the TS driver
+(`ts/bench/baseline_board_81_gold.txt`).
 
 **Step 5: Ergonomics defaults (when you're refactoring or
 adding code).**
@@ -323,10 +317,6 @@ Ordered by "load-bearing first":
   (a) triple-in-hand (zero BFS, best outcome), (b) pair-via-BFS,
   (c) singleton-via-BFS. `find_play_with_budget` is the budgeted
   variant; `find_play` uses defaults.
-- `bench_outer_shell.py` — benchmarks the outer shell on the fixed
-  60×6-card corpus from the Game 17 remaining 81 cards. Compares
-  singleton-only vs. full (triple + pair + singleton) for plan
-  quality and wall time. Gold output in `bench_outer_shell_gold.txt`.
 - `agent_game.py` — autonomous-play harness:
   dealer.deal → loop find_play → place + plan → complete_turn.
 - `bfs_play.py` — the replay driver: BFS plan executed
@@ -362,8 +352,9 @@ invokes `cmd/fixturegen` to compile fixtures, then Python
 
 To add a hand-crafted benchmark case, add it to
 `planner_corpus_extras.dsl` and re-run `ops/check-conformance`.
-To regenerate the full 81-card suite after a solver change, use
-`tools/gen_baseline_board.py` (see § "Agent orientation" Step 4).
+To regenerate the full 81-card suite after a solver change, run
+`npm run bench:gen-baseline` from `../ts/` (see § "Agent
+orientation" Step 4).
 
 The pre-DSL corpus tooling (`corpus_report.py`,
 `corpus_lab_catalog.py`) and the agent-vs-human harness
@@ -390,7 +381,7 @@ after any DSL edit):
   cases go here.
 - `baseline_board_81.dsl` — auto-generated 81-card baseline suite
   (`baseline_board_*`). Do not hand-edit; regenerate via
-  `tools/gen_baseline_board.py`.
+  `npm run bench:gen-baseline` (in `../ts/`).
 - `planner.dsl` — `enumerate_moves` unit scenarios.
 - `hint_game_seed42.dsl` — `hint_for_hand` conformance (Python only).
 - `referee.dsl`, `board_geometry.dsl`, `drag_invariant.dsl`,
@@ -449,7 +440,7 @@ reference. It documents:
   - The cross-language iteration-order canon (don't break Elm).
   - The five-gate validation methodology that every solver-touching
     change must run.
-  - Bench gold files (`baseline_board_81_gold.txt`,
+  - Bench gold files (in `../ts/bench/`: `baseline_board_81_gold.txt`,
     `bench_outer_shell_gold.txt`) and their capture process.
   - Pre-port discipline for the upcoming TypeScript engine.
 

@@ -25,8 +25,8 @@ The solver lives in five modules:
   - `move.py` — descriptor types + plan-line rendering.
   - `buckets.py` — 4-bucket state shape + boundary helper.
 
-Plus a small accelerator at `card_neighbors.py` and a benchmark
-harness at `bench_timing.py`.
+Plus a small accelerator at `card_neighbors.py`. Benchmark
+harness lives in TS at `../ts/bench/bench_timing.ts`.
 
 ## Core principle: earn knowledge, use earned knowledge
 
@@ -392,27 +392,26 @@ must be coordinated, not committed unilaterally.**
 ### 3. Baseline timing check
 
 ```
-python3 check_baseline_timing.py
+cd ../ts && npm run bench:check-baseline
 ```
 
-Measures all 81 baseline scenarios under `bench_timing.py`
-(warmup + GC-disabled + `process_time` + min-of-20). Compares
-against the gold at `baseline_board_81_gold.txt`. Flags any
-scenario whose time exceeds gold by more than the tolerance
-(default 10%) AND whose gold itself is above the noise floor
-(default 200ms). Single-pass for fast feedback; the gate is the
-fast feedback loop.
+Measures all 81 baseline scenarios under `ts/bench/bench_timing.ts`
+(warmup + min-of-20). Compares against the gold at
+`ts/bench/baseline_board_81_gold.txt`. Flags any scenario whose
+time exceeds gold by more than the tolerance (default 10%) AND
+whose gold itself is above the noise floor (50ms in TS — adjusted
+down from Python's 200ms because TS solves the corpus ~4× faster).
 
 ### 4. Outer-shell benchmark
 
 ```
-python3 bench_outer_shell.py
-diff <(python3 bench_outer_shell.py) bench_outer_shell_gold.txt
+cd ../ts && npm run bench:outer-shell
+diff <(npm run --silent bench:outer-shell) bench/bench_outer_shell_gold.txt
 ```
 
 Compares singleton-only vs. full (triple + pair + singleton)
 across the fixed 60×6-card corpus. Plan quality must stay
-`better=19 same=41 worse=0`. A regression is full *both* slower
+`better=18 same=42 worse=0`. A regression is full *both* slower
 *and* lower plan quality.
 
 ### 5. Offline self-play smoke
@@ -426,7 +425,7 @@ Should finish in <10s with at least a few plays completed. Catches
 
 ## Bench gold files
 
-Two gold files live in `python/`:
+Two gold files live in `../ts/bench/`:
 
   - `baseline_board_81_gold.txt` — 81-card baseline (one trouble
     singleton per remaining card on the Game 17 board). Line-
@@ -443,35 +442,35 @@ The 81-card gold uses a deliberately careful capture process to
 reduce between-capture variance:
 
 ```
-python3 tools/gen_baseline_board.py
+cd ../ts && npm run bench:gen-baseline
 ```
 
 Internally, this:
 
 1. Runs a **pre-suite warmup pass** (all 81 scenarios untimed)
-   so subsequent timing isn't biased by interpreter cold-start,
-   lazy table builds, or branch-predictor warmup.
-2. Then measures each scenario via `bench_timing.time_solver`
-   (warmup + GC-disabled + `process_time` + min-of-20).
-3. Writes the gold + the regenerated DSL.
+   so subsequent timing isn't biased by JIT cold-start.
+2. Then measures each scenario via `bench_timing.timeSolver`
+   (warmup + min-of-20). Pass `--expose-gc` to Node for tighter
+   timings.
+3. Writes the gold.
 
 Even with that discipline, between-capture variance is real —
 ~5-10% on the hot scenarios depending on system thermal state and
 load. **Refresh gold only when you believe you've earned a clear
 win.** When you do, capture two or three times and confirm the
-numbers are stable before committing. (Future option C from the
-bench-robustness essay: multi-capture median; not yet built.)
+numbers are stable before committing.
 
 ### Regenerate after solver changes
 
 ```
-python3 tools/gen_baseline_board.py
-ops/check-conformance     # to regenerate DSL fixtures
-python3 check_baseline_timing.py
+cd ../ts
+npm run bench:gen-baseline
+ops/check-conformance       # regenerate DSL fixtures (run from repo root)
+npm run bench:check-baseline
 ```
 
 Then commit both `baseline_board_81.dsl` and
-`baseline_board_81_gold.txt`.
+`ts/bench/baseline_board_81_gold.txt`.
 
 ## BFS performance vocabulary
 
