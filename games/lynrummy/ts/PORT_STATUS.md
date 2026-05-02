@@ -5,11 +5,47 @@ implementation at `games/lynrummy/python/`. Use this when reading the
 TS code to know which divergences are deliberate (deferred features)
 vs accidental (port drift to fix).
 
-The Python is the reference. Behavioral parity is verified by 214/214
-leaf conformance scenarios + 160/160 engine + hand-play cross-check
-(148 solve / 9 enumerate_moves / 3 hint_for_hand). Only `find_open_loc`
-remains explicitly out of TS scope (UI placement geometry, tested in
-Python + Elm).
+**Status 2026-05-02:** Python BFS slated for retirement. TS is becoming
+the canonical engine; conformance fixtures pin the moment of handoff.
+
+Behavioral parity is verified by 214/214 leaf conformance scenarios +
+160/160 engine + hand-play cross-check (148 solve / 9 enumerate_moves
+/ 3 hint_for_hand) PLUS 25 seeds × ~9 find_play calls (214 calls
+total) of real-game cross-validation via `agent_game_xcheck.py`. Only
+`find_open_loc` remains explicitly out of TS scope (UI placement
+geometry, tested in Python + Elm).
+
+## Cross-validation harness — `python/agent_game_xcheck.py`
+
+Drives offline self-play through Python orchestration; calls
+`agent_prelude.find_play` AND `ts_solver.find_play_steps` on every
+turn; asserts step-list equivalence. Captures every call to JSONL
+(`captures/*.jsonl`, gitignored — reproducible by re-running xcheck).
+
+Surfaced one port-fidelity bug the conformance corpus didn't catch:
+TS `rules/stack_type.ts:successor()` was missing the K→A wraparound,
+so `isPartialOk([KH, AC:1])` returned false and TS skipped K-A-2
+triple-in-hand plays Python found. Fixed in commit `651318f`. Lesson:
+curated fixtures have coverage gaps; real-workload cross-validation
+is what closes them. (See `memory/feedback_corpus_blind_spots.md`.)
+
+## Bridge — TS engine callable from Python and Elm
+
+`ts/bridge.ts` is the single CLI entry point: reads one JSON request
+from stdin, dispatches to `findPlay` or `solveStateWithDescs`, writes
+JSON to stdout. Python wrapper at `python/ts_solver.py` (subprocess
+per call). Same wire format will eventually serve Elm via ports
+(snake_case JSON throughout).
+
+Worst-case engine wall (across 25 real games / 214 calls):
+
+  Python BFS: 17.2s (seed 20 turn 7)
+  TS engine:  8.1s (same input, ~2× faster)
+
+Both well above the 200ms human-perceptible threshold on the slowest
+inputs — that's a SOLVER_SPEED problem (not port-fidelity). TS is
+consistently ~2× faster than Python on the worst 10 inputs across
+the captured corpus.
 
 ## File map
 
