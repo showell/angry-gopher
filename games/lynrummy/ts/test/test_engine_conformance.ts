@@ -201,7 +201,7 @@ function main(): void {
   }
 
   console.log();
-  console.log(`${passed}/${total} passed (${skipped} skipped — out-of-scope ops: build_suggestions / hint_invariant / find_open_loc / hint_for_hand)`);
+  console.log(`${passed}/${total} passed (${skipped} skipped — out-of-scope ops: find_open_loc / hint_for_hand)`);
   if (failed > 0) {
     console.log();
     console.log("FAILURES:");

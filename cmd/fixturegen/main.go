@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -376,18 +375,6 @@ var opRegistry = []OpKind{
 		EmitElm: func(b *strings.Builder, sc Scenario) { elmValidateMove(b, sc, true) },
 	},
 	{
-		Name:    "build_suggestions",
-		Elm:     true,
-		Python:  true,
-		EmitElm: elmBuildSuggestions,
-	},
-	{
-		Name:    "hint_invariant",
-		Elm:     true,
-		Python:  true,
-		EmitElm: emitElmHintInvariant,
-	},
-	{
 		Name:    "enumerate_moves",
 		Elm:     true,
 		Python:  true,
@@ -419,14 +406,6 @@ var opRegistry = []OpKind{
 		Name:    "undo_walkthrough",
 		Elm:     true,
 		EmitElm: elmUndoWalkthrough,
-	},
-	{
-		// Legacy: no scenarios reference this op today, but the
-		// Elm emitter is preserved so old hint scenarios can
-		// re-enter without re-implementing the dispatch.
-		Name:    "trick_first_play",
-		Elm:     true,
-		EmitElm: emitElmTrickFirstPlay,
 	},
 	{
 		// Elm-only: Python's find_violation / out_of_bounds cover
@@ -723,15 +702,13 @@ import Game.Physics.WingOracle as WingOracle
 import Game.Rules.Referee as Referee exposing (RefereeStage(..), refereeStageToString)
 import Game.Replay.Time as ReplayTime
 import Game.Rules.StackType as StackType
-import Game.Strategy.Hint as Hint
 import Game.WireAction as WA exposing (WireAction)
 import Main.Apply as Apply
 import Main.Gesture as Gesture
 import Main.Msg as Msg
 import Main.Play as Play
 import Main.State as State
-{{range elmTrickModules}}import Game.Strategy.{{.}}
-{{end}}import Test exposing (Test, describe, test)
+import Test exposing (Test, describe, test)
 
 
 standardBounds : BoardBounds
@@ -954,7 +931,6 @@ func emitElm(scenarios []Scenario, outPath string) error {
 	t := template.New("elm").Funcs(template.FuncMap{
 		"elmTestFn":        elmTestFn,
 		"elmScenarioBody":  elmScenarioBody,
-		"elmTrickModules":  elmTrickModules,
 		"quote":            func(s string) string { return `"` + s + `"` },
 	})
 	if _, err := t.Parse(elmTemplate); err != nil {
@@ -993,80 +969,6 @@ func elmTestName(s string) string {
 	return buf.String()
 }
 
-// elmPortedTricks records which tricks have a fully-ported Elm
-// counterpart. Auto-discovered from
-// games/lynrummy/elm/src/Game/Strategy/*.elm — a trick module is
-// one that `exposing (trick)` exactly. Scenarios for unported
-// tricks (Python-only, for now) stay as Expect.pass placeholders.
-//
-// PascalCase filename → snake_case trick id. Add a new trick
-// module + register it in Hint.priorityOrder, and it picks up
-// here automatically.
-var elmPortedTricks = discoverElmTricks()
-
-var elmStrategyDir = "games/lynrummy/elm/src/Game/Strategy"
-
-// elmTrickExposingRE matches `module Game.Strategy.X exposing (trick)`
-// tolerating whitespace variation around the parentheses. Modules
-// that expose anything other than just `trick` (Hint, Trick,
-// Helpers) are deliberately skipped.
-var elmTrickExposingRE = regexp.MustCompile(`(?m)^module\s+Game\.Strategy\.\w+\s+exposing\s*\(\s*trick\s*\)`)
-
-func discoverElmTricks() map[string]string {
-	out := map[string]string{}
-	entries, err := os.ReadDir(elmStrategyDir)
-	if err != nil {
-		return out
-	}
-	for _, e := range entries {
-		name := e.Name()
-		if !strings.HasSuffix(name, ".elm") {
-			continue
-		}
-		data, err := os.ReadFile(filepath.Join(elmStrategyDir, name))
-		if err != nil {
-			continue
-		}
-		if !elmTrickExposingRE.Match(data) {
-			continue
-		}
-		mod := strings.TrimSuffix(name, ".elm")
-		out[pascalToSnake(mod)] = "Game.Strategy." + mod + ".trick"
-	}
-	return out
-}
-
-// elmTrickModules returns the PascalCase module names of every
-// discovered Elm trick, sorted — used to generate the import
-// block in the conformance test.
-func elmTrickModules() []string {
-	var mods []string
-	for _, v := range elmPortedTricks {
-		// v is "Game.Strategy.X.trick"; take the X.
-		parts := strings.Split(v, ".")
-		if len(parts) >= 3 {
-			mods = append(mods, parts[2])
-		}
-	}
-	sort.Strings(mods)
-	return mods
-}
-
-func pascalToSnake(s string) string {
-	var b strings.Builder
-	for i, r := range s {
-		if r >= 'A' && r <= 'Z' {
-			if i > 0 {
-				b.WriteByte('_')
-			}
-			b.WriteRune(r - 'A' + 'a')
-		} else {
-			b.WriteRune(r)
-		}
-	}
-	return b.String()
-}
-
 // elmScenarioBody emits the inside of an Elm test thunk via the
 // op registry. For Python-only ops (Elm=false), emitting Expect.pass
 // keeps the Elm test file structurally valid without a spurious failure.
@@ -1091,30 +993,6 @@ func elmScenarioBody(sc Scenario) string {
 	op.EmitElm(&b, sc)
 	return b.String()
 }
-
-// emitElmHintInvariant + emitElmTrickFirstPlay are tiny adapters
-// that resolve the Elm trick module from elmPortedTricks before
-// delegating to the real emitter. Kept thin so the registry can
-// take a uniform `func(*Builder, Scenario)` shape.
-
-func emitElmHintInvariant(b *strings.Builder, sc Scenario) {
-	trickVar, ok := elmPortedTricks[sc.Trick]
-	if !ok {
-		fmt.Fprintf(b, "            Expect.fail \"unknown trick %s\"", sc.Trick)
-		return
-	}
-	elmHintInvariant(b, sc, trickVar)
-}
-
-func emitElmTrickFirstPlay(b *strings.Builder, sc Scenario) {
-	trickVar, ok := elmPortedTricks[sc.Trick]
-	if !ok {
-		fmt.Fprintf(b, "            -- Elm TrickBag not ported yet (%s / %s)\n            Expect.pass", sc.Trick, sc.Expect.Kind)
-		return
-	}
-	elmTrickFirstPlay(b, sc, trickVar)
-}
-
 
 const elmClickAgentPlayTmpl = `            let
                 board =
@@ -2254,104 +2132,6 @@ func elmWingsForHandCard(b *strings.Builder, sc Scenario) {
 }
 
 
-const elmHintInvariantTmpl = `            let
-                handCards =
-                    %s
-
-                board =
-                    %s
-
-                plays =
-                    %s.findPlays handCards board
-            in
-`
-
-// elmHintInvariant emits a test body that runs the named trick
-// against the scenario's (hand, board), applies the first Play,
-// and asserts every resulting stack classifies as a complete
-// group. An Elm Play's `apply` returns (newBoard, consumedHand)
-// directly, so no primitive replay is needed.
-func elmHintInvariant(b *strings.Builder, sc Scenario, trickVar string) {
-	fmt.Fprintf(b, elmHintInvariantTmpl,
-		elmHandCards(sc.Hand),
-		elmStacks(sc.Board, "                        "),
-		trickVar)
-	b.WriteString(`            case plays of
-                [] ->
-                    Expect.fail "trick did not fire (no plays)"
-
-                play :: _ ->
-                    let
-                        ( afterBoard, _ ) =
-                            play.apply board
-                    in
-                    case firstIncompleteStack afterBoard of
-                        Nothing ->
-                            Expect.pass
-
-                        Just ( i, s ) ->
-                            Expect.fail
-                                ("stack "
-                                    ++ String.fromInt i
-                                    ++ " is incomplete after trick emission: "
-                                    ++ Debug.toString s
-                                )`)
-}
-
-
-const elmBuildSuggestionsTmpl = `            let
-                handCards =
-                    %s
-
-                hand =
-                    { handCards = handCards }
-
-                board =
-                    %s
-
-                got =
-                    Hint.buildSuggestions hand board
-            in
-`
-
-const elmBuildSuggestionsCountCheckTmpl = `            if List.length got /= %d then
-                Expect.fail ("suggestion count: want %d, got " ++ String.fromInt (List.length got))
-`
-
-// elmBuildSuggestions emits a test body that calls
-// Hint.buildSuggestions and walks each expected row in order,
-// asserting trick_id + hand cards. Any mismatch short-circuits
-// via Expect.fail with a descriptive message.
-func elmBuildSuggestions(b *strings.Builder, sc Scenario) {
-	fmt.Fprintf(b, elmBuildSuggestionsTmpl,
-		elmHandCards(sc.Hand),
-		elmStacks(sc.Board, "                        "))
-
-	sugs := sc.Expect.Suggestions
-	fmt.Fprintf(b, elmBuildSuggestionsCountCheckTmpl, len(sugs), len(sugs))
-	b.WriteString("\n            else\n")
-	if len(sugs) == 0 {
-		// No per-row assertions needed; count check is sufficient.
-		b.WriteString("                Expect.pass")
-		return
-	}
-	b.WriteString("                let\n")
-	for i, sug := range sugs {
-		fmt.Fprintf(b, "                    want%d =\n                        { trickId = %q, handCards = %s }\n\n",
-			i, sug.TrickID, elmRawCards(sug.HandCards))
-	}
-	b.WriteString("                in\n")
-	b.WriteString("                Expect.all\n                    [")
-	for i := range sugs {
-		if i > 0 {
-			b.WriteString("\n                    ,")
-		}
-		fmt.Fprintf(b, " \\_ -> List.drop %d got |> List.head |> Maybe.map (\\s -> { trickId = s.trickId, handCards = s.handCards }) |> Expect.equal (Just want%d)", i, i)
-	}
-	b.WriteString("\n                    ]\n                    ()")
-}
-
-
 // elmRawCards renders a list of Card values (not HandCards).
 // Reuses elmCardLit per card.
 func elmRawCards(cs []Card) string {
@@ -2363,65 +2143,6 @@ func elmRawCards(cs []Card) string {
 		parts = append(parts, elmCardLit(c))
 	}
 	return "[ " + strings.Join(parts, ", ") + " ]"
-}
-
-const elmTrickFirstPlayTmpl = `            let
-                hand =
-                    %s
-
-                board =
-                    %s
-
-                plays =
-                    %s.findPlays hand board
-            in
-`
-
-const elmTrickFirstPlayNoPlays = `            if not (List.isEmpty plays) then
-                Expect.fail ("expected no plays, got " ++ String.fromInt (List.length plays))
-
-            else
-                Expect.pass`
-
-const elmTrickFirstPlayPlayTmpl = `            case plays of
-                [] ->
-                    Expect.fail "expected a play, got none"
-
-                play :: _ ->
-                    let
-                        ( gotBoard, gotHand ) =
-                            play.apply board
-
-                        wantHand =
-                            %s
-
-                        wantBoard =
-                            %s
-                    in
-                    if gotHand /= wantHand then
-                        Expect.fail ("hand mismatch:\n  want " ++ Debug.toString wantHand ++ "\n  got  " ++ Debug.toString gotHand)
-
-                    else if gotBoard /= wantBoard then
-                        Expect.fail ("board mismatch:\n  want " ++ Debug.toString wantBoard ++ "\n  got  " ++ Debug.toString gotBoard)
-
-                    else
-                        Expect.pass`
-
-func elmTrickFirstPlay(b *strings.Builder, sc Scenario, trickVar string) {
-	fmt.Fprintf(b, elmTrickFirstPlayTmpl,
-		elmHandCards(sc.Hand),
-		elmStacks(sc.Board, "                        "),
-		trickVar)
-	switch sc.Expect.Kind {
-	case "no_plays":
-		b.WriteString(elmTrickFirstPlayNoPlays)
-	case "play":
-		fmt.Fprintf(b, elmTrickFirstPlayPlayTmpl,
-			elmHandCards(sc.Expect.HandPlayed),
-			elmStacks(sc.Expect.BoardAfter, "                            "))
-	default:
-		fmt.Fprintf(b, "            Expect.fail \"unsupported expectation: %s\"", sc.Expect.Kind)
-	}
 }
 
 const elmValidateMoveTurnCompleteTmpl = `            let

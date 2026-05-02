@@ -1,5 +1,5 @@
 """
-test_dsl_conformance.py — run DSL scenarios against Python strategy.
+test_dsl_conformance.py — run DSL scenarios against Python BFS + geometry.
 
 Reads conformance_fixtures.json (emitted by cmd/fixturegen from
 games/lynrummy/conformance/scenarios/*.dsl) and dispatches each
@@ -7,20 +7,10 @@ scenario by op. No framework. Run directly:
 
     python3 games/lynrummy/python/test_dsl_conformance.py
 
-Supported ops:
-  - build_suggestions: invoke strategy.enumerate_plays, compare
-    trick_id + hand_cards row-by-row against `expect: suggestions`.
-    (The DSL op name stays `build_suggestions` because the
-    concept is shared with Elm, where the output feeds the
-    human-facing hint surface; Python's internal function is
-    `enumerate_plays` since the agent doesn't suggest, it
-    enumerates.)
-  - hint_invariant: invoke the named trick's emitter, apply its
-    primitives to the input board, and assert every resulting
-    stack classifies as a complete group (set / pure_run /
-    rb_run) AND that the board is geometrically clean (every
-    stack in bounds, no padded-overlap). Any other result fails
-    — an invariant-violating emission is a bug.
+Supported ops: enumerate_moves, solve, find_open_loc,
+hint_for_hand. The legacy strategy/trick layer (build_suggestions,
+hint_invariant) was removed when the tricks code was retired —
+hints flow through the BFS solver now.
 
 Python is interpreted, so there is no codegen step for these
 tests — the JSON file IS the source. Regenerate via:
@@ -35,111 +25,11 @@ from pathlib import Path
 import bfs
 import enumerator
 import move
-import strategy
 import agent_prelude
-from geometry import find_violation
 from rules.card import card as parse_card_label
 
 FIXTURES_PATH = Path(__file__).parent / "conformance_fixtures.json"
 OPS_MANIFEST_PATH = Path(__file__).parent / "conformance_ops.json"
-
-
-def _collect_hand_cards_from_primitives(prims):
-    """A suggestion's hand_cards (in the Elm/Go sense) = the
-    cards a trick's emission pulls from the hand, in the order
-    the primitives consume them."""
-    out = []
-    for p in prims:
-        if "hand_card" in p:
-            out.append(p["hand_card"])
-    return out
-
-
-def _card_eq(a, b):
-    return (a["value"] == b["value"]
-            and a["suit"] == b["suit"]
-            and a["origin_deck"] == b["origin_deck"])
-
-
-def _run_build_suggestions(sc):
-    hand = sc["hand"]
-    board = sc["board"]
-    got = strategy.enumerate_plays(hand, board)
-    want = sc["expect"].get("suggestions", [])
-    if len(got) != len(want):
-        return False, (f"suggestion count: want {len(want)}, got "
-                       f"{len(got)} ({[s['trick_id'] for s in got]})")
-    for i, (g, w) in enumerate(zip(got, want)):
-        if g["trick_id"] != w["trick_id"]:
-            return False, (f"suggestion[{i}].trick_id: want "
-                           f"{w['trick_id']!r}, got {g['trick_id']!r}")
-        got_hc = _collect_hand_cards_from_primitives(g["primitives"])
-        want_hc = w["hand_cards"]
-        if len(got_hc) != len(want_hc):
-            return False, (f"suggestion[{i}].hand_cards length: "
-                           f"want {len(want_hc)}, got {len(got_hc)}")
-        for j, (gc, wc) in enumerate(zip(got_hc, want_hc)):
-            if not _card_eq(gc, wc):
-                return False, (f"suggestion[{i}].hand_cards[{j}]: "
-                               f"want {wc}, got {gc}")
-    return True, f"OK — {len(got)} suggestions"
-
-
-def _apply_primitives(board, prims):
-    board = strategy._copy_board(board)
-    for p in prims:
-        kind = p["action"]
-        if kind == "split":
-            board = strategy._apply_split(board, p["stack_index"], p["card_index"])
-        elif kind == "move_stack":
-            board = strategy._apply_move(board, p["stack_index"], p["new_loc"])
-        elif kind == "merge_stack":
-            board = strategy._apply_merge_stack(
-                board, p["source_stack"], p["target_stack"],
-                p.get("side", "right"))
-        elif kind == "merge_hand":
-            board = strategy._apply_merge_hand(
-                board, p["target_stack"], p["hand_card"],
-                p.get("side", "right"))
-        elif kind == "place_hand":
-            board = strategy._apply_place_hand(
-                board, p["hand_card"], p["loc"])
-    return board
-
-
-def _fmt_card(c):
-    vals = {1: "A", 10: "T", 11: "J", 12: "Q", 13: "K"}
-    return f"{vals.get(c['value'], str(c['value']))}{'CDSH'[c['suit']]}"
-
-
-def _fmt_stack(s):
-    return "[" + ",".join(_fmt_card(bc["card"]) for bc in s["board_cards"]) + "]"
-
-
-def _run_hint_invariant(sc):
-    trick_name = sc["trick"]
-    emitter = getattr(strategy, trick_name, None)
-    if emitter is None:
-        return False, f"unknown trick {trick_name!r}"
-    prims = emitter(sc["hand"], sc["board"])
-    if prims is None:
-        return False, "emitter returned None (trick did not fire)"
-    try:
-        final = _apply_primitives(sc["board"], prims)
-    except (IndexError, KeyError) as e:
-        return False, f"simulation crashed: {type(e).__name__}: {e}"
-    for i, s in enumerate(final):
-        cards = [bc["card"] for bc in s["board_cards"]]
-        if strategy._classify(cards) == "other":
-            return False, (f"stack {i} ({_fmt_stack(s)}) is incomplete "
-                           f"after {len(prims)} primitives")
-    bad_idx = find_violation(final)
-    if bad_idx is not None:
-        bad = final[bad_idx]
-        return False, (f"stack {bad_idx} ({_fmt_stack(bad)}) at "
-                       f"({bad['loc']['left']},{bad['loc']['top']}) "
-                       f"violates geometry after {len(prims)} primitives")
-    return True, f"OK — {len(prims)} primitives, {len(final)} clean stacks"
 
 
 def _bucket_to_tuples(stacks):
@@ -305,8 +195,6 @@ def _run_hint_for_hand(sc):
 
 
 DISPATCH = {
-    "build_suggestions": _run_build_suggestions,
-    "hint_invariant":    _run_hint_invariant,
     "enumerate_moves":   _run_enumerate_moves,
     "solve":             _run_solve,
     "find_open_loc":     _run_find_open_loc,
