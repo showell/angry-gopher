@@ -154,6 +154,22 @@ function runSolve(sc: Scenario): RunResult {
   return { ok: false, msg: "solve scenario missing expectation (no_plan / plan_length / plan_lines)" };
 }
 
+// Ops the TS engine conformance runner exercises directly.
+const TS_HANDLED_OPS = new Set<string>(["enumerate_moves", "solve"]);
+
+// Ops that exist in the fixture JSON but are out-of-scope for the TS
+// port BY DESIGN. The runner reports each by name + rationale at the
+// end so nothing skips silently. Per
+// memory/feedback_silent_skipping_is_rot.md: skip loudly + itemized,
+// or don't admit at all.
+const TS_OUT_OF_SCOPE_OPS: Record<string, string> = {
+  find_open_loc: "tested in Python + Elm; UI placement geometry, not BFS",
+  // hint_for_hand is in-scope-but-not-yet-ported. The TS port will gain
+  // a hand-aware outer loop (mirror of python/agent_prelude.find_play),
+  // then this entry moves to TS_HANDLED_OPS. Tracked: TS_BFS_PORT step 2.
+  hint_for_hand: "TS hand-aware outer loop port pending (TS_BFS_PORT step 2)",
+};
+
 function main(): void {
   if (!fs.existsSync(FIXTURES_PATH)) {
     console.error(`no conformance fixtures at ${FIXTURES_PATH}`);
@@ -164,29 +180,27 @@ function main(): void {
   let total = 0;
   let passed = 0;
   let failed = 0;
-  let skipped = 0;
   const failures: string[] = [];
+  const outOfScopeCounts: Record<string, number> = {};
+  const unknownOpCounts: Record<string, number> = {};
 
   for (const sc of scenarios) {
+    if (!TS_HANDLED_OPS.has(sc.op)) {
+      if (sc.op in TS_OUT_OF_SCOPE_OPS) {
+        outOfScopeCounts[sc.op] = (outOfScopeCounts[sc.op] ?? 0) + 1;
+      } else {
+        unknownOpCounts[sc.op] = (unknownOpCounts[sc.op] ?? 0) + 1;
+      }
+      continue;
+    }
     let res: RunResult | null = null;
     if (sc.op === "enumerate_moves") {
       res = runEnumerateMoves(sc);
     } else if (sc.op === "solve") {
-      // Admit any solve scenario with a defined expectation.
-      const e = sc.expect;
-      const hasExpectation = e["no_plan"] === true
-        || (Array.isArray(e["plan_lines"]) && (e["plan_lines"] as unknown[]).length > 0)
-        || (typeof e["plan_length"] === "number" && (e["plan_length"] as number) > 0);
-      if (!hasExpectation) {
-        skipped++;
-        continue;
-      }
       res = runSolve(sc);
     } else {
-      // Other ops (build_suggestions, hint_invariant, find_open_loc,
-      // hint_for_hand) are not part of the engine port.
-      skipped++;
-      continue;
+      // Unreachable: TS_HANDLED_OPS gate above already filtered.
+      throw new Error(`handled-op gate let through unrecognized op ${JSON.stringify(sc.op)}`);
     }
     total++;
     if (res.ok) {
@@ -201,7 +215,22 @@ function main(): void {
   }
 
   console.log();
-  console.log(`${passed}/${total} passed (${skipped} skipped — out-of-scope ops: find_open_loc / hint_for_hand)`);
+  console.log(`${passed}/${total} passed`);
+  if (Object.keys(outOfScopeCounts).length > 0) {
+    console.log();
+    console.log("Out-of-scope by design (handled in Python and/or Elm):");
+    for (const [op, n] of Object.entries(outOfScopeCounts).sort()) {
+      console.log(`  ${op} (${n} scenarios) — ${TS_OUT_OF_SCOPE_OPS[op]}`);
+    }
+  }
+  if (Object.keys(unknownOpCounts).length > 0) {
+    console.log();
+    console.log("UNRECOGNIZED OPS (neither handled nor declared out-of-scope):");
+    for (const [op, n] of Object.entries(unknownOpCounts).sort()) {
+      console.log(`  ${op} (${n} scenarios) — add to TS_HANDLED_OPS or TS_OUT_OF_SCOPE_OPS`);
+    }
+    process.exit(1);
+  }
   if (failed > 0) {
     console.log();
     console.log("FAILURES:");
