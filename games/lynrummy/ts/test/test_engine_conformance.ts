@@ -22,10 +22,12 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import type { Card } from "../src/rules/card.ts";
+import { parseCardLabel } from "../src/rules/card.ts";
 import { solveState } from "../src/bfs.ts";
 import { enumerateMoves } from "../src/enumerator.ts";
 import { describe, narrate, hint, type Desc } from "../src/move.ts";
 import { classifyBuckets, type RawBuckets } from "../src/buckets.ts";
+import { findPlay, formatHint } from "../src/hand_play.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -49,6 +51,9 @@ interface Scenario {
   trouble?: BoardStack[];
   growing?: BoardStack[];
   complete?: BoardStack[];
+  hint_hand?: string[];
+  hint_board?: string[][];
+  hint_steps?: string[];
   expect: Record<string, unknown>;
 }
 
@@ -154,8 +159,41 @@ function runSolve(sc: Scenario): RunResult {
   return { ok: false, msg: "solve scenario missing expectation (no_plan / plan_length / plan_lines)" };
 }
 
+function runHintForHand(sc: Scenario): RunResult {
+  const handTokens = sc.hint_hand ?? [];
+  const boardTokens = sc.hint_board ?? [];
+  const wantSteps = sc.hint_steps ?? [];
+  const hand: Card[] = handTokens.map(parseCardLabel);
+  const board: Card[][] = boardTokens.map(stack => stack.map(parseCardLabel));
+  const result = findPlay(hand, board);
+  const got = formatHint(result);
+  if (got.length === wantSteps.length
+      && got.every((step, i) => step === wantSteps[i])) {
+    return { ok: true, msg: `OK — ${got.length} steps` };
+  }
+  if (got.length !== wantSteps.length) {
+    return {
+      ok: false,
+      msg: `step count: want ${wantSteps.length}, got ${got.length}\n`
+         + `  want: ${JSON.stringify(wantSteps)}\n`
+         + `  got:  ${JSON.stringify(got)}`,
+    };
+  }
+  for (let i = 0; i < got.length; i++) {
+    if (got[i] !== wantSteps[i]) {
+      return {
+        ok: false,
+        msg: `step[${i}] mismatch:\n`
+           + `  want: ${JSON.stringify(wantSteps[i])}\n`
+           + `  got:  ${JSON.stringify(got[i])}`,
+      };
+    }
+  }
+  return { ok: false, msg: "steps differ (lengths match but no single divergence found)" };
+}
+
 // Ops the TS engine conformance runner exercises directly.
-const TS_HANDLED_OPS = new Set<string>(["enumerate_moves", "solve"]);
+const TS_HANDLED_OPS = new Set<string>(["enumerate_moves", "solve", "hint_for_hand"]);
 
 // Ops that exist in the fixture JSON but are out-of-scope for the TS
 // port BY DESIGN. The runner reports each by name + rationale at the
@@ -164,10 +202,6 @@ const TS_HANDLED_OPS = new Set<string>(["enumerate_moves", "solve"]);
 // or don't admit at all.
 const TS_OUT_OF_SCOPE_OPS: Record<string, string> = {
   find_open_loc: "tested in Python + Elm; UI placement geometry, not BFS",
-  // hint_for_hand is in-scope-but-not-yet-ported. The TS port will gain
-  // a hand-aware outer loop (mirror of python/agent_prelude.find_play),
-  // then this entry moves to TS_HANDLED_OPS. Tracked: TS_BFS_PORT step 2.
-  hint_for_hand: "TS hand-aware outer loop port pending (TS_BFS_PORT step 2)",
 };
 
 function main(): void {
@@ -198,6 +232,8 @@ function main(): void {
       res = runEnumerateMoves(sc);
     } else if (sc.op === "solve") {
       res = runSolve(sc);
+    } else if (sc.op === "hint_for_hand") {
+      res = runHintForHand(sc);
     } else {
       // Unreachable: TS_HANDLED_OPS gate above already filtered.
       throw new Error(`handled-op gate let through unrecognized op ${JSON.stringify(sc.op)}`);

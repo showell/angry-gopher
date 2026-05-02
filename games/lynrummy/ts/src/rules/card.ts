@@ -39,7 +39,17 @@ export function parseCardLabel(label: string): Card {
   return [rankIdx + 1, suitIdx, deck] as const;
 }
 
-/** Render a Card as a label string (deck-0 form, no suffix). */
+/** Render a Card as a label string. Includes a `:N` deck suffix
+ *  when deck ≠ 0 (mirroring python `rules.card.card_label`). The
+ *  suffixed form is the cross-language plan-line contract — DSL
+ *  scenarios like `JD:1` round-trip through this. */
 export function cardLabel(c: Card): string {
-  return RANKS[c[0] - 1]! + SUITS[c[1]]!;
+  const base = RANKS[c[0] - 1]! + SUITS[c[1]]!;
+  return c[2] === 0 ? base : `${base}:${c[2]}`;
+}
+
+/** True iff `s` is the diamonds or hearts suit (matches python
+ *  `rules.card.color(s) == "red"`). */
+export function isRedSuit(s: number): boolean {
+  return RED.has(s);
 }

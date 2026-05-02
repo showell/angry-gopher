@@ -10,7 +10,7 @@
 // trivial (string equality, no normalization).
 
 import type { Card } from "./rules/card.ts";
-import { RANKS, SUITS } from "./rules/card.ts";
+import { RANKS, SUITS, cardLabel } from "./rules/card.ts";
 
 /** Side discriminator for absorb/splice variants. Mirrors python's
  *  `Side`. Only data-layout-level — no function takes `side` as a
@@ -99,15 +99,6 @@ export type Desc =
 // `describe(desc)` produces the canonical one-line DSL string. The
 // strings here are the cross-language contract — they must exactly
 // match python's `move.describe(desc)` output.
-
-/** Match python's `card_label` (rules/card.py): include `:N` deck
- *  suffix when deck ≠ 0. The TS `cardLabel` in `rules/card.ts` does
- *  NOT include the suffix; this is a separate function used only for
- *  plan-line rendering. */
-function cardLabel(c: Card): string {
-  const base = RANKS[c[0] - 1]! + SUITS[c[1]]!;
-  return c[2] === 0 ? base : `${base}:${c[2]}`;
-}
 
 function stackLabel(stack: readonly Card[]): string {
   return stack.map(cardLabel).join(" ");

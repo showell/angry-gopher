@@ -6,7 +6,10 @@ TS code to know which divergences are deliberate (deferred features)
 vs accidental (port drift to fix).
 
 The Python is the reference. Behavioral parity is verified by 214/214
-leaf conformance scenarios + 148/148 engine plan-line cross-check.
+leaf conformance scenarios + 160/160 engine + hand-play cross-check
+(148 solve / 9 enumerate_moves / 3 hint_for_hand). Only `find_open_loc`
+remains explicitly out of TS scope (UI placement geometry, tested in
+Python + Elm).
 
 ## File map
 
@@ -17,7 +20,9 @@ leaf conformance scenarios + 148/148 engine plan-line cross-check.
 | `src/enumerator.ts` | `python/enumerator.py` | none on the enumeration / focus / lineage paths |
 | `src/bfs.ts` | `python/bfs.py` | card-tracker liveness pruning (see below) |
 | `src/move.ts` | `python/move.py` | none |
-| `src/rules/card.ts` | `python/rules/card.py` (or equivalent) | none |
+| `src/hand_play.ts` | `python/agent_prelude.py` | none on the find_play / format_hint paths |
+| `src/rules/card.ts` | `python/rules/card.py` | none |
+| `src/rules/stack_type.ts` | `python/rules/stack_type.py` | only `isPartialOk` is ported (full module also has `classify`, `neighbors`, etc.; those live in `classified_card_stack.ts` in TS) |
 
 ## Deferred features
 
