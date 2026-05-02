@@ -108,13 +108,16 @@ function encodeBucket(stacks: readonly ClassifiedCardStack[]): string {
 }
 
 /** Encode a lineage (tuple of raw card tuples). Lineage POSITION
- *  matters (lineage[0] is focus), so we DON'T sort the outer list. */
+ *  matters (lineage[0] is focus), so we DON'T sort the outer list.
+ *  Lineage entries are encoded VERBATIM (no per-entry sort) — Python's
+ *  seen-set key uses the raw lineage tuple, so same-cards-different-
+ *  order entries are distinct states there and must be distinct here.
+ *  In practice all lineage entries land in canonical order by
+ *  construction (descriptors emit cards sorted), so this is invisible
+ *  today; verbatim encoding pins port fidelity if that invariant ever
+ *  breaks. */
 function encodeLineage(lineage: Lineage): string {
-  // Per-stack: lineage entries are content-tagged; sort within each
-  // entry to match the encoding used elsewhere (lineage entries store
-  // raw card tuples as content keys, but the focus is identified by
-  // content equality so same-cards-different-order is the same focus).
-  return lineage.map(entry => encodeStackCards(entry)).join("~");
+  return lineage.map(entry => entry.map(encodeCard).join(",")).join("~");
 }
 
 /**

@@ -1,0 +1,90 @@
+# TS port status — what's ported, what's deferred
+
+Crosswalk between this TypeScript BFS engine and its Python reference
+implementation at `games/lynrummy/python/`. Use this when reading the
+TS code to know which divergences are deliberate (deferred features)
+vs accidental (port drift to fix).
+
+The Python is the reference. Behavioral parity is verified by 214/214
+leaf conformance scenarios + 148/148 engine plan-line cross-check.
+
+## File map
+
+| TS file | Ported from | Deferred features |
+|---|---|---|
+| `src/buckets.ts` | `python/buckets.py` | none |
+| `src/classified_card_stack.ts` | `python/classified_card_stack.py` | splice executors (kept inline in `enumerator.ts` for v1; see below) |
+| `src/enumerator.ts` | `python/enumerator.py` | none on the enumeration / focus / lineage paths |
+| `src/bfs.ts` | `python/bfs.py` | card-tracker liveness pruning (see below) |
+| `src/move.ts` | `python/move.py` | none |
+| `src/rules/card.ts` | `python/rules/card.py` (or equivalent) | none |
+
+## Deferred features
+
+### Card-tracker liveness pruning (priority: before browser integration)
+
+Python has two filters not yet ported:
+
+- **`_all_trouble_singletons_live(b)`** — called once before the BFS
+  loop in `solve_state_with_descs` (`bfs.py:323`). Short-circuits
+  initial states with a provably-dead trouble singleton (no valid
+  3-card group reachable using accessible cards).
+- **`_any_trouble_singleton_newly_doomed(b)`** — called inside the
+  BFS loop on states that just graduated a group
+  (`bfs.py:160-162`). Prunes children where the completion sealed
+  the singleton's last partner into COMPLETE.
+
+Both are backed by the card-tracker accelerator: `card_loc` array
+plus precomputed neighbor tables in `card_neighbors.py` (~180 LOC).
+
+**Why deferred:** v1 conformance corpus is solvable boards; the
+runaway-class boards aren't tested. TS BFS will work but bloat
+`seen` and hit `maxStates` cap on hard puzzles Python solves
+cheaply.
+
+**When to port:** before the TS engine replaces the Elm BFS in the
+browser. Bench against `python/corpus/` first to size the gap.
+
+### Splice executors hoisted out of `enumerator.ts` (priority: opportunistic)
+
+The probes (`right_splice_candidates`, `left_splice_candidates`)
+landed in `classified_card_stack.ts` per the leaf module's domain.
+The executors (`splice_left`, `splice_right`) currently live inline
+in `enumerator.ts` because the v1 port task explicitly avoided
+touching the leaf module.
+
+**When to fix:** next time someone touches either file. Move the
+executors next to the probes, drop the inline definitions in
+`enumerator.ts`. No behavior change.
+
+## Open design surfaces
+
+These aren't deferred features — they're decisions that haven't been
+made yet because they'll first matter at browser integration:
+
+### Cross-language wire format for descriptors
+
+The TS `Desc` discriminated union uses camelCase fields
+(`extCard`, `targetBefore`, `pCard`). Python uses snake_case
+(`ext_card`, `target_before`, `p_card`). Elm has its own. When the
+TS engine eventually feeds the Elm UI via ports, three different
+shapes will need to agree. **Pin the wire format before
+integration.** Working assumption: snake_case JSON across the wire,
+TS layer converts at one boundary.
+
+This is tracked as `CROSS_LANG_WIRE_FORMAT` in `MINI_PROJECTS.md`.
+
+### `isAlreadyClassified` shape-sniff vs typed boundary
+
+`bfs.ts:179-191` inspects the first non-empty bucket's first stack
+to decide whether to classify. Cleaner: take only `RawBuckets` at
+the public entry point and classify always (idempotent at caller).
+Worth pinning before browser integration since serialization
+quirks could hit this surface silently.
+
+## Naming convention
+
+snake_case is fine in this TS port — see
+`memory/feedback_snake_case_in_elm.md`. The port stays close to its
+Python source, and that's the point. Don't flag snake_case as a
+critique target.
