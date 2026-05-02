@@ -38,12 +38,24 @@ export interface PlanLine {
   readonly desc: Desc;
 }
 
-interface BfsResult {
+export interface BfsResult {
   readonly plan: readonly PlanLine[] | null;
   readonly hitMaxStates: boolean;
   readonly expansions: number;
   readonly seenCount: number;
   readonly maxTroubleSeen: number;
+}
+
+export interface CapExhaustion {
+  readonly cap: number;
+  readonly hitMaxStates: boolean;
+  readonly expansions: number;
+  readonly seenCount: number;
+}
+
+export interface SolveExtResult {
+  readonly plan: readonly PlanLine[] | null;
+  readonly exhaustions: readonly CapExhaustion[];
 }
 
 /**
@@ -163,6 +175,51 @@ export function solveStateWithDescs(
     if (!res.hitMaxStates && res.maxTroubleSeen < cap) return null;
   }
   return null;
+}
+
+/**
+ * Diagnostic variant: same algorithm as `solveStateWithDescs` but
+ * returns one `CapExhaustion` record per cap that ran without finding
+ * a plan. `hitMaxStates: true` records mean the cap aborted on the
+ * state budget (a runaway candidate). Used by perf_harness for runaway
+ * detection and by budget_sweep for plan-rate-vs-budget analysis.
+ */
+export function solveStateWithDescsExt(
+  initial: Buckets | RawBuckets,
+  opts: SolveOptions = {},
+): SolveExtResult {
+  const maxTroubleOuter = opts.maxTroubleOuter ?? 8;
+  const maxStates = opts.maxStates ?? 10000;
+
+  const classified: Buckets = isAlreadyClassified(initial)
+    ? initial
+    : classifyBuckets(initial as RawBuckets);
+
+  if (troubleCount(classified.trouble, classified.growing) > maxTroubleOuter) {
+    return { plan: null, exhaustions: [] };
+  }
+  if (isVictory(classified.trouble, classified.growing)) {
+    return { plan: [], exhaustions: [] };
+  }
+  const initialFocused: FocusedState = {
+    buckets: classified,
+    lineage: initialLineage(classified.trouble, classified.growing),
+  };
+  const exhaustions: CapExhaustion[] = [];
+  for (let cap = 1; cap <= maxTroubleOuter; cap++) {
+    const res = bfsWithCap(initialFocused, cap, maxStates);
+    if (res.plan !== null) return { plan: res.plan, exhaustions };
+    exhaustions.push({
+      cap,
+      hitMaxStates: res.hitMaxStates,
+      expansions: res.expansions,
+      seenCount: res.seenCount,
+    });
+    if (!res.hitMaxStates && res.maxTroubleSeen < cap) {
+      return { plan: null, exhaustions };
+    }
+  }
+  return { plan: null, exhaustions };
 }
 
 /** Thin wrapper returning plan lines (no descs). Mirrors python's

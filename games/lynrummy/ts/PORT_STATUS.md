@@ -29,6 +29,37 @@ triple-in-hand plays Python found. Fixed in commit `651318f`. Lesson:
 curated fixtures have coverage gaps; real-workload cross-validation
 is what closes them. (See `memory/feedback_corpus_blind_spots.md`.)
 
+## Performance benchmarks — TS-canonical (2026-05-02)
+
+All perf-measurement drivers are ported to native TS at `ts/bench/`:
+
+| Driver                       | Was                                          |
+|------------------------------|----------------------------------------------|
+| `bench_timing.ts`            | `python/bench_timing.py`                     |
+| `bench_outer_shell.ts`       | `python/bench_outer_shell.py`                |
+| `gen_baseline_board.ts`      | `python/tools/gen_baseline_board.py`         |
+| `check_baseline_timing.ts`   | `python/check_baseline_timing.py`            |
+| `perf_harness.ts`            | `python/perf_harness.py`                     |
+| `budget_sweep.ts`            | `python/budget_sweep.py`                     |
+
+Run via npm: `npm run bench:outer-shell`, `bench:check-baseline`, etc.
+Python drivers stay runnable until Phase D (Python BFS deletion) but
+are no longer the canonical perf surface.
+
+Notable methodology differences from Python:
+
+- **PRNG**: TS uses mulberry32 (seedable, native to JS). Python used
+  Mersenne Twister. The 60 hands in `bench_outer_shell` are therefore
+  different across the two implementations — `bench_outer_shell_gold.txt`
+  is TS-specific. Cross-language hand selection wasn't a goal.
+- **MIN_BASELINE_MS lowered 200 → 50ms** in `check_baseline_timing.ts`.
+  TS solves the same corpus ~4× faster than Python; only 2Cp/2Sp clear
+  50ms in TS. Lower threshold keeps the regression net useful.
+- **No `cProfile` analog**. For deep profiling, run TS bench under
+  `node --prof` then post-process with `node --prof-process`.
+- **No GC control**. V8 doesn't expose generational-GC toggling like
+  CPython. Min-of-N with optional `--expose-gc` is the substitute.
+
 ## Bridge — TS engine callable from Python and Elm
 
 `ts/bridge.ts` is the single CLI entry point: reads one JSON request

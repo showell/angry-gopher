@@ -35,7 +35,11 @@ import { cardLabel } from "./rules/card.ts";
 import { isPartialOk } from "./rules/stack_type.ts";
 import { classifyStack } from "./classified_card_stack.ts";
 import type { RawBuckets } from "./buckets.ts";
-import { solveStateWithDescs } from "./bfs.ts";
+import {
+  solveStateWithDescs,
+  solveStateWithDescsExt,
+  type CapExhaustion,
+} from "./bfs.ts";
 
 // Default BFS state budget per projection. Mirrors python
 // `_PROJECTION_MAX_STATES`. Lowered from 200000 → 5000 in Python on
@@ -50,6 +54,24 @@ export interface PlayResult {
   readonly plan: readonly string[];
 }
 
+export interface ProjectionRecord {
+  readonly kind: "pair" | "singleton";
+  readonly cards: readonly Card[];
+  readonly wallMs: number;
+  readonly foundPlan: boolean;
+  readonly exhaustions: readonly CapExhaustion[];
+}
+
+export interface PlayStats {
+  totalWallMs: number;
+  projections: ProjectionRecord[];
+}
+
+export interface PlayOptions {
+  readonly maxStates?: number;
+  readonly stats?: PlayStats;
+}
+
 /**
  * Find a plausible play given a hand and a board. Returns
  * `{ placements, plan }` or `null`.
@@ -60,7 +82,12 @@ export interface PlayResult {
 export function findPlay(
   hand: readonly Card[],
   board: readonly (readonly Card[])[],
+  opts: PlayOptions = {},
 ): PlayResult | null {
+  const maxStates = opts.maxStates ?? PROJECTION_MAX_STATES;
+  const stats = opts.stats;
+  const tStart = performance.now();
+
   // (a) Triple in hand — always 0 BFS steps, best possible.
   for (let i = 0; i < hand.length; i++) {
     for (let j = i + 1; j < hand.length; j++) {
@@ -69,6 +96,7 @@ export function findPlay(
       if (!isPartialOk([c1, c2])) continue;
       const ordered = findCompletingThird([c1, c2], hand, i, j);
       if (ordered !== null) {
+        finishStats(stats, tStart);
         return { placements: ordered, plan: [] };
       }
     }
@@ -84,7 +112,7 @@ export function findPlay(
       const c1 = hand[i]!;
       const c2 = hand[j]!;
       if (!isPartialOk([c1, c2])) continue;
-      const plan = tryProjection(board, [[c1, c2]]);
+      const plan = tryProjection(board, [[c1, c2]], maxStates, stats, "pair");
       if (plan !== null) {
         candidates.push({ placements: [c1, c2], plan });
       }
@@ -93,16 +121,23 @@ export function findPlay(
 
   // (c) Singleton projections.
   for (const c of hand) {
-    const plan = tryProjection(board, [[c]]);
+    const plan = tryProjection(board, [[c]], maxStates, stats, "singleton");
     if (plan !== null) {
       candidates.push({ placements: [c], plan });
     }
   }
 
+  finishStats(stats, tStart);
   if (candidates.length === 0) return null;
   return candidates.reduce((best, cur) =>
     cur.plan.length < best.plan.length ? cur : best,
   );
+}
+
+function finishStats(stats: PlayStats | undefined, tStart: number): void {
+  if (stats !== undefined) {
+    stats.totalWallMs = performance.now() - tStart;
+  }
 }
 
 /**
@@ -160,6 +195,9 @@ function cardEq(a: Card, b: Card): boolean {
 function tryProjection(
   board: readonly (readonly Card[])[],
   extraStacks: readonly (readonly Card[])[],
+  maxStates: number,
+  stats: PlayStats | undefined,
+  kind: "pair" | "singleton",
 ): readonly string[] | null {
   const augmented: (readonly Card[])[] = [...board, ...extraStacks];
   const helper: (readonly Card[])[] = [];
@@ -178,12 +216,30 @@ function tryProjection(
     growing: [],
     complete: [],
   };
-  const plan = solveStateWithDescs(initial, {
+  const cards: Card[] = [];
+  for (const s of extraStacks) for (const c of s) cards.push(c);
+
+  if (stats === undefined) {
+    const plan = solveStateWithDescs(initial, {
+      maxTroubleOuter: 10,
+      maxStates,
+    });
+    return plan === null ? null : plan.map(p => p.line);
+  }
+  const t0 = performance.now();
+  const ext = solveStateWithDescsExt(initial, {
     maxTroubleOuter: 10,
-    maxStates: PROJECTION_MAX_STATES,
+    maxStates,
   });
-  if (plan === null) return null;
-  return plan.map(p => p.line);
+  const wallMs = performance.now() - t0;
+  stats.projections.push({
+    kind,
+    cards,
+    wallMs,
+    foundPlan: ext.plan !== null,
+    exhaustions: ext.exhaustions,
+  });
+  return ext.plan === null ? null : ext.plan.map(p => p.line);
 }
 
 /**
