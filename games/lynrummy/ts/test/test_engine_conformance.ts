@@ -7,12 +7,11 @@
 //   - All `enumerate_moves` scenarios — assert the matching `yields`
 //     type (or `narrate_contains` / `hint_contains` substring) is
 //     produced by the TS engine.
-//   - All `solve` scenarios with `no_plan: true` — admitted
-//     automatically; the BFS exhausting and returning null is a clean
-//     correctness signal that doesn't depend on plan ordering.
-//   - `solve` scenarios with `plan_lines` / `plan_length` expectations
-//     are gated by SOLVE_ALLOWLIST (hand-picked low-depth subset for v1
-//     until the allowlist widens to all 71 plan_lines scenarios).
+//   - All `solve` scenarios with any defined expectation
+//     (`no_plan` / `plan_lines` / `plan_length`) are admitted. The
+//     v1 hand-picked SOLVE_ALLOWLIST kept earlier tiers small while
+//     the engine was being verified; programmatic admission by
+//     expectation-shape replaced it once the engine proved out.
 //
 // Other ops (build_suggestions, hint_invariant, find_open_loc,
 // hint_for_hand) are reported as SKIP — they live above the BFS layer
@@ -162,27 +161,6 @@ function main(): void {
   }
   const scenarios: Scenario[] = JSON.parse(fs.readFileSync(FIXTURES_PATH, "utf8"));
 
-  // v1 solve coverage: a hand-picked subset of LOW-DEPTH scenarios.
-  // Picked from `corpus_sid_*` plan_lines scenarios with the shortest
-  // plans + a few baseline_board ones for variety. Per the task brief,
-  // "at least 5 solve cases".
-  const SOLVE_ALLOWLIST = new Set<string>([
-    // 1-line baseline_board plans (single push / steal / etc.)
-    "baseline_board_4Cp", "baseline_board_4S", "baseline_board_4Sp",
-    "baseline_board_5D", "baseline_board_5Dp", "baseline_board_KC",
-    "baseline_board_KH", "baseline_board_QS",
-    // Multi-line baseline_board plans (4-line peel + steal + push + push)
-    "baseline_board_2D", "baseline_board_3C",
-    // corpus_sid_*: low-depth scenarios from the planner_corpus DSL.
-    "corpus_sid_108", "corpus_sid_112", "corpus_sid_124",
-    "corpus_sid_128", "corpus_sid_132", "corpus_sid_134",
-    "corpus_sid_136", "corpus_sid_138", "corpus_sid_142",
-    "corpus_sid_144", "corpus_sid_148",
-    // extra-corpus low-depth scenarios.
-    "extra_017_6H_6Dp", "extra_018_ASp_2Sp", "extra_021_2D",
-    "extra_022_3Hp", "extra_025_8C",
-  ]);
-
   let total = 0;
   let passed = 0;
   let failed = 0;
@@ -194,11 +172,12 @@ function main(): void {
     if (sc.op === "enumerate_moves") {
       res = runEnumerateMoves(sc);
     } else if (sc.op === "solve") {
-      // no_plan scenarios are admitted automatically (correctness
-      // signal independent of plan ordering); plan_lines / plan_length
-      // scenarios remain gated by the v1 hand-picked allowlist.
-      const isNoPlan = sc.expect["no_plan"] === true;
-      if (!isNoPlan && !SOLVE_ALLOWLIST.has(sc.name)) {
+      // Admit any solve scenario with a defined expectation.
+      const e = sc.expect;
+      const hasExpectation = e["no_plan"] === true
+        || (Array.isArray(e["plan_lines"]) && (e["plan_lines"] as unknown[]).length > 0)
+        || (typeof e["plan_length"] === "number" && (e["plan_length"] as number) > 0);
+      if (!hasExpectation) {
         skipped++;
         continue;
       }
@@ -222,7 +201,7 @@ function main(): void {
   }
 
   console.log();
-  console.log(`${passed}/${total} passed (${skipped} skipped — outside engine scope or not in v1 solve allowlist)`);
+  console.log(`${passed}/${total} passed (${skipped} skipped — out-of-scope ops: build_suggestions / hint_invariant / find_open_loc / hint_for_hand)`);
   if (failed > 0) {
     console.log();
     console.log("FAILURES:");
