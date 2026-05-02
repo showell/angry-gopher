@@ -104,7 +104,6 @@ DEFAULT_VERIFY_CMDS = [
     "python3 test_bfs_enumerate.py",
     "python3 test_bfs_failure.py",
     "python3 test_verbs.py",
-    "python3 test_dsl_conformance.py",
     "python3 test_agent_prelude.py",
     "python3 test_plan_merge_hand.py",
     "python3 test_follow_up_merges.py",

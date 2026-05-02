@@ -145,13 +145,15 @@ From `games/lynrummy/elm/`:
 
 From `games/lynrummy/python/`:
 
-- `./check.sh` — runs every `test_*.py` in the directory,
-  including `test_dsl_conformance.py`.
+- `./check.sh` — runs every `test_*.py` in the directory.
+  The cross-language DSL conformance runner retired
+  2026-05-02; TS owns that leg now.
 
 From `games/lynrummy/ts/`:
 
 - `npm test` — leaf primitive conformance + engine plan-line
-  cross-check vs the Python-emitted fixtures.
+  cross-check vs the JSON fixtures (the canonical BFS
+  conformance run point post-2026-05-02).
 
 The single canonical run point for both elm-test and
 elm-review is `games/lynrummy/elm/`. The Puzzles gallery

@@ -12,8 +12,10 @@ Python module's docstring for the human-feel rationale.
 
 The constants below mirror Python's module-level constants.
 Both languages must agree exactly: any landed loc is
-text-asserted by `tools/export_primitives_fixtures.py` /
-`Game.PrimitivesConformanceTest.elm`.
+text-asserted by `Game.PrimitivesConformanceTest.elm` against
+the committed `primitives_fixtures.json`. (The legacy Python
+exporter retired 2026-05-02; the JSON is now committed-and-
+static.)
 
 -}
 

@@ -345,8 +345,10 @@ corpus scenarios: `planner_corpus.dsl` (21 solvable puzzles,
 and SOLVER_SPEED timing benchmarks, `extra_*`), and
 `baseline_board_81.dsl` (auto-generated 81-card baseline suite,
 `baseline_board_*`). Run via `ops/check-conformance` — that
-invokes `cmd/fixturegen` to compile fixtures, then Python
-`test_dsl_conformance.py`, then the Elm suite.
+invokes `cmd/fixturegen` to compile fixtures, then the TS
+runner (`npm test` in `../ts/`), then the Elm suite. The Python
+`test_dsl_conformance.py` runner retired 2026-05-02; TS owns
+the BFS conformance leg now.
 
 To add a hand-crafted benchmark case, add it to
 `planner_corpus_extras.dsl` and re-run `ops/check-conformance`.
@@ -366,12 +368,11 @@ DSL conformance pipeline plus replay walkthroughs.
 
 ## The DSL conformance bridge
 
-Python + Elm both exercise the same scenarios, defined once
-in `games/lynrummy/conformance/scenarios/*.dsl` and compiled
-by `cmd/fixturegen` into Python JSON fixtures + Elm test
-files. Central cross-language bridge per `BRIDGES.md`.
-Scenario files (run `ops/check-conformance` to regenerate
-after any DSL edit):
+TS + Elm both exercise the same scenarios, defined once in
+`games/lynrummy/conformance/scenarios/*.dsl` and compiled by
+`cmd/fixturegen` into JSON fixtures + Elm test files. Central
+cross-language bridge per `BRIDGES.md`. Scenario files (run
+`ops/check-conformance` to regenerate after any DSL edit):
 
 - `planner_corpus.dsl` — 21 solvable corpus puzzles (`corpus_sid_*`).
 - `planner_corpus_extras.dsl` — unsolvable cases + SOLVER_SPEED
@@ -381,12 +382,13 @@ after any DSL edit):
   (`baseline_board_*`). Do not hand-edit; regenerate via
   `npm run bench:gen-baseline` (in `../ts/`).
 - `planner.dsl` — `enumerate_moves` unit scenarios.
-- `hint_game_seed42.dsl` — `hint_for_hand` conformance (Python only).
+- `hint_game_seed42.dsl` — `hint_for_hand` conformance.
 - `referee.dsl`, `board_geometry.dsl`, `drag_invariant.dsl`,
   `gesture.dsl` — UI/referee ops (Elm-primary).
 
-`test_dsl_conformance.py` is the Python runner; `ops/check-conformance`
-is the full gate (fixturegen + Python + Elm).
+`ts/test/test_engine_conformance.ts` is the TS runner;
+`ops/check-conformance` is the full gate (fixturegen + TS + Elm).
+The Python runner retired 2026-05-02.
 
 ## Test contracts
 
@@ -413,10 +415,6 @@ The Python suite (run each test file directly) covers:
   primitive shape and post-trick geometry.
 - `test_plan_merge_hand.py` — geometry pre-flight planner.
 - `test_follow_up_merges.py` — post-trick follow-up scan.
-- `test_dsl_conformance.py` — cross-language scenarios
-  compiled from the conformance DSL (referee + hint +
-  planner; planner.dsl includes futility cases via
-  `expect: no_plan`).
 - `test_agent_prelude.py` — hand-aware outer loop
   (pair-with-third, pair-via-BFS, singleton fallback,
   stuck → None, pair-priority).

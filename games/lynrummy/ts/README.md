@@ -52,14 +52,15 @@ Run `npm test` to see live status.
   - `src/bfs.ts` — search engine (`bfsWithCap`, `solveStateWithDescs`).
   - `test/test_conformance_leaf.ts` — leaf DSL conformance runner.
   - `test/test_engine_conformance.ts` — engine-level conformance
-    against `python/conformance_fixtures.json` (the same fixtures
-    Python's `test_dsl_conformance.py` uses).
+    against `python/conformance_fixtures.json`. The canonical
+    BFS conformance runner since the Python runner retired
+    2026-05-02.
 
 ## Running tests
 
 ```
 node test/test_conformance_leaf.ts     # leaves only
-node test/test_engine_conformance.ts   # engine + cross-check vs Python
+node test/test_engine_conformance.ts   # engine vs JSON fixtures
 npm test                               # both
 ```
 

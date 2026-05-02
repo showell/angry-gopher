@@ -23,11 +23,11 @@ playback works end-to-end.
 Reads:  games/lynrummy/conformance/primitives_fixtures.json
 Writes: games/lynrummy/conformance/scenarios/replay_walkthroughs.dsl
 
-Re-run after either:
-  - tools/export_primitives_fixtures.py changes the fixture
-    contents (new puzzle mined, verb impl shifted), or
-  - any change that affects what the walkthrough should
-    expect.
+Re-run after any change that affects what the walkthrough
+should expect. Note: the upstream primitives-fixture exporter
+retired 2026-05-02 with the BFS-retirement work — the JSON
+fixtures are now committed-and-static. Resurrect from git
+history if a future Elm BFS resurrection requires regen.
 """
 
 import json

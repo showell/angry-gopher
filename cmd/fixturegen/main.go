@@ -338,8 +338,9 @@ const (
 //
 //   1. Append an OpKind row below.
 //   2. Implement the per-target emitter functions you flagged
-//      true (Go and/or Elm). Python is interpreted: register a
-//      runner in test_dsl_conformance.py:DISPATCH.
+//      true (Elm). The TS runner reads JSON fixtures at runtime —
+//      add a dispatch entry in
+//      games/lynrummy/ts/test/test_engine_conformance.ts.
 //   3. If the op needs new scalar / block / expectation fields,
 //      extend the parser (applyScalarField / applyBlockField /
 //      parseExpectBlock) and the AST struct (Scenario /
@@ -1402,10 +1403,8 @@ const elmFindOpenLocTmpl = `            let
 
 // elmFindOpenLoc emits a test body that constructs a list of
 // existing CardStacks and asserts `Game.Physics.PlaceStack.findOpenLoc`
-// returns the expected loc. Mirrors what
-// `python/test_dsl_conformance.py::_run_find_open_loc` does on
-// the Python side. Cards in the existing stacks are shape-only;
-// findOpenLoc only reads loc + boardCards length.
+// returns the expected loc. Cards in the existing stacks are
+// shape-only; findOpenLoc only reads loc + boardCards length.
 func elmFindOpenLoc(b *strings.Builder, sc Scenario) {
 	if sc.Expect.Geometry.Loc == nil {
 		b.WriteString("            Expect.fail \"find_open_loc scenario missing expect.loc\"")
@@ -3467,9 +3466,9 @@ func parseStacks(children []line, path string) ([]Stack, error) {
 //   - move_stack [<labels>] -> (<top>,<left>)
 //   - complete_turn
 //
-// The labels match the canonical-text-form already used in
-// `tools/export_primitives_fixtures.py` so the two layers stay
-// readable in the same vocabulary.
+// The labels match the canonical-text-form used by the legacy
+// `tools/export_primitives_fixtures.py` (retired 2026-05-02) so the
+// two layers stay readable in the same vocabulary.
 func parseReplayActions(children []line, path string) ([]ReplayAction, error) {
 	var out []ReplayAction
 	for _, l := range children {

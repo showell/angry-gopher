@@ -93,7 +93,9 @@ game transcript and shows the interaction model concretely):
   scenarios (read first as a primer).
 
 See `../../cmd/fixturegen/main.go` for the codegen pipeline
-and `python/test_dsl_conformance.py` for the Python runner.
+and `ts/test/test_engine_conformance.ts` for the TS runner.
+The Python runner retired 2026-05-02 with the BFS-retirement
+work; Elm + TS now cover the contract.
 
 ## TODO
 

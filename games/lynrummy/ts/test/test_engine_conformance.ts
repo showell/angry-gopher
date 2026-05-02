@@ -1,8 +1,8 @@
 // test_engine_conformance.ts — TS scenario-level conformance runner.
 //
-// Reads `python/conformance_fixtures.json` (the same JSON the Python
-// `test_dsl_conformance.py` consumes) and runs the TS engine against
-// the `enumerate_moves` and `solve` ops:
+// Reads `python/conformance_fixtures.json` (the canonical JSON
+// emitted by `cmd/fixturegen` from the DSL scenarios) and runs the
+// TS engine against the `enumerate_moves` and `solve` ops:
 //
 //   - All `enumerate_moves` scenarios — assert the matching `yields`
 //     type (or `narrate_contains` / `hint_contains` substring) is

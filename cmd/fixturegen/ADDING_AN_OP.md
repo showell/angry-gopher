@@ -1,7 +1,7 @@
 # Adding a new op kind to the DSL conformance pipeline
 
 > **To regenerate fixtures: run `ops/check-conformance`.** That script
-> invokes fixturegen + runs Python + Elm conformance. Do NOT compose
+> invokes fixturegen + runs TS + Elm conformance. Do NOT compose
 > `go run ./cmd/fixturegen …` ad-hoc — that's how dev-loop scripts
 > drift and Steve loses an hour to resurrection. If you find yourself
 > wanting a "smaller" regen-only script, run `ops/list` first; if one
@@ -12,29 +12,30 @@ The DSL has a small fixed set of ops today (`validate_game_move`,
 that uses an existing op is one .dsl edit. Adding a brand-new *op kind*
 costs more: it's the axis this doc is about.
 
-A new op kind needs four things, in roughly this order:
+A new op kind needs three or four things, in roughly this order:
 
 1. **Registry row** in `cmd/fixturegen/main.go` — declares which targets
-   (Elm / Python) run this op and points at the per-target emitters.
-2. **Per-target emitter functions** — Elm test-body codegen. Python is
-   interpreted, so there's no codegen — the runner reads the JSON
-   fixtures at runtime. (Go target retired 2026-04-28 with the Go
-   domain package.)
-3. **Python runner entry** in `games/lynrummy/python/test_dsl_conformance.py`
-   — only if the op runs in Python.
+   (Elm / TS) run this op and points at the per-target emitters. The
+   `Python` flag in the registry now means "include in
+   conformance_fixtures.json"; TS is the runtime consumer of that
+   JSON since the Python runner retired 2026-05-02.
+2. **Per-target emitter functions** — Elm test-body codegen. TS reads
+   the JSON fixtures at runtime, so there's no TS codegen step.
+   (Go target retired 2026-04-28 with the Go domain package.)
+3. **TS runner entry** in
+   `games/lynrummy/ts/test/test_engine_conformance.ts` — only if the
+   op needs TS-side coverage (most BFS ops do).
 4. **Maybe parser + AST extensions** — only if the op needs new
    scenario fields (a new block like `helper:` or a new expectation
    like `expect.foo:`). Most new ops reuse existing fields.
 
-A registry-validation gate fails loud at fixturegen-time if you forget
-step 1, and a manifest cross-check fails loud at Python-test-time if
-steps 1 and 3 disagree. So the costly forgot-to-update-the-other-side
-failure mode is gone.
+A registry-validation gate fails loud at fixturegen-time if you
+forget step 1.
 
 ## The minimum viable recipe
 
-Adding an op `my_op` that runs in Elm + Python (the most common case
-— the referee is the only Go-side citizen):
+Adding an op `my_op` that runs in Elm + TS (the most common case
+— the referee is the only Go-side citizen, and Go is retired):
 
 ### 1. Append to `opRegistry` in `cmd/fixturegen/main.go`
 
@@ -62,25 +63,11 @@ Look at `elmEnumerateMoves` or `elmFindOpenLoc` for shorter examples,
 `elmHandCards`, `elmCardLit`, `elmAgentStacks` cover the common
 input shapes.
 
-### 3. Add a Python runner
+### 3. Add a TS runner entry
 
-In `games/lynrummy/python/test_dsl_conformance.py`:
-
-```python
-def _run_my_op(sc):
-    # ... read fields off sc, run the Python equivalent, assert ...
-    return ok, msg
-
-DISPATCH = {
-    ...,
-    "my_op": _run_my_op,
-}
-```
-
-The DISPATCH dict is checked against the registry at startup —
-if you set `Python: true` and forget to add the runner, the test
-script exits non-zero with a clear "registry says python should
-handle" message before running any scenarios.
+In `games/lynrummy/ts/test/test_engine_conformance.ts`, dispatch
+the new op shape and assert against `sc.expect`. The dispatcher
+reads the same `conformance_fixtures.json` the registry emits.
 
 ### 4. Write a scenario in a `.dsl` file
 
@@ -114,11 +101,10 @@ This:
 ### 6. Run the gates
 
 ```
-python3 games/lynrummy/python/test_dsl_conformance.py
-cd games/lynrummy/elm && ./check.sh
+ops/check-conformance
 ```
 
-Both must pass green.
+Runs fixturegen, then TS, then Elm. All must pass green.
 
 ## When you also need new scenario fields
 
@@ -135,44 +121,33 @@ The cost-shape there:
   optional, model it as a pointer (`*int`, `*bool`) so emitters
   can detect "was it set?". See `Expect.LogAppended` for the
   pattern.
-- **Python-visible field** — extend `jsonScenario` / `jsonExpect`
+- **JSON-visible field** — extend `jsonScenario` / `jsonExpect`
   and `toJSONScenario`. Field names use `snake_case` JSON tags
-  to match the dict shape Python already uses.
+  (legacy from when Python consumed the JSON; TS reads the same
+  shape).
 
-## When the op is referee-only (Go + Elm)
+## When the op is referee-only (Elm-only)
 
-Set `Go: true, Elm: true` and write both `EmitGo` and `EmitElm`.
-Don't set `Python: true` — the referee is server-side only and
-isn't part of the Python contract.
+Set `Elm: true` and leave Python/Go off — the referee runs in the
+Elm client now (Go domain package retired 2026-04-28).
 
 ## Why a registry?
 
 Before this refactor, "which targets run this op?" was encoded in
-three independent places:
+multiple independent places. The registry collapses that to one row
+per op plus a registry-vs-scenarios gate at gen-time that turns
+forgotten-edit bugs into loud startup errors.
 
-- `goSupportedOps` map (Go filter)
-- `pythonSupportedOps` map (JSON filter)
-- the implicit "default → Expect.pass" branch in `elmScenarioBody`'s
-  switch (Elm "filter")
+## Why no TS codegen?
 
-Adding an op meant editing at least three locations correctly, with
-no machine-checked cross-link. The registry collapses that to one row
-per op and adds two cheap gates (registry-vs-scenarios at gen-time,
-manifest-vs-DISPATCH at Python startup) that turn forgotten-edit bugs
-into loud startup errors.
-
-## Why no Python codegen?
-
-Python is interpreted: the runner can dispatch off a string at runtime.
-Codegen would buy nothing and add a re-generate step. The JSON fixtures
-are the Python contract; the manifest is the Python reachability check.
+The TS runner reads the JSON fixtures at runtime and dispatches off
+the op string — no codegen step needed. The JSON fixtures are the
+TS contract.
 
 ## Files involved
 
-- `cmd/fixturegen/main.go` — registry, parser, all three emitters.
+- `cmd/fixturegen/main.go` — registry, parser, both emitters.
 - `games/lynrummy/conformance/scenarios/*.dsl` — scenario sources.
-- `games/lynrummy/referee_conformance_test.go` — generated Go tests.
 - `games/lynrummy/elm/tests/Game/DslConformanceTest.elm` — generated Elm tests.
-- `games/lynrummy/python/conformance_fixtures.json` — generated Python fixtures.
-- `games/lynrummy/python/conformance_ops.json` — generated ops manifest (registry's eyes for Python).
-- `games/lynrummy/python/test_dsl_conformance.py` — Python runner + DISPATCH.
+- `games/lynrummy/python/conformance_fixtures.json` — generated JSON fixtures (path is legacy; TS reads them).
+- `games/lynrummy/ts/test/test_engine_conformance.ts` — TS runtime dispatcher.

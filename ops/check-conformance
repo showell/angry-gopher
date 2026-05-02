@@ -16,9 +16,10 @@
 #   1. cmd/fixturegen — DSL → Elm + JSON + ops manifest; also
 #      surfaces registered-op manifest drift loudly (per
 #      cmd/fixturegen/ADDING_AN_OP.md). Go target retired
-#      2026-04-28 with the Go domain package.
-#   2. Python test_dsl_conformance — verifies its DISPATCH
-#      matches the manifest, then runs all scenarios.
+#      2026-04-28; Python runner retired 2026-05-02 (TS+Elm
+#      now cover the contract).
+#   2. TS conformance — runs the engine + leaf primitives
+#      against the JSON fixtures (npm test).
 #   3. Elm check.sh — standalone type-checks, elm-test (700+),
 #      elm make, elm-review.
 #
@@ -37,8 +38,8 @@ cd "$REPO_DIR"
 echo "==> fixturegen"
 go run ./cmd/fixturegen ./games/lynrummy/conformance/scenarios/*.dsl
 
-echo "==> Python conformance"
-python3 games/lynrummy/python/test_dsl_conformance.py
+echo "==> TS conformance"
+(cd games/lynrummy/ts && npm test)
 
 echo "==> Elm conformance"
 (cd games/lynrummy/elm && ./check.sh)

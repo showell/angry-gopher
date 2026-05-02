@@ -8,19 +8,22 @@ vs accidental (port drift to fix).
 **Status 2026-05-02:** Python BFS slated for retirement. TS is becoming
 the canonical engine; conformance fixtures pin the moment of handoff.
 
-Behavioral parity is verified by 214/214 leaf conformance scenarios +
+Behavioral parity was verified by 214/214 leaf conformance scenarios +
 160/160 engine + hand-play cross-check (148 solve / 9 enumerate_moves
 / 3 hint_for_hand) PLUS 25 seeds × ~9 find_play calls (214 calls
-total) of real-game cross-validation via `agent_game_xcheck.py`. Only
-`find_open_loc` remains explicitly out of TS scope (UI placement
-geometry, tested in Python + Elm).
+total) of real-game cross-validation via the (since-retired)
+`agent_game_xcheck.py` harness. Only `find_open_loc` remains
+explicitly out of TS scope (UI placement geometry, tested in Python
++ Elm).
 
-## Cross-validation harness — `python/agent_game_xcheck.py`
+## Cross-validation harness — historic, retired 2026-05-02
 
-Drives offline self-play through Python orchestration; calls
-`agent_prelude.find_play` AND `ts_solver.find_play_steps` on every
-turn; asserts step-list equivalence. Captures every call to JSONL
-(`captures/*.jsonl`, gitignored — reproducible by re-running xcheck).
+`python/agent_game_xcheck.py` drove offline self-play through Python
+orchestration; called Python's `agent_prelude.find_play` AND
+`ts_solver.find_play_steps` on every turn; asserted step-list
+equivalence. The harness retired with Round 5 of the BFS-retirement
+work; its job (build confidence the TS port matches Python on real
+games) was complete.
 
 Surfaced one port-fidelity bug the conformance corpus didn't catch:
 TS `rules/stack_type.ts:successor()` was missing the K→A wraparound,
