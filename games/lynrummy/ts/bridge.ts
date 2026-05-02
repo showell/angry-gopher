@@ -25,6 +25,7 @@ import * as fs from "node:fs";
 import type { Card } from "./src/rules/card.ts";
 import type { RawBuckets } from "./src/buckets.ts";
 import { solveStateWithDescs } from "./src/bfs.ts";
+import { classifyStack } from "./src/classified_card_stack.ts";
 import { findPlay, formatHint } from "./src/hand_play.ts";
 
 interface FindPlayRequest {
@@ -45,7 +46,14 @@ interface SolveRequest {
   max_states?: number;
 }
 
-type Request = FindPlayRequest | SolveRequest;
+interface SolveBoardRequest {
+  op: "solve_board";
+  board: number[][][];
+  max_trouble_outer?: number;
+  max_states?: number;
+}
+
+type Request = FindPlayRequest | SolveRequest | SolveBoardRequest;
 
 function asCard(arr: number[]): Card {
   if (arr.length !== 3) {
@@ -70,22 +78,75 @@ function asRawBuckets(b: SolveRequest["buckets"]): RawBuckets {
 function handleFindPlay(req: FindPlayRequest) {
   const hand = req.hand.map(asCard);
   const board = req.board.map(asStack);
+  const stats = { totalWallMs: 0, projections: [] as { kind: "pair" | "singleton"; cards: readonly Card[]; wallMs: number; foundPlan: boolean; exhaustions: readonly { cap: number; hitMaxStates: boolean; expansions: number; seenCount: number }[] }[] };
   const t0 = performance.now();
-  const result = findPlay(hand, board);
+  const result = findPlay(hand, board, { stats });
   const engine_wall_ms = performance.now() - t0;
+  // Translate stats to snake_case wire format mirroring Python's
+  // `agent_prelude.find_play(stats=...)` shape.
+  const projections = stats.projections.map(p => ({
+    kind: p.kind,
+    cards: p.cards.map(c => [c[0], c[1], c[2]]),
+    wall: p.wallMs / 1000,
+    found_plan: p.foundPlan,
+    exhaustions: p.exhaustions.map(ex => ({
+      cap: ex.cap,
+      hit_max_states: ex.hitMaxStates,
+      expansions: ex.expansions,
+      seen_count: ex.seenCount,
+    })),
+  }));
+  const total_wall = stats.totalWallMs / 1000;
   if (result === null) {
-    return { placements: null, plan: null, steps: [], engine_wall_ms };
+    return {
+      placements: null, plan: null, steps: [],
+      engine_wall_ms, total_wall, projections,
+    };
   }
   return {
     placements: result.placements.map(c => [c[0], c[1], c[2]]),
     plan: [...result.plan],
     steps: [...formatHint(result)],
     engine_wall_ms,
+    total_wall,
+    projections,
   };
 }
 
 function handleSolve(req: SolveRequest) {
   const buckets = asRawBuckets(req.buckets);
+  const t0 = performance.now();
+  const plan = solveStateWithDescs(buckets, {
+    maxTroubleOuter: req.max_trouble_outer ?? 8,
+    maxStates: req.max_states ?? 10000,
+  });
+  const engine_wall_ms = performance.now() - t0;
+  if (plan === null) return { plan: null, engine_wall_ms };
+  return { plan: plan.map(p => p.line), engine_wall_ms };
+}
+
+function handleSolveBoard(req: SolveBoardRequest) {
+  // Mirrors Python's `bfs.solve(board, ...)`: partition a flat
+  // board into helper/trouble before the inner BFS. Stacks that
+  // classify cleanly (and are length >= 3) go to helper; the
+  // rest stay as trouble.
+  const helper: number[][][] = [];
+  const trouble: number[][][] = [];
+  for (const stack of req.board) {
+    const cards = asStack(stack);
+    const ccs = classifyStack(cards);
+    if (ccs === null || ccs.cards.length < 3) {
+      trouble.push(stack);
+    } else {
+      helper.push(stack);
+    }
+  }
+  const buckets: RawBuckets = {
+    helper: helper.map(asStack),
+    trouble: trouble.map(asStack),
+    growing: [],
+    complete: [],
+  };
   const t0 = performance.now();
   const plan = solveStateWithDescs(buckets, {
     maxTroubleOuter: req.max_trouble_outer ?? 8,
@@ -111,6 +172,8 @@ function main() {
       res = handleFindPlay(req);
     } else if (req.op === "solve") {
       res = handleSolve(req);
+    } else if (req.op === "solve_board") {
+      res = handleSolveBoard(req);
     } else {
       process.stderr.write(`bridge.ts: unknown op ${JSON.stringify((req as { op: unknown }).op)}\n`);
       process.exit(2);

@@ -22,7 +22,7 @@ import argparse
 import json
 from pathlib import Path
 
-import bfs
+import ts_solver
 
 REPO = Path("/home/steve/showell_repos/angry-gopher")
 DEFAULT_SEEDS = REPO / "games/lynrummy/conformance/mined_seeds.json"
@@ -38,8 +38,8 @@ def _board_for_solver(state):
 
 def _depth_label(state, max_trouble, max_states):
     board = _board_for_solver(state)
-    plan = bfs.solve(board, max_trouble_outer=max_trouble,
-                     max_states=max_states, verbose=False)
+    plan = ts_solver.solve_board(board, max_trouble_outer=max_trouble,
+                                 max_states=max_states)
     if plan is None:
         return "STUCK"
     return f"{len(plan)}-line"

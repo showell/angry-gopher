@@ -3,7 +3,7 @@ agent_game.py — drive an Elm-backed LynRummy session using
 the BFS planner + hand-aware outer loop.
 
 Bootstraps a fresh session via `dealer.deal()`, then loops:
-fetch state → `agent_prelude.find_play(hand, board)` → send
+fetch state → `ts_solver.find_play(hand, board)` → send
 the placements + the BFS plan → repeat until find_play returns
 None (turn complete) or the deck runs low.
 
@@ -20,7 +20,7 @@ import json
 import sys
 import time
 
-import agent_prelude
+import ts_solver
 import dealer
 import move
 import geometry
@@ -205,7 +205,7 @@ def play_session(c, sid, *, max_turns=20, max_actions=300,
         plays_this_turn = 0
         while True:
             stats = {}
-            play = agent_prelude.find_play(hand, board_tuples,
+            play = ts_solver.find_play(hand, board_tuples,
                                            stats=stats)
             if capture_fp is not None:
                 capture_fp.write(json.dumps({
@@ -323,7 +323,7 @@ def play_session_offline(*, max_actions=500, capture_path=None):
     while actions < max_actions and hand:
         board_tuples = _board_cards_to_tuples(board)
         stats = {}
-        play = agent_prelude.find_play(hand, board_tuples,
+        play = ts_solver.find_play(hand, board_tuples,
                                        stats=stats)
         if capture_fp is not None:
             capture_fp.write(json.dumps({

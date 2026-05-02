@@ -22,9 +22,54 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import dealer
-import agent_prelude
-from agent_prelude import hint_scenario_dsl
+import ts_solver
 from rules import classify, card_label, is_partial_ok
+
+# Keep the projection budget aligned with agent_prelude's default
+# (5000 per projection — see SOLVER.md § "Hint projection").
+_PROJECTION_MAX_STATES = 5000
+
+
+def _try_projection(board, extra_stacks):
+    """Append extra_stacks to board, run TS BFS, return plan or None.
+    Mirrors what agent_prelude._try_projection did locally."""
+    return ts_solver.solve_board(
+        list(board) + list(extra_stacks),
+        max_trouble_outer=10,
+        max_states=_PROJECTION_MAX_STATES,
+    )
+
+
+def _format_hint_steps(result):
+    """Mirror agent_prelude.format_hint: 'place [...] from hand' +
+    plan lines. Returns [] when result is None."""
+    if result is None:
+        return []
+    labels = " ".join(card_label(c) for c in result["placements"])
+    steps = [f"place [{labels}] from hand"]
+    steps.extend(result["plan"])
+    return steps
+
+
+def hint_scenario_dsl(name, hand, board, result):
+    """Produce DSL text for one hint_for_hand conformance scenario."""
+    hand_str = " ".join(card_label(c) for c in hand)
+    board_block = "\n".join(
+        "    - " + " ".join(card_label(c) for c in stack)
+        for stack in board
+    )
+    steps = _format_hint_steps(result)
+    if steps:
+        steps_block = "  expect_steps:\n" + "\n".join(f"    - {s}" for s in steps)
+    else:
+        steps_block = "  expect_steps: []"
+    return (
+        f"scenario {name}\n"
+        f"  op: hint_for_hand\n"
+        f"  hand: {hand_str}\n"
+        f"  board:\n{board_block}\n"
+        f"{steps_block}\n"
+    )
 
 
 # --- Conversion helpers (dealer dicts → BFS tuple shape) ---
@@ -100,7 +145,7 @@ def main():
                 tried_as_singleton.add(id(c1))
                 tried_as_singleton.add(id(c2))
                 pair_labels = f"{card_label(c1)}, {card_label(c2)}"
-                plan = agent_prelude._try_projection(board, [[c1, c2]])
+                plan = _try_projection(board, [[c1, c2]])
                 if plan is not None:
                     print(f"  pair ({pair_labels}): plan found "
                           f"({len(plan)} step{'s' if len(plan) != 1 else ''})")
@@ -110,7 +155,7 @@ def main():
         # Singleton pass.
         for c in hand:
             lbl = card_label(c)
-            plan = agent_prelude._try_projection(board, [[c]])
+            plan = _try_projection(board, [[c]])
             if plan is not None:
                 print(f"  singleton {lbl}: plan found "
                       f"({len(plan)} step{'s' if len(plan) != 1 else ''})")
@@ -123,7 +168,7 @@ def main():
         hand_snapshot = list(hand)
         board_snapshot = [list(s) for s in board]
 
-        result = agent_prelude.find_play(hand, board)
+        result = ts_solver.find_play(hand, board)
 
         # Record for DSL output.
         dsl_records.append((f"turn_{turn}_hint", hand_snapshot, board_snapshot, result))
@@ -132,7 +177,7 @@ def main():
             placements = result["placements"]
             placement_labels = " ".join(card_label(c) for c in placements)
             print(f"Hint: play [{placement_labels}]")
-            for i, step in enumerate(agent_prelude.format_hint(result), 1):
+            for i, step in enumerate(_format_hint_steps(result), 1):
                 print(f"  Step {i}: {step}")
 
             # Advance state: remove placed cards, append as new stack.

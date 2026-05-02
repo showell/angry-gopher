@@ -75,17 +75,21 @@ These live at `/tools/` (repo root), not `games/lynrummy/python/tools/`.
 - `export_replay_walkthroughs.py` — concatenates per-puzzle
   primitive sequences into `replay_walkthroughs.dsl`. One
   full-walkthrough scenario per puzzle.
-- `export_corpus_to_dsl.py` and `export_mined_to_dsl.py` —
-  emit BFS plan-text scenarios. The corpus side is older;
-  the mined side is the post-mining sibling.
+
+The DSL plan-text scenarios (`planner_corpus*.dsl`,
+`planner_mined.dsl`) are now committed-and-static — the
+exporters that generated them retired 2026-05-02 with the
+TS solver migration. Regenerate by hand if a future plan-
+shape change requires it.
 
 A separate `games/lynrummy/python/tools/` holds solver-side
-utilities (`hint_demo.py` for end-to-end hint output). The
-81-card timing gold is now generated from TS — see
+utilities (`hint_demo.py` for end-to-end hint output, now
+running through `ts_solver`). The 81-card timing gold is
+now generated from TS — see
 `games/lynrummy/ts/bench/gen_baseline_board.ts`.
 
-All exporters are stable, regenerate cleanly, and feed the
-same conformance pipeline.
+All remaining exporters are stable, regenerate cleanly, and
+feed the same conformance pipeline.
 
 ### DSL → test code
 

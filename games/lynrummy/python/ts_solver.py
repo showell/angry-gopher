@@ -51,11 +51,16 @@ def _invoke(request):
         )
 
 
-def find_play(hand, board):
+def find_play(hand, board, *, stats=None):
     """Hand-aware play search. Mirrors `agent_prelude.find_play`.
 
     `hand` is a list of (value, suit, deck) tuples.
     `board` is a list of stacks, each a list of card tuples.
+
+    `stats` (out-param dict): if provided, populated with
+    `projections` (list of per-projection records: kind, cards,
+    wall, found_plan, exhaustions) and `total_wall` (seconds).
+    Mirrors Python `agent_prelude.find_play`'s stats shape.
 
     Returns a dict {"placements": [card, ...], "plan": [str, ...]}
     or None.
@@ -65,6 +70,18 @@ def find_play(hand, board):
         "hand": [list(c) for c in hand],
         "board": [[list(c) for c in stack] for stack in board],
     })
+    if stats is not None:
+        stats["total_wall"] = float(res.get("total_wall", 0.0))
+        stats["projections"] = [
+            {
+                "kind": p["kind"],
+                "cards": [tuple(c) for c in p["cards"]],
+                "wall": float(p["wall"]),
+                "found_plan": bool(p["found_plan"]),
+                "exhaustions": list(p.get("exhaustions", [])),
+            }
+            for p in res.get("projections", [])
+        ]
     if res.get("placements") is None:
         return None
     return {
@@ -113,6 +130,23 @@ def solve(helper, trouble, growing, complete, *,
             "growing": [[list(c) for c in s] for s in growing],
             "complete": [[list(c) for c in s] for s in complete],
         },
+        "max_trouble_outer": max_trouble_outer,
+        "max_states": max_states,
+    })
+    plan = res.get("plan")
+    if plan is None:
+        return None
+    return list(plan)
+
+
+def solve_board(board, *, max_trouble_outer=8, max_states=10000):
+    """Flat-board BFS solve. Mirrors `bfs.solve(board, ...)` —
+    partitions stacks into helper/trouble inside the bridge and
+    runs the inner solver. Returns the plan as [str, ...] or None.
+    """
+    res = _invoke({
+        "op": "solve_board",
+        "board": [[list(c) for c in s] for s in board],
         "max_trouble_outer": max_trouble_outer,
         "max_states": max_states,
     })
