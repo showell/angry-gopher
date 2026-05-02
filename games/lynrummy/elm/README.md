@@ -124,14 +124,6 @@ the goal of mirroring Elm's `Game/Rules/` shape on the
 Python side. Cross-language sub-agents working on the
 parallel migration should read both READMEs.
 
-## User-flow enumeration
-
-[`USER_FLOWS.md`](./USER_FLOWS.md) — enumerated user-facing
-flows (start a new game, play a card, complete a turn,
-replay). Atomic step granularity with ✅/🟡/❌ status. Read
-this when planning a UX change; write here FIRST when adding
-a new flow.
-
 ## Embeddable-component design goal
 
 The app is structured so `Main.Play` can be embedded into

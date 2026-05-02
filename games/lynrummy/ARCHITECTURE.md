@@ -652,9 +652,6 @@ historical record.)
 - [`../../GLOSSARY.md`](../../GLOSSARY.md) — vocabulary.
   If the architecture doc reaches for a term you don't know,
   check the glossary.
-- [`./elm/USER_FLOWS.md`](./elm/USER_FLOWS.md)
-  — enumerated Elm-client user flows. Read this when planning
-  a UX change.
 
 ### Conformance & testing
 
