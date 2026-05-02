@@ -319,8 +319,6 @@ Ordered by "load-bearing first":
   variant; `find_play` uses defaults.
 - `agent_game.py` — autonomous-play harness:
   dealer.deal → loop find_play → place + plan → complete_turn.
-- `bfs_play.py` — the replay driver: BFS plan executed
-  on the actual board, watchable in the browser.
 - `strategy.py` — the trick engine. PLANNED-LEGACY but
   still wired. Per-trick emitters, primitive ordering
   discipline, plan-then-execute for `merge_hand`.
