@@ -11,8 +11,9 @@ import { isRedSuit } from "./card.ts";
 import { classifyStack } from "../classified_card_stack.ts";
 
 function successor(v: number): number {
-  // Aces are low (1); kings (13) have no successor.
-  return v + 1;
+  // Card value cycle wraps: K → A → 2 → ... → K. K-A-2 IS a legal
+  // run in Lyn Rummy. Mirrors python `rules.stack_type.successor`.
+  return v === 13 ? 1 : v + 1;
 }
 
 /**
