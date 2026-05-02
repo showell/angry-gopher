@@ -70,25 +70,30 @@ function asRawBuckets(b: SolveRequest["buckets"]): RawBuckets {
 function handleFindPlay(req: FindPlayRequest) {
   const hand = req.hand.map(asCard);
   const board = req.board.map(asStack);
+  const t0 = performance.now();
   const result = findPlay(hand, board);
+  const engine_wall_ms = performance.now() - t0;
   if (result === null) {
-    return { placements: null, plan: null, steps: [] };
+    return { placements: null, plan: null, steps: [], engine_wall_ms };
   }
   return {
     placements: result.placements.map(c => [c[0], c[1], c[2]]),
     plan: [...result.plan],
     steps: [...formatHint(result)],
+    engine_wall_ms,
   };
 }
 
 function handleSolve(req: SolveRequest) {
   const buckets = asRawBuckets(req.buckets);
+  const t0 = performance.now();
   const plan = solveStateWithDescs(buckets, {
     maxTroubleOuter: req.max_trouble_outer ?? 8,
     maxStates: req.max_states ?? 10000,
   });
-  if (plan === null) return { plan: null };
-  return { plan: plan.map(p => p.line) };
+  const engine_wall_ms = performance.now() - t0;
+  if (plan === null) return { plan: null, engine_wall_ms };
+  return { plan: plan.map(p => p.line), engine_wall_ms };
 }
 
 function main() {

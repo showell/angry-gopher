@@ -86,6 +86,18 @@ def find_play_steps(hand, board):
     return list(res.get("steps", []))
 
 
+def find_play_with_timing(hand, board):
+    """Same as find_play_steps, but also returns engine-only wall
+    time (excluding subprocess startup + JSON serialization).
+    Returns (steps_list, engine_wall_ms)."""
+    res = _invoke({
+        "op": "find_play",
+        "hand": [list(c) for c in hand],
+        "board": [[list(c) for c in stack] for stack in board],
+    })
+    return list(res.get("steps", [])), float(res.get("engine_wall_ms", 0.0))
+
+
 def solve(helper, trouble, growing, complete, *,
           max_trouble_outer=8, max_states=10000):
     """4-bucket BFS solve. Mirrors `bfs.solve_state`.

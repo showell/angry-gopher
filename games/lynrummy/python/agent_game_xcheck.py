@@ -65,24 +65,36 @@ def _tuple_to_card_dict(c):
     return {"value": c[0], "suit": c[1], "origin_deck": c[2]}
 
 
-def find_play_xcheck(hand, board, *, py_wall_acc, ts_wall_acc):
+def find_play_xcheck(hand, board, *, records):
     """Call both engines on the same input, assert step-list
     equivalence, return Python's full PlayResult.
 
-    `py_wall_acc` and `ts_wall_acc` are mutable lists; each call
-    appends one float (the wall-clock seconds for that engine).
-    Per-call timings, not precise benchmarks.
+    Appends one record dict to `records` per call, including
+    Python wall, full TS-via-bridge wall, and engine-only TS
+    wall (reported by bridge.ts itself, excluding subprocess +
+    serialization overhead).
 
     Raises DivergenceError on disagreement — the cross-check that
     matters."""
     t = time.time()
     py_play = agent_prelude.find_play(hand, board)
-    py_wall_acc.append(time.time() - t)
+    py_wall_s = time.time() - t
     py_steps = agent_prelude.format_hint(py_play)
 
     t = time.time()
-    ts_steps = ts_solver.find_play_steps(hand, board)
-    ts_wall_acc.append(time.time() - t)
+    ts_steps, ts_engine_ms = ts_solver.find_play_with_timing(hand, board)
+    ts_full_wall_s = time.time() - t
+
+    record = {
+        "hand": [list(c) for c in hand],
+        "board": [[list(c) for c in s] for s in board],
+        "py_wall_ms": py_wall_s * 1000.0,
+        "ts_full_wall_ms": ts_full_wall_s * 1000.0,
+        "ts_engine_ms": ts_engine_ms,
+        "py_steps": py_steps,
+        "agreed": py_steps == ts_steps,
+    }
+    records.append(record)
 
     if py_steps != ts_steps:
         raise DivergenceError(
@@ -95,29 +107,30 @@ def find_play_xcheck(hand, board, *, py_wall_acc, ts_wall_acc):
     return py_play
 
 
-def play_xcheck_session(seed, *, max_actions=500):
+def play_xcheck_session(seed, *, max_actions=500, records=None):
     """Replicates play_session_offline but cross-checks every
-    find_play against TS. Returns a per-session summary dict."""
+    find_play against TS. Returns a per-session summary dict.
+    Appends per-call records to `records` if provided."""
     rng = random.Random(seed)
     initial_state = dealer.deal(rng=rng)
     board = initial_state["board"]
     hand = _hand_cards_to_tuples(
         initial_state["hands"][0]["hand_cards"])
 
-    py_wall = []
-    ts_wall = []
+    if records is None:
+        records = []
+    session_records = []
     actions = 0
     plays = 0
-    py_max_wall = 0.0
-    ts_max_wall = 0.0
 
     while actions < max_actions and hand:
         board_tuples = _board_cards_to_tuples(board)
         play = find_play_xcheck(hand, board_tuples,
-                                py_wall_acc=py_wall,
-                                ts_wall_acc=ts_wall)
-        py_max_wall = max(py_max_wall, py_wall[-1])
-        ts_max_wall = max(ts_max_wall, ts_wall[-1])
+                                records=session_records)
+        # Tag with seed + turn, then ship to caller's accumulator.
+        session_records[-1]["seed"] = seed
+        session_records[-1]["turn"] = plays + 1
+        records.append(session_records[-1])
 
         if play is None:
             break
@@ -156,16 +169,21 @@ def play_xcheck_session(seed, *, max_actions=500):
                 board = primitives.apply_locally(board, prim)
                 actions += 1
 
+    py_walls = [r["py_wall_ms"] for r in session_records]
+    ts_engine_walls = [r["ts_engine_ms"] for r in session_records]
+    ts_full_walls = [r["ts_full_wall_ms"] for r in session_records]
     return {
         "seed": seed,
         "plays": plays,
         "actions": actions,
         "hand_remaining": len(hand),
-        "py_total_wall": sum(py_wall),
-        "ts_total_wall": sum(ts_wall),
-        "py_max_wall": py_max_wall,
-        "ts_max_wall": ts_max_wall,
-        "find_play_calls": len(py_wall),
+        "py_total_ms": sum(py_walls),
+        "ts_total_engine_ms": sum(ts_engine_walls),
+        "ts_total_full_ms": sum(ts_full_walls),
+        "py_max_ms": max(py_walls, default=0.0),
+        "ts_max_engine_ms": max(ts_engine_walls, default=0.0),
+        "ts_max_full_ms": max(ts_full_walls, default=0.0),
+        "find_play_calls": len(session_records),
     }
 
 
@@ -174,17 +192,27 @@ def main():
     parser.add_argument("--seeds", default="1,2,3,4,5",
                         help="Comma-separated RNG seeds.")
     parser.add_argument("--max-actions", type=int, default=500)
+    parser.add_argument("--capture", default=None,
+                        help=("Path to JSONL output. Every find_play "
+                              "call's input + timings are appended, "
+                              "so trouble cases can be analyzed later."))
+    parser.add_argument("--top-slow", type=int, default=5,
+                        help="Print the N slowest find_play calls per engine.")
     args = parser.parse_args()
 
     seeds = [int(s) for s in args.seeds.split(",") if s.strip()]
     print(f"running {len(seeds)} seed(s); max-actions={args.max_actions}")
+    if args.capture:
+        print(f"capturing per-call records → {args.capture}")
     print()
 
     all_clean = True
     summaries = []
+    all_records = []
     for seed in seeds:
         try:
-            summary = play_xcheck_session(seed, max_actions=args.max_actions)
+            summary = play_xcheck_session(
+                seed, max_actions=args.max_actions, records=all_records)
         except DivergenceError as e:
             print(f"seed {seed}: DIVERGED")
             print(str(e))
@@ -195,21 +223,39 @@ def main():
               f"{summary['find_play_calls']:3d} find_play calls, "
               f"{summary['actions']:3d} actions, "
               f"hand={summary['hand_remaining']:2d}  |  "
-              f"py {summary['py_total_wall']:5.2f}s "
-              f"(max {summary['py_max_wall']*1000:6.1f}ms)  "
-              f"ts {summary['ts_total_wall']:5.2f}s "
-              f"(max {summary['ts_max_wall']*1000:6.1f}ms)")
+              f"py-max {summary['py_max_ms']:7.1f}ms  "
+              f"ts-engine-max {summary['ts_max_engine_ms']:7.1f}ms  "
+              f"ts-full-max {summary['ts_max_full_ms']:7.1f}ms")
+
+    if args.capture:
+        with open(args.capture, "a") as fp:
+            for r in all_records:
+                fp.write(json.dumps(r) + "\n")
+        print(f"\nwrote {len(all_records)} records to {args.capture}")
 
     print()
     if all_clean:
-        py_total = sum(s["py_total_wall"] for s in summaries)
-        ts_total = sum(s["ts_total_wall"] for s in summaries)
         calls = sum(s["find_play_calls"] for s in summaries)
-        py_max = max((s["py_max_wall"] for s in summaries), default=0.0)
-        ts_max = max((s["ts_max_wall"] for s in summaries), default=0.0)
         print(f"ALL CLEAN: {len(seeds)} seeds, {calls} find_play calls")
-        print(f"  py: {py_total:.2f}s total, {py_max*1000:.1f}ms worst-call")
-        print(f"  ts: {ts_total:.2f}s total, {ts_max*1000:.1f}ms worst-call")
+        print()
+        # Top-N slowest by py_wall_ms (engine-clean signal)
+        slow_py = sorted(all_records, key=lambda r: -r["py_wall_ms"])[:args.top_slow]
+        print(f"top {len(slow_py)} slowest find_play calls (by Python wall):")
+        for r in slow_py:
+            print(f"  seed {r['seed']:3d} turn {r['turn']:2d}: "
+                  f"py {r['py_wall_ms']:7.1f}ms  "
+                  f"ts-engine {r['ts_engine_ms']:7.1f}ms  "
+                  f"ts-full {r['ts_full_wall_ms']:7.1f}ms  "
+                  f"hand-size={len(r['hand'])} board-stacks={len(r['board'])}")
+        # Same view by ts_engine_ms
+        slow_ts = sorted(all_records, key=lambda r: -r["ts_engine_ms"])[:args.top_slow]
+        print()
+        print(f"top {len(slow_ts)} slowest by TS engine wall (excl. bridge):")
+        for r in slow_ts:
+            print(f"  seed {r['seed']:3d} turn {r['turn']:2d}: "
+                  f"ts-engine {r['ts_engine_ms']:7.1f}ms  "
+                  f"py {r['py_wall_ms']:7.1f}ms  "
+                  f"hand-size={len(r['hand'])} board-stacks={len(r['board'])}")
     else:
         sys.exit(1)
 
