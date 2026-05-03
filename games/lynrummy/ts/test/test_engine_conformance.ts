@@ -34,6 +34,7 @@ import { enumerateMoves } from "../src/enumerator.ts";
 import { describe, narrate, hint, type Desc } from "../src/move.ts";
 import { classifyBuckets, type RawBuckets } from "../src/buckets.ts";
 import { findPlay, formatHint } from "../src/hand_play.ts";
+import { findOpenLoc, type BoardStack } from "../src/geometry.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -45,29 +46,40 @@ interface BoardCard {
   state: number;
 }
 
-interface BoardStack {
+// Conformance-fixture stack shape (cards-with-state + optional loc).
+// Distinct from `BoardStack` in geometry.ts (bare-card + loc).
+interface FixtureBoardStack {
   board_cards: BoardCard[];
-  loc: { top: number; left: number };
+  loc?: { top: number; left: number };
 }
 
 interface Scenario {
   name: string;
   op: string;
-  helper?: BoardStack[];
-  trouble?: BoardStack[];
-  growing?: BoardStack[];
-  complete?: BoardStack[];
+  helper?: FixtureBoardStack[];
+  trouble?: FixtureBoardStack[];
+  growing?: FixtureBoardStack[];
+  complete?: FixtureBoardStack[];
   hint_hand?: string[];
   hint_board?: string[][];
   hint_steps?: string[];
+  card_count?: number;
+  existing?: FixtureBoardStack[];
   expect: Record<string, unknown>;
 }
 
-function bucketToTuples(stacks: BoardStack[] | undefined): Card[][] {
+function bucketToTuples(stacks: FixtureBoardStack[] | undefined): Card[][] {
   if (!stacks) return [];
   return stacks.map(s =>
     s.board_cards.map(bc => [bc.card.value, bc.card.suit, bc.card.origin_deck] as const),
   );
+}
+
+function fixtureStackToBoardStack(fs: FixtureBoardStack): BoardStack {
+  return {
+    cards: fs.board_cards.map(bc => [bc.card.value, bc.card.suit, bc.card.origin_deck] as const),
+    loc: fs.loc ?? { top: 0, left: 0 },
+  };
 }
 
 function buildRawBuckets(sc: Scenario): RawBuckets {
@@ -165,6 +177,25 @@ function runSolve(sc: Scenario): RunResult {
   return { ok: false, msg: "solve scenario missing expectation (no_plan / plan_length / plan_lines)" };
 }
 
+function runFindOpenLoc(sc: Scenario): RunResult {
+  if (sc.card_count === undefined) {
+    return { ok: false, msg: "find_open_loc scenario missing card_count" };
+  }
+  const wantLoc = sc.expect["loc"] as { top: number; left: number } | undefined;
+  if (!wantLoc || typeof wantLoc.top !== "number" || typeof wantLoc.left !== "number") {
+    return { ok: false, msg: "find_open_loc scenario missing expect.loc {top,left}" };
+  }
+  const existing = (sc.existing ?? []).map(fixtureStackToBoardStack);
+  const got = findOpenLoc(existing, sc.card_count);
+  if (got.top === wantLoc.top && got.left === wantLoc.left) {
+    return { ok: true, msg: `OK — loc (${got.top}, ${got.left})` };
+  }
+  return {
+    ok: false,
+    msg: `loc mismatch: want (${wantLoc.top}, ${wantLoc.left}), got (${got.top}, ${got.left})`,
+  };
+}
+
 function runHintForHand(sc: Scenario): RunResult {
   const handTokens = sc.hint_hand ?? [];
   const boardTokens = sc.hint_board ?? [];
@@ -199,16 +230,16 @@ function runHintForHand(sc: Scenario): RunResult {
 }
 
 // Ops the TS engine conformance runner exercises directly.
-const TS_HANDLED_OPS = new Set<string>(["enumerate_moves", "solve", "hint_for_hand"]);
+const TS_HANDLED_OPS = new Set<string>([
+  "enumerate_moves", "solve", "hint_for_hand", "find_open_loc",
+]);
 
 // Ops that exist in the fixture JSON but are out-of-scope for the TS
 // port BY DESIGN. The runner reports each by name + rationale at the
 // end so nothing skips silently. Per
 // memory/feedback_silent_skipping_is_rot.md: skip loudly + itemized,
 // or don't admit at all.
-const TS_OUT_OF_SCOPE_OPS: Record<string, string> = {
-  find_open_loc: "tested in Python + Elm; UI placement geometry, not BFS",
-};
+const TS_OUT_OF_SCOPE_OPS: Record<string, string> = {};
 
 function main(): void {
   if (!fs.existsSync(FIXTURES_PATH)) {
@@ -240,6 +271,8 @@ function main(): void {
       res = runSolve(sc);
     } else if (sc.op === "hint_for_hand") {
       res = runHintForHand(sc);
+    } else if (sc.op === "find_open_loc") {
+      res = runFindOpenLoc(sc);
     } else {
       // Unreachable: TS_HANDLED_OPS gate above already filtered.
       throw new Error(`handled-op gate let through unrecognized op ${JSON.stringify(sc.op)}`);
