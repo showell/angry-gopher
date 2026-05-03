@@ -8,6 +8,12 @@ vs accidental (port drift to fix).
 **Status 2026-05-02:** Python BFS slated for retirement. TS is becoming
 the canonical engine; conformance fixtures pin the moment of handoff.
 
+**Note 2026-05-03:** A second engine, `src/engine_v2.ts` (A* priority
+queue + closed list, drop-in alternative to `bfs.ts`), landed
+2026-05-02 alongside the v1 work this doc describes. This doc covers
+the v1 port + retirement story; for engine_v2 see
+[`ENGINE_V2.md`](./ENGINE_V2.md).
+
 Behavioral parity was verified by 214/214 leaf conformance scenarios +
 160/160 engine + hand-play cross-check (148 solve / 9 enumerate_moves
 / 3 hint_for_hand) PLUS 25 seeds × ~9 find_play calls (214 calls

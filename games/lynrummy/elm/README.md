@@ -117,12 +117,10 @@ volatility-class memory at
 Rules layer at the bottom; physics, UX cadence, and
 layout sit above it with progressively lighter test rigor.
 
-**Python parallel.** `../python/README.md` has a parallel
-section describing where the Python rule code currently
-lives (in `cards.py` + `buckets.py` etc., ungrouped) and
-the goal of mirroring Elm's `Game/Rules/` shape on the
-Python side. Cross-language sub-agents working on the
-parallel migration should read both READMEs.
+**Python parallel.** The mirror landed: Python rule code lives
+under `../python/rules/` (`card.py`, `stack_type.py`) — see
+`../python/README.md` § "Class-1/2 segregation". Cross-language
+sub-agents touching rules code should read both Rules READMEs.
 
 ## Embeddable-component design goal
 
@@ -156,9 +154,10 @@ REFACTOR_ELM_REPLAY).
 `src/Game/Agent/` is an Elm port of the Python BFS planner. It
 works in production but is **not actively maintained**. The
 canonical browser BFS engine going forward is the TypeScript port
-at `../ts/` (plan-line-for-plan-line cross-check vs Python via the
-DSL conformance contract; browser integration via Elm ports
-pending).
+at `../ts/` — `bfs.ts` (v1) is the plan-line-for-plan-line
+cross-check vs Python; `engine_v2.ts` (added 2026-05-02) is a
+drop-in A* alternative, see `../ts/ENGINE_V2.md`. Browser
+integration via Elm ports is pending.
 
 When the TS engine ships, the Elm `Game.Agent.*` modules will be
 retired. Until then, don't invest in catching up to Python-side

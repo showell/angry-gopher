@@ -96,10 +96,9 @@ feed the same conformance pipeline.
 - `cmd/fixturegen` — reads
   `games/lynrummy/conformance/scenarios/*.dsl`, emits Elm test
   code + JSON fixtures (consumed by Python conformance) +
-  ops manifest. Op set: `validate_game_move`,
-  `validate_turn_complete`, `build_suggestions`,
-  `hint_invariant`, `enumerate_moves`, `solve`,
-  `find_open_loc`, `click_agent_play`, `replay_invariant`.
+  ops manifest. Op set is registered in `cmd/fixturegen/main.go`'s
+  `opRegistry` (single source of truth). Run
+  `git grep '^\s*Name:' cmd/fixturegen/main.go` to enumerate.
   Go target retired 2026-04-28 with the Go domain package.
   **Run via `ops/check-conformance`**, not ad-hoc.
 
@@ -123,10 +122,15 @@ full-game hint path.)
 ### TypeScript BFS engine (`games/lynrummy/ts/`)
 
 - `src/classified_card_stack.ts`, `src/buckets.ts`,
-  `src/move.ts`, `src/enumerator.ts`, `src/bfs.ts` — the BFS
+  `src/move.ts`, `src/enumerator.ts`, `src/bfs.ts` — the v1 BFS
   engine, sibling to Python's solver. Matches Python plan-line-
   for-plan-line via the DSL conformance contract. Will replace
   the Elm `Game.Agent.*` BFS in the browser via Elm ports.
+- `src/engine_v2.ts` — A* priority-queue alternative engine added
+  2026-05-02. Drop-in for `bfs.ts` (same `Buckets`-in /
+  `PlanLine[]`-out interface). Adds `decompose` verb +
+  steal-from-partial vocab. Not yet the production path. See
+  [`ts/ENGINE_V2.md`](ts/ENGINE_V2.md).
 - Run tests with `npm test` from `games/lynrummy/ts/` — Node
   v24's native TS support runs `.ts` files directly, no compile
   step. See [`ts/README.md`](ts/README.md).

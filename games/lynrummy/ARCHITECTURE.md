@@ -31,9 +31,12 @@ landscape changed substantially in late April 2026.
 
 Key anchors for calibrating doc freshness:
 
-- **TS BFS engine v1 landed (2026-05-01):** A TypeScript
-  port of the BFS solver lives at `games/lynrummy/ts/`.
-  It is the going-forward browser BFS engine. The Elm
+- **TS BFS engine v1 landed (2026-05-01); engine_v2 (A* solver)
+  added 2026-05-02:** A TypeScript port of the BFS solver lives
+  at `games/lynrummy/ts/`. `bfs.ts` is the v1 engine; `engine_v2.ts`
+  is a drop-in alternative built on the kitchen-table A* algorithm
+  (see `ts/ENGINE_V2.md`) — not yet the production path. Either
+  way, TS is the going-forward browser BFS engine. The Elm
   `Game.Agent.*` BFS is on **life-support** — works in
   production, not actively maintained. Don't invest in
   Elm-side BFS catch-up to Python.

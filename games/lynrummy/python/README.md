@@ -473,8 +473,10 @@ For non-solver changes, `./check.sh` is the gate.
 
 A TS port of the BFS engine lives at `../ts/`. Status: leaves
 complete (214 DSL scenarios), engine v1 complete (148 plan-line
-cross-check vs Python), browser integration pending. The TS engine
-will replace the Elm BFS in the browser. Python remains the
+cross-check vs Python), `engine_v2.ts` (A* solver) added 2026-05-02
+as a drop-in alternative (see `../ts/ENGINE_V2.md`), browser
+integration pending. The TS engine will replace the Elm BFS in
+the browser. Python remains the
 experimentation surface; TS tracks Python via the DSL conformance
 contract. See [`../ts/README.md`](../ts/README.md) and
 [`SOLVER.md`](SOLVER.md) § "TypeScript sibling — landed v1".

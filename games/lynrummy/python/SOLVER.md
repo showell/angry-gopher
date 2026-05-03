@@ -63,15 +63,18 @@ its receipts.
 
 ### `ClassifiedCardStack` (CCS) — what BFS uses internally
 
-Every stack inside the BFS is a `ClassifiedCardStack`. Five slot
+Every stack inside the BFS is a `ClassifiedCardStack`. Three slot
 reads cover every access:
 
   - `stack.cards` — tuple of `(value, suit, deck)` triples.
   - `stack.kind` — one of seven: `run` / `rb` / `set` / `pair_run`
     / `pair_rb` / `pair_set` / `singleton`. NO `KIND_OTHER`.
   - `stack.n` — cached length.
-  - `stack.extends_left` / `stack.extends_right` / `stack.set_extenders` —
-    earned absorb tables (see "Three-bucket extends" below).
+
+The earned absorb tables (`extends_left`, `extends_right`,
+`set_extenders`) are *not* fields on the stack — they're the
+return value of the module-level `extends_tables(stack)` function,
+computed on demand. See "Three-bucket extends" below.
 
 There are NO dunder methods. `len(stack)`, `for c in stack`, `stack[i]`
 all raise. This is intentional:
@@ -496,13 +499,18 @@ dead-singleton filter and a dynamic per-state prune gated on
 group-completion events. See
 [BFS_CARD_TRACKER.md](BFS_CARD_TRACKER.md).
 
-## TypeScript sibling — landed v1
+## TypeScript sibling — landed v1; engine_v2 added 2026-05-02
 
 The TS engine at `../ts/` is the next-gen browser BFS. Status:
 
   - **Leaves**: complete. Full DSL conformance passes.
-  - **Engine**: complete v1. Plan-line-for-plan-line cross-check
-    vs Python via the DSL conformance contract.
+  - **Engine v1 (`bfs.ts`)**: complete. Plan-line-for-plan-line
+    cross-check vs Python via the DSL conformance contract.
+  - **Engine v2 (`engine_v2.ts`)**: A* priority queue + closed
+    list, drop-in alternative to v1. Validated on 116 conformance
+    scenarios (46 easy + 70 medium); zero regressions. Adds
+    `decompose` verb + steal-from-partial vocab. See
+    `../ts/ENGINE_V2.md`. Not yet the production path.
   - **Card-tracker liveness accelerator**: not yet ported.
     Correctness is unaffected; perf on tantalizing-card scenarios
     will lag Python until ported.
