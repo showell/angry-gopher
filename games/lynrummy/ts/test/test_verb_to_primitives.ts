@@ -1,12 +1,20 @@
 // test_verb_to_primitives.ts — TS-only DSL runner for the verb→primitive
-// pipeline. Reads `conformance/scenarios/verb_to_primitives.dsl` and
-// asserts that `verbs.moveToPrimitives(desc, board)` emits the
-// expected primitive sequence after the geometry post-pass.
+// pipeline. Reads two sibling DSL files:
 //
-// TS-only because the verb pipeline is being TS-canonical going
-// forward (Python verbs/primitives/geometry_plan are slated for
-// retirement once this passes). Cross-language fidelity isn't a goal
-// here, so we don't go through Go fixturegen.
+//   verb_to_primitives.dsl         — hand-authored, one scenario per
+//                                    verb category + edge cases (~8)
+//   verb_to_primitives_corpus.dsl  — auto-converted from the former
+//                                    primitives_fixtures.json; one
+//                                    scenario per BFS plan step
+//                                    across the 25 mined puzzles (94)
+//
+// For each scenario, asserts that `verbs.moveToPrimitives(desc,
+// board)` emits the expected primitive sequence after the geometry
+// post-pass.
+//
+// TS-only because the verb pipeline is TS-canonical going forward.
+// Card-label convention: `4D'` for deck-1 (matches replay_walkthroughs);
+// the parser converts `'` → `:1` for parseCardLabel.
 
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -30,8 +38,23 @@ import { moveToPrimitives } from "../src/verbs.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const DSL_PATH = path.resolve(
-  __dirname, "../../conformance/scenarios/verb_to_primitives.dsl");
+const DSL_DIR = path.resolve(__dirname, "../../conformance/scenarios");
+const DSL_FILES = [
+  "verb_to_primitives.dsl",
+  "verb_to_primitives_corpus.dsl",
+];
+
+// Card-label convention. The corpus DSL (and replay_walkthroughs.dsl)
+// uses `'` for deck-1 (`4D'` = 4 of diamonds, deck-1). parseCardLabel
+// expects `:1`. Convert at the parse boundary; emit with `'` so
+// expected/got strings round-trip.
+function dslLabelToTsLabel(s: string): string {
+  return s.endsWith("'") ? s.slice(0, -1) + ":1" : s;
+}
+
+function tsLabelToDslLabel(s: string): string {
+  return s.endsWith(":1") ? s.slice(0, -2) + "'" : s;
+}
 
 // --- DSL parser -------------------------------------------------------
 
@@ -90,7 +113,8 @@ function parseDsl(contents: string): ScenarioRaw[] {
       if (m) {
         const top = parseInt(m[1]!, 10);
         const left = parseInt(m[2]!, 10);
-        const cards = m[3]!.trim().split(/\s+/).map(parseCardLabel);
+        const cards = m[3]!.trim().split(/\s+/)
+          .map(s => parseCardLabel(dslLabelToTsLabel(s)));
         cur.board.push({ top, left, cards });
         continue;
       }
@@ -118,13 +142,13 @@ function parseDsl(contents: string): ScenarioRaw[] {
 
 function parseCardList(s: string): readonly Card[] {
   if (!s.trim()) return [];
-  return s.trim().split(/\s+/).map(parseCardLabel);
+  return s.trim().split(/\s+/).map(t => parseCardLabel(dslLabelToTsLabel(t)));
 }
 
 function parseSingleCard(s: string): Card {
   const tokens = s.trim().split(/\s+/);
   if (tokens.length !== 1) throw new Error(`expected single card, got "${s}"`);
-  return parseCardLabel(tokens[0]!);
+  return parseCardLabel(dslLabelToTsLabel(tokens[0]!));
 }
 
 function buildBoardStacks(sc: ScenarioRaw): readonly BoardStack[] {
@@ -206,7 +230,12 @@ function buildDesc(sc: ScenarioRaw): Desc {
     const donor = parseCardList(f["donor"] ?? "");
     const stolen = parseSingleCard(f["stolen"] ?? "");
     const pCard = parseSingleCard(f["p_card"] ?? "");
-    const whichEnd = parseInt(f["which_end"] ?? "0", 10);
+    // which_end: corpus DSL uses string ("left"/"right"); the runtime
+    // type is int (0 = left, 2 = right). Accept either.
+    const weRaw = f["which_end"] ?? "0";
+    const whichEnd = weRaw === "left" ? 0
+      : weRaw === "right" ? 2
+      : parseInt(weRaw, 10);
     const targetBefore = parseCardList(f["target_before"] ?? "");
     // newSource / newDonor / merged are reconstructed below well
     // enough for shape; moveToPrimitives doesn't read them.
@@ -242,21 +271,27 @@ function buildDesc(sc: ScenarioRaw): Desc {
 // --- Render primitives back to DSL strings ----------------------------
 
 function fmtCards(cards: readonly Card[]): string {
-  return cards.map(cardLabel).join(" ");
+  return cards.map(c => tsLabelToDslLabel(cardLabel(c))).join(" ");
+}
+
+function fmtCard(c: Card): string {
+  return tsLabelToDslLabel(cardLabel(c));
 }
 
 function fmtPrimitive(p: Primitive, board: readonly BoardStack[]): string {
+  // Convention: coords as (top,left) no-space, matching
+  // replay_walkthroughs.dsl + the corpus DSL.
   switch (p.action) {
     case "split":
       return `split [${fmtCards(board[p.stackIndex]!.cards)}]@${p.cardIndex}`;
     case "merge_stack":
       return `merge_stack [${fmtCards(board[p.sourceStack]!.cards)}] -> [${fmtCards(board[p.targetStack]!.cards)}] /${p.side}`;
     case "merge_hand":
-      return `merge_hand ${cardLabel(p.handCard)} -> [${fmtCards(board[p.targetStack]!.cards)}] /${p.side}`;
+      return `merge_hand ${fmtCard(p.handCard)} -> [${fmtCards(board[p.targetStack]!.cards)}] /${p.side}`;
     case "move_stack":
-      return `move_stack [${fmtCards(board[p.stackIndex]!.cards)}] -> (${p.newLoc.top}, ${p.newLoc.left})`;
+      return `move_stack [${fmtCards(board[p.stackIndex]!.cards)}] -> (${p.newLoc.top},${p.newLoc.left})`;
     case "place_hand":
-      return `place_hand ${cardLabel(p.handCard)} -> (${p.loc.top}, ${p.loc.left})`;
+      return `place_hand ${fmtCard(p.handCard)} -> (${p.loc.top},${p.loc.left})`;
   }
 }
 
@@ -345,31 +380,48 @@ function runScenario(sc: ScenarioRaw): RunResult {
 // --- Main --------------------------------------------------------------
 
 function main(): void {
-  if (!fs.existsSync(DSL_PATH)) {
-    console.error(`no DSL at ${DSL_PATH}`);
-    process.exit(1);
-  }
-  const contents = fs.readFileSync(DSL_PATH, "utf8");
-  const scenarios = parseDsl(contents);
-
-  let passed = 0;
-  let failed = 0;
+  let totalPassed = 0;
+  let totalFailed = 0;
   const failures: string[] = [];
-  for (const sc of scenarios) {
-    const res = runScenario(sc);
-    if (res.ok) {
-      passed++;
-      console.log(`PASS  ${sc.name.padEnd(50)}  ${res.msg}`);
-    } else {
-      failed++;
-      const line = `FAIL  ${sc.name.padEnd(50)}  ${res.msg}`;
-      console.log(line);
-      failures.push(line);
+  let totalScenarios = 0;
+  let quietCorpus = false;
+
+  for (const fname of DSL_FILES) {
+    const filepath = path.join(DSL_DIR, fname);
+    if (!fs.existsSync(filepath)) {
+      console.error(`no DSL at ${filepath}`);
+      process.exit(1);
     }
+    const contents = fs.readFileSync(filepath, "utf8");
+    const scenarios = parseDsl(contents);
+    totalScenarios += scenarios.length;
+
+    // The corpus DSL has 94 scenarios — too noisy to print every PASS.
+    // Print failures only; show a summary line per file.
+    quietCorpus = fname.endsWith("_corpus.dsl");
+
+    let filePassed = 0;
+    let fileFailed = 0;
+    for (const sc of scenarios) {
+      const res = runScenario(sc);
+      if (res.ok) {
+        filePassed++;
+        if (!quietCorpus) console.log(`PASS  ${sc.name.padEnd(50)}  ${res.msg}`);
+      } else {
+        fileFailed++;
+        const line = `FAIL  ${sc.name.padEnd(50)}  ${res.msg}`;
+        console.log(line);
+        failures.push(line);
+      }
+    }
+    console.log(`  ${fname}: ${filePassed}/${scenarios.length} passed`);
+    totalPassed += filePassed;
+    totalFailed += fileFailed;
   }
+
   console.log();
-  console.log(`${passed}/${scenarios.length} passed`);
-  if (failed > 0) {
+  console.log(`TOTAL: ${totalPassed}/${totalScenarios} passed`);
+  if (totalFailed > 0) {
     process.exit(1);
   }
 }

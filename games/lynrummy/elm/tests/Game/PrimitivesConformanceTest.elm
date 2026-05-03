@@ -23,12 +23,14 @@ import Game.WireAction exposing (WireAction(..))
 import Test exposing (Test, describe, test)
 
 
-{-| One per-step fixture mirrors the JSON in
-    `games/lynrummy/conformance/primitives_fixtures.json`.
-    Both runners (this module + `test_primitives_conformance.py`)
-    assert that their `moveToPrimitives` reproduces `expected`
-    exactly — MoveStack pre-flights filtered out (those live
-    in `GeometryPlan.planActions` / `_plan_split_after`).
+{-| Fixtures inline below were originally auto-generated alongside
+    `primitives_fixtures.json` (retired 2026-05-03; converted to
+    `conformance/scenarios/verb_to_primitives_corpus.dsl`). The
+    test asserts that this module's `moveToPrimitives` reproduces
+    `expected` exactly — MoveStack pre-flights filtered out
+    (those live in `GeometryPlan.planActions`). The Elm verb
+    pipeline is on life-support; TS port is canonical going
+    forward.
 -}
 type alias Fixture =
     { name : String

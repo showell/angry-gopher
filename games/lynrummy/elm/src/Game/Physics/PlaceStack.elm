@@ -10,12 +10,15 @@ column-major scan from `HUMAN_PREFERRED_ORIGIN`, anti-align,
 PACK_GAP, then crowded-board legal-margin fallback. See the
 Python module's docstring for the human-feel rationale.
 
-The constants below mirror Python's module-level constants.
-Both languages must agree exactly: any landed loc is
+The constants below mirror Python's module-level constants
+(and now the TS port at `games/lynrummy/ts/src/geometry.ts`).
+All three layers must agree exactly: any landed loc is
 text-asserted by `Game.PrimitivesConformanceTest.elm` against
-the committed `primitives_fixtures.json`. (The legacy Python
-exporter retired 2026-05-02; the JSON is now committed-and-
-static.)
+inline frozen fixtures. (The upstream
+`export_primitives_fixtures.py` retired 2026-05-02; the
+companion JSON was converted to
+`conformance/scenarios/verb_to_primitives_corpus.dsl` and
+retired 2026-05-03 — TS-canonical going forward.)
 
 -}
 

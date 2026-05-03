@@ -67,14 +67,16 @@ These live at `/tools/` (repo root), not `games/lynrummy/python/tools/`.
   gameplay snapshots; writes
   `games/lynrummy/conformance/mined_seeds.json` directly.
   Stable; produces the corpus the Puzzles gallery serves.
-- `export_primitives_fixtures.py` — captures Python verbs +
-  geometry_plan output per BFS plan step. Asserts the
-  post-step pack-gap invariant at generation time. Produces
-  `primitives_fixtures.json` plus an auto-generated Elm test
-  module.
-- `export_replay_walkthroughs.py` — concatenates per-puzzle
-  primitive sequences into `replay_walkthroughs.dsl`. One
-  full-walkthrough scenario per puzzle.
+- `tools/export_replay_walkthroughs.ts` — concatenates per-puzzle
+  primitive sequences from
+  `conformance/scenarios/verb_to_primitives_corpus.dsl` into
+  `conformance/scenarios/replay_walkthroughs.dsl` (one
+  full-walkthrough scenario per puzzle). Run after re-pinning
+  corpus DSL scenarios. (TS port of the retired `.py` version,
+  2026-05-03; the upstream `export_primitives_fixtures.py` that
+  generated `primitives_fixtures.json` retired 2026-05-02 with
+  the BFS-retirement work; the JSON itself was converted to
+  `verb_to_primitives_corpus.dsl` and retired 2026-05-03.)
 
 The DSL plan-text scenarios (`planner_corpus*.dsl`,
 `planner_mined.dsl`) are now committed-and-static — the

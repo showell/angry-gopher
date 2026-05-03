@@ -20,7 +20,7 @@
 # Primitive line syntax mirrors `replay_walkthroughs.dsl`:
 #   - split [content]@k             — split stack at card_index k
 #   - merge_stack [src] -> [tgt] /side
-#   - move_stack [content] -> (top, left)
+#   - move_stack [content] -> (top,left)
 #
 # Authored 2026-05-03 alongside the verbs.ts port.
 
@@ -55,9 +55,9 @@ scenario pluck_interior_premoves_donor
   side: right
   expect:
     primitives:
-      - move_stack [5H 6H 7H 8H 9H] -> (92, 52)
+      - move_stack [5H 6H 7H 8H 9H] -> (92,52)
       - split [5H 6H 7H 8H 9H]@1
-      - move_stack [7H 8H 9H] -> (167, 52)
+      - move_stack [7H 8H 9H] -> (167,52)
       - split [7H 8H 9H]@0
       - merge_stack [7H] -> [7S] /right
 
@@ -105,9 +105,9 @@ scenario splice_run
   side: left
   expect:
     primitives:
-      - move_stack [2C 3D 4C 5H 6S] -> (92, 52)
+      - move_stack [2C 3D 4C 5H 6S] -> (92,52)
       - split [2C 3D 4C 5H 6S]@1
-      - move_stack [2C 3D] -> (167, 52)
+      - move_stack [2C 3D] -> (167,52)
       - merge_stack [4S] -> [2C 3D] /right
 
 
@@ -129,7 +129,7 @@ scenario shift_right_end
   expect:
     primitives:
       - split [TC TS TD]@0
-      - move_stack [TS TD] -> (182, 52)
+      - move_stack [TS TD] -> (182,52)
       - split [TS TD]@0
       - merge_stack [TD] -> [TC] /right
       - merge_stack [TS] -> [JH QC KC] /right
