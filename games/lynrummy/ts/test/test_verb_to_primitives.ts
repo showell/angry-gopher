@@ -30,6 +30,7 @@ import type {
   AbsorberBucket,
 } from "../src/move.ts";
 import type { BoardStack, Loc } from "../src/geometry.ts";
+import { findViolation } from "../src/geometry.ts";
 import { classifyStack } from "../src/classified_card_stack.ts";
 import {
   type Primitive,
@@ -370,11 +371,27 @@ function runScenario(sc: ScenarioRaw): RunResult {
     };
   }
 
+  // GEOMETRY INVARIANT: post-sequence board has no overlapping
+  // stacks. Per Steve, 2026-05-03: NO OVERLAPPING STACKS. If the
+  // verb pipeline emits a primitive sequence whose final state has
+  // two stacks colliding, that's a bug at the verb→primitive layer
+  // — surface it loud, don't silently ship a transcript that the
+  // UI can't render cleanly.
+  const violation = findViolation(sim);
+  if (violation !== null) {
+    const s = sim[violation]!;
+    return {
+      ok: false,
+      msg: `geometry violation at stack ${violation} `
+        + `[${s.cards.map(c => c.join(",")).join(" ")}] @ (${s.loc.top},${s.loc.left})`,
+    };
+  }
+
   // Suppress unused-warning for classifyStack (kept for future
   // assertions on final-board shape).
   void classifyStack;
 
-  return { ok: true, msg: `OK — ${prims.length} primitives` };
+  return { ok: true, msg: `OK — ${prims.length} primitives (geometry clean)` };
 }
 
 // --- Main --------------------------------------------------------------

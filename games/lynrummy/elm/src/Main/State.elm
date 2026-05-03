@@ -552,6 +552,22 @@ activeHand model =
             h
 
         Nothing ->
+            -- Per memory/feedback_dont_paper_over_problems.md: if the
+            -- active player index falls off the end of the hands list,
+            -- log loud rather than silently returning an empty hand.
+            -- This was a paper-over for live-play race conditions; in
+            -- replay it just hides bridge bugs.
+            let
+                _ =
+                    Debug.log
+                        ("[activeHand] no hand at activePlayerIndex="
+                            ++ String.fromInt model.activePlayerIndex
+                            ++ " (have "
+                            ++ String.fromInt (List.length model.hands)
+                            ++ " hands) — returning Hand.empty (paper-over symptom)"
+                        )
+                        ()
+            in
             Hand.empty
 
 

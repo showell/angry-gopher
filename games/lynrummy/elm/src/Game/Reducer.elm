@@ -50,6 +50,10 @@ applyAction action state =
                     }
 
                 Nothing ->
+                    let
+                        _ =
+                            Debug.log "[Reducer.Split] target stack not on board — skipping (bridge bug)" stack
+                    in
                     state
 
         MergeStack { source, target, side } ->
@@ -60,46 +64,73 @@ applyAction action state =
                             { state | board = applyChange change state.board }
 
                         Nothing ->
+                            let
+                                _ =
+                                    Debug.log "[Reducer.MergeStack] tryStackMerge rejected — skipping (rules bug?)" { source = source, target = target, side = side }
+                            in
                             state
 
-                _ ->
+                ( Nothing, _ ) ->
+                    let
+                        _ =
+                            Debug.log "[Reducer.MergeStack] source stack not on board — skipping (bridge bug)" source
+                    in
+                    state
+
+                ( _, Nothing ) ->
+                    let
+                        _ =
+                            Debug.log "[Reducer.MergeStack] target stack not on board — skipping (bridge bug)" target
+                    in
                     state
 
         MergeHand { handCard, target, side } ->
             case findStack target state.board of
                 Just realTarget ->
-                    let
-                        -- When the card isn't in the tracked hand — a
-                        -- replay of the opponent's turn whose hand was
-                        -- server-dealt and never sent client-side —
-                        -- fall back to a synthetic HandCard so the
-                        -- board still advances. Skip the hand-update
-                        -- step in that case (we aren't tracking that
-                        -- player's hand anyway).
-                        ( hc, mutateHand ) =
-                            case findHandCard handCard state.hand of
-                                Just real ->
-                                    ( real, True )
+                    case findHandCard handCard state.hand of
+                        Just hc ->
+                            case BoardActions.tryHandMerge realTarget hc side of
+                                Just change ->
+                                    { state
+                                        | board = applyChange change state.board
+                                        , hand = Hand.removeHandCard hc state.hand
+                                    }
 
                                 Nothing ->
-                                    ( { card = handCard, state = CardStack.HandNormal }, False )
-                    in
-                    case BoardActions.tryHandMerge realTarget hc side of
-                        Just change ->
-                            { state
-                                | board = applyChange change state.board
-                                , hand =
-                                    if mutateHand then
-                                        Hand.removeHandCard hc state.hand
-
-                                    else
-                                        state.hand
-                            }
+                                    let
+                                        _ =
+                                            Debug.log "[Reducer.MergeHand] tryHandMerge rejected — skipping (rules bug?)" { handCard = handCard, target = target, side = side }
+                                    in
+                                    state
 
                         Nothing ->
+                            -- The card the agent transcript wants to
+                            -- merge isn't in this player's tracked
+                            -- hand. Per
+                            -- memory/feedback_dont_paper_over_problems.md:
+                            -- this WAS a silent fallback (synthetic
+                            -- HandCard, board advances anyway) — that's
+                            -- exactly how seed-44's "9D appears
+                            -- spontaneously" hid. Now we log loud and
+                            -- skip the action; the visible state stays
+                            -- as-is, the cascade is annotated.
+                            let
+                                _ =
+                                    Debug.log
+                                        ("[Reducer.MergeHand] hand_card not in active hand — skipping. "
+                                            ++ "This is the bridge-bug surfacer: agent transcript referenced a card "
+                                            ++ "the eager applier doesn't have in hand. Likely a missed CompleteTurn "
+                                            ++ "or wrong active_player_index."
+                                        )
+                                        { handCard = handCard, handSize = List.length state.hand.handCards }
+                            in
                             state
 
                 Nothing ->
+                    let
+                        _ =
+                            Debug.log "[Reducer.MergeHand] target stack not on board — skipping (bridge bug)" target
+                    in
                     state
 
         PlaceHand { handCard, loc } ->
@@ -115,6 +146,15 @@ applyAction action state =
                     }
 
                 Nothing ->
+                    let
+                        _ =
+                            Debug.log
+                                ("[Reducer.PlaceHand] hand_card not in active hand — skipping. "
+                                    ++ "Agent transcript references a card not in the eager applier's view. "
+                                    ++ "Likely a missed CompleteTurn or wrong active_player_index."
+                                )
+                                { handCard = handCard, handSize = List.length state.hand.handCards }
+                    in
                     state
 
         MoveStack { stack, newLoc } ->
@@ -127,6 +167,10 @@ applyAction action state =
                     { state | board = applyChange change state.board }
 
                 Nothing ->
+                    let
+                        _ =
+                            Debug.log "[Reducer.MoveStack] target stack not on board — skipping (bridge bug)" stack
+                    in
                     state
 
         CompleteTurn ->

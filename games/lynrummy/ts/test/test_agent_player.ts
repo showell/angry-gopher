@@ -18,6 +18,7 @@ import { parseCardLabel } from "../src/rules/card.ts";
 import { playFullGame } from "../src/agent_player.ts";
 
 const HAND_SIZE = 15;
+const NUM_PLAYERS = 2;
 const STOP_AT_DECK = 10;
 
 const BOARD_LABELS: string[][] = [
@@ -80,12 +81,15 @@ function main(): void {
   for (const seed of seeds) {
     const rand = mulberry32(seed);
     const remaining = shuffle(remainingCards(), rand);
-    const hand = remaining.slice(0, HAND_SIZE);
-    const deck = remaining.slice(HAND_SIZE);
+    const hands: readonly (readonly Card[])[] = [
+      remaining.slice(0, HAND_SIZE),
+      remaining.slice(HAND_SIZE, 2 * HAND_SIZE),
+    ];
+    const deck = remaining.slice(NUM_PLAYERS * HAND_SIZE);
     const board = makeOpeningBoard();
 
     try {
-      const result = playFullGame(board, hand, deck, { stopAtDeck: STOP_AT_DECK });
+      const result = playFullGame(board, hands, deck, { stopAtDeck: STOP_AT_DECK });
       console.log(`PASS  seed=${seed}  ${result.turns.length} turns, ${result.stoppedReason}`);
       passed++;
     } catch (e) {

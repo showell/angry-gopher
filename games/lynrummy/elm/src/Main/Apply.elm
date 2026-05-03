@@ -162,12 +162,57 @@ applyPhysics action model =
 
         post =
             Reducer.applyAction action pre
+
+        _ =
+            -- Trace each physics-action's effect on the active hand.
+            -- Quiet during steady state (sizes line up); noisy the
+            -- moment they don't, which is the bridge-bug surfacer.
+            Debug.log
+                ("[applyPhysics] action="
+                    ++ wireActionLabel action
+                    ++ " activeIdx="
+                    ++ String.fromInt model.activePlayerIndex
+                    ++ " hand_pre="
+                    ++ String.fromInt (List.length pre.hand.handCards)
+                    ++ " hand_post="
+                    ++ String.fromInt (List.length post.hand.handCards)
+                    ++ " board_pre="
+                    ++ String.fromInt (List.length pre.board)
+                    ++ " board_post="
+                    ++ String.fromInt (List.length post.board)
+                )
+                ()
     in
     setActiveHand post.hand
         { model
             | board = post.board
             , score = Score.forStacks post.board
         }
+
+
+wireActionLabel : WireAction -> String
+wireActionLabel action =
+    case action of
+        WA.Split _ ->
+            "split"
+
+        WA.MergeStack _ ->
+            "merge_stack"
+
+        WA.MergeHand _ ->
+            "merge_hand"
+
+        WA.PlaceHand _ ->
+            "place_hand"
+
+        WA.MoveStack _ ->
+            "move_stack"
+
+        WA.CompleteTurn ->
+            "complete_turn"
+
+        WA.Undo ->
+            "undo"
 
 
 

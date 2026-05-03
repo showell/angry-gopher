@@ -24,6 +24,7 @@ import {
   applyLocally, findStackIndex,
 } from "../src/primitives.ts";
 import type { BoardStack, Loc } from "../src/geometry.ts";
+import { findViolation } from "../src/geometry.ts";
 import { classifyStack } from "../src/classified_card_stack.ts";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -214,11 +215,24 @@ function runWalkthrough(w: Walkthrough): RunResult {
       return { ok: false, msg: `apply[${i}] (${line}): ${(e as Error).message}` };
     }
   }
+  // GEOMETRY INVARIANT: the final board has no overlapping stacks
+  // and every stack is in-bounds. Per Steve, 2026-05-03: "you cannot
+  // place a stack on top of another stack. NO OVERLAPPING STACKS!!!"
+  // Conformance is now geometry-aware at this boundary.
+  const violation = findViolation(board);
+  if (violation !== null) {
+    const s = board[violation]!;
+    return {
+      ok: false,
+      msg: `geometry violation at stack ${violation} `
+        + `[${s.cards.map(c => c.join(",")).join(" ")}] @ (${s.loc.top},${s.loc.left})`,
+    };
+  }
   const v = isVictory(board);
   if (!v.ok) {
     return { ok: false, msg: `final-board not victory: ${v.msg}` };
   }
-  return { ok: true, msg: `OK — ${w.actions.length} actions, ${board.length} legal final stacks` };
+  return { ok: true, msg: `OK — ${w.actions.length} actions, ${board.length} legal final stacks (geometry clean)` };
 }
 
 function main(): void {

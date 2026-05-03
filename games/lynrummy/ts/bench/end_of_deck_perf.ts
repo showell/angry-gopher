@@ -23,6 +23,7 @@ import { describe, type Desc } from "../src/move.ts";
 import { writeSession } from "../src/transcript.ts";
 
 const HAND_SIZE = 15;
+const NUM_PLAYERS = 2;
 const STOP_AT_DECK = 10;
 
 // Game 17 opening board — same as bench_outer_shell + python/dealer.py.
@@ -107,7 +108,8 @@ function totalCardsOnBoard(board: readonly (readonly Card[])[]): number {
 function reportGame(seed: number, result: GameResult): void {
   console.log();
   console.log(`=== seed ${seed} — ${result.turns.length} turns, stopped: ${result.stoppedReason} ===`);
-  console.log(`final: hand=${result.finalHand.length}  board=${result.finalBoard.length} stacks (${totalCardsOnBoard(result.finalBoard)} cards)  deck=${result.finalDeckSize}  total_wall=${result.totalWallMs.toFixed(0)}ms`);
+  const handSizes = result.finalHands.map(h => h.length).join(",");
+  console.log(`final: hands=[${handSizes}]  board=${result.finalBoard.length} stacks (${totalCardsOnBoard(result.finalBoard)} cards)  deck=${result.finalDeckSize}  total_wall=${result.totalWallMs.toFixed(0)}ms`);
   console.log();
   console.log(
     "turn  hand start→played→drew→end   board→         plays  outcome      find_play_ms  turn_ms",
@@ -205,18 +207,23 @@ function main(): void {
   for (const seed of seeds) {
     const rand = mulberry32(seed);
     const remaining = shuffle(remainingCards(), rand);
-    const hand = remaining.slice(0, HAND_SIZE);
-    const deck = remaining.slice(HAND_SIZE);
+    // Deal BOTH hands BEFORE play starts (per Lyn Rummy rules
+    // + python/dealer.py:142 + Elm Game.applyValidTurn).
+    const hands: readonly (readonly Card[])[] = [
+      remaining.slice(0, HAND_SIZE),
+      remaining.slice(HAND_SIZE, 2 * HAND_SIZE),
+    ];
+    const deck = remaining.slice(NUM_PLAYERS * HAND_SIZE);
     const board = makeOpeningBoard();
 
-    const result = playFullGame(board, hand, deck, { stopAtDeck: STOP_AT_DECK });
+    const result = playFullGame(board, hands, deck, { stopAtDeck: STOP_AT_DECK });
     if (trace) emitTrace(seed, result);
     else reportGame(seed, result);
 
     if (writeTranscript) {
       const positioned = makeOpeningBoardPositioned();
       const t = writeSession(
-        { initialBoard: positioned, initialHand: hand, initialDeck: deck, result },
+        { initialBoard: positioned, initialHands: hands, initialDeck: deck, result },
         { label: `agent self-play (seed=${seed})` },
       );
       console.log(`  → wrote session #${t.sessionId} (${t.actionsWritten} actions) to ${t.sessionDir}`);

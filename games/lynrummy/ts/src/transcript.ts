@@ -24,14 +24,43 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 
 import type { Card } from "./rules/card.ts";
+import { cardLabel } from "./rules/card.ts";
 import type { BoardStack, Loc } from "./geometry.ts";
-import { findOpenLoc } from "./geometry.ts";
+import { findOpenLoc, findViolation } from "./geometry.ts";
 import {
   type Primitive,
   applyLocally,
 } from "./primitives.ts";
 import type { GameResult, PlayRecord } from "./agent_player.ts";
 import { moveToPrimitives } from "./verbs.ts";
+
+// --- Invariant: no two stacks ever overlap, ever ---------------------
+//
+// Per Steve, 2026-05-03: "you cannot place a stack on top of another
+// stack. NO OVERLAPPING STACKS!!! ... It should also work by
+// construction, but you need belt/suspenders." This runs after every
+// primitive applies; if it fires, the geometry post-pass missed a
+// case OR the placement-loc search underestimated the eventual stack
+// width. Either way, surface it loud rather than write a transcript
+// the UI can't render cleanly.
+function assertNoOverlap(
+  board: readonly BoardStack[],
+  ctx: string,
+): void {
+  const violation = findViolation(board);
+  if (violation !== null) {
+    const stack = board[violation]!;
+    const labels = stack.cards.map(cardLabel).join(" ");
+    const dump = board.map((s, i) => {
+      const w = 27 + (s.cards.length - 1) * 33;
+      return `  [${i}] (${s.loc.top},${s.loc.left})..(${s.loc.top + 40},${s.loc.left + w}) ${s.cards.map(cardLabel).join(" ")}`;
+    }).join("\n");
+    throw new Error(
+      `[transcript ${ctx}] geometry violation at stack ${violation} `
+      + `[${labels}] @ (${stack.loc.top},${stack.loc.left}). Full board:\n${dump}`,
+    );
+  }
+}
 
 // --- Session-dir layout ----------------------------------------------
 
@@ -110,13 +139,13 @@ interface RemoteStateJson {
 
 function encodeInitialState(
   board: readonly BoardStack[],
-  hand: readonly Card[],
+  hands: readonly (readonly Card[])[],
   deck: readonly Card[],
 ): RemoteStateJson {
   return {
     board: board.map(jsonStack),
-    hands: [{ hand_cards: hand.map(jsonHandCard) }],
-    scores: [0],
+    hands: hands.map(h => ({ hand_cards: h.map(jsonHandCard) })),
+    scores: hands.map(() => 0),
     active_player_index: 0,
     turn_index: 0,
     deck: deck.map(jsonCard),
@@ -188,7 +217,13 @@ function playToPrimitives(
   const out: Primitive[] = [];
 
   if (play.placements.length > 0) {
-    const placeLoc = findOpenLoc(cur, 1);
+    // Reserve loc for the EVENTUAL stack width — placeHand creates a
+    // singleton and subsequent merge_hand calls grow rightward,
+    // keeping the original loc. Using card_count=1 (the python
+    // legacy) underestimates and lets the grown stack overlap a
+    // neighbor when the agent plays 2-3 cards together. Reserving
+    // for play.placements.length keeps the post-merge stack clear.
+    const placeLoc = findOpenLoc(cur, play.placements.length);
     const placeAction: Primitive = {
       action: "place_hand",
       handCard: play.placements[0]!,
@@ -209,6 +244,10 @@ function playToPrimitives(
       out.push(mergeAction);
       cur = applyLocally(cur, mergeAction);
     }
+    // Assert at the boundary where the player has finished placing
+    // their hand-cards (the placements form one clean stack on the
+    // board; no in-flight pre-flights pending).
+    assertNoOverlap(cur, "after-placements");
   }
 
   for (const desc of play.planDescs) {
@@ -217,8 +256,18 @@ function playToPrimitives(
       out.push(p);
       cur = applyLocally(cur, p);
     }
+    // Assert after each whole plan-desc completes (geometry_plan's
+    // pre-flights resolve in pairs: move_stack + the actual
+    // split/merge that follows; the intermediate frame between them
+    // can carry a transient overlap that the very next primitive
+    // resolves). The boundary that matters is post-desc.
+    assertNoOverlap(cur, `after-plan-desc ${describeShort(desc)}`);
   }
   return { prims: out, sim: cur };
+}
+
+function describeShort(d: { type: string }): string {
+  return d.type;
 }
 
 // --- Top-level writer ------------------------------------------------
@@ -233,7 +282,7 @@ export interface TranscriptOpts {
 
 export interface TranscriptInputs {
   readonly initialBoard: readonly BoardStack[];
-  readonly initialHand: readonly Card[];
+  readonly initialHands: readonly (readonly Card[])[];
   readonly initialDeck: readonly Card[];
   readonly result: GameResult;
 }
@@ -261,7 +310,7 @@ export function writeSession(
     created_at: Math.floor(Date.now() / 1000),
     label: opts.label ?? "agent self-play",
     initial_state: encodeInitialState(
-      inputs.initialBoard, inputs.initialHand, inputs.initialDeck),
+      inputs.initialBoard, inputs.initialHands, inputs.initialDeck),
   };
   fs.writeFileSync(
     path.join(sessionDir, "meta.json"),

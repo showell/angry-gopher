@@ -102,10 +102,28 @@ who want shuffling seed it before passing it in.
 applyCompleteTurn : BoardBounds -> GameState a -> ( GameState a, CompleteTurnOutcome )
 applyCompleteTurn bounds state =
     case Referee.validateTurnComplete state.board bounds of
-        Err _ ->
-            ( state
-            , { result = Failure, turnScore = 0, cardsDrawn = 0, dealtCards = [] }
-            )
+        Err err ->
+            -- Per memory/feedback_dont_paper_over_problems.md: a
+            -- failed turn-validate during replay is the bridge bug
+            -- the agent transcript needs to surface, not swallow.
+            -- Log the referee's rejection reason loudly, then PROCEED
+            -- to applyValidTurn anyway so the cascade is visible
+            -- (active player still switches, deck still deals, etc).
+            -- Silent no-op was how "9D appears spontaneously" hid
+            -- itself in the seed-44 replay — the no-op left turn-1's
+            -- state in place so turn-2 actions cascaded weirdly.
+            let
+                _ =
+                    Debug.log
+                        ("[applyCompleteTurn] referee rejected (stage="
+                            ++ Referee.refereeStageToString err.stage
+                            ++ "): "
+                            ++ err.message
+                            ++ " — applying turn anyway so the bridge bug surfaces in the cascade"
+                        )
+                        ()
+            in
+            applyValidTurn state
 
         Ok () ->
             applyValidTurn state
@@ -118,9 +136,23 @@ applyValidTurn state =
             state.activePlayerIndex
 
         outgoingHandSize =
-            listAt outgoingIdx state.hands
-                |> Maybe.map Hand.size
-                |> Maybe.withDefault 0
+            case listAt outgoingIdx state.hands of
+                Just h ->
+                    Hand.size h
+
+                Nothing ->
+                    let
+                        _ =
+                            Debug.log
+                                ("[applyValidTurn] no hand at active index "
+                                    ++ String.fromInt outgoingIdx
+                                    ++ " (have "
+                                    ++ String.fromInt (List.length state.hands)
+                                    ++ " hands) — bridge bug"
+                                )
+                                ()
+                    in
+                    0
 
         boardScore =
             Score.forStacks state.board
@@ -186,6 +218,15 @@ applyValidTurn state =
                     ( afterDraw, leftover, cards )
 
                 Nothing ->
+                    let
+                        _ =
+                            Debug.log
+                                ("[applyValidTurn] outgoing player at index "
+                                    ++ String.fromInt outgoingIdx
+                                    ++ " has no hand record — skipping draw (bridge bug)"
+                                )
+                                ()
+                    in
                     ( { handCards = [] }, state.deck, [] )
 
         newHands =

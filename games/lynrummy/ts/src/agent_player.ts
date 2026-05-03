@@ -258,14 +258,34 @@ export function playTurn(
 }
 
 // --- Full game loop ----------------------------------------------------
+//
+// Lyn Rummy is a TWO-HAND game. "Solo" means one *user* (a human
+// playing both sides, or an agent simulating both) — never one hand.
+// The dealer rules (per python/dealer.py:142 + Elm Game.applyValidTurn):
+//
+//   1. Lay 23-card opening board.
+//   2. Deal 15 to Player 1, 15 to Player 2 (51 left in deck).
+//   3. Player 0 begins; alternate via active_player_index.
+//   4. CompleteTurn → outgoing player draws 0/3/5 based on outcome:
+//        - SuccessButNeedsCards (played 0)         → 3
+//        - SuccessWithHandEmptied / SuccessAsVictor → 5
+//        - Success (played some, hand non-empty)    → 0
+//   5. nextActive = (outgoingIdx + 1) % nHands.
+//
+// playFullGame mirrors this exactly. Both hands are driven by the
+// same agent brain (engine_v2 + findPlay); from a gameplay
+// perspective it's solitaire-style self-play, but the wire-format
+// shape matches what Elm + Python encode for "real" 2-player games.
 
 export interface GameTurnRecord {
   readonly turnNum: number;
+  readonly activePlayerIndex: number;
   readonly handBefore: number;
   readonly boardBefore: number;
   readonly playsMade: number;
   readonly cardsPlayedThisTurn: number;
   readonly outcome: "hand_empty" | "stuck";
+  readonly drawCount: number;
   readonly cardsDrawn: number;
   readonly handAfter: number;
   readonly boardAfter: number;
@@ -278,7 +298,7 @@ export interface GameTurnRecord {
 export interface GameResult {
   readonly turns: readonly GameTurnRecord[];
   readonly finalBoard: readonly (readonly Card[])[];
-  readonly finalHand: readonly Card[];
+  readonly finalHands: readonly (readonly Card[])[];
   readonly finalDeckSize: number;
   readonly stoppedReason: "deck_low" | "max_turns" | "hand_and_deck_empty";
   readonly totalWallMs: number;
@@ -289,78 +309,108 @@ export interface PlayGameOptions {
   readonly maxTurns?: number;
 }
 
+/** Compute draw count per the canonical Lyn Rummy rule (matches
+ *  Elm `Game.applyValidTurn` drawCount + Python `_apply_complete_turn`).
+ *  - hand emptied → 5
+ *  - played zero → 3
+ *  - played some, hand non-empty → 0 */
+function drawCountFor(outcome: "hand_empty" | "stuck", cardsPlayedThisTurn: number): number {
+  if (outcome === "hand_empty") return 5;
+  if (cardsPlayedThisTurn === 0) return 3;
+  return 0;
+}
+
 export function playFullGame(
   initialBoard: readonly (readonly Card[])[],
-  initialHand: readonly Card[],
+  initialHands: readonly (readonly Card[])[],
   initialDeck: readonly Card[],
   opts: PlayGameOptions = {},
 ): GameResult {
   const stopAtDeck = opts.stopAtDeck ?? 10;
-  const maxTurns = opts.maxTurns ?? 100;
+  const maxTurns = opts.maxTurns ?? 200;
 
   let board = initialBoard;
-  let hand = initialHand;
+  const hands: Card[][] = initialHands.map(h => [...h]);
   let deck = [...initialDeck];
+  let activePlayerIndex = 0;
   const turns: GameTurnRecord[] = [];
   const tStart = performance.now();
   let stoppedReason: GameResult["stoppedReason"] = "max_turns";
 
-  // Card-conservation baseline. Every (board, hand, deck) snapshot
-  // through the game must contain exactly these card-keys.
-  const initialCardKeys = collectCardKeys(initialBoard, initialHand, initialDeck);
+  // Card-conservation baseline includes BOTH hands.
+  const collectAllKeys = (): string[] => {
+    const allHandsFlat: Card[] = [];
+    for (const h of hands) for (const c of h) allHandsFlat.push(c);
+    return collectCardKeys(board, allHandsFlat, deck);
+  };
+  const initialCardKeys = (() => {
+    const flat: Card[] = [];
+    for (const h of initialHands) for (const c of h) flat.push(c);
+    return collectCardKeys(initialBoard, flat, initialDeck);
+  })();
 
   for (let turnNum = 1; turnNum <= maxTurns; turnNum++) {
-    const handBefore = hand.length;
+    const handBefore = hands[activePlayerIndex]!.length;
     const boardBefore = board.length;
     const tTurn0 = performance.now();
-    const turn = playTurn(board, hand);
+    const turn = playTurn(board, hands[activePlayerIndex]!);
     const turnWallMs = performance.now() - tTurn0;
 
     board = turn.board;
-    hand = turn.hand;
+    hands[activePlayerIndex] = [...turn.hand];
 
-    // INVARIANT: turn outcome consistency. "hand_empty" iff hand is
-    // actually empty after plays; "stuck" iff hand still has cards.
+    // INVARIANTS (apply per turn).
     const handMid = turn.hand.length;
     if (turn.outcome === "hand_empty" && handMid !== 0) {
       throw new Error(
-        `[agent_player playFullGame] turn ${turnNum} outcome=hand_empty but ${handMid} cards still in hand`,
+        `[agent_player playFullGame] turn ${turnNum} player ${activePlayerIndex} `
+        + `outcome=hand_empty but ${handMid} cards still in hand`,
       );
     }
     if (turn.outcome === "stuck" && handMid === 0) {
       throw new Error(
-        `[agent_player playFullGame] turn ${turnNum} outcome=stuck but hand is empty (should be hand_empty)`,
+        `[agent_player playFullGame] turn ${turnNum} player ${activePlayerIndex} `
+        + `outcome=stuck but hand is empty (should be hand_empty)`,
       );
     }
-
-    // INVARIANT: hand-tracking arithmetic.
     if (handBefore - turn.cardsPlayed.length !== handMid) {
       throw new Error(
-        `[agent_player playFullGame] turn ${turnNum} hand arithmetic: `
-        + `handBefore (${handBefore}) - cardsPlayed (${turn.cardsPlayed.length}) = ${handBefore - turn.cardsPlayed.length}, `
-        + `expected handMid ${handMid}`,
+        `[agent_player playFullGame] turn ${turnNum} player ${activePlayerIndex} `
+        + `hand arithmetic: handBefore (${handBefore}) - cardsPlayed (${turn.cardsPlayed.length}) `
+        + `= ${handBefore - turn.cardsPlayed.length}, expected handMid ${handMid}`,
       );
     }
 
-    const drawAmount = turn.outcome === "hand_empty" ? 5 : 3;
-    const cardsDrawn = Math.min(drawAmount, deck.length);
+    // Draw for the outgoing (active) player.
+    const drawCount = drawCountFor(turn.outcome, turn.cardsPlayed.length);
+    const cardsDrawn = Math.min(drawCount, deck.length);
     if (cardsDrawn > 0) {
-      hand = [...hand, ...deck.slice(0, cardsDrawn)];
+      hands[activePlayerIndex] = [...hands[activePlayerIndex]!, ...deck.slice(0, cardsDrawn)];
       deck = deck.slice(cardsDrawn);
     }
 
     // INVARIANT: card conservation across the entire game.
-    assertCardsConserved(initialCardKeys, board, hand, deck, `playFullGame turn ${turnNum}`);
+    void collectAllKeys;
+    assertCardsConserved(
+      initialCardKeys,
+      board,
+      // Flatten all hands for the conservation check.
+      ([] as Card[]).concat(...hands),
+      deck,
+      `playFullGame turn ${turnNum}`,
+    );
 
     turns.push({
       turnNum,
+      activePlayerIndex,
       handBefore,
       boardBefore,
       playsMade: turn.playsMade,
       cardsPlayedThisTurn: turn.cardsPlayed.length,
       outcome: turn.outcome,
+      drawCount,
       cardsDrawn,
-      handAfter: hand.length,
+      handAfter: hands[activePlayerIndex]!.length,
       boardAfter: board.length,
       deckRemaining: deck.length,
       turnWallMs,
@@ -372,16 +422,20 @@ export function playFullGame(
       stoppedReason = "deck_low";
       break;
     }
-    if (hand.length === 0 && deck.length === 0) {
+    if (hands[activePlayerIndex]!.length === 0 && deck.length === 0) {
       stoppedReason = "hand_and_deck_empty";
       break;
     }
+
+    // Switch active player. Mirrors Elm's
+    // `nextActive = modBy nHands (outgoingIdx + 1)`.
+    activePlayerIndex = (activePlayerIndex + 1) % hands.length;
   }
 
   return {
     turns,
     finalBoard: board,
-    finalHand: hand,
+    finalHands: hands.map(h => [...h]),
     finalDeckSize: deck.length,
     stoppedReason,
     totalWallMs: performance.now() - tStart,
