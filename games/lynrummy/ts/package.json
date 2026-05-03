@@ -7,7 +7,8 @@
   "scripts": {
     "test:leaf": "node test/test_conformance_leaf.ts",
     "test:engine": "node test/test_engine_conformance.ts",
-    "test": "node test/test_conformance_leaf.ts && node test/test_engine_conformance.ts",
+    "test:verbs": "node test/test_verb_to_primitives.ts",
+    "test": "node test/test_conformance_leaf.ts && node test/test_engine_conformance.ts && node test/test_verb_to_primitives.ts",
     "bench:outer-shell": "node bench/bench_outer_shell.ts",
     "bench:gen-baseline": "node bench/gen_baseline_board.ts",
     "bench:check-baseline": "node bench/check_baseline_timing.ts",
