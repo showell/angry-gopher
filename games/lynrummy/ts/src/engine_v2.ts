@@ -6,8 +6,11 @@
 //
 // See claude-steve/random234.md for the algorithmic description.
 
-import type { Buckets, Lineage } from "./buckets.ts";
-import { isVictory, stateSig, fastStateSig, buildCardOrder } from "./buckets.ts";
+import type { Buckets, RawBuckets, Lineage } from "./buckets.ts";
+import {
+  isVictory, stateSig, fastStateSig, buildCardOrder,
+  classifyBuckets, troubleCount,
+} from "./buckets.ts";
 import type { ClassifiedCardStack } from "./classified_card_stack.ts";
 import { type Desc, describe } from "./move.ts";
 import { enumerateMoves } from "./enumerator.ts";
@@ -163,6 +166,73 @@ export function solveTurn(
   }
   lastVisits = visits;
   return best;
+}
+
+// --- Production shim --------------------------------------------------------
+//
+// `solveStateWithDescs` matches `bfs.ts`'s entry-point signature so callers
+// (bridge.ts, hand_play.ts, conformance harness, benches) can swap engines by
+// import path alone. Auto-classifies raw input, short-circuits trouble-cap
+// + victory states, then dispatches to `solveTurn` (A*).
+//
+// `maxStates` maps to `solveTurn`'s visit `budget` (same semantic: hard cap
+// on inner work). `maxTroubleOuter` survives as a pre-flight reject — A*
+// doesn't iterative-deepen on it like bfs.ts did, but unsolvably-deep
+// inputs still deserve a fast no-go.
+
+interface ShimSolveOptions {
+  readonly maxStates?: number;
+  readonly maxTroubleOuter?: number;
+  readonly heuristic?: Heuristic;
+  readonly dedup?: boolean;
+  readonly sigKind?: "fast" | "string";
+}
+
+function isAlreadyClassified(initial: Buckets | RawBuckets): initial is Buckets {
+  for (const bucketName of ["helper", "trouble", "growing", "complete"] as const) {
+    const bucket = (initial as { [k: string]: unknown })[bucketName];
+    if (Array.isArray(bucket) && bucket.length > 0) {
+      const first = bucket[0];
+      return typeof first === "object" && first !== null && "kind" in first;
+    }
+  }
+  return true;
+}
+
+export function solveStateWithDescs(
+  initial: Buckets | RawBuckets,
+  opts: ShimSolveOptions = {},
+): readonly PlanLine[] | null {
+  const maxStates = opts.maxStates ?? 50000;
+  const maxTroubleOuter = opts.maxTroubleOuter ?? 8;
+
+  const classified: Buckets = isAlreadyClassified(initial)
+    ? initial
+    : classifyBuckets(initial as RawBuckets);
+
+  if (troubleCount(classified.trouble, classified.growing) > maxTroubleOuter) {
+    return null;
+  }
+  if (isVictory(classified.trouble, classified.growing)) {
+    return [];
+  }
+
+  return solveTurn(classified, {
+    budget: maxStates,
+    heuristic: opts.heuristic,
+    dedup: opts.dedup,
+    sigKind: opts.sigKind,
+  });
+}
+
+/** Mirrors bfs.ts `solveState`: thin wrapper returning plan lines (no descs). */
+export function solveState(
+  initial: Buckets | RawBuckets,
+  opts: ShimSolveOptions = {},
+): readonly string[] | null {
+  const plan = solveStateWithDescs(initial, opts);
+  if (plan === null) return null;
+  return plan.map(p => p.line);
 }
 
 class MinHeap<T> {

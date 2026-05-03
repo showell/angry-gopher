@@ -24,7 +24,7 @@ import * as fs from "node:fs";
 
 import type { Card } from "./src/rules/card.ts";
 import type { RawBuckets } from "./src/buckets.ts";
-import { solveStateWithDescs } from "./src/bfs.ts";
+import { solveStateWithDescs } from "./src/engine_v2.ts";
 import { classifyStack } from "./src/classified_card_stack.ts";
 import { findPlay, formatHint } from "./src/hand_play.ts";
 

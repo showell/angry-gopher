@@ -35,11 +35,17 @@ import { cardLabel } from "./rules/card.ts";
 import { isPartialOk } from "./rules/stack_type.ts";
 import { classifyStack } from "./classified_card_stack.ts";
 import type { RawBuckets } from "./buckets.ts";
-import {
-  solveStateWithDescs,
-  solveStateWithDescsExt,
-  type CapExhaustion,
-} from "./bfs.ts";
+import { solveStateWithDescs } from "./engine_v2.ts";
+
+// Per-cap exhaustion records were a bfs.ts iterative-deepening artifact;
+// engine_v2 (A*) doesn't have caps. Kept as a wire-format-stable empty
+// array so bridge.ts stats callers don't break.
+export interface CapExhaustion {
+  readonly cap: number;
+  readonly hitMaxStates: boolean;
+  readonly expansions: number;
+  readonly seenCount: number;
+}
 
 // Default BFS state budget per projection. Mirrors python
 // `_PROJECTION_MAX_STATES`. Lowered from 200000 → 5000 in Python on
@@ -227,7 +233,7 @@ function tryProjection(
     return plan === null ? null : plan.map(p => p.line);
   }
   const t0 = performance.now();
-  const ext = solveStateWithDescsExt(initial, {
+  const plan = solveStateWithDescs(initial, {
     maxTroubleOuter: 10,
     maxStates,
   });
@@ -236,10 +242,10 @@ function tryProjection(
     kind,
     cards,
     wallMs,
-    foundPlan: ext.plan !== null,
-    exhaustions: ext.exhaustions,
+    foundPlan: plan !== null,
+    exhaustions: [],
   });
-  return ext.plan === null ? null : ext.plan.map(p => p.line);
+  return plan === null ? null : plan.map(p => p.line);
 }
 
 /**

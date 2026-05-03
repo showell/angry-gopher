@@ -23,6 +23,12 @@ import { fileURLToPath } from "node:url";
 
 import type { Card } from "../src/rules/card.ts";
 import { parseCardLabel } from "../src/rules/card.ts";
+// Conformance pins bfs.ts plan-lines (the cross-language fidelity contract
+// vs Python). engine_v2 is the production solver (used by bridge.ts and
+// hand_play.ts) but finds different valid plans for many fixtures —
+// switching here will FAIL ~33 scenarios until DSL fixtures are
+// regenerated against engine_v2's output. See README "Two engines"
+// section for the migration plan.
 import { solveState } from "../src/bfs.ts";
 import { enumerateMoves } from "../src/enumerator.ts";
 import { describe, narrate, hint, type Desc } from "../src/move.ts";
