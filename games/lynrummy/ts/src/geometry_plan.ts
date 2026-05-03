@@ -125,7 +125,15 @@ function preFlightMergeStack(
   const sourceSize = src.cards.length;
   const targetSize = tgt.cards.length;
   const finalSize = sourceSize + targetSize;
-  const others = sim.filter((_, i) => i !== srcSi && i !== tgtSi);
+  // Exclude ONLY the target (the stack being moved) from the
+  // open-loc search. Source must stay in `others` because source
+  // is physically still on the board during the post-move /
+  // pre-merge intermediate frame; if we ignored source, the move
+  // could land target on top of it (visible overlap until the
+  // merge resolves it). Source goes away only after the merge —
+  // not after the move. Per Steve, 2026-05-03: NO OVERLAPPING
+  // STACKS, even transiently.
+  const others = sim.filter((_, i) => i !== tgtSi);
   const finalLoc = findOpenLoc(others, finalSize);
   let targetLoc: Loc;
   if (action.side === "left") {

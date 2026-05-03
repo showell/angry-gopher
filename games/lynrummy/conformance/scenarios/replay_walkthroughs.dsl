@@ -33,7 +33,7 @@ scenario walkthrough_mined_001_4S_4Cp1
     - split [AD AH]@0
     - merge_stack [AC] -> [2D' 3S'] /left
     - merge_stack [AD] -> [2C 3D 4C 5H 6S 7H] /left
-    - move_stack [2H 3H 4H] -> (407,220)
+    - move_stack [2H 3H 4H] -> (482,220)
     - merge_stack [AH] -> [2H 3H 4H] /left
   expect:
     final_board_victory: true
@@ -91,7 +91,7 @@ scenario walkthrough_mined_003_6D
     - move_stack [7S 7D] -> (242,247)
     - split [7S 7D]@0
     - merge_stack [7C] -> [6D] /right
-    - move_stack [8D' 9C TD] -> (482,118)
+    - move_stack [8D' 9C TD] -> (482,358)
     - merge_stack [6D 7C] -> [8D' 9C TD] /left
     - merge_stack [7D] -> [7S] /right
     - split [3D 4C 5H 6S 7H]@4
@@ -170,7 +170,7 @@ scenario walkthrough_mined_006_6Cp1
     - split [6D' 7C]@0
     - merge_stack [6D'] -> [6C' 6S] /right
     - merge_stack [5C] -> [AC' 2H' 3S 4H] /right
-    - move_stack [7S 7D 7H] -> (332,172)
+    - move_stack [7S 7D 7H] -> (482,187)
     - merge_stack [7C] -> [7S 7D 7H] /right
   expect:
     final_board_victory: true
@@ -414,7 +414,7 @@ scenario walkthrough_mined_015_3Cp1
     - split [AC AD AH]@0
     - move_stack [AD AH] -> (407,187)
     - split [AD AH]@0
-    - move_stack [2C 3C'] -> (257,85)
+    - move_stack [2C 3C'] -> (257,145)
     - merge_stack [AC] -> [2C 3C'] /left
     - merge_stack [AD] -> [JD QD KD] /right
     - merge_stack [AH] -> [2H 3H 4H] /left
@@ -522,9 +522,9 @@ scenario walkthrough_mined_019_2D
     - split [AD 2C']@0
     - move_stack [2D] -> (317,220)
     - merge_stack [AD] -> [2D] /left
-    - move_stack [JD QD KD] -> (317,187)
+    - move_stack [JD QD KD] -> (467,187)
     - merge_stack [AD 2D] -> [JD QD KD] /right
-    - move_stack [AH 2C 3D 4C] -> (92,190)
+    - move_stack [AH 2C 3D 4C] -> (242,220)
     - merge_stack [KS] -> [AH 2C 3D 4C] /left
     - split [KS AH 2C 3D 4C]@1
     - move_stack [KS AH] -> (107,52)
@@ -574,7 +574,7 @@ scenario walkthrough_mined_021_8Dp1
     - split [7S 7D 7C]@2
     - move_stack [7S 7D] -> (482,187)
     - split [7S 7D]@0
-    - move_stack [8D'] -> (257,85)
+    - move_stack [8D'] -> (332,220)
     - merge_stack [7C] -> [8D'] /left
     - split [KS AS 2S 3S]@3
     - move_stack [4H' 5C' 6D'] -> (182,220)

@@ -110,7 +110,7 @@ scenario mined_001_4S_4Cp1_step_04
   side: left
   expect:
     primitives:
-      - move_stack [2H 3H 4H] -> (407,220)
+      - move_stack [2H 3H 4H] -> (482,220)
       - merge_stack [AH] -> [2H 3H 4H] /left
 
 scenario mined_002_QDp1_step_01
@@ -277,7 +277,7 @@ scenario mined_003_6D_step_02
   side: left
   expect:
     primitives:
-      - move_stack [8D' 9C TD] -> (482,118)
+      - move_stack [8D' 9C TD] -> (482,358)
       - merge_stack [6D 7C] -> [8D' 9C TD] /left
 
 scenario mined_003_6D_step_03
@@ -593,7 +593,7 @@ scenario mined_006_6Cp1_step_04
   side: right
   expect:
     primitives:
-      - move_stack [7S 7D 7H] -> (332,172)
+      - move_stack [7S 7D 7H] -> (482,187)
       - merge_stack [7C] -> [7S 7D 7H] /right
 
 scenario mined_007_5Cp1_6C_step_01
@@ -1380,7 +1380,7 @@ scenario mined_015_3Cp1_step_02
       - split [AC AD AH]@0
       - move_stack [AD AH] -> (407,187)
       - split [AD AH]@0
-      - move_stack [2C 3C'] -> (257,85)
+      - move_stack [2C 3C'] -> (257,145)
       - merge_stack [AC] -> [2C 3C'] /left
 
 scenario mined_015_3Cp1_step_03
@@ -1779,7 +1779,7 @@ scenario mined_019_2D_step_02
   side: right
   expect:
     primitives:
-      - move_stack [JD QD KD] -> (317,187)
+      - move_stack [JD QD KD] -> (467,187)
       - merge_stack [AD 2D] -> [JD QD KD] /right
 
 scenario mined_019_2D_step_03
@@ -1803,7 +1803,7 @@ scenario mined_019_2D_step_03
   side: left
   expect:
     primitives:
-      - move_stack [AH 2C 3D 4C] -> (92,190)
+      - move_stack [AH 2C 3D 4C] -> (242,220)
       - merge_stack [KS] -> [AH 2C 3D 4C] /left
 
 scenario mined_019_2D_step_04
@@ -1926,7 +1926,7 @@ scenario mined_021_8Dp1_step_01
       - split [7S 7D 7C]@2
       - move_stack [7S 7D] -> (482,187)
       - split [7S 7D]@0
-      - move_stack [8D'] -> (257,85)
+      - move_stack [8D'] -> (332,220)
       - merge_stack [7C] -> [8D'] /left
 
 scenario mined_021_8Dp1_step_02
