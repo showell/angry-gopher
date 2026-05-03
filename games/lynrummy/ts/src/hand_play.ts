@@ -45,8 +45,8 @@ import {
 // `_PROJECTION_MAX_STATES`. Lowered from 200000 → 5000 in Python on
 // 2026-04-25 after the doomed-third + state-level doomed-growing
 // filters landed; the TS port doesn't have those filters yet (see
-// PORT_STATUS.md "card-tracker liveness pruning"), but the corpus
-// scenarios solve cheaply enough that 5000 is sufficient.
+// README.md § "Loose ends" — card-tracker liveness pruning), but the
+// corpus scenarios solve cheaply enough that 5000 is sufficient.
 const PROJECTION_MAX_STATES = 5000;
 
 export interface PlayResult {
