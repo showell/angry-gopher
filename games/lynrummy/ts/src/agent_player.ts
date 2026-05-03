@@ -23,7 +23,7 @@
 import type { Card } from "./rules/card.ts";
 import type { Buckets, RawBuckets } from "./buckets.ts";
 import { classifyBuckets } from "./buckets.ts";
-import { classifyStack } from "./classified_card_stack.ts";
+import { classifyStack, type ClassifiedCardStack } from "./classified_card_stack.ts";
 import { findPlay, type PlayResult } from "./hand_play.ts";
 import { solveStateWithDescs } from "./engine_v2.ts";
 import { describe, type Desc } from "./move.ts";
@@ -51,6 +51,85 @@ function applyPlan(initial: Buckets, plan: readonly { desc: Desc }[]): Buckets {
 
 function cardKey(c: Card): string {
   return `${c[0]},${c[1]},${c[2]}`;
+}
+
+// --- Invariant assertions --------------------------------------------
+//
+// Per memory/feedback_dont_paper_over_problems.md: invariants are
+// permanent (always-on, throw on violation). These run after every
+// applyHandPlay + at the end of every turn. If any fire, the agent's
+// internal state has diverged from what the rules guarantee — every
+// downstream symptom (transcript drift, replay confusion, geometry
+// chaos) cascades from here.
+
+/** Every stack on the board must classify as a legal length-3+ kind
+ *  (run / rb / set). The BFS guarantee is that every applyHandPlay
+ *  produces a clean board; if this fires, either the BFS was wrong
+ *  or applyPlan diverged from solveStateWithDescs. */
+function assertBoardClean(
+  board: readonly (readonly Card[])[],
+  ctx: string,
+): void {
+  for (let i = 0; i < board.length; i++) {
+    const stack = board[i]!;
+    const ccs: ClassifiedCardStack | null = classifyStack(stack);
+    if (ccs === null) {
+      throw new Error(
+        `[agent_player ${ctx}] stack ${i} failed to classify: [${stack.map(cardKey).join(" ")}]`,
+      );
+    }
+    if (ccs.n < 3) {
+      throw new Error(
+        `[agent_player ${ctx}] stack ${i} length ${ccs.n} (${ccs.kind}) — not graduated: [${stack.map(cardKey).join(" ")}]`,
+      );
+    }
+    if (ccs.kind !== "run" && ccs.kind !== "rb" && ccs.kind !== "set") {
+      throw new Error(
+        `[agent_player ${ctx}] stack ${i} kind ${ccs.kind} not a length-3+ legal kind: [${stack.map(cardKey).join(" ")}]`,
+      );
+    }
+  }
+}
+
+function totalCardCount(board: readonly (readonly Card[])[]): number {
+  let n = 0;
+  for (const s of board) n += s.length;
+  return n;
+}
+
+function collectCardKeys(
+  board: readonly (readonly Card[])[],
+  hand: readonly Card[],
+  deck: readonly Card[],
+): string[] {
+  const keys: string[] = [];
+  for (const s of board) for (const c of s) keys.push(cardKey(c));
+  for (const c of hand) keys.push(cardKey(c));
+  for (const c of deck) keys.push(cardKey(c));
+  return keys.sort();
+}
+
+/** Card conservation: nothing appears twice, nothing disappears. */
+function assertCardsConserved(
+  expected: readonly string[],
+  board: readonly (readonly Card[])[],
+  hand: readonly Card[],
+  deck: readonly Card[],
+  ctx: string,
+): void {
+  const got = collectCardKeys(board, hand, deck);
+  if (got.length !== expected.length) {
+    throw new Error(
+      `[agent_player ${ctx}] card-count drift: expected ${expected.length}, got ${got.length} (board=${totalCardCount(board)} hand=${hand.length} deck=${deck.length})`,
+    );
+  }
+  for (let i = 0; i < got.length; i++) {
+    if (got[i] !== expected[i]) {
+      throw new Error(
+        `[agent_player ${ctx}] card-set drift at sorted index ${i}: expected ${expected[i]}, got ${got[i]}`,
+      );
+    }
+  }
 }
 
 function partition(
@@ -143,15 +222,25 @@ export function playTurn(
     const applyMs = performance.now() - t1;
     applyWallMsTotal += applyMs;
     if (next === null) {
-      // Engine couldn't replay a play it just produced; treat as stuck
-      // (defensive — should not happen with current code).
-      return {
-        playsMade, cardsPlayed, outcome: "stuck",
-        board, hand, findPlayWallMsTotal, applyWallMsTotal, plays,
-      };
+      // findPlay produced this play (proving a clean-board plan
+      // exists), but applyHandPlay's engine call returned null.
+      // That's a contradiction — two engine invocations on the same
+      // augmented state disagreed on solvability. Don't paper over;
+      // surface the bug.
+      throw new Error(
+        `[agent_player playTurn] applyHandPlay returned null for a play findPlay just produced. `
+        + `This indicates a divergence between findPlay's engine call and applyHandPlay's `
+        + `(both go through solveStateWithDescs). Placements: [${play.placements.map(cardKey).join(" ")}]. `
+        + `Plan length: ${play.plan.length}.`,
+      );
     }
     board = next.board;
     hand = next.hand;
+    // INVARIANT: every applyHandPlay produces a clean board. The BFS
+    // pipeline only returns plans that drive the augmented state to
+    // victory; any failure here means the agent saw a "winning" plan
+    // that didn't actually win.
+    assertBoardClean(board, "playTurn after-play");
     plays.push({
       placements: [...play.placements],
       planDescs: next.planDescs,
@@ -216,6 +305,10 @@ export function playFullGame(
   const tStart = performance.now();
   let stoppedReason: GameResult["stoppedReason"] = "max_turns";
 
+  // Card-conservation baseline. Every (board, hand, deck) snapshot
+  // through the game must contain exactly these card-keys.
+  const initialCardKeys = collectCardKeys(initialBoard, initialHand, initialDeck);
+
   for (let turnNum = 1; turnNum <= maxTurns; turnNum++) {
     const handBefore = hand.length;
     const boardBefore = board.length;
@@ -226,12 +319,38 @@ export function playFullGame(
     board = turn.board;
     hand = turn.hand;
 
+    // INVARIANT: turn outcome consistency. "hand_empty" iff hand is
+    // actually empty after plays; "stuck" iff hand still has cards.
+    const handMid = turn.hand.length;
+    if (turn.outcome === "hand_empty" && handMid !== 0) {
+      throw new Error(
+        `[agent_player playFullGame] turn ${turnNum} outcome=hand_empty but ${handMid} cards still in hand`,
+      );
+    }
+    if (turn.outcome === "stuck" && handMid === 0) {
+      throw new Error(
+        `[agent_player playFullGame] turn ${turnNum} outcome=stuck but hand is empty (should be hand_empty)`,
+      );
+    }
+
+    // INVARIANT: hand-tracking arithmetic.
+    if (handBefore - turn.cardsPlayed.length !== handMid) {
+      throw new Error(
+        `[agent_player playFullGame] turn ${turnNum} hand arithmetic: `
+        + `handBefore (${handBefore}) - cardsPlayed (${turn.cardsPlayed.length}) = ${handBefore - turn.cardsPlayed.length}, `
+        + `expected handMid ${handMid}`,
+      );
+    }
+
     const drawAmount = turn.outcome === "hand_empty" ? 5 : 3;
     const cardsDrawn = Math.min(drawAmount, deck.length);
     if (cardsDrawn > 0) {
       hand = [...hand, ...deck.slice(0, cardsDrawn)];
       deck = deck.slice(cardsDrawn);
     }
+
+    // INVARIANT: card conservation across the entire game.
+    assertCardsConserved(initialCardKeys, board, hand, deck, `playFullGame turn ${turnNum}`);
 
     turns.push({
       turnNum,
