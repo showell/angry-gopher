@@ -6900,6 +6900,45 @@ solveSetPartialUncompletable =
                     Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))
 
 
+solveShiftSubproblemCapture59 : Test
+solveShiftSubproblemCapture59 =
+    test "solve_shift_subproblem_capture_59" <|
+        \_ ->
+            let
+                state : Buckets
+                state =
+                    { helper = [ [ parseCard "3C1", parseCard "4C2", parseCard "5C2" ]
+                        , [ parseCard "AS1", parseCard "2S1", parseCard "3S1" ]
+                        , [ parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7D2" ]
+                        , [ parseCard "7S1", parseCard "7D1", parseCard "7C1", parseCard "7H1" ]
+                        , [ parseCard "KH1", parseCard "AC1", parseCard "2H2" ]
+                        , [ parseCard "KS1", parseCard "AD2", parseCard "2C1", parseCard "3D2" ]
+                        , [ parseCard "TD1", parseCard "JD1", parseCard "QD1", parseCard "KD1" ]
+                        ]
+                    , trouble = [ [ parseCard "4H1", parseCard "5S1" ]
+                        , [ parseCard "AC2" ]
+                        , [ parseCard "AD1" ]
+                        ]
+                    , growing = []
+                    , complete = []
+                    }
+
+                result =
+                    Game.Agent.Bfs.solve state
+            in
+            let
+                expected =
+                    [ "shift KS to pop 3S [AD:1 2C 3D:1 -> KS + AS 2S]; absorb onto trouble [4H 5S] → [3S 4H 5S] [→COMPLETE]", "pull AD onto trouble [AC:1] → [AC:1 AD]", "split_out AS from HELPER [KS AS 2S], absorb onto growing [AC:1 AD] → [AC:1 AD AS] [→COMPLETE] ; spawn TROUBLE: [KS], [2S]", "push TROUBLE [KS] onto HELPER [AD:1 2C 3D:1] → [KS AD:1 2C 3D:1]", "push TROUBLE [2S] onto HELPER [3D 4C 5H 6S 7D:1] → [2S 3D 4C 5H 6S 7D:1]" ]
+            in
+            case result of
+                Just plan ->
+                    List.map AgentMove.describe plan
+                        |> Expect.equal expected
+
+                Nothing ->
+                    Expect.fail ("expected plan; got Nothing")
+
+
 solveSimplePeelInOneLine : Test
 solveSimplePeelInOneLine =
     test "solve_simple_peel_in_one_line" <|
@@ -9267,6 +9306,7 @@ suite =
         , solvePartialCompletableButStranded
         , solveRunPartialUncompletable
         , solveSetPartialUncompletable
+        , solveShiftSubproblemCapture59
         , solveSimplePeelInOneLine
         , solveTwoPartialTroublesNoPaths
         , solveTwoUnrelatedSingletons

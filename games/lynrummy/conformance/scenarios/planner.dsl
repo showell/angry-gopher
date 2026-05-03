@@ -226,3 +226,26 @@ scenario shift_eight_clubs_pops_jack_clubs
     at (0,0): QH
   expect:
     yields: shift
+
+scenario solve_shift_subproblem_capture_59
+  desc: Tighter subproblem from xcheck capture #59 — state after place [5S] + steal 4H + steal AH. Board-only; tests that shift can deliver 3S to [4H 5S] without stranding [AS 2S]. [4H 5S] is in trouble (not growing) so initialLineage puts it first as the focus; the trouble-vs-growing distinction is bookkeeping anyway.
+  op: solve
+  helper:
+    at (0,0): 3C 4C' 5C'
+    at (0,0): AS 2S 3S
+    at (0,0): 3D 4C 5H 6S 7D'
+    at (0,0): 7S 7D 7C 7H
+    at (0,0): KH AC 2H'
+    at (0,0): KS AD' 2C 3D'
+    at (0,0): TD JD QD KD
+  trouble:
+    at (0,0): 4H 5S
+    at (0,0): AC'
+    at (0,0): AD
+  expect:
+    plan_lines:
+      - "shift KS to pop 3S [AD:1 2C 3D:1 -> KS + AS 2S]; absorb onto trouble [4H 5S] → [3S 4H 5S] [→COMPLETE]"
+      - "pull AD onto trouble [AC:1] → [AC:1 AD]"
+      - "split_out AS from HELPER [KS AS 2S], absorb onto growing [AC:1 AD] → [AC:1 AD AS] [→COMPLETE] ; spawn TROUBLE: [KS], [2S]"
+      - "push TROUBLE [KS] onto HELPER [AD:1 2C 3D:1] → [KS AD:1 2C 3D:1]"
+      - "push TROUBLE [2S] onto HELPER [3D 4C 5H 6S 7D:1] → [2S 3D 4C 5H 6S 7D:1]"
