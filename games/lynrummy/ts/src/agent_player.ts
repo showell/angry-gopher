@@ -25,7 +25,7 @@ import type { Buckets, RawBuckets } from "./buckets.ts";
 import { classifyBuckets } from "./buckets.ts";
 import { classifyStack } from "./classified_card_stack.ts";
 import { findPlay, type PlayResult } from "./hand_play.ts";
-import { solveStateWithDescs, type PlanLine } from "./engine_v2.ts";
+import { solveStateWithDescs } from "./engine_v2.ts";
 import { describe, type Desc } from "./move.ts";
 import { enumerateMoves } from "./enumerator.ts";
 
@@ -73,7 +73,7 @@ function applyHandPlay(
   board: readonly (readonly Card[])[],
   hand: readonly Card[],
   play: PlayResult,
-): { board: readonly (readonly Card[])[]; hand: readonly Card[] } | null {
+): { board: readonly (readonly Card[])[]; hand: readonly Card[]; planDescs: readonly Desc[] } | null {
   const { helper, trouble } = partition([...board, [...play.placements]]);
   const initial: RawBuckets = { helper, trouble, growing: [], complete: [] };
   const classified = classifyBuckets(initial);
@@ -89,10 +89,19 @@ function applyHandPlay(
   ];
   const placedSet = new Set(play.placements.map(cardKey));
   const newHand = hand.filter(c => !placedSet.has(cardKey(c)));
-  return { board: newBoard, hand: newHand };
+  return { board: newBoard, hand: newHand, planDescs: plan.map(p => p.desc) };
 }
 
 // --- One turn ----------------------------------------------------------
+
+/** Per-play record exposed for tracing harnesses. One PlayRecord per
+ *  successful findPlay → applyHandPlay round-trip. */
+export interface PlayRecord {
+  readonly placements: readonly Card[];
+  readonly planDescs: readonly Desc[];
+  readonly findPlayMs: number;
+  readonly applyMs: number;
+}
 
 export interface TurnResult {
   readonly playsMade: number;
@@ -102,6 +111,7 @@ export interface TurnResult {
   readonly hand: readonly Card[];
   readonly findPlayWallMsTotal: number;
   readonly applyWallMsTotal: number;
+  readonly plays: readonly PlayRecord[];
 }
 
 export function playTurn(
@@ -111,6 +121,7 @@ export function playTurn(
   let board = startBoard;
   let hand = startHand;
   const cardsPlayed: Card[] = [];
+  const plays: PlayRecord[] = [];
   let playsMade = 0;
   let findPlayWallMsTotal = 0;
   let applyWallMsTotal = 0;
@@ -118,34 +129,42 @@ export function playTurn(
   while (hand.length > 0) {
     const t0 = performance.now();
     const play = findPlay(hand, board);
-    findPlayWallMsTotal += performance.now() - t0;
+    const findPlayMs = performance.now() - t0;
+    findPlayWallMsTotal += findPlayMs;
     if (play === null) {
       return {
         playsMade, cardsPlayed, outcome: "stuck",
-        board, hand, findPlayWallMsTotal, applyWallMsTotal,
+        board, hand, findPlayWallMsTotal, applyWallMsTotal, plays,
       };
     }
 
     const t1 = performance.now();
     const next = applyHandPlay(board, hand, play);
-    applyWallMsTotal += performance.now() - t1;
+    const applyMs = performance.now() - t1;
+    applyWallMsTotal += applyMs;
     if (next === null) {
       // Engine couldn't replay a play it just produced; treat as stuck
       // (defensive — should not happen with current code).
       return {
         playsMade, cardsPlayed, outcome: "stuck",
-        board, hand, findPlayWallMsTotal, applyWallMsTotal,
+        board, hand, findPlayWallMsTotal, applyWallMsTotal, plays,
       };
     }
     board = next.board;
     hand = next.hand;
+    plays.push({
+      placements: [...play.placements],
+      planDescs: next.planDescs,
+      findPlayMs,
+      applyMs,
+    });
     for (const c of play.placements) cardsPlayed.push(c);
     playsMade++;
   }
 
   return {
     playsMade, cardsPlayed, outcome: "hand_empty",
-    board, hand, findPlayWallMsTotal, applyWallMsTotal,
+    board, hand, findPlayWallMsTotal, applyWallMsTotal, plays,
   };
 }
 
@@ -164,6 +183,7 @@ export interface GameTurnRecord {
   readonly deckRemaining: number;
   readonly turnWallMs: number;
   readonly findPlayWallMsTotal: number;
+  readonly plays: readonly PlayRecord[];
 }
 
 export interface GameResult {
@@ -226,6 +246,7 @@ export function playFullGame(
       deckRemaining: deck.length,
       turnWallMs,
       findPlayWallMsTotal: turn.findPlayWallMsTotal,
+      plays: turn.plays,
     });
 
     if (deck.length <= stopAtDeck) {

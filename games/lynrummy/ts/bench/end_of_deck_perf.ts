@@ -13,10 +13,13 @@
 // Usage:
 //   node bench/end_of_deck_perf.ts                # default: seeds 42,43,44
 //   node bench/end_of_deck_perf.ts 100 101        # custom seed list
+//   node bench/end_of_deck_perf.ts --trace 44     # markdown per-verb trace
+//                                                  for one seed
 
 import type { Card } from "../src/rules/card.ts";
-import { parseCardLabel } from "../src/rules/card.ts";
+import { parseCardLabel, cardLabel } from "../src/rules/card.ts";
 import { playFullGame, type GameResult } from "../src/agent_player.ts";
+import { describe, type Desc } from "../src/move.ts";
 
 const HAND_SIZE = 15;
 const STOP_AT_DECK = 10;
@@ -90,19 +93,20 @@ function reportGame(seed: number, result: GameResult): void {
   console.log(`final: hand=${result.finalHand.length}  board=${result.finalBoard.length} stacks (${totalCardsOnBoard(result.finalBoard)} cards)  deck=${result.finalDeckSize}  total_wall=${result.totalWallMs.toFixed(0)}ms`);
   console.log();
   console.log(
-    "turn  hand→  board→ stacks(cards)   plays  played  outcome      drew  find_play_ms  turn_ms",
+    "turn  hand start→played→drew→end   board→         plays  outcome      find_play_ms  turn_ms",
   );
   console.log("-".repeat(94));
   for (const t of result.turns) {
+    const handMid = t.handBefore - t.cardsPlayedThisTurn;
     const stacksStr = `${t.boardBefore}→${t.boardAfter}`;
-    const handStr = `${String(t.handBefore).padStart(2)}→${String(t.handAfter).padStart(2)}`;
+    const handStr = `${String(t.handBefore).padStart(2)}→${String(t.cardsPlayedThisTurn).padStart(2)}→${String(handMid).padStart(2)}+${String(t.cardsDrawn).padStart(1)}=${String(t.handAfter).padStart(2)}`;
     const outcomeStr = t.outcome.padEnd(11);
     console.log(
-      `${String(t.turnNum).padStart(3)}   ${handStr}    ${stacksStr.padStart(5)}            ${
+      `${String(t.turnNum).padStart(3)}   ${handStr}    ${stacksStr.padStart(5)}        ${
         String(t.playsMade).padStart(4)
-      }   ${String(t.cardsPlayedThisTurn).padStart(5)}   ${outcomeStr}  ${
-        String(t.cardsDrawn).padStart(2)
-      }    ${t.findPlayWallMsTotal.toFixed(0).padStart(8)}    ${
+      }   ${outcomeStr}    ${
+        t.findPlayWallMsTotal.toFixed(0).padStart(8)
+      }    ${
         t.turnWallMs.toFixed(0).padStart(5)
       }`,
     );
@@ -117,10 +121,65 @@ function reportGame(seed: number, result: GameResult): void {
   );
 }
 
+function verbName(d: Desc): string {
+  if (d.type === "extract_absorb") return d.verb;
+  return d.type;
+}
+
+function describeShort(d: Desc, max = 78): string {
+  const s = describe(d);
+  return s.length > max ? s.slice(0, max - 3) + "..." : s;
+}
+
+/** Emit a markdown per-verb trace for one game. One row per place /
+ *  plan-step verb; each play's findPlay wall is on the placement
+ *  row, plan-step continuations show "—". */
+function emitTrace(seed: number, result: GameResult): void {
+  const out: string[] = [];
+  out.push(`# Game trace — seed ${seed}, engine_v2 + liveness prune + maxPlanLength=4`);
+  out.push("");
+  out.push(`Total wall: ${result.totalWallMs.toFixed(0)} ms across ${result.turns.length} turns. Stopped: ${result.stoppedReason}.`);
+  out.push("");
+  out.push("## Per-turn summary");
+  out.push("");
+  out.push("| Turn | hand start | played | hand mid | drew | hand end | board→ | plays | outcome | find_play_ms | turn_ms |");
+  out.push("|----:|----:|----:|----:|----:|----:|:----:|----:|:----|----:|----:|");
+  for (const t of result.turns) {
+    const handMid = t.handBefore - t.cardsPlayedThisTurn;
+    const board = `${t.boardBefore}→${t.boardAfter}`;
+    out.push(
+      `| ${t.turnNum} | ${t.handBefore} | ${t.cardsPlayedThisTurn} | ${handMid} | ${t.cardsDrawn} | ${t.handAfter} | ${board} | ${t.playsMade} | ${t.outcome} | ${t.findPlayWallMsTotal.toFixed(0)} | ${t.turnWallMs.toFixed(0)} |`,
+    );
+  }
+  out.push("");
+  out.push("## Per-verb trace");
+  out.push("");
+  out.push("First row of each play shows the `find_play` wall; plan-step rows show `—`.");
+  out.push("");
+  out.push("| Turn | Play | find_ms | Verb | Description |");
+  out.push("|----:|----:|----:|:----|:----|");
+  for (const t of result.turns) {
+    let p = 0;
+    for (const play of t.plays) {
+      p++;
+      const placeLabel = play.placements.map(cardLabel).join(" ");
+      out.push(`| ${t.turnNum} | ${p} | ${play.findPlayMs.toFixed(0)} | \`place\` | ${placeLabel} from hand |`);
+      for (const d of play.planDescs) {
+        const desc = describeShort(d).replace(/\|/g, "\\|");
+        out.push(`| ${t.turnNum} | ${p} | — | \`${verbName(d)}\` | ${desc} |`);
+      }
+    }
+  }
+  process.stdout.write(out.join("\n") + "\n");
+}
+
 function main(): void {
-  const seedArgs = process.argv.slice(2);
-  const seeds = seedArgs.length > 0
-    ? seedArgs.map(s => parseInt(s, 10))
+  const args = process.argv.slice(2);
+  const traceIdx = args.indexOf("--trace");
+  const trace = traceIdx >= 0;
+  if (trace) args.splice(traceIdx, 1);
+  const seeds = args.length > 0
+    ? args.map(s => parseInt(s, 10))
     : [42, 43, 44];
 
   for (const seed of seeds) {
@@ -131,7 +190,8 @@ function main(): void {
     const board = makeOpeningBoard();
 
     const result = playFullGame(board, hand, deck, { stopAtDeck: STOP_AT_DECK });
-    reportGame(seed, result);
+    if (trace) emitTrace(seed, result);
+    else reportGame(seed, result);
   }
 }
 
