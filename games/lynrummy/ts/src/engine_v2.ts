@@ -14,6 +14,10 @@ import {
 import type { ClassifiedCardStack } from "./classified_card_stack.ts";
 import { type Desc, describe } from "./move.ts";
 import { enumerateMoves } from "./enumerator.ts";
+import {
+  allTroubleSingletonsLive,
+  anyTroubleSingletonNewlyDoomed,
+} from "./card_neighbors.ts";
 
 export interface PlanLine {
   readonly line: string;
@@ -155,10 +159,20 @@ export function solveTurn(
       continue;
     }
     const focus = cur.queue[0]!;
+    const parentCompleteCount = cur.buckets.complete.length;
     const candidates = enumerateForFocus(cur.buckets, focus, new Set<string>());
     for (const cand of candidates) {
       const newPlan = [...cur.plan, { line: describe(cand.desc), desc: cand.desc }];
       if (best !== null && newPlan.length >= best.length) continue;
+      // Dynamic doomed-singleton prune: a child state where a group
+      // just graduated may have left a trouble singleton stranded
+      // (its last partner sealed into COMPLETE). Gate on
+      // complete-count growth — that's the only way a partner can
+      // transition out of the accessible pool mid-search.
+      if (cand.afterBuckets.complete.length > parentCompleteCount
+          && anyTroubleSingletonNewlyDoomed(cand.afterBuckets)) {
+        continue;
+      }
       const newQueue = computeQueueAfter(cur.queue, focus, cand, cand.afterBuckets);
       const score = newPlan.length + h(cand.afterBuckets);
       pq.push({ buckets: cand.afterBuckets, queue: newQueue, plan: newPlan, score });
@@ -215,6 +229,14 @@ export function solveStateWithDescs(
   }
   if (isVictory(classified.trouble, classified.growing)) {
     return [];
+  }
+  // Pre-flight: short-circuit if any trouble singleton has no
+  // accessible partner pair anywhere in helper ∪ trouble ∪ growing.
+  // Such a state is provably unwinnable; A* can't prove it cheaply on
+  // its own. Backed by card_neighbors.NEIGHBORS (constant-time per
+  // singleton; only fires when trouble has at least one singleton).
+  if (!allTroubleSingletonsLive(classified)) {
+    return null;
   }
 
   return solveTurn(classified, {
