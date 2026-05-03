@@ -144,8 +144,8 @@ adding code).**
   convention here, not a style violation.)
 - **No DB or HTTP in test paths.** Conformance tests
   read `conformance_fixtures.json` (committed); tools
-  that need the DB (`tools/export_primitives_fixtures.py`,
-  `tools/mine_puzzles.py`) fail loud when the DB is empty.
+  that need the DB (e.g. `tools/mine_puzzles.py`) fail
+  loud when the DB is empty.
 
 **Step 6: Validation methodology.** For any change touching the
 BFS solver (planner modules + adjacent layers), open

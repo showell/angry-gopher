@@ -47,7 +47,7 @@ execution / render layering:
   `src/Main/Wire.elm` (wire deliveries + the
   action-log-entry decoder), and `src/Main/Msg.elm` (the
   unified Msg type).
-- **Integration.** `src/Game/Referee.elm` (Elm's own
+- **Integration.** `src/Game/Rules/Referee.elm` (Elm's own
   referee — does NOT rely on the Go referee).
 - **Execution.** `src/Main/Apply.elm` (applyAction),
   `src/Game/Reducer.elm` (the pure action-log
@@ -55,7 +55,7 @@ execution / render layering:
 - **Render.** `src/Main/View.elm` (top-level composition
   + pinned layout), `src/Game/View.elm` (rendering
   primitives), `src/Game/HandLayout.elm` and
-  `src/Game/BoardGeometry.elm` (frame constants).
+  `src/Game/Physics/BoardGeometry.elm` (frame constants).
 
 ## Domain modules
 
