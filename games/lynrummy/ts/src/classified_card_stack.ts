@@ -444,14 +444,28 @@ export function canYank(stack: ClassifiedCardStack, i: number): boolean {
   return Math.max(leftLen, rightLen) >= 3 && Math.min(leftLen, rightLen) >= 1;
 }
 
-/** Steal: only on length-3 stacks. End positions for run/rb; any
- *  position for set. */
+/** Steal: extract a card from a short stack.
+ *
+ *  Length-3 sources: end positions for run/rb; any position for set.
+ *  Length-2 sources (pair_run/pair_rb/pair_set): either position —
+ *  the residual is a singleton, which is always a legal kind.
+ *
+ *  Length-2 stealing matches the human "AS is a resource" intuition
+ *  from a kitchen-table game: cards trapped in a partial are still
+ *  donor-eligible; pulling one out leaves the other as a singleton. */
 export function canSteal(stack: ClassifiedCardStack, i: number): boolean {
-  if (stack.n !== 3) return false;
-  if (stack.kind === KIND_RUN || stack.kind === KIND_RB) {
-    return i === 0 || i === 2;
+  if (stack.n === 3) {
+    if (stack.kind === KIND_RUN || stack.kind === KIND_RB) {
+      return i === 0 || i === 2;
+    }
+    return stack.kind === KIND_SET;
   }
-  return stack.kind === KIND_SET;
+  if (stack.n === 2) {
+    return stack.kind === KIND_PAIR_RUN
+      || stack.kind === KIND_PAIR_RB
+      || stack.kind === KIND_PAIR_SET;
+  }
+  return false;
 }
 
 /** Split-out: extract the middle card of a length-3 run/rb. Both halves
@@ -553,6 +567,11 @@ export function steal(
     throw new Error(`canSteal(${stack.kind} len=${stack.n}, ${i}) is False`);
   }
   const extracted = singletonStack(stack.cards[i]!);
+  // Length-2 source: residual is the other card as a singleton.
+  if (stack.n === 2) {
+    const otherIdx = i === 0 ? 1 : 0;
+    return [extracted, singletonStack(stack.cards[otherIdx]!)];
+  }
   if (stack.kind === KIND_SET) {
     const others: ClassifiedCardStack[] = [];
     for (let j = 0; j < stack.cards.length; j++) {

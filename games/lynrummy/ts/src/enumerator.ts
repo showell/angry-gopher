@@ -29,9 +29,11 @@ import {
   type FocusedState,
   type Lineage,
   type BucketName,
+  pairKey,
 } from "./buckets.ts";
 import {
   type Desc,
+  type DecomposeDesc,
   type ExtractAbsorbDesc,
   type FreePullDesc,
   type PushDesc,
@@ -225,8 +227,11 @@ function extractPieces(
   }
   if (verb === "steal") {
     const pieces = steal(source, ci);
-    // For sets: rest is N-1 singletons. For run/rb: rest is one length-2 partial.
-    return [[], pieces.slice(1)];
+    // For sets: rest is N-1 singletons. For run/rb: rest is one
+    // length-2 partial. Either way, return the spawned pieces as-is —
+    // they're orphan-shape but the BFS can either extend them or
+    // decompose them later.
+    return [[], pieces.slice(1) as ClassifiedCardStack[]];
   }
   throw new Error(`unknown verb ${verb}`);
 }
@@ -405,6 +410,9 @@ export function* enumerateMoves(state: Buckets): Generator<MoveYield> {
   if (stateHasDoomedGrowing(growing, completionInv)) {
     return;
   }
+  if (stateHasDoomedSingleton(trouble, completionInv)) {
+    return;
+  }
 
   const extractable = extractableIndex(helper);
   const spliceHelpers = eligibleSpliceHelpers(helper);
@@ -417,6 +425,8 @@ export function* enumerateMoves(state: Buckets): Generator<MoveYield> {
       extractable, completionInv);
     yield* yieldFreePulls(
       absorber, helper, trouble, growing, complete, completionInv);
+    yield* yieldPartialSteals(
+      absorber, helper, trouble, growing, complete, completionInv);
   }
 
   yield* yieldShifts(
@@ -425,6 +435,7 @@ export function* enumerateMoves(state: Buckets): Generator<MoveYield> {
   yield* yieldSplices(helper, trouble, growing, complete, spliceHelpers);
   yield* yieldPushes(helper, trouble, growing, complete);
   yield* yieldEngulfs(helper, trouble, growing, complete);
+  yield* yieldDecomposes(helper, trouble, growing, complete);
 }
 
 function stateHasDoomedGrowing(
@@ -439,6 +450,139 @@ function stateHasDoomedGrowing(
         if (completionInv.has(s)) { alive = true; break; }
       }
       if (!alive) return true;
+    }
+  }
+  return false;
+}
+
+// --- Singleton doom check (variations A and B) ---------------------------
+//
+// SINGLETON_DOOM_MODE controls whether trouble singletons are scanned for
+// futility on state entry:
+//   "off"  — no check (legacy behavior).
+//   "low"  — variation A: a singleton is doomed iff NO partner shape (any
+//            pair-formable card) is present in the donor pool.
+//   "high" — variation B: a singleton is doomed iff for EVERY partner in
+//            the donor pool, the resulting (singleton, partner) pair has
+//            no live length-3 extender in the donor pool.
+export type SingletonDoomMode = "off" | "low" | "high";
+export let SINGLETON_DOOM_MODE: SingletonDoomMode = "off";
+
+export function setSingletonDoomMode(m: SingletonDoomMode): void {
+  SINGLETON_DOOM_MODE = m;
+}
+
+/** Return shape ids (value*4 + suit) of all cards that would pair with
+ *  `c` in some legal kind (pair_run, pair_rb, pair_set). Deck-agnostic. */
+function singletonPartnerShapes(c: Card): number[] {
+  const v = c[0], s = c[1];
+  const predV = v === 1 ? 13 : v - 1;
+  const succV = v === 13 ? 1 : v + 1;
+  const cRed = RED.has(s);
+  const out: number[] = [];
+  // pair_run partners (same suit, consecutive value).
+  out.push(predV * 4 + s);
+  out.push(succV * 4 + s);
+  // pair_rb partners (opposite color, consecutive value).
+  for (let s2 = 0; s2 < 4; s2++) {
+    if (s2 === s) continue;
+    if (RED.has(s2) === cRed) continue;
+    out.push(predV * 4 + s2);
+    out.push(succV * 4 + s2);
+  }
+  // pair_set partners (same value, distinct suit).
+  for (let s2 = 0; s2 < 4; s2++) {
+    if (s2 === s) continue;
+    out.push(v * 4 + s2);
+  }
+  return out;
+}
+
+/** Compute the completion shape ids for a hypothetical pair formed by
+ *  the singleton `c` plus a partner whose shape id is `partnerShape`.
+ *  Mirrors `completionShapes` for length-2 stacks but operates on
+ *  shape-ids without materializing the pair. */
+function completionShapesForHypotheticalPair(
+  c: Card,
+  partnerShape: number,
+): Set<number> {
+  const cv = c[0], cs = c[1];
+  const pv = Math.floor(partnerShape / 4);
+  const ps = partnerShape % 4;
+  const out = new Set<number>();
+  if (cv === pv) {
+    // pair_set: missing-suit thirds at this value.
+    for (let s = 0; s < 4; s++) {
+      if (s !== cs && s !== ps) out.add(cv * 4 + s);
+    }
+    return out;
+  }
+  // run partial: which is "low" vs "high"?
+  const lowV = cv < pv ? cv : pv;
+  const highV = cv < pv ? pv : cv;
+  const lowS = cv < pv ? cs : ps;
+  const highS = cv < pv ? ps : cs;
+  // Determine kind: same suit (pair_run) or opposite color (pair_rb).
+  if (cs === ps) {
+    // pair_run: same-suit extensions on either end.
+    const predV = lowV === 1 ? 13 : lowV - 1;
+    const succV = highV === 13 ? 1 : highV + 1;
+    out.add(predV * 4 + lowS);
+    out.add(succV * 4 + highS);
+    return out;
+  }
+  // pair_rb: opposite-color extensions on either end.
+  const predV = lowV === 1 ? 13 : lowV - 1;
+  const succV = highV === 13 ? 1 : highV + 1;
+  const lowRed = RED.has(lowS);
+  const highRed = RED.has(highS);
+  for (let s = 0; s < 4; s++) {
+    if (RED.has(s) !== lowRed) out.add(predV * 4 + s);
+    if (RED.has(s) !== highRed) out.add(succV * 4 + s);
+  }
+  return out;
+}
+
+/** Variation A — return true iff `c` has NO partner anywhere in the
+ *  donor pool (cheap; just a partner-shape lookup). */
+function singletonHasNoPartner(c: Card, completionInv: Set<number>): boolean {
+  const partners = singletonPartnerShapes(c);
+  for (const p of partners) {
+    if (completionInv.has(p)) return false;
+  }
+  return true;
+}
+
+/** Variation B — return true iff `c` has at least one partner in the
+ *  donor pool BUT every (c, partner) pair is itself doomed (no live
+ *  length-3 extender). */
+function singletonAllPairsDoomed(c: Card, completionInv: Set<number>): boolean {
+  const partners = singletonPartnerShapes(c);
+  let foundAnyPartner = false;
+  for (const p of partners) {
+    if (!completionInv.has(p)) continue;
+    foundAnyPartner = true;
+    const extenders = completionShapesForHypotheticalPair(c, p);
+    for (const e of extenders) {
+      if (completionInv.has(e)) return false; // alive
+    }
+  }
+  // If no partner at all, fall back to variation A's verdict (doomed).
+  return foundAnyPartner ? true : true;
+}
+
+function stateHasDoomedSingleton(
+  trouble: readonly ClassifiedCardStack[],
+  completionInv: Set<number>,
+): boolean {
+  if (SINGLETON_DOOM_MODE === "off") return false;
+  for (const stack of trouble) {
+    if (stack.n !== 1) continue;
+    const c = stack.cards[0]!;
+    if (SINGLETON_DOOM_MODE === "low") {
+      if (singletonHasNoPartner(c, completionInv)) return true;
+    } else if (SINGLETON_DOOM_MODE === "high") {
+      if (singletonAllPairsDoomed(c, completionInv)) return true;
     }
   }
   return false;
@@ -561,6 +705,101 @@ function* yieldExtractAbsorbs(
           };
           yield [desc, { helper: newHelper, trouble: nt, growing: ngFinal, complete: nc }];
         }
+      }
+    }
+  }
+}
+
+// --- Move type (a''): steal from a TROUBLE pair onto an absorber --------
+//
+// "Steal AS from [AS 2S] onto [AC' AD]" — single-motion in the kitchen-
+// table sense. Source is a length-2 partial in trouble; one card is
+// extracted and absorbed onto the focal partial; the other becomes a
+// fresh singleton in trouble.
+
+function* yieldPartialSteals(
+  absorber: AbsorberShape,
+  helper: readonly ClassifiedCardStack[],
+  trouble: readonly ClassifiedCardStack[],
+  growing: readonly ClassifiedCardStack[],
+  complete: readonly ClassifiedCardStack[],
+  completionInv: Set<number>,
+): Generator<MoveYield> {
+  const { bucket, idx, target, leftExt, rightExt, setExt } = absorber;
+  const targetCardsList = [...target.cards];
+
+  for (let pi = 0; pi < trouble.length; pi++) {
+    const partial = trouble[pi]!;
+    if (partial.n !== 2) continue;
+    // Skip self.
+    if (bucket === "trouble" && idx === pi) continue;
+
+    for (let ci = 0; ci < 2; ci++) {
+      const extCard = partial.cards[ci]!;
+      const otherCard = partial.cards[1 - ci]!;
+      const leftover: ClassifiedCardStack = {
+        cards: [otherCard], kind: "singleton", n: 1,
+      };
+      const shape = extCard[0] * 4 + extCard[1];
+
+      const rightKind = rightExt.get(shape) ?? null;
+      const leftKind = leftExt.get(shape) ?? null;
+      const setKind = setExt.get(shape) ?? null;
+      if (rightKind === null && leftKind === null && setKind === null) continue;
+
+      // Build the new trouble bucket: drop the absorber (if in trouble)
+      // AND drop the source partial AND add the leftover singleton.
+      const baseTrouble: ClassifiedCardStack[] = [];
+      let droppedAbsorber = false;
+      let droppedSource = false;
+      for (let k = 0; k < trouble.length; k++) {
+        if (bucket === "trouble" && idx === k) { droppedAbsorber = true; continue; }
+        if (k === pi) { droppedSource = true; continue; }
+        baseTrouble.push(trouble[k]!);
+      }
+      void droppedAbsorber; void droppedSource;
+      baseTrouble.push(leftover);
+
+      const ng: ClassifiedCardStack[] = bucket === "growing"
+        ? trouble.length === 0 ? [...growing.slice(0, idx), ...growing.slice(idx + 1)]
+            : [...growing.slice(0, idx), ...growing.slice(idx + 1)]
+        : [...growing];
+
+      const yieldMerge = (merged: ClassifiedCardStack, side: "left" | "right") => {
+        if (!admissibleMerged(merged, completionInv)) return;
+        const [ngFinal, nc, graduated] = graduate(merged, ng, complete);
+        const desc: ExtractAbsorbDesc = {
+          type: "extract_absorb",
+          verb: "steal",
+          source: [...partial.cards],
+          extCard,
+          targetBefore: targetCardsList,
+          targetBucketBefore: bucket,
+          result: [...merged.cards],
+          side,
+          graduated,
+          spawned: [[otherCard]],
+        };
+        return [desc, { helper: [...helper], trouble: baseTrouble, growing: ngFinal, complete: nc }] as const;
+      };
+
+      if (rightKind !== null) {
+        const m = absorbRight(target, extCard, rightKind);
+        const result = yieldMerge(m, "right");
+        if (result) yield result;
+      }
+      if (leftKind !== null) {
+        const m = absorbLeft(target, extCard, leftKind);
+        const result = yieldMerge(m, "left");
+        if (result) yield result;
+      }
+      if (setKind !== null) {
+        const mR = absorbRight(target, extCard, setKind);
+        const r1 = yieldMerge(mR, "right");
+        if (r1) yield r1;
+        const mL = absorbLeft(target, extCard, setKind);
+        const r2 = yieldMerge(mL, "left");
+        if (r2) yield r2;
       }
     }
   }
@@ -1019,6 +1258,40 @@ function* yieldEngulfs(
   }
 }
 
+// --- Decompose: split a TROUBLE pair back into its singletons ------------
+//
+// The bundling that pair-spawning moves (steal/yank/split/etc.) produce
+// isn't a real game commitment. Sometimes the right play separates the
+// cards. This move expresses that. See `random233.md` for the discovery.
+//
+// We only decompose pairs in TROUBLE (not GROWING). A GROWING pair is
+// under active extension via lineage; decomposing it would discard the
+// in-progress work. A TROUBLE pair has no such lineage commitment.
+
+function* yieldDecomposes(
+  helper: readonly ClassifiedCardStack[],
+  trouble: readonly ClassifiedCardStack[],
+  growing: readonly ClassifiedCardStack[],
+  complete: readonly ClassifiedCardStack[],
+): Generator<MoveYield> {
+  for (let ti = 0; ti < trouble.length; ti++) {
+    const t = trouble[ti]!;
+    if (t.n !== 2) continue;
+    const left = t.cards[0]!;
+    const right = t.cards[1]!;
+    const leftSingle: ClassifiedCardStack = { cards: [left], kind: "singleton", n: 1 };
+    const rightSingle: ClassifiedCardStack = { cards: [right], kind: "singleton", n: 1 };
+    const newTrouble = [...trouble.slice(0, ti), ...trouble.slice(ti + 1), leftSingle, rightSingle];
+    const desc: DecomposeDesc = {
+      type: "decompose",
+      pairBefore: [...t.cards],
+      leftCard: left,
+      rightCard: right,
+    };
+    yield [desc, { helper: [...helper], trouble: newTrouble, growing: [...growing], complete: [...complete] }];
+  }
+}
+
 // --- Focus rule + lineage tracking ---------------------------------------
 
 /** True iff this move grows or consumes the focus stack (identified by
@@ -1036,6 +1309,12 @@ function moveTouchesFocus(desc: Desc, focus: readonly Card[]): boolean {
   }
   if (desc.type === "push") {
     return cardsEqual(desc.troubleBefore, focus);
+  }
+  if (desc.type === "decompose") {
+    // Decompose bypasses focus: it's the only move that frees a
+    // non-focus commitment. Without this exception the BFS can never
+    // separate a TROUBLE pair while working on a different focus.
+    return true;
   }
   return false;
 }
@@ -1094,6 +1373,18 @@ function updateLineage(lineage: Lineage, desc: Desc): Lineage {
       }
     }
     return rest;
+  }
+
+  if (desc.type === "decompose") {
+    // Decompose can fire on any TROUBLE pair (not necessarily focus).
+    // Find the pair in lineage; remove it; append the two singletons
+    // at the end. If decompose was on focus, focus rotates to lineage[1].
+    const fullLineage: (readonly Card[])[] = lineage.map(s => [...s]);
+    const idx = fullLineage.findIndex(e => cardsEqual(e, desc.pairBefore));
+    if (idx >= 0) fullLineage.splice(idx, 1);
+    const left: readonly Card[] = [desc.leftCard];
+    const right: readonly Card[] = [desc.rightCard];
+    return [...fullLineage, left, right];
   }
 
   // splice / push: focus consumed, return rest.

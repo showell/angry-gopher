@@ -39,10 +39,23 @@ export interface RawBuckets {
  *  cards). Content-based identity for memoization. */
 export type Lineage = readonly (readonly Card[])[];
 
-/** BFS state with attached focus queue. Mirrors python's FocusedState. */
+/** BFS state with attached focus queue. Mirrors python's FocusedState.
+ *  `uncommittedPairs` is the set of pair-keys (sorted, joined card
+ *  encodings) for pairs that were SPAWNED from helper extracts —
+ *  i.e., pairs that aren't real commitments and may legally be
+ *  decomposed. Pairs formed by absorb-onto-partial are commitments
+ *  and not in this set. */
 export interface FocusedState {
   readonly buckets: Buckets;
   readonly lineage: Lineage;
+  readonly uncommittedPairs?: ReadonlySet<string>;
+}
+
+/** Build a canonical pair-key from two cards (order-insensitive). */
+export function pairKey(a: Card, b: Card): string {
+  const ka = ((a[0] * 4) + a[1]) * 2 + a[2];
+  const kb = ((b[0] * 4) + b[1]) * 2 + b[2];
+  return ka < kb ? `${ka},${kb}` : `${kb},${ka}`;
 }
 
 // --- State signature -------------------------------------------------------
@@ -128,14 +141,126 @@ function encodeLineage(lineage: Lineage): string {
  * `lineage` defaults to no lineage; pass it in to fold lineage identity
  * into the same key (matching python's `(state_sig(*b), lineage)`).
  */
-export function stateSig(b: Buckets, lineage?: Lineage): string {
+/** Build a position-of-cardId map from a full game's initial state.
+ *  Iterates all buckets, collects card-ids in encounter order, and
+ *  returns the inverse: posOf[cardId] = position 0..N-1.
+ *  Use ONCE per game; pass to fastStateSig on every call. */
+export function buildCardOrder(initial: Buckets): {
+  cardOrder: readonly number[];
+  posOf: Uint8Array;
+} {
+  const cardId = (c: Card): number => (c[0] - 1) * 8 + c[1] * 2 + c[2];
+  const cardOrder: number[] = [];
+  const seen = new Set<number>();
+  const collect = (stacks: readonly ClassifiedCardStack[]): void => {
+    for (const stack of stacks) for (const c of stack.cards) {
+      const id = cardId(c);
+      if (!seen.has(id)) { seen.add(id); cardOrder.push(id); }
+    }
+  };
+  collect(initial.helper);
+  collect(initial.trouble);
+  collect(initial.growing);
+  collect(initial.complete);
+  // posOf indexed by 0..103 (full card-id space); 255 for not-in-game.
+  const posOf = new Uint8Array(104);
+  posOf.fill(255);
+  for (let i = 0; i < cardOrder.length; i++) {
+    posOf[cardOrder[i]!] = i;
+  }
+  return { cardOrder, posOf };
+}
+
+/** Fast state-sig: per-position byte-array encoding. The buffer has
+ *  length = N (cards-in-play, typically 50-80) — much smaller than the
+ *  full 208-byte fixed array. Each byte encodes:
+ *    Top 2 bits: bucket_id (0=helper, 1=trouble, 2=growing, 3=complete)
+ *    Bottom 7 bits: right-neighbor position (0..N-1) or 127 = end-of-stack
+ *  (N ≤ 104 so 7 bits suffice; bucket fits in 2.)
+ *
+ *  Two states with the same per-position (bucket, right_neighbor) ARE
+ *  the same set of stacks per bucket — no need to sort.
+ *  Lineage head positions appended after a 0xFF separator. */
+export function fastStateSig(
+  b: Buckets,
+  lineage: Lineage | undefined,
+  posOf: Uint8Array,
+  N: number,
+): string {
+  const buf = new Uint8Array(N);
+  // Default 0 doesn't naturally distinguish "not present" — but every
+  // card has a position so EVERY byte gets written by writeBucket.
+  // (If a card moved to COMPLETE it's still "in the game" and gets
+  // bucket=3.)
+  const cardId = (c: Card): number => (c[0] - 1) * 8 + c[1] * 2 + c[2];
+  const writeBucket = (
+    stacks: readonly ClassifiedCardStack[],
+    bucketId: number,
+  ): void => {
+    for (const stack of stacks) {
+      // Canonicalize within-stack order: sort card positions ascending.
+      const positions: number[] = [];
+      for (const c of stack.cards) positions.push(posOf[cardId(c)]!);
+      positions.sort((a, b) => a - b);
+      for (let i = 0; i < positions.length; i++) {
+        const pos = positions[i]!;
+        const right = i + 1 < positions.length ? positions[i + 1]! : 127;
+        buf[pos] = (bucketId << 7) | right;  // 1 bit bucket | 7 bits right
+        // (bucketId is 0..3, but we only have 1 free bit after 7-bit
+        // right-neighbor. Use 2 bytes per card if we need 4 buckets.)
+      }
+    }
+  };
+  // 4 buckets need 2 bits, but we squeezed only 1 here. Use 2 bytes/card:
+  const buf2 = new Uint8Array(2 * N);
+  const writeBucket2 = (
+    stacks: readonly ClassifiedCardStack[],
+    bucketId: number,
+  ): void => {
+    for (const stack of stacks) {
+      const positions: number[] = [];
+      for (const c of stack.cards) positions.push(posOf[cardId(c)]!);
+      positions.sort((a, b) => a - b);
+      for (let i = 0; i < positions.length; i++) {
+        const pos = positions[i]!;
+        buf2[2 * pos] = bucketId;
+        buf2[2 * pos + 1] = i + 1 < positions.length ? positions[i + 1]! : 255;
+      }
+    }
+  };
+  writeBucket2(b.helper, 0);
+  writeBucket2(b.trouble, 1);
+  writeBucket2(b.growing, 2);
+  writeBucket2(b.complete, 3);
+
+  let result = String.fromCharCode.apply(null, buf2 as unknown as number[]);
+
+  if (lineage !== undefined && lineage.length > 0) {
+    const lbuf = new Uint8Array(lineage.length);
+    for (let i = 0; i < lineage.length; i++) {
+      lbuf[i] = posOf[cardId(lineage[i]![0]!)]!;
+    }
+    result += "@" + String.fromCharCode.apply(null, lbuf as unknown as number[]);
+  }
+  return result;
+  void buf; void writeBucket;  // silence unused
+}
+
+export function stateSig(
+  b: Buckets,
+  lineage?: Lineage,
+  uncommittedPairs?: ReadonlySet<string>,
+): string {
   const h = encodeBucket(b.helper);
   const t = encodeBucket(b.trouble);
   const g = encodeBucket(b.growing);
   const c = encodeBucket(b.complete);
   const base = `${h}|${t}|${g}|${c}`;
-  if (lineage === undefined) return base;
-  return `${base}@${encodeLineage(lineage)}`;
+  let withLineage = base;
+  if (lineage !== undefined) withLineage = `${base}@${encodeLineage(lineage)}`;
+  if (uncommittedPairs === undefined || uncommittedPairs.size === 0) return withLineage;
+  const sortedKeys = [...uncommittedPairs].sort();
+  return `${withLineage}#${sortedKeys.join(",")}`;
 }
 
 // --- Bucket-level operations ----------------------------------------------

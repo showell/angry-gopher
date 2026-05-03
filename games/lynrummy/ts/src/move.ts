@@ -86,13 +86,25 @@ export interface ShiftDesc {
   readonly graduated: boolean;
 }
 
+/** Decompose: split a TROUBLE pair (pair_run / pair_rb / pair_set)
+ *  back into two singletons. The bundling that pair-spawning moves
+ *  produce isn't a real game commitment — sometimes the right play
+ *  separates the cards. See `random233.md`. */
+export interface DecomposeDesc {
+  readonly type: "decompose";
+  readonly pairBefore: readonly Card[];   // 2-card pair being split
+  readonly leftCard: Card;
+  readonly rightCard: Card;
+}
+
 /** Discriminated union over all move descriptors. */
 export type Desc =
   | ExtractAbsorbDesc
   | FreePullDesc
   | PushDesc
   | SpliceDesc
-  | ShiftDesc;
+  | ShiftDesc
+  | DecomposeDesc;
 
 // --- Plan-line rendering ---------------------------------------------------
 //
@@ -170,6 +182,10 @@ export function describe(desc: Desc): string {
       return `push TROUBLE [${stackLabel(desc.troubleBefore)}] onto HELPER `
         + `[${stackLabel(desc.targetBefore)}] → `
         + `[${stackLabel(desc.result)}]`;
+    }
+    case "decompose": {
+      return `decompose TROUBLE [${stackLabel(desc.pairBefore)}] → `
+        + `[${cardLabel(desc.leftCard)}] + [${cardLabel(desc.rightCard)}]`;
     }
   }
 }
@@ -287,6 +303,8 @@ export function narrate(desc: Desc): string {
         + `[${stackLabel(desc.targetBefore)}] → `
         + `[${stackLabel(desc.result)}]`;
     }
+    case "decompose":
+      return `decompose [${stackLabel(desc.pairBefore)}] into singletons`;
   }
 }
 
@@ -311,5 +329,7 @@ export function hint(desc: Desc): string | null {
         return `You can complete a run by absorbing [${stackLabel(desc.troubleBefore)}].`;
       }
       return `You can tuck [${stackLabel(desc.troubleBefore)}] back into a run.`;
+    case "decompose":
+      return `You can split the [${stackLabel(desc.pairBefore)}] pair apart.`;
   }
 }
