@@ -151,13 +151,6 @@ host, side-by-side agent-vs-human viewer, etc.), import
 Game.Replay follows the same shape (extracted earlier via
 REFACTOR_ELM_REPLAY).
 
-## Port history
-
-[`PORTING_NOTES.md`](./PORTING_NOTES.md) and
-[`TS_TO_ELM.md`](./TS_TO_ELM.md) are historical records of
-the TS → Elm port. Process reflections, mapping references.
-Not current-work references.
-
 ## Agent-library port — on life-support
 
 `src/Game/Agent/` is an Elm port of the Python BFS planner. It

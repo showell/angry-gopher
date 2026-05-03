@@ -160,11 +160,30 @@ that's the signal that this orientation list needs
 sharpening.
 
 **Self-test.** If you want to verify you can find your way
-around before editing anything real, see
-[`QUIZ_AGENT_ORIENTATION.md`](QUIZ_AGENT_ORIENTATION.md)
-— a one-task exercise (produce a valid game state using
-only the public API above) with an automated verifier.
-Run it once and you'll know the orientation stuck.
+around before editing anything real, do this one-task exercise:
+
+> Produce a JSON file at `/tmp/quiz_lynrummy_game.json`
+> containing a fresh, randomly shuffled Lyn Rummy game state
+> — exactly the shape the server accepts as `initial_state`
+> on `/new-session`. Use 2 players, 15-card hands. Use the
+> existing public API (don't reimplement shuffling, card
+> construction, or board assembly). The output must be a
+> single JSON object containing the full game state (board +
+> hands + deck + discard + active player). No DB calls, no
+> HTTP. Pure Python.
+>
+> Then verify with:
+>
+>     python3 games/lynrummy/python/quiz_verify.py /tmp/quiz_lynrummy_game.json
+>
+> Exits 0 on pass, 1 on failure with diagnostics. The verifier
+> checks structural invariants (104 distinct cards, hand sizes,
+> opening board shape) — it does NOT compare to a fixed seed,
+> so any valid shuffle passes.
+
+If you find yourself rebuilding a deck or computing card values
+from scratch, you missed the orientation — back up and re-read
+the "Public surface" section above.
 
 ## Class-1/2 segregation — Elm precedent, Python parallel landed
 

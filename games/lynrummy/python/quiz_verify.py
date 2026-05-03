@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """quiz_verify — structural check for the agent-orientation quiz.
 
-Verifies that a JSON game produced per QUIZ_AGENT_ORIENTATION.md
-is a well-formed Lyn Rummy initial_state. Does NOT pin to a seed —
-any valid shuffle passes.
+Verifies that a JSON game produced per the self-test exercise in
+games/lynrummy/python/README.md § "Self-test" is a well-formed
+Lyn Rummy initial_state. Does NOT pin to a seed — any valid
+shuffle passes.
 
 Usage: python3 quiz_verify.py /tmp/quiz_lynrummy_game.json
 

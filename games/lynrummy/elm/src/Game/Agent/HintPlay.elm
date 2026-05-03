@@ -13,8 +13,9 @@ Search order (mirrors `agent_prelude.find_play` in Python):
       trouble onto the board, run BFS, collect all candidates that
       yield a plan, return the one with the fewest steps.
 
-Pair-via-BFS (step b in the Python version) is not yet ported;
-see `Game/Strategy/ELM_HINTS.md` for the full integration roadmap.
+Pair-via-BFS (step b in the Python version) is not yet ported.
+The Elm BFS is now on life-support — the canonical browser engine
+going forward is the TypeScript port at `games/lynrummy/ts/`.
 
 -}
 

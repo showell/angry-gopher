@@ -630,8 +630,7 @@ cross-language consistency checks the scripts encode.
   — Python agent subsystem. **If you're about to edit Python,
   read § "Agent orientation" first** — it's a 6-step checklist
   (baseline green → plan state → layering → corpus → ergonomics →
-  validation). There's also a self-test quiz:
-  [`QUIZ_AGENT_ORIENTATION.md`](./python/QUIZ_AGENT_ORIENTATION.md).
+  validation), with a self-test exercise inline.
   For solver-specific work, see also [`./python/SOLVER.md`](./python/SOLVER.md).
 - [`./ts/README.md`](./ts/README.md) — TypeScript BFS engine
   subsystem. Sibling to Python's solver; the going-forward
