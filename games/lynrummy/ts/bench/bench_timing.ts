@@ -29,7 +29,7 @@
 //    represent contention or transient system state, not the solver
 //    itself.
 
-import { solveStateWithDescs, type PlanLine } from "../src/bfs.ts";
+import { solveStateWithDescs, type PlanLine } from "../src/engine_v2.ts";
 import {
   classifyBuckets,
   type Buckets,

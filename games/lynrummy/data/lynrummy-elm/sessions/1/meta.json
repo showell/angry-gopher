@@ -1,6 +1,6 @@
 {
-  "created_at": 1777838456,
-  "label": "agent self-play (seed=44)",
+  "created_at": 1777846002,
+  "label": "agent self-play (seed=100)",
   "initial_state": {
     "board": [
       {
@@ -242,62 +242,78 @@
           {
             "card": {
               "value": 13,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 5,
+              "suit": 2,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 5,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 10,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 11,
+              "suit": 3,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 8,
               "suit": 0,
               "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 11,
+              "suit": 3,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 3,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 3,
+              "origin_deck": 1
             },
             "state": 0
           },
           {
             "card": {
               "value": 13,
-              "suit": 3,
-              "origin_deck": 0
-            },
-            "state": 0
-          },
-          {
-            "card": {
-              "value": 9,
-              "suit": 2,
-              "origin_deck": 0
-            },
-            "state": 0
-          },
-          {
-            "card": {
-              "value": 5,
-              "suit": 1,
-              "origin_deck": 0
-            },
-            "state": 0
-          },
-          {
-            "card": {
-              "value": 8,
-              "suit": 2,
-              "origin_deck": 0
-            },
-            "state": 0
-          },
-          {
-            "card": {
-              "value": 8,
-              "suit": 2,
-              "origin_deck": 1
-            },
-            "state": 0
-          },
-          {
-            "card": {
-              "value": 8,
-              "suit": 0,
-              "origin_deck": 0
-            },
-            "state": 0
-          },
-          {
-            "card": {
-              "value": 3,
               "suit": 1,
               "origin_deck": 1
             },
@@ -305,8 +321,8 @@
           },
           {
             "card": {
-              "value": 9,
-              "suit": 3,
+              "value": 2,
+              "suit": 1,
               "origin_deck": 1
             },
             "state": 0
@@ -321,7 +337,35 @@
           },
           {
             "card": {
-              "value": 7,
+              "value": 8,
+              "suit": 0,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 13,
+              "suit": 2,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 1,
+              "suit": 2,
+              "origin_deck": 1
+            },
+            "state": 0
+          }
+        ]
+      },
+      {
+        "hand_cards": [
+          {
+            "card": {
+              "value": 2,
               "suit": 3,
               "origin_deck": 1
             },
@@ -329,9 +373,9 @@
           },
           {
             "card": {
-              "value": 3,
-              "suit": 0,
-              "origin_deck": 0
+              "value": 12,
+              "suit": 2,
+              "origin_deck": 1
             },
             "state": 0
           },
@@ -339,13 +383,93 @@
             "card": {
               "value": 6,
               "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 9,
+              "suit": 2,
               "origin_deck": 1
             },
             "state": 0
           },
           {
             "card": {
-              "value": 11,
+              "value": 7,
+              "suit": 2,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 13,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 5,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 9,
+              "suit": 1,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
+              "suit": 0,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 12,
+              "suit": 0,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 10,
+              "suit": 3,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 12,
+              "suit": 2,
+              "origin_deck": 0
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 8,
+              "suit": 3,
+              "origin_deck": 1
+            },
+            "state": 0
+          },
+          {
+            "card": {
+              "value": 4,
               "suit": 1,
               "origin_deck": 1
             },
@@ -353,8 +477,8 @@
           },
           {
             "card": {
-              "value": 3,
-              "suit": 0,
+              "value": 12,
+              "suit": 1,
               "origin_deck": 1
             },
             "state": 0
@@ -363,34 +487,55 @@
       }
     ],
     "scores": [
+      0,
       0
     ],
     "active_player_index": 0,
     "turn_index": 0,
     "deck": [
       {
-        "value": 1,
-        "suit": 2,
-        "origin_deck": 1
-      },
-      {
-        "value": 9,
+        "value": 5,
         "suit": 1,
         "origin_deck": 0
       },
       {
-        "value": 9,
-        "suit": 1,
+        "value": 6,
+        "suit": 3,
+        "origin_deck": 0
+      },
+      {
+        "value": 13,
+        "suit": 0,
+        "origin_deck": 1
+      },
+      {
+        "value": 10,
+        "suit": 2,
+        "origin_deck": 0
+      },
+      {
+        "value": 5,
+        "suit": 3,
+        "origin_deck": 1
+      },
+      {
+        "value": 7,
+        "suit": 3,
         "origin_deck": 1
       },
       {
         "value": 4,
-        "suit": 2,
+        "suit": 1,
+        "origin_deck": 0
+      },
+      {
+        "value": 1,
+        "suit": 0,
         "origin_deck": 1
       },
       {
-        "value": 12,
-        "suit": 3,
+        "value": 6,
+        "suit": 1,
         "origin_deck": 1
       },
       {
@@ -399,49 +544,84 @@
         "origin_deck": 1
       },
       {
+        "value": 12,
+        "suit": 0,
+        "origin_deck": 1
+      },
+      {
+        "value": 10,
+        "suit": 2,
+        "origin_deck": 1
+      },
+      {
+        "value": 10,
+        "suit": 0,
+        "origin_deck": 1
+      },
+      {
+        "value": 1,
+        "suit": 1,
+        "origin_deck": 1
+      },
+      {
+        "value": 11,
+        "suit": 2,
+        "origin_deck": 1
+      },
+      {
+        "value": 6,
+        "suit": 1,
+        "origin_deck": 0
+      },
+      {
+        "value": 6,
+        "suit": 3,
+        "origin_deck": 1
+      },
+      {
+        "value": 11,
+        "suit": 0,
+        "origin_deck": 1
+      },
+      {
+        "value": 11,
+        "suit": 2,
+        "origin_deck": 0
+      },
+      {
+        "value": 6,
+        "suit": 2,
+        "origin_deck": 1
+      },
+      {
+        "value": 8,
+        "suit": 2,
+        "origin_deck": 0
+      },
+      {
         "value": 4,
         "suit": 3,
         "origin_deck": 1
       },
       {
-        "value": 11,
+        "value": 4,
         "suit": 2,
         "origin_deck": 1
-      },
-      {
-        "value": 5,
-        "suit": 0,
-        "origin_deck": 0
-      },
-      {
-        "value": 11,
-        "suit": 3,
-        "origin_deck": 1
-      },
-      {
-        "value": 13,
-        "suit": 1,
-        "origin_deck": 1
-      },
-      {
-        "value": 7,
-        "suit": 2,
-        "origin_deck": 1
-      },
-      {
-        "value": 13,
-        "suit": 2,
-        "origin_deck": 1
-      },
-      {
-        "value": 12,
-        "suit": 0,
-        "origin_deck": 0
       },
       {
         "value": 6,
         "suit": 0,
+        "origin_deck": 1
+      },
+      {
+        "value": 9,
+        "suit": 0,
         "origin_deck": 0
+      },
+      {
+        "value": 10,
+        "suit": 1,
+        "origin_deck": 1
       },
       {
         "value": 9,
@@ -449,9 +629,44 @@
         "origin_deck": 0
       },
       {
+        "value": 5,
+        "suit": 0,
+        "origin_deck": 1
+      },
+      {
+        "value": 8,
+        "suit": 2,
+        "origin_deck": 1
+      },
+      {
+        "value": 8,
+        "suit": 1,
+        "origin_deck": 0
+      },
+      {
+        "value": 3,
+        "suit": 2,
+        "origin_deck": 1
+      },
+      {
+        "value": 12,
+        "suit": 3,
+        "origin_deck": 0
+      },
+      {
         "value": 10,
         "suit": 0,
         "origin_deck": 0
+      },
+      {
+        "value": 7,
+        "suit": 1,
+        "origin_deck": 1
+      },
+      {
+        "value": 3,
+        "suit": 0,
+        "origin_deck": 1
       },
       {
         "value": 3,
@@ -459,244 +674,79 @@
         "origin_deck": 1
       },
       {
+        "value": 2,
+        "suit": 1,
+        "origin_deck": 0
+      },
+      {
+        "value": 9,
+        "suit": 3,
+        "origin_deck": 1
+      },
+      {
+        "value": 7,
+        "suit": 0,
+        "origin_deck": 1
+      },
+      {
+        "value": 9,
+        "suit": 0,
+        "origin_deck": 1
+      },
+      {
+        "value": 4,
+        "suit": 2,
+        "origin_deck": 0
+      },
+      {
+        "value": 9,
+        "suit": 1,
+        "origin_deck": 1
+      },
+      {
+        "value": 13,
+        "suit": 3,
+        "origin_deck": 1
+      },
+      {
+        "value": 11,
+        "suit": 1,
+        "origin_deck": 1
+      },
+      {
+        "value": 2,
+        "suit": 0,
+        "origin_deck": 1
+      },
+      {
+        "value": 9,
+        "suit": 2,
+        "origin_deck": 0
+      },
+      {
+        "value": 12,
+        "suit": 3,
+        "origin_deck": 1
+      },
+      {
+        "value": 8,
+        "suit": 3,
+        "origin_deck": 0
+      },
+      {
+        "value": 2,
+        "suit": 2,
+        "origin_deck": 1
+      },
+      {
         "value": 3,
-        "suit": 2,
-        "origin_deck": 1
-      },
-      {
-        "value": 11,
-        "suit": 0,
-        "origin_deck": 1
-      },
-      {
-        "value": 8,
         "suit": 1,
-        "origin_deck": 0
-      },
-      {
-        "value": 12,
-        "suit": 3,
-        "origin_deck": 0
-      },
-      {
-        "value": 4,
-        "suit": 1,
-        "origin_deck": 0
-      },
-      {
-        "value": 8,
-        "suit": 0,
-        "origin_deck": 1
-      },
-      {
-        "value": 2,
-        "suit": 2,
-        "origin_deck": 1
-      },
-      {
-        "value": 2,
-        "suit": 0,
-        "origin_deck": 1
-      },
-      {
-        "value": 5,
-        "suit": 2,
-        "origin_deck": 1
-      },
-      {
-        "value": 2,
-        "suit": 1,
-        "origin_deck": 1
-      },
-      {
-        "value": 5,
-        "suit": 2,
-        "origin_deck": 0
-      },
-      {
-        "value": 11,
-        "suit": 3,
-        "origin_deck": 0
-      },
-      {
-        "value": 5,
-        "suit": 3,
         "origin_deck": 1
       },
       {
         "value": 11,
         "suit": 0,
         "origin_deck": 0
-      },
-      {
-        "value": 10,
-        "suit": 0,
-        "origin_deck": 1
-      },
-      {
-        "value": 13,
-        "suit": 0,
-        "origin_deck": 1
-      },
-      {
-        "value": 7,
-        "suit": 0,
-        "origin_deck": 1
-      },
-      {
-        "value": 9,
-        "suit": 0,
-        "origin_deck": 1
-      },
-      {
-        "value": 1,
-        "suit": 3,
-        "origin_deck": 1
-      },
-      {
-        "value": 2,
-        "suit": 1,
-        "origin_deck": 0
-      },
-      {
-        "value": 9,
-        "suit": 2,
-        "origin_deck": 1
-      },
-      {
-        "value": 1,
-        "suit": 1,
-        "origin_deck": 1
-      },
-      {
-        "value": 12,
-        "suit": 2,
-        "origin_deck": 0
-      },
-      {
-        "value": 12,
-        "suit": 2,
-        "origin_deck": 1
-      },
-      {
-        "value": 4,
-        "suit": 0,
-        "origin_deck": 1
-      },
-      {
-        "value": 6,
-        "suit": 3,
-        "origin_deck": 0
-      },
-      {
-        "value": 8,
-        "suit": 3,
-        "origin_deck": 1
-      },
-      {
-        "value": 6,
-        "suit": 1,
-        "origin_deck": 0
-      },
-      {
-        "value": 6,
-        "suit": 1,
-        "origin_deck": 1
-      },
-      {
-        "value": 7,
-        "suit": 1,
-        "origin_deck": 1
-      },
-      {
-        "value": 10,
-        "suit": 3,
-        "origin_deck": 1
-      },
-      {
-        "value": 10,
-        "suit": 3,
-        "origin_deck": 0
-      },
-      {
-        "value": 8,
-        "suit": 3,
-        "origin_deck": 0
-      },
-      {
-        "value": 10,
-        "suit": 2,
-        "origin_deck": 1
-      },
-      {
-        "value": 11,
-        "suit": 2,
-        "origin_deck": 0
-      },
-      {
-        "value": 13,
-        "suit": 3,
-        "origin_deck": 1
-      },
-      {
-        "value": 1,
-        "suit": 0,
-        "origin_deck": 1
-      },
-      {
-        "value": 12,
-        "suit": 0,
-        "origin_deck": 1
-      },
-      {
-        "value": 10,
-        "suit": 2,
-        "origin_deck": 0
-      },
-      {
-        "value": 4,
-        "suit": 2,
-        "origin_deck": 0
-      },
-      {
-        "value": 4,
-        "suit": 1,
-        "origin_deck": 1
-      },
-      {
-        "value": 12,
-        "suit": 1,
-        "origin_deck": 1
-      },
-      {
-        "value": 10,
-        "suit": 1,
-        "origin_deck": 1
-      },
-      {
-        "value": 6,
-        "suit": 2,
-        "origin_deck": 1
-      },
-      {
-        "value": 2,
-        "suit": 3,
-        "origin_deck": 1
-      },
-      {
-        "value": 5,
-        "suit": 0,
-        "origin_deck": 1
-      },
-      {
-        "value": 9,
-        "suit": 0,
-        "origin_deck": 0
-      },
-      {
-        "value": 6,
-        "suit": 3,
-        "origin_deck": 1
       }
     ],
     "cards_played_this_turn": 0,

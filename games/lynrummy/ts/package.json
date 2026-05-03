@@ -16,6 +16,6 @@
     "bench:check-baseline": "node bench/check_baseline_timing.ts",
     "bench:perf-harness": "node bench/perf_harness.ts",
     "bench:budget-sweep": "node bench/budget_sweep.ts",
-    "bench:2sp": "node --expose-gc bench/bench_2sp.ts"
+    "bench:end-of-deck": "node bench/end_of_deck_perf.ts"
   }
 }

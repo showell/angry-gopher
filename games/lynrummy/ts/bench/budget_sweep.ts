@@ -16,7 +16,7 @@ import * as fs from "node:fs";
 
 import type { Card } from "../src/rules/card.ts";
 import { classifyStack } from "../src/classified_card_stack.ts";
-import { solveStateWithDescs } from "../src/bfs.ts";
+import { solveStateWithDescs } from "../src/engine_v2.ts";
 import type { RawBuckets } from "../src/buckets.ts";
 
 const BUDGETS = [200000, 50000, 20000, 10000, 5000, 2000, 1000];
