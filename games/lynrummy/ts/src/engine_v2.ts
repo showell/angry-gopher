@@ -115,9 +115,17 @@ export function solveTurn(
     heuristic?: Heuristic;
     dedup?: boolean;
     sigKind?: "fast" | "string";
+    /** Hard cap on plan length. Branches with `plan.length >=
+     *  maxPlanLength` are never pushed. Set this for hint paths
+     *  where multi-step plans aren't worth the search cost — humans
+     *  who can execute a 5+ step hint usually prefer hunting the
+     *  moves themselves. Leave undefined for "complete" solve work
+     *  (e.g. proving no_plan in conformance tests). */
+    maxPlanLength?: number;
   } = {},
 ): PlanLine[] | null {
   const budget = opts.budget ?? 50000;
+  const maxPlanLength = opts.maxPlanLength;
   const h = opts.heuristic ?? HEURISTICS.half_debt!;
   const dedup = opts.dedup !== false;  // dedup defaults to ON
   const useFastSig = opts.sigKind !== "string";
@@ -164,6 +172,7 @@ export function solveTurn(
     for (const cand of candidates) {
       const newPlan = [...cur.plan, { line: describe(cand.desc), desc: cand.desc }];
       if (best !== null && newPlan.length >= best.length) continue;
+      if (maxPlanLength !== undefined && newPlan.length > maxPlanLength) continue;
       // Dynamic doomed-singleton prune: a child state where a group
       // just graduated may have left a trouble singleton stranded
       // (its last partner sealed into COMPLETE). Gate on
@@ -200,6 +209,7 @@ interface ShimSolveOptions {
   readonly heuristic?: Heuristic;
   readonly dedup?: boolean;
   readonly sigKind?: "fast" | "string";
+  readonly maxPlanLength?: number;
 }
 
 function isAlreadyClassified(initial: Buckets | RawBuckets): initial is Buckets {
@@ -244,6 +254,7 @@ export function solveStateWithDescs(
     heuristic: opts.heuristic,
     dedup: opts.dedup,
     sigKind: opts.sigKind,
+    maxPlanLength: opts.maxPlanLength,
   });
 }
 

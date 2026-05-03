@@ -50,10 +50,17 @@ export interface CapExhaustion {
 // Default BFS state budget per projection. Mirrors python
 // `_PROJECTION_MAX_STATES`. Lowered from 200000 → 5000 in Python on
 // 2026-04-25 after the doomed-third + state-level doomed-growing
-// filters landed; the TS port doesn't have those filters yet (see
-// README.md § "Loose ends" — card-tracker liveness pruning), but the
-// corpus scenarios solve cheaply enough that 5000 is sufficient.
+// filters landed; ported to TS as the card_neighbors liveness prune
+// (2026-05-03), so 5000 is now a comfortable ceiling.
 const PROJECTION_MAX_STATES = 5000;
+
+// Hint paths cap plan length. A 5+-step hint is rarely useful: an
+// expert who can execute it prefers hunting the moves themselves;
+// a beginner can't follow it. Capping at 4 keeps worst-case wall
+// sub-second on hard mid-game states (Steve, 2026-05-03). The cap
+// applies ONLY here — solveStateWithDescs itself stays "complete"
+// for proof-of-no-plan / conformance work.
+const HINT_MAX_PLAN_LENGTH = 4;
 
 export interface PlayResult {
   readonly placements: readonly Card[];
@@ -229,6 +236,7 @@ function tryProjection(
     const plan = solveStateWithDescs(initial, {
       maxTroubleOuter: 10,
       maxStates,
+      maxPlanLength: HINT_MAX_PLAN_LENGTH,
     });
     return plan === null ? null : plan.map(p => p.line);
   }
