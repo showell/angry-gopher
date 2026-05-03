@@ -1,1 +1,0 @@
-{"action":{"action":"split","stack":{"board_cards":[{"card":{"value":1,"suit":2,"origin_deck":0},"state":0}],"loc":{"top":168,"left":505}},"card_index":0},"gesture_metadata":{"path":[{"t":313731,"x":505,"y":168},{"t":313840,"x":505,"y":168}],"path_frame":"board","pointer_type":"mouse"},"puzzle_name":"stunning_puzzle"}

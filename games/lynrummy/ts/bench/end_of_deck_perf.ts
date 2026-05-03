@@ -20,11 +20,16 @@ import type { Card } from "../src/rules/card.ts";
 import { parseCardLabel, cardLabel } from "../src/rules/card.ts";
 import { playFullGame, type GameResult } from "../src/agent_player.ts";
 import { describe, type Desc } from "../src/move.ts";
+import { writeSession } from "../src/transcript.ts";
 
 const HAND_SIZE = 15;
 const STOP_AT_DECK = 10;
 
 // Game 17 opening board — same as bench_outer_shell + python/dealer.py.
+// Locations match dealer.go's initial-board layout (Python dealer.py
+// `_board_location` formula: top = 20 + row*60, col = (row*3 + 1) % 5,
+// left = 40 + col*30) so the transcript writer's positioned output
+// matches what Elm renders on a fresh-replay bootstrap.
 const BOARD_LABELS: string[][] = [
   ["KS", "AS", "2S", "3S"],
   ["TD", "JD", "QD", "KD"],
@@ -34,8 +39,20 @@ const BOARD_LABELS: string[][] = [
   ["2C", "3D", "4C", "5H", "6S", "7H"],
 ];
 
+function boardLocFor(row: number): { top: number; left: number } {
+  const col = (row * 3 + 1) % 5;
+  return { top: 20 + row * 60, left: 40 + col * 30 };
+}
+
 function makeOpeningBoard(): readonly (readonly Card[])[] {
   return BOARD_LABELS.map(stack => stack.map(parseCardLabel));
+}
+
+function makeOpeningBoardPositioned(): readonly { cards: readonly Card[]; loc: { top: number; left: number } }[] {
+  return BOARD_LABELS.map((stack, row) => ({
+    cards: stack.map(parseCardLabel),
+    loc: boardLocFor(row),
+  }));
 }
 
 function remainingCards(): Card[] {
@@ -178,6 +195,9 @@ function main(): void {
   const traceIdx = args.indexOf("--trace");
   const trace = traceIdx >= 0;
   if (trace) args.splice(traceIdx, 1);
+  const writeIdx = args.indexOf("--write-transcript");
+  const writeTranscript = writeIdx >= 0;
+  if (writeTranscript) args.splice(writeIdx, 1);
   const seeds = args.length > 0
     ? args.map(s => parseInt(s, 10))
     : [42, 43, 44];
@@ -192,6 +212,15 @@ function main(): void {
     const result = playFullGame(board, hand, deck, { stopAtDeck: STOP_AT_DECK });
     if (trace) emitTrace(seed, result);
     else reportGame(seed, result);
+
+    if (writeTranscript) {
+      const positioned = makeOpeningBoardPositioned();
+      const t = writeSession(
+        { initialBoard: positioned, initialHand: hand, initialDeck: deck, result },
+        { label: `agent self-play (seed=${seed})` },
+      );
+      console.log(`  → wrote session #${t.sessionId} (${t.actionsWritten} actions) to ${t.sessionDir}`);
+    }
   }
 }
 
