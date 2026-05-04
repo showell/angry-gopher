@@ -1,13 +1,22 @@
 // LynRummy Elm client view. Serves the compiled Elm app and
-// exposes a deliberately-dumb HTTP surface for session data.
+// exposes a deliberately-dumb HTTP surface for full-game
+// session data.
 //
 // As of 2026-04-28 (LEAN_PASS): the server is a URL-keyed
 // file store. Elm POSTs land at paths under
-// games/lynrummy/data/lynrummy-elm/ that mirror the URL.
-// Last-write-wins per URL. Sequential session-id allocation
-// is the ONE smart exception. Replay/score/state computation
-// retired — Elm derives current state locally; Python agents
-// read the on-disk action log directly when they need state.
+// games/lynrummy/data/lynrummy-elm/sessions/ that mirror the
+// URL. Last-write-wins per URL. Sequential session-id
+// allocation is the ONE smart exception. Replay/score/state
+// computation retired — Elm derives current state locally;
+// agents read the on-disk action log directly when they need
+// state.
+//
+// This module owns ONLY the full-game surface
+// (`/gopher/lynrummy-elm/...`). Puzzle sessions live in their
+// own top-level namespace at
+// `data/lynrummy-elm/puzzle-sessions/...` and are served by
+// `views/puzzles.go`. The two namespaces share no helpers
+// beyond the file-store primitives in `gamedata.go`.
 package views
 
 import (
@@ -37,10 +46,9 @@ var ElmLynRummyDir = "games/lynrummy/elm"
 //   GET  /elm.js                        → compiled Elm
 //   GET  /play/<id>                     → Elm play page with session id baked in
 //   POST /new-session                   → allocate id, write meta.json
-//   POST /new-puzzle-session            → allocate id, write meta.json (puzzle)
 //   POST /sessions/<id>/actions/<seq>   → write body to actions/<seq>.json (DUMB)
 //   POST /sessions/<id>/annotations/<seq> → write body to annotations/<seq>.json (DUMB)
-//   GET  /sessions                      → HTML list of session dirs
+//   GET  /sessions                      → HTML list of full-game session dirs
 //   GET  /api/sessions                  → JSON list
 //   GET  /sessions/<id>                 → HTML detail (file listing)
 //   GET  /sessions/<id>/actions         → bundle: {meta, actions[]} for Elm bootstrap
@@ -54,8 +62,6 @@ func HandleLynRummyElm(w http.ResponseWriter, r *http.Request) {
 		lynrummyElmJS(w)
 	case sub == "new-session":
 		lynrummyElmNewSession(w, r)
-	case sub == "new-puzzle-session":
-		lynrummyElmNewPuzzleSession(w, r)
 	case sub == "sessions":
 		lynrummyElmSessionsList(w)
 	case sub == "api/sessions":
@@ -103,8 +109,8 @@ func handleSessionRoute(w http.ResponseWriter, r *http.Request, rest string) {
 
 // --- Session creation ---
 
-// lynrummyElmNewSession creates a fresh session. Body is
-// optional; if present, may carry `{label, initial_state}`.
+// lynrummyElmNewSession creates a fresh full-game session. Body
+// is optional; if present, may carry `{label, initial_state}`.
 // Server allocates id, generates deck_seed (when no
 // initial_state), writes meta.json, returns the id.
 //
@@ -172,69 +178,12 @@ func lynrummyElmNewSession(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(resp)
 }
 
-// lynrummyElmNewPuzzleSession is the puzzle variant. Body must
-// carry `{label, puzzle_name, initial_state}`. Server allocates
-// id, writes meta.json (with the puzzle fields embedded), returns
-// the id. No deck_seed (puzzles don't deal).
-func lynrummyElmNewPuzzleSession(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	body, err := io.ReadAll(r.Body)
-	if err != nil {
-		http.Error(w, "read body: "+err.Error(), http.StatusBadRequest)
-		return
-	}
-	var bodyMap map[string]any
-	if err := json.Unmarshal(body, &bodyMap); err != nil {
-		http.Error(w, "decode body: "+err.Error(), http.StatusBadRequest)
-		return
-	}
-	if _, ok := bodyMap["puzzle_name"]; !ok {
-		http.Error(w, "missing puzzle_name", http.StatusBadRequest)
-		return
-	}
-	if _, ok := bodyMap["initial_state"]; !ok {
-		http.Error(w, "missing initial_state", http.StatusBadRequest)
-		return
-	}
-
-	id, err := AllocateSessionID()
-	if err != nil {
-		http.Error(w, "alloc id: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	bodyMap["created_at"] = time.Now().Unix()
-
-	metaJSON, err := json.MarshalIndent(bodyMap, "", "  ")
-	if err != nil {
-		http.Error(w, "encode meta: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if err := WriteSessionFile(id, "meta.json", append(metaJSON, '\n')); err != nil {
-		http.Error(w, "write meta: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	fmt.Fprintf(w, `{"session_id":%d}`, id)
-}
-
 // --- Action / annotation writes (the dumb path) ---
 
-// lynrummyElmWriteSessionFile is the universal write handler:
-// POST body → file at <session>/<sub>/<seqOrName>.json. No
-// parsing, no validation beyond "session must exist."
-//
-// One smart exception: if the body carries a puzzle_name
-// field, the file is namespaced under
-// <session>/<sub>/<puzzle_name>/<seqOrName>.json. Puzzle
-// gallery sessions host many puzzles in one session and each
-// Play instance restarts seq at 1, so a flat layout has
-// puzzle B's seq=1 clobbering puzzle A's. Body-driven
-// namespacing keeps the server dumb about which puzzles
-// exist while preserving per-puzzle isolation.
+// lynrummyElmWriteSessionFile is the universal write handler
+// for full-game sessions: POST body → file at
+// <session>/<sub>/<seqOrName>.json. No parsing, no validation
+// beyond "session must exist."
 func lynrummyElmWriteSessionFile(w http.ResponseWriter, r *http.Request, sessionID int64, sub, seqOrName string) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -259,14 +208,7 @@ func lynrummyElmWriteSessionFile(w http.ResponseWriter, r *http.Request, session
 		http.Error(w, "bad filename", http.StatusBadRequest)
 		return
 	}
-	// Peek for puzzle_name so we can namespace by puzzle.
-	// Body must already be JSON for the legitimate clients;
-	// a probe-decode failure just falls back to flat layout.
-	puzzleName := peekPuzzleName(body)
 	rel := filepath.Join(sub, name)
-	if puzzleName != "" {
-		rel = filepath.Join(sub, puzzleName, name)
-	}
 	if err := WriteSessionFile(sessionID, rel, body); err != nil {
 		http.Error(w, "write: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -275,33 +217,12 @@ func lynrummyElmWriteSessionFile(w http.ResponseWriter, r *http.Request, session
 	fmt.Fprint(w, `{"ok":true}`)
 }
 
-// peekPuzzleName extracts the optional `puzzle_name` field
-// from a JSON request body. Returns "" if missing, empty,
-// or unsafe (path-traversal). Centralized here so action
-// and annotation writes share the same vetting.
-func peekPuzzleName(body []byte) string {
-	var probe struct {
-		PuzzleName string `json:"puzzle_name"`
-	}
-	if err := json.Unmarshal(body, &probe); err != nil {
-		return ""
-	}
-	if probe.PuzzleName == "" {
-		return ""
-	}
-	if strings.ContainsAny(probe.PuzzleName, "/\\") || strings.Contains(probe.PuzzleName, "..") {
-		return ""
-	}
-	return probe.PuzzleName
-}
-
 // --- Session reads ---
 
 // lynrummyElmSessionBootstrap returns the dumb bundle: the
 // session's meta blob and its action log, both as the Elm
 // client posted them. No initial_state synthesis — Elm derives
-// that locally from meta.deck_seed (full-game) or
-// meta.initial_state (puzzle) using its own dealer.
+// that locally from meta.deck_seed using its own dealer.
 //
 // Response shape:
 //   {"session_id": N, "meta": {...}, "actions": [<envelope>...]}
@@ -338,7 +259,9 @@ func lynrummyElmSessionBootstrap(w http.ResponseWriter, sessionID int64) {
 	json.NewEncoder(w).Encode(payload)
 }
 
-// lynrummyElmSessionsList is the HTML browser of session dirs.
+// lynrummyElmSessionsList is the HTML browser of full-game
+// session dirs. Puzzle sessions live in a separate namespace
+// and are not surfaced here.
 func lynrummyElmSessionsList(w http.ResponseWriter) {
 	ids, err := ListSessionIDs()
 	if err != nil {
@@ -369,7 +292,7 @@ a { color: #000080; }
 </head><body>
 <nav><a href="/gopher/">← Gopher home</a> &nbsp;·&nbsp; <a href="/gopher/lynrummy-elm/">Play</a></nav>
 <h1>LynRummy Elm sessions</h1>
-<p class="muted">Newest first. Sourced from games/lynrummy/data/.</p>
+<p class="muted">Newest first. Sourced from games/lynrummy/data/lynrummy-elm/sessions/.</p>
 <table><tr><th>id</th><th>created</th><th class="n">actions</th><th>label</th></tr>`)
 	if len(ids) == 0 {
 		fmt.Fprint(w, `<tr><td colspan="4" class="muted">No sessions yet.</td></tr>`)

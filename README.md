@@ -94,11 +94,14 @@ Roles inside Gopher:
   Elm engine (`Game.Strategy.Hint` + `Game.Agent.*` BFS
   port). Migration to the TS engine is queued as
   `TS_ELM_INTEGRATION`.
-- **Session storage** — Elm POSTs each action to
+- **Session storage** — Elm POSTs each full-game action to
   `/gopher/lynrummy-elm/sessions/<id>/{meta.json,actions/<seq>.json}`;
   the TS agent writes the same shape directly to the file
-  system. Files land under `games/lynrummy/data/`,
-  source-controlled.
+  system. Puzzle sessions live in a separate namespace at
+  `data/lynrummy-elm/puzzle-sessions/<id>/<puzzle_name>/...`
+  with their own id counter; actions post to
+  `/gopher/puzzles/sessions/<id>/<puzzle_name>/action`. Files
+  land under `games/lynrummy/data/`, source-controlled.
 
 The Elm client lives at `games/lynrummy/elm/` and is served
 via `/gopher/lynrummy-elm/`. The TS agent lives at

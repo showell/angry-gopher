@@ -45,10 +45,13 @@ In `views/`:
   Elm-posted bodies verbatim to
   `games/lynrummy/data/lynrummy-elm/sessions/<id>/{meta.json,actions/<seq>.json}`.
 - `puzzles.go` — puzzle HTTP surface: catalog at page-load
-  (allocates a session id), then puzzle plays write through
-  the unified `/sessions/<id>/actions/<seq>` URL space.
-  `/gopher/puzzles/annotate` survives as a small back-compat
-  shim that writes to `annotations/<seq>.json`.
+  (allocates a puzzle-session id from a separate counter),
+  then puzzle plays write to
+  `/gopher/puzzles/sessions/<id>/<puzzle_name>/{action,annotate}`.
+  Files land under
+  `games/lynrummy/data/lynrummy-elm/puzzle-sessions/<id>/<puzzle_name>/{actions,annotations}/<seq>.json`.
+  Puzzle and full-game sessions live in distinct on-disk
+  namespaces and never share session ids.
 - `gamedata.go` — file-storage primitives shared by both
   surfaces.
 - The broader `views/wiki_*.go` and friends host the rest of

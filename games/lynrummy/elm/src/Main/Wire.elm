@@ -66,8 +66,21 @@ fetchActionLog sid =
 
 {-| Persist one wire action to its own URL-keyed file. Server
 just writes the body; no validation, no outcome reply.
-`maybePuzzleName` rides in the body for puzzle attempts so
-forensics can attribute each action to its puzzle.
+
+Two URL shapes, depending on the session kind:
+
+  - Full game (`maybePuzzleName == Nothing`) →
+    `POST /gopher/lynrummy-elm/sessions/<sid>/actions/<seq>`.
+    Elm-assigned seq.
+  - Puzzle (`maybePuzzleName == Just name`) →
+    `POST /gopher/puzzles/sessions/<sid>/<name>/action`.
+    Server picks the next per-puzzle seq; the URL carries
+    session and puzzle, the body carries only the action
+    payload.
+
+The `puzzle_name` is no longer part of the body — the URL is
+the namespacing surface.
+
 -}
 sendAction :
     Int
@@ -77,13 +90,25 @@ sendAction :
     -> Maybe EnvelopeForGesture
     -> Cmd Msg
 sendAction sessionId seq maybePuzzleName action maybeGesture =
+    let
+        url =
+            case maybePuzzleName of
+                Just puzzleName ->
+                    "/gopher/puzzles/sessions/"
+                        ++ String.fromInt sessionId
+                        ++ "/"
+                        ++ puzzleName
+                        ++ "/action"
+
+                Nothing ->
+                    "/gopher/lynrummy-elm/sessions/"
+                        ++ String.fromInt sessionId
+                        ++ "/actions/"
+                        ++ String.fromInt seq
+    in
     Http.post
-        { url =
-            "/gopher/lynrummy-elm/sessions/"
-                ++ String.fromInt sessionId
-                ++ "/actions/"
-                ++ String.fromInt seq
-        , body = Http.jsonBody (encodeEnvelope action maybeGesture maybePuzzleName)
+        { url = url
+        , body = Http.jsonBody (encodeEnvelope action maybeGesture)
         , expect = Http.expectWhatever ActionSent
         }
 
@@ -102,12 +127,13 @@ pathFrameString frame =
 -- ENVELOPE
 
 
-{-| Outbound POST body: `{action, gesture_metadata?, puzzle_name?}`.
-The server stores it verbatim; nothing here is parsed
-server-side beyond writing the file.
+{-| Outbound POST body: `{action, gesture_metadata?}`. The
+server stores it verbatim; nothing here is parsed server-side
+beyond writing the file. Puzzle attribution is URL-borne now,
+not body-borne (see `sendAction`).
 -}
-encodeEnvelope : WireAction -> Maybe EnvelopeForGesture -> Maybe String -> Value
-encodeEnvelope action maybeGesture maybePuzzleName =
+encodeEnvelope : WireAction -> Maybe EnvelopeForGesture -> Value
+encodeEnvelope action maybeGesture =
     let
         baseFields =
             [ ( "action", WA.encode action ) ]
@@ -132,16 +158,8 @@ encodeEnvelope action maybeGesture maybePuzzleName =
                                         ]
                                      )
                                    ]
-
-        withPuzzle =
-            case maybePuzzleName of
-                Nothing ->
-                    withGesture
-
-                Just name ->
-                    withGesture ++ [ ( "puzzle_name", Encode.string name ) ]
     in
-    Encode.object withPuzzle
+    Encode.object withGesture
 
 
 encodeGesturePoint : GesturePoint -> Value

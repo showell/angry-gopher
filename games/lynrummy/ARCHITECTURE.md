@@ -423,12 +423,20 @@ the agent.
   page-load session id. Human plays inline; drags capture via
   the normal telemetry pipeline.
 - Per-attempt session data: a single page-load session under
-  `data/lynrummy-elm/sessions/<id>/` hosts every puzzle on the
-  page. Actions and annotations land at
-  `actions/<puzzle_name>/<seq>.json` and
-  `annotations/<puzzle_name>/<seq>.json` so each puzzle's
-  per-Play seq counter (which restarts at 1) doesn't clobber
-  its siblings.
+  `data/lynrummy-elm/puzzle-sessions/<id>/` hosts every
+  puzzle on the page. Actions land at
+  `<puzzle_name>/actions/<seq>.json` and annotations at
+  `<puzzle_name>/annotations/<seq>.json` — keyed in the URL
+  (`POST /gopher/puzzles/sessions/<id>/<puzzle_name>/action`),
+  not body-peeked — so each puzzle's per-Play seq counter
+  (which restarts at 1) doesn't clobber its siblings.
+  Puzzle sessions live in their own top-level namespace
+  separate from full-game sessions
+  (`data/lynrummy-elm/sessions/`); they allocate ids from a
+  separate counter (`next-puzzle-session-id.txt`). They are
+  not resumable — a page reload terminates the attempt by
+  design — so they do not need the full-game bootstrap or
+  session-browser machinery.
 
 ## Algorithm benchmarks
 

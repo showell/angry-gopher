@@ -6,11 +6,15 @@ page-load session_id at boot — the catalog fetch fires from
 init, no name-entry / login gate. Panels instantiate Play
 instances synchronously from the inline initial state —
 zero per-panel HTTP. You play within the gallery; drags and
-agent moves write to the unified
-/gopher/lynrummy-elm/sessions/<id>/actions/<seq> endpoint
-with `puzzle_name` in the body so the server namespaces each
-puzzle's seq counter on disk under
-`actions/<puzzle_name>/<seq>.json`.
+agent moves write to
+`/gopher/puzzles/sessions/<sid>/<puzzle_name>/action`,
+landing on disk at
+`puzzle-sessions/<sid>/<puzzle_name>/actions/<seq>.json`.
+Puzzle sessions live in their own top-level namespace
+(`data/lynrummy-elm/puzzle-sessions/`) — separate from
+full-game sessions, with a separate id counter — because
+they're not resumable and don't need the session-browser /
+bootstrap machinery.
 
 Per-panel gameId is the puzzle name, which disambiguates DOM
 ids so multiple Play instances coexist on one page (board DOM
@@ -371,14 +375,16 @@ fetchCatalog =
 sendAnnotation : Int -> String -> String -> Cmd Msg
 sendAnnotation sessionId puzzleName body =
     Http.post
-        { url = "/gopher/puzzles/annotate"
+        { url =
+            "/gopher/puzzles/sessions/"
+                ++ String.fromInt sessionId
+                ++ "/"
+                ++ puzzleName
+                ++ "/annotate"
         , body =
             Http.jsonBody
                 (Encode.object
-                    [ ( "session_id", Encode.int sessionId )
-                    , ( "puzzle_name", Encode.string puzzleName )
-                    , ( "body", Encode.string body )
-                    ]
+                    [ ( "body", Encode.string body ) ]
                 )
         , expect = Http.expectWhatever (AnnotationSent puzzleName)
         }

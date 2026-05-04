@@ -36,17 +36,22 @@ Python relate.
   panel. Served at `/gopher/puzzles/`. The catalog is
   generated from `conformance/mined_seeds.json` via
   `python/puzzle_catalog.py`.
-- `data/` — file-system-backed session data. The counter
-  `next-session-id.txt` lives at the root of `data/`;
-  per-session directories live under
-  `data/lynrummy-elm/sessions/<id>/` with `meta.json`,
-  `actions/<seq>.json` (one envelope per action), and
-  `annotations/<seq>.json` (puzzle-only). All committed.
+- `data/` — file-system-backed session data. Two top-level
+  namespaces, each with its own id counter at the root of
+  `data/`:
 
-  Distinguishing **full-game vs puzzle** sessions: full-game
-  meta carries an `initial_state` block (board + hands +
-  deck); puzzle sessions are tagged
-  `label: "puzzles page-load"` with no `initial_state`.
+  - `next-session-id.txt` + `lynrummy-elm/sessions/<id>/` —
+    full-game sessions. `meta.json`, `actions/<seq>.json`
+    (one envelope per action), and rare
+    `annotations/<seq>.json`.
+  - `next-puzzle-session-id.txt` +
+    `lynrummy-elm/puzzle-sessions/<id>/` — puzzle gallery
+    page-loads. `meta.json` plus per-puzzle subdirs:
+    `<puzzle_name>/actions/<seq>.json` and
+    `<puzzle_name>/annotations/<seq>.json`. Not resumable
+    by design.
+
+  All committed.
 
   **Reading sessions in DSL form** (Steve's preferred chat
   format): `python3 tools/show_session.py <session_id>`.

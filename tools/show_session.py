@@ -8,7 +8,14 @@ debugging by ear; never display cards as JSON envelopes when
 talking to him about gameplay.
 
 Usage:
-    python3 tools/show_session.py <session_id>
+    python3 tools/show_session.py <session_id>           # full-game
+    python3 tools/show_session.py puzzle <session_id>    # puzzle gallery
+
+Full-game sessions live under
+games/lynrummy/data/lynrummy-elm/sessions/. Puzzle gallery
+sessions live in a separate namespace under
+games/lynrummy/data/lynrummy-elm/puzzle-sessions/, with each
+puzzle's actions in its own subdir.
 
 Example output:
     === session 9 === label='' created_at=1777394809
@@ -32,6 +39,7 @@ from pathlib import Path
 
 REPO = Path("/home/steve/showell_repos/angry-gopher")
 SESSIONS = REPO / "games/lynrummy/data/lynrummy-elm/sessions"
+PUZZLE_SESSIONS = REPO / "games/lynrummy/data/lynrummy-elm/puzzle-sessions"
 
 RANKS = "A23456789TJQK"
 SUITS = "CDSH"
@@ -89,11 +97,7 @@ def render_action(env):
     return " ".join(parts)
 
 
-def main():
-    if len(sys.argv) != 2:
-        print("usage: show_session.py <session_id>", file=sys.stderr)
-        sys.exit(2)
-    sid = sys.argv[1]
+def show_full_game(sid):
     sdir = SESSIONS / sid
     if not sdir.is_dir():
         print(f"no session dir: {sdir}", file=sys.stderr)
@@ -105,8 +109,6 @@ def main():
         label = meta.get("label", "")
         print(f"=== session {sid} === label={label!r} "
               f"created_at={meta.get('created_at')}")
-        if "puzzle_name" in meta:
-            print(f"  puzzle_name: {meta['puzzle_name']}")
         if "initial_state" in meta:
             print("initial_state:")
             show_initial_state(meta["initial_state"])
@@ -120,9 +122,63 @@ def main():
         for f in files:
             seq = f.stem
             env = json.loads(f.read_text())
-            puzzle = env.get("puzzle_name", "")
-            tag = f"  [puzzle={puzzle}]" if puzzle else ""
-            print(f"  seq={seq}: {render_action(env)}{tag}")
+            print(f"  seq={seq}: {render_action(env)}")
+
+
+def show_puzzle(sid):
+    sdir = PUZZLE_SESSIONS / sid
+    if not sdir.is_dir():
+        print(f"no puzzle session dir: {sdir}", file=sys.stderr)
+        sys.exit(1)
+
+    meta_path = sdir / "meta.json"
+    if meta_path.exists():
+        meta = json.loads(meta_path.read_text())
+        label = meta.get("label", "")
+        print(f"=== puzzle session {sid} === label={label!r} "
+              f"created_at={meta.get('created_at')}")
+
+    # Per-puzzle subdirs each hold actions/ and annotations/.
+    puzzle_dirs = sorted(d for d in sdir.iterdir() if d.is_dir())
+    for pdir in puzzle_dirs:
+        actions_dir = pdir / "actions"
+        annotations_dir = pdir / "annotations"
+        n_actions = (
+            sum(1 for _ in actions_dir.glob("*.json"))
+            if actions_dir.is_dir() else 0
+        )
+        n_annotations = (
+            sum(1 for _ in annotations_dir.glob("*.json"))
+            if annotations_dir.is_dir() else 0
+        )
+        if n_actions == 0 and n_annotations == 0:
+            continue
+        print(f"  puzzle: {pdir.name}  "
+              f"({n_actions} actions, {n_annotations} annotations)")
+        if actions_dir.is_dir():
+            files = sorted(
+                actions_dir.glob("*.json"),
+                key=lambda p: int(p.stem) if p.stem.isdigit() else -1,
+            )
+            for f in files:
+                seq = f.stem
+                env = json.loads(f.read_text())
+                print(f"    seq={seq}: {render_action(env)}")
+
+
+def main():
+    args = sys.argv[1:]
+    if len(args) == 1:
+        show_full_game(args[0])
+    elif len(args) == 2 and args[0] == "puzzle":
+        show_puzzle(args[1])
+    else:
+        print(
+            "usage: show_session.py <session_id>\n"
+            "       show_session.py puzzle <session_id>",
+            file=sys.stderr,
+        )
+        sys.exit(2)
 
 
 if __name__ == "__main__":
