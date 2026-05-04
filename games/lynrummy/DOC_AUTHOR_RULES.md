@@ -23,8 +23,8 @@ Every doc is one of:
   sections.
 - **INVARIANT** — describes data shapes, contracts, validation
   gates. Changes rarely, only via deliberate breaking changes
-  shipped in the same PR. Example: `python/SOLVER.md` § "Data
-  shape."
+  shipped in the same PR. Example: `ts/ENGINE_V2.md` §
+  "Solver design principles".
 - **REFERENCE** — describes how a current subsystem works. Drift-
   prone unless tightly scoped + dated. Example: `ts/ENGINE_V2.md`.
 - **OVERVIEW** — short orientation + outbound links. Example:
@@ -57,7 +57,7 @@ If the doc has an end-of-life condition, add:
 **Expires:** when <grep-able condition>
 ```
 
-`ts/ENGINE_V2.md` and `python/SOLVER.md` are the templates. The
+`ts/ENGINE_V2.md` is the template. The
 grep-able expiry matters: `ELM_HINTS.md` self-declared expiry in
 prose; nobody swept for it; the doc rotted in place for weeks.
 
@@ -157,4 +157,4 @@ too. Run `tools/doc_xref.py --all` before committing a sweep.
   (which docs to keep, rewrite, delete).
 - `claude-steve/random241.md` — concrete drift hits across 6 docs.
 - `tools/doc_xref.py` — the heuristic verifier these rules pair with.
-- `ts/ENGINE_V2.md`, `python/SOLVER.md` — templates worth imitating.
+- `ts/ENGINE_V2.md` — template worth imitating.

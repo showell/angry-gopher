@@ -1,11 +1,9 @@
 // check_baseline_timing.ts — Timing regression checker for the
 // 81-card baseline.
 //
-// TS port of python/check_baseline_timing.py. Reads the gold file
-// (TS-canonical: ts/bench/baseline_board_81_gold.txt) and the
-// conformance fixtures (still emitted by the Python pipeline at
-// games/lynrummy/python/conformance_fixtures.json — these encode
-// board states only and are language-agnostic).
+// Reads the gold file (ts/bench/baseline_board_81_gold.txt) and
+// the conformance fixtures (games/lynrummy/conformance/fixtures.json
+// — these encode board states only and are language-agnostic).
 //
 // For each baseline_board_* scenario:
 //   - Build the buckets state from the fixture
@@ -107,7 +105,7 @@ function parseArgs(argv: string[]): { tolerance: number; runs: number; fixtures:
   let tolerance = 0.10;
   let runs = 20;
   const here = path.dirname(new URL(import.meta.url).pathname);
-  let fixtures = path.resolve(here, "../../python/conformance_fixtures.json");
+  let fixtures = path.resolve(here, "../../conformance/fixtures.json");
   let baseline = path.resolve(here, "baseline_board_81_gold.txt");
   for (const a of argv) {
     if (a.startsWith("--tolerance=")) tolerance = parseFloat(a.slice("--tolerance=".length));

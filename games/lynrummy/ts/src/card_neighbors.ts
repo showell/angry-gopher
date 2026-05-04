@@ -1,5 +1,5 @@
 // card_neighbors.ts — per-card partner-pair tables for fast singleton
-// liveness queries. Port of `python/card_neighbors.py`.
+// liveness queries.
 //
 // For each card c (encoded as 0..103), NEIGHBORS[c] is the list of
 // unordered pairs (c1_id, c2_id) such that {c, c1, c2} forms a valid
@@ -18,6 +18,26 @@
 //   TROUBLE = 2
 //   GROWING = 3
 //   COMPLETE = 4   (sealed; doesn't count as accessible partner)
+//
+// GROWING is conservative on purpose: cards in a growing 2-partial
+// are treated as accessible partners even though no BFS move
+// extracts them (growing isn't an extract source). This is a
+// correctness-safe over-approximation — false-positive liveness,
+// never false-negative — so plan quality is preserved.
+//
+// Tried and rejected (don't re-derive these):
+//
+// 1. Replacing isPartialOk length-2 with a precomputed pair-partner
+//    set. The 5-branch tower framing was misleading — isPartialOk is
+//    an early-return chain that exits in ~3 ops for the dominant
+//    case, while a hash lookup needs ~10 ops.
+// 2. Hoisting cardLoc into enumerateMoves as plumbing for future
+//    consumers. Building it per state without an immediate consumer
+//    is pure overhead.
+// 3. Pushing the dynamic doomed-singleton prune unconditionally on
+//    every state. Per-state cost dominated the prune savings; gating
+//    on graduation events (len(complete) > parentCompleteCount) is
+//    load-bearing.
 
 import type { Card } from "./rules/card.ts";
 import { RED } from "./rules/card.ts";

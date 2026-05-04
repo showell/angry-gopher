@@ -27,8 +27,8 @@
 // bucket. If it can't, the placement is rejected. The agent is not
 // allowed to leave the board dirtier than it found it.
 //
-// See `python/SOLVER.md § "Hint projection — how find_play uses BFS
-// for hand cards"` for the canonical write-up.
+// The dirty-board constraint above is the canonical write-up; no
+// external reference is needed.
 
 import type { Card } from "./rules/card.ts";
 import { cardLabel } from "./rules/card.ts";

@@ -102,8 +102,7 @@ Roles inside Gopher:
 
 The Elm client lives at `games/lynrummy/elm/` and is served
 via `/gopher/lynrummy-elm/`. The TS agent lives at
-`games/lynrummy/ts/`. Legacy Python tooling lives at
-`games/lynrummy/python/`.
+`games/lynrummy/ts/`.
 
 **Puzzles** (`games/lynrummy/puzzles/`) is the study
 instrument: a gallery of curated puzzles served at

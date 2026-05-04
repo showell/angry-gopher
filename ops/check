@@ -6,23 +6,20 @@
 # are how an hour disappears resurrecting things.
 #
 # Full-repo preflight: regenerate conformance fixtures, run
-# every test suite. If any target (Go build, Elm tests, Python
-# conformance) stops being wired up, this script fails loudly
-# instead of silently skipping.
+# every test suite. If any target (Go build, TS, Elm) stops
+# being wired up, this script fails loudly instead of silently
+# skipping.
 
 set -e
 
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_DIR"
 
-echo "==> conformance gate (fixturegen + Python + Elm)"
+echo "==> conformance gate (fixturegen + TS + Elm)"
 ./ops/check-conformance
 
 echo "==> go build ./..."
 go build ./...
-
-echo "==> Python unit tests (full suite)"
-(cd games/lynrummy/python && ./check.sh)
 
 echo
 echo "All preflight checks passed."

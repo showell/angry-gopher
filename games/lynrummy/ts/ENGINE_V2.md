@@ -123,6 +123,80 @@ edge of the conformance corpus, not common play.
 4. **Coroutine-scheduled candidate exploration** — see `random236.md`.
    Niche.
 
+## Solver design principles
+
+The engine, the verb library (`classified_card_stack.ts`), and the
+move generator (`enumerator.ts`) share a small set of structural
+choices that every solver-touching change should respect.
+
+### Probe + executor pattern
+
+Every operation that mutates a stack splits into two functions: a
+**probe** that earns the kind knowledge, and a **custom executor**
+that uses that knowledge to build the result without re-validating.
+
+```ts
+const newKind = kindAfterAbsorbRight(target, card);
+if (newKind === null) return null;        // probe short-circuits
+const result = absorbRight(target, card, newKind);  // executor trusts
+```
+
+Same pattern across `peel` / `pluck` / `yank` / `steal` / `splitOut`
+(each paired with its `canX` predicate via `verbForPosition`),
+`kindAfterAbsorbLeft` / `absorbLeft`, and the splice probes /
+executors. The probe asks "can I do this, and what would the result
+be?" with no allocations on the failure path. The executor assumes
+the precondition holds and writes the result trivially.
+
+### Three-bucket extends — earned at the commitment point
+
+`extendsTables(target)` returns three Maps in canonical reading
+order (`left`, `right`, `set`), each `(value, suit) → resultKind`.
+The three Maps are mutually disjoint — a shape's extension lives in
+at most one — and which Maps are populated reflects the target's
+commitment shape:
+
+- **run / rb / pair_run / pair_rb** — committed to a run-family
+  direction. `left` and `right` populated; `set` empty.
+- **set / pair_set** — committed to set, unordered. Only `set`
+  populated.
+- **singleton** — uncommitted. All three populated; this is the
+  only kind where a single card can land in any of three modes.
+
+Built once per absorber, at the moment the BFS commits to iterating
+that absorber against many sources. The hot path consumes lookups,
+not probe calls.
+
+### Iteration order is canon
+
+The BFS produces deterministic plan-line output that depends on
+iteration order in the move generator. The DSL conformance fixtures
+pin it. **Don't rearrange for readability.** Two orders coexist on
+purpose:
+
+- **Action order** is `right → left → set`. Right is the natural
+  human-first action; set is the unordered third mode that emits
+  both side descriptors per entry.
+- **Data layout** is `(left, right, set)` (reading order). Data is
+  read left-to-right; actions execute right-first.
+
+Within each shape, iteration is over the sorted union of all
+extending shapes per absorber.
+
+### Performance vocabulary
+
+- **Dead card** — fails the live-singleton filter outright (no
+  valid 3-card group exists in the accessible pool). Rejected in
+  O(1) before BFS starts.
+- **Tantalizing card** — passes the liveness filter (a valid group
+  *theoretically* exists using accessible cards) but has no actual
+  BFS solution. The engine climbs through many states before the
+  plateau fires and confirms no_plan. Tantalizing cards drive
+  worst-case wall.
+  Example: `2C:1` on the Game 17 board — its set partners `2H:0`
+  and `2S:0` exist but are locked inside two helper runs whose
+  dismantling cannot be repaired.
+
 ## Pointers
 
 - `claude-steve/random234.md` — the kitchen-table algorithm spec.
@@ -136,5 +210,10 @@ edge of the conformance corpus, not common play.
 
 - `memory/project_stunning_puzzle.md` — STUNNING_PUZZLE state D
   (the puzzle that drove much of this work).
-- `memory/project_python_verb_pipeline_stays.md` — Python BFS keeps
-  living for the verb pipeline; engine_v2 is TS-only.
+- `memory/feedback_earn_and_use_knowledge.md` — the doctrine
+  behind the probe+executor and three-bucket-extends shapes.
+- `memory/feedback_iteration_order_is_canon.md` — why the BFS
+  iteration order is treated as cross-language canon.
+- `memory/feedback_no_side_parameter.md` — the discipline that
+  splits left/right into separate functions instead of taking a
+  side parameter.

@@ -13,8 +13,10 @@ at that point this plan forks.
 - **Replay (Elm)** — `Main.elm` `replayFrame` state machine animates drags
   at real-captured speed via `onAnimationFrame`, with a fixed 1-second
   inter-action beat (think-time deliberately discarded).
-- **Read (Python)** — `games/lynrummy/python/telemetry.py` reads
-  directly from SQLite; HTTP bypassed for analysis data.
+- **Read** — gesture-metadata analysis reads directly from
+  SQLite; HTTP bypassed for analysis data. (The legacy Python
+  reader retired with the rest of the python/ subtree on
+  2026-05-04; future analysis tooling lives elsewhere.)
 
 Validation gate: Instant Replay at real speed. If a replay doesn't feel
 faithful, the bug is in capture — fix before running analyses.
@@ -118,12 +120,12 @@ without peering into the subject's head:
   outbound capture: does the re-animation look like what actually
   happened? Yes = capture is faithful. No = data is suspect and the bug
   is in the capture pipe.
-- Python reads the session post-hoc via `games/lynrummy/python/telemetry.py`.
+- Sessions are read post-hoc directly from SQLite for analysis.
 
 ## Replay as validation gate
 
 Instant Replay at real speed is not a nicety — it is the primary
-validation instrument. We do NOT trust post-hoc Python analyses until
+validation instrument. We do NOT trust post-hoc analyses until
 Steve has watched at least one replay after every study-design change
 and confirmed the felt accuracy. This is the enumerate-and-bridge pattern
 applied to research data: the outbound path (capture) and the visual

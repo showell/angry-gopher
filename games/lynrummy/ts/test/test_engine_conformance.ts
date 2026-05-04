@@ -1,8 +1,8 @@
 // test_engine_conformance.ts — TS scenario-level conformance runner.
 //
-// Reads `python/conformance_fixtures.json` (the canonical JSON
-// emitted by `cmd/fixturegen` from the DSL scenarios) and runs the
-// TS engine against the `enumerate_moves` and `solve` ops:
+// Reads `conformance/fixtures.json` (the canonical JSON emitted by
+// `cmd/fixturegen` from the DSL scenarios) and runs the TS engine
+// against the `enumerate_moves` and `solve` ops:
 //
 //   - All `enumerate_moves` scenarios — assert the matching `yields`
 //     type (or `narrate_contains` / `hint_contains` substring) is
@@ -41,7 +41,7 @@ import { findOpenLoc, type BoardStack } from "../src/geometry.ts";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const FIXTURES_PATH = path.resolve(
-  __dirname, "../../python/conformance_fixtures.json");
+  __dirname, "../../conformance/fixtures.json");
 
 interface BoardCard {
   card: { value: number; suit: number; origin_deck: number };

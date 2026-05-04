@@ -251,10 +251,6 @@ of scope.
   plain JSON under `games/lynrummy/data/`. The Go server
   does NOT deal, does NOT referee, does NOT replay — that
   Go domain package retired 2026-04-28.
-- **Python (legacy/utility).** `games/lynrummy/python/`
-  hosts the dealer, some unit tests, and odd tools.
-  The Python BFS solver retired during the TS migration;
-  do not invest in further Python-side solver work.
 
 ## Multiple action logs, one event shape
 
@@ -748,11 +744,11 @@ the Lyn Rummy project uses to observe play on curated
 mid-game situations and feed divergences back into the
 agent:
 
-- Catalog: `games/lynrummy/python/puzzle_catalog.py` reads
-  `games/lynrummy/conformance/mined_seeds.json` and writes
-  the JSON the Elm gallery loads. Go serves it at
-  `/gopher/puzzles/catalog`. (Per the no-DB policy: mined
-  seeds live in the repo as JSON, not in SQLite.)
+- Catalog: `games/lynrummy/puzzles/puzzles.json` is the
+  committed gallery the Elm app loads via Go's
+  `/gopher/puzzles/catalog`. The catalog is frozen as of
+  2026-05-04; refresh it by writing a TS generator from
+  scratch.
 - Elm gallery: a panel per puzzle, auto-creating its
   puzzle session on page load. Human plays inline; drags
   capture via the normal telemetry pipeline.

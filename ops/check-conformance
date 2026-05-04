@@ -13,13 +13,14 @@
 # is how orphaned type constructors survive undetected.
 #
 # Three steps:
-#   1. cmd/fixturegen — DSL → Elm + JSON + ops manifest; also
-#      surfaces registered-op manifest drift loudly (per
-#      cmd/fixturegen/ADDING_AN_OP.md). Go target retired
-#      2026-04-28; Python runner retired 2026-05-02 (TS+Elm
-#      now cover the contract).
-#   2. TS conformance — runs the engine + leaf primitives
-#      against the JSON fixtures (npm test).
+#   1. cmd/fixturegen — DSL → Elm test code + TS JSON fixtures.
+#      Surfaces registered-op drift loudly (per
+#      cmd/fixturegen/ADDING_AN_OP.md). TS+Elm now cover the
+#      contract; Go and Python targets are retired.
+#   2. TS conformance — runs the engine + leaf primitives + verb
+#      fixtures + physical_plan + replay walkthroughs + agent
+#      self-play (npm test). The TS-only DSLs have their own
+#      parsers and don't go through fixturegen.
 #   3. Elm check.sh — standalone type-checks, elm-test (700+),
 #      elm make, elm-review.
 #
@@ -36,7 +37,13 @@ REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_DIR"
 
 echo "==> fixturegen"
-go run ./cmd/fixturegen ./games/lynrummy/conformance/scenarios/*.dsl
+# A handful of DSLs are TS-runner-only — their TS test scripts
+# have their own DSL parser and hardcoded paths. Filter them out
+# of fixturegen so the cross-language gate only sees DSLs that
+# correspond to registered fixturegen ops.
+DSLS=$(ls ./games/lynrummy/conformance/scenarios/*.dsl \
+    | grep -vE 'physical_plan_corpus\.dsl|replay_walkthroughs\.dsl|verb_to_primitives.*\.dsl')
+go run ./cmd/fixturegen $DSLS
 
 echo "==> TS conformance"
 (cd games/lynrummy/ts && npm test)

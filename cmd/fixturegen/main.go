@@ -1,16 +1,14 @@
 // fixturegen: parse a LynRummy-DSL scenario file and emit
-// native test code for Elm + JSON fixtures for Python.
+// native test code for Elm + JSON fixtures for TS.
 //
 // DO NOT run this binary ad-hoc. The canonical way to
 // regenerate fixtures is `ops/check-conformance` (which also
-// runs Python + Elm conformance tests so drift surfaces
+// runs TS + Elm conformance tests so drift surfaces
 // immediately). Drifted dev-loop scripts are how an hour
 // disappears resurrecting things.
 //
 // Pipeline (template-driven):
 //   parse .dsl → AST → render templates → write → idempotence check
-//
-// Go target retired 2026-04-28 with the Go domain package.
 
 package main
 
@@ -327,9 +325,8 @@ type Card struct {
 // --- Entry point ---
 
 const (
-	elmOutPath      = "./games/lynrummy/elm/tests/Game/DslConformanceTest.elm"
-	jsonOutPath     = "./games/lynrummy/python/conformance_fixtures.json"
-	manifestOutPath = "./games/lynrummy/python/conformance_ops.json"
+	elmOutPath  = "./games/lynrummy/elm/tests/Game/DslConformanceTest.elm"
+	jsonOutPath = "./games/lynrummy/conformance/fixtures.json"
 )
 
 // --- Op registry ---
@@ -345,19 +342,18 @@ const (
 //      extend the parser (applyScalarField / applyBlockField /
 //      parseExpectBlock) and the AST struct (Scenario /
 //      Expectation), plus the JSON shape (jsonScenario /
-//      jsonExpect / toJSONScenario) if the op is python:true.
+//      jsonExpect / toJSONScenario) if the op is TS:true.
 //
 // fixturegen verifies at startup that every op encountered in
-// the .dsl files is registered here, and emits a sibling
-// `conformance_ops.json` that the Python runner consumes to
-// cross-check its DISPATCH dict. So a forgotten registration
-// fails loud, and a Python<->Go drift fails loud too.
+// the .dsl files is registered here, so a forgotten
+// registration fails loud rather than producing a silent dead
+// branch.
 //
 // See cmd/fixturegen/ADDING_AN_OP.md for the full recipe.
 type OpKind struct {
 	Name    string
 	Elm     bool                             // emit an Elm test stub for this op
-	Python  bool                             // include in conformance_fixtures.json
+	TS      bool                             // include in conformance fixtures.json (TS reads it)
 	EmitElm func(*strings.Builder, Scenario) // body of the generated Elm test thunk (Elm=true)
 }
 
@@ -378,19 +374,19 @@ var opRegistry = []OpKind{
 	{
 		Name:    "enumerate_moves",
 		Elm:     true,
-		Python:  true,
+		TS:      true,
 		EmitElm: elmEnumerateMoves,
 	},
 	{
 		Name:    "solve",
 		Elm:     true,
-		Python:  true,
+		TS:      true,
 		EmitElm: elmSolve,
 	},
 	{
 		Name:    "find_open_loc",
 		Elm:     true,
-		Python:  true,
+		TS:      true,
 		EmitElm: elmFindOpenLoc,
 	},
 	{
@@ -409,14 +405,13 @@ var opRegistry = []OpKind{
 		EmitElm: elmUndoWalkthrough,
 	},
 	{
-		// Elm-only: Python's find_violation / out_of_bounds cover
-		// related ground but don't match the typed-error API shape.
+		// Elm-only: typed-error API for board-geometry validation.
 		Name:    "validate_board_geometry",
 		Elm:     true,
 		EmitElm: elmValidateBoardGeometry,
 	},
 	{
-		// Elm-only: classifyBoardGeometry has no Python equivalent.
+		// Elm-only.
 		Name:    "classify_board_geometry",
 		Elm:     true,
 		EmitElm: elmClassifyBoardGeometry,
@@ -428,80 +423,80 @@ var opRegistry = []OpKind{
 		EmitElm: elmStackHeightConstant,
 	},
 	{
-		// Elm-only: no Python drag layer. Asserts floaterTopLeft
-		// shifts by exactly the cursor delta on mousemove,
-		// regardless of grab point.
+		// Elm-only: drag layer. Asserts floaterTopLeft shifts by
+		// exactly the cursor delta on mousemove, regardless of
+		// grab point.
 		Name:    "floater_top_left",
 		Elm:     true,
 		EmitElm: elmFloaterTopLeft,
 	},
 	{
-		// Elm-only: no Python drag layer. Asserts pathFrame is
-		// set correctly on mousedown for each drag origin type.
+		// Elm-only: drag layer. Asserts pathFrame is set correctly
+		// on mousedown for each drag origin type.
 		Name:    "path_frame",
 		Elm:     true,
 		EmitElm: elmPathFrame,
 	},
 	{
-		// Elm-only: no Python gesture layer. Tests resolveGesture
-		// → Split when clickIntent survives to mouseup.
+		// Elm-only: gesture layer. Tests resolveGesture → Split
+		// when clickIntent survives to mouseup.
 		Name:    "gesture_split",
 		Elm:     true,
 		EmitElm: elmGestureSplit,
 	},
 	{
-		// Elm-only: no Python gesture layer. Tests resolveGesture
-		// → MergeStack when hoveredWing is set with a board source.
+		// Elm-only: gesture layer. Tests resolveGesture →
+		// MergeStack when hoveredWing is set with a board source.
 		Name:    "gesture_merge_stack",
 		Elm:     true,
 		EmitElm: elmGestureMergeStack,
 	},
 	{
-		// Elm-only: no Python gesture layer. Tests resolveGesture
-		// → MergeHand when hoveredWing is set with a hand source.
+		// Elm-only: gesture layer. Tests resolveGesture → MergeHand
+		// when hoveredWing is set with a hand source.
 		Name:    "gesture_merge_hand",
 		Elm:     true,
 		EmitElm: elmGestureMergeHand,
 	},
 	{
-		// Elm-only: no Python gesture layer. Tests resolveGesture
-		// → MoveStack (or Nothing for off-board rejection) when no
-		// hoveredWing and the source is a board stack.
+		// Elm-only: gesture layer. Tests resolveGesture → MoveStack
+		// (or Nothing for off-board rejection) when no hoveredWing
+		// and the source is a board stack.
 		Name:    "gesture_move_stack",
 		Elm:     true,
 		EmitElm: elmGestureMoveStack,
 	},
 	{
-		// Elm-only: no Python gesture layer. Tests resolveGesture
-		// → PlaceHand when source is a hand card and cursor is over
+		// Elm-only: gesture layer. Tests resolveGesture →
+		// PlaceHand when source is a hand card and cursor is over
 		// the board.
 		Name:    "gesture_place_hand",
 		Elm:     true,
 		EmitElm: elmGesturePlaceHand,
 	},
 	{
-		// Elm-only: no Python gesture layer. Tests floaterOverWing
-		// with a single registered wing and various floater positions.
+		// Elm-only: gesture layer. Tests floaterOverWing with a
+		// single registered wing and various floater positions.
 		Name:    "gesture_floater_over_wing",
 		Elm:     true,
 		EmitElm: elmGestureFloaterOverWing,
 	},
 	{
-		// Elm-only: no Python gesture layer. Tests
-		// GA.clickIntentAfterMove — the click-vs-drag threshold rule.
+		// Elm-only: gesture layer. Tests GA.clickIntentAfterMove —
+		// the click-vs-drag threshold rule.
 		Name:    "click_arbitration",
 		Elm:     true,
 		EmitElm: elmClickArbitration,
 	},
 	{
-		// Elm-only: no Python wing-oracle layer. Tests
-		// WingOracle.wingsForStack — merge-target discovery.
+		// Elm-only: wing-oracle layer. Tests WingOracle.wingsForStack
+		// — merge-target discovery.
 		Name:    "wings_for_stack",
 		Elm:     true,
 		EmitElm: elmWingsForStack,
 	},
 	{
-		// Elm-only: no Python wing-oracle layer. Tests
+		// Elm-only: wing-oracle layer. Tests
 		// WingOracle.wingsForHandCard — merge-target discovery for
 		// a hand card being dragged onto board stacks.
 		Name:    "wings_for_hand_card",
@@ -509,10 +504,10 @@ var opRegistry = []OpKind{
 		EmitElm: elmWingsForHandCard,
 	},
 	{
-		// Python-only: no Elm hint-for-hand layer. Tests
-		// agent_prelude.find_play + format_hint end-to-end.
-		Name:   "hint_for_hand",
-		Python: true,
+		// TS-only: no Elm hint-for-hand layer. Tests
+		// hand_play.findPlay + formatHint end-to-end.
+		Name: "hint_for_hand",
+		TS:   true,
 	},
 }
 
@@ -543,20 +538,6 @@ func validateRegistryAgainstScenarios(scenarios []Scenario) error {
 		}
 	}
 	return nil
-}
-
-// pythonOps returns the sorted list of op names that are
-// expected to run in the Python runner. Emitted as a manifest
-// alongside the fixtures so the Python side can cross-check.
-func pythonOps() []string {
-	var out []string
-	for _, op := range opRegistry {
-		if op.Python {
-			out = append(out, op.Name)
-		}
-	}
-	sort.Strings(out)
-	return out
 }
 
 func main() {
@@ -598,9 +579,6 @@ func main() {
 	if err := emitJSON(all, jsonOutPath); err != nil {
 		die(fmt.Errorf("json emit: %w", err))
 	}
-	if err := emitOpsManifest(manifestOutPath); err != nil {
-		die(fmt.Errorf("ops manifest emit: %w", err))
-	}
 
 	// Idempotence: regen and diff; a clean generator never produces
 	// different output for the same input.
@@ -608,7 +586,7 @@ func main() {
 		die(fmt.Errorf("regen not idempotent: %w", err))
 	}
 
-	fmt.Printf("Emitted %d scenarios → Elm test file + JSON fixtures + ops manifest (idempotent).\n", len(all))
+	fmt.Printf("Emitted %d scenarios → Elm test file + JSON fixtures (idempotent).\n", len(all))
 }
 
 func die(err error) {
@@ -636,30 +614,19 @@ func checkIdempotence(all []Scenario) error {
 	if err != nil {
 		return err
 	}
-	originalManifest, err := os.ReadFile(manifestOutPath)
-	if err != nil {
-		return err
-	}
 	if err := emitElm(all, elmOutPath); err != nil {
 		return err
 	}
 	if err := emitJSON(all, jsonOutPath); err != nil {
 		return err
 	}
-	if err := emitOpsManifest(manifestOutPath); err != nil {
-		return err
-	}
 	afterElm, _ := os.ReadFile(elmOutPath)
 	afterJSON, _ := os.ReadFile(jsonOutPath)
-	afterManifest, _ := os.ReadFile(manifestOutPath)
 	if !bytes.Equal(originalElm, afterElm) {
 		return fmt.Errorf("Elm output differs on second regen")
 	}
 	if !bytes.Equal(originalJSON, afterJSON) {
 		return fmt.Errorf("JSON output differs on second regen")
-	}
-	if !bytes.Equal(originalManifest, afterManifest) {
-		return fmt.Errorf("ops manifest differs on second regen")
 	}
 	return nil
 }
@@ -971,7 +938,7 @@ func elmTestName(s string) string {
 }
 
 // elmScenarioBody emits the inside of an Elm test thunk via the
-// op registry. For Python-only ops (Elm=false), emitting Expect.pass
+// op registry. For non-Elm ops (Elm=false), emitting Expect.pass
 // keeps the Elm test file structurally valid without a spurious failure.
 // A true registry bug (nil op, or Elm=true with no emitter) is still
 // a hard Expect.fail so drift surfaces immediately.
@@ -983,7 +950,7 @@ func elmScenarioBody(sc Scenario) string {
 		return b.String()
 	}
 	if !op.Elm {
-		// Python-only scenario — no Elm coverage by design.
+		// Non-Elm scenario — no Elm coverage by design.
 		fmt.Fprintf(&b, "            Expect.pass")
 		return b.String()
 	}
@@ -1031,8 +998,8 @@ const elmClickAgentPlayTmpl = `            let
 // what the immediate-reducer post-state looks like for
 // solvable / unsolvable / replay-running cases.
 //
-// Only Elm runs this op (Python doesn't have an Elm-style
-// reducer). Go and Python skip — the JSON gate filters by op.
+// Only Elm runs this op (it tests the Elm-side reducer).
+// TS skips — the JSON gate filters by op.
 func elmClickAgentPlay(b *strings.Builder, sc Scenario) {
 	fmt.Fprintf(b, elmClickAgentPlayTmpl, elmStacks(sc.Board, "                        "))
 	b.WriteString("            Expect.all\n                [ ")
@@ -1721,7 +1688,7 @@ func elmPathFrame(b *strings.Builder, sc Scenario) {
 // Each emitter constructs a DragInfo record literal inline and then
 // calls the appropriate pure Gesture function. The default board rect
 // { x=300, y=100, width=800, height=600 } matches Fixtures.defaultBoardRect.
-// All gesture ops are Elm-only; Python is false.
+// All gesture ops are Elm-only.
 
 const gestureBoardRectLit = "{ x = 300, y = 100, width = 800, height = 600 }"
 
@@ -2322,7 +2289,7 @@ func elmSolve(b *strings.Builder, sc Scenario) {
 		b.WriteString(elmSolveNoPlanCheck)
 	} else if len(sv.PlanLines) > 0 {
 		// Snapshot match: every line of describe(move) must
-		// equal the pinned canonical plan_lines from Python.
+		// equal the pinned canonical plan_lines.
 		var listLits strings.Builder
 		listLits.WriteString("[ ")
 		for i, line := range sv.PlanLines {
@@ -2421,12 +2388,11 @@ func elmBoardState(s int) string {
 	return []string{"FirmlyOnBoard", "FreshlyPlayed", "FreshlyPlayedByLastPlayer"}[s]
 }
 
-// --- JSON emission (for Python, interpreted — no codegen) ---
+// --- JSON emission (for TS, interpreted — no codegen) ---
 //
-// Python reads the JSON at runtime and dispatches per op. Only
-// scenarios whose op is in pythonSupportedOps are included; the
-// Go + Elm emitters handle the rest. Field names match the dict
-// shape hints.py already uses (value/suit/origin_deck/state).
+// TS reads the JSON at runtime and dispatches per op. Only
+// scenarios whose op has TS:true are included; the Elm emitter
+// handles the rest.
 
 type jsonCard struct {
 	Value      int `json:"value"`
@@ -2490,8 +2456,8 @@ type jsonScenario struct {
 	// Geometry op (`find_open_loc`).
 	Existing  []jsonStack `json:"existing,omitempty"`
 	CardCount int         `json:"card_count,omitempty"`
-	// Hint op (`hint_for_hand`). Flat label strings so the Python
-	// handler can call agent_prelude.find_play directly.
+	// Hint op (`hint_for_hand`). Flat label strings so the TS
+	// handler can call hand_play.findPlay directly.
 	HintHand  []string   `json:"hint_hand,omitempty"`
 	HintBoard [][]string `json:"hint_board,omitempty"`
 	HintSteps []string   `json:"hint_steps,omitempty"`
@@ -2501,7 +2467,7 @@ type jsonScenario struct {
 func emitJSON(scenarios []Scenario, outPath string) error {
 	var out []jsonScenario
 	for _, sc := range scenarios {
-		if op, ok := opByName[sc.Op]; !ok || !op.Python {
+		if op, ok := opByName[sc.Op]; !ok || !op.TS {
 			continue
 		}
 		out = append(out, toJSONScenario(sc))
@@ -2511,33 +2477,6 @@ func emitJSON(scenarios []Scenario, outPath string) error {
 	}
 	// Indent for humans — diffs should be readable.
 	bs, err := json.MarshalIndent(out, "", "  ")
-	if err != nil {
-		return err
-	}
-	bs = append(bs, '\n')
-	if err := os.MkdirAll(filepath.Dir(outPath), 0755); err != nil {
-		return err
-	}
-	return os.WriteFile(outPath, bs, 0644)
-}
-
-// emitOpsManifest writes a small JSON file listing the op names
-// expected to run on each target. The Python runner reads this
-// to verify its DISPATCH dict matches the registry — drift on
-// either side fails loud.
-func emitOpsManifest(outPath string) error {
-	var elmNames []string
-	for _, op := range opRegistry {
-		if op.Elm {
-			elmNames = append(elmNames, op.Name)
-		}
-	}
-	sort.Strings(elmNames)
-	manifest := map[string][]string{
-		"elm":    elmNames,
-		"python": pythonOps(),
-	}
-	bs, err := json.MarshalIndent(manifest, "", "  ")
 	if err != nil {
 		return err
 	}

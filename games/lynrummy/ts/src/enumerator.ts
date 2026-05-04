@@ -7,8 +7,7 @@
 // Descriptors continue to hold raw card tuples for plan-line stability.
 //
 // Iteration order is the cross-language canon — DON'T rearrange for
-// readability. See SOLVER.md § "Iteration order is the cross-language
-// canon".
+// readability. See ENGINE_V2.md § "Iteration order is canon".
 
 import type { Card } from "./rules/card.ts";
 import { RED } from "./rules/card.ts";

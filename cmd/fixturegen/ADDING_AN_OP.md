@@ -16,12 +16,10 @@ A new op kind needs three or four things, in roughly this order:
 
 1. **Registry row** in `cmd/fixturegen/main.go` — declares which targets
    (Elm / TS) run this op and points at the per-target emitters. The
-   `Python` flag in the registry now means "include in
-   conformance_fixtures.json"; TS is the runtime consumer of that
-   JSON since the Python runner retired 2026-05-02.
+   `TS` flag means "include in `conformance/fixtures.json`"; the TS
+   runner reads that JSON at runtime.
 2. **Per-target emitter functions** — Elm test-body codegen. TS reads
    the JSON fixtures at runtime, so there's no TS codegen step.
-   (Go target retired 2026-04-28 with the Go domain package.)
 3. **TS runner entry** in
    `games/lynrummy/ts/test/test_engine_conformance.ts` — only if the
    op needs TS-side coverage (most BFS ops do).
@@ -34,8 +32,7 @@ forget step 1.
 
 ## The minimum viable recipe
 
-Adding an op `my_op` that runs in Elm + TS (the most common case
-— the referee is the only Go-side citizen, and Go is retired):
+Adding an op `my_op` that runs in Elm + TS (the most common case):
 
 ### 1. Append to `opRegistry` in `cmd/fixturegen/main.go`
 
@@ -43,7 +40,7 @@ Adding an op `my_op` that runs in Elm + TS (the most common case
 {
     Name:    "my_op",
     Elm:     true,
-    Python:  true,
+    TS:      true,
     EmitElm: elmMyOp,
 },
 ```
@@ -90,12 +87,8 @@ go run ./cmd/fixturegen ./games/lynrummy/conformance/scenarios/*.dsl
 This:
 
 - Validates the registry covers every op used in `.dsl` files.
-- Emits the Go test file (only ops with `Go: true`).
 - Emits the Elm test module (only ops with `Elm: true`).
-- Emits `conformance_fixtures.json` (only ops with `Python: true`).
-- Emits `conformance_ops.json` — the manifest the Python runner
-  uses for cross-checking.
-- Runs `go build` on the generated Go package.
+- Emits `conformance/fixtures.json` (only ops with `TS: true`).
 - Verifies regen idempotence.
 
 ### 6. Run the gates
@@ -122,14 +115,12 @@ The cost-shape there:
   can detect "was it set?". See `Expect.LogAppended` for the
   pattern.
 - **JSON-visible field** — extend `jsonScenario` / `jsonExpect`
-  and `toJSONScenario`. Field names use `snake_case` JSON tags
-  (legacy from when Python consumed the JSON; TS reads the same
-  shape).
+  and `toJSONScenario`. Field names use `snake_case` JSON tags.
 
-## When the op is referee-only (Elm-only)
+## When the op is Elm-only
 
-Set `Elm: true` and leave Python/Go off — the referee runs in the
-Elm client now (Go domain package retired 2026-04-28).
+Set `Elm: true` and leave `TS` off — the op only runs in the Elm
+test suite.
 
 ## Why a registry?
 
@@ -149,5 +140,5 @@ TS contract.
 - `cmd/fixturegen/main.go` — registry, parser, both emitters.
 - `games/lynrummy/conformance/scenarios/*.dsl` — scenario sources.
 - `games/lynrummy/elm/tests/Game/DslConformanceTest.elm` — generated Elm tests.
-- `games/lynrummy/python/conformance_fixtures.json` — generated JSON fixtures (path is legacy; TS reads them).
+- `games/lynrummy/conformance/fixtures.json` — generated JSON fixtures (consumed by TS).
 - `games/lynrummy/ts/test/test_engine_conformance.ts` — TS runtime dispatcher.

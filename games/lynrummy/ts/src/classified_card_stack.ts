@@ -229,8 +229,8 @@ export function kindAfterAbsorbRight(
 // order: (left, right, set). Each maps a SHAPE id (encoded as
 // `value * 4 + suit`) to the result kind that absorbing a card of
 // that shape would produce. The three Maps are mutually disjoint —
-// a shape lives in at most one of them. Mirrors python's
-// `extends_tables`. See SOLVER.md § Three-bucket extends.
+// a shape lives in at most one of them. See ENGINE_V2.md §
+// Three-bucket extends for the design rationale.
 
 /** Encode a (value, suit) pair as a single primitive key. value ∈ [1,13],
  *  suit ∈ [0,3]; the product is unique, dense, and comparable in O(1). */

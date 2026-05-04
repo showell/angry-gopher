@@ -40,6 +40,30 @@ The TS agent uses the file system directly — no HTTP. The Go
 server still indexes session ids and accepts wire POSTs from
 Elm during live play, but the TS agent bypasses it.
 
+## Agent responsibilities
+
+This subtree owns three end-to-end responsibilities. When Steve
+asks for any of these, the work happens here:
+
+- **Generating sample games for review.** Full 2-hand self-play
+  + Elm-replayable transcript writing live in this subtree.
+  Driver: `npm run bench:end-of-deck -- --write-transcript [seeds...]`.
+  Output: `data/lynrummy-elm/sessions/<id>/{meta.json, actions/*.json}`,
+  ready for Elm to replay at the URL the Go server exposes. The
+  Python subsystem does NOT generate transcripts.
+- **Running the conformance suite.** The canonical gate
+  `ops/check-conformance` runs `cmd/fixturegen` (Go, DSL →
+  fixtures), then `npm test` in this subtree (leaf + engine +
+  verbs + physical_plan + replay walkthroughs + agent self-play),
+  then Elm `check.sh`. Python's `check.sh` is a separate
+  parallel-implementation sanity check, NOT part of the canonical
+  gate.
+- **Running performance tests.** All perf harnesses live in
+  `bench/`: `bench:check-baseline` (timing regression gate),
+  `bench:end-of-deck` (full-game perf, 6 seeds), and the
+  auxiliary measurement drivers. There are no Python perf
+  benches in the active loop.
+
 ## Layout
 
 | File | Role |

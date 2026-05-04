@@ -51,15 +51,10 @@ wired.
   `games/lynrummy/conformance/scenarios/*.dsl` compile via
   `cmd/fixturegen` into two independent test suites:
   Elm (`games/lynrummy/elm/tests/Game/DslConformanceTest.elm`)
-  and TS (via `conformance_fixtures.json` consumed by
-  `games/lynrummy/ts/test/test_engine_conformance.ts`). Both
-  must agree scenario-by-scenario; divergent pass/fail counts
-  surface as the bridge failing. The Go target retired
-  2026-04-28 with the Go domain package — Go is now dumb file
-  storage and no longer runs the referee at runtime, so the
-  conformance bridge has no game on that target. The Python
-  runner retired 2026-05-02 with the BFS-retirement work —
-  TS now owns the BFS conformance leg.
+  and TS (via `games/lynrummy/conformance/fixtures.json`
+  consumed by `games/lynrummy/ts/test/test_engine_conformance.ts`).
+  Both must agree scenario-by-scenario; divergent pass/fail
+  counts surface as the bridge failing.
 - *Reading list ↔ Gopher comment JSON.* As of 2026-04-16, both
   the reading-list static site and the Gopher server render
   the same `.md` + `.md.comments.json` pair. The JSON is the

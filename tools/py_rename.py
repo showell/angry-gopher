@@ -14,9 +14,9 @@ mechanical passes; not appropriate for moves that change
 semantics.
 
 Usage:
-  python3 tools/py_rename.py SCRIPT --root games/lynrummy/python
-  python3 tools/py_rename.py SCRIPT --root games/lynrummy/python --execute
-  python3 tools/py_rename.py SCRIPT --root games/lynrummy/python --execute --verify
+  python3 tools/py_rename.py SCRIPT --root <python-tree>
+  python3 tools/py_rename.py SCRIPT --root <python-tree> --execute
+  python3 tools/py_rename.py SCRIPT --root <python-tree> --execute --verify
 
 Script syntax (one directive per line, # comments allowed):
 

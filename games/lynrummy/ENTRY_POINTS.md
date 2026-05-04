@@ -109,15 +109,6 @@ Run tests with `npm test` from `games/lynrummy/ts/` — Node
 v24's native TS support runs `.ts` files directly. See
 [`ts/README.md`](ts/README.md).
 
-### Python (legacy/utility) (`games/lynrummy/python/`)
-
-The Python solver retired during the TS migration; the
-modules still pass their tests as a frozen parallel
-implementation. Active utility code: `dealer.py`,
-`puzzle_catalog.py`, plus a few one-off study tools. See
-[`python/README.md`](python/README.md).
-
-
 ## Conformance test surfaces
 
 From `games/lynrummy/elm/`:
@@ -128,12 +119,6 @@ From `games/lynrummy/elm/`:
   `Play.update`), and DSL conformance.
 - `npx elm-review` — `NoUnused.*` rules with generated-tests
   + test-Exports exemptions.
-
-From `games/lynrummy/python/`:
-
-- `./check.sh` — runs every `test_*.py` in the directory.
-  The Python solver tests still pass as a frozen-parallel
-  reference; not in the cross-language conformance loop.
 
 From `games/lynrummy/ts/`:
 

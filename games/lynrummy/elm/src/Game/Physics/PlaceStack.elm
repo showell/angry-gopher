@@ -4,21 +4,14 @@ module Game.Physics.PlaceStack exposing
     )
 
 {-| Collision-free placement math for new stacks on the
-LynRummy board. Pure geometry. **Faithful port of
-`games/lynrummy/python/geometry.py::find_open_loc`** —
-column-major scan from `HUMAN_PREFERRED_ORIGIN`, anti-align,
-PACK_GAP, then crowded-board legal-margin fallback. See the
-Python module's docstring for the human-feel rationale.
+LynRummy board. Pure geometry. Mirrors the TS port at
+`games/lynrummy/ts/src/geometry.ts`: column-major scan from
+`HUMAN_PREFERRED_ORIGIN`, anti-align, PACK_GAP, then
+crowded-board legal-margin fallback.
 
-The constants below mirror Python's module-level constants
-(and now the TS port at `games/lynrummy/ts/src/geometry.ts`).
-All three layers must agree exactly: any landed loc is
-text-asserted by `Game.PrimitivesConformanceTest.elm` against
-inline frozen fixtures. (The upstream
-`export_primitives_fixtures.py` retired 2026-05-02; the
-companion JSON was converted to
-`conformance/scenarios/verb_to_primitives_corpus.dsl` and
-retired 2026-05-03 — TS-canonical going forward.)
+Both layers must agree exactly. The conformance gate
+(`ops/check-conformance`) re-emits the DSL fixtures and runs
+both runners against them.
 
 -}
 
@@ -26,7 +19,7 @@ import Game.CardStack as CardStack exposing (BoardLocation, CardStack)
 
 
 
--- CONSTANTS (mirror python/geometry.py)
+-- CONSTANTS (mirror ts/src/geometry.ts)
 
 
 cardHeight : Int
@@ -144,7 +137,8 @@ isRectsOverlap a b =
 -- PUBLIC: FIND AN OPEN LOC
 
 
-{-| Faithful port of python/geometry.py::find_open_loc.
+{-| Find an open loc for a new stack of `cardCount` cards.
+Mirrors the TS port at `ts/src/geometry.ts::findOpenLoc`.
 
 Empty board → BOARD_START + anti-align. Otherwise:
 
