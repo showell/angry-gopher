@@ -3130,6 +3130,262 @@ validExtendRunWith8H =
                     Expect.fail (refereeStageToString err.stage ++ ": " ++ err.message)
 
 
+walkthroughPuzzleA3001Seed1 : Test
+walkthroughPuzzleA3001Seed1 =
+    test "walkthrough_puzzle_a3_001_seed1" <|
+        \_ ->
+            let
+                board =
+                    [ { boardCards = [ boardCard "7S1", boardCard "7D1", boardCard "7C1" ], loc = { top = 200, left = 40 } }
+                        , { boardCards = [ boardCard "AS1", boardCard "2S1", boardCard "3S1" ], loc = { top = 20, left = 111 } }
+                        , { boardCards = [ boardCard "KH2", boardCard "KD2", boardCard "KS1" ], loc = { top = 542, left = 52 } }
+                        , { boardCards = [ boardCard "TD1", boardCard "JD1", boardCard "QD1" ], loc = { top = 80, left = 152 } }
+                        , { boardCards = [ boardCard "AD1", boardCard "2S2", boardCard "3H1" ], loc = { top = 542, left = 187 } }
+                        , { boardCards = [ boardCard "3C2", boardCard "4H2", boardCard "5S1" ], loc = { top = 392, left = 52 } }
+                        , { boardCards = [ boardCard "6S2", boardCard "6C2", boardCard "6D1" ], loc = { top = 92, left = 277 } }
+                        , { boardCards = [ boardCard "9S1", boardCard "TS2", boardCard "JS2", boardCard "QS1", boardCard "KS2" ], loc = { top = 287, left = 322 } }
+                        , { boardCards = [ boardCard "5H1", boardCard "6S1", boardCard "7H1", boardCard "8S2" ], loc = { top = 212, left = 228 } }
+                        , { boardCards = [ boardCard "QC2", boardCard "KD1", boardCard "AC1", boardCard "2H1", boardCard "3S2", boardCard "4H1" ], loc = { top = 467, left = 187 } }
+                        , { boardCards = [ boardCard "AH1", boardCard "2C1", boardCard "3D1", boardCard "4C1" ], loc = { top = 268, left = 58 } }
+                        , { boardCards = [ boardCard "AD2", boardCard "2D1", boardCard "3D2", boardCard "4D1", boardCard "5D2" ], loc = { top = 362, left = 232 } }
+                        , { boardCards = [ boardCard "KH1" ], loc = { top = 92, left = 52 } }
+                        ]
+
+                base =
+                    State.baseModel
+
+                initialModel =
+                    { base | board = board, sessionId = Just 0 }
+
+                ( eagerModel, actions ) =
+                    buildEagerAndActions initialModel
+                        [ SpecSplit [ parseCard "QC2", parseCard "KD1", parseCard "AC1", parseCard "2H1", parseCard "3S2", parseCard "4H1" ] 0
+                        , SpecMergeStack [ parseCard "QC2" ] [ parseCard "KH1" ] BoardActions.Left
+                        , SpecSplit [ parseCard "KD1", parseCard "AC1", parseCard "2H1", parseCard "3S2", parseCard "4H1" ] 0
+                        , SpecMoveStack [ parseCard "AC1", parseCard "2H1", parseCard "3S2", parseCard "4H1" ] { top = 467, left = 52 }
+                        , SpecSplit [ parseCard "AC1", parseCard "2H1", parseCard "3S2", parseCard "4H1" ] 0
+                        , SpecMergeStack [ parseCard "AC1" ] [ parseCard "QC2", parseCard "KH1" ] BoardActions.Right
+                        , SpecMoveStack [ parseCard "TD1", parseCard "JD1", parseCard "QD1" ] { top = 437, left = 292 }
+                        , SpecMergeStack [ parseCard "KD1" ] [ parseCard "TD1", parseCard "JD1", parseCard "QD1" ] BoardActions.Right ]
+
+                replayedModel =
+                    runReplay initialModel actions
+            in
+            Expect.all
+                [ \_ -> Expect.equal eagerModel.board replayedModel.board
+                , \_ -> Expect.equal eagerModel.hands replayedModel.hands
+                , \_ -> Expect.equal eagerModel.scores replayedModel.scores
+                , \_ -> Expect.equal eagerModel.activePlayerIndex replayedModel.activePlayerIndex
+                , \_ -> Expect.equal eagerModel.turnIndex replayedModel.turnIndex
+                ]
+                ()
+
+
+walkthroughPuzzleA3002Seed2 : Test
+walkthroughPuzzleA3002Seed2 =
+    test "walkthrough_puzzle_a3_002_seed2" <|
+        \_ ->
+            let
+                board =
+                    [ { boardCards = [ boardCard "7S1", boardCard "7D1", boardCard "7C1" ], loc = { top = 200, left = 40 } }
+                        , { boardCards = [ boardCard "TH1", boardCard "TC2", boardCard "TS1" ], loc = { top = 392, left = 52 } }
+                        , { boardCards = [ boardCard "8S2", boardCard "8D1", boardCard "8C1" ], loc = { top = 467, left = 52 } }
+                        , { boardCards = [ boardCard "KC2", boardCard "KH2", boardCard "KD1" ], loc = { top = 392, left = 187 } }
+                        , { boardCards = [ boardCard "9C2", boardCard "TH2", boardCard "JC1" ], loc = { top = 467, left = 187 } }
+                        , { boardCards = [ boardCard "QC1", boardCard "QH2", boardCard "QD2" ], loc = { top = 542, left = 187 } }
+                        , { boardCards = [ boardCard "2S1", boardCard "3S1", boardCard "4S1" ], loc = { top = 227, left = 336 } }
+                        , { boardCards = [ boardCard "KS1", boardCard "AS1", boardCard "2S2" ], loc = { top = 542, left = 52 } }
+                        , { boardCards = [ boardCard "7H1", boardCard "8S1", boardCard "9H1" ], loc = { top = 298, left = 431 } }
+                        , { boardCards = [ boardCard "9D2", boardCard "TD1", boardCard "JD1", boardCard "QD1" ], loc = { top = 80, left = 111 } }
+                        , { boardCards = [ boardCard "QC2", boardCard "KD2", boardCard "AC1" ], loc = { top = 302, left = 262 } }
+                        , { boardCards = [ boardCard "AH1", boardCard "2H1", boardCard "3H1", boardCard "4H1" ], loc = { top = 140, left = 67 } }
+                        , { boardCards = [ boardCard "AD1", boardCard "2C1", boardCard "3D1", boardCard "4C1", boardCard "5H1", boardCard "6S1", boardCard "7D2" ], loc = { top = 377, left = 314 } }
+                        , { boardCards = [ boardCard "5H2", boardCard "5C1", boardCard "5D1" ], loc = { top = 302, left = 112 } }
+                        , { boardCards = [ boardCard "5S1", boardCard "6D2", boardCard "7S2" ], loc = { top = 227, left = 184 } }
+                        , { boardCards = [ boardCard "5C2" ], loc = { top = 272, left = 52 } }
+                        ]
+
+                base =
+                    State.baseModel
+
+                initialModel =
+                    { base | board = board, sessionId = Just 0 }
+
+                ( eagerModel, actions ) =
+                    buildEagerAndActions initialModel
+                        [ SpecSplit [ parseCard "5S1", parseCard "6D2", parseCard "7S2" ] 0
+                        , SpecMoveStack [ parseCard "6D2", parseCard "7S2" ] { top = 152, left = 232 }
+                        , SpecSplit [ parseCard "6D2", parseCard "7S2" ] 0
+                        , SpecMoveStack [ parseCard "5C2" ] { top = 227, left = 247 }
+                        , SpecMergeStack [ parseCard "6D2" ] [ parseCard "5C2" ] BoardActions.Right
+                        , SpecMergeStack [ parseCard "5S1" ] [ parseCard "5H2", parseCard "5C1", parseCard "5D1" ] BoardActions.Right
+                        , SpecMoveStack [ parseCard "5C2", parseCard "6D2" ] { top = 227, left = 172 }
+                        , SpecMergeStack [ parseCard "7S2" ] [ parseCard "5C2", parseCard "6D2" ] BoardActions.Right ]
+
+                replayedModel =
+                    runReplay initialModel actions
+            in
+            Expect.all
+                [ \_ -> Expect.equal eagerModel.board replayedModel.board
+                , \_ -> Expect.equal eagerModel.hands replayedModel.hands
+                , \_ -> Expect.equal eagerModel.scores replayedModel.scores
+                , \_ -> Expect.equal eagerModel.activePlayerIndex replayedModel.activePlayerIndex
+                , \_ -> Expect.equal eagerModel.turnIndex replayedModel.turnIndex
+                ]
+                ()
+
+
+walkthroughPuzzleA3003Seed3 : Test
+walkthroughPuzzleA3003Seed3 =
+    test "walkthrough_puzzle_a3_003_seed3" <|
+        \_ ->
+            let
+                board =
+                    [ { boardCards = [ boardCard "KS1", boardCard "AS1", boardCard "2S1", boardCard "3S1" ], loc = { top = 20, left = 70 } }
+                        , { boardCards = [ boardCard "2H1", boardCard "3H1", boardCard "4H1" ], loc = { top = 140, left = 100 } }
+                        , { boardCards = [ boardCard "7S1", boardCard "7D1", boardCard "7C1" ], loc = { top = 200, left = 40 } }
+                        , { boardCards = [ boardCard "AC1", boardCard "AD1", boardCard "AH1" ], loc = { top = 260, left = 130 } }
+                        , { boardCards = [ boardCard "2C1", boardCard "3D1", boardCard "4C1", boardCard "5H1", boardCard "6S1", boardCard "7H1" ], loc = { top = 320, left = 70 } }
+                        , { boardCards = [ boardCard "2S2", boardCard "3H2", boardCard "4C2" ], loc = { top = 392, left = 52 } }
+                        , { boardCards = [ boardCard "7C2", boardCard "8H2", boardCard "9C1" ], loc = { top = 467, left = 52 } }
+                        , { boardCards = [ boardCard "TD1", boardCard "JD1", boardCard "QD1" ], loc = { top = 80, left = 152 } }
+                        , { boardCards = [ boardCard "KS2", boardCard "KH1", boardCard "KD1" ], loc = { top = 542, left = 52 } }
+                        , { boardCards = [ boardCard "5S1", boardCard "6S2" ], loc = { top = 392, left = 187 } }
+                        ]
+
+                base =
+                    State.baseModel
+
+                initialModel =
+                    { base | board = board, sessionId = Just 0 }
+
+                ( eagerModel, actions ) =
+                    buildEagerAndActions initialModel
+                        [ SpecSplit [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ] 0
+                        , SpecMergeStack [ parseCard "7S1" ] [ parseCard "5S1", parseCard "6S2" ] BoardActions.Right
+                        , SpecSplit [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ] 5
+                        , SpecMergeStack [ parseCard "7H1" ] [ parseCard "7D1", parseCard "7C1" ] BoardActions.Left ]
+
+                replayedModel =
+                    runReplay initialModel actions
+            in
+            Expect.all
+                [ \_ -> Expect.equal eagerModel.board replayedModel.board
+                , \_ -> Expect.equal eagerModel.hands replayedModel.hands
+                , \_ -> Expect.equal eagerModel.scores replayedModel.scores
+                , \_ -> Expect.equal eagerModel.activePlayerIndex replayedModel.activePlayerIndex
+                , \_ -> Expect.equal eagerModel.turnIndex replayedModel.turnIndex
+                ]
+                ()
+
+
+walkthroughPuzzleA3004Seed4 : Test
+walkthroughPuzzleA3004Seed4 =
+    test "walkthrough_puzzle_a3_004_seed4" <|
+        \_ ->
+            let
+                board =
+                    [ { boardCards = [ boardCard "TD1", boardCard "JD1", boardCard "QD1", boardCard "KD1" ], loc = { top = 80, left = 160 } }
+                        , { boardCards = [ boardCard "7S1", boardCard "7D1", boardCard "7C1" ], loc = { top = 200, left = 40 } }
+                        , { boardCards = [ boardCard "AC1", boardCard "AD1", boardCard "AH1" ], loc = { top = 260, left = 130 } }
+                        , { boardCards = [ boardCard "3S2", boardCard "4S1", boardCard "5S2" ], loc = { top = 392, left = 52 } }
+                        , { boardCards = [ boardCard "6D1", boardCard "7C2", boardCard "8H1" ], loc = { top = 467, left = 52 } }
+                        , { boardCards = [ boardCard "JH1", boardCard "QS1", boardCard "KD2" ], loc = { top = 542, left = 52 } }
+                        , { boardCards = [ boardCard "2C1", boardCard "3D1", boardCard "4C1", boardCard "5H1", boardCard "6S1", boardCard "7H1", boardCard "8C1" ], loc = { top = 320, left = 70 } }
+                        , { boardCards = [ boardCard "KS1", boardCard "AS1", boardCard "2S1" ], loc = { top = 20, left = 62 } }
+                        , { boardCards = [ boardCard "AH2", boardCard "2H1", boardCard "3H1" ], loc = { top = 140, left = 59 } }
+                        , { boardCards = [ boardCard "2H2", boardCard "3S1", boardCard "4H1" ], loc = { top = 392, left = 187 } }
+                        , { boardCards = [ boardCard "7D2" ], loc = { top = 152, left = 187 } }
+                        ]
+
+                base =
+                    State.baseModel
+
+                initialModel =
+                    { base | board = board, sessionId = Just 0 }
+
+                ( eagerModel, actions ) =
+                    buildEagerAndActions initialModel
+                        [ SpecSplit [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1", parseCard "8C1" ] 6
+                        , SpecMergeStack [ parseCard "8C1" ] [ parseCard "7D2" ] BoardActions.Right
+                        , SpecMoveStack [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ] { top = 467, left = 187 }
+                        , SpecSplit [ parseCard "2C1", parseCard "3D1", parseCard "4C1", parseCard "5H1", parseCard "6S1", parseCard "7H1" ] 4
+                        , SpecSplit [ parseCard "6S1", parseCard "7H1" ] 0
+                        , SpecMoveStack [ parseCard "7D2", parseCard "8C1" ] { top = 152, left = 220 }
+                        , SpecMergeStack [ parseCard "6S1" ] [ parseCard "7D2", parseCard "8C1" ] BoardActions.Left
+                        , SpecMergeStack [ parseCard "7H1" ] [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ] BoardActions.Left ]
+
+                replayedModel =
+                    runReplay initialModel actions
+            in
+            Expect.all
+                [ \_ -> Expect.equal eagerModel.board replayedModel.board
+                , \_ -> Expect.equal eagerModel.hands replayedModel.hands
+                , \_ -> Expect.equal eagerModel.scores replayedModel.scores
+                , \_ -> Expect.equal eagerModel.activePlayerIndex replayedModel.activePlayerIndex
+                , \_ -> Expect.equal eagerModel.turnIndex replayedModel.turnIndex
+                ]
+                ()
+
+
+walkthroughPuzzleA3005Seed5 : Test
+walkthroughPuzzleA3005Seed5 =
+    test "walkthrough_puzzle_a3_005_seed5" <|
+        \_ ->
+            let
+                board =
+                    [ { boardCards = [ boardCard "KH1", boardCard "KC2", boardCard "KD1" ], loc = { top = 467, left = 52 } }
+                        , { boardCards = [ boardCard "4H2", boardCard "4D2", boardCard "4C1" ], loc = { top = 392, left = 187 } }
+                        , { boardCards = [ boardCard "AH1", boardCard "AD1", boardCard "AS2" ], loc = { top = 467, left = 247 } }
+                        , { boardCards = [ boardCard "7S1", boardCard "7D1", boardCard "7C1" ], loc = { top = 200, left = 32 } }
+                        , { boardCards = [ boardCard "7S2", boardCard "8S1", boardCard "9S1" ], loc = { top = 377, left = 363 } }
+                        , { boardCards = [ boardCard "2D2", boardCard "2S2", boardCard "2H1" ], loc = { top = 88, left = 291 } }
+                        , { boardCards = [ boardCard "8H1", boardCard "9H1", boardCard "TH1" ], loc = { top = 152, left = 248 } }
+                        , { boardCards = [ boardCard "TD2", boardCard "TH2", boardCard "TC1" ], loc = { top = 347, left = 52 } }
+                        , { boardCards = [ boardCard "3H2", boardCard "3S1", boardCard "3D1" ], loc = { top = 167, left = 457 } }
+                        , { boardCards = [ boardCard "QS2", boardCard "QH1", boardCard "QD2" ], loc = { top = 317, left = 502 } }
+                        , { boardCards = [ boardCard "JS2", boardCard "QH2", boardCard "KS1", boardCard "AD2", boardCard "2S1" ], loc = { top = 302, left = 262 } }
+                        , { boardCards = [ boardCard "KC1", boardCard "AC1", boardCard "2C1" ], loc = { top = 272, left = 83 } }
+                        , { boardCards = [ boardCard "AS1", boardCard "2D1", boardCard "3C2" ], loc = { top = 16, left = 101 } }
+                        , { boardCards = [ boardCard "JD2", boardCard "QD1", boardCard "KD2" ], loc = { top = 92, left = 532 } }
+                        , { boardCards = [ boardCard "8D2", boardCard "9D2", boardCard "TD1", boardCard "JD1" ], loc = { top = 92, left = 11 } }
+                        , { boardCards = [ boardCard "3C1", boardCard "4D1", boardCard "5C1", boardCard "6D1", boardCard "7C2", boardCard "8H2" ], loc = { top = 542, left = 139 } }
+                        , { boardCards = [ boardCard "5D1", boardCard "6S1", boardCard "7H1", boardCard "8C1", boardCard "9H2" ], loc = { top = 448, left = 419 } }
+                        , { boardCards = [ boardCard "2H2", boardCard "3H1", boardCard "4H1", boardCard "5H1", boardCard "6H2" ], loc = { top = 392, left = 514 } }
+                        , { boardCards = [ boardCard "5H2", boardCard "6C1", boardCard "7H2", boardCard "8C2", boardCard "9D1" ], loc = { top = 242, left = 420 } }
+                        , { boardCards = [ boardCard "4C2", boardCard "5D2", boardCard "6C2", boardCard "7D2" ], loc = { top = 527, left = 379 } }
+                        , { boardCards = [ boardCard "3S2" ], loc = { top = 542, left = 52 } }
+                        ]
+
+                base =
+                    State.baseModel
+
+                initialModel =
+                    { base | board = board, sessionId = Just 0 }
+
+                ( eagerModel, actions ) =
+                    buildEagerAndActions initialModel
+                        [ SpecSplit [ parseCard "AS1", parseCard "2D1", parseCard "3C2" ] 0
+                        , SpecMoveStack [ parseCard "2D1", parseCard "3C2" ] { top = 167, left = 157 }
+                        , SpecSplit [ parseCard "2D1", parseCard "3C2" ] 0
+                        , SpecMergeStack [ parseCard "2D1" ] [ parseCard "3S2" ] BoardActions.Left
+                        , SpecMoveStack [ parseCard "2D1", parseCard "3S2" ] { top = 227, left = 295 }
+                        , SpecMergeStack [ parseCard "AS1" ] [ parseCard "2D1", parseCard "3S2" ] BoardActions.Left
+                        , SpecMergeStack [ parseCard "3C2" ] [ parseCard "3H2", parseCard "3S1", parseCard "3D1" ] BoardActions.Right ]
+
+                replayedModel =
+                    runReplay initialModel actions
+            in
+            Expect.all
+                [ \_ -> Expect.equal eagerModel.board replayedModel.board
+                , \_ -> Expect.equal eagerModel.hands replayedModel.hands
+                , \_ -> Expect.equal eagerModel.scores replayedModel.scores
+                , \_ -> Expect.equal eagerModel.activePlayerIndex replayedModel.activePlayerIndex
+                , \_ -> Expect.equal eagerModel.turnIndex replayedModel.turnIndex
+                ]
+                ()
+
+
 wingsForHandCard7SOnto7setRight : Test
 wingsForHandCard7SOnto7setRight =
     test "wings_for_hand_card_7S_onto_7set_right" <|
@@ -3578,6 +3834,11 @@ suite =
         , undoWalkthroughPlaceHand
         , undoWalkthroughSplitThenMove
         , validExtendRunWith8H
+        , walkthroughPuzzleA3001Seed1
+        , walkthroughPuzzleA3002Seed2
+        , walkthroughPuzzleA3003Seed3
+        , walkthroughPuzzleA3004Seed4
+        , walkthroughPuzzleA3005Seed5
         , wingsForHandCard7SOnto7setRight
         , wingsForHandCardDuplicateRejected
         , wingsForHandCardNoValidGroup
