@@ -102,6 +102,14 @@ function applyMove(board: readonly BoardStack[], si: number, newLoc: Loc): Board
   return [...board.slice(0, si), ...board.slice(si + 1), moved];
 }
 
+// Card-order invariant shared by applyMergeStack and applyMergeHand:
+//   side="left"  → merged.cards = [...incoming, ...target]
+//   side="right" → merged.cards = [...target, ...incoming]
+// where "incoming" is `s.cards` for merge_stack and `[handCard]` for
+// merge_hand. The lift in `physical_plan.ts` relies on this symmetry:
+// rewriting `merge_stack(X → [P], side)` as `merge_hand(P → X,
+// flipSide(side))` preserves the merged card order because P swaps
+// roles from target to incoming.
 function applyMergeStack(
   board: readonly BoardStack[],
   src: number,

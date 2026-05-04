@@ -63,6 +63,11 @@ export function physicalPlan(
   planDescs: readonly Desc[],
 ): readonly Primitive[] {
   const logical = emitLogicalTrace(initialBoard, placements, planDescs);
+  // `?? logical` is the benign fallback path: liftSinglePlacement
+  // returns null when the placement isn't liftable (no place_hand
+  // found, no merge_stack consumer, or some intermediate primitive
+  // touches the [P] singleton). The un-lifted trace is still a
+  // correct primitive sequence — we just don't get the optimization.
   const lifted = placements.length === 1
     ? (liftSinglePlacement(initialBoard, placements[0]!, logical) ?? logical)
     : logical;
@@ -217,6 +222,8 @@ function liftSinglePlacement(
     const c = contents[i]!;
     if (i === consumeIdx) {
       const m = c as Extract<Content, { kind: "merge_stack" }>;
+      // Both rewrites preserve the merged card order — see the
+      // shared invariant above `applyMergeStack` in `primitives.ts`.
       let liftedPrim: Primitive;
       if (consumerKind === "src") {
         // P was the source being absorbed INTO m.tgt. Direct-drag is
@@ -229,9 +236,9 @@ function liftSinglePlacement(
         };
       } else {
         // P was the target — m.src absorbed INTO [P]. Direct-drag is
-        // merge_hand(P → src, flipSide(side)) — gesture grammar
-        // mirrors absorber-active framing, side flips so the final
-        // card order matches.
+        // merge_hand(P → src, flipSide(side)) — P swaps from target
+        // to incoming, so the side that puts incoming on the same
+        // end of the merged stack is the flipped side.
         const srcIdx = findStackIndex(sim, m.src);
         liftedPrim = {
           action: "merge_hand", targetStack: srcIdx,

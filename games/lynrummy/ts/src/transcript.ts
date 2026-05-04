@@ -217,12 +217,12 @@ function primToWire(prim: Primitive, sim: readonly BoardStack[]): WireActionJson
 function playToPrimitives(
   sim: readonly BoardStack[],
   play: PlayRecord,
-): { prims: Primitive[]; sim: readonly BoardStack[] } {
+): { prims: readonly Primitive[]; sim: readonly BoardStack[] } {
   const prims = physicalPlan(sim, play.placements, play.planDescs);
   let cur = sim;
   for (const p of prims) cur = applyLocally(cur, p);
   assertNoOverlap(cur, "after-play");
-  return { prims: [...prims], sim: cur };
+  return { prims, sim: cur };
 }
 
 // --- Top-level writer ------------------------------------------------
