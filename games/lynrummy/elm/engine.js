@@ -18,7 +18,7 @@ var LynRummyEngine = (() => {
   };
   var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
-  // ../ts/src/engine_entry.ts
+  // games/lynrummy/ts/src/engine_entry.ts
   var engine_entry_exports = {};
   __export(engine_entry_exports, {
     agentPlay: () => agentPlay,
@@ -28,7 +28,7 @@ var LynRummyEngine = (() => {
     solveStateWithDescs: () => solveStateWithDescs
   });
 
-  // ../ts/src/rules/card.ts
+  // games/lynrummy/ts/src/rules/card.ts
   var RANKS = "A23456789TJQK";
   var SUITS = "CDSH";
   var RED = /* @__PURE__ */ new Set([1, 3]);
@@ -40,7 +40,7 @@ var LynRummyEngine = (() => {
     return RED.has(s);
   }
 
-  // ../ts/src/classified_card_stack.ts
+  // games/lynrummy/ts/src/classified_card_stack.ts
   var KIND_RUN = "run";
   var KIND_RB = "rb";
   var KIND_SET = "set";
@@ -433,7 +433,7 @@ var LynRummyEngine = (() => {
     return out;
   }
 
-  // ../ts/src/buckets.ts
+  // games/lynrummy/ts/src/buckets.ts
   var CARD_PAD = 4;
   function encodeCard(c) {
     const id = (c[0] * 4 + c[1]) * 2 + c[2];
@@ -567,7 +567,7 @@ var LynRummyEngine = (() => {
     };
   }
 
-  // ../ts/src/move.ts
+  // games/lynrummy/ts/src/move.ts
   function stackLabel(stack) {
     return stack.map(cardLabel).join(" ");
   }
@@ -618,7 +618,7 @@ var LynRummyEngine = (() => {
     }
   }
 
-  // ../ts/src/enumerator.ts
+  // games/lynrummy/ts/src/enumerator.ts
   var LEGAL_LEN3_KINDS = /* @__PURE__ */ new Set([KIND_RUN, KIND_RB, KIND_SET]);
   var RUN_FAMILY_KINDS = /* @__PURE__ */ new Set([KIND_RUN, KIND_RB]);
   function dropAt(stacks, idx) {
@@ -1590,7 +1590,7 @@ var LynRummyEngine = (() => {
     ];
   }
 
-  // ../ts/src/card_neighbors.ts
+  // games/lynrummy/ts/src/card_neighbors.ts
   function cardId(c) {
     return (c[0] - 1) * 8 + c[1] * 2 + c[2];
   }
@@ -1708,7 +1708,7 @@ var LynRummyEngine = (() => {
     return false;
   }
 
-  // ../ts/src/engine_v2.ts
+  // games/lynrummy/ts/src/engine_v2.ts
   var HEURISTICS = {
     /** Lower-bound: each move shrinks trouble+growing by ≤2. Admissible. */
     half_debt: (b) => {
@@ -1998,7 +1998,7 @@ var LynRummyEngine = (() => {
     return cards.map((c) => `${c[0]},${c[1]},${c[2]}`).join("|");
   }
 
-  // ../ts/src/geometry.ts
+  // games/lynrummy/ts/src/geometry.ts
   var CARD_WIDTH = 27;
   var CARD_PITCH = CARD_WIDTH + 6;
   var CARD_HEIGHT = 40;
@@ -2121,7 +2121,7 @@ var LynRummyEngine = (() => {
     return findViolation(board, PLANNING_MARGIN);
   }
 
-  // ../ts/src/primitives.ts
+  // games/lynrummy/ts/src/primitives.ts
   function applySplit(board, si, ci) {
     const stack = board[si];
     const size = stack.cards.length;
@@ -2219,7 +2219,7 @@ var LynRummyEngine = (() => {
     throw new Error(`stack not found on board: [${cards.map((c) => `${c[0]},${c[1]},${c[2]}`).join(" ")}]`);
   }
 
-  // ../ts/src/verbs.ts
+  // games/lynrummy/ts/src/verbs.ts
   function flipSide(s) {
     return s === "left" ? "right" : "left";
   }
@@ -2552,7 +2552,7 @@ var LynRummyEngine = (() => {
     return r.prims;
   }
 
-  // ../ts/src/wire_json.ts
+  // games/lynrummy/ts/src/wire_json.ts
   function jsonCard(c) {
     return { value: c[0], suit: c[1], origin_deck: c[2] };
   }
@@ -2602,7 +2602,7 @@ var LynRummyEngine = (() => {
     }
   }
 
-  // ../ts/src/rules/stack_type.ts
+  // games/lynrummy/ts/src/rules/stack_type.ts
   function successor2(v) {
     return v === 13 ? 1 : v + 1;
   }
@@ -2621,7 +2621,7 @@ var LynRummyEngine = (() => {
     return false;
   }
 
-  // ../ts/src/hand_play.ts
+  // games/lynrummy/ts/src/hand_play.ts
   var PROJECTION_MAX_STATES = 5e3;
   var HINT_MAX_PLAN_LENGTH = 4;
   function findPlay(hand, board, opts = {}) {
@@ -2732,7 +2732,7 @@ var LynRummyEngine = (() => {
     return plan === null ? null : plan.map((p) => p.line);
   }
 
-  // ../ts/src/engine_entry.ts
+  // games/lynrummy/ts/src/engine_entry.ts
   function solveBoard(board) {
     return solveBucketsFromCardLists(board);
   }

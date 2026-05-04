@@ -28,6 +28,7 @@ import Main.Msg exposing (Msg(..))
 import Main.Play as Play
 import Main.State as State
 import Test exposing (Test, describe, test)
+import Test.AgentPlanFixtures as Fixtures
 import Test.AgentPlayBridge as AgentPlayBridge
 import Time
 
@@ -75,11 +76,15 @@ driveReplayToCompletion model nowMs budget =
                 driveReplayToCompletion next (nowMs + 50) (budget - 1)
 
 
-clickAndDrain : State.Model -> State.Model
-clickAndDrain m0 =
+{-| Helper used by tests that walk a multi-batch plan: pass the
+plan JSON for the FIRST click; subsequent clicks consume from
+`agentProgram` cache and ignore their plan-JSON arg.
+-}
+clickAndDrainWith : String -> State.Model -> State.Model
+clickAndDrainWith planJson m0 =
     let
         m1 =
-            AgentPlayBridge.simulateClickAndDeliverPlan m0
+            AgentPlayBridge.clickWithPlanJson planJson m0
     in
     driveReplayToCompletion m1 0 5000
 
@@ -124,6 +129,9 @@ suite =
         , mined001FullWalkthroughPuzzleSession
         , wireFailureMidReplayDoesNotStallBoard
         , mouseUpDuringAnimDoesNotAbortPlayback
+        , simplePeelClickPostState
+        , unsolvableBoardYieldsNoPlanStatus
+        , alreadyCleanBoardYieldsCleanStatus
         ]
 
 
@@ -157,7 +165,7 @@ mouseUpDuringAnimDoesNotAbortPlayback =
                         ]
 
                 m1 =
-                    AgentPlayBridge.simulateClickAndDeliverPlan m0
+                    AgentPlayBridge.clickWithPlanJson Fixtures.mouseUpBoardPlanJson m0
 
                 ( m2, _, _ ) =
                     -- One ReplayFrame: NotAnimating → Animating.
@@ -217,7 +225,7 @@ wireFailureMidReplayDoesNotStallBoard =
                     modelFromBoard simplePeelBoard
 
                 m1 =
-                    AgentPlayBridge.simulateClickAndDeliverPlan m0
+                    AgentPlayBridge.clickWithPlanJson Fixtures.simplePeelPlanJson m0
 
                 ( m2, _, _ ) =
                     Play.update (ReplayFrame (posix 16)) m1
@@ -368,7 +376,7 @@ walkClicks model budget =
     else
         let
             after =
-                clickAndDrain model
+                clickAndDrainWith Fixtures.minedOneFourMovePlanJson model
         in
         case after.agentProgram of
             Just (_ :: _) ->
@@ -399,7 +407,7 @@ statusUpdatesAfterClick =
                     modelFromBoard simplePeelBoard
 
                 m1 =
-                    AgentPlayBridge.simulateClickAndDeliverPlan m0
+                    AgentPlayBridge.clickWithPlanJson Fixtures.simplePeelPlanJson m0
             in
             if String.startsWith "Agent: " m1.status.text then
                 Expect.pass
@@ -420,7 +428,7 @@ replayKicksAfterClick =
                     modelFromBoard simplePeelBoard
 
                 m1 =
-                    AgentPlayBridge.simulateClickAndDeliverPlan m0
+                    AgentPlayBridge.clickWithPlanJson Fixtures.simplePeelPlanJson m0
             in
             case m1.replay of
                 Just _ ->
@@ -440,7 +448,7 @@ boardChangesAfterDrain =
                     modelFromBoard simplePeelBoard
 
                 final =
-                    clickAndDrain m0
+                    clickAndDrainWith Fixtures.simplePeelPlanJson m0
             in
             if m0.board /= final.board then
                 Expect.pass
@@ -459,7 +467,7 @@ clickThenDrainProducesVictory =
                     modelFromBoard simplePeelBoard
 
                 final =
-                    clickAndDrain m0
+                    clickAndDrainWith Fixtures.simplePeelPlanJson m0
             in
             if List.all isCleanStack final.board then
                 Expect.pass
@@ -473,3 +481,137 @@ clickThenDrainProducesVictory =
                     ("final board not victory; incomplete stacks: "
                         ++ Debug.toString incomplete
                     )
+
+
+{-| Comprehensive post-click assertions for the simplePeelBoard
+1-batch plan: replay must start, exactly one primitive lands in
+the action log, agentProgram cache empties (1 batch consumed,
+nothing remains), status kind is Inform with "Agent:" prefix.
+Replaces the click_agent_play_simple_peel DSL scenario.
+-}
+simplePeelClickPostState : Test
+simplePeelClickPostState =
+    test "simple peel: click → replay started, log+1, cache empty, status 'Agent:'" <|
+        \_ ->
+            let
+                m0 =
+                    modelFromBoard simplePeelBoard
+
+                m1 =
+                    AgentPlayBridge.clickWithPlanJson Fixtures.simplePeelPlanJson m0
+
+                logAppended =
+                    List.length m1.actionLog - List.length m0.actionLog
+
+                replayStarted =
+                    m1.replay /= Nothing
+
+                programSize =
+                    case m1.agentProgram of
+                        Just lst ->
+                            List.length lst
+
+                        Nothing ->
+                            0
+            in
+            Expect.all
+                [ \_ -> Expect.equal True replayStarted
+                , \_ -> Expect.equal 1 logAppended
+                , \_ -> Expect.equal 0 programSize
+                , \_ -> Expect.equal State.Inform m1.status.kind
+                , \_ ->
+                    if String.startsWith "Agent:" m1.status.text then
+                        Expect.pass
+
+                    else
+                        Expect.fail ("status missing 'Agent:'; got: " ++ m1.status.text)
+                ]
+                ()
+
+
+{-| Unsolvable board: BFS-equivalent (i.e. the engine) finds no
+plan. Bridge delivers `plan: null`. Status surfaces "could not
+find a plan", no replay, no log growth. Replaces the
+click_agent_play_unsolvable_board DSL scenario.
+-}
+unsolvableBoardYieldsNoPlanStatus : Test
+unsolvableBoardYieldsNoPlanStatus =
+    test "unsolvable: clickWithNoPlan → status 'could not find a plan', no replay" <|
+        \_ ->
+            let
+                board =
+                    [ makeStack 50 50 [ c Five Heart ]
+                    , makeStack 100 200 [ c Nine Diamond ]
+                    ]
+
+                m0 =
+                    modelFromBoard board
+
+                m1 =
+                    AgentPlayBridge.clickWithNoPlan m0
+
+                logAppended =
+                    List.length m1.actionLog - List.length m0.actionLog
+
+                replayStarted =
+                    m1.replay /= Nothing
+            in
+            Expect.all
+                [ \_ -> Expect.equal False replayStarted
+                , \_ -> Expect.equal 0 logAppended
+                , \_ ->
+                    if String.contains "could not find a plan" m1.status.text then
+                        Expect.pass
+
+                    else
+                        Expect.fail
+                            ("status missing 'could not find a plan'; got: " ++ m1.status.text)
+                ]
+                ()
+
+
+{-| Already-clean board: every stack is a complete group. Bridge
+delivers `plan: []`. Status surfaces "already clean", no replay,
+no log growth. Replaces the click_agent_play_already_clean DSL
+scenario.
+-}
+alreadyCleanBoardYieldsCleanStatus : Test
+alreadyCleanBoardYieldsCleanStatus =
+    test "already clean: clickWithEmptyPlan → status 'already clean', no replay" <|
+        \_ ->
+            let
+                board =
+                    [ makeStack 50 50 [ c Ace Club, c Ace Diamond, c Ace Heart ]
+                    , makeStack 100 50
+                        [ c Two Club
+                        , { value = Three, suit = Diamond, originDeck = DeckTwo }
+                        , c Four Club
+                        , c Five Heart
+                        , c Six Spade
+                        , c Seven Heart
+                        ]
+                    ]
+
+                m0 =
+                    modelFromBoard board
+
+                m1 =
+                    AgentPlayBridge.clickWithEmptyPlan m0
+
+                logAppended =
+                    List.length m1.actionLog - List.length m0.actionLog
+
+                replayStarted =
+                    m1.replay /= Nothing
+            in
+            Expect.all
+                [ \_ -> Expect.equal False replayStarted
+                , \_ -> Expect.equal 0 logAppended
+                , \_ ->
+                    if String.contains "already clean" m1.status.text then
+                        Expect.pass
+
+                    else
+                        Expect.fail ("status missing 'already clean'; got: " ++ m1.status.text)
+                ]
+                ()

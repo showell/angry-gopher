@@ -265,15 +265,6 @@ type ExpectWingsForHandCard struct {
 	Wings []WingExpect // expect_wings: block or []
 }
 
-// ExpectClickAgent holds expectations for the `click_agent_play` op.
-type ExpectClickAgent struct {
-	ReplayStarted    *bool  // expect: replay_started: true | false
-	LogAppended      *int   // expect: log_appended: N
-	AgentProgramSize *int   // expect: agent_program_size: N
-	StatusKind       string // expect: status_kind: inform | scold | celebrate
-	StatusContains   string // expect: status_contains: "..."
-}
-
 // ExpectReplay holds expectations for the `replay_invariant` op.
 type ExpectReplay struct {
 	FinalBoardVictory *bool // expect: final_board_victory: true | false
@@ -287,7 +278,6 @@ type Expectation struct {
 	Planner              ExpectPlanner
 	Solve                ExpectSolve
 	Geometry             ExpectGeometry
-	ClickAgent           ExpectClickAgent
 	Replay               ExpectReplay
 	DragFloater          ExpectDragFloater
 	DragPathFrame        ExpectDragPathFrame
@@ -388,11 +378,6 @@ var opRegistry = []OpKind{
 		Elm:     true,
 		TS:      true,
 		EmitElm: elmFindOpenLoc,
-	},
-	{
-		Name:    "click_agent_play",
-		Elm:     true,
-		EmitElm: elmClickAgentPlay,
 	},
 	{
 		Name:    "replay_invariant",
@@ -677,7 +662,6 @@ import Main.Msg as Msg
 import Main.Play as Play
 import Main.State as State
 import Test exposing (Test, describe, test)
-import Test.AgentPlayBridge as AgentPlayBridge
 
 
 standardBounds : BoardBounds
@@ -963,102 +947,11 @@ func elmScenarioBody(sc Scenario) string {
 	return b.String()
 }
 
-const elmClickAgentPlayTmpl = `            let
-                board =
-                    %s
-
-                base =
-                    State.baseModel
-
-                model0 =
-                    { base | board = board, sessionId = Just 0 }
-
-                -- Phase 2 of TS_ELM_INTEGRATION moved this click
-                -- behind an async engine port. Test.AgentPlayBridge
-                -- does the click + synthetic-engine-response in one
-                -- call (legacy Bfs stands in for the TS bundle).
-                newModel =
-                    AgentPlayBridge.simulateClickAndDeliverPlan model0
-
-                logAppended =
-                    List.length newModel.actionLog - List.length model0.actionLog
-
-                replayStarted =
-                    newModel.replay /= Nothing
-
-                programSize =
-                    case newModel.agentProgram of
-                        Just lst ->
-                            List.length lst
-
-                        Nothing ->
-                            0
-            in
-`
-
-// elmClickAgentPlay emits a test body that constructs a Play
-// model from the scenario's `board:` block, dispatches a
-// `ClickAgentPlay` Msg through Play.update, and asserts on the
-// resulting model. Used to lock down the click-side contract:
-// what the immediate-reducer post-state looks like for
-// solvable / unsolvable / replay-running cases.
-//
-// Only Elm runs this op (it tests the Elm-side reducer).
-// TS skips — the JSON gate filters by op.
-func elmClickAgentPlay(b *strings.Builder, sc Scenario) {
-	fmt.Fprintf(b, elmClickAgentPlayTmpl, elmStacks(sc.Board, "                        "))
-	b.WriteString("            Expect.all\n                [ ")
-	first := true
-	emitCheck := func(s string) {
-		if !first {
-			b.WriteString("\n                , ")
-		}
-		first = false
-		b.WriteString(s)
-	}
-	ca := sc.Expect.ClickAgent
-	if ca.ReplayStarted != nil {
-		emitCheck(fmt.Sprintf("\\_ -> Expect.equal %s replayStarted", elmBool(*ca.ReplayStarted)))
-	}
-	if ca.LogAppended != nil {
-		emitCheck(fmt.Sprintf("\\_ -> Expect.equal %d logAppended", *ca.LogAppended))
-	}
-	if ca.AgentProgramSize != nil {
-		emitCheck(fmt.Sprintf("\\_ -> Expect.equal %d programSize", *ca.AgentProgramSize))
-	}
-	if ca.StatusKind != "" {
-		emitCheck(fmt.Sprintf("\\_ -> Expect.equal %s newModel.status.kind", elmStatusKind(ca.StatusKind)))
-	}
-	if ca.StatusContains != "" {
-		emitCheck(fmt.Sprintf("\\_ -> if String.contains %q newModel.status.text then Expect.pass else Expect.fail (\"status missing %s; got: \" ++ newModel.status.text)", ca.StatusContains, ca.StatusContains))
-	}
-	if first {
-		// No expectations supplied — at minimum verify the
-		// reducer didn't crash.
-		b.WriteString("\\_ -> Expect.pass")
-	}
-	b.WriteString("\n                ]\n                ()")
-}
-
-
 func elmBool(b bool) string {
 	if b {
 		return "True"
 	}
 	return "False"
-}
-
-
-func elmStatusKind(s string) string {
-	switch s {
-	case "inform":
-		return "State.Inform"
-	case "scold":
-		return "State.Scold"
-	case "celebrate":
-		return "State.Celebrate"
-	}
-	return "State.Inform"
 }
 
 
@@ -3217,37 +3110,6 @@ func parseExpectBlock(e *Expectation, children []line, path string) error {
 				}
 			case "geometry_status":
 				e.Geometry.GeometryStatus = val
-			// --- click_agent_play (ClickAgent) ---
-			case "replay_started":
-				v, err := parseBool(val)
-				if err != nil {
-					return fmt.Errorf("%s:%d: replay_started: %w", path, l.lineNum, err)
-				}
-				e.ClickAgent.ReplayStarted = &v
-			case "log_appended":
-				n, err := atoi(val)
-				if err != nil {
-					return fmt.Errorf("%s:%d: log_appended: %w", path, l.lineNum, err)
-				}
-				e.ClickAgent.LogAppended = &n
-			case "agent_program_size":
-				n, err := atoi(val)
-				if err != nil {
-					return fmt.Errorf("%s:%d: agent_program_size: %w", path, l.lineNum, err)
-				}
-				e.ClickAgent.AgentProgramSize = &n
-			case "status_kind":
-				e.ClickAgent.StatusKind = val
-			case "status_contains":
-				if len(val) >= 2 && val[0] == '"' && val[len(val)-1] == '"' {
-					unquoted, err := strconv.Unquote(val)
-					if err != nil {
-						return fmt.Errorf("%s:%d: status_contains: %w", path, l.lineNum, err)
-					}
-					e.ClickAgent.StatusContains = unquoted
-				} else {
-					e.ClickAgent.StatusContains = val
-				}
 			// --- replay_invariant (Replay) ---
 			case "final_board_victory":
 				v, err := parseBool(val)

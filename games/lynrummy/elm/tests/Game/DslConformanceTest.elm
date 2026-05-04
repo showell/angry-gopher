@@ -42,7 +42,6 @@ import Main.Msg as Msg
 import Main.Play as Play
 import Main.State as State
 import Test exposing (Test, describe, test)
-import Test.AgentPlayBridge as AgentPlayBridge
 
 
 standardBounds : BoardBounds
@@ -3155,144 +3154,6 @@ boardGeometryTwoNonOverlappingValid =
                         standardBounds
             in
             errors |> Expect.equal []
-
-
-clickAgentPlayAlreadyClean : Test
-clickAgentPlayAlreadyClean =
-    test "click_agent_play_already_clean" <|
-        \_ ->
-            let
-                board =
-                    [ { boardCards = [ boardCard "AC1", boardCard "AD1", boardCard "AH1" ], loc = { top = 50, left = 50 } }
-                        , { boardCards = [ boardCard "2C1", boardCard "3D2", boardCard "4C1", boardCard "5H1", boardCard "6S1", boardCard "7H1" ], loc = { top = 100, left = 50 } }
-                        ]
-
-                base =
-                    State.baseModel
-
-                model0 =
-                    { base | board = board, sessionId = Just 0 }
-
-                -- Phase 2 of TS_ELM_INTEGRATION moved this click
-                -- behind an async engine port. Test.AgentPlayBridge
-                -- does the click + synthetic-engine-response in one
-                -- call (legacy Bfs stands in for the TS bundle).
-                newModel =
-                    AgentPlayBridge.simulateClickAndDeliverPlan model0
-
-                logAppended =
-                    List.length newModel.actionLog - List.length model0.actionLog
-
-                replayStarted =
-                    newModel.replay /= Nothing
-
-                programSize =
-                    case newModel.agentProgram of
-                        Just lst ->
-                            List.length lst
-
-                        Nothing ->
-                            0
-            in
-            Expect.all
-                [ \_ -> Expect.equal False replayStarted
-                , \_ -> Expect.equal 0 logAppended
-                , \_ -> if String.contains "already clean" newModel.status.text then Expect.pass else Expect.fail ("status missing already clean; got: " ++ newModel.status.text)
-                ]
-                ()
-
-
-clickAgentPlaySimplePeel : Test
-clickAgentPlaySimplePeel =
-    test "click_agent_play_simple_peel" <|
-        \_ ->
-            let
-                board =
-                    [ { boardCards = [ boardCard "TC1", boardCard "JD1", boardCard "QS1", boardCard "KH1" ], loc = { top = 50, left = 50 } }
-                        , { boardCards = [ boardCard "9D1" ], loc = { top = 100, left = 200 } }
-                        ]
-
-                base =
-                    State.baseModel
-
-                model0 =
-                    { base | board = board, sessionId = Just 0 }
-
-                -- Phase 2 of TS_ELM_INTEGRATION moved this click
-                -- behind an async engine port. Test.AgentPlayBridge
-                -- does the click + synthetic-engine-response in one
-                -- call (legacy Bfs stands in for the TS bundle).
-                newModel =
-                    AgentPlayBridge.simulateClickAndDeliverPlan model0
-
-                logAppended =
-                    List.length newModel.actionLog - List.length model0.actionLog
-
-                replayStarted =
-                    newModel.replay /= Nothing
-
-                programSize =
-                    case newModel.agentProgram of
-                        Just lst ->
-                            List.length lst
-
-                        Nothing ->
-                            0
-            in
-            Expect.all
-                [ \_ -> Expect.equal True replayStarted
-                , \_ -> Expect.equal 1 logAppended
-                , \_ -> Expect.equal 0 programSize
-                , \_ -> Expect.equal State.Inform newModel.status.kind
-                , \_ -> if String.contains "Agent:" newModel.status.text then Expect.pass else Expect.fail ("status missing Agent:; got: " ++ newModel.status.text)
-                ]
-                ()
-
-
-clickAgentPlayUnsolvableBoard : Test
-clickAgentPlayUnsolvableBoard =
-    test "click_agent_play_unsolvable_board" <|
-        \_ ->
-            let
-                board =
-                    [ { boardCards = [ boardCard "5H1" ], loc = { top = 50, left = 50 } }
-                        , { boardCards = [ boardCard "9D1" ], loc = { top = 100, left = 200 } }
-                        ]
-
-                base =
-                    State.baseModel
-
-                model0 =
-                    { base | board = board, sessionId = Just 0 }
-
-                -- Phase 2 of TS_ELM_INTEGRATION moved this click
-                -- behind an async engine port. Test.AgentPlayBridge
-                -- does the click + synthetic-engine-response in one
-                -- call (legacy Bfs stands in for the TS bundle).
-                newModel =
-                    AgentPlayBridge.simulateClickAndDeliverPlan model0
-
-                logAppended =
-                    List.length newModel.actionLog - List.length model0.actionLog
-
-                replayStarted =
-                    newModel.replay /= Nothing
-
-                programSize =
-                    case newModel.agentProgram of
-                        Just lst ->
-                            List.length lst
-
-                        Nothing ->
-                            0
-            in
-            Expect.all
-                [ \_ -> Expect.equal False replayStarted
-                , \_ -> Expect.equal 0 logAppended
-                , \_ -> Expect.equal 0 programSize
-                , \_ -> if String.contains "could not find a plan" newModel.status.text then Expect.pass else Expect.fail ("status missing could not find a plan; got: " ++ newModel.status.text)
-                ]
-                ()
 
 
 clickIntentDeathIsPermanent : Test
@@ -7933,9 +7794,6 @@ suite =
         , boardGeometryThreeStacksOnlyOverlappingPair
         , boardGeometryTooCloseNotOverlap
         , boardGeometryTwoNonOverlappingValid
-        , clickAgentPlayAlreadyClean
-        , clickAgentPlaySimplePeel
-        , clickAgentPlayUnsolvableBoard
         , clickIntentDeathIsPermanent
         , clickIntentJustDiesLargeMovement
         , clickIntentJustDiesPastThreshold
