@@ -45,10 +45,10 @@ scenario baseline_board_3C
     at (0,0): 3C
   expect:
     plan_lines:
-      - "peel 2C from HELPER [2C 3D 4C 5H 6S 7H], absorb onto trouble [3C] → [2C 3C]"
-      - "steal AC from HELPER [AC AD AH], absorb onto growing [2C 3C] → [AC 2C 3C] [→COMPLETE] ; spawn TROUBLE: [AD], [AH]"
-      - "push TROUBLE [AD] onto HELPER [TD JD QD KD] → [TD JD QD KD AD]"
-      - "push TROUBLE [AH] onto HELPER [2H 3H 4H] → [AH 2H 3H 4H]"
+      - "peel 2C from HELPER [2C 3D 4C 5H 6S 7H], absorb onto [3C] → [2C 3C]"
+      - "steal AC from HELPER [AC AD AH], absorb onto [2C 3C] → [AC 2C 3C] [→COMPLETE] ; spawn [AD], [AH]"
+      - "push [AD] onto HELPER [TD JD QD KD] → [TD JD QD KD AD]"
+      - "push [AH] onto HELPER [2H 3H 4H] → [AH 2H 3H 4H]"
 
 scenario baseline_board_3Cp
   desc: Baseline board, trouble 3C'. 4-step plan. Auto-generated.
@@ -64,10 +64,10 @@ scenario baseline_board_3Cp
     at (0,0): 3C'
   expect:
     plan_lines:
-      - "peel 2C from HELPER [2C 3D 4C 5H 6S 7H], absorb onto trouble [3C'] → [2C 3C']"
-      - "steal AC from HELPER [AC AD AH], absorb onto growing [2C 3C'] → [AC 2C 3C'] [→COMPLETE] ; spawn TROUBLE: [AD], [AH]"
-      - "push TROUBLE [AD] onto HELPER [TD JD QD KD] → [TD JD QD KD AD]"
-      - "push TROUBLE [AH] onto HELPER [2H 3H 4H] → [AH 2H 3H 4H]"
+      - "peel 2C from HELPER [2C 3D 4C 5H 6S 7H], absorb onto [3C'] → [2C 3C']"
+      - "steal AC from HELPER [AC AD AH], absorb onto [2C 3C'] → [AC 2C 3C'] [→COMPLETE] ; spawn [AD], [AH]"
+      - "push [AD] onto HELPER [TD JD QD KD] → [TD JD QD KD AD]"
+      - "push [AH] onto HELPER [2H 3H 4H] → [AH 2H 3H 4H]"
 
 scenario baseline_board_4Cp
   desc: Baseline board, trouble 4C'. 1-step plan. Auto-generated.
@@ -169,7 +169,7 @@ scenario baseline_board_8C
     at (0,0): 8C
   expect:
     plan_lines:
-      - "push TROUBLE [8C] onto HELPER [2C 3D 4C 5H 6S 7H] → [2C 3D 4C 5H 6S 7H 8C]"
+      - "push [8C] onto HELPER [2C 3D 4C 5H 6S 7H] → [2C 3D 4C 5H 6S 7H 8C]"
 
 scenario baseline_board_8Cp
   desc: Baseline board, trouble 8C'. 1-step plan. Auto-generated.
@@ -185,7 +185,7 @@ scenario baseline_board_8Cp
     at (0,0): 8C'
   expect:
     plan_lines:
-      - "push TROUBLE [8C'] onto HELPER [2C 3D 4C 5H 6S 7H] → [2C 3D 4C 5H 6S 7H 8C']"
+      - "push [8C'] onto HELPER [2C 3D 4C 5H 6S 7H] → [2C 3D 4C 5H 6S 7H 8C']"
 
 scenario baseline_board_9C
   desc: Baseline board, trouble 9C. no plan. Auto-generated.
@@ -285,10 +285,10 @@ scenario baseline_board_QC
     at (0,0): QC
   expect:
     plan_lines:
-      - "peel KD from HELPER [TD JD QD KD], absorb onto trouble [QC] → [QC KD]"
-      - "steal AC from HELPER [AC AD AH], absorb onto growing [QC KD] → [QC KD AC] [→COMPLETE] ; spawn TROUBLE: [AD], [AH]"
-      - "push TROUBLE [AD] onto HELPER [2C 3D 4C 5H 6S 7H] → [AD 2C 3D 4C 5H 6S 7H]"
-      - "push TROUBLE [AH] onto HELPER [2H 3H 4H] → [AH 2H 3H 4H]"
+      - "peel KD from HELPER [TD JD QD KD], absorb onto [QC] → [QC KD]"
+      - "steal AC from HELPER [AC AD AH], absorb onto [QC KD] → [QC KD AC] [→COMPLETE] ; spawn [AD], [AH]"
+      - "push [AD] onto HELPER [2C 3D 4C 5H 6S 7H] → [AD 2C 3D 4C 5H 6S 7H]"
+      - "push [AH] onto HELPER [2H 3H 4H] → [AH 2H 3H 4H]"
 
 scenario baseline_board_QCp
   desc: Baseline board, trouble QC'. 4-step plan. Auto-generated.
@@ -304,10 +304,10 @@ scenario baseline_board_QCp
     at (0,0): QC'
   expect:
     plan_lines:
-      - "peel KD from HELPER [TD JD QD KD], absorb onto trouble [QC'] → [QC' KD]"
-      - "steal AC from HELPER [AC AD AH], absorb onto growing [QC' KD] → [QC' KD AC] [→COMPLETE] ; spawn TROUBLE: [AD], [AH]"
-      - "push TROUBLE [AD] onto HELPER [2C 3D 4C 5H 6S 7H] → [AD 2C 3D 4C 5H 6S 7H]"
-      - "push TROUBLE [AH] onto HELPER [2H 3H 4H] → [AH 2H 3H 4H]"
+      - "peel KD from HELPER [TD JD QD KD], absorb onto [QC'] → [QC' KD]"
+      - "steal AC from HELPER [AC AD AH], absorb onto [QC' KD] → [QC' KD AC] [→COMPLETE] ; spawn [AD], [AH]"
+      - "push [AD] onto HELPER [2C 3D 4C 5H 6S 7H] → [AD 2C 3D 4C 5H 6S 7H]"
+      - "push [AH] onto HELPER [2H 3H 4H] → [AH 2H 3H 4H]"
 
 scenario baseline_board_KC
   desc: Baseline board, trouble KC. 2-step plan. Auto-generated.
@@ -323,8 +323,8 @@ scenario baseline_board_KC
     at (0,0): KC
   expect:
     plan_lines:
-      - "peel KD from HELPER [TD JD QD KD], absorb onto trouble [KC] → [KC KD]"
-      - "peel KS from HELPER [KS AS 2S 3S], absorb onto growing [KC KD] → [KC KD KS] [→COMPLETE]"
+      - "peel KD from HELPER [TD JD QD KD], absorb onto [KC] → [KC KD]"
+      - "peel KS from HELPER [KS AS 2S 3S], absorb onto [KC KD] → [KS KC KD] [→COMPLETE]"
 
 scenario baseline_board_KCp
   desc: Baseline board, trouble KC'. 2-step plan. Auto-generated.
@@ -340,8 +340,8 @@ scenario baseline_board_KCp
     at (0,0): KC'
   expect:
     plan_lines:
-      - "peel KD from HELPER [TD JD QD KD], absorb onto trouble [KC'] → [KC' KD]"
-      - "peel KS from HELPER [KS AS 2S 3S], absorb onto growing [KC' KD] → [KC' KD KS] [→COMPLETE]"
+      - "peel KD from HELPER [TD JD QD KD], absorb onto [KC'] → [KC' KD]"
+      - "peel KS from HELPER [KS AS 2S 3S], absorb onto [KC' KD] → [KS KC' KD] [→COMPLETE]"
 
 scenario baseline_board_ADp
   desc: Baseline board, trouble AD'. 1-step plan. Auto-generated.
@@ -357,7 +357,7 @@ scenario baseline_board_ADp
     at (0,0): AD'
   expect:
     plan_lines:
-      - "push TROUBLE [AD'] onto HELPER [TD JD QD KD] → [TD JD QD KD AD']"
+      - "push [AD'] onto HELPER [TD JD QD KD] → [TD JD QD KD AD']"
 
 scenario baseline_board_2D
   desc: Baseline board, trouble 2D. 4-step plan. Auto-generated.
@@ -373,10 +373,10 @@ scenario baseline_board_2D
     at (0,0): 2D
   expect:
     plan_lines:
-      - "peel 3S from HELPER [KS AS 2S 3S], absorb onto trouble [2D] → [2D 3S]"
-      - "steal AC from HELPER [AC AD AH], absorb onto growing [2D 3S] → [AC 2D 3S] [→COMPLETE] ; spawn TROUBLE: [AD], [AH]"
-      - "push TROUBLE [AD] onto HELPER [TD JD QD KD] → [TD JD QD KD AD]"
-      - "push TROUBLE [AH] onto HELPER [2H 3H 4H] → [AH 2H 3H 4H]"
+      - "steal AC from HELPER [AC AD AH], absorb onto [2D] → [AC 2D] ; spawn [AD], [AH]"
+      - "push [AD] onto HELPER [TD JD QD KD] → [TD JD QD KD AD]"
+      - "push [AH] onto HELPER [2H 3H 4H] → [AH 2H 3H 4H]"
+      - "peel 3S from HELPER [KS AS 2S 3S], absorb onto [AC 2D] → [AC 2D 3S] [→COMPLETE]"
 
 scenario baseline_board_2Dp
   desc: Baseline board, trouble 2D'. 4-step plan. Auto-generated.
@@ -392,10 +392,10 @@ scenario baseline_board_2Dp
     at (0,0): 2D'
   expect:
     plan_lines:
-      - "peel 3S from HELPER [KS AS 2S 3S], absorb onto trouble [2D'] → [2D' 3S]"
-      - "steal AC from HELPER [AC AD AH], absorb onto growing [2D' 3S] → [AC 2D' 3S] [→COMPLETE] ; spawn TROUBLE: [AD], [AH]"
-      - "push TROUBLE [AD] onto HELPER [TD JD QD KD] → [TD JD QD KD AD]"
-      - "push TROUBLE [AH] onto HELPER [2H 3H 4H] → [AH 2H 3H 4H]"
+      - "steal AC from HELPER [AC AD AH], absorb onto [2D'] → [AC 2D'] ; spawn [AD], [AH]"
+      - "push [AD] onto HELPER [TD JD QD KD] → [TD JD QD KD AD]"
+      - "push [AH] onto HELPER [2H 3H 4H] → [AH 2H 3H 4H]"
+      - "peel 3S from HELPER [KS AS 2S 3S], absorb onto [AC 2D'] → [AC 2D' 3S] [→COMPLETE]"
 
 scenario baseline_board_3Dp
   desc: Baseline board, trouble 3D'. no plan. Auto-generated.
@@ -513,9 +513,9 @@ scenario baseline_board_7Dp
     at (0,0): 7D'
   expect:
     plan_lines:
-      - "yank 6S from HELPER [2C 3D 4C 5H 6S 7H], absorb onto trouble [7D'] → [6S 7D'] ; spawn TROUBLE: [7H]"
-      - "peel 5H from HELPER [2C 3D 4C 5H], absorb onto growing [6S 7D'] → [5H 6S 7D'] [→COMPLETE]"
-      - "push TROUBLE [7H] onto HELPER [7S 7D 7C] → [7S 7D 7C 7H]"
+      - "yank 6S from HELPER [2C 3D 4C 5H 6S 7H], absorb onto [7D'] → [6S 7D'] ; spawn [7H]"
+      - "push [7H] onto HELPER [7S 7D 7C] → [7S 7D 7C 7H]"
+      - "peel 5H from HELPER [2C 3D 4C 5H], absorb onto [6S 7D'] → [5H 6S 7D'] [→COMPLETE]"
 
 scenario baseline_board_8D
   desc: Baseline board, trouble 8D. no plan. Auto-generated.
@@ -559,7 +559,7 @@ scenario baseline_board_9D
     at (0,0): 9D
   expect:
     plan_lines:
-      - "push TROUBLE [9D] onto HELPER [TD JD QD KD] → [9D TD JD QD KD]"
+      - "push [9D] onto HELPER [TD JD QD KD] → [9D TD JD QD KD]"
 
 scenario baseline_board_9Dp
   desc: Baseline board, trouble 9D'. 1-step plan. Auto-generated.
@@ -575,7 +575,7 @@ scenario baseline_board_9Dp
     at (0,0): 9D'
   expect:
     plan_lines:
-      - "push TROUBLE [9D'] onto HELPER [TD JD QD KD] → [9D' TD JD QD KD]"
+      - "push [9D'] onto HELPER [TD JD QD KD] → [9D' TD JD QD KD]"
 
 scenario baseline_board_TDp
   desc: Baseline board, trouble TD'. no plan. Auto-generated.
@@ -647,7 +647,7 @@ scenario baseline_board_ASp
     at (0,0): AS'
   expect:
     plan_lines:
-      - "push TROUBLE [AS'] onto HELPER [AC AD AH] → [AC AD AH AS']"
+      - "push [AS'] onto HELPER [AC AD AH] → [AC AD AH AS']"
 
 scenario baseline_board_2Sp
   desc: Baseline board, trouble 2S'. no plan. Auto-generated.
@@ -691,7 +691,7 @@ scenario baseline_board_4S
     at (0,0): 4S
   expect:
     plan_lines:
-      - "splice [4S] into HELPER [2C 3D 4C 5H 6S 7H] → [2C 3D 4S] + [4C 5H 6S 7H]"
+      - "push [4S] onto HELPER [KS AS 2S 3S] → [KS AS 2S 3S 4S]"
 
 scenario baseline_board_4Sp
   desc: Baseline board, trouble 4S'. 1-step plan. Auto-generated.
@@ -707,7 +707,7 @@ scenario baseline_board_4Sp
     at (0,0): 4S'
   expect:
     plan_lines:
-      - "splice [4S'] into HELPER [2C 3D 4C 5H 6S 7H] → [2C 3D 4S'] + [4C 5H 6S 7H]"
+      - "push [4S'] onto HELPER [KS AS 2S 3S] → [KS AS 2S 3S 4S']"
 
 scenario baseline_board_5S
   desc: Baseline board, trouble 5S. 4-step plan. Auto-generated.
@@ -723,10 +723,9 @@ scenario baseline_board_5S
     at (0,0): 5S
   expect:
     plan_lines:
-      - "yank 6S from HELPER [2C 3D 4C 5H 6S 7H], absorb onto trouble [5S] → [5S 6S] ; spawn TROUBLE: [7H]"
-      - "steal 7S from HELPER [7S 7D 7C], absorb onto growing [5S 6S] → [5S 6S 7S] [→COMPLETE] ; spawn TROUBLE: [7D], [7C]"
-      - "pull 7D onto trouble [7H] → [7H 7D]"
-      - "pull 7C onto growing [7H 7D] → [7H 7D 7C] [→COMPLETE]"
+      - "yank 6S from HELPER [2C 3D 4C 5H 6S 7H], absorb onto [5S] → [5S 6S] ; spawn [7H]"
+      - "push [7H] onto HELPER [7S 7D 7C] → [7S 7D 7C 7H]"
+      - "peel 7S from HELPER [7S 7D 7C 7H], absorb onto [5S 6S] → [5S 6S 7S] [→COMPLETE]"
 
 scenario baseline_board_5Sp
   desc: Baseline board, trouble 5S'. 4-step plan. Auto-generated.
@@ -742,10 +741,9 @@ scenario baseline_board_5Sp
     at (0,0): 5S'
   expect:
     plan_lines:
-      - "yank 6S from HELPER [2C 3D 4C 5H 6S 7H], absorb onto trouble [5S'] → [5S' 6S] ; spawn TROUBLE: [7H]"
-      - "steal 7S from HELPER [7S 7D 7C], absorb onto growing [5S' 6S] → [5S' 6S 7S] [→COMPLETE] ; spawn TROUBLE: [7D], [7C]"
-      - "pull 7D onto trouble [7H] → [7H 7D]"
-      - "pull 7C onto growing [7H 7D] → [7H 7D 7C] [→COMPLETE]"
+      - "yank 6S from HELPER [2C 3D 4C 5H 6S 7H], absorb onto [5S'] → [5S' 6S] ; spawn [7H]"
+      - "push [7H] onto HELPER [7S 7D 7C] → [7S 7D 7C 7H]"
+      - "peel 7S from HELPER [7S 7D 7C 7H], absorb onto [5S' 6S] → [5S' 6S 7S] [→COMPLETE]"
 
 scenario baseline_board_6Sp
   desc: Baseline board, trouble 6S'. no plan. Auto-generated.
@@ -789,7 +787,7 @@ scenario baseline_board_8S
     at (0,0): 8S
   expect:
     plan_lines:
-      - "push TROUBLE [8S] onto HELPER [2C 3D 4C 5H 6S 7H] → [2C 3D 4C 5H 6S 7H 8S]"
+      - "push [8S] onto HELPER [2C 3D 4C 5H 6S 7H] → [2C 3D 4C 5H 6S 7H 8S]"
 
 scenario baseline_board_8Sp
   desc: Baseline board, trouble 8S'. 1-step plan. Auto-generated.
@@ -805,7 +803,7 @@ scenario baseline_board_8Sp
     at (0,0): 8S'
   expect:
     plan_lines:
-      - "push TROUBLE [8S'] onto HELPER [2C 3D 4C 5H 6S 7H] → [2C 3D 4C 5H 6S 7H 8S']"
+      - "push [8S'] onto HELPER [2C 3D 4C 5H 6S 7H] → [2C 3D 4C 5H 6S 7H 8S']"
 
 scenario baseline_board_9S
   desc: Baseline board, trouble 9S. no plan. Auto-generated.
@@ -905,7 +903,7 @@ scenario baseline_board_QS
     at (0,0): QS
   expect:
     plan_lines:
-      - "push TROUBLE [QS] onto HELPER [KS AS 2S 3S] → [QS KS AS 2S 3S]"
+      - "push [QS] onto HELPER [KS AS 2S 3S] → [QS KS AS 2S 3S]"
 
 scenario baseline_board_QSp
   desc: Baseline board, trouble QS'. 1-step plan. Auto-generated.
@@ -921,7 +919,7 @@ scenario baseline_board_QSp
     at (0,0): QS'
   expect:
     plan_lines:
-      - "push TROUBLE [QS'] onto HELPER [KS AS 2S 3S] → [QS' KS AS 2S 3S]"
+      - "push [QS'] onto HELPER [KS AS 2S 3S] → [QS' KS AS 2S 3S]"
 
 scenario baseline_board_KSp
   desc: Baseline board, trouble KS'. no plan. Auto-generated.
@@ -951,7 +949,7 @@ scenario baseline_board_AHp
     at (0,0): AH'
   expect:
     plan_lines:
-      - "push TROUBLE [AH'] onto HELPER [2H 3H 4H] → [AH' 2H 3H 4H]"
+      - "push [AH'] onto HELPER [2H 3H 4H] → [AH' 2H 3H 4H]"
 
 scenario baseline_board_2Hp
   desc: Baseline board, trouble 2H'. 4-step plan. Auto-generated.
@@ -967,10 +965,10 @@ scenario baseline_board_2Hp
     at (0,0): 2H'
   expect:
     plan_lines:
-      - "peel 3S from HELPER [KS AS 2S 3S], absorb onto trouble [2H'] → [2H' 3S]"
-      - "steal AC from HELPER [AC AD AH], absorb onto growing [2H' 3S] → [AC 2H' 3S] [→COMPLETE] ; spawn TROUBLE: [AD], [AH]"
-      - "push TROUBLE [AD] onto HELPER [TD JD QD KD] → [TD JD QD KD AD]"
-      - "push TROUBLE [AH] onto HELPER [2H 3H 4H] → [AH 2H 3H 4H]"
+      - "steal AC from HELPER [AC AD AH], absorb onto [2H'] → [AC 2H'] ; spawn [AD], [AH]"
+      - "push [AD] onto HELPER [TD JD QD KD] → [TD JD QD KD AD]"
+      - "push [AH] onto HELPER [2H 3H 4H] → [AH 2H 3H 4H]"
+      - "peel 3S from HELPER [KS AS 2S 3S], absorb onto [AC 2H'] → [AC 2H' 3S] [→COMPLETE]"
 
 scenario baseline_board_3Hp
   desc: Baseline board, trouble 3H'. no plan. Auto-generated.
@@ -1014,7 +1012,7 @@ scenario baseline_board_5Hp
     at (0,0): 5H'
   expect:
     plan_lines:
-      - "splice [5H'] into HELPER [2C 3D 4C 5H 6S 7H] → [2C 3D 4C 5H'] + [5H 6S 7H]"
+      - "push [5H'] onto HELPER [2H 3H 4H] → [2H 3H 4H 5H']"
 
 scenario baseline_board_6H
   desc: Baseline board, trouble 6H. no plan. Auto-generated.
@@ -1058,7 +1056,7 @@ scenario baseline_board_7Hp
     at (0,0): 7H'
   expect:
     plan_lines:
-      - "push TROUBLE [7H'] onto HELPER [7S 7D 7C] → [7S 7D 7C 7H']"
+      - "push [7H'] onto HELPER [7S 7D 7C] → [7S 7D 7C 7H']"
 
 scenario baseline_board_8H
   desc: Baseline board, trouble 8H. no plan. Auto-generated.
@@ -1214,8 +1212,8 @@ scenario baseline_board_KH
     at (0,0): KH
   expect:
     plan_lines:
-      - "peel KD from HELPER [TD JD QD KD], absorb onto trouble [KH] → [KH KD]"
-      - "peel KS from HELPER [KS AS 2S 3S], absorb onto growing [KH KD] → [KH KD KS] [→COMPLETE]"
+      - "peel KD from HELPER [TD JD QD KD], absorb onto [KH] → [KH KD]"
+      - "peel KS from HELPER [KS AS 2S 3S], absorb onto [KH KD] → [KS KH KD] [→COMPLETE]"
 
 scenario baseline_board_KHp
   desc: Baseline board, trouble KH'. 2-step plan. Auto-generated.
@@ -1231,5 +1229,5 @@ scenario baseline_board_KHp
     at (0,0): KH'
   expect:
     plan_lines:
-      - "peel KD from HELPER [TD JD QD KD], absorb onto trouble [KH'] → [KH' KD]"
-      - "peel KS from HELPER [KS AS 2S 3S], absorb onto growing [KH' KD] → [KH' KD KS] [→COMPLETE]"
+      - "peel KD from HELPER [TD JD QD KD], absorb onto [KH'] → [KH' KD]"
+      - "peel KS from HELPER [KS AS 2S 3S], absorb onto [KH' KD] → [KS KH' KD] [→COMPLETE]"

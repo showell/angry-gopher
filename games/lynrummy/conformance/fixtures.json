@@ -523,10 +523,10 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "peel 3S from HELPER [KS AS 2S 3S], absorb onto trouble [2D] → [2D 3S]",
-        "steal AC from HELPER [AC AD AH], absorb onto growing [2D 3S] → [AC 2D 3S] [→COMPLETE] ; spawn TROUBLE: [AD], [AH]",
-        "push TROUBLE [AD] onto HELPER [TD JD QD KD] → [TD JD QD KD AD]",
-        "push TROUBLE [AH] onto HELPER [2H 3H 4H] → [AH 2H 3H 4H]"
+        "steal AC from HELPER [AC AD AH], absorb onto [2D] → [AC 2D] ; spawn [AD], [AH]",
+        "push [AD] onto HELPER [TD JD QD KD] → [TD JD QD KD AD]",
+        "push [AH] onto HELPER [2H 3H 4H] → [AH 2H 3H 4H]",
+        "peel 3S from HELPER [KS AS 2S 3S], absorb onto [AC 2D] → [AC 2D 3S] [→COMPLETE]"
       ]
     }
   },
@@ -791,10 +791,10 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "peel 3S from HELPER [KS AS 2S 3S], absorb onto trouble [2D'] → [2D' 3S]",
-        "steal AC from HELPER [AC AD AH], absorb onto growing [2D' 3S] → [AC 2D' 3S] [→COMPLETE] ; spawn TROUBLE: [AD], [AH]",
-        "push TROUBLE [AD] onto HELPER [TD JD QD KD] → [TD JD QD KD AD]",
-        "push TROUBLE [AH] onto HELPER [2H 3H 4H] → [AH 2H 3H 4H]"
+        "steal AC from HELPER [AC AD AH], absorb onto [2D'] → [AC 2D'] ; spawn [AD], [AH]",
+        "push [AD] onto HELPER [TD JD QD KD] → [TD JD QD KD AD]",
+        "push [AH] onto HELPER [2H 3H 4H] → [AH 2H 3H 4H]",
+        "peel 3S from HELPER [KS AS 2S 3S], absorb onto [AC 2D'] → [AC 2D' 3S] [→COMPLETE]"
       ]
     }
   },
@@ -1059,10 +1059,10 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "peel 3S from HELPER [KS AS 2S 3S], absorb onto trouble [2H'] → [2H' 3S]",
-        "steal AC from HELPER [AC AD AH], absorb onto growing [2H' 3S] → [AC 2H' 3S] [→COMPLETE] ; spawn TROUBLE: [AD], [AH]",
-        "push TROUBLE [AD] onto HELPER [TD JD QD KD] → [TD JD QD KD AD]",
-        "push TROUBLE [AH] onto HELPER [2H 3H 4H] → [AH 2H 3H 4H]"
+        "steal AC from HELPER [AC AD AH], absorb onto [2H'] → [AC 2H'] ; spawn [AD], [AH]",
+        "push [AD] onto HELPER [TD JD QD KD] → [TD JD QD KD AD]",
+        "push [AH] onto HELPER [2H 3H 4H] → [AH 2H 3H 4H]",
+        "peel 3S from HELPER [KS AS 2S 3S], absorb onto [AC 2H'] → [AC 2H' 3S] [→COMPLETE]"
       ]
     }
   },
@@ -1590,10 +1590,10 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "peel 2C from HELPER [2C 3D 4C 5H 6S 7H], absorb onto trouble [3C] → [2C 3C]",
-        "steal AC from HELPER [AC AD AH], absorb onto growing [2C 3C] → [AC 2C 3C] [→COMPLETE] ; spawn TROUBLE: [AD], [AH]",
-        "push TROUBLE [AD] onto HELPER [TD JD QD KD] → [TD JD QD KD AD]",
-        "push TROUBLE [AH] onto HELPER [2H 3H 4H] → [AH 2H 3H 4H]"
+        "peel 2C from HELPER [2C 3D 4C 5H 6S 7H], absorb onto [3C] → [2C 3C]",
+        "steal AC from HELPER [AC AD AH], absorb onto [2C 3C] → [AC 2C 3C] [→COMPLETE] ; spawn [AD], [AH]",
+        "push [AD] onto HELPER [TD JD QD KD] → [TD JD QD KD AD]",
+        "push [AH] onto HELPER [2H 3H 4H] → [AH 2H 3H 4H]"
       ]
     }
   },
@@ -1858,10 +1858,10 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "peel 2C from HELPER [2C 3D 4C 5H 6S 7H], absorb onto trouble [3C'] → [2C 3C']",
-        "steal AC from HELPER [AC AD AH], absorb onto growing [2C 3C'] → [AC 2C 3C'] [→COMPLETE] ; spawn TROUBLE: [AD], [AH]",
-        "push TROUBLE [AD] onto HELPER [TD JD QD KD] → [TD JD QD KD AD]",
-        "push TROUBLE [AH] onto HELPER [2H 3H 4H] → [AH 2H 3H 4H]"
+        "peel 2C from HELPER [2C 3D 4C 5H 6S 7H], absorb onto [3C'] → [2C 3C']",
+        "steal AC from HELPER [AC AD AH], absorb onto [2C 3C'] → [AC 2C 3C'] [→COMPLETE] ; spawn [AD], [AH]",
+        "push [AD] onto HELPER [TD JD QD KD] → [TD JD QD KD AD]",
+        "push [AH] onto HELPER [2H 3H 4H] → [AH 2H 3H 4H]"
       ]
     }
   },
@@ -3969,7 +3969,7 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "splice [4S] into HELPER [2C 3D 4C 5H 6S 7H] → [2C 3D 4S] + [4C 5H 6S 7H]"
+        "push [4S] onto HELPER [KS AS 2S 3S] → [KS AS 2S 3S 4S]"
       ]
     }
   },
@@ -4234,7 +4234,7 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "splice [4S'] into HELPER [2C 3D 4C 5H 6S 7H] → [2C 3D 4S'] + [4C 5H 6S 7H]"
+        "push [4S'] onto HELPER [KS AS 2S 3S] → [KS AS 2S 3S 4S']"
       ]
     }
   },
@@ -5555,7 +5555,7 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "splice [5H'] into HELPER [2C 3D 4C 5H 6S 7H] → [2C 3D 4C 5H'] + [5H 6S 7H]"
+        "push [5H'] onto HELPER [2H 3H 4H] → [2H 3H 4H 5H']"
       ]
     }
   },
@@ -5820,10 +5820,9 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "yank 6S from HELPER [2C 3D 4C 5H 6S 7H], absorb onto trouble [5S] → [5S 6S] ; spawn TROUBLE: [7H]",
-        "steal 7S from HELPER [7S 7D 7C], absorb onto growing [5S 6S] → [5S 6S 7S] [→COMPLETE] ; spawn TROUBLE: [7D], [7C]",
-        "pull 7D onto trouble [7H] → [7H 7D]",
-        "pull 7C onto growing [7H 7D] → [7H 7D 7C] [→COMPLETE]"
+        "yank 6S from HELPER [2C 3D 4C 5H 6S 7H], absorb onto [5S] → [5S 6S] ; spawn [7H]",
+        "push [7H] onto HELPER [7S 7D 7C] → [7S 7D 7C 7H]",
+        "peel 7S from HELPER [7S 7D 7C 7H], absorb onto [5S 6S] → [5S 6S 7S] [→COMPLETE]"
       ]
     }
   },
@@ -6088,10 +6087,9 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "yank 6S from HELPER [2C 3D 4C 5H 6S 7H], absorb onto trouble [5S'] → [5S' 6S] ; spawn TROUBLE: [7H]",
-        "steal 7S from HELPER [7S 7D 7C], absorb onto growing [5S' 6S] → [5S' 6S 7S] [→COMPLETE] ; spawn TROUBLE: [7D], [7C]",
-        "pull 7D onto trouble [7H] → [7H 7D]",
-        "pull 7C onto growing [7H 7D] → [7H 7D 7C] [→COMPLETE]"
+        "yank 6S from HELPER [2C 3D 4C 5H 6S 7H], absorb onto [5S'] → [5S' 6S] ; spawn [7H]",
+        "push [7H] onto HELPER [7S 7D 7C] → [7S 7D 7C 7H]",
+        "peel 7S from HELPER [7S 7D 7C 7H], absorb onto [5S' 6S] → [5S' 6S 7S] [→COMPLETE]"
       ]
     }
   },
@@ -8460,9 +8458,9 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "yank 6S from HELPER [2C 3D 4C 5H 6S 7H], absorb onto trouble [7D'] → [6S 7D'] ; spawn TROUBLE: [7H]",
-        "peel 5H from HELPER [2C 3D 4C 5H], absorb onto growing [6S 7D'] → [5H 6S 7D'] [→COMPLETE]",
-        "push TROUBLE [7H] onto HELPER [7S 7D 7C] → [7S 7D 7C 7H]"
+        "yank 6S from HELPER [2C 3D 4C 5H 6S 7H], absorb onto [7D'] → [6S 7D'] ; spawn [7H]",
+        "push [7H] onto HELPER [7S 7D 7C] → [7S 7D 7C 7H]",
+        "peel 5H from HELPER [2C 3D 4C 5H], absorb onto [6S 7D'] → [5H 6S 7D'] [→COMPLETE]"
       ]
     }
   },
@@ -8727,7 +8725,7 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "push TROUBLE [7H'] onto HELPER [7S 7D 7C] → [7S 7D 7C 7H']"
+        "push [7H'] onto HELPER [7S 7D 7C] → [7S 7D 7C 7H']"
       ]
     }
   },
@@ -9255,7 +9253,7 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "push TROUBLE [8C] onto HELPER [2C 3D 4C 5H 6S 7H] → [2C 3D 4C 5H 6S 7H 8C]"
+        "push [8C] onto HELPER [2C 3D 4C 5H 6S 7H] → [2C 3D 4C 5H 6S 7H 8C]"
       ]
     }
   },
@@ -9520,7 +9518,7 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "push TROUBLE [8C'] onto HELPER [2C 3D 4C 5H 6S 7H] → [2C 3D 4C 5H 6S 7H 8C']"
+        "push [8C'] onto HELPER [2C 3D 4C 5H 6S 7H] → [2C 3D 4C 5H 6S 7H 8C']"
       ]
     }
   },
@@ -10837,7 +10835,7 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "push TROUBLE [8S] onto HELPER [2C 3D 4C 5H 6S 7H] → [2C 3D 4C 5H 6S 7H 8S]"
+        "push [8S] onto HELPER [2C 3D 4C 5H 6S 7H] → [2C 3D 4C 5H 6S 7H 8S]"
       ]
     }
   },
@@ -11102,7 +11100,7 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "push TROUBLE [8S'] onto HELPER [2C 3D 4C 5H 6S 7H] → [2C 3D 4C 5H 6S 7H 8S']"
+        "push [8S'] onto HELPER [2C 3D 4C 5H 6S 7H] → [2C 3D 4C 5H 6S 7H 8S']"
       ]
     }
   },
@@ -11893,7 +11891,7 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "push TROUBLE [9D] onto HELPER [TD JD QD KD] → [9D TD JD QD KD]"
+        "push [9D] onto HELPER [TD JD QD KD] → [9D TD JD QD KD]"
       ]
     }
   },
@@ -12158,7 +12156,7 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "push TROUBLE [9D'] onto HELPER [TD JD QD KD] → [9D' TD JD QD KD]"
+        "push [9D'] onto HELPER [TD JD QD KD] → [9D' TD JD QD KD]"
       ]
     }
   },
@@ -13738,7 +13736,7 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "push TROUBLE [AD'] onto HELPER [TD JD QD KD] → [TD JD QD KD AD']"
+        "push [AD'] onto HELPER [TD JD QD KD] → [TD JD QD KD AD']"
       ]
     }
   },
@@ -14003,7 +14001,7 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "push TROUBLE [AH'] onto HELPER [2H 3H 4H] → [AH' 2H 3H 4H]"
+        "push [AH'] onto HELPER [2H 3H 4H] → [AH' 2H 3H 4H]"
       ]
     }
   },
@@ -14268,7 +14266,7 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "push TROUBLE [AS'] onto HELPER [AC AD AH] → [AC AD AH AS']"
+        "push [AS'] onto HELPER [AC AD AH] → [AC AD AH AS']"
       ]
     }
   },
@@ -16374,8 +16372,8 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "peel KD from HELPER [TD JD QD KD], absorb onto trouble [KC] → [KC KD]",
-        "peel KS from HELPER [KS AS 2S 3S], absorb onto growing [KC KD] → [KC KD KS] [→COMPLETE]"
+        "peel KD from HELPER [TD JD QD KD], absorb onto [KC] → [KC KD]",
+        "peel KS from HELPER [KS AS 2S 3S], absorb onto [KC KD] → [KS KC KD] [→COMPLETE]"
       ]
     }
   },
@@ -16640,8 +16638,8 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "peel KD from HELPER [TD JD QD KD], absorb onto trouble [KC'] → [KC' KD]",
-        "peel KS from HELPER [KS AS 2S 3S], absorb onto growing [KC' KD] → [KC' KD KS] [→COMPLETE]"
+        "peel KD from HELPER [TD JD QD KD], absorb onto [KC'] → [KC' KD]",
+        "peel KS from HELPER [KS AS 2S 3S], absorb onto [KC' KD] → [KS KC' KD] [→COMPLETE]"
       ]
     }
   },
@@ -17169,8 +17167,8 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "peel KD from HELPER [TD JD QD KD], absorb onto trouble [KH] → [KH KD]",
-        "peel KS from HELPER [KS AS 2S 3S], absorb onto growing [KH KD] → [KH KD KS] [→COMPLETE]"
+        "peel KD from HELPER [TD JD QD KD], absorb onto [KH] → [KH KD]",
+        "peel KS from HELPER [KS AS 2S 3S], absorb onto [KH KD] → [KS KH KD] [→COMPLETE]"
       ]
     }
   },
@@ -17435,8 +17433,8 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "peel KD from HELPER [TD JD QD KD], absorb onto trouble [KH'] → [KH' KD]",
-        "peel KS from HELPER [KS AS 2S 3S], absorb onto growing [KH' KD] → [KH' KD KS] [→COMPLETE]"
+        "peel KD from HELPER [TD JD QD KD], absorb onto [KH'] → [KH' KD]",
+        "peel KS from HELPER [KS AS 2S 3S], absorb onto [KH' KD] → [KS KH' KD] [→COMPLETE]"
       ]
     }
   },
@@ -17964,10 +17962,10 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "peel KD from HELPER [TD JD QD KD], absorb onto trouble [QC] → [QC KD]",
-        "steal AC from HELPER [AC AD AH], absorb onto growing [QC KD] → [QC KD AC] [→COMPLETE] ; spawn TROUBLE: [AD], [AH]",
-        "push TROUBLE [AD] onto HELPER [2C 3D 4C 5H 6S 7H] → [AD 2C 3D 4C 5H 6S 7H]",
-        "push TROUBLE [AH] onto HELPER [2H 3H 4H] → [AH 2H 3H 4H]"
+        "peel KD from HELPER [TD JD QD KD], absorb onto [QC] → [QC KD]",
+        "steal AC from HELPER [AC AD AH], absorb onto [QC KD] → [QC KD AC] [→COMPLETE] ; spawn [AD], [AH]",
+        "push [AD] onto HELPER [2C 3D 4C 5H 6S 7H] → [AD 2C 3D 4C 5H 6S 7H]",
+        "push [AH] onto HELPER [2H 3H 4H] → [AH 2H 3H 4H]"
       ]
     }
   },
@@ -18232,10 +18230,10 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "peel KD from HELPER [TD JD QD KD], absorb onto trouble [QC'] → [QC' KD]",
-        "steal AC from HELPER [AC AD AH], absorb onto growing [QC' KD] → [QC' KD AC] [→COMPLETE] ; spawn TROUBLE: [AD], [AH]",
-        "push TROUBLE [AD] onto HELPER [2C 3D 4C 5H 6S 7H] → [AD 2C 3D 4C 5H 6S 7H]",
-        "push TROUBLE [AH] onto HELPER [2H 3H 4H] → [AH 2H 3H 4H]"
+        "peel KD from HELPER [TD JD QD KD], absorb onto [QC'] → [QC' KD]",
+        "steal AC from HELPER [AC AD AH], absorb onto [QC' KD] → [QC' KD AC] [→COMPLETE] ; spawn [AD], [AH]",
+        "push [AD] onto HELPER [2C 3D 4C 5H 6S 7H] → [AD 2C 3D 4C 5H 6S 7H]",
+        "push [AH] onto HELPER [2H 3H 4H] → [AH 2H 3H 4H]"
       ]
     }
   },
@@ -19289,7 +19287,7 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "push TROUBLE [QS] onto HELPER [KS AS 2S 3S] → [QS KS AS 2S 3S]"
+        "push [QS] onto HELPER [KS AS 2S 3S] → [QS KS AS 2S 3S]"
       ]
     }
   },
@@ -19554,7 +19552,7 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "push TROUBLE [QS'] onto HELPER [KS AS 2S 3S] → [QS' KS AS 2S 3S]"
+        "push [QS'] onto HELPER [KS AS 2S 3S] → [QS' KS AS 2S 3S]"
       ]
     }
   },
@@ -22068,8 +22066,8 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "shift 8C to pop JC' [8D' 8S 8H' -\u003e 8C + 9C TC']; absorb onto trouble [QD'] → [JC' QD']",
-        "peel TH from HELPER [AH' 2H 3H 4H 5H' 6H' 7H 8H 9H TH], absorb onto growing [JC' QD'] → [TH JC' QD'] [→COMPLETE]"
+        "shift 8C to pop JC' [8D' 8S 8H' -\u003e 8C + 9C TC']; absorb onto [QD'] → [JC' QD']",
+        "peel TH from HELPER [AH' 2H 3H 4H 5H' 6H' 7H 8H 9H TH], absorb onto [JC' QD'] → [TH JC' QD'] [→COMPLETE]"
       ]
     }
   },
@@ -22734,11 +22732,10 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "peel TH' from HELPER [TH' JC' QD' KS'], absorb onto trouble [TC] → [TC TH']",
-        "steal TD from HELPER [8D 9D' TD], absorb onto growing [TC TH'] → [TC TH' TD] [→COMPLETE] ; spawn TROUBLE: [8D 9D']",
-        "steal 7D from HELPER [7S 7D 7C], absorb onto trouble [8D 9D'] → [7D 8D 9D'] [→COMPLETE] ; spawn TROUBLE: [7S], [7C]",
-        "pull 7C onto trouble [7S] → [7S 7C]",
-        "pluck 7H' from HELPER [4H' 5H' 6H' 7H' 8H' 9H TH], absorb onto growing [7S 7C] → [7S 7C 7H'] [→COMPLETE]"
+        "peel TH' from HELPER [TH' JC' QD' KS'], absorb onto [TC] → [TC TH']",
+        "steal TD from HELPER [8D 9D' TD], absorb onto [TC TH'] → [TD TC TH'] [→COMPLETE] ; spawn [8D 9D']",
+        "set_peel 7D from HELPER [7S 7D 7C], absorb onto [8D 9D'] → [7D 8D 9D'] [→COMPLETE] ; spawn [7S 7C]",
+        "pluck 7H' from HELPER [4H' 5H' 6H' 7H' 8H' 9H TH], absorb onto [7S 7C] → [7S 7C 7H'] [→COMPLETE]"
       ]
     }
   },
@@ -23707,8 +23704,8 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "peel 2C from HELPER [2H' 2C 2S' 2D], absorb onto trouble [3C] → [2C 3C]",
-        "pluck 4C from HELPER [QH' KS' AD' 2C' 3D 4C 5D' 6C' 7H 8C' 9H TS JH' QS' KD AC' 2D' 3C'], absorb onto growing [2C 3C] → [2C 3C 4C] [→COMPLETE]"
+        "pluck 3S from HELPER [KS AS 2S 3S 4S 5S' 6S], absorb onto [3C] → [3S 3C]",
+        "pluck 3D from HELPER [QH' KS' AD' 2C' 3D 4C 5D' 6C' 7H 8C' 9H TS JH' QS' KD AC' 2D' 3C'], absorb onto [3S 3C] → [3S 3C 3D] [→COMPLETE]"
       ]
     }
   },
@@ -24461,10 +24458,10 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "peel 7C from HELPER [7S 7D 7C 7H'], absorb onto trouble [6D] → [6D 7C]",
-        "steal 5C from HELPER [5C 5D 5S'], absorb onto growing [6D 7C] → [5C 6D 7C] [→COMPLETE] ; spawn TROUBLE: [5D], [5S']",
-        "splice [5D] into HELPER [3D 4C 5H 6S 7H 8C'] → [3D 4C 5D] + [5H 6S 7H 8C']",
-        "splice [5S'] into HELPER [3S' 4D' 5S 6H 7S'] → [3S' 4D' 5S'] + [5S 6H 7S']"
+        "peel 7C' from HELPER [4C' 5C' 6C' 7C'], absorb onto [6D] → [6D 7C']",
+        "steal 5S' from HELPER [5C 5D 5S'], absorb onto [6D 7C'] → [5S' 6D 7C'] [→COMPLETE] ; spawn [5C], [5D]",
+        "splice [5C] into HELPER [3S' 4D' 5S 6H 7S'] → [3S' 4D' 5S] + [5C 6H 7S']",
+        "splice [5D] into HELPER [3D 4C 5H 6S 7H 8C'] → [3D 4C 5D] + [5H 6S 7H 8C']"
       ]
     }
   },
@@ -25153,11 +25150,11 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "peel JC' from HELPER [7S' 8H' 9C' TD' JC'], absorb onto trouble [JS] → [JS JC']",
-        "steal JD from HELPER [JD QD KD'], absorb onto growing [JS JC'] → [JS JC' JD] [→COMPLETE] ; spawn TROUBLE: [QD KD']",
-        "steal AD' from HELPER [AS AD' AC'], absorb onto trouble [QD KD'] → [QD KD' AD'] [→COMPLETE] ; spawn TROUBLE: [AS], [AC']",
-        "push TROUBLE [AS] onto HELPER [2S 3S 4S' 5S'] → [AS 2S 3S 4S' 5S']",
-        "push TROUBLE [AC'] onto HELPER [AD AH AS'] → [AD AH AS' AC']"
+        "steal JD from HELPER [JD QD KD'], absorb onto [JS] → [JS JD] ; spawn [QD KD']",
+        "steal AD' from HELPER [AS AD' AC'], absorb onto [QD KD'] → [QD KD' AD'] [→COMPLETE] ; spawn [AS], [AC']",
+        "peel JC' from HELPER [7S' 8H' 9C' TD' JC'], absorb onto [JS JD] → [JS JD JC'] [→COMPLETE]",
+        "push [AS] onto HELPER [2S 3S 4S' 5S'] → [AS 2S 3S 4S' 5S']",
+        "push [AC'] onto HELPER [AD AH AS'] → [AD AH AS' AC']"
       ]
     }
   },
@@ -25766,10 +25763,9 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "yank KD from HELPER [TD' JD QD KD AD'], absorb onto trouble [QC'] → [QC' KD] ; spawn TROUBLE: [AD']",
-        "yank AS from HELPER [TS' JS' QS KS AS 2S], absorb onto growing [QC' KD] → [QC' KD AS] [→COMPLETE] ; spawn TROUBLE: [2S]",
-        "pull 2S onto trouble [AD'] → [AD' 2S]",
-        "peel KS from HELPER [TS' JS' QS KS], absorb onto growing [AD' 2S] → [KS AD' 2S] [→COMPLETE]"
+        "set_peel JD' from HELPER [JC' JH' JD'], absorb onto [QC'] → [JD' QC'] ; spawn [JC' JH']",
+        "yank JS' from HELPER [TS' JS' QS KS AS 2S], absorb onto [JC' JH'] → [JC' JH' JS'] [→COMPLETE] ; spawn [TS']",
+        "pull TS' onto [JD' QC'] → [TS' JD' QC'] [→COMPLETE]"
       ]
     }
   },
@@ -26482,12 +26478,12 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "steal QD' from HELPER [QD' QS QH], absorb onto trouble [JC'] → [JC' QD'] ; spawn TROUBLE: [QS], [QH]",
-        "steal KC from HELPER [KS KD KC], absorb onto growing [JC' QD'] → [JC' QD' KC] [→COMPLETE] ; spawn TROUBLE: [KS], [KD]",
-        "push TROUBLE [QS] onto HELPER [9H' TC' JD'] → [9H' TC' JD' QS]",
-        "push TROUBLE [QH] onto HELPER [9C TD' JS'] → [9C TD' JS' QH]",
-        "push TROUBLE [KS] onto HELPER [AS 2S 3S] → [KS AS 2S 3S]",
-        "push TROUBLE [KD] onto HELPER [TD JD QD] → [TD JD QD KD]"
+        "steal QD' from HELPER [QD' QS QH], absorb onto [JC'] → [JC' QD'] ; spawn [QS], [QH]",
+        "steal KS from HELPER [KS KD KC], absorb onto [QS] → [QS KS] ; spawn [KD], [KC]",
+        "push [QH] onto HELPER [9C TD' JS'] → [9C TD' JS' QH]",
+        "pull KC onto [JC' QD'] → [JC' QD' KC] [→COMPLETE]",
+        "push [KD] onto HELPER [TD JD QD] → [TD JD QD KD]",
+        "push [QS KS] onto HELPER [AS 2S 3S] → [QS KS AS 2S 3S]"
       ]
     }
   },
@@ -27184,10 +27180,10 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "peel TC' from HELPER [7C' 8C' 9C' TC'], absorb onto trouble [TH'] → [TH' TC']",
-        "split_out TD' from HELPER [9S' TD' JS'], absorb onto growing [TH' TC'] → [TH' TC' TD'] [→COMPLETE] ; spawn TROUBLE: [9S'], [JS']",
-        "push TROUBLE [9S'] onto HELPER [9D' 9H 9C] → [9D' 9H 9C 9S']",
-        "push TROUBLE [JS'] onto HELPER [QS KS AS 2S 3S 4S'] → [JS' QS KS AS 2S 3S 4S']"
+        "peel TC' from HELPER [7C' 8C' 9C' TC'], absorb onto [TH'] → [TH' TC']",
+        "split_out TD' from HELPER [9S' TD' JS'], absorb onto [TH' TC'] → [TD' TH' TC'] [→COMPLETE] ; spawn [9S'], [JS']",
+        "push [9S'] onto HELPER [9D' 9H 9C] → [9D' 9H 9C 9S']",
+        "push [JS'] onto HELPER [QS KS AS 2S 3S 4S'] → [JS' QS KS AS 2S 3S 4S']"
       ]
     }
   },
@@ -28405,13 +28401,12 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "peel 4C from HELPER [4C 5H 6S 7H 8C'], absorb onto trouble [5C'] → [4C 5C']",
-        "steal 3C' from HELPER [3D 3S' 3C'], absorb onto growing [4C 5C'] → [3C' 4C 5C'] [→COMPLETE] ; spawn TROUBLE: [3D], [3S']",
-        "push TROUBLE [3D] onto HELPER [JD' QD KD' AD' 2D'] → [JD' QD KD' AD' 2D' 3D]",
-        "shift 5H' to pop 2H [2C 3H' 4C' -\u003e 3H 4H + 5H']; absorb onto trouble [3S'] → [2H 3S']",
-        "steal AS' from HELPER [AD AH AS'], absorb onto growing [2H 3S'] → [AS' 2H 3S'] [→COMPLETE] ; spawn TROUBLE: [AD], [AH]",
-        "splice [AD] into HELPER [JD' QD KD' AD' 2D' 3D] → [JD' QD KD' AD] + [AD' 2D' 3D]",
-        "push TROUBLE [AH] onto HELPER [9C' TD JS' QH KC'] → [9C' TD JS' QH KC' AH]"
+        "peel 4C from HELPER [4C 5H 6S 7H 8C'], absorb onto [5C'] → [4C 5C']",
+        "steal 3C' from HELPER [3D 3S' 3C'], absorb onto [4C 5C'] → [3C' 4C 5C'] [→COMPLETE] ; spawn [3D], [3S']",
+        "push [3D] onto HELPER [JD' QD KD' AD' 2D'] → [JD' QD KD' AD' 2D' 3D]",
+        "steal 2H from HELPER [2H 3H 4H], absorb onto [3S'] → [2H 3S'] ; spawn [3H 4H]",
+        "push [3H 4H] onto HELPER [KH' AH' 2H'] → [KH' AH' 2H' 3H 4H]",
+        "peel 4H from HELPER [KH' AH' 2H' 3H 4H], absorb onto [2H 3S'] → [2H 3S' 4H] [→COMPLETE]"
       ]
     }
   },
@@ -29028,8 +29023,8 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "shift 7H to pop 4S' [3D 4C 5H 6S -\u003e 5D' 6C + 7H]; absorb onto trouble [5S] → [4S' 5S]",
-        "peel 6S from HELPER [3D 4C 5H 6S], absorb onto growing [4S' 5S] → [4S' 5S 6S] [→COMPLETE]"
+        "shift 7H to pop 4S' [3D 4C 5H 6S -\u003e 5D' 6C + 7H]; absorb onto [5S] → [4S' 5S]",
+        "peel 6S from HELPER [3D 4C 5H 6S], absorb onto [4S' 5S] → [4S' 5S 6S] [→COMPLETE]"
       ]
     }
   },
@@ -29766,11 +29761,11 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "steal TS from HELPER [8S 9S TS], absorb onto trouble [JH] → [TS JH] ; spawn TROUBLE: [8S 9S]",
-        "peel 9D' from HELPER [9H 9S' 9C 9D'], absorb onto growing [TS JH] → [9D' TS JH] [→COMPLETE]",
-        "steal 7S from HELPER [7S 7C 7H'], absorb onto trouble [8S 9S] → [7S 8S 9S] [→COMPLETE] ; spawn TROUBLE: [7C], [7H']",
-        "push TROUBLE [7C] onto HELPER [8H 9C' TD JC' QH'] → [7C 8H 9C' TD JC' QH']",
-        "push TROUBLE [7H'] onto HELPER [4C' 5D 6S] → [4C' 5D 6S 7H']"
+        "steal TS from HELPER [8S 9S TS], absorb onto [JH] → [TS JH] ; spawn [8S 9S]",
+        "steal 7S from HELPER [7S 7C 7H'], absorb onto [8S 9S] → [7S 8S 9S] [→COMPLETE] ; spawn [7C], [7H']",
+        "peel 9D' from HELPER [9H 9S' 9C 9D'], absorb onto [TS JH] → [9D' TS JH] [→COMPLETE]",
+        "push [7C] onto HELPER [8H 9C' TD JC' QH'] → [7C 8H 9C' TD JC' QH']",
+        "push [7H'] onto HELPER [4C' 5D 6S] → [4C' 5D 6S 7H']"
       ]
     }
   },
@@ -30523,8 +30518,8 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "peel JD from HELPER [8D 9D TD JD], absorb onto trouble [QC] → [JD QC]",
-        "peel TS' from HELPER [TS' JS QS' KS AS 2S], absorb onto growing [JD QC] → [TS' JD QC] [→COMPLETE]"
+        "peel JD from HELPER [8D 9D TD JD], absorb onto [QC] → [JD QC]",
+        "peel TS' from HELPER [TS' JS QS' KS AS 2S], absorb onto [JD QC] → [TS' JD QC] [→COMPLETE]"
       ]
     }
   },
@@ -32599,8 +32594,8 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "peel JD from HELPER [JD QD KD AD' 2D 3D 4D'], absorb onto trouble [TC'] → [TC' JD]",
-        "peel QS from HELPER [QS KS AS 2S 3S], absorb onto growing [TC' JD] → [TC' JD QS] [→COMPLETE]"
+        "peel JH from HELPER [JH QH' KH' AH 2H'], absorb onto [TC'] → [TC' JH]",
+        "peel QS from HELPER [QS KS AS 2S 3S], absorb onto [TC' JH] → [TC' JH QS] [→COMPLETE]"
       ]
     }
   },
@@ -33313,9 +33308,9 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "peel QS' from HELPER [QS' KS AS 2S 3S'], absorb onto trouble [JH] → [JH QS']",
-        "yank KD from HELPER [TD JD QD KD AD' 2D'], absorb onto growing [JH QS'] → [JH QS' KD] [→COMPLETE] ; spawn TROUBLE: [AD' 2D']",
-        "peel 3D from HELPER [3D 4C 5H 6S], absorb onto trouble [AD' 2D'] → [AD' 2D' 3D] [→COMPLETE]"
+        "peel QS' from HELPER [QS' KS AS 2S 3S'], absorb onto [JH] → [JH QS']",
+        "yank KD from HELPER [TD JD QD KD AD' 2D'], absorb onto [JH QS'] → [JH QS' KD] [→COMPLETE] ; spawn [AD' 2D']",
+        "peel 3D from HELPER [3D 4C 5H 6S], absorb onto [AD' 2D'] → [AD' 2D' 3D] [→COMPLETE]"
       ]
     }
   },
@@ -34829,8 +34824,8 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "peel 4H from HELPER [4H 5S' 6H 7C' 8D], absorb onto trouble [5C'] → [4H 5C']",
-        "peel 3S' from HELPER [3S' 4S' 5S 6S' 7S'], absorb onto growing [4H 5C'] → [3S' 4H 5C'] [→COMPLETE]"
+        "peel 4H from HELPER [4H 5S' 6H 7C' 8D], absorb onto [5C'] → [4H 5C']",
+        "peel 3S' from HELPER [3S' 4S' 5S 6S' 7S'], absorb onto [4H 5C'] → [3S' 4H 5C'] [→COMPLETE]"
       ]
     }
   },
@@ -35447,11 +35442,10 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "peel 2D from HELPER [QD' KD AD' 2D], absorb onto trouble [AC'] → [AC' 2D]",
-        "split_out 3S from HELPER [2S' 3S 4S], absorb onto growing [AC' 2D] → [AC' 2D 3S] [→COMPLETE] ; spawn TROUBLE: [2S'], [4S]",
-        "push TROUBLE [2S'] onto HELPER [2H 2C' 2D'] → [2H 2C' 2D' 2S']",
-        "peel 5D' from HELPER [5S' 5H 5D' 5C'], absorb onto trouble [4S] → [4S 5D']",
-        "peel 6C' from HELPER [6C' 7H 8S 9D TS' JD' QC], absorb onto growing [4S 5D'] → [4S 5D' 6C'] [→COMPLETE]"
+        "peel 2H' from HELPER [2H' 3H 4H 5H' 6H], absorb onto [AC'] → [AC' 2H']",
+        "split_out 3S from HELPER [2S' 3S 4S], absorb onto [AC' 2H'] → [AC' 2H' 3S] [→COMPLETE] ; spawn [2S'], [4S]",
+        "peel 3H from HELPER [3H 4H 5H' 6H], absorb onto [2S'] → [2S' 3H]",
+        "pull 4S onto [2S' 3H] → [2S' 3H 4S] [→COMPLETE]"
       ]
     }
   },
@@ -42005,9 +41999,8 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "steal 7D from HELPER [7S 7D 7C], absorb onto trouble [7H' 7C'] → [7H' 7C' 7D] [→COMPLETE] ; spawn TROUBLE: [7S], [7C]",
-        "pull 7C onto trouble [7S] → [7S 7C]",
-        "peel 7H from HELPER [2C 3D 4C 5H 6S 7H], absorb onto growing [7S 7C] → [7S 7C 7H] [→COMPLETE]"
+        "set_peel 7D from HELPER [7S 7D 7C], absorb onto [7H' 7C'] → [7H' 7C' 7D] [→COMPLETE] ; spawn [7S 7C]",
+        "peel 7H from HELPER [2C 3D 4C 5H 6S 7H], absorb onto [7S 7C] → [7H 7S 7C] [→COMPLETE]"
       ]
     }
   },
@@ -42280,8 +42273,8 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "yank 6S from HELPER [2C 3D 4C 5H 6S 7H], absorb onto trouble [6H 6D'] → [6H 6D' 6S] [→COMPLETE] ; spawn TROUBLE: [7H]",
-        "push TROUBLE [7H] onto HELPER [7S 7D 7C] → [7S 7D 7C 7H]"
+        "yank 6S from HELPER [2C 3D 4C 5H 6S 7H], absorb onto [6H 6D'] → [6H 6D' 6S] [→COMPLETE] ; spawn [7H]",
+        "push [7H] onto HELPER [7S 7D 7C] → [7S 7D 7C 7H]"
       ]
     }
   },
@@ -42578,7 +42571,7 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "peel 3S from HELPER [KS AS 2S 3S], absorb onto trouble [AS' 2S'] → [AS' 2S' 3S] [→COMPLETE]"
+        "peel 3S from HELPER [KS AS 2S 3S], absorb onto [AS' 2S'] → [AS' 2S' 3S] [→COMPLETE]"
       ]
     }
   },
@@ -42947,12 +42940,12 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "peel TD from HELPER [TD JD QD KD], absorb onto trouble [JC] → [TD JC]",
-        "split_out QD from HELPER [JD QD KD], absorb onto growing [TD JC] → [TD JC QD] [→COMPLETE] ; spawn TROUBLE: [JD], [KD]",
-        "push TROUBLE [JD] onto HELPER [8C 9D' TS'] → [8C 9D' TS' JD]",
-        "peel AS' from HELPER [AS' 2S' 3S 4S], absorb onto trouble [KD] → [KD AS']",
-        "steal 2H from HELPER [2H 3H 4H], absorb onto growing [KD AS'] → [KD AS' 2H] [→COMPLETE] ; spawn TROUBLE: [3H 4H]",
-        "push TROUBLE [3H 4H] onto HELPER [5H 6H' 7H] → [3H 4H 5H 6H' 7H]"
+        "peel TD from HELPER [TD JD QD KD], absorb onto [JC] → [TD JC]",
+        "split_out QD from HELPER [JD QD KD], absorb onto [TD JC] → [TD JC QD] [→COMPLETE] ; spawn [JD], [KD]",
+        "push [JD] onto HELPER [8C 9D' TS'] → [8C 9D' TS' JD]",
+        "peel AS' from HELPER [AS' 2S' 3S 4S], absorb onto [KD] → [KD AS']",
+        "steal 2H from HELPER [2H 3H 4H], absorb onto [KD AS'] → [KD AS' 2H] [→COMPLETE] ; spawn [3H 4H]",
+        "push [3H 4H] onto HELPER [5H 6H' 7H] → [3H 4H 5H 6H' 7H]"
       ]
     }
   },
@@ -43353,12 +43346,12 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "steal AC from HELPER [AC AD AH], absorb onto trouble [KH'] → [KH' AC] ; spawn TROUBLE: [AD], [AH]",
-        "peel 2H from HELPER [2H 3H 4H 5H 6H'], absorb onto growing [KH' AC] → [KH' AC 2H] [→COMPLETE]",
-        "push TROUBLE [AD] onto HELPER [2C 3D 4C] → [AD 2C 3D 4C]",
-        "steal 2S from HELPER [KS AS 2S], absorb onto trouble [AH] → [AH 2S] ; spawn TROUBLE: [KS AS]",
-        "peel 3H from HELPER [3H 4H 5H 6H'], absorb onto growing [AH 2S] → [AH 2S 3H] [→COMPLETE]",
-        "push TROUBLE [KS AS] onto HELPER [2S' 3S 4S] → [KS AS 2S' 3S 4S]"
+        "steal AC from HELPER [AC AD AH], absorb onto [KH'] → [KH' AC] ; spawn [AD], [AH]",
+        "push [AD] onto HELPER [2C 3D 4C] → [AD 2C 3D 4C]",
+        "steal 2S' from HELPER [2S' 3S 4S], absorb onto [AH] → [AH 2S'] ; spawn [3S 4S]",
+        "peel 2H from HELPER [2H 3H 4H 5H 6H'], absorb onto [KH' AC] → [KH' AC 2H] [→COMPLETE]",
+        "push [3S 4S] onto HELPER [KS AS 2S] → [KS AS 2S 3S 4S]",
+        "peel 3H from HELPER [3H 4H 5H 6H'], absorb onto [AH 2S'] → [AH 2S' 3H] [→COMPLETE]"
       ]
     }
   },
@@ -43711,7 +43704,7 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "push TROUBLE [2D] onto HELPER [JD QD KD AD] → [JD QD KD AD 2D]"
+        "push [2D] onto HELPER [JD QD KD AD] → [JD QD KD AD 2D]"
       ]
     }
   },
@@ -44072,8 +44065,8 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "peel 3D from HELPER [3D 4C 5H 6S], absorb onto trouble [3H'] → [3H' 3D]",
-        "peel 3S from HELPER [KS AS 2S 3S], absorb onto growing [3H' 3D] → [3H' 3D 3S] [→COMPLETE]"
+        "peel 3D from HELPER [3D 4C 5H 6S], absorb onto [3H'] → [3H' 3D]",
+        "peel 3S from HELPER [KS AS 2S 3S], absorb onto [3H' 3D] → [3S 3H' 3D] [→COMPLETE]"
       ]
     }
   },
@@ -44450,10 +44443,9 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "peel JD from HELPER [JD QD KD AD 2D], absorb onto trouble [TC'] → [TC' JD]",
-        "steal QC' from HELPER [QH' QS' QC'], absorb onto growing [TC' JD] → [TC' JD QC'] [→COMPLETE] ; spawn TROUBLE: [QH'], [QS']",
-        "pull QS' onto trouble [QH'] → [QH' QS']",
-        "peel QD from HELPER [QD KD AD 2D], absorb onto growing [QH' QS'] → [QH' QS' QD] [→COMPLETE]"
+        "peel JD from HELPER [JD QD KD AD 2D], absorb onto [TC'] → [TC' JD]",
+        "set_peel QC' from HELPER [QH' QS' QC'], absorb onto [TC' JD] → [TC' JD QC'] [→COMPLETE] ; spawn [QH' QS']",
+        "peel QD from HELPER [QD KD AD 2D], absorb onto [QH' QS'] → [QD QH' QS'] [→COMPLETE]"
       ]
     }
   },
@@ -44846,10 +44838,10 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "peel AH from HELPER [AH 2H 3H 4H], absorb onto trouble [2C'] → [AH 2C']",
-        "steal 3D from HELPER [3H' 3D 3S], absorb onto growing [AH 2C'] → [AH 2C' 3D] [→COMPLETE] ; spawn TROUBLE: [3H'], [3S]",
-        "push TROUBLE [3H'] onto HELPER [4C 5H 6S] → [3H' 4C 5H 6S]",
-        "push TROUBLE [3S] onto HELPER [KS AS 2S] → [KS AS 2S 3S]"
+        "peel AH from HELPER [AH 2H 3H 4H], absorb onto [2C'] → [AH 2C']",
+        "steal 3H' from HELPER [3H' 3D 3S], absorb onto [AH 2C'] → [AH 2C' 3H'] [→COMPLETE] ; spawn [3D], [3S]",
+        "push [3D] onto HELPER [4C 5H 6S] → [3D 4C 5H 6S]",
+        "push [3S] onto HELPER [KS AS 2S] → [KS AS 2S 3S]"
       ]
     }
   },
@@ -45250,7 +45242,7 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "push TROUBLE [8C] onto HELPER [5D' 6C' 7H] → [5D' 6C' 7H 8C]"
+        "push [8C] onto HELPER [5D' 6C' 7H] → [5D' 6C' 7H 8C]"
       ]
     }
   },
@@ -47152,10 +47144,10 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "shift KD to pop 3S [TD JD QD -\u003e KD + AS' 2D]; absorb onto trouble [2H'] → [2H' 3S]",
-        "steal AC from HELPER [AC AD AH], absorb onto growing [2H' 3S] → [AC 2H' 3S] [→COMPLETE] ; spawn TROUBLE: [AD], [AH]",
-        "push TROUBLE [AD] onto HELPER [2C 3D 4S] → [AD 2C 3D 4S]",
-        "push TROUBLE [AH] onto HELPER [2H 3H 4H] → [AH 2H 3H 4H]"
+        "steal AC from HELPER [AC AD AH], absorb onto [2H'] → [AC 2H'] ; spawn [AD], [AH]",
+        "push [AD] onto HELPER [2C 3D 4S] → [AD 2C 3D 4S]",
+        "push [AH] onto HELPER [2H 3H 4H] → [AH 2H 3H 4H]",
+        "shift KD to pop 3S [TD JD QD -\u003e KD + AS' 2D]; absorb onto [AC 2H'] → [AC 2H' 3S] [→COMPLETE]"
       ]
     }
   },
@@ -47524,10 +47516,10 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "yank 5H from HELPER [2C 3D 4C 5H 6S 7H], absorb onto trouble [5D 5C] → [5D 5C 5H] [→COMPLETE] ; spawn TROUBLE: [6S 7H]",
-        "split_out 8S from HELPER [7H' 8S 9D], absorb onto trouble [6S 7H] → [6S 7H 8S] [→COMPLETE] ; spawn TROUBLE: [7H'], [9D]",
-        "push TROUBLE [7H'] onto HELPER [7S 7D 7C] → [7S 7D 7C 7H']",
-        "push TROUBLE [9D] onto HELPER [TD JD QD KD] → [9D TD JD QD KD]"
+        "yank 5H from HELPER [2C 3D 4C 5H 6S 7H], absorb onto [5D 5C] → [5D 5C 5H] [→COMPLETE] ; spawn [6S 7H]",
+        "split_out 8S from HELPER [7H' 8S 9D], absorb onto [6S 7H] → [6S 7H 8S] [→COMPLETE] ; spawn [7H'], [9D]",
+        "push [7H'] onto HELPER [7S 7D 7C] → [7H' 7S 7D 7C]",
+        "push [9D] onto HELPER [TD JD QD KD] → [9D TD JD QD KD]"
       ]
     }
   },
@@ -47928,9 +47920,9 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "yank QD from HELPER [9D TD JD QD KD], absorb onto trouble [JC'] → [JC' QD] ; spawn TROUBLE: [KD]",
-        "shift 3S to pop KS [4H 5C' 6H' -\u003e AS 2S + 3S]; absorb onto growing [JC' QD] → [JC' QD KS] [→COMPLETE]",
-        "push TROUBLE [KD] onto HELPER [AC 2H 3C' 4D] → [KD AC 2H 3C' 4D]"
+        "yank QD from HELPER [9D TD JD QD KD], absorb onto [JC'] → [JC' QD] ; spawn [KD]",
+        "push [KD] onto HELPER [AC 2H 3C' 4D] → [KD AC 2H 3C' 4D]",
+        "shift 3S to pop KS [4H 5C' 6H' -\u003e AS 2S + 3S]; absorb onto [JC' QD] → [JC' QD KS] [→COMPLETE]"
       ]
     }
   },
@@ -48347,10 +48339,10 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "peel 7C from HELPER [7S 7D 7C 7H'], absorb onto trouble [6H] → [6H 7C]",
-        "steal 5C from HELPER [5D 5C 5H], absorb onto growing [6H 7C] → [5C 6H 7C] [→COMPLETE] ; spawn TROUBLE: [5D], [5H]",
-        "push TROUBLE [5D] onto HELPER [6S 7H 8S] → [5D 6S 7H 8S]",
-        "push TROUBLE [5H] onto HELPER [AH 2C 3D 4C] → [AH 2C 3D 4C 5H]"
+        "steal 5H from HELPER [5D 5C 5H], absorb onto [6H] → [5H 6H] ; spawn [5D], [5C]",
+        "push [5D] onto HELPER [6S 7H 8S] → [5D 6S 7H 8S]",
+        "push [5C] onto HELPER [KD AC 2H 3C' 4D] → [KD AC 2H 3C' 4D 5C]",
+        "peel 7H' from HELPER [7S 7D 7C 7H'], absorb onto [5H 6H] → [5H 6H 7H'] [→COMPLETE]"
       ]
     }
   },
@@ -48655,9 +48647,8 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "steal 7D from HELPER [7S 7D 7C], absorb onto trouble [7C' 7H'] → [7C' 7H' 7D] [→COMPLETE] ; spawn TROUBLE: [7S], [7C]",
-        "pull 7C onto trouble [7S] → [7S 7C]",
-        "peel 7H from HELPER [2C 3D 4C 5H 6S 7H], absorb onto growing [7S 7C] → [7S 7C 7H] [→COMPLETE]"
+        "set_peel 7D from HELPER [7S 7D 7C], absorb onto [7C' 7H'] → [7C' 7H' 7D] [→COMPLETE] ; spawn [7S 7C]",
+        "peel 7H from HELPER [2C 3D 4C 5H 6S 7H], absorb onto [7S 7C] → [7H 7S 7C] [→COMPLETE]"
       ]
     }
   },
@@ -48978,10 +48969,10 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "split_out 3H from HELPER [2H 3H 4H], absorb onto trouble [2C'] → [2C' 3H] ; spawn TROUBLE: [2H], [4H]",
-        "shift 7D to pop 4S [7S 7C 7H -\u003e 5D 6C + 7D]; absorb onto growing [2C' 3H] → [2C' 3H 4S] [→COMPLETE]",
-        "peel 3S from HELPER [KS AS 2S 3S], absorb onto trouble [2H] → [2H 3S]",
-        "pull 4H onto growing [2H 3S] → [2H 3S 4H] [→COMPLETE]"
+        "split_out 3H from HELPER [2H 3H 4H], absorb onto [2C'] → [2C' 3H] ; spawn [2H], [4H]",
+        "peel 3S from HELPER [KS AS 2S 3S], absorb onto [2H] → [2H 3S]",
+        "pull 4H onto [2H 3S] → [2H 3S 4H] [→COMPLETE]",
+        "shift 7D to pop 4S [7S 7C 7H -\u003e 5D 6C + 7D]; absorb onto [2C' 3H] → [2C' 3H 4S] [→COMPLETE]"
       ]
     }
   },
@@ -49318,11 +49309,11 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "steal 4S from HELPER [2C' 3H 4S], absorb onto trouble [4D] → [4D 4S] ; spawn TROUBLE: [2C' 3H]",
-        "steal 4H from HELPER [2H 3S 4H], absorb onto growing [4D 4S] → [4D 4S 4H] [→COMPLETE] ; spawn TROUBLE: [2H 3S]",
-        "steal AD from HELPER [AC AD AH], absorb onto trouble [2C' 3H] → [AD 2C' 3H] [→COMPLETE] ; spawn TROUBLE: [AC], [AH]",
-        "pull AC onto trouble [2H 3S] → [AC 2H 3S] [→COMPLETE]",
-        "push TROUBLE [AH] onto HELPER [2C 3D 4C 5H] → [AH 2C 3D 4C 5H]"
+        "steal 4H from HELPER [2H 3S 4H], absorb onto [4D] → [4D 4H] ; spawn [2H 3S]",
+        "steal AC from HELPER [AC AD AH], absorb onto [2H 3S] → [AC 2H 3S] [→COMPLETE] ; spawn [AD], [AH]",
+        "steal 4S from HELPER [2C' 3H 4S], absorb onto [4D 4H] → [4S 4D 4H] [→COMPLETE] ; spawn [2C' 3H]",
+        "pull AD onto [2C' 3H] → [AD 2C' 3H] [→COMPLETE]",
+        "push [AH] onto HELPER [2C 3D 4C 5H] → [AH 2C 3D 4C 5H]"
       ]
     }
   },
@@ -49683,9 +49674,9 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "peel KD from HELPER [TD JD QD KD], absorb onto trouble [QD'] → [QD' KD]",
-        "steal AD from HELPER [AD 2C' 3H], absorb onto growing [QD' KD] → [QD' KD AD] [→COMPLETE] ; spawn TROUBLE: [2C' 3H]",
-        "peel AH from HELPER [AH 2C 3D 4C 5H], absorb onto trouble [2C' 3H] → [AH 2C' 3H] [→COMPLETE]"
+        "peel KD from HELPER [TD JD QD KD], absorb onto [QD'] → [QD' KD]",
+        "steal AD from HELPER [AD 2C' 3H], absorb onto [QD' KD] → [QD' KD AD] [→COMPLETE] ; spawn [2C' 3H]",
+        "peel AH from HELPER [AH 2C 3D 4C 5H], absorb onto [2C' 3H] → [AH 2C' 3H] [→COMPLETE]"
       ]
     }
   },
@@ -50387,9 +50378,9 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "peel QC' from HELPER [QC' KD AC 2H 3S' 4H], absorb onto trouble [KH] → [QC' KH]",
-        "yank AC from HELPER [KD AC 2H 3S' 4H], absorb onto growing [QC' KH] → [QC' KH AC] [→COMPLETE] ; spawn TROUBLE: [KD]",
-        "push TROUBLE [KD] onto HELPER [TD JD QD] → [TD JD QD KD]"
+        "peel QC' from HELPER [QC' KD AC 2H 3S' 4H], absorb onto [KH] → [QC' KH]",
+        "yank AC from HELPER [KD AC 2H 3S' 4H], absorb onto [QC' KH] → [QC' KH AC] [→COMPLETE] ; spawn [KD]",
+        "push [KD] onto HELPER [TD JD QD] → [TD JD QD KD]"
       ]
     }
   },
@@ -50950,9 +50941,9 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "split_out 6D' from HELPER [5S 6D' 7S'], absorb onto trouble [5C'] → [5C' 6D'] ; spawn TROUBLE: [5S], [7S']",
-        "push TROUBLE [5S] onto HELPER [2S 3S 4S] → [2S 3S 4S 5S]",
-        "pull 7S' onto growing [5C' 6D'] → [5C' 6D' 7S'] [→COMPLETE]"
+        "split_out 6D' from HELPER [5S 6D' 7S'], absorb onto [5C'] → [5C' 6D'] ; spawn [5S], [7S']",
+        "push [5S] onto HELPER [5H' 5C 5D] → [5H' 5C 5D 5S]",
+        "pull 7S' onto [5C' 6D'] → [5C' 6D' 7S'] [→COMPLETE]"
       ]
     }
   },
@@ -51313,8 +51304,8 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "set_peel 7S from HELPER [7S 7D 7C], absorb onto trouble [5S 6S'] → [5S 6S' 7S] [→COMPLETE] ; spawn GROWING: [7D 7C]",
-        "peel 7H from HELPER [2C 3D 4C 5H 6S 7H], absorb onto growing [7C 7D] → [7H 7C 7D] [→COMPLETE]"
+        "set_peel 7S from HELPER [7S 7D 7C], absorb onto [5S 6S'] → [5S 6S' 7S] [→COMPLETE] ; spawn [7D 7C]",
+        "peel 7H from HELPER [2C 3D 4C 5H 6S 7H], absorb onto [7D 7C] → [7H 7D 7C] [→COMPLETE]"
       ]
     }
   },
@@ -51707,9 +51698,9 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "peel 8C from HELPER [2C 3D 4C 5H 6S 7H 8C], absorb onto trouble [7D'] → [7D' 8C]",
-        "yank 6S from HELPER [2C 3D 4C 5H 6S 7H], absorb onto growing [7D' 8C] → [6S 7D' 8C] [→COMPLETE] ; spawn TROUBLE: [7H]",
-        "push TROUBLE [7H] onto HELPER [7S 7D 7C] → [7S 7D 7C 7H]"
+        "peel 8C from HELPER [2C 3D 4C 5H 6S 7H 8C], absorb onto [7D'] → [7D' 8C]",
+        "yank 6S from HELPER [2C 3D 4C 5H 6S 7H], absorb onto [7D' 8C] → [6S 7D' 8C] [→COMPLETE] ; spawn [7H]",
+        "push [7H] onto HELPER [7S 7D 7C] → [7H 7S 7D 7C]"
       ]
     }
   },
@@ -52486,9 +52477,9 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "split_out 2D from HELPER [AS 2D 3C'], absorb onto trouble [3S'] → [2D 3S'] ; spawn TROUBLE: [AS], [3C']",
-        "pull AS onto growing [2D 3S'] → [AS 2D 3S'] [→COMPLETE]",
-        "push TROUBLE [3C'] onto HELPER [3H' 3S 3D] → [3H' 3S 3D 3C']"
+        "split_out 2D from HELPER [AS 2D 3C'], absorb onto [3S'] → [2D 3S'] ; spawn [AS], [3C']",
+        "pull AS onto [2D 3S'] → [AS 2D 3S'] [→COMPLETE]",
+        "push [3C'] onto HELPER [3H' 3S 3D] → [3H' 3S 3D 3C']"
       ]
     }
   },
@@ -53535,11 +53526,10 @@
     "expect": {
       "kind": "",
       "plan_lines": [
-        "shift KS to pop 3S [AD' 2C 3D' -\u003e KS + AS 2S]; absorb onto trouble [4H 5S] → [3S 4H 5S] [→COMPLETE]",
-        "pull AD onto trouble [AC'] → [AC' AD]",
-        "split_out AS from HELPER [KS AS 2S], absorb onto growing [AC' AD] → [AC' AD AS] [→COMPLETE] ; spawn TROUBLE: [KS], [2S]",
-        "push TROUBLE [KS] onto HELPER [AD' 2C 3D'] → [KS AD' 2C 3D']",
-        "push TROUBLE [2S] onto HELPER [3D 4C 5H 6S 7D'] → [2S 3D 4C 5H 6S 7D']"
+        "steal 3S from HELPER [AS 2S 3S], absorb onto [4H 5S] → [3S 4H 5S] [→COMPLETE] ; spawn [AS 2S]",
+        "steal AS from HELPER [AS 2S], absorb onto [AC'] → [AC' AS] ; spawn [2S]",
+        "pull AD onto [AC' AS] → [AC' AS AD] [→COMPLETE]",
+        "push [2S] onto HELPER [3D 4C 5H 6S 7D'] → [2S 3D 4C 5H 6S 7D']"
       ]
     }
   },

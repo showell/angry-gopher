@@ -197,21 +197,45 @@ function runSolve(sc: Scenario): RunResult {
     }
     return { ok: false, msg: `expected no plan; got plan of length ${plan.length}` };
   }
-  // Plan-line / plan-length pins: relaxed to "any valid plan,
-  // length ≤ pinned." engine_v2 frequently finds different
-  // (sometimes shorter) valid plans than the JSON's bfs.ts-pinned
-  // plan_lines. A plan is valid iff replaying its descs through
-  // enumerateMoves drives the state to a victory (every stack a
-  // length-3+ legal kind, no trouble).
+  // Plan-line / plan-length pins:
+  //   - When `plan_lines` are present, the engine must produce
+  //     EXACTLY those lines in order (snapshot match). This is the
+  //     strict gate: any drift in the plan surface — different verb
+  //     choice, different side, different absorber pick — fails the
+  //     test, so we hear about regressions instead of silently
+  //     drifting under a length-only check.
+  //   - When only `plan_length` is pinned, fall back to length ≤
+  //     pinned + reach-victory (the old relaxed gate, kept for the
+  //     handful of scenarios that don't carry plan-line text).
   const planLines = expect["plan_lines"] as string[] | undefined;
   const planLength = (expect["plan_length"] as number) ?? 0;
-  const pinnedLength = planLines && planLines.length > 0 ? planLines.length : planLength;
-  if (pinnedLength > 0) {
+  if (planLines !== undefined && planLines.length > 0) {
     if (plan === null) {
-      return { ok: false, msg: `expected plan ≤${pinnedLength}; got null` };
+      return { ok: false, msg: `expected plan; got null` };
     }
-    if (plan.length > pinnedLength) {
-      return { ok: false, msg: `plan length ${plan.length} > pinned ${pinnedLength}` };
+    const got = plan.map(p => p.line);
+    if (got.length !== planLines.length || got.some((s, i) => s !== planLines[i])) {
+      // Find the first divergence so the failure message points at it.
+      let i = 0;
+      while (i < Math.min(got.length, planLines.length) && got[i] === planLines[i]) i++;
+      const expectedLine = planLines[i];
+      const gotLine = got[i];
+      return {
+        ok: false,
+        msg: `plan-line mismatch at index ${i}:`
+          + `\n      expected: ${expectedLine === undefined ? "(end)" : JSON.stringify(expectedLine)}`
+          + `\n      got:      ${gotLine === undefined ? "(end)" : JSON.stringify(gotLine)}`
+          + `\n      (full got: length ${got.length}, expected: length ${planLines.length})`,
+      };
+    }
+    return { ok: true, msg: `OK — plan of length ${plan.length} (exact match)` };
+  }
+  if (planLength > 0) {
+    if (plan === null) {
+      return { ok: false, msg: `expected plan ≤${planLength}; got null` };
+    }
+    if (plan.length > planLength) {
+      return { ok: false, msg: `plan length ${plan.length} > pinned ${planLength}` };
     }
     // Verify the plan actually drives state to victory.
     let final: Buckets;
@@ -224,7 +248,7 @@ function runSolve(sc: Scenario): RunResult {
     if (!v.ok) {
       return { ok: false, msg: `plan didn't reach victory: ${v.msg}` };
     }
-    return { ok: true, msg: `OK — plan of length ${plan.length} (pinned ${pinnedLength})` };
+    return { ok: true, msg: `OK — plan of length ${plan.length} (pinned ${planLength})` };
   }
   return { ok: false, msg: "solve scenario missing expectation (no_plan / plan_length / plan_lines)" };
 }
@@ -314,11 +338,11 @@ function main(): void {
   }
   let scenarios: Scenario[] = JSON.parse(fs.readFileSync(FIXTURES_PATH, "utf8"));
 
-  // Optional CLI arg: substring filter on scenario name. Useful when
-  // debugging a single scenario after editing its DSL — `npm run
-  // test:engine -- puzzle_a3_003` runs only matching scenarios. No
-  // arg = run everything.
-  const filter = process.argv[2];
+  // CLI parsing — order-insensitive: any non-flag arg is a name
+  // substring filter; `--repair` switches into pin-rewrite mode.
+  const args = process.argv.slice(2);
+  const repair = args.includes("--repair");
+  const filter = args.find(a => !a.startsWith("--"));
   if (filter !== undefined) {
     scenarios = scenarios.filter(sc => sc.name.includes(filter));
     if (scenarios.length === 0) {
@@ -327,6 +351,13 @@ function main(): void {
     }
     console.log(`Filtered to ${scenarios.length} scenario(s) matching ${JSON.stringify(filter)}.`);
   }
+  if (repair) {
+    console.log("REPAIR MODE: solve-scenario plan_lines pins will be rewritten");
+    console.log("from current engine output. Re-run fixturegen after repair.");
+    console.log();
+  }
+  // Repair-mode collection: scenarioName → engine's current plan-lines.
+  const repairs = new Map<string, string[]>();
 
   let total = 0;
   let passed = 0;
@@ -348,7 +379,27 @@ function main(): void {
     if (sc.op === "enumerate_moves") {
       res = runEnumerateMoves(sc);
     } else if (sc.op === "solve") {
-      res = runSolve(sc);
+      if (repair) {
+        // In repair mode: run the engine, capture plan-lines for
+        // any solve scenario that has plan_lines pinned. Always
+        // report PASS so the run keeps going through every
+        // scenario; the actual rewrite happens after the loop.
+        const expectPlanLines = sc.expect["plan_lines"] as string[] | undefined;
+        if (expectPlanLines !== undefined && expectPlanLines.length > 0) {
+          const raw = buildRawBuckets(sc);
+          const plan = solveStateWithDescs(raw, { maxTroubleOuter: 10, maxStates: 200000 });
+          if (plan === null) {
+            res = { ok: false, msg: `REPAIR: engine returned null for pinned scenario` };
+          } else {
+            repairs.set(sc.name, plan.map(p => p.line));
+            res = { ok: true, msg: `REPAIRED — ${plan.length} plan-line(s) recorded` };
+          }
+        } else {
+          res = runSolve(sc);  // no plan_lines to repair; run normally
+        }
+      } else {
+        res = runSolve(sc);
+      }
     } else if (sc.op === "hint_for_hand") {
       res = runHintForHand(sc);
     } else if (sc.op === "find_open_loc") {
@@ -371,6 +422,14 @@ function main(): void {
 
   console.log();
   console.log(`${passed}/${total} passed`);
+
+  if (repair && repairs.size > 0) {
+    console.log();
+    console.log(`Rewriting ${repairs.size} plan_lines block(s) in DSL files...`);
+    rewriteDslPlanLines(repairs);
+    console.log("Done. Now run `go run ./cmd/fixturegen ...` to refresh fixtures.json.");
+  }
+
   if (Object.keys(outOfScopeCounts).length > 0) {
     console.log();
     console.log("Out-of-scope by design (handled in Python and/or Elm):");
@@ -392,6 +451,93 @@ function main(): void {
     for (const f of failures) console.log("  " + f);
     process.exit(1);
   }
+}
+
+/**
+ * Repair-mode helper: scan every .dsl file in conformance/scenarios/
+ * for `scenario <name>` headers, and where the scenario name is in
+ * `repairs`, surgically rewrite the `plan_lines:` block with the
+ * captured engine output. Idempotent — re-run is a no-op if the
+ * engine still produces the same lines.
+ *
+ * The DSL format we expect (matches existing solve scenarios):
+ *
+ *   scenario <name>
+ *     ...
+ *     expect:
+ *       plan_lines:
+ *         - "<line>"
+ *         - "<line>"
+ *
+ *   scenario <next-name>
+ *
+ * The plan_lines block runs from `    plan_lines:` to the next line
+ * whose indent doesn't start with `      - "` (a sibling expect-key
+ * or the next scenario header). We replace it in place.
+ */
+function rewriteDslPlanLines(repairs: Map<string, string[]>): void {
+  const dslDir = path.resolve(__dirname, "../../conformance/scenarios");
+  const dslFiles = fs.readdirSync(dslDir)
+    .filter(f => f.endsWith(".dsl"))
+    .map(f => path.join(dslDir, f));
+
+  let touchedFiles = 0;
+  let touchedScenarios = 0;
+
+  for (const file of dslFiles) {
+    const original = fs.readFileSync(file, "utf8");
+    const lines = original.split("\n");
+    let changed = false;
+
+    let i = 0;
+    while (i < lines.length) {
+      const m = lines[i]!.match(/^scenario\s+(\S+)\s*$/);
+      if (!m) { i++; continue; }
+      const name = m[1]!;
+      const newLines = repairs.get(name);
+      if (newLines === undefined) { i++; continue; }
+      // Find the `    plan_lines:` line within this scenario block
+      // (i.e. before the next `^scenario `).
+      let j = i + 1;
+      let planLinesIdx = -1;
+      while (j < lines.length && !lines[j]!.match(/^scenario\s+\S+\s*$/)) {
+        if (lines[j]!.match(/^\s*plan_lines:\s*$/)) {
+          planLinesIdx = j;
+          break;
+        }
+        j++;
+      }
+      if (planLinesIdx === -1) { i++; continue; }
+      // Find the end of the plan_lines block: contiguous lines
+      // matching `^      - "..."` after `plan_lines:`.
+      let endIdx = planLinesIdx + 1;
+      while (endIdx < lines.length && /^      - ".*"$/.test(lines[endIdx]!)) {
+        endIdx++;
+      }
+      const replacement = newLines.map(l => `      - ${dslQuoteLine(l)}`);
+      lines.splice(planLinesIdx + 1, endIdx - (planLinesIdx + 1), ...replacement);
+      changed = true;
+      touchedScenarios++;
+      i = planLinesIdx + 1 + replacement.length;
+    }
+
+    if (changed) {
+      fs.writeFileSync(file, lines.join("\n"));
+      touchedFiles++;
+      console.log(`  ${path.basename(file)} — updated`);
+    }
+  }
+  console.log(`Touched ${touchedScenarios} scenarios across ${touchedFiles} file(s).`);
+}
+
+/**
+ * Quote a plan-line string for the DSL `- "..."` form. The DSL
+ * uses double-quoted strings; only `"` and `\` need escaping.
+ * Plan-line text contains neither in normal output (cards, arrows,
+ * brackets, semicolons all pass through unescaped).
+ */
+function dslQuoteLine(s: string): string {
+  return '"' + s.replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"';
 }
 
 main();

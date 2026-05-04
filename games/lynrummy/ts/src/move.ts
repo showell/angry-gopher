@@ -128,32 +128,35 @@ function stackLabel(stack: readonly Card[]): string {
 }
 
 /**
- * Render a one-line DSL string for a move. Mirrors python's
- * `move.describe`. Must match python output exactly — this is the
- * cross-language contract.
+ * Render a one-line DSL string for a move. Bucket markers
+ * (TROUBLE / GROWING) on the absorber and on spawn lists are
+ * intentionally elided — the bucket is implicit in the post-state
+ * and changes when bucket-routing logic evolves; pinning bucket
+ * names in plan-line text led to brittle DSL fixtures (every
+ * verb-routing change rewrote dozens of plan_lines for no real
+ * semantic difference). The line text now describes the move
+ * itself (verb, source, ext card, absorber stack, result, spawn
+ * stacks); bucket assignment lives in the structured Desc.
  */
 export function describe(desc: Desc): string {
   switch (desc.type) {
     case "free_pull": {
       const graduated = desc.graduated ? " [→COMPLETE]" : "";
-      return `pull ${cardLabel(desc.loose)} onto ${desc.targetBucketBefore} `
+      return `pull ${cardLabel(desc.loose)} onto `
         + `[${stackLabel(desc.targetBefore)}] → `
         + `[${stackLabel(desc.result)}]${graduated}`;
     }
     case "extract_absorb": {
       let spawnedStr = "";
-      if (desc.spawned.length > 0) {
-        spawnedStr += " ; spawn TROUBLE: "
-          + desc.spawned.map(s => "[" + stackLabel(s) + "]").join(", ");
-      }
-      if (desc.spawnedGrowing.length > 0) {
-        spawnedStr += " ; spawn GROWING: "
-          + desc.spawnedGrowing.map(s => "[" + stackLabel(s) + "]").join(", ");
+      const allSpawned = [...desc.spawned, ...desc.spawnedGrowing];
+      if (allSpawned.length > 0) {
+        spawnedStr = " ; spawn "
+          + allSpawned.map(s => "[" + stackLabel(s) + "]").join(", ");
       }
       const graduated = desc.graduated ? " [→COMPLETE]" : "";
       return `${desc.verb} ${cardLabel(desc.extCard)} from HELPER `
         + `[${stackLabel(desc.source)}], `
-        + `absorb onto ${desc.targetBucketBefore} `
+        + `absorb onto `
         + `[${stackLabel(desc.targetBefore)}] → `
         + `[${stackLabel(desc.result)}]`
         + `${graduated}${spawnedStr}`;
@@ -183,7 +186,7 @@ export function describe(desc: Desc): string {
       const graduated = desc.graduated ? " [→COMPLETE]" : "";
       return `shift ${p} to pop ${cardLabel(desc.stolen)} `
         + `[${stackLabel(desc.newDonor)} -> ${shifted}]; `
-        + `absorb onto ${desc.targetBucketBefore} `
+        + `absorb onto `
         + `[${stackLabel(desc.targetBefore)}] → `
         + `[${stackLabel(desc.merged)}]${graduated}`;
     }
@@ -194,12 +197,12 @@ export function describe(desc: Desc): string {
         + `[${stackLabel(desc.rightResult)}]`;
     }
     case "push": {
-      return `push TROUBLE [${stackLabel(desc.troubleBefore)}] onto HELPER `
+      return `push [${stackLabel(desc.troubleBefore)}] onto HELPER `
         + `[${stackLabel(desc.targetBefore)}] → `
         + `[${stackLabel(desc.result)}]`;
     }
     case "decompose": {
-      return `decompose TROUBLE [${stackLabel(desc.pairBefore)}] → `
+      return `decompose [${stackLabel(desc.pairBefore)}] → `
         + `[${cardLabel(desc.leftCard)}] + [${cardLabel(desc.rightCard)}]`;
     }
   }

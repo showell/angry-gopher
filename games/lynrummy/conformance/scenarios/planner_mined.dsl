@@ -35,10 +35,10 @@ scenario mined_mined_001_2Hp1
     at (0,0): 2H'
   expect:
     plan_lines:
-      - "shift KD to pop 3S [TD JD QD -> KD + AS' 2D]; absorb onto trouble [2H'] \u2192 [2H' 3S]"
-      - "steal AC from HELPER [AC AD AH], absorb onto growing [2H' 3S] \u2192 [AC 2H' 3S] [\u2192COMPLETE] ; spawn TROUBLE: [AD], [AH]"
-      - "push TROUBLE [AD] onto HELPER [2C 3D 4S] \u2192 [AD 2C 3D 4S]"
-      - "push TROUBLE [AH] onto HELPER [2H 3H 4H] \u2192 [AH 2H 3H 4H]"
+      - "steal AC from HELPER [AC AD AH], absorb onto [2H'] → [AC 2H'] ; spawn [AD], [AH]"
+      - "push [AD] onto HELPER [2C 3D 4S] → [AD 2C 3D 4S]"
+      - "push [AH] onto HELPER [2H 3H 4H] → [AH 2H 3H 4H]"
+      - "shift KD to pop 3S [TD JD QD -> KD + AS' 2D]; absorb onto [AC 2H'] → [AC 2H' 3S] [→COMPLETE]"
 
 scenario mined_mined_002_5D_5C
   desc: Mined puzzle mined_002_5D_5C. Auto-generated; do not hand-edit.
@@ -57,10 +57,10 @@ scenario mined_mined_002_5D_5C
     at (0,0): 5D 5C
   expect:
     plan_lines:
-      - "yank 5H from HELPER [2C 3D 4C 5H 6S 7H], absorb onto trouble [5D 5C] \u2192 [5D 5C 5H] [\u2192COMPLETE] ; spawn TROUBLE: [6S 7H]"
-      - "split_out 8S from HELPER [7H' 8S 9D], absorb onto trouble [6S 7H] \u2192 [6S 7H 8S] [\u2192COMPLETE] ; spawn TROUBLE: [7H'], [9D]"
-      - "push TROUBLE [7H'] onto HELPER [7S 7D 7C] \u2192 [7S 7D 7C 7H']"
-      - "push TROUBLE [9D] onto HELPER [TD JD QD KD] \u2192 [9D TD JD QD KD]"
+      - "yank 5H from HELPER [2C 3D 4C 5H 6S 7H], absorb onto [5D 5C] → [5D 5C 5H] [→COMPLETE] ; spawn [6S 7H]"
+      - "split_out 8S from HELPER [7H' 8S 9D], absorb onto [6S 7H] → [6S 7H 8S] [→COMPLETE] ; spawn [7H'], [9D]"
+      - "push [7H'] onto HELPER [7S 7D 7C] → [7H' 7S 7D 7C]"
+      - "push [9D] onto HELPER [TD JD QD KD] → [9D TD JD QD KD]"
 
 scenario mined_mined_003_JCp1
   desc: Mined puzzle mined_003_JCp1. Auto-generated; do not hand-edit.
@@ -80,9 +80,9 @@ scenario mined_mined_003_JCp1
     at (0,0): JC'
   expect:
     plan_lines:
-      - "yank QD from HELPER [9D TD JD QD KD], absorb onto trouble [JC'] \u2192 [JC' QD] ; spawn TROUBLE: [KD]"
-      - "shift 3S to pop KS [4H 5C' 6H' -> AS 2S + 3S]; absorb onto growing [JC' QD] \u2192 [JC' QD KS] [\u2192COMPLETE]"
-      - "push TROUBLE [KD] onto HELPER [AC 2H 3C' 4D] \u2192 [KD AC 2H 3C' 4D]"
+      - "yank QD from HELPER [9D TD JD QD KD], absorb onto [JC'] → [JC' QD] ; spawn [KD]"
+      - "push [KD] onto HELPER [AC 2H 3C' 4D] → [KD AC 2H 3C' 4D]"
+      - "shift 3S to pop KS [4H 5C' 6H' -> AS 2S + 3S]; absorb onto [JC' QD] → [JC' QD KS] [→COMPLETE]"
 
 scenario mined_mined_004_6H
   desc: Mined puzzle mined_004_6H. Auto-generated; do not hand-edit.
@@ -103,10 +103,10 @@ scenario mined_mined_004_6H
     at (0,0): 6H
   expect:
     plan_lines:
-      - "peel 7C from HELPER [7S 7D 7C 7H'], absorb onto trouble [6H] \u2192 [6H 7C]"
-      - "steal 5C from HELPER [5D 5C 5H], absorb onto growing [6H 7C] \u2192 [5C 6H 7C] [\u2192COMPLETE] ; spawn TROUBLE: [5D], [5H]"
-      - "push TROUBLE [5D] onto HELPER [6S 7H 8S] \u2192 [5D 6S 7H 8S]"
-      - "push TROUBLE [5H] onto HELPER [AH 2C 3D 4C] \u2192 [AH 2C 3D 4C 5H]"
+      - "steal 5H from HELPER [5D 5C 5H], absorb onto [6H] → [5H 6H] ; spawn [5D], [5C]"
+      - "push [5D] onto HELPER [6S 7H 8S] → [5D 6S 7H 8S]"
+      - "push [5C] onto HELPER [KD AC 2H 3C' 4D] → [KD AC 2H 3C' 4D 5C]"
+      - "peel 7H' from HELPER [7S 7D 7C 7H'], absorb onto [5H 6H] → [5H 6H 7H'] [→COMPLETE]"
 
 scenario mined_mined_005_7Cp1_7Hp1
   desc: Mined puzzle mined_005_7Cp1_7Hp1. Auto-generated; do not hand-edit.
@@ -123,9 +123,8 @@ scenario mined_mined_005_7Cp1_7Hp1
     at (0,0): 7C' 7H'
   expect:
     plan_lines:
-      - "steal 7D from HELPER [7S 7D 7C], absorb onto trouble [7C' 7H'] \u2192 [7C' 7H' 7D] [\u2192COMPLETE] ; spawn TROUBLE: [7S], [7C]"
-      - "pull 7C onto trouble [7S] \u2192 [7S 7C]"
-      - "peel 7H from HELPER [2C 3D 4C 5H 6S 7H], absorb onto growing [7S 7C] \u2192 [7S 7C 7H] [\u2192COMPLETE]"
+      - "set_peel 7D from HELPER [7S 7D 7C], absorb onto [7C' 7H'] → [7C' 7H' 7D] [→COMPLETE] ; spawn [7S 7C]"
+      - "peel 7H from HELPER [2C 3D 4C 5H 6S 7H], absorb onto [7S 7C] → [7H 7S 7C] [→COMPLETE]"
 
 scenario mined_mined_006_2Cp1
   desc: Mined puzzle mined_006_2Cp1. Auto-generated; do not hand-edit.
@@ -143,10 +142,10 @@ scenario mined_mined_006_2Cp1
     at (0,0): 2C'
   expect:
     plan_lines:
-      - "split_out 3H from HELPER [2H 3H 4H], absorb onto trouble [2C'] \u2192 [2C' 3H] ; spawn TROUBLE: [2H], [4H]"
-      - "shift 7D to pop 4S [7S 7C 7H -> 5D 6C + 7D]; absorb onto growing [2C' 3H] \u2192 [2C' 3H 4S] [\u2192COMPLETE]"
-      - "peel 3S from HELPER [KS AS 2S 3S], absorb onto trouble [2H] \u2192 [2H 3S]"
-      - "pull 4H onto growing [2H 3S] \u2192 [2H 3S 4H] [\u2192COMPLETE]"
+      - "split_out 3H from HELPER [2H 3H 4H], absorb onto [2C'] → [2C' 3H] ; spawn [2H], [4H]"
+      - "peel 3S from HELPER [KS AS 2S 3S], absorb onto [2H] → [2H 3S]"
+      - "pull 4H onto [2H 3S] → [2H 3S 4H] [→COMPLETE]"
+      - "shift 7D to pop 4S [7S 7C 7H -> 5D 6C + 7D]; absorb onto [2C' 3H] → [2C' 3H 4S] [→COMPLETE]"
 
 scenario mined_mined_007_4D
   desc: Mined puzzle mined_007_4D. Auto-generated; do not hand-edit.
@@ -165,11 +164,11 @@ scenario mined_mined_007_4D
     at (0,0): 4D
   expect:
     plan_lines:
-      - "steal 4S from HELPER [2C' 3H 4S], absorb onto trouble [4D] \u2192 [4D 4S] ; spawn TROUBLE: [2C' 3H]"
-      - "steal 4H from HELPER [2H 3S 4H], absorb onto growing [4D 4S] \u2192 [4D 4S 4H] [\u2192COMPLETE] ; spawn TROUBLE: [2H 3S]"
-      - "steal AD from HELPER [AC AD AH], absorb onto trouble [2C' 3H] \u2192 [AD 2C' 3H] [\u2192COMPLETE] ; spawn TROUBLE: [AC], [AH]"
-      - "pull AC onto trouble [2H 3S] \u2192 [AC 2H 3S] [\u2192COMPLETE]"
-      - "push TROUBLE [AH] onto HELPER [2C 3D 4C 5H] \u2192 [AH 2C 3D 4C 5H]"
+      - "steal 4H from HELPER [2H 3S 4H], absorb onto [4D] → [4D 4H] ; spawn [2H 3S]"
+      - "steal AC from HELPER [AC AD AH], absorb onto [2H 3S] → [AC 2H 3S] [→COMPLETE] ; spawn [AD], [AH]"
+      - "steal 4S from HELPER [2C' 3H 4S], absorb onto [4D 4H] → [4S 4D 4H] [→COMPLETE] ; spawn [2C' 3H]"
+      - "pull AD onto [2C' 3H] → [AD 2C' 3H] [→COMPLETE]"
+      - "push [AH] onto HELPER [2C 3D 4C 5H] → [AH 2C 3D 4C 5H]"
 
 scenario mined_mined_008_QDp1
   desc: Mined puzzle mined_008_QDp1. Auto-generated; do not hand-edit.
@@ -188,7 +187,7 @@ scenario mined_mined_008_QDp1
     at (0,0): QD'
   expect:
     plan_lines:
-      - "peel KD from HELPER [TD JD QD KD], absorb onto trouble [QD'] \u2192 [QD' KD]"
-      - "steal AD from HELPER [AD 2C' 3H], absorb onto growing [QD' KD] \u2192 [QD' KD AD] [\u2192COMPLETE] ; spawn TROUBLE: [2C' 3H]"
-      - "peel AH from HELPER [AH 2C 3D 4C 5H], absorb onto trouble [2C' 3H] \u2192 [AH 2C' 3H] [\u2192COMPLETE]"
+      - "peel KD from HELPER [TD JD QD KD], absorb onto [QD'] → [QD' KD]"
+      - "steal AD from HELPER [AD 2C' 3H], absorb onto [QD' KD] → [QD' KD AD] [→COMPLETE] ; spawn [2C' 3H]"
+      - "peel AH from HELPER [AH 2C 3D 4C 5H], absorb onto [2C' 3H] → [AH 2C' 3H] [→COMPLETE]"
 
