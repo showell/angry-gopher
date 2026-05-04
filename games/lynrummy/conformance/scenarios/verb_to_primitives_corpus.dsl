@@ -714,7 +714,6 @@ scenario mined_008_QHp1_step_02
   side: left
   expect:
     primitives:
-      - move_stack [TD JD QD KD] -> (317,187)
       - split [TD JD QD KD]@0
       - move_stack [JS' QH'] -> (242,220)
       - merge_stack [TD] -> [JS' QH'] /left
@@ -1143,7 +1142,6 @@ scenario mined_013_AHp1_step_01
   side: left
   expect:
     primitives:
-      - move_stack [KS AS 2S 3S] -> (167,247)
       - split [KS AS 2S 3S]@0
       - move_stack [AH'] -> (332,220)
       - merge_stack [KS] -> [AH'] /left
@@ -1380,7 +1378,6 @@ scenario mined_015_3Cp1_step_02
       - split [AC AD AH]@0
       - move_stack [AD AH] -> (407,187)
       - split [AD AH]@0
-      - move_stack [2C 3C'] -> (257,145)
       - merge_stack [AC] -> [2C 3C'] /left
 
 scenario mined_015_3Cp1_step_03
@@ -1624,7 +1621,6 @@ scenario mined_018_2Sp1_3Hp1_step_01
       - split [AC AD AH]@0
       - move_stack [AD AH] -> (407,187)
       - split [AD AH]@0
-      - move_stack [2S' 3H'] -> (257,145)
       - merge_stack [AD] -> [2S' 3H'] /left
 
 scenario mined_018_2Sp1_3Hp1_step_02

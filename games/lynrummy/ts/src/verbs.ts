@@ -1,20 +1,32 @@
-// verbs.ts — TS port of python/verbs.py.
+// verbs.ts — verb→primitive expansion.
 //
-// Pipeline: VERBs (BFS descs) → PRIMITIVEs (UI atomic ops) →
-// (eventually) GESTUREs.
+// One pass. Honest state. The agent walks the solver's verbs and emits
+// the primitive sequence a human at the kitchen table would: at every
+// merge, glance at the participants — is this card in my hand or on
+// the table? Is there room where the merged stack lands? — and pick
+// the move accordingly.
 //
-// `moveToPrimitives(desc, board)` decomposes one BFS verb into a
-// deterministic sequence of UI primitives. Stacks are identified by
-// content (Card[]) at each step rather than by symbolic indices:
-// after each primitive applies locally, the next primitive looks up
-// its inputs by content match. This avoids the index-shuffle
-// bookkeeping that the server's split/merge semantics impose.
+// Three rules baked into the helpers:
 //
-// The per-verb helpers below emit a geometry-agnostic primitive
-// sequence; the final `geometry_plan.planActions` pass injects
-// pre-flight `move_stack` primitives wherever the next primitive
-// would land the board too close to a pre-existing stack (or
-// off-board). Pre-flight planning, never post-hoc tidy.
+//   R1 (hand-direct): if a verb names a single card that's in
+//   `pendingHand`, the merge is a direct hand-to-stack drag
+//   (`merge_hand`), not place-then-merge.
+//
+//   R2 (small→large): for board-to-board merges, the smaller stack
+//   is the one that physically moves. If the solver named the larger
+//   stack as source, swap source↔target and flip side. The merged
+//   content is identical.
+//
+//   R3 (don't move if there's room): a merge or end-split pre-flights
+//   only when the post-action board would actually violate the legal
+//   threshold (`findCrowding`). Interior splits pre-flight
+//   unconditionally per Steve, 2026-04-23 — siblings of an interior
+//   split need a 4-side-clear region for downstream primitives to
+//   build on.
+//
+// The per-verb functions stay short: they describe the verb's
+// structure (split here, merge there) and let the helpers handle the
+// physical decisions.
 
 import type { Card } from "./rules/card.ts";
 import type {
@@ -22,54 +34,56 @@ import type {
   ExtractAbsorbDesc, FreePullDesc, PushDesc,
   ShiftDesc, SpliceDesc, DecomposeDesc,
 } from "./move.ts";
-import type { BoardStack } from "./geometry.ts";
 import {
-  type Primitive, type SplitPrim, type MergeStackPrim,
+  type BoardStack, type Loc,
+  CARD_PITCH, findOpenLoc, findCrowding,
+} from "./geometry.ts";
+import {
+  type Primitive, type SplitPrim, type MergeStackPrim, type MergeHandPrim, type MoveStackPrim,
   applyLocally, findStackIndex,
 } from "./primitives.ts";
-import { planActions } from "./geometry_plan.ts";
 import { classifyStack } from "./classified_card_stack.ts";
 
-/** Pure verb→primitive expansion. Geometry-agnostic: emits only the
- *  logical primitive sequence (split / merge_stack / merge_hand /
- *  place_hand). No pre-flight `move_stack` injection — that's the
- *  global physical planner's job (`physical_plan.ts`).
- *
- *  Used by the production agent path through `physicalPlan`. The
- *  legacy per-verb wrapper `moveToPrimitives` still composes this with
- *  `planActions` for the per-verb DSL test surface. */
+function flipSide(s: Side): Side {
+  return s === "left" ? "right" : "left";
+}
+
+function cardKey(c: Card): string {
+  return `${c[0]},${c[1]},${c[2]}`;
+}
+
+/** Walk a verb's structure and emit the physical primitives.
+ *  `pendingHand` is the set of card-keys still in the player's hand
+ *  for this play; passing an empty set treats every singleton the verb
+ *  names as already-on-board (the per-verb DSL test surface). */
 export function expandVerb(
   desc: Desc,
   board: readonly BoardStack[],
+  pendingHand: ReadonlySet<string> = new Set(),
 ): Primitive[] {
   switch (desc.type) {
-    case "extract_absorb": return extractAbsorbPrims(desc, board);
-    case "free_pull":      return freePullPrims(desc, board);
-    case "push":           return pushPrims(desc, board);
-    case "splice":         return splicePrims(desc, board);
-    case "shift":          return shiftPrims(desc, board);
+    case "extract_absorb": return extractAbsorbPrims(desc, board, pendingHand);
+    case "free_pull":      return freePullPrims(desc, board, pendingHand);
+    case "push":           return pushPrims(desc, board, pendingHand);
+    case "splice":         return splicePrims(desc, board, pendingHand);
+    case "shift":          return shiftPrims(desc, board, pendingHand);
     case "decompose":      return decomposePrims(desc, board);
   }
 }
 
-/** Per-verb expansion + per-verb geometry pre-flight. Unit-test surface
- *  exercised by `verb_to_primitives.dsl` + `verb_to_primitives_corpus.dsl`.
- *  Production uses the global `physicalPlan` instead — per-verb
- *  pre-flighting is locally myopic, the global planner sees the whole
- *  program. */
+/** Per-verb DSL test surface. No hand awareness — every card the verb
+ *  names is treated as already on the board. */
 export function moveToPrimitives(
   desc: Desc,
   board: readonly BoardStack[],
 ): readonly Primitive[] {
-  return planActions(board, expandVerb(desc, board));
+  return expandVerb(desc, board, new Set());
 }
 
-// --- helpers --------------------------------------------------
+// --- Primitive emission helpers ---------------------------------------
 
-/** Plan a split that puts the first `k` cards of `stackContent` into
- *  the left half and the rest into the right half. Geometry-agnostic;
- *  any necessary pre-flight is added by `planActions`.
- *  Returns (prims, newSim). */
+/** Emit a split. For end-splits, probe the post-board and pre-flight
+ *  only when needed. For interior splits, pre-flight unconditionally. */
 function planSplitAfter(
   sim: readonly BoardStack[],
   stackContent: readonly Card[],
@@ -79,33 +93,170 @@ function planSplitAfter(
   if (!(k >= 1 && k <= n - 1)) {
     throw new Error(`split-after k=${k} out of range for n=${n}`);
   }
-  // Mirror applySplit's left_count derivation: ci=k-1 if k <= n/2,
-  // else ci=k.
+  // Mirror applySplit's left_count derivation: ci=k-1 if k <= n/2, else ci=k.
   const ci = k <= Math.floor(n / 2) ? k - 1 : k;
   const si = findStackIndex(sim, stackContent);
-  const split: SplitPrim = {
-    action: "split", stackIndex: si, cardIndex: ci,
-  };
-  return { prims: [split], sim: applyLocally(sim, split) };
+  const isInterior = ci !== 0 && ci !== n - 1;
+
+  // Interior splits: always relocate source to a 4-side-clear region.
+  // Siblings will sit in tight quarters that downstream primitives
+  // can't safely build on.
+  if (isInterior) {
+    const others = sim.filter((_, i) => i !== si);
+    const newLoc = findOpenLoc(others, n);
+    const cur = sim[si]!.loc;
+    if (newLoc.top !== cur.top || newLoc.left !== cur.left) {
+      const move: MoveStackPrim = { action: "move_stack", stackIndex: si, newLoc };
+      const afterMove = applyLocally(sim, move);
+      const newSi = findStackIndex(afterMove, stackContent);
+      const split: SplitPrim = { action: "split", stackIndex: newSi, cardIndex: ci };
+      const post = applyLocally(afterMove, split);
+      return { prims: [move, split], sim: post };
+    }
+  }
+
+  // End-split (or interior-already-clear): try in place.
+  const split: SplitPrim = { action: "split", stackIndex: si, cardIndex: ci };
+  const post = applyLocally(sim, split);
+  if (findCrowding(post) === null) {
+    return { prims: [split], sim: post };
+  }
+  // End-split needs room. Move source first.
+  const others = sim.filter((_, i) => i !== si);
+  const newLoc = findOpenLoc(others, n);
+  const cur = sim[si]!.loc;
+  if (newLoc.top === cur.top && newLoc.left === cur.left) {
+    // No better spot exists — emit as-is.
+    return { prims: [split], sim: post };
+  }
+  const move: MoveStackPrim = { action: "move_stack", stackIndex: si, newLoc };
+  const afterMove = applyLocally(sim, move);
+  const newSi = findStackIndex(afterMove, stackContent);
+  const newSplit: SplitPrim = { action: "split", stackIndex: newSi, cardIndex: ci };
+  const post2 = applyLocally(afterMove, newSplit);
+  return { prims: [move, newSplit], sim: post2 };
 }
 
-/** Plan a content-addressed merge_stack. Geometry-agnostic. */
+/** Emit a merge. R1 (hand-direct), R2 (small→large), R3 (don't move
+ *  if there's room) all live here. */
 function planMerge(
   sim: readonly BoardStack[],
-  sourceContent: readonly Card[],
-  targetContent: readonly Card[],
+  srcContent: readonly Card[],
+  tgtContent: readonly Card[],
   side: Side,
+  pendingHand: ReadonlySet<string>,
 ): { prims: Primitive[]; sim: readonly BoardStack[] } {
-  const src = findStackIndex(sim, sourceContent);
-  const tgt = findStackIndex(sim, targetContent);
-  const merge: MergeStackPrim = {
-    action: "merge_stack",
-    sourceStack: src, targetStack: tgt, side,
-  };
-  return { prims: [merge], sim: applyLocally(sim, merge) };
+  // R1a: src is a hand-card singleton — drag it directly onto tgt.
+  if (srcContent.length === 1 && pendingHand.has(cardKey(srcContent[0]!))) {
+    return planMergeHand(sim, srcContent[0]!, tgtContent, side);
+  }
+  // R1b: tgt is a hand-card singleton — drag it directly onto src,
+  // flipping side so the cards land in the same order. (See the
+  // shared invariant above `applyMergeStack` in primitives.ts.)
+  if (tgtContent.length === 1 && pendingHand.has(cardKey(tgtContent[0]!))) {
+    return planMergeHand(sim, tgtContent[0]!, srcContent, flipSide(side));
+  }
+  // R2: both on board — physically drag the smaller stack onto the
+  // larger. The merged content is identical regardless of direction.
+  let s = srcContent, t = tgtContent, sd = side;
+  if (s.length > t.length) {
+    [s, t] = [t, s];
+    sd = flipSide(sd);
+  }
+  return planMergeStackOnBoard(sim, s, t, sd);
 }
 
-/** Translate Python rules-classify kinds to TS leaf kinds. */
+/** Emit a hand-to-stack merge. R3: only pre-flight if the in-place
+ *  result would actually violate the legal threshold. */
+function planMergeHand(
+  sim: readonly BoardStack[],
+  handCard: Card,
+  tgtContent: readonly Card[],
+  side: Side,
+): { prims: Primitive[]; sim: readonly BoardStack[] } {
+  const tgtIdx = findStackIndex(sim, tgtContent);
+  const merge: MergeHandPrim = {
+    action: "merge_hand", targetStack: tgtIdx, handCard, side,
+  };
+  const post = applyLocally(sim, merge);
+  if (findCrowding(post) === null) {
+    return { prims: [merge], sim: post };
+  }
+  // Pre-flight: relocate tgt so the post-merge stack lands clear.
+  const finalSize = tgtContent.length + 1;
+  const others = sim.filter((_, i) => i !== tgtIdx);
+  const finalLoc = findOpenLoc(others, finalSize);
+  // For side=left the hand card joins the LEFT edge — final stack's
+  // left = finalLoc.left, so tgt's pre-merge left shifts right by
+  // one CARD_PITCH from finalLoc.
+  const targetLoc: Loc = side === "left"
+    ? { top: finalLoc.top, left: finalLoc.left + CARD_PITCH }
+    : finalLoc;
+  const cur = sim[tgtIdx]!.loc;
+  if (targetLoc.top === cur.top && targetLoc.left === cur.left) {
+    // findOpenLoc returned the current spot. Emit merge as-is.
+    return { prims: [merge], sim: post };
+  }
+  const move: MoveStackPrim = {
+    action: "move_stack", stackIndex: tgtIdx, newLoc: targetLoc,
+  };
+  const afterMove = applyLocally(sim, move);
+  const newTgtIdx = findStackIndex(afterMove, tgtContent);
+  const newMerge: MergeHandPrim = {
+    action: "merge_hand", targetStack: newTgtIdx, handCard, side,
+  };
+  const post2 = applyLocally(afterMove, newMerge);
+  return { prims: [move, newMerge], sim: post2 };
+}
+
+/** Emit a board-to-board merge. R3: only pre-flight if the in-place
+ *  result would violate the legal threshold. Source stays in `others`
+ *  during the move/merge intermediate frame because it's physically
+ *  still on the board until the merge consumes it. */
+function planMergeStackOnBoard(
+  sim: readonly BoardStack[],
+  srcContent: readonly Card[],
+  tgtContent: readonly Card[],
+  side: Side,
+): { prims: Primitive[]; sim: readonly BoardStack[] } {
+  const srcIdx = findStackIndex(sim, srcContent);
+  const tgtIdx = findStackIndex(sim, tgtContent);
+  const merge: MergeStackPrim = {
+    action: "merge_stack", sourceStack: srcIdx, targetStack: tgtIdx, side,
+  };
+  const post = applyLocally(sim, merge);
+  if (findCrowding(post) === null) {
+    return { prims: [merge], sim: post };
+  }
+  const finalSize = srcContent.length + tgtContent.length;
+  const others = sim.filter((_, i) => i !== tgtIdx);
+  const finalLoc = findOpenLoc(others, finalSize);
+  const targetLoc: Loc = side === "left"
+    ? {
+        top: finalLoc.top,
+        left: finalLoc.left + CARD_PITCH * srcContent.length,
+      }
+    : finalLoc;
+  const cur = sim[tgtIdx]!.loc;
+  if (targetLoc.top === cur.top && targetLoc.left === cur.left) {
+    return { prims: [merge], sim: post };
+  }
+  const move: MoveStackPrim = {
+    action: "move_stack", stackIndex: tgtIdx, newLoc: targetLoc,
+  };
+  const afterMove = applyLocally(sim, move);
+  const newSrcIdx = findStackIndex(afterMove, srcContent);
+  const newTgtIdx = findStackIndex(afterMove, tgtContent);
+  const newMerge: MergeStackPrim = {
+    action: "merge_stack",
+    sourceStack: newSrcIdx, targetStack: newTgtIdx, side,
+  };
+  const post2 = applyLocally(afterMove, newMerge);
+  return { prims: [move, newMerge], sim: post2 };
+}
+
+// --- LeafKind classifier ----------------------------------------------
+
 type LeafKind = "set" | "pure_run" | "rb_run" | "other";
 function classifyLeaf(cards: readonly Card[]): LeafKind {
   const ccs = classifyStack(cards);
@@ -116,12 +267,12 @@ function classifyLeaf(cards: readonly Card[]): LeafKind {
   return "other";
 }
 
-// --- extract + absorb ----------------------------------------
+// --- extract + absorb -------------------------------------------------
 
-/** Generate the split primitives needed to leave the card at index
- *  `ci` of `stackContent` as a singleton on `sim`. Returns prims, new
- *  sim, the ext singleton card, and the remnant stacks left on the
- *  board (1 piece for end-extraction; 2 pieces for interior). */
+/** Generate the splits needed to leave the card at index `ci` of
+ *  `stackContent` as a singleton. Returns prims, post-sim, the ext
+ *  singleton card, and the remnant pieces (1 for end-extraction; 2 for
+ *  interior). */
 function isolateCard(
   sim: readonly BoardStack[],
   stackContent: readonly Card[],
@@ -176,6 +327,7 @@ function indexOfCard(arr: readonly Card[], target: Card): number {
 function extractAbsorbPrims(
   desc: ExtractAbsorbDesc,
   board: readonly BoardStack[],
+  pendingHand: ReadonlySet<string>,
 ): Primitive[] {
   const source = desc.source;
   const extCard = desc.extCard;
@@ -190,61 +342,46 @@ function extractAbsorbPrims(
   let extSingleton: readonly Card[] = [extCard];
 
   if (verb === "peel" || verb === "pluck" || verb === "yank" || verb === "split_out") {
-    // Same physical isolation regardless of verb. The peel/pluck/
-    // yank/split_out distinction is which spawned pieces qualify as
-    // helpers vs trouble — a logical-layer concern; physically all
-    // are split-then-merge.
     const iso = isolateCard(sim, source, ci);
     out.push(...iso.prims);
     sim = iso.sim;
     extSingleton = iso.extSingleton;
 
-    // Set peel from interior position: physically the remnant is
-    // split into TWO pieces (left chunk + tail chunk). The BFS
-    // solver treats the remnant as a single legal set [a, b, d]; we
-    // need to merge the two physical pieces back together.
+    // Set peel from interior position: remnant comes back as TWO
+    // physical pieces; merge them so the set [a, b, d] is one stack.
     if (kind === "set" && iso.remnants.length === 2) {
       const [leftChunk, tailChunk] = iso.remnants;
-      const r = planMerge(sim, tailChunk!, leftChunk!, "right");
+      const r = planMerge(sim, tailChunk!, leftChunk!, "right", pendingHand);
       out.push(...r.prims);
       sim = r.sim;
     }
   } else if (verb === "steal" && (kind === "pure_run" || kind === "rb_run")) {
-    // End-steal of length-3 run: ci is 0 or 2.
     const iso = isolateCard(sim, source, ci);
     out.push(...iso.prims);
     sim = iso.sim;
     extSingleton = iso.extSingleton;
   } else if (verb === "steal" && kind === "set") {
-    // Detach extCard FIRST (split at the end where it sits) so the
-    // user sees the steal as the visible action; then dismantle the
-    // remaining same-value pair into two singletons.
+    // Detach extCard FIRST (split at the end where it sits), then
+    // dismantle the same-value pair so subsequent BFS-planned moves
+    // (push spawned singletons) can find them.
     const n = source.length;
     let residue: readonly Card[];
     if (ci === n - 1) {
-      // X at right end: split @(n-1) → [pair] + [X].
       const r = planSplitAfter(sim, source, n - 1);
       out.push(...r.prims);
       sim = r.sim;
       residue = source.slice(0, n - 1);
     } else {
-      // ci === 0 (left end) or ci === 1 (interior — rare). Split @1.
       const r = planSplitAfter(sim, source, 1);
       out.push(...r.prims);
       sim = r.sim;
       residue = source.slice(1);
     }
-    // Dismantle the same-value remnant pair so subsequent BFS-
-    // planned moves (push spawned singletons) can find them.
     const r = planSplitAfter(sim, residue, 1);
     out.push(...r.prims);
     sim = r.sim;
     extSingleton = [extCard];
   } else if (verb === "steal" && (kind === "pair_run" || kind === "pair_rb" || kind === "pair_set" || kind === "other")) {
-    // Steal-from-partial (length-2 source). canSteal was extended
-    // 2026-05-02 to allow length-2 sources; physically a single
-    // split at k=1 separates the two cards. The "pair_*" / "other"
-    // arms are reached when source.length === 2.
     if (source.length !== 2) {
       throw new Error(`steal-from-partial expects length-2 source; got length ${source.length}`);
     }
@@ -256,43 +393,39 @@ function extractAbsorbPrims(
     throw new Error(`verb ${verb} kind ${kind} unsupported`);
   }
 
-  // Merge ext_card singleton onto target.
-  const r = planMerge(sim, extSingleton, targetBefore, side);
+  // Merge the ext singleton onto target.
+  const r = planMerge(sim, extSingleton, targetBefore, side, pendingHand);
   out.push(...r.prims);
   return out;
 }
 
-// --- free pull / push ----------------------------------------
+// --- free pull / push -------------------------------------------------
 
 function freePullPrims(
   desc: FreePullDesc,
   board: readonly BoardStack[],
+  pendingHand: ReadonlySet<string>,
 ): Primitive[] {
-  // A loose TROUBLE singleton is already on the board; merge it onto
-  // the target.
-  const r = planMerge(board, [desc.loose], desc.targetBefore, desc.side);
+  const r = planMerge(board, [desc.loose], desc.targetBefore, desc.side, pendingHand);
   return r.prims;
 }
 
 function pushPrims(
   desc: PushDesc,
   board: readonly BoardStack[],
+  pendingHand: ReadonlySet<string>,
 ): Primitive[] {
-  // Push a TROUBLE singleton or 2-partial onto a HELPER stack. The
-  // trouble cards are already on the board as a single stack.
-  const r = planMerge(board, desc.troubleBefore, desc.targetBefore, desc.side);
+  const r = planMerge(board, desc.troubleBefore, desc.targetBefore, desc.side, pendingHand);
   return r.prims;
 }
 
-// --- splice --------------------------------------------------
+// --- splice -----------------------------------------------------------
 
 function splicePrims(
   desc: SpliceDesc,
   board: readonly BoardStack[],
+  pendingHand: ReadonlySet<string>,
 ): Primitive[] {
-  // Insert a TROUBLE singleton into a HELPER pure/rb run. Split the
-  // run at k, then merge the loose onto the half it joins (per side).
-  // The other half persists untouched.
   const loose = desc.loose;
   const src = desc.source;
   const k = desc.k;
@@ -303,28 +436,19 @@ function splicePrims(
   sim = a.sim;
   // side === "left"  : loose joins LEFT half  → src[:k] + [loose]
   // side === "right" : loose joins RIGHT half → [loose] + src[k:]
-  const b = side === "left"
-    ? planMerge(sim, [loose], src.slice(0, k), "right")
-    : planMerge(sim, [loose], src.slice(k), "left");
+  const half = side === "left" ? src.slice(0, k) : src.slice(k);
+  const mergeSide: Side = side === "left" ? "right" : "left";
+  const b = planMerge(sim, [loose], half, mergeSide, pendingHand);
   return [...a.prims, ...b.prims];
 }
 
-// --- shift ---------------------------------------------------
+// --- shift ------------------------------------------------------------
 
 function shiftPrims(
   desc: ShiftDesc,
   board: readonly BoardStack[],
+  pendingHand: ReadonlySet<string>,
 ): Primitive[] {
-  // Shift verb: p_card moves from donor INTO source's opposite-end
-  // position, displacing stolen, which then absorbs onto target.
-  //
-  // Sequence (the user sees the LOGIC of the swap):
-  //   1. Isolate p_card from donor (split, plus interior-set
-  //      reassemble if applicable).
-  //   2. Merge p_card onto source on the OPPOSITE side from stolen.
-  //      Source becomes augmented (length+1).
-  //   3. Pop stolen off the augmented source by splitting at its end.
-  //   4. Merge stolen onto target.
   const source = desc.source;
   const donor = desc.donor;
   const stolen = desc.stolen;
@@ -344,26 +468,22 @@ function shiftPrims(
   sim = iso.sim;
   if (kind === "set" && iso.remnants.length === 2) {
     const [leftChunk, tailChunk] = iso.remnants;
-    const r = planMerge(sim, tailChunk!, leftChunk!, "right");
+    const r = planMerge(sim, tailChunk!, leftChunk!, "right", pendingHand);
     out.push(...r.prims);
     sim = r.sim;
   }
 
-  // 2. Merge p_card onto source. p_card joins the OPPOSITE side from
-  // stolen, so that splitting at the stolen end next yields the
-  // correct new_source.
+  // 2. Merge p_card onto source on the OPPOSITE side from stolen.
   let augmentedSource: readonly Card[];
   let splitK: number;
   if (whichEnd === 0) {
-    // stolen at LEFT of source; p_card joins RIGHT.
-    const r = planMerge(sim, [pCard], source, "right");
+    const r = planMerge(sim, [pCard], source, "right", pendingHand);
     out.push(...r.prims);
     sim = r.sim;
     augmentedSource = [...source, pCard];
     splitK = 1;
   } else {
-    // stolen at RIGHT of source; p_card joins LEFT.
-    const r = planMerge(sim, [pCard], source, "left");
+    const r = planMerge(sim, [pCard], source, "left", pendingHand);
     out.push(...r.prims);
     sim = r.sim;
     augmentedSource = [pCard, ...source];
@@ -376,17 +496,13 @@ function shiftPrims(
   sim = a.sim;
 
   // 4. Merge stolen onto target.
-  const m = planMerge(sim, [stolen], targetBefore, side);
+  const m = planMerge(sim, [stolen], targetBefore, side, pendingHand);
   out.push(...m.prims);
   return out;
 }
 
-// --- decompose ----------------------------------------------
+// --- decompose --------------------------------------------------------
 
-/** Decompose a 2-card pair stack into two singletons. Physically:
- *  one split at k=1. Per Steve, 2026-05-03: emit a real split so UI
- *  state stays consistent with BFS state — the user sees a discrete
- *  click that separates the pair. */
 function decomposePrims(
   desc: DecomposeDesc,
   board: readonly BoardStack[],

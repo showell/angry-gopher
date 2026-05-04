@@ -210,18 +210,18 @@ function primToWire(prim: Primitive, sim: readonly BoardStack[]): WireActionJson
  *  cards into direct merge_hand plays, and runs one global geometry
  *  pre-flight pass.
  *
- *  We assert no-overlap once at the END of the play. Earlier
- *  per-boundary asserts were artifacts of the legacy per-verb
- *  expansion; with one global pass there's no meaningful intermediate
- *  boundary to check. */
+ *  Assert no-overlap after EACH primitive — every emitted action
+ *  must leave the board legally clean. */
 function playToPrimitives(
   sim: readonly BoardStack[],
   play: PlayRecord,
 ): { prims: readonly Primitive[]; sim: readonly BoardStack[] } {
   const prims = physicalPlan(sim, play.placements, play.planDescs);
   let cur = sim;
-  for (const p of prims) cur = applyLocally(cur, p);
-  assertNoOverlap(cur, "after-play");
+  for (let i = 0; i < prims.length; i++) {
+    cur = applyLocally(cur, prims[i]!);
+    assertNoOverlap(cur, `after-primitive[${i}] ${prims[i]!.action}`);
+  }
   return { prims, sim: cur };
 }
 

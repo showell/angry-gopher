@@ -214,6 +214,17 @@ function runWalkthrough(w: Walkthrough): RunResult {
     } catch (e) {
       return { ok: false, msg: `apply[${i}] (${line}): ${(e as Error).message}` };
     }
+    // Per-step geometry check — catch the moment any primitive
+    // creates an overlap.
+    const v = findViolation(board);
+    if (v !== null) {
+      const s = board[v]!;
+      return {
+        ok: false,
+        msg: `intermediate geometry violation after action[${i}] (${line}): `
+          + `stack ${v} [${s.cards.map(c => c.join(",")).join(" ")}] @ (${s.loc.top},${s.loc.left})`,
+      };
+    }
   }
   // GEOMETRY INVARIANT: the final board has no overlapping stacks
   // and every stack is in-bounds. Per Steve, 2026-05-03: "you cannot

@@ -1,1 +1,1 @@
-{"action":{"action":"merge_stack","source":{"board_cards":[{"card":{"value":7,"suit":0,"origin_deck":1},"state":0}],"loc":{"top":388,"left":560}},"target":{"board_cards":[{"card":{"value":8,"suit":1,"origin_deck":0},"state":0},{"card":{"value":9,"suit":2,"origin_deck":1},"state":0}],"loc":{"top":92,"left":52}},"side":"left"}}
+{"action":{"action":"complete_turn"}}

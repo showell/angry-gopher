@@ -1,1 +1,1 @@
-{"action":{"action":"place_hand","hand_card":{"value":6,"suit":0,"origin_deck":1},"loc":{"top":242,"left":337}}}
+{"action":{"action":"complete_turn"}}

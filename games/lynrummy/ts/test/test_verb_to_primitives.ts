@@ -335,12 +335,23 @@ function runScenario(sc: ScenarioRaw): RunResult {
 
   // Render the primitive sequence by walking through board states so
   // each primitive's referenced stacks resolve to readable card-list
-  // strings (matching DSL syntax).
+  // strings (matching DSL syntax). At each step, assert no geometry
+  // violation — catches drift the moment the emitter creates one.
   const got: string[] = [];
   let sim = board;
-  for (const p of prims) {
+  for (let i = 0; i < prims.length; i++) {
+    const p = prims[i]!;
     got.push(fmtPrimitive(p, sim));
     sim = applyLocallyForRender(sim, p);
+    const v = findViolation(sim);
+    if (v !== null) {
+      const s = sim[v]!;
+      return {
+        ok: false,
+        msg: `intermediate geometry violation after primitive[${i}] (${got[i]}) `
+          + `at stack ${v} [${s.cards.map(c => c.join(",")).join(" ")}] @ (${s.loc.top},${s.loc.left})`,
+      };
+    }
   }
   const want = sc.primitives;
 

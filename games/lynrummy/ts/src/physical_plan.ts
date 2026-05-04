@@ -1,289 +1,111 @@
-// physical_plan.ts — single global pass that turns (initialBoard,
-// placements, planDescs) into a physical primitive sequence.
+// physical_plan.ts — the agent's gesture pipeline.
 //
-// Two stages, ONE pass at the function-call level:
+// One loop. Honest state.
 //
-//   1. Logical trace — emit the same place_hand+merge_hand seed for
-//      placements that the legacy `playToPrimitives` did, then expand
-//      each plan-desc through the pure `expandVerb`. Geometry-agnostic.
+//   sim         starts as the real board (no hand cards on it).
+//   pendingHand starts as the cards in hand for this play.
 //
-//   2. Singleton hand-card lift (v1) — when a single placement is
-//      consumed downstream by a merge_stack with the placement-singleton
-//      as source OR target, drop the place_hand and rewrite the consumer
-//      as a direct merge_hand. Pull/push semantic flips: a merge_stack
-//      where the placement is the TARGET (something else absorbs into
-//      P) lifts to merge_hand(P → other-stack, flipSide(side)) — same
-//      physical motion, dragged-piece-active grammar.
+// For each verb, expandVerb emits the primitives that realize it,
+// looking at the current sim and pendingHand to decide hand-to-stack
+// vs. board-to-board, small→large direction, and per-primitive
+// pre-flight inline. As primitives apply, we update sim and pull cards
+// out of pendingHand. That's it — no fake state, no rewrite passes.
 //
-//   3. Global geometry — single `planActions` pass over the lifted
-//      sequence injects pre-flight move_stack primitives with
-//      whole-program visibility.
-//
-// Per Steve, 2026-05-04: there should be ONE solver pass and ONE
-// physical-execution pass. Per-verb pre-flighting (the legacy path
-// in `moveToPrimitives`) is the "intermediate pass too dumb to have
-// value." `physicalPlan` replaces that intermediate.
-//
-// v1 scope: SINGLE-placement turns get the lift. Multi-placement turns
-// fall through unchanged (place_hand seed + merge_hand growing-stack +
-// downstream verbs as before). Easy multi-placement wins (pair stays
-// together → both cards play directly to the eventual destination)
-// remain open work.
+// Per Steve, 2026-05-04: there's one solver pass and one physical-
+// execution pass. The verb-level helpers in `verbs.ts` are where the
+// physical-execution decisions live; this module is just the loop.
 
 import type { Card } from "./rules/card.ts";
+import { cardLabel } from "./rules/card.ts";
 import type { Desc } from "./move.ts";
-import type { BoardStack, Loc } from "./geometry.ts";
+import type { BoardStack } from "./geometry.ts";
 import { findOpenLoc } from "./geometry.ts";
 import {
-  type Primitive, type Side,
-  applyLocally, findStackIndex,
+  type Primitive, type PlaceHandPrim, type MergeHandPrim,
+  applyLocally,
 } from "./primitives.ts";
 import { expandVerb } from "./verbs.ts";
-import { planActions } from "./geometry_plan.ts";
 
-function flipSide(s: Side): Side {
-  return s === "left" ? "right" : "left";
+function cardKey(c: Card): string {
+  return `${c[0]},${c[1]},${c[2]}`;
 }
 
-function cardEq(a: Card, b: Card): boolean {
-  return a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
-}
-
-function cardsEq(a: readonly Card[], b: readonly Card[]): boolean {
-  if (a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i++) if (!cardEq(a[i]!, b[i]!)) return false;
-  return true;
-}
-
-/** Single global pass: logical → lift → geometry. Returns the final
- *  primitive sequence ready for the wire. */
+/** Walk the solver's plan, emitting one primitive sequence.
+ *
+ *  Hand cards arrive in two shapes:
+ *
+ *  - Single placement (`hand.length === 1`): the card is destined for
+ *    an existing board stack. The verb loop's hand-aware merge in
+ *    `expandVerb` lifts it to a direct `merge_hand`. If the loop
+ *    finishes without consuming the card, that's a solver bug — fail
+ *    hard.
+ *
+ *  - Multi-card placement (`hand.length >= 2`): the cards form a
+ *    fresh stack on the board (a graduate, or the source/target of
+ *    an upcoming verb). Lay them down as a single stack first via
+ *    `place_hand` + `merge_hand` chain, then run the verb loop with
+ *    the placement-stack already on the board.
+ */
 export function physicalPlan(
   initialBoard: readonly BoardStack[],
-  placements: readonly Card[],
+  hand: readonly Card[],
   planDescs: readonly Desc[],
 ): readonly Primitive[] {
-  const logical = emitLogicalTrace(initialBoard, placements, planDescs);
-  // `?? logical` is the benign fallback path: liftSinglePlacement
-  // returns null when the placement isn't liftable (no place_hand
-  // found, no merge_stack consumer, or some intermediate primitive
-  // touches the [P] singleton). The un-lifted trace is still a
-  // correct primitive sequence — we just don't get the optimization.
-  const lifted = placements.length === 1
-    ? (liftSinglePlacement(initialBoard, placements[0]!, logical) ?? logical)
-    : logical;
-  return planActions(initialBoard, lifted);
-}
-
-/** Step A: emit the same primitives the legacy playToPrimitives used
- *  to. Multi-placement turns get the place_hand+merge_hand growing-stack
- *  seed; single-placement turns get one place_hand. Then each plan-desc
- *  expands through `expandVerb` against the running sim. */
-function emitLogicalTrace(
-  initialBoard: readonly BoardStack[],
-  placements: readonly Card[],
-  planDescs: readonly Desc[],
-): readonly Primitive[] {
-  const out: Primitive[] = [];
   let sim: readonly BoardStack[] = initialBoard;
+  const pendingHand = new Set(hand.map(cardKey));
+  const out: Primitive[] = [];
 
-  if (placements.length > 0) {
-    // Reserve loc for the EVENTUAL stack width (matches the legacy
-    // playToPrimitives reservation). For single-placement turns the
-    // place_hand will be dropped by the lift in most cases, so this
-    // loc is only consequential for the multi-placement case.
-    const placeLoc = findOpenLoc(sim, placements.length);
-    const place: Primitive = {
-      action: "place_hand", handCard: placements[0]!, loc: placeLoc,
+  if (hand.length >= 2) {
+    // Multi-placement seed: place the first card at a clean loc sized
+    // for the eventual stack, then merge the rest onto it rightward.
+    const loc = findOpenLoc(sim, hand.length);
+    const place: PlaceHandPrim = {
+      action: "place_hand", handCard: hand[0]!, loc,
     };
     out.push(place);
     sim = applyLocally(sim, place);
-    for (let i = 1; i < placements.length; i++) {
+    pendingHand.delete(cardKey(hand[0]!));
+    for (let i = 1; i < hand.length; i++) {
       const lastIdx = sim.length - 1;
-      const merge: Primitive = {
+      const merge: MergeHandPrim = {
         action: "merge_hand",
         targetStack: lastIdx,
-        handCard: placements[i]!,
+        handCard: hand[i]!,
         side: "right",
       };
       out.push(merge);
       sim = applyLocally(sim, merge);
+      pendingHand.delete(cardKey(hand[i]!));
     }
   }
 
   for (const desc of planDescs) {
-    const prims = expandVerb(desc, sim);
+    const prims = expandVerb(desc, sim, pendingHand);
     for (const p of prims) {
       out.push(p);
       sim = applyLocally(sim, p);
-    }
-  }
-
-  return out;
-}
-
-/** Step B: try to lift a single placement P. Returns the rewritten
- *  primitive list, or null if the placement isn't cleanly liftable
- *  (then the caller falls back to the un-lifted logical trace).
- *
- *  Liftability: there's a place_hand(P) followed by a merge_stack whose
- *  source OR target is the [P] singleton, AND nothing in between
- *  references the [P] singleton. In that case we drop the place_hand
- *  and rewrite the merge_stack as merge_hand. */
-function liftSinglePlacement(
-  initialBoard: readonly BoardStack[],
-  placement: Card,
-  prims: readonly Primitive[],
-): readonly Primitive[] | null {
-  // Capture the content each primitive operates on, computed against
-  // the ORIGINAL sim (with the placement applied). We re-resolve indices
-  // against a new sim during re-emission.
-  type Content =
-    | { kind: "split"; stack: readonly Card[]; ci: number }
-    | { kind: "merge_stack"; src: readonly Card[]; tgt: readonly Card[]; side: Side }
-    | { kind: "merge_hand"; tgt: readonly Card[]; handCard: Card; side: Side }
-    | { kind: "move_stack"; stack: readonly Card[]; newLoc: Loc }
-    | { kind: "place_hand"; handCard: Card; loc: Loc };
-
-  const contents: Content[] = [];
-  let origSim: readonly BoardStack[] = initialBoard;
-  for (const p of prims) {
-    switch (p.action) {
-      case "split":
-        contents.push({
-          kind: "split",
-          stack: origSim[p.stackIndex]!.cards,
-          ci: p.cardIndex,
-        });
-        break;
-      case "merge_stack":
-        contents.push({
-          kind: "merge_stack",
-          src: origSim[p.sourceStack]!.cards,
-          tgt: origSim[p.targetStack]!.cards,
-          side: p.side,
-        });
-        break;
-      case "merge_hand":
-        contents.push({
-          kind: "merge_hand",
-          tgt: origSim[p.targetStack]!.cards,
-          handCard: p.handCard,
-          side: p.side,
-        });
-        break;
-      case "move_stack":
-        contents.push({
-          kind: "move_stack",
-          stack: origSim[p.stackIndex]!.cards,
-          newLoc: p.newLoc,
-        });
-        break;
-      case "place_hand":
-        contents.push({ kind: "place_hand", handCard: p.handCard, loc: p.loc });
-        break;
-    }
-    origSim = applyLocally(origSim, p);
-  }
-
-  // Find place_hand of P.
-  const placeIdx = prims.findIndex(
-    p => p.action === "place_hand" && cardEq(p.handCard, placement),
-  );
-  if (placeIdx === -1) return null;
-
-  // Find first consumer of [P] singleton. Reject if anything else
-  // references [P] before then.
-  let consumeIdx = -1;
-  let consumerKind: "src" | "tgt" | null = null;
-  for (let j = placeIdx + 1; j < prims.length; j++) {
-    const c = contents[j]!;
-    if (c.kind === "split" && cardsEq(c.stack, [placement])) return null;
-    if (c.kind === "move_stack" && cardsEq(c.stack, [placement])) return null;
-    if (c.kind === "merge_hand" && cardsEq(c.tgt, [placement])) return null;
-    if (c.kind === "merge_hand" && cardEq(c.handCard, placement)) return null;
-    if (c.kind === "merge_stack") {
-      if (cardsEq(c.src, [placement])) {
-        consumeIdx = j; consumerKind = "src"; break;
-      }
-      if (cardsEq(c.tgt, [placement])) {
-        consumeIdx = j; consumerKind = "tgt"; break;
+      if (p.action === "merge_hand" || p.action === "place_hand") {
+        pendingHand.delete(cardKey(p.handCard));
       }
     }
   }
-  if (consumeIdx === -1) return null;
 
-  // Re-emit. Walk the original primitives, drop the place_hand, replace
-  // the consumer merge_stack with merge_hand, and re-resolve every
-  // intermediate primitive's indices against the new sim.
-  let sim: readonly BoardStack[] = initialBoard;
-  const out: Primitive[] = [];
-  for (let i = 0; i < prims.length; i++) {
-    if (i === placeIdx) continue;
-    const c = contents[i]!;
-    if (i === consumeIdx) {
-      const m = c as Extract<Content, { kind: "merge_stack" }>;
-      // Both rewrites preserve the merged card order — see the
-      // shared invariant above `applyMergeStack` in `primitives.ts`.
-      let liftedPrim: Primitive;
-      if (consumerKind === "src") {
-        // P was the source being absorbed INTO m.tgt. Direct-drag is
-        // merge_hand(P → tgt, side) — same side as the original
-        // merge_stack.
-        const tgtIdx = findStackIndex(sim, m.tgt);
-        liftedPrim = {
-          action: "merge_hand", targetStack: tgtIdx,
-          handCard: placement, side: m.side,
-        };
-      } else {
-        // P was the target — m.src absorbed INTO [P]. Direct-drag is
-        // merge_hand(P → src, flipSide(side)) — P swaps from target
-        // to incoming, so the side that puts incoming on the same
-        // end of the merged stack is the flipped side.
-        const srcIdx = findStackIndex(sim, m.src);
-        liftedPrim = {
-          action: "merge_hand", targetStack: srcIdx,
-          handCard: placement, side: flipSide(m.side),
-        };
-      }
-      out.push(liftedPrim);
-      sim = applyLocally(sim, liftedPrim);
-      continue;
-    }
-    let newPrim: Primitive;
-    switch (c.kind) {
-      case "split": {
-        const idx = findStackIndex(sim, c.stack);
-        newPrim = { action: "split", stackIndex: idx, cardIndex: c.ci };
-        break;
-      }
-      case "merge_stack": {
-        const srcIdx = findStackIndex(sim, c.src);
-        const tgtIdx = findStackIndex(sim, c.tgt);
-        newPrim = {
-          action: "merge_stack",
-          sourceStack: srcIdx, targetStack: tgtIdx, side: c.side,
-        };
-        break;
-      }
-      case "merge_hand": {
-        const tgtIdx = findStackIndex(sim, c.tgt);
-        newPrim = {
-          action: "merge_hand",
-          targetStack: tgtIdx, handCard: c.handCard, side: c.side,
-        };
-        break;
-      }
-      case "move_stack": {
-        const idx = findStackIndex(sim, c.stack);
-        newPrim = { action: "move_stack", stackIndex: idx, newLoc: c.newLoc };
-        break;
-      }
-      case "place_hand":
-        newPrim = { action: "place_hand", handCard: c.handCard, loc: c.loc };
-        break;
-    }
-    out.push(newPrim);
-    sim = applyLocally(sim, newPrim);
+  // Every hand card must be consumed — by the multi-placement seed or
+  // by a hand-aware merge in the verb loop. Anything left means the
+  // solver returned placements that no verb references and that we
+  // didn't seed — that's broken state, not something to paper over.
+  if (pendingHand.size > 0) {
+    const stranded = [...pendingHand]
+      .map(k => hand.find(c => cardKey(c) === k))
+      .filter((c): c is Card => c !== undefined)
+      .map(cardLabel)
+      .join(" ");
+    throw new Error(
+      `physicalPlan: hand cards [${stranded}] were not consumed by the `
+      + `verb sequence; solver returned a plan inconsistent with its `
+      + `placements`,
+    );
   }
+
   return out;
 }

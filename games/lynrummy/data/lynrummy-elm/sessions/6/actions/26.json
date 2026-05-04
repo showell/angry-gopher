@@ -1,1 +1,1 @@
-{"action":{"action":"place_hand","hand_card":{"value":13,"suit":3,"origin_deck":1},"loc":{"top":332,"left":187}}}
+{"action":{"action":"merge_hand","hand_card":{"value":3,"suit":2,"origin_deck":1},"target":{"board_cards":[{"card":{"value":13,"suit":2,"origin_deck":0},"state":0},{"card":{"value":1,"suit":2,"origin_deck":0},"state":0},{"card":{"value":2,"suit":2,"origin_deck":0},"state":0}],"loc":{"top":20,"left":62}},"side":"right"}}

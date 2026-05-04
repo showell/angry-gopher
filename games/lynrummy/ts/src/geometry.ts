@@ -245,24 +245,46 @@ export function locClearsOthers(
   return true;
 }
 
+/** Pre-flight comfort threshold. Looser than `BOARD_MARGIN` (the
+ *  referee's legal threshold) so the agent leaves a little breathing
+ *  room around new merges, but tighter than `PACK_GAP_X/Y` so
+ *  pre-flights don't fire over every 20-px row gap. The rest of a
+ *  typical board sits at ~20-px vertical gaps; 15 is just inside
+ *  that, avoiding visible crowding without forcing constant moves. */
+export const PLANNING_MARGIN = 15;
+
 /** Return the index of a stack that breaks the geometry rule, or null.
- *  Checks out-of-bounds first, then pairwise padded overlap.
+ *  Checks out-of-bounds first, then pairwise padded overlap with the
+ *  given margin (defaults to `BOARD_MARGIN`, the legal threshold).
  *
  *  Returns the FIRST offending stack rather than a full report —
  *  callers iterate: fix one, re-check, repeat until stable. When two
  *  stacks overlap, the LATER-indexed one is reported (it's the one
  *  that was appended most recently by a trick or by a growing
  *  neighbor; relocating it is less disruptive). */
-export function findViolation(board: readonly BoardStack[]): number | null {
+export function findViolation(
+  board: readonly BoardStack[],
+  margin: number = BOARD_MARGIN,
+): number | null {
   for (let i = 0; i < board.length; i++) {
     if (outOfBounds(board[i]!)) return i;
   }
   const rects = board.map(stackRect);
   for (let i = 0; i < rects.length; i++) {
-    const paddedI = padRect(rects[i]!, BOARD_MARGIN);
+    const paddedI = padRect(rects[i]!, margin);
     for (let j = i + 1; j < rects.length; j++) {
       if (rectsOverlap(paddedI, rects[j]!)) return j;
     }
   }
   return null;
+}
+
+/** Pre-flight trigger: would the post-action board be crowded? Same
+ *  shape as `findViolation` but uses `PLANNING_MARGIN` so the agent
+ *  pre-flights when stacks would land uncomfortably close — not just
+ *  when they'd legally collide. Test runners and the transcript
+ *  assertion stay on the strict `findViolation` so the legal-overlap
+ *  invariant remains load-bearing. */
+export function findCrowding(board: readonly BoardStack[]): number | null {
+  return findViolation(board, PLANNING_MARGIN);
 }
