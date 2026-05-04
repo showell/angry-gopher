@@ -17,8 +17,11 @@ import { RANKS, SUITS, cardLabel } from "./rules/card.ts";
  *  parameter (per SOLVER.md's discipline). */
 export type Side = "left" | "right";
 
-/** Source verb that produced an extract. Mirrors python's `Verb`. */
-export type Verb = "peel" | "pluck" | "yank" | "steal" | "split_out";
+/** Source verb that produced an extract. Mirrors python's `Verb`,
+ *  plus `set_peel` for the SET-specific length-3 case where the
+ *  remnant pair stays coherent in GROWING (instead of being
+ *  shattered into singletons by `steal`). */
+export type Verb = "peel" | "pluck" | "yank" | "steal" | "split_out" | "set_peel";
 
 /** Bucket where the absorb target came from. Same alphabet as
  *  `BucketName` in buckets.ts. */
@@ -39,7 +42,15 @@ export interface ExtractAbsorbDesc {
   readonly result: readonly Card[];
   readonly side: Side;
   readonly graduated: boolean;
+  /** Stacks the extract spawned that land in TROUBLE (singletons
+   *  from set-shattering steals; doomed run/rb halves from yank;
+   *  etc.). Each entry is a list of cards. */
   readonly spawned: readonly (readonly Card[])[];
+  /** Stacks the extract spawned that land in GROWING (pair-shape
+   *  remnants — only `set_peel` produces these today). Each entry
+   *  is a list of cards. Empty for verbs that don't produce
+   *  growing-bound spawns. */
+  readonly spawnedGrowing: readonly (readonly Card[])[];
 }
 
 export interface FreePullDesc {
@@ -132,8 +143,12 @@ export function describe(desc: Desc): string {
     case "extract_absorb": {
       let spawnedStr = "";
       if (desc.spawned.length > 0) {
-        spawnedStr = " ; spawn TROUBLE: "
+        spawnedStr += " ; spawn TROUBLE: "
           + desc.spawned.map(s => "[" + stackLabel(s) + "]").join(", ");
+      }
+      if (desc.spawnedGrowing.length > 0) {
+        spawnedStr += " ; spawn GROWING: "
+          + desc.spawnedGrowing.map(s => "[" + stackLabel(s) + "]").join(", ");
       }
       const graduated = desc.graduated ? " [→COMPLETE]" : "";
       return `${desc.verb} ${cardLabel(desc.extCard)} from HELPER `

@@ -341,7 +341,7 @@ function extractAbsorbPrims(
   const out: Primitive[] = [];
   let extSingleton: readonly Card[] = [extCard];
 
-  if (verb === "peel" || verb === "pluck" || verb === "yank" || verb === "split_out") {
+  if (verb === "peel" || verb === "pluck" || verb === "yank" || verb === "split_out" || verb === "set_peel") {
     const iso = isolateCard(sim, source, ci);
     out.push(...iso.prims);
     sim = iso.sim;
@@ -349,6 +349,8 @@ function extractAbsorbPrims(
 
     // Set peel from interior position: remnant comes back as TWO
     // physical pieces; merge them so the set [a, b, d] is one stack.
+    // Same merge applies whether the verb is `peel` (length-4+ set,
+    // interior position) or `set_peel` (length-3 set, middle card).
     if (kind === "set" && iso.remnants.length === 2) {
       const [leftChunk, tailChunk] = iso.remnants;
       const r = planMerge(sim, tailChunk!, leftChunk!, "right", pendingHand);

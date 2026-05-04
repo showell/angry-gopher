@@ -16,7 +16,7 @@ import {
   type Kind,
   KIND_RUN, KIND_RB, KIND_SET,
   classifyStack,
-  peel, pluck, yank, steal, splitOut,
+  peel, pluck, yank, steal, splitOut, setPeel,
   kindAfterAbsorbRight, kindAfterAbsorbLeft,
   extendsTables,
   findSpliceCandidates,
@@ -171,7 +171,12 @@ function admissibleMerged(merged: ClassifiedCardStack, completionInv: Set<number
 
 interface ExtractResult {
   readonly newHelper: readonly ClassifiedCardStack[];
+  /** Pieces that land in TROUBLE — singletons or doomed-shape
+   *  partials the search will work to clear. */
   readonly spawned: readonly ClassifiedCardStack[];
+  /** Pieces that land in GROWING — coherent length-2 partials
+   *  (today only `set_peel` produces one). */
+  readonly spawnedGrowing: readonly ClassifiedCardStack[];
   readonly extCard: Card;
   readonly sourceBeforeCards: readonly Card[];
 }
@@ -184,53 +189,82 @@ function doExtract(
 ): ExtractResult {
   const source = helper[srcIdx]!;
   const sourceBeforeCards = [...source.cards];
-  const [helperPieces, spawned] = extractPieces(source, ci, verb);
+  const { helpers: helperPieces, troubleSpawned, growingSpawned } =
+    extractPieces(source, ci, verb);
   const newHelper = helper.slice(0, srcIdx)
     .concat(helper.slice(srcIdx + 1))
     .concat(helperPieces);
   return {
     newHelper,
-    spawned,
+    spawned: troubleSpawned,
+    spawnedGrowing: growingSpawned,
     extCard: source.cards[ci]!,
     sourceBeforeCards,
   };
+}
+
+interface ExtractedPieces {
+  helpers: ClassifiedCardStack[];
+  troubleSpawned: ClassifiedCardStack[];
+  growingSpawned: ClassifiedCardStack[];
 }
 
 function extractPieces(
   source: ClassifiedCardStack,
   ci: number,
   verb: Verb,
-): [ClassifiedCardStack[], ClassifiedCardStack[]] {
+): ExtractedPieces {
   if (verb === "peel") {
     const [, remnant] = peel(source, ci);
-    return [[remnant!], []];
+    return { helpers: [remnant!], troubleSpawned: [], growingSpawned: [] };
+  }
+  if (verb === "set_peel") {
+    const [, remnant] = setPeel(source, ci);
+    // The pair_set remnant is a coherent length-2 partial that
+    // belongs in GROWING — NOT in helpers (length<3) and NOT in
+    // trouble (it's already legitimate growth state).
+    return { helpers: [], troubleSpawned: [], growingSpawned: [remnant!] };
   }
   if (verb === "pluck") {
     const [, left, right] = pluck(source, ci);
-    return [[left!, right!], []];
+    return { helpers: [left!, right!], troubleSpawned: [], growingSpawned: [] };
   }
   if (verb === "yank") {
     const [, left, right] = yank(source, ci);
     const helpers: ClassifiedCardStack[] = [];
-    const spawned: ClassifiedCardStack[] = [];
+    const troubleSpawned: ClassifiedCardStack[] = [];
+    const growingSpawned: ClassifiedCardStack[] = [];
     for (const piece of [left!, right!]) {
-      if (piece.n >= 3) helpers.push(piece);
-      else spawned.push(piece);
+      if (piece.n >= 3) {
+        helpers.push(piece);
+      } else if (piece.n === 2) {
+        // Length-2 yank remnants are coherent pair_run / pair_rb
+        // (the yank function preserves the parent run/rb family).
+        // They belong in GROWING — the same routing as set_peel's
+        // pair_set remnant — so the search doesn't have to fight
+        // its way back from a needlessly-shattered state.
+        growingSpawned.push(piece);
+      } else {
+        troubleSpawned.push(piece);
+      }
     }
-    return [helpers, spawned];
+    return { helpers, troubleSpawned, growingSpawned };
   }
   if (verb === "split_out") {
     const [, left, right] = splitOut(source, ci);
     // Both halves are singletons by precondition.
-    return [[], [left!, right!]];
+    return { helpers: [], troubleSpawned: [left!, right!], growingSpawned: [] };
   }
   if (verb === "steal") {
     const pieces = steal(source, ci);
     // For sets: rest is N-1 singletons. For run/rb: rest is one
-    // length-2 partial. Either way, return the spawned pieces as-is —
-    // they're orphan-shape but the BFS can either extend them or
-    // decompose them later.
-    return [[], pieces.slice(1) as ClassifiedCardStack[]];
+    // length-2 partial. Either way, route to TROUBLE — these are
+    // orphan-shape pieces the BFS works to extend or decompose.
+    return {
+      helpers: [],
+      troubleSpawned: pieces.slice(1) as ClassifiedCardStack[],
+      growingSpawned: [],
+    };
   }
   throw new Error(`unknown verb ${verb}`);
 }
@@ -286,7 +320,21 @@ function extractableIndex(
       if (n >= 4) {
         for (let ci = 0; ci < n; ci++) add(cards, ci, hi, "peel");
       } else if (n === 3) {
-        for (let ci = 0; ci < n; ci++) add(cards, ci, hi, "steal");
+        // Length-3 SET extraction has TWO live verbs per position:
+        //   - `steal`: shatters the SET into 2 trouble singletons
+        //   - `set_peel`: keeps the remnant as a pair_set in GROWING
+        // Both are kept because they produce genuinely different
+        // post-states. The set_peel branch fixes the silly split-
+        // then-rejoin pattern (a3_003); the steal branch preserves
+        // the singleton-spawn option some scenarios need (e.g. when
+        // the two remaining set members can each independently
+        // complete different partials elsewhere on the board). A
+        // partition by position was tried and dropped — it cut
+        // valid plans on 11 scenarios in the broader corpus.
+        for (let ci = 0; ci < n; ci++) {
+          add(cards, ci, hi, "steal");
+          add(cards, ci, hi, "set_peel");
+        }
       }
     }
     // KIND_PAIR_RUN / KIND_PAIR_RB / KIND_PAIR_SET / KIND_SINGLETON:
@@ -620,20 +668,23 @@ function* yieldExtractAbsorbs(
     const entries = extractable.get(shape) ?? [];
     for (const { hi, ci, verb } of entries) {
       const extCard = helper[hi]!.cards[ci]!;
-      const { newHelper, spawned, sourceBeforeCards } = doExtract(helper, hi, ci, verb);
+      const { newHelper, spawned, spawnedGrowing, sourceBeforeCards } =
+        doExtract(helper, hi, ci, verb);
       const spawnedLists = spawned.map(s => [...s.cards]);
+      const spawnedGrowingLists = spawnedGrowing.map(s => [...s.cards]);
       if (ntBase === null) {
         const [nt, gg] = removeAbsorber(bucket, idx, trouble, growing);
         ntBase = nt;
         ng = gg;
       }
       const nt = [...ntBase, ...spawned];
+      const ngWithSpawn = [...ng!, ...spawnedGrowing];
 
       // Three modes are disjoint per shape; at most one block fires.
       if (rightKind !== null) {
         const merged = absorbRight(target, extCard, rightKind);
         if (admissibleMerged(merged, completionInv)) {
-          const [ngFinal, nc, graduated] = graduate(merged, ng!, complete);
+          const [ngFinal, nc, graduated] = graduate(merged, ngWithSpawn, complete);
           const desc: ExtractAbsorbDesc = {
             type: "extract_absorb",
             verb,
@@ -645,6 +696,7 @@ function* yieldExtractAbsorbs(
             side: "right",
             graduated,
             spawned: spawnedLists,
+            spawnedGrowing: spawnedGrowingLists,
           };
           yield [desc, { helper: newHelper, trouble: nt, growing: ngFinal, complete: nc }];
         }
@@ -652,7 +704,7 @@ function* yieldExtractAbsorbs(
       if (leftKind !== null) {
         const merged = absorbLeft(target, extCard, leftKind);
         if (admissibleMerged(merged, completionInv)) {
-          const [ngFinal, nc, graduated] = graduate(merged, ng!, complete);
+          const [ngFinal, nc, graduated] = graduate(merged, ngWithSpawn, complete);
           const desc: ExtractAbsorbDesc = {
             type: "extract_absorb",
             verb,
@@ -664,6 +716,7 @@ function* yieldExtractAbsorbs(
             side: "left",
             graduated,
             spawned: spawnedLists,
+            spawnedGrowing: spawnedGrowingLists,
           };
           yield [desc, { helper: newHelper, trouble: nt, growing: ngFinal, complete: nc }];
         }
@@ -672,7 +725,7 @@ function* yieldExtractAbsorbs(
         // Sets are unordered; yield right then left.
         const mergedR = absorbRight(target, extCard, setKind);
         if (admissibleMerged(mergedR, completionInv)) {
-          const [ngFinal, nc, graduated] = graduate(mergedR, ng!, complete);
+          const [ngFinal, nc, graduated] = graduate(mergedR, ngWithSpawn, complete);
           const desc: ExtractAbsorbDesc = {
             type: "extract_absorb",
             verb,
@@ -684,12 +737,13 @@ function* yieldExtractAbsorbs(
             side: "right",
             graduated,
             spawned: spawnedLists,
+            spawnedGrowing: spawnedGrowingLists,
           };
           yield [desc, { helper: newHelper, trouble: nt, growing: ngFinal, complete: nc }];
         }
         const mergedL = absorbLeft(target, extCard, setKind);
         if (admissibleMerged(mergedL, completionInv)) {
-          const [ngFinal, nc, graduated] = graduate(mergedL, ng!, complete);
+          const [ngFinal, nc, graduated] = graduate(mergedL, ngWithSpawn, complete);
           const desc: ExtractAbsorbDesc = {
             type: "extract_absorb",
             verb,
@@ -701,6 +755,7 @@ function* yieldExtractAbsorbs(
             side: "left",
             graduated,
             spawned: spawnedLists,
+            spawnedGrowing: spawnedGrowingLists,
           };
           yield [desc, { helper: newHelper, trouble: nt, growing: ngFinal, complete: nc }];
         }
@@ -778,6 +833,7 @@ function* yieldPartialSteals(
           side,
           graduated,
           spawned: [[otherCard]],
+          spawnedGrowing: [],
         };
         return [desc, { helper: [...helper], trouble: baseTrouble, growing: ngFinal, complete: nc }] as const;
       };

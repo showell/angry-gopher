@@ -307,6 +307,9 @@ var LynRummyEngine = (() => {
     }
     return false;
   }
+  function canSetPeel(stack, i) {
+    return stack.kind === KIND_SET && stack.n === 3 && i >= 0 && i < 3;
+  }
   function canPluck(stack, i) {
     if (stack.kind !== KIND_RUN && stack.kind !== KIND_RB) return false;
     return 3 <= i && i <= stack.n - 4;
@@ -346,6 +349,14 @@ var LynRummyEngine = (() => {
     const family = stack.kind;
     const rest = i === 0 ? stack.cards.slice(1) : stack.cards.slice(0, -1);
     return [extracted, { cards: rest, kind: runKindForLength(family, rest.length), n: rest.length }];
+  }
+  function setPeel(stack, i) {
+    if (!canSetPeel(stack, i)) {
+      throw new Error(`canSetPeel(${stack.kind} len=${stack.n}, ${i}) is False`);
+    }
+    const extracted = singletonStack(stack.cards[i]);
+    const rest = stack.cards.slice(0, i).concat(stack.cards.slice(i + 1));
+    return [extracted, { cards: rest, kind: KIND_PAIR_SET, n: 2 }];
   }
   function pluck(stack, i) {
     if (!canPluck(stack, i)) {
@@ -580,7 +591,10 @@ var LynRummyEngine = (() => {
       case "extract_absorb": {
         let spawnedStr = "";
         if (desc.spawned.length > 0) {
-          spawnedStr = " ; spawn TROUBLE: " + desc.spawned.map((s) => "[" + stackLabel(s) + "]").join(", ");
+          spawnedStr += " ; spawn TROUBLE: " + desc.spawned.map((s) => "[" + stackLabel(s) + "]").join(", ");
+        }
+        if (desc.spawnedGrowing.length > 0) {
+          spawnedStr += " ; spawn GROWING: " + desc.spawnedGrowing.map((s) => "[" + stackLabel(s) + "]").join(", ");
         }
         const graduated = desc.graduated ? " [\u2192COMPLETE]" : "";
         return `${desc.verb} ${cardLabel(desc.extCard)} from HELPER [${stackLabel(desc.source)}], absorb onto ${desc.targetBucketBefore} [${stackLabel(desc.targetBefore)}] \u2192 [${stackLabel(desc.result)}]${graduated}${spawnedStr}`;
@@ -694,11 +708,12 @@ var LynRummyEngine = (() => {
   function doExtract(helper, srcIdx, ci, verb) {
     const source = helper[srcIdx];
     const sourceBeforeCards = [...source.cards];
-    const [helperPieces, spawned] = extractPieces(source, ci, verb);
+    const { helpers: helperPieces, troubleSpawned, growingSpawned } = extractPieces(source, ci, verb);
     const newHelper = helper.slice(0, srcIdx).concat(helper.slice(srcIdx + 1)).concat(helperPieces);
     return {
       newHelper,
-      spawned,
+      spawned: troubleSpawned,
+      spawnedGrowing: growingSpawned,
       extCard: source.cards[ci],
       sourceBeforeCards
     };
@@ -706,29 +721,43 @@ var LynRummyEngine = (() => {
   function extractPieces(source, ci, verb) {
     if (verb === "peel") {
       const [, remnant] = peel(source, ci);
-      return [[remnant], []];
+      return { helpers: [remnant], troubleSpawned: [], growingSpawned: [] };
+    }
+    if (verb === "set_peel") {
+      const [, remnant] = setPeel(source, ci);
+      return { helpers: [], troubleSpawned: [], growingSpawned: [remnant] };
     }
     if (verb === "pluck") {
       const [, left, right] = pluck(source, ci);
-      return [[left, right], []];
+      return { helpers: [left, right], troubleSpawned: [], growingSpawned: [] };
     }
     if (verb === "yank") {
       const [, left, right] = yank(source, ci);
       const helpers = [];
-      const spawned = [];
+      const troubleSpawned = [];
+      const growingSpawned = [];
       for (const piece of [left, right]) {
-        if (piece.n >= 3) helpers.push(piece);
-        else spawned.push(piece);
+        if (piece.n >= 3) {
+          helpers.push(piece);
+        } else if (piece.n === 2) {
+          growingSpawned.push(piece);
+        } else {
+          troubleSpawned.push(piece);
+        }
       }
-      return [helpers, spawned];
+      return { helpers, troubleSpawned, growingSpawned };
     }
     if (verb === "split_out") {
       const [, left, right] = splitOut(source, ci);
-      return [[], [left, right]];
+      return { helpers: [], troubleSpawned: [left, right], growingSpawned: [] };
     }
     if (verb === "steal") {
       const pieces = steal(source, ci);
-      return [[], pieces.slice(1)];
+      return {
+        helpers: [],
+        troubleSpawned: pieces.slice(1),
+        growingSpawned: []
+      };
     }
     throw new Error(`unknown verb ${verb}`);
   }
@@ -772,7 +801,10 @@ var LynRummyEngine = (() => {
         if (n >= 4) {
           for (let ci = 0; ci < n; ci++) add(cards, ci, hi, "peel");
         } else if (n === 3) {
-          for (let ci = 0; ci < n; ci++) add(cards, ci, hi, "steal");
+          for (let ci = 0; ci < n; ci++) {
+            add(cards, ci, hi, "steal");
+            add(cards, ci, hi, "set_peel");
+          }
         }
       }
     }
@@ -1005,18 +1037,20 @@ var LynRummyEngine = (() => {
       const entries = extractable.get(shape) ?? [];
       for (const { hi, ci, verb } of entries) {
         const extCard = helper[hi].cards[ci];
-        const { newHelper, spawned, sourceBeforeCards } = doExtract(helper, hi, ci, verb);
+        const { newHelper, spawned, spawnedGrowing, sourceBeforeCards } = doExtract(helper, hi, ci, verb);
         const spawnedLists = spawned.map((s) => [...s.cards]);
+        const spawnedGrowingLists = spawnedGrowing.map((s) => [...s.cards]);
         if (ntBase === null) {
           const [nt2, gg] = removeAbsorber(bucket, idx, trouble, growing);
           ntBase = nt2;
           ng = gg;
         }
         const nt = [...ntBase, ...spawned];
+        const ngWithSpawn = [...ng, ...spawnedGrowing];
         if (rightKind !== null) {
           const merged = absorbRight(target, extCard, rightKind);
           if (admissibleMerged(merged, completionInv)) {
-            const [ngFinal, nc, graduated] = graduate(merged, ng, complete);
+            const [ngFinal, nc, graduated] = graduate(merged, ngWithSpawn, complete);
             const desc = {
               type: "extract_absorb",
               verb,
@@ -1027,7 +1061,8 @@ var LynRummyEngine = (() => {
               result: [...merged.cards],
               side: "right",
               graduated,
-              spawned: spawnedLists
+              spawned: spawnedLists,
+              spawnedGrowing: spawnedGrowingLists
             };
             yield [desc, { helper: newHelper, trouble: nt, growing: ngFinal, complete: nc }];
           }
@@ -1035,7 +1070,7 @@ var LynRummyEngine = (() => {
         if (leftKind !== null) {
           const merged = absorbLeft(target, extCard, leftKind);
           if (admissibleMerged(merged, completionInv)) {
-            const [ngFinal, nc, graduated] = graduate(merged, ng, complete);
+            const [ngFinal, nc, graduated] = graduate(merged, ngWithSpawn, complete);
             const desc = {
               type: "extract_absorb",
               verb,
@@ -1046,7 +1081,8 @@ var LynRummyEngine = (() => {
               result: [...merged.cards],
               side: "left",
               graduated,
-              spawned: spawnedLists
+              spawned: spawnedLists,
+              spawnedGrowing: spawnedGrowingLists
             };
             yield [desc, { helper: newHelper, trouble: nt, growing: ngFinal, complete: nc }];
           }
@@ -1054,7 +1090,7 @@ var LynRummyEngine = (() => {
         if (setKind !== null) {
           const mergedR = absorbRight(target, extCard, setKind);
           if (admissibleMerged(mergedR, completionInv)) {
-            const [ngFinal, nc, graduated] = graduate(mergedR, ng, complete);
+            const [ngFinal, nc, graduated] = graduate(mergedR, ngWithSpawn, complete);
             const desc = {
               type: "extract_absorb",
               verb,
@@ -1065,13 +1101,14 @@ var LynRummyEngine = (() => {
               result: [...mergedR.cards],
               side: "right",
               graduated,
-              spawned: spawnedLists
+              spawned: spawnedLists,
+              spawnedGrowing: spawnedGrowingLists
             };
             yield [desc, { helper: newHelper, trouble: nt, growing: ngFinal, complete: nc }];
           }
           const mergedL = absorbLeft(target, extCard, setKind);
           if (admissibleMerged(mergedL, completionInv)) {
-            const [ngFinal, nc, graduated] = graduate(mergedL, ng, complete);
+            const [ngFinal, nc, graduated] = graduate(mergedL, ngWithSpawn, complete);
             const desc = {
               type: "extract_absorb",
               verb,
@@ -1082,7 +1119,8 @@ var LynRummyEngine = (() => {
               result: [...mergedL.cards],
               side: "left",
               graduated,
-              spawned: spawnedLists
+              spawned: spawnedLists,
+              spawnedGrowing: spawnedGrowingLists
             };
             yield [desc, { helper: newHelper, trouble: nt, growing: ngFinal, complete: nc }];
           }
@@ -1141,7 +1179,8 @@ var LynRummyEngine = (() => {
             result: [...merged.cards],
             side,
             graduated,
-            spawned: [[otherCard]]
+            spawned: [[otherCard]],
+            spawnedGrowing: []
           };
           return [desc, { helper: [...helper], trouble: baseTrouble, growing: ngFinal, complete: nc }];
         };
@@ -2434,7 +2473,7 @@ var LynRummyEngine = (() => {
     let sim = board;
     const out = [];
     let extSingleton = [extCard];
-    if (verb === "peel" || verb === "pluck" || verb === "yank" || verb === "split_out") {
+    if (verb === "peel" || verb === "pluck" || verb === "yank" || verb === "split_out" || verb === "set_peel") {
       const iso = isolateCard(sim, source, ci);
       out.push(...iso.prims);
       sim = iso.sim;

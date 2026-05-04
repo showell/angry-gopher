@@ -425,6 +425,17 @@ export function canPeel(stack: ClassifiedCardStack, i: number): boolean {
   return false;
 }
 
+/** Set-peel: drop one card from a length-3 SET, leaving the other
+ *  two as a coherent pair_set. Companion to `steal` (which atomizes
+ *  the SET into two singletons); both verbs are enumerated for every
+ *  position so A* sees both post-state options. Distinguished from
+ *  `peel` (length-4+ source) so the enumerator can tell them apart
+ *  in plan-line text and in the spawn-bucket routing. Per Steve,
+ *  2026-05-04: avoiding silly split-then-rejoin sequences. */
+export function canSetPeel(stack: ClassifiedCardStack, i: number): boolean {
+  return stack.kind === KIND_SET && stack.n === 3 && i >= 0 && i < 3;
+}
+
 /** Pluck: drop an interior card of a run/rb such that BOTH halves remain
  *  length-3+ runs of the same family. Requires n >= 7 with i in [3, n-4]. */
 export function canPluck(stack: ClassifiedCardStack, i: number): boolean {
@@ -499,6 +510,25 @@ export function peel(
   const rest: Card[] =
     i === 0 ? stack.cards.slice(1) : stack.cards.slice(0, -1);
   return [extracted, { cards: rest, kind: runKindForLength(family, rest.length), n: rest.length }];
+}
+
+/**
+ * Set-peel executor. Assumes `canSetPeel(stack, i)`. Returns
+ * `[extracted, pair_set_remnant]` — the remnant is a coherent
+ * length-2 pair_set that stays together (in contrast to `steal`,
+ * which atomizes the source SET into singletons). Caller routes
+ * the pair_set into GROWING.
+ */
+export function setPeel(
+  stack: ClassifiedCardStack,
+  i: number,
+): readonly ClassifiedCardStack[] {
+  if (!canSetPeel(stack, i)) {
+    throw new Error(`canSetPeel(${stack.kind} len=${stack.n}, ${i}) is False`);
+  }
+  const extracted = singletonStack(stack.cards[i]!);
+  const rest: Card[] = stack.cards.slice(0, i).concat(stack.cards.slice(i + 1));
+  return [extracted, { cards: rest, kind: KIND_PAIR_SET, n: 2 }];
 }
 
 /**

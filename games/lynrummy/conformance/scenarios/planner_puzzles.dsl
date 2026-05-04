@@ -76,8 +76,7 @@ scenario puzzle_a3_003_seed3
     at (0,0): 5S 6S'
   expect:
     plan_lines:
-      - "steal 7S from HELPER [7S 7D 7C], absorb onto trouble [5S 6S'] → [5S 6S' 7S] [→COMPLETE] ; spawn TROUBLE: [7D], [7C]"
-      - "pull 7C onto trouble [7D] → [7C 7D]"
+      - "set_peel 7S from HELPER [7S 7D 7C], absorb onto trouble [5S 6S'] → [5S 6S' 7S] [→COMPLETE] ; spawn GROWING: [7D 7C]"
       - "peel 7H from HELPER [2C 3D 4C 5H 6S 7H], absorb onto growing [7C 7D] → [7H 7C 7D] [→COMPLETE]"
 
 scenario puzzle_a3_004_seed4
