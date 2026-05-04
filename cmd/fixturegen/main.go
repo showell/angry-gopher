@@ -362,16 +362,12 @@ var opRegistry = []OpKind{
 		EmitElm: func(b *strings.Builder, sc Scenario) { elmValidateMove(b, sc, true) },
 	},
 	{
-		Name:    "enumerate_moves",
-		Elm:     true,
-		TS:      true,
-		EmitElm: elmEnumerateMoves,
+		Name: "enumerate_moves",
+		TS:   true,
 	},
 	{
-		Name:    "solve",
-		Elm:     true,
-		TS:      true,
-		EmitElm: elmSolve,
+		Name: "solve",
+		TS:   true,
 	},
 	{
 		Name:    "find_open_loc",
@@ -2090,136 +2086,12 @@ func elmAgentStackLit(s Stack) string {
 	return "[ " + strings.Join(cs, ", ") + " ]"
 }
 
-// elmEnumerateMoves emits a test body that builds the
-// scenario's 4-bucket state, walks the enumerator, and
-const elmEnumerateMovesTmpl = `            let
-                state : Buckets
-                state =
-                    { helper = %s
-                    , trouble = %s
-                    , growing = %s
-                    , complete = %s
-                    }
-
-                moves =
-                    AgentEnumerator.enumerateMoves state
-            in
-`
-
-const elmEnumerateMovesCheckTmpl = `            if List.any (\( m, _ ) -> %s) moves then
-                Expect.pass
-
-            else
-                Expect.fail ("no %s move yielded; got " ++ String.fromInt (List.length moves) ++ " moves")`
-
-// asserts at least one yielded move matches the
-// expect.yields type. Scenarios whose only assertion is
-// narrate_contains / hint_contains compile to Expect.pass
-// stubs on the Elm side until those renderers port.
-func elmEnumerateMoves(b *strings.Builder, sc Scenario) {
-	yields := sc.Expect.Planner.Yields
-	if yields == "" {
-		// narrate_contains / hint_contains only — stub on Elm
-		// until the renderers port.
-		b.WriteString("            -- narrate/hint matchers not yet ported to Elm\n            Expect.pass")
-		return
-	}
-	matcher := elmMoveMatcher(yields)
-	fmt.Fprintf(b, elmEnumerateMovesTmpl,
-		elmAgentStacks(sc.Helper, "                        "),
-		elmAgentStacks(sc.Trouble, "                        "),
-		elmAgentStacks(sc.Growing, "                        "),
-		elmAgentStacks(sc.Complete, "                        "))
-	fmt.Fprintf(b, elmEnumerateMovesCheckTmpl, matcher, yields)
-}
-
-// elmSolve emits a test body that builds the scenario's
-const elmSolveTmpl = `            let
-                state : Buckets
-                state =
-                    { helper = %s
-                    , trouble = %s
-                    , growing = %s
-                    , complete = %s
-                    }
-
-                result =
-                    Game.Agent.Bfs.solve state
-            in
-`
-
-const elmSolveNoPlanCheck = `            case result of
-                Nothing ->
-                    Expect.pass
-
-                Just plan ->
-                    Expect.fail ("expected no plan; got plan of length " ++ String.fromInt (List.length plan))`
-
-const elmSolvePlanLinesTmpl = `            let
-                expected =
-                    %s
-            in
-            case result of
-                Just plan ->
-                    List.map AgentMove.describe plan
-                        |> Expect.equal expected
-
-                Nothing ->
-                    Expect.fail ("expected plan; got Nothing")`
-
-const elmSolvePlanLengthTmpl = `            case result of
-                Just plan ->
-                    List.length plan |> Expect.equal %d
-
-                Nothing ->
-                    Expect.fail "expected plan of length %d; got Nothing"`
-
-// 4-bucket state, runs Game.Agent.Bfs.solve, and asserts on
-// either no_plan or an exact plan_length.
-func elmSolve(b *strings.Builder, sc Scenario) {
-	fmt.Fprintf(b, elmSolveTmpl,
-		elmAgentStacks(sc.Helper, "                        "),
-		elmAgentStacks(sc.Trouble, "                        "),
-		elmAgentStacks(sc.Growing, "                        "),
-		elmAgentStacks(sc.Complete, "                        "))
-	sv := sc.Expect.Solve
-	if sv.NoPlan {
-		b.WriteString(elmSolveNoPlanCheck)
-	} else if len(sv.PlanLines) > 0 {
-		// Snapshot match: every line of describe(move) must
-		// equal the pinned canonical plan_lines.
-		var listLits strings.Builder
-		listLits.WriteString("[ ")
-		for i, line := range sv.PlanLines {
-			if i > 0 {
-				listLits.WriteString(", ")
-			}
-			listLits.WriteString(strconv.Quote(line))
-		}
-		listLits.WriteString(" ]")
-		fmt.Fprintf(b, elmSolvePlanLinesTmpl, listLits.String())
-	} else if sv.PlanLength > 0 {
-		fmt.Fprintf(b, elmSolvePlanLengthTmpl, sv.PlanLength, sv.PlanLength)
-	} else {
-		b.WriteString("            Expect.fail \"solve scenario missing expectation (no_plan or plan_length or plan_lines)\"")
-	}
-}
-
-func elmMoveMatcher(yields string) string {
-	switch yields {
-	case "extract_absorb":
-		return "case m of\n                    ExtractAbsorb _ -> True\n\n                    _ -> False"
-	case "free_pull":
-		return "case m of\n                    FreePull _ -> True\n\n                    _ -> False"
-	case "push":
-		return "case m of\n                    Push _ -> True\n\n                    _ -> False"
-	case "splice":
-		return "case m of\n                    Splice _ -> True\n\n                    _ -> False"
-	case "shift":
-		return "case m of\n                    Shift _ -> True\n\n                    _ -> False"
-	}
-	return "False"
-}
+// solver-side ops (`solve`, `enumerate_moves`) are TS-only as of
+// the unification on the canonical TS engine. The Elm BFS port is
+// being retired by TS_ELM_INTEGRATION; emitting Elm tests for
+// solver scenarios was testing legacy code on its way out. The TS
+// path stays via `conformance/fixtures.json` →
+// `test_engine_conformance.ts`.
 
 func elmStacks(ss []Stack, indent string) string {
 	if len(ss) == 0 {
