@@ -2,12 +2,15 @@ module Puzzles exposing (main)
 
 {-| Puzzles — a single-page gallery of curated LynRummy
 puzzles. The catalog endpoint hands us all puzzles + a single
-page-load session_id at boot. Panels instantiate Play
+page-load session_id at boot — the catalog fetch fires from
+init, no name-entry / login gate. Panels instantiate Play
 instances synchronously from the inline initial state —
 zero per-panel HTTP. You play within the gallery; drags and
-agent moves write to /gopher/puzzles/actions, which appends
-to lynrummy_elm_puzzle_actions keyed by (session_id,
-puzzle_name).
+agent moves write to the unified
+/gopher/lynrummy-elm/sessions/<id>/actions/<seq> endpoint
+with `puzzle_name` in the body so the server namespaces each
+puzzle's seq counter on disk under
+`actions/<puzzle_name>/<seq>.json`.
 
 Per-panel gameId is the puzzle name, which disambiguates DOM
 ids so multiple Play instances coexist on one page (board DOM
@@ -19,12 +22,16 @@ cards (puzzles are board-only). Page reload terminates the
 session by design; sessions and action rows persist for
 analysis but the in-memory attempt is single-use.
 
+Lyn Rummy is a solo game (see project_solo_game_decision.md)
+— there's no cross-user comparison surface, so the page does
+not collect a user name.
+
 -}
 
 import Browser
 import Dict exposing (Dict)
-import Html exposing (Html, button, div, h1, h2, input, label, p, text, textarea)
-import Html.Attributes exposing (disabled, placeholder, rows, style, type_, value)
+import Html exposing (Html, button, div, h1, h2, label, p, text, textarea)
+import Html.Attributes exposing (disabled, placeholder, rows, style, value)
 import Html.Events exposing (onClick, onInput)
 import Http
 import Json.Decode as Decode exposing (Decoder)
@@ -66,9 +73,7 @@ type alias Catalog =
 
 
 type alias Model =
-    { userName : String
-    , started : Bool
-    , finished : Bool
+    { finished : Bool
     , catalog : CatalogState
     , sessionId : Maybe Int
     , panels : Dict String Panel
@@ -119,9 +124,7 @@ type Panel
 
 
 type Msg
-    = UpdateName String
-    | SubmitName
-    | ClickFinish
+    = ClickFinish
     | CatalogFetched (Result Http.Error Catalog)
     | PlayMsg String MainMsg.Msg
     | UpdateAnnotation String String
@@ -164,15 +167,13 @@ main =
 
 init : () -> ( Model, Cmd Msg )
 init _ =
-    ( { userName = ""
-      , started = False
-      , finished = False
+    ( { finished = False
       , catalog = CatalogLoading
       , sessionId = Nothing
       , panels = Dict.empty
       , annotations = Dict.empty
       }
-    , Cmd.none
+    , fetchCatalog
     )
 
 
@@ -194,16 +195,6 @@ getAnnotation puzzleName model =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        UpdateName s ->
-            ( { model | userName = s }, Cmd.none )
-
-        SubmitName ->
-            if String.trim model.userName == "" then
-                ( model, Cmd.none )
-
-            else
-                ( { model | started = True }, fetchCatalog )
-
         ClickFinish ->
             ( { model | finished = True }, Cmd.none )
 
@@ -299,7 +290,7 @@ update msg model =
                                 { current | status = Sending }
                                 model.annotations
                       }
-                    , sendAnnotation sid model.userName name trimmed
+                    , sendAnnotation sid name trimmed
                     )
 
         AnnotationSent name (Ok ()) ->
@@ -377,8 +368,8 @@ fetchCatalog =
         }
 
 
-sendAnnotation : Int -> String -> String -> String -> Cmd Msg
-sendAnnotation sessionId userName puzzleName body =
+sendAnnotation : Int -> String -> String -> Cmd Msg
+sendAnnotation sessionId puzzleName body =
     Http.post
         { url = "/gopher/puzzles/annotate"
         , body =
@@ -386,7 +377,6 @@ sendAnnotation sessionId userName puzzleName body =
                 (Encode.object
                     [ ( "session_id", Encode.int sessionId )
                     , ( "puzzle_name", Encode.string puzzleName )
-                    , ( "user_name", Encode.string userName )
                     , ( "body", Encode.string body )
                     ]
                 )
@@ -413,20 +403,15 @@ view model =
             [ text
                 ("A gallery of hand-crafted LynRummy puzzles. Each "
                     ++ "loads ready to play. Scroll down after solving "
-                    ++ "one to reach the next. Drags get captured into "
-                    ++ "SQLite so the Python agent can study your "
-                    ++ "spatial choices."
+                    ++ "one to reach the next."
                 )
             ]
          ]
             ++ (if model.finished then
-                    [ viewFinishedMessage model ]
-
-                else if model.started then
-                    viewCatalog model ++ [ viewFinishButton ]
+                    [ viewFinishedMessage ]
 
                 else
-                    [ viewNameGate model ]
+                    viewCatalog model ++ [ viewFinishButton ]
                )
         )
 
@@ -453,8 +438,8 @@ viewFinishButton =
         ]
 
 
-viewFinishedMessage : Model -> Html Msg
-viewFinishedMessage model =
+viewFinishedMessage : Html Msg
+viewFinishedMessage =
     div
         [ style "margin-top" "40px"
         , style "padding" "32px"
@@ -465,56 +450,9 @@ viewFinishedMessage model =
         , style "font-size" "18px"
         ]
         [ p [ style "margin" "0 0 8px 0", style "font-weight" "bold" ]
-            [ text ("Thanks, " ++ String.trim model.userName ++ "! You are helping science!") ]
+            [ text "Thanks for playing!" ]
         , p [ style "margin" "0", style "font-size" "14px", style "color" "#555" ]
             [ text "(you may reload the browser to play again)" ]
-        ]
-
-
-viewNameGate : Model -> Html Msg
-viewNameGate model =
-    let
-        trimmed =
-            String.trim model.userName
-
-        canStart =
-            trimmed /= ""
-    in
-    div
-        [ style "border" "1px solid #ccc"
-        , style "border-radius" "6px"
-        , style "padding" "20px"
-        , style "margin-top" "28px"
-        , style "background" "#fafafa"
-        ]
-        [ p []
-            [ text
-                ("Your name will be included in the session labels so "
-                    ++ "we can tell your attempts apart from others' when "
-                    ++ "we study the captures later."
-                )
-            ]
-        , label [ style "display" "block", style "margin-bottom" "12px" ]
-            [ text "Your name: "
-            , input
-                [ type_ "text"
-                , value model.userName
-                , onInput UpdateName
-                , placeholder "first name is fine"
-                , style "font-size" "15px"
-                , style "padding" "4px 8px"
-                , style "margin-left" "8px"
-                , style "min-width" "200px"
-                ]
-                []
-            ]
-        , button
-            [ onClick SubmitName
-            , disabled (not canStart)
-            , style "padding" "8px 20px"
-            , style "font-size" "14px"
-            ]
-            [ text "Start" ]
         ]
 
 

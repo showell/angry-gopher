@@ -416,13 +416,19 @@ the agent.
 - Catalog: `games/lynrummy/puzzles/puzzles.json` is the
   committed gallery served at `/gopher/puzzles/catalog`.
   Currently frozen; refresh by writing a TS generator from
-  scratch when needed.
-- Elm gallery: a panel per puzzle, auto-creating its puzzle
-  session on page load. Human plays inline; drags capture
-  via the normal telemetry pipeline.
-- Per-attempt session data: each puzzle play creates a
-  session under `data/lynrummy-elm/sessions/<id>/` with the
-  puzzle's name in the meta.
+  scratch when needed. The catalog response carries a
+  freshly-allocated `session_id` that all panels share —
+  there is no sign-on / login gate (Lyn Rummy is solo).
+- Elm gallery: one Play instance per puzzle, sharing a single
+  page-load session id. Human plays inline; drags capture via
+  the normal telemetry pipeline.
+- Per-attempt session data: a single page-load session under
+  `data/lynrummy-elm/sessions/<id>/` hosts every puzzle on the
+  page. Actions and annotations land at
+  `actions/<puzzle_name>/<seq>.json` and
+  `annotations/<puzzle_name>/<seq>.json` so each puzzle's
+  per-Play seq counter (which restarts at 1) doesn't clobber
+  its siblings.
 
 ## Algorithm benchmarks
 

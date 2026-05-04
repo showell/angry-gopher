@@ -225,10 +225,16 @@ func lynrummyElmNewPuzzleSession(w http.ResponseWriter, r *http.Request) {
 
 // lynrummyElmWriteSessionFile is the universal write handler:
 // POST body → file at <session>/<sub>/<seqOrName>.json. No
-// parsing, no validation beyond "session must exist." If
-// `sub` is "actions" or "annotations" and the seq is a positive
-// integer, store as <seq>.json; otherwise store as <name>.json
-// verbatim.
+// parsing, no validation beyond "session must exist."
+//
+// One smart exception: if the body carries a puzzle_name
+// field, the file is namespaced under
+// <session>/<sub>/<puzzle_name>/<seqOrName>.json. Puzzle
+// gallery sessions host many puzzles in one session and each
+// Play instance restarts seq at 1, so a flat layout has
+// puzzle B's seq=1 clobbering puzzle A's. Body-driven
+// namespacing keeps the server dumb about which puzzles
+// exist while preserving per-puzzle isolation.
 func lynrummyElmWriteSessionFile(w http.ResponseWriter, r *http.Request, sessionID int64, sub, seqOrName string) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -253,13 +259,40 @@ func lynrummyElmWriteSessionFile(w http.ResponseWriter, r *http.Request, session
 		http.Error(w, "bad filename", http.StatusBadRequest)
 		return
 	}
+	// Peek for puzzle_name so we can namespace by puzzle.
+	// Body must already be JSON for the legitimate clients;
+	// a probe-decode failure just falls back to flat layout.
+	puzzleName := peekPuzzleName(body)
 	rel := filepath.Join(sub, name)
+	if puzzleName != "" {
+		rel = filepath.Join(sub, puzzleName, name)
+	}
 	if err := WriteSessionFile(sessionID, rel, body); err != nil {
 		http.Error(w, "write: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	fmt.Fprint(w, `{"ok":true}`)
+}
+
+// peekPuzzleName extracts the optional `puzzle_name` field
+// from a JSON request body. Returns "" if missing, empty,
+// or unsafe (path-traversal). Centralized here so action
+// and annotation writes share the same vetting.
+func peekPuzzleName(body []byte) string {
+	var probe struct {
+		PuzzleName string `json:"puzzle_name"`
+	}
+	if err := json.Unmarshal(body, &probe); err != nil {
+		return ""
+	}
+	if probe.PuzzleName == "" {
+		return ""
+	}
+	if strings.ContainsAny(probe.PuzzleName, "/\\") || strings.Contains(probe.PuzzleName, "..") {
+		return ""
+	}
+	return probe.PuzzleName
 }
 
 // --- Session reads ---

@@ -1,13 +1,21 @@
 // Puzzles — a standalone Elm app that hosts a vertical list
 // of curated LynRummy puzzles. Always within-a-turn: no dealer,
-// no deck, no turn cycling.
+// no deck, no turn cycling. No sign-on / login form: Lyn Rummy
+// is a solo game (see project_solo_game_decision.md), so the
+// "your name" gate that BOARD_LAB used for cross-user
+// comparison was retired.
 //
 // Go surface: serve the page (HTML chrome + bootstrap script),
 // serve the compiled puzzles.js, serve the puzzle catalog JSON
 // alongside a freshly-allocated page-load session id. Actions
-// and annotations now post to the unified
-// /gopher/lynrummy-elm/sessions/<id>/... endpoints (Go is dumb
-// file storage; Elm carries puzzle_name in the body when needed).
+// post to the unified /gopher/lynrummy-elm/sessions/<id>/...
+// endpoints; the body carries puzzle_name and the server
+// namespaces the on-disk file as
+// `actions/<puzzle_name>/<seq>.json` to keep one puzzle's seq
+// counter from clobbering another's. Annotations route through
+// the back-compat /gopher/puzzles/annotate shim below; same
+// namespacing applies, with a per-puzzle seq picked
+// server-side because the Elm side doesn't track it.
 
 package views
 
@@ -58,9 +66,11 @@ func HandlePuzzles(w http.ResponseWriter, r *http.Request) {
 }
 
 // puzzlesAnnotateShim handles POST /gopher/puzzles/annotate
-// with body {session_id, puzzle_name, user_name, body}. Writes
-// the body verbatim to a new annotations/<n>.json file under
-// the session dir.
+// with body {session_id, puzzle_name, body}. Server picks the
+// next seq under <session>/annotations/<puzzle_name>/ — Elm
+// doesn't track an annotation seq counter — and writes the
+// body verbatim. puzzle_name is required; missing or
+// path-unsafe values are rejected.
 func puzzlesAnnotateShim(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -72,19 +82,28 @@ func puzzlesAnnotateShim(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var probe struct {
-		SessionID int64 `json:"session_id"`
+		SessionID  int64  `json:"session_id"`
+		PuzzleName string `json:"puzzle_name"`
 	}
 	if err := json.Unmarshal(body, &probe); err != nil || probe.SessionID <= 0 {
 		http.Error(w, "decode body / missing session_id", http.StatusBadRequest)
+		return
+	}
+	if probe.PuzzleName == "" {
+		http.Error(w, "missing puzzle_name", http.StatusBadRequest)
+		return
+	}
+	if strings.ContainsAny(probe.PuzzleName, "/\\") || strings.Contains(probe.PuzzleName, "..") {
+		http.Error(w, "bad puzzle_name", http.StatusBadRequest)
 		return
 	}
 	if !SessionExists(probe.SessionID) {
 		http.NotFound(w, r)
 		return
 	}
-	files, _ := ListAnnotationFiles(probe.SessionID)
+	files, _ := ListPuzzleAnnotationFiles(probe.SessionID, probe.PuzzleName)
 	nextSeq := int64(len(files) + 1)
-	rel := "annotations/" + strconv.FormatInt(nextSeq, 10) + ".json"
+	rel := "annotations/" + probe.PuzzleName + "/" + strconv.FormatInt(nextSeq, 10) + ".json"
 	if err := WriteSessionFile(probe.SessionID, rel, body); err != nil {
 		http.Error(w, "write: "+err.Error(), http.StatusInternalServerError)
 		return

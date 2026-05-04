@@ -12,9 +12,15 @@
 //     next-session-id.txt
 //     lynrummy-elm/
 //       sessions/<id>/
-//         meta.json                 # {label, deck_seed, created_at, [puzzle_name, initial_state]}
-//         actions/<seq>.json        # one file per action; Elm assigns seq
-//         annotations/<seq>.json    # one file per annotation
+//         meta.json                              # {label, deck_seed, created_at, [puzzle_name, initial_state]}
+//         actions/<seq>.json                     # full-game action; Elm assigns seq
+//         actions/<puzzle_name>/<seq>.json       # puzzle action; per-puzzle seq from Elm Play instance
+//         annotations/<puzzle_name>/<seq>.json   # puzzle annotation; per-puzzle seq counter on server
+//
+// Puzzle gallery sessions host multiple puzzles per
+// page-load; namespacing actions and annotations by
+// puzzle_name keeps each puzzle's seq=1 from clobbering its
+// siblings.
 //
 // Helpers below are deliberately thin — read/write/list with
 // auto-mkdirs. Handlers compose them.
@@ -138,6 +144,13 @@ func ListActionFiles(sessionID int64) ([]string, error) {
 // ListAnnotationFiles is the puzzle-side counterpart.
 func ListAnnotationFiles(sessionID int64) ([]string, error) {
 	return listSessionSubdir(sessionID, "annotations")
+}
+
+// ListPuzzleAnnotationFiles returns sorted annotation
+// filenames under <session>/annotations/<puzzleName>/. Used
+// to pick the next seq for a per-puzzle annotation write.
+func ListPuzzleAnnotationFiles(sessionID int64, puzzleName string) ([]string, error) {
+	return listSessionSubdir(sessionID, filepath.Join("annotations", puzzleName))
 }
 
 func listSessionSubdir(sessionID int64, sub string) ([]string, error) {
