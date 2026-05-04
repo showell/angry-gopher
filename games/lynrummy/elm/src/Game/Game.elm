@@ -103,15 +103,12 @@ applyCompleteTurn : BoardBounds -> GameState a -> ( GameState a, CompleteTurnOut
 applyCompleteTurn bounds state =
     case Referee.validateTurnComplete state.board bounds of
         Err err ->
-            -- Per memory/feedback_dont_paper_over_problems.md: a
-            -- failed turn-validate during replay is the bridge bug
-            -- the agent transcript needs to surface, not swallow.
-            -- Log the referee's rejection reason loudly, then PROCEED
-            -- to applyValidTurn anyway so the cascade is visible
-            -- (active player still switches, deck still deals, etc).
-            -- Silent no-op was how "9D appears spontaneously" hid
-            -- itself in the seed-44 replay — the no-op left turn-1's
-            -- state in place so turn-2 actions cascaded weirdly.
+            -- Referee said no — the canonical contract is "transition
+            -- did not happen." Return state unchanged with a Failure
+            -- outcome so callers can branch on it (Main/Play.elm's
+            -- clickCompleteTurn already does). Log loudly per
+            -- memory/feedback_dont_paper_over_problems.md so the
+            -- rejection surfaces; never silently swallow it.
             let
                 _ =
                     Debug.log
@@ -119,11 +116,16 @@ applyCompleteTurn bounds state =
                             ++ Referee.refereeStageToString err.stage
                             ++ "): "
                             ++ err.message
-                            ++ " — applying turn anyway so the bridge bug surfaces in the cascade"
                         )
                         ()
             in
-            applyValidTurn state
+            ( state
+            , { result = Failure
+              , turnScore = 0
+              , cardsDrawn = 0
+              , dealtCards = []
+              }
+            )
 
         Ok () ->
             applyValidTurn state
