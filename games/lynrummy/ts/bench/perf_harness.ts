@@ -1,21 +1,16 @@
 // perf_harness.ts — load find_play snapshots, benchmark.
 //
-// TS port of python/perf_harness.py. Capture snapshots with
-// `agent_game.py --capture FILE` (still Python-driven for now); then
-// run this harness against the JSONL file.
-//
+// Reads a JSONL file of captured `find_play` snapshots and:
 //   - lists the slowest cases by recorded total_wall;
 //   - re-runs each top-N case --repeats times and reports median wall
-//     (independent of network jitter — only exercises the planner);
-//   - flags runaways (any projection that hit the state budget).
+//     (independent of network jitter — only exercises the planner).
 //
-// Skipped vs the Python original:
-//   - cProfile output. Use `node --prof bench/perf_harness.ts ...`
-//     out-of-band when needed, then `node --prof-process` on the log.
-//   - Deep runaway diagnostics (`trouble_histogram`, `level_widths`,
-//     `sample_states`). The TS BFS doesn't yet emit those; they were
-//     Python-internal. Add later if a real runaway-class case lands
-//     and we need to debug it.
+// For deeper profiling: `node --prof bench/perf_harness.ts ...` then
+// `node --prof-process` on the log.
+//
+// NOTE: the original snapshot-capture mechanism was Python-side and
+// retired with the Python subtree. Until a TS-side capture lands,
+// this harness has no input source; kept against the day it's needed.
 //
 // Usage:
 //   node bench/perf_harness.ts /tmp/perf_snapshots.jsonl
@@ -32,7 +27,6 @@ interface CapturedProjection {
   cards: number[][];
   wall: number;
   found_plan: boolean;
-  exhaustions?: { hit_max_states?: boolean; cap?: number; expansions?: number; seen_count?: number }[];
 }
 
 interface CapturedSnapshot {
@@ -74,7 +68,6 @@ interface Summary {
   boardSize: number;
   foundPlay: boolean;
   nProjections: number;
-  runaways: { kind: string; cards: Card[]; cap: number; expansions: number; seen: number }[];
 }
 
 function timeOne(rec: CapturedSnapshot, repeats: number, maxStates: number): { walls: number[]; lastStats: PlayStats } {
@@ -91,21 +84,7 @@ function timeOne(rec: CapturedSnapshot, repeats: number, maxStates: number): { w
   return { walls, lastStats };
 }
 
-function summarize(rec: CapturedSnapshot, walls: number[], stats: PlayStats): Summary {
-  const runaways: Summary["runaways"] = [];
-  for (const proj of stats.projections) {
-    for (const ex of proj.exhaustions) {
-      if (ex.hitMaxStates) {
-        runaways.push({
-          kind: proj.kind,
-          cards: [...proj.cards],
-          cap: ex.cap,
-          expansions: ex.expansions,
-          seen: ex.seenCount,
-        });
-      }
-    }
-  }
+function summarize(rec: CapturedSnapshot, walls: number[], _stats: PlayStats): Summary {
   return {
     capturedWall: rec.total_wall,
     medianWall: median(walls),
@@ -115,12 +94,10 @@ function summarize(rec: CapturedSnapshot, walls: number[], stats: PlayStats): Su
     boardSize: rec.board.length,
     foundPlay: rec.found_play,
     nProjections: rec.projections.length,
-    runaways,
   };
 }
 
 function printSummary(rank: number, s: Summary): void {
-  const flag = s.runaways.length > 0 ? " ⚠ RUNAWAY" : "";
   console.log(
     `  #${String(rank).padStart(2, " ")} captured=${s.capturedWall.toFixed(2).padStart(5)}s ` +
       `median=${s.medianWall.toFixed(2).padStart(5)}s ` +
@@ -129,12 +106,8 @@ function printSummary(rank: number, s: Summary): void {
       `hand=${String(s.handSize).padStart(2)} ` +
       `board=${String(s.boardSize).padStart(2)} ` +
       `projs=${String(s.nProjections).padStart(2)} ` +
-      `${s.foundPlay ? "+plan" : "STUCK"}${flag}`,
+      `${s.foundPlay ? "+plan" : "STUCK"}`,
   );
-  for (const r of s.runaways) {
-    const cards = r.cards.map(c => `${c[0]}/${c[1]}/${c[2]}`).join(", ");
-    console.log(`      ⚠ runaway: ${r.kind} cards=[${cards}] cap=${r.cap} expansions=${r.expansions} seen=${r.seen}`);
-  }
 }
 
 function printProjectionBreakdown(rec: CapturedSnapshot): void {

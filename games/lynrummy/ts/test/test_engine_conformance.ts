@@ -23,8 +23,8 @@ import { fileURLToPath } from "node:url";
 
 import type { Card } from "../src/rules/card.ts";
 import { parseCardLabel } from "../src/rules/card.ts";
-// Engine conformance now exercises engine_v2 (the engine bridge.ts /
-// hand_play.ts / agent_player.ts all use). The plan-line equality
+// Engine conformance now exercises engine_v2 (the engine `hand_play.ts`
+// and `agent_player.ts` use). The plan-line equality
 // contract loosens to "any plan that drives the augmented board to
 // victory, length ≤ pinned" — engine_v2 frequently finds different
 // valid plans than the bfs.ts plan-lines the JSON pins. The

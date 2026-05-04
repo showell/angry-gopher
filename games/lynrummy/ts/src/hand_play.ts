@@ -37,16 +37,6 @@ import { classifyStack } from "./classified_card_stack.ts";
 import type { RawBuckets } from "./buckets.ts";
 import { solveStateWithDescs } from "./engine_v2.ts";
 
-// Per-cap exhaustion records were a bfs.ts iterative-deepening artifact;
-// engine_v2 (A*) doesn't have caps. Kept as a wire-format-stable empty
-// array so bridge.ts stats callers don't break.
-export interface CapExhaustion {
-  readonly cap: number;
-  readonly hitMaxStates: boolean;
-  readonly expansions: number;
-  readonly seenCount: number;
-}
-
 // Default BFS state budget per projection. Mirrors python
 // `_PROJECTION_MAX_STATES`. Lowered from 200000 → 5000 in Python on
 // 2026-04-25 after the doomed-third + state-level doomed-growing
@@ -72,7 +62,6 @@ export interface ProjectionRecord {
   readonly cards: readonly Card[];
   readonly wallMs: number;
   readonly foundPlan: boolean;
-  readonly exhaustions: readonly CapExhaustion[];
 }
 
 export interface PlayStats {
@@ -251,7 +240,6 @@ function tryProjection(
     cards,
     wallMs,
     foundPlan: plan !== null,
-    exhaustions: [],
   });
   return plan === null ? null : plan.map(p => p.line);
 }

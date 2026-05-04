@@ -46,6 +46,9 @@ full reasoning.
   the 6 standing seeds to deck-low.
 - `bench/perf_harness.ts`, `bench/budget_sweep.ts`,
   `bench/bench_timing.ts` — auxiliary measurement drivers.
+- `bench/bench_outer_shell.ts` — singleton-only vs full
+  outer-shell mode comparison on a fixed 60-hand corpus;
+  has its own gold (`bench/bench_outer_shell_gold.txt`).
 
 The one-shot diagnostic benches that lived alongside the
 2026-05-02 engine_v2 ramp-up have been retired; commit

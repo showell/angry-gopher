@@ -193,8 +193,8 @@ export function solveTurn(
 
 // --- Production shim --------------------------------------------------------
 //
-// `solveStateWithDescs` matches `bfs.ts`'s entry-point signature so callers
-// (bridge.ts, hand_play.ts, conformance harness, benches) can swap engines by
+// `solveStateWithDescs` matches the legacy `bfs.ts` entry-point signature so
+// callers (`hand_play.ts`, conformance harness, benches) can swap engines by
 // import path alone. Auto-classifies raw input, short-circuits trouble-cap
 // + victory states, then dispatches to `solveTurn` (A*).
 //
