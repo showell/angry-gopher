@@ -19,6 +19,12 @@
 // HandNormal (state=0). Animation states (FreshlyPlayed, FreshlyDrawn)
 // are runtime UI concerns Elm sets locally during gameplay; from a
 // fresh-replay perspective they don't matter.
+//
+// Public surface:
+//   - `writeSession` — write a full agent self-play session directory.
+//   - `encodeInitialState` — encode (board, hands, deck) to the
+//     Wire.initialStateDecoder JSON shape; reused by tools/generate_puzzles.ts
+//     for board-only puzzle catalogs.
 
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -124,8 +130,17 @@ function jsonStack(s: BoardStack): JsonCardStack {
 }
 
 // --- Initial-state encoder -------------------------------------------
+//
+// `encodeInitialState` is exported (used by tools/generate_puzzles.ts
+// for board-only puzzles, where hands and deck come in empty). It
+// produces the Wire.initialStateDecoder-compatible JSON shape — the
+// same shape `views/lynrummy_elm.go` writes for live human sessions.
+// Callers control the puzzle-vs-game distinction by what they pass:
+// puzzles pass `[[], []]` for hands and `[]` for deck; live sessions
+// pass real ones. No sibling encoder needed — the surface is the same
+// shape, only the inputs differ.
 
-interface RemoteStateJson {
+export interface RemoteStateJson {
   board: JsonCardStack[];
   hands: JsonHand[];
   scores: number[];
@@ -137,7 +152,7 @@ interface RemoteStateJson {
   turn_start_board_score: number;
 }
 
-function encodeInitialState(
+export function encodeInitialState(
   board: readonly BoardStack[],
   hands: readonly (readonly Card[])[],
   deck: readonly Card[],

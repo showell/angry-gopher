@@ -1,11 +1,14 @@
 # LynRummy — TypeScript agent
 
+> **Read alongside:** [`ENGINE_V2.md`](./ENGINE_V2.md) (solver
+> design, bench inventory) and [`PHYSICAL_PLAN.md`](./PHYSICAL_PLAN.md)
+> (gesture-layer doctrine). This README is the entry point; those
+> two carry the load-bearing detail.
+
 **Status:** Canonical agent. Solver, verb→primitive pipeline,
 spatial-execution layer, full-game player, transcript writer
-all live here. The Python solver retired during the migration;
-the legacy `Game.Agent.*` Elm BFS port is on life-support
-until `TS_ELM_INTEGRATION` lands.
-**As of:** 2026-05-04.
+all live here. The legacy `Game.Agent.*` Elm BFS port is on
+life-support until `TS_ELM_INTEGRATION` lands.
 
 ## What this is
 
@@ -49,20 +52,16 @@ asks for any of these, the work happens here:
   + Elm-replayable transcript writing live in this subtree.
   Driver: `npm run bench:end-of-deck -- --write-transcript [seeds...]`.
   Output: `data/lynrummy-elm/sessions/<id>/{meta.json, actions/*.json}`,
-  ready for Elm to replay at the URL the Go server exposes. The
-  Python subsystem does NOT generate transcripts.
+  ready for Elm to replay at the URL the Go server exposes.
 - **Running the conformance suite.** The canonical gate
   `ops/check-conformance` runs `cmd/fixturegen` (Go, DSL →
   fixtures), then `npm test` in this subtree (leaf + engine +
   verbs + physical_plan + replay walkthroughs + agent self-play),
-  then Elm `check.sh`. Python's `check.sh` is a separate
-  parallel-implementation sanity check, NOT part of the canonical
-  gate.
+  then Elm `check.sh`.
 - **Running performance tests.** All perf harnesses live in
   `bench/`: `bench:check-baseline` (timing regression gate),
   `bench:end-of-deck` (full-game perf, 6 seeds), and the
-  auxiliary measurement drivers. There are no Python perf
-  benches in the active loop.
+  auxiliary measurement drivers documented in `ENGINE_V2.md`.
 
 ## Layout
 
@@ -82,6 +81,7 @@ asks for any of these, the work happens here:
 | `src/geometry.ts` | Geometry constants, `findOpenLoc`, `findViolation`, `findCrowding`. |
 | `src/agent_player.ts` | Full-game player (2-hand alternating, deck-low termination). |
 | `src/transcript.ts` | Elm-replayable JSON session writer. |
+| `tools/generate_puzzles.ts` | Self-play-driven puzzle catalog generator. Emits `games/lynrummy/puzzles/puzzles.json` (5 puzzles where engine_v2 returns a 3-line plan, board ≥30 cards). |
 
 ## Tests
 
