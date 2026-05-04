@@ -11,6 +11,7 @@ Extracted 2026-04-19 from the pre-split `Main.elm` monolith.
 
 import Browser.Dom
 import Http
+import Json.Encode as Encode
 import Game.Rules.Card exposing (Card)
 import Game.CardStack exposing (CardStack)
 import Main.State exposing (ActionLogBundle, Point)
@@ -70,3 +71,4 @@ type Msg
     | ReplayFrame Time.Posix
     | ClickReplayPauseToggle
     | ActionLogFetched (Result Http.Error ActionLogBundle)
+    | EngineSolveResult Encode.Value

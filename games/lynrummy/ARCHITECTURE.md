@@ -325,7 +325,10 @@ All build, launch, and test ops go through `ops/` scripts
 
 - `ops/start` — kill stale processes, rebuild Go, recompile
   Elm, start both servers, wait for ready.
-- `ops/build_elm` — compile Main.elm + Puzzles.elm bundles.
+- `ops/build_elm` — bundle the TS engine to `engine.js` (via
+  `ops/build_engine_js`), then compile Main.elm + Puzzles.elm.
+  Full build steps documented in
+  [`BUILDING.md`](./BUILDING.md).
 - `ops/check-conformance` — **the commit gate for Elm
   work.** Runs fixturegen + TS conformance + elm-test +
   elm-review. Do not commit Elm without a passing run.

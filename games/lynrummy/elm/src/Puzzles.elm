@@ -1,4 +1,4 @@
-module Puzzles exposing (main)
+port module Puzzles exposing (main)
 
 {-| Puzzles — a single-page gallery of curated LynRummy
 puzzles. The catalog endpoint hands us all puzzles + a single
@@ -43,6 +43,24 @@ import Json.Encode as Encode
 import Main.Msg as MainMsg
 import Main.Play as Play
 import Main.State as MainState
+
+
+
+-- PORTS
+--
+-- TS_ELM_INTEGRATION Phase 1: the puzzles hint button delegates
+-- to the canonical TS engine, bundled to JS at /gopher/puzzles/
+-- engine.js. Play.update emits an `EngineSolveRequested` Output
+-- carrying the request payload; we forward it to JS via
+-- `engineRequest`. JS calls into `LynRummyEngine.solveBoard`
+-- and ships the result back through `engineResponse`, which
+-- routes by `puzzle_name` to the right Play instance.
+
+
+port engineRequest : Encode.Value -> Cmd msg
+
+
+port engineResponse : (Encode.Value -> msg) -> Sub msg
 
 
 
@@ -134,6 +152,7 @@ type Msg
     | UpdateAnnotation String String
     | SendAnnotation String
     | AnnotationSent String (Result Http.Error ())
+    | EngineResponse Encode.Value
 
 
 
@@ -241,16 +260,36 @@ update msg model =
             case Dict.get name model.panels of
                 Just (Playing p) ->
                     let
-                        ( p2, c, _ ) =
+                        ( p2, c, output ) =
                             Play.update pmsg p
+
+                        outputCmd =
+                            handlePlayOutput output
                     in
                     ( { model
                         | panels = Dict.insert name (Playing p2) model.panels
                       }
-                    , Cmd.map (PlayMsg name) c
+                    , Cmd.batch
+                        [ Cmd.map (PlayMsg name) c
+                        , outputCmd
+                        ]
                     )
 
                 _ ->
+                    ( model, Cmd.none )
+
+        EngineResponse value ->
+            -- The JS glue echoes our `puzzle_name` field back on
+            -- every response; route the payload to that panel's
+            -- Play instance via an `EngineSolveResult` Msg.
+            case Decode.decodeValue (Decode.field "puzzle_name" Decode.string) value of
+                Ok name ->
+                    update (PlayMsg name (MainMsg.EngineSolveResult value)) model
+
+                Err _ ->
+                    -- Malformed response (no puzzle_name) — drop it.
+                    -- Should be impossible: glue always sets it from
+                    -- the request. Logging would be noise.
                     ( model, Cmd.none )
 
         UpdateAnnotation name text ->
@@ -347,17 +386,38 @@ httpErrorToString err =
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    Dict.toList model.panels
-        |> List.filterMap
-            (\( name, panel ) ->
-                case panel of
-                    Playing p ->
-                        Just (Sub.map (PlayMsg name) (Play.subscriptions p))
+    let
+        panelSubs =
+            Dict.toList model.panels
+                |> List.filterMap
+                    (\( name, panel ) ->
+                        case panel of
+                            Playing p ->
+                                Just (Sub.map (PlayMsg name) (Play.subscriptions p))
 
-                    _ ->
-                        Nothing
-            )
-        |> Sub.batch
+                            _ ->
+                                Nothing
+                    )
+    in
+    Sub.batch (engineResponse EngineResponse :: panelSubs)
+
+
+{-| Translate a Play-side `Output` into a host-level Cmd. Today
+the only non-no-op case is `EngineSolveRequested`, which fires
+the `engineRequest` port. `SessionChanged` is ignored here —
+Puzzles allocates its session id at catalog GET, never mid-play.
+-}
+handlePlayOutput : Play.Output -> Cmd Msg
+handlePlayOutput output =
+    case output of
+        Play.NoOutput ->
+            Cmd.none
+
+        Play.SessionChanged _ ->
+            Cmd.none
+
+        Play.EngineSolveRequested payload ->
+            engineRequest payload
 
 
 

@@ -1,0 +1,40 @@
+#!/bin/bash
+# CANONICAL DEV-LOOP SCRIPT — DO NOT REINVENT.
+# Before writing a new ops/* script or composing an ad-hoc
+# shell command for build / launch / test / regen, run
+# `ops/list` to see what already exists.
+#
+# Bundle the LynRummy TypeScript engine into a single browser-
+# loadable JS file at games/lynrummy/elm/engine.js, served by the
+# /gopher/puzzles/engine.js route. The Elm puzzles client calls
+# the bundle via Elm ports + a thin JS glue (engine_glue.js).
+#
+# Entry point: games/lynrummy/ts/src/engine_entry.ts. Esbuild
+# resolves the full closure (engine_v2 + hand_play + buckets +
+# classified_card_stack + rules/* + …) into one IIFE that exposes
+# a single global, `LynRummyEngine`.
+#
+# esbuild is invoked via `npx --yes` so no project-level install
+# is required. First run downloads esbuild into npm's cache; later
+# runs are local.
+set -e
+
+source "$(dirname "$0")/_paths.sh"
+
+ENTRY="$GOPHER_DIR/games/lynrummy/ts/src/engine_entry.ts"
+OUT="$GOPHER_DIR/games/lynrummy/elm/engine.js"
+
+if ! command -v npx >/dev/null 2>&1; then
+    echo "Error: npx not found — install Node.js (npm comes with it)"
+    exit 1
+fi
+
+npx --yes esbuild "$ENTRY" \
+    --bundle \
+    --format=iife \
+    --global-name=LynRummyEngine \
+    --platform=browser \
+    --target=es2022 \
+    --outfile="$OUT" \
+    >/dev/null 2>&1 \
+    || { echo "Warning: engine.js bundle failed"; exit 1; }

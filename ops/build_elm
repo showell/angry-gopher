@@ -8,14 +8,18 @@
 # Compile the LynRummy Elm clients (Main.elm + Puzzles.elm) into
 # games/lynrummy/elm/{elm.js, puzzles.js}, the JS bundles served
 # by /gopher/lynrummy-elm/elm.js and /gopher/puzzles/puzzles.js.
+# Also bundles the TS engine (engine.js) — the puzzles client
+# loads it alongside puzzles.js and calls into it via Elm ports.
 #
-# Both entry points share the same elm.json + node_modules so a
+# Both Elm entry points share the same elm.json + node_modules so a
 # single elm install covers both compiles. Failures are warnings,
 # not fatal — the matching HTTP route 404s with an actionable
 # error pointing back here.
 set -e
 
 source "$(dirname "$0")/_paths.sh"
+
+"$GOPHER_DIR/ops/build_engine_js"
 
 cd "$GOPHER_DIR/games/lynrummy/elm"
 

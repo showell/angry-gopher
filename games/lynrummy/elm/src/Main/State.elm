@@ -137,6 +137,18 @@ type alias Model =
     -- puzzle, stored at bootstrap so Reset can restore it
     -- without a server round-trip. Nothing for full-game sessions.
     , puzzleInitialState : Maybe RemoteState
+
+    -- The id of the engine port request currently in flight (if
+    -- any). Set when the puzzle hint button fires `engineRequest`;
+    -- cleared by the matching `engineResponse`. Used to discard
+    -- stale responses (e.g. if the user clicks hint twice rapidly).
+    , pendingEngineRequest : Maybe Int
+
+    -- Monotonic counter for engine port request ids. Incremented
+    -- each time we fire a request so the response can be matched
+    -- back. Per-Play-instance — separate panels' counters live in
+    -- separate models.
+    , nextEngineRequestId : Int
     }
 
 
@@ -641,4 +653,6 @@ baseModel =
     , hideTurnControls = False
     , agentProgram = Nothing
     , puzzleInitialState = Nothing
+    , pendingEngineRequest = Nothing
+    , nextEngineRequestId = 1
     }

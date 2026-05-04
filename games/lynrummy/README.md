@@ -13,6 +13,10 @@ system-wide Lyn Rummy architecture document. It explains the
 event-driven model, the per-actor log story, and how Elm and
 Python relate.
 
+Build steps (Elm compile, TS engine bundle, fixturegen) live
+in [`BUILDING.md`](./BUILDING.md). The standard rebuild after
+editing any `.elm` or `ts/src/*.ts` file is `ops/build_elm`.
+
 ## Subsystems
 
 - `ts/` — **The TypeScript agent.** Solver (`engine_v2.ts`),

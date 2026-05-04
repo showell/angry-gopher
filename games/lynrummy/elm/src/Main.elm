@@ -61,6 +61,13 @@ update msg model =
                 ]
             )
 
+        Play.EngineSolveRequested _ ->
+            -- Full-game host doesn't wire the engine port (only
+            -- the Puzzles host does in TS_ELM_INTEGRATION Phase 1).
+            -- Play guards the request behind `puzzleName /= Nothing`
+            -- so this case is structurally unreachable from Main.elm.
+            ( next, cmd )
+
 
 view : Model -> Html Msg
 view model =

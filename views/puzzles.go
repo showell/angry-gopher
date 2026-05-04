@@ -46,6 +46,16 @@ import (
 // games/lynrummy/elm/ directory.
 var PuzzlesJSPath = "games/lynrummy/elm/puzzles.js"
 
+// EngineJSPath — esbuild-bundled TS engine. Built by
+// ops/build_engine_js (called transitively by ops/build_elm).
+// Exposes the global `LynRummyEngine` for the puzzles hint
+// flow (TS_ELM_INTEGRATION Phase 1).
+var EngineJSPath = "games/lynrummy/elm/engine.js"
+
+// EngineGlueJSPath — small JS shim that bridges Elm ports to
+// the engine bundle. Snake_case ↔ camelCase at the wire boundary.
+var EngineGlueJSPath = "games/lynrummy/elm/engine_glue.js"
+
 // PuzzlesCatalogPath — the catalog JSON the Puzzles gallery
 // loads. Frozen as of 2026-05-04 (the legacy Python generator
 // retired with the rest of the python/ subtree); refresh by
@@ -61,6 +71,10 @@ func HandlePuzzles(w http.ResponseWriter, r *http.Request) {
 		puzzlesPage(w)
 	case sub == "puzzles.js":
 		puzzlesJS(w)
+	case sub == "engine.js":
+		serveJS(w, EngineJSPath, "engine.js not found — run `ops/build_engine_js`")
+	case sub == "engine_glue.js":
+		serveJS(w, EngineGlueJSPath, "engine_glue.js not found — check the file exists at "+EngineGlueJSPath)
 	case sub == "catalog":
 		puzzlesCatalog(w)
 	case strings.HasPrefix(sub, "sessions/"):
@@ -189,17 +203,26 @@ func puzzlesPage(w http.ResponseWriter) {
   <a href="/gopher/puzzles/">Puzzles</a>
 </div>
 <div id="root"></div>
+<script src="/gopher/puzzles/engine.js"></script>
 <script src="/gopher/puzzles/puzzles.js"></script>
+<script src="/gopher/puzzles/engine_glue.js"></script>
 <script>
-  Elm.Puzzles.init({ node: document.getElementById("root") });
+  var app = Elm.Puzzles.init({ node: document.getElementById("root") });
+  EngineGlue.attach(app);
 </script>
 </body></html>`)
 }
 
 func puzzlesJS(w http.ResponseWriter) {
-	data, err := os.ReadFile(PuzzlesJSPath)
+	serveJS(w, PuzzlesJSPath, "puzzles.js not found — run `elm make src/Puzzles.elm --output=puzzles.js` in games/lynrummy/elm/")
+}
+
+// serveJS is the small read-and-write shape shared by every JS
+// asset Puzzles serves (puzzles.js, engine.js, engine_glue.js).
+func serveJS(w http.ResponseWriter, path string, missingMsg string) {
+	data, err := os.ReadFile(path)
 	if err != nil {
-		http.Error(w, "puzzles.js not found — run `elm make src/Puzzles.elm --output=puzzles.js` in games/lynrummy/elm/", http.StatusNotFound)
+		http.Error(w, missingMsg, http.StatusNotFound)
 		return
 	}
 	w.Header().Set("Content-Type", "application/javascript; charset=utf-8")

@@ -32,6 +32,8 @@ DOM ids for multi-embedding.
 import Browser.Dom
 import Browser.Events
 import Game.Agent.Bfs as Bfs
+import Game.CardStack exposing (CardStack)
+import Game.Rules.Card as Card
 import Game.Agent.GeometryPlan as AgentGeometry
 import Game.Agent.Move as AgentMove exposing (Move)
 import Game.Agent.Verbs as AgentVerbs
@@ -127,6 +129,7 @@ no-op.
 type Output
     = NoOutput
     | SessionChanged Int
+    | EngineSolveRequested Encode.Value
 
 
 
@@ -291,10 +294,13 @@ update msg model =
             withNoOutput (boardRectReceived result model)
 
         ClickHint ->
-            withNoOutput (clickHint model)
+            clickHint model
 
         ClickAgentPlay ->
             withNoOutput (clickAgentPlay model)
+
+        EngineSolveResult value ->
+            withNoOutput (handleEngineSolveResult value model)
 
 
 withNoOutput : ( Model, Cmd Msg ) -> ( Model, Cmd Msg, Output )
@@ -573,17 +579,18 @@ boardRectReceived result model =
             ( model, Cmd.none )
 
 
-clickHint : Model -> ( Model, Cmd Msg )
+clickHint : Model -> ( Model, Cmd Msg, Output )
 clickHint model =
     -- In puzzle context the active hand is always empty, so the
-    -- hand-driven hint has nothing to say. Fall back to BFS:
-    -- solve the current board, surface the first planned move
-    -- as a status nudge.
+    -- hand-driven hint has nothing to say. Defer to the canonical
+    -- TS engine via the host's port pair (Phase 1 of
+    -- TS_ELM_INTEGRATION). Full-game keeps the legacy hand-driven
+    -- hint until later phases.
     if model.puzzleName /= Nothing then
-        bfsHint model
+        requestEngineHint model
 
     else
-        handHint model
+        withNoOutput (handHint model)
 
 
 handHint : Model -> ( Model, Cmd Msg )
@@ -609,41 +616,169 @@ handHint model =
             )
 
 
-bfsHint : Model -> ( Model, Cmd Msg )
-bfsHint model =
-    case Bfs.solveBoard model.board of
-        Just (firstMove :: _) ->
+{-| Compose the engine port request payload and ship it through
+the `EngineSolveRequested` Output channel. The host (Puzzles)
+forwards it to JS via the `engineRequest` port. Status flips to
+"Thinking…" immediately so the user sees feedback while the
+engine works.
+
+The request id is monotonic per-Play-instance; the matching
+response carries the same id and we discard mismatches as
+stale (e.g. the user clicked hint twice in quick succession).
+-}
+requestEngineHint : Model -> ( Model, Cmd Msg, Output )
+requestEngineHint model =
+    let
+        reqId =
+            model.nextEngineRequestId
+
+        puzzleName =
+            Maybe.withDefault "" model.puzzleName
+
+        payload =
+            Encode.object
+                [ ( "request_id", Encode.int reqId )
+                , ( "op", Encode.string "solve_board" )
+                , ( "puzzle_name", Encode.string puzzleName )
+                , ( "board", encodeBoardForEngine model.board )
+                ]
+    in
+    ( { model
+        | hintedCards = []
+        , pendingEngineRequest = Just reqId
+        , nextEngineRequestId = reqId + 1
+        , status = { text = "Thinking…", kind = Inform }
+      }
+    , Cmd.none
+    , EngineSolveRequested payload
+    )
+
+
+{-| Encode the live board into the snake_case shape the TS
+engine bundle expects on the JS side: a list of stacks, each a
+list of `{value, suit, origin_deck}` card objects. The JS glue
+translates these into Card tuples before invoking
+`LynRummyEngine.solveBoard`. Reuses `Card.encodeCard` so the
+shape stays in lockstep with the wire convention.
+-}
+encodeBoardForEngine : List CardStack -> Encode.Value
+encodeBoardForEngine board =
+    Encode.list
+        (\stack ->
+            Encode.list Card.encodeCard
+                (List.map .card stack.boardCards)
+        )
+        board
+
+
+{-| Decode an `engineResponse` port payload and apply it to the
+status bar. Carries `request_id`, `ok`, and `plan`. Stale
+responses (request id ≠ pendingEngineRequest) are dropped on
+the floor.
+
+`plan` is null when the engine couldn't find a plan within
+budget; otherwise it's a non-empty list of PlanLine objects.
+We surface the first line as the hint, matching the legacy
+`AgentMove.describe firstMove` shape.
+-}
+handleEngineSolveResult : Encode.Value -> Model -> ( Model, Cmd Msg )
+handleEngineSolveResult value model =
+    case Decode.decodeValue engineResponseDecoder value of
+        Ok response ->
+            if model.pendingEngineRequest == Just response.requestId then
+                applyEngineResponse response model
+
+            else
+                ( model, Cmd.none )
+
+        Err err ->
+            let
+                _ =
+                    Debug.log "engineResponse decode err" err
+            in
             ( { model
-                | hintedCards = []
-                , status =
-                    { text = "Hint: " ++ AgentMove.describe firstMove
-                    , kind = Inform
+                | status =
+                    { text = "Engine response could not be decoded — see console."
+                    , kind = Scold
                     }
               }
             , Cmd.none
             )
 
-        Just [] ->
-            ( { model
-                | hintedCards = []
-                , status =
-                    { text = "Board is already clean — nothing to do."
-                    , kind = Inform
-                    }
-              }
-            , Cmd.none
-            )
 
-        Nothing ->
-            ( { model
-                | hintedCards = []
-                , status =
-                    { text = "BFS found no plan within budget."
-                    , kind = Inform
-                    }
-              }
-            , Cmd.none
+type alias EngineResponse =
+    { requestId : Int
+    , ok : Bool
+    , plan : Maybe (List String)
+    , error : Maybe String
+    }
+
+
+engineResponseDecoder : Decoder EngineResponse
+engineResponseDecoder =
+    Decode.map4 EngineResponse
+        (Decode.field "request_id" Decode.int)
+        (Decode.field "ok" Decode.bool)
+        (Decode.maybe
+            (Decode.field "plan"
+                (Decode.nullable
+                    (Decode.list (Decode.field "line" Decode.string))
+                )
             )
+            |> Decode.map (Maybe.andThen identity)
+        )
+        (Decode.maybe (Decode.field "error" Decode.string))
+
+
+applyEngineResponse : EngineResponse -> Model -> ( Model, Cmd Msg )
+applyEngineResponse response model =
+    let
+        cleared =
+            { model | pendingEngineRequest = Nothing, hintedCards = [] }
+    in
+    if not response.ok then
+        ( { cleared
+            | status =
+                { text =
+                    "Engine error: "
+                        ++ Maybe.withDefault "(no detail)" response.error
+                , kind = Scold
+                }
+          }
+        , Cmd.none
+        )
+
+    else
+        case response.plan of
+            Nothing ->
+                ( { cleared
+                    | status =
+                        { text = "Engine found no plan within budget."
+                        , kind = Inform
+                        }
+                  }
+                , Cmd.none
+                )
+
+            Just [] ->
+                ( { cleared
+                    | status =
+                        { text = "Board is already clean — nothing to do."
+                        , kind = Inform
+                        }
+                  }
+                , Cmd.none
+                )
+
+            Just (firstLine :: _) ->
+                ( { cleared
+                    | status =
+                        { text = "Hint: " ++ firstLine
+                        , kind = Inform
+                        }
+                  }
+                , Cmd.none
+                )
 
 
 {-| Each click plays exactly the next BFS plan line — i.e. the
