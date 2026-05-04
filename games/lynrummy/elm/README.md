@@ -72,8 +72,9 @@ expected to change. Locked-down by rigorous property
 tests so any regression breaks loudly.
 
 (Class-1 = game rules; Class-2 = locked domain primitives.
-The full five-class volatility taxonomy is laid out in
-`../python/README.md` § "Class-1/2 segregation".)
+The full five-class volatility taxonomy lives in the
+memory system at
+`memory/feedback_segregate_by_volatility_class.md`.)
 
 What lives here today (extracted 2026-04-28 in the
 `game_rules_lockdown` plan):
@@ -117,10 +118,8 @@ volatility-class memory at
 Rules layer at the bottom; physics, UX cadence, and
 layout sit above it with progressively lighter test rigor.
 
-**Python parallel.** The mirror landed: Python rule code lives
-under `../python/rules/` (`card.py`, `stack_type.py`) — see
-`../python/README.md` § "Class-1/2 segregation". Cross-language
-sub-agents touching rules code should read both Rules READMEs.
+**TS parallel.** The TS agent uses the same rule shapes;
+see `../ts/src/rules/card.ts` and `../ts/src/classified_card_stack.ts`.
 
 ## Embeddable-component design goal
 
@@ -151,21 +150,24 @@ REFACTOR_ELM_REPLAY).
 
 ## Agent-library port — on life-support
 
-`src/Game/Agent/` is an Elm port of the Python BFS planner. It
-works in production but is **not actively maintained**. The
-canonical browser BFS engine going forward is the TypeScript port
-at `../ts/` — `bfs.ts` (v1) is the plan-line-for-plan-line
-cross-check vs Python; `engine_v2.ts` (added 2026-05-02) is a
-drop-in A* alternative, see `../ts/ENGINE_V2.md`. Browser
-integration via Elm ports is pending.
+`src/Game/Agent/` is the legacy Elm BFS port. It works in
+production for the live-game hint button but is **not
+actively maintained**. The canonical solver lives at
+`../ts/` (`engine_v2.ts`). When `TS_ELM_INTEGRATION` lands —
+routing the hint button through the TS engine via Elm
+ports or a thin server endpoint — `Game.Agent.*` retires.
 
-When the TS engine ships, the Elm `Game.Agent.*` modules will be
-retired. Until then, don't invest in catching up to Python-side
-solver evolution here. Bug fixes for production behavior are in
+Until then, don't invest in catching up to TS-side solver
+evolution here. Bug fixes for production behavior are in
 scope; feature ports are not.
 
-The DSL conformance bridge still runs; the Elm side passes the
-subset of scenarios its frozen feature surface supports.
+The DSL conformance bridge still runs; the Elm side passes
+the subset of scenarios its frozen feature surface
+supports.
+
+Same applies to `src/Game/Strategy/` (the legacy trick
+engine that drives the hint surface). It retires alongside
+`Game.Agent.*`.
 
 ## TODO (stub-level)
 

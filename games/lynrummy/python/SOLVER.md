@@ -1,21 +1,17 @@
-# SOLVER.md — Lyn Rummy BFS planner
+# SOLVER.md — Lyn Rummy BFS planner (design principles)
 
-> **READ THIS FIRST if your work touches the BFS solver.** The solver
-> is the #1 active asset of the Python codebase. The Elm UI is
-> largely self-sufficient at this point; the solver is where active
-> algorithmic development happens, and it's where regressions are
-> most expensive. Sub-agents dispatched to do solver work must be
-> told to read this file. README.md is the front door; SOLVER.md is
-> the workshop floor.
+> **The active implementation is now in TypeScript.** This doc
+> captures the design principles + algorithmic decisions earned
+> during the original Python solver work (and carried verbatim
+> into the TS port). Read it for *why* the engine is shaped the
+> way it is — but for active solver work, edit
+> [`../ts/`](../ts/) and consult [`../ts/ENGINE_V2.md`](../ts/ENGINE_V2.md)
+> for the canonical engine.
 >
-> **The Python solver has a sibling.** A TypeScript port of the
-> engine lives at `../ts/` and matches Python plan-line-for-plan-line
-> via the DSL conformance suite (run `npm test` in `../ts/` to
-> verify). Python remains the experimentation surface (this doc);
-> the TS engine will replace the Elm BFS in the browser. See
-> [`../ts/README.md`](../ts/README.md). The Elm BFS (`Game.Agent.*`)
-> is on life-support — drifting from Python, kept alive only until
-> TS integration lands.
+> The Python solver modules (`bfs.py`, `enumerator.py`,
+> `classified_card_stack.py`, `move.py`, `buckets.py`, plus
+> the verb/primitive layers) still pass their tests but are a
+> frozen parallel implementation — see `README.md`.
 
 The solver lives in five modules:
 

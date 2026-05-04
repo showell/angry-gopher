@@ -25,49 +25,39 @@ running.
 ## Cold-agent orientation
 
 **If you're arriving with no session context,** read this
-paragraph before reading anything else. The architecture
-principles below are stable, but the implementation
-landscape changed substantially in late April 2026.
+paragraph before reading anything else. The principles below
+are stable; the implementation landscape settled around
+May 2026.
 
-Key anchors for calibrating doc freshness:
+Today's shape:
 
-- **TS BFS engine v1 landed (2026-05-01); engine_v2 (A* solver)
-  added 2026-05-02:** A TypeScript port of the BFS solver lives
-  at `games/lynrummy/ts/`. `bfs.ts` is the v1 engine; `engine_v2.ts`
-  is a drop-in alternative built on the kitchen-table A* algorithm
-  (see `ts/ENGINE_V2.md`) — not yet the production path. Either
-  way, TS is the going-forward browser BFS engine. The Elm
-  `Game.Agent.*` BFS is on **life-support** — works in
-  production, not actively maintained. Don't invest in
-  Elm-side BFS catch-up to Python.
-- **LEAN_PASS phase 2 (2026-04-28):** The entire
-  `games/lynrummy/` Go domain package was retired —
-  dealer, referee, replay, scoring, all of it. Any doc
-  or comment that refers to a Go referee, Go dealer, or
-  Go replay logic is stale. Elm now owns all of that.
-  The Go server is dumb file storage only.
-- **Sidecar rip (2026-04-28):** The `.claude/` sidecar
-  documentation system was retired. Per-module context
-  now lives in module top-of-file docstrings. References
-  to `.claude/*.md` files are stale.
-- **Per-sequence URL contract (2026-04-28):** Session
-  data writes one action per file at
-  `sessions/<id>/actions/<seq>.json`. Older references
-  to bulk or differently shaped write endpoints are
-  stale.
-- **Go rules retired (2026-04-28):** elm-review's
-  `NoUnused` rules now catch orphaned Elm type
-  constructors. Always run `ops/check-conformance` (not
-  just `elm-test`) before committing any Elm change.
+- **TypeScript is the agent.** `games/lynrummy/ts/` hosts the
+  BFS solver (`engine_v2.ts`, A* with kitchen-table heuristic
+  + card-tracker liveness pruning), the verb→primitive
+  pipeline, and `agent_player.ts` which plays full 2-hand
+  games down to deck-low. TS writes JSON transcripts that
+  the Elm UI replays.
+- **Elm is the autonomous client.** Deals, referees, replays,
+  renders. `games/lynrummy/elm/`. The `Game.Agent.*` BFS port
+  and `Game.Strategy.*` trick engine are still wired in for
+  the live-game hint button — that surface is the only thing
+  not yet routed through the TS engine, tracked as
+  `TS_ELM_INTEGRATION` in `claude-steve/MINI_PROJECTS.md`.
+- **Python is legacy/utility.** Some test code, the dealer,
+  some tools. The Python solver retired during the TS
+  migration; do not extend Python-side solver work.
+- **Go server is dumb file storage.** No referee, no dealer,
+  no replay. Sequential session-id allocation is the one
+  smart exception. The whole `games/lynrummy/` Go domain
+  package retired 2026-04-28.
 
-If you encounter prose that seems to describe a Go
-component doing domain work, treat it as pre-LEAN_PASS
-and flag it rather than acting on it.
+If you encounter prose describing a Python BFS as the
+experimentation surface, or a Go component doing domain
+work, treat it as stale and flag rather than acting on it.
 
-For cross-cutting working-style conventions (essay
-surface, ops scripts, commit patterns), see the
-agent-collaboration docs at
-`~/showell_repos/claude-collab/agent_collab/`.
+For cross-cutting working-style conventions (essay surface,
+ops scripts, commit patterns), see the agent-collaboration
+docs at `~/showell_repos/claude-collab/agent_collab/`.
 
 ## What Lyn Rummy is
 
@@ -126,30 +116,35 @@ implementation.
 ## The mission
 
 The product is roughly: **a human plays Lyn Rummy through the
-Elm UI, against a Python agent, and can watch the agent's
+Elm UI, against a TypeScript agent, and can watch the agent's
 moves unfold through the same UI in a way that reads as
 another player playing — not as a machine logging primitives
 to a server.**
 
-That sentence has three things in it, and each one shapes
-the architecture:
+That sentence has three things in it, each shaping the
+architecture:
 
-1. **Human plays through Elm.** There's a browser-based UI
-   (Elm) rendering the board, receiving mouse gestures,
-   posting actions to the server.
-2. **Against a Python agent.** There's a headless agent
-   (Python) that plays full games. It talks to the same
-   server, through the same wire, posting the same actions.
-3. **Watchable through the UI.** Whatever the agent did, the
-   human can replay it in the Elm UI afterward, or watch it
-   live as the agent plays as their opponent. The agent's
-   play has to look like play, not like a log.
+1. **Human plays through Elm.** A browser-based Elm UI
+   renders the board, receives mouse gestures, posts actions
+   to the Go server (which just files them).
+2. **Against a TypeScript agent.** `games/lynrummy/ts/`
+   hosts a headless agent that plays full 2-hand games
+   (engine_v2 A* solver, hand-aware physical-execution
+   layer, card-tracker liveness pruning). It writes its
+   game as a JSON transcript directly to the file system.
+3. **Watchable through the UI.** The Elm UI reads a stored
+   transcript and replays it primitive-by-primitive — same
+   reducer it uses for live play, no "live path" vs "replay
+   path" drift. The agent's play renders as drags and
+   merges, not as a log dump.
 
 The third constraint does a lot of quiet work. It means we
-can't treat "the agent sends wire actions" as the whole story
-— the Elm UI has to be able to re-tell that story visually,
-at human speed, with motion that looks like a drag. Everything
-about replay fidelity traces back to this constraint.
+can't treat "the agent emits wire actions" as the whole
+story — the Elm UI has to be able to re-tell that story
+visually, at human speed, with motion that looks like a
+drag. Everything about replay fidelity traces back to this
+constraint, and it shapes the spatial-planning rules in the
+TS agent (see "Agents plan, then execute" below).
 
 ## Events are the system
 
@@ -189,25 +184,25 @@ in a way that doesn't match how the system actually works.
 
 The truer picture: **each actor owns its own view of the
 world, including its own event log.** The Elm UI has a log.
-The Python agent has a log. The Go server stores the events
-it observed (Elm POSTs each action) but doesn't run a
-referee against them.
+The TS agent has a log (the transcript it writes). The Go
+server stores the events it observed (Elm POSTs each
+action) but doesn't run a referee against them.
 
 Direct consequences:
 
 - **Autonomous play doesn't need the server.** An Elm client
   maintains its own action log in memory, plays moves against
   its own referee, never round-trips for state. Same for the
-  Python agent in autonomous mode — Python plays a complete
-  game locally and only talks to the server if someone else
-  needs to see the result. The Elm client's only wire calls
-  during a session are outbound writes (`fetchNewSession`
-  once, `sendAction` per action — all fire-and-forget). Zero
-  inbound state reads after bootstrap.
+  TS agent in autonomous mode — `agent_player.ts` plays a
+  complete game locally; `transcript.ts` writes the result
+  straight to the file system, no HTTP. The Elm client's
+  only wire calls during a live session are outbound writes
+  (`fetchNewSession` once, `sendAction` per action — all
+  fire-and-forget). Zero inbound state reads after bootstrap.
 - **Each client is its own gatekeeper.** Elm has its OWN
-  referee module; the Go referee was retired 2026-04-28
-  (the entire Go domain package went with it). Python has
-  its own referee-equivalent too.
+  referee module; the TS agent uses its own
+  `applyLocally` + boundary checks (`findViolation`,
+  `assertNoOverlap`) per primitive.
 - **The server is observability, not coordination.** When the
   Elm client posts events to the server, those events become
   visible to anyone reading the data tree (a Python tool, a
@@ -220,78 +215,83 @@ server is a passive observer."
 
 ## The cast of components
 
-Four components collaborate. Lyn Rummy is a **single-human
-game** as of 2026-04-28 — solitaire or human-vs-agent. Two-
-human multiplayer is out of scope (product decision: scheduling
-friction outweighs the value once Elm has agent capability).
+Three components collaborate; a fourth (Python) holds
+legacy/utility code. Lyn Rummy is a **single-human game**:
+solitaire or human-vs-agent. Two-human multiplayer is out
+of scope.
 
-- **Elm UI.** The autonomous player. Deals locally
+- **Elm UI.** The autonomous client. Deals locally
   (`Game.Dealer.dealFullGame seed` produces the curated
   opening board + random hands), runs its own referee,
   appends to its own action log, can replay at any time.
-  Originates events from mouse drags or its own
-  hint/agent logic. Posts events to the Go server purely
-  for observability + reload-resume; nothing in the live
-  loop depends on the server's response.
-- **Python agent.** A complete player without a
-  presentation layer. Owns the four-bucket BFS planner —
-  the experimentation surface where solver work happens.
-  It has no DOM — so it cannot speak pixel-level viewport
-  coords for a hand drag — but it KNOWS the board frame and
-  reasons about geometry there. Discipline:
-  **constraints must be real, not artificial.** "Python
-  has no eyes" is not the same as "Python has no geometry."
-- **TypeScript BFS engine.** Sibling to Python's solver,
-  living at `games/lynrummy/ts/`. Mirrors Python plan-line-
-  for-plan-line via the DSL conformance contract; will
-  replace the Elm BFS in the browser via Elm ports. Browser
-  integration pending. The Elm `Game.Agent.*` BFS is on
-  life-support until then.
+  Originates events from mouse drags, its own hint engine
+  (legacy `Game.Strategy.*` for now — pending TS
+  integration), or a stored transcript on replay. Posts
+  events to the Go server for observability + reload-
+  resume; nothing in the live loop depends on the server's
+  response.
+- **TypeScript agent.** A complete player without a
+  presentation layer, at `games/lynrummy/ts/`. Owns the
+  BFS solver (`engine_v2.ts` — A* with admissible
+  heuristic + closed-list dedup + card-tracker liveness
+  pruning) and the physical-execution layer (`verbs.ts` +
+  `physical_plan.ts`) that turns a solver plan into the
+  primitive sequence a human at the kitchen table would
+  emit. `agent_player.ts` plays full 2-hand games to
+  deck-low; `transcript.ts` writes them as Elm-replayable
+  JSON. The TS agent has no DOM — so it cannot speak
+  pixel-level viewport coords for a live drag — but it
+  KNOWS the board frame and reasons about geometry there.
+  Discipline: **constraints must be real, not artificial.**
+  "TS has no eyes" is not the same as "TS has no geometry."
 - **Go server (Angry Gopher).** Dumb URL-keyed file
-  storage for LynRummy session data (LEAN_PASS phase 2,
-  2026-04-28). Sequential session-id allocation is the one
-  smart exception. The Go server does NOT deal, does NOT
-  referee, does NOT replay — all of that ran in Go until
-  2026-04-28 when the entire `games/lynrummy/` Go domain
-  package retired. SQLite hosts only the seeded `users`
-  table now; LynRummy session data lives as plain JSON
-  under `games/lynrummy/data/`.
+  storage for LynRummy session data. Sequential session-id
+  allocation is the one smart exception. SQLite hosts only
+  the seeded `users` table; LynRummy session data lives as
+  plain JSON under `games/lynrummy/data/`. The Go server
+  does NOT deal, does NOT referee, does NOT replay — that
+  Go domain package retired 2026-04-28.
+- **Python (legacy/utility).** `games/lynrummy/python/`
+  hosts the dealer, some unit tests, and odd tools.
+  The Python BFS solver retired during the TS migration;
+  do not invest in further Python-side solver work.
 
 ## Multiple action logs, one event shape
 
 Because each actor owns its own view, there are **multiple
 action logs in play** at any given time — the Elm client's,
-the Python agent's, the server's filesystem-backed log.
-What holds them together isn't one-log-to-rule-them-all;
-it's that **events have the same shape wherever they live**.
+the TS agent's transcript, the server's filesystem-backed
+log. What holds them together isn't one-log-to-rule-them-
+all; it's that **events have the same shape wherever they
+live**.
 
 Each entry in any of these logs is one wire action — one
-primitive a player could do: split a stack, merge two stacks,
-merge a hand card onto a stack, place a hand card on the
-board, move a stack, complete a turn, undo. The shape is
-identical across Elm, Python, and Go; that's what lets actors
-integrate each other's events without translation.
+primitive a player could do: split a stack, merge two
+stacks, merge a hand card onto a stack, place a hand card
+on the board, move a stack, complete a turn, undo. The
+shape is identical across Elm, TS, and Go; that's what lets
+actors integrate each other's events without translation.
 
 An actor's engagement with the server has three levels:
 
 - **Fully autonomous.** The log never leaves the actor. No
-  server round-trip. Elm solitaire. Python running a self-
-  play game it'll discard. The log is simply what the actor
-  did.
-- **Outbound-only.** The actor posts events to the server so
-  others (or a later replay) can see them, but doesn't pull
-  anything back. Python agents often operate here — play a
-  game, persist it, Steve later watches via Elm replay.
+  server round-trip. Elm solitaire. The TS agent running a
+  self-play game it'll discard. The log is simply what the
+  actor did.
+- **Outbound-only.** The actor writes events to where others
+  (or a later replay) can see them, but doesn't pull anything
+  back. The TS agent operates here when generating
+  transcripts — it writes JSON straight to the file system
+  (no HTTP), Steve later watches via Elm replay.
 - **Two-way coordination (fresh territory).** Both actors
-  post events AND integrate events originating from the other
-  actor. Each incoming event passes through the receiving
+  post events AND integrate events originating from the
+  other. Each incoming event passes through the receiving
   actor's own referee before being added to its own log.
   Integration is deliberate. **In practice we've barely
   exercised this** — even when Steve and Claude have shared
-  a session, coordination has been out-of-band (talking in
-  chat, eyeballing each other's moves). The architecture
-  supports it; the shape will refine as we exercise it for
-  real.
+  a session, coordination has been out-of-band. The
+  architecture supports it; the shape will refine as we
+  exercise it for real.
 
 The event shape's consistency across actors isn't a
 coincidence. We keep it consistent on purpose, using a
@@ -310,8 +310,7 @@ hold from any actor's perspective:
    caches that could drift.
 2. **Replay is mechanically trivial.** Walk the log, feed
    events through the same reducer used live. The mechanism
-   works identically inside Elm, inside Python, inside the Go
-   server.
+   works identically inside Elm and inside the TS agent.
 3. **Who proposed an event doesn't matter to the replay
    machinery.** Human, agent, or server-coordinated — a log
    is a log. Elm's UI replays any of these the same way.
@@ -363,30 +362,37 @@ drift.
 
 ## Who decides what — the hints-are-client-side rule
 
-A natural question: given that the server owns the referee,
-does the server also tell clients which moves are smart
+A natural question: given that the server owns wire +
+storage, does it also tell clients which moves are smart
 ("hints")? We used to. We don't anymore.
 
-The rule now: **the server owns wire and referee; each client
-owns its own hint logic.** Elm has a hint module that scans
-the current (hand, board) and proposes plays. Python has an
-independent hint module that does the same job, independently.
-The two don't have to produce the same proposals — they serve
-different players with different goals.
+The rule now: **the server owns wire and storage; each
+client owns its own hint logic.** Elm has a hint module that
+scans the current (hand, board) and proposes plays. The TS
+agent has its own (`hand_play.ts` calls `engine_v2`
+directly). They don't have to agree — they serve different
+players.
 
-Why split? Because the server doesn't need to know. The
-referee's job is "is this move legal." The hint logic's job
-is "would this move be wise." Clients are better placed to
-answer the second, and baking it into the server forced the
-server to reason about client-side concerns it had no business
-in. Today the server is clean: no hints, no gesture
-synthesis, no replay synthesis. It records actions, validates
-turns, serves back the log.
+Why split? The server's job is "store this action." The
+hint logic's job is "would this move be wise." Clients are
+better placed to answer the second, and baking it into the
+server forced the server to reason about client-side
+concerns it had no business in. Today the server is clean:
+no hints, no gesture synthesis, no replay synthesis. It
+files actions, indexes sessions, serves the data tree.
 
-This is load-bearing for the Python agent. The Python agent
-literally IS its own hint logic plus a posting loop. Without
-the server trying to help, the agent is self-sufficient; it
-plays the game using the same surface a human's Elm UI uses.
+This is load-bearing for the TS agent. The TS agent IS its
+own hint logic plus a transcript writer. Without the server
+trying to help, the agent is self-sufficient; it plays the
+game using the same primitive vocabulary the Elm UI emits.
+
+**Caveat (2026-05-04):** the live-game hint button in the
+Elm UI is still routed through the legacy `Game.Strategy.*`
+trick engine + `Game.Agent.*` Elm BFS port — the TS engine
+isn't called from the browser yet. Tracked as
+`TS_ELM_INTEGRATION` in `claude-steve/MINI_PROJECTS.md`.
+Once that lands, the 10-file `Game/Strategy/` directory and
+the on-life-support `Game/Agent/` BFS port both retire.
 
 ## Durable facts vs. rich-but-environment-bound facts
 
@@ -416,25 +422,25 @@ faithfully rendered. If the environment has drifted, fall
 back to synthesizing a drag from the durable layer — correct
 but no longer pixel-faithful.
 
-**Current state (2026-04-21):** replay branches purely on
-path **presence**: `Just (p :: rest)` → faithful playback,
-`Nothing` → synthesize. Python's synthesizer does emit a
-partial stamp (`pointer_type: "synthetic"`, viewport,
-device_pixel_ratio) alongside its paths, and Elm-captured
-paths do not yet carry an analogous "captured under these
-environmental conditions" stamp. **PLANNED:** both sides
-emit a stamp, and replay reads it to decide faithful vs.
-fallback when the environment has drifted. Without the
-stamp-reader, a window-resize before replay currently
-produces a faithful-looking playback aimed at stale viewport
-coords.
+**Current state:** the TS agent emits primitives only —
+no drag paths. Elm synthesizes drags on replay from the
+durable board-frame coords. Replay branches on path
+**presence**: `Just (p :: rest)` → faithful playback,
+`Nothing` → synthesize. Elm-captured paths do not yet carry
+an "captured under these environmental conditions" stamp,
+so a window-resize between capture and replay currently
+produces a faithful-looking playback aimed at stale
+viewport coords. **PLANNED:** add the stamp + reader so
+replay falls back to synthesis when the environment has
+drifted.
 
 This is what resolves the cross-language geometry debate. The
-durable layer is what the Python agent can speak to (it knows
-the board frame). The rich layer is what only a specific Elm
-instance in a specific browser session can produce. Neither
-tries to speak for the other. The wire carries both (where
-available) and each consumer reads the layer it can trust.
+durable layer is what the TS agent can speak to (it knows
+the board frame). The rich layer is what only a specific
+Elm instance in a specific browser session can produce.
+Neither tries to speak for the other. The wire carries both
+(where available) and each consumer reads the layer it can
+trust.
 
 ## Frames of reference
 
@@ -442,11 +448,11 @@ Related to the durable/rich split: LynRummy uses **two
 coordinate frames**, and nobody should confuse them.
 
 - **Board frame.** Origin `(0, 0)` at the board's top-left.
-  Every stack on the board has a `loc: {top, left}` in board
-  frame. The 800×600 play surface has fixed dimensions. Any
-  action that talks about WHERE SOMETHING IS ON THE BOARD
-  uses this frame. Both Go and Python use it natively —
-  they've never known about viewports.
+  Every stack on the board has a `loc: {top, left}` in
+  board frame. The 800×600 play surface has fixed
+  dimensions. Any action that talks about WHERE SOMETHING
+  IS ON THE BOARD uses this frame. The TS agent uses it
+  natively — it has never known about viewports.
 - **Viewport frame.** Origin `(0, 0)` at the top-left of the
   user's browser window. Mouse coordinates are captured in
   this frame. The Elm drag floater is positioned in this
@@ -473,9 +479,9 @@ today's layout drift came from.
 
 ## Agents plan, then execute
 
-A load-bearing discipline for the Python agent — and any
-future agent — worth stating as its own principle: **plan
-the whole move in your head before emitting the primitives.**
+A load-bearing discipline for the TS agent — and any future
+agent — worth stating as its own principle: **plan the whole
+move in your head before emitting the primitives.**
 
 Humans are good at small-scale spatial planning. Our
 lookahead is shallow, but we easily hold two or three
@@ -485,28 +491,36 @@ headroom on the left"), and reason spatially. A trick that
 needs 6–7 physical primitives to realize is within
 comfortable human planning range.
 
-The agent mimics this. Before emitting the primitive
-sequence for a trick, it **simulates the final board
-state**, checks that every intermediate state (not just the
-last one) is geometrically clean, and only then emits. If a
-simulated merge would spill over a board boundary, the
-emitter plans a `move_stack` *upstream* of the merge — not
-a corrective move appended at the end. The replay shows a
-coherent sequence of human-plausible moves, not "ugly in
-the middle, fine at the end."
+The TS agent's physical-execution layer (`ts/src/verbs.ts`
++ `ts/src/physical_plan.ts`) mimics this. The pipeline is a
+single loop over the solver's plan with **honest state**
+throughout: `sim` is the real board (no hand cards on it);
+`pendingHand` tracks cards still in the hand. At each verb,
+the emission helpers in `verbs.ts` consult both and pick
+the right primitive directly. Three rules baked in:
 
-The concrete mechanism is in `python/strategy.py`'s
-`_plan_merge_hand` helper: it simulates a merge_hand, and if
-in-place would violate bounds, finds a hole sized for the
-EVENTUAL stack (accounting for side-specific offset: a
-left-merge shifts the top-left by −CARD_PITCH) and emits
-`move_stack` before `merge_hand`. Every `merge_hand`
-emission in every trick routes through it. `_fix_geometry`
-remains as a last-ditch safety net; it should rarely fire.
+- **R1 (hand-direct):** a hand card whose end-state is
+  "absorbed into stack S" is dragged from the hand directly
+  to S via `merge_hand` — no transient board singleton.
+  The pull/push semantic flip (solver = absorber-active,
+  gesture = dragged-piece-active) is hidden inside the
+  helper.
+- **R2 (small→large):** for board-to-board merges, the
+  smaller stack is the one that physically moves. Source ↔
+  target swap with a side flip preserves the merged card
+  order.
+- **R3 (don't move if there's room):** pre-flight fires
+  only when the post-action board would crowd the
+  `findCrowding` threshold (`PLANNING_MARGIN = 15`, between
+  the legal `BOARD_MARGIN = 7` and the human-feel
+  `PACK_GAP = 30`). Interior splits still pre-flight
+  unconditionally — siblings need a 4-side-clear region.
 
-Planning horizon is a single trick. Multi-trick lookahead
-— "if I peel X now, a hand card plays later" — is a
-different intelligence layer, not within this rule's scope.
+The full doctrine lives in `ts/PHYSICAL_PLAN.md`; the per-
+step overlap-check fixtures in
+`conformance/scenarios/physical_plan_corpus.dsl` exercise
+each rule. Planning horizon is a single trick — multi-trick
+lookahead is a different intelligence layer, out of scope.
 
 ## Compute answers you own; don't delegate
 
@@ -572,10 +586,10 @@ them plainly here so they're not only implicit:
 - **Own the whole system.** The wire format is a contract we
   control. If a component needs a fact to behave well, put
   the fact on the wire.
-- **Constraints must be real, not artificial.** "Python has
-  no DOM" ≠ "Python has no geometry." Before designing
+- **Constraints must be real, not artificial.** "TS has
+  no DOM" ≠ "TS has no geometry." Before designing
   around a constraint, verify it's actually binding.
-- **Hints are client-side.** Go owns wire + referee; each
+- **Hints are client-side.** Go owns wire + storage; each
   client owns its own hint logic. Neither client has to
   agree with the other on proposals.
 - **Faithful when possible, durable always.** Raw pointer
@@ -609,13 +623,14 @@ The short version:
   Elm, regenerate Puzzles catalog, start both servers, wait for ready.
 - `ops/build_elm` — compile Main.elm + Puzzles.elm bundles.
 - `ops/check-conformance` — **the commit gate for Elm work.**
-  Runs fixturegen + Python conformance + elm-test + elm-review
-  (including `NoUnused.CustomTypeConstructors`). Do not commit an
-  Elm change without a passing run. `elm-test` alone is not
-  sufficient — elm-review catches orphaned constructors and other
-  classes of drift that elm-test misses.
-- `ops/check` — full preflight (conformance + Go build + Python unit
-  tests).
+  Runs fixturegen + TS conformance + elm-test + elm-review
+  (including `NoUnused.CustomTypeConstructors`). Do not
+  commit an Elm change without a passing run. `elm-test`
+  alone is not sufficient — elm-review catches orphaned
+  constructors and other classes of drift that elm-test
+  misses.
+- `ops/check` — full preflight (conformance + Go build +
+  remaining Python unit tests).
 
 Do not hand-compose `go run .`, `elm make`, or `go test ./...` as
 your build/test step — those commands silently drop sequencing and
@@ -623,28 +638,25 @@ cross-language consistency checks the scripts encode.
 
 ### Subsystem landing pages
 
-- [`./README.md`](./README.md) — repo-level overview (the Go
-  domain package was retired 2026-04-28; the Go server is now
-  dumb file storage).
-- [`./elm/README.md`](./elm/README.md) —
-  Elm UI subsystem. (The `Game.Agent.*` BFS port here is on
-  life-support; new BFS work goes to `./ts/`.)
-- [`./python/README.md`](./python/README.md)
-  — Python agent subsystem. **If you're about to edit Python,
-  read § "Agent orientation" first** — it's a 6-step checklist
-  (baseline green → plan state → layering → corpus → ergonomics →
-  validation), with a self-test exercise inline.
-  For solver-specific work, see also [`./python/SOLVER.md`](./python/SOLVER.md).
-- [`./ts/README.md`](./ts/README.md) — TypeScript BFS engine
-  subsystem. Sibling to Python's solver; the going-forward
-  browser BFS engine.
+- [`./README.md`](./README.md) — repo-level overview.
+- [`./ts/README.md`](./ts/README.md) — TypeScript agent
+  subsystem. The canonical BFS solver + physical-execution
+  layer + transcript writer.
+  See also [`./ts/PHYSICAL_PLAN.md`](./ts/PHYSICAL_PLAN.md)
+  for the gesture-layer rules and
+  [`./ts/ENGINE_V2.md`](./ts/ENGINE_V2.md) for the solver.
+- [`./elm/README.md`](./elm/README.md) — Elm UI subsystem.
+  The `Game.Agent.*` BFS port and `Game.Strategy.*` trick
+  engine are still wired in for the live-game hint button;
+  both retire when `TS_ELM_INTEGRATION` lands.
+- [`./python/README.md`](./python/README.md) — Python
+  legacy/utility code (dealer, some tests). The Python
+  solver retired during the TS migration.
 
 Each subsystem README lists the load-bearing modules in
 "read-this-first" order. Read the architecture doc first
-(you're in it); then the relevant subsystem README; then the
-module top-of-file docstrings. (The legacy `.claude` sidecar
-system was retired 2026-04-28; commit messages now carry the
-historical record.)
+(you're in it); then the relevant subsystem README; then
+the module top-of-file docstrings.
 
 ### First-class cross-cutting docs
 
@@ -658,41 +670,36 @@ historical record.)
 ### Conformance & testing
 
 - `../../cmd/fixturegen/main.go` — the DSL → Elm + JSON
-  test generator. The mechanism behind our cross-language
-  parity bridge between Elm and Python (the Go target
-  retired 2026-04-28 with the Go domain package). Don't run
-  ad-hoc; use `ops/check-conformance`.
+  test generator. The cross-language parity bridge between
+  Elm and TS. Don't run ad-hoc; use `ops/check-conformance`.
 - `games/lynrummy/conformance/scenarios/*.dsl` — the
-  canonical scenarios both sides test against. **New agents:
-  read `undo_walkthrough.dsl` early.** Its two scenarios —
+  canonical scenarios. **New agents: read
+  `undo_walkthrough.dsl` early.** Its two scenarios —
   board-only split/move/undo and the trickier hand-card
   merge/undo — are the most compact readable summary of how
-  the game's interaction model actually works: what an action
-  does to board and hand, what undo reverses, and what the
-  button-enable predicate tracks. The DSL reads like a game
-  transcript; that's intentional.
+  the game's interaction model actually works. The DSL
+  reads like a game transcript; that's intentional.
+- TS-specific gesture-layer fixtures live in
+  `physical_plan_corpus.dsl` (integration: hand cards +
+  multi-verb plans + R1/R3 cases) and
+  `verb_to_primitives_corpus.dsl` (per-verb expansion).
+  Both runners assert `findViolation == null` after every
+  emitted primitive — overlap drift fails at the moment it
+  appears, not just at end-of-play.
 - `games/lynrummy/DSL_CONVERSION_GUIDE.md` — how to extend
-  the DSL scenario coverage: why (dispute resolution),
-  selection criteria for what's worth porting, step-by-step
-  process, current coverage inventory, and prioritized
-  remaining work.
+  DSL coverage.
 
 ### Memory pointers
 
-For finer-grained architectural atoms, the memory system
-carries standalone notes. A few load-bearing ones:
+For finer-grained architectural atoms, the memory index at
+`~/.claude/projects/-home-steve-showell-repos-angry-gopher/memory/MEMORY.md`
+indexes durable doctrines and feedback. Two load-bearing
+ones worth naming inline:
 
-- `project_hints_are_client_side.md`
-- `project_durable_vs_ephemeral_state.md`
-- `project_one_action_log.md`
-- `project_enumerate_and_bridge.md`
-- `project_ui_engine_elm.md`
-- `project_agent_tools_python.md`
-- `doctrine_make_state_honest.md` (record facts decide later;
-  shape matches reality)
-- `doctrine_eliminate_dont_paper_over.md` (I own the whole
-  system; change the shape, not the adapter)
-- `feedback_compute_dont_delegate.md`
+- **`doctrine_make_state_honest.md`** — record facts,
+  decide later; shape matches reality.
+- **`doctrine_eliminate_dont_paper_over.md`** — change the
+  shape, not the adapter.
 
 The memory system is comprehensive; use it for specifics
 this doc can't carry without becoming a reference manual.
@@ -736,10 +743,10 @@ should bias toward component.
 
 ## Puzzles as study instrument
 
-The Puzzles gallery (`/gopher/puzzles/`, added 2026-04-23)
-is the apparatus the Lyn Rummy project uses to observe
-play on curated mid-game situations and feed divergences
-back into the agent:
+The Puzzles gallery (`/gopher/puzzles/`) is the apparatus
+the Lyn Rummy project uses to observe play on curated
+mid-game situations and feed divergences back into the
+agent:
 
 - Catalog: `games/lynrummy/python/puzzle_catalog.py` reads
   `games/lynrummy/conformance/mined_seeds.json` and writes
@@ -756,58 +763,32 @@ back into the agent:
 
 The apparatus lets us name concrete divergences between
 human and agent play and feed them back into the agent's
-spatial strategy. Surfaced weaknesses: the original
-`find_open_loc → (7,7)` corner-dump was fixed by
-shifting `HUMAN_PREFERRED_ORIGIN` to (50, 90). Current
-known gap is the row-major scan bias — on a packed top
-row the scan can land the agent far-right on that row
-before trying a lower open row; fix queued as
-`FIND_OPEN_LOC_COLUMN_MAJOR`.
-
-Note: the original agent-vs-human comparison harness
-(`agent_board_lab.py`, `board_lab_puzzles.py`, `study.py`)
-and the pre-DSL corpus tooling (`corpus_report.py`,
-`corpus_lab_catalog.py`) are gone (purged 2026-04-27);
-the role they played is now covered by the DSL conformance
-pipeline plus replay walkthroughs.
+spatial strategy.
 
 ## Algorithm benchmarks
 
-Algorithm-side benchmark numbers (BFS solver depths + wall
-times across the 21-puzzle corpus) live as plain-text gold
-files in `games/lynrummy/python/corpus/`. The current gold
-is `baseline_post_focus.txt`; older milestones
-(`baseline_post_engulf.txt`, `baseline_pre_engulf.txt`,
-`baseline_bfs.txt`, `baseline.txt`) are preserved as
-historical reference. The corpus inputs themselves live in
-`games/lynrummy/conformance/scenarios/planner_corpus.dsl`
-(versioned, in repo) — not in the DB, per the policy that
-no valuable asset relies on the DB.
-
-For the validation methodology around regenerating and
-diffing baselines, see `python/README.md` § Validation
-methodology.
+Solver bench gold lives in `games/lynrummy/ts/bench/`
+(`baseline_board_81_gold.txt`, `bench_outer_shell_gold.txt`).
+Run via `npm run bench:check-baseline` from
+`games/lynrummy/ts/` to regression-check; regenerate with
+`npm run bench:gen-baseline` after a deliberate solver
+change. The corpus inputs are language-neutral DSL at
+`conformance/scenarios/planner_corpus.dsl` and
+`baseline_board_81.dsl`.
 
 ## Parking status
 
-Parked `STILL_EVOLVING`, last swept 2026-04-27
-(TOP_DOWN_SWEEP after the Lab → Puzzles rename — verified
-file paths, URLs, and table names align with the post-rename
-code). Prior sweep was 2026-04-23
-evening, after a full day of Puzzles-gallery refinement
-(margin 5→7, 25-puzzle v2 catalog, session-scoped
-annotations, agent mid-stack-split pre-move rule, Replay
-hygiene pass). The principles are stable; new surfaces
-(Puzzles gallery, embeddable-components design goal) are
-documented above.
+Last swept 2026-05-04 after the spatial-planning v2 work
+landed (one-loop honest-state architecture; R1/R2/R3
+inline; per-step overlap checks across DSL fixtures). The
+TS agent now plays full 2-hand games to deck-low with
+human-quality gesture choices; the only remaining
+integration gap is the live-game hint button in the Elm UI
+(`TS_ELM_INTEGRATION` in MINI_PROJECTS.md).
 
-Two-player mechanics are still immature (coordinated
-sessions have been exercised out-of-band at best); expect
-that surface to move as real two-way play gets shaken out.
-
-Update this document whenever a conversation produces a
-durable architectural insight. Redundancy with module
-docstrings and memories is deliberate and fine — this doc's
-job is the over-arching principles; the per-module
-docstrings and memory entries carry the specifics and the
-examples.
+The principles are stable. Update this document whenever a
+conversation produces a durable architectural insight.
+Redundancy with module docstrings and memories is
+deliberate — this doc carries the over-arching principles;
+the per-module docstrings carry specifics; commit history
+carries the historical record.

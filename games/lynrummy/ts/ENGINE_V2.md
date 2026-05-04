@@ -38,15 +38,19 @@ full reasoning.
 - `src/engine_v2.ts` — the engine + heuristics + min-heap.
 - `src/buckets.ts` — `fastStateSig`/`buildCardOrder` for fast
   position-indexed dedup keys (1.2× faster than legacy stateSig).
-- `bench/test_engine_v2_easy.ts` — runs 46 easy scenarios.
-- `bench/test_engine_v2_full.ts` — runs full corpus by tier
-  (set `TIER=0`/`1`/`2`/`3`).
-- `bench/heuristic_compare.ts` — compares heuristics side-by-side.
-- `bench/dedup_compare.ts` — measures state-sig dedup impact.
-- `bench/sig_compare.ts` — measures fast-sig vs legacy stateSig.
-- `bench/verify_clean_board.ts` — independent victory-state verifier
-  (replays a plan, confirms card conservation + every final stack
-  legal length-3+).
+- `bench/check_baseline_timing.ts` — 81-card timing
+  regression check (the standing perf gate).
+- `bench/gen_baseline_board.ts` — regenerates the gold
+  after a deliberate solver change.
+- `bench/end_of_deck_perf.ts` — full-game perf harness; runs
+  the 6 standing seeds to deck-low.
+- `bench/perf_harness.ts`, `bench/budget_sweep.ts`,
+  `bench/bench_timing.ts` — auxiliary measurement drivers.
+
+The one-shot diagnostic benches that lived alongside the
+2026-05-02 engine_v2 ramp-up have been retired; commit
+history carries the historical record of what was measured
+and when.
 
 ## Optimization levers explored
 

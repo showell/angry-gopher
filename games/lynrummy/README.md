@@ -1,10 +1,10 @@
 # Lyn Rummy
 
 **Status:** `WORKHORSE`. Elm is the autonomous client (deals,
-referees, replays). Python is the agent / planner / conformance
-side. Go is dumb file storage at `views/lynrummy_elm.go` plus
-`views/puzzles.go` — the entire `games/lynrummy/` Go package
-was retired 2026-04-28 in LEAN_PASS phase 2.
+referees, replays). TypeScript is the agent (solver, verb
+pipeline, full-game player, transcript writer). Go is dumb
+file storage at `views/lynrummy_elm.go` + `views/puzzles.go`.
+Python is legacy/utility (dealer + tests + puzzle catalog).
 
 ## Before reading the code
 
@@ -15,97 +15,94 @@ Python relate.
 
 ## Subsystems
 
+- `ts/` — **The TypeScript agent.** Solver (`engine_v2.ts`),
+  verb→primitive pipeline (`verbs.ts`), spatial-execution
+  loop (`physical_plan.ts`), full-game player
+  (`agent_player.ts`), transcript writer (`transcript.ts`).
+  See `ts/README.md` and `ts/PHYSICAL_PLAN.md`.
 - `elm/` — the human-facing client (Main.Play + Game.* +
   Main.* harness). Served at `/gopher/lynrummy-elm/`.
   Game.Rules locked-down primitives, the dealer (Game.Dealer),
-  and a referee (Game.Referee). The BFS planner port at
-  `src/Game/Agent/` is on life-support — TS is the
-  going-forward browser BFS. Elm is autonomous; the Go
-  server is observational at most.
-- `python/` — agent tools: BFS planner (the experimentation
-  surface), hand-aware outer loop, verb/primitive translators,
-  autonomous self-play harness, DSL conformance runner.
-  `agent_game.py` is the driver. See `python/SOLVER.md` for
-  solver-specific design.
-- `ts/` — TypeScript port of the BFS engine. Sibling to
-  `python/`; matches Python plan-line-for-plan-line on the
-  148-scenario conformance suite. Will replace the Elm BFS in
-  the browser via Elm ports. See `ts/README.md`.
-- `puzzles/` — curated puzzle gallery (added 2026-04-23).
-  Elm sub-app compiled from `elm/src/Puzzles.elm`,
-  embedding `Main.Play` per panel. Served at
-  `/gopher/puzzles/`. The Python catalog is generated from
-  `conformance/mined_seeds.json` via
+  and a referee (Game.Referee). The legacy BFS port at
+  `src/Game/Agent/` and trick engine at `src/Game/Strategy/`
+  are still wired in for the live-game hint button; both
+  retire when `TS_ELM_INTEGRATION` lands.
+- `python/` — Legacy/utility. The Python solver modules
+  still pass their tests as a frozen parallel implementation;
+  `dealer.py`, `puzzle_catalog.py`, and one-off tools remain
+  useful. See `python/README.md`.
+- `puzzles/` — curated puzzle gallery. Elm sub-app compiled
+  from `elm/src/Puzzles.elm`, embedding `Main.Play` per
+  panel. Served at `/gopher/puzzles/`. The catalog is
+  generated from `conformance/mined_seeds.json` via
   `python/puzzle_catalog.py`.
 - `data/` — file-system-backed session data. The counter
   `next-session-id.txt` lives at the root of `data/`;
-  per-session directories live under `data/lynrummy-elm/sessions/<id>/`
-  with `meta.json` (created_at, label, full-game initial_state
-  if applicable), `actions/<seq>.json` (one envelope per
-  action), and `annotations/<seq>.json` (puzzle-only). All
-  committed.
+  per-session directories live under
+  `data/lynrummy-elm/sessions/<id>/` with `meta.json`,
+  `actions/<seq>.json` (one envelope per action), and
+  `annotations/<seq>.json` (puzzle-only). All committed.
 
   Distinguishing **full-game vs puzzle** sessions: full-game
-  meta carries an `initial_state` block (board + hands + deck);
-  puzzle sessions are tagged `label: "puzzles page-load"`
-  with no `initial_state` (the puzzle's state lives in the
-  catalog). Action bodies for puzzle plays carry a
-  `puzzle_name` field; full-game bodies don't.
+  meta carries an `initial_state` block (board + hands +
+  deck); puzzle sessions are tagged
+  `label: "puzzles page-load"` with no `initial_state`.
 
   **Reading sessions in DSL form** (Steve's preferred chat
   format): `python3 tools/show_session.py <session_id>`.
-  Renders cards as DSL shorthand (e.g. `8C'`, `KS`, `2H`) one
-  stack per row. Always use this when discussing a session in
-  conversation — never paste raw JSON envelopes.
+  Renders cards as DSL shorthand (e.g. `8C'`, `KS`, `2H`)
+  one stack per row. Always use this when discussing a
+  session in conversation — never paste raw JSON envelopes.
 - `conformance/scenarios/*.dsl` — cross-language scenario
-  contract. Compiled to Elm tests + Python JSON fixtures
-  via `cmd/fixturegen`. Single source of truth for Elm ↔
-  Python parity.
+  contract. Compiled to Elm tests + JSON fixtures via
+  `cmd/fixturegen`. Single source of truth for Elm ↔ TS
+  parity.
 
 ## Conformance DSL
 
 The DSL under `conformance/scenarios/` is the cross-language
-contract. Scenario files compile to Elm tests + Python JSON
-fixtures via `cmd/fixturegen`. Current files (read
-`undo_walkthrough.dsl` first if you're new — it reads like a
-game transcript and shows the interaction model concretely):
+contract. Scenario files compile to Elm tests + JSON
+fixtures via `cmd/fixturegen`. Read `undo_walkthrough.dsl`
+first if you're new — it reads like a game transcript and
+shows the interaction model concretely.
 
 **Solver / planner:**
-- `planner.dsl`, `planner_corpus.dsl`, `planner_corpus_extras.dsl`,
-  `planner_mined.dsl` — `enumerate_moves` + `solve` ops.
+- `planner.dsl`, `planner_corpus.dsl`,
+  `planner_corpus_extras.dsl`, `planner_mined.dsl` —
+  `enumerate_moves` + `solve` ops.
 - `baseline_board_81.dsl` — auto-generated 81-card baseline
-  suite (regenerate via `npm run bench:gen-baseline` in `ts/`).
-- `hint_game_seed42.dsl` — `hint_for_hand` ops (Python only).
+  suite (regenerate via `npm run bench:gen-baseline` in
+  `ts/`).
+- `hint_game_seed42.dsl` — `hint_for_hand` ops.
+
+**Verb / gesture pipeline:**
+- `verb_to_primitives.dsl`, `verb_to_primitives_corpus.dsl`
+  — per-verb primitive expansion. The runner asserts
+  `findViolation == null` after every primitive.
+- `physical_plan_corpus.dsl` — integration: hand cards +
+  multi-verb plans + R1/R3 cases. Same per-step overlap
+  guarantee.
 
 **Referee / rules:**
 - `referee.dsl` — referee ops.
 
 **UI / interaction:**
-- `place_stack.dsl` — `find_open_loc` ops.
-- `click_agent_play.dsl`, `click_arbitration.dsl` — agent-click
-  + click-arbitration invariants.
-- `drag_invariant.dsl`, `gesture.dsl` — drag state machine,
-  floaterTopLeft invariant, pathFrame correctness.
-- `board_geometry.dsl` — typed board-geometry validation.
-- `wing_oracle.dsl` — wing-detection invariants.
+- `place_stack.dsl`, `click_agent_play.dsl`,
+  `click_arbitration.dsl`, `drag_invariant.dsl`,
+  `gesture.dsl`, `board_geometry.dsl`, `wing_oracle.dsl` —
+  Elm-side invariants.
 - `replay_walkthroughs.dsl` — replay invariants.
 - `undo_walkthrough.dsl` — board-only and hand-card undo
   scenarios (read first as a primer).
 
 See `../../cmd/fixturegen/main.go` for the codegen pipeline
 and `ts/test/test_engine_conformance.ts` for the TS runner.
-The Python runner retired 2026-05-02 with the BFS-retirement
-work; Elm + TS now cover the contract.
+Elm + TS cover the contract.
 
 ## TODO
 
-- **Browser BFS swap.** Replace the Elm `Game.Agent.*` BFS
-  with the TS engine via Elm ports. Possibly expand the TS
-  surface to handle hand-to-board interactions too, so the
-  Elm/TS split doesn't bisect feature work. Open question.
-- Retire the trick engine (`Game.Strategy.Hint` on the Elm
-  side, `strategy.py` on the Python side). The BFS planner
-  is the replacement; full-game UI swap pending per
-  `~/.claude/projects/.../memory/project_hint_solver_split.md`.
-- Doc-sweep `views/puzzles.go`'s `puzzlesAnnotateShim` once
-  Puzzles.elm migrates to the unified URL space.
+- **`TS_ELM_INTEGRATION`** — wire the live-game hint
+  button (currently still routed through
+  `Game.Strategy.Hint` + `Game.Agent.*` BFS port) into the
+  TS engine. Tracked in `claude-steve/MINI_PROJECTS.md`.
+  Once landed, both legacy Elm trees retire.

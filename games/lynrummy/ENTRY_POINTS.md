@@ -1,6 +1,6 @@
 # Lyn Rummy — entry points and maturity
 
-**Status:** Living document. Last refreshed 2026-05-01.
+**Status:** Living document. Last refreshed 2026-05-04.
 
 A catch-up reference — what code is actually running today,
 what it does, and how mature each piece is. Companion to
@@ -35,8 +35,8 @@ real use, and the rename to "Puzzles" landed 2026-04-27.
 ## Server-side handlers (Go)
 
 The Go server is dumb URL-keyed file storage for LynRummy
-session data (LEAN_PASS phase 2, 2026-04-28). No referee, no
-replay, no dealer — Elm owns all of that now.
+session data. No referee, no replay, no dealer — Elm owns
+all of that now.
 
 In `views/`:
 
@@ -61,37 +61,19 @@ In `views/`:
 
 ### Mining + fixture generation (repo-root `tools/`)
 
-These live at `/tools/` (repo root), not `games/lynrummy/python/tools/`.
-
-- `mine_puzzles.py` — generates puzzles from agent
+- `tools/mine_puzzles.py` — generates puzzles from agent
   gameplay snapshots; writes
   `games/lynrummy/conformance/mined_seeds.json` directly.
-  Stable; produces the corpus the Puzzles gallery serves.
-- `tools/export_replay_walkthroughs.ts` — concatenates per-puzzle
-  primitive sequences from
-  `conformance/scenarios/verb_to_primitives_corpus.dsl` into
-  `conformance/scenarios/replay_walkthroughs.dsl` (one
-  full-walkthrough scenario per puzzle). Run after re-pinning
-  corpus DSL scenarios. (TS port of the retired `.py` version,
-  2026-05-03; the upstream `export_primitives_fixtures.py` that
-  generated `primitives_fixtures.json` retired 2026-05-02 with
-  the BFS-retirement work; the JSON itself was converted to
-  `verb_to_primitives_corpus.dsl` and retired 2026-05-03.)
+- `tools/export_replay_walkthroughs.ts` — concatenates
+  per-puzzle primitive sequences from
+  `conformance/scenarios/verb_to_primitives_corpus.dsl`
+  into `conformance/scenarios/replay_walkthroughs.dsl`. Run
+  after re-pinning corpus DSL scenarios.
 
-The DSL plan-text scenarios (`planner_corpus*.dsl`,
-`planner_mined.dsl`) are now committed-and-static — the
-exporters that generated them retired 2026-05-02 with the
-TS solver migration. Regenerate by hand if a future plan-
-shape change requires it.
-
-A separate `games/lynrummy/python/tools/` holds solver-side
-utilities (`hint_demo.py` for end-to-end hint output, now
-running through `ts_solver`). The 81-card timing gold is
-now generated from TS — see
-`games/lynrummy/ts/bench/gen_baseline_board.ts`.
-
-All remaining exporters are stable, regenerate cleanly, and
-feed the same conformance pipeline.
+The 81-card timing gold is generated from TS — see
+`games/lynrummy/ts/bench/gen_baseline_board.ts`. The DSL
+plan-text scenarios (`planner_corpus*.dsl`,
+`planner_mined.dsl`) are committed-and-static.
 
 ### DSL → test code
 
@@ -104,38 +86,36 @@ feed the same conformance pipeline.
   Go target retired 2026-04-28 with the Go domain package.
   **Run via `ops/check-conformance`**, not ad-hoc.
 
-### Python agent core (`games/lynrummy/python/`)
+### TypeScript agent (`games/lynrummy/ts/`)
 
-- `bfs.py` — four-bucket BFS solver with focus rule, iterative
-  cap, doomed-third filter. The experimentation surface for
-  solver work; see [`python/SOLVER.md`](python/SOLVER.md).
-- `classified_card_stack.py` — the CCS data type + verb
-  library + absorb / splice probes & executors. Most BFS
-  hot-path arithmetic.
-- `verbs.py` — verb-to-primitive layer (geometry-agnostic).
-- `geometry_plan.py` — unified geometry post-pass. Walks
-  primitive sequences, injects pre-flights at points where
-  the next primitive would crowd a pre-existing stack.
+The canonical agent. Modules:
 
-Older but stable: `dealer.py`, `strategy.py`. (PLANNED-LEGACY:
-`strategy.py` will retire when the BFS planner takes over the
-full-game hint path.)
-
-### TypeScript BFS engine (`games/lynrummy/ts/`)
-
-- `src/classified_card_stack.ts`, `src/buckets.ts`,
-  `src/move.ts`, `src/enumerator.ts`, `src/bfs.ts` — the v1 BFS
-  engine, sibling to Python's solver. Matches Python plan-line-
-  for-plan-line via the DSL conformance contract. Will replace
-  the Elm `Game.Agent.*` BFS in the browser via Elm ports.
-- `src/engine_v2.ts` — A* priority-queue alternative engine added
-  2026-05-02. Drop-in for `bfs.ts` (same `Buckets`-in /
-  `PlanLine[]`-out interface). Adds `decompose` verb +
-  steal-from-partial vocab. Not yet the production path. See
+- `src/engine_v2.ts` — A* solver with admissible heuristic,
+  closed-list dedup, card-tracker liveness pruning. See
   [`ts/ENGINE_V2.md`](ts/ENGINE_V2.md).
-- Run tests with `npm test` from `games/lynrummy/ts/` — Node
-  v24's native TS support runs `.ts` files directly, no compile
-  step. See [`ts/README.md`](ts/README.md).
+- `src/verbs.ts` — verb→primitive pipeline. Hand-aware
+  merging (R1), small→large swaps (R2), inline pre-flight
+  (R3). See [`ts/PHYSICAL_PLAN.md`](ts/PHYSICAL_PLAN.md).
+- `src/physical_plan.ts` — the loop. `physicalPlan(initialBoard,
+  hand, planDescs)` over honest state.
+- `src/agent_player.ts` — full 2-hand games to deck-low.
+- `src/transcript.ts` — Elm-replayable JSON writer
+  (file-system, no HTTP).
+- `src/classified_card_stack.ts`, `src/buckets.ts`,
+  `src/move.ts`, `src/enumerator.ts`, `src/hand_play.ts` —
+  the BFS infrastructure.
+
+Run tests with `npm test` from `games/lynrummy/ts/` — Node
+v24's native TS support runs `.ts` files directly. See
+[`ts/README.md`](ts/README.md).
+
+### Python (legacy/utility) (`games/lynrummy/python/`)
+
+The Python solver retired during the TS migration; the
+modules still pass their tests as a frozen parallel
+implementation. Active utility code: `dealer.py`,
+`puzzle_catalog.py`, plus a few one-off study tools. See
+[`python/README.md`](python/README.md).
 
 
 ## Conformance test surfaces
@@ -152,14 +132,14 @@ From `games/lynrummy/elm/`:
 From `games/lynrummy/python/`:
 
 - `./check.sh` — runs every `test_*.py` in the directory.
-  The cross-language DSL conformance runner retired
-  2026-05-02; TS owns that leg now.
+  The Python solver tests still pass as a frozen-parallel
+  reference; not in the cross-language conformance loop.
 
 From `games/lynrummy/ts/`:
 
-- `npm test` — leaf primitive conformance + engine plan-line
-  cross-check vs the JSON fixtures (the canonical BFS
-  conformance run point post-2026-05-02).
+- `npm test` — leaf conformance + engine cross-check + verb
+  fixtures + physical_plan + walkthroughs + agent self-play.
+  The canonical conformance run point.
 
 The single canonical run point for both elm-test and
 elm-review is `games/lynrummy/elm/`. The Puzzles gallery
@@ -168,16 +148,15 @@ shares this single project (unified 2026-04-27).
 
 ## What is NOT current (avoid confusion)
 
-- The Cat TS UI (`angry-cat/`) — legacy Lyn Rummy UI. Still
-  in the repo but not in the agent flow.
-- The pre-DSL corpus tooling (`corpus_report.py`,
-  `corpus_lab_catalog.py`) and the agent-vs-human harness
-  (`agent_board_lab.py`, `board_lab_puzzles.py`, `study.py`)
-  — purged 2026-04-27; superseded by the DSL conformance
-  pipeline.
-- Old "review mode" in the puzzle UI — ripped 2026-04-26.
+- The Cat TS UI (`angry-cat/`) — legacy Lyn Rummy UI.
+  Still in the repo but not in the agent flow.
+- The Python solver path is a frozen parallel
+  implementation; new solver work goes to `games/lynrummy/ts/`.
+- The Elm `Game.Agent.*` BFS port + `Game.Strategy.*`
+  trick engine are still wired in for the live-game hint
+  button; both retire when `TS_ELM_INTEGRATION` lands.
 
 ---
 
-See also: [`elm/README.md`](./elm/README.md) — links here for
-the current map of entry points.
+See also: [`elm/README.md`](./elm/README.md) — links here
+for the current map of entry points.

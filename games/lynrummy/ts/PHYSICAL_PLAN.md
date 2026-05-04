@@ -74,10 +74,10 @@ under the swap (see `applyMergeStack` invariant).
 
 A merge primitive (`merge_stack`, `merge_hand`) produces a stack
 larger than either input. Before emitting a `move_stack` pre-flight,
-the planner applies the merge to a probe sim and runs `findViolation`.
-If the post-merge board is legally clean (no out-of-bounds, no
-`BOARD_MARGIN`-padded overlap), the merge emits in place — no
-`move_stack`. Only when the probe shows an actual violation does the
+the planner applies the merge to a probe sim and runs `findCrowding`.
+If the post-merge board is comfortably clean (no out-of-bounds, no
+`PLANNING_MARGIN`-padded overlap), the merge emits in place — no
+`move_stack`. Only when the probe shows actual crowding does the
 planner relocate the target.
 
 Interior splits remain pre-flighted unconditionally (per Steve,
@@ -87,9 +87,11 @@ post-board doesn't yet overlap.
 
 Enforcement: `planMergeHand`, `planMergeStackOnBoard`, and the
 end-split branch of `planSplitAfter` in `src/verbs.ts`. The trigger
-threshold is `findViolation` (the legal `BOARD_MARGIN`), NOT the
-human-feel `PACK_GAP`. `findOpenLoc` still uses `PACK_GAP` for picking
-*new* loc slots — that's a separate concern (preferred spacing for
+threshold is `findCrowding` (`PLANNING_MARGIN = 15` — between the
+legal `BOARD_MARGIN = 7` and the human-feel `PACK_GAP = 30`), NOT the
+strict legal-overlap check. `findOpenLoc` still uses `PACK_GAP` for
+picking *new* loc slots — that's a separate concern (preferred
+spacing for
 fresh placements).
 
 ---
@@ -139,14 +141,16 @@ helpers `planMerge`, `planMergeHand`, `planMergeStackOnBoard`, and
 - `src/primitives.ts` — primitive types, `applyLocally`, and the
   shared `applyMergeStack` / `applyMergeHand` card-order invariant.
 - `src/geometry.ts` — geometry constants, `findOpenLoc`,
-  `findViolation`. The legal-threshold collision check (`BOARD_MARGIN`
-  padding) is what R3's pre-flight trigger uses.
-- `src/transcript.ts` — production caller of `physicalPlan`. Asserts
-  `findViolation == null` after every emitted primitive.
+  `findViolation` (legal-threshold strict overlap), and
+  `findCrowding` (pre-flight comfort threshold,
+  `PLANNING_MARGIN = 15`).
+- `src/transcript.ts` — production caller of `physicalPlan`.
+  Asserts `findViolation == null` after every emitted
+  primitive.
 
-The previous `src/geometry_plan.ts` (top-level pre-flight sweep) was
-retired with v2; its per-primitive pre-flight logic moved into the
-verbs.ts helpers, which call it inline at emission time.
+The previous top-level pre-flight sweep retired with v2;
+the per-primitive pre-flight logic moved into the
+`verbs.ts` helpers, which call it inline at emission time.
 
 ---
 
