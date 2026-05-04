@@ -102,32 +102,22 @@ function allocateSessionId(p: Paths): number {
 }
 
 // --- TS Card → Elm-wire JSON -----------------------------------------
+//
+// Encoders live in wire_json.ts (browser-safe; no fs). Re-exported
+// here so older imports (paths that read this file) keep working.
 
-interface JsonCard { value: number; suit: number; origin_deck: number }
-interface JsonBoardCard { card: JsonCard; state: number }
-interface JsonHandCard { card: JsonCard; state: number }
-interface JsonLoc { top: number; left: number }
-interface JsonCardStack { board_cards: JsonBoardCard[]; loc: JsonLoc }
-interface JsonHand { hand_cards: JsonHandCard[] }
+import {
+  type JsonCard,
+  type JsonHand,
+  type JsonCardStack,
+  type WireActionJson,
+  jsonCard,
+  jsonHandCard,
+  jsonStack,
+  primToWire,
+} from "./wire_json.ts";
 
-function jsonCard(c: Card): JsonCard {
-  return { value: c[0], suit: c[1], origin_deck: c[2] };
-}
-
-function jsonBoardCard(c: Card): JsonBoardCard {
-  return { card: jsonCard(c), state: 0 };  // FirmlyOnBoard
-}
-
-function jsonHandCard(c: Card): JsonHandCard {
-  return { card: jsonCard(c), state: 0 };  // HandNormal
-}
-
-function jsonStack(s: BoardStack): JsonCardStack {
-  return {
-    board_cards: s.cards.map(jsonBoardCard),
-    loc: { top: s.loc.top, left: s.loc.left },
-  };
-}
+export { jsonStack, primToWire, type WireActionJson } from "./wire_json.ts";
 
 // --- Initial-state encoder -------------------------------------------
 //
@@ -168,53 +158,6 @@ export function encodeInitialState(
     victor_awarded: false,
     turn_start_board_score: 0,
   };
-}
-
-// --- Primitive → WireAction envelope ---------------------------------
-
-type WireActionJson =
-  | { action: "split"; stack: JsonCardStack; card_index: number }
-  | { action: "merge_stack"; source: JsonCardStack; target: JsonCardStack; side: "left" | "right" }
-  | { action: "merge_hand"; hand_card: JsonCard; target: JsonCardStack; side: "left" | "right" }
-  | { action: "place_hand"; hand_card: JsonCard; loc: JsonLoc }
-  | { action: "move_stack"; stack: JsonCardStack; new_loc: JsonLoc }
-  | { action: "complete_turn" };
-
-function primToWire(prim: Primitive, sim: readonly BoardStack[]): WireActionJson {
-  switch (prim.action) {
-    case "split":
-      return {
-        action: "split",
-        stack: jsonStack(sim[prim.stackIndex]!),
-        card_index: prim.cardIndex,
-      };
-    case "merge_stack":
-      return {
-        action: "merge_stack",
-        source: jsonStack(sim[prim.sourceStack]!),
-        target: jsonStack(sim[prim.targetStack]!),
-        side: prim.side,
-      };
-    case "merge_hand":
-      return {
-        action: "merge_hand",
-        hand_card: jsonCard(prim.handCard),
-        target: jsonStack(sim[prim.targetStack]!),
-        side: prim.side,
-      };
-    case "place_hand":
-      return {
-        action: "place_hand",
-        hand_card: jsonCard(prim.handCard),
-        loc: { top: prim.loc.top, left: prim.loc.left },
-      };
-    case "move_stack":
-      return {
-        action: "move_stack",
-        stack: jsonStack(sim[prim.stackIndex]!),
-        new_loc: { top: prim.newLoc.top, left: prim.newLoc.left },
-      };
-  }
 }
 
 // --- Per-play expansion (delegates to physicalPlan) ------------------

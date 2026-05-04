@@ -2,6 +2,7 @@ module Main.State exposing
     ( ActionLogBundle
     , ActionLogEntry
     , ActionOutcome
+    , AgentMoveBatch
     , ClickArbiter
     , DragContext
     , DragInfo
@@ -42,7 +43,6 @@ ripples in.
 
 -}
 
-import Game.Agent.Move exposing (Move)
 import Game.Rules.Card as Card exposing (Card)
 import Game.CardStack as CardStack exposing (CardStack)
 import Game.Dealer
@@ -125,13 +125,14 @@ type alias Model =
     , hideTurnControls : Bool
 
     -- Puzzles "Let agent play" program counter. Holds the
-    -- list of plan lines the agent computed at the start of
-    -- the walk; each click consumes one line (animating its
-    -- primitives at 500ms pacing) and advances. Empty/Nothing
-    -- means "no walk in progress — next click solves fresh."
-    -- A user gesture between clicks invalidates the cache by
-    -- clearing this back to Nothing.
-    , agentProgram : Maybe (List Move)
+    -- per-move primitive batches the TS engine produced at the
+    -- start of the walk; each click consumes one batch
+    -- (animating its primitives at 500ms pacing) and advances.
+    -- Empty/Nothing means "no walk in progress — next click
+    -- fires a fresh engine port request."  A user gesture
+    -- between clicks invalidates the cache by clearing this
+    -- back to Nothing.
+    , agentProgram : Maybe (List AgentMoveBatch)
 
     -- The decoded initial board/hand state for the current
     -- puzzle, stored at bootstrap so Reset can restore it
@@ -149,6 +150,18 @@ type alias Model =
     -- back. Per-Play-instance — separate panels' counters live in
     -- separate models.
     , nextEngineRequestId : Int
+    }
+
+
+{-| One agent move-batch as the TS engine produces it: the
+canonical DSL line plus the primitive sequence (Elm
+`WireAction`) realizing it on the live board. The agent-play
+walk caches a list of these in `agentProgram`; each click
+consumes one batch and animates its primitives.
+-}
+type alias AgentMoveBatch =
+    { line : String
+    , primitives : List WireAction
     }
 
 

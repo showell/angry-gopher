@@ -18,15 +18,17 @@ var LynRummyEngine = (() => {
   };
   var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
-  // games/lynrummy/ts/src/engine_entry.ts
+  // ../ts/src/engine_entry.ts
   var engine_entry_exports = {};
   __export(engine_entry_exports, {
+    agentPlay: () => agentPlay,
     findPlay: () => findPlay,
+    jsonStack: () => jsonStack,
     solveBoard: () => solveBoard,
     solveStateWithDescs: () => solveStateWithDescs
   });
 
-  // games/lynrummy/ts/src/rules/card.ts
+  // ../ts/src/rules/card.ts
   var RANKS = "A23456789TJQK";
   var SUITS = "CDSH";
   var RED = /* @__PURE__ */ new Set([1, 3]);
@@ -38,7 +40,7 @@ var LynRummyEngine = (() => {
     return RED.has(s);
   }
 
-  // games/lynrummy/ts/src/classified_card_stack.ts
+  // ../ts/src/classified_card_stack.ts
   var KIND_RUN = "run";
   var KIND_RB = "rb";
   var KIND_SET = "set";
@@ -431,7 +433,7 @@ var LynRummyEngine = (() => {
     return out;
   }
 
-  // games/lynrummy/ts/src/buckets.ts
+  // ../ts/src/buckets.ts
   var CARD_PAD = 4;
   function encodeCard(c) {
     const id = (c[0] * 4 + c[1]) * 2 + c[2];
@@ -565,7 +567,7 @@ var LynRummyEngine = (() => {
     };
   }
 
-  // games/lynrummy/ts/src/move.ts
+  // ../ts/src/move.ts
   function stackLabel(stack) {
     return stack.map(cardLabel).join(" ");
   }
@@ -616,7 +618,7 @@ var LynRummyEngine = (() => {
     }
   }
 
-  // games/lynrummy/ts/src/enumerator.ts
+  // ../ts/src/enumerator.ts
   var LEGAL_LEN3_KINDS = /* @__PURE__ */ new Set([KIND_RUN, KIND_RB, KIND_SET]);
   var RUN_FAMILY_KINDS = /* @__PURE__ */ new Set([KIND_RUN, KIND_RB]);
   function dropAt(stacks, idx) {
@@ -1588,7 +1590,7 @@ var LynRummyEngine = (() => {
     ];
   }
 
-  // games/lynrummy/ts/src/card_neighbors.ts
+  // ../ts/src/card_neighbors.ts
   function cardId(c) {
     return (c[0] - 1) * 8 + c[1] * 2 + c[2];
   }
@@ -1706,7 +1708,7 @@ var LynRummyEngine = (() => {
     return false;
   }
 
-  // games/lynrummy/ts/src/engine_v2.ts
+  // ../ts/src/engine_v2.ts
   var HEURISTICS = {
     /** Lower-bound: each move shrinks trouble+growing by ≤2. Admissible. */
     half_debt: (b) => {
@@ -1996,7 +1998,611 @@ var LynRummyEngine = (() => {
     return cards.map((c) => `${c[0]},${c[1]},${c[2]}`).join("|");
   }
 
-  // games/lynrummy/ts/src/rules/stack_type.ts
+  // ../ts/src/geometry.ts
+  var CARD_WIDTH = 27;
+  var CARD_PITCH = CARD_WIDTH + 6;
+  var CARD_HEIGHT = 40;
+  var BOARD_MAX_WIDTH = 800;
+  var BOARD_MAX_HEIGHT = 600;
+  var BOARD_MARGIN = 7;
+  var PLACE_STEP = 10;
+  var PACK_GAP_X = 30;
+  var PACK_GAP_Y = 30;
+  var ANTI_ALIGN_PX = 2;
+  var BOARD_START = { left: 24, top: 24 };
+  var HUMAN_PREFERRED_ORIGIN = { left: 50, top: 90 };
+  function stackWidth(cardCount) {
+    if (cardCount <= 0) return 0;
+    return CARD_WIDTH + (cardCount - 1) * CARD_PITCH;
+  }
+  function stackRect(stack) {
+    const left = stack.loc.left;
+    const top = stack.loc.top;
+    return {
+      left,
+      top,
+      right: left + stackWidth(stack.cards.length),
+      bottom: top + CARD_HEIGHT
+    };
+  }
+  function rectsOverlap(a, b) {
+    return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+  }
+  function padRect(r, margin) {
+    return {
+      left: r.left - margin,
+      top: r.top - margin,
+      right: r.right + margin,
+      bottom: r.bottom + margin
+    };
+  }
+  function antiAlign(left, top, newW, newH) {
+    const jl = Math.min(left + ANTI_ALIGN_PX, BOARD_MAX_WIDTH - newW);
+    const jt = Math.min(top + ANTI_ALIGN_PX, BOARD_MAX_HEIGHT - newH);
+    return { left: jl, top: jt };
+  }
+  function findOpenLoc(existing, cardCount) {
+    const newW = stackWidth(cardCount);
+    const newH = CARD_HEIGHT;
+    const existingRects = existing.map(stackRect);
+    if (existingRects.length === 0) {
+      return antiAlign(BOARD_START.left, BOARD_START.top, newW, newH);
+    }
+    const step = 15;
+    const minLeft = BOARD_MARGIN;
+    const minTop = BOARD_MARGIN;
+    const maxLeft = BOARD_MAX_WIDTH - newW - BOARD_MARGIN;
+    const maxTop = BOARD_MAX_HEIGHT - newH - BOARD_MARGIN;
+    const startLeft = Math.min(Math.max(HUMAN_PREFERRED_ORIGIN.left, minLeft), maxLeft);
+    const startTop = Math.min(Math.max(HUMAN_PREFERRED_ORIGIN.top, minTop), maxTop);
+    const clears = (left, top) => {
+      const padded = {
+        left: left - PACK_GAP_X,
+        top: top - PACK_GAP_Y,
+        right: left + newW + PACK_GAP_X,
+        bottom: top + newH + PACK_GAP_Y
+      };
+      for (const er of existingRects) if (rectsOverlap(padded, er)) return false;
+      return true;
+    };
+    for (let left = startLeft; left <= maxLeft; left += step) {
+      for (let top = startTop; top <= maxTop; top += step) {
+        if (clears(left, top)) return antiAlign(left, top, newW, newH);
+      }
+    }
+    for (let left = minLeft; left <= maxLeft; left += step) {
+      for (let top = minTop; top <= maxTop; top += step) {
+        if (clears(left, top)) return antiAlign(left, top, newW, newH);
+      }
+    }
+    return gridSweepOpenLoc(existingRects, newW, newH);
+  }
+  function gridSweepOpenLoc(existingRects, newW, newH) {
+    for (let top = 0; top + newH <= BOARD_MAX_HEIGHT; top += PLACE_STEP) {
+      for (let left = 0; left + newW <= BOARD_MAX_WIDTH; left += PLACE_STEP) {
+        const candidate = {
+          left: left - BOARD_MARGIN,
+          top: top - BOARD_MARGIN,
+          right: left + newW + BOARD_MARGIN,
+          bottom: top + newH + BOARD_MARGIN
+        };
+        let clears = true;
+        for (const er of existingRects) {
+          if (rectsOverlap(candidate, er)) {
+            clears = false;
+            break;
+          }
+        }
+        if (clears) return { top, left };
+      }
+    }
+    const fallbackTop = Math.max(0, BOARD_MAX_HEIGHT - newH);
+    return { top: fallbackTop, left: 0 };
+  }
+  function outOfBounds(stack) {
+    const r = stackRect(stack);
+    return r.left < 0 || r.top < 0 || r.right > BOARD_MAX_WIDTH || r.bottom > BOARD_MAX_HEIGHT;
+  }
+  var PLANNING_MARGIN = 15;
+  function findViolation(board, margin = BOARD_MARGIN) {
+    for (let i = 0; i < board.length; i++) {
+      if (outOfBounds(board[i])) return i;
+    }
+    const rects = board.map(stackRect);
+    for (let i = 0; i < rects.length; i++) {
+      const paddedI = padRect(rects[i], margin);
+      for (let j = i + 1; j < rects.length; j++) {
+        if (rectsOverlap(paddedI, rects[j])) return j;
+      }
+    }
+    return null;
+  }
+  function findCrowding(board) {
+    return findViolation(board, PLANNING_MARGIN);
+  }
+
+  // ../ts/src/primitives.ts
+  function applySplit(board, si, ci) {
+    const stack = board[si];
+    const size = stack.cards.length;
+    const srcLeft = stack.loc.left;
+    const srcTop = stack.loc.top;
+    let leftCount;
+    let leftLoc;
+    let rightLoc;
+    if (ci + 1 <= Math.floor(size / 2)) {
+      leftCount = ci + 1;
+      leftLoc = { top: srcTop - 4, left: srcLeft - 2 };
+      rightLoc = { top: srcTop, left: srcLeft + leftCount * CARD_PITCH + 8 };
+    } else {
+      leftCount = ci;
+      leftLoc = { top: srcTop, left: srcLeft - 8 };
+      rightLoc = { top: srcTop - 4, left: srcLeft + leftCount * CARD_PITCH + 4 };
+    }
+    const left = {
+      cards: stack.cards.slice(0, leftCount),
+      loc: leftLoc
+    };
+    const right = {
+      cards: stack.cards.slice(leftCount),
+      loc: rightLoc
+    };
+    return [...board.slice(0, si), ...board.slice(si + 1), left, right];
+  }
+  function applyMove(board, si, newLoc) {
+    const s = board[si];
+    const moved = { cards: s.cards, loc: { ...newLoc } };
+    return [...board.slice(0, si), ...board.slice(si + 1), moved];
+  }
+  function applyMergeStack(board, src, tgt, side) {
+    const s = board[src];
+    const t = board[tgt];
+    let newCards;
+    let loc;
+    if (side === "left") {
+      newCards = [...s.cards, ...t.cards];
+      loc = { left: t.loc.left - CARD_PITCH * s.cards.length, top: t.loc.top };
+    } else {
+      newCards = [...t.cards, ...s.cards];
+      loc = { ...t.loc };
+    }
+    const merged = { cards: newCards, loc };
+    const [hi, lo] = src > tgt ? [src, tgt] : [tgt, src];
+    const out = [...board];
+    out.splice(hi, 1);
+    out.splice(lo, 1);
+    return [...out, merged];
+  }
+  function applyMergeHand(board, targetIdx, handCard, side) {
+    const t = board[targetIdx];
+    let newCards;
+    let loc;
+    if (side === "left") {
+      newCards = [handCard, ...t.cards];
+      loc = { left: t.loc.left - CARD_PITCH, top: t.loc.top };
+    } else {
+      newCards = [...t.cards, handCard];
+      loc = { ...t.loc };
+    }
+    const merged = { cards: newCards, loc };
+    return [...board.slice(0, targetIdx), ...board.slice(targetIdx + 1), merged];
+  }
+  function applyPlaceHand(board, handCard, loc) {
+    return [...board, { cards: [handCard], loc: { ...loc } }];
+  }
+  function applyLocally(board, prim) {
+    switch (prim.action) {
+      case "split":
+        return applySplit(board, prim.stackIndex, prim.cardIndex);
+      case "move_stack":
+        return applyMove(board, prim.stackIndex, prim.newLoc);
+      case "merge_stack":
+        return applyMergeStack(board, prim.sourceStack, prim.targetStack, prim.side);
+      case "merge_hand":
+        return applyMergeHand(board, prim.targetStack, prim.handCard, prim.side);
+      case "place_hand":
+        return applyPlaceHand(board, prim.handCard, prim.loc);
+    }
+  }
+  function cardEq(a, b) {
+    return a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
+  }
+  function cardsEq(a, b) {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) if (!cardEq(a[i], b[i])) return false;
+    return true;
+  }
+  function findStackIndex(board, cards) {
+    for (let i = 0; i < board.length; i++) {
+      if (cardsEq(board[i].cards, cards)) return i;
+    }
+    throw new Error(`stack not found on board: [${cards.map((c) => `${c[0]},${c[1]},${c[2]}`).join(" ")}]`);
+  }
+
+  // ../ts/src/verbs.ts
+  function flipSide(s) {
+    return s === "left" ? "right" : "left";
+  }
+  function cardKey(c) {
+    return `${c[0]},${c[1]},${c[2]}`;
+  }
+  function expandVerb(desc, board, pendingHand = /* @__PURE__ */ new Set()) {
+    switch (desc.type) {
+      case "extract_absorb":
+        return extractAbsorbPrims(desc, board, pendingHand);
+      case "free_pull":
+        return freePullPrims(desc, board, pendingHand);
+      case "push":
+        return pushPrims(desc, board, pendingHand);
+      case "splice":
+        return splicePrims(desc, board, pendingHand);
+      case "shift":
+        return shiftPrims(desc, board, pendingHand);
+      case "decompose":
+        return decomposePrims(desc, board);
+    }
+  }
+  function planSplitAfter(sim, stackContent, k) {
+    const n = stackContent.length;
+    if (!(k >= 1 && k <= n - 1)) {
+      throw new Error(`split-after k=${k} out of range for n=${n}`);
+    }
+    const ci = k <= Math.floor(n / 2) ? k - 1 : k;
+    const si = findStackIndex(sim, stackContent);
+    const isInterior = ci !== 0 && ci !== n - 1;
+    if (isInterior) {
+      const others2 = sim.filter((_, i) => i !== si);
+      const newLoc2 = findOpenLoc(others2, n);
+      const cur2 = sim[si].loc;
+      if (newLoc2.top !== cur2.top || newLoc2.left !== cur2.left) {
+        const move2 = { action: "move_stack", stackIndex: si, newLoc: newLoc2 };
+        const afterMove2 = applyLocally(sim, move2);
+        const newSi2 = findStackIndex(afterMove2, stackContent);
+        const split2 = { action: "split", stackIndex: newSi2, cardIndex: ci };
+        const post3 = applyLocally(afterMove2, split2);
+        return { prims: [move2, split2], sim: post3 };
+      }
+    }
+    const split = { action: "split", stackIndex: si, cardIndex: ci };
+    const post = applyLocally(sim, split);
+    if (findCrowding(post) === null) {
+      return { prims: [split], sim: post };
+    }
+    const others = sim.filter((_, i) => i !== si);
+    const newLoc = findOpenLoc(others, n);
+    const cur = sim[si].loc;
+    if (newLoc.top === cur.top && newLoc.left === cur.left) {
+      return { prims: [split], sim: post };
+    }
+    const move = { action: "move_stack", stackIndex: si, newLoc };
+    const afterMove = applyLocally(sim, move);
+    const newSi = findStackIndex(afterMove, stackContent);
+    const newSplit = { action: "split", stackIndex: newSi, cardIndex: ci };
+    const post2 = applyLocally(afterMove, newSplit);
+    return { prims: [move, newSplit], sim: post2 };
+  }
+  function planMerge(sim, srcContent, tgtContent, side, pendingHand) {
+    if (srcContent.length === 1 && pendingHand.has(cardKey(srcContent[0]))) {
+      return planMergeHand(sim, srcContent[0], tgtContent, side);
+    }
+    if (tgtContent.length === 1 && pendingHand.has(cardKey(tgtContent[0]))) {
+      return planMergeHand(sim, tgtContent[0], srcContent, flipSide(side));
+    }
+    let s = srcContent, t = tgtContent, sd = side;
+    if (s.length > t.length) {
+      [s, t] = [t, s];
+      sd = flipSide(sd);
+    }
+    return planMergeStackOnBoard(sim, s, t, sd);
+  }
+  function planMergeHand(sim, handCard, tgtContent, side) {
+    const tgtIdx = findStackIndex(sim, tgtContent);
+    const merge = {
+      action: "merge_hand",
+      targetStack: tgtIdx,
+      handCard,
+      side
+    };
+    const post = applyLocally(sim, merge);
+    if (findCrowding(post) === null) {
+      return { prims: [merge], sim: post };
+    }
+    const finalSize = tgtContent.length + 1;
+    const others = sim.filter((_, i) => i !== tgtIdx);
+    const finalLoc = findOpenLoc(others, finalSize);
+    const targetLoc = side === "left" ? { top: finalLoc.top, left: finalLoc.left + CARD_PITCH } : finalLoc;
+    const cur = sim[tgtIdx].loc;
+    if (targetLoc.top === cur.top && targetLoc.left === cur.left) {
+      return { prims: [merge], sim: post };
+    }
+    const move = {
+      action: "move_stack",
+      stackIndex: tgtIdx,
+      newLoc: targetLoc
+    };
+    const afterMove = applyLocally(sim, move);
+    const newTgtIdx = findStackIndex(afterMove, tgtContent);
+    const newMerge = {
+      action: "merge_hand",
+      targetStack: newTgtIdx,
+      handCard,
+      side
+    };
+    const post2 = applyLocally(afterMove, newMerge);
+    return { prims: [move, newMerge], sim: post2 };
+  }
+  function planMergeStackOnBoard(sim, srcContent, tgtContent, side) {
+    const srcIdx = findStackIndex(sim, srcContent);
+    const tgtIdx = findStackIndex(sim, tgtContent);
+    const merge = {
+      action: "merge_stack",
+      sourceStack: srcIdx,
+      targetStack: tgtIdx,
+      side
+    };
+    const post = applyLocally(sim, merge);
+    if (findCrowding(post) === null) {
+      return { prims: [merge], sim: post };
+    }
+    const finalSize = srcContent.length + tgtContent.length;
+    const others = sim.filter((_, i) => i !== tgtIdx);
+    const finalLoc = findOpenLoc(others, finalSize);
+    const targetLoc = side === "left" ? {
+      top: finalLoc.top,
+      left: finalLoc.left + CARD_PITCH * srcContent.length
+    } : finalLoc;
+    const cur = sim[tgtIdx].loc;
+    if (targetLoc.top === cur.top && targetLoc.left === cur.left) {
+      return { prims: [merge], sim: post };
+    }
+    const move = {
+      action: "move_stack",
+      stackIndex: tgtIdx,
+      newLoc: targetLoc
+    };
+    const afterMove = applyLocally(sim, move);
+    const newSrcIdx = findStackIndex(afterMove, srcContent);
+    const newTgtIdx = findStackIndex(afterMove, tgtContent);
+    const newMerge = {
+      action: "merge_stack",
+      sourceStack: newSrcIdx,
+      targetStack: newTgtIdx,
+      side
+    };
+    const post2 = applyLocally(afterMove, newMerge);
+    return { prims: [move, newMerge], sim: post2 };
+  }
+  function classifyLeaf(cards) {
+    const ccs = classifyStack(cards);
+    if (ccs === null || ccs.n < 3) return "other";
+    if (ccs.kind === "set") return "set";
+    if (ccs.kind === "run") return "pure_run";
+    if (ccs.kind === "rb") return "rb_run";
+    return "other";
+  }
+  function isolateCard(sim, stackContent, ci) {
+    const n = stackContent.length;
+    const extCard = stackContent[ci];
+    const out = [];
+    if (ci === 0 && n > 1) {
+      const r = planSplitAfter(sim, stackContent, 1);
+      out.push(...r.prims);
+      return {
+        prims: out,
+        sim: r.sim,
+        extSingleton: [extCard],
+        remnants: [stackContent.slice(1)]
+      };
+    }
+    if (ci === n - 1 && n > 1) {
+      const r = planSplitAfter(sim, stackContent, n - 1);
+      out.push(...r.prims);
+      return {
+        prims: out,
+        sim: r.sim,
+        extSingleton: [extCard],
+        remnants: [stackContent.slice(0, n - 1)]
+      };
+    }
+    const a = planSplitAfter(sim, stackContent, ci);
+    out.push(...a.prims);
+    const rightChunk = stackContent.slice(ci);
+    const b = planSplitAfter(a.sim, rightChunk, 1);
+    out.push(...b.prims);
+    return {
+      prims: out,
+      sim: b.sim,
+      extSingleton: [extCard],
+      remnants: [stackContent.slice(0, ci), stackContent.slice(ci + 1)]
+    };
+  }
+  function indexOfCard(arr, target) {
+    for (let i = 0; i < arr.length; i++) {
+      const c = arr[i];
+      if (c[0] === target[0] && c[1] === target[1] && c[2] === target[2]) return i;
+    }
+    return -1;
+  }
+  function extractAbsorbPrims(desc, board, pendingHand) {
+    const source = desc.source;
+    const extCard = desc.extCard;
+    const targetBefore = desc.targetBefore;
+    const side = desc.side;
+    const verb = desc.verb;
+    const kind = classifyLeaf(source);
+    const ci = indexOfCard(source, extCard);
+    let sim = board;
+    const out = [];
+    let extSingleton = [extCard];
+    if (verb === "peel" || verb === "pluck" || verb === "yank" || verb === "split_out") {
+      const iso = isolateCard(sim, source, ci);
+      out.push(...iso.prims);
+      sim = iso.sim;
+      extSingleton = iso.extSingleton;
+      if (kind === "set" && iso.remnants.length === 2) {
+        const [leftChunk, tailChunk] = iso.remnants;
+        const r2 = planMerge(sim, tailChunk, leftChunk, "right", pendingHand);
+        out.push(...r2.prims);
+        sim = r2.sim;
+      }
+    } else if (verb === "steal" && (kind === "pure_run" || kind === "rb_run")) {
+      const iso = isolateCard(sim, source, ci);
+      out.push(...iso.prims);
+      sim = iso.sim;
+      extSingleton = iso.extSingleton;
+    } else if (verb === "steal" && kind === "set") {
+      const n = source.length;
+      let residue;
+      if (ci === n - 1) {
+        const r3 = planSplitAfter(sim, source, n - 1);
+        out.push(...r3.prims);
+        sim = r3.sim;
+        residue = source.slice(0, n - 1);
+      } else {
+        const r3 = planSplitAfter(sim, source, 1);
+        out.push(...r3.prims);
+        sim = r3.sim;
+        residue = source.slice(1);
+      }
+      const r2 = planSplitAfter(sim, residue, 1);
+      out.push(...r2.prims);
+      sim = r2.sim;
+      extSingleton = [extCard];
+    } else if (verb === "steal" && (kind === "pair_run" || kind === "pair_rb" || kind === "pair_set" || kind === "other")) {
+      if (source.length !== 2) {
+        throw new Error(`steal-from-partial expects length-2 source; got length ${source.length}`);
+      }
+      const r2 = planSplitAfter(sim, source, 1);
+      out.push(...r2.prims);
+      sim = r2.sim;
+      extSingleton = [extCard];
+    } else {
+      throw new Error(`verb ${verb} kind ${kind} unsupported`);
+    }
+    const r = planMerge(sim, extSingleton, targetBefore, side, pendingHand);
+    out.push(...r.prims);
+    return out;
+  }
+  function freePullPrims(desc, board, pendingHand) {
+    const r = planMerge(board, [desc.loose], desc.targetBefore, desc.side, pendingHand);
+    return r.prims;
+  }
+  function pushPrims(desc, board, pendingHand) {
+    const r = planMerge(board, desc.troubleBefore, desc.targetBefore, desc.side, pendingHand);
+    return r.prims;
+  }
+  function splicePrims(desc, board, pendingHand) {
+    const loose = desc.loose;
+    const src = desc.source;
+    const k = desc.k;
+    const side = desc.side;
+    let sim = board;
+    const a = planSplitAfter(sim, src, k);
+    sim = a.sim;
+    const half = side === "left" ? src.slice(0, k) : src.slice(k);
+    const mergeSide = side === "left" ? "right" : "left";
+    const b = planMerge(sim, [loose], half, mergeSide, pendingHand);
+    return [...a.prims, ...b.prims];
+  }
+  function shiftPrims(desc, board, pendingHand) {
+    const source = desc.source;
+    const donor = desc.donor;
+    const stolen = desc.stolen;
+    const pCard = desc.pCard;
+    const whichEnd = desc.whichEnd;
+    const targetBefore = desc.targetBefore;
+    const side = desc.side;
+    let sim = board;
+    const out = [];
+    const pi = indexOfCard(donor, pCard);
+    const kind = classifyLeaf(donor);
+    const iso = isolateCard(sim, donor, pi);
+    out.push(...iso.prims);
+    sim = iso.sim;
+    if (kind === "set" && iso.remnants.length === 2) {
+      const [leftChunk, tailChunk] = iso.remnants;
+      const r = planMerge(sim, tailChunk, leftChunk, "right", pendingHand);
+      out.push(...r.prims);
+      sim = r.sim;
+    }
+    let augmentedSource;
+    let splitK;
+    if (whichEnd === 0) {
+      const r = planMerge(sim, [pCard], source, "right", pendingHand);
+      out.push(...r.prims);
+      sim = r.sim;
+      augmentedSource = [...source, pCard];
+      splitK = 1;
+    } else {
+      const r = planMerge(sim, [pCard], source, "left", pendingHand);
+      out.push(...r.prims);
+      sim = r.sim;
+      augmentedSource = [pCard, ...source];
+      splitK = source.length;
+    }
+    const a = planSplitAfter(sim, augmentedSource, splitK);
+    out.push(...a.prims);
+    sim = a.sim;
+    const m = planMerge(sim, [stolen], targetBefore, side, pendingHand);
+    out.push(...m.prims);
+    return out;
+  }
+  function decomposePrims(desc, board) {
+    const r = planSplitAfter(board, desc.pairBefore, 1);
+    return r.prims;
+  }
+
+  // ../ts/src/wire_json.ts
+  function jsonCard(c) {
+    return { value: c[0], suit: c[1], origin_deck: c[2] };
+  }
+  function jsonBoardCard(c) {
+    return { card: jsonCard(c), state: 0 };
+  }
+  function jsonStack(s) {
+    return {
+      board_cards: s.cards.map(jsonBoardCard),
+      loc: { top: s.loc.top, left: s.loc.left }
+    };
+  }
+  function primToWire(prim, sim) {
+    switch (prim.action) {
+      case "split":
+        return {
+          action: "split",
+          stack: jsonStack(sim[prim.stackIndex]),
+          card_index: prim.cardIndex
+        };
+      case "merge_stack":
+        return {
+          action: "merge_stack",
+          source: jsonStack(sim[prim.sourceStack]),
+          target: jsonStack(sim[prim.targetStack]),
+          side: prim.side
+        };
+      case "merge_hand":
+        return {
+          action: "merge_hand",
+          hand_card: jsonCard(prim.handCard),
+          target: jsonStack(sim[prim.targetStack]),
+          side: prim.side
+        };
+      case "place_hand":
+        return {
+          action: "place_hand",
+          hand_card: jsonCard(prim.handCard),
+          loc: { top: prim.loc.top, left: prim.loc.left }
+        };
+      case "move_stack":
+        return {
+          action: "move_stack",
+          stack: jsonStack(sim[prim.stackIndex]),
+          new_loc: { top: prim.newLoc.top, left: prim.newLoc.left }
+        };
+    }
+  }
+
+  // ../ts/src/rules/stack_type.ts
   function successor2(v) {
     return v === 13 ? 1 : v + 1;
   }
@@ -2015,7 +2621,7 @@ var LynRummyEngine = (() => {
     return false;
   }
 
-  // games/lynrummy/ts/src/hand_play.ts
+  // ../ts/src/hand_play.ts
   var PROJECTION_MAX_STATES = 5e3;
   var HINT_MAX_PLAN_LENGTH = 4;
   function findPlay(hand, board, opts = {}) {
@@ -2067,7 +2673,7 @@ var LynRummyEngine = (() => {
     for (let k = 0; k < hand.length; k++) {
       if (k === pairI || k === pairJ) continue;
       const c = hand[k];
-      if (cardEq(c, pair[0]) || cardEq(c, pair[1])) continue;
+      if (cardEq2(c, pair[0]) || cardEq2(c, pair[1])) continue;
       const triples = [
         [pair[0], pair[1], c],
         [pair[0], c, pair[1]],
@@ -2080,7 +2686,7 @@ var LynRummyEngine = (() => {
     }
     return null;
   }
-  function cardEq(a, b) {
+  function cardEq2(a, b) {
     return a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
   }
   function tryProjection(board, extraStacks, maxStates, stats, kind) {
@@ -2126,8 +2732,28 @@ var LynRummyEngine = (() => {
     return plan === null ? null : plan.map((p) => p.line);
   }
 
-  // games/lynrummy/ts/src/engine_entry.ts
+  // ../ts/src/engine_entry.ts
   function solveBoard(board) {
+    return solveBucketsFromCardLists(board);
+  }
+  function agentPlay(board) {
+    const cardLists = board.map((s) => s.cards);
+    const plan = solveBucketsFromCardLists(cardLists);
+    if (plan === null) return null;
+    let sim = board;
+    const out = [];
+    for (const planLine of plan) {
+      const prims = expandVerb(planLine.desc, sim, /* @__PURE__ */ new Set());
+      const wireActions = [];
+      for (const p of prims) {
+        wireActions.push(primToWire(p, sim));
+        sim = applyLocally(sim, p);
+      }
+      out.push({ line: planLine.line, wire_actions: wireActions });
+    }
+    return out;
+  }
+  function solveBucketsFromCardLists(board) {
     const helper = [];
     const trouble = [];
     for (const stack of board) {

@@ -31,12 +31,8 @@ DOM ids for multi-embedding.
 
 import Browser.Dom
 import Browser.Events
-import Game.Agent.Bfs as Bfs
 import Game.CardStack exposing (CardStack)
 import Game.Rules.Card as Card
-import Game.Agent.GeometryPlan as AgentGeometry
-import Game.Agent.Move as AgentMove exposing (Move)
-import Game.Agent.Verbs as AgentVerbs
 import Game.Dealer as Dealer
 import Game.Reducer as Reducer
 import Game.Game as Game
@@ -297,7 +293,7 @@ update msg model =
             clickHint model
 
         ClickAgentPlay ->
-            withNoOutput (clickAgentPlay model)
+            clickAgentPlay model
 
         EngineSolveResult value ->
             withNoOutput (handleEngineSolveResult value model)
@@ -672,24 +668,57 @@ encodeBoardForEngine board =
 
 
 {-| Decode an `engineResponse` port payload and apply it to the
-status bar. Carries `request_id`, `ok`, and `plan`. Stale
-responses (request id ≠ pendingEngineRequest) are dropped on
-the floor.
+model. Carries `request_id`, `op`, `ok`, and op-specific result
+fields. Stale responses (request id ≠ pendingEngineRequest)
+are dropped on the floor.
 
-`plan` is null when the engine couldn't find a plan within
-budget; otherwise it's a non-empty list of PlanLine objects.
-We surface the first line as the hint, matching the legacy
-`AgentMove.describe firstMove` shape.
+The decoder branches on `op`: "solve_board" for hint, where
+`plan` is a list of plan-line strings; "agent_play" for the
+agent walk, where `plan` is a list of `{line, wire_actions}`
+batches.
 -}
 handleEngineSolveResult : Encode.Value -> Model -> ( Model, Cmd Msg )
 handleEngineSolveResult value model =
-    case Decode.decodeValue engineResponseDecoder value of
-        Ok response ->
-            if model.pendingEngineRequest == Just response.requestId then
-                applyEngineResponse response model
+    case Decode.decodeValue engineResponseHeadDecoder value of
+        Ok head ->
+            if model.pendingEngineRequest /= Just head.requestId then
+                ( model, Cmd.none )
+
+            else if not head.ok then
+                ( { model
+                    | pendingEngineRequest = Nothing
+                    , status =
+                        { text =
+                            "Engine error: "
+                                ++ Maybe.withDefault "(no detail)" head.error
+                        , kind = Scold
+                        }
+                  }
+                , Cmd.none
+                )
 
             else
-                ( model, Cmd.none )
+                case head.op of
+                    "solve_board" ->
+                        applyHintResponse value model
+
+                    "agent_play" ->
+                        applyAgentPlayResponse value model
+
+                    other ->
+                        let
+                            _ =
+                                Debug.log "engineResponse: unknown op" other
+                        in
+                        ( { model
+                            | pendingEngineRequest = Nothing
+                            , status =
+                                { text = "Engine sent unknown op: " ++ other
+                                , kind = Scold
+                                }
+                          }
+                        , Cmd.none
+                        )
 
         Err err ->
             let
@@ -706,108 +735,148 @@ handleEngineSolveResult value model =
             )
 
 
-type alias EngineResponse =
+{-| Just the discriminator + outcome fields. Op-specific decode
+happens after the dispatch.
+-}
+type alias EngineResponseHead =
     { requestId : Int
+    , op : String
     , ok : Bool
-    , plan : Maybe (List String)
     , error : Maybe String
     }
 
 
-engineResponseDecoder : Decoder EngineResponse
-engineResponseDecoder =
-    Decode.map4 EngineResponse
+engineResponseHeadDecoder : Decoder EngineResponseHead
+engineResponseHeadDecoder =
+    Decode.map4 EngineResponseHead
         (Decode.field "request_id" Decode.int)
+        (Decode.field "op" Decode.string)
         (Decode.field "ok" Decode.bool)
-        (Decode.maybe
-            (Decode.field "plan"
-                (Decode.nullable
-                    (Decode.list (Decode.field "line" Decode.string))
-                )
-            )
-            |> Decode.map (Maybe.andThen identity)
-        )
         (Decode.maybe (Decode.field "error" Decode.string))
 
 
-applyEngineResponse : EngineResponse -> Model -> ( Model, Cmd Msg )
-applyEngineResponse response model =
+applyHintResponse : Encode.Value -> Model -> ( Model, Cmd Msg )
+applyHintResponse value model =
     let
         cleared =
             { model | pendingEngineRequest = Nothing, hintedCards = [] }
+
+        planDecoder =
+            Decode.field "plan"
+                (Decode.nullable
+                    (Decode.list (Decode.field "line" Decode.string))
+                )
     in
-    if not response.ok then
-        ( { cleared
-            | status =
-                { text =
-                    "Engine error: "
-                        ++ Maybe.withDefault "(no detail)" response.error
-                , kind = Scold
-                }
-          }
-        , Cmd.none
-        )
+    case Decode.decodeValue planDecoder value of
+        Ok Nothing ->
+            ( { cleared
+                | status = { text = "Engine found no plan within budget.", kind = Inform }
+              }
+            , Cmd.none
+            )
 
-    else
-        case response.plan of
-            Nothing ->
-                ( { cleared
-                    | status =
-                        { text = "Engine found no plan within budget."
-                        , kind = Inform
-                        }
-                  }
-                , Cmd.none
-                )
+        Ok (Just []) ->
+            ( { cleared
+                | status = { text = "Board is already clean — nothing to do.", kind = Inform }
+              }
+            , Cmd.none
+            )
 
-            Just [] ->
-                ( { cleared
-                    | status =
-                        { text = "Board is already clean — nothing to do."
-                        , kind = Inform
-                        }
-                  }
-                , Cmd.none
-                )
+        Ok (Just (firstLine :: _)) ->
+            ( { cleared
+                | status = { text = "Hint: " ++ firstLine, kind = Inform }
+              }
+            , Cmd.none
+            )
 
-            Just (firstLine :: _) ->
-                ( { cleared
-                    | status =
-                        { text = "Hint: " ++ firstLine
-                        , kind = Inform
-                        }
-                  }
-                , Cmd.none
-                )
+        Err err ->
+            let
+                _ =
+                    Debug.log "applyHintResponse decode err" err
+            in
+            ( { cleared
+                | status = { text = "Engine hint response could not be decoded — see console.", kind = Scold }
+              }
+            , Cmd.none
+            )
 
 
-{-| Each click plays exactly the next BFS plan line — i.e. the
-primitives for one logical move. Then it stops, so the user
-can keep clicking to walk through the program one line at a
-time.
+{-| Decode an agent_play response (list of `{line, wire_actions}`
+batches), cache the rest in `agentProgram`, and run the head
+batch immediately. Mirrors what the cached-cache path does on
+subsequent clicks: one batch per click, the rest queued.
+-}
+applyAgentPlayResponse : Encode.Value -> Model -> ( Model, Cmd Msg )
+applyAgentPlayResponse value model =
+    let
+        cleared =
+            { model | pendingEngineRequest = Nothing, hintedCards = [] }
 
-The plan is computed ONCE on the first click and cached in
-`model.agentProgram` (a "program counter" of remaining
-moves). Subsequent clicks consume the head of that cache —
-no re-solve. If the user makes their own gesture in between,
-the gesture path clears `agentProgram` back to Nothing,
-which forces the next click to re-solve from the new live
-board.
+        planDecoder =
+            Decode.field "plan" (Decode.nullable (Decode.list agentBatchDecoder))
+    in
+    case Decode.decodeValue planDecoder value of
+        Ok Nothing ->
+            ( { cleared
+                | status = { text = "Agent could not find a plan within budget.", kind = Inform }
+              }
+            , Cmd.none
+            )
 
-The animation itself is owned by the Replay engine. We expand
-the move into a sequence of WireActions, append each to the
-action log with no captured gesture path, fire each on the
-wire for persistence, then kick Replay forward from the new
-tail with `stopAtStep` set to the post-tail index so it stops
-when the move's primitives are exhausted (instead of running
-to end-of-log). Replay walks each entry, calls
+        Ok (Just []) ->
+            ( { cleared
+                | status = { text = "Board is already clean — nothing to do.", kind = Inform }
+              }
+            , Cmd.none
+            )
+
+        Ok (Just (batch :: rest)) ->
+            runAgentBatch batch rest cleared
+
+        Err err ->
+            let
+                _ =
+                    Debug.log "applyAgentPlayResponse decode err" err
+            in
+            ( { cleared
+                | status = { text = "Engine agent_play response could not be decoded — see console.", kind = Scold }
+              }
+            , Cmd.none
+            )
+
+
+agentBatchDecoder : Decoder State.AgentMoveBatch
+agentBatchDecoder =
+    Decode.map2 State.AgentMoveBatch
+        (Decode.field "line" Decode.string)
+        (Decode.field "wire_actions" (Decode.list WA.decoder))
+
+
+{-| Each click plays exactly the next plan move — i.e. the
+primitive batch for one logical move from the canonical TS
+engine. Then it stops, so the user can keep clicking to walk
+through the program one line at a time.
+
+The plan is computed ONCE on the first click (via the engine
+port — async; status flips to "Thinking…" while the bundle
+solves) and cached in `model.agentProgram`. Subsequent clicks
+consume the head of that cache — no re-solve. If the user
+makes their own gesture in between, the gesture path clears
+`agentProgram` back to Nothing, which forces the next click
+to re-fire the engine port from the new live board.
+
+The animation itself is owned by the Replay engine. The TS
+engine produces primitive batches in `Game.WireAction` shape;
+this module appends them to the action log with synthesized
+gesture paths, fires each on the wire for persistence, then
+kicks Replay forward. Replay walks each entry, calls
 `Space.synthesizeBoardPath` because no captured path is
 present, and animates with the same FSM that animates Steve's
 captured drags. The agent is a clean producer of WireActions;
 all rendering work lives behind the Replay seam.
 
 -}
-clickAgentPlay : Model -> ( Model, Cmd Msg )
+clickAgentPlay : Model -> ( Model, Cmd Msg, Output )
 clickAgentPlay model =
     -- Don't stack agent moves on top of an already-running
     -- replay or animation — wait for the current step to land
@@ -815,93 +884,110 @@ clickAgentPlay model =
     if model.replay /= Nothing then
         ( { model | status = animationInProgressStatus }
         , Cmd.none
+        , NoOutput
         )
 
     else
-        case nextAgentMove model of
-            Just ( move, remaining ) ->
-                runAgentMove move remaining model
+        case model.agentProgram of
+            Just (batch :: rest) ->
+                -- Cache live: consume head, no port call.
+                let
+                    ( newModel, cmd ) =
+                        runAgentBatch batch rest model
+                in
+                ( newModel, cmd, NoOutput )
+
+            Just [] ->
+                -- Walked to the end of the program last click; tell
+                -- the user, then drop the cache so the next click
+                -- starts a fresh solve.
+                ( { model
+                    | agentProgram = Nothing
+                    , status = { text = "Agent finished its program.", kind = Inform }
+                  }
+                , Cmd.none
+                , NoOutput
+                )
 
             Nothing ->
-                -- nextAgentMove already filled in the right
-                -- status; just hand the model back unchanged.
-                ( noteAgentStatus model, Cmd.none )
+                -- Cache empty: fire the engine port and wait for the
+                -- response to land via EngineSolveResult.
+                requestAgentPlan model
 
 
-{-| Resolve the next move to play, using the cached program
-counter when one's live and re-solving from the live board
-otherwise. Returns Nothing when there's nothing left to do
-AND writes a status message describing why.
+{-| Compose the agent_play engine port request payload.
+Differs from the hint payload in two ways:
+  - op = "agent_play" (the JS glue branches on this)
+  - board entries carry geometry (loc) so the engine can do
+    geometry-aware verb expansion
 -}
-nextAgentMove : Model -> Maybe ( Move, List Move )
-nextAgentMove model =
-    case model.agentProgram of
-        Just (move :: rest) ->
-            Just ( move, rest )
-
-        Just [] ->
-            Nothing
-
-        Nothing ->
-            case Bfs.solveBoard model.board of
-                Just (move :: rest) ->
-                    Just ( move, rest )
-
-                _ ->
-                    Nothing
-
-
-noteAgentStatus : Model -> Model
-noteAgentStatus model =
+requestAgentPlan : Model -> ( Model, Cmd Msg, Output )
+requestAgentPlan model =
     let
-        text =
-            case model.agentProgram of
-                Just [] ->
-                    "Agent finished its program."
+        reqId =
+            model.nextEngineRequestId
 
-                _ ->
-                    case Bfs.solveBoard model.board of
-                        Just [] ->
-                            "Board is already clean — nothing to do."
+        puzzleName =
+            Maybe.withDefault "" model.puzzleName
 
-                        _ ->
-                            "Agent could not find a plan within budget."
+        payload =
+            Encode.object
+                [ ( "request_id", Encode.int reqId )
+                , ( "op", Encode.string "agent_play" )
+                , ( "puzzle_name", Encode.string puzzleName )
+                , ( "board", encodeBoardForAgentPlay model.board )
+                ]
     in
-    { model
-        | agentProgram = Nothing
-        , status = { text = text, kind = Inform }
-    }
+    ( { model
+        | hintedCards = []
+        , pendingEngineRequest = Just reqId
+        , nextEngineRequestId = reqId + 1
+        , status = { text = "Thinking…", kind = Inform }
+      }
+    , Cmd.none
+    , EngineSolveRequested payload
+    )
 
 
-runAgentMove : Move -> List Move -> Model -> ( Model, Cmd Msg )
-runAgentMove move remaining model =
-    let
-        -- Verbs decompose the logical move; GeometryPlan injects
-        -- pre-flight MoveStacks before any merge whose in-place
-        -- result would overflow the board. Without the wrapper,
-        -- the referee rejects the merge and the agent stalls.
-        primitives =
-            AgentVerbs.moveToPrimitives model.board move
-                |> AgentGeometry.planActions model.board
-    in
-    if List.isEmpty primitives then
-        -- Verb-to-primitive translation produced nothing. Most
-        -- common cause: the BFS plan and the live board have
-        -- drifted (a stack the move expected to find by content
-        -- isn't there in that exact shape). Make the failure
-        -- visible: status bar + console log of the failed move.
-        -- Don't kick Replay — there's nothing to animate. Don't
-        -- pop further into the program; the user needs to see
-        -- this and decide.
+{-| Encode the board for agent_play: each stack carries cards
+AND loc (the engine needs geometry to plan splits, pushes, and
+move_stacks correctly).
+-}
+encodeBoardForAgentPlay : List CardStack -> Encode.Value
+encodeBoardForAgentPlay board =
+    Encode.list
+        (\stack ->
+            Encode.object
+                [ ( "cards"
+                  , Encode.list Card.encodeCard
+                        (List.map .card stack.boardCards)
+                  )
+                , ( "loc"
+                  , Encode.object
+                        [ ( "top", Encode.int stack.loc.top )
+                        , ( "left", Encode.int stack.loc.left )
+                        ]
+                  )
+                ]
+        )
+        board
+
+
+{-| Apply one engine-produced batch: synthesize gestures,
+build action log entries, kick Replay, fire wire writes.
+-}
+runAgentBatch : State.AgentMoveBatch -> List State.AgentMoveBatch -> Model -> ( Model, Cmd Msg )
+runAgentBatch batch remaining model =
+    if List.isEmpty batch.primitives then
+        -- Engine produced an empty primitive list — that should be
+        -- impossible (a "do nothing" plan line). Surface it loudly
+        -- rather than silently consuming the batch.
         let
-            described =
-                AgentMove.describe move
-
             _ =
-                Debug.log "agent: move emitted no primitives" described
+                Debug.log "agent: engine produced empty primitive batch" batch.line
         in
         ( { model
-            | status = agentStalledStatus described
+            | status = agentStalledStatus batch.line
             , agentProgram = Nothing
           }
         , Cmd.none
@@ -909,16 +995,8 @@ runAgentMove move remaining model =
 
     else
         let
-            -- Synthesize a gesture per primitive against an
-            -- evolving sim board. Each Merge/Move primitive
-            -- gets a real path; the resulting actionLog entry
-            -- carries it so Instant Replay can animate later
-            -- AND the wire envelope ships it so the server's
-            -- gesture-required gate accepts (Splits, hand-
-            -- origin, complete_turn don't need one — synthesis
-            -- returns Nothing for those).
             primGestures =
-                synthesizeAgentGestures model primitives
+                synthesizeAgentGestures model batch.primitives
 
             entries =
                 List.map agentLogEntryWith primGestures
@@ -932,7 +1010,7 @@ runAgentMove move remaining model =
                     , nextSeq = startSeq + List.length entries
                     , agentProgram = Just remaining
                     , status =
-                        { text = "Agent: " ++ AgentMove.describe move
+                        { text = "Agent: " ++ batch.line
                         , kind = Inform
                         }
                     , replay = Just { pending = entries, paused = False }

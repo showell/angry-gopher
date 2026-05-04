@@ -14,6 +14,10 @@ import {
   KIND_RB,
   KIND_SET,
 } from "./classified_card_stack.ts";
+import type { BoardStack } from "./geometry.ts";
+import { applyLocally } from "./primitives.ts";
+import { expandVerb } from "./verbs.ts";
+import { primToWire, type WireActionJson } from "./wire_json.ts";
 
 /**
  * Board-shaped entry point. Each board stack is a list of cards
@@ -24,8 +28,58 @@ import {
  *
  * Returns the SHORTEST plan (PlanLine[]) found within the engine's
  * default budget, or null if no plan exists / budget exhausted.
+ *
+ * Used by the puzzles HINT button. Locations aren't needed because
+ * hint output is text-only — no primitives to lay out.
  */
 export function solveBoard(
+  board: readonly (readonly Card[])[],
+): readonly PlanLine[] | null {
+  return solveBucketsFromCardLists(board);
+}
+
+/**
+ * Agent-play entry point. Like `solveBoard` but threads geometry
+ * through the verb expansion so callers get back per-move
+ * primitive batches in Elm-wire JSON shape.
+ *
+ * Each batch is `{ line, wire_actions }` where `line` is the
+ * canonical DSL string for one logical move and `wire_actions` is
+ * the primitive sequence (in `Game.WireAction` JSON shape) that
+ * realizes it on the live board. The Elm side caches batches in
+ * `agentProgram` and consumes one per click — same per-move-step
+ * walking semantics as the legacy Elm-BFS path.
+ *
+ * Each `BoardStack` carries `{cards, loc}` matching `geometry.ts`.
+ * Locations are required because verb expansion does geometry-
+ * aware planning (interior splits relocate, end-splits pre-flight,
+ * pushes find open locs, etc.).
+ */
+export function agentPlay(
+  board: readonly BoardStack[],
+): readonly { line: string; wire_actions: readonly WireActionJson[] }[] | null {
+  const cardLists = board.map(s => s.cards);
+  const plan = solveBucketsFromCardLists(cardLists);
+  if (plan === null) return null;
+
+  // Thread sim forward across moves. Each desc expands against the
+  // current sim, then the resulting primitives advance sim before
+  // the next desc expands.
+  let sim: readonly BoardStack[] = board;
+  const out: { line: string; wire_actions: WireActionJson[] }[] = [];
+  for (const planLine of plan) {
+    const prims = expandVerb(planLine.desc, sim, new Set());
+    const wireActions: WireActionJson[] = [];
+    for (const p of prims) {
+      wireActions.push(primToWire(p, sim));
+      sim = applyLocally(sim, p);
+    }
+    out.push({ line: planLine.line, wire_actions: wireActions });
+  }
+  return out;
+}
+
+function solveBucketsFromCardLists(
   board: readonly (readonly Card[])[],
 ): readonly PlanLine[] | null {
   const helper: Card[][] = [];
@@ -48,8 +102,9 @@ export function solveBoard(
 }
 
 // Re-exports — useful if the JS glue needs lower-level access later
-// (e.g., for hand_play / findPlay in Phase 2).
+// (e.g. for hand_play / findPlay in a future phase).
 export { solveStateWithDescs } from "./engine_v2.ts";
 export { findPlay } from "./hand_play.ts";
+export { jsonStack } from "./wire_json.ts";
 export type { PlanLine } from "./engine_v2.ts";
 export type { Card } from "./rules/card.ts";

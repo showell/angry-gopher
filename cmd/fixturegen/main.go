@@ -677,6 +677,7 @@ import Main.Msg as Msg
 import Main.Play as Play
 import Main.State as State
 import Test exposing (Test, describe, test)
+import Test.AgentPlayBridge as AgentPlayBridge
 
 
 standardBounds : BoardBounds
@@ -972,8 +973,12 @@ const elmClickAgentPlayTmpl = `            let
                 model0 =
                     { base | board = board, sessionId = Just 0 }
 
-                ( newModel, _, _ ) =
-                    Play.update Msg.ClickAgentPlay model0
+                -- Phase 2 of TS_ELM_INTEGRATION moved this click
+                -- behind an async engine port. Test.AgentPlayBridge
+                -- does the click + synthetic-engine-response in one
+                -- call (legacy Bfs stands in for the TS bundle).
+                newModel =
+                    AgentPlayBridge.simulateClickAndDeliverPlan model0
 
                 logAppended =
                     List.length newModel.actionLog - List.length model0.actionLog

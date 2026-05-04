@@ -28,6 +28,7 @@ import Main.Msg exposing (Msg(..))
 import Main.Play as Play
 import Main.State as State
 import Test exposing (Test, describe, test)
+import Test.AgentPlayBridge as AgentPlayBridge
 import Time
 
 
@@ -77,8 +78,8 @@ driveReplayToCompletion model nowMs budget =
 clickAndDrain : State.Model -> State.Model
 clickAndDrain m0 =
     let
-        ( m1, _, _ ) =
-            Play.update ClickAgentPlay m0
+        m1 =
+            AgentPlayBridge.simulateClickAndDeliverPlan m0
     in
     driveReplayToCompletion m1 0 5000
 
@@ -155,8 +156,8 @@ mouseUpDuringAnimDoesNotAbortPlayback =
                         , makeStack 200 100 [ c Two Club, c Three Diamond, c Four Club, c Five Heart, c Six Spade, c Seven Heart ]
                         ]
 
-                ( m1, _, _ ) =
-                    Play.update ClickAgentPlay m0
+                m1 =
+                    AgentPlayBridge.simulateClickAndDeliverPlan m0
 
                 ( m2, _, _ ) =
                     -- One ReplayFrame: NotAnimating → Animating.
@@ -215,8 +216,8 @@ wireFailureMidReplayDoesNotStallBoard =
                 m0 =
                     modelFromBoard simplePeelBoard
 
-                ( m1, _, _ ) =
-                    Play.update ClickAgentPlay m0
+                m1 =
+                    AgentPlayBridge.simulateClickAndDeliverPlan m0
 
                 ( m2, _, _ ) =
                     Play.update (ReplayFrame (posix 16)) m1
@@ -397,8 +398,8 @@ statusUpdatesAfterClick =
                 m0 =
                     modelFromBoard simplePeelBoard
 
-                ( m1, _, _ ) =
-                    Play.update ClickAgentPlay m0
+                m1 =
+                    AgentPlayBridge.simulateClickAndDeliverPlan m0
             in
             if String.startsWith "Agent: " m1.status.text then
                 Expect.pass
@@ -418,8 +419,8 @@ replayKicksAfterClick =
                 m0 =
                     modelFromBoard simplePeelBoard
 
-                ( m1, _, _ ) =
-                    Play.update ClickAgentPlay m0
+                m1 =
+                    AgentPlayBridge.simulateClickAndDeliverPlan m0
             in
             case m1.replay of
                 Just _ ->
