@@ -26,7 +26,7 @@ import {
   stackRect, padRect, rectsOverlap, findOpenLoc,
 } from "./geometry.ts";
 import {
-  type Primitive, type SplitPrim, type MergeStackPrim, type MoveStackPrim,
+  type Primitive, type SplitPrim, type MergeStackPrim, type MergeHandPrim, type MoveStackPrim,
   applyLocally, cardsOf, findStackIndex,
 } from "./primitives.ts";
 
@@ -89,6 +89,7 @@ interface PreFlightResult {
 function preFlight(sim: readonly BoardStack[], action: Primitive): PreFlightResult | null {
   if (action.action === "split") return preFlightSplit(sim, action);
   if (action.action === "merge_stack") return preFlightMergeStack(sim, action);
+  if (action.action === "merge_hand") return preFlightMergeHand(sim, action);
   return null;
 }
 
@@ -155,6 +156,48 @@ function preFlightMergeStack(
     action: "merge_stack",
     sourceStack: newSrcSi,
     targetStack: newTgtSi,
+    side: action.side,
+  };
+  const afterMerge = applyLocally(afterMove, newMerge);
+  return { move, newAction: newMerge, newPost: afterMerge };
+}
+
+function preFlightMergeHand(
+  sim: readonly BoardStack[],
+  action: MergeHandPrim,
+): PreFlightResult | null {
+  // merge_hand grows the target stack by one card from the hand. The
+  // hand card is not on the board, so there's no source to keep clear
+  // of — only the target moves. Find a loc that fits the post-merge
+  // (targetSize+1) stack, accounting for which side the hand card
+  // joins on.
+  const tgtSi = action.targetStack;
+  const tgt = sim[tgtSi]!;
+  const targetSize = tgt.cards.length;
+  const finalSize = targetSize + 1;
+  const others = sim.filter((_, i) => i !== tgtSi);
+  const finalLoc = findOpenLoc(others, finalSize);
+  let targetLoc: Loc;
+  if (action.side === "left") {
+    // Hand card joins LEFT — final stack's left edge is the new card's
+    // left edge, target shifts right by one CARD_PITCH.
+    targetLoc = {
+      left: finalLoc.left + CARD_PITCH,
+      top: finalLoc.top,
+    };
+  } else {
+    targetLoc = finalLoc;
+  }
+  if (targetLoc.top === tgt.loc.top && targetLoc.left === tgt.loc.left) return null;
+  const move: MoveStackPrim = {
+    action: "move_stack", stackIndex: tgtSi, newLoc: targetLoc,
+  };
+  const afterMove = applyLocally(sim, move);
+  const newTgtSi = findStackIndex(afterMove, cardsOf(tgt));
+  const newMerge: MergeHandPrim = {
+    action: "merge_hand",
+    targetStack: newTgtSi,
+    handCard: action.handCard,
     side: action.side,
   };
   const afterMerge = applyLocally(afterMove, newMerge);

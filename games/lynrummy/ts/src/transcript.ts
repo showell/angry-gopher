@@ -26,13 +26,13 @@ import * as path from "node:path";
 import type { Card } from "./rules/card.ts";
 import { cardLabel } from "./rules/card.ts";
 import type { BoardStack, Loc } from "./geometry.ts";
-import { findOpenLoc, findViolation } from "./geometry.ts";
+import { findViolation } from "./geometry.ts";
 import {
   type Primitive,
   applyLocally,
 } from "./primitives.ts";
 import type { GameResult, PlayRecord } from "./agent_player.ts";
-import { moveToPrimitives } from "./verbs.ts";
+import { physicalPlan } from "./physical_plan.ts";
 
 // --- Invariant: no two stacks ever overlap, ever ---------------------
 //
@@ -202,72 +202,27 @@ function primToWire(prim: Primitive, sim: readonly BoardStack[]): WireActionJson
   }
 }
 
-// --- Per-play expansion (placements + plan steps) --------------------
+// --- Per-play expansion (delegates to physicalPlan) ------------------
 
-/** Expand one play into a primitive sequence:
- *    - first placement → PlaceHand
- *    - additional placements → MergeHand onto the just-placed stack
- *    - then each plan-desc → moveToPrimitives expansion
- *  Returns the primitive list paired with the post-play sim board. */
+/** Expand one play into a primitive sequence by handing
+ *  (initialBoard, placements, planDescs) to the global physical
+ *  planner. The planner emits the logical trace, lifts singleton hand
+ *  cards into direct merge_hand plays, and runs one global geometry
+ *  pre-flight pass.
+ *
+ *  We assert no-overlap once at the END of the play. Earlier
+ *  per-boundary asserts were artifacts of the legacy per-verb
+ *  expansion; with one global pass there's no meaningful intermediate
+ *  boundary to check. */
 function playToPrimitives(
   sim: readonly BoardStack[],
   play: PlayRecord,
 ): { prims: Primitive[]; sim: readonly BoardStack[] } {
+  const prims = physicalPlan(sim, play.placements, play.planDescs);
   let cur = sim;
-  const out: Primitive[] = [];
-
-  if (play.placements.length > 0) {
-    // Reserve loc for the EVENTUAL stack width — placeHand creates a
-    // singleton and subsequent merge_hand calls grow rightward,
-    // keeping the original loc. Using card_count=1 (the python
-    // legacy) underestimates and lets the grown stack overlap a
-    // neighbor when the agent plays 2-3 cards together. Reserving
-    // for play.placements.length keeps the post-merge stack clear.
-    const placeLoc = findOpenLoc(cur, play.placements.length);
-    const placeAction: Primitive = {
-      action: "place_hand",
-      handCard: play.placements[0]!,
-      loc: placeLoc,
-    };
-    out.push(placeAction);
-    cur = applyLocally(cur, placeAction);
-    for (let i = 1; i < play.placements.length; i++) {
-      // Just-placed stack is the last one; right-side merges keep
-      // its loc and append the new card.
-      const targetIdx = cur.length - 1;
-      const mergeAction: Primitive = {
-        action: "merge_hand",
-        targetStack: targetIdx,
-        handCard: play.placements[i]!,
-        side: "right",
-      };
-      out.push(mergeAction);
-      cur = applyLocally(cur, mergeAction);
-    }
-    // Assert at the boundary where the player has finished placing
-    // their hand-cards (the placements form one clean stack on the
-    // board; no in-flight pre-flights pending).
-    assertNoOverlap(cur, "after-placements");
-  }
-
-  for (const desc of play.planDescs) {
-    const prims = moveToPrimitives(desc, cur);
-    for (const p of prims) {
-      out.push(p);
-      cur = applyLocally(cur, p);
-    }
-    // Assert after each whole plan-desc completes (geometry_plan's
-    // pre-flights resolve in pairs: move_stack + the actual
-    // split/merge that follows; the intermediate frame between them
-    // can carry a transient overlap that the very next primitive
-    // resolves). The boundary that matters is post-desc.
-    assertNoOverlap(cur, `after-plan-desc ${describeShort(desc)}`);
-  }
-  return { prims: out, sim: cur };
-}
-
-function describeShort(d: { type: string }): string {
-  return d.type;
+  for (const p of prims) cur = applyLocally(cur, p);
+  assertNoOverlap(cur, "after-play");
+  return { prims: [...prims], sim: cur };
 }
 
 // --- Top-level writer ------------------------------------------------

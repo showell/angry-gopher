@@ -1,0 +1,1 @@
+{"action":{"action":"move_stack","stack":{"board_cards":[{"card":{"value":3,"suit":0,"origin_deck":0},"state":0},{"card":{"value":4,"suit":1,"origin_deck":0},"state":0},{"card":{"value":5,"suit":0,"origin_deck":0},"state":0}],"loc":{"top":242,"left":217}},"new_loc":{"top":242,"left":157}}}

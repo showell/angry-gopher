@@ -30,22 +30,38 @@ import {
 import { planActions } from "./geometry_plan.ts";
 import { classifyStack } from "./classified_card_stack.ts";
 
-/** Decompose one BFS verb into UI primitives, then run the geometry
- *  post-pass. Returns the augmented (possibly-pre-flighted) sequence. */
+/** Pure verb→primitive expansion. Geometry-agnostic: emits only the
+ *  logical primitive sequence (split / merge_stack / merge_hand /
+ *  place_hand). No pre-flight `move_stack` injection — that's the
+ *  global physical planner's job (`physical_plan.ts`).
+ *
+ *  Used by the production agent path through `physicalPlan`. The
+ *  legacy per-verb wrapper `moveToPrimitives` still composes this with
+ *  `planActions` for the per-verb DSL test surface. */
+export function expandVerb(
+  desc: Desc,
+  board: readonly BoardStack[],
+): Primitive[] {
+  switch (desc.type) {
+    case "extract_absorb": return extractAbsorbPrims(desc, board);
+    case "free_pull":      return freePullPrims(desc, board);
+    case "push":           return pushPrims(desc, board);
+    case "splice":         return splicePrims(desc, board);
+    case "shift":          return shiftPrims(desc, board);
+    case "decompose":      return decomposePrims(desc, board);
+  }
+}
+
+/** Per-verb expansion + per-verb geometry pre-flight. Unit-test surface
+ *  exercised by `verb_to_primitives.dsl` + `verb_to_primitives_corpus.dsl`.
+ *  Production uses the global `physicalPlan` instead — per-verb
+ *  pre-flighting is locally myopic, the global planner sees the whole
+ *  program. */
 export function moveToPrimitives(
   desc: Desc,
   board: readonly BoardStack[],
 ): readonly Primitive[] {
-  let raw: Primitive[];
-  switch (desc.type) {
-    case "extract_absorb": raw = extractAbsorbPrims(desc, board); break;
-    case "free_pull":      raw = freePullPrims(desc, board); break;
-    case "push":           raw = pushPrims(desc, board); break;
-    case "splice":         raw = splicePrims(desc, board); break;
-    case "shift":          raw = shiftPrims(desc, board); break;
-    case "decompose":      raw = decomposePrims(desc, board); break;
-  }
-  return planActions(board, raw);
+  return planActions(board, expandVerb(desc, board));
 }
 
 // --- helpers --------------------------------------------------

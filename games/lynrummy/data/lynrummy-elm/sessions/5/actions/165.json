@@ -1,0 +1,1 @@
+{"action":{"action":"split","stack":{"board_cards":[{"card":{"value":5,"suit":1,"origin_deck":0},"state":0},{"card":{"value":5,"suit":3,"origin_deck":1},"state":0},{"card":{"value":5,"suit":2,"origin_deck":0},"state":0},{"card":{"value":5,"suit":0,"origin_deck":1},"state":0}],"loc":{"top":92,"left":667}},"card_index":1}}
