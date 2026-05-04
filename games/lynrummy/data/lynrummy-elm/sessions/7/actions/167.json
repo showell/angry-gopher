@@ -1,1 +1,0 @@
-{"action":{"action":"merge_hand","hand_card":{"value":2,"suit":1,"origin_deck":0},"target":{"board_cards":[{"card":{"value":2,"suit":2,"origin_deck":1},"state":0}],"loc":{"top":163,"left":564}},"side":"right"}}
