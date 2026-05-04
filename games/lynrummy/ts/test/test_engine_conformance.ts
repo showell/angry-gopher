@@ -312,7 +312,21 @@ function main(): void {
     console.error(`no conformance fixtures at ${FIXTURES_PATH}`);
     process.exit(1);
   }
-  const scenarios: Scenario[] = JSON.parse(fs.readFileSync(FIXTURES_PATH, "utf8"));
+  let scenarios: Scenario[] = JSON.parse(fs.readFileSync(FIXTURES_PATH, "utf8"));
+
+  // Optional CLI arg: substring filter on scenario name. Useful when
+  // debugging a single scenario after editing its DSL — `npm run
+  // test:engine -- puzzle_a3_003` runs only matching scenarios. No
+  // arg = run everything.
+  const filter = process.argv[2];
+  if (filter !== undefined) {
+    scenarios = scenarios.filter(sc => sc.name.includes(filter));
+    if (scenarios.length === 0) {
+      console.error(`no scenario name matches ${JSON.stringify(filter)}`);
+      process.exit(1);
+    }
+    console.log(`Filtered to ${scenarios.length} scenario(s) matching ${JSON.stringify(filter)}.`);
+  }
 
   let total = 0;
   let passed = 0;
