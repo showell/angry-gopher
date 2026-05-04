@@ -34,7 +34,7 @@ var LynRummyEngine = (() => {
   var RED = /* @__PURE__ */ new Set([1, 3]);
   function cardLabel(c) {
     const base = RANKS[c[0] - 1] + SUITS[c[1]];
-    return c[2] === 0 ? base : `${base}:${c[2]}`;
+    return c[2] === 0 ? base : `${base}'`;
   }
   function isRedSuit(s) {
     return RED.has(s);

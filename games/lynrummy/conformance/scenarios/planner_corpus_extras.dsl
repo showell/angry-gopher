@@ -285,7 +285,7 @@ scenario extra_016_7Hp_7Cp
     at (0,0): 7H' 7C'
   expect:
     plan_lines:
-      - "steal 7D from HELPER [7S 7D 7C], absorb onto trouble [7H:1 7C:1] \u2192 [7H:1 7C:1 7D] [\u2192COMPLETE] ; spawn TROUBLE: [7S], [7C]"
+      - "steal 7D from HELPER [7S 7D 7C], absorb onto trouble [7H' 7C'] \u2192 [7H' 7C' 7D] [\u2192COMPLETE] ; spawn TROUBLE: [7S], [7C]"
       - "pull 7C onto trouble [7S] \u2192 [7S 7C]"
       - "peel 7H from HELPER [2C 3D 4C 5H 6S 7H], absorb onto growing [7S 7C] \u2192 [7S 7C 7H] [\u2192COMPLETE]"
 
@@ -303,7 +303,7 @@ scenario extra_017_6H_6Dp
     at (0,0): 6H 6D'
   expect:
     plan_lines:
-      - "yank 6S from HELPER [2C 3D 4C 5H 6S 7H], absorb onto trouble [6H 6D:1] \u2192 [6H 6D:1 6S] [\u2192COMPLETE] ; spawn TROUBLE: [7H]"
+      - "yank 6S from HELPER [2C 3D 4C 5H 6S 7H], absorb onto trouble [6H 6D'] \u2192 [6H 6D' 6S] [\u2192COMPLETE] ; spawn TROUBLE: [7H]"
       - "push TROUBLE [7H] onto HELPER [7S 7D 7C] \u2192 [7S 7D 7C 7H]"
 
 scenario extra_018_ASp_2Sp
@@ -321,7 +321,7 @@ scenario extra_018_ASp_2Sp
     at (0,0): AS' 2S'
   expect:
     plan_lines:
-      - "peel 3S from HELPER [KS AS 2S 3S], absorb onto trouble [AS:1 2S:1] \u2192 [AS:1 2S:1 3S] [\u2192COMPLETE]"
+      - "peel 3S from HELPER [KS AS 2S 3S], absorb onto trouble [AS' 2S'] \u2192 [AS' 2S' 3S] [\u2192COMPLETE]"
 
 scenario extra_019_JC
   desc: extra_019_JC. Auto-generated from offline play.
@@ -343,10 +343,10 @@ scenario extra_019_JC
     plan_lines:
       - "peel TD from HELPER [TD JD QD KD], absorb onto trouble [JC] \u2192 [TD JC]"
       - "split_out QD from HELPER [JD QD KD], absorb onto growing [TD JC] \u2192 [TD JC QD] [\u2192COMPLETE] ; spawn TROUBLE: [JD], [KD]"
-      - "push TROUBLE [JD] onto HELPER [8C 9D:1 TS:1] \u2192 [8C 9D:1 TS:1 JD]"
-      - "peel AS:1 from HELPER [AS:1 2S:1 3S 4S], absorb onto trouble [KD] \u2192 [KD AS:1]"
-      - "steal 2H from HELPER [2H 3H 4H], absorb onto growing [KD AS:1] \u2192 [KD AS:1 2H] [\u2192COMPLETE] ; spawn TROUBLE: [3H 4H]"
-      - "push TROUBLE [3H 4H] onto HELPER [5H 6H:1 7H] \u2192 [3H 4H 5H 6H:1 7H]"
+      - "push TROUBLE [JD] onto HELPER [8C 9D' TS'] \u2192 [8C 9D' TS' JD]"
+      - "peel AS' from HELPER [AS' 2S' 3S 4S], absorb onto trouble [KD] \u2192 [KD AS']"
+      - "steal 2H from HELPER [2H 3H 4H], absorb onto growing [KD AS'] \u2192 [KD AS' 2H] [\u2192COMPLETE] ; spawn TROUBLE: [3H 4H]"
+      - "push TROUBLE [3H 4H] onto HELPER [5H 6H' 7H] \u2192 [3H 4H 5H 6H' 7H]"
 
 scenario extra_020_KHp
   desc: extra_020_KHp. Auto-generated from offline play.
@@ -367,12 +367,12 @@ scenario extra_020_KHp
     at (0,0): KH'
   expect:
     plan_lines:
-      - "steal AC from HELPER [AC AD AH], absorb onto trouble [KH:1] \u2192 [KH:1 AC] ; spawn TROUBLE: [AD], [AH]"
-      - "peel 2H from HELPER [2H 3H 4H 5H 6H:1], absorb onto growing [KH:1 AC] \u2192 [KH:1 AC 2H] [\u2192COMPLETE]"
+      - "steal AC from HELPER [AC AD AH], absorb onto trouble [KH'] \u2192 [KH' AC] ; spawn TROUBLE: [AD], [AH]"
+      - "peel 2H from HELPER [2H 3H 4H 5H 6H'], absorb onto growing [KH' AC] \u2192 [KH' AC 2H] [\u2192COMPLETE]"
       - "push TROUBLE [AD] onto HELPER [2C 3D 4C] \u2192 [AD 2C 3D 4C]"
       - "steal 2S from HELPER [KS AS 2S], absorb onto trouble [AH] \u2192 [AH 2S] ; spawn TROUBLE: [KS AS]"
-      - "peel 3H from HELPER [3H 4H 5H 6H:1], absorb onto growing [AH 2S] \u2192 [AH 2S 3H] [\u2192COMPLETE]"
-      - "push TROUBLE [KS AS] onto HELPER [2S:1 3S 4S] \u2192 [KS AS 2S:1 3S 4S]"
+      - "peel 3H from HELPER [3H 4H 5H 6H'], absorb onto growing [AH 2S] \u2192 [AH 2S 3H] [\u2192COMPLETE]"
+      - "push TROUBLE [KS AS] onto HELPER [2S' 3S 4S] \u2192 [KS AS 2S' 3S 4S]"
 
 scenario extra_021_2D
   desc: extra_021_2D. Auto-generated from offline play.
@@ -410,8 +410,8 @@ scenario extra_022_3Hp
     at (0,0): 3H'
   expect:
     plan_lines:
-      - "peel 3D from HELPER [3D 4C 5H 6S], absorb onto trouble [3H:1] \u2192 [3H:1 3D]"
-      - "peel 3S from HELPER [KS AS 2S 3S], absorb onto growing [3H:1 3D] \u2192 [3H:1 3D 3S] [\u2192COMPLETE]"
+      - "peel 3D from HELPER [3D 4C 5H 6S], absorb onto trouble [3H'] \u2192 [3H' 3D]"
+      - "peel 3S from HELPER [KS AS 2S 3S], absorb onto growing [3H' 3D] \u2192 [3H' 3D 3S] [\u2192COMPLETE]"
 
 scenario extra_023_TCp
   desc: extra_023_TCp. Auto-generated from offline play.
@@ -431,10 +431,10 @@ scenario extra_023_TCp
     at (0,0): TC'
   expect:
     plan_lines:
-      - "peel JD from HELPER [JD QD KD AD 2D], absorb onto trouble [TC:1] \u2192 [TC:1 JD]"
-      - "steal QC:1 from HELPER [QH:1 QS:1 QC:1], absorb onto growing [TC:1 JD] \u2192 [TC:1 JD QC:1] [\u2192COMPLETE] ; spawn TROUBLE: [QH:1], [QS:1]"
-      - "pull QS:1 onto trouble [QH:1] \u2192 [QH:1 QS:1]"
-      - "peel QD from HELPER [QD KD AD 2D], absorb onto growing [QH:1 QS:1] \u2192 [QH:1 QS:1 QD] [\u2192COMPLETE]"
+      - "peel JD from HELPER [JD QD KD AD 2D], absorb onto trouble [TC'] \u2192 [TC' JD]"
+      - "steal QC' from HELPER [QH' QS' QC'], absorb onto growing [TC' JD] \u2192 [TC' JD QC'] [\u2192COMPLETE] ; spawn TROUBLE: [QH'], [QS']"
+      - "pull QS' onto trouble [QH'] \u2192 [QH' QS']"
+      - "peel QD from HELPER [QD KD AD 2D], absorb onto growing [QH' QS'] \u2192 [QH' QS' QD] [\u2192COMPLETE]"
 
 scenario extra_024_2Cp
   desc: extra_024_2Cp. Auto-generated from offline play.
@@ -455,9 +455,9 @@ scenario extra_024_2Cp
     at (0,0): 2C'
   expect:
     plan_lines:
-      - "peel AH from HELPER [AH 2H 3H 4H], absorb onto trouble [2C:1] \u2192 [AH 2C:1]"
-      - "steal 3D from HELPER [3H:1 3D 3S], absorb onto growing [AH 2C:1] \u2192 [AH 2C:1 3D] [\u2192COMPLETE] ; spawn TROUBLE: [3H:1], [3S]"
-      - "push TROUBLE [3H:1] onto HELPER [4C 5H 6S] \u2192 [3H:1 4C 5H 6S]"
+      - "peel AH from HELPER [AH 2H 3H 4H], absorb onto trouble [2C'] \u2192 [AH 2C']"
+      - "steal 3D from HELPER [3H' 3D 3S], absorb onto growing [AH 2C'] \u2192 [AH 2C' 3D] [\u2192COMPLETE] ; spawn TROUBLE: [3H'], [3S]"
+      - "push TROUBLE [3H'] onto HELPER [4C 5H 6S] \u2192 [3H' 4C 5H 6S]"
       - "push TROUBLE [3S] onto HELPER [KS AS 2S] \u2192 [KS AS 2S 3S]"
 
 scenario extra_025_8C
@@ -479,7 +479,7 @@ scenario extra_025_8C
     at (0,0): 8C
   expect:
     plan_lines:
-      - "push TROUBLE [8C] onto HELPER [5D:1 6C:1 7H] \u2192 [5D:1 6C:1 7H 8C]"
+      - "push TROUBLE [8C] onto HELPER [5D' 6C' 7H] \u2192 [5D' 6C' 7H 8C]"
 
 # Hand-added 2026-04-30: game 17 initial board, singleton projections.
 # Benchmarks the "live-but-hard" slow class for SOLVER_SPEED work.

@@ -4,7 +4,7 @@
 
 scenario turn_1_hint
   op: hint_for_hand
-  hand: 3S:1 4S 8D:1 JD:1 4C:1 6D QD:1
+  hand: 3S' 4S 8D' JD' 4C' 6D QD'
   board:
     - KS AS 2S 3S
     - TD JD QD KD
@@ -13,12 +13,12 @@ scenario turn_1_hint
     - AC AD AH
     - 2C 3D 4C 5H 6S 7H
   expect_steps:
-    - place [JD:1 QD:1] from hand
-    - peel TD from HELPER [TD JD QD KD], absorb onto trouble [JD:1 QD:1] → [TD JD:1 QD:1] [→COMPLETE]
+    - place [JD' QD'] from hand
+    - peel TD from HELPER [TD JD QD KD], absorb onto trouble [JD' QD'] → [TD JD' QD'] [→COMPLETE]
 
 scenario turn_2_hint
   op: hint_for_hand
-  hand: 3S:1 4S 8D:1 4C:1 6D 8H JS:1
+  hand: 3S' 4S 8D' 4C' 6D 8H JS'
   board:
     - KS AS 2S 3S
     - TD JD QD KD
@@ -26,15 +26,15 @@ scenario turn_2_hint
     - 7S 7D 7C
     - AC AD AH
     - 2C 3D 4C 5H 6S 7H
-    - JD:1 QD:1
+    - JD' QD'
   expect_steps:
     - place [4S] from hand
-    - peel TD from HELPER [TD JD QD KD], absorb onto trouble [JD:1 QD:1] → [TD JD:1 QD:1] [→COMPLETE]
+    - peel TD from HELPER [TD JD QD KD], absorb onto trouble [JD' QD'] → [TD JD' QD'] [→COMPLETE]
     - splice [4S] into HELPER [2C 3D 4C 5H 6S 7H] → [2C 3D 4S] + [4C 5H 6S 7H]
 
 scenario turn_3_hint
   op: hint_for_hand
-  hand: 3S:1 8D:1 4C:1 6D 8H JS:1 2S:1 2D:1
+  hand: 3S' 8D' 4C' 6D 8H JS' 2S' 2D'
   board:
     - KS AS 2S 3S
     - TD JD QD KD
@@ -42,10 +42,10 @@ scenario turn_3_hint
     - 7S 7D 7C
     - AC AD AH
     - 2C 3D 4C 5H 6S 7H
-    - JD:1 QD:1
+    - JD' QD'
     - 4S
   expect_steps:
-    - place [2S:1 2D:1] from hand
-    - peel TD from HELPER [TD JD QD KD], absorb onto trouble [JD:1 QD:1] → [TD JD:1 QD:1] [→COMPLETE]
+    - place [2S' 2D'] from hand
+    - peel TD from HELPER [TD JD QD KD], absorb onto trouble [JD' QD'] → [TD JD' QD'] [→COMPLETE]
     - push TROUBLE [4S] onto HELPER [KS AS 2S 3S] → [KS AS 2S 3S 4S]
-    - peel 2C from HELPER [2C 3D 4C 5H 6S 7H], absorb onto trouble [2S:1 2D:1] → [2S:1 2D:1 2C] [→COMPLETE]
+    - peel 2C from HELPER [2C 3D 4C 5H 6S 7H], absorb onto trouble [2S' 2D'] → [2S' 2D' 2C] [→COMPLETE]

@@ -270,8 +270,9 @@ stackStr =
 
 
 {-| Letter-suit card label for DSL output parity with the
-Python solver. `5H`, `JC`, `KS`. Deck suffix appended for
-non-deck-zero cards (`5H:1`).
+TS solver. `5H`, `JC`, `KS`. Deck-2 cards get a trailing
+apostrophe (`5H'`) — the unified deck-suffix convention
+across DSL, plan-line strings, and UI display.
 -}
 cardLabel : Card -> String
 cardLabel c =
@@ -301,7 +302,7 @@ deckSuffix d =
             ""
 
         DeckTwo ->
-            ":1"
+            "'"
 
 
 graduationSuffix : Bool -> String

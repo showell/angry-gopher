@@ -2489,8 +2489,10 @@ func toHintBoardLabels(stacks [][]Card) [][]string {
 	return out
 }
 
-// cardLabel renders a Card as a hint-DSL shorthand: "<value><suit>"
-// or "<value><suit>:<deck>" when deck > 0.
+// cardLabel renders a Card in the unified DSL shorthand:
+// "<value><suit>" for deck 0, "<value><suit>'" for deck 1.
+// (Deck > 1 isn't a real game state — the double deck has only
+// decks 0 and 1 — but defend against it for sanity.)
 func cardLabel(c Card) string {
 	const ranks = "A23456789TJQK"
 	const suits = "CDSH"
@@ -2500,8 +2502,11 @@ func cardLabel(c Card) string {
 		return "??"
 	}
 	base := string(ranks[v-1]) + string(suits[s])
+	if c.Deck == 1 {
+		return base + "'"
+	}
 	if c.Deck != 0 {
-		return base + ":" + strconv.Itoa(c.Deck)
+		return base + "'" + strconv.Itoa(c.Deck)
 	}
 	return base
 }
@@ -3650,17 +3655,24 @@ func parseHintCards(s string) ([]Card, error) {
 	return cards, nil
 }
 
-// parseHintCard parses one card token in hint DSL format:
+// parseHintCard parses one card token in the unified DSL format:
 //
 //	<value><suit>          (deck 0, e.g. "4S")
-//	<value><suit>:<deck>   (explicit deck, e.g. "3S:1")
+//	<value><suit>'         (deck 1, e.g. "3S'")
+//
+// The legacy `:N` deck-suffix form is still accepted for any
+// pre-unification fixtures still in the corpus (gold files,
+// captured plan strings) — should be a vanishing concern.
 //
 // Value letters: A 2 3 4 5 6 7 8 9 T J Q K
 // Suit letters:  C D S H
 func parseHintCard(tok string) (Card, error) {
 	deck := 0
 	base := tok
-	if idx := strings.Index(tok, ":"); idx >= 0 {
+	if strings.HasSuffix(tok, "'") {
+		deck = 1
+		base = tok[:len(tok)-1]
+	} else if idx := strings.Index(tok, ":"); idx >= 0 {
 		var err error
 		deck, err = atoi(tok[idx+1:])
 		if err != nil {

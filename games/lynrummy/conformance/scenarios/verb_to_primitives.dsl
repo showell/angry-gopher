@@ -15,7 +15,7 @@
 #
 # Coordinate convention: `at (top, left)` matches the established
 # DSL shape (replay_walkthroughs, board_geometry, etc.). Card labels
-# use the canonical SUITS="CDSH" with optional `:1` for deck-1.
+# use the canonical SUITS="CDSH" with trailing apostrophe for deck-1.
 #
 # Primitive line syntax mirrors `replay_walkthroughs.dsl`:
 #   - split [content]@k             — split stack at card_index k

@@ -337,7 +337,7 @@ baselineBoard2Dp =
             in
             let
                 expected =
-                    [ "peel 3S from HELPER [KS AS 2S 3S], absorb onto trouble [2D:1] → [2D:1 3S]", "steal AC from HELPER [AC AD AH], absorb onto growing [2D:1 3S] → [AC 2D:1 3S] [→COMPLETE] ; spawn TROUBLE: [AD], [AH]", "push TROUBLE [AD] onto HELPER [TD JD QD KD] → [TD JD QD KD AD]", "push TROUBLE [AH] onto HELPER [2H 3H 4H] → [AH 2H 3H 4H]" ]
+                    [ "peel 3S from HELPER [KS AS 2S 3S], absorb onto trouble [2D'] → [2D' 3S]", "steal AC from HELPER [AC AD AH], absorb onto growing [2D' 3S] → [AC 2D' 3S] [→COMPLETE] ; spawn TROUBLE: [AD], [AH]", "push TROUBLE [AD] onto HELPER [TD JD QD KD] → [TD JD QD KD AD]", "push TROUBLE [AH] onto HELPER [2H 3H 4H] → [AH 2H 3H 4H]" ]
             in
             case result of
                 Just plan ->
@@ -373,7 +373,7 @@ baselineBoard2Hp =
             in
             let
                 expected =
-                    [ "peel 3S from HELPER [KS AS 2S 3S], absorb onto trouble [2H:1] → [2H:1 3S]", "steal AC from HELPER [AC AD AH], absorb onto growing [2H:1 3S] → [AC 2H:1 3S] [→COMPLETE] ; spawn TROUBLE: [AD], [AH]", "push TROUBLE [AD] onto HELPER [TD JD QD KD] → [TD JD QD KD AD]", "push TROUBLE [AH] onto HELPER [2H 3H 4H] → [AH 2H 3H 4H]" ]
+                    [ "peel 3S from HELPER [KS AS 2S 3S], absorb onto trouble [2H'] → [2H' 3S]", "steal AC from HELPER [AC AD AH], absorb onto growing [2H' 3S] → [AC 2H' 3S] [→COMPLETE] ; spawn TROUBLE: [AD], [AH]", "push TROUBLE [AD] onto HELPER [TD JD QD KD] → [TD JD QD KD AD]", "push TROUBLE [AH] onto HELPER [2H 3H 4H] → [AH 2H 3H 4H]" ]
             in
             case result of
                 Just plan ->
@@ -476,7 +476,7 @@ baselineBoard3Cp =
             in
             let
                 expected =
-                    [ "peel 2C from HELPER [2C 3D 4C 5H 6S 7H], absorb onto trouble [3C:1] → [2C 3C:1]", "steal AC from HELPER [AC AD AH], absorb onto growing [2C 3C:1] → [AC 2C 3C:1] [→COMPLETE] ; spawn TROUBLE: [AD], [AH]", "push TROUBLE [AD] onto HELPER [TD JD QD KD] → [TD JD QD KD AD]", "push TROUBLE [AH] onto HELPER [2H 3H 4H] → [AH 2H 3H 4H]" ]
+                    [ "peel 2C from HELPER [2C 3D 4C 5H 6S 7H], absorb onto trouble [3C'] → [2C 3C']", "steal AC from HELPER [AC AD AH], absorb onto growing [2C 3C'] → [AC 2C 3C'] [→COMPLETE] ; spawn TROUBLE: [AD], [AH]", "push TROUBLE [AD] onto HELPER [TD JD QD KD] → [TD JD QD KD AD]", "push TROUBLE [AH] onto HELPER [2H 3H 4H] → [AH 2H 3H 4H]" ]
             in
             case result of
                 Just plan ->
@@ -605,7 +605,7 @@ baselineBoard4Cp =
             in
             let
                 expected =
-                    [ "splice [4C:1] into HELPER [2C 3D 4C 5H 6S 7H] → [2C 3D 4C:1] + [4C 5H 6S 7H]" ]
+                    [ "splice [4C'] into HELPER [2C 3D 4C 5H 6S 7H] → [2C 3D 4C'] + [4C 5H 6S 7H]" ]
             in
             case result of
                 Just plan ->
@@ -770,7 +770,7 @@ baselineBoard4Sp =
             in
             let
                 expected =
-                    [ "splice [4S:1] into HELPER [2C 3D 4C 5H 6S 7H] → [2C 3D 4S:1] + [4C 5H 6S 7H]" ]
+                    [ "splice [4S'] into HELPER [2C 3D 4C 5H 6S 7H] → [2C 3D 4S'] + [4C 5H 6S 7H]" ]
             in
             case result of
                 Just plan ->
@@ -904,7 +904,7 @@ baselineBoard5Dp =
             in
             let
                 expected =
-                    [ "splice [5D:1] into HELPER [2C 3D 4C 5H 6S 7H] → [2C 3D 4C 5D:1] + [5H 6S 7H]" ]
+                    [ "splice [5D'] into HELPER [2C 3D 4C 5H 6S 7H] → [2C 3D 4C 5D'] + [5H 6S 7H]" ]
             in
             case result of
                 Just plan ->
@@ -940,7 +940,7 @@ baselineBoard5Hp =
             in
             let
                 expected =
-                    [ "splice [5H:1] into HELPER [2C 3D 4C 5H 6S 7H] → [2C 3D 4C 5H:1] + [5H 6S 7H]" ]
+                    [ "splice [5H'] into HELPER [2C 3D 4C 5H 6S 7H] → [2C 3D 4C 5H'] + [5H 6S 7H]" ]
             in
             case result of
                 Just plan ->
@@ -1012,7 +1012,7 @@ baselineBoard5Sp =
             in
             let
                 expected =
-                    [ "yank 6S from HELPER [2C 3D 4C 5H 6S 7H], absorb onto trouble [5S:1] → [5S:1 6S] ; spawn TROUBLE: [7H]", "steal 7S from HELPER [7S 7D 7C], absorb onto growing [5S:1 6S] → [5S:1 6S 7S] [→COMPLETE] ; spawn TROUBLE: [7D], [7C]", "pull 7D onto trouble [7H] → [7H 7D]", "pull 7C onto growing [7H 7D] → [7H 7D 7C] [→COMPLETE]" ]
+                    [ "yank 6S from HELPER [2C 3D 4C 5H 6S 7H], absorb onto trouble [5S'] → [5S' 6S] ; spawn TROUBLE: [7H]", "steal 7S from HELPER [7S 7D 7C], absorb onto growing [5S' 6S] → [5S' 6S 7S] [→COMPLETE] ; spawn TROUBLE: [7D], [7C]", "pull 7D onto trouble [7H] → [7H 7D]", "pull 7C onto growing [7H 7D] → [7H 7D 7C] [→COMPLETE]" ]
             in
             case result of
                 Just plan ->
@@ -1296,7 +1296,7 @@ baselineBoard7Dp =
             in
             let
                 expected =
-                    [ "yank 6S from HELPER [2C 3D 4C 5H 6S 7H], absorb onto trouble [7D:1] → [6S 7D:1] ; spawn TROUBLE: [7H]", "peel 5H from HELPER [2C 3D 4C 5H], absorb onto growing [6S 7D:1] → [5H 6S 7D:1] [→COMPLETE]", "push TROUBLE [7H] onto HELPER [7S 7D 7C] → [7S 7D 7C 7H]" ]
+                    [ "yank 6S from HELPER [2C 3D 4C 5H 6S 7H], absorb onto trouble [7D'] → [6S 7D'] ; spawn TROUBLE: [7H]", "peel 5H from HELPER [2C 3D 4C 5H], absorb onto growing [6S 7D'] → [5H 6S 7D'] [→COMPLETE]", "push TROUBLE [7H] onto HELPER [7S 7D 7C] → [7S 7D 7C 7H]" ]
             in
             case result of
                 Just plan ->
@@ -1332,7 +1332,7 @@ baselineBoard7Hp =
             in
             let
                 expected =
-                    [ "push TROUBLE [7H:1] onto HELPER [7S 7D 7C] → [7S 7D 7C 7H:1]" ]
+                    [ "push TROUBLE [7H'] onto HELPER [7S 7D 7C] → [7S 7D 7C 7H']" ]
             in
             case result of
                 Just plan ->
@@ -1435,7 +1435,7 @@ baselineBoard8Cp =
             in
             let
                 expected =
-                    [ "push TROUBLE [8C:1] onto HELPER [2C 3D 4C 5H 6S 7H] → [2C 3D 4C 5H 6S 7H 8C:1]" ]
+                    [ "push TROUBLE [8C'] onto HELPER [2C 3D 4C 5H 6S 7H] → [2C 3D 4C 5H 6S 7H 8C']" ]
             in
             case result of
                 Just plan ->
@@ -1631,7 +1631,7 @@ baselineBoard8Sp =
             in
             let
                 expected =
-                    [ "push TROUBLE [8S:1] onto HELPER [2C 3D 4C 5H 6S 7H] → [2C 3D 4C 5H 6S 7H 8S:1]" ]
+                    [ "push TROUBLE [8S'] onto HELPER [2C 3D 4C 5H 6S 7H] → [2C 3D 4C 5H 6S 7H 8S']" ]
             in
             case result of
                 Just plan ->
@@ -1765,7 +1765,7 @@ baselineBoard9Dp =
             in
             let
                 expected =
-                    [ "push TROUBLE [9D:1] onto HELPER [TD JD QD KD] → [9D:1 TD JD QD KD]" ]
+                    [ "push TROUBLE [9D'] onto HELPER [TD JD QD KD] → [9D' TD JD QD KD]" ]
             in
             case result of
                 Just plan ->
@@ -1956,7 +1956,7 @@ baselineBoardADp =
             in
             let
                 expected =
-                    [ "push TROUBLE [AD:1] onto HELPER [TD JD QD KD] → [TD JD QD KD AD:1]" ]
+                    [ "push TROUBLE [AD'] onto HELPER [TD JD QD KD] → [TD JD QD KD AD']" ]
             in
             case result of
                 Just plan ->
@@ -1992,7 +1992,7 @@ baselineBoardAHp =
             in
             let
                 expected =
-                    [ "push TROUBLE [AH:1] onto HELPER [2H 3H 4H] → [AH:1 2H 3H 4H]" ]
+                    [ "push TROUBLE [AH'] onto HELPER [2H 3H 4H] → [AH' 2H 3H 4H]" ]
             in
             case result of
                 Just plan ->
@@ -2028,7 +2028,7 @@ baselineBoardASp =
             in
             let
                 expected =
-                    [ "push TROUBLE [AS:1] onto HELPER [AC AD AH] → [AC AD AH AS:1]" ]
+                    [ "push TROUBLE [AS'] onto HELPER [AC AD AH] → [AC AD AH AS']" ]
             in
             case result of
                 Just plan ->
@@ -2317,7 +2317,7 @@ baselineBoardKCp =
             in
             let
                 expected =
-                    [ "peel KD from HELPER [TD JD QD KD], absorb onto trouble [KC:1] → [KC:1 KD]", "peel KS from HELPER [KS AS 2S 3S], absorb onto growing [KC:1 KD] → [KC:1 KD KS] [→COMPLETE]" ]
+                    [ "peel KD from HELPER [TD JD QD KD], absorb onto trouble [KC'] → [KC' KD]", "peel KS from HELPER [KS AS 2S 3S], absorb onto growing [KC' KD] → [KC' KD KS] [→COMPLETE]" ]
             in
             case result of
                 Just plan ->
@@ -2420,7 +2420,7 @@ baselineBoardKHp =
             in
             let
                 expected =
-                    [ "peel KD from HELPER [TD JD QD KD], absorb onto trouble [KH:1] → [KH:1 KD]", "peel KS from HELPER [KS AS 2S 3S], absorb onto growing [KH:1 KD] → [KH:1 KD KS] [→COMPLETE]" ]
+                    [ "peel KD from HELPER [TD JD QD KD], absorb onto trouble [KH'] → [KH' KD]", "peel KS from HELPER [KS AS 2S 3S], absorb onto growing [KH' KD] → [KH' KD KS] [→COMPLETE]" ]
             in
             case result of
                 Just plan ->
@@ -2523,7 +2523,7 @@ baselineBoardQCp =
             in
             let
                 expected =
-                    [ "peel KD from HELPER [TD JD QD KD], absorb onto trouble [QC:1] → [QC:1 KD]", "steal AC from HELPER [AC AD AH], absorb onto growing [QC:1 KD] → [QC:1 KD AC] [→COMPLETE] ; spawn TROUBLE: [AD], [AH]", "push TROUBLE [AD] onto HELPER [2C 3D 4C 5H 6S 7H] → [AD 2C 3D 4C 5H 6S 7H]", "push TROUBLE [AH] onto HELPER [2H 3H 4H] → [AH 2H 3H 4H]" ]
+                    [ "peel KD from HELPER [TD JD QD KD], absorb onto trouble [QC'] → [QC' KD]", "steal AC from HELPER [AC AD AH], absorb onto growing [QC' KD] → [QC' KD AC] [→COMPLETE] ; spawn TROUBLE: [AD], [AH]", "push TROUBLE [AD] onto HELPER [2C 3D 4C 5H 6S 7H] → [AD 2C 3D 4C 5H 6S 7H]", "push TROUBLE [AH] onto HELPER [2H 3H 4H] → [AH 2H 3H 4H]" ]
             in
             case result of
                 Just plan ->
@@ -2688,7 +2688,7 @@ baselineBoardQSp =
             in
             let
                 expected =
-                    [ "push TROUBLE [QS:1] onto HELPER [KS AS 2S 3S] → [QS:1 KS AS 2S 3S]" ]
+                    [ "push TROUBLE [QS'] onto HELPER [KS AS 2S 3S] → [QS' KS AS 2S 3S]" ]
             in
             case result of
                 Just plan ->
@@ -3260,7 +3260,7 @@ corpusSid108 =
             in
             let
                 expected =
-                    [ "shift 8C to pop JC:1 [8D:1 8S 8H:1 -> 8C + 9C TC:1]; absorb onto trouble [QD:1] → [JC:1 QD:1]", "peel TH from HELPER [AH:1 2H 3H 4H 5H:1 6H:1 7H 8H 9H TH], absorb onto growing [JC:1 QD:1] → [TH JC:1 QD:1] [→COMPLETE]" ]
+                    [ "shift 8C to pop JC' [8D' 8S 8H' -> 8C + 9C TC']; absorb onto trouble [QD'] → [JC' QD']", "peel TH from HELPER [AH' 2H 3H 4H 5H' 6H' 7H 8H 9H TH], absorb onto growing [JC' QD'] → [TH JC' QD'] [→COMPLETE]" ]
             in
             case result of
                 Just plan ->
@@ -3307,7 +3307,7 @@ corpusSid110 =
             in
             let
                 expected =
-                    [ "peel TH:1 from HELPER [TH:1 JC:1 QD:1 KS:1], absorb onto trouble [TC] → [TC TH:1]", "steal TD from HELPER [8D 9D:1 TD], absorb onto growing [TC TH:1] → [TC TH:1 TD] [→COMPLETE] ; spawn TROUBLE: [8D 9D:1]", "steal 7D from HELPER [7S 7D 7C], absorb onto trouble [8D 9D:1] → [7D 8D 9D:1] [→COMPLETE] ; spawn TROUBLE: [7S], [7C]", "pull 7C onto trouble [7S] → [7S 7C]", "pluck 7H:1 from HELPER [4H:1 5H:1 6H:1 7H:1 8H:1 9H TH], absorb onto growing [7S 7C] → [7S 7C 7H:1] [→COMPLETE]" ]
+                    [ "peel TH' from HELPER [TH' JC' QD' KS'], absorb onto trouble [TC] → [TC TH']", "steal TD from HELPER [8D 9D' TD], absorb onto growing [TC TH'] → [TC TH' TD] [→COMPLETE] ; spawn TROUBLE: [8D 9D']", "steal 7D from HELPER [7S 7D 7C], absorb onto trouble [8D 9D'] → [7D 8D 9D'] [→COMPLETE] ; spawn TROUBLE: [7S], [7C]", "pull 7C onto trouble [7S] → [7S 7C]", "pluck 7H' from HELPER [4H' 5H' 6H' 7H' 8H' 9H TH], absorb onto growing [7S 7C] → [7S 7C 7H'] [→COMPLETE]" ]
             in
             case result of
                 Just plan ->
@@ -3360,7 +3360,7 @@ corpusSid112 =
             in
             let
                 expected =
-                    [ "peel 2C from HELPER [2H:1 2C 2S:1 2D], absorb onto trouble [3C] → [2C 3C]", "pluck 4C from HELPER [QH:1 KS:1 AD:1 2C:1 3D 4C 5D:1 6C:1 7H 8C:1 9H TS JH:1 QS:1 KD AC:1 2D:1 3C:1], absorb onto growing [2C 3C] → [2C 3C 4C] [→COMPLETE]" ]
+                    [ "peel 2C from HELPER [2H' 2C 2S' 2D], absorb onto trouble [3C] → [2C 3C]", "pluck 4C from HELPER [QH' KS' AD' 2C' 3D 4C 5D' 6C' 7H 8C' 9H TS JH' QS' KD AC' 2D' 3C'], absorb onto growing [2C 3C] → [2C 3C 4C] [→COMPLETE]" ]
             in
             case result of
                 Just plan ->
@@ -3410,7 +3410,7 @@ corpusSid114 =
             in
             let
                 expected =
-                    [ "peel 7C from HELPER [7S 7D 7C 7H:1], absorb onto trouble [6D] → [6D 7C]", "steal 5C from HELPER [5C 5D 5S:1], absorb onto growing [6D 7C] → [5C 6D 7C] [→COMPLETE] ; spawn TROUBLE: [5D], [5S:1]", "splice [5D] into HELPER [3D 4C 5H 6S 7H 8C:1] → [3D 4C 5D] + [5H 6S 7H 8C:1]", "splice [5S:1] into HELPER [3S:1 4D:1 5S 6H 7S:1] → [3S:1 4D:1 5S:1] + [5S 6H 7S:1]" ]
+                    [ "peel 7C from HELPER [7S 7D 7C 7H'], absorb onto trouble [6D] → [6D 7C]", "steal 5C from HELPER [5C 5D 5S'], absorb onto growing [6D 7C] → [5C 6D 7C] [→COMPLETE] ; spawn TROUBLE: [5D], [5S']", "splice [5D] into HELPER [3D 4C 5H 6S 7H 8C'] → [3D 4C 5D] + [5H 6S 7H 8C']", "splice [5S'] into HELPER [3S' 4D' 5S 6H 7S'] → [3S' 4D' 5S'] + [5S 6H 7S']" ]
             in
             case result of
                 Just plan ->
@@ -3459,7 +3459,7 @@ corpusSid116 =
             in
             let
                 expected =
-                    [ "peel JC:1 from HELPER [7S:1 8H:1 9C:1 TD:1 JC:1], absorb onto trouble [JS] → [JS JC:1]", "steal JD from HELPER [JD QD KD:1], absorb onto growing [JS JC:1] → [JS JC:1 JD] [→COMPLETE] ; spawn TROUBLE: [QD KD:1]", "steal AD:1 from HELPER [AS AD:1 AC:1], absorb onto trouble [QD KD:1] → [QD KD:1 AD:1] [→COMPLETE] ; spawn TROUBLE: [AS], [AC:1]", "push TROUBLE [AS] onto HELPER [2S 3S 4S:1 5S:1] → [AS 2S 3S 4S:1 5S:1]", "push TROUBLE [AC:1] onto HELPER [AD AH AS:1] → [AD AH AS:1 AC:1]" ]
+                    [ "peel JC' from HELPER [7S' 8H' 9C' TD' JC'], absorb onto trouble [JS] → [JS JC']", "steal JD from HELPER [JD QD KD'], absorb onto growing [JS JC'] → [JS JC' JD] [→COMPLETE] ; spawn TROUBLE: [QD KD']", "steal AD' from HELPER [AS AD' AC'], absorb onto trouble [QD KD'] → [QD KD' AD'] [→COMPLETE] ; spawn TROUBLE: [AS], [AC']", "push TROUBLE [AS] onto HELPER [2S 3S 4S' 5S'] → [AS 2S 3S 4S' 5S']", "push TROUBLE [AC'] onto HELPER [AD AH AS'] → [AD AH AS' AC']" ]
             in
             case result of
                 Just plan ->
@@ -3505,7 +3505,7 @@ corpusSid118 =
             in
             let
                 expected =
-                    [ "yank KD from HELPER [TD:1 JD QD KD AD:1], absorb onto trouble [QC:1] → [QC:1 KD] ; spawn TROUBLE: [AD:1]", "yank AS from HELPER [TS:1 JS:1 QS KS AS 2S], absorb onto growing [QC:1 KD] → [QC:1 KD AS] [→COMPLETE] ; spawn TROUBLE: [2S]", "pull 2S onto trouble [AD:1] → [AD:1 2S]", "peel KS from HELPER [TS:1 JS:1 QS KS], absorb onto growing [AD:1 2S] → [KS AD:1 2S] [→COMPLETE]" ]
+                    [ "yank KD from HELPER [TD' JD QD KD AD'], absorb onto trouble [QC'] → [QC' KD] ; spawn TROUBLE: [AD']", "yank AS from HELPER [TS' JS' QS KS AS 2S], absorb onto growing [QC' KD] → [QC' KD AS] [→COMPLETE] ; spawn TROUBLE: [2S]", "pull 2S onto trouble [AD'] → [AD' 2S]", "peel KS from HELPER [TS' JS' QS KS], absorb onto growing [AD' 2S] → [KS AD' 2S] [→COMPLETE]" ]
             in
             case result of
                 Just plan ->
@@ -3556,7 +3556,7 @@ corpusSid120 =
             in
             let
                 expected =
-                    [ "steal QD:1 from HELPER [QD:1 QS QH], absorb onto trouble [JC:1] → [JC:1 QD:1] ; spawn TROUBLE: [QS], [QH]", "steal KC from HELPER [KS KD KC], absorb onto growing [JC:1 QD:1] → [JC:1 QD:1 KC] [→COMPLETE] ; spawn TROUBLE: [KS], [KD]", "push TROUBLE [QS] onto HELPER [9H:1 TC:1 JD:1] → [9H:1 TC:1 JD:1 QS]", "push TROUBLE [QH] onto HELPER [9C TD:1 JS:1] → [9C TD:1 JS:1 QH]", "push TROUBLE [KS] onto HELPER [AS 2S 3S] → [KS AS 2S 3S]", "push TROUBLE [KD] onto HELPER [TD JD QD] → [TD JD QD KD]" ]
+                    [ "steal QD' from HELPER [QD' QS QH], absorb onto trouble [JC'] → [JC' QD'] ; spawn TROUBLE: [QS], [QH]", "steal KC from HELPER [KS KD KC], absorb onto growing [JC' QD'] → [JC' QD' KC] [→COMPLETE] ; spawn TROUBLE: [KS], [KD]", "push TROUBLE [QS] onto HELPER [9H' TC' JD'] → [9H' TC' JD' QS]", "push TROUBLE [QH] onto HELPER [9C TD' JS'] → [9C TD' JS' QH]", "push TROUBLE [KS] onto HELPER [AS 2S 3S] → [KS AS 2S 3S]", "push TROUBLE [KD] onto HELPER [TD JD QD] → [TD JD QD KD]" ]
             in
             case result of
                 Just plan ->
@@ -3605,7 +3605,7 @@ corpusSid122 =
             in
             let
                 expected =
-                    [ "peel TC:1 from HELPER [7C:1 8C:1 9C:1 TC:1], absorb onto trouble [TH:1] → [TH:1 TC:1]", "split_out TD:1 from HELPER [9S:1 TD:1 JS:1], absorb onto growing [TH:1 TC:1] → [TH:1 TC:1 TD:1] [→COMPLETE] ; spawn TROUBLE: [9S:1], [JS:1]", "push TROUBLE [9S:1] onto HELPER [9D:1 9H 9C] → [9D:1 9H 9C 9S:1]", "push TROUBLE [JS:1] onto HELPER [QS KS AS 2S 3S 4S:1] → [JS:1 QS KS AS 2S 3S 4S:1]" ]
+                    [ "peel TC' from HELPER [7C' 8C' 9C' TC'], absorb onto trouble [TH'] → [TH' TC']", "split_out TD' from HELPER [9S' TD' JS'], absorb onto growing [TH' TC'] → [TH' TC' TD'] [→COMPLETE] ; spawn TROUBLE: [9S'], [JS']", "push TROUBLE [9S'] onto HELPER [9D' 9H 9C] → [9D' 9H 9C 9S']", "push TROUBLE [JS'] onto HELPER [QS KS AS 2S 3S 4S'] → [JS' QS KS AS 2S 3S 4S']" ]
             in
             case result of
                 Just plan ->
@@ -3650,7 +3650,7 @@ corpusSid124 =
             in
             let
                 expected =
-                    [ "splice [6S:1] into HELPER [3H 4C:1 5H 6S 7H 8C:1 9H:1] → [3H 4C:1 5H 6S:1] + [6S 7H 8C:1 9H:1]" ]
+                    [ "splice [6S'] into HELPER [3H 4C' 5H 6S 7H 8C' 9H'] → [3H 4C' 5H 6S'] + [6S 7H 8C' 9H']" ]
             in
             case result of
                 Just plan ->
@@ -3695,7 +3695,7 @@ corpusSid126 =
             in
             let
                 expected =
-                    [ "peel 4C from HELPER [4C 5H 6S 7H 8C:1], absorb onto trouble [5C:1] → [4C 5C:1]", "steal 3C:1 from HELPER [3D 3S:1 3C:1], absorb onto growing [4C 5C:1] → [3C:1 4C 5C:1] [→COMPLETE] ; spawn TROUBLE: [3D], [3S:1]", "push TROUBLE [3D] onto HELPER [JD:1 QD KD:1 AD:1 2D:1] → [JD:1 QD KD:1 AD:1 2D:1 3D]", "shift 5H:1 to pop 2H [2C 3H:1 4C:1 -> 3H 4H + 5H:1]; absorb onto trouble [3S:1] → [2H 3S:1]", "steal AS:1 from HELPER [AD AH AS:1], absorb onto growing [2H 3S:1] → [AS:1 2H 3S:1] [→COMPLETE] ; spawn TROUBLE: [AD], [AH]", "splice [AD] into HELPER [JD:1 QD KD:1 AD:1 2D:1 3D] → [JD:1 QD KD:1 AD] + [AD:1 2D:1 3D]", "push TROUBLE [AH] onto HELPER [9C:1 TD JS:1 QH KC:1] → [9C:1 TD JS:1 QH KC:1 AH]" ]
+                    [ "peel 4C from HELPER [4C 5H 6S 7H 8C'], absorb onto trouble [5C'] → [4C 5C']", "steal 3C' from HELPER [3D 3S' 3C'], absorb onto growing [4C 5C'] → [3C' 4C 5C'] [→COMPLETE] ; spawn TROUBLE: [3D], [3S']", "push TROUBLE [3D] onto HELPER [JD' QD KD' AD' 2D'] → [JD' QD KD' AD' 2D' 3D]", "shift 5H' to pop 2H [2C 3H' 4C' -> 3H 4H + 5H']; absorb onto trouble [3S'] → [2H 3S']", "steal AS' from HELPER [AD AH AS'], absorb onto growing [2H 3S'] → [AS' 2H 3S'] [→COMPLETE] ; spawn TROUBLE: [AD], [AH]", "splice [AD] into HELPER [JD' QD KD' AD' 2D' 3D] → [JD' QD KD' AD] + [AD' 2D' 3D]", "push TROUBLE [AH] onto HELPER [9C' TD JS' QH KC'] → [9C' TD JS' QH KC' AH]" ]
             in
             case result of
                 Just plan ->
@@ -3741,7 +3741,7 @@ corpusSid128 =
             in
             let
                 expected =
-                    [ "shift 7H to pop 4S:1 [3D 4C 5H 6S -> 5D:1 6C + 7H]; absorb onto trouble [5S] → [4S:1 5S]", "peel 6S from HELPER [3D 4C 5H 6S], absorb onto growing [4S:1 5S] → [4S:1 5S 6S] [→COMPLETE]" ]
+                    [ "shift 7H to pop 4S' [3D 4C 5H 6S -> 5D' 6C + 7H]; absorb onto trouble [5S] → [4S' 5S]", "peel 6S from HELPER [3D 4C 5H 6S], absorb onto growing [4S' 5S] → [4S' 5S 6S] [→COMPLETE]" ]
             in
             case result of
                 Just plan ->
@@ -3791,7 +3791,7 @@ corpusSid130 =
             in
             let
                 expected =
-                    [ "steal TS from HELPER [8S 9S TS], absorb onto trouble [JH] → [TS JH] ; spawn TROUBLE: [8S 9S]", "peel 9D:1 from HELPER [9H 9S:1 9C 9D:1], absorb onto growing [TS JH] → [9D:1 TS JH] [→COMPLETE]", "steal 7S from HELPER [7S 7C 7H:1], absorb onto trouble [8S 9S] → [7S 8S 9S] [→COMPLETE] ; spawn TROUBLE: [7C], [7H:1]", "push TROUBLE [7C] onto HELPER [8H 9C:1 TD JC:1 QH:1] → [7C 8H 9C:1 TD JC:1 QH:1]", "push TROUBLE [7H:1] onto HELPER [4C:1 5D 6S] → [4C:1 5D 6S 7H:1]" ]
+                    [ "steal TS from HELPER [8S 9S TS], absorb onto trouble [JH] → [TS JH] ; spawn TROUBLE: [8S 9S]", "peel 9D' from HELPER [9H 9S' 9C 9D'], absorb onto growing [TS JH] → [9D' TS JH] [→COMPLETE]", "steal 7S from HELPER [7S 7C 7H'], absorb onto trouble [8S 9S] → [7S 8S 9S] [→COMPLETE] ; spawn TROUBLE: [7C], [7H']", "push TROUBLE [7C] onto HELPER [8H 9C' TD JC' QH'] → [7C 8H 9C' TD JC' QH']", "push TROUBLE [7H'] onto HELPER [4C' 5D 6S] → [4C' 5D 6S 7H']" ]
             in
             case result of
                 Just plan ->
@@ -3840,7 +3840,7 @@ corpusSid132 =
             in
             let
                 expected =
-                    [ "peel JD from HELPER [8D 9D TD JD], absorb onto trouble [QC] → [JD QC]", "peel TS:1 from HELPER [TS:1 JS QS:1 KS AS 2S], absorb onto growing [JD QC] → [TS:1 JD QC] [→COMPLETE]" ]
+                    [ "peel JD from HELPER [8D 9D TD JD], absorb onto trouble [QC] → [JD QC]", "peel TS' from HELPER [TS' JS QS' KS AS 2S], absorb onto growing [JD QC] → [TS' JD QC] [→COMPLETE]" ]
             in
             case result of
                 Just plan ->
@@ -3887,7 +3887,7 @@ corpusSid134 =
             in
             let
                 expected =
-                    [ "splice [6H:1] into HELPER [4D:1 5C 6H 7S:1 8H 9S] → [4D:1 5C 6H:1] + [6H 7S:1 8H 9S]" ]
+                    [ "splice [6H'] into HELPER [4D' 5C 6H 7S' 8H 9S] → [4D' 5C 6H'] + [6H 7S' 8H 9S]" ]
             in
             case result of
                 Just plan ->
@@ -3980,7 +3980,7 @@ corpusSid138 =
             in
             let
                 expected =
-                    [ "peel JD from HELPER [JD QD KD AD:1 2D 3D 4D:1], absorb onto trouble [TC:1] → [TC:1 JD]", "peel QS from HELPER [QS KS AS 2S 3S], absorb onto growing [TC:1 JD] → [TC:1 JD QS] [→COMPLETE]" ]
+                    [ "peel JD from HELPER [JD QD KD AD' 2D 3D 4D'], absorb onto trouble [TC'] → [TC' JD]", "peel QS from HELPER [QS KS AS 2S 3S], absorb onto growing [TC' JD] → [TC' JD QS] [→COMPLETE]" ]
             in
             case result of
                 Just plan ->
@@ -4029,7 +4029,7 @@ corpusSid140 =
             in
             let
                 expected =
-                    [ "peel QS:1 from HELPER [QS:1 KS AS 2S 3S:1], absorb onto trouble [JH] → [JH QS:1]", "yank KD from HELPER [TD JD QD KD AD:1 2D:1], absorb onto growing [JH QS:1] → [JH QS:1 KD] [→COMPLETE] ; spawn TROUBLE: [AD:1 2D:1]", "peel 3D from HELPER [3D 4C 5H 6S], absorb onto trouble [AD:1 2D:1] → [AD:1 2D:1 3D] [→COMPLETE]" ]
+                    [ "peel QS' from HELPER [QS' KS AS 2S 3S'], absorb onto trouble [JH] → [JH QS']", "yank KD from HELPER [TD JD QD KD AD' 2D'], absorb onto growing [JH QS'] → [JH QS' KD] [→COMPLETE] ; spawn TROUBLE: [AD' 2D']", "peel 3D from HELPER [3D 4C 5H 6S], absorb onto trouble [AD' 2D'] → [AD' 2D' 3D] [→COMPLETE]" ]
             in
             case result of
                 Just plan ->
@@ -4079,7 +4079,7 @@ corpusSid142 =
             in
             let
                 expected =
-                    [ "splice [8H:1] into HELPER [5C 6D:1 7S:1 8D:1 9C:1 TH] → [5C 6D:1 7S:1 8H:1] + [8D:1 9C:1 TH]" ]
+                    [ "splice [8H'] into HELPER [5C 6D' 7S' 8D' 9C' TH] → [5C 6D' 7S' 8H'] + [8D' 9C' TH]" ]
             in
             case result of
                 Just plan ->
@@ -4124,7 +4124,7 @@ corpusSid144 =
             in
             let
                 expected =
-                    [ "peel 4H from HELPER [4H 5S:1 6H 7C:1 8D], absorb onto trouble [5C:1] → [4H 5C:1]", "peel 3S:1 from HELPER [3S:1 4S:1 5S 6S:1 7S:1], absorb onto growing [4H 5C:1] → [3S:1 4H 5C:1] [→COMPLETE]" ]
+                    [ "peel 4H from HELPER [4H 5S' 6H 7C' 8D], absorb onto trouble [5C'] → [4H 5C']", "peel 3S' from HELPER [3S' 4S' 5S 6S' 7S'], absorb onto growing [4H 5C'] → [3S' 4H 5C'] [→COMPLETE]" ]
             in
             case result of
                 Just plan ->
@@ -4169,7 +4169,7 @@ corpusSid146 =
             in
             let
                 expected =
-                    [ "peel 2D from HELPER [QD:1 KD AD:1 2D], absorb onto trouble [AC:1] → [AC:1 2D]", "split_out 3S from HELPER [2S:1 3S 4S], absorb onto growing [AC:1 2D] → [AC:1 2D 3S] [→COMPLETE] ; spawn TROUBLE: [2S:1], [4S]", "push TROUBLE [2S:1] onto HELPER [2H 2C:1 2D:1] → [2H 2C:1 2D:1 2S:1]", "peel 5D:1 from HELPER [5S:1 5H 5D:1 5C:1], absorb onto trouble [4S] → [4S 5D:1]", "peel 6C:1 from HELPER [6C:1 7H 8S 9D TS:1 JD:1 QC], absorb onto growing [4S 5D:1] → [4S 5D:1 6C:1] [→COMPLETE]" ]
+                    [ "peel 2D from HELPER [QD' KD AD' 2D], absorb onto trouble [AC'] → [AC' 2D]", "split_out 3S from HELPER [2S' 3S 4S], absorb onto growing [AC' 2D] → [AC' 2D 3S] [→COMPLETE] ; spawn TROUBLE: [2S'], [4S]", "push TROUBLE [2S'] onto HELPER [2H 2C' 2D'] → [2H 2C' 2D' 2S']", "peel 5D' from HELPER [5S' 5H 5D' 5C'], absorb onto trouble [4S] → [4S 5D']", "peel 6C' from HELPER [6C' 7H 8S 9D TS' JD' QC], absorb onto growing [4S 5D'] → [4S 5D' 6C'] [→COMPLETE]" ]
             in
             case result of
                 Just plan ->
@@ -4217,7 +4217,7 @@ corpusSid148 =
             in
             let
                 expected =
-                    [ "splice [2D] into HELPER [KH:1 AC:1 2D:1 3C 4D] → [KH:1 AC:1 2D] + [2D:1 3C 4D]" ]
+                    [ "splice [2D] into HELPER [KH' AC' 2D' 3C 4D] → [KH' AC' 2D] + [2D' 3C 4D]" ]
             in
             case result of
                 Just plan ->
@@ -5007,7 +5007,7 @@ extra0167Hp7Cp =
             in
             let
                 expected =
-                    [ "steal 7D from HELPER [7S 7D 7C], absorb onto trouble [7H:1 7C:1] → [7H:1 7C:1 7D] [→COMPLETE] ; spawn TROUBLE: [7S], [7C]", "pull 7C onto trouble [7S] → [7S 7C]", "peel 7H from HELPER [2C 3D 4C 5H 6S 7H], absorb onto growing [7S 7C] → [7S 7C 7H] [→COMPLETE]" ]
+                    [ "steal 7D from HELPER [7S 7D 7C], absorb onto trouble [7H' 7C'] → [7H' 7C' 7D] [→COMPLETE] ; spawn TROUBLE: [7S], [7C]", "pull 7C onto trouble [7S] → [7S 7C]", "peel 7H from HELPER [2C 3D 4C 5H 6S 7H], absorb onto growing [7S 7C] → [7S 7C 7H] [→COMPLETE]" ]
             in
             case result of
                 Just plan ->
@@ -5043,7 +5043,7 @@ extra0176H6Dp =
             in
             let
                 expected =
-                    [ "yank 6S from HELPER [2C 3D 4C 5H 6S 7H], absorb onto trouble [6H 6D:1] → [6H 6D:1 6S] [→COMPLETE] ; spawn TROUBLE: [7H]", "push TROUBLE [7H] onto HELPER [7S 7D 7C] → [7S 7D 7C 7H]" ]
+                    [ "yank 6S from HELPER [2C 3D 4C 5H 6S 7H], absorb onto trouble [6H 6D'] → [6H 6D' 6S] [→COMPLETE] ; spawn TROUBLE: [7H]", "push TROUBLE [7H] onto HELPER [7S 7D 7C] → [7S 7D 7C 7H]" ]
             in
             case result of
                 Just plan ->
@@ -5080,7 +5080,7 @@ extra018ASp2Sp =
             in
             let
                 expected =
-                    [ "peel 3S from HELPER [KS AS 2S 3S], absorb onto trouble [AS:1 2S:1] → [AS:1 2S:1 3S] [→COMPLETE]" ]
+                    [ "peel 3S from HELPER [KS AS 2S 3S], absorb onto trouble [AS' 2S'] → [AS' 2S' 3S] [→COMPLETE]" ]
             in
             case result of
                 Just plan ->
@@ -5120,7 +5120,7 @@ extra019JC =
             in
             let
                 expected =
-                    [ "peel TD from HELPER [TD JD QD KD], absorb onto trouble [JC] → [TD JC]", "split_out QD from HELPER [JD QD KD], absorb onto growing [TD JC] → [TD JC QD] [→COMPLETE] ; spawn TROUBLE: [JD], [KD]", "push TROUBLE [JD] onto HELPER [8C 9D:1 TS:1] → [8C 9D:1 TS:1 JD]", "peel AS:1 from HELPER [AS:1 2S:1 3S 4S], absorb onto trouble [KD] → [KD AS:1]", "steal 2H from HELPER [2H 3H 4H], absorb onto growing [KD AS:1] → [KD AS:1 2H] [→COMPLETE] ; spawn TROUBLE: [3H 4H]", "push TROUBLE [3H 4H] onto HELPER [5H 6H:1 7H] → [3H 4H 5H 6H:1 7H]" ]
+                    [ "peel TD from HELPER [TD JD QD KD], absorb onto trouble [JC] → [TD JC]", "split_out QD from HELPER [JD QD KD], absorb onto growing [TD JC] → [TD JC QD] [→COMPLETE] ; spawn TROUBLE: [JD], [KD]", "push TROUBLE [JD] onto HELPER [8C 9D' TS'] → [8C 9D' TS' JD]", "peel AS' from HELPER [AS' 2S' 3S 4S], absorb onto trouble [KD] → [KD AS']", "steal 2H from HELPER [2H 3H 4H], absorb onto growing [KD AS'] → [KD AS' 2H] [→COMPLETE] ; spawn TROUBLE: [3H 4H]", "push TROUBLE [3H 4H] onto HELPER [5H 6H' 7H] → [3H 4H 5H 6H' 7H]" ]
             in
             case result of
                 Just plan ->
@@ -5161,7 +5161,7 @@ extra020KHp =
             in
             let
                 expected =
-                    [ "steal AC from HELPER [AC AD AH], absorb onto trouble [KH:1] → [KH:1 AC] ; spawn TROUBLE: [AD], [AH]", "peel 2H from HELPER [2H 3H 4H 5H 6H:1], absorb onto growing [KH:1 AC] → [KH:1 AC 2H] [→COMPLETE]", "push TROUBLE [AD] onto HELPER [2C 3D 4C] → [AD 2C 3D 4C]", "steal 2S from HELPER [KS AS 2S], absorb onto trouble [AH] → [AH 2S] ; spawn TROUBLE: [KS AS]", "peel 3H from HELPER [3H 4H 5H 6H:1], absorb onto growing [AH 2S] → [AH 2S 3H] [→COMPLETE]", "push TROUBLE [KS AS] onto HELPER [2S:1 3S 4S] → [KS AS 2S:1 3S 4S]" ]
+                    [ "steal AC from HELPER [AC AD AH], absorb onto trouble [KH'] → [KH' AC] ; spawn TROUBLE: [AD], [AH]", "peel 2H from HELPER [2H 3H 4H 5H 6H'], absorb onto growing [KH' AC] → [KH' AC 2H] [→COMPLETE]", "push TROUBLE [AD] onto HELPER [2C 3D 4C] → [AD 2C 3D 4C]", "steal 2S from HELPER [KS AS 2S], absorb onto trouble [AH] → [AH 2S] ; spawn TROUBLE: [KS AS]", "peel 3H from HELPER [3H 4H 5H 6H'], absorb onto growing [AH 2S] → [AH 2S 3H] [→COMPLETE]", "push TROUBLE [KS AS] onto HELPER [2S' 3S 4S] → [KS AS 2S' 3S 4S]" ]
             in
             case result of
                 Just plan ->
@@ -5239,7 +5239,7 @@ extra0223Hp =
             in
             let
                 expected =
-                    [ "peel 3D from HELPER [3D 4C 5H 6S], absorb onto trouble [3H:1] → [3H:1 3D]", "peel 3S from HELPER [KS AS 2S 3S], absorb onto growing [3H:1 3D] → [3H:1 3D 3S] [→COMPLETE]" ]
+                    [ "peel 3D from HELPER [3D 4C 5H 6S], absorb onto trouble [3H'] → [3H' 3D]", "peel 3S from HELPER [KS AS 2S 3S], absorb onto growing [3H' 3D] → [3H' 3D 3S] [→COMPLETE]" ]
             in
             case result of
                 Just plan ->
@@ -5279,7 +5279,7 @@ extra023TCp =
             in
             let
                 expected =
-                    [ "peel JD from HELPER [JD QD KD AD 2D], absorb onto trouble [TC:1] → [TC:1 JD]", "steal QC:1 from HELPER [QH:1 QS:1 QC:1], absorb onto growing [TC:1 JD] → [TC:1 JD QC:1] [→COMPLETE] ; spawn TROUBLE: [QH:1], [QS:1]", "pull QS:1 onto trouble [QH:1] → [QH:1 QS:1]", "peel QD from HELPER [QD KD AD 2D], absorb onto growing [QH:1 QS:1] → [QH:1 QS:1 QD] [→COMPLETE]" ]
+                    [ "peel JD from HELPER [JD QD KD AD 2D], absorb onto trouble [TC'] → [TC' JD]", "steal QC' from HELPER [QH' QS' QC'], absorb onto growing [TC' JD] → [TC' JD QC'] [→COMPLETE] ; spawn TROUBLE: [QH'], [QS']", "pull QS' onto trouble [QH'] → [QH' QS']", "peel QD from HELPER [QD KD AD 2D], absorb onto growing [QH' QS'] → [QH' QS' QD] [→COMPLETE]" ]
             in
             case result of
                 Just plan ->
@@ -5320,7 +5320,7 @@ extra0242Cp =
             in
             let
                 expected =
-                    [ "peel AH from HELPER [AH 2H 3H 4H], absorb onto trouble [2C:1] → [AH 2C:1]", "steal 3D from HELPER [3H:1 3D 3S], absorb onto growing [AH 2C:1] → [AH 2C:1 3D] [→COMPLETE] ; spawn TROUBLE: [3H:1], [3S]", "push TROUBLE [3H:1] onto HELPER [4C 5H 6S] → [3H:1 4C 5H 6S]", "push TROUBLE [3S] onto HELPER [KS AS 2S] → [KS AS 2S 3S]" ]
+                    [ "peel AH from HELPER [AH 2H 3H 4H], absorb onto trouble [2C'] → [AH 2C']", "steal 3D from HELPER [3H' 3D 3S], absorb onto growing [AH 2C'] → [AH 2C' 3D] [→COMPLETE] ; spawn TROUBLE: [3H'], [3S]", "push TROUBLE [3H'] onto HELPER [4C 5H 6S] → [3H' 4C 5H 6S]", "push TROUBLE [3S] onto HELPER [KS AS 2S] → [KS AS 2S 3S]" ]
             in
             case result of
                 Just plan ->
@@ -5361,7 +5361,7 @@ extra0258C =
             in
             let
                 expected =
-                    [ "push TROUBLE [8C] onto HELPER [5D:1 6C:1 7H] → [5D:1 6C:1 7H 8C]" ]
+                    [ "push TROUBLE [8C] onto HELPER [5D' 6C' 7H] → [5D' 6C' 7H 8C]" ]
             in
             case result of
                 Just plan ->
@@ -6212,7 +6212,7 @@ minedMined0012Hp1 =
             in
             let
                 expected =
-                    [ "shift KD to pop 3S [TD JD QD -> KD + AS:1 2D]; absorb onto trouble [2H:1] → [2H:1 3S]", "steal AC from HELPER [AC AD AH], absorb onto growing [2H:1 3S] → [AC 2H:1 3S] [→COMPLETE] ; spawn TROUBLE: [AD], [AH]", "push TROUBLE [AD] onto HELPER [2C 3D 4S] → [AD 2C 3D 4S]", "push TROUBLE [AH] onto HELPER [2H 3H 4H] → [AH 2H 3H 4H]" ]
+                    [ "shift KD to pop 3S [TD JD QD -> KD + AS' 2D]; absorb onto trouble [2H'] → [2H' 3S]", "steal AC from HELPER [AC AD AH], absorb onto growing [2H' 3S] → [AC 2H' 3S] [→COMPLETE] ; spawn TROUBLE: [AD], [AH]", "push TROUBLE [AD] onto HELPER [2C 3D 4S] → [AD 2C 3D 4S]", "push TROUBLE [AH] onto HELPER [2H 3H 4H] → [AH 2H 3H 4H]" ]
             in
             case result of
                 Just plan ->
@@ -6251,7 +6251,7 @@ minedMined0025D5C =
             in
             let
                 expected =
-                    [ "yank 5H from HELPER [2C 3D 4C 5H 6S 7H], absorb onto trouble [5D 5C] → [5D 5C 5H] [→COMPLETE] ; spawn TROUBLE: [6S 7H]", "split_out 8S from HELPER [7H:1 8S 9D], absorb onto trouble [6S 7H] → [6S 7H 8S] [→COMPLETE] ; spawn TROUBLE: [7H:1], [9D]", "push TROUBLE [7H:1] onto HELPER [7S 7D 7C] → [7S 7D 7C 7H:1]", "push TROUBLE [9D] onto HELPER [TD JD QD KD] → [9D TD JD QD KD]" ]
+                    [ "yank 5H from HELPER [2C 3D 4C 5H 6S 7H], absorb onto trouble [5D 5C] → [5D 5C 5H] [→COMPLETE] ; spawn TROUBLE: [6S 7H]", "split_out 8S from HELPER [7H' 8S 9D], absorb onto trouble [6S 7H] → [6S 7H 8S] [→COMPLETE] ; spawn TROUBLE: [7H'], [9D]", "push TROUBLE [7H'] onto HELPER [7S 7D 7C] → [7S 7D 7C 7H']", "push TROUBLE [9D] onto HELPER [TD JD QD KD] → [9D TD JD QD KD]" ]
             in
             case result of
                 Just plan ->
@@ -6291,7 +6291,7 @@ minedMined003JCp1 =
             in
             let
                 expected =
-                    [ "yank QD from HELPER [9D TD JD QD KD], absorb onto trouble [JC:1] → [JC:1 QD] ; spawn TROUBLE: [KD]", "shift 3S to pop KS [4H 5C:1 6H:1 -> AS 2S + 3S]; absorb onto growing [JC:1 QD] → [JC:1 QD KS] [→COMPLETE]", "push TROUBLE [KD] onto HELPER [AC 2H 3C:1 4D] → [KD AC 2H 3C:1 4D]" ]
+                    [ "yank QD from HELPER [9D TD JD QD KD], absorb onto trouble [JC'] → [JC' QD] ; spawn TROUBLE: [KD]", "shift 3S to pop KS [4H 5C' 6H' -> AS 2S + 3S]; absorb onto growing [JC' QD] → [JC' QD KS] [→COMPLETE]", "push TROUBLE [KD] onto HELPER [AC 2H 3C' 4D] → [KD AC 2H 3C' 4D]" ]
             in
             case result of
                 Just plan ->
@@ -6332,7 +6332,7 @@ minedMined0046H =
             in
             let
                 expected =
-                    [ "peel 7C from HELPER [7S 7D 7C 7H:1], absorb onto trouble [6H] → [6H 7C]", "steal 5C from HELPER [5D 5C 5H], absorb onto growing [6H 7C] → [5C 6H 7C] [→COMPLETE] ; spawn TROUBLE: [5D], [5H]", "push TROUBLE [5D] onto HELPER [6S 7H 8S] → [5D 6S 7H 8S]", "push TROUBLE [5H] onto HELPER [AH 2C 3D 4C] → [AH 2C 3D 4C 5H]" ]
+                    [ "peel 7C from HELPER [7S 7D 7C 7H'], absorb onto trouble [6H] → [6H 7C]", "steal 5C from HELPER [5D 5C 5H], absorb onto growing [6H 7C] → [5C 6H 7C] [→COMPLETE] ; spawn TROUBLE: [5D], [5H]", "push TROUBLE [5D] onto HELPER [6S 7H 8S] → [5D 6S 7H 8S]", "push TROUBLE [5H] onto HELPER [AH 2C 3D 4C] → [AH 2C 3D 4C 5H]" ]
             in
             case result of
                 Just plan ->
@@ -6369,7 +6369,7 @@ minedMined0057Cp17Hp1 =
             in
             let
                 expected =
-                    [ "steal 7D from HELPER [7S 7D 7C], absorb onto trouble [7C:1 7H:1] → [7C:1 7H:1 7D] [→COMPLETE] ; spawn TROUBLE: [7S], [7C]", "pull 7C onto trouble [7S] → [7S 7C]", "peel 7H from HELPER [2C 3D 4C 5H 6S 7H], absorb onto growing [7S 7C] → [7S 7C 7H] [→COMPLETE]" ]
+                    [ "steal 7D from HELPER [7S 7D 7C], absorb onto trouble [7C' 7H'] → [7C' 7H' 7D] [→COMPLETE] ; spawn TROUBLE: [7S], [7C]", "pull 7C onto trouble [7S] → [7S 7C]", "peel 7H from HELPER [2C 3D 4C 5H 6S 7H], absorb onto growing [7S 7C] → [7S 7C 7H] [→COMPLETE]" ]
             in
             case result of
                 Just plan ->
@@ -6407,7 +6407,7 @@ minedMined0062Cp1 =
             in
             let
                 expected =
-                    [ "split_out 3H from HELPER [2H 3H 4H], absorb onto trouble [2C:1] → [2C:1 3H] ; spawn TROUBLE: [2H], [4H]", "shift 7D to pop 4S [7S 7C 7H -> 5D 6C + 7D]; absorb onto growing [2C:1 3H] → [2C:1 3H 4S] [→COMPLETE]", "peel 3S from HELPER [KS AS 2S 3S], absorb onto trouble [2H] → [2H 3S]", "pull 4H onto growing [2H 3S] → [2H 3S 4H] [→COMPLETE]" ]
+                    [ "split_out 3H from HELPER [2H 3H 4H], absorb onto trouble [2C'] → [2C' 3H] ; spawn TROUBLE: [2H], [4H]", "shift 7D to pop 4S [7S 7C 7H -> 5D 6C + 7D]; absorb onto growing [2C' 3H] → [2C' 3H 4S] [→COMPLETE]", "peel 3S from HELPER [KS AS 2S 3S], absorb onto trouble [2H] → [2H 3S]", "pull 4H onto growing [2H 3S] → [2H 3S 4H] [→COMPLETE]" ]
             in
             case result of
                 Just plan ->
@@ -6446,7 +6446,7 @@ minedMined0074D =
             in
             let
                 expected =
-                    [ "steal 4S from HELPER [2C:1 3H 4S], absorb onto trouble [4D] → [4D 4S] ; spawn TROUBLE: [2C:1 3H]", "steal 4H from HELPER [2H 3S 4H], absorb onto growing [4D 4S] → [4D 4S 4H] [→COMPLETE] ; spawn TROUBLE: [2H 3S]", "steal AD from HELPER [AC AD AH], absorb onto trouble [2C:1 3H] → [AD 2C:1 3H] [→COMPLETE] ; spawn TROUBLE: [AC], [AH]", "pull AC onto trouble [2H 3S] → [AC 2H 3S] [→COMPLETE]", "push TROUBLE [AH] onto HELPER [2C 3D 4C 5H] → [AH 2C 3D 4C 5H]" ]
+                    [ "steal 4S from HELPER [2C' 3H 4S], absorb onto trouble [4D] → [4D 4S] ; spawn TROUBLE: [2C' 3H]", "steal 4H from HELPER [2H 3S 4H], absorb onto growing [4D 4S] → [4D 4S 4H] [→COMPLETE] ; spawn TROUBLE: [2H 3S]", "steal AD from HELPER [AC AD AH], absorb onto trouble [2C' 3H] → [AD 2C' 3H] [→COMPLETE] ; spawn TROUBLE: [AC], [AH]", "pull AC onto trouble [2H 3S] → [AC 2H 3S] [→COMPLETE]", "push TROUBLE [AH] onto HELPER [2C 3D 4C 5H] → [AH 2C 3D 4C 5H]" ]
             in
             case result of
                 Just plan ->
@@ -6485,7 +6485,7 @@ minedMined008QDp1 =
             in
             let
                 expected =
-                    [ "peel KD from HELPER [TD JD QD KD], absorb onto trouble [QD:1] → [QD:1 KD]", "steal AD from HELPER [AD 2C:1 3H], absorb onto growing [QD:1 KD] → [QD:1 KD AD] [→COMPLETE] ; spawn TROUBLE: [2C:1 3H]", "peel AH from HELPER [AH 2C 3D 4C 5H], absorb onto trouble [2C:1 3H] → [AH 2C:1 3H] [→COMPLETE]" ]
+                    [ "peel KD from HELPER [TD JD QD KD], absorb onto trouble [QD'] → [QD' KD]", "steal AD from HELPER [AD 2C' 3H], absorb onto growing [QD' KD] → [QD' KD AD] [→COMPLETE] ; spawn TROUBLE: [2C' 3H]", "peel AH from HELPER [AH 2C 3D 4C 5H], absorb onto trouble [2C' 3H] → [AH 2C' 3H] [→COMPLETE]" ]
             in
             case result of
                 Just plan ->
@@ -6802,7 +6802,7 @@ solveShiftSubproblemCapture59 =
             in
             let
                 expected =
-                    [ "shift KS to pop 3S [AD:1 2C 3D:1 -> KS + AS 2S]; absorb onto trouble [4H 5S] → [3S 4H 5S] [→COMPLETE]", "pull AD onto trouble [AC:1] → [AC:1 AD]", "split_out AS from HELPER [KS AS 2S], absorb onto growing [AC:1 AD] → [AC:1 AD AS] [→COMPLETE] ; spawn TROUBLE: [KS], [2S]", "push TROUBLE [KS] onto HELPER [AD:1 2C 3D:1] → [KS AD:1 2C 3D:1]", "push TROUBLE [2S] onto HELPER [3D 4C 5H 6S 7D:1] → [2S 3D 4C 5H 6S 7D:1]" ]
+                    [ "shift KS to pop 3S [AD' 2C 3D' -> KS + AS 2S]; absorb onto trouble [4H 5S] → [3S 4H 5S] [→COMPLETE]", "pull AD onto trouble [AC'] → [AC' AD]", "split_out AS from HELPER [KS AS 2S], absorb onto growing [AC' AD] → [AC' AD AS] [→COMPLETE] ; spawn TROUBLE: [KS], [2S]", "push TROUBLE [KS] onto HELPER [AD' 2C 3D'] → [KS AD' 2C 3D']", "push TROUBLE [2S] onto HELPER [3D 4C 5H 6S 7D'] → [2S 3D 4C 5H 6S 7D']" ]
             in
             case result of
                 Just plan ->

@@ -10,7 +10,7 @@
 # bulk regression contract.
 #
 # Card label convention: `4D'` = deck-1 4D (mirrors the existing
-# replay_walkthroughs.dsl). The TS runner converts `'` → `:1` at
+# replay_walkthroughs.dsl). TS runner accepts `'` natively (legacy `:1` also tolerated) at
 # the parse boundary.
 #
 # Coordinate convention: `at (top, left)` per established DSL shape.

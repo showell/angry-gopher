@@ -1,33 +1,28 @@
-// replay_puzzles.ts — render the canonical TS solver's output for
-// each puzzle in games/lynrummy/puzzles/puzzles.json, in DSL-like
-// shorthand that matches `tools/show_session.py`'s format.
+// replay_puzzles.ts — emit conformance-ready DSL for every puzzle
+// in games/lynrummy/puzzles/puzzles.json.
 //
-// Purpose: surface solver / planner flaws that are hard to see in
-// the live UI but obvious on paper. The output shows the initial
-// board, then for each plan line: the engine's DSL description,
-// followed by the primitive sequence the verb→primitive +
-// geometry pipeline emits. When the planner does something silly
-// (e.g. splits a Set into singletons and immediately re-pairs two
-// of them), the primitive list makes it visible at a glance.
+// For each puzzle:
+//   1. Decode the initial board.
+//   2. Partition stacks into helper / trouble (same boundary the
+//      solver uses).
+//   3. Run `solveStateWithDescs` and capture the resulting plan
+//      lines verbatim.
+//   4. Emit a `scenario puzzle_<name>` block in the existing
+//      `op: solve` DSL shape (the one `planner_mined.dsl` uses).
 //
-// The puzzles catalog is small and stable, so this is the natural
-// debug surface: every puzzle the gallery ships gets walked here.
+// The output is the contract: pipe it to
+// `games/lynrummy/conformance/scenarios/planner_puzzles.dsl` and
+// fixturegen turns each puzzle into a regression test
+// automatically. If the solver's output for a puzzle later
+// changes, the conformance gate fails — the operator inspects
+// the diff, decides whether the new plan is better (re-run +
+// commit) or a regression (fix the solver), and the captured
+// DSL stays in lockstep with the spec.
 //
 // Usage:
-//   node tools/replay_puzzles.ts            # all puzzles
-//   node tools/replay_puzzles.ts <name>     # just the named puzzle
-//                                           # (substring match, case-sensitive)
+//   node tools/replay_puzzles.ts > <output.dsl>
 //
-// Output goes to stdout.
-//
-// DSL conventions (matching tools/show_session.py):
-//   - Cards: rank+suit, e.g. KS, 7H, AC
-//   - Deck-2 cards get a trailing apostrophe, e.g. 8C', QC'
-//   - Stacks: one per row, space-separated cards
-//
-// Translates the engine's native `:1` deck suffix (cardLabel)
-// into the apostrophe form so the report reads in one consistent
-// shorthand throughout.
+// No flags: stdout always; the redirect is your choice.
 
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -35,40 +30,13 @@ import * as path from "node:path";
 import type { Card } from "../src/rules/card.ts";
 import { cardLabel } from "../src/rules/card.ts";
 import type { BoardStack } from "../src/geometry.ts";
-import { applyLocally } from "../src/primitives.ts";
-import type { Primitive } from "../src/primitives.ts";
-import { expandVerb } from "../src/verbs.ts";
 import { solveStateWithDescs } from "../src/engine_v2.ts";
 import {
   classifyStack,
   KIND_RUN, KIND_RB, KIND_SET,
 } from "../src/classified_card_stack.ts";
 
-// --- DSL shorthand helpers -------------------------------------------
-
-/** Convert engine `8C:1` form to show_session.py's `8C'` form. */
-function dslLabel(c: Card): string {
-  const base = cardLabel(c);
-  return base.replace(/:1$/, "'").replace(/:0$/, "");
-}
-
-function dslStack(cards: readonly Card[]): string {
-  return cards.map(dslLabel).join(" ");
-}
-
-/** Translate any engine plan-line text from `:1` to `'` form so the
- *  full report reads consistently. The engine only ever emits
- *  `:1` (deck 0 has no suffix), so this is a single substitution. */
-function dslLine(line: string): string {
-  return line.replace(/:1\b/g, "'");
-}
-
 // --- Puzzle JSON shape -----------------------------------------------
-//
-// Mirrors what views/puzzles.go ships: { puzzles: [{ name, title,
-// initial_state: { board: [{board_cards: [{card: {...}, state}], loc},
-// ...], hands: [...], deck: [...], ... } } ...] }. We only need the
-// board's cards + locs for replay.
 
 interface JsonCard { value: number; suit: number; origin_deck: number }
 interface JsonBoardCard { card: JsonCard; state: number }
@@ -86,14 +54,13 @@ function decodeBoard(stacks: JsonStack[]): BoardStack[] {
 }
 
 // --- Bucket partition (mirror of engine_entry.solveBoard) -----------
-//
-// Same as `engine_entry.ts solveBoard`'s helper-vs-trouble partition;
-// kept here so this tool doesn't depend on the browser-bundle entry
-// module.
 
-function buckets(board: readonly BoardStack[]): {
-  helper: Card[][]; trouble: Card[][]; growing: Card[][]; complete: Card[][];
-} {
+interface Buckets {
+  helper: Card[][];
+  trouble: Card[][];
+}
+
+function partitionBoard(board: readonly BoardStack[]): Buckets {
   const helper: Card[][] = [];
   const trouble: Card[][] = [];
   for (const stack of board) {
@@ -105,80 +72,68 @@ function buckets(board: readonly BoardStack[]): {
       trouble.push(cards);
     }
   }
-  return { helper, trouble, growing: [], complete: [] };
+  return { helper, trouble };
 }
 
-// --- Primitive rendering ---------------------------------------------
+// --- DSL emit --------------------------------------------------------
 //
-// Each primitive is rendered against the sim it executes against —
-// we look up stack content by index so the report shows what was
-// actually moved (not just an index). Sim is threaded forward across
-// the move's primitive sequence the same way verbs.ts threads it.
+// Matches the `op: solve` shape used by planner_mined.dsl: each
+// scenario carries helper/trouble blocks (no growing/complete since
+// puzzles always start with empty growing+complete) and an
+// `expect.plan_lines:` list of plan-line strings, verbatim from
+// the engine. Stack-card labels use the engine's native cardLabel
+// (`:1` deck suffix); the parser accepts that form alongside the
+// `'` form planner_mined.dsl happens to use.
+//
+// Locs are pinned to (0,0) — solver doesn't consult geometry, the
+// existing planner DSLs do the same.
 
-function renderPrim(prim: Primitive, sim: readonly BoardStack[]): string {
-  switch (prim.action) {
-    case "split": {
-      const stack = sim[prim.stackIndex]!;
-      return `split [${dslStack(stack.cards)}] @ index ${prim.cardIndex}`;
-    }
-    case "merge_stack": {
-      const src = sim[prim.sourceStack]!;
-      const tgt = sim[prim.targetStack]!;
-      return `merge_stack [${dslStack(src.cards)}] ${prim.side} onto [${dslStack(tgt.cards)}]`;
-    }
-    case "merge_hand": {
-      const tgt = sim[prim.targetStack]!;
-      return `merge_hand ${dslLabel(prim.handCard)} ${prim.side} onto [${dslStack(tgt.cards)}]`;
-    }
-    case "place_hand":
-      return `place_hand ${dslLabel(prim.handCard)} @ (${prim.loc.top}, ${prim.loc.left})`;
-    case "move_stack": {
-      const stack = sim[prim.stackIndex]!;
-      return `move_stack [${dslStack(stack.cards)}] → (${prim.newLoc.top}, ${prim.newLoc.left})`;
-    }
-  }
+function dslStack(cards: readonly Card[]): string {
+  return cards.map(cardLabel).join(" ");
 }
 
-// --- Per-puzzle replay -----------------------------------------------
+/** Escape a plan-line for embedding in a DSL double-quoted string.
+ *  The plan-line strings the engine emits are built from
+ *  `cardLabel` + a small fixed alphabet; the only characters that
+ *  matter are `"` and `\`. We don't need to JSON-escape the unicode
+ *  arrow — the DSL parser passes it through. */
+function dslQuote(s: string): string {
+  return '"' + s.replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"';
+}
 
-function replayPuzzle(p: JsonPuzzle): void {
-  console.log(`=== ${p.title} ===`);
-
+function emitPuzzle(p: JsonPuzzle): void {
   const board = decodeBoard(p.initial_state.board);
-  console.log("initial board:");
-  for (const stack of board) {
-    console.log(`  ${dslStack(stack.cards)}`);
-  }
+  const { helper, trouble } = partitionBoard(board);
+  const plan = solveStateWithDescs({
+    helper, trouble, growing: [], complete: [],
+  });
 
-  const plan = solveStateWithDescs(buckets(board));
+  const lines: string[] = [];
+  lines.push(`scenario puzzle_${p.name}`);
+  lines.push(`  desc: Replay of ${p.title}. Auto-generated by tools/replay_puzzles.ts.`);
+  lines.push(`  op: solve`);
+  lines.push(`  helper:`);
+  for (const stack of helper) {
+    lines.push(`    at (0,0): ${dslStack(stack)}`);
+  }
+  lines.push(`  trouble:`);
+  for (const stack of trouble) {
+    lines.push(`    at (0,0): ${dslStack(stack)}`);
+  }
+  lines.push(`  expect:`);
   if (plan === null) {
-    console.log("\n(no plan within budget)");
-    console.log();
-    return;
-  }
-  if (plan.length === 0) {
-    console.log("\n(board is already clean — empty plan)");
-    console.log();
-    return;
-  }
-
-  console.log("\nplan:");
-  let sim: readonly BoardStack[] = board;
-  for (let i = 0; i < plan.length; i++) {
-    const planLine = plan[i]!;
-    console.log(`  [${i + 1}] ${dslLine(planLine.line)}`);
-    const prims = expandVerb(planLine.desc, sim, new Set());
-    if (prims.length === 0) {
-      console.log("      (no primitives — engine bug?)");
-    } else {
-      console.log(`      primitives (${prims.length}):`);
-      for (const p of prims) {
-        console.log(`        ${renderPrim(p, sim)}`);
-        sim = applyLocally(sim, p);
-      }
+    // No plan within budget. The existing solve DSL doesn't
+    // model "no plan" directly — emit an empty plan_lines list
+    // and a comment so the operator notices.
+    lines.push(`    # solver returned NULL (no plan within budget)`);
+    lines.push(`    plan_lines:`);
+  } else {
+    lines.push(`    plan_lines:`);
+    for (const planLine of plan) {
+      lines.push(`      - ${dslQuote(planLine.line)}`);
     }
   }
-  console.log();
+  process.stdout.write(lines.join("\n") + "\n\n");
 }
 
 // --- Entry point -----------------------------------------------------
@@ -189,18 +144,21 @@ function main(): void {
   const raw = fs.readFileSync(catalogPath, "utf8");
   const catalog: JsonCatalog = JSON.parse(raw);
 
-  const filter = process.argv[2];  // optional substring match on name
-  const puzzles = filter !== undefined
-    ? catalog.puzzles.filter(p => p.name.includes(filter))
-    : catalog.puzzles;
+  process.stdout.write(
+    "# AUTO-GENERATED by tools/replay_puzzles.ts.\n" +
+    "# Do NOT hand-edit. Re-run the exporter to refresh.\n" +
+    "#\n" +
+    "# Each scenario captures the canonical TS solver's plan for\n" +
+    "# one entry in games/lynrummy/puzzles/puzzles.json. The plan\n" +
+    "# you see is the plan the engine produces RIGHT NOW for that\n" +
+    "# board — when reading, treat \"expected\" as a snapshot of\n" +
+    "# \"actual\". Drift between this file and the engine surfaces\n" +
+    "# at the conformance gate; regenerate to update the spec.\n" +
+    "\n",
+  );
 
-  if (puzzles.length === 0) {
-    console.log(`No puzzles match filter ${JSON.stringify(filter)}.`);
-    return;
-  }
-
-  for (const p of puzzles) {
-    replayPuzzle(p);
+  for (const p of catalog.puzzles) {
+    emitPuzzle(p);
   }
 }
 

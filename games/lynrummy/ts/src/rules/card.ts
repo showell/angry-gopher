@@ -18,12 +18,18 @@ export const RED: ReadonlySet<number> = new Set([1, 3]);
 export type Card = readonly [number, number, number];
 
 /**
- * Parse a card label like "5H" or "TC:1" into a Card tuple.
- * `:1` suffix selects deck 1; default is deck 0.
+ * Parse a card label like "5H" or "TC'" into a Card tuple. A
+ * trailing apostrophe selects deck 1; default is deck 0. The
+ * legacy `:1` suffix form is also accepted for back-compat with
+ * any pre-unification fixtures still floating around (gold files,
+ * captured plan strings) — should be a vanishing concern.
  */
 export function parseCardLabel(label: string): Card {
   let deck = 0;
-  if (label.includes(":")) {
+  if (label.endsWith("'")) {
+    deck = 1;
+    label = label.slice(0, -1);
+  } else if (label.includes(":")) {
     const parts = label.split(":");
     label = parts[0]!;
     deck = parseInt(parts[1]!, 10);
@@ -39,13 +45,13 @@ export function parseCardLabel(label: string): Card {
   return [rankIdx + 1, suitIdx, deck] as const;
 }
 
-/** Render a Card as a label string. Includes a `:N` deck suffix
- *  when deck ≠ 0 (mirroring python `rules.card.card_label`). The
- *  suffixed form is the cross-language plan-line contract — DSL
- *  scenarios like `JD:1` round-trip through this. */
+/** Render a Card as a label string. Trailing apostrophe denotes
+ *  the second deck (e.g. `8C'`, `QH'`); deck-0 cards render bare.
+ *  This is the unified deck-suffix convention across DSL, plan-
+ *  line strings, UI display, and `tools/show_session.py`. */
 export function cardLabel(c: Card): string {
   const base = RANKS[c[0] - 1]! + SUITS[c[1]]!;
-  return c[2] === 0 ? base : `${base}:${c[2]}`;
+  return c[2] === 0 ? base : `${base}'`;
 }
 
 /** True iff `s` is the diamonds or hearts suit (matches python

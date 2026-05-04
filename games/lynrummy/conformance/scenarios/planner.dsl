@@ -244,8 +244,8 @@ scenario solve_shift_subproblem_capture_59
     at (0,0): AD
   expect:
     plan_lines:
-      - "shift KS to pop 3S [AD:1 2C 3D:1 -> KS + AS 2S]; absorb onto trouble [4H 5S] → [3S 4H 5S] [→COMPLETE]"
-      - "pull AD onto trouble [AC:1] → [AC:1 AD]"
-      - "split_out AS from HELPER [KS AS 2S], absorb onto growing [AC:1 AD] → [AC:1 AD AS] [→COMPLETE] ; spawn TROUBLE: [KS], [2S]"
-      - "push TROUBLE [KS] onto HELPER [AD:1 2C 3D:1] → [KS AD:1 2C 3D:1]"
-      - "push TROUBLE [2S] onto HELPER [3D 4C 5H 6S 7D:1] → [2S 3D 4C 5H 6S 7D:1]"
+      - "shift KS to pop 3S [AD' 2C 3D' -> KS + AS 2S]; absorb onto trouble [4H 5S] → [3S 4H 5S] [→COMPLETE]"
+      - "pull AD onto trouble [AC'] → [AC' AD]"
+      - "split_out AS from HELPER [KS AS 2S], absorb onto growing [AC' AD] → [AC' AD AS] [→COMPLETE] ; spawn TROUBLE: [KS], [2S]"
+      - "push TROUBLE [KS] onto HELPER [AD' 2C 3D'] → [KS AD' 2C 3D']"
+      - "push TROUBLE [2S] onto HELPER [3D 4C 5H 6S 7D'] → [2S 3D 4C 5H 6S 7D']"
