@@ -3,9 +3,9 @@
 // agent_player.ts asserts these invariants permanently (throws on
 // violation per memory/feedback_dont_paper_over_problems.md):
 //
-//   - every applyHandPlay → clean board (every stack length-3+ legal)
-//   - playTurn outcome === "hand_empty" iff hand is empty
-//   - hand-tracking arithmetic: handBefore - played === handMid
+//   - every applyPlay → clean board (every stack length-3+ legal)
+//   - simulateFullTurn outcome === "hand_empty" iff hand is empty
+//   - hand-tracking arithmetic: handBefore - played === handAfter
 //   - card conservation across the game
 //
 // This test runs the agent through several seeds. If any invariant

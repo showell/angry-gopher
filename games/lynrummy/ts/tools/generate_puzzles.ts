@@ -146,7 +146,7 @@ function cardsOnBoard(board: readonly BoardStack[]): number {
 // for multi-card placements the cards form one fresh stack at a loc
 // sized for the placement count.
 //
-// This mirrors the augmented-buckets shape `applyHandPlay` constructs
+// This mirrors the augmented-buckets shape `applyPlay` constructs
 // in agent_player.ts (`partition([...board, [...play.placements]])`),
 // just lifted to the positioned-stack representation so we can serialize
 // it as `initial_state.board`.
