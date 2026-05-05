@@ -31,13 +31,14 @@ import * as path from "node:path";
 
 import type { Card } from "./rules/card.ts";
 import { cardLabel } from "./rules/card.ts";
-import type { BoardStack, Loc } from "./geometry.ts";
+import type { BoardStack } from "./geometry.ts";
 import { findViolation } from "./geometry.ts";
 import {
   type Primitive,
   applyLocally,
 } from "./primitives.ts";
-import type { GameResult, PlayRecord } from "./agent_player.ts";
+import { planMergeStackOnBoard } from "./verbs.ts";
+import type { GameResult, JoinEvent } from "./agent_player.ts";
 import { physicalPlan } from "./physical_plan.ts";
 
 // --- Invariant: no two stacks ever overlap, ever ---------------------
@@ -160,27 +161,31 @@ export function encodeInitialState(
   };
 }
 
-// --- Per-play expansion (delegates to physicalPlan) ------------------
+// --- Join-event materialization --------------------------------------
+//
+// `joinBoardRuns` (agent_player.ts) records each greedy run-merge as a
+// `JoinEvent { src, tgt }`. The merged stack reads `[...src, ...tgt]`,
+// matching `merge_stack` with side="left". We materialize each event
+// into a `merge_stack` primitive at apply time, looking up indices on
+// the LIVE sim board (the agent's index space differs from the
+// transcript's, since `applyMergeStack` appends the merged stack to
+// the end of the array).
 
-/** Expand one play into a primitive sequence by handing
- *  (initialBoard, placements, planDescs) to the global physical
- *  planner. The planner emits the logical trace, lifts singleton hand
- *  cards into direct merge_hand plays, and runs one global geometry
- *  pre-flight pass.
- *
- *  Assert no-overlap after EACH primitive — every emitted action
- *  must leave the board legally clean. */
-function playToPrimitives(
+function applyJoinEvents(
   sim: readonly BoardStack[],
-  play: PlayRecord,
-): { prims: readonly Primitive[]; sim: readonly BoardStack[] } {
-  const prims = physicalPlan(sim, play.placements, play.planDescs);
+  joins: readonly JoinEvent[],
+  writePrim: (sim: readonly BoardStack[], prim: Primitive) => readonly BoardStack[],
+): readonly BoardStack[] {
   let cur = sim;
-  for (let i = 0; i < prims.length; i++) {
-    cur = applyLocally(cur, prims[i]!);
-    assertNoOverlap(cur, `after-primitive[${i}] ${prims[i]!.action}`);
+  for (const j of joins) {
+    // Reuse the verb-level planner: handles geometry pre-flight
+    // (injects a `move_stack` ahead of the merge if the in-place
+    // result would crowd). Always side="left" because joinBoardRuns
+    // builds the merged stack as `[...src, ...tgt]`.
+    const planned = planMergeStackOnBoard(cur, j.src, j.tgt, "left");
+    for (const p of planned.prims) cur = writePrim(cur, p);
   }
-  return { prims, sim: cur };
+  return cur;
 }
 
 // --- Top-level writer ------------------------------------------------
@@ -230,35 +235,47 @@ export function writeSession(
     JSON.stringify(meta, null, 2) + "\n",
   );
 
-  let seq = 1;
+  // Local helper: write one primitive as the next action file and
+  // advance `actSim`. Captures `actionsDir`, `seq` (mutable closure
+  // via the ref object), and the assertNoOverlap discipline.
+  const seqRef = { n: 1 };
+  const writePrim = (
+    actSim: readonly BoardStack[],
+    prim: Primitive,
+  ): readonly BoardStack[] => {
+    const wire = primToWire(prim, actSim);
+    fs.writeFileSync(
+      path.join(actionsDir, `${seqRef.n}.json`),
+      JSON.stringify({ action: wire }) + "\n",
+    );
+    seqRef.n++;
+    const next = applyLocally(actSim, prim);
+    assertNoOverlap(next, `after-primitive ${prim.action}`);
+    return next;
+  };
+
   let sim: readonly BoardStack[] = inputs.initialBoard;
   for (const turn of inputs.result.turns) {
-    for (const play of turn.plays) {
-      const { prims, sim: nextSim } = playToPrimitives(sim, play);
-      // Write each primitive as a discrete action file. We re-thread
-      // sim per primitive so each action carries the correct full
-      // CardStack at its referenced indices.
-      let actSim = sim;
-      for (const prim of prims) {
-        const wire = primToWire(prim, actSim);
-        const envelope = { action: wire };
-        fs.writeFileSync(
-          path.join(actionsDir, `${seq}.json`),
-          JSON.stringify(envelope) + "\n",
-        );
-        seq++;
-        actSim = applyLocally(actSim, prim);
+    // Walk the turn's interleaved step stream. Each step is either a
+    // groom (replay run-merges as `merge_stack` primitives) or a
+    // play (expand into physical primitives via `physicalPlan`).
+    for (const step of turn.steps) {
+      if (step.kind === "groom") {
+        sim = applyJoinEvents(sim, step.joins, writePrim);
+      } else {
+        const prims = physicalPlan(sim, step.placements, step.planDescs);
+        for (const prim of prims) sim = writePrim(sim, prim);
       }
-      sim = nextSim;
     }
     // CompleteTurn at end of every turn (Elm's local logic deals
     // the next 3 / 5 from initial_state.deck on receipt).
     fs.writeFileSync(
-      path.join(actionsDir, `${seq}.json`),
+      path.join(actionsDir, `${seqRef.n}.json`),
       JSON.stringify({ action: { action: "complete_turn" } }) + "\n",
     );
-    seq++;
+    seqRef.n++;
   }
+  const seq = seqRef.n;
 
   return {
     sessionId,

@@ -38,7 +38,12 @@
 import type { Card } from "./rules/card.ts";
 import type { Buckets, RawBuckets } from "./buckets.ts";
 import { classifyBuckets } from "./buckets.ts";
-import { classifyStack, type ClassifiedCardStack } from "./classified_card_stack.ts";
+import {
+  classifyStack,
+  type ClassifiedCardStack,
+  KIND_RUN,
+  KIND_RB,
+} from "./classified_card_stack.ts";
 import { findPlay, type PlayResult } from "./hand_play.ts";
 import { solveStateWithDescs } from "./engine_v2.ts";
 import { describe, type Desc } from "./move.ts";
@@ -185,16 +190,96 @@ function applyPlay(
   return { board: newBoard, hand: newHand, planDescs: plan.map(p => p.desc) };
 }
 
-// --- Records ----------------------------------------------------------
+// --- Board grooming ---------------------------------------------------
+//
+// Greedy run-merger. The BFS / play loop happily leaves the board with
+// adjacent runs that fit end-to-end (e.g. [9♠ T♠ J♠] and [Q♠ K♠ A♠])
+// but never glues them, because every run is already a complete legal
+// stack. Joining them post-hoc opens the board: more cards in one
+// stack means more in-place absorbers next turn (a longer run accepts
+// peels and yanks at both ends).
+//
+// Quadratic over board size; at Lyn Rummy scale (≤ ~25 stacks) this
+// is cheap. Greedy is fine — any join is locally pure (preserves all
+// cards, lengthens a stack), and the iteration restart on each merge
+// catches transitive joins.
+//
+// Cap at MAX_JOINED_LEN (15) because the UI's stack rendering chokes
+// on longer stacks. Runs longer than this stay split.
 
-/** Per-play record exposed for tracing harnesses. One PlayRecord per
- *  successful findPlay → applyPlay round-trip. */
-export interface PlayRecord {
+const MAX_JOINED_LEN = 15;
+
+/** One greedy run-merge: the contents of the two stacks at the moment
+ *  of the merge. The merged stack reads `[...src, ...tgt]` (matches
+ *  `merge_stack` with side="left"). Transcript writers materialize
+ *  these into wire-level `merge_stack` primitives. */
+export interface JoinEvent {
+  readonly src: readonly Card[];
+  readonly tgt: readonly Card[];
+}
+
+function joinBoardRuns(
+  board: readonly (readonly Card[])[],
+): { board: readonly (readonly Card[])[]; joins: readonly JoinEvent[] } {
+  const cur: (readonly Card[])[] = [...board];
+  const joins: JoinEvent[] = [];
+  while (true) {
+    let merged = false;
+    outer: for (let i = 0; i < cur.length; i++) {
+      const ci = classifyStack(cur[i]!);
+      if (ci === null) continue;
+      if (ci.kind !== KIND_RUN && ci.kind !== KIND_RB) continue;
+      for (let j = 0; j < cur.length; j++) {
+        if (j === i) continue;
+        const cj = classifyStack(cur[j]!);
+        if (cj === null) continue;
+        if (cj.kind !== ci.kind) continue;
+        if (ci.n + cj.n > MAX_JOINED_LEN) continue;
+        const concat = [...cur[i]!, ...cur[j]!];
+        const joined = classifyStack(concat);
+        if (joined === null || joined.kind !== ci.kind) continue;
+        joins.push({ src: cur[i]!, tgt: cur[j]! });
+        cur[i] = concat;
+        cur.splice(j, 1);
+        merged = true;
+        break outer;
+      }
+    }
+    if (!merged) break;
+  }
+  return { board: cur, joins };
+}
+
+// --- Records ----------------------------------------------------------
+//
+// A turn is a single ordered list of `steps`. Each step is either a
+// `groom` (a batch of run-merges, possibly empty) or a `play` (one
+// findPlay → applyPlay round-trip). The list always alternates
+// groom → play → groom → play → … → play → groom: every turn opens
+// AND closes with a groom, with plays interleaved between. Consumers
+// (transcript writer, puzzle capture, traces) walk `steps` in order
+// and dispatch on `kind` — no other place reconstructs the
+// alternation.
+
+/** A batch of greedy run-merges applied at one groom point. Empty in
+ *  steady state. Transcript writers replay these as `merge_stack`
+ *  primitives so the wire-level board stays in sync with the agent's
+ *  logical board. */
+export interface GroomStep {
+  readonly kind: "groom";
+  readonly joins: readonly JoinEvent[];
+}
+
+/** One successful findPlay → applyPlay round-trip. */
+export interface PlayStep {
+  readonly kind: "play";
   readonly placements: readonly Card[];
   readonly planDescs: readonly Desc[];
   readonly findPlayMs: number;
   readonly applyMs: number;
 }
+
+export type TurnStep = GroomStep | PlayStep;
 
 export interface GameTurnRecord {
   readonly turnNum: number;
@@ -211,7 +296,9 @@ export interface GameTurnRecord {
   readonly deckRemaining: number;
   readonly turnWallMs: number;
   readonly findPlayWallMsTotal: number;
-  readonly plays: readonly PlayRecord[];
+  /** The interleaved groom/play stream. See module-level comment;
+   *  `simulateFullTurn` is the only producer. */
+  readonly steps: readonly TurnStep[];
 }
 
 export interface GameResult {
@@ -266,18 +353,34 @@ export function simulateFullTurn(
   const boardBefore = startBoard.length;
   const tTurn0 = performance.now();
 
-  let board = startBoard;
+  // The turn alternates: groom, play, groom, play, …, play, groom.
+  // Each loop iteration pushes a groom step, then (if possible) a
+  // play step. If the iteration can't produce a play (hand empty or
+  // no findPlay), it breaks AFTER pushing the groom — leaving the
+  // steps list ending in a groom, with exactly one more groom than
+  // play.
+  let board: readonly (readonly Card[])[] = startBoard;
   let hand = startHand;
   const cardsPlayed: Card[] = [];
-  const plays: PlayRecord[] = [];
+  const steps: TurnStep[] = [];
   let playsMade = 0;
   let findPlayWallMsTotal = 0;
   let applyWallMsTotal = 0;
   let outcome: "hand_empty" | "stuck";
 
-  // The play loop: while the active player can still place hand
-  // cards on a board that ends clean, do so.
   while (true) {
+    // Groom: greedily merge any runs the inherited / post-play board
+    // left split. No-op in steady state, non-empty after a play that
+    // opened a join, or on a hand-built board inherited from a human
+    // player.
+    const groomed = joinBoardRuns(board);
+    board = groomed.board;
+    steps.push({ kind: "groom", joins: groomed.joins });
+    // INVARIANT: groom only replaces stacks with classifyStack-
+    // validated longer ones; if applyPlay produced a clean board,
+    // the post-groom board is still clean.
+    assertBoardClean(board, "simulateFullTurn after-groom");
+
     if (hand.length === 0) { outcome = "hand_empty"; break; }
 
     const t0 = performance.now();
@@ -305,12 +408,8 @@ export function simulateFullTurn(
     }
     board = next.board;
     hand = next.hand;
-    // INVARIANT: every applyPlay produces a clean board. The BFS
-    // pipeline only returns plans that drive the augmented state to
-    // victory; any failure here means the agent saw a "winning" plan
-    // that didn't actually win.
-    assertBoardClean(board, "simulateFullTurn after-play");
-    plays.push({
+    steps.push({
+      kind: "play",
       placements: [...play.placements],
       planDescs: next.planDescs,
       findPlayMs,
@@ -354,7 +453,7 @@ export function simulateFullTurn(
     deckRemaining: newDeck.length,
     turnWallMs,
     findPlayWallMsTotal,
-    plays,
+    steps,
   };
 
   // applyWallMsTotal is computed for symmetry with findPlayWallMsTotal

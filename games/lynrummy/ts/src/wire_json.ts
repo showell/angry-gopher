@@ -15,6 +15,7 @@
 //     never freshly-played anything, the recency markers are UI-only
 
 import type { Card } from "./rules/card.ts";
+import { cardLabel } from "./rules/card.ts";
 import type { BoardStack } from "./geometry.ts";
 import type { Primitive } from "./primitives.ts";
 
@@ -50,6 +51,29 @@ export function jsonStack(s: BoardStack): JsonCardStack {
     board_cards: s.cards.map(jsonBoardCard),
     loc: { top: s.loc.top, left: s.loc.left },
   };
+}
+
+/** Render a Primitive in the action-line syntax shared by the
+ *  conformance DSL fixtures (`replay_walkthroughs.dsl`,
+ *  `verb_to_primitives.dsl`, etc.). The sim-board argument resolves
+ *  positional stack references to their card content. */
+export function primToDslLine(p: Primitive, sim: readonly BoardStack[]): string {
+  const stackCards = (i: number) => sim[i]!.cards.map(cardLabel).join(" ");
+  switch (p.action) {
+    case "split":
+      return `split [${stackCards(p.stackIndex)}]@${p.cardIndex}`;
+    case "merge_stack":
+      return `merge_stack [${stackCards(p.sourceStack)}]`
+        + ` -> [${stackCards(p.targetStack)}] /${p.side}`;
+    case "merge_hand":
+      return `merge_hand ${cardLabel(p.handCard)}`
+        + ` -> [${stackCards(p.targetStack)}] /${p.side}`;
+    case "place_hand":
+      return `place_hand ${cardLabel(p.handCard)} -> (${p.loc.top},${p.loc.left})`;
+    case "move_stack":
+      return `move_stack [${stackCards(p.stackIndex)}]`
+        + ` -> (${p.newLoc.top},${p.newLoc.left})`;
+  }
 }
 
 export function primToWire(prim: Primitive, sim: readonly BoardStack[]): WireActionJson {

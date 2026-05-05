@@ -214,7 +214,7 @@ function planMergeHand(
  *  result would violate the legal threshold. Source stays in `others`
  *  during the move/merge intermediate frame because it's physically
  *  still on the board until the merge consumes it. */
-function planMergeStackOnBoard(
+export function planMergeStackOnBoard(
   sim: readonly BoardStack[],
   srcContent: readonly Card[],
   tgtContent: readonly Card[],

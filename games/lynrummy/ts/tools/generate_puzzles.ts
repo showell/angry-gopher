@@ -38,9 +38,9 @@ import type { Card } from "../src/rules/card.ts";
 import { parseCardLabel } from "../src/rules/card.ts";
 import type { BoardStack, Loc } from "../src/geometry.ts";
 import { findOpenLoc } from "../src/geometry.ts";
-import { playFullGame, type PlayRecord } from "../src/agent_player.ts";
+import { playFullGame, type PlayStep, type JoinEvent } from "../src/agent_player.ts";
 import { physicalPlan } from "../src/physical_plan.ts";
-import { applyLocally } from "../src/primitives.ts";
+import { applyLocally, findStackIndex } from "../src/primitives.ts";
 import { encodeInitialState, type RemoteStateJson } from "../src/transcript.ts";
 
 // --- Tunables (constants, NOT CLI args) -----------------------------
@@ -166,7 +166,28 @@ function augmentedBoard(
 // to render its action log; we reuse `physicalPlan` + `applyLocally`
 // here so positions stay in lockstep with what the Elm UI would render.
 
-function advanceSim(sim: readonly BoardStack[], play: PlayRecord): readonly BoardStack[] {
+function applyGroom(
+  sim: readonly BoardStack[],
+  joins: readonly JoinEvent[],
+): readonly BoardStack[] {
+  let cur = sim;
+  for (const j of joins) {
+    const sourceStack = findStackIndex(cur, j.src);
+    const targetStack = findStackIndex(cur, j.tgt);
+    cur = applyLocally(cur, {
+      action: "merge_stack",
+      sourceStack,
+      targetStack,
+      side: "left",
+    });
+  }
+  return cur;
+}
+
+function advancePlay(
+  sim: readonly BoardStack[],
+  play: PlayStep,
+): readonly BoardStack[] {
   const prims = physicalPlan(sim, play.placements, play.planDescs);
   let cur = sim;
   for (const p of prims) cur = applyLocally(cur, p);
@@ -230,12 +251,17 @@ function tryCaptureFromSeed(seed: number): { puzzle: CapturedPuzzle | null; ctx:
   let sim: readonly BoardStack[] = initialBoard;
   for (let ti = 0; ti < result.turns.length; ti++) {
     const turn = result.turns[ti]!;
-    for (let pi = 0; pi < turn.plays.length; pi++) {
-      const play = turn.plays[pi]!;
-      const aug = augmentedBoard(sim, play.placements);
+    let playIdx = 0;
+    for (const step of turn.steps) {
+      if (step.kind === "groom") {
+        sim = applyGroom(sim, step.joins);
+        continue;
+      }
+      playIdx++;
+      const aug = augmentedBoard(sim, step.placements);
       const cardCount = cardsOnBoard(aug);
       if (
-        play.planDescs.length === TARGET_PLAN_LINES &&
+        step.planDescs.length === TARGET_PLAN_LINES &&
         cardCount >= MIN_BOARD_CARDS
       ) {
         const idx = String(0).padStart(3, "0");  // overwritten by caller
@@ -249,12 +275,12 @@ function tryCaptureFromSeed(seed: number): { puzzle: CapturedPuzzle | null; ctx:
           ctx: {
             seed,
             turnIndex: ti + 1,
-            playIndex: pi + 1,
+            playIndex: playIdx,
             boardCardCount: cardCount,
           },
         };
       }
-      sim = advanceSim(sim, play);
+      sim = advancePlay(sim, step);
     }
   }
   return { puzzle: null, ctx: null };

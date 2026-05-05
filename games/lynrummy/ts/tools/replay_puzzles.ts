@@ -31,6 +31,7 @@ import { cardLabel } from "../src/rules/card.ts";
 import type { BoardStack } from "../src/geometry.ts";
 import type { Primitive } from "../src/primitives.ts";
 import { applyLocally } from "../src/primitives.ts";
+import { primToDslLine } from "../src/wire_json.ts";
 import { expandVerb } from "../src/verbs.ts";
 import { solveStateWithDescs } from "../src/engine_v2.ts";
 import {
@@ -88,30 +89,6 @@ function dslStack(cards: readonly Card[]): string {
  *  and `\` need escaping. */
 function dslQuote(s: string): string {
   return '"' + s.replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"';
-}
-
-/** Render a Primitive in the action-line syntax shared by
- *  replay_walkthroughs.dsl + verb_to_primitives.dsl + the parser
- *  in test_replay_walkthroughs.parseActionLine. The sim-board
- *  argument is needed because primitives reference stacks by
- *  position; we look up the cards at that position to render the
- *  content-form expected by the DSL. */
-function primToDslLine(p: Primitive, sim: readonly BoardStack[]): string {
-  switch (p.action) {
-    case "split":
-      return `split [${dslStack(sim[p.stackIndex]!.cards)}]@${p.cardIndex}`;
-    case "merge_stack":
-      return `merge_stack [${dslStack(sim[p.sourceStack]!.cards)}]`
-        + ` -> [${dslStack(sim[p.targetStack]!.cards)}] /${p.side}`;
-    case "merge_hand":
-      return `merge_hand ${cardLabel(p.handCard)}`
-        + ` -> [${dslStack(sim[p.targetStack]!.cards)}] /${p.side}`;
-    case "place_hand":
-      return `place_hand ${cardLabel(p.handCard)} -> (${p.loc.top},${p.loc.left})`;
-    case "move_stack":
-      return `move_stack [${dslStack(sim[p.stackIndex]!.cards)}]`
-        + ` -> (${p.newLoc.top},${p.newLoc.left})`;
-  }
 }
 
 // --- Per-puzzle solve + primitive expansion --------------------------

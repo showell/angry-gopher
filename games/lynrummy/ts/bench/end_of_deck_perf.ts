@@ -179,11 +179,12 @@ function emitTrace(seed: number, result: GameResult): void {
   out.push("|----:|----:|----:|:----|:----|");
   for (const t of result.turns) {
     let p = 0;
-    for (const play of t.plays) {
+    for (const step of t.steps) {
+      if (step.kind !== "play") continue;
       p++;
-      const placeLabel = play.placements.map(cardLabel).join(" ");
-      out.push(`| ${t.turnNum} | ${p} | ${play.findPlayMs.toFixed(0)} | \`place\` | ${placeLabel} from hand |`);
-      for (const d of play.planDescs) {
+      const placeLabel = step.placements.map(cardLabel).join(" ");
+      out.push(`| ${t.turnNum} | ${p} | ${step.findPlayMs.toFixed(0)} | \`place\` | ${placeLabel} from hand |`);
+      for (const d of step.planDescs) {
         const desc = describeShort(d).replace(/\|/g, "\\|");
         out.push(`| ${t.turnNum} | ${p} | — | \`${verbName(d)}\` | ${desc} |`);
       }
