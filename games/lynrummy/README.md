@@ -26,20 +26,15 @@ editing any `.elm` or `ts/src/*.ts` file is `ops/build_elm`.
   See `ts/README.md` and `ts/PHYSICAL_PLAN.md`.
 - `elm/` — the human-facing client (Main.Play + Game.* +
   Main.* harness). Served at `/gopher/lynrummy-elm/`.
-  Game.Rules locked-down primitives, the dealer (Game.Dealer),
-  and a referee (Game.Referee). The legacy BFS port at
-  `src/Game/Agent/` and trick engine at `src/Game/Strategy/`
-  are still wired in for the live-game hint button; both
-  retire when `TS_ELM_INTEGRATION` lands.
-- `python/` — Legacy/utility. The Python solver modules
-  still pass their tests as a frozen parallel implementation;
-  `dealer.py`, `puzzle_catalog.py`, and one-off tools remain
-  useful. See `python/README.md`.
+  Game.Rules locked-down primitives, the dealer
+  (`Game.Dealer`), and a referee (`Game.Rules.Referee`).
+  Hint and agent-play surfaces route through the TS engine
+  over Elm ports.
 - `puzzles/` — curated puzzle gallery. Elm sub-app compiled
   from `elm/src/Puzzles.elm`, embedding `Main.Play` per
-  panel. Served at `/gopher/puzzles/`. The catalog is
-  generated from `conformance/mined_seeds.json` via
-  `python/puzzle_catalog.py`.
+  panel. Served at `/gopher/puzzles/`. The committed catalog
+  lives at `puzzles/puzzles.json`; refresh by running
+  `ts/tools/generate_puzzles.ts` against the current engine.
 - `data/` — file-system-backed session data. Two top-level
   namespaces, each with its own id counter at the root of
   `data/`:
@@ -108,10 +103,3 @@ See `../../cmd/fixturegen/main.go` for the codegen pipeline
 and `ts/test/test_engine_conformance.ts` for the TS runner.
 Elm + TS cover the contract.
 
-## TODO
-
-- **`TS_ELM_INTEGRATION`** — wire the live-game hint
-  button (currently still routed through
-  `Game.Strategy.Hint` + `Game.Agent.*` BFS port) into the
-  TS engine. Tracked in `claude-steve/MINI_PROJECTS.md`.
-  Once landed, both legacy Elm trees retire.

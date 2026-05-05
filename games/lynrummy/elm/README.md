@@ -25,12 +25,14 @@ Once running, the Elm UI talks to two systems:
   Let-Agent-Play button (puzzles only). All other gameplay
   logic — dealing, refereeing, turn transitions, replay —
   lives in Elm.
-- **Go server** via HTTP. Bootstrap (one or two follow-up
-  fetches after the HTML page load: session creation /
-  resume bundle / puzzle catalog) plus outbound writes
-  during play (action POSTs + gesture telemetry, all
-  fire-and-forget). After bootstrap, no Elm code path waits
-  on a Go HTTP response.
+- **Go server** via HTTP. Bootstrap (one follow-up fetch
+  after the HTML page load, depending on the surface mode:
+  `POST /new-session` for a fresh full game, `GET
+  /sessions/<sid>/actions` for a resumed full game,
+  `GET /puzzles/catalog` for the Puzzles gallery) plus
+  outbound writes during play (action POSTs + gesture
+  telemetry, all fire-and-forget). After bootstrap, no Elm
+  code path waits on a Go HTTP response.
 
 For the system-level picture, see
 [`../ARCHITECTURE.md`](../ARCHITECTURE.md). For concrete

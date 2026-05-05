@@ -68,12 +68,10 @@ is the **TypeScript agent** at `games/lynrummy/ts/`:
 - `transcript.ts` — writes Elm-replayable JSON straight to
   the file system (no HTTP).
 
-Elm has the legacy `Game.Agent.*` BFS port and
-`Game.Strategy.*` trick engine still wired in for the
-live-game hint button; both retire when `TS_ELM_INTEGRATION`
-lands (in-browser TS hint integration — tracked in
-`claude-steve/MINI_PROJECTS.md`). The Python `bfs.py` and
-`strategy.py` retired during the TS migration.
+All hint requests (full game + Puzzles) and the puzzle
+"Let agent play" button route through the TS engine over
+Elm ports + the JS glue. No Elm code path computes a hint
+or runs the BFS itself.
 
 ## LynRummy
 
@@ -90,10 +88,9 @@ Roles inside Gopher:
   agent plays full 2-hand games offline and writes the
   result as a JSON transcript Elm can replay. See
   `games/lynrummy/ts/README.md` for the modules.
-- **Live-game hint surface** — currently still the legacy
-  Elm engine (`Game.Strategy.Hint` + `Game.Agent.*` BFS
-  port). Migration to the TS engine is queued as
-  `TS_ELM_INTEGRATION`.
+- **Hint surface** — the TS engine. Both surfaces (full game
+  + Puzzles) route through `hand_play.ts:findPlay` over Elm
+  ports + a JS glue (`engine_glue.js`).
 - **Session storage** — Elm POSTs each full-game action to
   `/gopher/lynrummy-elm/sessions/<id>/{meta.json,actions/<seq>.json}`;
   the TS agent writes the same shape directly to the file

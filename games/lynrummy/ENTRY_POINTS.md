@@ -138,11 +138,9 @@ shares this single project (unified 2026-04-27).
 
 - The Cat TS UI (`angry-cat/`) — legacy Lyn Rummy UI.
   Still in the repo but not in the agent flow.
-- The Python solver path is a frozen parallel
-  implementation; new solver work goes to `games/lynrummy/ts/`.
-- The Elm `Game.Agent.*` BFS port + `Game.Strategy.*`
-  trick engine are still wired in for the live-game hint
-  button; both retire when `TS_ELM_INTEGRATION` lands.
+- `games/lynrummy/elm/src/Game/Strategy/` — orphan
+  production code (the legacy trick engine). Not imported
+  by anything Main / Puzzles renders; pending deletion.
 
 ---
 

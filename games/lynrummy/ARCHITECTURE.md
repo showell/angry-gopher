@@ -17,11 +17,12 @@ covers principles; that one covers the artifacts.
   games down to deck-low. TS writes JSON transcripts the Elm
   UI replays.
 - **Elm is the autonomous client.** Deals, referees, replays,
-  renders. `games/lynrummy/elm/`. The `Game.Agent.*` BFS port
-  and `Game.Strategy.*` trick engine are still wired in for
-  the live-game hint button — the only surface not yet routed
-  through the TS engine, tracked as `TS_ELM_INTEGRATION` in
-  `claude-steve/MINI_PROJECTS.md`.
+  renders. `games/lynrummy/elm/`. Two surfaces — the full
+  game (`Main.elm`) and the Puzzles gallery (`Puzzles.elm`),
+  both embedding `Main.Play`. All hint requests (both
+  surfaces) and the puzzle "Let agent play" button route
+  through the TS engine over Elm ports + the JS glue. No
+  Elm code path computes a hint or runs the BFS itself.
 - **Go server is dumb file storage.** No referee, no dealer,
   no replay. Sequential session-id allocation is the one
   smart exception.
@@ -238,10 +239,13 @@ The layers:
 
 ## Hints are client-side
 
-**Server owns wire and storage; each client owns its own hint
-logic.** Elm has its hint module; the TS agent has
-`hand_play.ts`. They serve different players and don't have
-to agree.
+**Server owns wire and storage; clients own hint logic.** Hint
+generation is a client concern; the Go server is not asked to
+reason about gameplay. In practice both surfaces share the
+same TS hint engine (`hand_play.ts:findPlay` rendered via
+`formatHint`), reached over Elm ports + the JS glue. Nothing
+about that arrangement is forced — a future client could
+ship its own hint logic and not contradict the architecture.
 
 This is load-bearing for the TS agent. The TS agent IS its
 own hint logic plus a transcript writer. Without the server
@@ -384,9 +388,9 @@ Don't hand-compose `go run .`, `elm make`, or `go test ./...`
   transcript writer). See also
   [`./ts/PHYSICAL_PLAN.md`](./ts/PHYSICAL_PLAN.md) and
   [`./ts/ENGINE_V2.md`](./ts/ENGINE_V2.md).
-- [`./elm/README.md`](./elm/README.md) — Elm UI. The
-  `Game.Agent.*` BFS port and `Game.Strategy.*` trick engine
-  retire when `TS_ELM_INTEGRATION` lands.
+- [`./elm/README.md`](./elm/README.md) — Elm UI. Two
+  surfaces (full game + Puzzles) embedding `Main.Play`.
+  Hints + agent-play route through the TS engine.
 
 ### Cross-cutting
 
