@@ -33,7 +33,12 @@
 import type { Card } from "./rules/card.ts";
 import { cardLabel } from "./rules/card.ts";
 import { isPartialOk } from "./rules/stack_type.ts";
-import { classifyStack } from "./classified_card_stack.ts";
+import {
+  classifyStack,
+  KIND_RUN,
+  KIND_RB,
+  KIND_SET,
+} from "./classified_card_stack.ts";
 import type { RawBuckets } from "./buckets.ts";
 import { solveStateWithDescs } from "./engine_v2.ts";
 
@@ -90,16 +95,24 @@ export function findPlay(
   const stats = opts.stats;
   const tStart = performance.now();
 
-  // (a) Triple in hand — always 0 BFS steps, best possible.
-  for (let i = 0; i < hand.length; i++) {
-    for (let j = i + 1; j < hand.length; j++) {
-      const c1 = hand[i]!;
-      const c2 = hand[j]!;
-      if (!isPartialOk([c1, c2])) continue;
-      const ordered = findCompletingThird([c1, c2], hand, i, j);
-      if (ordered !== null) {
-        finishStats(stats, tStart);
-        return { placements: ordered, plan: [] };
+  // (a) Triple in hand — short-circuit ONLY when the existing
+  //     board is already fully clean (every stack a length-3+
+  //     legal group). On a dirty board, recommending "place this
+  //     triple from hand" leaves the pre-existing trouble
+  //     unaddressed, violating the dirty-board contract. Falling
+  //     through routes the triple through tier (b)/(c) projection
+  //     where BFS verifies the augmented board reaches victory.
+  if (boardIsAllHelper(board)) {
+    for (let i = 0; i < hand.length; i++) {
+      for (let j = i + 1; j < hand.length; j++) {
+        const c1 = hand[i]!;
+        const c2 = hand[j]!;
+        if (!isPartialOk([c1, c2])) continue;
+        const ordered = findCompletingThird([c1, c2], hand, i, j);
+        if (ordered !== null) {
+          finishStats(stats, tStart);
+          return { placements: ordered, plan: [] };
+        }
       }
     }
   }
@@ -131,9 +144,46 @@ export function findPlay(
 
   finishStats(stats, tStart);
   if (candidates.length === 0) return null;
-  return candidates.reduce((best, cur) =>
+  const chosen = candidates.reduce((best, cur) =>
     cur.plan.length < best.plan.length ? cur : best,
   );
+  return validatesCleanFinish(board, chosen) ? chosen : null;
+}
+
+/** Defensive backstop: a hint only counts if it leaves the board
+ *  fully clean. BFS-derived plans (tier b/c) are already verified
+ *  via `is_victory` at engine termination, but tier (a) and any
+ *  future short-circuit path could in principle slip through.
+ *  Catches them all in one place: an empty-plan candidate is only
+ *  valid when the existing board is already clean AND the
+ *  placements form a length-3+ legal group on their own. */
+function validatesCleanFinish(
+  board: readonly (readonly Card[])[],
+  result: PlayResult,
+): boolean {
+  if (result.plan.length > 0) return true;
+  if (!boardIsAllHelper(board)) return false;
+  const ccs = classifyStack(result.placements);
+  if (ccs === null) return false;
+  if (ccs.n < 3) return false;
+  return ccs.kind === KIND_RUN || ccs.kind === KIND_RB || ccs.kind === KIND_SET;
+}
+
+/** True iff every stack on the board is a length-3+ legal group
+ *  (run / rb / set). Pre-existing partials, singletons, or
+ *  unclassifiable stacks all count as "dirty." */
+function boardIsAllHelper(
+  board: readonly (readonly Card[])[],
+): boolean {
+  for (const stack of board) {
+    const ccs = classifyStack(stack);
+    if (ccs === null) return false;
+    if (ccs.n < 3) return false;
+    if (ccs.kind !== KIND_RUN && ccs.kind !== KIND_RB && ccs.kind !== KIND_SET) {
+      return false;
+    }
+  }
+  return true;
 }
 
 function finishStats(stats: PlayStats | undefined, tStart: number): void {

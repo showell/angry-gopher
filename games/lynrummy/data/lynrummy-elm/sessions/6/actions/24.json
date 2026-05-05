@@ -1,0 +1,1 @@
+{"action":{"action":"split","stack":{"board_cards":[{"card":{"value":1,"suit":3,"origin_deck":1},"state":1}],"loc":{"top":285,"left":295}},"card_index":0},"gesture_metadata":{"path":[{"t":901759,"x":295,"y":285},{"t":901900,"x":295,"y":285}],"path_frame":"board","pointer_type":"mouse"}}

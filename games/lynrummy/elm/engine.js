@@ -2682,15 +2682,17 @@ var LynRummyEngine = (() => {
     const maxStates = opts.maxStates ?? PROJECTION_MAX_STATES;
     const stats = opts.stats;
     const tStart = performance.now();
-    for (let i = 0; i < hand.length; i++) {
-      for (let j = i + 1; j < hand.length; j++) {
-        const c1 = hand[i];
-        const c2 = hand[j];
-        if (!isPartialOk([c1, c2])) continue;
-        const ordered = findCompletingThird([c1, c2], hand, i, j);
-        if (ordered !== null) {
-          finishStats(stats, tStart);
-          return { placements: ordered, plan: [] };
+    if (boardIsAllHelper(board)) {
+      for (let i = 0; i < hand.length; i++) {
+        for (let j = i + 1; j < hand.length; j++) {
+          const c1 = hand[i];
+          const c2 = hand[j];
+          if (!isPartialOk([c1, c2])) continue;
+          const ordered = findCompletingThird([c1, c2], hand, i, j);
+          if (ordered !== null) {
+            finishStats(stats, tStart);
+            return { placements: ordered, plan: [] };
+          }
         }
       }
     }
@@ -2714,9 +2716,29 @@ var LynRummyEngine = (() => {
     }
     finishStats(stats, tStart);
     if (candidates.length === 0) return null;
-    return candidates.reduce(
+    const chosen = candidates.reduce(
       (best, cur) => cur.plan.length < best.plan.length ? cur : best
     );
+    return validatesCleanFinish(board, chosen) ? chosen : null;
+  }
+  function validatesCleanFinish(board, result) {
+    if (result.plan.length > 0) return true;
+    if (!boardIsAllHelper(board)) return false;
+    const ccs = classifyStack(result.placements);
+    if (ccs === null) return false;
+    if (ccs.n < 3) return false;
+    return ccs.kind === KIND_RUN || ccs.kind === KIND_RB || ccs.kind === KIND_SET;
+  }
+  function boardIsAllHelper(board) {
+    for (const stack of board) {
+      const ccs = classifyStack(stack);
+      if (ccs === null) return false;
+      if (ccs.n < 3) return false;
+      if (ccs.kind !== KIND_RUN && ccs.kind !== KIND_RB && ccs.kind !== KIND_SET) {
+        return false;
+      }
+    }
+    return true;
   }
   function finishStats(stats, tStart) {
     if (stats !== void 0) {

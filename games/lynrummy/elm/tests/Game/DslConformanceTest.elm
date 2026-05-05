@@ -2571,6 +2571,13 @@ spliceDup5dIntoPureDiamonds =
             Expect.pass
 
 
+tripleInHandWithDirtyBoardReturnsNoHint : Test
+tripleInHandWithDirtyBoardReturnsNoHint =
+    test "triple_in_hand_with_dirty_board_returns_no_hint" <|
+        \_ ->
+            Expect.pass
+
+
 turn1Hint : Test
 turn1Hint =
     test "turn_1_hint" <|
@@ -3814,6 +3821,7 @@ suite =
         , solveTwoPartialTroublesNoPaths
         , solveTwoUnrelatedSingletons
         , spliceDup5dIntoPureDiamonds
+        , tripleInHandWithDirtyBoardReturnsNoHint
         , turn1Hint
         , turn2Hint
         , turn3Hint

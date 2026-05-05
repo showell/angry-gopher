@@ -53868,6 +53868,52 @@
     }
   },
   {
+    "name": "triple_in_hand_with_dirty_board_returns_no_hint",
+    "desc": "hand contains a triple [7D 8D 9D] but the board has a dangling partial [5C 6C] that no card on the board OR in hand can complete. The triple-in-hand short-circuit MUST NOT fire — placing the triple alone would leave [5C 6C] dirty. With no completing third reachable for [5C 6C], findPlay returns null and the hint is empty.",
+    "op": "hint_for_hand",
+    "hand": [
+      {
+        "card": {
+          "value": 7,
+          "suit": 1,
+          "origin_deck": 0
+        },
+        "state": 0
+      },
+      {
+        "card": {
+          "value": 8,
+          "suit": 1,
+          "origin_deck": 0
+        },
+        "state": 0
+      },
+      {
+        "card": {
+          "value": 9,
+          "suit": 1,
+          "origin_deck": 0
+        },
+        "state": 0
+      }
+    ],
+    "board": [],
+    "hint_hand": [
+      "7D",
+      "8D",
+      "9D"
+    ],
+    "hint_board": [
+      [
+        "5C",
+        "6C"
+      ]
+    ],
+    "expect": {
+      "kind": ""
+    }
+  },
+  {
     "name": "turn_1_hint",
     "desc": "",
     "op": "hint_for_hand",
