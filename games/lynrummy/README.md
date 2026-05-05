@@ -18,6 +18,14 @@ strongest available player is always one click away. Full
 games can be auto-played end-to-end against a fixed seed for
 testing or analysis.
 
+A hard-earned tuning note: hint plan-depth (`HINT_MAX_PLAN_LENGTH`
+in `ts/src/hand_play.ts`) is **5**, not 4. Depth 4 looks fine on
+benchmarks but visibly under-plays in real games — multi-stack
+rebuilds that an engaged human finds in seconds were beyond
+reach. Depth 5 is the smallest setting that closes that gap;
+the worked examples are seed-42 turns 10 and 11. See
+[`ts/ENGINE_V2.md`](./ts/ENGINE_V2.md) for the empirical write-up.
+
 ## Agent responsibilities
 
 The TS agent at `ts/` owns three end-to-end jobs:

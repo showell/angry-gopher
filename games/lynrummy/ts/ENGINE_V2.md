@@ -79,9 +79,20 @@ For the hint feature:
   budget (default 50000 visits ≈ 5–10s worst case). UI shows
   "No hint."
 
-Hint paths cap plan length at 4 (`HINT_MAX_PLAN_LENGTH` in
+Hint paths cap plan length at 5 (`HINT_MAX_PLAN_LENGTH` in
 `hand_play.ts`); `solveStateWithDescs` itself stays complete
 for proof-of-no-plan / conformance work.
+
+The 4 → 5 bump (2026-05-05) was empirically driven by seed-42
+self-play turns 10 and 11, both stuck at depth 4 but trivially
+solvable at depth 5 (1–2s wall, 5-verb plans). Five was the
+smallest depth that recovers the kind of plays an engaged human
+finds; below that the agent gives up on real boards. Going past
+5 was tempting but unneeded — every stuck moment we examined
+fell to a depth-5 plan. Future regressions or aggressive cuts
+to this cap should be justified empirically against
+`bench/end_of_deck_perf.ts --write-transcript 42` (turns 10/11
+must remain `hand_empty`).
 
 ## Unexplored, in priority order
 

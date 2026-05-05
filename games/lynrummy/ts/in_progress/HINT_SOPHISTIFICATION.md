@@ -164,6 +164,36 @@ Per `claude-steve/random267.md`:
 Open to talking through the ordering when this resumes —
 nothing is locked in.
 
+## 2026-05-05 update — calibration shifted
+
+Today's seed-42 turn-10/11 stuck-state experiment changed how
+much weight each class deserves:
+
+- **Class (C) is less urgent than originally framed.** The two
+  worked stuck states (turn 10 with `[TS']`, turn 11 with
+  `[8S]`) looked like KICK candidates from outside but solved
+  cleanly with depth-5 BFS using only the existing verb
+  library (yank / steal / pull / push / peel / split_out). The
+  bottleneck was `HINT_MAX_PLAN_LENGTH=4`, not a missing verb.
+  Bumped to 5 in commit `2d1d804`. Re-evaluate (C) only when a
+  case surfaces that genuinely needs helper→helper KICK and
+  doesn't fall to the existing verbs at any reasonable depth
+  — the standing test case is `complicated_7D-example.json`.
+- **Class (B) gained a new design direction from Steve**
+  (random270.md ¶23): persist computed hint primitives in
+  memory until the human's actual move diverges from them,
+  rather than recomputing each step. "Focus on getting the
+  model right." This is hint-persistence — a separable layer
+  above `findPlay`, orthogonal to BFS. Might subsume some of
+  what (B) was originally going to do via candidate ranking,
+  since persistence-of-earned-knowledge IS a strategic-
+  awareness mechanism.
+- **Class (A) unchanged.**
+
+Net effect on ordering: (A) still first (unchanged). (B) shifts
+toward "hint persistence" first, "candidate-set / ranking"
+later. (C) drops from "design with B" to "wait for a real case."
+
 ## Cross-references
 
 - `claude-steve/random265.md` — the original Phase 1 contract
