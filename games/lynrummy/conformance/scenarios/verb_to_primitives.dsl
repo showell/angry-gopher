@@ -55,9 +55,7 @@ scenario pluck_interior_premoves_donor
   side: right
   expect:
     primitives:
-      - move_stack [5H 6H 7H 8H 9H] -> (92,52)
       - split [5H 6H 7H 8H 9H]@1
-      - move_stack [7H 8H 9H] -> (167,52)
       - split [7H 8H 9H]@0
       - merge_stack [7H] -> [7S] /right
 
@@ -129,8 +127,8 @@ scenario shift_right_end
   expect:
     primitives:
       - split [TC TS TD]@0
-      - move_stack [TS TD] -> (182,52)
       - split [TS TD]@0
+      - move_stack [TC] -> (182,52)
       - merge_stack [TD] -> [TC] /right
       - merge_stack [TS] -> [JH QC KC] /right
       - split [JH QC KC TS]@0

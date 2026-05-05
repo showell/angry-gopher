@@ -197,18 +197,12 @@ function runSolve(sc: Scenario): RunResult {
     }
     return { ok: false, msg: `expected no plan; got plan of length ${plan.length}` };
   }
-  // Plan-line / plan-length pins:
-  //   - When `plan_lines` are present, the engine must produce
-  //     EXACTLY those lines in order (snapshot match). This is the
-  //     strict gate: any drift in the plan surface — different verb
-  //     choice, different side, different absorber pick — fails the
-  //     test, so we hear about regressions instead of silently
-  //     drifting under a length-only check.
-  //   - When only `plan_length` is pinned, fall back to length ≤
-  //     pinned + reach-victory (the old relaxed gate, kept for the
-  //     handful of scenarios that don't carry plan-line text).
+  // Strict plan-line snapshot. Per
+  // memory/feedback_strict_tests_no_ceiling.md: no "<= pinned"
+  // length-ceiling fallback. plan_length-only scenarios that lack
+  // plan_lines are repaired up to plan_lines via --repair the same
+  // way solve scenarios are.
   const planLines = expect["plan_lines"] as string[] | undefined;
-  const planLength = (expect["plan_length"] as number) ?? 0;
   if (planLines !== undefined && planLines.length > 0) {
     if (plan === null) {
       return { ok: false, msg: `expected plan; got null` };
@@ -230,27 +224,12 @@ function runSolve(sc: Scenario): RunResult {
     }
     return { ok: true, msg: `OK — plan of length ${plan.length} (exact match)` };
   }
-  if (planLength > 0) {
-    if (plan === null) {
-      return { ok: false, msg: `expected plan ≤${planLength}; got null` };
-    }
-    if (plan.length > planLength) {
-      return { ok: false, msg: `plan length ${plan.length} > pinned ${planLength}` };
-    }
-    // Verify the plan actually drives state to victory.
-    let final: Buckets;
-    try {
-      final = applyPlan(classifyBuckets(raw), plan);
-    } catch (e) {
-      return { ok: false, msg: `plan replay failed: ${(e as Error).message}` };
-    }
-    const v = isCleanFinal(final);
-    if (!v.ok) {
-      return { ok: false, msg: `plan didn't reach victory: ${v.msg}` };
-    }
-    return { ok: true, msg: `OK — plan of length ${plan.length} (pinned ${planLength})` };
-  }
-  return { ok: false, msg: "solve scenario missing expectation (no_plan / plan_length / plan_lines)" };
+  // No plan_lines pinned. Fail loudly so the operator either pins
+  // them (preferred) or removes the scenario.
+  return {
+    ok: false,
+    msg: "solve scenario missing plan_lines pin (and no_plan not asserted) — repair with --repair",
+  };
 }
 
 function runFindOpenLoc(sc: Scenario): RunResult {
@@ -280,12 +259,10 @@ function runHintForHand(sc: Scenario): RunResult {
   const board: Card[][] = boardTokens.map(stack => stack.map(parseCardLabel));
   const result = findPlay(hand, board);
   const got = formatHint(result);
-  // Relaxed contract (engine_v2 era): produced ANY valid hint of
-  // length ≤ pinned. engine_v2 frequently picks a different valid
-  // hint than the bfs.ts-pinned step list (e.g., push vs splice for
-  // turn_2_hint). The user-facing test of "did the agent help the
-  // player play" is "did it return a hint" + "no longer than the
-  // pinned reference."
+  // Strict snapshot match. Per
+  // memory/feedback_strict_tests_no_ceiling.md: no "<= pinned"
+  // length-ceiling. Different valid hints are caught by the diff
+  // and re-pinned via --repair, not silently accepted.
   if (result === null && wantSteps.length === 0) {
     return { ok: true, msg: "OK — null hint, as expected" };
   }
@@ -296,27 +273,19 @@ function runHintForHand(sc: Scenario): RunResult {
       && got.every((step, i) => step === wantSteps[i])) {
     return { ok: true, msg: `OK — ${got.length} steps (exact match)` };
   }
-  if (got.length > wantSteps.length) {
-    return {
-      ok: false,
-      msg: `hint longer than pinned: ${got.length} > ${wantSteps.length}\n`
-         + `  want: ${JSON.stringify(wantSteps)}\n`
-         + `  got:  ${JSON.stringify(got)}`,
-    };
-  }
-  return { ok: true, msg: `OK — ${got.length} steps (≤ pinned ${wantSteps.length}, different valid hint)` };
-  // Never reached, but keeps the diff tight:
-  for (let i = 0; i < got.length; i++) {
-    if (got[i] !== wantSteps[i]) {
-      return {
-        ok: false,
-        msg: `step[${i}] mismatch:\n`
-           + `  want: ${JSON.stringify(wantSteps[i])}\n`
-           + `  got:  ${JSON.stringify(got[i])}`,
-      };
-    }
-  }
-  return { ok: false, msg: "steps differ (lengths match but no single divergence found)" };
+  // Length or content differs. Find the first divergence so the
+  // failure message points at it.
+  let i = 0;
+  while (i < Math.min(got.length, wantSteps.length) && got[i] === wantSteps[i]) i++;
+  const expectedStep = wantSteps[i];
+  const gotStep = got[i];
+  return {
+    ok: false,
+    msg: `hint step[${i}] mismatch:`
+      + `\n      expected: ${expectedStep === undefined ? "(end)" : JSON.stringify(expectedStep)}`
+      + `\n      got:      ${gotStep === undefined ? "(end)" : JSON.stringify(gotStep)}`
+      + `\n      (full got: ${got.length} steps; expected ${wantSteps.length})`,
+  };
 }
 
 // Ops the TS engine conformance runner exercises directly.
@@ -352,12 +321,14 @@ function main(): void {
     console.log(`Filtered to ${scenarios.length} scenario(s) matching ${JSON.stringify(filter)}.`);
   }
   if (repair) {
-    console.log("REPAIR MODE: solve-scenario plan_lines pins will be rewritten");
-    console.log("from current engine output. Re-run fixturegen after repair.");
+    console.log("REPAIR MODE: solve-scenario plan_lines and hint_for_hand");
+    console.log("expect_steps pins will be rewritten from current engine");
+    console.log("output. Re-run fixturegen after repair.");
     console.log();
   }
-  // Repair-mode collection: scenarioName → engine's current plan-lines.
-  const repairs = new Map<string, string[]>();
+  // Repair-mode collection: scenarioName → {kind, lines}.
+  // RepairContent is declared at module scope below.
+  const repairs = new Map<string, RepairContent>();
 
   let total = 0;
   let passed = 0;
@@ -381,27 +352,39 @@ function main(): void {
     } else if (sc.op === "solve") {
       if (repair) {
         // In repair mode: run the engine, capture plan-lines for
-        // any solve scenario that has plan_lines pinned. Always
-        // report PASS so the run keeps going through every
-        // scenario; the actual rewrite happens after the loop.
-        const expectPlanLines = sc.expect["plan_lines"] as string[] | undefined;
-        if (expectPlanLines !== undefined && expectPlanLines.length > 0) {
+        // every non-no_plan solve scenario. Covers two cases:
+        //   - existing plan_lines block: replaced with current engine output
+        //   - existing plan_length pin (no plan_lines): converted to plan_lines
+        if (sc.expect["no_plan"]) {
+          res = runSolve(sc);  // no_plan stays no_plan; nothing to capture
+        } else {
           const raw = buildRawBuckets(sc);
           const plan = solveStateWithDescs(raw, { maxTroubleOuter: 10, maxStates: 200000 });
           if (plan === null) {
             res = { ok: false, msg: `REPAIR: engine returned null for pinned scenario` };
           } else {
-            repairs.set(sc.name, plan.map(p => p.line));
+            repairs.set(sc.name, { kind: "plan_lines", lines: plan.map(p => p.line) });
             res = { ok: true, msg: `REPAIRED — ${plan.length} plan-line(s) recorded` };
           }
-        } else {
-          res = runSolve(sc);  // no plan_lines to repair; run normally
         }
       } else {
         res = runSolve(sc);
       }
     } else if (sc.op === "hint_for_hand") {
-      res = runHintForHand(sc);
+      if (repair) {
+        // Capture engine's current hint steps and rewrite the DSL's
+        // expect_steps block.
+        const handTokens = sc.hint_hand ?? [];
+        const boardTokens = sc.hint_board ?? [];
+        const hand: Card[] = handTokens.map(parseCardLabel);
+        const board: Card[][] = boardTokens.map(stack => stack.map(parseCardLabel));
+        const result = findPlay(hand, board);
+        const got = formatHint(result);
+        repairs.set(sc.name, { kind: "expect_steps", lines: [...got] });
+        res = { ok: true, msg: `REPAIRED — ${got.length} step(s) recorded` };
+      } else {
+        res = runHintForHand(sc);
+      }
     } else if (sc.op === "find_open_loc") {
       res = runFindOpenLoc(sc);
     } else {
@@ -425,8 +408,8 @@ function main(): void {
 
   if (repair && repairs.size > 0) {
     console.log();
-    console.log(`Rewriting ${repairs.size} plan_lines block(s) in DSL files...`);
-    rewriteDslPlanLines(repairs);
+    console.log(`Rewriting ${repairs.size} pin block(s) in DSL files...`);
+    rewriteDslPins(repairs);
     console.log("Done. Now run `go run ./cmd/fixturegen ...` to refresh fixtures.json.");
   }
 
@@ -456,26 +439,36 @@ function main(): void {
 /**
  * Repair-mode helper: scan every .dsl file in conformance/scenarios/
  * for `scenario <name>` headers, and where the scenario name is in
- * `repairs`, surgically rewrite the `plan_lines:` block with the
- * captured engine output. Idempotent — re-run is a no-op if the
- * engine still produces the same lines.
+ * `repairs`, rewrite the appropriate pin block with the captured
+ * engine output. Idempotent — re-run is a no-op if the engine still
+ * produces the same lines.
  *
- * The DSL format we expect (matches existing solve scenarios):
+ * Two block shapes are handled:
  *
- *   scenario <name>
- *     ...
- *     expect:
- *       plan_lines:
- *         - "<line>"
- *         - "<line>"
+ *   plan_lines (op: solve, indent under `expect:`):
+ *     scenario <name>
+ *       ...
+ *       expect:
+ *         plan_lines:
+ *           - "<line>"
  *
- *   scenario <next-name>
+ *     A scenario carrying `plan_length: N` instead of `plan_lines:`
+ *     gets the `plan_length:` line replaced with a `plan_lines:`
+ *     block in the same place — converting the relaxed pin into a
+ *     strict pin.
  *
- * The plan_lines block runs from `    plan_lines:` to the next line
- * whose indent doesn't start with `      - "` (a sibling expect-key
- * or the next scenario header). We replace it in place.
+ *   expect_steps (op: hint_for_hand, top-level under scenario):
+ *     scenario <name>
+ *       ...
+ *       expect_steps:
+ *         - <step>
+ *         - <step>
  */
-function rewriteDslPlanLines(repairs: Map<string, string[]>): void {
+type RepairContent =
+  | { kind: "plan_lines"; lines: string[] }
+  | { kind: "expect_steps"; lines: string[] };
+
+function rewriteDslPins(repairs: Map<string, RepairContent>): void {
   const dslDir = path.resolve(__dirname, "../../conformance/scenarios");
   const dslFiles = fs.readdirSync(dslDir)
     .filter(f => f.endsWith(".dsl"))
@@ -494,31 +487,33 @@ function rewriteDslPlanLines(repairs: Map<string, string[]>): void {
       const m = lines[i]!.match(/^scenario\s+(\S+)\s*$/);
       if (!m) { i++; continue; }
       const name = m[1]!;
-      const newLines = repairs.get(name);
-      if (newLines === undefined) { i++; continue; }
-      // Find the `    plan_lines:` line within this scenario block
-      // (i.e. before the next `^scenario `).
-      let j = i + 1;
-      let planLinesIdx = -1;
-      while (j < lines.length && !lines[j]!.match(/^scenario\s+\S+\s*$/)) {
-        if (lines[j]!.match(/^\s*plan_lines:\s*$/)) {
-          planLinesIdx = j;
-          break;
+      const repair = repairs.get(name);
+      if (repair === undefined) { i++; continue; }
+
+      // Scenario block extent: from i+1 up to (but not including)
+      // the next `^scenario ` line or end-of-file.
+      let blockEnd = i + 1;
+      while (blockEnd < lines.length && !lines[blockEnd]!.match(/^scenario\s+\S+\s*$/)) {
+        blockEnd++;
+      }
+
+      if (repair.kind === "plan_lines") {
+        const result = rewritePlanLinesBlock(lines, i + 1, blockEnd, repair.lines);
+        if (result.changed) {
+          changed = true;
+          touchedScenarios++;
         }
-        j++;
+        i = result.nextI;
+      } else if (repair.kind === "expect_steps") {
+        const result = rewriteExpectStepsBlock(lines, i + 1, blockEnd, repair.lines);
+        if (result.changed) {
+          changed = true;
+          touchedScenarios++;
+        }
+        i = result.nextI;
+      } else {
+        i++;
       }
-      if (planLinesIdx === -1) { i++; continue; }
-      // Find the end of the plan_lines block: contiguous lines
-      // matching `^      - "..."` after `plan_lines:`.
-      let endIdx = planLinesIdx + 1;
-      while (endIdx < lines.length && /^      - ".*"$/.test(lines[endIdx]!)) {
-        endIdx++;
-      }
-      const replacement = newLines.map(l => `      - ${dslQuoteLine(l)}`);
-      lines.splice(planLinesIdx + 1, endIdx - (planLinesIdx + 1), ...replacement);
-      changed = true;
-      touchedScenarios++;
-      i = planLinesIdx + 1 + replacement.length;
     }
 
     if (changed) {
@@ -528,6 +523,61 @@ function rewriteDslPlanLines(repairs: Map<string, string[]>): void {
     }
   }
   console.log(`Touched ${touchedScenarios} scenarios across ${touchedFiles} file(s).`);
+}
+
+/** Rewrite (or convert) the plan_lines/plan_length pin under
+ *  `expect:`. `lines` is the file split by lines; `start` and `end`
+ *  bound the scenario block. Mutates `lines` in place. */
+function rewritePlanLinesBlock(
+  lines: string[],
+  start: number,
+  end: number,
+  newPlanLines: readonly string[],
+): { changed: boolean; nextI: number } {
+  const replacement = newPlanLines.map(l => `      - ${dslQuoteLine(l)}`);
+
+  // Look first for an existing `plan_lines:` line.
+  for (let j = start; j < end; j++) {
+    if (lines[j]!.match(/^\s*plan_lines:\s*$/)) {
+      let endIdx = j + 1;
+      while (endIdx < lines.length && /^      - ".*"$/.test(lines[endIdx]!)) {
+        endIdx++;
+      }
+      lines.splice(j + 1, endIdx - (j + 1), ...replacement);
+      return { changed: true, nextI: j + 1 + replacement.length };
+    }
+  }
+  // No plan_lines block. Look for a `plan_length: N` line and
+  // convert it to a plan_lines block.
+  for (let j = start; j < end; j++) {
+    if (lines[j]!.match(/^\s*plan_length:\s*\d+\s*$/)) {
+      lines.splice(j, 1, `    plan_lines:`, ...replacement);
+      return { changed: true, nextI: j + 1 + replacement.length };
+    }
+  }
+  return { changed: false, nextI: start };
+}
+
+/** Rewrite the expect_steps pin (hint_for_hand). `start`/`end`
+ *  bound the scenario block. Mutates `lines` in place. */
+function rewriteExpectStepsBlock(
+  lines: string[],
+  start: number,
+  end: number,
+  newSteps: readonly string[],
+): { changed: boolean; nextI: number } {
+  const replacement = newSteps.map(s => `    - ${s}`);
+  for (let j = start; j < end; j++) {
+    if (lines[j]!.match(/^\s*expect_steps:\s*$/)) {
+      let endIdx = j + 1;
+      while (endIdx < lines.length && /^    - /.test(lines[endIdx]!)) {
+        endIdx++;
+      }
+      lines.splice(j + 1, endIdx - (j + 1), ...replacement);
+      return { changed: true, nextI: j + 1 + replacement.length };
+    }
+  }
+  return { changed: false, nextI: start };
 }
 
 /**

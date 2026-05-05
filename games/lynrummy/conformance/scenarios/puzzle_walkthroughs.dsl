@@ -32,10 +32,9 @@ scenario walkthrough_puzzle_a3_001_seed1
     - split [QC' KD AC 2H 3S' 4H]@0
     - merge_stack [QC'] -> [KH] /left
     - split [KD AC 2H 3S' 4H]@0
-    - move_stack [AC 2H 3S' 4H] -> (467,52)
     - split [AC 2H 3S' 4H]@0
     - merge_stack [AC] -> [QC' KH] /right
-    - move_stack [TD JD QD] -> (437,292)
+    - move_stack [TD JD QD] -> (467,52)
     - merge_stack [KD] -> [TD JD QD] /right
 
 scenario walkthrough_puzzle_a3_002_seed2
@@ -60,12 +59,10 @@ scenario walkthrough_puzzle_a3_002_seed2
     at (272,52): 5C'
   actions:
     - split [5S 6D' 7S']@0
-    - move_stack [6D' 7S'] -> (152,232)
     - split [6D' 7S']@0
-    - move_stack [5C'] -> (227,247)
+    - move_stack [5C'] -> (152,232)
     - merge_stack [6D'] -> [5C'] /right
     - merge_stack [5S] -> [5H' 5C 5D] /right
-    - move_stack [5C' 6D'] -> (227,172)
     - merge_stack [7S'] -> [5C' 6D'] /right
 
 scenario walkthrough_puzzle_a3_003_seed3
@@ -140,10 +137,9 @@ scenario walkthrough_puzzle_a3_005_seed5
     at (542,52): 3S'
   actions:
     - split [AS 2D 3C']@0
-    - move_stack [2D 3C'] -> (167,157)
     - split [2D 3C']@0
     - merge_stack [2D] -> [3S'] /left
-    - move_stack [2D 3S'] -> (227,295)
+    - move_stack [2D 3S'] -> (227,250)
     - merge_stack [AS] -> [2D 3S'] /left
     - merge_stack [3C'] -> [3H' 3S 3D] /right
 

@@ -407,12 +407,97 @@ function runScenario(sc: ScenarioRaw): RunResult {
 
 // --- Main --------------------------------------------------------------
 
+/** Render the primitive sequence for a scenario without comparing
+ *  to the pinned `expect.primitives`. Returns null on pipeline /
+ *  geometry errors (those still want loud failures, not a silent
+ *  repair). */
+function captureScenario(sc: ScenarioRaw): string[] | null {
+  let desc: Desc;
+  try {
+    desc = buildDesc(sc);
+  } catch {
+    return null;
+  }
+  const board = buildBoardStacks(sc);
+  let prims: readonly Primitive[];
+  try {
+    prims = moveToPrimitives(desc, board);
+  } catch {
+    return null;
+  }
+  const got: string[] = [];
+  let sim = board;
+  for (const p of prims) {
+    got.push(fmtPrimitive(p, sim));
+    sim = applyLocallyForRender(sim, p);
+    if (findViolation(sim) !== null) return null;
+  }
+  return got;
+}
+
+/** Rewrite the `expect.primitives:` block of a scenario in `lines`.
+ *  Mutates `lines` in place. Returns true if the block was found
+ *  and replaced. */
+function rewritePrimitivesBlock(
+  lines: string[],
+  start: number,
+  end: number,
+  newPrims: readonly string[],
+): boolean {
+  const replacement = newPrims.map(p => `      - ${p}`);
+  for (let j = start; j < end; j++) {
+    if (lines[j]!.match(/^\s*primitives:\s*$/)) {
+      let endIdx = j + 1;
+      while (endIdx < lines.length && /^      - /.test(lines[endIdx]!)) {
+        endIdx++;
+      }
+      lines.splice(j + 1, endIdx - (j + 1), ...replacement);
+      return true;
+    }
+  }
+  return false;
+}
+
+function repairFile(filepath: string, repairs: Map<string, string[]>): number {
+  const original = fs.readFileSync(filepath, "utf8");
+  const lines = original.split("\n");
+  let touched = 0;
+  let i = 0;
+  while (i < lines.length) {
+    const m = lines[i]!.match(/^scenario\s+(\S+)\s*$/);
+    if (!m) { i++; continue; }
+    const newPrims = repairs.get(m[1]!);
+    if (newPrims === undefined) { i++; continue; }
+    let blockEnd = i + 1;
+    while (blockEnd < lines.length && !lines[blockEnd]!.match(/^scenario\s+\S+\s*$/)) {
+      blockEnd++;
+    }
+    if (rewritePrimitivesBlock(lines, i + 1, blockEnd, newPrims)) {
+      touched++;
+    }
+    i = blockEnd;
+  }
+  if (touched > 0) {
+    fs.writeFileSync(filepath, lines.join("\n"));
+  }
+  return touched;
+}
+
 function main(): void {
+  const repair = process.argv.includes("--repair");
+  if (repair) {
+    console.log("REPAIR MODE: expect.primitives blocks will be rewritten");
+    console.log("from current engine output.");
+    console.log();
+  }
+
   let totalPassed = 0;
   let totalFailed = 0;
   const failures: string[] = [];
   let totalScenarios = 0;
   let quietCorpus = false;
+  // In repair mode: scenarioName → got prims, applied per-file at end.
+  const repairsByFile = new Map<string, Map<string, string[]>>();
 
   for (const fname of DSL_FILES) {
     const filepath = path.join(DSL_DIR, fname);
@@ -430,25 +515,51 @@ function main(): void {
 
     let filePassed = 0;
     let fileFailed = 0;
-    for (const sc of scenarios) {
-      const res = runScenario(sc);
-      if (res.ok) {
+    if (repair) {
+      const fileRepairs = new Map<string, string[]>();
+      for (const sc of scenarios) {
+        const got = captureScenario(sc);
+        if (got === null) {
+          fileFailed++;
+          const line = `FAIL  ${sc.name.padEnd(50)}  REPAIR: pipeline error, can't capture`;
+          console.log(line);
+          failures.push(line);
+          continue;
+        }
+        fileRepairs.set(sc.name, got);
         filePassed++;
-        if (!quietCorpus) console.log(`PASS  ${sc.name.padEnd(50)}  ${res.msg}`);
-      } else {
-        fileFailed++;
-        const line = `FAIL  ${sc.name.padEnd(50)}  ${res.msg}`;
-        console.log(line);
-        failures.push(line);
+      }
+      repairsByFile.set(filepath, fileRepairs);
+    } else {
+      for (const sc of scenarios) {
+        const res = runScenario(sc);
+        if (res.ok) {
+          filePassed++;
+          if (!quietCorpus) console.log(`PASS  ${sc.name.padEnd(50)}  ${res.msg}`);
+        } else {
+          fileFailed++;
+          const line = `FAIL  ${sc.name.padEnd(50)}  ${res.msg}`;
+          console.log(line);
+          failures.push(line);
+        }
       }
     }
-    console.log(`  ${fname}: ${filePassed}/${scenarios.length} passed`);
+    console.log(`  ${fname}: ${filePassed}/${scenarios.length} ${repair ? "captured" : "passed"}`);
     totalPassed += filePassed;
     totalFailed += fileFailed;
   }
 
+  if (repair) {
+    console.log();
+    console.log("Rewriting primitives blocks...");
+    for (const [filepath, fileRepairs] of repairsByFile) {
+      const n = repairFile(filepath, fileRepairs);
+      if (n > 0) console.log(`  ${path.basename(filepath)} — ${n} scenarios updated`);
+    }
+  }
+
   console.log();
-  console.log(`TOTAL: ${totalPassed}/${totalScenarios} passed`);
+  console.log(`TOTAL: ${totalPassed}/${totalScenarios} ${repair ? "captured" : "passed"}`);
   if (totalFailed > 0) {
     process.exit(1);
   }

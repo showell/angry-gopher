@@ -298,13 +298,83 @@ function runScenario(sc: Scenario): RunResult {
   return { ok: true, msg: `OK — ${prims.length} primitives (per-step geometry clean)` };
 }
 
+/** Render the primitive sequence for a scenario without comparing
+ *  to the pinned expect.primitives. Returns null on pipeline /
+ *  geometry errors (loud failures, not silent repairs). */
+function captureScenario(sc: Scenario): string[] | null {
+  const board: BoardStack[] = sc.board.map(b => ({
+    cards: b.cards, loc: { top: b.top, left: b.left },
+  }));
+  let descs: Desc[];
+  try { descs = sc.plan.map(buildDesc); } catch { return null; }
+  let prims: readonly Primitive[];
+  try { prims = physicalPlan(board, sc.hand, descs); } catch { return null; }
+  const got: string[] = [];
+  let sim: readonly BoardStack[] = board;
+  for (const p of prims) {
+    got.push(fmtPrim(p, sim));
+    sim = applyLocally(sim, p);
+    if (findViolation(sim) !== null) return null;
+  }
+  return got;
+}
+
+function rewritePrimitivesBlock(
+  lines: string[],
+  start: number,
+  end: number,
+  newPrims: readonly string[],
+): boolean {
+  const replacement = newPrims.map(p => `      - ${p}`);
+  for (let j = start; j < end; j++) {
+    if (lines[j]!.match(/^\s*primitives:\s*$/)) {
+      let endIdx = j + 1;
+      while (endIdx < lines.length && /^      - /.test(lines[endIdx]!)) {
+        endIdx++;
+      }
+      lines.splice(j + 1, endIdx - (j + 1), ...replacement);
+      return true;
+    }
+  }
+  return false;
+}
+
 function main(): void {
+  const repair = process.argv.includes("--repair");
   if (!fs.existsSync(DSL_PATH)) {
     console.error(`missing DSL: ${DSL_PATH}`);
     process.exit(1);
   }
   const text = fs.readFileSync(DSL_PATH, "utf8");
   const scenarios = parseDsl(text);
+
+  if (repair) {
+    console.log("REPAIR MODE: expect.primitives blocks will be rewritten.");
+    const repairs = new Map<string, string[]>();
+    let captured = 0;
+    for (const sc of scenarios) {
+      const got = captureScenario(sc);
+      if (got !== null) { repairs.set(sc.name, got); captured++; }
+      else console.log(`FAIL  ${sc.name}  REPAIR: pipeline error, can't capture`);
+    }
+    const lines = text.split("\n");
+    let touched = 0;
+    let i = 0;
+    while (i < lines.length) {
+      const m = lines[i]!.match(/^scenario\s+(\S+)\s*$/);
+      if (!m) { i++; continue; }
+      const newPrims = repairs.get(m[1]!);
+      if (newPrims === undefined) { i++; continue; }
+      let blockEnd = i + 1;
+      while (blockEnd < lines.length && !lines[blockEnd]!.match(/^scenario\s+\S+\s*$/)) blockEnd++;
+      if (rewritePrimitivesBlock(lines, i + 1, blockEnd, newPrims)) touched++;
+      i = blockEnd;
+    }
+    if (touched > 0) fs.writeFileSync(DSL_PATH, lines.join("\n"));
+    console.log(`Captured ${captured}/${scenarios.length}, touched ${touched}.`);
+    return;
+  }
+
   let pass = 0, fail = 0;
   for (const sc of scenarios) {
     const r = runScenario(sc);

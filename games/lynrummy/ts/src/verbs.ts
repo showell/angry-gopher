@@ -37,6 +37,7 @@ import type {
 import {
   type BoardStack, type Loc,
   CARD_PITCH, findOpenLoc, findCrowding,
+  stackRect, padRect, rectsOverlap, PLANNING_MARGIN,
 } from "./geometry.ts";
 import {
   type Primitive, type SplitPrim, type MergeStackPrim, type MergeHandPrim, type MoveStackPrim,
@@ -305,15 +306,130 @@ function isolateCard(
   }
   // Interior: split after ci → [s[:ci]], [s[ci:]]; then split
   // [s[ci:]] after 1 → [s[ci]] + [s[ci+1:]].
-  const a = planSplitAfter(sim, stackContent, ci);
-  out.push(...a.prims);
-  const rightChunk = stackContent.slice(ci);
-  const b = planSplitAfter(a.sim, rightChunk, 1);
-  out.push(...b.prims);
+  //
+  // Single up-front geometry decision (per Steve's human idiom):
+  // relocate the SOURCE up front if the in-place split-split would
+  // crowd, otherwise do both splits in place. Never put a move_stack
+  // BETWEEN the two splits — a human player wouldn't relocate the
+  // residue mid-yank, they'd do both clicks in the same area or
+  // move the whole stack first.
+  const r = planInteriorIsolate(sim, stackContent, ci);
+  out.push(...r.prims);
   return {
-    prims: out, sim: b.sim, extSingleton: [extCard],
+    prims: out, sim: r.sim, extSingleton: [extCard],
     remnants: [stackContent.slice(0, ci), stackContent.slice(ci + 1)],
   };
+}
+
+/** Two-splits-as-a-unit. Try in place; if the post-state would
+ *  be crowded WITH RESPECT TO OTHER STACKS, relocate the source up
+ *  front and do both splits at the new loc. Crowding among the
+ *  three split products themselves is expected (the per-split
+ *  auto-displacement keeps them close by design — that's a human
+ *  player's natural shape) and is NOT counted. Both branches emit
+ *  two splits sequentially; what differs is whether a single
+ *  move_stack precedes them. */
+function planInteriorIsolate(
+  sim: readonly BoardStack[],
+  stackContent: readonly Card[],
+  ci: number,
+): { prims: Primitive[]; sim: readonly BoardStack[] } {
+  const inPlace = doTwoSplitsAt(sim, stackContent, ci);
+
+  // Identify the three split products by content. Crowding INSIDE
+  // this set is expected and ignored; only crowding WITH a stack
+  // outside the set means the source's neighborhood was already
+  // populated and we need to relocate.
+  const productContents: readonly (readonly Card[])[] = [
+    stackContent.slice(0, ci),
+    [stackContent[ci]!],
+    stackContent.slice(ci + 1),
+  ];
+  const productIndices = new Set<number>();
+  for (let i = 0; i < inPlace.sim.length; i++) {
+    const s = inPlace.sim[i]!;
+    for (const pc of productContents) {
+      if (sameContent(s.cards, pc)) {
+        productIndices.add(i);
+        break;
+      }
+    }
+  }
+  if (!hasExternalCrowding(inPlace.sim, productIndices)) {
+    return inPlace;
+  }
+
+  // External crowding: relocate source up front, then both splits
+  // at the new home.
+  const n = stackContent.length;
+  const si = findStackIndex(sim, stackContent);
+  const others = sim.filter((_, i) => i !== si);
+  const newLoc = findOpenLoc(others, n);
+  const cur = sim[si]!.loc;
+  if (newLoc.top === cur.top && newLoc.left === cur.left) {
+    return inPlace;
+  }
+  const move: MoveStackPrim = { action: "move_stack", stackIndex: si, newLoc };
+  const afterMove = applyLocally(sim, move);
+  const splits = doTwoSplitsAt(afterMove, stackContent, ci);
+  return { prims: [move, ...splits.prims], sim: splits.sim };
+}
+
+function sameContent(a: readonly Card[], b: readonly Card[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    const ca = a[i]!;
+    const cb = b[i]!;
+    if (ca[0] !== cb[0] || ca[1] !== cb[1] || ca[2] !== cb[2]) return false;
+  }
+  return true;
+}
+
+/** Crowding check that ignores pairs where BOTH stacks are in
+ *  `exempt` (the split-product set). Returns true iff at least one
+ *  pair involving a non-exempt stack is too close. */
+function hasExternalCrowding(
+  board: readonly BoardStack[],
+  exempt: ReadonlySet<number>,
+): boolean {
+  const rects = board.map(stackRect);
+  for (let i = 0; i < rects.length; i++) {
+    const paddedI = padRect(rects[i]!, PLANNING_MARGIN);
+    for (let j = i + 1; j < rects.length; j++) {
+      if (exempt.has(i) && exempt.has(j)) continue;
+      if (rectsOverlap(paddedI, rects[j]!)) return true;
+    }
+  }
+  return false;
+}
+
+/** Emit both splits without any geometry pre-flight. The cardIndex
+ *  derivations mirror `planSplitAfter`'s "split-after k" → applySplit
+ *  cardIndex convention. Returns the prim pair + the post-sim. */
+function doTwoSplitsAt(
+  sim: readonly BoardStack[],
+  stackContent: readonly Card[],
+  ci: number,
+): { prims: Primitive[]; sim: readonly BoardStack[] } {
+  const n = stackContent.length;
+  // Split A: split-after k=ci → left = [s[:ci]], right = [s[ci:]].
+  const kA = ci;
+  const ciA = kA <= Math.floor(n / 2) ? kA - 1 : kA;
+  const siA = findStackIndex(sim, stackContent);
+  const splitA: SplitPrim = { action: "split", stackIndex: siA, cardIndex: ciA };
+  const afterA = applyLocally(sim, splitA);
+
+  // Split B: from right chunk = [s[ci:]], split-after k=1 →
+  // left = [s[ci]], right = [s[ci+1:]].
+  const rightChunk = stackContent.slice(ci);
+  const nB = rightChunk.length;
+  const kB = 1;
+  const ciB = kB <= Math.floor(nB / 2) ? kB - 1 : kB;
+  const siB = findStackIndex(afterA, rightChunk);
+  const splitB: SplitPrim = { action: "split", stackIndex: siB, cardIndex: ciB };
+  const afterB = applyLocally(afterA, splitB);
+
+  return { prims: [splitA, splitB], sim: afterB };
 }
 
 function indexOfCard(arr: readonly Card[], target: Card): number {

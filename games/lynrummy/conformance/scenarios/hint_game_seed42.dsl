@@ -14,7 +14,7 @@ scenario turn_1_hint
     - 2C 3D 4C 5H 6S 7H
   expect_steps:
     - place [JD' QD'] from hand
-    - peel TD from HELPER [TD JD QD KD], absorb onto trouble [JD' QD'] → [TD JD' QD'] [→COMPLETE]
+    - peel TD from HELPER [TD JD QD KD], absorb onto [JD' QD'] → [TD JD' QD'] [→COMPLETE]
 
 scenario turn_2_hint
   op: hint_for_hand
@@ -29,8 +29,8 @@ scenario turn_2_hint
     - JD' QD'
   expect_steps:
     - place [4S] from hand
-    - peel TD from HELPER [TD JD QD KD], absorb onto trouble [JD' QD'] → [TD JD' QD'] [→COMPLETE]
-    - splice [4S] into HELPER [2C 3D 4C 5H 6S 7H] → [2C 3D 4S] + [4C 5H 6S 7H]
+    - peel TD from HELPER [TD JD QD KD], absorb onto [JD' QD'] → [TD JD' QD'] [→COMPLETE]
+    - push [4S] onto HELPER [KS AS 2S 3S] → [KS AS 2S 3S 4S]
 
 scenario turn_3_hint
   op: hint_for_hand
@@ -46,6 +46,6 @@ scenario turn_3_hint
     - 4S
   expect_steps:
     - place [2S' 2D'] from hand
-    - peel TD from HELPER [TD JD QD KD], absorb onto trouble [JD' QD'] → [TD JD' QD'] [→COMPLETE]
-    - push TROUBLE [4S] onto HELPER [KS AS 2S 3S] → [KS AS 2S 3S 4S]
-    - peel 2C from HELPER [2C 3D 4C 5H 6S 7H], absorb onto trouble [2S' 2D'] → [2S' 2D' 2C] [→COMPLETE]
+    - peel TD from HELPER [TD JD QD KD], absorb onto [JD' QD'] → [TD JD' QD'] [→COMPLETE]
+    - push [4S] onto HELPER [KS AS 2S 3S] → [KS AS 2S 3S 4S]
+    - peel 2C from HELPER [2C 3D 4C 5H 6S 7H], absorb onto [2S' 2D'] → [2S' 2D' 2C] [→COMPLETE]

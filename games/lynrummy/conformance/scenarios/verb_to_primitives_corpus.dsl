@@ -544,7 +544,6 @@ scenario mined_006_6Cp1_step_02
   expect:
     primitives:
       - split [5C 6D' 7C]@0
-      - move_stack [6D' 7C] -> (332,172)
       - split [6D' 7C]@0
       - merge_stack [6D'] -> [6C' 6S] /right
 
@@ -789,7 +788,6 @@ scenario mined_009_JC_step_02
   expect:
     primitives:
       - split [QS' KS AS 2S 3S]@0
-      - move_stack [KS AS 2S 3S] -> (482,112)
       - split [KS AS 2S 3S]@0
       - merge_stack [KS] -> [JC QH'] /right
 
@@ -1169,7 +1167,6 @@ scenario mined_013_AHp1_step_02
   expect:
     primitives:
       - split [AS 2S 3S]@0
-      - move_stack [2S 3S] -> (407,247)
       - split [2S 3S]@0
       - merge_stack [2S] -> [KS AH'] /right
 
@@ -1748,7 +1745,6 @@ scenario mined_019_2D_step_01
   expect:
     primitives:
       - split [KS AD 2C']@0
-      - move_stack [AD 2C'] -> (392,187)
       - split [AD 2C']@0
       - move_stack [2D] -> (317,220)
       - merge_stack [AD] -> [2D] /left

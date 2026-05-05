@@ -162,7 +162,8 @@ scenario solve_engulf_in_one_line
   growing:
     at (0,0): AC 2D
   expect:
-    plan_length: 1
+    plan_lines:
+      - "push [AC 2D] onto HELPER [3S 4D 5C] → [AC 2D 3S 4D 5C]"
 
 scenario solve_simple_peel_in_one_line
   desc: Trouble [4H] absorbs 5H peeled from a length-4 helper run for a 1-line plan.
@@ -172,7 +173,8 @@ scenario solve_simple_peel_in_one_line
   trouble:
     at (0,0): 4H
   expect:
-    plan_length: 1
+    plan_lines:
+      - "push [4H] onto HELPER [5H 6H 7H 8H] → [4H 5H 6H 7H 8H]"
 
 # --- narrate / hint renderings ------------------------------
 # Each layer has a different audience:

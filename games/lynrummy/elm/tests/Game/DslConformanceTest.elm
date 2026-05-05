@@ -3162,10 +3162,9 @@ walkthroughPuzzleA3001Seed1 =
                         [ SpecSplit [ parseCard "QC2", parseCard "KD1", parseCard "AC1", parseCard "2H1", parseCard "3S2", parseCard "4H1" ] 0
                         , SpecMergeStack [ parseCard "QC2" ] [ parseCard "KH1" ] BoardActions.Left
                         , SpecSplit [ parseCard "KD1", parseCard "AC1", parseCard "2H1", parseCard "3S2", parseCard "4H1" ] 0
-                        , SpecMoveStack [ parseCard "AC1", parseCard "2H1", parseCard "3S2", parseCard "4H1" ] { top = 467, left = 52 }
                         , SpecSplit [ parseCard "AC1", parseCard "2H1", parseCard "3S2", parseCard "4H1" ] 0
                         , SpecMergeStack [ parseCard "AC1" ] [ parseCard "QC2", parseCard "KH1" ] BoardActions.Right
-                        , SpecMoveStack [ parseCard "TD1", parseCard "JD1", parseCard "QD1" ] { top = 437, left = 292 }
+                        , SpecMoveStack [ parseCard "TD1", parseCard "JD1", parseCard "QD1" ] { top = 467, left = 52 }
                         , SpecMergeStack [ parseCard "KD1" ] [ parseCard "TD1", parseCard "JD1", parseCard "QD1" ] BoardActions.Right ]
 
                 replayedModel =
@@ -3214,12 +3213,10 @@ walkthroughPuzzleA3002Seed2 =
                 ( eagerModel, actions ) =
                     buildEagerAndActions initialModel
                         [ SpecSplit [ parseCard "5S1", parseCard "6D2", parseCard "7S2" ] 0
-                        , SpecMoveStack [ parseCard "6D2", parseCard "7S2" ] { top = 152, left = 232 }
                         , SpecSplit [ parseCard "6D2", parseCard "7S2" ] 0
-                        , SpecMoveStack [ parseCard "5C2" ] { top = 227, left = 247 }
+                        , SpecMoveStack [ parseCard "5C2" ] { top = 152, left = 232 }
                         , SpecMergeStack [ parseCard "6D2" ] [ parseCard "5C2" ] BoardActions.Right
                         , SpecMergeStack [ parseCard "5S1" ] [ parseCard "5H2", parseCard "5C1", parseCard "5D1" ] BoardActions.Right
-                        , SpecMoveStack [ parseCard "5C2", parseCard "6D2" ] { top = 227, left = 172 }
                         , SpecMergeStack [ parseCard "7S2" ] [ parseCard "5C2", parseCard "6D2" ] BoardActions.Right ]
 
                 replayedModel =
@@ -3366,10 +3363,9 @@ walkthroughPuzzleA3005Seed5 =
                 ( eagerModel, actions ) =
                     buildEagerAndActions initialModel
                         [ SpecSplit [ parseCard "AS1", parseCard "2D1", parseCard "3C2" ] 0
-                        , SpecMoveStack [ parseCard "2D1", parseCard "3C2" ] { top = 167, left = 157 }
                         , SpecSplit [ parseCard "2D1", parseCard "3C2" ] 0
                         , SpecMergeStack [ parseCard "2D1" ] [ parseCard "3S2" ] BoardActions.Left
-                        , SpecMoveStack [ parseCard "2D1", parseCard "3S2" ] { top = 227, left = 295 }
+                        , SpecMoveStack [ parseCard "2D1", parseCard "3S2" ] { top = 227, left = 250 }
                         , SpecMergeStack [ parseCard "AS1" ] [ parseCard "2D1", parseCard "3S2" ] BoardActions.Left
                         , SpecMergeStack [ parseCard "3C2" ] [ parseCard "3H2", parseCard "3S1", parseCard "3D1" ] BoardActions.Right ]
 
