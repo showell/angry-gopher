@@ -105,24 +105,56 @@ but doesn't run a referee.
 
 Consequences:
 
-- **Autonomous play doesn't need the server.** Elm runs its
-  own log + referee in memory. The TS agent's `agent_player.ts`
-  plays a complete game locally; `transcript.ts` writes the
-  result straight to the file system, no HTTP.
 - **Each client is its own gatekeeper.** Elm has its own
   referee module; the TS agent uses `applyLocally` +
   `findViolation` / `assertNoOverlap` per primitive.
-- **The server is observability, not coordination.** Elm
-  POSTs events for storage / reload-resume; nothing in the
-  live loop depends on the response.
+- **Bootstrap pulls down the data the client needs to play.**
+  The Elm UI does this with three follow-up fetches AFTER the
+  HTML page loads — once each, before play becomes
+  interactive:
+    - `POST /new-session` (full game, fresh start) — server
+      allocates a session id and writes `meta.json`; Elm uses
+      the id in subsequent action POST URLs.
+    - `GET /sessions/<sid>/actions` (full game, deep-link
+      resume) — server reads the on-disk action log and
+      bundles it; Elm replays it locally to reach the live
+      state.
+    - `GET /puzzles/catalog` (puzzles) — server reads
+      `puzzles.json` and allocates a fresh puzzle-session id.
+  These could in principle be inlined into the page-render
+  flags (the data is already on Go's side); separating them
+  is a code-organization choice, not an architectural
+  requirement. Once they land, the Elm UI is fully primed.
+- **Ongoing play is fully local.** After bootstrap completes,
+  no inbound HTTP gates user input. The only "pending" state
+  the Elm UI tracks is for TS engine responses (Hint shows
+  "Thinking…"); there is no Go-side analogue. Elm POSTs
+  actions and gesture telemetry as fire-and-forget writes
+  (`sendAction`, `sendAnnotation`); the `ActionSent` handler
+  takes no action on success and never blocks further play.
+- **The server is observability, not coordination.** Once
+  bootstrap is done, Elm's only remaining traffic to Go is
+  outbound writes that exist so anyone reading the data tree
+  (a future replay viewer, a human inspecting
+  `games/lynrummy/data/`) can see what happened. The server
+  is not part of any decision loop.
+- **Autonomous TS-agent play doesn't touch the server at all.**
+  `agent_player.ts` plays a complete game locally;
+  `transcript.ts` writes the result straight to the file
+  system, no HTTP.
 
 ## The cast of components
 
-- **Elm UI.** The autonomous client. Deals locally
+- **Elm UI.** The autonomous client. Two surfaces — full
+  game (`Main.elm`) and the Puzzles gallery (`Puzzles.elm`),
+  both embedding `Main.Play`. Deals locally
   (`Game.Dealer.dealFullGame seed`), runs its own referee,
   appends to its own action log, can replay at any time.
-  Originates events from drags, its own hint engine, or a
-  stored transcript.
+  Originates events from drags, from the **TS engine** (Hint
+  for both surfaces; Let-Agent-Play for Puzzles only) over
+  Elm ports + the JS glue, or from a stored transcript.
+  Once bootstrap is done, the Elm UI's only Go-bound traffic
+  is outbound action and gesture-telemetry POSTs.
 - **TypeScript agent.** A complete player without a
   presentation layer, at `games/lynrummy/ts/`. Owns the
   solver (`engine_v2.ts`) and the physical-execution layer
@@ -150,15 +182,22 @@ without translation.
 
 Engagement levels:
 
-- **Fully autonomous.** Log never leaves the actor.
-- **Outbound-only.** Actor writes events for others (or
-  later replay) but pulls nothing back. The TS agent operates
-  here — writes JSON straight to the file system; Steve
-  watches via Elm replay.
+- **Fully autonomous.** Log never leaves the actor. The TS
+  agent in self-play operates here, writing JSON straight to
+  the file system without any HTTP.
+- **Outbound-only after bootstrap.** Actor pulls down what it
+  needs at startup, then writes events for others (or later
+  replay) without pulling anything back. The Elm UI operates
+  here: three bootstrap fetches once (session creation /
+  resume bundle / puzzle catalog), then fire-and-forget
+  action + telemetry POSTs for the rest of play. The TS agent
+  operates here too when generating transcripts; Steve
+  watches the result via Elm replay.
 - **Two-way coordination.** Both actors post events AND
-  integrate events from the other. Each incoming event passes
-  through the receiving actor's referee before being added to
-  its log.
+  integrate events from the other during ongoing play. Each
+  incoming event passes through the receiving actor's referee
+  before being added to its log. (Not currently exercised by
+  any production surface; the architecture supports it.)
 
 The shape's consistency across actors is enforced by the
 DSL-driven conformance bridge. See

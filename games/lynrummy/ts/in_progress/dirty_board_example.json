@@ -1,0 +1,75 @@
+{
+  "label": "Game 8, mid-turn 1, after 9 hand-card placements; player hits Hint with [8S'] dangling on the board.",
+  "captured_at": "2026-05-05",
+  "source_session": "games/lynrummy/data/lynrummy-elm/sessions/8/",
+
+  "initial_board": [
+    { "loc": { "top": 20, "left": 70 },  "cards": ["KS", "AS", "2S", "3S"] },
+    { "loc": { "top": 80, "left": 160 }, "cards": ["TD", "JD", "QD", "KD"] },
+    { "loc": { "top": 140, "left": 100 }, "cards": ["2H", "3H", "4H"] },
+    { "loc": { "top": 200, "left": 40 },  "cards": ["7S", "7D", "7C"] },
+    { "loc": { "top": 260, "left": 130 }, "cards": ["AC", "AD", "AH"] },
+    { "loc": { "top": 320, "left": 70 },  "cards": ["2C", "3D", "4C", "5H", "6S", "7H"] }
+  ],
+
+  "initial_hand": [
+    "9C", "QD'", "TH", "5C'", "8S'", "6S'",
+    "QS'", "TC'", "2D", "9H'", "7S'", "7D'",
+    "JH", "QH", "8D"
+  ],
+
+  "actions_taken_before_hint": [
+    { "seq": 1, "action": "place_hand", "card": "8D", "loc": { "top": 43, "left": 369 } },
+    { "seq": 2, "action": "merge_hand", "card": "9C", "target_cards": ["8D"], "side": "right" },
+    { "seq": 3, "action": "merge_hand", "card": "TH", "target_cards": ["8D", "9C"], "side": "right" },
+    { "seq": 4, "action": "place_hand", "card": "QD'", "loc": { "top": 153, "left": 259 } },
+    { "seq": 5, "action": "merge_hand", "card": "QS'", "target_cards": ["QD'"], "side": "right" },
+    { "seq": 6, "action": "merge_hand", "card": "QH", "target_cards": ["QD'", "QS'"], "side": "right" },
+    { "seq": 7, "action": "place_hand", "card": "8S'", "loc": { "top": 247, "left": 352 } },
+    { "seq": 8, "action": "place_hand", "card": "6S'", "loc": { "top": 221, "left": 262 } },
+    { "seq": 9, "action": "merge_hand", "card": "7S'", "target_cards": ["6S'"], "side": "right" }
+  ],
+
+  "state_at_hint_time": {
+    "board_helpers": [
+      ["KS", "AS", "2S", "3S"],
+      ["TD", "JD", "QD", "KD"],
+      ["2H", "3H", "4H"],
+      ["7S", "7D", "7C"],
+      ["AC", "AD", "AH"],
+      ["2C", "3D", "4C", "5H", "6S", "7H"],
+      ["8D", "9C", "TH"],
+      ["QD'", "QS'", "QH"]
+    ],
+    "board_trouble": [
+      ["8S'"],
+      ["6S'", "7S'"]
+    ],
+    "hand": ["5C'", "TC'", "2D", "9H'", "7D'", "JH"]
+  },
+
+  "current_engine_hint": [
+    "place [7D'] from hand",
+    "pull 8S' onto [6S' 7S'] → [6S' 7S' 8S'] [→COMPLETE]",
+    "yank 6S from HELPER [2C 3D 4C 5H 6S 7H], absorb onto [7D'] → [6S 7D'] ; spawn [7H]",
+    "push [7H] onto HELPER [7S 7D 7C] → [7S 7D 7C 7H]",
+    "peel 5H from HELPER [2C 3D 4C 5H], absorb onto [6S 7D'] → [5H 6S 7D'] [→COMPLETE]"
+  ],
+
+  "current_engine_hint_notes": {
+    "kind": "tier-c singleton projection",
+    "placement": "1 hand card (7D')",
+    "bfs_plan_length": 4,
+    "hits_max_plan_length_cap": true,
+    "completes_dangling_8S_prime": true,
+    "creates_a_new_completion_chain": "yank 6S → [6S 7D'], peel 5H → [5H 6S 7D']",
+    "leaves_board_clean_at_turn_end": true
+  },
+
+  "open_questions": [
+    "Could a much shorter hint (e.g. 'free_pull 8S' onto [6S' 7S']') be a better answer when the player has already played enough hand cards this turn?",
+    "Should the engine prioritize completing existing partials BEFORE introducing new hand-card projections?",
+    "Should the player's choice to leave 8S' as a dangling singleton be treated as a signal that they are mid-construction of [6S' 7S' 8S'], not as a separate trouble to be cleaned somewhere else?",
+    "Plan-length tie-breaking is by total step count today; should we instead favor plays whose first BFS step completes a board partial (a 'finish what's started' bias)?"
+  ]
+}

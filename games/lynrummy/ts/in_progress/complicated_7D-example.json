@@ -1,0 +1,72 @@
+{
+  "label": "Game 8, mid-turn 1, after 13 hand-card placements; board is now CLEAN. Player hits Hint with hand [5C' 2D 7D']. The current engine hint is judged 'too complicated' for a clean-board state.",
+  "captured_at": "2026-05-05",
+  "source_session": "games/lynrummy/data/lynrummy-elm/sessions/8/",
+  "continues_from": "in_progress/dirty_board_example.json (which captured state after action 9; this captures state after action 13)",
+
+  "actions_since_dirty_board_example": [
+    { "seq": 10, "action": "merge_stack", "source_cards": ["8S'"], "target_cards": ["6S'", "7S'"], "side": "right",
+      "produces": "[6S' 7S' 8S']  — pure_run length-3 helper, the dangling 8S' consolidated onto its partial" },
+    { "seq": 11, "action": "place_hand", "card": "9H'" },
+    { "seq": 12, "action": "merge_hand", "card": "TC'", "target_cards": ["9H'"], "side": "right" },
+    { "seq": 13, "action": "merge_hand", "card": "JH",  "target_cards": ["9H'", "TC'"], "side": "right",
+      "produces": "[9H' TC' JH] — rb_run length-3 helper" }
+  ],
+
+  "state_at_hint_time": {
+    "board_helpers": [
+      ["KS", "AS", "2S", "3S"],
+      ["TD", "JD", "QD", "KD"],
+      ["2H", "3H", "4H"],
+      ["7S", "7D", "7C"],
+      ["AC", "AD", "AH"],
+      ["2C", "3D", "4C", "5H", "6S", "7H"],
+      ["8D", "9C", "TH"],
+      ["QD'", "QS'", "QH"],
+      ["6S'", "7S'", "8S'"],
+      ["9H'", "TC'", "JH"]
+    ],
+    "board_trouble": [],
+    "board_is_clean": true,
+    "hand": ["5C'", "2D", "7D'"]
+  },
+
+  "current_engine_hint": [
+    "place [7D'] from hand",
+    "yank 6S from HELPER [2C 3D 4C 5H 6S 7H], absorb onto [7D'] → [6S 7D'] ; spawn [7H]",
+    "push [7H] onto HELPER [7S 7D 7C] → [7S 7D 7C 7H]",
+    "push [6S 7D'] onto HELPER [2C 3D 4C 5H] → [2C 3D 4C 5H 6S 7D']"
+  ],
+
+  "current_engine_hint_notes": {
+    "kind": "tier-c singleton projection of 7D'",
+    "placement": "1 hand card (7D')",
+    "bfs_plan_length": 3,
+    "rendered_lines": 4,
+    "leaves_board_clean_at_turn_end": true,
+    "structural_complexity": [
+      "yank from the MIDDLE of a length-6 helper — a destructive split of a working stack",
+      "the yank's spawned [7H] then has to be re-pushed onto a different helper before it loses helper status",
+      "the new [6S 7D'] partial is then pushed onto what's left of the original helper, rebuilding it as a different shape"
+    ],
+    "human_feel": "The player has to tear apart [2C 3D 4C 5H 6S 7H] mid-stream, juggle the spawned 7H, and reassemble. Three structurally independent reorganizations for one 7D' placement. High cognitive load even though the BFS plan-length is shorter than the dirty-board case (3 vs 4)."
+  },
+
+  "open_questions": [
+    "On a clean board, is there a play involving any of [5C' 2D 7D'] that the engine would judge longer in BFS steps but a human would find structurally simpler? (E.g., a play that adds to one helper without tearing another apart.)",
+    "Should the cost function include a 'helpers disturbed' term so a clean stay-out-of-the-way play wins ties over a yank-and-rebuild play?",
+    "On a clean board with a small hand (3 cards here), is one of the right choices 'don't play this turn' — i.e., the optimal hint can be empty? Today findPlay forces a placement; the hand-aware contract assumes you want one.",
+    "Is 7D' fundamentally harder to play than 5C' or 2D from this board state? If yes, would a human prefer to be told 'try something else' rather than 'do this elaborate yank'?"
+  ],
+
+  "steves_actual_solution": {
+    "summary": "Two UI motions, structurally simpler than the engine's hint, and BFS-invisible by design.",
+    "ui_motions": [
+      "Drag 7H from the right end of HELPER [2C 3D 4C 5H 6S 7H] onto HELPER [7S 7D 7C]. UI realizes as split @ 5 + merge_stack [7H] -> [7S 7D 7C], producing [2C 3D 4C 5H 6S] + [7S 7D 7C 7H].",
+      "Drag 7D' from hand onto HELPER [2C 3D 4C 5H 6S] /right, producing [2C 3D 4C 5H 6S 7D']."
+    ],
+    "verbatim_actions_in_log": "session 8 actions 24, 25, 26 (after 17–23 'refresh' noise that resets the previous play).",
+    "why_bfs_doesnt_find_this": "The first move is a HELPER → HELPER rearrangement. The BFS verb library (extract+absorb, free_pull, push, splice, shift, decompose) only emits moves that touch trouble or growing — every frontier expansion commits to reducing trouble. A pure helper-to-helper card transfer with no trouble involved isn't a verb. By design: it keeps the search space tractable. But it permanently misses the class of plays where ONE cheap rearrangement makes the rest of the turn a single push.",
+    "deeper_principle": "Steve's play exploits exactly that gap. Helper-only setup moves are 'free' from a trouble-reduction perspective but they unlock single-step finishes. To find such plans, the engine would need either (a) a verb that captures helper-helper transfers, or (b) a pre-pass that considers small helper rearrangements as setup before launching the main BFS, or (c) some recognition pattern (e.g. 'this hand card would slot into a length-N run if its current end-card were elsewhere — try moving the end-card first')."
+  }
+}

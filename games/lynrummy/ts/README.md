@@ -1,67 +1,65 @@
 # LynRummy — TypeScript agent
 
 > **Read alongside:** [`ENGINE_V2.md`](./ENGINE_V2.md) (solver
-> design, bench inventory) and [`PHYSICAL_PLAN.md`](./PHYSICAL_PLAN.md)
-> (gesture-layer doctrine). This README is the entry point; those
-> two carry the load-bearing detail.
+> design) and [`PHYSICAL_PLAN.md`](./PHYSICAL_PLAN.md) (gesture-
+> layer doctrine). This README is the entry point; those two
+> carry the load-bearing detail.
 
-**Status:** Canonical agent. Solver, verb→primitive pipeline,
-spatial-execution layer, full-game player, transcript writer
-all live here. The legacy `Game.Agent.*` Elm BFS port is on
-life-support until `TS_ELM_INTEGRATION` lands.
+The complete LynRummy agent in TypeScript. Solver,
+verb→primitive pipeline, spatial-execution layer, full-game
+self-play, transcript writer, and the bundle the Elm UI calls
+for hints all live here.
 
-## What this is
-
-The complete LynRummy agent in TypeScript:
+## What's in here
 
 - **Solver:** [`engine_v2.ts`](src/engine_v2.ts) — A* with
   `half_debt` admissible heuristic, closed-list dedup,
-  card-tracker liveness pruning. See
-  [`ENGINE_V2.md`](./ENGINE_V2.md) for design notes and
-  optimization levers.
+  card-tracker liveness pruning. Design notes and
+  optimization levers in [`ENGINE_V2.md`](./ENGINE_V2.md).
+- **Hand-aware outer loop:**
+  [`hand_play.ts`](src/hand_play.ts) — `findPlay` projects
+  hand-card candidates onto the board and runs BFS to verify
+  the augmented board reaches victory. `formatHint` renders
+  the result for the Elm UI.
 - **Verb pipeline:** [`verbs.ts`](src/verbs.ts) — turns one
   solver verb into the primitive sequence a human at the
   kitchen table would emit. Hand-aware (R1), small→large
-  swaps (R2), inline pre-flight (R3). See
-  [`PHYSICAL_PLAN.md`](./PHYSICAL_PLAN.md) for the gesture-
-  layer rules.
+  swaps (R2), inline pre-flight (R3). Doctrine in
+  [`PHYSICAL_PLAN.md`](./PHYSICAL_PLAN.md).
 - **Loop:** [`physical_plan.ts`](src/physical_plan.ts) — one
   loop over the solver's plan with honest state (sim = real
-  board, pendingHand = cards in hand). Multi-card placement
-  seeded as a `place_hand` + `merge_hand` chain at a clean
-  loc; single-card placements rely on R1 lift.
+  board, pendingHand = cards in hand).
 - **Player:** [`agent_player.ts`](src/agent_player.ts) —
   drives full 2-hand games to deck-low. Permanent invariants
   (board cleanliness, hand arithmetic, card conservation)
-  throw on violation per "don't paper over."
+  throw on violation.
 - **Transcript:** [`transcript.ts`](src/transcript.ts) —
   writes Elm-replayable session JSON straight to the file
-  system. Asserts `findViolation == null` after every
-  primitive.
-
-The TS agent uses the file system directly — no HTTP. The Go
-server still indexes session ids and accepts wire POSTs from
-Elm during live play, but the TS agent bypasses it.
+  system (no HTTP). Asserts `findViolation == null` after
+  every primitive.
+- **Browser bundle entry:**
+  [`engine_entry.ts`](src/engine_entry.ts) — `solveBoard`,
+  `gameHintLines`, `agentPlay`, exposed as
+  `window.LynRummyEngine` via esbuild (see
+  `ops/build_engine_js`). The Elm UI's
+  `engine_glue.js` calls these.
 
 ## Agent responsibilities
 
-This subtree owns three end-to-end responsibilities. When Steve
-asks for any of these, the work happens here:
+This subtree owns three end-to-end responsibilities:
 
-- **Generating sample games for review.** Full 2-hand self-play
-  + Elm-replayable transcript writing live in this subtree.
+- **Generating sample games for review.** Full 2-hand
+  self-play + Elm-replayable transcript writing.
   Driver: `npm run bench:end-of-deck -- --write-transcript [seeds...]`.
-  Output: `data/lynrummy-elm/sessions/<id>/{meta.json, actions/*.json}`,
-  ready for Elm to replay at the URL the Go server exposes.
+  Output: `data/lynrummy-elm/sessions/<id>/{meta.json, actions/*.json}`.
 - **Running the conformance suite.** The canonical gate
-  `ops/check-conformance` runs `cmd/fixturegen` (Go, DSL →
-  fixtures), then `npm test` in this subtree (leaf + engine +
-  verbs + physical_plan + replay walkthroughs + agent self-play),
-  then Elm `check.sh`.
-- **Running performance tests.** All perf harnesses live in
+  `ops/check-conformance` runs `cmd/fixturegen` (Go,
+  DSL → fixtures), then `npm test` here, then Elm
+  `check.sh`.
+- **Running performance tests.** Bench harnesses live in
   `bench/`: `bench:check-baseline` (timing regression gate),
-  `bench:end-of-deck` (full-game perf, 6 seeds), and the
-  auxiliary measurement drivers documented in `ENGINE_V2.md`.
+  `bench:end-of-deck` (full-game perf), and the auxiliary
+  drivers documented in `ENGINE_V2.md`.
 
 ## Layout
 
@@ -73,83 +71,91 @@ asks for any of these, the work happens here:
 | `src/move.ts` | Verb descriptor types + plan-line renderers. |
 | `src/enumerator.ts` | Move generator dispatcher + per-move-type helpers. |
 | `src/engine_v2.ts` | A* engine + heuristic + min-heap. |
-| `src/card_neighbors.ts` | Card-tracker accelerator (NEIGHBORS, buildCardLoc, isLive). |
+| `src/card_neighbors.ts` | Card-tracker accelerator. |
 | `src/hand_play.ts` | Hand-aware outer loop — `findPlay`, `formatHint`. |
-| `src/verbs.ts` | Verb→primitive pipeline (hand-aware, R1/R2/R3 inline). |
-| `src/physical_plan.ts` | The loop. `physicalPlan(initialBoard, hand, planDescs)`. |
-| `src/primitives.ts` | Primitive types + `applyLocally` + shared merge invariant. |
+| `src/verbs.ts` | Verb→primitive pipeline (R1/R2/R3 inline). |
+| `src/physical_plan.ts` | The physical-execution loop. |
+| `src/primitives.ts` | Primitive types + `applyLocally`. |
 | `src/geometry.ts` | Geometry constants, `findOpenLoc`, `findViolation`, `findCrowding`. |
-| `src/agent_player.ts` | Full-game player (2-hand alternating, deck-low termination). |
+| `src/agent_player.ts` | Full-game player (2-hand, deck-low termination). |
 | `src/transcript.ts` | Elm-replayable JSON session writer. |
-| `tools/generate_puzzles.ts` | Self-play-driven puzzle catalog generator. Emits `games/lynrummy/puzzles/puzzles.json` (5 puzzles where engine_v2 returns a 3-line plan, board ≥30 cards). |
+| `src/engine_entry.ts` | Browser-bundle entry; exports `LynRummyEngine`. |
+| `src/wire_json.ts` | Primitive ↔ Elm-wire JSON. |
+| `tools/generate_puzzles.ts` | Self-play-driven puzzle catalog generator. |
+| `tools/replay_puzzles.ts` | Re-emit `puzzle_walkthroughs.dsl` from the catalog. |
 
 ## Tests
 
 ```
-npm test    # leaf + engine conformance + verb fixtures + physical_plan + walkthroughs + agent self-play
+npm test
 ```
 
-Individual suites:
+Runs leaf + engine conformance + verb fixtures + physical_plan
++ replay walkthroughs + agent self-play in sequence. Node v24's
+native TS support runs `.ts` files directly — no compile step.
 
-| Script | DSL | Counts |
-|---|---|---|
-| `npm run test:leaf` | `conformance/leaf/*.dsl` | 212+ leaf primitives |
-| `npm run test:engine` | `conformance/engine/*.json` | engine plan-line cross-check |
-| `npm run test:verbs` | `conformance/scenarios/verb_to_primitives*.dsl` | 102 per-verb primitive sequences |
-| `npm run test:physical-plan` | `conformance/scenarios/physical_plan_corpus.dsl` | integration: hand cards + multi-verb + R3 |
-| `npm run test:replay-walkthroughs` | `conformance/scenarios/replay_walkthroughs.dsl` | full puzzle walkthroughs |
-| `npm run test:agent-player` | (no DSL — plays real games) | 6 seeds × full game |
+The TS suite runs several hundred scenarios end-to-end (leaf
+primitives + engine cross-check + verb-pipeline fixtures +
+physical-plan integration + replay walkthroughs + a handful
+of full self-played games against fixed seeds). The Elm side
+adds many hundreds more via `elm-test` against the same DSL
+fixtures. Total conformance footprint is well into the
+hundreds across both runners.
+
+| Script | Source |
+|---|---|
+| `npm run test:leaf` | `conformance/leaf/*.dsl` |
+| `npm run test:engine` | `conformance/fixtures.json` (generated by `cmd/fixturegen`) |
+| `npm run test:verbs` | `conformance/scenarios/verb_to_primitives*.dsl` |
+| `npm run test:physical-plan` | `conformance/scenarios/physical_plan_corpus.dsl` |
+| `npm run test:replay-walkthroughs` | `conformance/scenarios/replay_walkthroughs.dsl` |
+| `npm run test:agent-player` | (no DSL — plays full games against fixed seeds) |
 
 All DSL runners assert `findViolation == null` after every
-emitted primitive — overlap drift fails the moment it
-appears, not just at end-of-play.
-
-Node v24's native TS support runs `.ts` files directly — no
-compile step, no `tsx`, no dependencies.
+emitted primitive — overlap drift fails the moment it appears,
+not just at end-of-play. Strict-equality contract: snapshot
+tests compare exact output (no "≤ pinned" ceilings); see
+`memory/feedback_strict_tests_no_ceiling.md`.
 
 ## Bench
 
 ```
 npm run bench:check-baseline   # 81-card timing regression check
-npm run bench:gen-baseline     # regenerate gold after deliberate solver change
-npm run bench:end-of-deck      # full-game perf, 6 seeds × deck-low
+npm run bench:gen-baseline     # regenerate gold after a deliberate solver change
+npm run bench:end-of-deck      # full-game perf, default 6 seeds × deck-low
 ```
 
 Gold timings live in `bench/baseline_board_81_gold.txt` and
-`bench/bench_outer_shell_gold.txt`. Mulberry32 PRNG (seedable,
-native to JS).
+`bench/bench_outer_shell_gold.txt`. PRNG is mulberry32
+(seedable, native to JS).
 
-## State signature hashing
+## Design principles
 
-The engine uses a packed-int strategy for `Set` keys (JS
-Sets compare objects by reference, not value). Each card
-encodes as `((value*4)+suit)*2+deck` (max 111). `engine_v2`
-adds a position-indexed `fastStateSig` (~1.2× faster than
-the legacy stateSig, same dedup decisions). Decision
-documented inline in `src/buckets.ts`.
-
-## Design principles carried from the migration
-
-These predate today's architecture but still apply verbatim:
+These show up across the engine, verb pipeline, and bench
+discipline. They're load-bearing — anyone touching solver code
+should know them.
 
 - **Earn knowledge, use earned knowledge.** Probes earn the
-  kind; executors consume it.
+  kind; executors consume it. See `ENGINE_V2.md` § Solver
+  design principles.
 - **No `side` parameter on functions.** Pairs of named
   functions (`right_X` vs `left_X`), never a `side` arg.
   Side appears only in data layouts.
 - **Iteration order is canon.** Plan-line output depends on
-  the order moves are yielded. The DSL conformance suite
-  pins it.
-- **Splice is run/rb-only.** Set parents extend via the
-  absorb operation, not splice.
+  the order moves are yielded. The DSL conformance fixtures
+  pin it.
+- **Splice is run/rb-only.** Set parents extend via the absorb
+  operation, not splice.
 
 ## Pointers
 
 - [`PHYSICAL_PLAN.md`](./PHYSICAL_PLAN.md) — gesture-layer
   doctrine (R1/R2/R3, the loop, the helpers).
 - [`ENGINE_V2.md`](./ENGINE_V2.md) — solver design, heuristic
-  choice, dedup strategy.
-- [`../DOC_AUTHOR_RULES.md`](../DOC_AUTHOR_RULES.md) — read
-  before touching docs in this subtree.
-- [`../ARCHITECTURE.md`](../ARCHITECTURE.md) — repo-level
-  context (events, action logs, frames of reference).
+  choice, dedup strategy, verb-library principles.
+- [`../DOC_AUTHOR_RULES.md`](../DOC_AUTHOR_RULES.md) — doc
+  conventions for this subtree.
+- [`../ARCHITECTURE.md`](../ARCHITECTURE.md) — system-wide
+  architecture.
+- [`in_progress/HINT_SOPHISTIFICATION.md`](./in_progress/HINT_SOPHISTIFICATION.md)
+  — queued follow-on project (hint quality refinement).
