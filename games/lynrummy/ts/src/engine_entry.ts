@@ -17,6 +17,7 @@ import {
 import type { BoardStack } from "./geometry.ts";
 import { applyLocally } from "./primitives.ts";
 import { expandVerb } from "./verbs.ts";
+import { findPlay, formatHint } from "./hand_play.ts";
 import { primToWire, type WireActionJson } from "./wire_json.ts";
 
 /**
@@ -101,8 +102,26 @@ function solveBucketsFromCardLists(
   });
 }
 
-// Re-exports — useful if the JS glue needs lower-level access later
-// (e.g. for hand_play / findPlay in a future phase).
+/**
+ * Full-game hint entry point. Given the active player's hand and
+ * the live board, return the rendered hint as a flat list of step
+ * strings: `["place [<cards>] from hand", "<plan-line>", ...]`,
+ * or `[]` if no playable hand card was found.
+ *
+ * Wraps `findPlay` (hand-aware outer loop — triple-in-hand →
+ * pair projections → singleton projections → shortest plan) and
+ * `formatHint` (renderer). The Elm UI displays `lines` verbatim
+ * in the status bar; refining hint phrasing belongs in
+ * `hand_play.ts:formatHint`, not here.
+ */
+export function gameHintLines(
+  hand: readonly Card[],
+  board: readonly (readonly Card[])[],
+): readonly string[] {
+  return formatHint(findPlay(hand, board));
+}
+
+// Re-exports — used by tests and by the agent_player code path.
 export { solveStateWithDescs } from "./engine_v2.ts";
 export { findPlay } from "./hand_play.ts";
 export { jsonStack } from "./wire_json.ts";

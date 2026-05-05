@@ -60,6 +60,13 @@ func HandleLynRummyElm(w http.ResponseWriter, r *http.Request) {
 		lynrummyElmPlay(w)
 	case sub == "elm.js":
 		lynrummyElmJS(w)
+	case sub == "engine.js":
+		// TS engine bundle — shared with the Puzzles surface.
+		// Same file, served under both paths so the full-game
+		// page doesn't reach into /gopher/puzzles/ for assets.
+		serveJS(w, EngineJSPath, "engine.js not found — run `ops/build_engine_js`")
+	case sub == "engine_glue.js":
+		serveJS(w, EngineGlueJSPath, "engine_glue.js not found — check the file exists at "+EngineGlueJSPath)
 	case sub == "new-session":
 		lynrummyElmNewSession(w, r)
 	case sub == "sessions":
@@ -437,7 +444,9 @@ func lynrummyElmPlayWithSession(w http.ResponseWriter, sessionID int64) {
 </div>
 <div class="app-main">
 <div id="root"></div>
+<script src="/gopher/lynrummy-elm/engine.js"></script>
 <script src="/gopher/lynrummy-elm/elm.js"></script>
+<script src="/gopher/lynrummy-elm/engine_glue.js"></script>
 <script>
   var initialSessionId = %s;
   var app = Elm.Main.init({
@@ -452,6 +461,7 @@ func lynrummyElmPlayWithSession(w http.ResponseWriter, sessionID int64) {
                          : "/gopher/lynrummy-elm/play/" + sid;
     history.replaceState(null, "", url);
   });
+  EngineGlue.attach(app);
 </script>
 </div>
 </body></html>`, flag)

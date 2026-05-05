@@ -5,10 +5,6 @@
 module Game.DslConformanceTest exposing (suite)
 
 import Expect
-import Game.Agent.Bfs
-import Game.Agent.Buckets as AgentBuckets exposing (Buckets)
-import Game.Agent.Enumerator as AgentEnumerator
-import Game.Agent.Move as AgentMove exposing (Move(..))
 import Game.Physics.BoardGeometry
     exposing
         ( BoardBounds

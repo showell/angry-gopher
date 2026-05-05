@@ -2,21 +2,30 @@ port module Main exposing (main)
 
 {-| Thin harness around `Main.Play`.
 
-The main app's entire play surface lives in `Main.Play` as of
-REFACTOR_EMBEDDABLE_PLAY Phase I — Main here just owns the
-URL-pinning port (only port modules may declare ports), boots
-`Browser.element`, and routes Play's `Output` to the port.
+The main app's entire play surface lives in `Main.Play`. Main
+here owns the host ports (URL-pinning + the TS engine bridge)
+and boots `Browser.element`, then routes Play's `Output` and
+engine responses to the right places.
 
-Puzzles will eventually embed `Main.Play` directly for its
-puzzle gallery, without needing this port at all; that's why
-the port stays a host concern instead of living inside Play.
+Engine ports:
+
+  - `engineRequest` (Cmd) — payload-agnostic outbound. JS glue
+    switches on the payload's `op` field to pick the TS function
+    and the response port.
+  - `gameHintResponse` (Sub) — full-game hint responses arrive
+    here as `GameHintReceived` Msgs; Play decodes them in
+    `applyGameHintResponse`. Distinct from Puzzles' generic
+    `engineResponse` channel because the two surfaces have
+    different response shapes and we want each Msg to carry
+    only what it needs.
 
 -}
 
 import Browser
 import Html exposing (Html, div)
 import Html.Attributes exposing (style)
-import Main.Msg exposing (Msg)
+import Json.Encode as Encode
+import Main.Msg as MainMsg exposing (Msg)
 import Main.Play as Play
 import Main.State exposing (Flags, Model)
 
@@ -26,6 +35,19 @@ to match the active session. Fired whenever Play emits
 `SessionChanged`.
 -}
 port setSessionPath : String -> Cmd msg
+
+
+{-| Port: ship a TS-engine request payload to JS. Forwarded
+from Play's `EngineSolveRequested` Output.
+-}
+port engineRequest : Encode.Value -> Cmd msg
+
+
+{-| Port: full-game hint response from the TS engine. Carries
+`{ request_id, ok, lines: string[] }`. Subscribed via
+`MainMsg.GameHintReceived`.
+-}
+port gameHintResponse : (Encode.Value -> msg) -> Sub msg
 
 
 init : Flags -> ( Model, Cmd Msg )
@@ -61,12 +83,13 @@ update msg model =
                 ]
             )
 
-        Play.EngineSolveRequested _ ->
-            -- Full-game host doesn't wire the engine port (only
-            -- the Puzzles host does in TS_ELM_INTEGRATION Phase 1).
-            -- Play guards the request behind `puzzleName /= Nothing`
-            -- so this case is structurally unreachable from Main.elm.
-            ( next, cmd )
+        Play.EngineSolveRequested payload ->
+            ( next
+            , Cmd.batch
+                [ cmd
+                , engineRequest payload
+                ]
+            )
 
 
 view : Model -> Html Msg
@@ -87,8 +110,11 @@ view model =
 
 
 subscriptions : Model -> Sub Msg
-subscriptions =
-    Play.subscriptions
+subscriptions model =
+    Sub.batch
+        [ Play.subscriptions model
+        , gameHintResponse MainMsg.GameHintReceived
+        ]
 
 
 main : Program Flags Model Msg

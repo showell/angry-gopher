@@ -72,3 +72,4 @@ type Msg
     | ClickReplayPauseToggle
     | ActionLogFetched (Result Http.Error ActionLogBundle)
     | EngineSolveResult Encode.Value
+    | GameHintReceived Encode.Value

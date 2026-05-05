@@ -23,6 +23,7 @@ var LynRummyEngine = (() => {
   __export(engine_entry_exports, {
     agentPlay: () => agentPlay,
     findPlay: () => findPlay,
+    gameHintLines: () => gameHintLines,
     jsonStack: () => jsonStack,
     solveBoard: () => solveBoard,
     solveStateWithDescs: () => solveStateWithDescs
@@ -586,18 +587,16 @@ var LynRummyEngine = (() => {
     switch (desc.type) {
       case "free_pull": {
         const graduated = desc.graduated ? " [\u2192COMPLETE]" : "";
-        return `pull ${cardLabel(desc.loose)} onto ${desc.targetBucketBefore} [${stackLabel(desc.targetBefore)}] \u2192 [${stackLabel(desc.result)}]${graduated}`;
+        return `pull ${cardLabel(desc.loose)} onto [${stackLabel(desc.targetBefore)}] \u2192 [${stackLabel(desc.result)}]${graduated}`;
       }
       case "extract_absorb": {
         let spawnedStr = "";
-        if (desc.spawned.length > 0) {
-          spawnedStr += " ; spawn TROUBLE: " + desc.spawned.map((s) => "[" + stackLabel(s) + "]").join(", ");
-        }
-        if (desc.spawnedGrowing.length > 0) {
-          spawnedStr += " ; spawn GROWING: " + desc.spawnedGrowing.map((s) => "[" + stackLabel(s) + "]").join(", ");
+        const allSpawned = [...desc.spawned, ...desc.spawnedGrowing];
+        if (allSpawned.length > 0) {
+          spawnedStr = " ; spawn " + allSpawned.map((s) => "[" + stackLabel(s) + "]").join(", ");
         }
         const graduated = desc.graduated ? " [\u2192COMPLETE]" : "";
-        return `${desc.verb} ${cardLabel(desc.extCard)} from HELPER [${stackLabel(desc.source)}], absorb onto ${desc.targetBucketBefore} [${stackLabel(desc.targetBefore)}] \u2192 [${stackLabel(desc.result)}]${graduated}${spawnedStr}`;
+        return `${desc.verb} ${cardLabel(desc.extCard)} from HELPER [${stackLabel(desc.source)}], absorb onto [${stackLabel(desc.targetBefore)}] \u2192 [${stackLabel(desc.result)}]${graduated}${spawnedStr}`;
       }
       case "shift": {
         const p = cardLabel(desc.pCard);
@@ -618,16 +617,16 @@ var LynRummyEngine = (() => {
         const restLabel = rest.map(cardLabel).join(" ");
         const shifted = pIdx === 0 ? `${p} + ${restLabel}` : `${restLabel} + ${p}`;
         const graduated = desc.graduated ? " [\u2192COMPLETE]" : "";
-        return `shift ${p} to pop ${cardLabel(desc.stolen)} [${stackLabel(desc.newDonor)} -> ${shifted}]; absorb onto ${desc.targetBucketBefore} [${stackLabel(desc.targetBefore)}] \u2192 [${stackLabel(desc.merged)}]${graduated}`;
+        return `shift ${p} to pop ${cardLabel(desc.stolen)} [${stackLabel(desc.newDonor)} -> ${shifted}]; absorb onto [${stackLabel(desc.targetBefore)}] \u2192 [${stackLabel(desc.merged)}]${graduated}`;
       }
       case "splice": {
         return `splice [${cardLabel(desc.loose)}] into HELPER [${stackLabel(desc.source)}] \u2192 [${stackLabel(desc.leftResult)}] + [${stackLabel(desc.rightResult)}]`;
       }
       case "push": {
-        return `push TROUBLE [${stackLabel(desc.troubleBefore)}] onto HELPER [${stackLabel(desc.targetBefore)}] \u2192 [${stackLabel(desc.result)}]`;
+        return `push [${stackLabel(desc.troubleBefore)}] onto HELPER [${stackLabel(desc.targetBefore)}] \u2192 [${stackLabel(desc.result)}]`;
       }
       case "decompose": {
-        return `decompose TROUBLE [${stackLabel(desc.pairBefore)}] \u2192 [${cardLabel(desc.leftCard)}] + [${cardLabel(desc.rightCard)}]`;
+        return `decompose [${stackLabel(desc.pairBefore)}] \u2192 [${cardLabel(desc.leftCard)}] + [${cardLabel(desc.rightCard)}]`;
       }
     }
   }
@@ -2424,36 +2423,102 @@ var LynRummyEngine = (() => {
     const extCard = stackContent[ci];
     const out = [];
     if (ci === 0 && n > 1) {
-      const r = planSplitAfter(sim, stackContent, 1);
-      out.push(...r.prims);
+      const r2 = planSplitAfter(sim, stackContent, 1);
+      out.push(...r2.prims);
       return {
         prims: out,
-        sim: r.sim,
+        sim: r2.sim,
         extSingleton: [extCard],
         remnants: [stackContent.slice(1)]
       };
     }
     if (ci === n - 1 && n > 1) {
-      const r = planSplitAfter(sim, stackContent, n - 1);
-      out.push(...r.prims);
+      const r2 = planSplitAfter(sim, stackContent, n - 1);
+      out.push(...r2.prims);
       return {
         prims: out,
-        sim: r.sim,
+        sim: r2.sim,
         extSingleton: [extCard],
         remnants: [stackContent.slice(0, n - 1)]
       };
     }
-    const a = planSplitAfter(sim, stackContent, ci);
-    out.push(...a.prims);
-    const rightChunk = stackContent.slice(ci);
-    const b = planSplitAfter(a.sim, rightChunk, 1);
-    out.push(...b.prims);
+    const r = planInteriorIsolate(sim, stackContent, ci);
+    out.push(...r.prims);
     return {
       prims: out,
-      sim: b.sim,
+      sim: r.sim,
       extSingleton: [extCard],
       remnants: [stackContent.slice(0, ci), stackContent.slice(ci + 1)]
     };
+  }
+  function planInteriorIsolate(sim, stackContent, ci) {
+    const inPlace = doTwoSplitsAt(sim, stackContent, ci);
+    const productContents = [
+      stackContent.slice(0, ci),
+      [stackContent[ci]],
+      stackContent.slice(ci + 1)
+    ];
+    const productIndices = /* @__PURE__ */ new Set();
+    for (let i = 0; i < inPlace.sim.length; i++) {
+      const s = inPlace.sim[i];
+      for (const pc of productContents) {
+        if (sameContent(s.cards, pc)) {
+          productIndices.add(i);
+          break;
+        }
+      }
+    }
+    if (!hasExternalCrowding(inPlace.sim, productIndices)) {
+      return inPlace;
+    }
+    const n = stackContent.length;
+    const si = findStackIndex(sim, stackContent);
+    const others = sim.filter((_, i) => i !== si);
+    const newLoc = findOpenLoc(others, n);
+    const cur = sim[si].loc;
+    if (newLoc.top === cur.top && newLoc.left === cur.left) {
+      return inPlace;
+    }
+    const move = { action: "move_stack", stackIndex: si, newLoc };
+    const afterMove = applyLocally(sim, move);
+    const splits = doTwoSplitsAt(afterMove, stackContent, ci);
+    return { prims: [move, ...splits.prims], sim: splits.sim };
+  }
+  function sameContent(a, b) {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) {
+      const ca = a[i];
+      const cb = b[i];
+      if (ca[0] !== cb[0] || ca[1] !== cb[1] || ca[2] !== cb[2]) return false;
+    }
+    return true;
+  }
+  function hasExternalCrowding(board, exempt) {
+    const rects = board.map(stackRect);
+    for (let i = 0; i < rects.length; i++) {
+      const paddedI = padRect(rects[i], PLANNING_MARGIN);
+      for (let j = i + 1; j < rects.length; j++) {
+        if (exempt.has(i) && exempt.has(j)) continue;
+        if (rectsOverlap(paddedI, rects[j])) return true;
+      }
+    }
+    return false;
+  }
+  function doTwoSplitsAt(sim, stackContent, ci) {
+    const n = stackContent.length;
+    const kA = ci;
+    const ciA = kA <= Math.floor(n / 2) ? kA - 1 : kA;
+    const siA = findStackIndex(sim, stackContent);
+    const splitA = { action: "split", stackIndex: siA, cardIndex: ciA };
+    const afterA = applyLocally(sim, splitA);
+    const rightChunk = stackContent.slice(ci);
+    const nB = rightChunk.length;
+    const kB = 1;
+    const ciB = kB <= Math.floor(nB / 2) ? kB - 1 : kB;
+    const siB = findStackIndex(afterA, rightChunk);
+    const splitB = { action: "split", stackIndex: siB, cardIndex: ciB };
+    const afterB = applyLocally(afterA, splitB);
+    return { prims: [splitA, splitB], sim: afterB };
   }
   function indexOfCard(arr, target) {
     for (let i = 0; i < arr.length; i++) {
@@ -2591,56 +2656,6 @@ var LynRummyEngine = (() => {
     return r.prims;
   }
 
-  // games/lynrummy/ts/src/wire_json.ts
-  function jsonCard(c) {
-    return { value: c[0], suit: c[1], origin_deck: c[2] };
-  }
-  function jsonBoardCard(c) {
-    return { card: jsonCard(c), state: 0 };
-  }
-  function jsonStack(s) {
-    return {
-      board_cards: s.cards.map(jsonBoardCard),
-      loc: { top: s.loc.top, left: s.loc.left }
-    };
-  }
-  function primToWire(prim, sim) {
-    switch (prim.action) {
-      case "split":
-        return {
-          action: "split",
-          stack: jsonStack(sim[prim.stackIndex]),
-          card_index: prim.cardIndex
-        };
-      case "merge_stack":
-        return {
-          action: "merge_stack",
-          source: jsonStack(sim[prim.sourceStack]),
-          target: jsonStack(sim[prim.targetStack]),
-          side: prim.side
-        };
-      case "merge_hand":
-        return {
-          action: "merge_hand",
-          hand_card: jsonCard(prim.handCard),
-          target: jsonStack(sim[prim.targetStack]),
-          side: prim.side
-        };
-      case "place_hand":
-        return {
-          action: "place_hand",
-          hand_card: jsonCard(prim.handCard),
-          loc: { top: prim.loc.top, left: prim.loc.left }
-        };
-      case "move_stack":
-        return {
-          action: "move_stack",
-          stack: jsonStack(sim[prim.stackIndex]),
-          new_loc: { top: prim.newLoc.top, left: prim.newLoc.left }
-        };
-    }
-  }
-
   // games/lynrummy/ts/src/rules/stack_type.ts
   function successor2(v) {
     return v === 13 ? 1 : v + 1;
@@ -2770,6 +2785,61 @@ var LynRummyEngine = (() => {
     });
     return plan === null ? null : plan.map((p) => p.line);
   }
+  function formatHint(result) {
+    if (result === null) return [];
+    const labels = result.placements.map(cardLabel).join(" ");
+    return [`place [${labels}] from hand`, ...result.plan];
+  }
+
+  // games/lynrummy/ts/src/wire_json.ts
+  function jsonCard(c) {
+    return { value: c[0], suit: c[1], origin_deck: c[2] };
+  }
+  function jsonBoardCard(c) {
+    return { card: jsonCard(c), state: 0 };
+  }
+  function jsonStack(s) {
+    return {
+      board_cards: s.cards.map(jsonBoardCard),
+      loc: { top: s.loc.top, left: s.loc.left }
+    };
+  }
+  function primToWire(prim, sim) {
+    switch (prim.action) {
+      case "split":
+        return {
+          action: "split",
+          stack: jsonStack(sim[prim.stackIndex]),
+          card_index: prim.cardIndex
+        };
+      case "merge_stack":
+        return {
+          action: "merge_stack",
+          source: jsonStack(sim[prim.sourceStack]),
+          target: jsonStack(sim[prim.targetStack]),
+          side: prim.side
+        };
+      case "merge_hand":
+        return {
+          action: "merge_hand",
+          hand_card: jsonCard(prim.handCard),
+          target: jsonStack(sim[prim.targetStack]),
+          side: prim.side
+        };
+      case "place_hand":
+        return {
+          action: "place_hand",
+          hand_card: jsonCard(prim.handCard),
+          loc: { top: prim.loc.top, left: prim.loc.left }
+        };
+      case "move_stack":
+        return {
+          action: "move_stack",
+          stack: jsonStack(sim[prim.stackIndex]),
+          new_loc: { top: prim.newLoc.top, left: prim.newLoc.left }
+        };
+    }
+  }
 
   // games/lynrummy/ts/src/engine_entry.ts
   function solveBoard(board) {
@@ -2809,6 +2879,9 @@ var LynRummyEngine = (() => {
       growing: [],
       complete: []
     });
+  }
+  function gameHintLines(hand, board) {
+    return formatHint(findPlay(hand, board));
   }
   return __toCommonJS(engine_entry_exports);
 })();
