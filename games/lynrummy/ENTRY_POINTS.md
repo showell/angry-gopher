@@ -64,9 +64,12 @@ In `views/`:
 
 ### Mining + fixture generation (repo-root `tools/`)
 
-- `tools/mine_puzzles.py` — generates puzzles from agent
-  gameplay snapshots; writes
-  `games/lynrummy/conformance/mined_seeds.json` directly.
+- `games/lynrummy/ts/tools/generate_puzzles.ts` — self-play-
+  driven puzzle catalog generator. Plays the agent across
+  several seeded games and captures the first state past
+  ~30 cards on board where engine_v2 returns a length-3 plan.
+  Writes `games/lynrummy/puzzles/puzzles.json` (the
+  Elm-loaded gallery catalog). Hard-coded N=5 puzzles.
 - `tools/export_replay_walkthroughs.ts` — concatenates
   per-puzzle primitive sequences from
   `conformance/scenarios/verb_to_primitives_corpus.dsl`
