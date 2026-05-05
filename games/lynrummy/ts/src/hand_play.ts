@@ -49,13 +49,19 @@ import { solveStateWithDescs } from "./engine_v2.ts";
 // (2026-05-03), so 5000 is now a comfortable ceiling.
 const PROJECTION_MAX_STATES = 5000;
 
-// Hint paths cap plan length. A 5+-step hint is rarely useful: an
-// expert who can execute it prefers hunting the moves themselves;
-// a beginner can't follow it. Capping at 4 keeps worst-case wall
-// sub-second on hard mid-game states (Steve, 2026-05-03). The cap
-// applies ONLY here — solveStateWithDescs itself stays "complete"
-// for proof-of-no-plan / conformance work.
-const HINT_MAX_PLAN_LENGTH = 4;
+// Hint paths cap plan length. The cap applies ONLY here —
+// solveStateWithDescs itself stays "complete" for
+// proof-of-no-plan / conformance work.
+//
+// 2026-05-05: bumped 4 → 5 after the seed-42 turn-10/11 stuck-state
+// experiments. At depth 4 the engine gave up on tantalizing boards
+// where a 5-verb plan exists (concrete cases: agent-only self-play
+// turns 10 and 11 of seed 42); at depth 10 it solved both in 1–2s.
+// Depth 5 is the smallest bump that recovers expert-tenacity plays
+// while keeping the BFS branching tractable. Within reach of an
+// engaged human who's willing to think; well past the give-up
+// point of a casual player.
+const HINT_MAX_PLAN_LENGTH = 5;
 
 export interface PlayResult {
   readonly placements: readonly Card[];
