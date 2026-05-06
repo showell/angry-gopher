@@ -268,6 +268,9 @@ function joinBoardRuns(
 export interface GroomStep {
   readonly kind: "groom";
   readonly joins: readonly JoinEvent[];
+  /** Total wall time the agent spent producing this step. For
+   *  grooms this is the joinBoardRuns probe + assertion cost. */
+  readonly wallMs: number;
 }
 
 /** One successful findPlay → applyPlay round-trip. */
@@ -277,6 +280,11 @@ export interface PlayStep {
   readonly planDescs: readonly Desc[];
   readonly findPlayMs: number;
   readonly applyMs: number;
+  /** Total wall time the agent spent producing this step,
+   *  including the cheap groom probe that came up empty. This is
+   *  what the human watching agent-as-Player-Two will perceive
+   *  as "agent thinking…" between primitives. */
+  readonly wallMs: number;
 }
 
 /** Returned by `nextStep` to signal the turn is over (no grooms
@@ -367,12 +375,13 @@ export function nextStep(
   board: readonly (readonly Card[])[],
   hand: readonly Card[],
 ): NextStepResult {
+  const tStart = performance.now();
   // 1. Groom-first. Cheap quadratic probe over board stacks.
   const groomed = joinBoardRuns(board);
   if (groomed.joins.length > 0) {
     assertBoardClean(groomed.board, "nextStep after-groom");
     return {
-      step: { kind: "groom", joins: groomed.joins },
+      step: { kind: "groom", joins: groomed.joins, wallMs: performance.now() - tStart },
       board: groomed.board,
       hand,
     };
@@ -421,6 +430,7 @@ export function nextStep(
       planDescs: next.planDescs,
       findPlayMs,
       applyMs,
+      wallMs: performance.now() - tStart,
     },
     board: next.board,
     hand: next.hand,

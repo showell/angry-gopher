@@ -85,9 +85,10 @@ function shuffle<T>(arr: readonly T[], rand: () => number): T[] {
 function emitGroom(
   sim: BoardStack[],
   joins: readonly JoinEvent[],
+  wallMs: number,
   out: string[],
 ): BoardStack[] {
-  out.push("GROOM");
+  out.push(`GROOM  (${wallMs.toFixed(0)} ms)`);
   let cur: readonly BoardStack[] = sim;
   for (const j of joins) {
     // Reuse the same planner the transcript uses, so the trace shows
@@ -105,10 +106,11 @@ function emitPlay(
   sim: BoardStack[],
   placements: readonly Card[],
   planDescs: readonly any[],
+  wallMs: number,
   out: string[],
 ): BoardStack[] {
   const placeLabel = placements.map(cardLabel).join(" ");
-  out.push(`PLAY  place ${placeLabel}`);
+  out.push(`PLAY  place ${placeLabel}  (${wallMs.toFixed(0)} ms)`);
   const prims = physicalPlan(sim, placements, planDescs);
   let cur: readonly BoardStack[] = sim;
   for (const p of prims) {
@@ -143,6 +145,8 @@ function main(): void {
   out.push(`# Agent self-play trace — seed ${seed}`);
   out.push("");
 
+  let worstWallMs = 0;
+  let worstWallLabel = "";
   let turnNum = 1;
   while (deck.length > STOP_AT_DECK && turnNum <= 200) {
     const handBefore = hands[active]!.length;
@@ -155,10 +159,16 @@ function main(): void {
     const r = simulateFullTurn(board, hands[active]!, deck, turnNum, active);
 
     for (const step of r.record.steps) {
+      if (step.wallMs > worstWallMs) {
+        worstWallMs = step.wallMs;
+        worstWallLabel = step.kind === "play"
+          ? `T${turnNum} place ${step.placements.map(cardLabel).join(" ")}`
+          : `T${turnNum} groom`;
+      }
       if (step.kind === "groom") {
-        sim = emitGroom(sim, step.joins, out);
+        sim = emitGroom(sim, step.joins, step.wallMs, out);
       } else {
-        sim = emitPlay(sim, step.placements, step.planDescs, out);
+        sim = emitPlay(sim, step.placements, step.planDescs, step.wallMs, out);
       }
     }
 
@@ -180,6 +190,7 @@ function main(): void {
   out.push("---");
   out.push("");
   out.push(`stopped: deck=${deck.length} (≤${STOP_AT_DECK}); ${turnNum - 1} turns played`);
+  out.push(`worst step: ${worstWallMs.toFixed(0)} ms (${worstWallLabel})`);
 
   process.stdout.write(out.join("\n") + "\n");
 }
