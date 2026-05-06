@@ -13,7 +13,7 @@ state types.
 
 import Game.Physics.GestureArbitration as GA
 import Game.Physics.WingOracle exposing (WingId)
-import Main.State exposing (GesturePoint, PathFrame, Point)
+import Main.Types exposing (GesturePoint, PathFrame, Point)
 
 
 {-| The data shape produced when a board-card drag starts —
@@ -27,15 +27,6 @@ The game's `startBoardCardDrag` constructs one of these and
 assembles a `Dragging` from it; the eventual puzzle drag
 handler can construct the same shape and assemble its own
 state-machine variant from it.
-
-Caveat: `Point`, `PathFrame`, `GesturePoint` currently still
-live in `Main.State`. Moving them to a neutral location is
-its own follow-up; for now this type's transitive deps reach
-into `Main.State` for those primitives. The decoupling that
-matters today is "the type's NAME and shape are not in
-`Main.State`," so a non-game caller can import
-`Game.Drag.BoardCardDragStartInfo` directly without touching
-the game's `Model` or `DragState` constructors.
 
 -}
 type alias BoardCardDragStartInfo =

@@ -37,7 +37,8 @@ import Game.CardStack exposing (BoardCard, BoardCardState(..), CardStack)
 import Game.Replay.DragAnimation as DA
 import Game.Replay.Space as Space
 import Game.WireAction as WA exposing (WireAction)
-import Main.State exposing (DragState(..), DragSource(..), GesturePoint, PathFrame(..))
+import Main.State exposing (DragState(..), DragSource(..))
+import Main.Types exposing (GesturePoint, PathFrame(..))
 import Test exposing (Test, describe, test)
 
 

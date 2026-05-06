@@ -83,12 +83,11 @@ import Main.State as State
         , DragSource(..)
         , DragState(..)
         , Model
-        , PathFrame(..)
-        , Point
         , StatusKind(..)
         , activeHand
         , boardDomIdFor
         )
+import Main.Types exposing (GesturePoint, PathFrame(..), Point)
 import Main.Wire as Wire
 import Task
 
@@ -344,7 +343,7 @@ measurement. `CompleteTurn` and `Undo` aren't drags.
 -}
 gestureForAction :
     WireAction
-    -> List State.GesturePoint
+    -> List GesturePoint
     -> PathFrame
     -> Maybe State.EnvelopeForGesture
 gestureForAction action path pathFrame =

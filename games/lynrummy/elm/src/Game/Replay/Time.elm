@@ -50,10 +50,10 @@ import Main.State as State
     exposing
         ( DragState(..)
         , Model
-        , PathFrame
         , ReplayAnimationState(..)
         , StatusKind(..)
         )
+import Main.Types exposing (GesturePoint, PathFrame, Point)
 import Task
 import Time
 
@@ -266,7 +266,7 @@ path). The decision tree:
 -}
 prepareReplayStep :
     WireAction
-    -> Maybe (List State.GesturePoint)
+    -> Maybe (List GesturePoint)
     -> PathFrame
     -> Model
     -> Float
@@ -488,7 +488,7 @@ synchronous board-drag primitive.
 -}
 startBoardAnim :
     WireAction
-    -> List State.GesturePoint
+    -> List GesturePoint
     -> PathFrame
     -> Model
     -> Float
@@ -567,7 +567,7 @@ to the matching Animate module to build the AnimationInfo.
 -}
 finishHandAnim :
     WireAction
-    -> State.Point
+    -> Point
     -> Float
     -> State.DragSource
     -> Model

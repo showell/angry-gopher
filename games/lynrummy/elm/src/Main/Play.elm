@@ -58,6 +58,7 @@ import Main.State as State
         , encodeRemoteState
         , setActiveHand
         )
+import Main.Types as Types
 import Main.View as View exposing (popupForCompleteTurn, statusForCompleteTurn)
 import Main.Wire as Wire exposing (fetchActionLog, fetchNewSession)
 import Time
@@ -261,7 +262,7 @@ logAndScold label err status model =
 -- UPDATE HELPERS
 
 
-mouseMove : State.Point -> Float -> Model -> ( Model, Cmd Msg )
+mouseMove : Types.Point -> Float -> Model -> ( Model, Cmd Msg )
 mouseMove pos tMs model =
     case model.drag of
         Dragging info ctx arb ->
@@ -346,7 +347,7 @@ clickCompleteTurn model =
                 completeTurnEntry =
                     { action = WA.CompleteTurn
                     , gesturePath = Nothing
-                    , pathFrame = State.ViewportFrame
+                    , pathFrame = Types.ViewportFrame
                     }
 
                 newModel =
@@ -386,7 +387,7 @@ clickUndo model =
                 undoEntry =
                     { action = WA.Undo
                     , gesturePath = Nothing
-                    , pathFrame = State.ViewportFrame
+                    , pathFrame = Types.ViewportFrame
                     }
 
                 seq =

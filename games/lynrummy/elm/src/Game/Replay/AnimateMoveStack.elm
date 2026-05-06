@@ -7,12 +7,13 @@ present (server-enforced), so synchronous — no DOM measure.
 import Game.CardStack exposing (CardStack, BoardLocation)
 import Game.Replay.Space as Space
 import Game.WireAction as WA
-import Main.State as State exposing (Model, PathFrame)
+import Main.State exposing (Model)
+import Main.Types exposing (GesturePoint, PathFrame)
 
 
 start :
     { stack : CardStack, newLoc : BoardLocation }
-    -> List State.GesturePoint
+    -> List GesturePoint
     -> PathFrame
     -> Model
     -> Float

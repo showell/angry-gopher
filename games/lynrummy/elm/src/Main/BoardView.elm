@@ -41,9 +41,9 @@ import Main.State
         , DragSource(..)
         , DragState(..)
         , Model
-        , PathFrame(..)
         , boardDomIdFor
         )
+import Main.Types exposing (PathFrame(..))
 
 
 

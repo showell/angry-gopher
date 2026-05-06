@@ -44,10 +44,9 @@ import Main.State as State
         ( DragSource(..)
         , DragState(..)
         , Model
-        , PathFrame(..)
-        , Point
         , activeHand
         )
+import Main.Types exposing (GesturePoint, PathFrame(..), Point)
 
 
 
@@ -65,7 +64,7 @@ downstream of capture needs the cursor↔card offset.
 -}
 type alias AnimationInfo =
     { startMs : Float
-    , path : List State.GesturePoint
+    , path : List GesturePoint
     , source : DragSource
     , pathFrame : PathFrame
     , pendingAction : WireAction
@@ -155,7 +154,7 @@ proportional to distance at `dragMsPerPixel`. The returned
 samples' coordinate frame matches `start` and `end`'s frame —
 the caller is responsible for being consistent.
 -}
-linearPath : Point -> Point -> Float -> List State.GesturePoint
+linearPath : Point -> Point -> Float -> List GesturePoint
 linearPath start end nowMs =
     let
         dx =
@@ -195,7 +194,7 @@ floater eases out of rest and into rest more pronouncedly than
 cosine). 20 samples is dense enough that linear interpolation
 between them reads smoothly through the fast middle.
 -}
-easedPath : Point -> Point -> Float -> List State.GesturePoint
+easedPath : Point -> Point -> Float -> List GesturePoint
 easedPath start end nowMs =
     let
         dx =
@@ -266,7 +265,7 @@ synthesizeBoardPath :
     WireAction
     -> Model
     -> Float
-    -> Maybe ( List State.GesturePoint, PathFrame )
+    -> Maybe ( List GesturePoint, PathFrame )
 synthesizeBoardPath action model nowMs =
     boardEndpoints action model
         |> Maybe.map
@@ -349,7 +348,7 @@ and paths are recorded with the exact loc), so this isn't a
 fuzzy match.
 
 -}
-isPathStillValid : List State.GesturePoint -> WireAction -> Model -> Bool
+isPathStillValid : List GesturePoint -> WireAction -> Model -> Bool
 isPathStillValid path action model =
     case ( List.head path, expectedStartFor action model ) of
         ( Just first, Just expected ) ->
@@ -374,7 +373,7 @@ expectedStartFor action model =
         |> Maybe.map Tuple.first
 
 
-pathDuration : List State.GesturePoint -> Float
+pathDuration : List GesturePoint -> Float
 pathDuration path =
     case ( List.head path, List.head (List.reverse path) ) of
         ( Just first, Just last ) ->
@@ -390,7 +389,7 @@ to first/last point at the bounds. Returns `Nothing` for an
 empty path — callers must handle (treat as "animation done"
 or skip).
 -}
-interpPath : List State.GesturePoint -> Float -> Maybe Point
+interpPath : List GesturePoint -> Float -> Maybe Point
 interpPath path elapsedMs =
     case path of
         [] ->
@@ -404,7 +403,7 @@ interpPath path elapsedMs =
             Just (interpPathHelp first path targetTs)
 
 
-interpPathHelp : State.GesturePoint -> List State.GesturePoint -> Float -> Point
+interpPathHelp : GesturePoint -> List GesturePoint -> Float -> Point
 interpPathHelp prev remaining targetTs =
     case remaining of
         [] ->
