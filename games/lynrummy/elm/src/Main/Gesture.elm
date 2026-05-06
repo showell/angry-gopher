@@ -62,6 +62,7 @@ for merge / place / move.
 -}
 
 import Browser.Dom
+import Game.Drag exposing (BoardCardDragStartInfo)
 import Game.Physics.BoardGeometry as BG
 import Game.Rules.Card exposing (Card)
 import Game.CardStack as CardStack exposing (BoardLocation, CardStack, HandCard)
@@ -113,9 +114,6 @@ startBoardCardDrag { stack, cardIndex } clientPoint tMs model =
     case model.drag of
         NotDragging ->
             let
-                wings =
-                    WingOracle.wingsForStack stack model.board
-
                 -- Intra-board: the floater starts exactly
                 -- where the stack is. `stack.loc` is
                 -- already in board frame, so no translation
@@ -125,19 +123,35 @@ startBoardCardDrag { stack, cardIndex } clientPoint tMs model =
                 -- frame by CSS construction.
                 initialFloater =
                     { x = stack.loc.left, y = stack.loc.top }
+
+                startInfo : BoardCardDragStartInfo
+                startInfo =
+                    { cursor = clientPoint
+                    , floaterTopLeft = initialFloater
+                    , pathFrame = BoardFrame
+                    , gesturePath =
+                        [ { tMs = tMs, x = initialFloater.x, y = initialFloater.y } ]
+                    , wings = WingOracle.wingsForStack stack model.board
+                    , boardRect = Nothing
+                    , clickIntent = Just cardIndex
+                    , originalCursor = clientPoint
+                    }
             in
             ( { model
                 | drag =
                     Dragging
                         { source = FromBoardStack stack
-                        , cursor = clientPoint
-                        , floaterTopLeft = initialFloater
-                        , pathFrame = BoardFrame
-                        , gesturePath =
-                            [ { tMs = tMs, x = initialFloater.x, y = initialFloater.y } ]
+                        , cursor = startInfo.cursor
+                        , floaterTopLeft = startInfo.floaterTopLeft
+                        , pathFrame = startInfo.pathFrame
+                        , gesturePath = startInfo.gesturePath
                         }
-                        { wings = wings, boardRect = Nothing }
-                        { clickIntent = Just cardIndex, originalCursor = clientPoint }
+                        { wings = startInfo.wings
+                        , boardRect = startInfo.boardRect
+                        }
+                        { clickIntent = startInfo.clickIntent
+                        , originalCursor = startInfo.originalCursor
+                        }
               }
             , fetchBoardRect model.gameId
             )
