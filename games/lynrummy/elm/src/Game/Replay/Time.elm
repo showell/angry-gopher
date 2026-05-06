@@ -41,6 +41,7 @@ import Game.Replay.AnimateMergeStack as AnimateMergeStack
 import Game.Replay.AnimateMoveStack as AnimateMoveStack
 import Game.Replay.AnimatePlaceHand as AnimatePlaceHand
 import Game.Replay.DragAnimation as DragAnimation
+import Game.Replay.Snapshot exposing (Snapshot)
 import Game.Replay.Space as Space
 import Game.Score as Score
 import Game.WireAction as WA exposing (WireAction)
@@ -56,6 +57,24 @@ import Main.State as State
         )
 import Task
 import Time
+
+
+
+-- BRIDGE
+--
+-- Time.elm is the only Replay module that bridges the parent
+-- Model to the snapshot-pure inner helpers. This local helper
+-- IS that bridge — every call into Space / Animate* / Snapshot
+-- threads through it so the inner helpers never see the Model.
+
+
+snapshotFromModel : Model -> Snapshot
+snapshotFromModel model =
+    { board = model.board
+    , hands = model.hands
+    , activePlayerIndex = model.activePlayerIndex
+    , boardRect = model.replayBoardRect
+    }
 
 
 
@@ -304,7 +323,7 @@ prepareReplayStep action maybePath frame model nowMs =
                     jitOrApply
 
                 _ ->
-                    case startBoardAnim action path frame model nowMs of
+                    case startBoardAnim action path frame snapshot nowMs of
                         Just anim ->
                             startAnimating anim
 
@@ -323,10 +342,13 @@ prepareReplayStep action maybePath frame model nowMs =
                             -- here keeps the gap from being silent.
                             jitOrApply
 
+        snapshot =
+            snapshotFromModel model
+
         jitOrApply =
-            case Space.synthesizeBoardPath action model nowMs of
+            case Space.synthesizeBoardPath action snapshot nowMs of
                 Just ( synthPath, synthFrame ) ->
-                    case startBoardAnim action synthPath synthFrame model nowMs of
+                    case startBoardAnim action synthPath synthFrame snapshot nowMs of
                         Just anim ->
                             startAnimating anim
 
@@ -336,7 +358,7 @@ prepareReplayStep action maybePath frame model nowMs =
                 Nothing ->
                     -- No JIT recipe for this action shape. Try
                     -- the hand-origin async measurement path.
-                    case prepareHandAnim action model of
+                    case prepareHandAnim action snapshot of
                         Just result ->
                             ( { model
                                 | replayAnim =
@@ -359,7 +381,7 @@ prepareReplayStep action maybePath frame model nowMs =
     in
     case maybePath of
         Just (p :: rest) ->
-            if Space.isPathStillValid (p :: rest) action model then
+            if Space.isPathStillValid (p :: rest) action snapshot then
                 animateFromCaptured (p :: rest)
 
             else
@@ -398,7 +420,7 @@ handCardRectReceived result model =
                     Space.elementTopLeftInViewport element
 
                 maybeAnim =
-                    finishHandAnim ctx.action origin nowMs ctx.source model
+                    finishHandAnim ctx.action origin nowMs ctx.source (snapshotFromModel model)
             in
             let
                 applyNow =
@@ -490,10 +512,10 @@ startBoardAnim :
     WireAction
     -> List State.GesturePoint
     -> PathFrame
-    -> Model
+    -> Snapshot
     -> Float
     -> Maybe Space.AnimationInfo
-startBoardAnim action path frame model nowMs =
+startBoardAnim action path frame snapshot nowMs =
     case action of
         WA.Split _ ->
             -- Splits are CLICKS in the live UI — a single event
@@ -507,10 +529,10 @@ startBoardAnim action path frame model nowMs =
             Nothing
 
         WA.MergeStack payload ->
-            AnimateMergeStack.start payload path frame model nowMs
+            AnimateMergeStack.start payload path frame snapshot nowMs
 
         WA.MoveStack payload ->
-            AnimateMoveStack.start payload path frame model nowMs
+            AnimateMoveStack.start payload path frame snapshot nowMs
 
         _ ->
             Nothing
@@ -519,17 +541,17 @@ startBoardAnim action path frame model nowMs =
 {-| Dispatch the synchronous phase 1 of hand-origin replay to
 the matching per-primitive Animate module. Nothing means the
 action isn't hand-origin (shouldn't reach this helper) or the
-hand card can't be resolved on the current model.
+hand card can't be resolved on the current snapshot.
 -}
-prepareHandAnim : WireAction -> Model -> Maybe HandPrepareResult
-prepareHandAnim action model =
+prepareHandAnim : WireAction -> Snapshot -> Maybe HandPrepareResult
+prepareHandAnim action snapshot =
     case action of
         WA.MergeHand payload ->
-            AnimateMergeHand.prepare payload model
+            AnimateMergeHand.prepare payload snapshot
                 |> Maybe.map prepareResultFromMergeHand
 
         WA.PlaceHand payload ->
-            AnimatePlaceHand.prepare payload model
+            AnimatePlaceHand.prepare payload snapshot
                 |> Maybe.map prepareResultFromPlaceHand
 
         _ ->
@@ -570,15 +592,15 @@ finishHandAnim :
     -> State.Point
     -> Float
     -> State.DragSource
-    -> Model
+    -> Snapshot
     -> Maybe Space.AnimationInfo
-finishHandAnim action origin nowMs source model =
+finishHandAnim action origin nowMs source snapshot =
     case action of
         WA.MergeHand payload ->
-            AnimateMergeHand.finish payload origin nowMs source model
+            AnimateMergeHand.finish payload origin nowMs source snapshot
 
         WA.PlaceHand payload ->
-            AnimatePlaceHand.finish payload origin nowMs source model
+            AnimatePlaceHand.finish payload origin nowMs source snapshot
 
         _ ->
             Nothing

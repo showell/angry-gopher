@@ -15,21 +15,23 @@ module Game.Replay.Space exposing
 
 {-| The spatial half of Instant Replay.
 
-Given a `WireAction` + the current Model, answer **where** the
-drag happened — AND in **which frame**. The board is a self-
-contained widget; for intra-board drags, coords live in
-board frame and the floater is rendered as a DOM child of the
-board div so CSS handles board→viewport for free. Hand-origin
-drags cross the board widget boundary and use viewport coords;
-for those we DOM-measure at replay time.
+Given a `WireAction` + a `Snapshot` of the world, answer
+**where** the drag happened — AND in **which frame**. The
+board is a self-contained widget; for intra-board drags, coords
+live in board frame and the floater is rendered as a DOM child
+of the board div so CSS handles board→viewport for free.
+Hand-origin drags cross the board widget boundary and use
+viewport coords; for those we DOM-measure at replay time and
+the measurement lands in `Snapshot.boardRect`.
 
 Pure functions only — no Msg, no I/O, no subscriptions, no
-DOM measurement of its own. Callers in `Game.Replay.Time` (and
-in `Main.elm` for the async HandCardRectReceived continuation)
-feed in Model state; this module does the math.
+DOM measurement of its own. Callers feed in a Snapshot; this
+module does the math. The Snapshot type is the entire input
+surface — never reach back into the parent Model from here.
 
-See `Game.Replay.Time` for the companion clock half: which step
-are we on, has the beat elapsed, when does the next step fire?
+See `Game.Replay.Time` for the companion clock half (and
+the orchestrator that constructs the Snapshot from the
+parent Model at each call).
 
 -}
 
@@ -38,15 +40,14 @@ import Game.BoardActions as BoardActions
 import Game.Physics.BoardGeometry as BG
 import Game.Rules.Card exposing (Card)
 import Game.CardStack as CardStack exposing (CardStack)
+import Game.Replay.Snapshot as Snapshot exposing (Snapshot)
 import Game.WireAction as WA exposing (WireAction)
 import Main.State as State
     exposing
         ( DragSource(..)
         , DragState(..)
-        , Model
         , PathFrame(..)
         , Point
-        , activeHand
         )
 
 
@@ -97,9 +98,9 @@ frame using the live DOM-measured board rect. Returns
 absence explicitly rather than silently falling back to
 pinned constants.
 -}
-pointInLiveViewport : Model -> { left : Int, top : Int } -> Maybe Point
-pointInLiveViewport model loc =
-    model.replayBoardRect
+pointInLiveViewport : Snapshot -> { left : Int, top : Int } -> Maybe Point
+pointInLiveViewport snapshot loc =
+    snapshot.boardRect
         |> Maybe.map
             (\rect ->
                 { x = rect.x + loc.left, y = rect.y + loc.top }
@@ -118,8 +119,8 @@ by `AnimateMergeHand.finish` to compute the destination of
 the synthesized drag path.
 
 -}
-stackLandingInLiveViewport : Model -> CardStack -> BoardActions.Side -> Maybe Point
-stackLandingInLiveViewport model stack side =
+stackLandingInLiveViewport : Snapshot -> CardStack -> BoardActions.Side -> Maybe Point
+stackLandingInLiveViewport snapshot stack side =
     let
         size =
             CardStack.size stack
@@ -132,7 +133,7 @@ stackLandingInLiveViewport model stack side =
                 BoardActions.Left ->
                     stack.loc.left - BG.cardPitch
     in
-    pointInLiveViewport model { left = landingLeft, top = stack.loc.top }
+    pointInLiveViewport snapshot { left = landingLeft, top = stack.loc.top }
 
 
 
@@ -264,11 +265,11 @@ so every drag the player sees is synthesized here.
 -}
 synthesizeBoardPath :
     WireAction
-    -> Model
+    -> Snapshot
     -> Float
     -> Maybe ( List State.GesturePoint, PathFrame )
-synthesizeBoardPath action model nowMs =
-    boardEndpoints action model
+synthesizeBoardPath action snapshot nowMs =
+    boardEndpoints action snapshot
         |> Maybe.map
             (\( start, end ) ->
                 ( easedPath start end nowMs, BoardFrame )
@@ -293,11 +294,11 @@ both sides:
     aren't pinned in board coords.
 
 -}
-boardEndpoints : WireAction -> Model -> Maybe ( Point, Point )
-boardEndpoints action model =
+boardEndpoints : WireAction -> Snapshot -> Maybe ( Point, Point )
+boardEndpoints action snapshot =
     case action of
         WA.MoveStack p ->
-            CardStack.findStack p.stack model.board
+            CardStack.findStack p.stack snapshot.board
                 |> Maybe.map
                     (\src ->
                         ( { x = src.loc.left, y = src.loc.top }
@@ -327,8 +328,8 @@ boardEndpoints action model =
                     , { x = endLeft + 2, y = tgt.loc.top - 2 }
                     )
                 )
-                (CardStack.findStack p.source model.board)
-                (CardStack.findStack p.target model.board)
+                (CardStack.findStack p.source snapshot.board)
+                (CardStack.findStack p.target snapshot.board)
 
         _ ->
             Nothing
@@ -349,9 +350,9 @@ and paths are recorded with the exact loc), so this isn't a
 fuzzy match.
 
 -}
-isPathStillValid : List State.GesturePoint -> WireAction -> Model -> Bool
-isPathStillValid path action model =
-    case ( List.head path, expectedStartFor action model ) of
+isPathStillValid : List State.GesturePoint -> WireAction -> Snapshot -> Bool
+isPathStillValid path action snapshot =
+    case ( List.head path, expectedStartFor action snapshot ) of
         ( Just first, Just expected ) ->
             first.x == expected.x && first.y == expected.y
 
@@ -368,9 +369,9 @@ isPathStillValid path action model =
             False
 
 
-expectedStartFor : WireAction -> Model -> Maybe Point
-expectedStartFor action model =
-    boardEndpoints action model
+expectedStartFor : WireAction -> Snapshot -> Maybe Point
+expectedStartFor action snapshot =
+    boardEndpoints action snapshot
         |> Maybe.map Tuple.first
 
 
@@ -435,17 +436,17 @@ interpPathHelp prev remaining targetTs =
 -- DRAG SOURCE
 
 
-boardStackSource : CardStack -> Model -> Maybe DragSource
-boardStackSource ref model =
-    CardStack.findStack ref model.board
+boardStackSource : CardStack -> Snapshot -> Maybe DragSource
+boardStackSource ref snapshot =
+    CardStack.findStack ref snapshot.board
         |> Maybe.map FromBoardStack
 
 
-handCardSource : Card -> Model -> Maybe DragSource
-handCardSource card model =
+handCardSource : Card -> Snapshot -> Maybe DragSource
+handCardSource card snapshot =
     let
         hand =
-            activeHand model
+            Snapshot.activeHand snapshot
 
         present =
             List.any (\hc -> hc.card == card) hand.handCards

@@ -1145,8 +1145,15 @@ synthesizeAgentGestures initialModel prims =
 
                 p :: rest ->
                     let
+                        simSnapshot =
+                            { board = simModel.board
+                            , hands = simModel.hands
+                            , activePlayerIndex = simModel.activePlayerIndex
+                            , boardRect = simModel.replayBoardRect
+                            }
+
                         synth =
-                            ReplaySpace.synthesizeBoardPath p simModel 0
+                            ReplaySpace.synthesizeBoardPath p simSnapshot 0
                                 |> Maybe.map (\( path, frame ) -> { path = path, frame = frame })
 
                         nextSim =

@@ -25,12 +25,12 @@ Companion: `Game.Replay.AnimatePlaceHand`.
 import Game.BoardActions exposing (Side)
 import Game.Rules.Card exposing (Card)
 import Game.CardStack as CardStack exposing (CardStack)
+import Game.Replay.Snapshot exposing (Snapshot)
 import Game.Replay.Space as Space
 import Game.WireAction as WA
 import Main.State
     exposing
         ( DragSource
-        , Model
         , PathFrame(..)
         , Point
         )
@@ -48,11 +48,11 @@ type alias PrepareResult =
 
 {-| Resolve the source hand card and name it for DOM
 measurement. Returns Nothing if the card isn't in the current
-hand — treated as a wire/model drift rather than a crash.
+hand — treated as a wire/snapshot drift rather than a crash.
 -}
-prepare : { handCard : Card, target : CardStack, side : Side } -> Model -> Maybe PrepareResult
-prepare payload model =
-    Space.handCardSource payload.handCard model
+prepare : { handCard : Card, target : CardStack, side : Side } -> Snapshot -> Maybe PrepareResult
+prepare payload snapshot =
+    Space.handCardSource payload.handCard snapshot
         |> Maybe.map
             (\source ->
                 { source = source
@@ -76,13 +76,13 @@ finish :
     -> Point
     -> Float
     -> DragSource
-    -> Model
+    -> Snapshot
     -> Maybe Space.AnimationInfo
-finish payload origin nowMs source model =
-    CardStack.findStack payload.target model.board
+finish payload origin nowMs source snapshot =
+    CardStack.findStack payload.target snapshot.board
         |> Maybe.andThen
             (\stack ->
-                Space.stackLandingInLiveViewport model stack payload.side
+                Space.stackLandingInLiveViewport snapshot stack payload.side
                     |> Maybe.map
                         (\landing ->
                             { startMs = nowMs
