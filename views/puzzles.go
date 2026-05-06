@@ -17,10 +17,10 @@
 // (next-puzzle-session-id.txt) and live in their own on-disk
 // namespace (data/lynrummy-elm/puzzle-sessions/<id>/...),
 // distinct from full-game sessions. Each action write lands
-// at puzzle-sessions/<id>/<puzzle_name>/actions/<seq>.json;
-// annotations land alongside under .../annotations/<seq>.json
-// with a per-puzzle seq picked server-side because the Elm
-// side doesn't track an annotation seq counter.
+// at puzzle-sessions/<id>/<puzzle_name>/actions.jsonl as one
+// appended line per POST; annotations land alongside under
+// .../annotations.jsonl. The seq Elm assigns rides inside each
+// envelope.
 //
 // Path segments are URL-driven, not body-peeked: the handler
 // reads session_id and puzzle_name from the URL only. The
@@ -125,16 +125,9 @@ func handlePuzzleSessionRoute(w http.ResponseWriter, r *http.Request, rest strin
 	}
 }
 
-// puzzleActionWrite writes the POST body to
-// puzzle-sessions/<id>/<puzzle_name>/actions/<seq>.json. The
-// seq comes from the URL too — but here it's implicit: Elm
-// posts to /action and the server picks the next seq, mirroring
-// how annotations work. This keeps the Elm side ignorant of
-// per-puzzle seq state across panels.
-//
-// (We could also accept an explicit seq path segment; we don't
-// need to. Last-write-wins per URL would still hold; the
-// next-seq pick is the simpler shape.)
+// puzzleActionWrite appends one envelope to
+// puzzle-sessions/<id>/<puzzle_name>/actions.jsonl. The seq Elm
+// assigned rides inside the body.
 func puzzleActionWrite(w http.ResponseWriter, r *http.Request, sessionID int64, puzzleName string) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -145,20 +138,17 @@ func puzzleActionWrite(w http.ResponseWriter, r *http.Request, sessionID int64, 
 		http.Error(w, "read body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	files, _ := listDir(puzzleSubPath(sessionID, puzzleName, "actions"))
-	nextSeq := int64(len(files) + 1)
-	rel := puzzleName + "/actions/" + strconv.FormatInt(nextSeq, 10) + ".json"
-	if err := WritePuzzleSessionFile(sessionID, rel, body); err != nil {
-		http.Error(w, "write: "+err.Error(), http.StatusInternalServerError)
+	rel := puzzleName + "/actions.jsonl"
+	if err := AppendPuzzleSessionLine(sessionID, rel, body); err != nil {
+		http.Error(w, "append: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	fmt.Fprint(w, `{"ok":true}`)
 }
 
-// puzzleAnnotateWrite writes a per-puzzle annotation. Server
-// picks the next seq under
-// puzzle-sessions/<id>/<puzzle_name>/annotations/.
+// puzzleAnnotateWrite appends one envelope to
+// puzzle-sessions/<id>/<puzzle_name>/annotations.jsonl.
 func puzzleAnnotateWrite(w http.ResponseWriter, r *http.Request, sessionID int64, puzzleName string) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -169,20 +159,13 @@ func puzzleAnnotateWrite(w http.ResponseWriter, r *http.Request, sessionID int64
 		http.Error(w, "read body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	files, _ := ListPuzzleSessionAnnotationFiles(sessionID, puzzleName)
-	nextSeq := int64(len(files) + 1)
-	rel := puzzleName + "/annotations/" + strconv.FormatInt(nextSeq, 10) + ".json"
-	if err := WritePuzzleSessionFile(sessionID, rel, body); err != nil {
-		http.Error(w, "write: "+err.Error(), http.StatusInternalServerError)
+	rel := puzzleName + "/annotations.jsonl"
+	if err := AppendPuzzleSessionLine(sessionID, rel, body); err != nil {
+		http.Error(w, "append: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Write([]byte(`{"ok":true}`))
-}
-
-// puzzleSubPath builds <puzzle-session-dir>/<puzzleName>/<sub>.
-func puzzleSubPath(sessionID int64, puzzleName, sub string) string {
-	return PuzzleSessionDir(sessionID) + "/" + puzzleName + "/" + sub
 }
 
 func puzzlesPage(w http.ResponseWriter) {

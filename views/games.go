@@ -90,7 +90,7 @@ func renderRecentSessions(w http.ResponseWriter) {
 	}
 	for _, id := range ids {
 		meta, _ := ReadSessionMeta(id)
-		files, _ := ListActionFiles(id)
+		count, _ := CountSessionActions(id)
 		ts := ""
 		if t := SessionCreatedAt(meta); t > 0 {
 			ts = time.Unix(t, 0).In(eastern).Format("Jan 2, 2006 · 3:04 PM MST")
@@ -104,7 +104,7 @@ func renderRecentSessions(w http.ResponseWriter) {
 		fmt.Fprintf(w,
 			`<tr><td>%d</td><td>%s</td><td>%s</td><td class="n">%d</td>`+
 				`<td><a href="/gopher/lynrummy-elm/play/%d">Resume →</a></td></tr>`,
-			id, html.EscapeString(ts), labelCell, len(files), id,
+			id, html.EscapeString(ts), labelCell, count, id,
 		)
 	}
 	fmt.Fprint(w, `</table></div>`)

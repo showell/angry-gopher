@@ -2677,7 +2677,7 @@ var LynRummyEngine = (() => {
 
   // games/lynrummy/ts/src/hand_play.ts
   var PROJECTION_MAX_STATES = 5e3;
-  var HINT_MAX_PLAN_LENGTH = 4;
+  var HINT_MAX_PLAN_LENGTH = 5;
   function findPlay(hand, board, opts = {}) {
     const maxStates = opts.maxStates ?? PROJECTION_MAX_STATES;
     const stats = opts.stats;

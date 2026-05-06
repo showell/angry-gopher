@@ -470,12 +470,13 @@ the agent.
   the normal telemetry pipeline.
 - Per-attempt session data: a single page-load session under
   `data/lynrummy-elm/puzzle-sessions/<id>/` hosts every
-  puzzle on the page. Actions land at
-  `<puzzle_name>/actions/<seq>.json` and annotations at
-  `<puzzle_name>/annotations/<seq>.json` — keyed in the URL
+  puzzle on the page. Actions append to
+  `<puzzle_name>/actions.jsonl` and annotations to
+  `<puzzle_name>/annotations.jsonl` — keyed in the URL
   (`POST /gopher/puzzles/sessions/<id>/<puzzle_name>/action`),
   not body-peeked — so each puzzle's per-Play seq counter
-  (which restarts at 1) doesn't clobber its siblings.
+  (which restarts at 1, embedded in each line) doesn't clobber
+  its siblings.
   Puzzle sessions live in their own top-level namespace
   separate from full-game sessions
   (`data/lynrummy-elm/sessions/`); they allocate ids from a

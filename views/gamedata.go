@@ -1,9 +1,9 @@
 // gamedata: filesystem-backed storage for LynRummy session data.
 //
 // The Go server is a dumb URL-keyed file store for LynRummy.
-// POSTs land at paths under games/lynrummy/data/ that mirror
-// the URL the Elm client hit. Last-write-wins per URL. The
-// only "smart" exception is sequential session-id allocation
+// POSTs land at paths under games/lynrummy/data/. Last-write-wins
+// for meta; actions and annotations are append-only JSONL streams.
+// The only "smart" exception is sequential session-id allocation
 // via a per-namespace counter file.
 //
 // Two top-level namespaces, each with its own id counter:
@@ -14,25 +14,36 @@
 //     lynrummy-elm/
 //       sessions/<id>/                     # full-game sessions
 //         meta.json                        # {label, deck_seed, created_at, [initial_state]}
-//         actions/<seq>.json               # full-game action; Elm assigns seq
-//         annotations/<seq>.json           # full-game annotation (rare)
+//         actions.jsonl                    # one action per line; Elm-assigned seq embedded
+//         annotations.jsonl                # one annotation per line (rare)
 //       puzzle-sessions/<id>/              # puzzle gallery sessions
 //         meta.json                        # {label, created_at}
 //         <puzzle_name>/
-//           actions/<seq>.json             # per-puzzle seq from Elm Play instance
-//           annotations/<seq>.json         # per-puzzle seq picked server-side
+//           actions.jsonl                  # per-puzzle action stream
+//           annotations.jsonl              # per-puzzle annotation stream
+//
+// Each line of an actions.jsonl / annotations.jsonl file is a
+// compact JSON object Elm sent verbatim — the server's only
+// intervention is `json.Compact` to guarantee no internal
+// newlines, plus the trailing '\n'. Order on disk = order Elm
+// sent. Per-line atomicity comes from POSIX append semantics
+// (writes < PIPE_BUF are atomic); Lyn Rummy actions are well
+// under 4 kB so this is safe without further locking. Concurrent
+// writes are not a real concern in our single-actor flow but
+// the property is preserved if it ever became one.
 //
 // Puzzle sessions live in their own namespace because they
-// are not resumable (single page-load attempts) and host many
-// puzzles per session; per-puzzle subdirs keep each puzzle's
-// seq=1 from clobbering its siblings. Full-game sessions stay
-// flat (one game per session, one seq counter).
+// are not resumable in the UI (single page-load attempts) and
+// host many puzzles per session; per-puzzle subdirs keep each
+// puzzle's stream isolated.
 //
-// Helpers below are deliberately thin — read/write/list with
+// Helpers below are deliberately thin — append/read with
 // auto-mkdirs. Handlers compose them.
 package views
 
 import (
+	"bufio"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -160,6 +171,110 @@ func WritePuzzleSessionFile(sessionID int64, rel string, body []byte) error {
 	return os.WriteFile(full, body, 0644)
 }
 
+// AppendJSONLLine appends one JSON-encoded line to `path`. The
+// body is run through json.Compact first (in case Elm sent
+// pretty-printed JSON), then written as compact-body + '\n' in a
+// single Write call so POSIX append-atomicity holds.
+func AppendJSONLLine(path string, body []byte) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return err
+	}
+	var buf bytes.Buffer
+	if err := json.Compact(&buf, body); err != nil {
+		return fmt.Errorf("compact: %w", err)
+	}
+	buf.WriteByte('\n')
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	_, err = f.Write(buf.Bytes())
+	return err
+}
+
+// AppendSessionLine appends one line to <session-dir>/<rel> for
+// a full-game session. Common case: rel="actions.jsonl".
+func AppendSessionLine(sessionID int64, rel string, body []byte) error {
+	return AppendJSONLLine(filepath.Join(SessionDir(sessionID), rel), body)
+}
+
+// AppendPuzzleSessionLine appends one line to
+// <puzzle-session-dir>/<rel>. Common case:
+// rel="<puzzle_name>/actions.jsonl".
+func AppendPuzzleSessionLine(sessionID int64, rel string, body []byte) error {
+	return AppendJSONLLine(filepath.Join(PuzzleSessionDir(sessionID), rel), body)
+}
+
+// ReadJSONLLines parses `path` as JSONL: one JSON value per
+// non-empty line. Empty lines are skipped. Returns
+// ([]json.RawMessage{}, nil) if the file doesn't exist.
+func ReadJSONLLines(path string) ([]json.RawMessage, error) {
+	f, err := os.Open(path)
+	if os.IsNotExist(err) {
+		return []json.RawMessage{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	var out []json.RawMessage
+	scanner := bufio.NewScanner(f)
+	// Sessions can carry many actions; bump the per-line buffer
+	// well above the 4 kB atomicity ceiling so a future big
+	// gesture_metadata payload doesn't truncate.
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	for scanner.Scan() {
+		line := scanner.Bytes()
+		if len(line) == 0 {
+			continue
+		}
+		// Copy: scanner reuses the slice on each iteration.
+		raw := make(json.RawMessage, len(line))
+		copy(raw, line)
+		out = append(out, raw)
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ReadSessionActions reads <session>/actions.jsonl as a list of
+// raw envelopes (each line as Elm sent it).
+func ReadSessionActions(sessionID int64) ([]json.RawMessage, error) {
+	return ReadJSONLLines(filepath.Join(SessionDir(sessionID), "actions.jsonl"))
+}
+
+// CountJSONLLines returns the number of non-empty lines in
+// `path`, or 0 if the file is missing. Used for action counts
+// in the sessions HTML list.
+func CountJSONLLines(path string) (int, error) {
+	f, err := os.Open(path)
+	if os.IsNotExist(err) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+	defer f.Close()
+	n := 0
+	scanner := bufio.NewScanner(f)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	for scanner.Scan() {
+		if len(scanner.Bytes()) > 0 {
+			n++
+		}
+	}
+	return n, scanner.Err()
+}
+
+// CountSessionActions is a convenience for the sessions HTML
+// list (action count column).
+func CountSessionActions(sessionID int64) (int, error) {
+	return CountJSONLLines(filepath.Join(SessionDir(sessionID), "actions.jsonl"))
+}
+
 // ListSessionIDs returns every full-game session-id directory
 // currently on disk, sorted ascending.
 func ListSessionIDs() ([]int64, error) {
@@ -184,67 +299,6 @@ func ListSessionIDs() ([]int64, error) {
 	}
 	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
 	return ids, nil
-}
-
-// ListActionFiles returns the sorted action filenames for a
-// full-game session (e.g. ["1.json","2.json",...]). Empty list
-// if no actions yet or session missing. Full-game sessions
-// keep actions flat; puzzle sessions live in a different dir
-// and are not counted here.
-func ListActionFiles(sessionID int64) ([]string, error) {
-	return listSessionSubdir(sessionID, "actions")
-}
-
-// ListAnnotationFiles is the full-game counterpart for
-// annotations.
-func ListAnnotationFiles(sessionID int64) ([]string, error) {
-	return listSessionSubdir(sessionID, "annotations")
-}
-
-// ListPuzzleSessionAnnotationFiles returns sorted annotation
-// filenames under <puzzle-session>/<puzzleName>/annotations/.
-// Used to pick the next seq for a per-puzzle annotation write.
-func ListPuzzleSessionAnnotationFiles(sessionID int64, puzzleName string) ([]string, error) {
-	dir := filepath.Join(PuzzleSessionDir(sessionID), puzzleName, "annotations")
-	return listDir(dir)
-}
-
-func listSessionSubdir(sessionID int64, sub string) ([]string, error) {
-	dir := filepath.Join(SessionDir(sessionID), sub)
-	return listDir(dir)
-}
-
-func listDir(dir string) ([]string, error) {
-	if _, err := os.Stat(dir); os.IsNotExist(err) {
-		return nil, nil
-	}
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return nil, err
-	}
-	names := make([]string, 0, len(entries))
-	for _, e := range entries {
-		if e.IsDir() {
-			continue
-		}
-		names = append(names, e.Name())
-	}
-	// Numeric-aware sort: "10.json" comes after "2.json".
-	sort.Slice(names, func(i, j int) bool {
-		return seqOf(names[i]) < seqOf(names[j])
-	})
-	return names, nil
-}
-
-// seqOf parses the seq number from a filename like "3.json".
-// Returns -1 on parse failure (those sort first; they're noise).
-func seqOf(name string) int64 {
-	stem := strings.TrimSuffix(name, filepath.Ext(name))
-	n, err := strconv.ParseInt(stem, 10, 64)
-	if err != nil {
-		return -1
-	}
-	return n
 }
 
 // ReadSessionMeta loads <session>/meta.json into a generic map.

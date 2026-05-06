@@ -41,15 +41,16 @@ all of that now.
 In `views/`:
 
 - `lynrummy_elm.go` — full-game HTTP surface: allocates
-  sequential session ids (the one smart exception), writes
-  Elm-posted bodies verbatim to
-  `games/lynrummy/data/lynrummy-elm/sessions/<id>/{meta.json,actions/<seq>.json}`.
+  sequential session ids (the one smart exception), appends
+  Elm-posted envelopes to
+  `games/lynrummy/data/lynrummy-elm/sessions/<id>/{meta.json,actions.jsonl,annotations.jsonl}`.
+  Each line of `actions.jsonl` is `{seq, action, gesture_metadata?}`.
 - `puzzles.go` — puzzle HTTP surface: catalog at page-load
   (allocates a puzzle-session id from a separate counter),
   then puzzle plays write to
   `/gopher/puzzles/sessions/<id>/<puzzle_name>/{action,annotate}`.
   Files land under
-  `games/lynrummy/data/lynrummy-elm/puzzle-sessions/<id>/<puzzle_name>/{actions,annotations}/<seq>.json`.
+  `games/lynrummy/data/lynrummy-elm/puzzle-sessions/<id>/<puzzle_name>/{actions,annotations}.jsonl`.
   Puzzle and full-game sessions live in distinct on-disk
   namespaces and never share session ids.
 - `gamedata.go` — file-storage primitives shared by both

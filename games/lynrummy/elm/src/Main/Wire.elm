@@ -14,8 +14,9 @@ Three outbound calls (fetchNewSession, fetchActionLog,
 sendAction) plus the inbound decoders for the bootstrap bundle.
 sendAction handles every action including CompleteTurn and
 puzzle moves — the server doesn't validate, doesn't reply with
-turn outcomes, just files the body at
-`/sessions/<id>/actions/<seq>`.
+turn outcomes, just appends the body as one line of
+`actions.jsonl`. The seq Elm assigns rides inside the body
+(not the URL); ordering on disk = ordering Elm sent.
 
 -}
 
@@ -103,12 +104,11 @@ sendAction sessionId seq maybePuzzleName action maybeGesture =
                 Nothing ->
                     "/gopher/lynrummy-elm/sessions/"
                         ++ String.fromInt sessionId
-                        ++ "/actions/"
-                        ++ String.fromInt seq
+                        ++ "/actions"
     in
     Http.post
         { url = url
-        , body = Http.jsonBody (encodeEnvelope action maybeGesture)
+        , body = Http.jsonBody (encodeEnvelope seq action maybeGesture)
         , expect = Http.expectWhatever ActionSent
         }
 
@@ -127,16 +127,22 @@ pathFrameString frame =
 -- ENVELOPE
 
 
-{-| Outbound POST body: `{action, gesture_metadata?}`. The
-server stores it verbatim; nothing here is parsed server-side
-beyond writing the file. Puzzle attribution is URL-borne now,
-not body-borne (see `sendAction`).
+{-| Outbound POST body: `{seq, action, gesture_metadata?}`. The
+server appends it verbatim as one line of actions.jsonl;
+nothing here is parsed server-side beyond a `json.Compact`
+normalize-pass. The `seq` is Elm-authored and rides in the body
+so the JSONL log preserves the order Elm THOUGHT actions were
+in (HTTP responses don't gate Elm's send loop, so reading order
+on disk is the only post-hoc record). Puzzle attribution is
+URL-borne (see `sendAction`).
 -}
-encodeEnvelope : WireAction -> Maybe EnvelopeForGesture -> Value
-encodeEnvelope action maybeGesture =
+encodeEnvelope : Int -> WireAction -> Maybe EnvelopeForGesture -> Value
+encodeEnvelope seq action maybeGesture =
     let
         baseFields =
-            [ ( "action", WA.encode action ) ]
+            [ ( "seq", Encode.int seq )
+            , ( "action", WA.encode action )
+            ]
 
         withGesture =
             case maybeGesture of

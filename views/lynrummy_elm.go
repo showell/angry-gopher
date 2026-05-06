@@ -46,12 +46,16 @@ var ElmLynRummyDir = "games/lynrummy/elm"
 //   GET  /elm.js                        → compiled Elm
 //   GET  /play/<id>                     → Elm play page with session id baked in
 //   POST /new-session                   → allocate id, write meta.json
-//   POST /sessions/<id>/actions/<seq>   → write body to actions/<seq>.json (DUMB)
-//   POST /sessions/<id>/annotations/<seq> → write body to annotations/<seq>.json (DUMB)
+//   POST /sessions/<id>/actions         → append one envelope to actions.jsonl (DUMB)
+//   POST /sessions/<id>/annotations     → append one envelope to annotations.jsonl (DUMB)
 //   GET  /sessions                      → HTML list of full-game session dirs
 //   GET  /api/sessions                  → JSON list
 //   GET  /sessions/<id>                 → HTML detail (file listing)
 //   GET  /sessions/<id>/actions         → bundle: {meta, actions[]} for Elm bootstrap
+//
+// Each envelope on actions.jsonl is `{seq, action, gesture_metadata?}` —
+// the seq is Elm-authored (rides in the body, not the URL) and the
+// server appends verbatim. Order on disk = order Elm sent.
 func HandleLynRummyElm(w http.ResponseWriter, r *http.Request) {
 	sub := strings.TrimPrefix(r.URL.Path, "/gopher/lynrummy-elm")
 	sub = strings.TrimPrefix(sub, "/")
@@ -90,7 +94,15 @@ func HandleLynRummyElm(w http.ResponseWriter, r *http.Request) {
 
 // handleSessionRoute fans out the per-session URL space.
 // `rest` is everything after "sessions/" — e.g.
-// "7", "7/actions", "7/actions/3", "7/annotations/1".
+// "7", "7/actions", "7/annotations".
+//
+// GET  /<id>                bundle (HTML detail)
+// GET  /<id>/actions        bootstrap JSON ({meta, actions})
+// POST /<id>/actions        append one envelope to actions.jsonl
+// POST /<id>/annotations    append one envelope to annotations.jsonl
+//
+// Seq numbers ride in the POST body now, not the URL — so /actions
+// and /annotations are single endpoints distinguished by HTTP method.
 func handleSessionRoute(w http.ResponseWriter, r *http.Request, rest string) {
 	parts := strings.Split(rest, "/")
 	idStr := parts[0]
@@ -104,11 +116,13 @@ func handleSessionRoute(w http.ResponseWriter, r *http.Request, rest string) {
 	case len(parts) == 1:
 		lynrummyElmSessionDetail(w, id)
 	case len(parts) == 2 && parts[1] == "actions":
-		lynrummyElmSessionBootstrap(w, id)
-	case len(parts) == 3 && parts[1] == "actions":
-		lynrummyElmWriteSessionFile(w, r, id, "actions", parts[2])
-	case len(parts) == 3 && parts[1] == "annotations":
-		lynrummyElmWriteSessionFile(w, r, id, "annotations", parts[2])
+		if r.Method == http.MethodPost {
+			lynrummyElmAppendSessionLine(w, r, id, "actions")
+		} else {
+			lynrummyElmSessionBootstrap(w, id)
+		}
+	case len(parts) == 2 && parts[1] == "annotations":
+		lynrummyElmAppendSessionLine(w, r, id, "annotations")
 	default:
 		http.NotFound(w, r)
 	}
@@ -187,11 +201,12 @@ func lynrummyElmNewSession(w http.ResponseWriter, r *http.Request) {
 
 // --- Action / annotation writes (the dumb path) ---
 
-// lynrummyElmWriteSessionFile is the universal write handler
-// for full-game sessions: POST body → file at
-// <session>/<sub>/<seqOrName>.json. No parsing, no validation
-// beyond "session must exist."
-func lynrummyElmWriteSessionFile(w http.ResponseWriter, r *http.Request, sessionID int64, sub, seqOrName string) {
+// lynrummyElmAppendSessionLine is the universal write handler
+// for full-game sessions: POST body → one appended line in
+// <session>/<rel>.jsonl. No parsing, no validation beyond
+// "session must exist." `rel` is "actions" or "annotations";
+// the seq Elm assigned rides inside the body.
+func lynrummyElmAppendSessionLine(w http.ResponseWriter, r *http.Request, sessionID int64, rel string) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -205,19 +220,8 @@ func lynrummyElmWriteSessionFile(w http.ResponseWriter, r *http.Request, session
 		http.Error(w, "read body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	// Filename: numeric input gets .json appended; explicit
-	// .json input passes through. Path traversal is rejected.
-	name := seqOrName
-	if seq, perr := strconv.ParseInt(seqOrName, 10, 64); perr == nil && seq > 0 {
-		name = strconv.FormatInt(seq, 10) + ".json"
-	}
-	if strings.Contains(name, "/") || strings.Contains(name, "..") {
-		http.Error(w, "bad filename", http.StatusBadRequest)
-		return
-	}
-	rel := filepath.Join(sub, name)
-	if err := WriteSessionFile(sessionID, rel, body); err != nil {
-		http.Error(w, "write: "+err.Error(), http.StatusInternalServerError)
+	if err := AppendSessionLine(sessionID, rel+".jsonl", body); err != nil {
+		http.Error(w, "append: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -243,18 +247,10 @@ func lynrummyElmSessionBootstrap(w http.ResponseWriter, sessionID int64) {
 		http.Error(w, "read meta: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	files, err := ListActionFiles(sessionID)
+	actions, err := ReadSessionActions(sessionID)
 	if err != nil {
-		http.Error(w, "list actions: "+err.Error(), http.StatusInternalServerError)
+		http.Error(w, "read actions: "+err.Error(), http.StatusInternalServerError)
 		return
-	}
-	actions := make([]json.RawMessage, 0, len(files))
-	for _, name := range files {
-		body, err := ReadSessionFile(sessionID, filepath.Join("actions", name))
-		if err != nil {
-			continue
-		}
-		actions = append(actions, body)
 	}
 
 	payload := map[string]any{
@@ -306,14 +302,14 @@ a { color: #000080; }
 	}
 	for _, id := range ids {
 		meta, _ := ReadSessionMeta(id)
-		files, _ := ListActionFiles(id)
+		count, _ := CountSessionActions(id)
 		ts := ""
 		if t := SessionCreatedAt(meta); t > 0 {
 			ts = time.Unix(t, 0).In(eastern).Format("Jan 2, 2006 · 3:04 PM MST")
 		}
 		fmt.Fprintf(w,
 			`<tr><td><a href="/gopher/lynrummy-elm/sessions/%d">#%d</a></td><td>%s</td><td class="n">%d</td><td>%s</td></tr>`,
-			id, id, html.EscapeString(ts), len(files), html.EscapeString(SessionLabel(meta)))
+			id, id, html.EscapeString(ts), count, html.EscapeString(SessionLabel(meta)))
 	}
 	fmt.Fprint(w, `</table></body></html>`)
 }
@@ -336,12 +332,12 @@ func lynrummyElmSessionsJSON(w http.ResponseWriter) {
 	out := []entry{}
 	for _, id := range ids {
 		meta, _ := ReadSessionMeta(id)
-		files, _ := ListActionFiles(id)
+		count, _ := CountSessionActions(id)
 		out = append(out, entry{
 			ID:          id,
 			CreatedAt:   SessionCreatedAt(meta),
 			Label:       SessionLabel(meta),
-			ActionCount: len(files),
+			ActionCount: count,
 		})
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -356,8 +352,8 @@ func lynrummyElmSessionDetail(w http.ResponseWriter, sessionID int64) {
 		return
 	}
 	meta, _ := ReadSessionMeta(sessionID)
-	actionFiles, _ := ListActionFiles(sessionID)
-	annotationFiles, _ := ListAnnotationFiles(sessionID)
+	actionCount, _ := CountSessionActions(sessionID)
+	annotationCount, _ := CountJSONLLines(filepath.Join(SessionDir(sessionID), "annotations.jsonl"))
 
 	eastern, _ := time.LoadLocation("America/New_York")
 	ts := ""
@@ -391,21 +387,9 @@ pre { background: #f4f4ec; padding: 12px; border: 1px solid #ddd; overflow-x: au
 	} else {
 		fmt.Fprint(w, `<p class="muted">no meta.json</p>`)
 	}
-	fmt.Fprintf(w, `<h3>actions/ (%d)</h3><ul>`, len(actionFiles))
-	for _, name := range actionFiles {
-		fmt.Fprintf(w, `<li>%s</li>`, html.EscapeString(name))
-	}
-	if len(actionFiles) == 0 {
-		fmt.Fprint(w, `<li class="muted">empty</li>`)
-	}
-	fmt.Fprintf(w, `</ul><h3>annotations/ (%d)</h3><ul>`, len(annotationFiles))
-	for _, name := range annotationFiles {
-		fmt.Fprintf(w, `<li>%s</li>`, html.EscapeString(name))
-	}
-	if len(annotationFiles) == 0 {
-		fmt.Fprint(w, `<li class="muted">empty</li>`)
-	}
-	fmt.Fprint(w, `</ul></body></html>`)
+	fmt.Fprintf(w, `<p>actions.jsonl: <strong>%d</strong> lines</p>`, actionCount)
+	fmt.Fprintf(w, `<p>annotations.jsonl: <strong>%d</strong> lines</p>`, annotationCount)
+	fmt.Fprint(w, `</body></html>`)
 }
 
 func labelSuffix(label string) string {

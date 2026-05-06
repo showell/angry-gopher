@@ -6,7 +6,7 @@
 // reads back on replay):
 //
 //   <sessions_dir>/<id>/meta.json     {created_at, label, initial_state}
-//   <sessions_dir>/<id>/actions/<seq>.json   {action, gesture_metadata?}
+//   <sessions_dir>/<id>/actions.jsonl        one envelope per line: {seq, action, gesture_metadata?}
 //
 // The actions are wire-shaped `WireAction` envelopes — same vocabulary
 // the Elm UI POSTs to the server during live play. Replay walks the
@@ -221,8 +221,7 @@ export function writeSession(
   const p = paths(dataDir);
   const sessionId = allocateSessionId(p);
   const sessionDir = path.join(p.sessionsDir, String(sessionId));
-  const actionsDir = path.join(sessionDir, "actions");
-  fs.mkdirSync(actionsDir, { recursive: true });
+  fs.mkdirSync(sessionDir, { recursive: true });
 
   const meta = {
     created_at: Math.floor(Date.now() / 1000),
@@ -235,18 +234,21 @@ export function writeSession(
     JSON.stringify(meta, null, 2) + "\n",
   );
 
-  // Local helper: write one primitive as the next action file and
-  // advance `actSim`. Captures `actionsDir`, `seq` (mutable closure
-  // via the ref object), and the assertNoOverlap discipline.
+  // Append one envelope ({seq, action}) per primitive to
+  // actions.jsonl. The seq matches what Elm assigns at runtime —
+  // monotonic, embedded in the body, ride-along not load-bearing
+  // for routing. assertNoOverlap discipline mirrors the live path.
+  const actionsPath = path.join(sessionDir, "actions.jsonl");
+  fs.writeFileSync(actionsPath, "");
   const seqRef = { n: 1 };
   const writePrim = (
     actSim: readonly BoardStack[],
     prim: Primitive,
   ): readonly BoardStack[] => {
     const wire = primToWire(prim, actSim);
-    fs.writeFileSync(
-      path.join(actionsDir, `${seqRef.n}.json`),
-      JSON.stringify({ action: wire }) + "\n",
+    fs.appendFileSync(
+      actionsPath,
+      JSON.stringify({ seq: seqRef.n, action: wire }) + "\n",
     );
     seqRef.n++;
     const next = applyLocally(actSim, prim);
@@ -269,17 +271,16 @@ export function writeSession(
     }
     // CompleteTurn at end of every turn (Elm's local logic deals
     // the next 3 / 5 from initial_state.deck on receipt).
-    fs.writeFileSync(
-      path.join(actionsDir, `${seqRef.n}.json`),
-      JSON.stringify({ action: { action: "complete_turn" } }) + "\n",
+    fs.appendFileSync(
+      actionsPath,
+      JSON.stringify({ seq: seqRef.n, action: { action: "complete_turn" } }) + "\n",
     );
     seqRef.n++;
   }
-  const seq = seqRef.n;
 
   return {
     sessionId,
     sessionDir,
-    actionsWritten: seq - 1,
+    actionsWritten: seqRef.n - 1,
   };
 }
