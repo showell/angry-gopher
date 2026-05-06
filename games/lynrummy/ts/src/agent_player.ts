@@ -253,18 +253,18 @@ function joinBoardRuns(
 // --- Records ----------------------------------------------------------
 //
 // A turn is a single ordered list of `steps`. Each step is either a
-// `groom` (a batch of run-merges, possibly empty) or a `play` (one
-// findPlay → applyPlay round-trip). The list always alternates
-// groom → play → groom → play → … → play → groom: every turn opens
-// AND closes with a groom, with plays interleaved between. Consumers
-// (transcript writer, puzzle capture, traces) walk `steps` in order
-// and dispatch on `kind` — no other place reconstructs the
-// alternation.
+// `groom` (a non-empty batch of run-merges) or a `play` (one
+// findPlay → applyPlay round-trip). The shape emerges from
+// `nextStep`'s contract: groom-when-available wins over play-when-
+// available; nothing is emitted for empty grooms. So the typical
+// stream looks like a real human game would — long runs of plays
+// punctuated by occasional grooms when a play opens a join.
+// Consumers (transcript writer, puzzle capture, traces, the
+// eventual Elm port) walk `steps` in order and dispatch on `kind`.
 
-/** A batch of greedy run-merges applied at one groom point. Empty in
- *  steady state. Transcript writers replay these as `merge_stack`
- *  primitives so the wire-level board stays in sync with the agent's
- *  logical board. */
+/** A non-empty batch of greedy run-merges. Transcript writers
+ *  replay these as `merge_stack` primitives so the wire-level
+ *  board stays in sync with the agent's logical board. */
 export interface GroomStep {
   readonly kind: "groom";
   readonly joins: readonly JoinEvent[];
@@ -277,6 +277,13 @@ export interface PlayStep {
   readonly planDescs: readonly Desc[];
   readonly findPlayMs: number;
   readonly applyMs: number;
+}
+
+/** Returned by `nextStep` to signal the turn is over (no grooms
+ *  available AND no findPlay succeeded, or the hand is empty). */
+export interface EndStep {
+  readonly kind: "end";
+  readonly outcome: "hand_empty" | "stuck";
 }
 
 export type TurnStep = GroomStep | PlayStep;
@@ -326,17 +333,111 @@ function drawCountFor(outcome: "hand_empty" | "stuck", cardsPlayedThisTurn: numb
   return 0;
 }
 
+// --- nextStep: the agent's per-step boundary --------------------------
+//
+// `nextStep(board, hand)` is the agent's primary contract. The caller
+// (a self-play loop here, or eventually an Elm port) calls it
+// repeatedly; each call returns one of:
+//
+//   - `groom` — a non-empty batch of run-merges to animate
+//   - `play`  — one findPlay→applyPlay round-trip with placements
+//   - `end`   — no groom available AND no play available; turn over
+//
+// The contract is "groom-first when available, play-when-not, end-
+// when-neither." Both sides of the alternation fall out naturally:
+// after a play that opens a board-level join, the next call returns
+// the groom; once grooms are exhausted, the next call returns a
+// play; when nothing else is possible, the next call returns end.
+//
+// Empty grooms are NEVER returned — if `joinBoardRuns` finds nothing
+// to merge, we silently fall through to findPlay. The caller's loop
+// stays tight: dispatch on kind, animate, call again.
+
+/** One step result, plus the post-step (board, hand). For `end` the
+ *  state is unchanged from the inputs; for `groom`/`play` the state
+ *  reflects what would be on the board if the step's effects were
+ *  applied. */
+export interface NextStepResult {
+  readonly step: GroomStep | PlayStep | EndStep;
+  readonly board: readonly (readonly Card[])[];
+  readonly hand: readonly Card[];
+}
+
+export function nextStep(
+  board: readonly (readonly Card[])[],
+  hand: readonly Card[],
+): NextStepResult {
+  // 1. Groom-first. Cheap quadratic probe over board stacks.
+  const groomed = joinBoardRuns(board);
+  if (groomed.joins.length > 0) {
+    assertBoardClean(groomed.board, "nextStep after-groom");
+    return {
+      step: { kind: "groom", joins: groomed.joins },
+      board: groomed.board,
+      hand,
+    };
+  }
+
+  // 2. End if hand is empty.
+  if (hand.length === 0) {
+    return {
+      step: { kind: "end", outcome: "hand_empty" },
+      board,
+      hand,
+    };
+  }
+
+  // 3. Try a play.
+  const t0 = performance.now();
+  const play = findPlay(hand, board);
+  const findPlayMs = performance.now() - t0;
+  if (play === null) {
+    return {
+      step: { kind: "end", outcome: "stuck" },
+      board,
+      hand,
+    };
+  }
+
+  const t1 = performance.now();
+  const next = applyPlay(board, hand, play);
+  const applyMs = performance.now() - t1;
+  if (next === null) {
+    // findPlay produced this play (proving a clean-board plan
+    // exists), but applyPlay's engine call returned null. That's a
+    // contradiction — two engine invocations on the same augmented
+    // state disagreed on solvability. Don't paper over; surface.
+    throw new Error(
+      `[agent_player nextStep] applyPlay returned null for a play findPlay just produced. `
+      + `This indicates a divergence between findPlay's engine call and applyPlay's `
+      + `(both go through solveStateWithDescs). Placements: [${play.placements.map(cardKey).join(" ")}]. `
+      + `Plan length: ${play.plan.length}.`,
+    );
+  }
+  return {
+    step: {
+      kind: "play",
+      placements: [...play.placements],
+      planDescs: next.planDescs,
+      findPlayMs,
+      applyMs,
+    },
+    board: next.board,
+    hand: next.hand,
+  };
+}
+
 // --- One full turn ----------------------------------------------------
 
-/** Run one individual player's full turn. Loops findPlay → applyPlay
- *  until the player runs out of plays or empties their hand, then
- *  applies the outcome-appropriate draw. Returns the post-turn
- *  (board, hand, deck) plus a structured record.
+/** Run one individual player's full turn. Loops `nextStep` until it
+ *  returns `end`, then applies the outcome-appropriate draw. Returns
+ *  the post-turn (board, hand, deck) plus a structured record.
  *
  *  This is the first-class "one turn" boundary — the eventual
- *  human-watches-agent-as-Player-Two flow will dispatch one of these
- *  per opponent turn. The full-game loop (playFullGame) is a tiny
- *  while around it. */
+ *  human-watches-agent-as-Player-Two flow will dispatch `nextStep`
+ *  call by call rather than running the whole turn through
+ *  `simulateFullTurn`, but both surfaces share `nextStep` as the
+ *  agent's only step-decision API. */
 export function simulateFullTurn(
   startBoard: readonly (readonly Card[])[],
   startHand: readonly Card[],
@@ -353,12 +454,8 @@ export function simulateFullTurn(
   const boardBefore = startBoard.length;
   const tTurn0 = performance.now();
 
-  // The turn alternates: groom, play, groom, play, …, play, groom.
-  // Each loop iteration pushes a groom step, then (if possible) a
-  // play step. If the iteration can't produce a play (hand empty or
-  // no findPlay), it breaks AFTER pushing the groom — leaving the
-  // steps list ending in a groom, with exactly one more groom than
-  // play.
+  // Drive `nextStep` until it returns `end`. Each non-end step is
+  // pushed onto the turn's step stream verbatim.
   let board: readonly (readonly Card[])[] = startBoard;
   let hand = startHand;
   const cardsPlayed: Card[] = [];
@@ -369,54 +466,20 @@ export function simulateFullTurn(
   let outcome: "hand_empty" | "stuck";
 
   while (true) {
-    // Groom: greedily merge any runs the inherited / post-play board
-    // left split. No-op in steady state, non-empty after a play that
-    // opened a join, or on a hand-built board inherited from a human
-    // player.
-    const groomed = joinBoardRuns(board);
-    board = groomed.board;
-    steps.push({ kind: "groom", joins: groomed.joins });
-    // INVARIANT: groom only replaces stacks with classifyStack-
-    // validated longer ones; if applyPlay produced a clean board,
-    // the post-groom board is still clean.
-    assertBoardClean(board, "simulateFullTurn after-groom");
-
-    if (hand.length === 0) { outcome = "hand_empty"; break; }
-
-    const t0 = performance.now();
-    const play = findPlay(hand, board);
-    const findPlayMs = performance.now() - t0;
-    findPlayWallMsTotal += findPlayMs;
-    if (play === null) { outcome = "stuck"; break; }
-
-    const t1 = performance.now();
-    const next = applyPlay(board, hand, play);
-    const applyMs = performance.now() - t1;
-    applyWallMsTotal += applyMs;
-    if (next === null) {
-      // findPlay produced this play (proving a clean-board plan
-      // exists), but applyPlay's engine call returned null. That's
-      // a contradiction — two engine invocations on the same
-      // augmented state disagreed on solvability. Don't paper over;
-      // surface the bug.
-      throw new Error(
-        `[agent_player simulateFullTurn] applyPlay returned null for a play findPlay just produced. `
-        + `This indicates a divergence between findPlay's engine call and applyPlay's `
-        + `(both go through solveStateWithDescs). Placements: [${play.placements.map(cardKey).join(" ")}]. `
-        + `Plan length: ${play.plan.length}.`,
-      );
+    const result = nextStep(board, hand);
+    board = result.board;
+    hand = result.hand;
+    if (result.step.kind === "end") {
+      outcome = result.step.outcome;
+      break;
     }
-    board = next.board;
-    hand = next.hand;
-    steps.push({
-      kind: "play",
-      placements: [...play.placements],
-      planDescs: next.planDescs,
-      findPlayMs,
-      applyMs,
-    });
-    for (const c of play.placements) cardsPlayed.push(c);
-    playsMade++;
+    steps.push(result.step);
+    if (result.step.kind === "play") {
+      findPlayWallMsTotal += result.step.findPlayMs;
+      applyWallMsTotal += result.step.applyMs;
+      for (const c of result.step.placements) cardsPlayed.push(c);
+      playsMade++;
+    }
   }
 
   const turnWallMs = performance.now() - tTurn0;

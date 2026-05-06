@@ -87,7 +87,7 @@ function emitGroom(
   joins: readonly JoinEvent[],
   out: string[],
 ): BoardStack[] {
-  out.push("GROOM" + (joins.length === 0 ? "  (no-op)" : ""));
+  out.push("GROOM");
   let cur: readonly BoardStack[] = sim;
   for (const j of joins) {
     // Reuse the same planner the transcript uses, so the trace shows
