@@ -63,13 +63,10 @@ type Msg
     | SessionReceived (Result Http.Error Int)
     | ClickCompleteTurn
     | ClickUndo
-    | ClickReset
     | ClickHint
-    | ClickAgentPlay
     | PopupOk
     | ClickInstantReplay
     | ReplayFrame Time.Posix
     | ClickReplayPauseToggle
     | ActionLogFetched (Result Http.Error ActionLogBundle)
-    | EngineSolveResult Encode.Value
     | GameHintReceived Encode.Value

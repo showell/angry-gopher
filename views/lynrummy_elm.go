@@ -11,12 +11,11 @@
 // agents read the on-disk action log directly when they need
 // state.
 //
-// This module owns ONLY the full-game surface
-// (`/gopher/lynrummy-elm/...`). Puzzle sessions live in their
-// own top-level namespace at
-// `data/lynrummy-elm/puzzle-sessions/...` and are served by
-// `views/puzzles.go`. The two namespaces share no helpers
-// beyond the file-store primitives in `gamedata.go`.
+// This module owns the full-game surface
+// (`/gopher/lynrummy-elm/...`). It also hosts the TS engine
+// JS bundle constants (`EngineJSPath`, `EngineGlueJSPath`)
+// because the full-game Hint button is the surviving consumer
+// after the puzzle gallery retired.
 package views
 
 import (
@@ -38,6 +37,16 @@ import (
 // Elm source + compiled elm.js. Set by main; default assumes
 // Gopher runs from the angry-gopher repo root.
 var ElmLynRummyDir = "games/lynrummy/elm"
+
+// EngineJSPath — esbuild-bundled TS engine. Built by
+// ops/build_engine_js (called transitively by ops/build_elm).
+// Served at /gopher/lynrummy-elm/engine.js for the full-game
+// Hint button.
+var EngineJSPath = "games/lynrummy/elm/engine.js"
+
+// EngineGlueJSPath — small JS shim that bridges Elm ports to
+// the TS engine bundle. Lives next to engine.js.
+var EngineGlueJSPath = "games/lynrummy/elm/engine_glue.js"
 
 // HandleLynRummyElm dispatches /gopher/lynrummy-elm/*.
 //
@@ -65,9 +74,6 @@ func HandleLynRummyElm(w http.ResponseWriter, r *http.Request) {
 	case sub == "elm.js":
 		lynrummyElmJS(w)
 	case sub == "engine.js":
-		// TS engine bundle — shared with the Puzzles surface.
-		// Same file, served under both paths so the full-game
-		// page doesn't reach into /gopher/puzzles/ for assets.
 		serveJS(w, EngineJSPath, "engine.js not found — run `ops/build_engine_js`")
 	case sub == "engine_glue.js":
 		serveJS(w, EngineGlueJSPath, "engine_glue.js not found — check the file exists at "+EngineGlueJSPath)
@@ -456,6 +462,20 @@ func lynrummyElmJS(w http.ResponseWriter) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		http.Error(w, "elm.js not found — run `elm make src/Main.elm --output=elm.js` in "+ElmLynRummyDir, http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+	w.Write(data)
+}
+
+// serveJS reads `path` and writes it as application/javascript.
+// On read failure, returns a 404 with the supplied missing-file
+// message (intended to point the developer at the build step
+// that produces the asset).
+func serveJS(w http.ResponseWriter, path string, missingMsg string) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		http.Error(w, missingMsg, http.StatusNotFound)
 		return
 	}
 	w.Header().Set("Content-Type", "application/javascript; charset=utf-8")

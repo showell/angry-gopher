@@ -1,7 +1,6 @@
 module Main.Wire exposing
     ( fetchActionLog
     , fetchNewSession
-    , initialStateDecoder
     , sendAction
     )
 
@@ -86,28 +85,15 @@ the namespacing surface.
 sendAction :
     Int
     -> Int
-    -> Maybe String
     -> WireAction
     -> Maybe EnvelopeForGesture
     -> Cmd Msg
-sendAction sessionId seq maybePuzzleName action maybeGesture =
-    let
-        url =
-            case maybePuzzleName of
-                Just puzzleName ->
-                    "/gopher/puzzles/sessions/"
-                        ++ String.fromInt sessionId
-                        ++ "/"
-                        ++ puzzleName
-                        ++ "/action"
-
-                Nothing ->
-                    "/gopher/lynrummy-elm/sessions/"
-                        ++ String.fromInt sessionId
-                        ++ "/actions"
-    in
+sendAction sessionId seq action maybeGesture =
     Http.post
-        { url = url
+        { url =
+            "/gopher/lynrummy-elm/sessions/"
+                ++ String.fromInt sessionId
+                ++ "/actions"
         , body = Http.jsonBody (encodeEnvelope seq action maybeGesture)
         , expect = Http.expectWhatever ActionSent
         }

@@ -5,16 +5,14 @@
 # `ops/list` to see what already exists. Drifted ops scripts
 # are how an hour disappears resurrecting things.
 #
-# Compile the LynRummy Elm clients (Main.elm + Puzzles.elm) into
-# games/lynrummy/elm/{elm.js, puzzles.js}, the JS bundles served
-# by /gopher/lynrummy-elm/elm.js and /gopher/puzzles/puzzles.js.
-# Also bundles the TS engine (engine.js) — the puzzles client
-# loads it alongside puzzles.js and calls into it via Elm ports.
+# Compile the LynRummy Elm client (Main.elm) into
+# games/lynrummy/elm/elm.js, the JS bundle served by
+# /gopher/lynrummy-elm/elm.js. Also bundles the TS engine
+# (engine.js) — the Elm client loads it alongside elm.js and
+# calls into it via the Hint port.
 #
-# Both Elm entry points share the same elm.json + node_modules so a
-# single elm install covers both compiles. Failures are warnings,
-# not fatal — the matching HTTP route 404s with an actionable
-# error pointing back here.
+# Failures are warnings, not fatal — the matching HTTP route
+# 404s with an actionable error pointing back here.
 set -e
 
 source "$(dirname "$0")/_paths.sh"
@@ -30,6 +28,3 @@ fi
 
 ./node_modules/.bin/elm make src/Main.elm --output=elm.js >/dev/null 2>&1 \
     || { echo "Warning: Main.elm build failed"; exit 1; }
-
-./node_modules/.bin/elm make src/Puzzles.elm --output=puzzles.js >/dev/null 2>&1 \
-    || { echo "Warning: Puzzles.elm build failed"; exit 1; }

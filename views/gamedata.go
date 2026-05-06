@@ -6,21 +6,15 @@
 // The only "smart" exception is sequential session-id allocation
 // via a per-namespace counter file.
 //
-// Two top-level namespaces, each with its own id counter:
+// Layout:
 //
 //   games/lynrummy/data/
 //     next-session-id.txt                  # counter for full-game sessions
-//     next-puzzle-session-id.txt           # counter for puzzle sessions
 //     lynrummy-elm/
 //       sessions/<id>/                     # full-game sessions
 //         meta.json                        # {label, deck_seed, created_at, [initial_state]}
 //         actions.jsonl                    # one action per line; Elm-assigned seq embedded
 //         annotations.jsonl                # one annotation per line (rare)
-//       puzzle-sessions/<id>/              # puzzle gallery sessions
-//         meta.json                        # {label, created_at}
-//         <puzzle_name>/
-//           actions.jsonl                  # per-puzzle action stream
-//           annotations.jsonl              # per-puzzle annotation stream
 //
 // Each line of an actions.jsonl / annotations.jsonl file is a
 // compact JSON object Elm sent verbatim — the server's only
@@ -31,11 +25,6 @@
 // under 4 kB so this is safe without further locking. Concurrent
 // writes are not a real concern in our single-actor flow but
 // the property is preserved if it ever became one.
-//
-// Puzzle sessions live in their own namespace because they
-// are not resumable in the UI (single page-load attempts) and
-// host many puzzles per session; per-puzzle subdirs keep each
-// puzzle's stream isolated.
 //
 // Helpers below are deliberately thin — append/read with
 // auto-mkdirs. Handlers compose them.
@@ -65,14 +54,8 @@ const lynrummyElmRoot = GameDataRoot + "/lynrummy-elm"
 // and visible.
 var nextSessionIDPath = filepath.Join(GameDataRoot, "next-session-id.txt")
 
-// nextPuzzleSessionIDPath is the puzzle-session counter file.
-// Distinct from the full-game counter so the two namespaces
-// allocate independently.
-var nextPuzzleSessionIDPath = filepath.Join(GameDataRoot, "next-puzzle-session-id.txt")
-
 // sessionIDMu serializes counter increments. Single-process
-// server; a mutex is sufficient. Shared across both counters
-// since contention is negligible and the lock scope is tiny.
+// server; a mutex is sufficient.
 var sessionIDMu sync.Mutex
 
 // allocateID is the shared counter-bump primitive. Reads the
@@ -110,24 +93,10 @@ func AllocateSessionID() (int64, error) {
 	return allocateID(nextSessionIDPath)
 }
 
-// AllocatePuzzleSessionID returns the next sequential
-// puzzle-session id, 1-based, persisted via
-// games/lynrummy/data/next-puzzle-session-id.txt. Independent
-// of the full-game counter.
-func AllocatePuzzleSessionID() (int64, error) {
-	return allocateID(nextPuzzleSessionIDPath)
-}
-
 // SessionDir returns the on-disk directory for a full-game
 // session.
 func SessionDir(sessionID int64) string {
 	return filepath.Join(lynrummyElmRoot, "sessions", strconv.FormatInt(sessionID, 10))
-}
-
-// PuzzleSessionDir returns the on-disk directory for a
-// puzzle-gallery session.
-func PuzzleSessionDir(sessionID int64) string {
-	return filepath.Join(lynrummyElmRoot, "puzzle-sessions", strconv.FormatInt(sessionID, 10))
 }
 
 // WriteSessionFile writes body to <session-dir>/<rel>, creating
@@ -153,22 +122,6 @@ func ReadSessionFile(sessionID int64, rel string) ([]byte, error) {
 func SessionExists(sessionID int64) bool {
 	info, err := os.Stat(SessionDir(sessionID))
 	return err == nil && info.IsDir()
-}
-
-// PuzzleSessionExists reports whether a puzzle-session
-// directory is on disk.
-func PuzzleSessionExists(sessionID int64) bool {
-	info, err := os.Stat(PuzzleSessionDir(sessionID))
-	return err == nil && info.IsDir()
-}
-
-// WritePuzzleSessionFile writes body to <puzzle-session-dir>/<rel>.
-func WritePuzzleSessionFile(sessionID int64, rel string, body []byte) error {
-	full := filepath.Join(PuzzleSessionDir(sessionID), rel)
-	if err := os.MkdirAll(filepath.Dir(full), 0755); err != nil {
-		return err
-	}
-	return os.WriteFile(full, body, 0644)
 }
 
 // AppendJSONLLine appends one JSON-encoded line to `path`. The
@@ -197,13 +150,6 @@ func AppendJSONLLine(path string, body []byte) error {
 // a full-game session. Common case: rel="actions.jsonl".
 func AppendSessionLine(sessionID int64, rel string, body []byte) error {
 	return AppendJSONLLine(filepath.Join(SessionDir(sessionID), rel), body)
-}
-
-// AppendPuzzleSessionLine appends one line to
-// <puzzle-session-dir>/<rel>. Common case:
-// rel="<puzzle_name>/actions.jsonl".
-func AppendPuzzleSessionLine(sessionID int64, rel string, body []byte) error {
-	return AppendJSONLLine(filepath.Join(PuzzleSessionDir(sessionID), rel), body)
 }
 
 // ReadJSONLLines parses `path` as JSONL: one JSON value per

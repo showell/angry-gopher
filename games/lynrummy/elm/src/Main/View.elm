@@ -356,12 +356,7 @@ leftSidebar model =
         , style "padding-right" "20px"
         , style "border-right" "1px gray solid"
         ]
-        (if model.hideTurnControls then
-            puzzleControls model
-
-         else
-            playerHands model
-        )
+        (playerHands model)
 
 
 playerHands : Model -> List (Html Msg)
@@ -375,29 +370,6 @@ playerHands model =
         :: List.indexedMap (viewPlayerRow model) model.hands
     )
         ++ [ deckRemainingLine model ]
-
-
-puzzleControls : Model -> List (Html Msg)
-puzzleControls model =
-    [ div
-        [ style "padding-top" "12px"
-        , style "display" "flex"
-        , style "flex-direction" "column"
-        , style "gap" "10px"
-        , style "align-items" "stretch"
-        ]
-        [ gameButton "Hint" ClickHint
-        , gameButton "Let agent play" ClickAgentPlay
-        , (if canUndoThisTurn model then
-            gameButton "Undo" ClickUndo
-
-           else
-            disabledGameButton "Undo"
-          )
-        , gameButton "Reset" ClickReset
-        , viewReplayControl model
-        ]
-    ]
 
 
 {-| Shows how many cards are left in the dealer's deck.

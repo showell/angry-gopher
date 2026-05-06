@@ -2,7 +2,6 @@ module Main.State exposing
     ( ActionLogBundle
     , ActionLogEntry
     , ActionOutcome
-    , AgentMoveBatch
     , ClickArbiter
     , DragContext
     , DragInfo
@@ -88,12 +87,6 @@ type alias Model =
     -- UI-layer fields.
     , drag : DragState
     , sessionId : Maybe Int
-
-    -- When this Play instance is hosting a puzzle, names
-    -- which puzzle. Rides in the JSON body of every action for
-    -- forensics (so logs can attribute moves to their puzzle).
-    -- Nothing for full-game sessions.
-    , puzzleName : Maybe String
     , status : StatusMessage
     , score : Int
     , hintedCards : List Card
@@ -110,58 +103,22 @@ type alias Model =
     -- when replay starts; stays Nothing outside replay.
     , replayBoardRect : Maybe { x : Int, y : Int }
 
-    -- Per-instance identity. The main app uses "default"; each
-    -- Puzzles-embedded Play gets the puzzle's session id stringified.
-    -- Drives the board DOM id (via `boardDomIdFor`) so multiple
-    -- Play instances on one page don't collide on
-    -- `Browser.Dom.getElement`.
+    -- Constant string forming the board's DOM id (via
+    -- `boardDomIdFor`). Multi-Play-per-page hosting retired
+    -- with the puzzle gallery; the field survives so the DOM
+    -- contract is unchanged.
     , gameId : String
 
-    -- True when this Play instance lives inside a Puzzles
-    -- panel — suppresses the Complete Turn button and the
-    -- "← Lobby" link in the turn-controls row. Puzzles are
-    -- always within-a-turn; surfacing Complete Turn would mean
-    -- nothing. Main app sets this False.
-    , hideTurnControls : Bool
-
-    -- Puzzles "Let agent play" program counter. Holds the
-    -- per-move primitive batches the TS engine produced at the
-    -- start of the walk; each click consumes one batch
-    -- (animating its primitives at 500ms pacing) and advances.
-    -- Empty/Nothing means "no walk in progress — next click
-    -- fires a fresh engine port request."  A user gesture
-    -- between clicks invalidates the cache by clearing this
-    -- back to Nothing.
-    , agentProgram : Maybe (List AgentMoveBatch)
-
-    -- The decoded initial board/hand state for the current
-    -- puzzle, stored at bootstrap so Reset can restore it
-    -- without a server round-trip. Nothing for full-game sessions.
-    , puzzleInitialState : Maybe RemoteState
-
     -- The id of the engine port request currently in flight (if
-    -- any). Set when the puzzle hint button fires `engineRequest`;
-    -- cleared by the matching `engineResponse`. Used to discard
+    -- any). Set when the Hint button fires `engineRequest`;
+    -- cleared by the matching `gameHintResponse`. Used to discard
     -- stale responses (e.g. if the user clicks hint twice rapidly).
     , pendingEngineRequest : Maybe Int
 
     -- Monotonic counter for engine port request ids. Incremented
     -- each time we fire a request so the response can be matched
-    -- back. Per-Play-instance — separate panels' counters live in
-    -- separate models.
+    -- back.
     , nextEngineRequestId : Int
-    }
-
-
-{-| One agent move-batch as the TS engine produces it: the
-canonical DSL line plus the primitive sequence (Elm
-`WireAction`) realizing it on the live board. The agent-play
-walk caches a list of these in `agentProgram`; each click
-consumes one batch and animates its primitives.
--}
-type alias AgentMoveBatch =
-    { line : String
-    , primitives : List WireAction
     }
 
 
@@ -551,11 +508,11 @@ canUndoThisTurn model =
 -- DOM ID
 
 
-{-| CSS id of the board element for a given game id. Per-
-instance so multiple Play instances on one page don't collide
-on `Browser.Dom.getElement`. The main app uses `gameId =
-"default"`; each Puzzles-embedded Play gets its puzzle session
-id stringified.
+{-| CSS id of the board element. The main app uses `gameId =
+"default"` (a constant; multi-Play-per-page hosting retired
+with the puzzle gallery, so disambiguation is no longer
+load-bearing — the parameter survives so the DOM contract is
+unchanged).
 -}
 boardDomIdFor : String -> String
 boardDomIdFor gameId =
@@ -651,7 +608,6 @@ baseModel =
     -- UI-layer fields.
     , drag = NotDragging
     , sessionId = Nothing
-    , puzzleName = Nothing
     , status = { text = "You may begin moving.", kind = Inform }
     , score = Score.forStacks Game.Dealer.initialBoard
     , hintedCards = []
@@ -663,9 +619,6 @@ baseModel =
     , replayBaseline = Nothing
     , replayBoardRect = Nothing
     , gameId = "default"
-    , hideTurnControls = False
-    , agentProgram = Nothing
-    , puzzleInitialState = Nothing
     , pendingEngineRequest = Nothing
     , nextEngineRequestId = 1
     }

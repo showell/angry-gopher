@@ -265,14 +265,8 @@ handleMouseUp releasePoint tMs model =
                 modelAfterAction =
                     case maybeAction of
                         Just action ->
-                            -- A successful user gesture invalidates any
-                            -- cached agent program — the board has
-                            -- diverged from the plan, so the next "Let
-                            -- agent play" click must re-solve.
-                            (Apply.applyAction action modelAfterDragClear
+                            Apply.applyAction action modelAfterDragClear
                                 |> Apply.commit
-                            )
-                                |> (\m -> { m | agentProgram = Nothing })
 
                         Nothing ->
                             case droppedOffBoardScold infoFull ctx of
@@ -308,7 +302,6 @@ handleMouseUp releasePoint tMs model =
                                 writeCmd =
                                     Wire.sendAction sid
                                         seq
-                                        modelAfterAction.puzzleName
                                         action
                                         maybeGesture
                             in
