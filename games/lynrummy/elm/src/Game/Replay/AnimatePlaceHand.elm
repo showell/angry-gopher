@@ -13,12 +13,12 @@ target endpoint (PlaceHand uses the payload's explicit `loc`).
 
 import Game.Rules.Card exposing (Card)
 import Game.CardStack exposing (BoardLocation)
-import Game.Replay.Snapshot exposing (Snapshot)
 import Game.Replay.Space as Space
 import Game.WireAction as WA
 import Main.State
     exposing
         ( DragSource
+        , Model
         , PathFrame(..)
         , Point
         )
@@ -34,9 +34,9 @@ type alias PrepareResult =
     }
 
 
-prepare : { handCard : Card, loc : BoardLocation } -> Snapshot -> Maybe PrepareResult
-prepare payload snapshot =
-    Space.handCardSource payload.handCard snapshot
+prepare : { handCard : Card, loc : BoardLocation } -> Model -> Maybe PrepareResult
+prepare payload model =
+    Space.handCardSource payload.handCard model
         |> Maybe.map
             (\source ->
                 { source = source
@@ -59,10 +59,10 @@ finish :
     -> Point
     -> Float
     -> DragSource
-    -> Snapshot
+    -> Model
     -> Maybe Space.AnimationInfo
-finish payload origin nowMs source snapshot =
-    Space.pointInLiveViewport snapshot
+finish payload origin nowMs source model =
+    Space.pointInLiveViewport model
         { left = payload.loc.left, top = payload.loc.top }
         |> Maybe.map
             (\target ->
