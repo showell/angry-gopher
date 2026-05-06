@@ -8,13 +8,12 @@ import Game.BoardActions exposing (Side)
 import Game.CardStack exposing (CardStack)
 import Game.Replay.Space as Space
 import Game.WireAction as WA
-import Main.State exposing (Model)
-import Main.Types exposing (GesturePoint, PathFrame)
+import Main.State as State exposing (Model, PathFrame)
 
 
 start :
     { source : CardStack, target : CardStack, side : Side }
-    -> List GesturePoint
+    -> List State.GesturePoint
     -> PathFrame
     -> Model
     -> Float

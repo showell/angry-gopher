@@ -36,8 +36,9 @@ import Main.State
         , DragContext
         , DragInfo
         , DragSource(..)
+        , PathFrame(..)
+        , Point
         )
-import Main.Types exposing (PathFrame(..), Point)
 
 
 {-| Bundles DragInfo + DragContext + ClickArbiter into one

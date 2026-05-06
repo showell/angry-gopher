@@ -27,8 +27,7 @@ import Http
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode exposing (Value)
 import Main.Msg exposing (Msg(..))
-import Main.State exposing (ActionLogBundle, ActionLogEntry, EnvelopeForGesture, RemoteState)
-import Main.Types exposing (GesturePoint, PathFrame(..))
+import Main.State exposing (ActionLogBundle, ActionLogEntry, EnvelopeForGesture, GesturePoint, PathFrame(..), RemoteState)
 
 
 

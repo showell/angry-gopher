@@ -15,8 +15,13 @@ import Game.Rules.Card exposing (Card)
 import Game.CardStack exposing (BoardLocation)
 import Game.Replay.Space as Space
 import Game.WireAction as WA
-import Main.State exposing (DragSource, Model)
-import Main.Types exposing (PathFrame(..), Point)
+import Main.State
+    exposing
+        ( DragSource
+        , Model
+        , PathFrame(..)
+        , Point
+        )
 
 
 

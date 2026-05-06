@@ -9,7 +9,10 @@ module Main.State exposing
     , DragState(..)
     , EnvelopeForGesture
     , Flags
+    , GesturePoint
     , Model
+    , PathFrame(..)
+    , Point
     , PopupContent
     , RemoteState
     , ReplayAnimationState(..)
@@ -48,7 +51,6 @@ import Game.Score as Score
 import Game.Physics.WingOracle exposing (WingId)
 import Game.WireAction exposing (WireAction(..))
 import Json.Encode as Encode exposing (Value)
-import Main.Types exposing (GesturePoint, PathFrame, Point)
 import Main.Util exposing (listAt)
 
 
@@ -298,6 +300,42 @@ format uses — one representation everywhere.
 type DragSource
     = FromBoardStack CardStack
     | FromHandCard Card
+
+
+type alias Point =
+    { x : Int, y : Int }
+
+
+{-| Coordinate frame for a captured gesture path. The board
+is a self-contained widget positioned anywhere in the app via
+CSS; drag floaters rendered as children of the board take
+board-frame coords directly. Hand-origin drags cross the board
+widget boundary and must be viewport-positioned.
+
+  - **ViewportFrame** — origin at the browser viewport top-left.
+    Used for live mouse-captured paths and for hand-origin
+    drags that cross widget boundaries.
+  - **BoardFrame** — origin at the board element's top-left.
+    Used for intra-board drags (Python-synthesized and,
+    eventually, board-to-board live-captured after a
+    capture-time translation).
+
+See `feedback_*` / architecture doc for the rule: pick the
+right frame, don't maintain parallel-coordinate bookkeeping.
+
+-}
+type PathFrame
+    = ViewportFrame
+    | BoardFrame
+
+
+{-| Behaviorist telemetry sample captured during a drag. The
+`tMs` is the `MouseEvent.timeStamp` (performance.now-style,
+document-lifetime relative). The `x`/`y` pair is in whichever
+frame the containing path is tagged with (see `PathFrame`).
+-}
+type alias GesturePoint =
+    { tMs : Float, x : Int, y : Int }
 
 
 {-| Captured drag telemetry attached to a wire-bound action. A
