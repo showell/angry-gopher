@@ -1,6 +1,7 @@
 module Main.BoardView exposing
     ( boardWithWings
     , draggedOverlay
+    , viewBoard
     )
 
 {-| The board widget — stacks, drag wings, and the dragged-
@@ -46,7 +47,25 @@ import Main.State
 
 
 
--- BOARD SHELL
+-- STATIC RENDERING
+--
+-- The minimum surface to draw a board: a list of positioned
+-- stacks on the standard board shell. No model, no drag
+-- state, no gameId. Used by surfaces where there's nothing
+-- to interact with (the puzzle V1, snapshot views, anything
+-- that just wants to render a board image).
+--
+-- Polymorphic in `msg` so callers with their own Msg type
+-- can use it without going through `Main.Msg`.
+
+
+viewBoard : List CardStack -> Html msg
+viewBoard stacks =
+    View.boardShellWith [] (List.map View.viewStack stacks)
+
+
+
+-- BOARD SHELL (drag-aware)
 
 
 boardWithWings : Model -> Html Msg

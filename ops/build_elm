@@ -28,3 +28,6 @@ fi
 
 ./node_modules/.bin/elm make src/Main.elm --output=elm.js >/dev/null 2>&1 \
     || { echo "Warning: Main.elm build failed"; exit 1; }
+
+./node_modules/.bin/elm make src/Puzzle.elm --output=puzzle.js >/dev/null 2>&1 \
+    || { echo "Warning: Puzzle.elm build failed"; exit 1; }
