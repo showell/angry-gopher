@@ -146,20 +146,7 @@ applyAction action state =
                     state
 
         MoveStack { stack, newLoc } ->
-            case findStack stack state.board of
-                Just real ->
-                    let
-                        change =
-                            BoardActions.moveStackTo real newLoc
-                    in
-                    { state | board = applyChange change state.board }
-
-                Nothing ->
-                    let
-                        _ =
-                            Debug.log "[Reducer.MoveStack] target stack not on board — skipping (bridge bug)" stack
-                    in
-                    state
+            { state | board = Execute.moveStack stack newLoc state.board }
 
         CompleteTurn ->
             state

@@ -418,17 +418,17 @@ handleMouseUpBoard releasePoint tMs d model =
 
         BoardGesture.MoveStack p ->
             let
-                newModel =
-                    applyMouseUpAction
-                        (GameEvent.MoveStack { stack = p.stack, newLoc = p.newLoc })
-                        (Just p.envelope)
-                        model
+                entry =
+                    { action = GameEvent.MoveStack { stack = p.stack, newLoc = p.newLoc }
+                    , gesturePath = Just p.envelope.path
+                    , pathFrame = p.envelope.frame
+                    }
 
                 outcome =
-                    { board = newModel.board
-                    , status = newModel.status
-                    , actionLog = newModel.actionLog
-                    , nextSeq = newModel.nextSeq
+                    { board = Execute.moveStack p.stack p.newLoc model.board
+                    , status = { text = "Moved!", kind = Inform }
+                    , actionLog = model.actionLog ++ [ entry ]
+                    , nextSeq = model.nextSeq + 1
                     }
 
                 outboundPayloadForAgent =

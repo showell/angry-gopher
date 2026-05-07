@@ -1,4 +1,4 @@
-module Game.Execute exposing (split)
+module Game.Execute exposing (moveStack, split)
 
 {-| Honest board mutators, one per `GameEvent` variant. Each
 function takes the board (and whatever per-action data it
@@ -13,7 +13,7 @@ divergence cascades downstream and gets harder to trace.
 
 -}
 
-import Game.CardStack as CardStack exposing (CardStack, findStack, isStacksEqual)
+import Game.CardStack as CardStack exposing (BoardLocation, CardStack, findStack, isStacksEqual)
 
 
 {-| Split the given stack at `cardIndex`, returning a new
@@ -32,5 +32,25 @@ split stack cardIndex board =
             let
                 _ =
                     Debug.log "[Execute.split] stack not on board — skipping (bridge bug)" stack
+            in
+            board
+
+
+{-| Move the given stack to `newLoc`, returning a new board
+with the original stack removed and the relocated stack
+appended. Bridge-bug case: stack not on board → log + board
+unchanged.
+-}
+moveStack : CardStack -> BoardLocation -> List CardStack -> List CardStack
+moveStack stack newLoc board =
+    case findStack stack board of
+        Just real ->
+            List.filter (not << isStacksEqual real) board
+                ++ [ { real | loc = newLoc } ]
+
+        Nothing ->
+            let
+                _ =
+                    Debug.log "[Execute.moveStack] stack not on board — skipping (bridge bug)" stack
             in
             board
