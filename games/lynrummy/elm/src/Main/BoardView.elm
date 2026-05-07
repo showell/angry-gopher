@@ -26,6 +26,7 @@ not a state the View needs to know about.
 
 import Game.CardStack as CardStack exposing (CardStack)
 import Game.Drag exposing (BoardCardDragInfo, DragState(..), HandCardDragInfo)
+import Game.Physics.GestureArbitration as GA
 import Game.Physics.WingOracle as WingOracle exposing (WingId)
 import Game.View as View
 import Html exposing (Html)
@@ -69,42 +70,7 @@ boardChildren model =
             List.map (viewStackForBoard model.drag) model.board
 
         wingNodes =
-            case model.drag of
-                DraggingBoardCard d ->
-                    List.map
-                        (renderWingWithHover
-                            (Gesture.floaterOverWing
-                                d.floaterTopLeft
-                                (CardStack.stackDisplayWidth d.stack)
-                                d.wings
-                            )
-                        )
-                        d.wings
-
-                DraggingHandCard d ->
-                    case model.boardRect of
-                        Just rect ->
-                            let
-                                floaterBoardLoc =
-                                    { left = d.floaterTopLeft.x - rect.x
-                                    , top = d.floaterTopLeft.y - rect.y
-                                    }
-                            in
-                            List.map
-                                (renderWingWithHover
-                                    (Gesture.floaterOverWing
-                                        floaterBoardLoc
-                                        CardStack.stackPitch
-                                        d.wings
-                                    )
-                                )
-                                d.wings
-
-                        Nothing ->
-                            []
-
-                NotDragging ->
-                    []
+            getWingNodes model.drag model.boardRect
 
         boardOverlayNodes =
             case boardDragOverlay model.drag of
@@ -115,6 +81,43 @@ boardChildren model =
                     []
     in
     stackNodes ++ wingNodes ++ boardOverlayNodes
+
+
+getWingNodes : DragState -> Maybe GA.Rect -> List (Html Msg)
+getWingNodes drag maybeBoardRect =
+    case drag of
+        DraggingBoardCard d ->
+            let
+                hoveredWing =
+                    Gesture.floaterOverWing
+                        d.floaterTopLeft
+                        (CardStack.stackDisplayWidth d.stack)
+                        d.wings
+            in
+            List.map (renderWingWithHover hoveredWing) d.wings
+
+        DraggingHandCard d ->
+            case maybeBoardRect of
+                Just rect ->
+                    let
+                        floaterBoardLoc =
+                            { left = d.floaterTopLeft.x - rect.x
+                            , top = d.floaterTopLeft.y - rect.y
+                            }
+
+                        hoveredWing =
+                            Gesture.floaterOverWing
+                                floaterBoardLoc
+                                CardStack.stackPitch
+                                d.wings
+                    in
+                    List.map (renderWingWithHover hoveredWing) d.wings
+
+                Nothing ->
+                    []
+
+        NotDragging ->
+            []
 
 
 viewStackForBoard : DragState -> CardStack -> Html Msg
