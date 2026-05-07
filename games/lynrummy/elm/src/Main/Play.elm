@@ -286,10 +286,6 @@ pulling in any of the hand-card complexity.
 -}
 handleMouseUp : Point -> Float -> Model -> ( Model, Cmd Msg )
 handleMouseUp releasePoint tMs model =
-    let
-        cleared =
-            { model | drag = NotDragging }
-    in
     case model.drag of
         NotDragging ->
             ( model, Cmd.none )
@@ -297,10 +293,11 @@ handleMouseUp releasePoint tMs model =
         DraggingBoardCard d ->
             let
                 ( outcome, cmd ) =
-                    handleMouseUpBoard releasePoint tMs d cleared
+                    handleMouseUpBoard releasePoint tMs d model
             in
-            ( { cleared
-                | board = outcome.board
+            ( { model
+                | drag = NotDragging
+                , board = outcome.board
                 , status = outcome.status
                 , actionLog = outcome.actionLog
                 , nextSeq = outcome.nextSeq
@@ -309,7 +306,11 @@ handleMouseUp releasePoint tMs model =
             )
 
         DraggingHandCard d ->
-            handleMouseUpHand releasePoint d cleared
+            let
+                ( newModel, cmd ) =
+                    handleMouseUpHand releasePoint d model
+            in
+            ( { newModel | drag = NotDragging }, cmd )
 
 
 {-| Narrow return type for `handleMouseUpBoard`: the three
@@ -334,12 +335,12 @@ is built inline — the `Wire.sendAction` body shape lives at
 the one site that authors it.
 -}
 handleMouseUpBoard : Point -> Float -> BoardCardDragInfo -> Model -> ( BoardOutcome, Cmd Msg )
-handleMouseUpBoard releasePoint tMs d cleared =
-    case BoardGesture.handleMouseUp releasePoint tMs d cleared.boardRect of
+handleMouseUpBoard releasePoint tMs d model =
+    case BoardGesture.handleMouseUp releasePoint tMs d model.boardRect of
         BoardGesture.Split p ->
             let
                 newModel =
-                    applyMouseUpAction (GameEvent.Split p) Nothing cleared
+                    applyMouseUpAction (GameEvent.Split p) Nothing model
 
                 outcome =
                     { board = newModel.board
@@ -350,7 +351,7 @@ handleMouseUpBoard releasePoint tMs d cleared =
 
                 outboundPayloadForAgent =
                     Encode.object
-                        [ ( "seq", Encode.int cleared.nextSeq )
+                        [ ( "seq", Encode.int model.nextSeq )
                         , ( "action"
                           , Encode.object
                                 [ ( "action", Encode.string "split" )
@@ -360,7 +361,7 @@ handleMouseUpBoard releasePoint tMs d cleared =
                           )
                         ]
             in
-            ( outcome, Wire.sendAction cleared.sessionId outboundPayloadForAgent )
+            ( outcome, Wire.sendAction model.sessionId outboundPayloadForAgent )
 
         BoardGesture.MergeStack p ->
             let
@@ -368,7 +369,7 @@ handleMouseUpBoard releasePoint tMs d cleared =
                     applyMouseUpAction
                         (GameEvent.MergeStack { source = p.source, target = p.target, side = p.side })
                         (Just p.envelope)
-                        cleared
+                        model
 
                 outcome =
                     { board = newModel.board
@@ -379,7 +380,7 @@ handleMouseUpBoard releasePoint tMs d cleared =
 
                 outboundPayloadForAgent =
                     Encode.object
-                        [ ( "seq", Encode.int cleared.nextSeq )
+                        [ ( "seq", Encode.int model.nextSeq )
                         , ( "action"
                           , Encode.object
                                 [ ( "action", Encode.string "merge_stack" )
@@ -406,7 +407,7 @@ handleMouseUpBoard releasePoint tMs d cleared =
                           )
                         ]
             in
-            ( outcome, Wire.sendAction cleared.sessionId outboundPayloadForAgent )
+            ( outcome, Wire.sendAction model.sessionId outboundPayloadForAgent )
 
         BoardGesture.MoveStack p ->
             let
@@ -414,7 +415,7 @@ handleMouseUpBoard releasePoint tMs d cleared =
                     applyMouseUpAction
                         (GameEvent.MoveStack { stack = p.stack, newLoc = p.newLoc })
                         (Just p.envelope)
-                        cleared
+                        model
 
                 outcome =
                     { board = newModel.board
@@ -425,7 +426,7 @@ handleMouseUpBoard releasePoint tMs d cleared =
 
                 outboundPayloadForAgent =
                     Encode.object
-                        [ ( "seq", Encode.int cleared.nextSeq )
+                        [ ( "seq", Encode.int model.nextSeq )
                         , ( "action"
                           , Encode.object
                                 [ ( "action", Encode.string "move_stack" )
@@ -442,15 +443,15 @@ handleMouseUpBoard releasePoint tMs d cleared =
                           )
                         ]
             in
-            ( outcome, Wire.sendAction cleared.sessionId outboundPayloadForAgent )
+            ( outcome, Wire.sendAction model.sessionId outboundPayloadForAgent )
 
         BoardGesture.BoardCardOffBoard ->
             let
                 outcome =
-                    { board = cleared.board
+                    { board = model.board
                     , status = offBoardScold
-                    , actionLog = cleared.actionLog
-                    , nextSeq = cleared.nextSeq
+                    , actionLog = model.actionLog
+                    , nextSeq = model.nextSeq
                     }
             in
             ( outcome, Cmd.none )
@@ -462,16 +463,16 @@ but for the hand-origin variants. Hand actions ship pathless
 measurement on the resume path.
 -}
 handleMouseUpHand : Point -> HandCardDragInfo -> Model -> ( Model, Cmd Msg )
-handleMouseUpHand releasePoint d cleared =
-    case HandGesture.handleMouseUp releasePoint d cleared.boardRect of
+handleMouseUpHand releasePoint d model =
+    case HandGesture.handleMouseUp releasePoint d model.boardRect of
         HandGesture.MergeHand p ->
             let
                 newModel =
-                    applyMouseUpAction (GameEvent.MergeHand p) Nothing cleared
+                    applyMouseUpAction (GameEvent.MergeHand p) Nothing model
 
                 outboundPayloadForAgent =
                     Encode.object
-                        [ ( "seq", Encode.int cleared.nextSeq )
+                        [ ( "seq", Encode.int model.nextSeq )
                         , ( "action"
                           , Encode.object
                                 [ ( "action", Encode.string "merge_hand" )
@@ -491,16 +492,16 @@ handleMouseUpHand releasePoint d cleared =
                           )
                         ]
             in
-            ( newModel, Wire.sendAction cleared.sessionId outboundPayloadForAgent )
+            ( newModel, Wire.sendAction model.sessionId outboundPayloadForAgent )
 
         HandGesture.PlaceHand p ->
             let
                 newModel =
-                    applyMouseUpAction (GameEvent.PlaceHand p) Nothing cleared
+                    applyMouseUpAction (GameEvent.PlaceHand p) Nothing model
 
                 outboundPayloadForAgent =
                     Encode.object
-                        [ ( "seq", Encode.int cleared.nextSeq )
+                        [ ( "seq", Encode.int model.nextSeq )
                         , ( "action"
                           , Encode.object
                                 [ ( "action", Encode.string "place_hand" )
@@ -510,13 +511,13 @@ handleMouseUpHand releasePoint d cleared =
                           )
                         ]
             in
-            ( newModel, Wire.sendAction cleared.sessionId outboundPayloadForAgent )
+            ( newModel, Wire.sendAction model.sessionId outboundPayloadForAgent )
 
         HandGesture.HandCardOffBoard ->
-            ( { cleared | status = offBoardScold }, Cmd.none )
+            ( { model | status = offBoardScold }, Cmd.none )
 
         HandGesture.HandNothing ->
-            ( cleared, Cmd.none )
+            ( model, Cmd.none )
 
 
 {-| Apply a player action through the engine, append the
@@ -532,10 +533,10 @@ applyMouseUpAction :
     -> Maybe State.EnvelopeForGesture
     -> Model
     -> Model
-applyMouseUpAction event maybeEnvelope cleared =
+applyMouseUpAction event maybeEnvelope model =
     let
         modelAfter =
-            Apply.applyAction event cleared
+            Apply.applyAction event model
                 |> Apply.commit
     in
     case modelAfter.sessionId of
