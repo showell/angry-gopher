@@ -164,13 +164,22 @@ resolveBoardCardGesture d boardRect =
                     Nothing
 
 
-{-| Mousemove handler for a board-card drag. Caller (the
-dispatcher in `Main.Play`) has pattern-matched out the `Info`.
-Advances cursor + floater + gesture path, recomputes hover
-status, returns the patched Model.
+{-| Mousemove handler for a board-card drag. Pure state
+transformation — advances cursor + floater + gesture path,
+recomputes hover status. Caller (the dispatcher in `Main.Play`)
+wraps the returned `Info` into `DraggingBoardCard` and patches
+the model.
+
+Returns just the bits that change — there's no `Cmd Msg` slot
+because mousemove never emits commands.
 -}
-mouseMove : Point -> Float -> BoardCardDragInfo -> Model -> ( Model, Cmd Msg )
-mouseMove pos tMs d model =
+mouseMove :
+    Point
+    -> Float
+    -> BoardCardDragInfo
+    -> State.StatusMessage
+    -> ( BoardCardDragInfo, State.StatusMessage )
+mouseMove pos tMs d currentStatus =
     let
         delta =
             { x = pos.x - d.cursor.x
@@ -203,11 +212,9 @@ mouseMove pos tMs d model =
             hoverStatus
                 (hover d.floaterTopLeft)
                 (hover nextD.floaterTopLeft)
-                model.status
+                currentStatus
     in
-    ( { model | drag = DraggingBoardCard nextD, status = nextStatus }
-    , Cmd.none
-    )
+    ( nextD, nextStatus )
 
 
 

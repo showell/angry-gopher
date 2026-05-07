@@ -178,7 +178,7 @@ update msg model =
             withNoOutput (startHandDrag card point time model)
 
         MouseMove pos tMs ->
-            withNoOutput (mouseMove pos tMs model)
+            ( mouseMove pos tMs model, Cmd.none, NoOutput )
 
         MouseUp pos tMs ->
             withNoOutput (handleMouseUp pos tMs model)
@@ -263,17 +263,25 @@ logAndScold label err status model =
 -- UPDATE HELPERS
 
 
-mouseMove : Point -> Float -> Model -> ( Model, Cmd Msg )
+mouseMove : Point -> Float -> Model -> Model
 mouseMove pos tMs model =
     case model.drag of
         DraggingBoardCard d ->
-            BoardGesture.mouseMove pos tMs d model
+            let
+                ( nextD, nextStatus ) =
+                    BoardGesture.mouseMove pos tMs d model.status
+            in
+            { model | drag = DraggingBoardCard nextD, status = nextStatus }
 
         DraggingHandCard d ->
-            HandGesture.mouseMove pos d model
+            let
+                ( nextD, nextStatus ) =
+                    HandGesture.mouseMove pos d model.boardRect model.status
+            in
+            { model | drag = DraggingHandCard nextD, status = nextStatus }
 
         NotDragging ->
-            ( model, Cmd.none )
+            model
 
 
 clickCompleteTurn : Model -> ( Model, Cmd Msg )

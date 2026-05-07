@@ -176,12 +176,19 @@ resolveHandCardGesture d maybeRect =
                         Nothing
 
 
-{-| Mousemove handler for a hand-card drag. Caller (the
-dispatcher in `Main.Play`) has pattern-matched out the `Info`.
-Hand drags don't capture a gesture path, so no `tMs`.
+{-| Mousemove handler for a hand-card drag. Pure state
+transformation — caller wraps the returned `Info` into
+`DraggingHandCard`. Hand drags don't capture a gesture path,
+so no `tMs`. No `Cmd Msg` slot — mousemove never emits
+commands.
 -}
-mouseMove : Point -> HandCardDragInfo -> Model -> ( Model, Cmd Msg )
-mouseMove pos d model =
+mouseMove :
+    Point
+    -> HandCardDragInfo
+    -> Maybe GA.Rect
+    -> State.StatusMessage
+    -> ( HandCardDragInfo, State.StatusMessage )
+mouseMove pos d maybeBoardRect currentStatus =
     let
         delta =
             { x = pos.x - d.cursor.x
@@ -200,7 +207,7 @@ mouseMove pos d model =
             }
 
         hover floaterTopLeft =
-            case model.boardRect of
+            case maybeBoardRect of
                 Just rect ->
                     let
                         floaterBoardLoc =
@@ -217,11 +224,9 @@ mouseMove pos d model =
             hoverStatus
                 (hover d.floaterTopLeft)
                 (hover nextD.floaterTopLeft)
-                model.status
+                currentStatus
     in
-    ( { model | drag = DraggingHandCard nextD, status = nextStatus }
-    , Cmd.none
-    )
+    ( nextD, nextStatus )
 
 
 
