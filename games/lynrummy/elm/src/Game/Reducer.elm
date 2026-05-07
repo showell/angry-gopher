@@ -20,6 +20,7 @@ import Game.BoardActions as BoardActions
 import Game.Rules.Card exposing (Card)
 import Game.CardStack as CardStack exposing (CardStack, HandCard, findStack, isStacksEqual)
 import Game.Dealer
+import Game.Execute as Execute
 import Game.Hand as Hand exposing (Hand)
 import Game.GameEvent exposing (GameEvent(..))
 
@@ -41,20 +42,7 @@ applyAction : GameEvent -> State -> State
 applyAction action state =
     case action of
         Split { stack, cardIndex } ->
-            case findStack stack state.board of
-                Just real ->
-                    { state
-                        | board =
-                            List.filter (not << isStacksEqual real) state.board
-                                ++ CardStack.split cardIndex real
-                    }
-
-                Nothing ->
-                    let
-                        _ =
-                            Debug.log "[Reducer.Split] target stack not on board — skipping (bridge bug)" stack
-                    in
-                    state
+            { state | board = Execute.split stack cardIndex state.board }
 
         MergeStack { source, target, side } ->
             case ( findStack source state.board, findStack target state.board ) of
