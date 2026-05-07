@@ -172,9 +172,9 @@ findHandCard target cards =
 
 {-| Fire a `Browser.Dom.getElement` Task to capture the board's
 viewport rectangle. Needed by `isCursorOverBoard` and by hand-
-origin `dropLoc` to translate a viewport-frame floater into
-board frame; intra-board drags don't strictly need it, but the
-fetch is harmless. The rect arrives via `BoardRectReceived`.
+origin drags to translate viewport-frame floaters into board
+frame; intra-board drags don't strictly need it, but the fetch
+is harmless. The rect arrives via `BoardRectReceived`.
 -}
 fetchBoardRect : String -> Cmd Msg
 fetchBoardRect gameId =
@@ -236,7 +236,7 @@ handleMouseUp releasePoint tMs model =
                 maybeAction
                 envelope
                 (droppedOffBoardScold
-                    (dropLoc dFull.floaterTopLeft { x = 0, y = 0 })
+                    { left = dFull.floaterTopLeft.x, top = dFull.floaterTopLeft.y }
                     (CardStack.size dFull.stack)
                 )
                 model
@@ -266,7 +266,9 @@ handleMouseUp releasePoint tMs model =
                     case model.boardRect of
                         Just rect ->
                             droppedOffBoardScold
-                                (dropLoc dFull.floaterTopLeft { x = rect.x, y = rect.y })
+                                { left = dFull.floaterTopLeft.x - rect.x
+                                , top = dFull.floaterTopLeft.y - rect.y
+                                }
                                 1
 
                         Nothing ->
@@ -400,7 +402,7 @@ resolveBoardCardGesture d boardRect =
                 if isCursorOverBoard d.cursor boardRect then
                     let
                         loc =
-                            dropLoc d.floaterTopLeft { x = 0, y = 0 }
+                            { left = d.floaterTopLeft.x, top = d.floaterTopLeft.y }
                     in
                     if isDropFootprintInBounds (CardStack.size d.stack) loc then
                         Just (WA.MoveStack { stack = d.stack, newLoc = loc })
@@ -447,7 +449,7 @@ resolveHandCardGesture d maybeRect =
                     if GA.isCursorInRect d.cursor rect then
                         let
                             loc =
-                                dropLoc d.floaterTopLeft { x = rect.x, y = rect.y }
+                                { left = floaterInBoard.x, top = floaterInBoard.y }
                         in
                         if isDropFootprintInBounds 1 loc then
                             Just (WA.PlaceHand { handCard = d.card, loc = loc })
@@ -519,18 +521,6 @@ floaterOverWing floaterTopLeft floaterWidth wings =
     wings
         |> List.filter (isNearLanding floaterTopLeft floaterWidth)
         |> List.head
-
-
-{-| Translate a floater's top-left into board-frame `BoardLocation`
-coords. For board-frame floaters `boardOrigin = { x = 0, y = 0 }`
-makes this an identity; for viewport-frame floaters callers
-pass the board rect's viewport origin.
--}
-dropLoc : Point -> Point -> BoardLocation
-dropLoc floaterTopLeft boardOrigin =
-    { left = floaterTopLeft.x - boardOrigin.x
-    , top = floaterTopLeft.y - boardOrigin.y
-    }
 
 
 {-| True iff a stack of `cardCount` cards placed at `loc` fits
