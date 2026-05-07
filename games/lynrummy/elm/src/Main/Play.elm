@@ -51,6 +51,7 @@ import Main.Msg exposing (Msg(..))
 import Main.State as State
     exposing
         ( ActionLogBundle
+        , ActionLogEntry
         , Model
         , StatusKind(..)
         , StatusMessage
@@ -294,10 +295,35 @@ handleMouseUp releasePoint tMs model =
             ( model, Cmd.none )
 
         DraggingBoardCard d ->
-            handleMouseUpBoard releasePoint tMs d cleared
+            let
+                ( outcome, cmd ) =
+                    handleMouseUpBoard releasePoint tMs d cleared
+            in
+            ( { cleared
+                | board = outcome.board
+                , status = outcome.status
+                , actionLog = outcome.actionLog
+                , nextSeq = outcome.nextSeq
+              }
+            , cmd
+            )
 
         DraggingHandCard d ->
             handleMouseUpHand releasePoint d cleared
+
+
+{-| Narrow return type for `handleMouseUpBoard`: the three
+fields that a board-card mouseup actually mutates. The
+caller patches these onto its full Model. This is a shim
+toward letting Puzzles call `handleMouseUpBoard` without
+knowing the full Model shape.
+-}
+type alias BoardOutcome =
+    { board : List CardStack
+    , status : StatusMessage
+    , actionLog : List ActionLogEntry
+    , nextSeq : Int
+    }
 
 
 {-| Resolve a board-card mouseup. Each action variant produces
@@ -307,13 +333,20 @@ server's action log). The per-action `outboundPayloadForAgent`
 is built inline — the `Wire.sendAction` body shape lives at
 the one site that authors it.
 -}
-handleMouseUpBoard : Point -> Float -> BoardCardDragInfo -> Model -> ( Model, Cmd Msg )
+handleMouseUpBoard : Point -> Float -> BoardCardDragInfo -> Model -> ( BoardOutcome, Cmd Msg )
 handleMouseUpBoard releasePoint tMs d cleared =
     case BoardGesture.handleMouseUp releasePoint tMs d cleared.boardRect of
         BoardGesture.Split p ->
             let
                 newModel =
                     applyMouseUpAction (GameEvent.Split p) Nothing cleared
+
+                outcome =
+                    { board = newModel.board
+                    , status = newModel.status
+                    , actionLog = newModel.actionLog
+                    , nextSeq = newModel.nextSeq
+                    }
 
                 outboundPayloadForAgent =
                     Encode.object
@@ -327,7 +360,7 @@ handleMouseUpBoard releasePoint tMs d cleared =
                           )
                         ]
             in
-            ( newModel, Wire.sendAction cleared.sessionId outboundPayloadForAgent )
+            ( outcome, Wire.sendAction cleared.sessionId outboundPayloadForAgent )
 
         BoardGesture.MergeStack p ->
             let
@@ -336,6 +369,13 @@ handleMouseUpBoard releasePoint tMs d cleared =
                         (GameEvent.MergeStack { source = p.source, target = p.target, side = p.side })
                         (Just p.envelope)
                         cleared
+
+                outcome =
+                    { board = newModel.board
+                    , status = newModel.status
+                    , actionLog = newModel.actionLog
+                    , nextSeq = newModel.nextSeq
+                    }
 
                 outboundPayloadForAgent =
                     Encode.object
@@ -366,7 +406,7 @@ handleMouseUpBoard releasePoint tMs d cleared =
                           )
                         ]
             in
-            ( newModel, Wire.sendAction cleared.sessionId outboundPayloadForAgent )
+            ( outcome, Wire.sendAction cleared.sessionId outboundPayloadForAgent )
 
         BoardGesture.MoveStack p ->
             let
@@ -375,6 +415,13 @@ handleMouseUpBoard releasePoint tMs d cleared =
                         (GameEvent.MoveStack { stack = p.stack, newLoc = p.newLoc })
                         (Just p.envelope)
                         cleared
+
+                outcome =
+                    { board = newModel.board
+                    , status = newModel.status
+                    , actionLog = newModel.actionLog
+                    , nextSeq = newModel.nextSeq
+                    }
 
                 outboundPayloadForAgent =
                     Encode.object
@@ -395,10 +442,18 @@ handleMouseUpBoard releasePoint tMs d cleared =
                           )
                         ]
             in
-            ( newModel, Wire.sendAction cleared.sessionId outboundPayloadForAgent )
+            ( outcome, Wire.sendAction cleared.sessionId outboundPayloadForAgent )
 
         BoardGesture.BoardCardOffBoard ->
-            ( { cleared | status = offBoardScold }, Cmd.none )
+            let
+                outcome =
+                    { board = cleared.board
+                    , status = offBoardScold
+                    , actionLog = cleared.actionLog
+                    , nextSeq = cleared.nextSeq
+                    }
+            in
+            ( outcome, Cmd.none )
 
 
 {-| Resolve a hand-card mouseup. Mirrors `handleMouseUpBoard`
