@@ -1,6 +1,8 @@
 module Main.Wire exposing
-    ( fetchActionLog
+    ( encodeGesturePoint
+    , fetchActionLog
     , fetchNewSession
+    , pathFrameString
     , sendAction
     )
 
@@ -9,26 +11,28 @@ The server is a dumb URL-keyed file store as of LEAN_PASS phase 2
 (2026-04-28); this module is a thin afterthought layer, not a
 load-bearing concept in the Elm app's architecture.
 
-Three outbound calls (fetchNewSession, fetchActionLog,
-sendAction) plus the inbound decoders for the bootstrap bundle.
-sendAction handles every action including CompleteTurn and
-puzzle moves — the server doesn't validate, doesn't reply with
-turn outcomes, just appends the body as one line of
-`actions.jsonl`. The seq Elm assigns rides inside the body
-(not the URL); ordering on disk = ordering Elm sent.
+Three outbound calls (`fetchNewSession`, `fetchActionLog`,
+`sendAction`) plus the inbound decoders for the bootstrap
+bundle. `sendAction` is now a thin wrapper: take a `Maybe Int`
+session id and a fully-formed JSON body, POST if there's a
+session, no-op otherwise. The body is built at the dispatch
+site (in `Main.Play.handleMouseUp`) with exactly the fields
+the action carries — no `Maybe Envelope` parameter, no shared
+envelope-wrapper. `encodeGesturePoint` and `pathFrameString`
+are exposed as primitive helpers for callers that splice
+gesture metadata into their bodies.
 
 -}
 
 import Game.Rules.Card as Card
 import Game.CardStack as CardStack
 import Game.Hand exposing (Hand)
-import Game.GameEvent exposing (GameEvent)
 import Game.WireAction as WA
 import Http
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode exposing (Value)
 import Main.Msg exposing (Msg(..))
-import Main.State exposing (ActionLogBundle, ActionLogEntry, EnvelopeForGesture, RemoteState)
+import Main.State exposing (ActionLogBundle, ActionLogEntry, RemoteState)
 import Main.Types exposing (GesturePoint, PathFrame(..))
 
 
@@ -66,39 +70,24 @@ fetchActionLog sid =
         }
 
 
-{-| Persist one wire action to its own URL-keyed file. Server
-just writes the body; no validation, no outcome reply.
-
-Two URL shapes, depending on the session kind:
-
-  - Full game (`maybePuzzleName == Nothing`) →
-    `POST /gopher/lynrummy-elm/sessions/<sid>/actions/<seq>`.
-    Elm-assigned seq.
-  - Puzzle (`maybePuzzleName == Just name`) →
-    `POST /gopher/puzzles/sessions/<sid>/<name>/action`.
-    Server picks the next per-puzzle seq; the URL carries
-    session and puzzle, the body carries only the action
-    payload.
-
-The `puzzle_name` is no longer part of the body — the URL is
-the namespacing surface.
-
+{-| POST a fully-formed body to the action log endpoint.
+No-op when the session id is `Nothing` (offline mode — the
+session hasn't been allocated yet). The dispatch site builds
+the body inline, knowing exactly what fields its action
+carries — there is no shared envelope-wrapper here.
 -}
-sendAction :
-    Int
-    -> Int
-    -> GameEvent
-    -> Maybe EnvelopeForGesture
-    -> Cmd Msg
-sendAction sessionId seq action maybeGesture =
-    Http.post
-        { url =
-            "/gopher/lynrummy-elm/sessions/"
-                ++ String.fromInt sessionId
-                ++ "/actions"
-        , body = Http.jsonBody (encodeEnvelope seq action maybeGesture)
-        , expect = Http.expectWhatever ActionSent
-        }
+sendAction : Maybe Int -> Value -> Cmd Msg
+sendAction maybeSessionId body =
+    case maybeSessionId of
+        Just sid ->
+            Http.post
+                { url = "/gopher/lynrummy-elm/sessions/" ++ String.fromInt sid ++ "/actions"
+                , body = Http.jsonBody body
+                , expect = Http.expectWhatever ActionSent
+                }
+
+        Nothing ->
+            Cmd.none
 
 
 pathFrameString : PathFrame -> String
@@ -109,51 +98,6 @@ pathFrameString frame =
 
         ViewportFrame ->
             "viewport"
-
-
-
--- ENVELOPE
-
-
-{-| Outbound POST body: `{seq, action, gesture_metadata?}`. The
-server appends it verbatim as one line of actions.jsonl;
-nothing here is parsed server-side beyond a `json.Compact`
-normalize-pass. The `seq` is Elm-authored and rides in the body
-so the JSONL log preserves the order Elm THOUGHT actions were
-in (HTTP responses don't gate Elm's send loop, so reading order
-on disk is the only post-hoc record). Puzzle attribution is
-URL-borne (see `sendAction`).
--}
-encodeEnvelope : Int -> GameEvent -> Maybe EnvelopeForGesture -> Value
-encodeEnvelope seq action maybeGesture =
-    let
-        baseFields =
-            [ ( "seq", Encode.int seq )
-            , ( "action", WA.encode action )
-            ]
-
-        withGesture =
-            case maybeGesture of
-                Nothing ->
-                    baseFields
-
-                Just { path, frame } ->
-                    case path of
-                        [] ->
-                            baseFields
-
-                        _ ->
-                            baseFields
-                                ++ [ ( "gesture_metadata"
-                                     , Encode.object
-                                        [ ( "path", Encode.list encodeGesturePoint path )
-                                        , ( "path_frame", Encode.string (pathFrameString frame) )
-                                        , ( "pointer_type", Encode.string "mouse" )
-                                        ]
-                                     )
-                                   ]
-    in
-    Encode.object withGesture
 
 
 encodeGesturePoint : GesturePoint -> Value

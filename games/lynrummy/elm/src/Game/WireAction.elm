@@ -1,82 +1,23 @@
-module Game.WireAction exposing
-    ( decoder
-    , encode
-    )
+module Game.WireAction exposing (decoder)
 
-{-| Wire encoder/decoder for `Game.GameEvent.GameEvent`. The
-type itself lives in `Game.GameEvent`; this module is the
-serialization layer that ships events over the HTTP boundary
-to the server's append-only action log.
+{-| Wire decoder for `Game.GameEvent.GameEvent`. The type
+itself lives in `Game.GameEvent`; this module is the inbound
+half of the serialization layer (used when the action log is
+fetched from the server during resume).
+
+The encoder used to live here too, but since the wire body is
+built at the dispatch site in `Main.Play.handleMouseUp` (where
+the per-action shape is already in hand), there is no
+`encode` function — the JSON-shape of each action is at its
+one and only producer.
 
 -}
 
 import Json.Decode as Decode exposing (Decoder)
-import Json.Encode as Encode exposing (Value)
 import Game.BoardActions exposing (Side(..))
 import Game.GameEvent exposing (GameEvent(..))
 import Game.Rules.Card as Card
-import Game.CardStack exposing (boardLocationDecoder, cardStackDecoder, encodeBoardLocation, encodeCardStack)
-
-
-
--- ENCODE
-
-
-encode : GameEvent -> Value
-encode event =
-    case event of
-        Split p ->
-            Encode.object
-                [ ( "action", Encode.string "split" )
-                , ( "stack", encodeCardStack p.stack )
-                , ( "card_index", Encode.int p.cardIndex )
-                ]
-
-        MergeStack p ->
-            Encode.object
-                [ ( "action", Encode.string "merge_stack" )
-                , ( "source", encodeCardStack p.source )
-                , ( "target", encodeCardStack p.target )
-                , ( "side", encodeSide p.side )
-                ]
-
-        MergeHand p ->
-            Encode.object
-                [ ( "action", Encode.string "merge_hand" )
-                , ( "hand_card", Card.encodeCard p.handCard )
-                , ( "target", encodeCardStack p.target )
-                , ( "side", encodeSide p.side )
-                ]
-
-        PlaceHand p ->
-            Encode.object
-                [ ( "action", Encode.string "place_hand" )
-                , ( "hand_card", Card.encodeCard p.handCard )
-                , ( "loc", encodeBoardLocation p.loc )
-                ]
-
-        MoveStack p ->
-            Encode.object
-                [ ( "action", Encode.string "move_stack" )
-                , ( "stack", encodeCardStack p.stack )
-                , ( "new_loc", encodeBoardLocation p.newLoc )
-                ]
-
-        CompleteTurn ->
-            Encode.object [ ( "action", Encode.string "complete_turn" ) ]
-
-        Undo ->
-            Encode.object [ ( "action", Encode.string "undo" ) ]
-
-
-encodeSide : Side -> Value
-encodeSide side =
-    case side of
-        Left ->
-            Encode.string "left"
-
-        Right ->
-            Encode.string "right"
+import Game.CardStack exposing (boardLocationDecoder, cardStackDecoder)
 
 
 

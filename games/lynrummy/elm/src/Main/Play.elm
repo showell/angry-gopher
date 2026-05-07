@@ -21,8 +21,9 @@ Output.
 
 import Browser.Dom
 import Browser.Events
+import Game.BoardActions exposing (Side(..))
 import Game.BoardGesture as BoardGesture
-import Game.CardStack exposing (CardStack)
+import Game.CardStack exposing (CardStack, encodeBoardLocation, encodeCardStack)
 import Game.Drag exposing (DragState(..))
 import Game.HandGesture as HandGesture
 import Game.Rules.Card as Card
@@ -60,7 +61,7 @@ import Main.State as State
         )
 import Main.Types exposing (PathFrame(..), Point)
 import Main.View as View exposing (popupForCompleteTurn, statusForCompleteTurn)
-import Main.Wire as Wire exposing (fetchActionLog, fetchNewSession)
+import Main.Wire as Wire exposing (encodeGesturePoint, fetchActionLog, fetchNewSession, pathFrameString)
 import Time
 
 
@@ -307,22 +308,82 @@ handleMouseUp releasePoint tMs model =
         DraggingBoardCard d ->
             case BoardGesture.handleMouseUp releasePoint tMs d model.boardRect of
                 BoardGesture.Split p ->
-                    applyMouseUpAction
-                        (GameEvent.Split { stack = p.stack, cardIndex = p.cardIndex })
-                        Nothing
-                        cleared
+                    ( applyMouseUpAction (GameEvent.Split p) Nothing cleared
+                    , Wire.sendAction cleared.sessionId
+                        (Encode.object
+                            [ ( "seq", Encode.int cleared.nextSeq )
+                            , ( "action"
+                              , Encode.object
+                                    [ ( "action", Encode.string "split" )
+                                    , ( "stack", encodeCardStack p.stack )
+                                    , ( "card_index", Encode.int p.cardIndex )
+                                    ]
+                              )
+                            ]
+                        )
+                    )
 
                 BoardGesture.MergeStack p ->
-                    applyMouseUpAction
+                    ( applyMouseUpAction
                         (GameEvent.MergeStack { source = p.source, target = p.target, side = p.side })
                         (Just p.envelope)
                         cleared
+                    , Wire.sendAction cleared.sessionId
+                        (Encode.object
+                            [ ( "seq", Encode.int cleared.nextSeq )
+                            , ( "action"
+                              , Encode.object
+                                    [ ( "action", Encode.string "merge_stack" )
+                                    , ( "source", encodeCardStack p.source )
+                                    , ( "target", encodeCardStack p.target )
+                                    , ( "side"
+                                      , Encode.string
+                                            (case p.side of
+                                                Left ->
+                                                    "left"
+
+                                                Right ->
+                                                    "right"
+                                            )
+                                      )
+                                    ]
+                              )
+                            , ( "gesture_metadata"
+                              , Encode.object
+                                    [ ( "path", Encode.list encodeGesturePoint p.envelope.path )
+                                    , ( "path_frame", Encode.string (pathFrameString p.envelope.frame) )
+                                    , ( "pointer_type", Encode.string "mouse" )
+                                    ]
+                              )
+                            ]
+                        )
+                    )
 
                 BoardGesture.MoveStack p ->
-                    applyMouseUpAction
+                    ( applyMouseUpAction
                         (GameEvent.MoveStack { stack = p.stack, newLoc = p.newLoc })
                         (Just p.envelope)
                         cleared
+                    , Wire.sendAction cleared.sessionId
+                        (Encode.object
+                            [ ( "seq", Encode.int cleared.nextSeq )
+                            , ( "action"
+                              , Encode.object
+                                    [ ( "action", Encode.string "move_stack" )
+                                    , ( "stack", encodeCardStack p.stack )
+                                    , ( "new_loc", encodeBoardLocation p.newLoc )
+                                    ]
+                              )
+                            , ( "gesture_metadata"
+                              , Encode.object
+                                    [ ( "path", Encode.list encodeGesturePoint p.envelope.path )
+                                    , ( "path_frame", Encode.string (pathFrameString p.envelope.frame) )
+                                    , ( "pointer_type", Encode.string "mouse" )
+                                    ]
+                              )
+                            ]
+                        )
+                    )
 
                 BoardGesture.BoardCardOffBoard ->
                     ( { cleared | status = offBoardScold }, Cmd.none )
@@ -330,10 +391,46 @@ handleMouseUp releasePoint tMs model =
         DraggingHandCard d ->
             case HandGesture.handleMouseUp releasePoint d model.boardRect of
                 HandGesture.MergeHand p ->
-                    applyMouseUpAction (GameEvent.MergeHand p) Nothing cleared
+                    ( applyMouseUpAction (GameEvent.MergeHand p) Nothing cleared
+                    , Wire.sendAction cleared.sessionId
+                        (Encode.object
+                            [ ( "seq", Encode.int cleared.nextSeq )
+                            , ( "action"
+                              , Encode.object
+                                    [ ( "action", Encode.string "merge_hand" )
+                                    , ( "hand_card", Card.encodeCard p.handCard )
+                                    , ( "target", encodeCardStack p.target )
+                                    , ( "side"
+                                      , Encode.string
+                                            (case p.side of
+                                                Left ->
+                                                    "left"
+
+                                                Right ->
+                                                    "right"
+                                            )
+                                      )
+                                    ]
+                              )
+                            ]
+                        )
+                    )
 
                 HandGesture.PlaceHand p ->
-                    applyMouseUpAction (GameEvent.PlaceHand p) Nothing cleared
+                    ( applyMouseUpAction (GameEvent.PlaceHand p) Nothing cleared
+                    , Wire.sendAction cleared.sessionId
+                        (Encode.object
+                            [ ( "seq", Encode.int cleared.nextSeq )
+                            , ( "action"
+                              , Encode.object
+                                    [ ( "action", Encode.string "place_hand" )
+                                    , ( "hand_card", Card.encodeCard p.handCard )
+                                    , ( "loc", encodeBoardLocation p.loc )
+                                    ]
+                              )
+                            ]
+                        )
+                    )
 
                 HandGesture.HandCardOffBoard ->
                     ( { cleared | status = offBoardScold }, Cmd.none )
@@ -342,16 +439,19 @@ handleMouseUp releasePoint tMs model =
                     ( cleared, Cmd.none )
 
 
-{-| Apply a player action: feed it through the engine, append
-to the action log, fire `Wire.sendAction` if a session id is
-set. `maybeEnvelope` is `Just` for board drags (which capture
-a path) and `Nothing` for hand drags / Split clicks.
+{-| Apply a player action through the engine, append the
+action-log entry, advance `nextSeq`. The wire send is a
+separate concern fired at the dispatch site in
+`handleMouseUp` — this function returns just the new model.
+`maybeEnvelope` is `Just` for board drags (which capture a
+path) and `Nothing` for hand drags / Split clicks; it shapes
+the entry's `gesturePath` / `pathFrame` for replay.
 -}
 applyMouseUpAction :
     GameEvent
     -> Maybe State.EnvelopeForGesture
     -> Model
-    -> ( Model, Cmd Msg )
+    -> Model
 applyMouseUpAction event maybeEnvelope cleared =
     let
         modelAfter =
@@ -359,7 +459,7 @@ applyMouseUpAction event maybeEnvelope cleared =
                 |> Apply.commit
     in
     case modelAfter.sessionId of
-        Just sid ->
+        Just _ ->
             let
                 entry =
                     { action = event
@@ -369,19 +469,14 @@ applyMouseUpAction event maybeEnvelope cleared =
                             |> Maybe.map .frame
                             |> Maybe.withDefault ViewportFrame
                     }
-
-                seq =
-                    modelAfter.nextSeq
             in
-            ( { modelAfter
+            { modelAfter
                 | actionLog = modelAfter.actionLog ++ [ entry ]
-                , nextSeq = seq + 1
-              }
-            , Wire.sendAction sid seq event maybeEnvelope
-            )
+                , nextSeq = modelAfter.nextSeq + 1
+            }
 
         Nothing ->
-            ( modelAfter, Cmd.none )
+            modelAfter
 
 
 offBoardScold : StatusMessage
@@ -427,12 +522,15 @@ clickCompleteTurn model =
                     }
 
                 persistCmd =
-                    case model.sessionId of
-                        Just sid ->
-                            Wire.sendAction sid seq GameEvent.CompleteTurn Nothing
-
-                        Nothing ->
-                            Cmd.none
+                    Wire.sendAction model.sessionId
+                        (Encode.object
+                            [ ( "seq", Encode.int seq )
+                            , ( "action"
+                              , Encode.object
+                                    [ ( "action", Encode.string "complete_turn" ) ]
+                              )
+                            ]
+                        )
             in
             ( newModel, persistCmd )
 
@@ -487,12 +585,15 @@ clickUndo model =
                         }
 
                 persistCmd =
-                    case model.sessionId of
-                        Just sid ->
-                            Wire.sendAction sid seq GameEvent.Undo Nothing
-
-                        Nothing ->
-                            Cmd.none
+                    Wire.sendAction model.sessionId
+                        (Encode.object
+                            [ ( "seq", Encode.int seq )
+                            , ( "action"
+                              , Encode.object
+                                    [ ( "action", Encode.string "undo" ) ]
+                              )
+                            ]
+                        )
             in
             ( newModel, persistCmd )
 
