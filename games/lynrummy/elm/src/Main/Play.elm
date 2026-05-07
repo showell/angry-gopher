@@ -22,12 +22,12 @@ Output.
 import Browser.Dom
 import Browser.Events
 import Game.CardStack exposing (CardStack)
+import Game.Drag exposing (DragState(..))
 import Game.Rules.Card as Card
 import Game.Dealer as Dealer
 import Game.Reducer as Reducer
 import Game.Game as Game
 import Game.PlayerTurn exposing (CompleteTurnResult(..))
-import Game.Physics.GestureArbitration as GA
 import Game.Random as Random
 import Game.Replay.Time as ReplayTime
 import Game.Score as Score
@@ -48,7 +48,6 @@ import Main.Msg exposing (Msg(..))
 import Main.State as State
     exposing
         ( ActionLogBundle
-        , DragState(..)
         , Model
         , StatusKind(..)
         , StatusMessage
@@ -58,6 +57,7 @@ import Main.State as State
         , encodeRemoteState
         , setActiveHand
         )
+import Main.Types exposing (PathFrame(..), Point)
 import Main.View as View exposing (popupForCompleteTurn, statusForCompleteTurn)
 import Main.Wire as Wire exposing (fetchActionLog, fetchNewSession)
 import Time
@@ -261,66 +261,96 @@ logAndScold label err status model =
 -- UPDATE HELPERS
 
 
-mouseMove : State.Point -> Float -> Model -> ( Model, Cmd Msg )
+mouseMove : Point -> Float -> Model -> ( Model, Cmd Msg )
 mouseMove pos tMs model =
     case model.drag of
-        Dragging info ctx arb ->
+        DraggingBoardCard d ->
             let
-                nextIntent =
-                    GA.clickIntentAfterMove arb.originalCursor pos arb.clickIntent
-
-                -- Apply the cursor delta to the floater. Pure
-                -- vector, frame-agnostic — floaterTopLeft stays
-                -- in whatever frame it started (board for
-                -- intra-board drags, viewport for hand drags).
                 delta =
-                    { x = pos.x - info.cursor.x
-                    , y = pos.y - info.cursor.y
+                    { x = pos.x - d.cursor.x
+                    , y = pos.y - d.cursor.y
                     }
 
                 nextFloater =
-                    { x = info.floaterTopLeft.x + delta.x
-                    , y = info.floaterTopLeft.y + delta.y
+                    { x = d.floaterTopLeft.x + delta.x
+                    , y = d.floaterTopLeft.y + delta.y
                     }
 
                 nextPath =
-                    info.gesturePath
+                    d.gesturePath
                         ++ [ { tMs = tMs, x = nextFloater.x, y = nextFloater.y } ]
 
-                nextInfo =
-                    { info
+                nextD =
+                    { d
                         | cursor = pos
                         , floaterTopLeft = nextFloater
                         , gesturePath = nextPath
                     }
 
-                nextArb =
-                    { arb | clickIntent = nextIntent }
-
                 currentHover =
-                    Gesture.floaterOverWing ctx info
+                    Gesture.floaterOverWingForBoard d
 
                 nextHover =
-                    Gesture.floaterOverWing ctx nextInfo
+                    Gesture.floaterOverWingForBoard nextD
 
                 statusAfterMove =
-                    if nextHover /= currentHover then
-                        case nextHover of
-                            Just _ ->
-                                Gesture.wingHoverStatus
-
-                            Nothing ->
-                                model.status
-
-                    else
-                        model.status
+                    hoverStatus currentHover nextHover model.status
             in
-            ( { model | drag = Dragging nextInfo ctx nextArb, status = statusAfterMove }
+            ( { model | drag = DraggingBoardCard nextD, status = statusAfterMove }
+            , Cmd.none
+            )
+
+        DraggingHandCard d ->
+            let
+                delta =
+                    { x = pos.x - d.cursor.x
+                    , y = pos.y - d.cursor.y
+                    }
+
+                nextFloater =
+                    { x = d.floaterTopLeft.x + delta.x
+                    , y = d.floaterTopLeft.y + delta.y
+                    }
+
+                nextD =
+                    { d
+                        | cursor = pos
+                        , floaterTopLeft = nextFloater
+                    }
+
+                currentHover =
+                    Gesture.floaterOverWingForHand d model.boardRect
+
+                nextHover =
+                    Gesture.floaterOverWingForHand nextD model.boardRect
+
+                statusAfterMove =
+                    hoverStatus currentHover nextHover model.status
+            in
+            ( { model | drag = DraggingHandCard nextD, status = statusAfterMove }
             , Cmd.none
             )
 
         NotDragging ->
             ( model, Cmd.none )
+
+
+hoverStatus :
+    Maybe a
+    -> Maybe a
+    -> StatusMessage
+    -> StatusMessage
+hoverStatus currentHover nextHover currentStatus =
+    if nextHover /= currentHover then
+        case nextHover of
+            Just _ ->
+                Gesture.wingHoverStatus
+
+            Nothing ->
+                currentStatus
+
+    else
+        currentStatus
 
 
 clickCompleteTurn : Model -> ( Model, Cmd Msg )
@@ -346,7 +376,7 @@ clickCompleteTurn model =
                 completeTurnEntry =
                     { action = WA.CompleteTurn
                     , gesturePath = Nothing
-                    , pathFrame = State.ViewportFrame
+                    , pathFrame = ViewportFrame
                     }
 
                 newModel =
@@ -386,7 +416,7 @@ clickUndo model =
                 undoEntry =
                     { action = WA.Undo
                     , gesturePath = Nothing
-                    , pathFrame = State.ViewportFrame
+                    , pathFrame = ViewportFrame
                     }
 
                 seq =
@@ -458,29 +488,8 @@ boardRectReceived result model =
                     , width = round element.element.width
                     , height = round element.element.height
                     }
-
-                updatedDrag =
-                    case model.drag of
-                        Dragging info ctx arb ->
-                            Dragging info { ctx | boardRect = Just rect } arb
-
-                        other ->
-                            other
-
-                replayOffset =
-                    case model.replay of
-                        Just _ ->
-                            Just { x = rect.x, y = rect.y }
-
-                        Nothing ->
-                            model.replayBoardRect
             in
-            ( { model
-                | drag = updatedDrag
-                , replayBoardRect = replayOffset
-              }
-            , Cmd.none
-            )
+            ( { model | boardRect = Just rect }, Cmd.none )
 
         Err err ->
             let
@@ -642,13 +651,13 @@ subscriptions model =
     let
         dragSubs =
             case model.drag of
-                Dragging _ _ _ ->
+                NotDragging ->
+                    []
+
+                _ ->
                     [ Browser.Events.onMouseMove mouseMoveDecoder
                     , Browser.Events.onMouseUp mouseUpDecoder
                     ]
-
-                NotDragging ->
-                    []
 
         replaySubs =
             case model.replay of

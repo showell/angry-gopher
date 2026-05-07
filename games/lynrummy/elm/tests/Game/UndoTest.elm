@@ -21,7 +21,8 @@ import Game.CardStack exposing (CardStack, HandCardState(..))
 import Game.Hand as Hand
 import Game.Reducer as Reducer
 import Game.WireAction exposing (WireAction(..))
-import Main.State as State exposing (ActionLogEntry, PathFrame(..))
+import Main.State as State exposing (ActionLogEntry)
+import Main.Types exposing (PathFrame(..))
 import Test exposing (Test, describe, test)
 
 

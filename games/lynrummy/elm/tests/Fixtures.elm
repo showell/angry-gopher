@@ -1,55 +1,34 @@
 module Fixtures exposing
-    ( DragBundle
-    , at
-    , boardStackDragAt
+    ( at
+    , boardCardDragAt
     , defaultBoardRect
     , handCardDragAt
     , stackAt
-    , withWings
+    , withWingsBoard
+    , withWingsHand
     )
 
 {-| Shared test fixtures for drag-related tests.
 
-The drag state is now split across three records —
-`DragInfo`, `DragContext`, and `ClickArbiter`. This module
-exports a `DragBundle` wrapper so test code can work with a
-single value and destructure only what it needs.
+The drag state is now two clean variants — `DraggingBoardCard`
+holds a `BoardCardDragInfo`; `DraggingHandCard` holds a
+`HandCardDragInfo`. These builders return the variant-specific
+record so tests can construct realistic drags without boiling
+back through any union-of-records intermediary.
 
-Each builder returns a `DragBundle` that's minimally valid for
-the drag type it represents: intra-board drags are BoardFrame
-with floaterTopLeft in board frame; hand drags are ViewportFrame
-with floaterTopLeft in viewport frame and a measured boardRect
-populated.
-
-Adding a field to any of the three records ripples through this
-one module, not through every test.
+`floaterTopLeft` is in board frame for board drags and
+viewport frame for hand drags (matching the variant's implicit
+coordinate frame). Adding a field to either info record ripples
+through this one module, not through every test.
 
 -}
 
+import Game.Drag exposing (BoardCardDragInfo, HandCardDragInfo)
 import Game.Rules.Card exposing (Card, OriginDeck(..))
 import Game.CardStack as CardStack exposing (BoardLocation, CardStack)
 import Game.Physics.GestureArbitration as GA
 import Game.Physics.WingOracle exposing (WingId)
-import Main.State
-    exposing
-        ( ClickArbiter
-        , DragContext
-        , DragInfo
-        , DragSource(..)
-        , PathFrame(..)
-        , Point
-        )
-
-
-{-| Bundles DragInfo + DragContext + ClickArbiter into one
-value for test ergonomics. Tests destructure only what they
-need.
--}
-type alias DragBundle =
-    { info : DragInfo
-    , ctx : DragContext
-    , arb : ClickArbiter
-    }
+import Main.Types exposing (Point)
 
 
 at : Int -> Int -> BoardLocation
@@ -72,70 +51,50 @@ defaultBoardRect =
     { x = 300, y = 100, width = 800, height = 600 }
 
 
-defaultInfo : DragInfo
-defaultInfo =
-    let
-        placeholder =
-            stackAt "2C,3D" (at 0 0)
-    in
-    { source = FromBoardStack placeholder
-    , cursor = { x = 0, y = 0 }
-    , floaterTopLeft = { x = 0, y = 0 }
-    , gesturePath = []
-    , pathFrame = BoardFrame
-    }
-
-
-defaultCtx : DragContext
-defaultCtx =
-    { wings = [], boardRect = Nothing }
-
-
-defaultArb : ClickArbiter
-defaultArb =
-    { clickIntent = Nothing, originalCursor = { x = 0, y = 0 } }
-
-
-{-| Intra-board drag fixture. `floaterTopLeft` is in BOARD
-frame (matches pathFrame). The initial floater of a real
-drag is `stack.loc`, but tests pass arbitrary positions to
-probe specific distances from wings / landings.
+{-| Board-card drag fixture. `floaterTopLeft` is in BOARD
+frame. The initial floater of a real drag is `stack.loc`, but
+tests pass arbitrary positions to probe specific distances
+from wings / landings. `cardIndex` defaults to 0 and
+`originalCursor` defaults to (0, 0); tests that exercise
+click-vs-drag arbitration set these explicitly via record
+update.
 -}
-boardStackDragAt : CardStack -> Point -> DragBundle
-boardStackDragAt stack floaterTopLeft =
-    { info =
-        { defaultInfo
-            | source = FromBoardStack stack
-            , floaterTopLeft = floaterTopLeft
-            , pathFrame = BoardFrame
-        }
-    , ctx = defaultCtx
-    , arb = defaultArb
+boardCardDragAt : CardStack -> Point -> BoardCardDragInfo
+boardCardDragAt stack floaterTopLeft =
+    { stack = stack
+    , cardIndex = 0
+    , originalCursor = { x = 0, y = 0 }
+    , cursor = { x = 0, y = 0 }
+    , floaterTopLeft = floaterTopLeft
+    , gesturePath = []
+    , wings = []
     }
 
 
 {-| Hand-card drag fixture. `floaterTopLeft` is in VIEWPORT
-frame. `boardRect` is populated — hand-card hit-tests need
-it to translate the eventual-landing board-frame point into
-viewport frame.
+frame. Hand drags don't carry `gesturePath` (replay
+re-synthesizes via DOM measurement) and don't have a
+click-vs-drag arbitration, so neither field is here.
 -}
-handCardDragAt : Card -> Point -> DragBundle
+handCardDragAt : Card -> Point -> HandCardDragInfo
 handCardDragAt card floaterTopLeft =
-    { info =
-        { defaultInfo
-            | source = FromHandCard card
-            , floaterTopLeft = floaterTopLeft
-            , pathFrame = ViewportFrame
-        }
-    , ctx = { defaultCtx | boardRect = Just defaultBoardRect }
-    , arb = defaultArb
+    { card = card
+    , cursor = { x = 0, y = 0 }
+    , floaterTopLeft = floaterTopLeft
+    , wings = []
     }
 
 
-{-| Add a list of wings to a DragBundle. Tests setting up a
-hit-test scenario need the target wing(s) registered so the
-filter in `floaterOverWing` has something to match against.
+{-| Add a list of wings to a board-card drag. Tests setting
+up a hit-test scenario need the target wing(s) registered so
+the filter in `floaterOverWingForBoard` has something to match
+against.
 -}
-withWings : List WingId -> DragBundle -> DragBundle
-withWings wings bundle =
-    { bundle | ctx = { wings = wings, boardRect = bundle.ctx.boardRect } }
+withWingsBoard : List WingId -> BoardCardDragInfo -> BoardCardDragInfo
+withWingsBoard wings d =
+    { d | wings = wings }
+
+
+withWingsHand : List WingId -> HandCardDragInfo -> HandCardDragInfo
+withWingsHand wings d =
+    { d | wings = wings }

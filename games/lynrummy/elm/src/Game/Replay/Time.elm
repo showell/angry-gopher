@@ -34,6 +34,7 @@ the replay FSM + its Msg handlers in one module.
 -}
 
 import Browser.Dom
+import Game.Drag as Drag exposing (DragState(..))
 import Game.Rules.Card
 import Game.HandLayout as HandLayout
 import Game.Replay.AnimateMergeHand as AnimateMergeHand
@@ -48,12 +49,11 @@ import Main.Apply as Apply
 import Main.Msg exposing (Msg(..))
 import Main.State as State
     exposing
-        ( DragState(..)
-        , Model
-        , PathFrame
+        ( Model
         , ReplayAnimationState(..)
         , StatusKind(..)
         )
+import Main.Types exposing (GesturePoint, Point)
 import Task
 import Time
 
@@ -104,7 +104,6 @@ clickInstantReplay model =
                 , replay = Just { pending = State.collapseUndos model.actionLog, paused = False }
                 , replayAnim = PreRolling { untilMs = 0 }
                 , drag = NotDragging
-                , replayBoardRect = Nothing
               }
             , Task.attempt BoardRectReceived
                 (Browser.Dom.getElement (State.boardDomIdFor model.gameId))
@@ -168,14 +167,13 @@ replayFrame nowMs model =
                                 prepareReplayStep
                                     entry.action
                                     entry.gesturePath
-                                    entry.pathFrame
                                     advanced
                                     nowMs
 
                     Animating anim ->
                         case DragAnimation.step nowMs anim of
-                            DragAnimation.InProgress { drag } ->
-                                ( { model | drag = drag }
+                            DragAnimation.InProgress { floaterTopLeft } ->
+                                ( { model | drag = Drag.setFloaterTopLeft floaterTopLeft model.drag }
                                 , Cmd.none
                                 )
 
@@ -266,18 +264,17 @@ path). The decision tree:
 -}
 prepareReplayStep :
     WireAction
-    -> Maybe (List State.GesturePoint)
-    -> PathFrame
+    -> Maybe (List GesturePoint)
     -> Model
     -> Float
     -> ( Model, Cmd Msg )
-prepareReplayStep action maybePath frame model nowMs =
+prepareReplayStep action maybePath model nowMs =
     let
         startAnimating anim =
             case Space.interpPath anim.path 0 of
                 Just cursor ->
                     ( { model
-                        | replayAnim = Animating anim
+                        | replayAnim = Animating { startMs = anim.startMs, path = anim.path, pendingAction = anim.pendingAction }
                         , drag = Space.animatedDragState anim cursor
                       }
                     , Cmd.none
@@ -304,7 +301,7 @@ prepareReplayStep action maybePath frame model nowMs =
                     jitOrApply
 
                 _ ->
-                    case startBoardAnim action path frame model nowMs of
+                    case startBoardAnim action path model nowMs of
                         Just anim ->
                             startAnimating anim
 
@@ -317,16 +314,13 @@ prepareReplayStep action maybePath frame model nowMs =
                             -- to applyImmediate, escalate to JIT
                             -- synthesis. JIT itself falls back to
                             -- applyImmediate if it can't synthesize
-                            -- either. This is the only place where
-                            -- this lookup gap can surface during
-                            -- replay; centralizing the fallback
-                            -- here keeps the gap from being silent.
+                            -- either.
                             jitOrApply
 
         jitOrApply =
             case Space.synthesizeBoardPath action model nowMs of
-                Just ( synthPath, synthFrame ) ->
-                    case startBoardAnim action synthPath synthFrame model nowMs of
+                Just ( synthPath, _ ) ->
+                    case startBoardAnim action synthPath model nowMs of
                         Just anim ->
                             startAnimating anim
 
@@ -340,10 +334,7 @@ prepareReplayStep action maybePath frame model nowMs =
                         Just result ->
                             ( { model
                                 | replayAnim =
-                                    AwaitingHandRect
-                                        { action = action
-                                        , source = result.source
-                                        }
+                                    AwaitingHandRect { action = action }
                               }
                             , Task.attempt HandCardRectReceived
                                 (Task.map2 Tuple.pair
@@ -398,7 +389,7 @@ handCardRectReceived result model =
                     Space.elementTopLeftInViewport element
 
                 maybeAnim =
-                    finishHandAnim ctx.action origin nowMs ctx.source model
+                    finishHandAnim ctx.action origin nowMs model
             in
             let
                 applyNow =
@@ -418,7 +409,7 @@ handCardRectReceived result model =
                     case Space.interpPath anim.path 0 of
                         Just cursor ->
                             ( { model
-                                | replayAnim = Animating anim
+                                | replayAnim = Animating { startMs = anim.startMs, path = anim.path, pendingAction = anim.pendingAction }
                                 , drag = Space.animatedDragState anim cursor
                               }
                             , Cmd.none
@@ -488,12 +479,11 @@ synchronous board-drag primitive.
 -}
 startBoardAnim :
     WireAction
-    -> List State.GesturePoint
-    -> PathFrame
+    -> List GesturePoint
     -> Model
     -> Float
     -> Maybe Space.AnimationInfo
-startBoardAnim action path frame model nowMs =
+startBoardAnim action path model nowMs =
     case action of
         WA.Split _ ->
             -- Splits are CLICKS in the live UI — a single event
@@ -507,10 +497,10 @@ startBoardAnim action path frame model nowMs =
             Nothing
 
         WA.MergeStack payload ->
-            AnimateMergeStack.start payload path frame model nowMs
+            AnimateMergeStack.start payload path model nowMs
 
         WA.MoveStack payload ->
-            AnimateMoveStack.start payload path frame model nowMs
+            AnimateMoveStack.start payload path model nowMs
 
         _ ->
             Nothing
@@ -526,59 +516,42 @@ prepareHandAnim action model =
     case action of
         WA.MergeHand payload ->
             AnimateMergeHand.prepare payload model
-                |> Maybe.map prepareResultFromMergeHand
+                |> Maybe.map (\r -> { handCardToMeasure = r.handCardToMeasure })
 
         WA.PlaceHand payload ->
             AnimatePlaceHand.prepare payload model
-                |> Maybe.map prepareResultFromPlaceHand
+                |> Maybe.map (\r -> { handCardToMeasure = r.handCardToMeasure })
 
         _ ->
             Nothing
 
 
-{-| Unified shape for Time's AwaitingHandRect bookkeeping.
-The per-primitive Animate modules define their own typed
-PrepareResult; we lift both into this common record for
-the FSM.
+{-| Unified shape for Time's prepareReplayStep return path —
+just names which hand card the DOM measurement should target.
 -}
 type alias HandPrepareResult =
-    { source : State.DragSource
-    , handCardToMeasure : Game.Rules.Card.Card
+    { handCardToMeasure : Game.Rules.Card.Card
     }
 
 
-prepareResultFromMergeHand : AnimateMergeHand.PrepareResult -> HandPrepareResult
-prepareResultFromMergeHand r =
-    { source = r.source
-    , handCardToMeasure = r.handCardToMeasure
-    }
-
-
-prepareResultFromPlaceHand : AnimatePlaceHand.PrepareResult -> HandPrepareResult
-prepareResultFromPlaceHand r =
-    { source = r.source
-    , handCardToMeasure = r.handCardToMeasure
-    }
-
-
-{-| Dispatch the async phase 2 of hand-origin replay. Given
-the measured viewport origin and the stashed context, forward
-to the matching Animate module to build the AnimationInfo.
+{-| Dispatch the async phase 2 of hand-origin replay. The
+measured viewport origin pairs with the action's payload to
+build the AnimationInfo; source identity is derived from the
+action (the `handCard` field on MergeHand/PlaceHand).
 -}
 finishHandAnim :
     WireAction
-    -> State.Point
+    -> Point
     -> Float
-    -> State.DragSource
     -> Model
     -> Maybe Space.AnimationInfo
-finishHandAnim action origin nowMs source model =
+finishHandAnim action origin nowMs model =
     case action of
         WA.MergeHand payload ->
-            AnimateMergeHand.finish payload origin nowMs source model
+            AnimateMergeHand.finish payload origin nowMs model
 
         WA.PlaceHand payload ->
-            AnimatePlaceHand.finish payload origin nowMs source model
+            AnimatePlaceHand.finish payload origin nowMs model
 
         _ ->
             Nothing

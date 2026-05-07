@@ -25,6 +25,7 @@ import Game.CardStack
         , HandCardState(..)
         )
 import Game.BoardActions as BoardActions
+import Game.Drag as Drag exposing (DragState(..))
 import Game.Physics.GestureArbitration as GA
 import Game.Physics.PlaceStack
 import Game.Physics.WingOracle as WingOracle
@@ -37,6 +38,7 @@ import Main.Gesture as Gesture
 import Main.Msg as Msg
 import Main.Play as Play
 import Main.State as State
+import Main.Types exposing (PathFrame(..))
 import Test exposing (Test, describe, test)
 
 
@@ -201,7 +203,7 @@ runReplay initialModel actions =
                 (\a ->
                     { action = a
                     , gesturePath = Nothing
-                    , pathFrame = State.BoardFrame
+                    , pathFrame = BoardFrame
                     }
                 )
                 actions
@@ -1314,11 +1316,11 @@ dragInvariantBoardDragInitialFloater =
                         model
             in
             case afterDown.drag of
-                State.Dragging info _ _ ->
-                    Expect.equal { x = 100, y = 200 } info.floaterTopLeft
+                DraggingBoardCard d ->
+                    Expect.equal { x = 100, y = 200 } d.floaterTopLeft
 
                 _ ->
-                    Expect.fail "expected Dragging state"
+                    Expect.fail "expected DraggingBoardCard state"
 
 
 dragInvariantBoardDragPathFrame : Test
@@ -1343,11 +1345,11 @@ dragInvariantBoardDragPathFrame =
                         model
             in
             case afterDown.drag of
-                State.Dragging info _ _ ->
-                    Expect.equal State.BoardFrame info.pathFrame
+                DraggingBoardCard _ ->
+                    Expect.pass
 
                 _ ->
-                    Expect.fail "expected Dragging state"
+                    Expect.fail ("expected DraggingBoardCard state")
 
 
 dragInvariantFloaterShift : Test
@@ -1384,7 +1386,7 @@ dragInvariantFloaterShift =
                         afterDown
             in
             case ( afterDown.drag, afterMove.drag ) of
-                ( State.Dragging before _ _, State.Dragging after _ _ ) ->
+                ( DraggingBoardCard before, DraggingBoardCard after ) ->
                     Expect.equal
                         { x = before.floaterTopLeft.x + delta.x
                         , y = before.floaterTopLeft.y + delta.y
@@ -1392,7 +1394,7 @@ dragInvariantFloaterShift =
                         after.floaterTopLeft
             
                 _ ->
-                    Expect.fail "expected both states to be Dragging"
+                    Expect.fail "expected both states to be DraggingBoardCard"
 
 
 dragInvariantGrabPointInvariant : Test
@@ -1428,7 +1430,7 @@ dragInvariantGrabPointInvariant =
                                 afterDown
                     in
                     case ( afterDown.drag, afterMove.drag ) of
-                        ( State.Dragging before _ _, State.Dragging after _ _ ) ->
+                        ( DraggingBoardCard before, DraggingBoardCard after ) ->
                             Just
                                 { x = after.floaterTopLeft.x - before.floaterTopLeft.x
                                 , y = after.floaterTopLeft.y - before.floaterTopLeft.y
@@ -1465,11 +1467,11 @@ dragInvariantHandDragPathFrame =
                         model
             in
             case afterDown.drag of
-                State.Dragging info _ _ ->
-                    Expect.equal State.ViewportFrame info.pathFrame
+                DraggingHandCard _ ->
+                    Expect.pass
 
                 _ ->
-                    Expect.fail "expected Dragging state"
+                    Expect.fail ("expected DraggingHandCard state")
 
 
 engulfGrowing2partialIntoLegalRun : Test
@@ -1862,9 +1864,6 @@ gestureFloaterOverWingLeftFires =
                 sourceStack =
                     { boardCards = [ boardCard "2C1", boardCard "3D1", boardCard "4C1" ], loc = { top = 20, left = 20 } }
 
-                source =
-                    State.FromBoardStack sourceStack
-
                 targetStack =
                     { boardCards = [ boardCard "5H1", boardCard "6S1", boardCard "7H1" ], loc = { top = 20, left = 300 } }
 
@@ -1874,19 +1873,18 @@ gestureFloaterOverWingLeftFires =
                 wing =
                     { target = targetStack, side = BoardActions.Left }
 
-                info =
-                    { source = source
+                d =
+                    { stack = sourceStack
+                    , cardIndex = 0
+                    , originalCursor = { x = -1000, y = 0 }
                     , cursor = { x = 0, y = 0 }
                     , floaterTopLeft = floater
                     , gesturePath = []
-                    , pathFrame = State.BoardFrame
+                    , wings = [ wing ]
                     }
 
-                ctx =
-                    { wings = [ wing ], boardRect = Nothing }
-
             in
-            Gesture.floaterOverWing ctx info
+            Gesture.floaterOverWingForBoard d
                 |> Expect.equal (Just wing)
 
 
@@ -1898,9 +1896,6 @@ gestureFloaterOverWingPastTolerance =
                 sourceStack =
                     { boardCards = [ boardCard "2C1", boardCard "3D1", boardCard "4C1" ], loc = { top = 20, left = 20 } }
 
-                source =
-                    State.FromBoardStack sourceStack
-
                 targetStack =
                     { boardCards = [ boardCard "5H1", boardCard "6S1", boardCard "7H1" ], loc = { top = 20, left = 300 } }
 
@@ -1910,19 +1905,18 @@ gestureFloaterOverWingPastTolerance =
                 wing =
                     { target = targetStack, side = BoardActions.Right }
 
-                info =
-                    { source = source
+                d =
+                    { stack = sourceStack
+                    , cardIndex = 0
+                    , originalCursor = { x = -1000, y = 0 }
                     , cursor = { x = 0, y = 0 }
                     , floaterTopLeft = floater
                     , gesturePath = []
-                    , pathFrame = State.BoardFrame
+                    , wings = [ wing ]
                     }
 
-                ctx =
-                    { wings = [ wing ], boardRect = Nothing }
-
             in
-            Gesture.floaterOverWing ctx info
+            Gesture.floaterOverWingForBoard d
                 |> Expect.equal Nothing
 
 
@@ -1934,9 +1928,6 @@ gestureFloaterOverWingRightFires =
                 sourceStack =
                     { boardCards = [ boardCard "2C1", boardCard "3D1", boardCard "4C1" ], loc = { top = 20, left = 20 } }
 
-                source =
-                    State.FromBoardStack sourceStack
-
                 targetStack =
                     { boardCards = [ boardCard "5H1", boardCard "6S1", boardCard "7H1" ], loc = { top = 20, left = 300 } }
 
@@ -1946,19 +1937,18 @@ gestureFloaterOverWingRightFires =
                 wing =
                     { target = targetStack, side = BoardActions.Right }
 
-                info =
-                    { source = source
+                d =
+                    { stack = sourceStack
+                    , cardIndex = 0
+                    , originalCursor = { x = -1000, y = 0 }
                     , cursor = { x = 0, y = 0 }
                     , floaterTopLeft = floater
                     , gesturePath = []
-                    , pathFrame = State.BoardFrame
+                    , wings = [ wing ]
                     }
 
-                ctx =
-                    { wings = [ wing ], boardRect = Nothing }
-
             in
-            Gesture.floaterOverWing ctx info
+            Gesture.floaterOverWingForBoard d
                 |> Expect.equal (Just wing)
 
 
@@ -1970,9 +1960,6 @@ gestureFloaterOverWingWayOff =
                 sourceStack =
                     { boardCards = [ boardCard "2C1", boardCard "3D1", boardCard "4C1" ], loc = { top = 20, left = 20 } }
 
-                source =
-                    State.FromBoardStack sourceStack
-
                 targetStack =
                     { boardCards = [ boardCard "5H1", boardCard "6S1", boardCard "7H1" ], loc = { top = 20, left = 300 } }
 
@@ -1982,19 +1969,18 @@ gestureFloaterOverWingWayOff =
                 wing =
                     { target = targetStack, side = BoardActions.Right }
 
-                info =
-                    { source = source
+                d =
+                    { stack = sourceStack
+                    , cardIndex = 0
+                    , originalCursor = { x = -1000, y = 0 }
                     , cursor = { x = 0, y = 0 }
                     , floaterTopLeft = floater
                     , gesturePath = []
-                    , pathFrame = State.BoardFrame
+                    , wings = [ wing ]
                     }
 
-                ctx =
-                    { wings = [ wing ], boardRect = Nothing }
-
             in
-            Gesture.floaterOverWing ctx info
+            Gesture.floaterOverWingForBoard d
                 |> Expect.equal Nothing
 
 
@@ -2006,9 +1992,6 @@ gestureMergeHandCardOntoBoardWing =
                 handCard_ =
                     parseCard "6H1"
 
-                source =
-                    State.FromHandCard handCard_
-
                 targetStack =
                     { boardCards = [ boardCard "3C1", boardCard "4D1", boardCard "5C1" ], loc = { top = 200, left = 100 } }
 
@@ -2018,22 +2001,15 @@ gestureMergeHandCardOntoBoardWing =
                 wing =
                     { target = targetStack, side = BoardActions.Right }
 
-                info =
-                    { source = source
+                d =
+                    { card = handCard_
                     , cursor = { x = 0, y = 0 }
                     , floaterTopLeft = floater
-                    , gesturePath = []
-                    , pathFrame = State.ViewportFrame
+                    , wings = [ wing ]
                     }
 
-                ctx =
-                    { wings = [ wing ], boardRect = Just { x = 300, y = 100, width = 800, height = 600 } }
-
-                arb =
-                    { clickIntent = Nothing, originalCursor = { x = 0, y = 0 } }
-
             in
-            case Gesture.resolveGesture info ctx arb of
+            case Gesture.resolveHandCardGesture d (Just { x = 300, y = 100, width = 800, height = 600 }) of
                 Just (WA.MergeHand p) ->
                     Expect.equal BoardActions.Right p.side
 
@@ -2049,9 +2025,6 @@ gestureMergeStack234Onto567Left =
                 sourceStack =
                     { boardCards = [ boardCard "2C1", boardCard "3D1", boardCard "4C1" ], loc = { top = 200, left = 100 } }
 
-                source =
-                    State.FromBoardStack sourceStack
-
                 targetStack =
                     { boardCards = [ boardCard "5H1", boardCard "6S1", boardCard "7H1" ], loc = { top = 200, left = 300 } }
 
@@ -2061,22 +2034,18 @@ gestureMergeStack234Onto567Left =
                 wing =
                     { target = targetStack, side = BoardActions.Left }
 
-                info =
-                    { source = source
+                d =
+                    { stack = sourceStack
+                    , cardIndex = 0
+                    , originalCursor = { x = -1000, y = 0 }
                     , cursor = { x = 0, y = 0 }
                     , floaterTopLeft = floater
                     , gesturePath = []
-                    , pathFrame = State.BoardFrame
+                    , wings = [ wing ]
                     }
 
-                ctx =
-                    { wings = [ wing ], boardRect = Nothing }
-
-                arb =
-                    { clickIntent = Nothing, originalCursor = { x = 0, y = 0 } }
-
             in
-            case Gesture.resolveGesture info ctx arb of
+            case Gesture.resolveBoardCardGesture d Nothing of
                 Just (WA.MergeStack p) ->
                     Expect.equal BoardActions.Left p.side
 
@@ -2092,9 +2061,6 @@ gestureMergeStack567Onto234Right =
                 sourceStack =
                     { boardCards = [ boardCard "5H1", boardCard "6S1", boardCard "7H1" ], loc = { top = 200, left = 300 } }
 
-                source =
-                    State.FromBoardStack sourceStack
-
                 targetStack =
                     { boardCards = [ boardCard "2C1", boardCard "3D1", boardCard "4C1" ], loc = { top = 200, left = 100 } }
 
@@ -2104,22 +2070,18 @@ gestureMergeStack567Onto234Right =
                 wing =
                     { target = targetStack, side = BoardActions.Right }
 
-                info =
-                    { source = source
+                d =
+                    { stack = sourceStack
+                    , cardIndex = 0
+                    , originalCursor = { x = -1000, y = 0 }
                     , cursor = { x = 0, y = 0 }
                     , floaterTopLeft = floater
                     , gesturePath = []
-                    , pathFrame = State.BoardFrame
+                    , wings = [ wing ]
                     }
 
-                ctx =
-                    { wings = [ wing ], boardRect = Nothing }
-
-                arb =
-                    { clickIntent = Nothing, originalCursor = { x = 0, y = 0 } }
-
             in
-            case Gesture.resolveGesture info ctx arb of
+            case Gesture.resolveBoardCardGesture d Nothing of
                 Just (WA.MergeStack p) ->
                     Expect.equal BoardActions.Right p.side
 
@@ -2135,28 +2097,21 @@ gestureMoveStackOffBoardRejected =
                 sourceStack =
                     { boardCards = [ boardCard "2C1", boardCard "3D1", boardCard "4C1" ], loc = { top = 200, left = 100 } }
 
-                source =
-                    State.FromBoardStack sourceStack
-
                 floater =
                     { x = -50, y = -20 }
 
-                info =
-                    { source = source
+                d =
+                    { stack = sourceStack
+                    , cardIndex = 0
+                    , originalCursor = { x = -1000, y = 0 }
                     , cursor = { x = 700, y = 400 }
                     , floaterTopLeft = floater
                     , gesturePath = []
-                    , pathFrame = State.BoardFrame
+                    , wings = []
                     }
 
-                ctx =
-                    { wings = [], boardRect = Just { x = 300, y = 100, width = 800, height = 600 } }
-
-                arb =
-                    { clickIntent = Nothing, originalCursor = { x = 0, y = 0 } }
-
             in
-            Gesture.resolveGesture info ctx arb
+            Gesture.resolveBoardCardGesture d (Just { x = 300, y = 100, width = 800, height = 600 })
                 |> Expect.equal Nothing
 
 
@@ -2168,28 +2123,21 @@ gestureMoveStackValidDrop =
                 sourceStack =
                     { boardCards = [ boardCard "2C1", boardCard "3D1", boardCard "4C1" ], loc = { top = 200, left = 100 } }
 
-                source =
-                    State.FromBoardStack sourceStack
-
                 floater =
                     { x = 400, y = 300 }
 
-                info =
-                    { source = source
+                d =
+                    { stack = sourceStack
+                    , cardIndex = 0
+                    , originalCursor = { x = -1000, y = 0 }
                     , cursor = { x = 700, y = 400 }
                     , floaterTopLeft = floater
                     , gesturePath = []
-                    , pathFrame = State.BoardFrame
+                    , wings = []
                     }
 
-                ctx =
-                    { wings = [], boardRect = Just { x = 300, y = 100, width = 800, height = 600 } }
-
-                arb =
-                    { clickIntent = Nothing, originalCursor = { x = 0, y = 0 } }
-
             in
-            case Gesture.resolveGesture info ctx arb of
+            case Gesture.resolveBoardCardGesture d (Just { x = 300, y = 100, width = 800, height = 600 }) of
                 Just (WA.MoveStack p) ->
                     Expect.all
                         [ \_ -> Expect.equal 400 p.newLoc.left
@@ -2209,28 +2157,18 @@ gesturePlaceHandDropsToBoard =
                 handCard_ =
                     parseCard "6H1"
 
-                source =
-                    State.FromHandCard handCard_
-
                 floater =
                     { x = 750, y = 450 }
 
-                info =
-                    { source = source
+                d =
+                    { card = handCard_
                     , cursor = { x = 750, y = 450 }
                     , floaterTopLeft = floater
-                    , gesturePath = []
-                    , pathFrame = State.ViewportFrame
+                    , wings = []
                     }
 
-                ctx =
-                    { wings = [], boardRect = Just { x = 300, y = 100, width = 800, height = 600 } }
-
-                arb =
-                    { clickIntent = Nothing, originalCursor = { x = 0, y = 0 } }
-
             in
-            case Gesture.resolveGesture info ctx arb of
+            case Gesture.resolveHandCardGesture d (Just { x = 300, y = 100, width = 800, height = 600 }) of
                 Just (WA.PlaceHand p) ->
                     Expect.all
                         [ \_ -> Expect.equal 450 p.loc.left
@@ -2250,28 +2188,21 @@ gestureSplitSurvivingClickIntent =
                 sourceStack =
                     { boardCards = [ boardCard "2C1", boardCard "3D1", boardCard "4C1", boardCard "5H1", boardCard "6S1", boardCard "7H1" ], loc = { top = 20, left = 20 } }
 
-                source =
-                    State.FromBoardStack sourceStack
-
                 floater =
                     { x = 20, y = 20 }
 
-                info =
-                    { source = source
+                d =
+                    { stack = sourceStack
+                    , cardIndex = 3
+                    , originalCursor = { x = 0, y = 0 }
                     , cursor = { x = 0, y = 0 }
                     , floaterTopLeft = floater
                     , gesturePath = []
-                    , pathFrame = State.BoardFrame
+                    , wings = []
                     }
 
-                ctx =
-                    { wings = [], boardRect = Nothing }
-
-                arb =
-                    { clickIntent = Just 3, originalCursor = { x = 0, y = 0 } }
-
             in
-            case Gesture.resolveGesture info ctx arb of
+            case Gesture.resolveBoardCardGesture d Nothing of
                 Just (WA.Split p) ->
                     Expect.equal 3 p.cardIndex
 
@@ -2667,7 +2598,7 @@ undoRestoresPosition =
                     resolveSpec spec2 m1.board
 
                 entry2 =
-                    { action = action2, gesturePath = Nothing, pathFrame = State.BoardFrame }
+                    { action = action2, gesturePath = Nothing, pathFrame = BoardFrame }
 
                 m2post =
                     (Apply.applyAction action2 m1).model
@@ -2732,7 +2663,7 @@ undoSplitPieceReturnsToSplitPosition =
                     resolveSpec spec2 m1.board
 
                 entry2 =
-                    { action = action2, gesturePath = Nothing, pathFrame = State.BoardFrame }
+                    { action = action2, gesturePath = Nothing, pathFrame = BoardFrame }
 
                 m2post =
                     (Apply.applyAction action2 m1).model
@@ -2748,7 +2679,7 @@ undoSplitPieceReturnsToSplitPosition =
                     resolveSpec spec3 m2.board
 
                 entry3 =
-                    { action = action3, gesturePath = Nothing, pathFrame = State.BoardFrame }
+                    { action = action3, gesturePath = Nothing, pathFrame = BoardFrame }
 
                 m3post =
                     (Apply.applyAction action3 m2).model
@@ -2825,7 +2756,7 @@ undoWalkthroughMergeHand =
                     WA.MergeHand { handCard = parseCard "7H2", target = findStackByContent [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ] m1.board, side = BoardActions.Right }
 
                 entry2 =
-                    { action = action2, gesturePath = Nothing, pathFrame = State.BoardFrame }
+                    { action = action2, gesturePath = Nothing, pathFrame = BoardFrame }
 
                 m2post =
                     (Apply.applyAction action2 m1).model
@@ -2898,7 +2829,7 @@ undoWalkthroughMergeStack =
                     resolveSpec spec2 m1.board
 
                 entry2 =
-                    { action = action2, gesturePath = Nothing, pathFrame = State.BoardFrame }
+                    { action = action2, gesturePath = Nothing, pathFrame = BoardFrame }
 
                 m2post =
                     (Apply.applyAction action2 m1).model
@@ -2971,7 +2902,7 @@ undoWalkthroughPlaceHand =
                     WA.PlaceHand { handCard = parseCard "7H2", loc = { top = 400, left = 300 } }
 
                 entry2 =
-                    { action = action2, gesturePath = Nothing, pathFrame = State.BoardFrame }
+                    { action = action2, gesturePath = Nothing, pathFrame = BoardFrame }
 
                 m2post =
                     (Apply.applyAction action2 m1).model
@@ -3046,7 +2977,7 @@ undoWalkthroughSplitThenMove =
                     resolveSpec spec2 m1.board
 
                 entry2 =
-                    { action = action2, gesturePath = Nothing, pathFrame = State.BoardFrame }
+                    { action = action2, gesturePath = Nothing, pathFrame = BoardFrame }
 
                 m2post =
                     (Apply.applyAction action2 m1).model
@@ -3062,7 +2993,7 @@ undoWalkthroughSplitThenMove =
                     resolveSpec spec3 m2.board
 
                 entry3 =
-                    { action = action3, gesturePath = Nothing, pathFrame = State.BoardFrame }
+                    { action = action3, gesturePath = Nothing, pathFrame = BoardFrame }
 
                 m3post =
                     (Apply.applyAction action3 m2).model

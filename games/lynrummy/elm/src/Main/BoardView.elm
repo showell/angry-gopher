@@ -13,37 +13,27 @@ drag, wing targets and a board-frame floater).
 `draggedOverlay` is the viewport-frame floater used for
 hand-origin drags whose source is outside the board widget.
 
-Both overlays share `renderDraggedFloater` — the same
-"draw the dragged thing" code at two different mount frames.
-Mount choice is `info.pathFrame`: `BoardFrame` → board-shell
-child via `position: absolute`; `ViewportFrame` → viewport
-overlay via `position: fixed`.
+Mount choice is keyed off the drag variant:
+`DraggingBoardCard` → board-shell child via `position: absolute`;
+`DraggingHandCard` → viewport overlay via `position: fixed`.
 
-Extracted from `Main.View` 2026-05-06 as the first cut of the
-post-puzzle-rip game-system disentangle. Today the input is
-the parent `Model`; later phases will narrow that to a typed
-snapshot so the same module can render a puzzle's board
-without dragging in turn / hand / engine state.
+A drag is rendered immediately on mousedown; the source stack
+hides and the floater takes over at the same screen position.
+Click-vs-drag arbitration is a mouseup-time outcome judgment,
+not a state the View needs to know about.
 
 -}
 
 import Game.CardStack as CardStack exposing (CardStack)
+import Game.Drag exposing (BoardCardDragInfo, DragState(..), HandCardDragInfo)
+import Game.Physics.GestureArbitration as GA
 import Game.Physics.WingOracle as WingOracle exposing (WingId)
 import Game.View as View
 import Html exposing (Html)
 import Html.Attributes exposing (id, style)
 import Main.Gesture as Gesture
 import Main.Msg exposing (Msg)
-import Main.State
-    exposing
-        ( DragContext
-        , DragInfo
-        , DragSource(..)
-        , DragState(..)
-        , Model
-        , PathFrame(..)
-        , boardDomIdFor
-        )
+import Main.State exposing (Model, boardDomIdFor)
 
 
 
@@ -81,14 +71,17 @@ boardChildren model =
 
         wingNodes =
             case model.drag of
-                Dragging info ctx _ ->
-                    List.map (viewWingAt ctx info) ctx.wings
+                DraggingBoardCard d ->
+                    List.map (viewWingForBoardDrag d) d.wings
+
+                DraggingHandCard d ->
+                    List.map (viewWingForHandDrag d model.boardRect) d.wings
 
                 NotDragging ->
                     []
 
         boardOverlayNodes =
-            case boardDragOverlay model of
+            case boardDragOverlay model.drag of
                 Just node ->
                     [ node ]
 
@@ -101,40 +94,56 @@ boardChildren model =
 viewStackForBoard : DragState -> CardStack -> Html Msg
 viewStackForBoard drag stack =
     case drag of
-        Dragging info _ arb ->
-            case ( info.source, arb.clickIntent ) of
-                ( FromBoardStack source, Nothing ) ->
-                    -- Drag confirmed (click intent dropped).
-                    -- Hide the source stack; the floater takes over.
-                    if CardStack.isStacksEqual source stack then
-                        Html.text ""
+        DraggingBoardCard d ->
+            -- Hide the source stack — the floater renders in
+            -- its place. At mousedown the floater is at
+            -- exactly stack.loc, so the visual swap is a
+            -- no-op; from there forward, the floater follows
+            -- the cursor.
+            if CardStack.isStacksEqual d.stack stack then
+                Html.text ""
 
-                    else
-                        View.viewStack stack
+            else
+                View.viewStack stack
 
-                _ ->
-                    -- Either a hand-card drag, or a board-source
-                    -- still in the click-intent window (mousedown
-                    -- without enough movement yet). In both cases
-                    -- render the stack normally — no floater
-                    -- visuals engage until drag is confirmed, so
-                    -- clicks (splits) cause a single redraw on
-                    -- release with no intermediate flash.
-                    View.viewStackWithCardAttrs (Gesture.cardMouseDown stack) stack
+        DraggingHandCard _ ->
+            -- Hand-card drags don't affect any board stack's
+            -- rendering; we still hide the stack-level
+            -- mousedown handlers so the in-flight drag isn't
+            -- re-triggered by stray events.
+            View.viewStack stack
 
         NotDragging ->
             View.viewStackWithCardAttrs (Gesture.cardMouseDown stack) stack
 
 
-viewWingAt : DragContext -> DragInfo -> WingId -> Html Msg
-viewWingAt ctx info wing =
+viewWingForBoardDrag : BoardCardDragInfo -> WingId -> Html Msg
+viewWingForBoardDrag d wing =
     let
         rect =
             WingOracle.wingBoardRect wing
 
         hovering =
-            Gesture.floaterOverWing ctx info == Just wing
+            Gesture.floaterOverWingForBoard d == Just wing
+    in
+    renderWing rect hovering
 
+
+viewWingForHandDrag : HandCardDragInfo -> Maybe GA.Rect -> WingId -> Html Msg
+viewWingForHandDrag d boardRect wing =
+    let
+        rect =
+            WingOracle.wingBoardRect wing
+
+        hovering =
+            Gesture.floaterOverWingForHand d boardRect == Just wing
+    in
+    renderWing rect hovering
+
+
+renderWing : { left : Int, top : Int, width : Int, height : Int } -> Bool -> Html Msg
+renderWing rect hovering =
+    let
         bgColor =
             if hovering then
                 View.mergeableHover
@@ -158,27 +167,15 @@ viewWingAt ctx info wing =
 {-| Viewport-frame drag overlay (`position: fixed`). Renders
 hand-origin drags. Intra-board drags render via
 `boardDragOverlay` inside the board shell.
-
-While `clickIntent` is still alive (mousedown without
-confirmed drag movement), the floater is suppressed so a
-pure click doesn't briefly render a split-candidate floater
-then discard it.
-
 -}
 draggedOverlay : Model -> Html Msg
 draggedOverlay model =
     case model.drag of
-        Dragging info _ arb ->
-            if arb.clickIntent /= Nothing then
-                Html.text ""
+        DraggingHandCard d ->
+            renderHandFloater d [ style "position" "fixed" ]
 
-            else
-                case info.pathFrame of
-                    ViewportFrame ->
-                        renderDraggedFloater info [ style "position" "fixed" ]
-
-                    BoardFrame ->
-                        Html.text ""
+        DraggingBoardCard _ ->
+            Html.text ""
 
         NotDragging ->
             Html.text ""
@@ -188,52 +185,38 @@ draggedOverlay model =
 (which is `position: relative`) with `position: absolute` and
 board-frame top/left. Renders intra-board drags.
 -}
-boardDragOverlay : Model -> Maybe (Html Msg)
-boardDragOverlay model =
-    case model.drag of
-        Dragging info _ arb ->
-            if arb.clickIntent /= Nothing then
-                Nothing
+boardDragOverlay : DragState -> Maybe (Html Msg)
+boardDragOverlay drag =
+    case drag of
+        DraggingBoardCard d ->
+            Just (renderBoardFloater d [ style "position" "absolute" ])
 
-            else
-                case info.pathFrame of
-                    BoardFrame ->
-                        Just (renderDraggedFloater info [ style "position" "absolute" ])
-
-                    ViewportFrame ->
-                        Nothing
+        DraggingHandCard _ ->
+            Nothing
 
         NotDragging ->
             Nothing
 
 
-{-| Shared floater renderer. Reads `info.floaterTopLeft`
-directly into the CSS top/left; caller picks `fixed` (viewport)
-vs `absolute` (board child). Frame of `floaterTopLeft` matches
-the overlay's mount frame — no translation at render.
--}
-renderDraggedFloater : DragInfo -> List (Html.Attribute Msg) -> Html Msg
-renderDraggedFloater info positioningAttrs =
-    let
-        x =
-            info.floaterTopLeft.x
+renderBoardFloater : BoardCardDragInfo -> List (Html.Attribute Msg) -> Html Msg
+renderBoardFloater d positioningAttrs =
+    View.viewStackWithAttrs (floatingAttrs d.floaterTopLeft positioningAttrs) d.stack
 
-        y =
-            info.floaterTopLeft.y
 
-        floatingAttrs =
-            positioningAttrs
-                ++ [ style "top" (String.fromInt y ++ "px")
-                   , style "left" (String.fromInt x ++ "px")
-                   , style "pointer-events" "none"
-                   , style "z-index" "1000"
-                   ]
-    in
-    case info.source of
-        FromBoardStack source ->
-            View.viewStackWithAttrs floatingAttrs source
+renderHandFloater : HandCardDragInfo -> List (Html.Attribute Msg) -> Html Msg
+renderHandFloater d positioningAttrs =
+    View.viewCardWithAttrs
+        (floatingAttrs d.floaterTopLeft positioningAttrs
+            ++ [ style "background-color" "white" ]
+        )
+        d.card
 
-        FromHandCard card ->
-            View.viewCardWithAttrs
-                (floatingAttrs ++ [ style "background-color" "white" ])
-                card
+
+floatingAttrs : { x : Int, y : Int } -> List (Html.Attribute Msg) -> List (Html.Attribute Msg)
+floatingAttrs floaterTopLeft positioningAttrs =
+    positioningAttrs
+        ++ [ style "top" (String.fromInt floaterTopLeft.y ++ "px")
+           , style "left" (String.fromInt floaterTopLeft.x ++ "px")
+           , style "pointer-events" "none"
+           , style "z-index" "1000"
+           ]

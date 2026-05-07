@@ -13,8 +13,7 @@ DOM measurement at replay time.
 Two phases:
 
   - `prepare` — synchronous; names which hand card needs DOM
-    measurement and returns the source identity to stash in
-    `AwaitingHandRect`.
+    measurement.
   - `finish` — called when the DOM task resolves; synthesizes
     a linear viewport-frame path from origin to landing.
 
@@ -27,13 +26,8 @@ import Game.Rules.Card exposing (Card)
 import Game.CardStack as CardStack exposing (CardStack)
 import Game.Replay.Space as Space
 import Game.WireAction as WA
-import Main.State
-    exposing
-        ( DragSource
-        , Model
-        , PathFrame(..)
-        , Point
-        )
+import Main.State exposing (Model)
+import Main.Types exposing (Point)
 
 
 
@@ -41,8 +35,7 @@ import Main.State
 
 
 type alias PrepareResult =
-    { source : DragSource
-    , handCardToMeasure : Card
+    { handCardToMeasure : Card
     }
 
 
@@ -53,12 +46,7 @@ hand — treated as a wire/model drift rather than a crash.
 prepare : { handCard : Card, target : CardStack, side : Side } -> Model -> Maybe PrepareResult
 prepare payload model =
     Space.handCardSource payload.handCard model
-        |> Maybe.map
-            (\source ->
-                { source = source
-                , handCardToMeasure = payload.handCard
-                }
-            )
+        |> Maybe.map (\_ -> { handCardToMeasure = payload.handCard })
 
 
 
@@ -69,27 +57,31 @@ prepare payload model =
 `origin` is the hand card's viewport top-left; target is the
 floater's landing top-left in viewport (from
 `Space.stackLandingInLiveViewport`). Returns Nothing if the
-target stack drifted between prepare and rect-arrival.
+target stack drifted between prepare and rect-arrival OR if
+the hand card is no longer in the active hand.
 -}
 finish :
     { handCard : Card, target : CardStack, side : Side }
     -> Point
     -> Float
-    -> DragSource
     -> Model
     -> Maybe Space.AnimationInfo
-finish payload origin nowMs source model =
-    CardStack.findStack payload.target model.board
-        |> Maybe.andThen
-            (\stack ->
-                Space.stackLandingInLiveViewport model stack payload.side
-                    |> Maybe.map
-                        (\landing ->
-                            { startMs = nowMs
-                            , path = Space.linearPath origin landing nowMs
-                            , source = source
-                            , pathFrame = ViewportFrame
-                            , pendingAction = WA.MergeHand payload
-                            }
-                        )
-            )
+finish payload origin nowMs model =
+    case Space.handCardSource payload.handCard model of
+        Nothing ->
+            Nothing
+
+        Just source ->
+            CardStack.findStack payload.target model.board
+                |> Maybe.andThen
+                    (\stack ->
+                        Space.stackLandingInLiveViewport model stack payload.side
+                            |> Maybe.map
+                                (\landing ->
+                                    { startMs = nowMs
+                                    , path = Space.linearPath origin landing nowMs
+                                    , source = source
+                                    , pendingAction = WA.MergeHand payload
+                                    }
+                                )
+                    )

@@ -4,40 +4,41 @@ module Game.Replay.DragAnimation exposing (Step(..), step)
 broader `Game.Replay.Time` orchestrator.
 
 This is the **physics half** of replay: given the current
-clock time and an `AnimationInfo` (which carries a path,
-start time, and the eventual `WireAction` to apply when the
-animation completes), produce a `Step` describing what
-should happen next.
+clock time and the animation's per-step bundle (path, start
+time, eventual `WireAction`), produce a `Step` describing
+what should happen next.
 
 The outer replay state machine in `Game.Replay.Time` calls
 `step` on every animation frame and reacts:
 
-  - `InProgress` → set the drag overlay to the returned
-    `DragState` and keep waiting for the next frame.
+  - `InProgress` → patch the returned `floaterTopLeft` into
+    `model.drag` (via `Drag.setFloaterTopLeft`) and keep
+    waiting for the next frame.
   - `Done` → apply the `pendingAction` and advance to the
     next replay phase (typically `Beating`).
 
 The seam between this module and `Time` is the
 **testability boundary**: drag animation is deterministic
-(time, path, source → cursor position; cursor + path-end →
-done), so it can be locked down with rigorous property
-tests. The outer cadence (PreRolling holds, inter-action
-beats, AwaitingHandRect timing) carries volatile UX-tuning
-values and stays test-light.
+(time + path → cursor position; cursor + path-end → done), so
+it can be locked down with rigorous property tests. The outer
+cadence (PreRolling holds, inter-action beats,
+AwaitingHandRect timing) carries volatile UX-tuning values
+and stays test-light.
 
 -}
 
 import Game.Replay.Space as Space
 import Game.WireAction exposing (WireAction)
-import Main.State exposing (DragState)
+import Main.Types exposing (GesturePoint, Point)
 
 
 {-| The result of advancing the animation by one frame.
 
-  - `InProgress drag` — animation still running; `drag` is
-    the `DragState` the View layer should render this frame.
-  - `Done pendingAction` — animation is complete; the outer
-    machine should apply `pendingAction` and transition.
+  - `InProgress { floaterTopLeft }` — animation still running;
+    the caller should patch this point into the current
+    drag's `floaterTopLeft`.
+  - `Done { pendingAction }` — animation is complete; the
+    outer machine should apply `pendingAction` and transition.
 
 The empty-path case (a path with no samples) collapses to
 `Done` immediately, treating "nothing to interpolate" as
@@ -45,22 +46,32 @@ The empty-path case (a path with no samples) collapses to
 
 -}
 type Step
-    = InProgress { drag : DragState }
+    = InProgress { floaterTopLeft : Point }
     | Done { pendingAction : WireAction }
 
 
 {-| Advance the animation one step. Pure function of (clock
-time, animation info). Returns the rendering payload for
-this frame OR a Done signal when the animation has elapsed.
+time, animation bundle). Returns the next floater position OR
+a Done signal when the animation has elapsed.
 
 The contract is intentionally narrow: `step` does NOT mutate
-or know about the broader `Model`. It speaks only the
-animation's own facts. That makes it deterministically
-testable AND keeps the outer replay machine free to change
-its pacing rules without disturbing the physics.
+or know about the broader `Model` — and now does not even
+know about `DragState`. It speaks only the animation's own
+facts (when, where along the path, what to apply at end).
+That keeps the function deterministically testable and lets
+the outer replay machine evolve its DragState patching
+strategy independently.
 
 -}
-step : Float -> Space.AnimationInfo -> Step
+step :
+    Float
+    ->
+        { a
+            | startMs : Float
+            , path : List GesturePoint
+            , pendingAction : WireAction
+        }
+    -> Step
 step nowMs anim =
     let
         duration =
@@ -74,8 +85,8 @@ step nowMs anim =
 
     else
         case Space.interpPath anim.path elapsed of
-            Just cursor ->
-                InProgress { drag = Space.animatedDragState anim cursor }
+            Just point ->
+                InProgress { floaterTopLeft = point }
 
             Nothing ->
                 -- Empty path means nothing to interpolate; treat

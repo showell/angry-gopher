@@ -15,13 +15,8 @@ import Game.Rules.Card exposing (Card)
 import Game.CardStack exposing (BoardLocation)
 import Game.Replay.Space as Space
 import Game.WireAction as WA
-import Main.State
-    exposing
-        ( DragSource
-        , Model
-        , PathFrame(..)
-        , Point
-        )
+import Main.State exposing (Model)
+import Main.Types exposing (Point)
 
 
 
@@ -29,20 +24,14 @@ import Main.State
 
 
 type alias PrepareResult =
-    { source : DragSource
-    , handCardToMeasure : Card
+    { handCardToMeasure : Card
     }
 
 
 prepare : { handCard : Card, loc : BoardLocation } -> Model -> Maybe PrepareResult
 prepare payload model =
     Space.handCardSource payload.handCard model
-        |> Maybe.map
-            (\source ->
-                { source = source
-                , handCardToMeasure = payload.handCard
-                }
-            )
+        |> Maybe.map (\_ -> { handCardToMeasure = payload.handCard })
 
 
 
@@ -52,24 +41,27 @@ prepare payload model =
 {-| Build the AnimationInfo once the hand card's DOM rect has
 arrived. The floater is a single card; its top-left at landing
 IS `payload.loc`. Destination is that loc translated to
-viewport via the replay board-rect offset.
+viewport via the live board-rect offset.
 -}
 finish :
     { handCard : Card, loc : BoardLocation }
     -> Point
     -> Float
-    -> DragSource
     -> Model
     -> Maybe Space.AnimationInfo
-finish payload origin nowMs source model =
-    Space.pointInLiveViewport model
-        { left = payload.loc.left, top = payload.loc.top }
-        |> Maybe.map
-            (\target ->
-                { startMs = nowMs
-                , path = Space.linearPath origin target nowMs
-                , source = source
-                , pathFrame = ViewportFrame
-                , pendingAction = WA.PlaceHand payload
-                }
-            )
+finish payload origin nowMs model =
+    case Space.handCardSource payload.handCard model of
+        Nothing ->
+            Nothing
+
+        Just source ->
+            Space.pointInLiveViewport model
+                { left = payload.loc.left, top = payload.loc.top }
+                |> Maybe.map
+                    (\target ->
+                        { startMs = nowMs
+                        , path = Space.linearPath origin target nowMs
+                        , source = source
+                        , pendingAction = WA.PlaceHand payload
+                        }
+                    )

@@ -2,17 +2,9 @@ module Main.State exposing
     ( ActionLogBundle
     , ActionLogEntry
     , ActionOutcome
-    , ClickArbiter
-    , DragContext
-    , DragInfo
-    , DragSource(..)
-    , DragState(..)
     , EnvelopeForGesture
     , Flags
-    , GesturePoint
     , Model
-    , PathFrame(..)
-    , Point
     , PopupContent
     , RemoteState
     , ReplayAnimationState(..)
@@ -35,22 +27,22 @@ the refactor that unwound "one big module" (an artifact of the
 original TS game's deployment constraint that no longer applies).
 
 This module is pure types + trivial helpers — no I/O, no
-rendering, no update logic, no Msg. Other Main.\* modules import
-from here; it imports only the LynRummy domain primitives. That
-makes State a safe leaf: changes here ripple out, but nothing
-ripples in.
+rendering, no update logic, no Msg. Drag state types now live
+in `Game.Drag`; small leaf types (`Point`, `PathFrame`,
+`GesturePoint`) live in `Main.Types`.
 
 -}
 
+import Game.Drag exposing (DragState(..))
 import Game.Rules.Card as Card exposing (Card)
-import Game.CardStack as CardStack exposing (CardStack)
+import Game.CardStack as CardStack
 import Game.Dealer
 import Game.Physics.GestureArbitration as GA
 import Game.Hand as Hand exposing (Hand)
 import Game.Score as Score
-import Game.Physics.WingOracle exposing (WingId)
 import Game.WireAction exposing (WireAction(..))
 import Json.Encode as Encode exposing (Value)
+import Main.Types exposing (GesturePoint, PathFrame)
 import Main.Util exposing (listAt)
 
 
@@ -74,7 +66,7 @@ operate on Model directly without wrapping/unwrapping.
 -}
 type alias Model =
     { -- Game-state fields.
-      board : List CardStack
+      board : List CardStack.CardStack
     , hands : List Hand
     , scores : List Int
     , activePlayerIndex : Int
@@ -86,6 +78,13 @@ type alias Model =
 
     -- UI-layer fields.
     , drag : DragState
+
+    -- Live DOM-measured board rect. Populated lazily on the
+    -- first drag-start (or replay-start) of the session via
+    -- `Browser.Dom.getElement`; reused thereafter. Lifted out
+    -- of drag state so it isn't re-fetched per drag and so
+    -- replay doesn't need a parallel storage site.
+    , boardRect : Maybe GA.Rect
     , sessionId : Maybe Int
     , status : StatusMessage
     , score : Int
@@ -96,12 +95,6 @@ type alias Model =
     , replay : Maybe ReplayProgress
     , replayAnim : ReplayAnimationState
     , replayBaseline : Maybe RemoteState
-
-    -- Live DOM-measured board offset used by the replay
-    -- synthesizer to translate board-frame coords to current
-    -- viewport coords. Fetched via `Browser.Dom.getElement`
-    -- when replay starts; stays Nothing outside replay.
-    , replayBoardRect : Maybe { x : Int, y : Int }
 
     -- Constant string forming the board's DOM id (via
     -- `boardDomIdFor`). Multi-Play-per-page hosting retired
@@ -164,7 +157,9 @@ Phases:
   - **Animating** — a drag-derived action is replaying. The
     cursor position is interpolated along `path` by
     `(nowMs - startMs)`. When elapsed ≥ path duration, apply
-    the action and switch to `Beating`.
+    the action and switch to `Beating`. The seeded `DragState`
+    lives in `model.drag`; per-frame updates patch only its
+    `floaterTopLeft`.
   - **Beating** — holding a 1-second gap between actions.
     When `nowMs ≥ untilMs`, advance `step` and return to
     `NotAnimating`.
@@ -179,16 +174,11 @@ type ReplayAnimationState
     | Animating
         { startMs : Float
         , path : List GesturePoint
-        , source : DragSource
-        , pathFrame : PathFrame
         , pendingAction : WireAction
         }
     | Beating { untilMs : Float }
     | PreRolling { untilMs : Float }
-    | AwaitingHandRect
-        { action : WireAction
-        , source : DragSource
-        }
+    | AwaitingHandRect { action : WireAction }
 
 
 {-| Cheapest-possible popup for turn-boundary ceremony. One
@@ -224,118 +214,6 @@ type StatusKind
     = Inform
     | Celebrate
     | Scold
-
-
-type DragState
-    = NotDragging
-    | Dragging DragInfo DragContext ClickArbiter
-
-
-{-| Intrinsic live-drag state: fields that change on every
-MouseMove and are consumed by replay.
-
-The RENDER-CANONICAL field is `floaterTopLeft` — the one
-thing the View layer reads to position the drag floater.
-Everything in this record feeds INTO floaterTopLeft;
-nothing derives FROM it.
-
-Key invariants:
-
-  - `floaterTopLeft` is in the same frame as `pathFrame`:
-    board frame for intra-board drags, viewport frame for
-    hand-origin drags. Path samples (in `gesturePath`) match.
-  - Mousemove maintains `floaterTopLeft` by ADDING cursor
-    deltas (pure vectors, frame-agnostic).
-  - `cursor` is the current mouse position in viewport frame.
-    Used only for live concerns — the `isCursorOverBoard`
-    hit-test. Never travels on the wire.
-  - No `grabOffset` field. For intra-board drags it isn't
-    needed at all (the floater starts at `stack.loc`). For
-    hand-origin drags it's applied at mousedown to derive the
-    initial viewport floater position, then forgotten.
-  - `gesturePath` accumulates during the drag and is consumed
-    by replay — it is a critical feature, not a cache.
-
--}
-type alias DragInfo =
-    { source : DragSource
-    , cursor : Point
-    , floaterTopLeft : Point
-    , pathFrame : PathFrame
-    , gesturePath : List GesturePoint
-    }
-
-
-{-| Stable snapshot captured once at mousedown. Passed as a
-parameter to gesture resolution functions rather than stored
-inside DragInfo. The board geometry (boardRect) starts as
-Nothing and is filled in by BoardRectReceived; wings are
-computed from the drag source at mousedown and never change.
--}
-type alias DragContext =
-    { wings : List WingId
-    , boardRect : Maybe GA.Rect
-    }
-
-
-{-| Click-vs-drag arbitration state. Lives alongside the drag
-(only exists while dragging) so it is cleared atomically when
-the drag ends via NotDragging. Board-card drags start with
-`clickIntent = Just cardIndex`; hand-card drags start with
-`Nothing`. Mousemove calls `GA.clickIntentAfterMove` to kill
-the intent once the cursor drifts past the threshold — death
-is permanent within a gesture.
--}
-type alias ClickArbiter =
-    { clickIntent : Maybe Int
-    , originalCursor : Point
-    }
-
-
-{-| What the user picked up at mousedown. Content-based:
-a board-stack drag carries the CardStack value; a hand-card
-drag carries the Card. Same identification model as the wire
-format uses — one representation everywhere.
--}
-type DragSource
-    = FromBoardStack CardStack
-    | FromHandCard Card
-
-
-type alias Point =
-    { x : Int, y : Int }
-
-
-{-| Coordinate frame for a captured gesture path. The board
-is a self-contained widget positioned anywhere in the app via
-CSS; drag floaters rendered as children of the board take
-board-frame coords directly. Hand-origin drags cross the board
-widget boundary and must be viewport-positioned.
-
-  - **ViewportFrame** — origin at the browser viewport top-left.
-    Used for live mouse-captured paths and for hand-origin
-    drags that cross widget boundaries.
-  - **BoardFrame** — origin at the board element's top-left.
-    Used for intra-board drags (Python-synthesized and,
-    eventually, board-to-board live-captured after a
-    capture-time translation).
-
-See `feedback_*` / architecture doc for the rule: pick the
-right frame, don't maintain parallel-coordinate bookkeeping.
-
--}
-type PathFrame
-    = ViewportFrame
-    | BoardFrame
-
-
-{-| Behaviorist telemetry sample captured during a drag. The
-`tMs` is the `MouseEvent.timeStamp` (performance.now-style,
-document-lifetime relative). The `x`/`y` pair is in whichever
-frame the containing path is tagged with (see `PathFrame`).
--}
-type alias GesturePoint =
-    { tMs : Float, x : Int, y : Int }
 
 
 {-| Captured drag telemetry attached to a wire-bound action. A
@@ -387,7 +265,7 @@ updates flow through `Main.Apply.applyAction` /
 reconstitute the autonomous game.
 -}
 type alias RemoteState =
-    { board : List CardStack
+    { board : List CardStack.CardStack
     , hands : List Hand
     , scores : List Int
     , activePlayerIndex : Int
@@ -607,6 +485,7 @@ baseModel =
 
     -- UI-layer fields.
     , drag = NotDragging
+    , boardRect = Nothing
     , sessionId = Nothing
     , status = { text = "You may begin moving.", kind = Inform }
     , score = Score.forStacks Game.Dealer.initialBoard
@@ -617,7 +496,6 @@ baseModel =
     , replay = Nothing
     , replayAnim = NotAnimating
     , replayBaseline = Nothing
-    , replayBoardRect = Nothing
     , gameId = "default"
     , pendingEngineRequest = Nothing
     , nextEngineRequestId = 1

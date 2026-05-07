@@ -3,6 +3,7 @@ module Game.Physics.GestureArbitration exposing
     , Rect
     , applySplit
     , clickIntentAfterMove
+    , clickThreshold
     , isCursorInRect
     , distSquared
     )

@@ -3,7 +3,7 @@ module Game.Replay.DragAnimationTest exposing (suite)
 {-| Property + boundary tests for `Game.Replay.DragAnimation`.
 
 The drag-animation sub-state-machine is deterministic
-physics — given (clock time, AnimationInfo) → Step. These
+physics — given (clock time, animation bundle) → Step. These
 tests lock down the laws so the broader replay state
 machine in `Game.Replay.Time` can change its UX cadence
 (beat durations, PreRolling holds) without disturbing the
@@ -32,12 +32,13 @@ What's NOT in scope here:
 
 import Expect
 import Game.BoardActions as BoardActions
+import Game.Drag exposing (DragSource(..))
 import Game.Rules.Card exposing (Card, CardValue(..), OriginDeck(..), Suit(..))
 import Game.CardStack exposing (BoardCard, BoardCardState(..), CardStack)
 import Game.Replay.DragAnimation as DA
 import Game.Replay.Space as Space
 import Game.WireAction as WA exposing (WireAction)
-import Main.State exposing (DragState(..), DragSource(..), GesturePoint, PathFrame(..))
+import Main.Types exposing (GesturePoint)
 import Test exposing (Test, describe, test)
 
 
@@ -84,7 +85,6 @@ fixtureAnim =
     { startMs = 1000
     , path = fixturePath
     , source = FromBoardStack fixtureStack
-    , pathFrame = ViewportFrame
     , pendingAction = fixtureAction
     }
 
@@ -92,16 +92,11 @@ fixtureAnim =
 -- HELPERS
 
 
-cursorOf : DA.Step -> Maybe { x : Int, y : Int }
-cursorOf result =
+floaterOf : DA.Step -> Maybe { x : Int, y : Int }
+floaterOf result =
     case result of
-        DA.InProgress { drag } ->
-            case drag of
-                Dragging d _ _ ->
-                    Just d.floaterTopLeft
-
-                NotDragging ->
-                    Nothing
+        DA.InProgress { floaterTopLeft } ->
+            Just floaterTopLeft
 
         DA.Done _ ->
             Nothing
@@ -127,7 +122,7 @@ suite =
             [ test "at startMs returns InProgress at path[0]" <|
                 \_ ->
                     DA.step 1000 fixtureAnim
-                        |> cursorOf
+                        |> floaterOf
                         |> Expect.equal (Just { x = 0, y = 0 })
             , test "at startMs + duration returns Done" <|
                 \_ ->
@@ -144,12 +139,12 @@ suite =
             [ test "halfway returns InProgress at path midpoint" <|
                 \_ ->
                     DA.step 1500 fixtureAnim
-                        |> cursorOf
+                        |> floaterOf
                         |> Expect.equal (Just { x = 50, y = 0 })
             , test "quarter through returns InProgress at quarter" <|
                 \_ ->
                     DA.step 1250 fixtureAnim
-                        |> cursorOf
+                        |> floaterOf
                         |> Expect.equal (Just { x = 25, y = 0 })
             , test "cursor advances monotonically over time" <|
                 \_ ->
@@ -158,7 +153,7 @@ suite =
                             List.map
                                 (\nowMs ->
                                     DA.step (toFloat nowMs) fixtureAnim
-                                        |> cursorOf
+                                        |> floaterOf
                                         |> Maybe.map .x
                                         |> Maybe.withDefault -1
                                 )
@@ -198,11 +193,11 @@ suite =
                     let
                         a =
                             DA.step 1500 fixtureAnim
-                                |> cursorOf
+                                |> floaterOf
 
                         b =
                             DA.step 1500 fixtureAnim
-                                |> cursorOf
+                                |> floaterOf
                     in
                     a |> Expect.equal b
             ]

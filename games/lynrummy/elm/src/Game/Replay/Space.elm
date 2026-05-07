@@ -35,19 +35,13 @@ are we on, has the beat elapsed, when does the next step fire?
 
 import Browser.Dom
 import Game.BoardActions as BoardActions
+import Game.Drag exposing (DragSource(..), DragState(..))
 import Game.Physics.BoardGeometry as BG
 import Game.Rules.Card exposing (Card)
 import Game.CardStack as CardStack exposing (CardStack)
 import Game.WireAction as WA exposing (WireAction)
-import Main.State as State
-    exposing
-        ( DragSource(..)
-        , DragState(..)
-        , Model
-        , PathFrame(..)
-        , Point
-        , activeHand
-        )
+import Main.State exposing (Model, activeHand)
+import Main.Types exposing (GesturePoint, PathFrame(..), Point)
 
 
 
@@ -55,19 +49,15 @@ import Main.State as State
 
 
 {-| The bundle a Time-phase `Animating` carries: when the
-animation started, the interpolation path (in the frame named
-by `pathFrame`), the DragSource that drives the floater's
-render, and the action to apply at end.
-
-No grabOffset — replay speaks only floaterTopLeft; nothing
-downstream of capture needs the cursor↔card offset.
-
+animation started, the interpolation path (in the frame
+implied by `source`'s variant — board for `FromBoardStack`,
+viewport for `FromHandCard`), the source identity that drives
+the floater's render, and the action to apply at end.
 -}
 type alias AnimationInfo =
     { startMs : Float
-    , path : List State.GesturePoint
+    , path : List GesturePoint
     , source : DragSource
-    , pathFrame : PathFrame
     , pendingAction : WireAction
     }
 
@@ -99,7 +89,7 @@ pinned constants.
 -}
 pointInLiveViewport : Model -> { left : Int, top : Int } -> Maybe Point
 pointInLiveViewport model loc =
-    model.replayBoardRect
+    model.boardRect
         |> Maybe.map
             (\rect ->
                 { x = rect.x + loc.left, y = rect.y + loc.top }
@@ -155,7 +145,7 @@ proportional to distance at `dragMsPerPixel`. The returned
 samples' coordinate frame matches `start` and `end`'s frame —
 the caller is responsible for being consistent.
 -}
-linearPath : Point -> Point -> Float -> List State.GesturePoint
+linearPath : Point -> Point -> Float -> List GesturePoint
 linearPath start end nowMs =
     let
         dx =
@@ -195,7 +185,7 @@ floater eases out of rest and into rest more pronouncedly than
 cosine). 20 samples is dense enough that linear interpolation
 between them reads smoothly through the fast middle.
 -}
-easedPath : Point -> Point -> Float -> List State.GesturePoint
+easedPath : Point -> Point -> Float -> List GesturePoint
 easedPath start end nowMs =
     let
         dx =
@@ -266,7 +256,7 @@ synthesizeBoardPath :
     WireAction
     -> Model
     -> Float
-    -> Maybe ( List State.GesturePoint, PathFrame )
+    -> Maybe ( List GesturePoint, PathFrame )
 synthesizeBoardPath action model nowMs =
     boardEndpoints action model
         |> Maybe.map
@@ -349,7 +339,7 @@ and paths are recorded with the exact loc), so this isn't a
 fuzzy match.
 
 -}
-isPathStillValid : List State.GesturePoint -> WireAction -> Model -> Bool
+isPathStillValid : List GesturePoint -> WireAction -> Model -> Bool
 isPathStillValid path action model =
     case ( List.head path, expectedStartFor action model ) of
         ( Just first, Just expected ) ->
@@ -374,7 +364,7 @@ expectedStartFor action model =
         |> Maybe.map Tuple.first
 
 
-pathDuration : List State.GesturePoint -> Float
+pathDuration : List GesturePoint -> Float
 pathDuration path =
     case ( List.head path, List.head (List.reverse path) ) of
         ( Just first, Just last ) ->
@@ -390,7 +380,7 @@ to first/last point at the bounds. Returns `Nothing` for an
 empty path — callers must handle (treat as "animation done"
 or skip).
 -}
-interpPath : List State.GesturePoint -> Float -> Maybe Point
+interpPath : List GesturePoint -> Float -> Maybe Point
 interpPath path elapsedMs =
     case path of
         [] ->
@@ -404,7 +394,7 @@ interpPath path elapsedMs =
             Just (interpPathHelp first path targetTs)
 
 
-interpPathHelp : State.GesturePoint -> List State.GesturePoint -> Float -> Point
+interpPathHelp : GesturePoint -> List GesturePoint -> Float -> Point
 interpPathHelp prev remaining targetTs =
     case remaining of
         [] ->
@@ -461,23 +451,32 @@ handCardSource card model =
 -- RENDER ADAPTER
 
 
-{-| Synthesize a DragState from an animation bundle + current
-floater top-left. `floaterTopLeft` is the one field the View
-layer reads to position the drag overlay. The `DragContext`
-and `ClickArbiter` stubs carry empty/Nothing values — replay
-doesn't use them.
+{-| Synthesize a `DragState` from an animation bundle + the
+current floater top-left. The variant is chosen by the source
+tag: `FromBoardStack` → `DraggingBoardCard`; `FromHandCard` →
+`DraggingHandCard`. Replay-only fields (`cardIndex`,
+`originalCursor`, `cursor`, `gesturePath`) are filled with
+no-op defaults — replay never reads them, and the View doesn't
+either (no click-vs-drag arbitration during replay).
 -}
-animatedDragState :
-    { a | source : DragSource, pathFrame : PathFrame }
-    -> Point
-    -> DragState
+animatedDragState : { a | source : DragSource } -> Point -> DragState
 animatedDragState anim floaterTopLeft =
-    Dragging
-        { source = anim.source
-        , cursor = { x = 0, y = 0 }
-        , floaterTopLeft = floaterTopLeft
-        , pathFrame = anim.pathFrame
-        , gesturePath = []
-        }
-        { wings = [], boardRect = Nothing }
-        { clickIntent = Nothing, originalCursor = { x = 0, y = 0 } }
+    case anim.source of
+        FromBoardStack stack ->
+            DraggingBoardCard
+                { stack = stack
+                , cardIndex = 0
+                , originalCursor = { x = 0, y = 0 }
+                , cursor = { x = 0, y = 0 }
+                , floaterTopLeft = floaterTopLeft
+                , gesturePath = []
+                , wings = []
+                }
+
+        FromHandCard card ->
+            DraggingHandCard
+                { card = card
+                , cursor = { x = 0, y = 0 }
+                , floaterTopLeft = floaterTopLeft
+                , wings = []
+                }
