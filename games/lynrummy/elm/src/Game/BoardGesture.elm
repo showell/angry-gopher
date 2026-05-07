@@ -2,6 +2,7 @@ module Game.BoardGesture exposing
     ( BoardOutcome(..)
     , applyBoardOutcome
     , handleMouseUp
+    , mouseMove
     , resolveBoardCardGesture
     , resolveBoardOutcome
     )
@@ -166,8 +167,77 @@ resolveBoardCardGesture d boardRect =
                     Nothing
 
 
+{-| Mousemove handler for a board-card drag. Caller (the
+dispatcher in `Main.Play`) has pattern-matched out the `Info`.
+Advances cursor + floater + gesture path, recomputes hover
+status, returns the patched Model.
+-}
+mouseMove : Point -> Float -> BoardCardDragInfo -> Model -> ( Model, Cmd Msg )
+mouseMove pos tMs d model =
+    let
+        delta =
+            { x = pos.x - d.cursor.x
+            , y = pos.y - d.cursor.y
+            }
+
+        nextFloater =
+            { left = d.floaterTopLeft.left + delta.x
+            , top = d.floaterTopLeft.top + delta.y
+            }
+
+        nextPath =
+            d.gesturePath
+                ++ [ { tMs = tMs, x = nextFloater.left, y = nextFloater.top } ]
+
+        nextD =
+            { d
+                | cursor = pos
+                , floaterTopLeft = nextFloater
+                , gesturePath = nextPath
+            }
+
+        hover floaterTopLeft =
+            WingView.hoveredWing
+                floaterTopLeft
+                (CardStack.stackDisplayWidth d.stack)
+                d.wings
+
+        nextStatus =
+            hoverStatus
+                (hover d.floaterTopLeft)
+                (hover nextD.floaterTopLeft)
+                model.status
+    in
+    ( { model | drag = DraggingBoardCard nextD, status = nextStatus }
+    , Cmd.none
+    )
+
+
 
 -- PRIVATE HELPERS (small enough to duplicate in HandGesture)
+
+
+hoverStatus :
+    Maybe a
+    -> Maybe a
+    -> State.StatusMessage
+    -> State.StatusMessage
+hoverStatus currentHover nextHover currentStatus =
+    if nextHover /= currentHover then
+        case nextHover of
+            Just _ ->
+                wingHoverStatus
+
+            Nothing ->
+                currentStatus
+
+    else
+        currentStatus
+
+
+wingHoverStatus : State.StatusMessage
+wingHoverStatus =
+    { text = "Drop stack to complete merge.", kind = Inform }
 
 
 isCursorOverBoard : Point -> Maybe GA.Rect -> Bool
