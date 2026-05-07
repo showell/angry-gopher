@@ -372,17 +372,20 @@ handleMouseUpBoard releasePoint tMs d model =
 
         BoardGesture.MergeStack p ->
             let
-                newModel =
-                    applyMouseUpAction
-                        (GameEvent.MergeStack { source = p.source, target = p.target, side = p.side })
-                        (Just p.envelope)
-                        model
+                newBoard =
+                    Execute.mergeStack p.source p.target p.side model.board
+
+                entry =
+                    { action = GameEvent.MergeStack { source = p.source, target = p.target, side = p.side }
+                    , gesturePath = Just p.envelope.path
+                    , pathFrame = p.envelope.frame
+                    }
 
                 outcome =
-                    { board = newModel.board
-                    , status = newModel.status
-                    , actionLog = newModel.actionLog
-                    , nextSeq = newModel.nextSeq
+                    { board = newBoard
+                    , status = Apply.mergeStatus newBoard
+                    , actionLog = model.actionLog ++ [ entry ]
+                    , nextSeq = model.nextSeq + 1
                     }
 
                 outboundPayloadForAgent =

@@ -1,6 +1,7 @@
 module Main.Apply exposing
     ( applyAction
     , commit
+    , mergeStatus
     , refereeBounds
     )
 
@@ -102,7 +103,7 @@ applyAction action model =
                     applyPhysics action model
             in
             { model = next
-            , status = withTidinessOverlay model next (mergeStatus next)
+            , status = withTidinessOverlay model next (mergeStatus next.board)
             }
 
         MergeHand _ ->
@@ -111,7 +112,7 @@ applyAction action model =
                     applyPhysics action model |> Game.noteCardsPlayed 1
             in
             { model = next
-            , status = withTidinessOverlay model next (mergeStatus next)
+            , status = withTidinessOverlay model next (mergeStatus next.board)
             }
 
         PlaceHand _ ->
@@ -320,9 +321,9 @@ withTidinessOverlay pre post primary =
 stack (always the last entry of the post board, by reducer
 convention) and whether the whole post board is clean.
 -}
-mergeStatus : Model -> StatusMessage
-mergeStatus post =
-    case List.reverse post.board of
+mergeStatus : List CardStack -> StatusMessage
+mergeStatus board =
+    case List.reverse board of
         [] ->
             { text = "Merged.", kind = Inform }
 
@@ -330,7 +331,7 @@ mergeStatus post =
             if CardStack.size mergedStack < 3 then
                 { text = "Nice, but where's the third card?", kind = Scold }
 
-            else if isCleanBoard post.board then
+            else if isCleanBoard board then
                 { text = "Combined! Clean board!", kind = Celebrate }
 
             else

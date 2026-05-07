@@ -45,32 +45,7 @@ applyAction action state =
             { state | board = Execute.split stack cardIndex state.board }
 
         MergeStack { source, target, side } ->
-            case ( findStack source state.board, findStack target state.board ) of
-                ( Just realSource, Just realTarget ) ->
-                    case BoardActions.tryStackMerge realTarget realSource side of
-                        Just change ->
-                            { state | board = applyChange change state.board }
-
-                        Nothing ->
-                            let
-                                _ =
-                                    Debug.log "[Reducer.MergeStack] tryStackMerge rejected — skipping (rules bug?)" { source = source, target = target, side = side }
-                            in
-                            state
-
-                ( Nothing, _ ) ->
-                    let
-                        _ =
-                            Debug.log "[Reducer.MergeStack] source stack not on board — skipping (bridge bug)" source
-                    in
-                    state
-
-                ( _, Nothing ) ->
-                    let
-                        _ =
-                            Debug.log "[Reducer.MergeStack] target stack not on board — skipping (bridge bug)" target
-                    in
-                    state
+            { state | board = Execute.mergeStack source target side state.board }
 
         MergeHand { handCard, target, side } ->
             case findStack target state.board of
