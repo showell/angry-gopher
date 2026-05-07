@@ -22,9 +22,11 @@ Output.
 import Browser.Dom
 import Browser.Events
 import Game.BoardActions exposing (Side(..))
+import Game.BoardDrag exposing (BoardCardDragInfo)
 import Game.BoardGesture as BoardGesture
 import Game.CardStack exposing (CardStack, encodeBoardLocation, encodeCardStack)
 import Game.Drag exposing (DragState(..))
+import Game.HandDrag exposing (HandCardDragInfo)
 import Game.HandGesture as HandGesture
 import Game.Rules.Card as Card
 import Game.Dealer as Dealer
@@ -284,16 +286,10 @@ mouseMove pos tMs model =
             model
 
 
-{-| Resolve a mouseup against the current drag and dispatch on
-the per-side outcome variant. Action variants are translated
-into `GameEvent` and fed through `Apply.applyAction` +
-`Wire.sendAction`; off-board variants render the scold;
-`HandNothing` is the rect-not-measured race (silent no-op).
-
-Both the per-side variants (`BoardGesture.X`) and the
-`GameEvent.X` constructors are referenced qualified — at the
-seam between gesture-resolution and engine-application, naming
-the source side helps the dispatch read.
+{-| Thin dispatcher: pattern match on `model.drag` and delegate
+to the per-side handler. The board/hand split is load-bearing
+indirection — Puzzles can import `handleMouseUpBoard` without
+pulling in any of the hand-card complexity.
 -}
 handleMouseUp : Point -> Float -> Model -> ( Model, Cmd Msg )
 handleMouseUp releasePoint tMs model =
@@ -306,152 +302,174 @@ handleMouseUp releasePoint tMs model =
             ( model, Cmd.none )
 
         DraggingBoardCard d ->
-            case BoardGesture.handleMouseUp releasePoint tMs d model.boardRect of
-                BoardGesture.Split p ->
-                    let
-                        newModel =
-                            applyMouseUpAction (GameEvent.Split p) Nothing cleared
-
-                        outboundPayloadForAgent =
-                            Encode.object
-                                [ ( "seq", Encode.int cleared.nextSeq )
-                                , ( "action"
-                                  , Encode.object
-                                        [ ( "action", Encode.string "split" )
-                                        , ( "stack", encodeCardStack p.stack )
-                                        , ( "card_index", Encode.int p.cardIndex )
-                                        ]
-                                  )
-                                ]
-                    in
-                    ( newModel, Wire.sendAction cleared.sessionId outboundPayloadForAgent )
-
-                BoardGesture.MergeStack p ->
-                    let
-                        newModel =
-                            applyMouseUpAction
-                                (GameEvent.MergeStack { source = p.source, target = p.target, side = p.side })
-                                (Just p.envelope)
-                                cleared
-
-                        outboundPayloadForAgent =
-                            Encode.object
-                                [ ( "seq", Encode.int cleared.nextSeq )
-                                , ( "action"
-                                  , Encode.object
-                                        [ ( "action", Encode.string "merge_stack" )
-                                        , ( "source", encodeCardStack p.source )
-                                        , ( "target", encodeCardStack p.target )
-                                        , ( "side"
-                                          , Encode.string
-                                                (case p.side of
-                                                    Left ->
-                                                        "left"
-
-                                                    Right ->
-                                                        "right"
-                                                )
-                                          )
-                                        ]
-                                  )
-                                , ( "gesture_metadata"
-                                  , Encode.object
-                                        [ ( "path", Encode.list encodeGesturePoint p.envelope.path )
-                                        , ( "path_frame", Encode.string (pathFrameString p.envelope.frame) )
-                                        , ( "pointer_type", Encode.string "mouse" )
-                                        ]
-                                  )
-                                ]
-                    in
-                    ( newModel, Wire.sendAction cleared.sessionId outboundPayloadForAgent )
-
-                BoardGesture.MoveStack p ->
-                    let
-                        newModel =
-                            applyMouseUpAction
-                                (GameEvent.MoveStack { stack = p.stack, newLoc = p.newLoc })
-                                (Just p.envelope)
-                                cleared
-
-                        outboundPayloadForAgent =
-                            Encode.object
-                                [ ( "seq", Encode.int cleared.nextSeq )
-                                , ( "action"
-                                  , Encode.object
-                                        [ ( "action", Encode.string "move_stack" )
-                                        , ( "stack", encodeCardStack p.stack )
-                                        , ( "new_loc", encodeBoardLocation p.newLoc )
-                                        ]
-                                  )
-                                , ( "gesture_metadata"
-                                  , Encode.object
-                                        [ ( "path", Encode.list encodeGesturePoint p.envelope.path )
-                                        , ( "path_frame", Encode.string (pathFrameString p.envelope.frame) )
-                                        , ( "pointer_type", Encode.string "mouse" )
-                                        ]
-                                  )
-                                ]
-                    in
-                    ( newModel, Wire.sendAction cleared.sessionId outboundPayloadForAgent )
-
-                BoardGesture.BoardCardOffBoard ->
-                    ( { cleared | status = offBoardScold }, Cmd.none )
+            handleMouseUpBoard releasePoint tMs d cleared
 
         DraggingHandCard d ->
-            case HandGesture.handleMouseUp releasePoint d model.boardRect of
-                HandGesture.MergeHand p ->
-                    let
-                        newModel =
-                            applyMouseUpAction (GameEvent.MergeHand p) Nothing cleared
+            handleMouseUpHand releasePoint d cleared
 
-                        outboundPayloadForAgent =
-                            Encode.object
-                                [ ( "seq", Encode.int cleared.nextSeq )
-                                , ( "action"
-                                  , Encode.object
-                                        [ ( "action", Encode.string "merge_hand" )
-                                        , ( "hand_card", Card.encodeCard p.handCard )
-                                        , ( "target", encodeCardStack p.target )
-                                        , ( "side"
-                                          , Encode.string
-                                                (case p.side of
-                                                    Left ->
-                                                        "left"
 
-                                                    Right ->
-                                                        "right"
-                                                )
-                                          )
-                                        ]
+{-| Resolve a board-card mouseup. Each action variant produces
+a `newModel` (engine-applied + log-appended) and an
+`outboundPayloadForAgent` (the JSON body that goes to the
+server's action log). The per-action `outboundPayloadForAgent`
+is built inline — the `Wire.sendAction` body shape lives at
+the one site that authors it.
+-}
+handleMouseUpBoard : Point -> Float -> BoardCardDragInfo -> Model -> ( Model, Cmd Msg )
+handleMouseUpBoard releasePoint tMs d cleared =
+    case BoardGesture.handleMouseUp releasePoint tMs d cleared.boardRect of
+        BoardGesture.Split p ->
+            let
+                newModel =
+                    applyMouseUpAction (GameEvent.Split p) Nothing cleared
+
+                outboundPayloadForAgent =
+                    Encode.object
+                        [ ( "seq", Encode.int cleared.nextSeq )
+                        , ( "action"
+                          , Encode.object
+                                [ ( "action", Encode.string "split" )
+                                , ( "stack", encodeCardStack p.stack )
+                                , ( "card_index", Encode.int p.cardIndex )
+                                ]
+                          )
+                        ]
+            in
+            ( newModel, Wire.sendAction cleared.sessionId outboundPayloadForAgent )
+
+        BoardGesture.MergeStack p ->
+            let
+                newModel =
+                    applyMouseUpAction
+                        (GameEvent.MergeStack { source = p.source, target = p.target, side = p.side })
+                        (Just p.envelope)
+                        cleared
+
+                outboundPayloadForAgent =
+                    Encode.object
+                        [ ( "seq", Encode.int cleared.nextSeq )
+                        , ( "action"
+                          , Encode.object
+                                [ ( "action", Encode.string "merge_stack" )
+                                , ( "source", encodeCardStack p.source )
+                                , ( "target", encodeCardStack p.target )
+                                , ( "side"
+                                  , Encode.string
+                                        (case p.side of
+                                            Left ->
+                                                "left"
+
+                                            Right ->
+                                                "right"
+                                        )
                                   )
                                 ]
-                    in
-                    ( newModel, Wire.sendAction cleared.sessionId outboundPayloadForAgent )
+                          )
+                        , ( "gesture_metadata"
+                          , Encode.object
+                                [ ( "path", Encode.list encodeGesturePoint p.envelope.path )
+                                , ( "path_frame", Encode.string (pathFrameString p.envelope.frame) )
+                                , ( "pointer_type", Encode.string "mouse" )
+                                ]
+                          )
+                        ]
+            in
+            ( newModel, Wire.sendAction cleared.sessionId outboundPayloadForAgent )
 
-                HandGesture.PlaceHand p ->
-                    let
-                        newModel =
-                            applyMouseUpAction (GameEvent.PlaceHand p) Nothing cleared
+        BoardGesture.MoveStack p ->
+            let
+                newModel =
+                    applyMouseUpAction
+                        (GameEvent.MoveStack { stack = p.stack, newLoc = p.newLoc })
+                        (Just p.envelope)
+                        cleared
 
-                        outboundPayloadForAgent =
-                            Encode.object
-                                [ ( "seq", Encode.int cleared.nextSeq )
-                                , ( "action"
-                                  , Encode.object
-                                        [ ( "action", Encode.string "place_hand" )
-                                        , ( "hand_card", Card.encodeCard p.handCard )
-                                        , ( "loc", encodeBoardLocation p.loc )
-                                        ]
+                outboundPayloadForAgent =
+                    Encode.object
+                        [ ( "seq", Encode.int cleared.nextSeq )
+                        , ( "action"
+                          , Encode.object
+                                [ ( "action", Encode.string "move_stack" )
+                                , ( "stack", encodeCardStack p.stack )
+                                , ( "new_loc", encodeBoardLocation p.newLoc )
+                                ]
+                          )
+                        , ( "gesture_metadata"
+                          , Encode.object
+                                [ ( "path", Encode.list encodeGesturePoint p.envelope.path )
+                                , ( "path_frame", Encode.string (pathFrameString p.envelope.frame) )
+                                , ( "pointer_type", Encode.string "mouse" )
+                                ]
+                          )
+                        ]
+            in
+            ( newModel, Wire.sendAction cleared.sessionId outboundPayloadForAgent )
+
+        BoardGesture.BoardCardOffBoard ->
+            ( { cleared | status = offBoardScold }, Cmd.none )
+
+
+{-| Resolve a hand-card mouseup. Mirrors `handleMouseUpBoard`
+but for the hand-origin variants. Hand actions ship pathless
+(no `gesture_metadata`); replay re-synthesizes via DOM
+measurement on the resume path.
+-}
+handleMouseUpHand : Point -> HandCardDragInfo -> Model -> ( Model, Cmd Msg )
+handleMouseUpHand releasePoint d cleared =
+    case HandGesture.handleMouseUp releasePoint d cleared.boardRect of
+        HandGesture.MergeHand p ->
+            let
+                newModel =
+                    applyMouseUpAction (GameEvent.MergeHand p) Nothing cleared
+
+                outboundPayloadForAgent =
+                    Encode.object
+                        [ ( "seq", Encode.int cleared.nextSeq )
+                        , ( "action"
+                          , Encode.object
+                                [ ( "action", Encode.string "merge_hand" )
+                                , ( "hand_card", Card.encodeCard p.handCard )
+                                , ( "target", encodeCardStack p.target )
+                                , ( "side"
+                                  , Encode.string
+                                        (case p.side of
+                                            Left ->
+                                                "left"
+
+                                            Right ->
+                                                "right"
+                                        )
                                   )
                                 ]
-                    in
-                    ( newModel, Wire.sendAction cleared.sessionId outboundPayloadForAgent )
+                          )
+                        ]
+            in
+            ( newModel, Wire.sendAction cleared.sessionId outboundPayloadForAgent )
 
-                HandGesture.HandCardOffBoard ->
-                    ( { cleared | status = offBoardScold }, Cmd.none )
+        HandGesture.PlaceHand p ->
+            let
+                newModel =
+                    applyMouseUpAction (GameEvent.PlaceHand p) Nothing cleared
 
-                HandGesture.HandNothing ->
-                    ( cleared, Cmd.none )
+                outboundPayloadForAgent =
+                    Encode.object
+                        [ ( "seq", Encode.int cleared.nextSeq )
+                        , ( "action"
+                          , Encode.object
+                                [ ( "action", Encode.string "place_hand" )
+                                , ( "hand_card", Card.encodeCard p.handCard )
+                                , ( "loc", encodeBoardLocation p.loc )
+                                ]
+                          )
+                        ]
+            in
+            ( newModel, Wire.sendAction cleared.sessionId outboundPayloadForAgent )
+
+        HandGesture.HandCardOffBoard ->
+            ( { cleared | status = offBoardScold }, Cmd.none )
+
+        HandGesture.HandNothing ->
+            ( cleared, Cmd.none )
 
 
 {-| Apply a player action through the engine, append the
