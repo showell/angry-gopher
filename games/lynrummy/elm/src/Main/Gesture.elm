@@ -3,8 +3,6 @@ module Main.Gesture exposing
     , handCardAttrs
     , handleMouseUp
     , pointDecoder
-    , resolveBoardCardGesture
-    , resolveHandCardGesture
     , startBoardCardDrag
     , startHandDrag
     , wingHoverStatus
@@ -47,21 +45,16 @@ answered exactly once, at mouseup, as an outcome judgment.
 -}
 
 import Browser.Dom
-import Game.BoardDrag exposing (BoardCardDragInfo)
+import Game.BoardGesture as BoardGesture
 import Game.Drag exposing (DragState(..))
-import Game.HandDrag exposing (HandCardDragInfo)
-import Game.Physics.BoardGeometry as BG
-import Game.Physics.GestureArbitration as GA
+import Game.HandGesture as HandGesture
 import Game.Physics.WingOracle as WingOracle
 import Game.Rules.Card exposing (Card)
-import Game.CardStack as CardStack exposing (BoardLocation, CardStack, HandCard)
-import Game.WingView as WingView
-import Game.WireAction as WA exposing (WireAction)
+import Game.CardStack as CardStack exposing (CardStack, HandCard)
 import Html
 import Html.Attributes exposing (style)
 import Html.Events as Events
 import Json.Decode as Decode exposing (Decoder)
-import Main.Apply as Apply
 import Main.Msg exposing (Msg(..))
 import Main.State as State
     exposing
@@ -70,8 +63,7 @@ import Main.State as State
         , activeHand
         , boardDomIdFor
         )
-import Main.Types exposing (PathFrame(..), Point)
-import Main.Wire as Wire
+import Main.Types exposing (Point)
 import Task
 
 
@@ -216,7 +208,7 @@ handleMouseUp releasePoint tMs model =
                                 ++ [ { tMs = tMs, x = releaseFloater.left, y = releaseFloater.top } ]
                     }
             in
-            applyBoardOutcome (resolveBoardOutcome dFull model.boardRect) model
+            BoardGesture.applyBoardOutcome (BoardGesture.resolveBoardOutcome dFull model.boardRect) model
 
         DraggingHandCard d ->
             let
@@ -236,268 +228,8 @@ handleMouseUp releasePoint tMs model =
                         , floaterTopLeft = releaseFloater
                     }
             in
-            applyHandOutcome (resolveHandOutcome dFull model.boardRect) model
+            HandGesture.applyHandOutcome (HandGesture.resolveHandOutcome dFull model.boardRect) model
 
-
-
--- BOARD VS HAND: SEPARATE LADDERS
---
--- Two drag kinds, two outcome types, two resolvers, two
--- appliers. The shared scaffolding (clearDrag, sessionId
--- check, log+send) is duplicated rather than unified behind
--- Maybe parameters — splitting along the noun (board / hand)
--- is what cuts through the complexity, not "fewer Maybes via
--- helpers."
-
-
-type BoardOutcome
-    = BoardAction WireAction State.EnvelopeForGesture
-    | BoardOffBoard State.StatusMessage
-    | BoardNothingHappened
-
-
-type HandOutcome
-    = HandAction WireAction
-    | HandOffBoard State.StatusMessage
-    | HandNothingHappened
-
-
-resolveBoardOutcome : BoardCardDragInfo -> Maybe GA.Rect -> BoardOutcome
-resolveBoardOutcome d boardRect =
-    case resolveBoardCardGesture d boardRect of
-        Just action ->
-            BoardAction action
-                { path = d.gesturePath, frame = BoardFrame }
-
-        Nothing ->
-            case droppedOffBoardScold d.floaterTopLeft (CardStack.size d.stack) of
-                Just scold ->
-                    BoardOffBoard scold
-
-                Nothing ->
-                    BoardNothingHappened
-
-
-{-| Hand-side resolver. Hand-origin actions ship pathless
-(replay re-synthesizes via DOM), so HandAction carries no
-envelope.
--}
-resolveHandOutcome : HandCardDragInfo -> Maybe GA.Rect -> HandOutcome
-resolveHandOutcome d maybeRect =
-    case resolveHandCardGesture d maybeRect of
-        Just action ->
-            HandAction action
-
-        Nothing ->
-            case maybeRect of
-                Just rect ->
-                    let
-                        floaterBoardLoc =
-                            { left = d.floaterTopLeft.x - rect.x
-                            , top = d.floaterTopLeft.y - rect.y
-                            }
-                    in
-                    case droppedOffBoardScold floaterBoardLoc 1 of
-                        Just scold ->
-                            HandOffBoard scold
-
-                        Nothing ->
-                            HandNothingHappened
-
-                Nothing ->
-                    HandNothingHappened
-
-
-applyBoardOutcome : BoardOutcome -> Model -> ( Model, Cmd Msg )
-applyBoardOutcome outcome model =
-    let
-        cleared =
-            clearDrag model
-    in
-    case outcome of
-        BoardAction action envelope ->
-            let
-                modelAfter =
-                    Apply.applyAction action cleared
-                        |> Apply.commit
-            in
-            case modelAfter.sessionId of
-                Just sid ->
-                    let
-                        entry =
-                            { action = action
-                            , gesturePath = Just envelope.path
-                            , pathFrame = envelope.frame
-                            }
-
-                        seq =
-                            modelAfter.nextSeq
-                    in
-                    ( { modelAfter
-                        | actionLog = modelAfter.actionLog ++ [ entry ]
-                        , nextSeq = seq + 1
-                      }
-                    , Wire.sendAction sid seq action (Just envelope)
-                    )
-
-                Nothing ->
-                    ( modelAfter, Cmd.none )
-
-        BoardOffBoard scold ->
-            ( { cleared | status = scold }, Cmd.none )
-
-        BoardNothingHappened ->
-            ( cleared, Cmd.none )
-
-
-applyHandOutcome : HandOutcome -> Model -> ( Model, Cmd Msg )
-applyHandOutcome outcome model =
-    let
-        cleared =
-            clearDrag model
-    in
-    case outcome of
-        HandAction action ->
-            let
-                modelAfter =
-                    Apply.applyAction action cleared
-                        |> Apply.commit
-            in
-            case modelAfter.sessionId of
-                Just sid ->
-                    let
-                        entry =
-                            { action = action
-                            , gesturePath = Nothing
-                            , pathFrame = ViewportFrame
-                            }
-
-                        seq =
-                            modelAfter.nextSeq
-                    in
-                    ( { modelAfter
-                        | actionLog = modelAfter.actionLog ++ [ entry ]
-                        , nextSeq = seq + 1
-                      }
-                    , Wire.sendAction sid seq action Nothing
-                    )
-
-                Nothing ->
-                    ( modelAfter, Cmd.none )
-
-        HandOffBoard scold ->
-            ( { cleared | status = scold }, Cmd.none )
-
-        HandNothingHappened ->
-            ( cleared, Cmd.none )
-
-
-{-| Resolve a completed board-card drag into the WireAction (if
-any) it should produce. Click-vs-drag check: if the cursor is
-still within `clickThreshold` of `originalCursor`, emit a
-`Split` at the captured `cardIndex`.
--}
-resolveBoardCardGesture : BoardCardDragInfo -> Maybe GA.Rect -> Maybe WireAction
-resolveBoardCardGesture d boardRect =
-    if GA.distSquared d.cursor d.originalCursor <= GA.clickThreshold then
-        Just (WA.Split { stack = d.stack, cardIndex = d.cardIndex })
-
-    else
-        let
-            hovered =
-                WingView.hoveredWing d.floaterTopLeft (CardStack.stackDisplayWidth d.stack) d.wings
-        in
-        case hovered of
-            Just wing ->
-                Just
-                    (WA.MergeStack
-                        { source = d.stack
-                        , target = wing.target
-                        , side = wing.side
-                        }
-                    )
-
-            Nothing ->
-                if isCursorOverBoard d.cursor boardRect then
-                    if isDropFootprintInBounds (CardStack.size d.stack) d.floaterTopLeft then
-                        Just (WA.MoveStack { stack = d.stack, newLoc = d.floaterTopLeft })
-
-                    else
-                        Nothing
-
-                else
-                    Nothing
-
-
-{-| Hand-card resolution requires the live board rect for both
-the wing-hover hit-test (lifting board-frame eventual landings
-into viewport frame) and the drop-loc translation. With no rect
-yet, no honest action is possible — return Nothing.
--}
-resolveHandCardGesture : HandCardDragInfo -> Maybe GA.Rect -> Maybe WireAction
-resolveHandCardGesture d maybeRect =
-    case maybeRect of
-        Nothing ->
-            Nothing
-
-        Just rect ->
-            let
-                floaterBoardLoc =
-                    { left = d.floaterTopLeft.x - rect.x
-                    , top = d.floaterTopLeft.y - rect.y
-                    }
-
-                hovered =
-                    WingView.hoveredWing floaterBoardLoc CardStack.stackPitch d.wings
-            in
-            case hovered of
-                Just wing ->
-                    Just
-                        (WA.MergeHand
-                            { handCard = d.card
-                            , target = wing.target
-                            , side = wing.side
-                            }
-                        )
-
-                Nothing ->
-                    if GA.isCursorInRect d.cursor rect then
-                        if isDropFootprintInBounds 1 floaterBoardLoc then
-                            Just (WA.PlaceHand { handCard = d.card, loc = floaterBoardLoc })
-
-                        else
-                            Nothing
-
-                    else
-                        Nothing
-
-
-isCursorOverBoard : Point -> Maybe GA.Rect -> Bool
-isCursorOverBoard cursor maybeRect =
-    case maybeRect of
-        Just rect ->
-            GA.isCursorInRect cursor rect
-
-        Nothing ->
-            False
-
-
--- LEAF HELPERS
-
-
-{-| True iff a stack of `cardCount` cards placed at `loc` fits
-entirely within the board's bounds.
--}
-isDropFootprintInBounds : Int -> BoardLocation -> Bool
-isDropFootprintInBounds cardCount loc =
-    let
-        bounds =
-            Apply.refereeBounds
-    in
-    (loc.left >= 0)
-        && (loc.top >= 0)
-        && (loc.left + BG.stackWidth cardCount <= bounds.maxWidth)
-        && (loc.top + BG.cardHeight <= bounds.maxHeight)
 
 
 {-| Status message to show while hovering a wing (a drop here
@@ -506,27 +238,6 @@ would fire a merge).
 wingHoverStatus : State.StatusMessage
 wingHoverStatus =
     { text = "Drop stack to complete merge.", kind = Inform }
-
-
-droppedOffBoardScold : BoardLocation -> Int -> Maybe State.StatusMessage
-droppedOffBoardScold loc cardCount =
-    if not (isDropFootprintInBounds cardCount loc) then
-        Just offBoardScold
-
-    else
-        Nothing
-
-
-offBoardScold : State.StatusMessage
-offBoardScold =
-    { text = "Don't knock cards off the board, please. You're not a cat!"
-    , kind = Scold
-    }
-
-
-clearDrag : Model -> Model
-clearDrag model =
-    { model | drag = NotDragging }
 
 
 
