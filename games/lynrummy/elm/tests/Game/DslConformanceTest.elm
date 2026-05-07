@@ -25,7 +25,9 @@ import Game.CardStack as CardStack
         , HandCardState(..)
         )
 import Game.BoardActions as BoardActions
+import Game.BoardGesture as BoardGesture
 import Game.Drag as Drag exposing (DragState(..))
+import Game.HandGesture as HandGesture
 import Game.Physics.GestureArbitration as GA
 import Game.Physics.PlaceStack
 import Game.Physics.WingOracle as WingOracle
@@ -1970,7 +1972,7 @@ gestureMergeHandCardOntoBoardWing =
                     }
 
             in
-            case Gesture.resolveHandCardGesture d (Just { x = 300, y = 100, width = 800, height = 600 }) of
+            case HandGesture.resolveHandCardGesture d (Just { x = 300, y = 100, width = 800, height = 600 }) of
                 Just (WA.MergeHand p) ->
                     Expect.equal BoardActions.Right p.side
 
@@ -2006,7 +2008,7 @@ gestureMergeStack234Onto567Left =
                     }
 
             in
-            case Gesture.resolveBoardCardGesture d Nothing of
+            case BoardGesture.resolveBoardCardGesture d Nothing of
                 Just (WA.MergeStack p) ->
                     Expect.equal BoardActions.Left p.side
 
@@ -2042,7 +2044,7 @@ gestureMergeStack567Onto234Right =
                     }
 
             in
-            case Gesture.resolveBoardCardGesture d Nothing of
+            case BoardGesture.resolveBoardCardGesture d Nothing of
                 Just (WA.MergeStack p) ->
                     Expect.equal BoardActions.Right p.side
 
@@ -2072,7 +2074,7 @@ gestureMoveStackOffBoardRejected =
                     }
 
             in
-            Gesture.resolveBoardCardGesture d (Just { x = 300, y = 100, width = 800, height = 600 })
+            BoardGesture.resolveBoardCardGesture d (Just { x = 300, y = 100, width = 800, height = 600 })
                 |> Expect.equal Nothing
 
 
@@ -2098,7 +2100,7 @@ gestureMoveStackValidDrop =
                     }
 
             in
-            case Gesture.resolveBoardCardGesture d (Just { x = 300, y = 100, width = 800, height = 600 }) of
+            case BoardGesture.resolveBoardCardGesture d (Just { x = 300, y = 100, width = 800, height = 600 }) of
                 Just (WA.MoveStack p) ->
                     Expect.all
                         [ \_ -> Expect.equal 400 p.newLoc.left
@@ -2129,7 +2131,7 @@ gesturePlaceHandDropsToBoard =
                     }
 
             in
-            case Gesture.resolveHandCardGesture d (Just { x = 300, y = 100, width = 800, height = 600 }) of
+            case HandGesture.resolveHandCardGesture d (Just { x = 300, y = 100, width = 800, height = 600 }) of
                 Just (WA.PlaceHand p) ->
                     Expect.all
                         [ \_ -> Expect.equal 450 p.loc.left
@@ -2163,7 +2165,7 @@ gestureSplitSurvivingClickIntent =
                     }
 
             in
-            case Gesture.resolveBoardCardGesture d Nothing of
+            case BoardGesture.resolveBoardCardGesture d Nothing of
                 Just (WA.Split p) ->
                     Expect.equal 3 p.cardIndex
 

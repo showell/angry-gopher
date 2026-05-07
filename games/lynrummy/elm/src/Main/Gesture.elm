@@ -55,10 +55,9 @@ import Html.Attributes exposing (style)
 import Html.Events as Events
 import Json.Decode as Decode exposing (Decoder)
 import Main.Msg exposing (Msg(..))
-import Main.State as State
+import Main.State
     exposing
         ( Model
-        , StatusKind(..)
         , activeHand
         , boardDomIdFor
         )
@@ -190,7 +189,7 @@ handleMouseUp releasePoint tMs model =
             BoardGesture.handleMouseUp releasePoint tMs d model
 
         DraggingHandCard d ->
-            HandGesture.handleMouseUp releasePoint tMs d model
+            HandGesture.handleMouseUp releasePoint d model
 
 
 

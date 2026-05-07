@@ -1,10 +1,7 @@
 module Game.HandGesture exposing
-    ( HandOutcome(..)
-    , applyHandOutcome
-    , handleMouseUp
+    ( handleMouseUp
     , mouseMove
     , resolveHandCardGesture
-    , resolveHandOutcome
     )
 
 {-| Per-side resolution and application for hand-card drags.
@@ -43,11 +40,11 @@ type HandOutcome
 
 {-| Mouseup handler for a hand-card drag. Caller (the
 dispatcher in `Main.Gesture`) has pattern-matched out the
-`Info` and passes it in. The `tMs` parameter is unused — hand
-drags don't capture a gesture path.
+`Info` and passes it in. Hand drags don't capture a gesture
+path, so no `tMs`.
 -}
-handleMouseUp : Point -> Float -> HandCardDragInfo -> Model -> ( Model, Cmd Msg )
-handleMouseUp releasePoint _ d model =
+handleMouseUp : Point -> HandCardDragInfo -> Model -> ( Model, Cmd Msg )
+handleMouseUp releasePoint d model =
     let
         delta =
             { x = releasePoint.x - d.cursor.x
@@ -181,10 +178,10 @@ resolveHandCardGesture d maybeRect =
 
 {-| Mousemove handler for a hand-card drag. Caller (the
 dispatcher in `Main.Play`) has pattern-matched out the `Info`.
-Hand drags don't capture a gesture path; `tMs` is unused.
+Hand drags don't capture a gesture path, so no `tMs`.
 -}
-mouseMove : Point -> Float -> HandCardDragInfo -> Model -> ( Model, Cmd Msg )
-mouseMove pos _ d model =
+mouseMove : Point -> HandCardDragInfo -> Model -> ( Model, Cmd Msg )
+mouseMove pos d model =
     let
         delta =
             { x = pos.x - d.cursor.x

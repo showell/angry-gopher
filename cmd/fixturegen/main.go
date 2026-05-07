@@ -641,7 +641,9 @@ import Game.CardStack as CardStack
         , HandCardState(..)
         )
 import Game.BoardActions as BoardActions
+import Game.BoardGesture as BoardGesture
 import Game.Drag as Drag exposing (DragState(..))
+import Game.HandGesture as HandGesture
 import Game.Physics.GestureArbitration as GA
 import Game.Physics.PlaceStack
 import Game.Physics.WingOracle as WingOracle
@@ -1711,7 +1713,7 @@ func elmGestureSplit(b *strings.Builder, sc Scenario) {
 		"floater",
 		"[]")
 	b.WriteString(ind + "in\n")
-	b.WriteString(ind + "case Gesture.resolveBoardCardGesture d Nothing of\n")
+	b.WriteString(ind + "case BoardGesture.resolveBoardCardGesture d Nothing of\n")
 	b.WriteString(ind + "    Just (WA.Split p) ->\n")
 	fmt.Fprintf(b, "%s        Expect.equal %d p.cardIndex\n\n", ind, gs.CardIndex)
 	b.WriteString(ind + "    other ->\n")
@@ -1742,7 +1744,7 @@ func elmGestureMergeStack(b *strings.Builder, sc Scenario) {
 		"floater",
 		"[ wing ]")
 	b.WriteString(ind + "in\n")
-	b.WriteString(ind + "case Gesture.resolveBoardCardGesture d Nothing of\n")
+	b.WriteString(ind + "case BoardGesture.resolveBoardCardGesture d Nothing of\n")
 	b.WriteString(ind + "    Just (WA.MergeStack p) ->\n")
 	fmt.Fprintf(b, "%s        Expect.equal %s p.side\n\n", ind, sideExpr)
 	b.WriteString(ind + "    other ->\n")
@@ -1768,7 +1770,7 @@ func elmGestureMergeHand(b *strings.Builder, sc Scenario) {
 		"floater",
 		"[ wing ]")
 	b.WriteString(ind + "in\n")
-	fmt.Fprintf(b, "%scase Gesture.resolveHandCardGesture d (Just %s) of\n", ind, gestureBoardRectLit)
+	fmt.Fprintf(b, "%scase HandGesture.resolveHandCardGesture d (Just %s) of\n", ind, gestureBoardRectLit)
 	b.WriteString(ind + "    Just (WA.MergeHand p) ->\n")
 	fmt.Fprintf(b, "%s        Expect.equal %s p.side\n\n", ind, sideExpr)
 	b.WriteString(ind + "    other ->\n")
@@ -1801,10 +1803,10 @@ func elmGestureMoveStack(b *strings.Builder, sc Scenario) {
 		"[]")
 	b.WriteString(ind + "in\n")
 	if gm.Rejected {
-		fmt.Fprintf(b, "%sGesture.resolveBoardCardGesture d (Just %s)\n", ind, gestureBoardRectLit)
+		fmt.Fprintf(b, "%sBoardGesture.resolveBoardCardGesture d (Just %s)\n", ind, gestureBoardRectLit)
 		b.WriteString(ind + "    |> Expect.equal Nothing")
 	} else {
-		fmt.Fprintf(b, "%scase Gesture.resolveBoardCardGesture d (Just %s) of\n", ind, gestureBoardRectLit)
+		fmt.Fprintf(b, "%scase BoardGesture.resolveBoardCardGesture d (Just %s) of\n", ind, gestureBoardRectLit)
 		b.WriteString(ind + "    Just (WA.MoveStack p) ->\n")
 		b.WriteString(ind + "        Expect.all\n")
 		fmt.Fprintf(b, "%s            [ \\_ -> Expect.equal %d p.newLoc.left\n", ind, gm.NewLocLeft)
@@ -1837,7 +1839,7 @@ func elmGesturePlaceHand(b *strings.Builder, sc Scenario) {
 		"floater",
 		"[]")
 	b.WriteString(ind + "in\n")
-	fmt.Fprintf(b, "%scase Gesture.resolveHandCardGesture d (Just %s) of\n", ind, gestureBoardRectLit)
+	fmt.Fprintf(b, "%scase HandGesture.resolveHandCardGesture d (Just %s) of\n", ind, gestureBoardRectLit)
 	b.WriteString(ind + "    Just (WA.PlaceHand p) ->\n")
 	b.WriteString(ind + "        Expect.all\n")
 	fmt.Fprintf(b, "%s            [ \\_ -> Expect.equal %d p.loc.left\n", ind, gp.LocLeft)

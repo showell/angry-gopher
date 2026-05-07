@@ -22,7 +22,7 @@ Output.
 import Browser.Dom
 import Browser.Events
 import Game.BoardGesture as BoardGesture
-import Game.CardStack as CardStack exposing (CardStack)
+import Game.CardStack exposing (CardStack)
 import Game.Drag exposing (DragState(..))
 import Game.HandGesture as HandGesture
 import Game.Rules.Card as Card
@@ -33,14 +33,13 @@ import Game.PlayerTurn exposing (CompleteTurnResult(..))
 import Game.Random as Random
 import Game.Replay.Time as ReplayTime
 import Game.Score as Score
-import Game.WingView as WingView
 import Game.WireAction as WA
 import Html exposing (Html)
 import Http
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
 import Main.Apply exposing (applyAction, refereeBounds)
-import Main.Gesture as Gesture
+import Main.Gesture
     exposing
         ( handleMouseUp
         , pointDecoder
@@ -271,7 +270,7 @@ mouseMove pos tMs model =
             BoardGesture.mouseMove pos tMs d model
 
         DraggingHandCard d ->
-            HandGesture.mouseMove pos tMs d model
+            HandGesture.mouseMove pos d model
 
         NotDragging ->
             ( model, Cmd.none )

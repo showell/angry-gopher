@@ -1,10 +1,7 @@
 module Game.BoardGesture exposing
-    ( BoardOutcome(..)
-    , applyBoardOutcome
-    , handleMouseUp
+    ( handleMouseUp
     , mouseMove
     , resolveBoardCardGesture
-    , resolveBoardOutcome
     )
 
 {-| Per-side resolution and application for board-card drags.
