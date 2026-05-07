@@ -26,6 +26,7 @@ import Game.BoardDrag exposing (BoardCardDragInfo)
 import Game.BoardGesture as BoardGesture
 import Game.CardStack exposing (CardStack, encodeBoardLocation, encodeCardStack)
 import Game.Drag exposing (DragState(..))
+import Game.Execute as Execute
 import Game.HandDrag exposing (HandCardDragInfo)
 import Game.HandGesture as HandGesture
 import Game.Rules.Card as Card
@@ -339,14 +340,20 @@ handleMouseUpBoard releasePoint tMs d model =
     case BoardGesture.handleMouseUp releasePoint tMs d model.boardRect of
         BoardGesture.Split p ->
             let
-                newModel =
-                    applyMouseUpAction (GameEvent.Split p) Nothing model
+                entry =
+                    { action = GameEvent.Split p
+                    , gesturePath = Nothing
+                    , pathFrame = ViewportFrame
+                    }
 
                 outcome =
-                    { board = newModel.board
-                    , status = newModel.status
-                    , actionLog = newModel.actionLog
-                    , nextSeq = newModel.nextSeq
+                    { board = Execute.split p.stack p.cardIndex model.board
+                    , status =
+                        { text = "Be careful with splitting! Splits only pay off when you get more cards on the board or make prettier piles."
+                        , kind = Scold
+                        }
+                    , actionLog = model.actionLog ++ [ entry ]
+                    , nextSeq = model.nextSeq + 1
                     }
 
                 outboundPayloadForAgent =
