@@ -57,6 +57,7 @@ import Html exposing (Html, div)
 import Html.Attributes exposing (href, style)
 import Html.Events as Events
 import Game.BoardView as BoardView
+import Game.Drag as Drag
 import Main.Gesture as Gesture
 import Main.Msg exposing (Msg(..))
 import Main.State
@@ -221,7 +222,7 @@ view model =
             , style "left" (String.fromInt BoardGeometry.boardViewportLeft ++ "px")
             ]
             [ boardColumn model ]
-        , BoardView.draggedOverlay model
+        , Drag.draggedOverlay model.drag
         , viewPopup
             (case model.replay of
                 Just _ ->

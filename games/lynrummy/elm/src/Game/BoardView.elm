@@ -1,22 +1,20 @@
 module Game.BoardView exposing
     ( boardWithWings
-    , draggedOverlay
     , viewBoard
     )
 
-{-| The board widget — stacks, drag wings, and the dragged-
-floater overlays.
+{-| The board widget — stacks, drag wings, and the
+board-frame overlay for an in-flight intra-board drag.
 
-`boardShellWith` is the bare board shell (khaki rectangle,
-`position: relative`, fixed 800×600). Used both by the
-drag-aware `boardWithWings` and by the puzzle's static
-`viewBoard`.
+`boardShellWith` (private) is the bare board shell (khaki
+rectangle, `position: relative`, fixed 800×600). Used both
+by the drag-aware `boardWithWings` and by the puzzle's
+static `viewBoard`.
 
 `boardWithWings` is the in-flow drag-aware board (shell with
 stack children and, during a drag, wing targets and a
-board-frame floater). `draggedOverlay` is the viewport-frame
-floater used for hand-origin drags whose source is outside
-the board widget.
+board-frame floater). The viewport-frame floater for
+hand-origin drags lives in `Game.Drag.draggedOverlay`.
 
 A drag is rendered immediately on mousedown; the source stack
 hides and the floater takes over at the same screen position.
@@ -26,7 +24,7 @@ not a state the View needs to know about.
 -}
 
 import Game.CardStack as CardStack exposing (CardStack)
-import Game.Drag exposing (BoardCardDragInfo, DragState(..), HandCardDragInfo)
+import Game.Drag as Drag exposing (DragState(..))
 import Game.Physics.GestureArbitration as GA
 import Game.StackView as StackView
 import Game.View exposing (navy)
@@ -141,63 +139,23 @@ viewStackForBoard drag stack =
 -- DRAG OVERLAYS
 
 
-{-| Viewport-frame drag overlay (`position: fixed`). Renders
-hand-origin drags. Intra-board drags render via
-`getOverlayNodes` inside the board shell.
--}
-draggedOverlay : Model -> Html Msg
-draggedOverlay model =
-    case model.drag of
-        DraggingHandCard d ->
-            renderHandFloater d [ style "position" "fixed" ]
-
-        DraggingBoardCard _ ->
-            Html.text ""
-
-        NotDragging ->
-            Html.text ""
-
-
 {-| Board-frame drag overlay nodes: a DOM child of the board
 shell (which is `position: relative`) with `position: absolute`
 and board-frame top/left. Renders intra-board drags. Empty list
 when no overlay applies — keeps the caller's concatenation
 straightforward.
+
+The viewport-frame counterpart for hand drags is
+`Game.Drag.draggedOverlay`.
 -}
 getOverlayNodes : DragState -> List (Html Msg)
 getOverlayNodes drag =
     case drag of
         DraggingBoardCard d ->
-            [ renderBoardFloater d [ style "position" "absolute" ] ]
+            [ Drag.renderBoardFloater d [ style "position" "absolute" ] ]
 
         DraggingHandCard _ ->
             []
 
         NotDragging ->
             []
-
-
-renderBoardFloater : BoardCardDragInfo -> List (Html.Attribute Msg) -> Html Msg
-renderBoardFloater d positioningAttrs =
-    StackView.viewStackWithAttrs (floatingAttrs d.floaterTopLeft positioningAttrs) d.stack
-
-
-renderHandFloater : HandCardDragInfo -> List (Html.Attribute Msg) -> Html Msg
-renderHandFloater d positioningAttrs =
-    StackView.viewCardWithAttrs
-        (floatingAttrs
-            { left = d.floaterTopLeft.x, top = d.floaterTopLeft.y }
-            positioningAttrs
-            ++ [ style "background-color" "white" ]
-        )
-        d.card
-
-
-floatingAttrs : { left : Int, top : Int } -> List (Html.Attribute Msg) -> List (Html.Attribute Msg)
-floatingAttrs floaterTopLeft positioningAttrs =
-    positioningAttrs
-        ++ [ style "top" (String.fromInt floaterTopLeft.top ++ "px")
-           , style "left" (String.fromInt floaterTopLeft.left ++ "px")
-           , style "pointer-events" "none"
-           , style "z-index" "1000"
-           ]
