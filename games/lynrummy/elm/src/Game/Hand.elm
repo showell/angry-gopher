@@ -3,6 +3,7 @@ module Game.Hand exposing
     , addCards
     , addHandCards
     , empty
+    , findHandCard
     , removeHandCard
     , resetState
     , size
@@ -20,6 +21,18 @@ import Game.CardStack exposing (HandCard, HandCardState(..), isHandCardSameCard)
 
 type alias Hand =
     { handCards : List HandCard }
+
+
+{-| Find a hand card by content identity (ignores state). The
+wire's `Card` references identify a hand card; the actual
+`HandCard` record on the hand carries the mutable state that
+matters for rendering.
+-}
+findHandCard : Card -> Hand -> Maybe HandCard
+findHandCard card hand =
+    hand.handCards
+        |> List.filter (\hc -> isHandCardSameCard hc { card = card, state = HandNormal })
+        |> List.head
 
 
 empty : Hand

@@ -1,4 +1,4 @@
-module Game.Execute exposing (mergeStack, moveStack, split)
+module Game.Execute exposing (mergeHand, mergeStack, moveStack, placeHand, split)
 
 {-| Honest board mutators, one per `GameEvent` variant. Each
 function takes the board (and whatever per-action data it
@@ -15,6 +15,8 @@ divergence cascades downstream and gets harder to trace.
 
 import Game.BoardActions as BoardActions exposing (Side)
 import Game.CardStack as CardStack exposing (BoardLocation, CardStack, findStack, isStacksEqual)
+import Game.Hand as Hand exposing (Hand)
+import Game.Rules.Card exposing (Card)
 
 
 {-| Split the given stack at `cardIndex`, returning a new
@@ -70,10 +72,7 @@ mergeStack source target side board =
         ( Just realSource, Just realTarget ) ->
             case BoardActions.tryStackMerge realTarget realSource side of
                 Just change ->
-                    List.filter
-                        (\s -> not (List.any (isStacksEqual s) change.stacksToRemove))
-                        board
-                        ++ change.stacksToAdd
+                    applyBoardChange change board
 
                 Nothing ->
                     let
@@ -96,3 +95,94 @@ mergeStack source target side board =
                     Debug.log "[Execute.mergeStack] target stack not on board — skipping (bridge bug)" target
             in
             board
+
+
+{-| Merge `handCard` onto `target` from the given side. Returns
+the new (board, hand) — board has the merged stack, hand has
+the merged card removed. Failure cases (target missing, hand
+card missing, tryHandMerge rejects) log and return board+hand
+unchanged.
+-}
+mergeHand :
+    Card
+    -> CardStack
+    -> Side
+    -> List CardStack
+    -> Hand
+    -> { board : List CardStack, hand : Hand }
+mergeHand handCardId target side board hand =
+    case ( findStack target board, Hand.findHandCard handCardId hand ) of
+        ( Just realTarget, Just hc ) ->
+            case BoardActions.tryHandMerge realTarget hc side of
+                Just change ->
+                    { board = applyBoardChange change board
+                    , hand = Hand.removeHandCard hc hand
+                    }
+
+                Nothing ->
+                    let
+                        _ =
+                            Debug.log "[Execute.mergeHand] tryHandMerge rejected — skipping (rules bug?)"
+                                { handCard = handCardId, target = target, side = side }
+                    in
+                    { board = board, hand = hand }
+
+        ( Nothing, _ ) ->
+            let
+                _ =
+                    Debug.log "[Execute.mergeHand] target stack not on board — skipping (bridge bug)" target
+            in
+            { board = board, hand = hand }
+
+        ( _, Nothing ) ->
+            let
+                _ =
+                    Debug.log
+                        ("[Execute.mergeHand] hand_card not in active hand — skipping. "
+                            ++ "Bridge-bug surfacer: agent transcript referenced a card "
+                            ++ "the eager applier doesn't have in hand."
+                        )
+                        { handCard = handCardId, handSize = List.length hand.handCards }
+            in
+            { board = board, hand = hand }
+
+
+{-| Place `handCard` on the board at `loc`. Returns the new
+(board, hand) — board has the new singleton stack, hand has
+the placed card removed. Bridge-bug case: hand card not in
+active hand → log + board+hand unchanged.
+-}
+placeHand :
+    Card
+    -> BoardLocation
+    -> List CardStack
+    -> Hand
+    -> { board : List CardStack, hand : Hand }
+placeHand handCardId loc board hand =
+    case Hand.findHandCard handCardId hand of
+        Just hc ->
+            { board = applyBoardChange (BoardActions.placeHandCardAt hc loc) board
+            , hand = Hand.removeHandCard hc hand
+            }
+
+        Nothing ->
+            let
+                _ =
+                    Debug.log
+                        ("[Execute.placeHand] hand_card not in active hand — skipping. "
+                            ++ "Bridge-bug surfacer: agent transcript referenced a card "
+                            ++ "the eager applier doesn't have in hand."
+                        )
+                        { handCard = handCardId, handSize = List.length hand.handCards }
+            in
+            { board = board, hand = hand }
+
+
+
+-- HELPERS
+
+
+applyBoardChange : BoardActions.BoardChange -> List CardStack -> List CardStack
+applyBoardChange change board =
+    List.filter (\s -> not (List.any (isStacksEqual s) change.stacksToRemove)) board
+        ++ change.stacksToAdd

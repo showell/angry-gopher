@@ -27,6 +27,7 @@ import Game.BoardGesture as BoardGesture
 import Game.CardStack exposing (CardStack, encodeBoardLocation, encodeCardStack)
 import Game.Drag exposing (DragState(..))
 import Game.Execute as Execute
+import Game.Hand exposing (Hand)
 import Game.HandDrag exposing (HandCardDragInfo)
 import Game.HandGesture as HandGesture
 import Game.Rules.Card as Card
@@ -308,10 +309,20 @@ handleMouseUp releasePoint tMs model =
 
         DraggingHandCard d ->
             let
-                ( newModel, cmd ) =
+                ( outcome, cmd ) =
                     handleMouseUpHand releasePoint d model
             in
-            ( { newModel | drag = NotDragging }, cmd )
+            ( { model
+                | drag = NotDragging
+                , board = outcome.board
+                , hands = outcome.hands
+                , cardsPlayedThisTurn = outcome.cardsPlayedThisTurn
+                , status = outcome.status
+                , actionLog = outcome.actionLog
+                , nextSeq = outcome.nextSeq
+              }
+            , cmd
+            )
 
 
 {-| Narrow return type for `handleMouseUpBoard`: the three
@@ -478,18 +489,51 @@ handleMouseUpBoard releasePoint tMs d model =
             ( outcome, Cmd.none )
 
 
+{-| Narrow return type for `handleMouseUpHand`, parallel to
+`BoardOutcome` but with the additional fields a hand action
+can mutate (`hands` for the active-hand write-back,
+`cardsPlayedThisTurn` for the per-turn counter).
+-}
+type alias HandOutcome =
+    { board : List CardStack
+    , hands : List Hand
+    , cardsPlayedThisTurn : Int
+    , status : StatusMessage
+    , actionLog : List ActionLogEntry
+    , nextSeq : Int
+    }
+
+
 {-| Resolve a hand-card mouseup. Mirrors `handleMouseUpBoard`
 but for the hand-origin variants. Hand actions ship pathless
 (no `gesture_metadata`); replay re-synthesizes via DOM
 measurement on the resume path.
 -}
-handleMouseUpHand : Point -> HandCardDragInfo -> Model -> ( Model, Cmd Msg )
+handleMouseUpHand : Point -> HandCardDragInfo -> Model -> ( HandOutcome, Cmd Msg )
 handleMouseUpHand releasePoint d model =
     case HandGesture.handleMouseUp releasePoint d model.boardRect of
         HandGesture.MergeHand p ->
             let
-                newModel =
-                    applyMouseUpAction (GameEvent.MergeHand p) Nothing model
+                next =
+                    Execute.mergeHand p.handCard p.target p.side model.board (activeHand model)
+
+                modelWithHand =
+                    setActiveHand next.hand model
+
+                outcome =
+                    { board = next.board
+                    , hands = modelWithHand.hands
+                    , cardsPlayedThisTurn = model.cardsPlayedThisTurn + 1
+                    , status = Apply.geometryFeedback model.board next.board |> Maybe.withDefault (Apply.mergeStatus next.board)
+                    , actionLog =
+                        model.actionLog
+                            ++ [ { action = GameEvent.MergeHand p
+                                 , gesturePath = Nothing
+                                 , pathFrame = ViewportFrame
+                                 }
+                               ]
+                    , nextSeq = model.nextSeq + 1
+                    }
 
                 outboundPayloadForAgent =
                     Encode.object
@@ -513,12 +557,33 @@ handleMouseUpHand releasePoint d model =
                           )
                         ]
             in
-            ( newModel, Wire.sendAction model.sessionId outboundPayloadForAgent )
+            ( outcome, Wire.sendAction model.sessionId outboundPayloadForAgent )
 
         HandGesture.PlaceHand p ->
             let
-                newModel =
-                    applyMouseUpAction (GameEvent.PlaceHand p) Nothing model
+                next =
+                    Execute.placeHand p.handCard p.loc model.board (activeHand model)
+
+                modelWithHand =
+                    setActiveHand next.hand model
+
+                placeHandStatus =
+                    { text = "On the board!", kind = Inform }
+
+                outcome =
+                    { board = next.board
+                    , hands = modelWithHand.hands
+                    , cardsPlayedThisTurn = model.cardsPlayedThisTurn + 1
+                    , status = Apply.geometryFeedback model.board next.board |> Maybe.withDefault placeHandStatus
+                    , actionLog =
+                        model.actionLog
+                            ++ [ { action = GameEvent.PlaceHand p
+                                 , gesturePath = Nothing
+                                 , pathFrame = ViewportFrame
+                                 }
+                               ]
+                    , nextSeq = model.nextSeq + 1
+                    }
 
                 outboundPayloadForAgent =
                     Encode.object
@@ -532,13 +597,33 @@ handleMouseUpHand releasePoint d model =
                           )
                         ]
             in
-            ( newModel, Wire.sendAction model.sessionId outboundPayloadForAgent )
+            ( outcome, Wire.sendAction model.sessionId outboundPayloadForAgent )
 
         HandGesture.HandCardOffBoard ->
-            ( { model | status = offBoardScold }, Cmd.none )
+            let
+                outcome =
+                    { board = model.board
+                    , hands = model.hands
+                    , cardsPlayedThisTurn = model.cardsPlayedThisTurn
+                    , status = offBoardScold
+                    , actionLog = model.actionLog
+                    , nextSeq = model.nextSeq
+                    }
+            in
+            ( outcome, Cmd.none )
 
         HandGesture.HandNothing ->
-            ( model, Cmd.none )
+            let
+                outcome =
+                    { board = model.board
+                    , hands = model.hands
+                    , cardsPlayedThisTurn = model.cardsPlayedThisTurn
+                    , status = model.status
+                    , actionLog = model.actionLog
+                    , nextSeq = model.nextSeq
+                    }
+            in
+            ( outcome, Cmd.none )
 
 
 {-| Apply a player action through the engine, append the
