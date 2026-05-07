@@ -205,29 +205,16 @@ handleMouseUp releasePoint tMs model =
                     , top = d.floaterTopLeft.top + delta.y
                     }
 
-                fullPath =
-                    d.gesturePath
-                        ++ [ { tMs = tMs, x = releaseFloater.left, y = releaseFloater.top } ]
-
                 dFull =
                     { d
                         | cursor = releasePoint
                         , floaterTopLeft = releaseFloater
-                        , gesturePath = fullPath
+                        , gesturePath =
+                            d.gesturePath
+                                ++ [ { tMs = tMs, x = releaseFloater.left, y = releaseFloater.top } ]
                     }
-
-                maybeAction =
-                    resolveBoardCardGesture dFull model.boardRect
-
-                envelope =
-                    maybeAction
-                        |> Maybe.map (\_ -> { path = fullPath, frame = BoardFrame })
             in
-            finalizeMouseUp
-                maybeAction
-                envelope
-                (droppedOffBoardScold dFull.floaterTopLeft (CardStack.size dFull.stack))
-                model
+            applyBoardOutcome (resolveBoardOutcome dFull model.boardRect) model
 
         DraggingHandCard d ->
             let
@@ -246,78 +233,161 @@ handleMouseUp releasePoint tMs model =
                         | cursor = releasePoint
                         , floaterTopLeft = releaseFloater
                     }
-
-                maybeAction =
-                    resolveHandCardGesture dFull model.boardRect
-
-                handScold =
-                    case model.boardRect of
-                        Just rect ->
-                            let
-                                floaterBoardLoc =
-                                    { left = dFull.floaterTopLeft.x - rect.x
-                                    , top = dFull.floaterTopLeft.y - rect.y
-                                    }
-                            in
-                            droppedOffBoardScold floaterBoardLoc 1
-
-                        Nothing ->
-                            Nothing
             in
-            -- Hand-origin actions ship pathless (replay
-            -- re-synthesizes via DOM), so envelope is always
-            -- Nothing here regardless of the action.
-            finalizeMouseUp maybeAction Nothing handScold model
+            applyHandOutcome (resolveHandOutcome dFull model.boardRect) model
 
 
-finalizeMouseUp :
-    Maybe WireAction
-    -> Maybe State.EnvelopeForGesture
-    -> Maybe State.StatusMessage
-    -> Model
-    -> ( Model, Cmd Msg )
-finalizeMouseUp maybeAction maybeGesture maybeOffBoardScold model =
-    let
-        modelAfterDragClear =
-            clearDrag model
 
-        modelAfterAction =
-            case maybeAction of
-                Just action ->
-                    Apply.applyAction action modelAfterDragClear
-                        |> Apply.commit
+-- BOARD VS HAND: SEPARATE LADDERS
+--
+-- Two drag kinds, two outcome types, two resolvers, two
+-- appliers. The shared scaffolding (clearDrag, sessionId
+-- check, log+send) is duplicated rather than unified behind
+-- Maybe parameters — splitting along the noun (board / hand)
+-- is what cuts through the complexity, not "fewer Maybes via
+-- helpers."
+
+
+type BoardOutcome
+    = BoardAction WireAction State.EnvelopeForGesture
+    | BoardOffBoard State.StatusMessage
+    | BoardNothingHappened
+
+
+type HandOutcome
+    = HandAction WireAction
+    | HandOffBoard State.StatusMessage
+    | HandNothingHappened
+
+
+resolveBoardOutcome : BoardCardDragInfo -> Maybe GA.Rect -> BoardOutcome
+resolveBoardOutcome d boardRect =
+    case resolveBoardCardGesture d boardRect of
+        Just action ->
+            BoardAction action
+                { path = d.gesturePath, frame = BoardFrame }
+
+        Nothing ->
+            case droppedOffBoardScold d.floaterTopLeft (CardStack.size d.stack) of
+                Just scold ->
+                    BoardOffBoard scold
 
                 Nothing ->
-                    case maybeOffBoardScold of
-                        Just status ->
-                            { modelAfterDragClear | status = status }
+                    BoardNothingHappened
+
+
+{-| Hand-side resolver. Hand-origin actions ship pathless
+(replay re-synthesizes via DOM), so HandAction carries no
+envelope.
+-}
+resolveHandOutcome : HandCardDragInfo -> Maybe GA.Rect -> HandOutcome
+resolveHandOutcome d maybeRect =
+    case resolveHandCardGesture d maybeRect of
+        Just action ->
+            HandAction action
+
+        Nothing ->
+            case maybeRect of
+                Just rect ->
+                    let
+                        floaterBoardLoc =
+                            { left = d.floaterTopLeft.x - rect.x
+                            , top = d.floaterTopLeft.y - rect.y
+                            }
+                    in
+                    case droppedOffBoardScold floaterBoardLoc 1 of
+                        Just scold ->
+                            HandOffBoard scold
 
                         Nothing ->
-                            modelAfterDragClear
+                            HandNothingHappened
+
+                Nothing ->
+                    HandNothingHappened
+
+
+applyBoardOutcome : BoardOutcome -> Model -> ( Model, Cmd Msg )
+applyBoardOutcome outcome model =
+    let
+        cleared =
+            clearDrag model
     in
-    case ( maybeAction, modelAfterAction.sessionId ) of
-        ( Just action, Just sid ) ->
+    case outcome of
+        BoardAction action envelope ->
             let
-                entry =
-                    { action = action
-                    , gesturePath = Maybe.map .path maybeGesture
-                    , pathFrame =
-                        Maybe.map .frame maybeGesture
-                            |> Maybe.withDefault ViewportFrame
-                    }
-
-                seq =
-                    modelAfterAction.nextSeq
+                modelAfter =
+                    Apply.applyAction action cleared
+                        |> Apply.commit
             in
-            ( { modelAfterAction
-                | actionLog = modelAfterAction.actionLog ++ [ entry ]
-                , nextSeq = seq + 1
-              }
-            , Wire.sendAction sid seq action maybeGesture
-            )
+            case modelAfter.sessionId of
+                Just sid ->
+                    let
+                        entry =
+                            { action = action
+                            , gesturePath = Just envelope.path
+                            , pathFrame = envelope.frame
+                            }
 
-        _ ->
-            ( modelAfterAction, Cmd.none )
+                        seq =
+                            modelAfter.nextSeq
+                    in
+                    ( { modelAfter
+                        | actionLog = modelAfter.actionLog ++ [ entry ]
+                        , nextSeq = seq + 1
+                      }
+                    , Wire.sendAction sid seq action (Just envelope)
+                    )
+
+                Nothing ->
+                    ( modelAfter, Cmd.none )
+
+        BoardOffBoard scold ->
+            ( { cleared | status = scold }, Cmd.none )
+
+        BoardNothingHappened ->
+            ( cleared, Cmd.none )
+
+
+applyHandOutcome : HandOutcome -> Model -> ( Model, Cmd Msg )
+applyHandOutcome outcome model =
+    let
+        cleared =
+            clearDrag model
+    in
+    case outcome of
+        HandAction action ->
+            let
+                modelAfter =
+                    Apply.applyAction action cleared
+                        |> Apply.commit
+            in
+            case modelAfter.sessionId of
+                Just sid ->
+                    let
+                        entry =
+                            { action = action
+                            , gesturePath = Nothing
+                            , pathFrame = ViewportFrame
+                            }
+
+                        seq =
+                            modelAfter.nextSeq
+                    in
+                    ( { modelAfter
+                        | actionLog = modelAfter.actionLog ++ [ entry ]
+                        , nextSeq = seq + 1
+                      }
+                    , Wire.sendAction sid seq action Nothing
+                    )
+
+                Nothing ->
+                    ( modelAfter, Cmd.none )
+
+        HandOffBoard scold ->
+            ( { cleared | status = scold }, Cmd.none )
+
+        HandNothingHappened ->
+            ( cleared, Cmd.none )
 
 
 {-| Resolve a completed board-card drag into the WireAction (if
