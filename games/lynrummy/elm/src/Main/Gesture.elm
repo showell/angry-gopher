@@ -68,7 +68,7 @@ import Main.State as State
         , activeHand
         , boardDomIdFor
         )
-import Main.Types exposing (GesturePoint, PathFrame(..), Point)
+import Main.Types exposing (PathFrame(..), Point)
 import Main.Wire as Wire
 import Task
 
@@ -220,12 +220,8 @@ handleMouseUp releasePoint tMs model =
                     resolveBoardCardGesture dFull model.boardRect
 
                 envelope =
-                    case maybeAction of
-                        Just action ->
-                            gestureForAction action fullPath BoardFrame
-
-                        Nothing ->
-                            Nothing
+                    maybeAction
+                        |> Maybe.map (\_ -> { path = fullPath, frame = BoardFrame })
             in
             finalizeMouseUp
                 maybeAction
@@ -322,45 +318,6 @@ finalizeMouseUp maybeAction maybeGesture maybeOffBoardScold model =
 
         _ ->
             ( modelAfterAction, Cmd.none )
-
-
-{-| Decide what gesture (if any) ships with this action.
-
-Intra-board drags (`Split`, `MergeStack`, `MoveStack`) ship
-the captured path as-is with its native frame tag — the
-capture layer already stores it in the right frame.
-Hand-origin drags (`MergeHand`, `PlaceHand`) ship pathless;
-the receiver re-synthesizes at replay time via live DOM
-measurement. `CompleteTurn` and `Undo` aren't drags.
-
--}
-gestureForAction :
-    WireAction
-    -> List GesturePoint
-    -> PathFrame
-    -> Maybe State.EnvelopeForGesture
-gestureForAction action path pathFrame =
-    case action of
-        WA.MergeHand _ ->
-            Nothing
-
-        WA.PlaceHand _ ->
-            Nothing
-
-        WA.Split _ ->
-            Just { path = path, frame = pathFrame }
-
-        WA.MergeStack _ ->
-            Just { path = path, frame = pathFrame }
-
-        WA.MoveStack _ ->
-            Just { path = path, frame = pathFrame }
-
-        WA.CompleteTurn ->
-            Nothing
-
-        WA.Undo ->
-            Nothing
 
 
 {-| Resolve a completed board-card drag into the WireAction (if
