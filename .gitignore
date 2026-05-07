@@ -20,3 +20,7 @@ __pycache__/
 
 # Stray compiled binary from `go build` with no -o (see cmd/ for proper output paths)
 /angry-gopher
+
+# LynRummy runtime gameplay artifacts (server creates lazily via MkdirAll)
+/games/lynrummy/data/lynrummy-elm/
+/games/lynrummy/data/next-session-id.txt
