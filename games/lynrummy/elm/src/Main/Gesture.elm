@@ -188,27 +188,7 @@ handleMouseUp releasePoint tMs model =
             ( model, Cmd.none )
 
         DraggingBoardCard d ->
-            let
-                delta =
-                    { x = releasePoint.x - d.cursor.x
-                    , y = releasePoint.y - d.cursor.y
-                    }
-
-                releaseFloater =
-                    { left = d.floaterTopLeft.left + delta.x
-                    , top = d.floaterTopLeft.top + delta.y
-                    }
-
-                dFull =
-                    { d
-                        | cursor = releasePoint
-                        , floaterTopLeft = releaseFloater
-                        , gesturePath =
-                            d.gesturePath
-                                ++ [ { tMs = tMs, x = releaseFloater.left, y = releaseFloater.top } ]
-                    }
-            in
-            BoardGesture.applyBoardOutcome (BoardGesture.resolveBoardOutcome dFull model.boardRect) model
+            BoardGesture.handleMouseUp releasePoint tMs d model
 
         DraggingHandCard d ->
             let

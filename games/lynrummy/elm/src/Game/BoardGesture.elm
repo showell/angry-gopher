@@ -1,6 +1,7 @@
 module Game.BoardGesture exposing
     ( BoardOutcome(..)
     , applyBoardOutcome
+    , handleMouseUp
     , resolveBoardCardGesture
     , resolveBoardOutcome
     )
@@ -38,6 +39,36 @@ type BoardOutcome
     = BoardAction WireAction State.EnvelopeForGesture
     | BoardOffBoard State.StatusMessage
     | BoardNothingHappened
+
+
+{-| Mouseup handler for a board-card drag. Caller (the
+dispatcher in `Main.Gesture`) has pattern-matched out the
+`Info` and passes it in. Builds the final `Info` (with the
+release point folded in), resolves the outcome, applies it.
+-}
+handleMouseUp : Point -> Float -> BoardCardDragInfo -> Model -> ( Model, Cmd Msg )
+handleMouseUp releasePoint tMs d model =
+    let
+        delta =
+            { x = releasePoint.x - d.cursor.x
+            , y = releasePoint.y - d.cursor.y
+            }
+
+        releaseFloater =
+            { left = d.floaterTopLeft.left + delta.x
+            , top = d.floaterTopLeft.top + delta.y
+            }
+
+        dFull =
+            { d
+                | cursor = releasePoint
+                , floaterTopLeft = releaseFloater
+                , gesturePath =
+                    d.gesturePath
+                        ++ [ { tMs = tMs, x = releaseFloater.left, y = releaseFloater.top } ]
+            }
+    in
+    applyBoardOutcome (resolveBoardOutcome dFull model.boardRect) model
 
 
 resolveBoardOutcome : BoardCardDragInfo -> Maybe GA.Rect -> BoardOutcome
