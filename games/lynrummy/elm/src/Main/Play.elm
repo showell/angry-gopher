@@ -24,6 +24,7 @@ import Browser.Events
 import Game.BoardGesture as BoardGesture
 import Game.CardStack as CardStack exposing (CardStack)
 import Game.Drag exposing (DragState(..))
+import Game.HandGesture as HandGesture
 import Game.Rules.Card as Card
 import Game.Dealer as Dealer
 import Game.Reducer as Reducer
@@ -270,43 +271,7 @@ mouseMove pos tMs model =
             BoardGesture.mouseMove pos tMs d model
 
         DraggingHandCard d ->
-            let
-                delta =
-                    { x = pos.x - d.cursor.x
-                    , y = pos.y - d.cursor.y
-                    }
-
-                nextFloater =
-                    { x = d.floaterTopLeft.x + delta.x
-                    , y = d.floaterTopLeft.y + delta.y
-                    }
-
-                nextD =
-                    { d
-                        | cursor = pos
-                        , floaterTopLeft = nextFloater
-                    }
-
-                hover floaterTopLeft =
-                    case model.boardRect of
-                        Just rect ->
-                            let
-                                floaterBoardLoc =
-                                    { left = floaterTopLeft.x - rect.x
-                                    , top = floaterTopLeft.y - rect.y
-                                    }
-                            in
-                            WingView.hoveredWing floaterBoardLoc CardStack.stackPitch d.wings
-
-                        Nothing ->
-                            Nothing
-
-                statusAfterMove =
-                    hoverStatus (hover d.floaterTopLeft) (hover nextD.floaterTopLeft) model.status
-            in
-            ( { model | drag = DraggingHandCard nextD, status = statusAfterMove }
-            , Cmd.none
-            )
+            HandGesture.mouseMove pos tMs d model
 
         NotDragging ->
             ( model, Cmd.none )
