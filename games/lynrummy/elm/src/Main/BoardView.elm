@@ -60,20 +60,24 @@ viewBoard stacks =
 
 boardWithWings : Model -> Html Msg
 boardWithWings model =
-    View.boardShellWith [ id (boardDomIdFor model.gameId) ] (boardChildren model)
+    let
+        boardElements =
+            boardChildren model.board model.boardRect model.drag
+    in
+    View.boardShellWith [ id (boardDomIdFor model.gameId) ] boardElements
 
 
-boardChildren : Model -> List (Html Msg)
-boardChildren model =
+boardChildren : List CardStack -> Maybe GA.Rect -> DragState -> List (Html Msg)
+boardChildren board maybeBoardRect drag =
     let
         stackNodes =
-            List.map (viewStackForBoard model.drag) model.board
+            List.map (viewStackForBoard drag) board
 
         wingNodes =
-            getWingNodes model.drag model.boardRect
+            getWingNodes drag maybeBoardRect
 
         boardOverlayNodes =
-            getOverlayNodes model.drag
+            getOverlayNodes drag
     in
     stackNodes ++ wingNodes ++ boardOverlayNodes
 
