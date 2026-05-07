@@ -73,12 +73,7 @@ boardChildren model =
             getWingNodes model.drag model.boardRect
 
         boardOverlayNodes =
-            case boardDragOverlay model.drag of
-                Just node ->
-                    [ node ]
-
-                Nothing ->
-                    []
+            getOverlayNodes model.drag
     in
     stackNodes ++ wingNodes ++ boardOverlayNodes
 
@@ -176,7 +171,7 @@ renderWing rect hovering =
 
 {-| Viewport-frame drag overlay (`position: fixed`). Renders
 hand-origin drags. Intra-board drags render via
-`boardDragOverlay` inside the board shell.
+`getOverlayNodes` inside the board shell.
 -}
 draggedOverlay : Model -> Html Msg
 draggedOverlay model =
@@ -191,21 +186,23 @@ draggedOverlay model =
             Html.text ""
 
 
-{-| Board-frame drag overlay: a DOM child of the board shell
-(which is `position: relative`) with `position: absolute` and
-board-frame top/left. Renders intra-board drags.
+{-| Board-frame drag overlay nodes: a DOM child of the board
+shell (which is `position: relative`) with `position: absolute`
+and board-frame top/left. Renders intra-board drags. Empty list
+when no overlay applies — keeps the caller's concatenation
+straightforward.
 -}
-boardDragOverlay : DragState -> Maybe (Html Msg)
-boardDragOverlay drag =
+getOverlayNodes : DragState -> List (Html Msg)
+getOverlayNodes drag =
     case drag of
         DraggingBoardCard d ->
-            Just (renderBoardFloater d [ style "position" "absolute" ])
+            [ renderBoardFloater d [ style "position" "absolute" ] ]
 
         DraggingHandCard _ ->
-            Nothing
+            []
 
         NotDragging ->
-            Nothing
+            []
 
 
 renderBoardFloater : BoardCardDragInfo -> List (Html.Attribute Msg) -> Html Msg
