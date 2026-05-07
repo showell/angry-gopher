@@ -631,7 +631,7 @@ import Game.Physics.BoardGeometry
         , validateBoardGeometry
         )
 import Game.Rules.Card exposing (Card, CardValue(..), OriginDeck(..), Suit(..))
-import Game.CardStack
+import Game.CardStack as CardStack
     exposing
         ( BoardCard
         , BoardCardState(..)
@@ -1828,37 +1828,25 @@ func elmGesturePlaceHand(b *strings.Builder, sc Scenario) {
 }
 
 // elmGestureFloaterOverWing emits a test body for the
-// `gesture_floater_over_wing` op. Constructs the appropriate
-// drag-info variant (BoardCardDragInfo for board sources,
-// HandCardDragInfo for hand sources) with a single registered
-// wing, then calls the matching floaterOverWing variant.
+// `gesture_floater_over_wing` op. Calls the unified
+// `Gesture.floaterOverWing` helper with narrow inputs:
+// floaterTopLeft, floaterWidth, boardOrigin, wings.
+//
+// All current scenarios are board-sourced (the floater is in
+// board frame). Floater width comes from `sourceStack`'s
+// display width; `boardOrigin = { x = 0, y = 0 }` since
+// board-frame floaters need no lift.
 func elmGestureFloaterOverWing(b *strings.Builder, sc Scenario) {
 	ind := "            "
 	gf := sc.Expect.GestureFloaterOverWing
 	sideExpr := "BoardActions." + sc.GestureHoveredSide
-	isHandDrag := sc.DragHandCard != ""
 	b.WriteString(ind + "let\n")
 	elmGestureSourceVar(b, sc, ind)
 	elmGestureTargetVar(b, sc, ind)
 	elmGestureFloaterAt(b, sc, ind)
 	fmt.Fprintf(b, "%s    wing =\n%s        { target = targetStack, side = %s }\n\n", ind, ind, sideExpr)
-	if isHandDrag {
-		elmHandCardDragInfo(b, ind, "d", "{ x = 0, y = 0 }", "floater", "[ wing ]")
-	} else {
-		elmBoardCardDragInfo(b, ind, "d",
-			"0",
-			"{ x = -1000, y = 0 }",
-			"{ x = 0, y = 0 }",
-			"floater",
-			"[ wing ]")
-	}
 	b.WriteString(ind + "in\n")
-	var call string
-	if isHandDrag {
-		call = "Gesture.floaterOverWingForHand d Nothing"
-	} else {
-		call = "Gesture.floaterOverWingForBoard d"
-	}
+	call := "Gesture.floaterOverWing floater (CardStack.stackDisplayWidth sourceStack) { x = 0, y = 0 } [ wing ]"
 	if gf.HasWing {
 		fmt.Fprintf(b, "%s%s\n", ind, call)
 		fmt.Fprintf(b, "%s    |> Expect.equal (Just wing)", ind)

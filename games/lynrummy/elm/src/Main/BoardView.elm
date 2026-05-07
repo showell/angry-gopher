@@ -26,7 +26,6 @@ not a state the View needs to know about.
 
 import Game.CardStack as CardStack exposing (CardStack)
 import Game.Drag exposing (BoardCardDragInfo, DragState(..), HandCardDragInfo)
-import Game.Physics.GestureArbitration as GA
 import Game.Physics.WingOracle as WingOracle exposing (WingId)
 import Game.View as View
 import Html exposing (Html)
@@ -72,10 +71,33 @@ boardChildren model =
         wingNodes =
             case model.drag of
                 DraggingBoardCard d ->
-                    List.map (viewWingForBoardDrag d) d.wings
+                    List.map
+                        (renderWingWithHover
+                            (Gesture.floaterOverWing
+                                d.floaterTopLeft
+                                (CardStack.stackDisplayWidth d.stack)
+                                { x = 0, y = 0 }
+                                d.wings
+                            )
+                        )
+                        d.wings
 
                 DraggingHandCard d ->
-                    List.map (viewWingForHandDrag d model.boardRect) d.wings
+                    case model.boardRect of
+                        Just rect ->
+                            List.map
+                                (renderWingWithHover
+                                    (Gesture.floaterOverWing
+                                        d.floaterTopLeft
+                                        CardStack.stackPitch
+                                        { x = rect.x, y = rect.y }
+                                        d.wings
+                                    )
+                                )
+                                d.wings
+
+                        Nothing ->
+                            []
 
                 NotDragging ->
                     []
@@ -117,28 +139,9 @@ viewStackForBoard drag stack =
             View.viewStackWithCardAttrs (Gesture.cardMouseDown stack) stack
 
 
-viewWingForBoardDrag : BoardCardDragInfo -> WingId -> Html Msg
-viewWingForBoardDrag d wing =
-    let
-        rect =
-            WingOracle.wingBoardRect wing
-
-        hovering =
-            Gesture.floaterOverWingForBoard d == Just wing
-    in
-    renderWing rect hovering
-
-
-viewWingForHandDrag : HandCardDragInfo -> Maybe GA.Rect -> WingId -> Html Msg
-viewWingForHandDrag d boardRect wing =
-    let
-        rect =
-            WingOracle.wingBoardRect wing
-
-        hovering =
-            Gesture.floaterOverWingForHand d boardRect == Just wing
-    in
-    renderWing rect hovering
+renderWingWithHover : Maybe WingId -> WingId -> Html Msg
+renderWingWithHover hoveredWing wing =
+    renderWing (WingOracle.wingBoardRect wing) (hoveredWing == Just wing)
 
 
 renderWing : { left : Int, top : Int, width : Int, height : Int } -> Bool -> Html Msg

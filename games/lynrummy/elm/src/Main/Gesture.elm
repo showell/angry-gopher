@@ -1,7 +1,6 @@
 module Main.Gesture exposing
     ( cardMouseDown
-    , floaterOverWingForBoard
-    , floaterOverWingForHand
+    , floaterOverWing
     , handCardAttrs
     , handleMouseUp
     , pointDecoder
@@ -233,7 +232,14 @@ handleMouseUp releasePoint tMs model =
                         Nothing ->
                             Nothing
             in
-            finalizeMouseUp maybeAction envelope (droppedOffBoardScoldForBoard dFull) model
+            finalizeMouseUp
+                maybeAction
+                envelope
+                (droppedOffBoardScold
+                    (dropLoc dFull.floaterTopLeft { x = 0, y = 0 })
+                    (CardStack.size dFull.stack)
+                )
+                model
 
         DraggingHandCard d ->
             let
@@ -255,11 +261,21 @@ handleMouseUp releasePoint tMs model =
 
                 maybeAction =
                     resolveHandCardGesture dFull model.boardRect
+
+                handScold =
+                    case model.boardRect of
+                        Just rect ->
+                            droppedOffBoardScold
+                                (dropLoc dFull.floaterTopLeft { x = rect.x, y = rect.y })
+                                1
+
+                        Nothing ->
+                            Nothing
             in
             -- Hand-origin actions ship pathless (replay
             -- re-synthesizes via DOM), so envelope is always
             -- Nothing here regardless of the action.
-            finalizeMouseUp maybeAction Nothing (droppedOffBoardScoldForHand dFull model.boardRect) model
+            finalizeMouseUp maybeAction Nothing handScold model
 
 
 finalizeMouseUp :
@@ -356,6 +372,9 @@ any) it should produce. Click-vs-drag check: if the cursor is
 still within `clickThreshold` of `originalCursor`, emit a
 `Split` at the captured `cardIndex`. Otherwise dispatch on
 `(hoveredWing, isCursorOverBoard)`.
+
+Board-card floaters live in board frame, so `boardOrigin` is the
+zero point — the floater coordinates need no lift.
 -}
 resolveBoardCardGesture : BoardCardDragInfo -> Maybe GA.Rect -> Maybe WireAction
 resolveBoardCardGesture d boardRect =
@@ -364,8 +383,11 @@ resolveBoardCardGesture d boardRect =
 
     else
         let
+            boardOrigin =
+                { x = 0, y = 0 }
+
             hovered =
-                hoveredWingForBoard d
+                floaterOverWing d.floaterTopLeft (CardStack.stackDisplayWidth d.stack) boardOrigin d.wings
         in
         case hovered of
             Just wing ->
@@ -379,52 +401,63 @@ resolveBoardCardGesture d boardRect =
 
             Nothing ->
                 if isCursorOverBoard d.cursor boardRect then
-                    case dropLocBoard d of
-                        Just loc ->
-                            if isDropFootprintInBounds (CardStack.size d.stack) loc then
-                                Just (WA.MoveStack { stack = d.stack, newLoc = loc })
+                    let
+                        loc =
+                            dropLoc d.floaterTopLeft boardOrigin
+                    in
+                    if isDropFootprintInBounds (CardStack.size d.stack) loc then
+                        Just (WA.MoveStack { stack = d.stack, newLoc = loc })
 
-                            else
-                                Nothing
-
-                        Nothing ->
-                            Nothing
+                    else
+                        Nothing
 
                 else
                     Nothing
 
 
+{-| Hand-card resolution requires the live board rect for both
+the wing-hover hit-test (lifting board-frame eventual landings
+into viewport frame) and the drop-loc translation. With no rect
+yet, no honest action is possible — return Nothing.
+-}
 resolveHandCardGesture : HandCardDragInfo -> Maybe GA.Rect -> Maybe WireAction
-resolveHandCardGesture d boardRect =
-    let
-        hovered =
-            hoveredWingForHand d boardRect
-    in
-    case hovered of
-        Just wing ->
-            Just
-                (WA.MergeHand
-                    { handCard = d.card
-                    , target = wing.target
-                    , side = wing.side
-                    }
-                )
-
+resolveHandCardGesture d maybeRect =
+    case maybeRect of
         Nothing ->
-            if isCursorOverBoard d.cursor boardRect then
-                case dropLocHand d boardRect of
-                    Just loc ->
+            Nothing
+
+        Just rect ->
+            let
+                boardOrigin =
+                    { x = rect.x, y = rect.y }
+
+                hovered =
+                    floaterOverWing d.floaterTopLeft CardStack.stackPitch boardOrigin d.wings
+            in
+            case hovered of
+                Just wing ->
+                    Just
+                        (WA.MergeHand
+                            { handCard = d.card
+                            , target = wing.target
+                            , side = wing.side
+                            }
+                        )
+
+                Nothing ->
+                    if GA.isCursorInRect d.cursor rect then
+                        let
+                            loc =
+                                dropLoc d.floaterTopLeft boardOrigin
+                        in
                         if isDropFootprintInBounds 1 loc then
                             Just (WA.PlaceHand { handCard = d.card, loc = loc })
 
                         else
                             Nothing
 
-                    Nothing ->
+                    else
                         Nothing
-
-            else
-                Nothing
 
 
 isCursorOverBoard : Point -> Maybe GA.Rect -> Bool
@@ -437,34 +470,12 @@ isCursorOverBoard cursor maybeRect =
             False
 
 
-{-| Which wing (if any) is the floater about to land on, for
-a board-card drag? Wings are pre-computed at drag start; this
-filters them by proximity to the floater's eventual landing.
-The floater is in board frame, so no boardRect translation is
-needed.
--}
-floaterOverWingForBoard : BoardCardDragInfo -> Maybe WingOracle.WingId
-floaterOverWingForBoard d =
-    d.wings
-        |> List.filter (isNearLandingBoard d)
-        |> List.head
-
-
-floaterOverWingForHand : HandCardDragInfo -> Maybe GA.Rect -> Maybe WingOracle.WingId
-floaterOverWingForHand d boardRect =
-    d.wings
-        |> List.filter (isNearLandingHand d boardRect)
-        |> List.head
-
-
-hoveredWingForBoard : BoardCardDragInfo -> Maybe WingOracle.WingId
-hoveredWingForBoard =
-    floaterOverWingForBoard
-
-
-hoveredWingForHand : HandCardDragInfo -> Maybe GA.Rect -> Maybe WingOracle.WingId
-hoveredWingForHand =
-    floaterOverWingForHand
+-- LEAF HELPERS — narrow inputs, frame-agnostic.
+--
+-- The board / hand split lives at the resolver level, not down
+-- here. These helpers take coordinates and the per-frame
+-- `boardOrigin` knob: `{ x = 0, y = 0 }` for board-frame floaters,
+-- the live board rect's `{ x, y }` for viewport-frame floaters.
 
 
 {-| Half a card-pitch of slop in each axis around the eventual
@@ -477,87 +488,52 @@ wingSnapTolerance =
     CardStack.stackPitch // 2
 
 
-isNearLandingBoard : BoardCardDragInfo -> WingOracle.WingId -> Bool
-isNearLandingBoard d wing =
+{-| True iff `floaterTopLeft` is within `wingSnapTolerance` of
+`wing`'s eventual landing. Frame-agnostic — `boardOrigin` lifts
+the wing's board-frame eventual landing into the floater's frame
+(zero-point for board drags; `{ x = rect.x, y = rect.y }` for
+viewport-frame drags).
+-}
+isNearLanding : Point -> Int -> Point -> WingOracle.WingId -> Bool
+isNearLanding floaterTopLeft floaterWidth boardOrigin wing =
     let
-        floaterWidth =
-            CardStack.stackDisplayWidth d.stack
-
-        eventualBoard =
+        ev =
             WingOracle.eventualFloaterTopLeft wing floaterWidth
 
-        eventual =
-            { x = eventualBoard.left, y = eventualBoard.top }
-
         dx =
-            abs (d.floaterTopLeft.x - eventual.x)
+            abs (floaterTopLeft.x - (ev.left + boardOrigin.x))
 
         dy =
-            abs (d.floaterTopLeft.y - eventual.y)
+            abs (floaterTopLeft.y - (ev.top + boardOrigin.y))
     in
     dx < wingSnapTolerance && dy < wingSnapTolerance
 
 
-isNearLandingHand : HandCardDragInfo -> Maybe GA.Rect -> WingOracle.WingId -> Bool
-isNearLandingHand d boardRect wing =
-    let
-        floaterWidth =
-            CardStack.stackPitch
-
-        eventualBoard =
-            WingOracle.eventualFloaterTopLeft wing floaterWidth
-    in
-    case boardRect of
-        Just rect ->
-            let
-                eventual =
-                    { x = eventualBoard.left + rect.x
-                    , y = eventualBoard.top + rect.y
-                    }
-
-                dx =
-                    abs (d.floaterTopLeft.x - eventual.x)
-
-                dy =
-                    abs (d.floaterTopLeft.y - eventual.y)
-            in
-            dx < wingSnapTolerance && dy < wingSnapTolerance
-
-        Nothing ->
-            False
-
-
-{-| Status message to show while hovering a wing (a drop here
-would fire a merge).
+{-| Which wing (if any) the floater is about to land on. Same
+frame-agnostic shape as `isNearLanding`.
 -}
-wingHoverStatus : State.StatusMessage
-wingHoverStatus =
-    { text = "Drop stack to complete merge.", kind = Inform }
+floaterOverWing :
+    Point
+    -> Int
+    -> Point
+    -> List WingOracle.WingId
+    -> Maybe WingOracle.WingId
+floaterOverWing floaterTopLeft floaterWidth boardOrigin wings =
+    wings
+        |> List.filter (isNearLanding floaterTopLeft floaterWidth boardOrigin)
+        |> List.head
 
 
-{-| Board-relative drop location for a board-card drag.
-`floaterTopLeft` is already in board frame, so the drop loc is
-just that point.
+{-| Translate a floater's top-left into board-frame `BoardLocation`
+coords. For board-frame floaters `boardOrigin = { x = 0, y = 0 }`
+makes this an identity; for viewport-frame floaters callers
+pass the board rect's viewport origin.
 -}
-dropLocBoard : BoardCardDragInfo -> Maybe BoardLocation
-dropLocBoard d =
-    Just { left = d.floaterTopLeft.x, top = d.floaterTopLeft.y }
-
-
-{-| Board-relative drop location for a hand-card drag — translate
-the viewport floater into board frame by subtracting the board
-div's viewport origin. `Nothing` if the board rect hasn't
-arrived.
--}
-dropLocHand : HandCardDragInfo -> Maybe GA.Rect -> Maybe BoardLocation
-dropLocHand d boardRect =
-    boardRect
-        |> Maybe.map
-            (\rect ->
-                { left = d.floaterTopLeft.x - rect.x
-                , top = d.floaterTopLeft.y - rect.y
-                }
-            )
+dropLoc : Point -> Point -> BoardLocation
+dropLoc floaterTopLeft boardOrigin =
+    { left = floaterTopLeft.x - boardOrigin.x
+    , top = floaterTopLeft.y - boardOrigin.y
+    }
 
 
 {-| True iff a stack of `cardCount` cards placed at `loc` fits
@@ -575,35 +551,21 @@ isDropFootprintInBounds cardCount loc =
         && (loc.top + BG.cardHeight <= bounds.maxHeight)
 
 
-droppedOffBoardScoldForBoard : BoardCardDragInfo -> Maybe State.StatusMessage
-droppedOffBoardScoldForBoard d =
-    case dropLocBoard d of
-        Just loc ->
-            if not (isDropFootprintInBounds (CardStack.size d.stack) loc) then
-                Just offBoardScold
-
-            else
-                Nothing
-
-        Nothing ->
-            Nothing
+{-| Status message to show while hovering a wing (a drop here
+would fire a merge).
+-}
+wingHoverStatus : State.StatusMessage
+wingHoverStatus =
+    { text = "Drop stack to complete merge.", kind = Inform }
 
 
-droppedOffBoardScoldForHand :
-    HandCardDragInfo
-    -> Maybe GA.Rect
-    -> Maybe State.StatusMessage
-droppedOffBoardScoldForHand d boardRect =
-    case dropLocHand d boardRect of
-        Just loc ->
-            if not (isDropFootprintInBounds 1 loc) then
-                Just offBoardScold
+droppedOffBoardScold : BoardLocation -> Int -> Maybe State.StatusMessage
+droppedOffBoardScold loc cardCount =
+    if not (isDropFootprintInBounds cardCount loc) then
+        Just offBoardScold
 
-            else
-                Nothing
-
-        Nothing ->
-            Nothing
+    else
+        Nothing
 
 
 offBoardScold : State.StatusMessage

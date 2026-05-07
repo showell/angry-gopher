@@ -21,7 +21,7 @@ Output.
 
 import Browser.Dom
 import Browser.Events
-import Game.CardStack exposing (CardStack)
+import Game.CardStack as CardStack exposing (CardStack)
 import Game.Drag exposing (DragState(..))
 import Game.Rules.Card as Card
 import Game.Dealer as Dealer
@@ -287,14 +287,15 @@ mouseMove pos tMs model =
                         , gesturePath = nextPath
                     }
 
-                currentHover =
-                    Gesture.floaterOverWingForBoard d
-
-                nextHover =
-                    Gesture.floaterOverWingForBoard nextD
+                hover floaterTopLeft =
+                    Gesture.floaterOverWing
+                        floaterTopLeft
+                        (CardStack.stackDisplayWidth d.stack)
+                        { x = 0, y = 0 }
+                        d.wings
 
                 statusAfterMove =
-                    hoverStatus currentHover nextHover model.status
+                    hoverStatus (hover d.floaterTopLeft) (hover nextD.floaterTopLeft) model.status
             in
             ( { model | drag = DraggingBoardCard nextD, status = statusAfterMove }
             , Cmd.none
@@ -318,14 +319,20 @@ mouseMove pos tMs model =
                         , floaterTopLeft = nextFloater
                     }
 
-                currentHover =
-                    Gesture.floaterOverWingForHand d model.boardRect
+                hover floaterTopLeft =
+                    case model.boardRect of
+                        Just rect ->
+                            Gesture.floaterOverWing
+                                floaterTopLeft
+                                CardStack.stackPitch
+                                { x = rect.x, y = rect.y }
+                                d.wings
 
-                nextHover =
-                    Gesture.floaterOverWingForHand nextD model.boardRect
+                        Nothing ->
+                            Nothing
 
                 statusAfterMove =
-                    hoverStatus currentHover nextHover model.status
+                    hoverStatus (hover d.floaterTopLeft) (hover nextD.floaterTopLeft) model.status
             in
             ( { model | drag = DraggingHandCard nextD, status = statusAfterMove }
             , Cmd.none

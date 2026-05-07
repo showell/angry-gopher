@@ -15,7 +15,7 @@ import Game.Physics.BoardGeometry
         , validateBoardGeometry
         )
 import Game.Rules.Card exposing (Card, CardValue(..), OriginDeck(..), Suit(..))
-import Game.CardStack
+import Game.CardStack as CardStack
     exposing
         ( BoardCard
         , BoardCardState(..)
@@ -1873,18 +1873,8 @@ gestureFloaterOverWingLeftFires =
                 wing =
                     { target = targetStack, side = BoardActions.Left }
 
-                d =
-                    { stack = sourceStack
-                    , cardIndex = 0
-                    , originalCursor = { x = -1000, y = 0 }
-                    , cursor = { x = 0, y = 0 }
-                    , floaterTopLeft = floater
-                    , gesturePath = []
-                    , wings = [ wing ]
-                    }
-
             in
-            Gesture.floaterOverWingForBoard d
+            Gesture.floaterOverWing floater (CardStack.stackDisplayWidth sourceStack) { x = 0, y = 0 } [ wing ]
                 |> Expect.equal (Just wing)
 
 
@@ -1905,18 +1895,8 @@ gestureFloaterOverWingPastTolerance =
                 wing =
                     { target = targetStack, side = BoardActions.Right }
 
-                d =
-                    { stack = sourceStack
-                    , cardIndex = 0
-                    , originalCursor = { x = -1000, y = 0 }
-                    , cursor = { x = 0, y = 0 }
-                    , floaterTopLeft = floater
-                    , gesturePath = []
-                    , wings = [ wing ]
-                    }
-
             in
-            Gesture.floaterOverWingForBoard d
+            Gesture.floaterOverWing floater (CardStack.stackDisplayWidth sourceStack) { x = 0, y = 0 } [ wing ]
                 |> Expect.equal Nothing
 
 
@@ -1937,18 +1917,8 @@ gestureFloaterOverWingRightFires =
                 wing =
                     { target = targetStack, side = BoardActions.Right }
 
-                d =
-                    { stack = sourceStack
-                    , cardIndex = 0
-                    , originalCursor = { x = -1000, y = 0 }
-                    , cursor = { x = 0, y = 0 }
-                    , floaterTopLeft = floater
-                    , gesturePath = []
-                    , wings = [ wing ]
-                    }
-
             in
-            Gesture.floaterOverWingForBoard d
+            Gesture.floaterOverWing floater (CardStack.stackDisplayWidth sourceStack) { x = 0, y = 0 } [ wing ]
                 |> Expect.equal (Just wing)
 
 
@@ -1969,18 +1939,8 @@ gestureFloaterOverWingWayOff =
                 wing =
                     { target = targetStack, side = BoardActions.Right }
 
-                d =
-                    { stack = sourceStack
-                    , cardIndex = 0
-                    , originalCursor = { x = -1000, y = 0 }
-                    , cursor = { x = 0, y = 0 }
-                    , floaterTopLeft = floater
-                    , gesturePath = []
-                    , wings = [ wing ]
-                    }
-
             in
-            Gesture.floaterOverWingForBoard d
+            Gesture.floaterOverWing floater (CardStack.stackDisplayWidth sourceStack) { x = 0, y = 0 } [ wing ]
                 |> Expect.equal Nothing
 
 
