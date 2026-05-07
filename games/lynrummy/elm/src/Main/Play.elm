@@ -340,6 +340,14 @@ handleMouseUpBoard releasePoint tMs d model =
     case BoardGesture.handleMouseUp releasePoint tMs d model.boardRect of
         BoardGesture.Split p ->
             let
+                newBoard =
+                    Execute.split p.stack p.cardIndex model.board
+
+                splitStatus =
+                    { text = "Be careful with splitting! Splits only pay off when you get more cards on the board or make prettier piles."
+                    , kind = Scold
+                    }
+
                 entry =
                     { action = GameEvent.Split p
                     , gesturePath = Nothing
@@ -347,11 +355,8 @@ handleMouseUpBoard releasePoint tMs d model =
                     }
 
                 outcome =
-                    { board = Execute.split p.stack p.cardIndex model.board
-                    , status =
-                        { text = "Be careful with splitting! Splits only pay off when you get more cards on the board or make prettier piles."
-                        , kind = Scold
-                        }
+                    { board = newBoard
+                    , status = Apply.geometryFeedback model.board newBoard |> Maybe.withDefault splitStatus
                     , actionLog = model.actionLog ++ [ entry ]
                     , nextSeq = model.nextSeq + 1
                     }
@@ -383,7 +388,7 @@ handleMouseUpBoard releasePoint tMs d model =
 
                 outcome =
                     { board = newBoard
-                    , status = Apply.mergeStatus newBoard
+                    , status = Apply.geometryFeedback model.board newBoard |> Maybe.withDefault (Apply.mergeStatus newBoard)
                     , actionLog = model.actionLog ++ [ entry ]
                     , nextSeq = model.nextSeq + 1
                     }
@@ -421,6 +426,12 @@ handleMouseUpBoard releasePoint tMs d model =
 
         BoardGesture.MoveStack p ->
             let
+                newBoard =
+                    Execute.moveStack p.stack p.newLoc model.board
+
+                moveStackStatus =
+                    { text = "Moved!", kind = Inform }
+
                 entry =
                     { action = GameEvent.MoveStack { stack = p.stack, newLoc = p.newLoc }
                     , gesturePath = Just p.envelope.path
@@ -428,8 +439,8 @@ handleMouseUpBoard releasePoint tMs d model =
                     }
 
                 outcome =
-                    { board = Execute.moveStack p.stack p.newLoc model.board
-                    , status = { text = "Moved!", kind = Inform }
+                    { board = newBoard
+                    , status = Apply.geometryFeedback model.board newBoard |> Maybe.withDefault moveStackStatus
                     , actionLog = model.actionLog ++ [ entry ]
                     , nextSeq = model.nextSeq + 1
                     }

@@ -1,6 +1,7 @@
 module Main.Apply exposing
     ( applyAction
     , commit
+    , geometryFeedback
     , mergeStatus
     , refereeBounds
     )
@@ -94,7 +95,7 @@ applyAction action model =
                     applyPhysics action model
             in
             { model = next
-            , status = withTidinessOverlay model next splitStatus
+            , status = geometryFeedback model.board next.board |> Maybe.withDefault splitStatus
             }
 
         MergeStack _ ->
@@ -103,7 +104,7 @@ applyAction action model =
                     applyPhysics action model
             in
             { model = next
-            , status = withTidinessOverlay model next (mergeStatus next.board)
+            , status = geometryFeedback model.board next.board |> Maybe.withDefault (mergeStatus next.board)
             }
 
         MergeHand _ ->
@@ -112,7 +113,7 @@ applyAction action model =
                     applyPhysics action model |> Game.noteCardsPlayed 1
             in
             { model = next
-            , status = withTidinessOverlay model next (mergeStatus next.board)
+            , status = geometryFeedback model.board next.board |> Maybe.withDefault (mergeStatus next.board)
             }
 
         PlaceHand _ ->
@@ -121,7 +122,7 @@ applyAction action model =
                     applyPhysics action model |> Game.noteCardsPlayed 1
             in
             { model = next
-            , status = withTidinessOverlay model next placeHandStatus
+            , status = geometryFeedback model.board next.board |> Maybe.withDefault placeHandStatus
             }
 
         MoveStack _ ->
@@ -130,7 +131,7 @@ applyAction action model =
                     applyPhysics action model
             in
             { model = next
-            , status = withTidinessOverlay model next moveStackStatus
+            , status = geometryFeedback model.board next.board |> Maybe.withDefault moveStackStatus
             }
 
         CompleteTurn ->
@@ -286,35 +287,37 @@ undoStatus =
     { text = "Undone.", kind = Inform }
 
 
-{-| Layer the board-tidiness overlay onto the primary action
-status. If a CROWDED board became CLEANLY\_SPACED, celebrate
-the recovery; if the action left the board in a CROWDED state
-(regardless of where it came from), scold. Otherwise the
-primary message stands.
+{-| Surface a board-geometry tidiness change as a status
+message, or `Nothing` if there's nothing geometry-relevant to
+say. Returns `Just (Celebrate)` when a Crowded board became
+CleanlySpaced, `Just (Scold)` when the action left the board
+Crowded (regardless of where it came from), `Nothing` otherwise
+— callers fall back to their action-specific status.
 
 Mirrors the post-hook in angry-cat's
-`process_and_push_player_action`. Overlay OVERRIDES the
-primary message when it fires, matching the TS order-of-
+`process_and_push_player_action`. When a feedback fires it
+overrides the primary message, matching the TS order-of-
 operations.
 
 -}
-withTidinessOverlay : Model -> Model -> StatusMessage -> StatusMessage
-withTidinessOverlay pre post primary =
+geometryFeedback : List CardStack -> List CardStack -> Maybe StatusMessage
+geometryFeedback oldBoard newBoard =
     case
-        ( BoardGeometry.classifyBoardGeometry pre.board refereeBounds
-        , BoardGeometry.classifyBoardGeometry post.board refereeBounds
+        ( BoardGeometry.classifyBoardGeometry oldBoard refereeBounds
+        , BoardGeometry.classifyBoardGeometry newBoard refereeBounds
         )
     of
         ( Crowded, CleanlySpaced ) ->
-            { text = "Nice and tidy!", kind = Celebrate }
+            Just { text = "Nice and tidy!", kind = Celebrate }
 
         ( _, Crowded ) ->
-            { text = "Board is getting tight — try spacing stacks out!"
-            , kind = Scold
-            }
+            Just
+                { text = "Board is getting tight — try spacing stacks out!"
+                , kind = Scold
+                }
 
         _ ->
-            primary
+            Nothing
 
 
 {-| The merge outcome depends on the size of the newly-merged
