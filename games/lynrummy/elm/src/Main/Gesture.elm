@@ -47,7 +47,9 @@ answered exactly once, at mouseup, as an outcome judgment.
 -}
 
 import Browser.Dom
-import Game.Drag exposing (BoardCardDragInfo, DragState(..), HandCardDragInfo)
+import Game.BoardDrag exposing (BoardCardDragInfo)
+import Game.Drag exposing (DragState(..))
+import Game.HandDrag exposing (HandCardDragInfo)
 import Game.Physics.BoardGeometry as BG
 import Game.Physics.GestureArbitration as GA
 import Game.Physics.WingOracle as WingOracle
