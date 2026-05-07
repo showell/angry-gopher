@@ -35,7 +35,7 @@ import Game.Rules.Referee as Referee exposing (RefereeStage(..), refereeStageToS
 import Game.Replay.Time as ReplayTime
 import Game.Rules.StackType as StackType
 import Game.WingView as WingView
-import Game.WireAction as WA exposing (WireAction)
+import Game.GameEvent as GameEvent exposing (GameEvent)
 import Main.Apply as Apply
 import Main.Gesture as Gesture
 import Main.Msg as Msg
@@ -157,27 +157,27 @@ findStackByContent cards board =
             }
 
 
-resolveSpec : ReplaySpec -> List CardStack -> WireAction
+resolveSpec : ReplaySpec -> List CardStack -> GameEvent
 resolveSpec spec board =
     case spec of
         SpecSplit cards idx ->
-            WA.Split { stack = findStackByContent cards board, cardIndex = idx }
+            GameEvent.Split { stack = findStackByContent cards board, cardIndex = idx }
 
         SpecMergeStack src tgt side ->
-            WA.MergeStack
+            GameEvent.MergeStack
                 { source = findStackByContent src board
                 , target = findStackByContent tgt board
                 , side = side
                 }
 
         SpecMoveStack cards loc ->
-            WA.MoveStack { stack = findStackByContent cards board, newLoc = loc }
+            GameEvent.MoveStack { stack = findStackByContent cards board, newLoc = loc }
 
         SpecCompleteTurn ->
-            WA.CompleteTurn
+            GameEvent.CompleteTurn
 
 
-buildEagerAndActions : State.Model -> List ReplaySpec -> ( State.Model, List WireAction )
+buildEagerAndActions : State.Model -> List ReplaySpec -> ( State.Model, List GameEvent )
 buildEagerAndActions initialModel specs =
     let
         loop model acc remaining =
@@ -198,7 +198,7 @@ buildEagerAndActions initialModel specs =
     loop initialModel [] specs
 
 
-runReplay : State.Model -> List WireAction -> State.Model
+runReplay : State.Model -> List GameEvent -> State.Model
 runReplay initialModel actions =
     let
         entries =
@@ -1382,7 +1382,7 @@ dragInvariantFloaterShift =
                 delta =
                     { x = 20, y = -5 }
 
-                ( afterMove, _ ) =
+                afterMove =
                     Play.mouseMove
                         { x = mousedownClient.x + delta.x, y = mousedownClient.y + delta.y }
                         100
@@ -1426,7 +1426,7 @@ dragInvariantGrabPointInvariant =
                                 0
                                 model
 
-                        ( afterMove, _ ) =
+                        afterMove =
                             Play.mouseMove
                                 { x = down.x + delta.x, y = down.y + delta.y }
                                 100
@@ -1973,7 +1973,7 @@ gestureMergeHandCardOntoBoardWing =
 
             in
             case HandGesture.resolveHandCardGesture d (Just { x = 300, y = 100, width = 800, height = 600 }) of
-                Just (WA.MergeHand p) ->
+                Just (HandGesture.MergeHand p) ->
                     Expect.equal BoardActions.Right p.side
 
                 other ->
@@ -2009,7 +2009,7 @@ gestureMergeStack234Onto567Left =
 
             in
             case BoardGesture.resolveBoardCardGesture d Nothing of
-                Just (WA.MergeStack p) ->
+                Just (BoardGesture.MergeStack p) ->
                     Expect.equal BoardActions.Left p.side
 
                 other ->
@@ -2045,7 +2045,7 @@ gestureMergeStack567Onto234Right =
 
             in
             case BoardGesture.resolveBoardCardGesture d Nothing of
-                Just (WA.MergeStack p) ->
+                Just (BoardGesture.MergeStack p) ->
                     Expect.equal BoardActions.Right p.side
 
                 other ->
@@ -2101,7 +2101,7 @@ gestureMoveStackValidDrop =
 
             in
             case BoardGesture.resolveBoardCardGesture d (Just { x = 300, y = 100, width = 800, height = 600 }) of
-                Just (WA.MoveStack p) ->
+                Just (BoardGesture.MoveStack p) ->
                     Expect.all
                         [ \_ -> Expect.equal 400 p.newLoc.left
                         , \_ -> Expect.equal 300 p.newLoc.top
@@ -2132,7 +2132,7 @@ gesturePlaceHandDropsToBoard =
 
             in
             case HandGesture.resolveHandCardGesture d (Just { x = 300, y = 100, width = 800, height = 600 }) of
-                Just (WA.PlaceHand p) ->
+                Just (HandGesture.PlaceHand p) ->
                     Expect.all
                         [ \_ -> Expect.equal 450 p.loc.left
                         , \_ -> Expect.equal 350 p.loc.top
@@ -2166,7 +2166,7 @@ gestureSplitSurvivingClickIntent =
 
             in
             case BoardGesture.resolveBoardCardGesture d Nothing of
-                Just (WA.Split p) ->
+                Just (BoardGesture.Split p) ->
                     Expect.equal 3 p.cardIndex
 
                 other ->
@@ -2716,7 +2716,7 @@ undoWalkthroughMergeHand =
 
                 -- player merges 7H' from hand onto the 7S-7D-7C set on the right
                 action2 =
-                    WA.MergeHand { handCard = parseCard "7H2", target = findStackByContent [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ] m1.board, side = BoardActions.Right }
+                    GameEvent.MergeHand { handCard = parseCard "7H2", target = findStackByContent [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ] m1.board, side = BoardActions.Right }
 
                 entry2 =
                     { action = action2, gesturePath = Nothing, pathFrame = BoardFrame }
@@ -2862,7 +2862,7 @@ undoWalkthroughPlaceHand =
 
                 -- player places 7H' from hand onto an open board location
                 action2 =
-                    WA.PlaceHand { handCard = parseCard "7H2", loc = { top = 400, left = 300 } }
+                    GameEvent.PlaceHand { handCard = parseCard "7H2", loc = { top = 400, left = 300 } }
 
                 entry2 =
                     { action = action2, gesturePath = Nothing, pathFrame = BoardFrame }

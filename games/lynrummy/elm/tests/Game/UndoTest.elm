@@ -20,7 +20,7 @@ import Game.Rules.Card exposing (CardValue(..), OriginDeck(..), Suit(..))
 import Game.CardStack exposing (CardStack, HandCardState(..))
 import Game.Hand as Hand
 import Game.Reducer as Reducer
-import Game.WireAction exposing (WireAction(..))
+import Game.GameEvent exposing (GameEvent(..))
 import Main.State as State exposing (ActionLogEntry)
 import Main.Types exposing (PathFrame(..))
 import Test exposing (Test, describe, test)
@@ -41,12 +41,12 @@ stackAt idx state =
             { boardCards = [], loc = { top = 0, left = 0 } }
 
 
-{-| Construct a minimal ActionLogEntry for a WireAction.
+{-| Construct a minimal ActionLogEntry for a GameEvent.
 `gesturePath` and `pathFrame` are inconsequential for the
 `collapseUndos` / `canUndoThisTurn` tests; we use the cheapest
 valid values.
 -}
-logEntry : WireAction -> ActionLogEntry
+logEntry : GameEvent -> ActionLogEntry
 logEntry action =
     { action = action
     , gesturePath = Nothing

@@ -37,7 +37,7 @@ import Game.Rules.Card exposing (Card, CardValue(..), OriginDeck(..), Suit(..))
 import Game.CardStack exposing (BoardCard, BoardCardState(..), CardStack)
 import Game.Replay.DragAnimation as DA
 import Game.Replay.Space as Space
-import Game.WireAction as WA exposing (WireAction)
+import Game.GameEvent as GameEvent exposing (GameEvent)
 import Main.Types exposing (GesturePoint)
 import Test exposing (Test, describe, test)
 
@@ -71,9 +71,9 @@ fixturePath =
     ]
 
 
-fixtureAction : WireAction
+fixtureAction : GameEvent
 fixtureAction =
-    WA.MergeStack
+    GameEvent.MergeStack
         { source = fixtureStack
         , target = fixtureStack
         , side = BoardActions.Right

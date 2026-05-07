@@ -12,7 +12,7 @@ import Game.Rules.Card exposing (CardValue(..), OriginDeck(..), Suit(..))
 import Game.CardStack exposing (BoardCardState(..), CardStack, HandCardState(..))
 import Game.Hand as Hand
 import Game.Reducer as Reducer
-import Game.WireAction exposing (WireAction(..))
+import Game.GameEvent exposing (GameEvent(..))
 import Test exposing (Test, describe, test)
 
 

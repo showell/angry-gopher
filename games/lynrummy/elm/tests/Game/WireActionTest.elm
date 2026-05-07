@@ -1,9 +1,11 @@
 module Game.WireActionTest exposing (suite)
 
 {-| Tests for `Game.WireAction` — the action-shaped wire
-format. Round-trip tests prove encode/decode are inverses;
-format tests lock the specific JSON shape so accidental drift
-gets caught.
+format. The action type itself (`GameEvent`) lives in
+`Game.GameEvent`; this module is the encoder/decoder layer.
+Round-trip tests prove encode/decode are inverses; format
+tests lock the specific JSON shape so accidental drift gets
+caught.
 -}
 
 import Expect
@@ -12,7 +14,8 @@ import Json.Encode as Encode
 import Game.BoardActions exposing (Side(..))
 import Game.Rules.Card exposing (Card, CardValue(..), OriginDeck(..), Suit(..))
 import Game.CardStack exposing (BoardCard, BoardCardState(..), CardStack)
-import Game.WireAction as WA exposing (WireAction(..))
+import Game.GameEvent exposing (GameEvent(..))
+import Game.WireAction as WA
 import Test exposing (Test, describe, test)
 
 
@@ -82,7 +85,7 @@ suite =
 -- HELPERS
 
 
-roundTrip : String -> WireAction -> Test
+roundTrip : String -> GameEvent -> Test
 roundTrip name action =
     test name <|
         \_ ->

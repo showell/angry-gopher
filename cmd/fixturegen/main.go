@@ -124,7 +124,7 @@ type WalkthroughStep struct {
 // ReplayAction is one entry in a replay_invariant scenario's
 // action log. We don't reuse Stack because each shape carries
 // different fields. The Elm emitter walks these to build a
-// dynamic WireAction list at test-runtime — content addresses
+// dynamic GameEvent list at test-runtime — content addresses
 // are resolved against the live board on each step, mirroring
 // what the replay engine does in production.
 type ReplayAction struct {
@@ -651,7 +651,7 @@ import Game.Rules.Referee as Referee exposing (RefereeStage(..), refereeStageToS
 import Game.Replay.Time as ReplayTime
 import Game.Rules.StackType as StackType
 import Game.WingView as WingView
-import Game.WireAction as WA exposing (WireAction)
+import Game.GameEvent as GameEvent exposing (GameEvent)
 import Main.Apply as Apply
 import Main.Gesture as Gesture
 import Main.Msg as Msg
@@ -773,27 +773,27 @@ findStackByContent cards board =
             }
 
 
-resolveSpec : ReplaySpec -> List CardStack -> WireAction
+resolveSpec : ReplaySpec -> List CardStack -> GameEvent
 resolveSpec spec board =
     case spec of
         SpecSplit cards idx ->
-            WA.Split { stack = findStackByContent cards board, cardIndex = idx }
+            GameEvent.Split { stack = findStackByContent cards board, cardIndex = idx }
 
         SpecMergeStack src tgt side ->
-            WA.MergeStack
+            GameEvent.MergeStack
                 { source = findStackByContent src board
                 , target = findStackByContent tgt board
                 , side = side
                 }
 
         SpecMoveStack cards loc ->
-            WA.MoveStack { stack = findStackByContent cards board, newLoc = loc }
+            GameEvent.MoveStack { stack = findStackByContent cards board, newLoc = loc }
 
         SpecCompleteTurn ->
-            WA.CompleteTurn
+            GameEvent.CompleteTurn
 
 
-buildEagerAndActions : State.Model -> List ReplaySpec -> ( State.Model, List WireAction )
+buildEagerAndActions : State.Model -> List ReplaySpec -> ( State.Model, List GameEvent )
 buildEagerAndActions initialModel specs =
     let
         loop model acc remaining =
@@ -814,7 +814,7 @@ buildEagerAndActions initialModel specs =
     loop initialModel [] specs
 
 
-runReplay : State.Model -> List WireAction -> State.Model
+runReplay : State.Model -> List GameEvent -> State.Model
 runReplay initialModel actions =
     let
         entries =
@@ -965,7 +965,7 @@ func elmBool(b bool) string {
 // Build:
 //   1. initialModel from `board:`.
 //   2. actions from `actions:`, resolved against a moving sim
-//      board so each WireAction's CardStack ref reflects the
+//      board so each GameEvent's CardStack ref reflects the
 //      pre-action state at its point of execution (mirroring
 //      what gets stored in the live actionLog).
 //   3. eagerModel = foldl Apply.applyAction over actions.
@@ -1114,7 +1114,7 @@ func elmUndoWalkthrough(b *strings.Builder, sc Scenario) {
 				ind, cur, ind, prev)
 
 		} else if step.Action.Kind == "place_hand" || step.Action.Kind == "merge_hand" {
-			// Hand-origin step: construct WireAction directly (no resolveSpec).
+			// Hand-origin step: construct GameEvent directly (no resolveSpec).
 			act := fmt.Sprintf("action%d", i+1)
 			entry := fmt.Sprintf("entry%d", i+1)
 			post := fmt.Sprintf("m%dpost", i+1)
@@ -1212,7 +1212,7 @@ func elmUndoWalkthrough(b *strings.Builder, sc Scenario) {
 }
 
 
-// elmHandAction renders a hand-origin WireAction (place_hand or
+// elmHandAction renders a hand-origin GameEvent (place_hand or
 // merge_hand) as an Elm literal. Unlike board-origin actions,
 // these don't go through resolveSpec — the hand card is explicit
 // and the target stack (for merge_hand) is content-addressed
@@ -1221,10 +1221,10 @@ func elmHandAction(a ReplayAction, prevModel string) string {
 	card := elmCompactCard(a.Source[0])
 	switch a.Kind {
 	case "place_hand":
-		return fmt.Sprintf("WA.PlaceHand { handCard = parseCard %s, loc = { top = %d, left = %d } }",
+		return fmt.Sprintf("GameEvent.PlaceHand { handCard = parseCard %s, loc = { top = %d, left = %d } }",
 			card, a.NewLoc.Top, a.NewLoc.Left)
 	case "merge_hand":
-		return fmt.Sprintf("WA.MergeHand { handCard = parseCard %s, target = findStackByContent %s %s.board, side = %s }",
+		return fmt.Sprintf("GameEvent.MergeHand { handCard = parseCard %s, target = findStackByContent %s %s.board, side = %s }",
 			card,
 			elmRawCards(cardsFromCards(a.Target)),
 			prevModel,
@@ -1432,7 +1432,7 @@ func elmFloaterTopLeft(b *strings.Builder, sc Scenario) {
 		fmt.Fprintf(b, "%s    ( afterDown, _ ) =\n%s        Gesture.startBoardCardDrag\n%s            { stack = stack, cardIndex = %d }\n%s            mousedownClient\n%s            0\n%s            model\n\n",
 			ind, ind, ind, sc.DragCardIndex, ind, ind, ind)
 		fmt.Fprintf(b, "%s    delta =\n%s        { x = %d, y = %d }\n\n", ind, ind, dlt.X, dlt.Y)
-		fmt.Fprintf(b, "%s    ( afterMove, _ ) =\n%s        Play.mouseMove\n%s            { x = mousedownClient.x + delta.x, y = mousedownClient.y + delta.y }\n%s            100\n%s            afterDown\n", ind, ind, ind, ind, ind)
+		fmt.Fprintf(b, "%s    afterMove =\n%s        Play.mouseMove\n%s            { x = mousedownClient.x + delta.x, y = mousedownClient.y + delta.y }\n%s            100\n%s            afterDown\n", ind, ind, ind, ind, ind)
 		b.WriteString(ind + "in\n")
 		b.WriteString(ind + "case ( afterDown.drag, afterMove.drag ) of\n")
 		b.WriteString(ind + "    ( DraggingBoardCard before, DraggingBoardCard after ) ->\n")
@@ -1468,7 +1468,7 @@ func elmFloaterTopLeft(b *strings.Builder, sc Scenario) {
 		b.WriteString(ind + "                    down\n")
 		b.WriteString(ind + "                    0\n")
 		b.WriteString(ind + "                    model\n\n")
-		b.WriteString(ind + "            ( afterMove, _ ) =\n")
+		b.WriteString(ind + "            afterMove =\n")
 		b.WriteString(ind + "                Play.mouseMove\n")
 		b.WriteString(ind + "                    { x = down.x + delta.x, y = down.y + delta.y }\n")
 		b.WriteString(ind + "                    100\n")
@@ -1714,7 +1714,7 @@ func elmGestureSplit(b *strings.Builder, sc Scenario) {
 		"[]")
 	b.WriteString(ind + "in\n")
 	b.WriteString(ind + "case BoardGesture.resolveBoardCardGesture d Nothing of\n")
-	b.WriteString(ind + "    Just (WA.Split p) ->\n")
+	b.WriteString(ind + "    Just (BoardGesture.Split p) ->\n")
 	fmt.Fprintf(b, "%s        Expect.equal %d p.cardIndex\n\n", ind, gs.CardIndex)
 	b.WriteString(ind + "    other ->\n")
 	b.WriteString(ind + "        Expect.fail (\"expected Split; got \" ++ Debug.toString other)")
@@ -1745,7 +1745,7 @@ func elmGestureMergeStack(b *strings.Builder, sc Scenario) {
 		"[ wing ]")
 	b.WriteString(ind + "in\n")
 	b.WriteString(ind + "case BoardGesture.resolveBoardCardGesture d Nothing of\n")
-	b.WriteString(ind + "    Just (WA.MergeStack p) ->\n")
+	b.WriteString(ind + "    Just (BoardGesture.MergeStack p) ->\n")
 	fmt.Fprintf(b, "%s        Expect.equal %s p.side\n\n", ind, sideExpr)
 	b.WriteString(ind + "    other ->\n")
 	b.WriteString(ind + "        Expect.fail (\"expected MergeStack; got \" ++ Debug.toString other)")
@@ -1771,7 +1771,7 @@ func elmGestureMergeHand(b *strings.Builder, sc Scenario) {
 		"[ wing ]")
 	b.WriteString(ind + "in\n")
 	fmt.Fprintf(b, "%scase HandGesture.resolveHandCardGesture d (Just %s) of\n", ind, gestureBoardRectLit)
-	b.WriteString(ind + "    Just (WA.MergeHand p) ->\n")
+	b.WriteString(ind + "    Just (HandGesture.MergeHand p) ->\n")
 	fmt.Fprintf(b, "%s        Expect.equal %s p.side\n\n", ind, sideExpr)
 	b.WriteString(ind + "    other ->\n")
 	b.WriteString(ind + "        Expect.fail (\"expected MergeHand; got \" ++ Debug.toString other)")
@@ -1807,7 +1807,7 @@ func elmGestureMoveStack(b *strings.Builder, sc Scenario) {
 		b.WriteString(ind + "    |> Expect.equal Nothing")
 	} else {
 		fmt.Fprintf(b, "%scase BoardGesture.resolveBoardCardGesture d (Just %s) of\n", ind, gestureBoardRectLit)
-		b.WriteString(ind + "    Just (WA.MoveStack p) ->\n")
+		b.WriteString(ind + "    Just (BoardGesture.MoveStack p) ->\n")
 		b.WriteString(ind + "        Expect.all\n")
 		fmt.Fprintf(b, "%s            [ \\_ -> Expect.equal %d p.newLoc.left\n", ind, gm.NewLocLeft)
 		fmt.Fprintf(b, "%s            , \\_ -> Expect.equal %d p.newLoc.top\n", ind, gm.NewLocTop)
@@ -1840,7 +1840,7 @@ func elmGesturePlaceHand(b *strings.Builder, sc Scenario) {
 		"[]")
 	b.WriteString(ind + "in\n")
 	fmt.Fprintf(b, "%scase HandGesture.resolveHandCardGesture d (Just %s) of\n", ind, gestureBoardRectLit)
-	b.WriteString(ind + "    Just (WA.PlaceHand p) ->\n")
+	b.WriteString(ind + "    Just (HandGesture.PlaceHand p) ->\n")
 	b.WriteString(ind + "        Expect.all\n")
 	fmt.Fprintf(b, "%s            [ \\_ -> Expect.equal %d p.loc.left\n", ind, gp.LocLeft)
 	fmt.Fprintf(b, "%s            , \\_ -> Expect.equal %d p.loc.top\n", ind, gp.LocTop)
