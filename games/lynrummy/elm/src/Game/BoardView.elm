@@ -1,4 +1,4 @@
-module Main.BoardView exposing
+module Game.BoardView exposing
     ( boardWithWings
     , draggedOverlay
     , viewBoard
@@ -7,15 +7,16 @@ module Main.BoardView exposing
 {-| The board widget — stacks, drag wings, and the dragged-
 floater overlays.
 
-`boardWithWings` is the in-flow board surface (a
-`position: relative` shell with stack children and, during a
-drag, wing targets and a board-frame floater).
-`draggedOverlay` is the viewport-frame floater used for
-hand-origin drags whose source is outside the board widget.
+`boardShellWith` is the bare board shell (khaki rectangle,
+`position: relative`, fixed 800×600). Used both by the
+drag-aware `boardWithWings` and by the puzzle's static
+`viewBoard`.
 
-Mount choice is keyed off the drag variant:
-`DraggingBoardCard` → board-shell child via `position: absolute`;
-`DraggingHandCard` → viewport overlay via `position: fixed`.
+`boardWithWings` is the in-flow drag-aware board (shell with
+stack children and, during a drag, wing targets and a
+board-frame floater). `draggedOverlay` is the viewport-frame
+floater used for hand-origin drags whose source is outside
+the board widget.
 
 A drag is rendered immediately on mousedown; the source stack
 hides and the floater takes over at the same screen position.
@@ -27,13 +28,42 @@ not a state the View needs to know about.
 import Game.CardStack as CardStack exposing (CardStack)
 import Game.Drag exposing (BoardCardDragInfo, DragState(..), HandCardDragInfo)
 import Game.Physics.GestureArbitration as GA
-import Game.Physics.WingOracle as WingOracle exposing (WingId)
-import Game.View as View
-import Html exposing (Html)
+import Game.StackView as StackView
+import Game.View exposing (navy)
+import Game.WingView as WingView
+import Html exposing (Html, div)
 import Html.Attributes exposing (id, style)
 import Main.Gesture as Gesture
 import Main.Msg exposing (Msg)
 import Main.State exposing (Model, boardDomIdFor)
+
+
+
+-- BOARD SHELL
+
+
+{-| Board shell with extra attributes on the shell element
+(e.g. an `id` for measurement, or mouseenter / mouseleave
+handlers for tracking whether the cursor is over the board).
+-}
+boardShellWith : List (Html.Attribute msg) -> List (Html msg) -> Html msg
+boardShellWith extraAttrs children =
+    let
+        -- Match the server's DEFAULT_BOARD_BOUNDS (800×600) exactly.
+        -- Visible area = legal area, so users can't drop cards in
+        -- what looks like the board but gets geometry-rejected at
+        -- CompleteTurn.
+        baseAttrs =
+            [ style "background-color" "khaki"
+            , style "border" ("1px solid " ++ navy)
+            , style "border-radius" "15px"
+            , style "position" "relative"
+            , style "width" "800px"
+            , style "height" "600px"
+            , style "margin-top" "8px"
+            ]
+    in
+    div (baseAttrs ++ extraAttrs) children
 
 
 
@@ -42,8 +72,7 @@ import Main.State exposing (Model, boardDomIdFor)
 -- The minimum surface to draw a board: a list of positioned
 -- stacks on the standard board shell. No model, no drag
 -- state, no gameId. Used by surfaces where there's nothing
--- to interact with (the puzzle V1, snapshot views, anything
--- that just wants to render a board image).
+-- to interact with (the puzzle V1, snapshot views).
 --
 -- Polymorphic in `msg` so callers with their own Msg type
 -- can use it without going through `Main.Msg`.
@@ -51,11 +80,11 @@ import Main.State exposing (Model, boardDomIdFor)
 
 viewBoard : List CardStack -> Html msg
 viewBoard stacks =
-    View.boardShellWith [] (List.map View.viewStack stacks)
+    boardShellWith [] (List.map StackView.viewStack stacks)
 
 
 
--- BOARD SHELL (drag-aware)
+-- DRAG-AWARE BOARD
 
 
 boardWithWings : Model -> Html Msg
@@ -64,7 +93,7 @@ boardWithWings model =
         boardElements =
             boardChildren model.board model.boardRect model.drag
     in
-    View.boardShellWith [ id (boardDomIdFor model.gameId) ] boardElements
+    boardShellWith [ id (boardDomIdFor model.gameId) ] boardElements
 
 
 boardChildren : List CardStack -> Maybe GA.Rect -> DragState -> List (Html Msg)
@@ -74,49 +103,12 @@ boardChildren board maybeBoardRect drag =
             List.map (viewStackForBoard drag) board
 
         wingNodes =
-            getWingNodes drag maybeBoardRect
+            WingView.getWingNodes drag maybeBoardRect
 
         boardOverlayNodes =
             getOverlayNodes drag
     in
     stackNodes ++ wingNodes ++ boardOverlayNodes
-
-
-getWingNodes : DragState -> Maybe GA.Rect -> List (Html Msg)
-getWingNodes drag maybeBoardRect =
-    case drag of
-        DraggingBoardCard d ->
-            let
-                hoveredWing =
-                    Gesture.floaterOverWing
-                        d.floaterTopLeft
-                        (CardStack.stackDisplayWidth d.stack)
-                        d.wings
-            in
-            List.map (renderWingWithHover hoveredWing) d.wings
-
-        DraggingHandCard d ->
-            case maybeBoardRect of
-                Just rect ->
-                    let
-                        floaterBoardLoc =
-                            { left = d.floaterTopLeft.x - rect.x
-                            , top = d.floaterTopLeft.y - rect.y
-                            }
-
-                        hoveredWing =
-                            Gesture.floaterOverWing
-                                floaterBoardLoc
-                                CardStack.stackPitch
-                                d.wings
-                    in
-                    List.map (renderWingWithHover hoveredWing) d.wings
-
-                Nothing ->
-                    []
-
-        NotDragging ->
-            []
 
 
 viewStackForBoard : DragState -> CardStack -> Html Msg
@@ -132,41 +124,17 @@ viewStackForBoard drag stack =
                 Html.text ""
 
             else
-                View.viewStack stack
+                StackView.viewStack stack
 
         DraggingHandCard _ ->
             -- Hand-card drags don't affect any board stack's
             -- rendering; we still hide the stack-level
             -- mousedown handlers so the in-flight drag isn't
             -- re-triggered by stray events.
-            View.viewStack stack
+            StackView.viewStack stack
 
         NotDragging ->
-            View.viewStackWithCardAttrs (Gesture.cardMouseDown stack) stack
-
-
-renderWingWithHover : Maybe WingId -> WingId -> Html Msg
-renderWingWithHover hoveredWing wing =
-    renderWing (WingOracle.wingBoardRect wing) (hoveredWing == Just wing)
-
-
-renderWing : { left : Int, top : Int, width : Int, height : Int } -> Bool -> Html Msg
-renderWing rect hovering =
-    let
-        bgColor =
-            if hovering then
-                View.mergeableHover
-
-            else
-                View.mergeableGreen
-    in
-    View.viewWing
-        { top = rect.top
-        , left = rect.left
-        , width = rect.width
-        , bgColor = bgColor
-        , extraAttrs = []
-        }
+            StackView.viewStackWithCardAttrs (Gesture.cardMouseDown stack) stack
 
 
 
@@ -211,12 +179,12 @@ getOverlayNodes drag =
 
 renderBoardFloater : BoardCardDragInfo -> List (Html.Attribute Msg) -> Html Msg
 renderBoardFloater d positioningAttrs =
-    View.viewStackWithAttrs (floatingAttrs d.floaterTopLeft positioningAttrs) d.stack
+    StackView.viewStackWithAttrs (floatingAttrs d.floaterTopLeft positioningAttrs) d.stack
 
 
 renderHandFloater : HandCardDragInfo -> List (Html.Attribute Msg) -> Html Msg
 renderHandFloater d positioningAttrs =
-    View.viewCardWithAttrs
+    StackView.viewCardWithAttrs
         (floatingAttrs
             { left = d.floaterTopLeft.x, top = d.floaterTopLeft.y }
             positioningAttrs

@@ -31,6 +31,7 @@ import Game.PlayerTurn exposing (CompleteTurnResult(..))
 import Game.Random as Random
 import Game.Replay.Time as ReplayTime
 import Game.Score as Score
+import Game.WingView as WingView
 import Game.WireAction as WA
 import Html exposing (Html)
 import Http
@@ -288,7 +289,7 @@ mouseMove pos tMs model =
                     }
 
                 hover floaterTopLeft =
-                    Gesture.floaterOverWing
+                    WingView.hoveredWing
                         floaterTopLeft
                         (CardStack.stackDisplayWidth d.stack)
                         d.wings
@@ -327,7 +328,7 @@ mouseMove pos tMs model =
                                     , top = floaterTopLeft.y - rect.y
                                     }
                             in
-                            Gesture.floaterOverWing floaterBoardLoc CardStack.stackPitch d.wings
+                            WingView.hoveredWing floaterBoardLoc CardStack.stackPitch d.wings
 
                         Nothing ->
                             Nothing

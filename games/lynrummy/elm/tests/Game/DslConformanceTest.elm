@@ -32,6 +32,7 @@ import Game.Physics.WingOracle as WingOracle
 import Game.Rules.Referee as Referee exposing (RefereeStage(..), refereeStageToString)
 import Game.Replay.Time as ReplayTime
 import Game.Rules.StackType as StackType
+import Game.WingView as WingView
 import Game.WireAction as WA exposing (WireAction)
 import Main.Apply as Apply
 import Main.Gesture as Gesture
@@ -1874,7 +1875,7 @@ gestureFloaterOverWingLeftFires =
                     { target = targetStack, side = BoardActions.Left }
 
             in
-            Gesture.floaterOverWing floater (CardStack.stackDisplayWidth sourceStack) [ wing ]
+            WingView.hoveredWing floater (CardStack.stackDisplayWidth sourceStack) [ wing ]
                 |> Expect.equal (Just wing)
 
 
@@ -1896,7 +1897,7 @@ gestureFloaterOverWingPastTolerance =
                     { target = targetStack, side = BoardActions.Right }
 
             in
-            Gesture.floaterOverWing floater (CardStack.stackDisplayWidth sourceStack) [ wing ]
+            WingView.hoveredWing floater (CardStack.stackDisplayWidth sourceStack) [ wing ]
                 |> Expect.equal Nothing
 
 
@@ -1918,7 +1919,7 @@ gestureFloaterOverWingRightFires =
                     { target = targetStack, side = BoardActions.Right }
 
             in
-            Gesture.floaterOverWing floater (CardStack.stackDisplayWidth sourceStack) [ wing ]
+            WingView.hoveredWing floater (CardStack.stackDisplayWidth sourceStack) [ wing ]
                 |> Expect.equal (Just wing)
 
 
@@ -1940,7 +1941,7 @@ gestureFloaterOverWingWayOff =
                     { target = targetStack, side = BoardActions.Right }
 
             in
-            Gesture.floaterOverWing floater (CardStack.stackDisplayWidth sourceStack) [ wing ]
+            WingView.hoveredWing floater (CardStack.stackDisplayWidth sourceStack) [ wing ]
                 |> Expect.equal Nothing
 
 

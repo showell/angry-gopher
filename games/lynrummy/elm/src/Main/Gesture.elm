@@ -1,6 +1,5 @@
 module Main.Gesture exposing
     ( cardMouseDown
-    , floaterOverWing
     , handCardAttrs
     , handleMouseUp
     , pointDecoder
@@ -45,9 +44,6 @@ the cursor is still within `clickThreshold` of `originalCursor`
 table. There is no live "click intent" flag — the question is
 answered exactly once, at mouseup, as an outcome judgment.
 
-Hand-card drags have no Split semantic; they always dispatch on
-`(hoveredWing, isCursorOverBoard)`.
-
 -}
 
 import Browser.Dom
@@ -57,6 +53,7 @@ import Game.Physics.GestureArbitration as GA
 import Game.Physics.WingOracle as WingOracle
 import Game.Rules.Card exposing (Card)
 import Game.CardStack as CardStack exposing (BoardLocation, CardStack, HandCard)
+import Game.WingView as WingView
 import Game.WireAction as WA exposing (WireAction)
 import Html
 import Html.Attributes exposing (style)
@@ -369,11 +366,7 @@ gestureForAction action path pathFrame =
 {-| Resolve a completed board-card drag into the WireAction (if
 any) it should produce. Click-vs-drag check: if the cursor is
 still within `clickThreshold` of `originalCursor`, emit a
-`Split` at the captured `cardIndex`. Otherwise dispatch on
-`(hoveredWing, isCursorOverBoard)`.
-
-Board-card floaters live in board frame, so `boardOrigin` is the
-zero point — the floater coordinates need no lift.
+`Split` at the captured `cardIndex`.
 -}
 resolveBoardCardGesture : BoardCardDragInfo -> Maybe GA.Rect -> Maybe WireAction
 resolveBoardCardGesture d boardRect =
@@ -383,7 +376,7 @@ resolveBoardCardGesture d boardRect =
     else
         let
             hovered =
-                floaterOverWing d.floaterTopLeft (CardStack.stackDisplayWidth d.stack) d.wings
+                WingView.hoveredWing d.floaterTopLeft (CardStack.stackDisplayWidth d.stack) d.wings
         in
         case hovered of
             Just wing ->
@@ -426,7 +419,7 @@ resolveHandCardGesture d maybeRect =
                     }
 
                 hovered =
-                    floaterOverWing floaterBoardLoc CardStack.stackPitch d.wings
+                    WingView.hoveredWing floaterBoardLoc CardStack.stackPitch d.wings
             in
             case hovered of
                 Just wing ->
@@ -460,57 +453,7 @@ isCursorOverBoard cursor maybeRect =
             False
 
 
--- LEAF HELPERS — narrow inputs, frame-agnostic.
---
--- The board / hand split lives at the resolver level, not down
--- here. These helpers take coordinates and the per-frame
--- `boardOrigin` knob: `{ x = 0, y = 0 }` for board-frame floaters,
--- the live board rect's `{ x, y }` for viewport-frame floaters.
-
-
-{-| Half a card-pitch of slop in each axis around the eventual
-landing. Tight enough that the floater must be visually
-adjacent to the target; loose enough to tolerate normal mouse
-wiggle.
--}
-wingSnapTolerance : Int
-wingSnapTolerance =
-    CardStack.stackPitch // 2
-
-
-{-| True iff `floaterTopLeft` is within `wingSnapTolerance` of
-`wing`'s eventual landing. Both inputs are in board frame —
-the floater is a rectangle's top-left, the wing's eventual
-landing is too, so the comparison is a same-frame
-`{ left, top }` distance check.
--}
-isNearLanding : BoardLocation -> Int -> WingOracle.WingId -> Bool
-isNearLanding floaterTopLeft floaterWidth wing =
-    let
-        ev =
-            WingOracle.eventualFloaterTopLeft wing floaterWidth
-
-        dx =
-            abs (floaterTopLeft.left - ev.left)
-
-        dy =
-            abs (floaterTopLeft.top - ev.top)
-    in
-    dx < wingSnapTolerance && dy < wingSnapTolerance
-
-
-{-| Which wing (if any) the floater is about to land on.
-`floaterTopLeft` is in board frame.
--}
-floaterOverWing :
-    BoardLocation
-    -> Int
-    -> List WingOracle.WingId
-    -> Maybe WingOracle.WingId
-floaterOverWing floaterTopLeft floaterWidth wings =
-    wings
-        |> List.filter (isNearLanding floaterTopLeft floaterWidth)
-        |> List.head
+-- LEAF HELPERS
 
 
 {-| True iff a stack of `cardCount` cards placed at `loc` fits

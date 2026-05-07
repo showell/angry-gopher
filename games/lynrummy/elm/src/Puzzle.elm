@@ -9,7 +9,7 @@ no engine, no model beyond the static stack list itself.
 This is the first "second consumer" of game-side components
 post-puzzle-rip — the entire app fits in one file because the
 extraction work has reduced "render a board" to one function
-call against `Main.BoardView.viewBoard`.
+call against `Game.BoardView.viewBoard`.
 
 Future iterations will add interaction (drag → place → reset),
 hint, agent-play, replay. Each addition forces another
@@ -21,7 +21,7 @@ import Browser
 import Game.CardStack exposing (BoardCardState(..), CardStack)
 import Game.Rules.Card exposing (CardValue(..), OriginDeck(..), Suit(..))
 import Html exposing (Html)
-import Main.BoardView as BoardView
+import Game.BoardView as BoardView
 
 
 main : Program () () msg

@@ -648,6 +648,7 @@ import Game.Physics.WingOracle as WingOracle
 import Game.Rules.Referee as Referee exposing (RefereeStage(..), refereeStageToString)
 import Game.Replay.Time as ReplayTime
 import Game.Rules.StackType as StackType
+import Game.WingView as WingView
 import Game.WireAction as WA exposing (WireAction)
 import Main.Apply as Apply
 import Main.Gesture as Gesture
@@ -1849,7 +1850,7 @@ func elmGesturePlaceHand(b *strings.Builder, sc Scenario) {
 
 // elmGestureFloaterOverWing emits a test body for the
 // `gesture_floater_over_wing` op. Calls the unified
-// `Gesture.floaterOverWing` helper with narrow inputs:
+// `WingView.hoveredWing` helper with narrow inputs:
 // floaterTopLeft, floaterWidth, boardOrigin, wings.
 //
 // All current scenarios are board-sourced (the floater is in
@@ -1866,7 +1867,7 @@ func elmGestureFloaterOverWing(b *strings.Builder, sc Scenario) {
 	elmGestureFloaterAt(b, sc, ind)
 	fmt.Fprintf(b, "%s    wing =\n%s        { target = targetStack, side = %s }\n\n", ind, ind, sideExpr)
 	b.WriteString(ind + "in\n")
-	call := "Gesture.floaterOverWing floater (CardStack.stackDisplayWidth sourceStack) [ wing ]"
+	call := "WingView.hoveredWing floater (CardStack.stackDisplayWidth sourceStack) [ wing ]"
 	if gf.HasWing {
 		fmt.Fprintf(b, "%s%s\n", ind, call)
 		fmt.Fprintf(b, "%s    |> Expect.equal (Just wing)", ind)

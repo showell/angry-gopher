@@ -56,7 +56,7 @@ import Game.View as View
 import Html exposing (Html, div)
 import Html.Attributes exposing (href, style)
 import Html.Events as Events
-import Main.BoardView as BoardView
+import Game.BoardView as BoardView
 import Main.Gesture as Gesture
 import Main.Msg exposing (Msg(..))
 import Main.State
