@@ -15,7 +15,7 @@ module Game.Replay.Space exposing
 
 {-| The spatial half of Instant Replay.
 
-Given a `WireAction` + the current Model, answer **where** the
+Given a `GameEvent` + the current Model, answer **where** the
 drag happened — AND in **which frame**. The board is a self-
 contained widget; for intra-board drags, coords live in
 board frame and the floater is rendered as a DOM child of the
@@ -39,7 +39,7 @@ import Game.Drag exposing (DragSource(..), DragState(..))
 import Game.Physics.BoardGeometry as BG
 import Game.Rules.Card exposing (Card)
 import Game.CardStack as CardStack exposing (CardStack)
-import Game.WireAction as WA exposing (WireAction)
+import Game.GameEvent as GameEvent exposing (GameEvent)
 import Main.State exposing (Model, activeHand)
 import Main.Types exposing (GesturePoint, PathFrame(..), Point)
 
@@ -58,7 +58,7 @@ type alias AnimationInfo =
     { startMs : Float
     , path : List GesturePoint
     , source : DragSource
-    , pendingAction : WireAction
+    , pendingAction : GameEvent
     }
 
 
@@ -232,7 +232,7 @@ quinticEase f =
 -- BOARD-ORIGIN PATH SYNTHESIS (the JIT seam)
 --
 -- Mirrors Python's `gesture_synth.drag_endpoints`: given a
--- WireAction and the live board, derive the (start, end) pair
+-- GameEvent and the live board, derive the (start, end) pair
 -- in board frame, then build an eased path. Hand-origin
 -- primitives and Splits return Nothing (the former goes
 -- through the async DOM-measurement path, the latter is a
@@ -253,7 +253,7 @@ so every drag the player sees is synthesized here.
 
 -}
 synthesizeBoardPath :
-    WireAction
+    GameEvent
     -> Model
     -> Float
     -> Maybe ( List GesturePoint, PathFrame )
@@ -283,10 +283,10 @@ both sides:
     aren't pinned in board coords.
 
 -}
-boardEndpoints : WireAction -> Model -> Maybe ( Point, Point )
+boardEndpoints : GameEvent -> Model -> Maybe ( Point, Point )
 boardEndpoints action model =
     case action of
-        WA.MoveStack p ->
+        GameEvent.MoveStack p ->
             CardStack.findStack p.stack model.board
                 |> Maybe.map
                     (\src ->
@@ -295,7 +295,7 @@ boardEndpoints action model =
                         )
                     )
 
-        WA.MergeStack p ->
+        GameEvent.MergeStack p ->
             Maybe.map2
                 (\src tgt ->
                     let
@@ -339,7 +339,7 @@ and paths are recorded with the exact loc), so this isn't a
 fuzzy match.
 
 -}
-isPathStillValid : List GesturePoint -> WireAction -> Model -> Bool
+isPathStillValid : List GesturePoint -> GameEvent -> Model -> Bool
 isPathStillValid path action model =
     case ( List.head path, expectedStartFor action model ) of
         ( Just first, Just expected ) ->
@@ -358,7 +358,7 @@ isPathStillValid path action model =
             False
 
 
-expectedStartFor : WireAction -> Model -> Maybe Point
+expectedStartFor : GameEvent -> Model -> Maybe Point
 expectedStartFor action model =
     boardEndpoints action model
         |> Maybe.map Tuple.first

@@ -21,7 +21,7 @@ import Game.Drag exposing (DragState(..))
 import Game.Physics.BoardGeometry as BG
 import Game.Physics.GestureArbitration as GA
 import Game.WingView as WingView
-import Game.WireAction as WA exposing (WireAction)
+import Game.GameEvent exposing (GameEvent(..))
 import Main.Apply as Apply
 import Main.Msg exposing (Msg)
 import Main.State as State
@@ -34,7 +34,7 @@ import Main.Wire as Wire
 
 
 type BoardOutcome
-    = BoardAction WireAction State.EnvelopeForGesture
+    = BoardAction GameEvent State.EnvelopeForGesture
     | BoardOffBoard State.StatusMessage
     | BoardNothingHappened
 
@@ -127,15 +127,15 @@ applyBoardOutcome outcome model =
             ( cleared, Cmd.none )
 
 
-{-| Resolve a completed board-card drag into the WireAction (if
+{-| Resolve a completed board-card drag into the GameEvent (if
 any) it should produce. Click-vs-drag check: if the cursor is
 still within `clickThreshold` of `originalCursor`, emit a
 `Split` at the captured `cardIndex`.
 -}
-resolveBoardCardGesture : BoardCardDragInfo -> Maybe GA.Rect -> Maybe WireAction
+resolveBoardCardGesture : BoardCardDragInfo -> Maybe GA.Rect -> Maybe GameEvent
 resolveBoardCardGesture d boardRect =
     if GA.distSquared d.cursor d.originalCursor <= GA.clickThreshold then
-        Just (WA.Split { stack = d.stack, cardIndex = d.cardIndex })
+        Just (Split { stack = d.stack, cardIndex = d.cardIndex })
 
     else
         let
@@ -145,7 +145,7 @@ resolveBoardCardGesture d boardRect =
         case hovered of
             Just wing ->
                 Just
-                    (WA.MergeStack
+                    (MergeStack
                         { source = d.stack
                         , target = wing.target
                         , side = wing.side
@@ -155,7 +155,7 @@ resolveBoardCardGesture d boardRect =
             Nothing ->
                 if isCursorOverBoard d.cursor boardRect then
                     if isDropFootprintInBounds (CardStack.size d.stack) d.floaterTopLeft then
-                        Just (WA.MoveStack { stack = d.stack, newLoc = d.floaterTopLeft })
+                        Just (MoveStack { stack = d.stack, newLoc = d.floaterTopLeft })
 
                     else
                         Nothing

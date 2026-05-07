@@ -5,7 +5,7 @@ module Game.Reducer exposing
     , undoAction
     )
 
-{-| Pure action reducer: take a `WireAction` and apply it to a
+{-| Pure action reducer: take a `GameEvent` and apply it to a
 `(board, hand)` state to produce the next state. Shared by both
 live-play action application and replay. Live-play callers wrap
 this with Model-level concerns (Score, cardsPlayedThisTurn) in
@@ -21,7 +21,7 @@ import Game.Rules.Card exposing (Card)
 import Game.CardStack as CardStack exposing (CardStack, HandCard, findStack, isStacksEqual)
 import Game.Dealer
 import Game.Hand as Hand exposing (Hand)
-import Game.WireAction exposing (WireAction(..))
+import Game.GameEvent exposing (GameEvent(..))
 
 
 type alias State =
@@ -37,7 +37,7 @@ initialState =
     }
 
 
-applyAction : WireAction -> State -> State
+applyAction : GameEvent -> State -> State
 applyAction action state =
     case action of
         Split { stack, cardIndex } ->
@@ -180,7 +180,7 @@ applyAction action state =
             state
 
 
-{-| Reverse a WireAction on (board, hand) — the undo primitive.
+{-| Reverse a GameEvent on (board, hand) — the undo primitive.
 Each action carries its pre-action stacks in the payload, so the
 post-action stacks are fully derivable: MoveStack's destination
 is newLoc, Split's pieces are CardStack.split, Merge's result is
@@ -189,7 +189,7 @@ pre-action board; handCardsToRelease cards return to hand.
 
 CompleteTurn and Undo are no-ops here; callers guard against them.
 -}
-undoAction : WireAction -> State -> State
+undoAction : GameEvent -> State -> State
 undoAction action state =
     case action of
         MoveStack { stack, newLoc } ->

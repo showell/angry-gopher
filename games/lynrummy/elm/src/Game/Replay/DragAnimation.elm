@@ -5,7 +5,7 @@ broader `Game.Replay.Time` orchestrator.
 
 This is the **physics half** of replay: given the current
 clock time and the animation's per-step bundle (path, start
-time, eventual `WireAction`), produce a `Step` describing
+time, eventual `GameEvent`), produce a `Step` describing
 what should happen next.
 
 The outer replay state machine in `Game.Replay.Time` calls
@@ -28,7 +28,7 @@ and stays test-light.
 -}
 
 import Game.Replay.Space as Space
-import Game.WireAction exposing (WireAction)
+import Game.GameEvent exposing (GameEvent)
 import Main.Types exposing (GesturePoint, Point)
 
 
@@ -47,7 +47,7 @@ The empty-path case (a path with no samples) collapses to
 -}
 type Step
     = InProgress { floaterTopLeft : Point }
-    | Done { pendingAction : WireAction }
+    | Done { pendingAction : GameEvent }
 
 
 {-| Advance the animation one step. Pure function of (clock
@@ -69,7 +69,7 @@ step :
         { a
             | startMs : Float
             , path : List GesturePoint
-            , pendingAction : WireAction
+            , pendingAction : GameEvent
         }
     -> Step
 step nowMs anim =

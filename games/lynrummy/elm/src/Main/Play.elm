@@ -33,7 +33,7 @@ import Game.PlayerTurn exposing (CompleteTurnResult(..))
 import Game.Random as Random
 import Game.Replay.Time as ReplayTime
 import Game.Score as Score
-import Game.WireAction as WA
+import Game.GameEvent as GameEvent exposing (GameEvent)
 import Html exposing (Html)
 import Http
 import Json.Decode as Decode exposing (Decoder)
@@ -305,7 +305,7 @@ clickCompleteTurn model =
                     model.nextSeq
 
                 completeTurnEntry =
-                    { action = WA.CompleteTurn
+                    { action = GameEvent.CompleteTurn
                     , gesturePath = Nothing
                     , pathFrame = ViewportFrame
                     }
@@ -322,7 +322,7 @@ clickCompleteTurn model =
                 persistCmd =
                     case model.sessionId of
                         Just sid ->
-                            Wire.sendAction sid seq WA.CompleteTurn Nothing
+                            Wire.sendAction sid seq GameEvent.CompleteTurn Nothing
 
                         Nothing ->
                             Cmd.none
@@ -345,7 +345,7 @@ clickUndo model =
                     Reducer.undoAction lastAction pre
 
                 undoEntry =
-                    { action = WA.Undo
+                    { action = GameEvent.Undo
                     , gesturePath = Nothing
                     , pathFrame = ViewportFrame
                     }
@@ -355,10 +355,10 @@ clickUndo model =
 
                 cardsAdjust =
                     case lastAction of
-                        WA.MergeHand _ ->
+                        GameEvent.MergeHand _ ->
                             -1
 
-                        WA.PlaceHand _ ->
+                        GameEvent.PlaceHand _ ->
                             -1
 
                         _ ->
@@ -382,7 +382,7 @@ clickUndo model =
                 persistCmd =
                     case model.sessionId of
                         Just sid ->
-                            Wire.sendAction sid seq WA.Undo Nothing
+                            Wire.sendAction sid seq GameEvent.Undo Nothing
 
                         Nothing ->
                             Cmd.none
@@ -390,7 +390,7 @@ clickUndo model =
             ( newModel, persistCmd )
 
 
-lastUndoableAction : Model -> Maybe WA.WireAction
+lastUndoableAction : Model -> Maybe GameEvent
 lastUndoableAction model =
     case List.reverse (collapseUndos model.actionLog) of
         [] ->
@@ -398,7 +398,7 @@ lastUndoableAction model =
 
         last :: _ ->
             case last.action of
-                WA.CompleteTurn ->
+                GameEvent.CompleteTurn ->
                     Nothing
 
                 _ ->

@@ -44,7 +44,7 @@ import Game.Replay.AnimatePlaceHand as AnimatePlaceHand
 import Game.Replay.DragAnimation as DragAnimation
 import Game.Replay.Space as Space
 import Game.Score as Score
-import Game.WireAction as WA exposing (WireAction)
+import Game.GameEvent as GameEvent exposing (GameEvent)
 import Main.Apply as Apply
 import Main.Msg exposing (Msg(..))
 import Main.State as State
@@ -263,7 +263,7 @@ path). The decision tree:
 
 -}
 prepareReplayStep :
-    WireAction
+    GameEvent
     -> Maybe (List GesturePoint)
     -> Model
     -> Float
@@ -457,10 +457,10 @@ every primitive, whether it came from a captured human drag
 or from an agent program — Replay is the runtime, the source
 of the action doesn't change the timing budget.
 -}
-beatAfter : WireAction -> Float
+beatAfter : GameEvent -> Float
 beatAfter action =
     case action of
-        WA.CompleteTurn ->
+        GameEvent.CompleteTurn ->
             2500
 
         _ ->
@@ -478,14 +478,14 @@ measurement path or `applyImmediate`. One branch per
 synchronous board-drag primitive.
 -}
 startBoardAnim :
-    WireAction
+    GameEvent
     -> List GesturePoint
     -> Model
     -> Float
     -> Maybe Space.AnimationInfo
 startBoardAnim action path model nowMs =
     case action of
-        WA.Split _ ->
+        GameEvent.Split _ ->
             -- Splits are CLICKS in the live UI — a single event
             -- producing a single redraw. The server's
             -- requiresGestureMetadata gate forces a gesture path
@@ -496,10 +496,10 @@ startBoardAnim action path model nowMs =
             -- Nothing drops the action into `applyImmediate`.
             Nothing
 
-        WA.MergeStack payload ->
+        GameEvent.MergeStack payload ->
             AnimateMergeStack.start payload path model nowMs
 
-        WA.MoveStack payload ->
+        GameEvent.MoveStack payload ->
             AnimateMoveStack.start payload path model nowMs
 
         _ ->
@@ -511,14 +511,14 @@ the matching per-primitive Animate module. Nothing means the
 action isn't hand-origin (shouldn't reach this helper) or the
 hand card can't be resolved on the current model.
 -}
-prepareHandAnim : WireAction -> Model -> Maybe HandPrepareResult
+prepareHandAnim : GameEvent -> Model -> Maybe HandPrepareResult
 prepareHandAnim action model =
     case action of
-        WA.MergeHand payload ->
+        GameEvent.MergeHand payload ->
             AnimateMergeHand.prepare payload model
                 |> Maybe.map (\r -> { handCardToMeasure = r.handCardToMeasure })
 
-        WA.PlaceHand payload ->
+        GameEvent.PlaceHand payload ->
             AnimatePlaceHand.prepare payload model
                 |> Maybe.map (\r -> { handCardToMeasure = r.handCardToMeasure })
 
@@ -540,17 +540,17 @@ build the AnimationInfo; source identity is derived from the
 action (the `handCard` field on MergeHand/PlaceHand).
 -}
 finishHandAnim :
-    WireAction
+    GameEvent
     -> Point
     -> Float
     -> Model
     -> Maybe Space.AnimationInfo
 finishHandAnim action origin nowMs model =
     case action of
-        WA.MergeHand payload ->
+        GameEvent.MergeHand payload ->
             AnimateMergeHand.finish payload origin nowMs model
 
-        WA.PlaceHand payload ->
+        GameEvent.PlaceHand payload ->
             AnimatePlaceHand.finish payload origin nowMs model
 
         _ ->

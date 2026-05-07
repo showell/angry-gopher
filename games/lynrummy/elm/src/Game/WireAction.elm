@@ -1,46 +1,30 @@
 module Game.WireAction exposing
-    ( WireAction(..)
-    , decoder
+    ( decoder
     , encode
     )
 
-{-| Action-shaped wire format for the Lyn Rummy port. Each
-value of `WireAction` names a thing the player did, rather
-than the mechanical diff that resulted. Receiver derives the
-post-state by applying the action to the known prior state.
-
-Stacks are referenced by their **full ordered card list**
-(`cards`, `source_cards`, `target_cards`), not by positional
-index. Cards are globally unique in the double deck, so a card
-list identifies a stack unambiguously AND stays stable under
-the reducer's reordering.
+{-| Wire encoder/decoder for `Game.GameEvent.GameEvent`. The
+type itself lives in `Game.GameEvent`; this module is the
+serialization layer that ships events over the HTTP boundary
+to the server's append-only action log.
 
 -}
 
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode exposing (Value)
 import Game.BoardActions exposing (Side(..))
-import Game.Rules.Card as Card exposing (Card)
-import Game.CardStack exposing (BoardLocation, CardStack, boardLocationDecoder, cardStackDecoder, encodeBoardLocation, encodeCardStack)
-
-
-type WireAction
-    = Split { stack : CardStack, cardIndex : Int }
-    | MergeStack { source : CardStack, target : CardStack, side : Side }
-    | MergeHand { handCard : Card, target : CardStack, side : Side }
-    | PlaceHand { handCard : Card, loc : BoardLocation }
-    | MoveStack { stack : CardStack, newLoc : BoardLocation }
-    | CompleteTurn
-    | Undo
+import Game.GameEvent exposing (GameEvent(..))
+import Game.Rules.Card as Card
+import Game.CardStack exposing (boardLocationDecoder, cardStackDecoder, encodeBoardLocation, encodeCardStack)
 
 
 
 -- ENCODE
 
 
-encode : WireAction -> Value
-encode action =
-    case action of
+encode : GameEvent -> Value
+encode event =
+    case event of
         Split p ->
             Encode.object
                 [ ( "action", Encode.string "split" )
@@ -99,13 +83,13 @@ encodeSide side =
 -- DECODE
 
 
-decoder : Decoder WireAction
+decoder : Decoder GameEvent
 decoder =
     Decode.field "action" Decode.string
         |> Decode.andThen decoderForAction
 
 
-decoderForAction : String -> Decoder WireAction
+decoderForAction : String -> Decoder GameEvent
 decoderForAction kind =
     case kind of
         "split" ->

@@ -40,7 +40,7 @@ import Game.Dealer
 import Game.Physics.GestureArbitration as GA
 import Game.Hand as Hand exposing (Hand)
 import Game.Score as Score
-import Game.WireAction exposing (WireAction(..))
+import Game.GameEvent exposing (GameEvent(..))
 import Json.Encode as Encode exposing (Value)
 import Main.Types exposing (GesturePoint, PathFrame)
 import Main.Util exposing (listAt)
@@ -174,11 +174,11 @@ type ReplayAnimationState
     | Animating
         { startMs : Float
         , path : List GesturePoint
-        , pendingAction : WireAction
+        , pendingAction : GameEvent
         }
     | Beating { untilMs : Float }
     | PreRolling { untilMs : Float }
-    | AwaitingHandRect { action : WireAction }
+    | AwaitingHandRect { action : GameEvent }
 
 
 {-| Cheapest-possible popup for turn-boundary ceremony. One
@@ -316,7 +316,7 @@ type alias ActionLogBundle =
 
 
 type alias ActionLogEntry =
-    { action : WireAction
+    { action : GameEvent
     , gesturePath : Maybe (List GesturePoint)
     , pathFrame : PathFrame
     }

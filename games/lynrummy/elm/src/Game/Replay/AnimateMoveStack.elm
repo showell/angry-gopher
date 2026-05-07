@@ -6,7 +6,7 @@ present (server-enforced), so synchronous — no DOM measure.
 
 import Game.CardStack exposing (CardStack, BoardLocation)
 import Game.Replay.Space as Space
-import Game.WireAction as WA
+import Game.GameEvent as GameEvent
 import Main.State exposing (Model)
 import Main.Types exposing (GesturePoint)
 
@@ -24,6 +24,6 @@ start payload path model nowMs =
                 { startMs = nowMs
                 , path = path
                 , source = source
-                , pendingAction = WA.MoveStack payload
+                , pendingAction = GameEvent.MoveStack payload
                 }
             )

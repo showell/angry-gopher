@@ -22,7 +22,8 @@ turn outcomes, just appends the body as one line of
 import Game.Rules.Card as Card
 import Game.CardStack as CardStack
 import Game.Hand exposing (Hand)
-import Game.WireAction as WA exposing (WireAction)
+import Game.GameEvent exposing (GameEvent)
+import Game.WireAction as WA
 import Http
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode exposing (Value)
@@ -86,7 +87,7 @@ the namespacing surface.
 sendAction :
     Int
     -> Int
-    -> WireAction
+    -> GameEvent
     -> Maybe EnvelopeForGesture
     -> Cmd Msg
 sendAction sessionId seq action maybeGesture =
@@ -123,7 +124,7 @@ in (HTTP responses don't gate Elm's send loop, so reading order
 on disk is the only post-hoc record). Puzzle attribution is
 URL-borne (see `sendAction`).
 -}
-encodeEnvelope : Int -> WireAction -> Maybe EnvelopeForGesture -> Value
+encodeEnvelope : Int -> GameEvent -> Maybe EnvelopeForGesture -> Value
 encodeEnvelope seq action maybeGesture =
     let
         baseFields =

@@ -20,7 +20,7 @@ import Game.HandDrag exposing (HandCardDragInfo)
 import Game.Physics.BoardGeometry as BG
 import Game.Physics.GestureArbitration as GA
 import Game.WingView as WingView
-import Game.WireAction as WA exposing (WireAction)
+import Game.GameEvent exposing (GameEvent(..))
 import Main.Apply as Apply
 import Main.Msg exposing (Msg)
 import Main.State as State
@@ -33,7 +33,7 @@ import Main.Wire as Wire
 
 
 type HandOutcome
-    = HandAction WireAction
+    = HandAction GameEvent
     | HandOffBoard State.StatusMessage
     | HandNothingHappened
 
@@ -138,7 +138,7 @@ the wing-hover hit-test (lifting board-frame eventual landings
 into viewport frame) and the drop-loc translation. With no rect
 yet, no honest action is possible — return Nothing.
 -}
-resolveHandCardGesture : HandCardDragInfo -> Maybe GA.Rect -> Maybe WireAction
+resolveHandCardGesture : HandCardDragInfo -> Maybe GA.Rect -> Maybe GameEvent
 resolveHandCardGesture d maybeRect =
     case maybeRect of
         Nothing ->
@@ -157,7 +157,7 @@ resolveHandCardGesture d maybeRect =
             case hovered of
                 Just wing ->
                     Just
-                        (WA.MergeHand
+                        (MergeHand
                             { handCard = d.card
                             , target = wing.target
                             , side = wing.side
@@ -167,7 +167,7 @@ resolveHandCardGesture d maybeRect =
                 Nothing ->
                     if GA.isCursorInRect d.cursor rect then
                         if isDropFootprintInBounds 1 floaterBoardLoc then
-                            Just (WA.PlaceHand { handCard = d.card, loc = floaterBoardLoc })
+                            Just (PlaceHand { handCard = d.card, loc = floaterBoardLoc })
 
                         else
                             Nothing

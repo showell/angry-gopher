@@ -8,7 +8,7 @@ module Main.Gesture exposing
     )
 
 {-| The pointer-gesture layer: everything between a physical
-mousedown and the WireAction it produces.
+mousedown and the GameEvent it produces.
 
 Responsibilities:
 
@@ -22,7 +22,7 @@ Responsibilities:
     and `MouseUp` back into update; the cursor tracking is a
     one-liner inline there.
   - **End drag** — `handleMouseUp` resolves the gesture into a
-    `Maybe WireAction`, clears the drag state, applies the
+    `Maybe GameEvent`, clears the drag state, applies the
     action through `Main.Apply.applyAction`, appends to
     `actionLog`, and fires `Main.Wire.sendAction` for
     persistence.
@@ -173,7 +173,7 @@ fetchBoardRect gameId =
 -- DRAG END
 
 
-{-| Handle MouseUp. Resolves the drag into a `Maybe WireAction`,
+{-| Handle MouseUp. Resolves the drag into a `Maybe GameEvent`,
 clears the drag state, applies the action through
 `Main.Apply.applyAction`, appends to actionLog, and fires
 `sendAction` for persistence. If no sessionId is set (offline

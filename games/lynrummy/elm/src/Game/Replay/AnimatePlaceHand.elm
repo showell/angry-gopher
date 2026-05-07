@@ -14,7 +14,7 @@ target endpoint (PlaceHand uses the payload's explicit `loc`).
 import Game.Rules.Card exposing (Card)
 import Game.CardStack exposing (BoardLocation)
 import Game.Replay.Space as Space
-import Game.WireAction as WA
+import Game.GameEvent as GameEvent
 import Main.State exposing (Model)
 import Main.Types exposing (Point)
 
@@ -62,6 +62,6 @@ finish payload origin nowMs model =
                         { startMs = nowMs
                         , path = Space.linearPath origin target nowMs
                         , source = source
-                        , pendingAction = WA.PlaceHand payload
+                        , pendingAction = GameEvent.PlaceHand payload
                         }
                     )

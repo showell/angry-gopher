@@ -34,7 +34,7 @@ import Game.Game as Game
 import Game.Reducer as Reducer
 import Game.Score as Score
 import Game.Rules.StackType as StackType
-import Game.WireAction as WA exposing (WireAction)
+import Game.GameEvent exposing (GameEvent(..))
 import Main.State
     exposing
         ( ActionOutcome
@@ -63,7 +63,7 @@ refereeBounds =
 -- APPLY ACTION
 
 
-{-| Apply a validated WireAction to the Model. Exhaustive
+{-| Apply a validated GameEvent to the Model. Exhaustive
 dispatch over the seven variants. Each branch returns an
 `ActionOutcome` — the new Model plus the status message that
 describes the outcome — generated at the point of mutation.
@@ -85,10 +85,10 @@ The physics branches all share `applyPhysics`: delegate the
 the result back through the Model.
 
 -}
-applyAction : WireAction -> Model -> ActionOutcome
+applyAction : GameEvent -> Model -> ActionOutcome
 applyAction action model =
     case action of
-        WA.Split _ ->
+        Split _ ->
             let
                 next =
                     applyPhysics action model
@@ -97,7 +97,7 @@ applyAction action model =
             , status = withTidinessOverlay model next splitStatus
             }
 
-        WA.MergeStack _ ->
+        MergeStack _ ->
             let
                 next =
                     applyPhysics action model
@@ -106,7 +106,7 @@ applyAction action model =
             , status = withTidinessOverlay model next (mergeStatus next)
             }
 
-        WA.MergeHand _ ->
+        MergeHand _ ->
             let
                 next =
                     applyPhysics action model |> Game.noteCardsPlayed 1
@@ -115,7 +115,7 @@ applyAction action model =
             , status = withTidinessOverlay model next (mergeStatus next)
             }
 
-        WA.PlaceHand _ ->
+        PlaceHand _ ->
             let
                 next =
                     applyPhysics action model |> Game.noteCardsPlayed 1
@@ -124,7 +124,7 @@ applyAction action model =
             , status = withTidinessOverlay model next placeHandStatus
             }
 
-        WA.MoveStack _ ->
+        MoveStack _ ->
             let
                 next =
                     applyPhysics action model
@@ -133,10 +133,10 @@ applyAction action model =
             , status = withTidinessOverlay model next moveStackStatus
             }
 
-        WA.CompleteTurn ->
+        CompleteTurn ->
             applyCompleteTurn model
 
-        WA.Undo ->
+        Undo ->
             { model = model, status = undoStatus }
 
 
@@ -154,7 +154,7 @@ here with `post` equal to the input `pre`, so the writes are
 idempotent — same board, same hand, same score.
 
 -}
-applyPhysics : WireAction -> Model -> Model
+applyPhysics : GameEvent -> Model -> Model
 applyPhysics action model =
     let
         pre =
@@ -190,28 +190,28 @@ applyPhysics action model =
         }
 
 
-wireActionLabel : WireAction -> String
+wireActionLabel : GameEvent -> String
 wireActionLabel action =
     case action of
-        WA.Split _ ->
+        Split _ ->
             "split"
 
-        WA.MergeStack _ ->
+        MergeStack _ ->
             "merge_stack"
 
-        WA.MergeHand _ ->
+        MergeHand _ ->
             "merge_hand"
 
-        WA.PlaceHand _ ->
+        PlaceHand _ ->
             "place_hand"
 
-        WA.MoveStack _ ->
+        MoveStack _ ->
             "move_stack"
 
-        WA.CompleteTurn ->
+        CompleteTurn ->
             "complete_turn"
 
-        WA.Undo ->
+        Undo ->
             "undo"
 
 
