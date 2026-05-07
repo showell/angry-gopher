@@ -277,24 +277,6 @@ mouseMove pos tMs model =
             ( model, Cmd.none )
 
 
-hoverStatus :
-    Maybe a
-    -> Maybe a
-    -> StatusMessage
-    -> StatusMessage
-hoverStatus currentHover nextHover currentStatus =
-    if nextHover /= currentHover then
-        case nextHover of
-            Just _ ->
-                Gesture.wingHoverStatus
-
-            Nothing ->
-                currentStatus
-
-    else
-        currentStatus
-
-
 clickCompleteTurn : Model -> ( Model, Cmd Msg )
 clickCompleteTurn model =
     let

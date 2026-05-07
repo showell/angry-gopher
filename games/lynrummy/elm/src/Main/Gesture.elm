@@ -5,7 +5,6 @@ module Main.Gesture exposing
     , pointDecoder
     , startBoardCardDrag
     , startHandDrag
-    , wingHoverStatus
     )
 
 {-| The pointer-gesture layer: everything between a physical
@@ -193,14 +192,6 @@ handleMouseUp releasePoint tMs model =
         DraggingHandCard d ->
             HandGesture.handleMouseUp releasePoint tMs d model
 
-
-
-{-| Status message to show while hovering a wing (a drop here
-would fire a merge).
--}
-wingHoverStatus : State.StatusMessage
-wingHoverStatus =
-    { text = "Drop stack to complete merge.", kind = Inform }
 
 
 
