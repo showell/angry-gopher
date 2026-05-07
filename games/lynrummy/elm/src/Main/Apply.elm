@@ -1,6 +1,5 @@
 module Main.Apply exposing
     ( applyAction
-    , commit
     , geometryFeedback
     , mergeStatus
     , refereeBounds
@@ -234,25 +233,6 @@ applyCompleteTurn model =
         , kind = Celebrate
         }
     }
-
-
-
--- OUTCOME CONSUMPTION
-
-
-{-| Collapse an `ActionOutcome` to a Model by writing the
-outcome's status into the Model's status field. The standard
-way human-driven callers "accept" an outcome. Replay callers,
-which want to keep their own status text ("Replaying…"), skip
-this and take `outcome.model` directly.
--}
-commit : ActionOutcome -> Model
-commit outcome =
-    let
-        m =
-            outcome.model
-    in
-    { m | status = outcome.status }
 
 
 

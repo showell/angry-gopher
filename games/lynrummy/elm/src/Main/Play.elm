@@ -626,46 +626,6 @@ handleMouseUpHand releasePoint d model =
             ( outcome, Cmd.none )
 
 
-{-| Apply a player action through the engine, append the
-action-log entry, advance `nextSeq`. The wire send is a
-separate concern fired at the dispatch site in
-`handleMouseUp` — this function returns just the new model.
-`maybeEnvelope` is `Just` for board drags (which capture a
-path) and `Nothing` for hand drags / Split clicks; it shapes
-the entry's `gesturePath` / `pathFrame` for replay.
--}
-applyMouseUpAction :
-    GameEvent
-    -> Maybe State.EnvelopeForGesture
-    -> Model
-    -> Model
-applyMouseUpAction event maybeEnvelope model =
-    let
-        modelAfter =
-            Apply.applyAction event model
-                |> Apply.commit
-    in
-    case modelAfter.sessionId of
-        Just _ ->
-            let
-                entry =
-                    { action = event
-                    , gesturePath = Maybe.map .path maybeEnvelope
-                    , pathFrame =
-                        maybeEnvelope
-                            |> Maybe.map .frame
-                            |> Maybe.withDefault ViewportFrame
-                    }
-            in
-            { modelAfter
-                | actionLog = modelAfter.actionLog ++ [ entry ]
-                , nextSeq = modelAfter.nextSeq + 1
-            }
-
-        Nothing ->
-            modelAfter
-
-
 offBoardScold : StatusMessage
 offBoardScold =
     { text = "Don't knock cards off the board, please. You're not a cat!"
