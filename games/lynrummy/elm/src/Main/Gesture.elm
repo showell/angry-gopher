@@ -1,7 +1,6 @@
 module Main.Gesture exposing
     ( cardMouseDown
     , handCardAttrs
-    , handleMouseUp
     , pointDecoder
     , startBoardCardDrag
     , startHandDrag
@@ -21,11 +20,12 @@ Responsibilities:
     `onMouseUp` subscriptions in `Main.Play` feed `MouseMove`
     and `MouseUp` back into update; the cursor tracking is a
     one-liner inline there.
-  - **End drag** — `handleMouseUp` resolves the gesture into a
-    `Maybe GameEvent`, clears the drag state, applies the
-    action through `Main.Apply.applyAction`, appends to
-    `actionLog`, and fires `Main.Wire.sendAction` for
-    persistence.
+  - **End drag** — handled by `Main.Play.update` directly: it
+    pattern matches on `model.drag` and calls
+    `Game.BoardGesture.handleMouseUp` /
+    `Game.HandGesture.handleMouseUp` for the per-side
+    resolution, then dispatches on the returned variant to
+    apply / scold / no-op.
   - **Styling hooks** — `handCardAttrs` / `cardMouseDown`
     produce per-card event-handler/style attributes.
   - **Decoder** — `pointDecoder` pulls `{clientX, clientY}` from
@@ -44,9 +44,7 @@ answered exactly once, at mouseup, as an outcome judgment.
 -}
 
 import Browser.Dom
-import Game.BoardGesture as BoardGesture
 import Game.Drag exposing (DragState(..))
-import Game.HandGesture as HandGesture
 import Game.Physics.WingOracle as WingOracle
 import Game.Rules.Card exposing (Card)
 import Game.CardStack as CardStack exposing (CardStack, HandCard)
@@ -167,30 +165,6 @@ fetchBoardRect : String -> Cmd Msg
 fetchBoardRect gameId =
     Browser.Dom.getElement (boardDomIdFor gameId)
         |> Task.attempt BoardRectReceived
-
-
-
--- DRAG END
-
-
-{-| Handle MouseUp. Resolves the drag into a `Maybe GameEvent`,
-clears the drag state, applies the action through
-`Main.Apply.applyAction`, appends to actionLog, and fires
-`sendAction` for persistence. If no sessionId is set (offline
-mode) the persistence step is skipped.
--}
-handleMouseUp : Point -> Float -> Model -> ( Model, Cmd Msg )
-handleMouseUp releasePoint tMs model =
-    case model.drag of
-        NotDragging ->
-            ( model, Cmd.none )
-
-        DraggingBoardCard d ->
-            BoardGesture.handleMouseUp releasePoint tMs d model
-
-        DraggingHandCard d ->
-            HandGesture.handleMouseUp releasePoint d model
-
 
 
 

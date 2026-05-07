@@ -38,11 +38,10 @@ import Html exposing (Html)
 import Http
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
-import Main.Apply exposing (applyAction, refereeBounds)
+import Main.Apply as Apply exposing (applyAction, refereeBounds)
 import Main.Gesture
     exposing
-        ( handleMouseUp
-        , pointDecoder
+        ( pointDecoder
         , startBoardCardDrag
         , startHandDrag
         )
@@ -282,6 +281,114 @@ mouseMove pos tMs model =
 
         NotDragging ->
             model
+
+
+{-| Resolve a mouseup against the current drag and dispatch on
+the per-side outcome variant. Action variants are translated
+into `GameEvent` and fed through `Apply.applyAction` +
+`Wire.sendAction`; off-board variants render the scold;
+`HandNothing` is the rect-not-measured race (silent no-op).
+
+Both the per-side variants (`BoardGesture.X`) and the
+`GameEvent.X` constructors are referenced qualified — at the
+seam between gesture-resolution and engine-application, naming
+the source side helps the dispatch read.
+-}
+handleMouseUp : Point -> Float -> Model -> ( Model, Cmd Msg )
+handleMouseUp releasePoint tMs model =
+    let
+        cleared =
+            { model | drag = NotDragging }
+    in
+    case model.drag of
+        NotDragging ->
+            ( model, Cmd.none )
+
+        DraggingBoardCard d ->
+            case BoardGesture.handleMouseUp releasePoint tMs d model.boardRect of
+                BoardGesture.Split p ->
+                    applyMouseUpAction
+                        (GameEvent.Split { stack = p.stack, cardIndex = p.cardIndex })
+                        Nothing
+                        cleared
+
+                BoardGesture.MergeStack p ->
+                    applyMouseUpAction
+                        (GameEvent.MergeStack { source = p.source, target = p.target, side = p.side })
+                        (Just p.envelope)
+                        cleared
+
+                BoardGesture.MoveStack p ->
+                    applyMouseUpAction
+                        (GameEvent.MoveStack { stack = p.stack, newLoc = p.newLoc })
+                        (Just p.envelope)
+                        cleared
+
+                BoardGesture.BoardCardOffBoard ->
+                    ( { cleared | status = offBoardScold }, Cmd.none )
+
+        DraggingHandCard d ->
+            case HandGesture.handleMouseUp releasePoint d model.boardRect of
+                HandGesture.MergeHand p ->
+                    applyMouseUpAction (GameEvent.MergeHand p) Nothing cleared
+
+                HandGesture.PlaceHand p ->
+                    applyMouseUpAction (GameEvent.PlaceHand p) Nothing cleared
+
+                HandGesture.HandCardOffBoard ->
+                    ( { cleared | status = offBoardScold }, Cmd.none )
+
+                HandGesture.HandNothing ->
+                    ( cleared, Cmd.none )
+
+
+{-| Apply a player action: feed it through the engine, append
+to the action log, fire `Wire.sendAction` if a session id is
+set. `maybeEnvelope` is `Just` for board drags (which capture
+a path) and `Nothing` for hand drags / Split clicks.
+-}
+applyMouseUpAction :
+    GameEvent
+    -> Maybe State.EnvelopeForGesture
+    -> Model
+    -> ( Model, Cmd Msg )
+applyMouseUpAction event maybeEnvelope cleared =
+    let
+        modelAfter =
+            Apply.applyAction event cleared
+                |> Apply.commit
+    in
+    case modelAfter.sessionId of
+        Just sid ->
+            let
+                entry =
+                    { action = event
+                    , gesturePath = Maybe.map .path maybeEnvelope
+                    , pathFrame =
+                        maybeEnvelope
+                            |> Maybe.map .frame
+                            |> Maybe.withDefault ViewportFrame
+                    }
+
+                seq =
+                    modelAfter.nextSeq
+            in
+            ( { modelAfter
+                | actionLog = modelAfter.actionLog ++ [ entry ]
+                , nextSeq = seq + 1
+              }
+            , Wire.sendAction sid seq event maybeEnvelope
+            )
+
+        Nothing ->
+            ( modelAfter, Cmd.none )
+
+
+offBoardScold : StatusMessage
+offBoardScold =
+    { text = "Don't knock cards off the board, please. You're not a cat!"
+    , kind = Scold
+    }
 
 
 clickCompleteTurn : Model -> ( Model, Cmd Msg )

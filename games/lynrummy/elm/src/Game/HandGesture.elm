@@ -5,42 +5,36 @@ module Game.HandGesture exposing
     , resolveHandCardGesture
     )
 
-{-| Per-side resolution and application for hand-card drags.
+{-| Per-side resolution for hand-card mouseup gestures.
 Symmetric to `Game.BoardGesture`. Hand-origin actions ship
-pathless (replay re-synthesizes via DOM), so `HandAction`
-carries no envelope.
+pathless (replay re-synthesizes via DOM), so the action
+variants carry no envelope.
 
-The shared small helpers are duplicated per-side rather than
-shared via Maybe-flagged helpers.
+`handleMouseUp` returns a `HandMouseUp` value that flows up to
+`Main.Play.update` for dispatch.
 
 -}
 
 import Game.BoardActions exposing (Side)
 import Game.CardStack as CardStack exposing (BoardLocation, CardStack)
-import Game.Drag exposing (DragState(..))
 import Game.HandDrag exposing (HandCardDragInfo)
 import Game.Physics.BoardGeometry as BG
 import Game.Physics.GestureArbitration as GA
 import Game.Rules.Card exposing (Card)
 import Game.WingView as WingView
-import Game.GameEvent as GameEvent exposing (GameEvent)
 import Main.Apply as Apply
-import Main.Msg exposing (Msg)
 import Main.State as State
-    exposing
-        ( Model
-        , StatusKind(..)
-        )
-import Main.Types exposing (PathFrame(..), Point)
-import Main.Wire as Wire
+import Main.Types exposing (Point)
 
 
-{-| Result of resolving a hand-card mouseup. Action variants
-carry the same payloads as their `GameEvent` cousins; update in
-`Main.Play` translates and feeds them to `Apply.applyAction`.
-`HandCardOffBoard` is the scold case; `HandNothing` is the no-op.
-Mirror of `BoardGesture.BoardMouseUp`, minus the gesture-path
-envelope (hand actions ship pathless).
+{-| Result of resolving a hand-card mouseup. `MergeHand` and
+`PlaceHand` carry the same payloads as their `GameEvent`
+cousins; update in `Main.Play` translates and feeds them to
+`Apply.applyAction`. `HandCardOffBoard` is the scold case.
+`HandNothing` covers the rect-not-measured race (the user
+released before `BoardRectReceived` arrived) — drop is not
+geometrically interpretable yet. Mirror of
+`BoardGesture.BoardMouseUp`, minus the envelope.
 -}
 type HandMouseUp
     = MergeHand { handCard : Card, target : CardStack, side : Side }
@@ -49,19 +43,14 @@ type HandMouseUp
     | HandNothing
 
 
-type HandOutcome
-    = HandAction GameEvent
-    | HandOffBoard State.StatusMessage
-    | HandNothingHappened
-
-
-{-| Mouseup handler for a hand-card drag. Caller (the
-dispatcher in `Main.Gesture`) has pattern-matched out the
-`Info` and passes it in. Hand drags don't capture a gesture
-path, so no `tMs`.
+{-| Mouseup handler for a hand-card drag. Caller has
+pattern-matched out the `HandCardDragInfo` and passes it in
+along with the live board rect. Hand drags don't capture a
+gesture path, so no `tMs` parameter. Returns a `HandMouseUp`
+that the caller dispatches on.
 -}
-handleMouseUp : Point -> HandCardDragInfo -> Model -> ( Model, Cmd Msg )
-handleMouseUp releasePoint d model =
+handleMouseUp : Point -> HandCardDragInfo -> Maybe GA.Rect -> HandMouseUp
+handleMouseUp releasePoint d maybeRect =
     let
         delta =
             { x = releasePoint.x - d.cursor.x
@@ -79,75 +68,27 @@ handleMouseUp releasePoint d model =
                 , floaterTopLeft = releaseFloater
             }
     in
-    applyHandOutcome (resolveHandOutcome dFull model.boardRect) model
-
-
-resolveHandOutcome : HandCardDragInfo -> Maybe GA.Rect -> HandOutcome
-resolveHandOutcome d maybeRect =
-    case resolveHandCardGesture d maybeRect of
-        Just action ->
-            HandAction action
+    case resolveHandCardGesture dFull maybeRect of
+        Just outcome ->
+            outcome
 
         Nothing ->
             case maybeRect of
                 Just rect ->
                     let
                         floaterBoardLoc =
-                            { left = d.floaterTopLeft.x - rect.x
-                            , top = d.floaterTopLeft.y - rect.y
+                            { left = dFull.floaterTopLeft.x - rect.x
+                            , top = dFull.floaterTopLeft.y - rect.y
                             }
                     in
-                    case droppedOffBoardScold floaterBoardLoc 1 of
-                        Just scold ->
-                            HandOffBoard scold
+                    if isDropFootprintInBounds 1 floaterBoardLoc then
+                        HandNothing
 
-                        Nothing ->
-                            HandNothingHappened
-
-                Nothing ->
-                    HandNothingHappened
-
-
-applyHandOutcome : HandOutcome -> Model -> ( Model, Cmd Msg )
-applyHandOutcome outcome model =
-    let
-        cleared =
-            clearDrag model
-    in
-    case outcome of
-        HandAction action ->
-            let
-                modelAfter =
-                    Apply.applyAction action cleared
-                        |> Apply.commit
-            in
-            case modelAfter.sessionId of
-                Just sid ->
-                    let
-                        entry =
-                            { action = action
-                            , gesturePath = Nothing
-                            , pathFrame = ViewportFrame
-                            }
-
-                        seq =
-                            modelAfter.nextSeq
-                    in
-                    ( { modelAfter
-                        | actionLog = modelAfter.actionLog ++ [ entry ]
-                        , nextSeq = seq + 1
-                      }
-                    , Wire.sendAction sid seq action Nothing
-                    )
+                    else
+                        HandCardOffBoard
 
                 Nothing ->
-                    ( modelAfter, Cmd.none )
-
-        HandOffBoard scold ->
-            ( { cleared | status = scold }, Cmd.none )
-
-        HandNothingHappened ->
-            ( cleared, Cmd.none )
+                    HandNothing
 
 
 {-| Hand-card resolution requires the live board rect for both
@@ -155,7 +96,7 @@ the wing-hover hit-test (lifting board-frame eventual landings
 into viewport frame) and the drop-loc translation. With no rect
 yet, no honest action is possible — return Nothing.
 -}
-resolveHandCardGesture : HandCardDragInfo -> Maybe GA.Rect -> Maybe GameEvent
+resolveHandCardGesture : HandCardDragInfo -> Maybe GA.Rect -> Maybe HandMouseUp
 resolveHandCardGesture d maybeRect =
     case maybeRect of
         Nothing ->
@@ -174,7 +115,7 @@ resolveHandCardGesture d maybeRect =
             case hovered of
                 Just wing ->
                     Just
-                        (GameEvent.MergeHand
+                        (MergeHand
                             { handCard = d.card
                             , target = wing.target
                             , side = wing.side
@@ -184,7 +125,7 @@ resolveHandCardGesture d maybeRect =
                 Nothing ->
                     if GA.isCursorInRect d.cursor rect then
                         if isDropFootprintInBounds 1 floaterBoardLoc then
-                            Just (GameEvent.PlaceHand { handCard = d.card, loc = floaterBoardLoc })
+                            Just (PlaceHand { handCard = d.card, loc = floaterBoardLoc })
 
                         else
                             Nothing
@@ -270,7 +211,7 @@ hoverStatus currentHover nextHover currentStatus =
 
 wingHoverStatus : State.StatusMessage
 wingHoverStatus =
-    { text = "Drop stack to complete merge.", kind = Inform }
+    { text = "Drop stack to complete merge.", kind = State.Inform }
 
 
 isDropFootprintInBounds : Int -> BoardLocation -> Bool
@@ -283,24 +224,3 @@ isDropFootprintInBounds cardCount loc =
         && (loc.top >= 0)
         && (loc.left + BG.stackWidth cardCount <= bounds.maxWidth)
         && (loc.top + BG.cardHeight <= bounds.maxHeight)
-
-
-droppedOffBoardScold : BoardLocation -> Int -> Maybe State.StatusMessage
-droppedOffBoardScold loc cardCount =
-    if not (isDropFootprintInBounds cardCount loc) then
-        Just offBoardScold
-
-    else
-        Nothing
-
-
-offBoardScold : State.StatusMessage
-offBoardScold =
-    { text = "Don't knock cards off the board, please. You're not a cat!"
-    , kind = Scold
-    }
-
-
-clearDrag : Model -> Model
-clearDrag model =
-    { model | drag = NotDragging }
