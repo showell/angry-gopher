@@ -1434,8 +1434,8 @@ func elmFloaterTopLeft(b *strings.Builder, sc Scenario) {
 		b.WriteString(ind + "case ( afterDown.drag, afterMove.drag ) of\n")
 		b.WriteString(ind + "    ( DraggingBoardCard before, DraggingBoardCard after ) ->\n")
 		b.WriteString(ind + "        Expect.equal\n")
-		b.WriteString(ind + "            { x = before.floaterTopLeft.x + delta.x\n")
-		b.WriteString(ind + "            , y = before.floaterTopLeft.y + delta.y\n")
+		b.WriteString(ind + "            { left = before.floaterTopLeft.left + delta.x\n")
+		b.WriteString(ind + "            , top = before.floaterTopLeft.top + delta.y\n")
 		b.WriteString(ind + "            }\n")
 		b.WriteString(ind + "            after.floaterTopLeft\n")
 		b.WriteString(ind + "\n")
@@ -1474,8 +1474,8 @@ func elmFloaterTopLeft(b *strings.Builder, sc Scenario) {
 		b.WriteString(ind + "        case ( afterDown.drag, afterMove.drag ) of\n")
 		b.WriteString(ind + "            ( DraggingBoardCard before, DraggingBoardCard after ) ->\n")
 		b.WriteString(ind + "                Just\n")
-		b.WriteString(ind + "                    { x = after.floaterTopLeft.x - before.floaterTopLeft.x\n")
-		b.WriteString(ind + "                    , y = after.floaterTopLeft.y - before.floaterTopLeft.y\n")
+		b.WriteString(ind + "                    { x = after.floaterTopLeft.left - before.floaterTopLeft.left\n")
+		b.WriteString(ind + "                    , y = after.floaterTopLeft.top - before.floaterTopLeft.top\n")
 		b.WriteString(ind + "                    }\n")
 		b.WriteString(ind + "\n")
 		b.WriteString(ind + "            _ ->\n")
@@ -1556,9 +1556,17 @@ func elmPathFrame(b *strings.Builder, sc Scenario) {
 
 	if dpf.InitialFloater != nil {
 		fl := dpf.InitialFloater
+		// Field shape matches the variant: hand uses Point ({x,y}),
+		// board uses BoardLocation ({left,top}).
+		var expectedLit string
+		if isHandDrag {
+			expectedLit = fmt.Sprintf("{ x = %d, y = %d }", fl.X, fl.Y)
+		} else {
+			expectedLit = fmt.Sprintf("{ left = %d, top = %d }", fl.X, fl.Y)
+		}
 		b.WriteString(ind + "case afterDown.drag of\n")
 		fmt.Fprintf(b, "%s    %s ->\n", ind, dragPattern)
-		fmt.Fprintf(b, "%s        Expect.equal { x = %d, y = %d } d.floaterTopLeft\n\n", ind, fl.X, fl.Y)
+		fmt.Fprintf(b, "%s        Expect.equal %s d.floaterTopLeft\n\n", ind, expectedLit)
 		b.WriteString(ind + "    _ ->\n")
 		fmt.Fprintf(b, "%s        Expect.fail \"expected %s state\"", ind, dragName)
 		return
@@ -1655,14 +1663,26 @@ func elmGestureTargetVar(b *strings.Builder, sc Scenario, ind string) {
 	fmt.Fprintf(b, "%s    targetStack =\n%s        %s\n\n", ind, ind, elmStackLit(sc.GestureTarget[0]))
 }
 
-// elmGestureFloaterAt emits floaterTopLeft from sc.GestureFloaterAt.
+// elmGestureFloaterAt emits the `floater` let-binding for use as
+// the test scenario's floater top-left. Shape matches what its
+// downstream consumer wants:
+//
+//   - Hand-source scenarios feed it into `HandCardDragInfo.floaterTopLeft`,
+//     which is `Point` (viewport-frame `{ x, y }`).
+//   - Board-source scenarios feed it into `BoardCardDragInfo.floaterTopLeft`
+//     or `floaterOverWing`, both of which take `BoardLocation`
+//     (board-frame `{ left, top }`).
 func elmGestureFloaterAt(b *strings.Builder, sc Scenario, ind string) {
 	if sc.GestureFloaterAt == nil {
 		fmt.Fprintf(b, "%s    floater =\n%s        Debug.todo \"gesture scenario missing floater_at\"\n\n", ind, ind)
 		return
 	}
 	fl := sc.GestureFloaterAt
-	fmt.Fprintf(b, "%s    floater =\n%s        { x = %d, y = %d }\n\n", ind, ind, fl.X, fl.Y)
+	if sc.DragHandCard != "" {
+		fmt.Fprintf(b, "%s    floater =\n%s        { x = %d, y = %d }\n\n", ind, ind, fl.X, fl.Y)
+	} else {
+		fmt.Fprintf(b, "%s    floater =\n%s        { left = %d, top = %d }\n\n", ind, ind, fl.X, fl.Y)
+	}
 }
 
 

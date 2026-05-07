@@ -272,13 +272,13 @@ mouseMove pos tMs model =
                     }
 
                 nextFloater =
-                    { x = d.floaterTopLeft.x + delta.x
-                    , y = d.floaterTopLeft.y + delta.y
+                    { left = d.floaterTopLeft.left + delta.x
+                    , top = d.floaterTopLeft.top + delta.y
                     }
 
                 nextPath =
                     d.gesturePath
-                        ++ [ { tMs = tMs, x = nextFloater.x, y = nextFloater.y } ]
+                        ++ [ { tMs = tMs, x = nextFloater.left, y = nextFloater.top } ]
 
                 nextD =
                     { d
@@ -321,12 +321,13 @@ mouseMove pos tMs model =
                 hover floaterTopLeft =
                     case model.boardRect of
                         Just rect ->
-                            Gesture.floaterOverWing
-                                { x = floaterTopLeft.x - rect.x
-                                , y = floaterTopLeft.y - rect.y
-                                }
-                                CardStack.stackPitch
-                                d.wings
+                            let
+                                floaterBoardLoc =
+                                    { left = floaterTopLeft.x - rect.x
+                                    , top = floaterTopLeft.y - rect.y
+                                    }
+                            in
+                            Gesture.floaterOverWing floaterBoardLoc CardStack.stackPitch d.wings
 
                         Nothing ->
                             Nothing

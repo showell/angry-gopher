@@ -85,15 +85,15 @@ boardChildren model =
                     case model.boardRect of
                         Just rect ->
                             let
-                                floaterInBoard =
-                                    { x = d.floaterTopLeft.x - rect.x
-                                    , y = d.floaterTopLeft.y - rect.y
+                                floaterBoardLoc =
+                                    { left = d.floaterTopLeft.x - rect.x
+                                    , top = d.floaterTopLeft.y - rect.y
                                     }
                             in
                             List.map
                                 (renderWingWithHover
                                     (Gesture.floaterOverWing
-                                        floaterInBoard
+                                        floaterBoardLoc
                                         CardStack.stackPitch
                                         d.wings
                                     )
@@ -213,17 +213,19 @@ renderBoardFloater d positioningAttrs =
 renderHandFloater : HandCardDragInfo -> List (Html.Attribute Msg) -> Html Msg
 renderHandFloater d positioningAttrs =
     View.viewCardWithAttrs
-        (floatingAttrs d.floaterTopLeft positioningAttrs
+        (floatingAttrs
+            { left = d.floaterTopLeft.x, top = d.floaterTopLeft.y }
+            positioningAttrs
             ++ [ style "background-color" "white" ]
         )
         d.card
 
 
-floatingAttrs : { x : Int, y : Int } -> List (Html.Attribute Msg) -> List (Html.Attribute Msg)
+floatingAttrs : { left : Int, top : Int } -> List (Html.Attribute Msg) -> List (Html.Attribute Msg)
 floatingAttrs floaterTopLeft positioningAttrs =
     positioningAttrs
-        ++ [ style "top" (String.fromInt floaterTopLeft.y ++ "px")
-           , style "left" (String.fromInt floaterTopLeft.x ++ "px")
+        ++ [ style "top" (String.fromInt floaterTopLeft.top ++ "px")
+           , style "left" (String.fromInt floaterTopLeft.left ++ "px")
            , style "pointer-events" "none"
            , style "z-index" "1000"
            ]

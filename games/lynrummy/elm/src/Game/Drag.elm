@@ -30,7 +30,7 @@ measurement, so capturing them would be dead weight.
 
 import Game.Physics.WingOracle exposing (WingId)
 import Game.Rules.Card exposing (Card)
-import Game.CardStack exposing (CardStack)
+import Game.CardStack exposing (BoardLocation, CardStack)
 import Main.Types exposing (GesturePoint, Point)
 
 
@@ -45,7 +45,7 @@ type alias BoardCardDragInfo =
     , cardIndex : Int
     , originalCursor : Point
     , cursor : Point
-    , floaterTopLeft : Point
+    , floaterTopLeft : BoardLocation
     , gesturePath : List GesturePoint
     , wings : List WingId
     }
@@ -75,8 +75,10 @@ type DragSource
 
 {-| Patch a new floater position into whichever variant is
 active. Used by the replay frame loop: `DragAnimation.step`
-computes the next floater point, and the caller threads it
-into `model.drag` without caring which variant is in play.
+computes the next floater point (as a generic `Point` from
+the interpolator), and we lift it into the variant's expected
+shape — `BoardLocation` for board drags (which live in board
+frame), `Point` for hand drags (still in viewport frame).
 -}
 setFloaterTopLeft : Point -> DragState -> DragState
 setFloaterTopLeft point state =
@@ -85,7 +87,8 @@ setFloaterTopLeft point state =
             NotDragging
 
         DraggingBoardCard d ->
-            DraggingBoardCard { d | floaterTopLeft = point }
+            DraggingBoardCard
+                { d | floaterTopLeft = { left = point.x, top = point.y } }
 
         DraggingHandCard d ->
             DraggingHandCard { d | floaterTopLeft = point }

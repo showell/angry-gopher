@@ -1317,7 +1317,7 @@ dragInvariantBoardDragInitialFloater =
             in
             case afterDown.drag of
                 DraggingBoardCard d ->
-                    Expect.equal { x = 100, y = 200 } d.floaterTopLeft
+                    Expect.equal { left = 100, top = 200 } d.floaterTopLeft
 
                 _ ->
                     Expect.fail "expected DraggingBoardCard state"
@@ -1388,8 +1388,8 @@ dragInvariantFloaterShift =
             case ( afterDown.drag, afterMove.drag ) of
                 ( DraggingBoardCard before, DraggingBoardCard after ) ->
                     Expect.equal
-                        { x = before.floaterTopLeft.x + delta.x
-                        , y = before.floaterTopLeft.y + delta.y
+                        { left = before.floaterTopLeft.left + delta.x
+                        , top = before.floaterTopLeft.top + delta.y
                         }
                         after.floaterTopLeft
             
@@ -1432,8 +1432,8 @@ dragInvariantGrabPointInvariant =
                     case ( afterDown.drag, afterMove.drag ) of
                         ( DraggingBoardCard before, DraggingBoardCard after ) ->
                             Just
-                                { x = after.floaterTopLeft.x - before.floaterTopLeft.x
-                                , y = after.floaterTopLeft.y - before.floaterTopLeft.y
+                                { x = after.floaterTopLeft.left - before.floaterTopLeft.left
+                                , y = after.floaterTopLeft.top - before.floaterTopLeft.top
                                 }
             
                         _ ->
@@ -1868,7 +1868,7 @@ gestureFloaterOverWingLeftFires =
                     { boardCards = [ boardCard "5H1", boardCard "6S1", boardCard "7H1" ], loc = { top = 20, left = 300 } }
 
                 floater =
-                    { x = 201, y = 20 }
+                    { left = 201, top = 20 }
 
                 wing =
                     { target = targetStack, side = BoardActions.Left }
@@ -1890,7 +1890,7 @@ gestureFloaterOverWingPastTolerance =
                     { boardCards = [ boardCard "5H1", boardCard "6S1", boardCard "7H1" ], loc = { top = 20, left = 300 } }
 
                 floater =
-                    { x = 437, y = 20 }
+                    { left = 437, top = 20 }
 
                 wing =
                     { target = targetStack, side = BoardActions.Right }
@@ -1912,7 +1912,7 @@ gestureFloaterOverWingRightFires =
                     { boardCards = [ boardCard "5H1", boardCard "6S1", boardCard "7H1" ], loc = { top = 20, left = 300 } }
 
                 floater =
-                    { x = 399, y = 20 }
+                    { left = 399, top = 20 }
 
                 wing =
                     { target = targetStack, side = BoardActions.Right }
@@ -1934,7 +1934,7 @@ gestureFloaterOverWingWayOff =
                     { boardCards = [ boardCard "5H1", boardCard "6S1", boardCard "7H1" ], loc = { top = 20, left = 300 } }
 
                 floater =
-                    { x = 50, y = 400 }
+                    { left = 50, top = 400 }
 
                 wing =
                     { target = targetStack, side = BoardActions.Right }
@@ -1989,7 +1989,7 @@ gestureMergeStack234Onto567Left =
                     { boardCards = [ boardCard "5H1", boardCard "6S1", boardCard "7H1" ], loc = { top = 200, left = 300 } }
 
                 floater =
-                    { x = 207, y = 200 }
+                    { left = 207, top = 200 }
 
                 wing =
                     { target = targetStack, side = BoardActions.Left }
@@ -2025,7 +2025,7 @@ gestureMergeStack567Onto234Right =
                     { boardCards = [ boardCard "2C1", boardCard "3D1", boardCard "4C1" ], loc = { top = 200, left = 100 } }
 
                 floater =
-                    { x = 193, y = 200 }
+                    { left = 193, top = 200 }
 
                 wing =
                     { target = targetStack, side = BoardActions.Right }
@@ -2058,7 +2058,7 @@ gestureMoveStackOffBoardRejected =
                     { boardCards = [ boardCard "2C1", boardCard "3D1", boardCard "4C1" ], loc = { top = 200, left = 100 } }
 
                 floater =
-                    { x = -50, y = -20 }
+                    { left = -50, top = -20 }
 
                 d =
                     { stack = sourceStack
@@ -2084,7 +2084,7 @@ gestureMoveStackValidDrop =
                     { boardCards = [ boardCard "2C1", boardCard "3D1", boardCard "4C1" ], loc = { top = 200, left = 100 } }
 
                 floater =
-                    { x = 400, y = 300 }
+                    { left = 400, top = 300 }
 
                 d =
                     { stack = sourceStack
@@ -2149,7 +2149,7 @@ gestureSplitSurvivingClickIntent =
                     { boardCards = [ boardCard "2C1", boardCard "3D1", boardCard "4C1", boardCard "5H1", boardCard "6S1", boardCard "7H1" ], loc = { top = 20, left = 20 } }
 
                 floater =
-                    { x = 20, y = 20 }
+                    { left = 20, top = 20 }
 
                 d =
                     { stack = sourceStack

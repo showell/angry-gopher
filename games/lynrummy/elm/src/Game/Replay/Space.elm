@@ -468,7 +468,8 @@ animatedDragState anim floaterTopLeft =
                 , cardIndex = 0
                 , originalCursor = { x = 0, y = 0 }
                 , cursor = { x = 0, y = 0 }
-                , floaterTopLeft = floaterTopLeft
+                , floaterTopLeft =
+                    { left = floaterTopLeft.x, top = floaterTopLeft.y }
                 , gesturePath = []
                 , wings = []
                 }

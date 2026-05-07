@@ -97,13 +97,11 @@ startBoardCardDrag { stack, cardIndex } clientPoint tMs model =
             let
                 wings =
                     WingOracle.wingsForStack stack model.board
-
-                -- Intra-board: the floater starts exactly
-                -- where the stack is. `stack.loc` is already
-                -- in board frame, so no translation needed.
-                initialFloater =
-                    { x = stack.loc.left, y = stack.loc.top }
             in
+            -- Intra-board: the floater starts exactly where
+            -- the stack is. `stack.loc` is already a
+            -- `BoardLocation` — same shape as `floaterTopLeft`,
+            -- no translation.
             ( { model
                 | drag =
                     DraggingBoardCard
@@ -111,9 +109,9 @@ startBoardCardDrag { stack, cardIndex } clientPoint tMs model =
                         , cardIndex = cardIndex
                         , originalCursor = clientPoint
                         , cursor = clientPoint
-                        , floaterTopLeft = initialFloater
+                        , floaterTopLeft = stack.loc
                         , gesturePath =
-                            [ { tMs = tMs, x = initialFloater.x, y = initialFloater.y } ]
+                            [ { tMs = tMs, x = stack.loc.left, y = stack.loc.top } ]
                         , wings = wings
                         }
               }
@@ -206,13 +204,13 @@ handleMouseUp releasePoint tMs model =
                     }
 
                 releaseFloater =
-                    { x = d.floaterTopLeft.x + delta.x
-                    , y = d.floaterTopLeft.y + delta.y
+                    { left = d.floaterTopLeft.left + delta.x
+                    , top = d.floaterTopLeft.top + delta.y
                     }
 
                 fullPath =
                     d.gesturePath
-                        ++ [ { tMs = tMs, x = releaseFloater.x, y = releaseFloater.y } ]
+                        ++ [ { tMs = tMs, x = releaseFloater.left, y = releaseFloater.top } ]
 
                 dFull =
                     { d
@@ -235,10 +233,7 @@ handleMouseUp releasePoint tMs model =
             finalizeMouseUp
                 maybeAction
                 envelope
-                (droppedOffBoardScold
-                    { left = dFull.floaterTopLeft.x, top = dFull.floaterTopLeft.y }
-                    (CardStack.size dFull.stack)
-                )
+                (droppedOffBoardScold dFull.floaterTopLeft (CardStack.size dFull.stack))
                 model
 
         DraggingHandCard d ->
@@ -265,11 +260,13 @@ handleMouseUp releasePoint tMs model =
                 handScold =
                     case model.boardRect of
                         Just rect ->
-                            droppedOffBoardScold
-                                { left = dFull.floaterTopLeft.x - rect.x
-                                , top = dFull.floaterTopLeft.y - rect.y
-                                }
-                                1
+                            let
+                                floaterBoardLoc =
+                                    { left = dFull.floaterTopLeft.x - rect.x
+                                    , top = dFull.floaterTopLeft.y - rect.y
+                                    }
+                            in
+                            droppedOffBoardScold floaterBoardLoc 1
 
                         Nothing ->
                             Nothing
@@ -400,12 +397,8 @@ resolveBoardCardGesture d boardRect =
 
             Nothing ->
                 if isCursorOverBoard d.cursor boardRect then
-                    let
-                        loc =
-                            { left = d.floaterTopLeft.x, top = d.floaterTopLeft.y }
-                    in
-                    if isDropFootprintInBounds (CardStack.size d.stack) loc then
-                        Just (WA.MoveStack { stack = d.stack, newLoc = loc })
+                    if isDropFootprintInBounds (CardStack.size d.stack) d.floaterTopLeft then
+                        Just (WA.MoveStack { stack = d.stack, newLoc = d.floaterTopLeft })
 
                     else
                         Nothing
@@ -427,13 +420,13 @@ resolveHandCardGesture d maybeRect =
 
         Just rect ->
             let
-                floaterInBoard =
-                    { x = d.floaterTopLeft.x - rect.x
-                    , y = d.floaterTopLeft.y - rect.y
+                floaterBoardLoc =
+                    { left = d.floaterTopLeft.x - rect.x
+                    , top = d.floaterTopLeft.y - rect.y
                     }
 
                 hovered =
-                    floaterOverWing floaterInBoard CardStack.stackPitch d.wings
+                    floaterOverWing floaterBoardLoc CardStack.stackPitch d.wings
             in
             case hovered of
                 Just wing ->
@@ -447,12 +440,8 @@ resolveHandCardGesture d maybeRect =
 
                 Nothing ->
                     if GA.isCursorInRect d.cursor rect then
-                        let
-                            loc =
-                                { left = floaterInBoard.x, top = floaterInBoard.y }
-                        in
-                        if isDropFootprintInBounds 1 loc then
-                            Just (WA.PlaceHand { handCard = d.card, loc = loc })
+                        if isDropFootprintInBounds 1 floaterBoardLoc then
+                            Just (WA.PlaceHand { handCard = d.card, loc = floaterBoardLoc })
 
                         else
                             Nothing
@@ -490,30 +479,31 @@ wingSnapTolerance =
 
 
 {-| True iff `floaterTopLeft` is within `wingSnapTolerance` of
-`wing`'s eventual landing. Both points must already be in
-board frame — callers in viewport frame translate before
-calling.
+`wing`'s eventual landing. Both inputs are in board frame —
+the floater is a rectangle's top-left, the wing's eventual
+landing is too, so the comparison is a same-frame
+`{ left, top }` distance check.
 -}
-isNearLanding : Point -> Int -> WingOracle.WingId -> Bool
+isNearLanding : BoardLocation -> Int -> WingOracle.WingId -> Bool
 isNearLanding floaterTopLeft floaterWidth wing =
     let
         ev =
             WingOracle.eventualFloaterTopLeft wing floaterWidth
 
         dx =
-            abs (floaterTopLeft.x - ev.left)
+            abs (floaterTopLeft.left - ev.left)
 
         dy =
-            abs (floaterTopLeft.y - ev.top)
+            abs (floaterTopLeft.top - ev.top)
     in
     dx < wingSnapTolerance && dy < wingSnapTolerance
 
 
 {-| Which wing (if any) the floater is about to land on.
-`floaterTopLeft` must be in board frame.
+`floaterTopLeft` is in board frame.
 -}
 floaterOverWing :
-    Point
+    BoardLocation
     -> Int
     -> List WingOracle.WingId
     -> Maybe WingOracle.WingId
