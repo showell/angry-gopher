@@ -383,11 +383,8 @@ resolveBoardCardGesture d boardRect =
 
     else
         let
-            boardOrigin =
-                { x = 0, y = 0 }
-
             hovered =
-                floaterOverWing d.floaterTopLeft (CardStack.stackDisplayWidth d.stack) boardOrigin d.wings
+                floaterOverWing d.floaterTopLeft (CardStack.stackDisplayWidth d.stack) d.wings
         in
         case hovered of
             Just wing ->
@@ -403,7 +400,7 @@ resolveBoardCardGesture d boardRect =
                 if isCursorOverBoard d.cursor boardRect then
                     let
                         loc =
-                            dropLoc d.floaterTopLeft boardOrigin
+                            dropLoc d.floaterTopLeft { x = 0, y = 0 }
                     in
                     if isDropFootprintInBounds (CardStack.size d.stack) loc then
                         Just (WA.MoveStack { stack = d.stack, newLoc = loc })
@@ -428,11 +425,13 @@ resolveHandCardGesture d maybeRect =
 
         Just rect ->
             let
-                boardOrigin =
-                    { x = rect.x, y = rect.y }
+                floaterInBoard =
+                    { x = d.floaterTopLeft.x - rect.x
+                    , y = d.floaterTopLeft.y - rect.y
+                    }
 
                 hovered =
-                    floaterOverWing d.floaterTopLeft CardStack.stackPitch boardOrigin d.wings
+                    floaterOverWing floaterInBoard CardStack.stackPitch d.wings
             in
             case hovered of
                 Just wing ->
@@ -448,7 +447,7 @@ resolveHandCardGesture d maybeRect =
                     if GA.isCursorInRect d.cursor rect then
                         let
                             loc =
-                                dropLoc d.floaterTopLeft boardOrigin
+                                dropLoc d.floaterTopLeft { x = rect.x, y = rect.y }
                         in
                         if isDropFootprintInBounds 1 loc then
                             Just (WA.PlaceHand { handCard = d.card, loc = loc })
@@ -489,38 +488,36 @@ wingSnapTolerance =
 
 
 {-| True iff `floaterTopLeft` is within `wingSnapTolerance` of
-`wing`'s eventual landing. Frame-agnostic — `boardOrigin` lifts
-the wing's board-frame eventual landing into the floater's frame
-(zero-point for board drags; `{ x = rect.x, y = rect.y }` for
-viewport-frame drags).
+`wing`'s eventual landing. Both points must already be in
+board frame — callers in viewport frame translate before
+calling.
 -}
-isNearLanding : Point -> Int -> Point -> WingOracle.WingId -> Bool
-isNearLanding floaterTopLeft floaterWidth boardOrigin wing =
+isNearLanding : Point -> Int -> WingOracle.WingId -> Bool
+isNearLanding floaterTopLeft floaterWidth wing =
     let
         ev =
             WingOracle.eventualFloaterTopLeft wing floaterWidth
 
         dx =
-            abs (floaterTopLeft.x - (ev.left + boardOrigin.x))
+            abs (floaterTopLeft.x - ev.left)
 
         dy =
-            abs (floaterTopLeft.y - (ev.top + boardOrigin.y))
+            abs (floaterTopLeft.y - ev.top)
     in
     dx < wingSnapTolerance && dy < wingSnapTolerance
 
 
-{-| Which wing (if any) the floater is about to land on. Same
-frame-agnostic shape as `isNearLanding`.
+{-| Which wing (if any) the floater is about to land on.
+`floaterTopLeft` must be in board frame.
 -}
 floaterOverWing :
     Point
     -> Int
-    -> Point
     -> List WingOracle.WingId
     -> Maybe WingOracle.WingId
-floaterOverWing floaterTopLeft floaterWidth boardOrigin wings =
+floaterOverWing floaterTopLeft floaterWidth wings =
     wings
-        |> List.filter (isNearLanding floaterTopLeft floaterWidth boardOrigin)
+        |> List.filter (isNearLanding floaterTopLeft floaterWidth)
         |> List.head
 
 

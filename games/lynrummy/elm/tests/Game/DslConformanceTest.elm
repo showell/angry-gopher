@@ -1874,7 +1874,7 @@ gestureFloaterOverWingLeftFires =
                     { target = targetStack, side = BoardActions.Left }
 
             in
-            Gesture.floaterOverWing floater (CardStack.stackDisplayWidth sourceStack) { x = 0, y = 0 } [ wing ]
+            Gesture.floaterOverWing floater (CardStack.stackDisplayWidth sourceStack) [ wing ]
                 |> Expect.equal (Just wing)
 
 
@@ -1896,7 +1896,7 @@ gestureFloaterOverWingPastTolerance =
                     { target = targetStack, side = BoardActions.Right }
 
             in
-            Gesture.floaterOverWing floater (CardStack.stackDisplayWidth sourceStack) { x = 0, y = 0 } [ wing ]
+            Gesture.floaterOverWing floater (CardStack.stackDisplayWidth sourceStack) [ wing ]
                 |> Expect.equal Nothing
 
 
@@ -1918,7 +1918,7 @@ gestureFloaterOverWingRightFires =
                     { target = targetStack, side = BoardActions.Right }
 
             in
-            Gesture.floaterOverWing floater (CardStack.stackDisplayWidth sourceStack) { x = 0, y = 0 } [ wing ]
+            Gesture.floaterOverWing floater (CardStack.stackDisplayWidth sourceStack) [ wing ]
                 |> Expect.equal (Just wing)
 
 
@@ -1940,7 +1940,7 @@ gestureFloaterOverWingWayOff =
                     { target = targetStack, side = BoardActions.Right }
 
             in
-            Gesture.floaterOverWing floater (CardStack.stackDisplayWidth sourceStack) { x = 0, y = 0 } [ wing ]
+            Gesture.floaterOverWing floater (CardStack.stackDisplayWidth sourceStack) [ wing ]
                 |> Expect.equal Nothing
 
 

@@ -291,7 +291,6 @@ mouseMove pos tMs model =
                     Gesture.floaterOverWing
                         floaterTopLeft
                         (CardStack.stackDisplayWidth d.stack)
-                        { x = 0, y = 0 }
                         d.wings
 
                 statusAfterMove =
@@ -323,9 +322,10 @@ mouseMove pos tMs model =
                     case model.boardRect of
                         Just rect ->
                             Gesture.floaterOverWing
-                                floaterTopLeft
+                                { x = floaterTopLeft.x - rect.x
+                                , y = floaterTopLeft.y - rect.y
+                                }
                                 CardStack.stackPitch
-                                { x = rect.x, y = rect.y }
                                 d.wings
 
                         Nothing ->

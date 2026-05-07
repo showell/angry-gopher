@@ -76,7 +76,6 @@ boardChildren model =
                             (Gesture.floaterOverWing
                                 d.floaterTopLeft
                                 (CardStack.stackDisplayWidth d.stack)
-                                { x = 0, y = 0 }
                                 d.wings
                             )
                         )
@@ -85,12 +84,17 @@ boardChildren model =
                 DraggingHandCard d ->
                     case model.boardRect of
                         Just rect ->
+                            let
+                                floaterInBoard =
+                                    { x = d.floaterTopLeft.x - rect.x
+                                    , y = d.floaterTopLeft.y - rect.y
+                                    }
+                            in
                             List.map
                                 (renderWingWithHover
                                     (Gesture.floaterOverWing
-                                        d.floaterTopLeft
+                                        floaterInBoard
                                         CardStack.stackPitch
-                                        { x = rect.x, y = rect.y }
                                         d.wings
                                     )
                                 )

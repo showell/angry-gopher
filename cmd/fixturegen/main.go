@@ -1846,7 +1846,7 @@ func elmGestureFloaterOverWing(b *strings.Builder, sc Scenario) {
 	elmGestureFloaterAt(b, sc, ind)
 	fmt.Fprintf(b, "%s    wing =\n%s        { target = targetStack, side = %s }\n\n", ind, ind, sideExpr)
 	b.WriteString(ind + "in\n")
-	call := "Gesture.floaterOverWing floater (CardStack.stackDisplayWidth sourceStack) { x = 0, y = 0 } [ wing ]"
+	call := "Gesture.floaterOverWing floater (CardStack.stackDisplayWidth sourceStack) [ wing ]"
 	if gf.HasWing {
 		fmt.Fprintf(b, "%s%s\n", ind, call)
 		fmt.Fprintf(b, "%s    |> Expect.equal (Just wing)", ind)
