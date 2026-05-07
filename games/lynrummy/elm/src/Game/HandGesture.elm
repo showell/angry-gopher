@@ -1,6 +1,7 @@
 module Game.HandGesture exposing
     ( HandOutcome(..)
     , applyHandOutcome
+    , handleMouseUp
     , resolveHandCardGesture
     , resolveHandOutcome
     )
@@ -29,7 +30,7 @@ import Main.State as State
         ( Model
         , StatusKind(..)
         )
-import Main.Types exposing (PathFrame(..))
+import Main.Types exposing (PathFrame(..), Point)
 import Main.Wire as Wire
 
 
@@ -37,6 +38,33 @@ type HandOutcome
     = HandAction WireAction
     | HandOffBoard State.StatusMessage
     | HandNothingHappened
+
+
+{-| Mouseup handler for a hand-card drag. Caller (the
+dispatcher in `Main.Gesture`) has pattern-matched out the
+`Info` and passes it in. The `tMs` parameter is unused — hand
+drags don't capture a gesture path.
+-}
+handleMouseUp : Point -> Float -> HandCardDragInfo -> Model -> ( Model, Cmd Msg )
+handleMouseUp releasePoint _ d model =
+    let
+        delta =
+            { x = releasePoint.x - d.cursor.x
+            , y = releasePoint.y - d.cursor.y
+            }
+
+        releaseFloater =
+            { x = d.floaterTopLeft.x + delta.x
+            , y = d.floaterTopLeft.y + delta.y
+            }
+
+        dFull =
+            { d
+                | cursor = releasePoint
+                , floaterTopLeft = releaseFloater
+            }
+    in
+    applyHandOutcome (resolveHandOutcome dFull model.boardRect) model
 
 
 resolveHandOutcome : HandCardDragInfo -> Maybe GA.Rect -> HandOutcome

@@ -191,24 +191,7 @@ handleMouseUp releasePoint tMs model =
             BoardGesture.handleMouseUp releasePoint tMs d model
 
         DraggingHandCard d ->
-            let
-                delta =
-                    { x = releasePoint.x - d.cursor.x
-                    , y = releasePoint.y - d.cursor.y
-                    }
-
-                releaseFloater =
-                    { x = d.floaterTopLeft.x + delta.x
-                    , y = d.floaterTopLeft.y + delta.y
-                    }
-
-                dFull =
-                    { d
-                        | cursor = releasePoint
-                        , floaterTopLeft = releaseFloater
-                    }
-            in
-            HandGesture.applyHandOutcome (HandGesture.resolveHandOutcome dFull model.boardRect) model
+            HandGesture.handleMouseUp releasePoint tMs d model
 
 
 
