@@ -1,5 +1,6 @@
 module Game.BoardGesture exposing
-    ( handleMouseUp
+    ( BoardMouseUp(..)
+    , handleMouseUp
     , mouseMove
     , resolveBoardCardGesture
     )
@@ -15,13 +16,14 @@ helpers.
 
 -}
 
+import Game.BoardActions exposing (Side)
 import Game.BoardDrag exposing (BoardCardDragInfo)
-import Game.CardStack as CardStack exposing (BoardLocation)
+import Game.CardStack as CardStack exposing (BoardLocation, CardStack)
 import Game.Drag exposing (DragState(..))
 import Game.Physics.BoardGeometry as BG
 import Game.Physics.GestureArbitration as GA
 import Game.WingView as WingView
-import Game.GameEvent exposing (GameEvent(..))
+import Game.GameEvent as GameEvent exposing (GameEvent)
 import Main.Apply as Apply
 import Main.Msg exposing (Msg)
 import Main.State as State
@@ -31,6 +33,20 @@ import Main.State as State
         )
 import Main.Types exposing (PathFrame(..), Point)
 import Main.Wire as Wire
+
+
+{-| Result of resolving a board-card mouseup. Action variants
+carry the same payloads as their `GameEvent` cousins; update in
+`Main.Play` translates and feeds them to `Apply.applyAction`.
+`BoardCardOffBoard` is the scold case (caller renders status);
+`BoardNothing` is the no-op. Mirror of `HandGesture.HandMouseUp`.
+-}
+type BoardMouseUp
+    = Split { stack : CardStack, cardIndex : Int }
+    | MergeStack { source : CardStack, target : CardStack, side : Side }
+    | MoveStack { stack : CardStack, newLoc : BoardLocation }
+    | BoardCardOffBoard
+    | BoardNothing
 
 
 type BoardOutcome
@@ -135,7 +151,7 @@ still within `clickThreshold` of `originalCursor`, emit a
 resolveBoardCardGesture : BoardCardDragInfo -> Maybe GA.Rect -> Maybe GameEvent
 resolveBoardCardGesture d boardRect =
     if GA.distSquared d.cursor d.originalCursor <= GA.clickThreshold then
-        Just (Split { stack = d.stack, cardIndex = d.cardIndex })
+        Just (GameEvent.Split { stack = d.stack, cardIndex = d.cardIndex })
 
     else
         let
@@ -145,7 +161,7 @@ resolveBoardCardGesture d boardRect =
         case hovered of
             Just wing ->
                 Just
-                    (MergeStack
+                    (GameEvent.MergeStack
                         { source = d.stack
                         , target = wing.target
                         , side = wing.side
@@ -155,7 +171,7 @@ resolveBoardCardGesture d boardRect =
             Nothing ->
                 if isCursorOverBoard d.cursor boardRect then
                     if isDropFootprintInBounds (CardStack.size d.stack) d.floaterTopLeft then
-                        Just (MoveStack { stack = d.stack, newLoc = d.floaterTopLeft })
+                        Just (GameEvent.MoveStack { stack = d.stack, newLoc = d.floaterTopLeft })
 
                     else
                         Nothing

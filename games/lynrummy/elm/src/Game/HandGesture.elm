@@ -1,5 +1,6 @@
 module Game.HandGesture exposing
-    ( handleMouseUp
+    ( HandMouseUp(..)
+    , handleMouseUp
     , mouseMove
     , resolveHandCardGesture
     )
@@ -14,13 +15,15 @@ shared via Maybe-flagged helpers.
 
 -}
 
-import Game.CardStack as CardStack exposing (BoardLocation)
+import Game.BoardActions exposing (Side)
+import Game.CardStack as CardStack exposing (BoardLocation, CardStack)
 import Game.Drag exposing (DragState(..))
 import Game.HandDrag exposing (HandCardDragInfo)
 import Game.Physics.BoardGeometry as BG
 import Game.Physics.GestureArbitration as GA
+import Game.Rules.Card exposing (Card)
 import Game.WingView as WingView
-import Game.GameEvent exposing (GameEvent(..))
+import Game.GameEvent as GameEvent exposing (GameEvent)
 import Main.Apply as Apply
 import Main.Msg exposing (Msg)
 import Main.State as State
@@ -30,6 +33,20 @@ import Main.State as State
         )
 import Main.Types exposing (PathFrame(..), Point)
 import Main.Wire as Wire
+
+
+{-| Result of resolving a hand-card mouseup. Action variants
+carry the same payloads as their `GameEvent` cousins; update in
+`Main.Play` translates and feeds them to `Apply.applyAction`.
+`HandCardOffBoard` is the scold case; `HandNothing` is the no-op.
+Mirror of `BoardGesture.BoardMouseUp`, minus the gesture-path
+envelope (hand actions ship pathless).
+-}
+type HandMouseUp
+    = MergeHand { handCard : Card, target : CardStack, side : Side }
+    | PlaceHand { handCard : Card, loc : BoardLocation }
+    | HandCardOffBoard
+    | HandNothing
 
 
 type HandOutcome
@@ -157,7 +174,7 @@ resolveHandCardGesture d maybeRect =
             case hovered of
                 Just wing ->
                     Just
-                        (MergeHand
+                        (GameEvent.MergeHand
                             { handCard = d.card
                             , target = wing.target
                             , side = wing.side
@@ -167,7 +184,7 @@ resolveHandCardGesture d maybeRect =
                 Nothing ->
                     if GA.isCursorInRect d.cursor rect then
                         if isDropFootprintInBounds 1 floaterBoardLoc then
-                            Just (PlaceHand { handCard = d.card, loc = floaterBoardLoc })
+                            Just (GameEvent.PlaceHand { handCard = d.card, loc = floaterBoardLoc })
 
                         else
                             Nothing

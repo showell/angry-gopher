@@ -5251,7 +5251,7 @@ var $elm$html$Html$div = _VirtualDom_node('div');
 var $author$project$Game$View$navy = '#000080';
 var $elm$virtual_dom$VirtualDom$style = _VirtualDom_style;
 var $elm$html$Html$Attributes$style = $elm$virtual_dom$VirtualDom$style;
-var $author$project$Game$View$boardShellWith = F2(
+var $author$project$Game$BoardView$boardShellWith = F2(
 	function (extraAttrs, children) {
 		var baseAttrs = _List_fromArray(
 			[
@@ -5430,9 +5430,10 @@ var $author$project$Game$CardStack$isIncomplete = function (s) {
 		$author$project$Game$CardStack$stackType(s),
 		$author$project$Game$Rules$StackType$Incomplete);
 };
-var $author$project$Game$View$cardHeightPx = '40px';
+var $author$project$Game$Physics$BoardGeometry$cardHeight = 40;
+var $author$project$Game$StackView$cardHeightPx = $elm$core$String$fromInt($author$project$Game$Physics$BoardGeometry$cardHeight) + 'px';
 var $author$project$Game$CardStack$cardWidth = 27;
-var $author$project$Game$View$cardWidthPx = $elm$core$String$fromInt($author$project$Game$CardStack$cardWidth) + 'px';
+var $author$project$Game$StackView$cardWidthPx = $elm$core$String$fromInt($author$project$Game$CardStack$cardWidth) + 'px';
 var $author$project$Game$Rules$Card$suitEmojiStr = function (suit) {
 	switch (suit.$) {
 		case 'Club':
@@ -5484,7 +5485,7 @@ var $author$project$Game$Rules$Card$valueDisplayStr = function (v) {
 };
 var $elm$virtual_dom$VirtualDom$text = _VirtualDom_text;
 var $elm$html$Html$text = $elm$virtual_dom$VirtualDom$text;
-var $author$project$Game$View$viewCardChar = function (c) {
+var $author$project$Game$StackView$viewCardChar = function (c) {
 	return A2(
 		$elm$html$Html$div,
 		_List_fromArray(
@@ -5497,7 +5498,7 @@ var $author$project$Game$View$viewCardChar = function (c) {
 				$elm$html$Html$text(c)
 			]));
 };
-var $author$project$Game$View$viewPlayingCardWith = F2(
+var $author$project$Game$StackView$viewPlayingCardWith = F2(
 	function (extraAttrs, card) {
 		var colorStr = function () {
 			var _v0 = $author$project$Game$Rules$Card$cardColor(card);
@@ -5510,7 +5511,7 @@ var $author$project$Game$View$viewPlayingCardWith = F2(
 		var baseAttrs = _List_fromArray(
 			[
 				A2($elm$html$Html$Attributes$style, 'display', 'inline-block'),
-				A2($elm$html$Html$Attributes$style, 'height', $author$project$Game$View$cardHeightPx),
+				A2($elm$html$Html$Attributes$style, 'height', $author$project$Game$StackView$cardHeightPx),
 				A2($elm$html$Html$Attributes$style, 'padding', '1px 1px 3px 1px'),
 				A2($elm$html$Html$Attributes$style, 'user-select', 'none'),
 				A2($elm$html$Html$Attributes$style, 'text-align', 'center'),
@@ -5519,20 +5520,20 @@ var $author$project$Game$View$viewPlayingCardWith = F2(
 				A2($elm$html$Html$Attributes$style, 'color', colorStr),
 				A2($elm$html$Html$Attributes$style, 'background-color', 'white'),
 				A2($elm$html$Html$Attributes$style, 'border', '1px blue solid'),
-				A2($elm$html$Html$Attributes$style, 'width', $author$project$Game$View$cardWidthPx)
+				A2($elm$html$Html$Attributes$style, 'width', $author$project$Game$StackView$cardWidthPx)
 			]);
 		return A2(
 			$elm$html$Html$div,
 			_Utils_ap(baseAttrs, extraAttrs),
 			_List_fromArray(
 				[
-					$author$project$Game$View$viewCardChar(
+					$author$project$Game$StackView$viewCardChar(
 					$author$project$Game$Rules$Card$valueDisplayStr(card.value)),
-					$author$project$Game$View$viewCardChar(
+					$author$project$Game$StackView$viewCardChar(
 					$author$project$Game$Rules$Card$suitEmojiStr(card.suit))
 				]));
 	});
-var $author$project$Game$View$viewBoardCardAt = F3(
+var $author$project$Game$StackView$viewBoardCardAt = F3(
 	function (cardAttrs, index, bc) {
 		var stateAttrs = function () {
 			var _v0 = bc.state;
@@ -5556,13 +5557,13 @@ var $author$project$Game$View$viewBoardCardAt = F3(
 				A2($elm$html$Html$Attributes$style, 'margin-left', '2px')
 			]);
 		return A2(
-			$author$project$Game$View$viewPlayingCardWith,
+			$author$project$Game$StackView$viewPlayingCardWith,
 			_Utils_ap(
 				marginAttrs,
 				_Utils_ap(stateAttrs, cardAttrs)),
 			bc.card);
 	});
-var $author$project$Game$View$viewStackInternal = F3(
+var $author$project$Game$StackView$viewStackInternal = F3(
 	function (stackExtraAttrs, attrsForCard, stack) {
 		var isIncomplete = $author$project$Game$CardStack$isIncomplete(stack);
 		var incompleteAttrs = isIncomplete ? _List_fromArray(
@@ -5575,7 +5576,7 @@ var $author$project$Game$View$viewStackInternal = F3(
 			F2(
 				function (i, bc) {
 					return A3(
-						$author$project$Game$View$viewBoardCardAt,
+						$author$project$Game$StackView$viewBoardCardAt,
 						attrsForCard(i),
 						i,
 						bc);
@@ -5601,27 +5602,27 @@ var $author$project$Game$View$viewStackInternal = F3(
 				_Utils_ap(incompleteAttrs, stackExtraAttrs)),
 			cardNodes);
 	});
-var $author$project$Game$View$viewStackWithAttrs = F2(
+var $author$project$Game$StackView$viewStackWithAttrs = F2(
 	function (extraAttrs, stack) {
 		return A3(
-			$author$project$Game$View$viewStackInternal,
+			$author$project$Game$StackView$viewStackInternal,
 			extraAttrs,
 			function (_v0) {
 				return _List_Nil;
 			},
 			stack);
 	});
-var $author$project$Game$View$viewStack = function (stack) {
-	return A2($author$project$Game$View$viewStackWithAttrs, _List_Nil, stack);
+var $author$project$Game$StackView$viewStack = function (stack) {
+	return A2($author$project$Game$StackView$viewStackWithAttrs, _List_Nil, stack);
 };
-var $author$project$Main$BoardView$viewBoard = function (stacks) {
+var $author$project$Game$BoardView$viewBoard = function (stacks) {
 	return A2(
-		$author$project$Game$View$boardShellWith,
+		$author$project$Game$BoardView$boardShellWith,
 		_List_Nil,
-		A2($elm$core$List$map, $author$project$Game$View$viewStack, stacks));
+		A2($elm$core$List$map, $author$project$Game$StackView$viewStack, stacks));
 };
 var $author$project$Puzzle$view = function (_v0) {
-	return $author$project$Main$BoardView$viewBoard($author$project$Puzzle$puzzleStacks);
+	return $author$project$Game$BoardView$viewBoard($author$project$Puzzle$puzzleStacks);
 };
 var $author$project$Puzzle$main = $elm$browser$Browser$sandbox(
 	{
