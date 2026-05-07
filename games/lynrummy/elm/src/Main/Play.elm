@@ -35,7 +35,6 @@ import Game.Game as Game
 import Game.PlayerTurn exposing (CompleteTurnResult(..))
 import Game.Random as Random
 import Game.Replay.Time as ReplayTime
-import Game.Score as Score
 import Game.GameEvent as GameEvent exposing (GameEvent)
 import Html exposing (Html)
 import Http
@@ -119,20 +118,15 @@ init config =
                 setup =
                     Dealer.dealFullGame (Random.initSeed seedSource)
 
-                turnScore =
-                    Score.forStacks setup.board
-
                 initialRS : State.RemoteState
                 initialRS =
                     { board = setup.board
                     , hands = setup.hands
-                    , scores = [ 0, 0 ]
                     , activePlayerIndex = 0
                     , turnIndex = 0
                     , deck = setup.deck
                     , cardsPlayedThisTurn = 0
                     , victorAwarded = False
-                    , turnStartBoardScore = turnScore
                     }
 
                 dealtModel =
@@ -140,8 +134,6 @@ init config =
                         | board = setup.board
                         , hands = setup.hands
                         , deck = setup.deck
-                        , turnStartBoardScore = turnScore
-                        , score = turnScore
                         , replayBaseline = Just initialRS
                     }
             in
@@ -549,7 +541,6 @@ clickCompleteTurn model =
                     { afterTurn
                         | actionLog = model.actionLog ++ [ completeTurnEntry ]
                         , nextSeq = seq + 1
-                        , score = Score.forStacks afterTurn.board
                         , status = statusForCompleteTurn (Ok turnOutcome)
                         , popup = popupForCompleteTurn (Ok turnOutcome)
                     }
@@ -604,7 +595,6 @@ clickUndo model =
                     setActiveHand post.hand
                         { model
                             | board = post.board
-                            , score = Score.forStacks post.board
                             , cardsPlayedThisTurn = model.cardsPlayedThisTurn + cardsAdjust
                             , actionLog = model.actionLog ++ [ undoEntry ]
                             , nextSeq = seq + 1
@@ -880,14 +870,11 @@ modelAtInitial initial model =
     { model
         | board = initial.board
         , hands = initial.hands
-        , scores = initial.scores
         , activePlayerIndex = initial.activePlayerIndex
         , turnIndex = initial.turnIndex
         , deck = initial.deck
         , cardsPlayedThisTurn = initial.cardsPlayedThisTurn
         , victorAwarded = initial.victorAwarded
-        , turnStartBoardScore = initial.turnStartBoardScore
-        , score = Score.forStacks initial.board
         , replayBaseline = Just initial
     }
 

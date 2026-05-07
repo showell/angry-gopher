@@ -971,8 +971,8 @@ func elmBool(b bool) string {
 //   3. eagerModel = foldl Apply.applyAction over actions.
 //   4. replayedModel = drive replayFrame from initialModel +
 //      seeded replay until replay = Nothing.
-//   5. assert eagerModel.{board, hands, scores, ...} ==
-//      replayedModel.{board, hands, scores, ...}.
+//   5. assert eagerModel.{board, hands, ...} ==
+//      replayedModel.{board, hands, ...}.
 //
 // Hand-origin actions (MergeHand/PlaceHand) are out of scope:
 // their replay path needs DOM measurements that elm-test can't
@@ -1001,7 +1001,6 @@ const elmReplayInvariantTmpl = `            let
 const elmReplayInvariantChecks = `            Expect.all
                 [ \_ -> Expect.equal eagerModel.board replayedModel.board
                 , \_ -> Expect.equal eagerModel.hands replayedModel.hands
-                , \_ -> Expect.equal eagerModel.scores replayedModel.scores
                 , \_ -> Expect.equal eagerModel.activePlayerIndex replayedModel.activePlayerIndex
                 , \_ -> Expect.equal eagerModel.turnIndex replayedModel.turnIndex`
 

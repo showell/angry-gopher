@@ -20,7 +20,7 @@ import Test exposing (Test, describe, test)
 
 outcome : CompleteTurnResult -> CompleteTurnOutcome
 outcome result =
-    { result = result, turnScore = 0, cardsDrawn = 0, dealtCards = [] }
+    { result = result, cardsDrawn = 0, dealtCards = [] }
 
 
 suite : Test

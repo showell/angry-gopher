@@ -32,7 +32,6 @@ import Game.Rules.Card
 import Game.CardStack as CardStack exposing (CardStack)
 import Game.Game as Game
 import Game.Reducer as Reducer
-import Game.Score as Score
 import Game.Rules.StackType as StackType
 import Game.GameEvent exposing (GameEvent(..))
 import Main.State
@@ -184,10 +183,7 @@ applyPhysics action model =
                 ()
     in
     setActiveHand post.hand
-        { model
-            | board = post.board
-            , score = Score.forStacks post.board
-        }
+        { model | board = post.board }
 
 
 wireActionLabel : GameEvent -> String
@@ -224,11 +220,8 @@ applyCompleteTurn model =
     let
         ( afterTurn, _ ) =
             Game.applyCompleteTurn refereeBounds model
-
-        withScore =
-            { afterTurn | score = Score.forStacks afterTurn.board }
     in
-    { model = withScore
+    { model = afterTurn
     , status =
         { text =
             "Turn "
@@ -325,9 +318,7 @@ withTidinessOverlay pre post primary =
 
 {-| The merge outcome depends on the size of the newly-merged
 stack (always the last entry of the post board, by reducer
-convention), whether the whole post board is clean, and — on
-a clean-board celebration — the player's board-delta for the
-turn so far.
+convention) and whether the whole post board is clean.
 -}
 mergeStatus : Model -> StatusMessage
 mergeStatus post =
@@ -340,26 +331,10 @@ mergeStatus post =
                 { text = "Nice, but where's the third card?", kind = Scold }
 
             else if isCleanBoard post.board then
-                { text = cleanBoardMessage "Combined! Clean board!" post
-                , kind = Celebrate
-                }
+                { text = "Combined! Clean board!", kind = Celebrate }
 
             else
                 { text = "Combined!", kind = Celebrate }
-
-
-{-| Append the turn's board-score delta to a celebratory
-prefix, mirroring the TS `clean_board_message` helper. Shows
-the player how much they gained on the board this turn —
-meaningful after a merge that closed out a meld.
--}
-cleanBoardMessage : String -> Model -> String
-cleanBoardMessage prefix post =
-    let
-        delta =
-            post.score - post.turnStartBoardScore
-    in
-    prefix ++ " Your board delta for this turn is " ++ String.fromInt delta ++ "."
 
 
 {-| Every stack classifies as a valid group (Set / PureRun /

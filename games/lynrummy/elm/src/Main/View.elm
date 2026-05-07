@@ -68,7 +68,7 @@ import Main.State
         , StatusMessage
         , canUndoThisTurn
         )
-import Main.Util exposing (listAt, pluralize)
+import Main.Util exposing (pluralize)
 
 
 
@@ -119,7 +119,7 @@ popupForCompleteTurn result =
 
 
 popupFromOutcome : CompleteTurnOutcome -> PopupContent
-popupFromOutcome { result, turnScore, cardsDrawn } =
+popupFromOutcome { result, cardsDrawn } =
     case result of
         Failure ->
             { admin = "Angry Cat"
@@ -133,9 +133,6 @@ popupFromOutcome { result, turnScore, cardsDrawn } =
             , body =
                 "Sorry you couldn't find a move.\n\n"
                     ++ "I'm going back to my nap!\n\n"
-                    ++ "You scored "
-                    ++ String.fromInt turnScore
-                    ++ " points for your turn.\n\n"
                     ++ "We have dealt you "
                     ++ pluralize cardsDrawn "more card"
                     ++ " for your next turn."
@@ -145,10 +142,6 @@ popupFromOutcome { result, turnScore, cardsDrawn } =
             { admin = "Steve"
             , body =
                 "You are the first person to play all their cards!\n\n"
-                    ++ "That earns you a 1500 point bonus.\n\n"
-                    ++ "You got "
-                    ++ String.fromInt turnScore
-                    ++ " points for this turn.\n\n"
                     ++ "We have dealt you "
                     ++ pluralize cardsDrawn "more card"
                     ++ " for your next turn.\n\n"
@@ -158,11 +151,7 @@ popupFromOutcome { result, turnScore, cardsDrawn } =
         SuccessWithHandEmptied ->
             { admin = "Steve"
             , body =
-                "Good job!\n\n"
-                    ++ "You scored "
-                    ++ String.fromInt turnScore
-                    ++ " for this turn!\n\n"
-                    ++ "We gave you a bonus for emptying your hand.\n\n"
+                "Good job — hand emptied!\n\n"
                     ++ "We have dealt you "
                     ++ pluralize cardsDrawn "more card"
                     ++ " for your next turn."
@@ -170,11 +159,7 @@ popupFromOutcome { result, turnScore, cardsDrawn } =
 
         Success ->
             { admin = "Steve"
-            , body =
-                "The board is growing!\n\n"
-                    ++ "You receive "
-                    ++ String.fromInt turnScore
-                    ++ " points for this turn!"
+            , body = "The board is growing!"
             }
 
 
@@ -385,8 +370,8 @@ deckRemainingLine model =
         ]
 
 
-{-| One player's row — name + score + either full interactive
-hand + turn controls (if active) or a card-count line (if not).
+{-| One player's row — name + either full interactive hand +
+turn controls (if active) or a card-count line (if not).
 Always P1 above P2 regardless of who's active.
 -}
 viewPlayerRow : Model -> Int -> Hand -> Html Msg
@@ -411,37 +396,6 @@ viewPlayerRow model idx hand =
 
             else
                 "#666"
-
-        playerTotal =
-            case listAt idx model.scores of
-                Just n ->
-                    n
-
-                Nothing ->
-                    0
-
-        turnDelta =
-            model.score - model.turnStartBoardScore
-
-        turnDeltaText =
-            if turnDelta >= 0 then
-                "+" ++ String.fromInt turnDelta
-
-            else
-                String.fromInt turnDelta
-
-        turnDeltaLine =
-            if isActive then
-                [ div
-                    [ style "color" "#555"
-                    , style "font-size" "13px"
-                    , style "margin-bottom" "6px"
-                    ]
-                    [ Html.text ("Turn: " ++ turnDeltaText) ]
-                ]
-
-            else
-                []
     in
     div
         [ style "padding-bottom" "15px"
@@ -455,14 +409,7 @@ viewPlayerRow model idx hand =
             , style "margin-top" "8px"
             ]
             [ Html.text (playerName ++ nameSuffix) ]
-         , div
-            [ style "color" "maroon"
-            , style "margin-bottom" "4px"
-            , style "margin-top" "4px"
-            ]
-            [ Html.text ("Score: " ++ String.fromInt playerTotal) ]
          ]
-            ++ turnDeltaLine
             ++ (if isActive then
                     [ View.viewHandHeading
                     , View.viewHand { attrsForCard = Gesture.handCardAttrs model.drag model.hintedCards } hand

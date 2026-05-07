@@ -10,10 +10,8 @@ CompleteTurn transition. Covers:
   - Seat flip and turn-index increment.
   - Deck is drawn from the front, in order, and the remaining
     deck is the tail.
-  - Score banking for each branch.
   - victorAwarded flip (once-per-game semantics).
   - cardsPlayedThisTurn resets.
-  - turnStartBoardScore updates to the post-turn board score.
 
 Each test builds a minimal GameState, applies the transition,
 and asserts the resulting fields. No I/O, no randomness —
@@ -54,8 +52,8 @@ applyTurn =
 -- SHARED FIXTURES
 
 
-{-| A minimal non-empty hand: one card that won't affect score
-or classification (no set/run of interest).
+{-| A minimal non-empty hand: one card that won't affect
+classification (no set/run of interest).
 -}
 lonelyCard : Card
 lonelyCard =
@@ -73,20 +71,18 @@ lonelyHand =
 
 
 {-| Build an otherwise-empty state seeded with the required
-fields. The board is empty (score 0); outgoing hand can be
-overridden via the record accessor.
+fields. The board is empty; outgoing hand can be overridden
+via the record accessor.
 -}
 baseState : GameState {}
 baseState =
     { board = []
     , hands = [ lonelyHand, Hand.empty ]
-    , scores = [ 0, 0 ]
     , activePlayerIndex = 0
     , turnIndex = 0
     , deck = []
     , cardsPlayedThisTurn = 0
     , victorAwarded = False
-    , turnStartBoardScore = 0
     }
 
 
@@ -116,10 +112,8 @@ suite =
         [ seatAndTurn
         , cardsPlayedBranches
         , deckDrawBranches
-        , scoringBranches
         , victorAwardedOnce
         , cardsPlayedResets
-        , turnStartBoardScoreAdvances
         , dirtyBoardBranch
         ]
 
@@ -208,48 +202,6 @@ deckDrawBranches =
         ]
 
 
-scoringBranches : Test
-scoringBranches =
-    describe "banked turn score"
-        [ test "Success: banks cards-played bonus only (0 board score)" <|
-            \_ ->
-                { baseState | cardsPlayedThisTurn = 2 }
-                    |> applyTurn
-                    |> .scores
-                    -- forCardsPlayed 2 = 200 + 100*4 = 600
-                    |> Expect.equal [ 600, 0 ]
-        , test "SuccessButNeedsCards: banks nothing (cardsPlayed = 0)" <|
-            \_ ->
-                { baseState | deck = deckOfThree, cardsPlayedThisTurn = 0 }
-                    |> applyTurn
-                    |> .scores
-                    |> Expect.equal [ 0, 0 ]
-        , test "SuccessAsVictor: banks cards-played + 1000 empty-hand + 500 victor" <|
-            \_ ->
-                { baseState
-                    | hands = [ Hand.empty, Hand.empty ]
-                    , deck = deckOfFive
-                    , cardsPlayedThisTurn = 3
-                    , victorAwarded = False
-                }
-                    |> applyTurn
-                    |> .scores
-                    -- forCardsPlayed 3 = 200 + 900 = 1100; +1000 empty; +500 victor
-                    |> Expect.equal [ 2600, 0 ]
-        , test "SuccessWithHandEmptied: banks cards-played + 1000 empty-hand (no victor)" <|
-            \_ ->
-                { baseState
-                    | hands = [ Hand.empty, Hand.empty ]
-                    , deck = deckOfFive
-                    , cardsPlayedThisTurn = 3
-                    , victorAwarded = True
-                }
-                    |> applyTurn
-                    |> .scores
-                    |> Expect.equal [ 2100, 0 ]
-        ]
-
-
 victorAwardedOnce : Test
 victorAwardedOnce =
     describe "victorAwarded flips once, then sticks"
@@ -286,16 +238,6 @@ cardsPlayedResets =
             { baseState | cardsPlayedThisTurn = 5 }
                 |> applyTurn
                 |> .cardsPlayedThisTurn
-                |> Expect.equal 0
-
-
-turnStartBoardScoreAdvances : Test
-turnStartBoardScoreAdvances =
-    test "turnStartBoardScore advances to post-turn board score (still 0 in these fixtures)" <|
-        \_ ->
-            { baseState | cardsPlayedThisTurn = 2, turnStartBoardScore = 0 }
-                |> applyTurn
-                |> .turnStartBoardScore
                 |> Expect.equal 0
 
 

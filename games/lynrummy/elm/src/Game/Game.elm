@@ -9,9 +9,9 @@ module Game.Game exposing
 
 This is the core of the client — the full game logic that can
 run standalone without any server. Mirrors the Go-side
-`games/lynrummy/replay.go` `applyCompleteTurn`, but with the
-Elm primitives already in place (`Game.Score`,
-`Game.PlayerTurn`, `Game.Hand`, `CardStack.agedFromPriorTurn`).
+`games/lynrummy/replay.go` `applyCompleteTurn`, with the Elm
+primitives in place (`Game.PlayerTurn`, `Game.Hand`,
+`CardStack.agedFromPriorTurn`).
 
 The `GameState` is defined as an extensible record so the host
 Model (Main.elm) can embed these fields alongside its UI-only
@@ -31,7 +31,6 @@ import Game.Hand as Hand exposing (Hand)
 import Game.Physics.BoardGeometry exposing (BoardBounds)
 import Game.PlayerTurn as PlayerTurn exposing (CompleteTurnResult(..))
 import Game.Rules.Referee as Referee
-import Game.Score as Score
 
 
 {-| Every field required to run a full LynRummy game. Open
@@ -43,13 +42,11 @@ type alias GameState a =
     { a
         | board : List CardStack
         , hands : List Hand
-        , scores : List Int
         , activePlayerIndex : Int
         , turnIndex : Int
         , deck : List Card
         , cardsPlayedThisTurn : Int
         , victorAwarded : Bool
-        , turnStartBoardScore : Int
     }
 
 
@@ -63,16 +60,11 @@ noteCardsPlayed n state =
 
 
 {-| What `applyCompleteTurn` produced, beyond the new state:
-the outgoing player's classified result, the points they
-banked, the cards they drew. All locally computed — no wire
-round-trip. The server's /complete-turn response is a
-projection of the same shape (and will diverge only if the
-client and server disagree on the game's history, which
-should never happen).
+the outgoing player's classified result and the cards they
+drew. All locally computed — no wire round-trip.
 -}
 type alias CompleteTurnOutcome =
     { result : CompleteTurnResult
-    , turnScore : Int
     , cardsDrawn : Int
     , dealtCards : List Card
     }
@@ -121,7 +113,6 @@ applyCompleteTurn bounds state =
             in
             ( state
             , { result = Failure
-              , turnScore = 0
               , cardsDrawn = 0
               , dealtCards = []
               }
@@ -156,16 +147,13 @@ applyValidTurn state =
                     in
                     0
 
-        boardScore =
-            Score.forStacks state.board
-
-        -- Build a PlayerTurn accumulator for classification +
-        -- score summing. Load in the cards-played counter the
-        -- state has been tracking.
+        -- Build a PlayerTurn accumulator for classification.
+        -- Load in the cards-played counter the state has been
+        -- tracking.
         turnBase =
             let
                 seed =
-                    PlayerTurn.new state.turnStartBoardScore
+                    PlayerTurn.new
             in
             { seed
                 | cardsPlayedDuringTurn = state.cardsPlayedThisTurn
@@ -173,18 +161,13 @@ applyValidTurn state =
 
         turnWithBonuses =
             if outgoingHandSize == 0 && state.cardsPlayedThisTurn > 0 then
-                PlayerTurn.updateScoreForEmptyHand
-                    (not state.victorAwarded)
-                    turnBase
+                PlayerTurn.noteEmptyHand (not state.victorAwarded) turnBase
 
             else
                 turnBase
 
         result =
             PlayerTurn.turnResult turnWithBonuses
-
-        turnScore =
-            PlayerTurn.getScore boardScore turnWithBonuses
 
         drawCount =
             case result of
@@ -242,17 +225,6 @@ applyValidTurn state =
                 )
                 state.hands
 
-        newScores =
-            List.indexedMap
-                (\i s ->
-                    if i == outgoingIdx then
-                        s + turnScore
-
-                    else
-                        s
-                )
-                state.scores
-
         agedBoard =
             List.map CardStack.agedFromPriorTurn state.board
 
@@ -267,17 +239,14 @@ applyValidTurn state =
                 | board = agedBoard
                 , hands = newHands
                 , deck = remainingDeck
-                , scores = newScores
                 , activePlayerIndex = nextActive
                 , turnIndex = state.turnIndex + 1
                 , cardsPlayedThisTurn = 0
-                , turnStartBoardScore = boardScore
                 , victorAwarded = state.victorAwarded || result == SuccessAsVictor
             }
 
         outcome =
             { result = result
-            , turnScore = turnScore
             , cardsDrawn = drawCount
             , dealtCards = drawnCards
             }

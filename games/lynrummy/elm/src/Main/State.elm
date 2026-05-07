@@ -39,7 +39,6 @@ import Game.CardStack as CardStack
 import Game.Dealer
 import Game.Physics.GestureArbitration as GA
 import Game.Hand as Hand exposing (Hand)
-import Game.Score as Score
 import Game.GameEvent exposing (GameEvent(..))
 import Json.Encode as Encode exposing (Value)
 import Main.Types exposing (GesturePoint, PathFrame)
@@ -68,13 +67,11 @@ type alias Model =
     { -- Game-state fields.
       board : List CardStack.CardStack
     , hands : List Hand
-    , scores : List Int
     , activePlayerIndex : Int
     , turnIndex : Int
     , deck : List Card
     , cardsPlayedThisTurn : Int
     , victorAwarded : Bool
-    , turnStartBoardScore : Int
 
     -- UI-layer fields.
     , drag : DragState
@@ -87,7 +84,6 @@ type alias Model =
     , boardRect : Maybe GA.Rect
     , sessionId : Maybe Int
     , status : StatusMessage
-    , score : Int
     , hintedCards : List Card
     , popup : Maybe PopupContent
     , actionLog : List ActionLogEntry
@@ -267,13 +263,11 @@ reconstitute the autonomous game.
 type alias RemoteState =
     { board : List CardStack.CardStack
     , hands : List Hand
-    , scores : List Int
     , activePlayerIndex : Int
     , turnIndex : Int
     , deck : List Card
     , cardsPlayedThisTurn : Int
     , victorAwarded : Bool
-    , turnStartBoardScore : Int
     }
 
 
@@ -286,13 +280,11 @@ encodeRemoteState rs =
     Encode.object
         [ ( "board", Encode.list CardStack.encodeCardStack rs.board )
         , ( "hands", Encode.list encodeHand rs.hands )
-        , ( "scores", Encode.list Encode.int rs.scores )
         , ( "active_player_index", Encode.int rs.activePlayerIndex )
         , ( "turn_index", Encode.int rs.turnIndex )
         , ( "deck", Encode.list Card.encodeCard rs.deck )
         , ( "cards_played_this_turn", Encode.int rs.cardsPlayedThisTurn )
         , ( "victor_awarded", Encode.bool rs.victorAwarded )
-        , ( "turn_start_board_score", Encode.int rs.turnStartBoardScore )
         ]
 
 
@@ -475,20 +467,17 @@ baseModel =
       -- `Game.Dealer.dealFullGame` (fresh page load).
       board = Game.Dealer.initialBoard
     , hands = [ Hand.empty, Hand.empty ]
-    , scores = [ 0, 0 ]
     , activePlayerIndex = 0
     , turnIndex = 0
     , deck = []
     , cardsPlayedThisTurn = 0
     , victorAwarded = False
-    , turnStartBoardScore = Score.forStacks Game.Dealer.initialBoard
 
     -- UI-layer fields.
     , drag = NotDragging
     , boardRect = Nothing
     , sessionId = Nothing
     , status = { text = "You may begin moving.", kind = Inform }
-    , score = Score.forStacks Game.Dealer.initialBoard
     , hintedCards = []
     , popup = Nothing
     , actionLog = []

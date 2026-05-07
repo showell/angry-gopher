@@ -129,20 +129,14 @@ the Puzzles catalog ships per puzzle.
 -}
 initialStateDecoder : Decoder RemoteState
 initialStateDecoder =
-    Decode.map8 RemoteState
+    Decode.map7 RemoteState
         (Decode.field "board" (Decode.list CardStack.cardStackDecoder))
         (Decode.field "hands" (Decode.list handDecoder))
-        (Decode.field "scores" (Decode.list Decode.int))
         (Decode.field "active_player_index" Decode.int)
         (Decode.field "turn_index" Decode.int)
         (Decode.field "deck" (Decode.list Card.cardDecoder))
         (Decode.field "cards_played_this_turn" Decode.int)
         (Decode.field "victor_awarded" Decode.bool)
-        |> Decode.andThen
-            (\partial ->
-                Decode.map partial
-                    (Decode.field "turn_start_board_score" Decode.int)
-            )
 
 
 actionLogDecoder : Decoder ActionLogBundle

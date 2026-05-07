@@ -1,35 +1,28 @@
 module Game.PlayerTurn exposing
     ( CompleteTurnResult(..)
     , PlayerTurn
-    , wasHandEmptied
     , getNumCardsPlayed
-    , getScore
-    , wasVictoryBonusGained
     , new
+    , noteCardPlayed
+    , noteEmptyHand
     , revokeEmptyHandBonuses
     , turnResult
-    , undoScoreAfterMove
-    , updateScoreAfterMove
-    , updateScoreForEmptyHand
+    , undoCardPlayed
+    , wasHandEmptied
+    , wasVictoryBonusGained
     )
 
-{-| Turn-level scoring and outcome-type tracking for LynRummy.
-Faithful port of `angry-cat/src/lyn_rummy/game/player_turn.ts`.
+{-| Turn-level outcome tracking for LynRummy. Records whether
+the player played any cards, whether they emptied their hand,
+and whether they got the victor award. Drives the
+`turnResult` discriminator that picks success category.
 
-The record holds per-turn state: starting board score, cards
-played this turn, empty-hand bonus, victory bonus. Its
-functions compute the final turn score and outcome category.
-
-Intentional Elm divergences:
-
-  - TS class → Elm record + module functions.
-  - Mutating methods → functions returning new records.
-  - Argument order: record comes last where multiple args are
-    present, so callers can pipe (`turn |> getScore 100`).
+Ported from `angry-cat/src/lyn_rummy/game/player_turn.ts`,
+trimmed to drop the score-tracking machinery (the kitchen-
+table game has no scoring; the bonuses here used to be Int
+values, now plain Bool flags).
 
 -}
-
-import Game.Score as Score
 
 
 {-| Outcome of a completed turn. `Failure` is reserved for
@@ -44,37 +37,22 @@ type CompleteTurnResult
     | Failure
 
 
-{-| Per-turn scoring state. Start with `new`; update via the
-`updateScore*` functions; read via `getScore` /
-`turnResult`.
+{-| Per-turn tracking state. Start with `new`; update via the
+mutators; read via `turnResult` / the `wasX` accessors.
 -}
 type alias PlayerTurn =
-    { startingBoardScore : Int
-    , cardsPlayedDuringTurn : Int
-    , emptyHandBonus : Int
-    , victoryBonus : Int
+    { cardsPlayedDuringTurn : Int
+    , handEmptied : Bool
+    , victoryGained : Bool
     }
 
 
-new : Int -> PlayerTurn
-new startingBoardScore =
-    { startingBoardScore = startingBoardScore
-    , cardsPlayedDuringTurn = 0
-    , emptyHandBonus = 0
-    , victoryBonus = 0
+new : PlayerTurn
+new =
+    { cardsPlayedDuringTurn = 0
+    , handEmptied = False
+    , victoryGained = False
     }
-
-
-getScore : Int -> PlayerTurn -> Int
-getScore currentBoardScore t =
-    let
-        boardScore =
-            currentBoardScore - t.startingBoardScore
-
-        cardsScore =
-            Score.forCardsPlayed t.cardsPlayedDuringTurn
-    in
-    boardScore + cardsScore + t.victoryBonus + t.emptyHandBonus
 
 
 getNumCardsPlayed : PlayerTurn -> Int
@@ -84,50 +62,42 @@ getNumCardsPlayed t =
 
 wasHandEmptied : PlayerTurn -> Bool
 wasHandEmptied t =
-    t.emptyHandBonus > 0
+    t.handEmptied
 
 
 wasVictoryBonusGained : PlayerTurn -> Bool
 wasVictoryBonusGained t =
-    t.victoryBonus > 0
+    t.victoryGained
 
 
 {-| Called exactly once per card released to the board during
 this turn.
 -}
-updateScoreAfterMove : PlayerTurn -> PlayerTurn
-updateScoreAfterMove t =
+noteCardPlayed : PlayerTurn -> PlayerTurn
+noteCardPlayed t =
     { t | cardsPlayedDuringTurn = t.cardsPlayedDuringTurn + 1 }
 
 
-undoScoreAfterMove : PlayerTurn -> PlayerTurn
-undoScoreAfterMove t =
+undoCardPlayed : PlayerTurn -> PlayerTurn
+undoCardPlayed t =
     { t | cardsPlayedDuringTurn = t.cardsPlayedDuringTurn - 1 }
 
 
-{-| Zero out the empty-hand and victory bonuses. Called when
-the referee disallows an empty-hand state (e.g., illegal
-final board).
+{-| Clear the empty-hand and victory flags. Called when the
+referee disallows an empty-hand state (e.g., illegal final
+board).
 -}
 revokeEmptyHandBonuses : PlayerTurn -> PlayerTurn
 revokeEmptyHandBonuses t =
-    { t | emptyHandBonus = 0, victoryBonus = 0 }
+    { t | handEmptied = False, victoryGained = False }
 
 
 {-| Record that the player emptied their hand. If `isVictor`,
-also grant the victory bonus on top.
+also flag the victory bonus.
 -}
-updateScoreForEmptyHand : Bool -> PlayerTurn -> PlayerTurn
-updateScoreForEmptyHand isVictor t =
-    { t
-        | emptyHandBonus = 1000
-        , victoryBonus =
-            if isVictor then
-                500
-
-            else
-                0
-    }
+noteEmptyHand : Bool -> PlayerTurn -> PlayerTurn
+noteEmptyHand isVictor t =
+    { t | handEmptied = True, victoryGained = isVictor }
 
 
 turnResult : PlayerTurn -> CompleteTurnResult

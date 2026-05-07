@@ -43,7 +43,6 @@ import Game.Replay.AnimateMoveStack as AnimateMoveStack
 import Game.Replay.AnimatePlaceHand as AnimatePlaceHand
 import Game.Replay.DragAnimation as DragAnimation
 import Game.Replay.Space as Space
-import Game.Score as Score
 import Game.GameEvent as GameEvent exposing (GameEvent)
 import Main.Apply as Apply
 import Main.Msg exposing (Msg(..))
@@ -89,14 +88,11 @@ clickInstantReplay model =
                     { model
                         | board = baseline.board
                         , hands = baseline.hands
-                        , scores = baseline.scores
                         , activePlayerIndex = baseline.activePlayerIndex
                         , turnIndex = baseline.turnIndex
                         , deck = baseline.deck
                         , cardsPlayedThisTurn = baseline.cardsPlayedThisTurn
                         , victorAwarded = baseline.victorAwarded
-                        , turnStartBoardScore = baseline.turnStartBoardScore
-                        , score = Score.forStacks baseline.board
                     }
             in
             ( { rewound

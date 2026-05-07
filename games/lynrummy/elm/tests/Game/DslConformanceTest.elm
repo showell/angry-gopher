@@ -3070,7 +3070,6 @@ walkthroughPuzzleA3001Seed1 =
             Expect.all
                 [ \_ -> Expect.equal eagerModel.board replayedModel.board
                 , \_ -> Expect.equal eagerModel.hands replayedModel.hands
-                , \_ -> Expect.equal eagerModel.scores replayedModel.scores
                 , \_ -> Expect.equal eagerModel.activePlayerIndex replayedModel.activePlayerIndex
                 , \_ -> Expect.equal eagerModel.turnIndex replayedModel.turnIndex
                 ]
@@ -3122,7 +3121,6 @@ walkthroughPuzzleA3002Seed2 =
             Expect.all
                 [ \_ -> Expect.equal eagerModel.board replayedModel.board
                 , \_ -> Expect.equal eagerModel.hands replayedModel.hands
-                , \_ -> Expect.equal eagerModel.scores replayedModel.scores
                 , \_ -> Expect.equal eagerModel.activePlayerIndex replayedModel.activePlayerIndex
                 , \_ -> Expect.equal eagerModel.turnIndex replayedModel.turnIndex
                 ]
@@ -3166,7 +3164,6 @@ walkthroughPuzzleA3003Seed3 =
             Expect.all
                 [ \_ -> Expect.equal eagerModel.board replayedModel.board
                 , \_ -> Expect.equal eagerModel.hands replayedModel.hands
-                , \_ -> Expect.equal eagerModel.scores replayedModel.scores
                 , \_ -> Expect.equal eagerModel.activePlayerIndex replayedModel.activePlayerIndex
                 , \_ -> Expect.equal eagerModel.turnIndex replayedModel.turnIndex
                 ]
@@ -3215,7 +3212,6 @@ walkthroughPuzzleA3004Seed4 =
             Expect.all
                 [ \_ -> Expect.equal eagerModel.board replayedModel.board
                 , \_ -> Expect.equal eagerModel.hands replayedModel.hands
-                , \_ -> Expect.equal eagerModel.scores replayedModel.scores
                 , \_ -> Expect.equal eagerModel.activePlayerIndex replayedModel.activePlayerIndex
                 , \_ -> Expect.equal eagerModel.turnIndex replayedModel.turnIndex
                 ]
@@ -3272,7 +3268,6 @@ walkthroughPuzzleA3005Seed5 =
             Expect.all
                 [ \_ -> Expect.equal eagerModel.board replayedModel.board
                 , \_ -> Expect.equal eagerModel.hands replayedModel.hands
-                , \_ -> Expect.equal eagerModel.scores replayedModel.scores
                 , \_ -> Expect.equal eagerModel.activePlayerIndex replayedModel.activePlayerIndex
                 , \_ -> Expect.equal eagerModel.turnIndex replayedModel.turnIndex
                 ]
