@@ -404,7 +404,8 @@ viewPlayerRow model idx hand =
             ++ (if isActive then
                     [ View.viewHandHeading
                     , View.viewHand { attrsForCard = Gesture.handCardAttrs model.drag model.hintedCards } hand
-                    , viewTurnControls model
+                    , viewTurnControls
+                        { canUndo = canUndoThisTurn model, replay = model.replay }
                     ]
 
                 else
@@ -418,12 +419,8 @@ viewPlayerRow model idx hand =
         )
 
 
-{-| Main-app turn controls — Complete turn / Hint / Replay /
-Lobby. The puzzle path uses `puzzleControls` instead and
-never reaches this.
--}
-viewTurnControls : Model -> Html Msg
-viewTurnControls model =
+viewTurnControls : { canUndo : Bool, replay : Maybe ReplayProgress } -> Html Msg
+viewTurnControls { canUndo, replay } =
     div
         [ style "margin-top" "12px"
         , style "display" "flex"
@@ -431,14 +428,14 @@ viewTurnControls model =
         , style "flex-wrap" "wrap"
         ]
         [ gameButton "Complete turn" ClickCompleteTurn
-        , (if canUndoThisTurn model then
+        , (if canUndo then
             gameButton "Undo" ClickUndo
 
            else
             disabledGameButton "Undo"
           )
         , gameButton "Hint" ClickHint
-        , viewReplayControl model.replay
+        , viewReplayControl replay
         , gameLink "← Lobby" "/gopher/game-lobby"
         ]
 
