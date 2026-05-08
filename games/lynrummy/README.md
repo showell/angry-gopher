@@ -47,22 +47,30 @@ The TS agent at `ts/` owns three end-to-end jobs:
 
 ## Gating & testing
 
-**Default: run all gates before each commit.** That's
-`ops/check-conformance` (no flags) — TS suite + Elm
-standalone + Elm tests + elm-review. Per-phase timing is
-printed so regressions are visible.
+Two gate modes.
 
-When rapidly iterating (pure refactors, known-experimental
-branches), **ask Steve** if we can pass `--skip-engine` to
-omit `test_engine_conformance.ts` (~7s saved per run) until
-the experiment lands. Don't skip without asking.
+**`ops/check-conformance --skip-slow` (~10s).** Default for
+day-to-day Elm iteration. Runs Elm standalone + tests +
+elm-review + the cross-language integration suites (leaf
+primitives, verb fixtures, physical_plan, replay
+walkthroughs). Skips the two TS-only suites that are
+essentially engine-workouts — `test_engine_conformance.ts`
+and `test_agent_player.ts`. Both stress the BFS solver and
+run byte-identical when the engine hasn't changed; running
+them after an Elm-only edit is wasted budget.
 
-Treat any phase >15s as worth flagging — instrumentation is
-in place to spot it. The honest test invariant is that
-conformance calls the same codepath the production hint
-path does (`findPlanForBuckets` in `ts/src/hand_play.ts`):
-divergence in solver options means the gate isn't load-
-bearing.
+**`ops/check-conformance` no flag (~75s).** Full gate. Run
+before committing changes that touch the engine, the agent
+loop, or the bucket pipeline — anything that could plausibly
+shift solver behavior. Also run as a final pass at the end
+of an Elm-only chunk (cheap insurance, lands intact).
+
+Treat any phase >15s as worth flagging — per-phase timing is
+printed for exactly this reason. The honest test invariant
+is that conformance calls the same codepath the production
+hint path does (`findPlanForBuckets` in
+`ts/src/hand_play.ts`); divergence in solver options means
+the gate isn't load-bearing.
 
 ## Subsystems
 

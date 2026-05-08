@@ -36,14 +36,17 @@ set -e
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_DIR"
 
-# --skip-engine: run all gates EXCEPT test_engine_conformance.ts.
-# Saves ~7s per run. Default off; ask Steve before enabling on a
-# branch — full gates are the expectation per
+# --skip-slow: omit the two TS suites that are essentially
+# engine-workouts — test_engine_conformance.ts and
+# test_agent_player.ts. Both stress the BFS solver; both run
+# byte-identical when the engine hasn't changed. Skipping them
+# during Elm-only iteration is honest. Saves ~70s. Run the full
+# gate before commits that touch the engine. Per
 # games/lynrummy/README.md ("Gating & testing").
-SKIP_ENGINE=0
+SKIP_SLOW=0
 for arg in "$@"; do
     case "$arg" in
-        --skip-engine) SKIP_ENGINE=1 ;;
+        --skip-slow) SKIP_SLOW=1 ;;
         *) echo "Unknown arg: $arg" >&2; exit 2 ;;
     esac
 done
@@ -66,9 +69,9 @@ DSLS=$(ls ./games/lynrummy/conformance/scenarios/*.dsl \
     | grep -vE 'physical_plan_corpus\.dsl|replay_walkthroughs\.dsl|verb_to_primitives.*\.dsl')
 phase "fixturegen" go run ./cmd/fixturegen $DSLS
 
-if [ "$SKIP_ENGINE" = "1" ]; then
-    echo "==> TS conformance (--skip-engine: omitting test:engine)"
-    phase "ts-tests" bash -c "cd games/lynrummy/ts && npm run -s test:no-engine"
+if [ "$SKIP_SLOW" = "1" ]; then
+    echo "==> TS conformance (--skip-slow: omitting engine + agent self-play)"
+    phase "ts-tests" bash -c "cd games/lynrummy/ts && npm run -s test:skip-slow"
 else
     echo "==> TS conformance"
     phase "ts-tests" bash -c "cd games/lynrummy/ts && npm test"
