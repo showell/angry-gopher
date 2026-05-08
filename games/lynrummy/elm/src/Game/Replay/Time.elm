@@ -42,9 +42,9 @@ import Game.Replay.AnimateMergeStack as AnimateMergeStack
 import Game.Replay.AnimateMoveStack as AnimateMoveStack
 import Game.Replay.AnimatePlaceHand as AnimatePlaceHand
 import Game.Replay.DragAnimation as DragAnimation
+import Game.Execute as Execute
 import Game.Replay.Space as Space
 import Game.GameEvent as GameEvent exposing (GameEvent)
-import Main.Apply as Apply
 import Main.Msg exposing (Msg(..))
 import Main.State as State
     exposing
@@ -176,7 +176,7 @@ replayFrame nowMs model =
                             DragAnimation.Done { pendingAction } ->
                                 let
                                     modelAfter =
-                                        (Apply.applyAction pendingAction { model | drag = NotDragging }).model
+                                        Execute.applyEvent pendingAction { model | drag = NotDragging }
                                 in
                                 ( { modelAfter
                                     | replayAnim = Beating { untilMs = nowMs + 1000 }
@@ -282,7 +282,7 @@ prepareReplayStep action maybePath model nowMs =
         applyImmediate =
             let
                 modelAfter =
-                    (Apply.applyAction action model).model
+                    Execute.applyEvent action model
             in
             ( { modelAfter
                 | replayAnim = Beating { untilMs = nowMs + beatAfter action }
@@ -391,7 +391,7 @@ handCardRectReceived result model =
                 applyNow =
                     let
                         modelAfter =
-                            (Apply.applyAction ctx.action model).model
+                            Execute.applyEvent ctx.action model
                     in
                     ( { modelAfter
                         | replayAnim = Beating { untilMs = nowMs + beatAfter ctx.action }
@@ -428,7 +428,7 @@ handCardRectReceived result model =
                     Debug.log "HandCardRectReceived err" err
 
                 modelAfter =
-                    (Apply.applyAction ctx.action model).model
+                    Execute.applyEvent ctx.action model
             in
             ( { modelAfter
                 | replayAnim = Beating { untilMs = 1000 }
