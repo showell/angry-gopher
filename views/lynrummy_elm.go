@@ -62,9 +62,9 @@ var EngineGlueJSPath = "games/lynrummy/elm/engine_glue.js"
 //   GET  /sessions/<id>                 → HTML detail (file listing)
 //   GET  /sessions/<id>/actions         → bundle: {meta, actions[]} for Elm bootstrap
 //
-// Each envelope on actions.jsonl is `{seq, action, gesture_metadata?}` —
-// the seq is Elm-authored (rides in the body, not the URL) and the
-// server appends verbatim. Order on disk = order Elm sent.
+// Each envelope on actions.jsonl is `{seq, action}` — the seq is
+// Elm-authored (rides in the body, not the URL) and the server
+// appends verbatim. Order on disk = order Elm sent.
 func HandleLynRummyElm(w http.ResponseWriter, r *http.Request) {
 	sub := strings.TrimPrefix(r.URL.Path, "/gopher/lynrummy-elm")
 	sub = strings.TrimPrefix(sub, "/")

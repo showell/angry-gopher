@@ -26,12 +26,16 @@ export interface JsonLoc { top: number; left: number }
 export interface JsonCardStack { board_cards: JsonBoardCard[]; loc: JsonLoc }
 export interface JsonHand { hand_cards: JsonHandCard[] }
 
+/** Floater top-left at a given time, in board frame. Wire mirror
+ *  of Elm's `Game.TimeLoc.TimeLoc`. */
+export interface JsonTimeLoc { t_ms: number; left: number; top: number }
+
 export type WireActionJson =
   | { action: "split"; stack: JsonCardStack; card_index: number }
-  | { action: "merge_stack"; source: JsonCardStack; target: JsonCardStack; side: "left" | "right" }
+  | { action: "merge_stack"; source: JsonCardStack; target: JsonCardStack; side: "left" | "right"; board_path: JsonTimeLoc[] }
   | { action: "merge_hand"; hand_card: JsonCard; target: JsonCardStack; side: "left" | "right" }
   | { action: "place_hand"; hand_card: JsonCard; loc: JsonLoc }
-  | { action: "move_stack"; stack: JsonCardStack; new_loc: JsonLoc }
+  | { action: "move_stack"; stack: JsonCardStack; new_loc: JsonLoc; board_path: JsonTimeLoc[] }
   | { action: "complete_turn" };
 
 export function jsonCard(c: Card): JsonCard {
@@ -90,6 +94,9 @@ export function primToWire(prim: Primitive, sim: readonly BoardStack[]): WireAct
         source: jsonStack(sim[prim.sourceStack]!),
         target: jsonStack(sim[prim.targetStack]!),
         side: prim.side,
+        // Agent has no captured path; replay synthesizes one
+        // via the JIT path in Game.Replay.Space.
+        board_path: [],
       };
     case "merge_hand":
       return {
@@ -109,6 +116,7 @@ export function primToWire(prim: Primitive, sim: readonly BoardStack[]): WireAct
         action: "move_stack",
         stack: jsonStack(sim[prim.stackIndex]!),
         new_loc: { top: prim.newLoc.top, left: prim.newLoc.left },
+        board_path: [],
       };
   }
 }

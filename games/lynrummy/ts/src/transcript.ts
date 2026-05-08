@@ -6,7 +6,7 @@
 // reads back on replay):
 //
 //   <sessions_dir>/<id>/meta.json     {created_at, label, initial_state}
-//   <sessions_dir>/<id>/actions.jsonl        one envelope per line: {seq, action, gesture_metadata?}
+//   <sessions_dir>/<id>/actions.jsonl        one envelope per line: {seq, action}
 //
 // The actions are wire-shaped `WireAction` envelopes — same vocabulary
 // the Elm UI POSTs to the server during live play. Replay walks the

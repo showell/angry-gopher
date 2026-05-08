@@ -167,8 +167,8 @@ func ReadJSONLLines(path string) ([]json.RawMessage, error) {
 	var out []json.RawMessage
 	scanner := bufio.NewScanner(f)
 	// Sessions can carry many actions; bump the per-line buffer
-	// well above the 4 kB atomicity ceiling so a future big
-	// gesture_metadata payload doesn't truncate.
+	// well above the 4 kB atomicity ceiling so a long board_path
+	// on a merge_stack / move_stack doesn't truncate.
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	for scanner.Scan() {
 		line := scanner.Bytes()
