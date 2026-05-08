@@ -40,7 +40,8 @@ import Game.Physics.BoardGeometry as BG
 import Game.Rules.Card exposing (Card)
 import Game.CardStack as CardStack exposing (CardStack)
 import Game.GameEvent as GameEvent exposing (GameEvent)
-import Main.State exposing (Model, activeHand)
+import Game.Hand exposing (activeHand)
+import Main.State exposing (Model)
 import Main.Types exposing (GesturePoint, PathFrame(..), Point)
 
 

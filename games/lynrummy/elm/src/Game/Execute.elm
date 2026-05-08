@@ -1,4 +1,4 @@
-module Game.Execute exposing (mergeHand, mergeStack, moveStack, placeHand, split)
+module Game.Execute exposing (applyEvent, mergeHand, mergeStack, moveStack, placeHand, split)
 
 {-| Honest board mutators, one per `GameEvent` variant. Each
 function takes the board (and whatever per-action data it
@@ -15,8 +15,48 @@ divergence cascades downstream and gets harder to trace.
 
 import Game.BoardActions as BoardActions exposing (Side)
 import Game.CardStack as CardStack exposing (BoardLocation, CardStack, findStack, isStacksEqual)
+import Game.GameEvent exposing (GameEvent(..))
 import Game.Hand as Hand exposing (Hand)
 import Game.Rules.Card exposing (Card)
+
+
+{-| Dispatch a `GameEvent` to the appropriate per-variant
+mutator. Operates on a narrow `{ board, hand }` state — the
+caller (Main.Apply, replay, tests) wraps the result back into
+its own host shape.
+
+`CompleteTurn` and `Undo` are no-ops here: the turn-flip needs
+fields beyond `{ board, hand }`, and `Undo` is the inverse
+walk handled separately. Both pass through unchanged so this
+function can be called blindly on a sequence of events.
+
+-}
+applyEvent :
+    GameEvent
+    -> { board : List CardStack, hand : Hand }
+    -> { board : List CardStack, hand : Hand }
+applyEvent event state =
+    case event of
+        Split p ->
+            { state | board = split p.stack p.cardIndex state.board }
+
+        MergeStack p ->
+            { state | board = mergeStack p.source p.target p.side state.board }
+
+        MoveStack p ->
+            { state | board = moveStack p.stack p.newLoc state.board }
+
+        MergeHand p ->
+            mergeHand p.handCard p.target p.side state.board state.hand
+
+        PlaceHand p ->
+            placeHand p.handCard p.loc state.board state.hand
+
+        CompleteTurn ->
+            state
+
+        Undo ->
+            state
 
 
 {-| Split the given stack at `cardIndex`, returning a new

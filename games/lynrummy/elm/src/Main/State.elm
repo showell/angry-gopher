@@ -11,13 +11,11 @@ module Main.State exposing
     , ReplayProgress
     , StatusKind(..)
     , StatusMessage
-    , activeHand
     , baseModel
     , boardDomIdFor
     , canUndoThisTurn
     , collapseUndos
     , encodeRemoteState
-    , setActiveHand
     )
 
 {-| All application-wide data types and the initial Model.
@@ -391,56 +389,6 @@ boardDomIdFor gameId =
 
 
 -- ACTIVE HAND
-
-
-{-| Active hand is whichever player's turn it is. All hand-card
-drag/drop uses this. Empty-hand fallback keeps the view
-resilient if state hasn't populated yet.
--}
-activeHand : Model -> Hand
-activeHand model =
-    case listAt model.activePlayerIndex model.hands of
-        Just h ->
-            h
-
-        Nothing ->
-            -- Per memory/feedback_dont_paper_over_problems.md: if the
-            -- active player index falls off the end of the hands list,
-            -- log loud rather than silently returning an empty hand.
-            -- This was a paper-over for live-play race conditions; in
-            -- replay it just hides bridge bugs.
-            let
-                _ =
-                    Debug.log
-                        ("[activeHand] no hand at activePlayerIndex="
-                            ++ String.fromInt model.activePlayerIndex
-                            ++ " (have "
-                            ++ String.fromInt (List.length model.hands)
-                            ++ " hands) — returning Hand.empty (paper-over symptom)"
-                        )
-                        ()
-            in
-            Hand.empty
-
-
-{-| Returns a Model with the active player's hand replaced.
-Used by local UI-side hand updates (drag-drop that removes a
-card before the server round-trip).
--}
-setActiveHand : Hand -> Model -> Model
-setActiveHand newHand model =
-    { model
-        | hands =
-            List.indexedMap
-                (\i h ->
-                    if i == model.activePlayerIndex then
-                        newHand
-
-                    else
-                        h
-                )
-                model.hands
-    }
 
 
 

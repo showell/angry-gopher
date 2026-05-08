@@ -1,11 +1,13 @@
 module Game.Hand exposing
     ( Hand
+    , activeHand
     , addCards
     , addHandCards
     , empty
     , findHandCard
     , removeHandCard
     , resetState
+    , setActiveHand
     , size
     )
 
@@ -33,6 +35,40 @@ findHandCard card hand =
     hand.handCards
         |> List.filter (\hc -> isHandCardSameCard hc { card = card, state = HandNormal })
         |> List.head
+
+
+{-| Active hand of any state record carrying `hands` and
+`activePlayerIndex`. Empty-hand fallback keeps callers
+resilient if state hasn't populated yet (the bridge-bug log
+happens at the call sites that care).
+-}
+activeHand : { a | activePlayerIndex : Int, hands : List Hand } -> Hand
+activeHand state =
+    state.hands
+        |> List.drop state.activePlayerIndex
+        |> List.head
+        |> Maybe.withDefault empty
+
+
+{-| Replace the active player's hand on the state.
+-}
+setActiveHand :
+    Hand
+    -> { a | activePlayerIndex : Int, hands : List Hand }
+    -> { a | activePlayerIndex : Int, hands : List Hand }
+setActiveHand newHand state =
+    { state
+        | hands =
+            List.indexedMap
+                (\i h ->
+                    if i == state.activePlayerIndex then
+                        newHand
+
+                    else
+                        h
+                )
+                state.hands
+    }
 
 
 empty : Hand

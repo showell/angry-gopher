@@ -12,6 +12,7 @@ module Game.Physics.BoardGeometry exposing
     , encodeBoardBounds
     , encodeGeometryError
     , geometryErrorDecoder
+    , refereeBounds
     , stackHeight
     , stackWidth
     , validateBoardGeometry
@@ -93,6 +94,16 @@ type alias BoardBounds =
     , maxHeight : Int
     , margin : Int -- minimum gap between stacks
     }
+
+
+{-| Bounds the kitchen-table game's referee uses to validate
+end-of-turn layouts. The server no longer validates (dumb
+file storage as of LEAN_PASS phase 2); this is purely
+client-side.
+-}
+refereeBounds : BoardBounds
+refereeBounds =
+    { maxWidth = 800, maxHeight = 600, margin = 7 }
 
 
 type GeometryErrorKind

@@ -35,14 +35,13 @@ import Game.Game as Game
 import Game.Reducer as Reducer
 import Game.Rules.StackType as StackType
 import Game.GameEvent exposing (GameEvent(..))
+import Game.Hand exposing (activeHand, setActiveHand)
 import Main.State
     exposing
         ( ActionOutcome
         , Model
         , StatusKind(..)
         , StatusMessage
-        , activeHand
-        , setActiveHand
         )
 
 
