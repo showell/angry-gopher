@@ -46,11 +46,11 @@ import Game.Execute as Execute
 import Game.Replay.Space as Space
 import Game.GameEvent as GameEvent exposing (GameEvent)
 import Main.Msg exposing (Msg(..))
+import Game.Status exposing (StatusKind(..))
 import Main.State as State
     exposing
         ( Model
         , ReplayAnimationState(..)
-        , StatusKind(..)
         )
 import Main.Types exposing (GesturePoint, Point)
 import Task

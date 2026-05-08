@@ -1,42 +1,26 @@
-module Main.Apply exposing
-    ( geometryFeedback
+module Game.Status exposing
+    ( StatusKind(..)
+    , StatusMessage
+    , geometryFeedback
     , mergeStatus
     )
 
-{-| Status-message helpers for the live-play dispatch layer.
-`geometryFeedback` surfaces a board-tidiness change as a
-`Maybe StatusMessage`; `mergeStatus` classifies the post-merge
-board into one of "Merged." / "Nice, but where's the third
-card?" / "Combined!" / "Combined! Clean board!".
-
-What used to live here — `applyAction`, `applyPhysics`,
-`ActionOutcome`, the per-action status constants — was the
-state-transition layer. That role moved to `Game.Execute`
-(the dispatch function) and the per-side `handleMouseUpBoard`
-/ `handleMouseUpHand` workhorses in `Main.Play` (which compose
-their own status messages inline). The two surviving helpers
-here will likely relocate to a `Status` module soon.
-
--}
+{-| Status messages and the helpers that build them. -}
 
 import Game.CardStack as CardStack exposing (CardStack)
 import Game.Physics.BoardGeometry as BoardGeometry exposing (BoardGeometryStatus(..))
 import Game.Rules.Card
 import Game.Rules.StackType as StackType
-import Main.State
-    exposing
-        ( StatusKind(..)
-        , StatusMessage
-        )
 
 
+type alias StatusMessage =
+    { text : String, kind : StatusKind }
 
--- STATUS MESSAGES
---
--- Lifted from angry-cat/src/lyn_rummy/game/game.ts:2044-2076.
--- Kept verbatim so feel matches the TS original. Each message
--- is built from post-mutation board data — no post-hoc
--- board-diffing.
+
+type StatusKind
+    = Inform
+    | Celebrate
+    | Scold
 
 
 {-| Surface a board-geometry tidiness change as a status

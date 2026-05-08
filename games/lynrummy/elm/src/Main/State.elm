@@ -8,8 +8,6 @@ module Main.State exposing
     , RemoteState
     , ReplayAnimationState(..)
     , ReplayProgress
-    , StatusKind(..)
-    , StatusMessage
     , baseModel
     , boardDomIdFor
     , canUndoThisTurn
@@ -37,6 +35,7 @@ import Game.GameEvent exposing (GameEvent(..))
 import Game.Hand as Hand exposing (Hand)
 import Game.Physics.GestureArbitration as GA
 import Game.Rules.Card as Card exposing (Card)
+import Game.Status exposing (StatusKind(..), StatusMessage)
 import Json.Encode as Encode exposing (Value)
 import Main.Types exposing (GesturePoint, PathFrame)
 
@@ -183,16 +182,6 @@ type alias PopupContent =
     { admin : String
     , body : String
     }
-
-
-type alias StatusMessage =
-    { text : String, kind : StatusKind }
-
-
-type StatusKind
-    = Inform
-    | Celebrate
-    | Scold
 
 
 {-| Captured drag telemetry attached to a wire-bound action. A

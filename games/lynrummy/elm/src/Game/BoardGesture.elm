@@ -25,6 +25,7 @@ import Game.BoardDrag exposing (BoardCardDragInfo)
 import Game.CardStack as CardStack exposing (BoardLocation, CardStack)
 import Game.Physics.BoardGeometry as BG
 import Game.Physics.GestureArbitration as GA
+import Game.Status as Status
 import Game.WingView as WingView
 import Main.State as State
 import Main.Types exposing (PathFrame(..), Point)
@@ -145,8 +146,8 @@ mouseMove :
     Point
     -> Float
     -> BoardCardDragInfo
-    -> State.StatusMessage
-    -> ( BoardCardDragInfo, State.StatusMessage )
+    -> Status.StatusMessage
+    -> ( BoardCardDragInfo, Status.StatusMessage )
 mouseMove pos tMs d currentStatus =
     let
         delta =
@@ -192,8 +193,8 @@ mouseMove pos tMs d currentStatus =
 hoverStatus :
     Maybe a
     -> Maybe a
-    -> State.StatusMessage
-    -> State.StatusMessage
+    -> Status.StatusMessage
+    -> Status.StatusMessage
 hoverStatus currentHover nextHover currentStatus =
     if nextHover /= currentHover then
         case nextHover of
@@ -207,9 +208,9 @@ hoverStatus currentHover nextHover currentStatus =
         currentStatus
 
 
-wingHoverStatus : State.StatusMessage
+wingHoverStatus : Status.StatusMessage
 wingHoverStatus =
-    { text = "Drop stack to complete merge.", kind = State.Inform }
+    { text = "Drop stack to complete merge.", kind = Status.Inform }
 
 
 isCursorOverBoard : Point -> Maybe GA.Rect -> Bool

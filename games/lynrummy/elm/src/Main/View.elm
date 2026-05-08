@@ -60,12 +60,11 @@ import Game.BoardView as BoardView
 import Game.Drag as Drag
 import Main.Gesture as Gesture
 import Main.Msg exposing (Msg(..))
+import Game.Status exposing (StatusKind(..), StatusMessage)
 import Main.State
     exposing
         ( Model
         , PopupContent
-        , StatusKind(..)
-        , StatusMessage
         , canUndoThisTurn
         )
 import Main.Util exposing (pluralize)

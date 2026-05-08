@@ -43,7 +43,7 @@ import Http
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
 import Game.Physics.BoardGeometry exposing (refereeBounds)
-import Main.Apply as Apply
+import Game.Status as Status exposing (StatusKind(..), StatusMessage)
 import Main.Gesture
     exposing
         ( pointDecoder
@@ -56,8 +56,6 @@ import Main.State as State
         ( ActionLogBundle
         , ActionLogEntry
         , Model
-        , StatusKind(..)
-        , StatusMessage
         , baseModel
         , collapseUndos
         , encodeRemoteState
@@ -366,7 +364,7 @@ handleMouseUpBoard releasePoint tMs d model =
 
                 outcome =
                     { board = newBoard
-                    , status = Apply.geometryFeedback model.board newBoard |> Maybe.withDefault splitStatus
+                    , status = Status.geometryFeedback model.board newBoard |> Maybe.withDefault splitStatus
                     , actionLog = model.actionLog ++ [ entry ]
                     , nextSeq = model.nextSeq + 1
                     }
@@ -398,7 +396,7 @@ handleMouseUpBoard releasePoint tMs d model =
 
                 outcome =
                     { board = newBoard
-                    , status = Apply.geometryFeedback model.board newBoard |> Maybe.withDefault (Apply.mergeStatus newBoard)
+                    , status = Status.geometryFeedback model.board newBoard |> Maybe.withDefault (Status.mergeStatus newBoard)
                     , actionLog = model.actionLog ++ [ entry ]
                     , nextSeq = model.nextSeq + 1
                     }
@@ -450,7 +448,7 @@ handleMouseUpBoard releasePoint tMs d model =
 
                 outcome =
                     { board = newBoard
-                    , status = Apply.geometryFeedback model.board newBoard |> Maybe.withDefault moveStackStatus
+                    , status = Status.geometryFeedback model.board newBoard |> Maybe.withDefault moveStackStatus
                     , actionLog = model.actionLog ++ [ entry ]
                     , nextSeq = model.nextSeq + 1
                     }
@@ -523,7 +521,7 @@ handleMouseUpHand releasePoint d model =
                     { board = next.board
                     , hands = modelWithHand.hands
                     , cardsPlayedThisTurn = model.cardsPlayedThisTurn + 1
-                    , status = Apply.geometryFeedback model.board next.board |> Maybe.withDefault (Apply.mergeStatus next.board)
+                    , status = Status.geometryFeedback model.board next.board |> Maybe.withDefault (Status.mergeStatus next.board)
                     , actionLog =
                         model.actionLog
                             ++ [ { action = GameEvent.MergeHand p
@@ -573,7 +571,7 @@ handleMouseUpHand releasePoint d model =
                     { board = next.board
                     , hands = modelWithHand.hands
                     , cardsPlayedThisTurn = model.cardsPlayedThisTurn + 1
-                    , status = Apply.geometryFeedback model.board next.board |> Maybe.withDefault placeHandStatus
+                    , status = Status.geometryFeedback model.board next.board |> Maybe.withDefault placeHandStatus
                     , actionLog =
                         model.actionLog
                             ++ [ { action = GameEvent.PlaceHand p
