@@ -52,6 +52,7 @@ import Game.Physics.BoardGeometry as BoardGeometry
 import Game.Game exposing (CompleteTurnOutcome)
 import Game.Hand exposing (Hand)
 import Game.PlayerTurn exposing (CompleteTurnResult(..))
+import Game.Rules.Card exposing (Card)
 import Game.View as View
 import Html exposing (Html, div)
 import Html.Attributes exposing (href, style)
@@ -340,13 +341,29 @@ leftSidebar model =
 
 playerHands : Model -> List (Html Msg)
 playerHands model =
+    let
+        activeInfo : ActivePlayerInfo
+        activeInfo =
+            { drag = model.drag
+            , hintedCards = model.hintedCards
+            , canUndo = canUndoThisTurn model
+            , replay = model.replay
+            }
+
+        renderRow idx hand =
+            if idx == model.gameState.activePlayerIndex then
+                viewActivePlayerRow activeInfo idx hand
+
+            else
+                viewInactivePlayerRow idx hand
+    in
     (div
         [ style "color" "#666"
         , style "font-size" "13px"
         , style "margin-top" "12px"
         ]
         [ Html.text ("Turn " ++ String.fromInt (model.gameState.turnIndex + 1)) ]
-        :: List.indexedMap (viewPlayerRow model) model.gameState.hands
+        :: List.indexedMap renderRow model.gameState.hands
     )
         ++ [ deckRemainingLine (List.length model.gameState.deck) ]
 
@@ -361,19 +378,39 @@ deckRemainingLine deckCount =
         [ Html.text ("Deck: " ++ String.fromInt deckCount ++ " cards left") ]
 
 
-{-| One player's row — name + either full interactive hand +
-turn controls (if active) or a card-count line (if not).
-Always P1 above P2 regardless of who's active.
--}
-viewPlayerRow : Model -> Int -> Hand -> Html Msg
-viewPlayerRow model idx hand =
+type alias ActivePlayerInfo =
+    { drag : Drag.DragState
+    , hintedCards : List Card
+    , canUndo : Bool
+    , replay : Maybe ReplayProgress
+    }
+
+
+viewActivePlayerRow : ActivePlayerInfo -> Int -> Hand -> Html Msg
+viewActivePlayerRow info idx hand =
+    playerRowShell { isActive = True, idx = idx }
+        [ View.viewHandHeading
+        , View.viewHand
+            { attrsForCard = Gesture.handCardAttrs info.drag info.hintedCards }
+            hand
+        , viewTurnControls { canUndo = info.canUndo, replay = info.replay }
+        ]
+
+
+viewInactivePlayerRow : Int -> Hand -> Html Msg
+viewInactivePlayerRow idx hand =
+    playerRowShell { isActive = False, idx = idx }
+        [ div
+            [ style "color" "#888"
+            , style "font-size" "13px"
+            ]
+            [ Html.text (String.fromInt (List.length hand.handCards) ++ " cards") ]
+        ]
+
+
+playerRowShell : { isActive : Bool, idx : Int } -> List (Html Msg) -> Html Msg
+playerRowShell { isActive, idx } body =
     let
-        isActive =
-            idx == model.gameState.activePlayerIndex
-
-        playerName =
-            "Player " ++ String.fromInt (idx + 1)
-
         nameSuffix =
             if isActive then
                 " (your turn)"
@@ -393,29 +430,14 @@ viewPlayerRow model idx hand =
         , style "margin-bottom" "12px"
         , style "border-bottom" "1px #000080 solid"
         ]
-        ([ div
+        (div
             [ style "font-weight" "bold"
             , style "font-size" "16px"
             , style "color" nameColor
             , style "margin-top" "8px"
             ]
-            [ Html.text (playerName ++ nameSuffix) ]
-         ]
-            ++ (if isActive then
-                    [ View.viewHandHeading
-                    , View.viewHand { attrsForCard = Gesture.handCardAttrs model.drag model.hintedCards } hand
-                    , viewTurnControls
-                        { canUndo = canUndoThisTurn model, replay = model.replay }
-                    ]
-
-                else
-                    [ div
-                        [ style "color" "#888"
-                        , style "font-size" "13px"
-                        ]
-                        [ Html.text (String.fromInt (List.length hand.handCards) ++ " cards") ]
-                    ]
-               )
+            [ Html.text ("Player " ++ String.fromInt (idx + 1) ++ nameSuffix) ]
+            :: body
         )
 
 
