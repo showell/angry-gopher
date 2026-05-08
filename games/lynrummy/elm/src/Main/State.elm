@@ -40,7 +40,6 @@ import Game.Hand as Hand exposing (Hand)
 import Game.GameEvent exposing (GameEvent(..))
 import Json.Encode as Encode exposing (Value)
 import Main.Types exposing (GesturePoint, PathFrame)
-import Main.Util exposing (listAt)
 
 
 

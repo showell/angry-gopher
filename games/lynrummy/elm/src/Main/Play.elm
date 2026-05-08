@@ -27,7 +27,7 @@ import Game.BoardGesture as BoardGesture
 import Game.CardStack exposing (CardStack, encodeBoardLocation, encodeCardStack)
 import Game.Drag exposing (DragState(..))
 import Game.Execute as Execute
-import Game.Hand as Hand exposing (Hand, activeHand, setActiveHand)
+import Game.Hand exposing (Hand, activeHand, setActiveHand)
 import Game.HandDrag exposing (HandCardDragInfo)
 import Game.HandGesture as HandGesture
 import Game.Rules.Card as Card
