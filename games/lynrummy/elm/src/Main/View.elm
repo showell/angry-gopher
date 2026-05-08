@@ -348,26 +348,17 @@ playerHands model =
         [ Html.text ("Turn " ++ String.fromInt (model.gameState.turnIndex + 1)) ]
         :: List.indexedMap (viewPlayerRow model) model.gameState.hands
     )
-        ++ [ deckRemainingLine model ]
+        ++ [ deckRemainingLine (List.length model.gameState.deck) ]
 
 
-{-| Shows how many cards are left in the dealer's deck.
-Helpful for gauging how far into the game the agent has
-gotten / how long it's been sustaining itself.
--}
-deckRemainingLine : Model -> Html Msg
-deckRemainingLine model =
+deckRemainingLine : Int -> Html Msg
+deckRemainingLine deckCount =
     div
         [ style "color" "#666"
         , style "font-size" "13px"
         , style "margin-top" "8px"
         ]
-        [ Html.text
-            ("Deck: "
-                ++ String.fromInt (List.length model.gameState.deck)
-                ++ " cards left"
-            )
-        ]
+        [ Html.text ("Deck: " ++ String.fromInt deckCount ++ " cards left") ]
 
 
 {-| One player's row — name + either full interactive hand +
