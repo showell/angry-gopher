@@ -44,8 +44,7 @@ import {
   KIND_RUN,
   KIND_RB,
 } from "./classified_card_stack.ts";
-import { findPlay, type PlayResult } from "./hand_play.ts";
-import { solveStateWithDescs } from "./engine_v2.ts";
+import { findPlay, findPlanForBuckets, type PlayResult } from "./hand_play.ts";
 import { describe, type Desc } from "./move.ts";
 import { enumerateMoves } from "./enumerator.ts";
 
@@ -176,7 +175,7 @@ function applyPlay(
   const initial: RawBuckets = { helper, trouble, growing: [], complete: [] };
   const classified = classifyBuckets(initial);
 
-  const plan = solveStateWithDescs(classified, { maxStates: 50000, maxTroubleOuter: 12 });
+  const plan = findPlanForBuckets(classified);
   if (plan === null) return null;
 
   const final = applyPlan(classified, plan);
