@@ -42,7 +42,8 @@ import Html exposing (Html)
 import Http
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
-import Main.Apply as Apply exposing (applyAction, refereeBounds)
+import Game.Physics.BoardGeometry exposing (refereeBounds)
+import Main.Apply as Apply
 import Main.Gesture
     exposing
         ( pointDecoder
@@ -976,7 +977,7 @@ bootstrapFromBundle bundle model =
                 }
     in
     List.foldl
-        (\entry m -> .model (applyAction entry.action m))
+        (\entry m -> Execute.applyEvent entry.action m)
         atInitial
         (collapseUndos bundle.actions)
 

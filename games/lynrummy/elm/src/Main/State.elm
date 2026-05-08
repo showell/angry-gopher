@@ -1,7 +1,6 @@
 module Main.State exposing
     ( ActionLogBundle
     , ActionLogEntry
-    , ActionOutcome
     , EnvelopeForGesture
     , Flags
     , Model
@@ -31,13 +30,13 @@ in `Game.Drag`; small leaf types (`Point`, `PathFrame`,
 
 -}
 
-import Game.Drag exposing (DragState(..))
-import Game.Rules.Card as Card exposing (Card)
 import Game.CardStack as CardStack
 import Game.Dealer
-import Game.Physics.GestureArbitration as GA
-import Game.Hand as Hand exposing (Hand)
+import Game.Drag exposing (DragState(..))
 import Game.GameEvent exposing (GameEvent(..))
+import Game.Hand as Hand exposing (Hand)
+import Game.Physics.GestureArbitration as GA
+import Game.Rules.Card as Card exposing (Card)
 import Json.Encode as Encode exposing (Value)
 import Main.Types exposing (GesturePoint, PathFrame)
 
@@ -190,19 +189,6 @@ type alias StatusMessage =
     { text : String, kind : StatusKind }
 
 
-{-| What `Main.Apply.applyAction` returns: the post-action Model
-plus the status message describing what just happened. The
-message is generated at the same point the mutation is
-performed, colocated with the physics — no separate "diff the
-boards to figure out what happened" classifier. Callers decide
-whether to use the status (human actions do; replay ignores).
--}
-type alias ActionOutcome =
-    { model : Model
-    , status : StatusMessage
-    }
-
-
 type StatusKind
     = Inform
     | Celebrate
@@ -321,6 +307,7 @@ sequence — what replay and bootstrap should actually apply.
 
 Used by bootstrapFromBundle (to fold only effective actions)
 and clickInstantReplay (so replay never animates Undo tokens).
+
 -}
 collapseUndos : List ActionLogEntry -> List ActionLogEntry
 collapseUndos entries =
@@ -388,9 +375,6 @@ boardDomIdFor gameId =
 
 
 -- ACTIVE HAND
-
-
-
 -- INIT STATE
 
 

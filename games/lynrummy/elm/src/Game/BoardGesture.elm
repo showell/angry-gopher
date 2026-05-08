@@ -26,7 +26,6 @@ import Game.CardStack as CardStack exposing (BoardLocation, CardStack)
 import Game.Physics.BoardGeometry as BG
 import Game.Physics.GestureArbitration as GA
 import Game.WingView as WingView
-import Main.Apply as Apply
 import Main.State as State
 import Main.Types exposing (PathFrame(..), Point)
 
@@ -94,6 +93,7 @@ the off-board case — caller maps that to `BoardCardOffBoard`.
 Action variants carry the gesture envelope (path + frame)
 constructed from `d.gesturePath`; the frame is always
 `BoardFrame` for board-origin drags.
+
 -}
 resolveBoardCardGesture : BoardCardDragInfo -> Maybe GA.Rect -> Maybe BoardMouseUp
 resolveBoardCardGesture d boardRect =
@@ -139,6 +139,7 @@ the model.
 
 Returns just the bits that change — there's no `Cmd Msg` slot
 because mousemove never emits commands.
+
 -}
 mouseMove :
     Point
@@ -225,7 +226,7 @@ isDropFootprintInBounds : Int -> BoardLocation -> Bool
 isDropFootprintInBounds cardCount loc =
     let
         bounds =
-            Apply.refereeBounds
+            BG.refereeBounds
     in
     (loc.left >= 0)
         && (loc.top >= 0)

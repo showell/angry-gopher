@@ -2,7 +2,6 @@ module Game.Game exposing
     ( CompleteTurnOutcome
     , GameState
     , applyCompleteTurn
-    , noteCardsPlayed
     )
 
 {-| The autonomous LynRummy game state and its pure transitions.
@@ -25,11 +24,11 @@ to the incoming party. In the Go path that decision flows from
 
 -}
 
-import Game.Rules.Card exposing (Card)
 import Game.CardStack as CardStack exposing (CardStack, HandCardState(..))
 import Game.Hand as Hand exposing (Hand)
 import Game.Physics.BoardGeometry exposing (BoardBounds)
 import Game.PlayerTurn as PlayerTurn exposing (CompleteTurnResult(..))
+import Game.Rules.Card exposing (Card)
 import Game.Rules.Referee as Referee
 
 
@@ -48,15 +47,6 @@ type alias GameState a =
         , cardsPlayedThisTurn : Int
         , victorAwarded : Bool
     }
-
-
-{-| Increment `cardsPlayedThisTurn` by `n`. Call once per
-hand-card release (merge_hand adds 1; place_hand adds 1;
-trick_result adds n where n is the number of cards released).
--}
-noteCardsPlayed : Int -> GameState a -> GameState a
-noteCardsPlayed n state =
-    { state | cardsPlayedThisTurn = state.cardsPlayedThisTurn + n }
 
 
 {-| What `applyCompleteTurn` produced, beyond the new state:

@@ -1,237 +1,33 @@
 module Main.Apply exposing
-    ( applyAction
-    , geometryFeedback
+    ( geometryFeedback
     , mergeStatus
-    , refereeBounds
     )
 
-{-| The pure state-transition layer of the Elm client.
-`applyAction` is the single entry point for applying a
-validated action to the Model — same function whether the
-input came from a local gesture, a replay tick, or a wire
-broadcast. "Capture the input, update the data structure,
-re-draw the view."
+{-| Status-message helpers for the live-play dispatch layer.
+`geometryFeedback` surfaces a board-tidiness change as a
+`Maybe StatusMessage`; `mergeStatus` classifies the post-merge
+board into one of "Merged." / "Nice, but where's the third
+card?" / "Combined!" / "Combined! Clean board!".
 
-Each call returns an `ActionOutcome`: the new Model alongside
-the `StatusMessage` that describes what just happened. The
-status is generated at the same point the mutation is
-performed — colocated with the physics, not inferred
-post-hoc by a separate classifier. Callers decide whether to
-use the status (human actions do; replay ignores).
-
-The (board, hand) half of each physics transition delegates to
-`Game.Reducer.applyAction`. This module's job is the
-Model-level wrapping: Score recomputation, the
-`cardsPlayedThisTurn` counter, the full `CompleteTurn`
-transition via `Game.applyCompleteTurn`, and the per-action
-status message.
+What used to live here — `applyAction`, `applyPhysics`,
+`ActionOutcome`, the per-action status constants — was the
+state-transition layer. That role moved to `Game.Execute`
+(the dispatch function) and the per-side `handleMouseUpBoard`
+/ `handleMouseUpHand` workhorses in `Main.Play` (which compose
+their own status messages inline). The two surviving helpers
+here will likely relocate to a `Status` module soon.
 
 -}
 
+import Game.CardStack as CardStack exposing (CardStack)
 import Game.Physics.BoardGeometry as BoardGeometry exposing (BoardGeometryStatus(..))
 import Game.Rules.Card
-import Game.CardStack as CardStack exposing (CardStack)
-import Game.Game as Game
-import Game.Reducer as Reducer
 import Game.Rules.StackType as StackType
-import Game.GameEvent exposing (GameEvent(..))
-import Game.Hand exposing (activeHand, setActiveHand)
 import Main.State
     exposing
-        ( ActionOutcome
-        , Model
-        , StatusKind(..)
+        ( StatusKind(..)
         , StatusMessage
         )
-
-
-
--- BOUNDS CONSTANT
-
-
-{-| Bounds the client's referee uses to validate end-of-turn
-layouts. The server no longer validates (dumb file storage as of
-LEAN_PASS phase 2); this is purely client-side.
--}
-refereeBounds : BoardGeometry.BoardBounds
-refereeBounds =
-    { maxWidth = 800, maxHeight = 600, margin = 7 }
-
-
-
--- APPLY ACTION
-
-
-{-| Apply a validated GameEvent to the Model. Exhaustive
-dispatch over the seven variants. Each branch returns an
-`ActionOutcome` — the new Model plus the status message that
-describes the outcome — generated at the point of mutation.
-
-  - `Split`, `MergeStack`, `MoveStack` — board-only physics.
-  - `MergeHand`, `PlaceHand` — board + hand physics; each
-    releases one hand card, so increment
-    `cardsPlayedThisTurn`.
-  - `CompleteTurn` — full autonomous turn transition via
-    `Game.applyCompleteTurn`.
-  - `Undo` — unreachable here: live undo is handled by
-    `Main.Play.clickUndo` (direct inversion via
-    `Reducer.undoAction`); replay/bootstrap fold through
-    `collapseUndos` which strips Undo tokens before this
-    function is called. Branch kept for exhaustiveness.
-
-The physics branches all share `applyPhysics`: delegate the
-(board, hand) transition to `Reducer.applyAction`, then thread
-the result back through the Model.
-
--}
-applyAction : GameEvent -> Model -> ActionOutcome
-applyAction action model =
-    case action of
-        Split _ ->
-            let
-                next =
-                    applyPhysics action model
-            in
-            { model = next
-            , status = geometryFeedback model.board next.board |> Maybe.withDefault splitStatus
-            }
-
-        MergeStack _ ->
-            let
-                next =
-                    applyPhysics action model
-            in
-            { model = next
-            , status = geometryFeedback model.board next.board |> Maybe.withDefault (mergeStatus next.board)
-            }
-
-        MergeHand _ ->
-            let
-                next =
-                    applyPhysics action model |> Game.noteCardsPlayed 1
-            in
-            { model = next
-            , status = geometryFeedback model.board next.board |> Maybe.withDefault (mergeStatus next.board)
-            }
-
-        PlaceHand _ ->
-            let
-                next =
-                    applyPhysics action model |> Game.noteCardsPlayed 1
-            in
-            { model = next
-            , status = geometryFeedback model.board next.board |> Maybe.withDefault placeHandStatus
-            }
-
-        MoveStack _ ->
-            let
-                next =
-                    applyPhysics action model
-            in
-            { model = next
-            , status = geometryFeedback model.board next.board |> Maybe.withDefault moveStackStatus
-            }
-
-        CompleteTurn ->
-            applyCompleteTurn model
-
-        Undo ->
-            { model = model, status = undoStatus }
-
-
-
--- PHYSICS
-
-
-{-| Delegate the (board, hand) transition to
-`Game.Reducer.applyAction`, then rebuild the Model with
-the UI-layer wrappers: Score recompute + active-hand
-write-back. Covers the five physics actions.
-
-No-ops (bad target stack, bad hand card reference) land back
-here with `post` equal to the input `pre`, so the writes are
-idempotent — same board, same hand, same score.
-
--}
-applyPhysics : GameEvent -> Model -> Model
-applyPhysics action model =
-    let
-        pre =
-            { board = model.board, hand = activeHand model }
-
-        post =
-            Reducer.applyAction action pre
-
-        _ =
-            -- Trace each physics-action's effect on the active hand.
-            -- Quiet during steady state (sizes line up); noisy the
-            -- moment they don't, which is the bridge-bug surfacer.
-            Debug.log
-                ("[applyPhysics] action="
-                    ++ wireActionLabel action
-                    ++ " activeIdx="
-                    ++ String.fromInt model.activePlayerIndex
-                    ++ " hand_pre="
-                    ++ String.fromInt (List.length pre.hand.handCards)
-                    ++ " hand_post="
-                    ++ String.fromInt (List.length post.hand.handCards)
-                    ++ " board_pre="
-                    ++ String.fromInt (List.length pre.board)
-                    ++ " board_post="
-                    ++ String.fromInt (List.length post.board)
-                )
-                ()
-    in
-    setActiveHand post.hand
-        { model | board = post.board }
-
-
-wireActionLabel : GameEvent -> String
-wireActionLabel action =
-    case action of
-        Split _ ->
-            "split"
-
-        MergeStack _ ->
-            "merge_stack"
-
-        MergeHand _ ->
-            "merge_hand"
-
-        PlaceHand _ ->
-            "place_hand"
-
-        MoveStack _ ->
-            "move_stack"
-
-        CompleteTurn ->
-            "complete_turn"
-
-        Undo ->
-            "undo"
-
-
-
--- COMPLETE TURN
-
-
-applyCompleteTurn : Model -> ActionOutcome
-applyCompleteTurn model =
-    let
-        ( afterTurn, _ ) =
-            Game.applyCompleteTurn refereeBounds model
-    in
-    { model = afterTurn
-    , status =
-        { text =
-            "Turn "
-                ++ String.fromInt (afterTurn.turnIndex + 1)
-                ++ " — Player "
-                ++ String.fromInt (afterTurn.activePlayerIndex + 1)
-                ++ " to play."
-        , kind = Celebrate
-        }
-    }
 
 
 
@@ -239,31 +35,8 @@ applyCompleteTurn model =
 --
 -- Lifted from angry-cat/src/lyn_rummy/game/game.ts:2044-2076.
 -- Kept verbatim so feel matches the TS original. Each message
--- is built from post-mutation model data that the applyAction
--- branch above has in hand when it calls these helpers — no
--- post-hoc board-diffing.
-
-
-splitStatus : StatusMessage
-splitStatus =
-    { text = "Be careful with splitting! Splits only pay off when you get more cards on the board or make prettier piles."
-    , kind = Scold
-    }
-
-
-placeHandStatus : StatusMessage
-placeHandStatus =
-    { text = "On the board!", kind = Inform }
-
-
-moveStackStatus : StatusMessage
-moveStackStatus =
-    { text = "Moved!", kind = Inform }
-
-
-undoStatus : StatusMessage
-undoStatus =
-    { text = "Undone.", kind = Inform }
+-- is built from post-mutation board data — no post-hoc
+-- board-diffing.
 
 
 {-| Surface a board-geometry tidiness change as a status
@@ -282,8 +55,8 @@ operations.
 geometryFeedback : List CardStack -> List CardStack -> Maybe StatusMessage
 geometryFeedback oldBoard newBoard =
     case
-        ( BoardGeometry.classifyBoardGeometry oldBoard refereeBounds
-        , BoardGeometry.classifyBoardGeometry newBoard refereeBounds
+        ( BoardGeometry.classifyBoardGeometry oldBoard BoardGeometry.refereeBounds
+        , BoardGeometry.classifyBoardGeometry newBoard BoardGeometry.refereeBounds
         )
     of
         ( Crowded, CleanlySpaced ) ->

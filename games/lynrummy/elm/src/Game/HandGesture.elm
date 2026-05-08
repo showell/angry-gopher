@@ -22,7 +22,6 @@ import Game.Physics.BoardGeometry as BG
 import Game.Physics.GestureArbitration as GA
 import Game.Rules.Card exposing (Card)
 import Game.WingView as WingView
-import Main.Apply as Apply
 import Main.State as State
 import Main.Types exposing (Point)
 
@@ -218,7 +217,7 @@ isDropFootprintInBounds : Int -> BoardLocation -> Bool
 isDropFootprintInBounds cardCount loc =
     let
         bounds =
-            Apply.refereeBounds
+            BG.refereeBounds
     in
     (loc.left >= 0)
         && (loc.top >= 0)
