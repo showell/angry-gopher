@@ -6,7 +6,7 @@ module Main.State exposing
     , Model
     , PopupContent
     , ReplayAnimationState(..)
-    , ReplayProgress
+    , ReplayState
     , baseModel
     , boardDomIdFor
     , canUndoThisTurn
@@ -46,6 +46,12 @@ import Main.Types exposing (GesturePoint, PathFrame)
 
 type alias Model =
     { gameState : GameState
+
+    -- The session's pre-first-action snapshot. Pinned at
+    -- bootstrap (new-session deal or resume's bundle) and
+    -- never mutated thereafter. Instant Replay seeds its
+    -- ReplayState's gameState from this.
+    , initialGameState : GameState
     , drag : DragState
 
     -- Live DOM-measured board rect. Populated lazily on the
@@ -60,9 +66,12 @@ type alias Model =
     , popup : Maybe PopupContent
     , actionLog : List ActionLogEntry
     , nextSeq : Int
-    , replay : Maybe ReplayProgress
-    , replayAnim : ReplayAnimationState
-    , replayBaseline : Maybe GameState
+
+    -- When `Just`, replay is in flight; the engine owns its
+    -- own gameState/drag/anim/eventPlan. When `Nothing`,
+    -- the live game is on screen. Replaces the prior trio
+    -- (replay / replayAnim / replayBaseline).
+    , replayState : Maybe ReplayState
 
     -- Constant string forming the board's DOM id (via
     -- `boardDomIdFor`). Multi-Play-per-page hosting retired
@@ -83,32 +92,28 @@ type alias Model =
     }
 
 
-{-| Replay's own work queue: the entries left to walk, in
-order. Replay pops the head, animates / applies, and stops
-when the queue is empty.
+{-| The replay engine's complete working state — only present
+on Model when replay is in flight (`Maybe ReplayState`).
 
-One engine serves two callers:
-
-  - **Instant Replay** (the Replay button): rewinds the model
-    to baseline and hands the entire `actionLog` to Replay.
-  - **Agent play** (the Let-Agent-Play button): hands Replay
-    just the primitives the agent emitted for this move.
-
-Either way, Replay only sees the entries it's supposed to
-walk — no indexing into a longer list, no off-by-one stop
-arithmetic. The full `actionLog` stays the persistent record
-that other code (replay-resume on session bootstrap, the
-wire) reads; Replay's queue is a transient slice.
+`gameState` is the replay's frame-by-frame view of the world;
+it advances as `eventPlan` is consumed, while `Model.gameState`
+stays at the live game position. `drag` is the synthesized
+animation drag that paints the floater (independent of the
+live drag, which is force-cleared during replay). `anim` is
+the per-step FSM. `eventPlan` is the queue of entries left to
+walk — sliced from `actionLog` at replay start.
 
 Subscription during replay is `Browser.Events.onAnimationFrame`
 (not a fixed Time.every tick) so drag animations can interpolate
-cursor position smoothly. See `replayAnim` for per-step
-animation state.
+cursor position smoothly.
 
 -}
-type alias ReplayProgress =
-    { pending : List ActionLogEntry
+type alias ReplayState =
+    { gameState : GameState
+    , eventPlan : List ActionLogEntry
     , paused : Bool
+    , drag : DragState
+    , anim : ReplayAnimationState
     }
 
 
@@ -329,29 +334,26 @@ boardDomIdFor gameId =
 -- INIT STATE
 
 
-{-| Starting Model. Game-state fields default to the hardcoded
-opening board + canned P1 hand + empty P2 hand; UI-layer fields
-default to quiescent / empty values.
-
-On session resume (URL hash), `Main.elm init` immediately fires
-`fetchActionLog` which replaces these defaults: the bundle's
-`initialState` seeds the board/hands/deck/..., the action log
-is folded through the local reducer to reach current state,
-and `initialState` is also stashed in `replayBaseline` for the
-Instant Replay rewind target.
-
+{-| Starting Model. Both `gameState` and `initialGameState`
+share the empty placeholder until bootstrap (NewSession's deal
+or ResumeSession's bundle) replaces them with the real session
+state.
 -}
 baseModel : Model
 baseModel =
-    { gameState =
-        { board = Game.Dealer.initialBoard
-        , hands = [ Hand.empty, Hand.empty ]
-        , activePlayerIndex = 0
-        , turnIndex = 0
-        , deck = []
-        , cardsPlayedThisTurn = 0
-        , victorAwarded = False
-        }
+    let
+        emptyGameState =
+            { board = Game.Dealer.initialBoard
+            , hands = [ Hand.empty, Hand.empty ]
+            , activePlayerIndex = 0
+            , turnIndex = 0
+            , deck = []
+            , cardsPlayedThisTurn = 0
+            , victorAwarded = False
+            }
+    in
+    { gameState = emptyGameState
+    , initialGameState = emptyGameState
     , drag = NotDragging
     , boardRect = Nothing
     , sessionId = Nothing
@@ -360,9 +362,7 @@ baseModel =
     , popup = Nothing
     , actionLog = []
     , nextSeq = 1
-    , replay = Nothing
-    , replayAnim = NotAnimating
-    , replayBaseline = Nothing
+    , replayState = Nothing
     , gameId = "default"
     , pendingEngineRequest = Nothing
     , nextEngineRequestId = 1

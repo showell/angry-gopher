@@ -1,12 +1,14 @@
 module Game.Replay.Time exposing
-    ( clickInstantReplay
+    ( ClickInstantReplayInputs
+    , clickInstantReplay
     , clickReplayPauseToggle
     , handCardRectReceived
     , replayFrame
     )
 
 {-| The temporal half of Instant Replay. Owns the FSM and the
-clock-driven Msg handlers.
+clock-driven Msg handlers. Operates on `ReplayState` only —
+Model never enters this module.
 
 Phases, same as the `ReplayAnimationState` sum type in `Main.State`:
 
@@ -21,36 +23,30 @@ Phases, same as the `ReplayAnimationState` sum type in `Main.State`:
     for a hand card's live rect; wait for
     `HandCardRectReceived` to transition us to Animating.
   - **Beating** — hold ~1s between actions (2.5s for
-    CompleteTurn, since a lot happens at once). Not the
-    real-world inter-drag pause — that would read as buggy.
-
-Companion to `Game.Replay.Space`, which owns the spatial
-synthesis (endpoints, paths, interpolation). This module
-depends on Space; Space has no dependency here.
-
-Extracted 2026-04-21 from `Main.elm` alongside Space, to collect
-the replay FSM + its Msg handlers in one module.
+    CompleteTurn, since a lot happens at once).
 
 -}
 
 import Browser.Dom
+import Game.CardStack exposing (CardStack)
 import Game.Drag as Drag exposing (DragState(..))
-import Game.Rules.Card
+import Game.Execute as Execute
+import Game.Game exposing (GameState)
+import Game.GameEvent as GameEvent exposing (GameEvent)
 import Game.HandLayout as HandLayout
+import Game.Physics.GestureArbitration as GA
 import Game.Replay.AnimateMergeHand as AnimateMergeHand
 import Game.Replay.AnimateMergeStack as AnimateMergeStack
 import Game.Replay.AnimateMoveStack as AnimateMoveStack
 import Game.Replay.AnimatePlaceHand as AnimatePlaceHand
 import Game.Replay.DragAnimation as DragAnimation
-import Game.Execute as Execute
 import Game.Replay.Space as Space
-import Game.GameEvent as GameEvent exposing (GameEvent)
+import Game.Rules.Card
 import Main.Msg exposing (Msg(..))
-import Game.Status exposing (StatusKind(..))
 import Main.State as State
     exposing
-        ( Model
-        , ReplayAnimationState(..)
+        ( ReplayAnimationState(..)
+        , ReplayState
         )
 import Main.Types exposing (GesturePoint, Point)
 import Task
@@ -61,57 +57,39 @@ import Time
 -- CLICK HANDLER: INSTANT REPLAY
 
 
-{-| Handle `ClickInstantReplay`: rewind the Model to the
-session's true pre-first-action baseline, seed the replay
-walker, and kick off a DOM query for the live board rect.
+type alias ClickInstantReplayInputs =
+    { gameId : String
+    , initialGameState : GameState
+    , actionLog : List State.ActionLogEntry
+    }
 
-The PreRolling phase keeps the rewound board on screen briefly so
-the viewer registers the starting state before action 0 fires.
 
-Requires a baseline. The baseline is populated at session
-bootstrap by `fetchActionLog` (both on new-session and
-URL-resume paths), so it's expected to be present. If it
-isn't — e.g. if the user clicks Replay before the fetch
-resolves — the click no-ops rather than rewinding to an
-invented state. Better silent no-op than replaying a lie.
-
+{-| Construct a fresh ReplayState seeded from the session's
+pre-first-action snapshot, and emit the cmd that fetches the
+live board rect. Caller (Main.Play) is responsible for
+attaching the new ReplayState to Model and force-clearing
+`model.drag`.
 -}
-clickInstantReplay : Model -> ( Model, Cmd Msg )
-clickInstantReplay model =
-    case model.replayBaseline of
-        Nothing ->
-            ( model, Cmd.none )
-
-        Just baseline ->
-            let
-                rewound =
-                    { model | gameState = baseline }
-            in
-            ( { rewound
-                | status = { text = "Replaying…", kind = Inform }
-                , replay = Just { pending = State.collapseUndos model.actionLog, paused = False }
-                , replayAnim = PreRolling { untilMs = 0 }
-                , drag = NotDragging
-              }
-            , Task.attempt BoardRectReceived
-                (Browser.Dom.getElement (State.boardDomIdFor model.gameId))
-            )
+clickInstantReplay : ClickInstantReplayInputs -> ( ReplayState, Cmd Msg )
+clickInstantReplay inputs =
+    ( { gameState = inputs.initialGameState
+      , eventPlan = State.collapseUndos inputs.actionLog
+      , paused = False
+      , drag = NotDragging
+      , anim = PreRolling { untilMs = 0 }
+      }
+    , Task.attempt BoardRectReceived
+        (Browser.Dom.getElement (State.boardDomIdFor inputs.gameId))
+    )
 
 
 
 -- CLICK HANDLER: PAUSE TOGGLE
 
 
-clickReplayPauseToggle : Model -> ( Model, Cmd Msg )
-clickReplayPauseToggle model =
-    case model.replay of
-        Just progress ->
-            ( { model | replay = Just { progress | paused = not progress.paused } }
-            , Cmd.none
-            )
-
-        Nothing ->
-            ( model, Cmd.none )
+clickReplayPauseToggle : ReplayState -> ReplayState
+clickReplayPauseToggle rs =
+    { rs | paused = not rs.paused }
 
 
 
@@ -119,102 +97,75 @@ clickReplayPauseToggle model =
 
 
 {-| Core replay state machine. One step per `onAnimationFrame`;
-no-op when paused. See module-level comment for phase semantics.
+no-op when paused. Returns `Nothing` when the queue drains
+(the caller clears `replayState` from Model).
 -}
-replayFrame : Float -> Model -> ( Model, Cmd Msg )
-replayFrame nowMs model =
-    case model.replay of
-        Nothing ->
-            ( model, Cmd.none )
+replayFrame : Float -> Maybe GA.Rect -> ReplayState -> ( Maybe ReplayState, Cmd Msg )
+replayFrame nowMs maybeBoardRect rs =
+    if rs.paused then
+        ( Just rs, Cmd.none )
 
-        Just progress ->
-            if progress.paused then
-                ( model, Cmd.none )
+    else
+        case rs.anim of
+            NotAnimating ->
+                case rs.eventPlan of
+                    [] ->
+                        ( Nothing, Cmd.none )
 
-            else
-                case model.replayAnim of
-                    NotAnimating ->
-                        case progress.pending of
-                            [] ->
-                                ( { model
-                                    | replay = Nothing
-                                    , replayAnim = NotAnimating
-                                    , drag = NotDragging
-                                  }
-                                , Cmd.none
-                                )
+                    entry :: rest ->
+                        prepareReplayStep
+                            entry.action
+                            entry.gesturePath
+                            { rs | eventPlan = rest }
+                            maybeBoardRect
+                            nowMs
+                            |> mapStateAndCmd Just
 
-                            entry :: rest ->
-                                let
-                                    advanced =
-                                        { model
-                                            | replay =
-                                                Just { progress | pending = rest }
-                                        }
-                                in
-                                prepareReplayStep
-                                    entry.action
-                                    entry.gesturePath
-                                    advanced
-                                    nowMs
+            Animating anim ->
+                case DragAnimation.step nowMs anim of
+                    DragAnimation.InProgress { floaterTopLeft } ->
+                        ( Just { rs | drag = Drag.setFloaterTopLeft floaterTopLeft rs.drag }
+                        , Cmd.none
+                        )
 
-                    Animating anim ->
-                        case DragAnimation.step nowMs anim of
-                            DragAnimation.InProgress { floaterTopLeft } ->
-                                ( { model | drag = Drag.setFloaterTopLeft floaterTopLeft model.drag }
-                                , Cmd.none
-                                )
+                    DragAnimation.Done { pendingAction } ->
+                        ( Just
+                            { rs
+                                | drag = NotDragging
+                                , gameState = Execute.applyEvent pendingAction rs.gameState
+                                , anim = Beating { untilMs = nowMs + 1000 }
+                            }
+                        , Cmd.none
+                        )
 
-                            DragAnimation.Done { pendingAction } ->
-                                ( { model
-                                    | drag = NotDragging
-                                    , gameState = Execute.applyEvent pendingAction model.gameState
-                                    , replayAnim = Beating { untilMs = nowMs + 1000 }
-                                  }
-                                , Cmd.none
-                                )
+            Beating { untilMs } ->
+                if nowMs >= untilMs then
+                    ( Just { rs | anim = NotAnimating }, Cmd.none )
 
-                    Beating { untilMs } ->
-                        if nowMs >= untilMs then
-                            -- Advancement happened at queue-pop
-                            -- time in NotAnimating; here we just
-                            -- close out the beat.
-                            ( { model | replayAnim = NotAnimating }
-                            , Cmd.none
-                            )
+                else
+                    ( Just rs, Cmd.none )
 
-                        else
-                            ( model, Cmd.none )
+            AwaitingHandRect _ ->
+                ( Just rs, Cmd.none )
 
-                    AwaitingHandRect _ ->
-                        -- Nothing to do on a replay frame while we
-                        -- wait for the DOM to report the hand card's
-                        -- live rect. The HandCardRectReceived Msg
-                        -- handler will transition us to Animating as
-                        -- soon as the Task completes — typically the
-                        -- very next frame.
-                        ( model, Cmd.none )
+            PreRolling { untilMs } ->
+                if untilMs == 0 then
+                    -- Lazy-initialize the deadline on the
+                    -- first frame so the pre-roll lasts
+                    -- a real 1000ms regardless of when
+                    -- the first ReplayFrame tick arrives.
+                    ( Just { rs | anim = PreRolling { untilMs = nowMs + 1000 } }, Cmd.none )
 
-                    PreRolling { untilMs } ->
-                        if untilMs == 0 then
-                            -- Lazy-initialize the deadline on the
-                            -- first frame so the pre-roll lasts
-                            -- a real 1000ms regardless of when
-                            -- the first ReplayFrame tick arrives.
-                            -- "Order of a second between major
-                            -- events" matches the between-action
-                            -- Beating duration.
-                            ( { model | replayAnim = PreRolling { untilMs = nowMs + 1000 } }
-                            , Cmd.none
-                            )
+                else if nowMs >= untilMs then
+                    ( Just { rs | anim = NotAnimating }, Cmd.none )
 
-                        else if nowMs >= untilMs then
-                            ( { model | replayAnim = NotAnimating }
-                            , Cmd.none
-                            )
+                else
+                    ( Just rs, Cmd.none )
 
-                        else
-                            ( model, Cmd.none )
+
+mapStateAndCmd : (a -> b) -> ( a, Cmd msg ) -> ( b, Cmd msg )
+mapStateAndCmd f ( a, cmd ) =
+    ( f a, cmd )
 
 
 
@@ -223,44 +174,22 @@ replayFrame nowMs model =
 
 {-| Transition from NotAnimating into the right next replay
 state, given an action and its captured gesture path (if any).
-
-Replay is the runtime — it owns the decision of whether to
-honor a captured path or synthesize a fresh one (the "JIT"
-branch, used by agent-emitted primitives that ship without a
-path). The decision tree:
-
-1.  **Captured path present and still valid** (its first
-    sample matches the live source stack's loc): faithful
-    playback. This is the human-replay common case.
-2.  **Captured path absent OR stale** for an intra-board
-    action: synthesize a fresh path via
-    `Space.synthesizeBoardPath` and animate it. This is the
-    agent-play common case (no path captured) and the
-    out-of-band-MoveStack edge case (path captured but the
-    source has since moved).
-3.  **Captured path absent for a hand-origin action**: fire a
-    `Browser.Dom.getElement` Task for the hand card's DOM id
-    and transition to AwaitingHandRect. Hand origins live in
-    the DOM, not in board coords, so we measure at replay
-    time rather than synthesize blindly.
-4.  **Anything else** (Splits, unknown shapes): apply
-    immediately and beat. Splits are clicks in the live UI,
-    so animating a fake drag for them would be a lie.
-
+See module-level comment for the decision tree.
 -}
 prepareReplayStep :
     GameEvent
     -> Maybe (List GesturePoint)
-    -> Model
+    -> ReplayState
+    -> Maybe GA.Rect
     -> Float
-    -> ( Model, Cmd Msg )
-prepareReplayStep action maybePath model nowMs =
+    -> ( ReplayState, Cmd Msg )
+prepareReplayStep action maybePath rs maybeBoardRect nowMs =
     let
         startAnimating anim =
             case Space.interpPath anim.path 0 of
                 Just cursor ->
-                    ( { model
-                        | replayAnim = Animating { startMs = anim.startMs, path = anim.path, pendingAction = anim.pendingAction }
+                    ( { rs
+                        | anim = Animating { startMs = anim.startMs, path = anim.path, pendingAction = anim.pendingAction }
                         , drag = Space.animatedDragState anim cursor
                       }
                     , Cmd.none
@@ -270,9 +199,9 @@ prepareReplayStep action maybePath model nowMs =
                     applyImmediate
 
         applyImmediate =
-            ( { model
-                | gameState = Execute.applyEvent action model.gameState
-                , replayAnim = Beating { untilMs = nowMs + beatAfter action }
+            ( { rs
+                | gameState = Execute.applyEvent action rs.gameState
+                , anim = Beating { untilMs = nowMs + beatAfter action }
                 , drag = NotDragging
               }
             , Cmd.none
@@ -284,7 +213,7 @@ prepareReplayStep action maybePath model nowMs =
                     jitOrApply
 
                 _ ->
-                    case startBoardAnim action path model nowMs of
+                    case startBoardAnim action path rs.gameState.board nowMs of
                         Just anim ->
                             startAnimating anim
 
@@ -292,18 +221,13 @@ prepareReplayStep action maybePath model nowMs =
                             -- Captured path was deemed valid by
                             -- pathStillValid but the underlying
                             -- source-stack lookup (boardStackSource)
-                            -- still failed. The two checks aren't
-                            -- coupled; rather than silently degrade
-                            -- to applyImmediate, escalate to JIT
-                            -- synthesis. JIT itself falls back to
-                            -- applyImmediate if it can't synthesize
-                            -- either.
+                            -- still failed. Escalate to JIT.
                             jitOrApply
 
         jitOrApply =
-            case Space.synthesizeBoardPath action model nowMs of
+            case Space.synthesizeBoardPath action rs.gameState.board nowMs of
                 Just ( synthPath, _ ) ->
-                    case startBoardAnim action synthPath model nowMs of
+                    case startBoardAnim action synthPath rs.gameState.board nowMs of
                         Just anim ->
                             startAnimating anim
 
@@ -313,12 +237,9 @@ prepareReplayStep action maybePath model nowMs =
                 Nothing ->
                     -- No JIT recipe for this action shape. Try
                     -- the hand-origin async measurement path.
-                    case prepareHandAnim action model of
+                    case prepareHandAnim action rs.gameState of
                         Just result ->
-                            ( { model
-                                | replayAnim =
-                                    AwaitingHandRect { action = action }
-                              }
+                            ( { rs | anim = AwaitingHandRect { action = action } }
                             , Task.attempt HandCardRectReceived
                                 (Task.map2 Tuple.pair
                                     (Browser.Dom.getElement
@@ -333,7 +254,7 @@ prepareReplayStep action maybePath model nowMs =
     in
     case maybePath of
         Just (p :: rest) ->
-            if Space.isPathStillValid (p :: rest) action model then
+            if Space.isPathStillValid (p :: rest) action rs.gameState.board then
                 animateFromCaptured (p :: rest)
 
             else
@@ -350,8 +271,7 @@ prepareReplayStep action maybePath model nowMs =
 {-| Handle `HandCardRectReceived`: the async continuation of
 `prepareReplayStep` for hand-origin actions. When the Task
 succeeds we know the card's live center; pair that with the
-target endpoint (stack edge for MergeHand, drop loc for
-PlaceHand), synthesize a linear path, and begin Animating.
+target endpoint, synthesize a linear path, and begin Animating.
 
 If the target can't be resolved — or the DOM query failed —
 apply the action immediately and beat.
@@ -359,10 +279,11 @@ apply the action immediately and beat.
 -}
 handCardRectReceived :
     Result Browser.Dom.Error ( Browser.Dom.Element, Time.Posix )
-    -> Model
-    -> ( Model, Cmd Msg )
-handCardRectReceived result model =
-    case ( model.replayAnim, result ) of
+    -> Maybe GA.Rect
+    -> ReplayState
+    -> ( ReplayState, Cmd Msg )
+handCardRectReceived result maybeBoardRect rs =
+    case ( rs.anim, result ) of
         ( AwaitingHandRect ctx, Ok ( element, posix ) ) ->
             let
                 nowMs =
@@ -372,13 +293,12 @@ handCardRectReceived result model =
                     Space.elementTopLeftInViewport element
 
                 maybeAnim =
-                    finishHandAnim ctx.action origin nowMs model
-            in
-            let
+                    finishHandAnim ctx.action origin nowMs rs.gameState maybeBoardRect
+
                 applyNow =
-                    ( { model
-                        | gameState = Execute.applyEvent ctx.action model.gameState
-                        , replayAnim = Beating { untilMs = nowMs + beatAfter ctx.action }
+                    ( { rs
+                        | gameState = Execute.applyEvent ctx.action rs.gameState
+                        , anim = Beating { untilMs = nowMs + beatAfter ctx.action }
                         , drag = NotDragging
                       }
                     , Cmd.none
@@ -388,8 +308,8 @@ handCardRectReceived result model =
                 Just anim ->
                     case Space.interpPath anim.path 0 of
                         Just cursor ->
-                            ( { model
-                                | replayAnim = Animating { startMs = anim.startMs, path = anim.path, pendingAction = anim.pendingAction }
+                            ( { rs
+                                | anim = Animating { startMs = anim.startMs, path = anim.path, pendingAction = anim.pendingAction }
                                 , drag = Space.animatedDragState anim cursor
                               }
                             , Cmd.none
@@ -411,16 +331,16 @@ handCardRectReceived result model =
                 _ =
                     Debug.log "HandCardRectReceived err" err
             in
-            ( { model
-                | gameState = Execute.applyEvent ctx.action model.gameState
-                , replayAnim = Beating { untilMs = 1000 }
+            ( { rs
+                | gameState = Execute.applyEvent ctx.action rs.gameState
+                , anim = Beating { untilMs = 1000 }
                 , drag = NotDragging
               }
             , Cmd.none
             )
 
         _ ->
-            ( model, Cmd.none )
+            ( rs, Cmd.none )
 
 
 
@@ -429,11 +349,7 @@ handCardRectReceived result model =
 
 {-| Inter-action beat duration (ms). `CompleteTurn` gets extra
 time because a lot happens at once — hand refresh, score update,
-active-player swap, dealt cards appearing. A normal beat reads
-as buggy at that boundary. The base 800ms beat applies to
-every primitive, whether it came from a captured human drag
-or from an agent program — Replay is the runtime, the source
-of the action doesn't change the timing budget.
+active-player swap, dealt cards appearing.
 -}
 beatAfter : GameEvent -> Float
 beatAfter action =
@@ -451,60 +367,51 @@ beatAfter action =
 
 {-| Dispatch a board-origin wire action to its per-operation
 Animate module. Nothing means the action is hand-origin (or an
-unsupported kind); the caller falls back to the async DOM
-measurement path or `applyImmediate`. One branch per
-synchronous board-drag primitive.
+unsupported kind).
 -}
 startBoardAnim :
     GameEvent
     -> List GesturePoint
-    -> Model
+    -> List CardStack
     -> Float
     -> Maybe Space.AnimationInfo
-startBoardAnim action path model nowMs =
+startBoardAnim action path board nowMs =
     case action of
         GameEvent.Split _ ->
-            -- Splits are CLICKS in the live UI — a single event
-            -- producing a single redraw. The server's
-            -- requiresGestureMetadata gate forces a gesture path
-            -- onto them for telemetry, but replay should not
-            -- animate that fake drag: no floater, no cursor interp,
-            -- just apply + beat, matching the live UI's
-            -- click-responds-with-redraw simplicity. Returning
-            -- Nothing drops the action into `applyImmediate`.
+            -- Splits are CLICKS in the live UI; replay should not
+            -- animate that fake drag. Returning Nothing drops the
+            -- action into `applyImmediate`.
             Nothing
 
         GameEvent.MergeStack payload ->
-            AnimateMergeStack.start payload path model nowMs
+            AnimateMergeStack.start payload path board nowMs
 
         GameEvent.MoveStack payload ->
-            AnimateMoveStack.start payload path model nowMs
+            AnimateMoveStack.start payload path board nowMs
 
         _ ->
             Nothing
 
 
 {-| Dispatch the synchronous phase 1 of hand-origin replay to
-the matching per-primitive Animate module. Nothing means the
-action isn't hand-origin (shouldn't reach this helper) or the
-hand card can't be resolved on the current model.
+the matching per-primitive Animate module.
 -}
-prepareHandAnim : GameEvent -> Model -> Maybe HandPrepareResult
-prepareHandAnim action model =
+prepareHandAnim : GameEvent -> GameState -> Maybe HandPrepareResult
+prepareHandAnim action gameState =
     case action of
         GameEvent.MergeHand payload ->
-            AnimateMergeHand.prepare payload model
+            AnimateMergeHand.prepare payload gameState
                 |> Maybe.map (\r -> { handCardToMeasure = r.handCardToMeasure })
 
         GameEvent.PlaceHand payload ->
-            AnimatePlaceHand.prepare payload model
+            AnimatePlaceHand.prepare payload gameState
                 |> Maybe.map (\r -> { handCardToMeasure = r.handCardToMeasure })
 
         _ ->
             Nothing
 
 
-{-| Unified shape for Time's prepareReplayStep return path —
+{-| Unified shape for prepareReplayStep return path —
 just names which hand card the DOM measurement should target.
 -}
 type alias HandPrepareResult =
@@ -512,24 +419,22 @@ type alias HandPrepareResult =
     }
 
 
-{-| Dispatch the async phase 2 of hand-origin replay. The
-measured viewport origin pairs with the action's payload to
-build the AnimationInfo; source identity is derived from the
-action (the `handCard` field on MergeHand/PlaceHand).
+{-| Dispatch the async phase 2 of hand-origin replay.
 -}
 finishHandAnim :
     GameEvent
     -> Point
     -> Float
-    -> Model
+    -> GameState
+    -> Maybe GA.Rect
     -> Maybe Space.AnimationInfo
-finishHandAnim action origin nowMs model =
+finishHandAnim action origin nowMs gameState maybeBoardRect =
     case action of
         GameEvent.MergeHand payload ->
-            AnimateMergeHand.finish payload origin nowMs model
+            AnimateMergeHand.finish payload origin nowMs gameState maybeBoardRect
 
         GameEvent.PlaceHand payload ->
-            AnimatePlaceHand.finish payload origin nowMs model
+            AnimatePlaceHand.finish payload origin nowMs gameState maybeBoardRect
 
         _ ->
             Nothing

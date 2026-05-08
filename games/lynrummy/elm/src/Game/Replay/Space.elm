@@ -36,12 +36,13 @@ are we on, has the beat elapsed, when does the next step fire?
 import Browser.Dom
 import Game.BoardActions as BoardActions
 import Game.Drag exposing (DragSource(..), DragState(..))
+import Game.Game exposing (GameState)
+import Game.Hand as Hand
 import Game.Physics.BoardGeometry as BG
+import Game.Physics.GestureArbitration as GA
 import Game.Rules.Card exposing (Card)
 import Game.CardStack as CardStack exposing (CardStack)
 import Game.GameEvent as GameEvent exposing (GameEvent)
-import Game.Hand exposing (activeHand)
-import Main.State exposing (Model)
 import Main.Types exposing (GesturePoint, PathFrame(..), Point)
 
 
@@ -88,9 +89,9 @@ frame using the live DOM-measured board rect. Returns
 absence explicitly rather than silently falling back to
 pinned constants.
 -}
-pointInLiveViewport : Model -> { left : Int, top : Int } -> Maybe Point
-pointInLiveViewport model loc =
-    model.boardRect
+pointInLiveViewport : Maybe GA.Rect -> { left : Int, top : Int } -> Maybe Point
+pointInLiveViewport maybeRect loc =
+    maybeRect
         |> Maybe.map
             (\rect ->
                 { x = rect.x + loc.left, y = rect.y + loc.top }
@@ -109,8 +110,8 @@ by `AnimateMergeHand.finish` to compute the destination of
 the synthesized drag path.
 
 -}
-stackLandingInLiveViewport : Model -> CardStack -> BoardActions.Side -> Maybe Point
-stackLandingInLiveViewport model stack side =
+stackLandingInLiveViewport : Maybe GA.Rect -> CardStack -> BoardActions.Side -> Maybe Point
+stackLandingInLiveViewport maybeRect stack side =
     let
         size =
             CardStack.size stack
@@ -123,7 +124,7 @@ stackLandingInLiveViewport model stack side =
                 BoardActions.Left ->
                     stack.loc.left - BG.cardPitch
     in
-    pointInLiveViewport model { left = landingLeft, top = stack.loc.top }
+    pointInLiveViewport maybeRect { left = landingLeft, top = stack.loc.top }
 
 
 
@@ -241,7 +242,7 @@ quinticEase f =
 
 
 {-| Synthesize a fresh gesture path for `action` against the
-live `model`. Returns the path together with the frame it lives
+live `board`. Returns the path together with the frame it lives
 in, or `Nothing` if synthesis can't honestly be done for this
 action shape.
 
@@ -255,11 +256,11 @@ so every drag the player sees is synthesized here.
 -}
 synthesizeBoardPath :
     GameEvent
-    -> Model
+    -> List CardStack
     -> Float
     -> Maybe ( List GesturePoint, PathFrame )
-synthesizeBoardPath action model nowMs =
-    boardEndpoints action model
+synthesizeBoardPath action board nowMs =
+    boardEndpoints action board
         |> Maybe.map
             (\( start, end ) ->
                 ( easedPath start end nowMs, BoardFrame )
@@ -284,11 +285,11 @@ both sides:
     aren't pinned in board coords.
 
 -}
-boardEndpoints : GameEvent -> Model -> Maybe ( Point, Point )
-boardEndpoints action model =
+boardEndpoints : GameEvent -> List CardStack -> Maybe ( Point, Point )
+boardEndpoints action board =
     case action of
         GameEvent.MoveStack p ->
-            CardStack.findStack p.stack model.gameState.board
+            CardStack.findStack p.stack board
                 |> Maybe.map
                     (\src ->
                         ( { x = src.loc.left, y = src.loc.top }
@@ -318,8 +319,8 @@ boardEndpoints action model =
                     , { x = endLeft + 2, y = tgt.loc.top - 2 }
                     )
                 )
-                (CardStack.findStack p.source model.gameState.board)
-                (CardStack.findStack p.target model.gameState.board)
+                (CardStack.findStack p.source board)
+                (CardStack.findStack p.target board)
 
         _ ->
             Nothing
@@ -340,9 +341,9 @@ and paths are recorded with the exact loc), so this isn't a
 fuzzy match.
 
 -}
-isPathStillValid : List GesturePoint -> GameEvent -> Model -> Bool
-isPathStillValid path action model =
-    case ( List.head path, expectedStartFor action model ) of
+isPathStillValid : List GesturePoint -> GameEvent -> List CardStack -> Bool
+isPathStillValid path action board =
+    case ( List.head path, expectedStartFor action board ) of
         ( Just first, Just expected ) ->
             first.x == expected.x && first.y == expected.y
 
@@ -359,9 +360,9 @@ isPathStillValid path action model =
             False
 
 
-expectedStartFor : GameEvent -> Model -> Maybe Point
-expectedStartFor action model =
-    boardEndpoints action model
+expectedStartFor : GameEvent -> List CardStack -> Maybe Point
+expectedStartFor action board =
+    boardEndpoints action board
         |> Maybe.map Tuple.first
 
 
@@ -426,17 +427,17 @@ interpPathHelp prev remaining targetTs =
 -- DRAG SOURCE
 
 
-boardStackSource : CardStack -> Model -> Maybe DragSource
-boardStackSource ref model =
-    CardStack.findStack ref model.gameState.board
+boardStackSource : CardStack -> List CardStack -> Maybe DragSource
+boardStackSource ref board =
+    CardStack.findStack ref board
         |> Maybe.map FromBoardStack
 
 
-handCardSource : Card -> Model -> Maybe DragSource
-handCardSource card model =
+handCardSource : Card -> GameState -> Maybe DragSource
+handCardSource card gameState =
     let
         hand =
-            activeHand model.gameState
+            Hand.activeHand gameState
 
         present =
             List.any (\hc -> hc.card == card) hand.handCards

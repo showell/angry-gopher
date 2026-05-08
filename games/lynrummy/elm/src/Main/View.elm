@@ -66,7 +66,7 @@ import Main.State
     exposing
         ( Model
         , PopupContent
-        , ReplayProgress
+        , ReplayState
         , canUndoThisTurn
         )
 import Main.Util exposing (pluralize)
@@ -208,9 +208,8 @@ view model =
             , style "left" (String.fromInt BoardGeometry.boardViewportLeft ++ "px")
             ]
             [ boardColumn model ]
-        , Drag.draggedOverlay model.drag
         , viewPopup
-            (case model.replay of
+            (case model.replayState of
                 Just _ ->
                     Nothing
 
@@ -334,25 +333,37 @@ type alias PlayerPanelInfo =
     , drag : Drag.DragState
     , hintedCards : List Card
     , canUndo : Bool
-    , replay : Maybe ReplayProgress
+    , replay : Maybe ReplayState
     }
 
 
 leftSidebar : Model -> Html Msg
 leftSidebar model =
+    let
+        info =
+            case model.replayState of
+                Just rs ->
+                    { gameState = rs.gameState
+                    , drag = rs.drag
+                    , hintedCards = []
+                    , canUndo = False
+                    , replay = Just rs
+                    }
+
+                Nothing ->
+                    { gameState = model.gameState
+                    , drag = model.drag
+                    , hintedCards = model.hintedCards
+                    , canUndo = canUndoThisTurn model
+                    , replay = Nothing
+                    }
+    in
     div
         [ style "min-width" "240px"
         , style "padding-right" "20px"
         , style "border-right" "1px gray solid"
         ]
-        (playerHands
-            { gameState = model.gameState
-            , drag = model.drag
-            , hintedCards = model.hintedCards
-            , canUndo = canUndoThisTurn model
-            , replay = model.replay
-            }
-        )
+        (playerHands info)
 
 
 playerHands : PlayerPanelInfo -> List (Html Msg)
@@ -398,7 +409,7 @@ type alias ActivePlayerInfo =
     { drag : Drag.DragState
     , hintedCards : List Card
     , canUndo : Bool
-    , replay : Maybe ReplayProgress
+    , replay : Maybe ReplayState
     }
 
 
@@ -457,7 +468,7 @@ playerRowShell { isActive, idx } body =
         )
 
 
-viewTurnControls : { canUndo : Bool, replay : Maybe ReplayProgress } -> Html Msg
+viewTurnControls : { canUndo : Bool, replay : Maybe ReplayState } -> Html Msg
 viewTurnControls { canUndo, replay } =
     div
         [ style "margin-top" "12px"
@@ -481,7 +492,7 @@ viewTurnControls { canUndo, replay } =
 {-| Replay button — Resume / Pause when a replay is in
 progress, or "Instant replay" when not.
 -}
-viewReplayControl : Maybe ReplayProgress -> Html Msg
+viewReplayControl : Maybe ReplayState -> Html Msg
 viewReplayControl maybeReplay =
     case maybeReplay of
         Just progress ->
@@ -547,13 +558,23 @@ disabledGameButton label =
 
 boardColumn : Model -> Html Msg
 boardColumn model =
+    let
+        ( board, drag ) =
+            case model.replayState of
+                Just rs ->
+                    ( rs.gameState.board, rs.drag )
+
+                Nothing ->
+                    ( model.gameState.board, model.drag )
+    in
     div
         [ style "min-width" "800px" ]
         [ View.viewBoardHeading
         , BoardView.boardWithWings
-            { board = model.gameState.board
+            { board = board
             , boardRect = model.boardRect
-            , drag = model.drag
+            , drag = drag
             , gameId = model.gameId
             }
+        , Drag.draggedOverlay drag
         ]

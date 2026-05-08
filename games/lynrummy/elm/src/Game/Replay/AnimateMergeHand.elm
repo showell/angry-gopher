@@ -22,11 +22,12 @@ Companion: `Game.Replay.AnimatePlaceHand`.
 -}
 
 import Game.BoardActions exposing (Side)
+import Game.Game exposing (GameState)
+import Game.Physics.GestureArbitration as GA
 import Game.Rules.Card exposing (Card)
 import Game.CardStack as CardStack exposing (CardStack)
 import Game.Replay.Space as Space
 import Game.GameEvent as GameEvent
-import Main.State exposing (Model)
 import Main.Types exposing (Point)
 
 
@@ -43,9 +44,9 @@ type alias PrepareResult =
 measurement. Returns Nothing if the card isn't in the current
 hand — treated as a wire/model drift rather than a crash.
 -}
-prepare : { handCard : Card, target : CardStack, side : Side } -> Model -> Maybe PrepareResult
-prepare payload model =
-    Space.handCardSource payload.handCard model
+prepare : { handCard : Card, target : CardStack, side : Side } -> GameState -> Maybe PrepareResult
+prepare payload gameState =
+    Space.handCardSource payload.handCard gameState
         |> Maybe.map (\_ -> { handCardToMeasure = payload.handCard })
 
 
@@ -64,18 +65,19 @@ finish :
     { handCard : Card, target : CardStack, side : Side }
     -> Point
     -> Float
-    -> Model
+    -> GameState
+    -> Maybe GA.Rect
     -> Maybe Space.AnimationInfo
-finish payload origin nowMs model =
-    case Space.handCardSource payload.handCard model of
+finish payload origin nowMs gameState maybeBoardRect =
+    case Space.handCardSource payload.handCard gameState of
         Nothing ->
             Nothing
 
         Just source ->
-            CardStack.findStack payload.target model.gameState.board
+            CardStack.findStack payload.target gameState.board
                 |> Maybe.andThen
                     (\stack ->
-                        Space.stackLandingInLiveViewport model stack payload.side
+                        Space.stackLandingInLiveViewport maybeBoardRect stack payload.side
                             |> Maybe.map
                                 (\landing ->
                                     { startMs = nowMs

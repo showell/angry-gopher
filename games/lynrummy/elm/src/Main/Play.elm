@@ -131,7 +131,7 @@ init config =
                 dealtModel =
                     { baseModel
                         | gameState = initialRS
-                        , replayBaseline = Just initialRS
+                        , initialGameState = initialRS
                     }
             in
             ( dealtModel, fetchNewSession (encodeGameState initialRS) )
@@ -201,16 +201,60 @@ update msg model =
             ( { model | popup = Nothing }, Cmd.none, NoOutput )
 
         ClickInstantReplay ->
-            withNoOutput (ReplayTime.clickInstantReplay model)
+            let
+                ( newRS, cmd ) =
+                    ReplayTime.clickInstantReplay
+                        { gameId = model.gameId
+                        , initialGameState = model.initialGameState
+                        , actionLog = model.actionLog
+                        }
+            in
+            withNoOutput
+                ( { model
+                    | replayState = Just newRS
+                    , status = { text = "Replaying…", kind = Inform }
+                    , drag = NotDragging
+                  }
+                , cmd
+                )
 
         ReplayFrame nowPosix ->
-            withNoOutput (ReplayTime.replayFrame (toFloat (Time.posixToMillis nowPosix)) model)
+            case model.replayState of
+                Nothing ->
+                    withNoOutput ( model, Cmd.none )
+
+                Just rs ->
+                    let
+                        ( maybeNew, cmd ) =
+                            ReplayTime.replayFrame
+                                (toFloat (Time.posixToMillis nowPosix))
+                                model.boardRect
+                                rs
+                    in
+                    withNoOutput ( { model | replayState = maybeNew }, cmd )
 
         ClickReplayPauseToggle ->
-            withNoOutput (ReplayTime.clickReplayPauseToggle model)
+            case model.replayState of
+                Nothing ->
+                    withNoOutput ( model, Cmd.none )
+
+                Just rs ->
+                    withNoOutput
+                        ( { model | replayState = Just (ReplayTime.clickReplayPauseToggle rs) }
+                        , Cmd.none
+                        )
 
         HandCardRectReceived result ->
-            withNoOutput (ReplayTime.handCardRectReceived result model)
+            case model.replayState of
+                Nothing ->
+                    withNoOutput ( model, Cmd.none )
+
+                Just rs ->
+                    let
+                        ( newRS, cmd ) =
+                            ReplayTime.handCardRectReceived result model.boardRect rs
+                    in
+                    withNoOutput ( { model | replayState = Just newRS }, cmd )
 
         ActionLogFetched (Ok bundle) ->
             ( bootstrapFromBundle bundle model, Cmd.none, NoOutput )
@@ -708,8 +752,7 @@ clickUndo model =
                         , status = { text = "Undone.", kind = Inform }
                         , hintedCards = []
                         , drag = NotDragging
-                        , replay = Nothing
-                        , replayAnim = State.NotAnimating
+                        , replayState = Nothing
                     }
 
                 outboundPayloadForAgent =
@@ -925,9 +968,9 @@ subscriptions model =
                     ]
 
         replaySubs =
-            case model.replay of
-                Just progress ->
-                    if progress.paused then
+            case model.replayState of
+                Just rs ->
+                    if rs.paused then
                         []
 
                     else
@@ -968,13 +1011,13 @@ bootstrapFromBundle bundle model =
         (collapseUndos bundle.actions)
 
 
-{-| Drop the initial-state record's fields onto the model and
-pin it as the replay baseline. Used by `bootstrapFromBundle`
-on the resume path.
+{-| Pin the bundle's initial state as both the live gameState
+and the immutable initialGameState (used by Instant Replay's
+ReplayState seed). Used by `bootstrapFromBundle` on resume.
 -}
 modelAtInitial : Game.GameState -> Model -> Model
 modelAtInitial initial model =
-    { model | gameState = initial, replayBaseline = Just initial }
+    { model | gameState = initial, initialGameState = initial }
 
 
 

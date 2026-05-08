@@ -11,11 +11,12 @@ Companion to `AnimateMergeHand` — same shape, different
 target endpoint (PlaceHand uses the payload's explicit `loc`).
 -}
 
+import Game.Game exposing (GameState)
+import Game.Physics.GestureArbitration as GA
 import Game.Rules.Card exposing (Card)
 import Game.CardStack exposing (BoardLocation)
 import Game.Replay.Space as Space
 import Game.GameEvent as GameEvent
-import Main.State exposing (Model)
 import Main.Types exposing (Point)
 
 
@@ -28,9 +29,9 @@ type alias PrepareResult =
     }
 
 
-prepare : { handCard : Card, loc : BoardLocation } -> Model -> Maybe PrepareResult
-prepare payload model =
-    Space.handCardSource payload.handCard model
+prepare : { handCard : Card, loc : BoardLocation } -> GameState -> Maybe PrepareResult
+prepare payload gameState =
+    Space.handCardSource payload.handCard gameState
         |> Maybe.map (\_ -> { handCardToMeasure = payload.handCard })
 
 
@@ -47,15 +48,16 @@ finish :
     { handCard : Card, loc : BoardLocation }
     -> Point
     -> Float
-    -> Model
+    -> GameState
+    -> Maybe GA.Rect
     -> Maybe Space.AnimationInfo
-finish payload origin nowMs model =
-    case Space.handCardSource payload.handCard model of
+finish payload origin nowMs gameState maybeBoardRect =
+    case Space.handCardSource payload.handCard gameState of
         Nothing ->
             Nothing
 
         Just source ->
-            Space.pointInLiveViewport model
+            Space.pointInLiveViewport maybeBoardRect
                 { left = payload.loc.left, top = payload.loc.top }
                 |> Maybe.map
                     (\target ->
