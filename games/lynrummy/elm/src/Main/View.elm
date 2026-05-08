@@ -65,6 +65,7 @@ import Main.State
     exposing
         ( Model
         , PopupContent
+        , ReplayProgress
         , canUndoThisTurn
         )
 import Main.Util exposing (pluralize)
@@ -446,18 +447,17 @@ viewTurnControls model =
             disabledGameButton "Undo"
           )
         , gameButton "Hint" ClickHint
-        , viewReplayControl model
+        , viewReplayControl model.replay
         , gameLink "← Lobby" "/gopher/game-lobby"
         ]
 
 
 {-| Replay button — Resume / Pause when a replay is in
-progress, or "Instant replay" when not. Used by both
-`puzzleControls` and `viewTurnControls`.
+progress, or "Instant replay" when not.
 -}
-viewReplayControl : Model -> Html Msg
-viewReplayControl model =
-    case model.replay of
+viewReplayControl : Maybe ReplayProgress -> Html Msg
+viewReplayControl maybeReplay =
+    case maybeReplay of
         Just progress ->
             if progress.paused then
                 gameButton "Resume" ClickReplayPauseToggle
