@@ -36,6 +36,18 @@ set -e
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_DIR"
 
+# --skip-engine: run all gates EXCEPT test_engine_conformance.ts.
+# Saves ~7s per run. Default off; ask Steve before enabling on a
+# branch — full gates are the expectation per
+# games/lynrummy/README.md ("Gating & testing").
+SKIP_ENGINE=0
+for arg in "$@"; do
+    case "$arg" in
+        --skip-engine) SKIP_ENGINE=1 ;;
+        *) echo "Unknown arg: $arg" >&2; exit 2 ;;
+    esac
+done
+
 # Timing helper — prints elapsed seconds for each phase.
 phase() {
     local label="$1"
@@ -54,8 +66,13 @@ DSLS=$(ls ./games/lynrummy/conformance/scenarios/*.dsl \
     | grep -vE 'physical_plan_corpus\.dsl|replay_walkthroughs\.dsl|verb_to_primitives.*\.dsl')
 phase "fixturegen" go run ./cmd/fixturegen $DSLS
 
-echo "==> TS conformance"
-phase "ts-tests" bash -c "cd games/lynrummy/ts && npm test"
+if [ "$SKIP_ENGINE" = "1" ]; then
+    echo "==> TS conformance (--skip-engine: omitting test:engine)"
+    phase "ts-tests" bash -c "cd games/lynrummy/ts && npm run -s test:no-engine"
+else
+    echo "==> TS conformance"
+    phase "ts-tests" bash -c "cd games/lynrummy/ts && npm test"
+fi
 
 echo "==> Elm conformance"
 phase "elm-check" bash -c "cd games/lynrummy/elm && ./check.sh"

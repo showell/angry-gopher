@@ -26476,15 +26476,8 @@
       }
     ],
     "expect": {
-      "kind": "",
-      "plan_lines": [
-        "steal QD' from HELPER [QD' QS QH], absorb onto [JC'] → [JC' QD'] ; spawn [QS], [QH]",
-        "steal KS from HELPER [KS KD KC], absorb onto [QS] → [QS KS] ; spawn [KD], [KC]",
-        "push [QH] onto HELPER [9C TD' JS'] → [9C TD' JS' QH]",
-        "pull KC onto [JC' QD'] → [JC' QD' KC] [→COMPLETE]",
-        "push [KD] onto HELPER [TD JD QD] → [TD JD QD KD]",
-        "push [QS KS] onto HELPER [AS 2S 3S] → [QS KS AS 2S 3S]"
-      ]
+      "kind": "no_plan",
+      "no_plan": true
     }
   },
   {
@@ -28399,15 +28392,8 @@
       }
     ],
     "expect": {
-      "kind": "",
-      "plan_lines": [
-        "peel 4C from HELPER [4C 5H 6S 7H 8C'], absorb onto [5C'] → [4C 5C']",
-        "steal 3C' from HELPER [3D 3S' 3C'], absorb onto [4C 5C'] → [3C' 4C 5C'] [→COMPLETE] ; spawn [3D], [3S']",
-        "push [3D] onto HELPER [JD' QD KD' AD' 2D'] → [JD' QD KD' AD' 2D' 3D]",
-        "steal 2H from HELPER [2H 3H 4H], absorb onto [3S'] → [2H 3S'] ; spawn [3H 4H]",
-        "push [3H 4H] onto HELPER [KH' AH' 2H'] → [KH' AH' 2H' 3H 4H]",
-        "peel 4H from HELPER [KH' AH' 2H' 3H 4H], absorb onto [2H 3S'] → [2H 3S' 4H] [→COMPLETE]"
-      ]
+      "kind": "no_plan",
+      "no_plan": true
     }
   },
   {
@@ -42938,15 +42924,8 @@
       }
     ],
     "expect": {
-      "kind": "",
-      "plan_lines": [
-        "peel TD from HELPER [TD JD QD KD], absorb onto [JC] → [TD JC]",
-        "split_out QD from HELPER [JD QD KD], absorb onto [TD JC] → [TD JC QD] [→COMPLETE] ; spawn [JD], [KD]",
-        "push [JD] onto HELPER [8C 9D' TS'] → [8C 9D' TS' JD]",
-        "peel AS' from HELPER [AS' 2S' 3S 4S], absorb onto [KD] → [KD AS']",
-        "steal 2H from HELPER [2H 3H 4H], absorb onto [KD AS'] → [KD AS' 2H] [→COMPLETE] ; spawn [3H 4H]",
-        "push [3H 4H] onto HELPER [5H 6H' 7H] → [3H 4H 5H 6H' 7H]"
-      ]
+      "kind": "no_plan",
+      "no_plan": true
     }
   },
   {
@@ -43344,15 +43323,8 @@
       }
     ],
     "expect": {
-      "kind": "",
-      "plan_lines": [
-        "steal AC from HELPER [AC AD AH], absorb onto [KH'] → [KH' AC] ; spawn [AD], [AH]",
-        "push [AD] onto HELPER [2C 3D 4C] → [AD 2C 3D 4C]",
-        "steal 2S' from HELPER [2S' 3S 4S], absorb onto [AH] → [AH 2S'] ; spawn [3S 4S]",
-        "peel 2H from HELPER [2H 3H 4H 5H 6H'], absorb onto [KH' AC] → [KH' AC 2H] [→COMPLETE]",
-        "push [3S 4S] onto HELPER [KS AS 2S] → [KS AS 2S 3S 4S]",
-        "peel 3H from HELPER [3H 4H 5H 6H'], absorb onto [AH 2S'] → [AH 2S' 3H] [→COMPLETE]"
-      ]
+      "kind": "no_plan",
+      "no_plan": true
     }
   },
   {

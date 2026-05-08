@@ -39,8 +39,8 @@ import {
   KIND_RB,
   KIND_SET,
 } from "./classified_card_stack.ts";
-import type { RawBuckets } from "./buckets.ts";
-import { solveStateWithDescs } from "./engine_v2.ts";
+import type { Buckets, RawBuckets } from "./buckets.ts";
+import { solveStateWithDescs, type PlanLine } from "./engine_v2.ts";
 
 // Default BFS state budget per projection. Mirrors python
 // `_PROJECTION_MAX_STATES`. Lowered from 200000 → 5000 in Python on
@@ -49,9 +49,7 @@ import { solveStateWithDescs } from "./engine_v2.ts";
 // (2026-05-03), so 5000 is now a comfortable ceiling.
 const PROJECTION_MAX_STATES = 5000;
 
-// Hint paths cap plan length. The cap applies ONLY here —
-// solveStateWithDescs itself stays "complete" for
-// proof-of-no-plan / conformance work.
+// Plan-length cap.
 //
 // 2026-05-05: bumped 4 → 5 after the seed-42 turn-10/11 stuck-state
 // experiments. At depth 4 the engine gave up on tantalizing boards
@@ -62,6 +60,33 @@ const PROJECTION_MAX_STATES = 5000;
 // engaged human who's willing to think; well past the give-up
 // point of a casual player.
 const HINT_MAX_PLAN_LENGTH = 5;
+
+// Outer-trouble pre-flight reject. Boards with more than this
+// many trouble cards are presumed unsolvable.
+const HINT_MAX_TROUBLE_OUTER = 10;
+
+
+/**
+ * Single canonical entry point for "given a bucket-shaped board
+ * state, find the shortest hint-grade plan." Both the live hint
+ * path (`tryProjection`) and the conformance test harness call
+ * THIS function — drift-by-construction is impossible because
+ * there's only one configuration site for the search.
+ *
+ * `maxStates` defaults to `PROJECTION_MAX_STATES` but can be
+ * overridden by callers that want a different inner budget
+ * (e.g. heuristic-tuning experiments).
+ */
+export function findPlanForBuckets(
+  initial: RawBuckets | Buckets,
+  maxStates: number = PROJECTION_MAX_STATES,
+): readonly PlanLine[] | null {
+  return solveStateWithDescs(initial, {
+    maxTroubleOuter: HINT_MAX_TROUBLE_OUTER,
+    maxStates,
+    maxPlanLength: HINT_MAX_PLAN_LENGTH,
+  });
+}
 
 export interface PlayResult {
   readonly placements: readonly Card[];
@@ -278,18 +303,11 @@ function tryProjection(
   for (const s of extraStacks) for (const c of s) cards.push(c);
 
   if (stats === undefined) {
-    const plan = solveStateWithDescs(initial, {
-      maxTroubleOuter: 10,
-      maxStates,
-      maxPlanLength: HINT_MAX_PLAN_LENGTH,
-    });
+    const plan = findPlanForBuckets(initial, maxStates);
     return plan === null ? null : plan.map(p => p.line);
   }
   const t0 = performance.now();
-  const plan = solveStateWithDescs(initial, {
-    maxTroubleOuter: 10,
-    maxStates,
-  });
+  const plan = findPlanForBuckets(initial, maxStates);
   const wallMs = performance.now() - t0;
   stats.projections.push({
     kind,

@@ -338,14 +338,7 @@ scenario extra_019_JC
     at (0,0): AS' 2S' 3S 4S
   trouble:
     at (0,0): JC
-  expect:
-    plan_lines:
-      - "peel TD from HELPER [TD JD QD KD], absorb onto [JC] → [TD JC]"
-      - "split_out QD from HELPER [JD QD KD], absorb onto [TD JC] → [TD JC QD] [→COMPLETE] ; spawn [JD], [KD]"
-      - "push [JD] onto HELPER [8C 9D' TS'] → [8C 9D' TS' JD]"
-      - "peel AS' from HELPER [AS' 2S' 3S 4S], absorb onto [KD] → [KD AS']"
-      - "steal 2H from HELPER [2H 3H 4H], absorb onto [KD AS'] → [KD AS' 2H] [→COMPLETE] ; spawn [3H 4H]"
-      - "push [3H 4H] onto HELPER [5H 6H' 7H] → [3H 4H 5H 6H' 7H]"
+  expect: no_plan
 
 scenario extra_020_KHp
   desc: extra_020_KHp. Auto-generated from offline play.
@@ -364,14 +357,7 @@ scenario extra_020_KHp
     at (0,0): 2H 3H 4H 5H 6H'
   trouble:
     at (0,0): KH'
-  expect:
-    plan_lines:
-      - "steal AC from HELPER [AC AD AH], absorb onto [KH'] → [KH' AC] ; spawn [AD], [AH]"
-      - "push [AD] onto HELPER [2C 3D 4C] → [AD 2C 3D 4C]"
-      - "steal 2S' from HELPER [2S' 3S 4S], absorb onto [AH] → [AH 2S'] ; spawn [3S 4S]"
-      - "peel 2H from HELPER [2H 3H 4H 5H 6H'], absorb onto [KH' AC] → [KH' AC 2H] [→COMPLETE]"
-      - "push [3S 4S] onto HELPER [KS AS 2S] → [KS AS 2S 3S 4S]"
-      - "peel 3H from HELPER [3H 4H 5H 6H'], absorb onto [AH 2S'] → [AH 2S' 3H] [→COMPLETE]"
+  expect: no_plan
 
 scenario extra_021_2D
   desc: extra_021_2D. Auto-generated from offline play.

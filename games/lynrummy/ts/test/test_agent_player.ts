@@ -89,8 +89,10 @@ function main(): void {
     const board = makeOpeningBoard();
 
     try {
+      const t0 = Date.now();
       const result = playFullGame(board, hands, deck, { stopAtDeck: STOP_AT_DECK });
-      console.log(`PASS  seed=${seed}  ${result.turns.length} turns, ${result.stoppedReason}`);
+      const ms = Date.now() - t0;
+      console.log(`PASS  seed=${seed}  ${result.turns.length} turns, ${result.stoppedReason}  [${ms}ms]`);
       passed++;
     } catch (e) {
       const msg = (e as Error).message;

@@ -30,7 +30,7 @@ import { parseCardLabel } from "../src/rules/card.ts";
 // valid plans than the bfs.ts plan-lines the JSON pins. The
 // canSteal length-2 extension also made some pinned no_plan
 // scenarios solvable; those are itemized in STALE_NO_PLAN.
-import { solveStateWithDescs } from "../src/engine_v2.ts";
+import { findPlanForBuckets } from "../src/hand_play.ts";
 import { enumerateMoves } from "../src/enumerator.ts";
 import { describe, narrate, hint, type Desc } from "../src/move.ts";
 import { classifyBuckets, type Buckets, type RawBuckets } from "../src/buckets.ts";
@@ -187,7 +187,7 @@ function isCleanFinal(b: Buckets): { ok: boolean; msg: string } {
 
 function runSolve(sc: Scenario): RunResult {
   const raw = buildRawBuckets(sc);
-  const plan = solveStateWithDescs(raw, { maxTroubleOuter: 10, maxStates: 200000 });
+  const plan = findPlanForBuckets(raw);
 
   const expect = sc.expect;
   if (expect["no_plan"]) {
@@ -300,11 +300,37 @@ const TS_HANDLED_OPS = new Set<string>([
 // or don't admit at all.
 const TS_OUT_OF_SCOPE_OPS: Record<string, string> = {};
 
+/**
+ * Refuse to run if any .dsl scenario file is newer than
+ * fixtures.json. Without this check, an edit to a .dsl
+ * combined with a forgotten fixturegen run silently tests
+ * the OLD fixtures — confusing failures, wrong signal.
+ */
+function assertFixturesFresh(): void {
+  const dslDir = path.resolve(__dirname, "../../conformance/scenarios");
+  if (!fs.existsSync(dslDir)) return;
+  const fixturesMtime = fs.statSync(FIXTURES_PATH).mtimeMs;
+  const stale: string[] = [];
+  for (const f of fs.readdirSync(dslDir)) {
+    if (!f.endsWith(".dsl")) continue;
+    const dslMtime = fs.statSync(path.join(dslDir, f)).mtimeMs;
+    if (dslMtime > fixturesMtime) stale.push(f);
+  }
+  if (stale.length > 0) {
+    console.error(
+      `\nfixtures.json is stale — newer .dsl files: ${stale.join(", ")}\n` +
+      `Run \`go run ./cmd/fixturegen <dsls>\` (or \`ops/check-conformance\`) to regenerate.\n`,
+    );
+    process.exit(2);
+  }
+}
+
 function main(): void {
   if (!fs.existsSync(FIXTURES_PATH)) {
     console.error(`no conformance fixtures at ${FIXTURES_PATH}`);
     process.exit(1);
   }
+  assertFixturesFresh();
   let scenarios: Scenario[] = JSON.parse(fs.readFileSync(FIXTURES_PATH, "utf8"));
 
   // CLI parsing — order-insensitive: any non-flag arg is a name
@@ -346,6 +372,7 @@ function main(): void {
       }
       continue;
     }
+    const t0 = Date.now();
     let res: RunResult | null = null;
     if (sc.op === "enumerate_moves") {
       res = runEnumerateMoves(sc);
@@ -359,7 +386,7 @@ function main(): void {
           res = runSolve(sc);  // no_plan stays no_plan; nothing to capture
         } else {
           const raw = buildRawBuckets(sc);
-          const plan = solveStateWithDescs(raw, { maxTroubleOuter: 10, maxStates: 200000 });
+          const plan = findPlanForBuckets(raw);
           if (plan === null) {
             res = { ok: false, msg: `REPAIR: engine returned null for pinned scenario` };
           } else {
@@ -391,13 +418,15 @@ function main(): void {
       // Unreachable: TS_HANDLED_OPS gate above already filtered.
       throw new Error(`handled-op gate let through unrecognized op ${JSON.stringify(sc.op)}`);
     }
+    const ms = Date.now() - t0;
     total++;
+    const tag = ms >= 100 ? `  [${ms}ms]` : "";
     if (res.ok) {
       passed++;
-      console.log(`PASS  ${sc.name.padEnd(50)}  ${res.msg}`);
+      console.log(`PASS  ${sc.name.padEnd(50)}  ${res.msg}${tag}`);
     } else {
       failed++;
-      const line = `FAIL  ${sc.name.padEnd(50)}  ${res.msg}`;
+      const line = `FAIL  ${sc.name.padEnd(50)}  ${res.msg}${tag}`;
       console.log(line);
       failures.push(line);
     }

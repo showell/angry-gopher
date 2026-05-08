@@ -45,6 +45,25 @@ The TS agent at `ts/` owns three end-to-end jobs:
   files at `ts/bench/*_gold.txt` lock baseline wall-time
   per scenario.
 
+## Gating & testing
+
+**Default: run all gates before each commit.** That's
+`ops/check-conformance` (no flags) — TS suite + Elm
+standalone + Elm tests + elm-review. Per-phase timing is
+printed so regressions are visible.
+
+When rapidly iterating (pure refactors, known-experimental
+branches), **ask Steve** if we can pass `--skip-engine` to
+omit `test_engine_conformance.ts` (~7s saved per run) until
+the experiment lands. Don't skip without asking.
+
+Treat any phase >15s as worth flagging — instrumentation is
+in place to spot it. The honest test invariant is that
+conformance calls the same codepath the production hint
+path does (`findPlanForBuckets` in `ts/src/hand_play.ts`):
+divergence in solver options means the gate isn't load-
+bearing.
+
 ## Subsystems
 
 - `ts/` — the TypeScript agent (solver, verb pipeline,
