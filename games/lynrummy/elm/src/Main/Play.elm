@@ -21,14 +21,13 @@ Output.
 
 import Browser.Dom
 import Browser.Events
-import Game.BoardActions exposing (Side(..))
-import Game.BoardDrag exposing (BoardCardDragInfo)
+import Game.BoardDrag as BoardDrag
 import Game.BoardGesture as BoardGesture
-import Game.CardStack exposing (CardStack, encodeBoardLocation, encodeCardStack)
+import Game.CardStack exposing (CardStack)
 import Game.Drag exposing (DragState(..))
 import Game.Execute as Execute
-import Game.Hand exposing (Hand, activeHand, setActiveHand)
-import Game.HandDrag exposing (HandCardDragInfo)
+import Game.Hand exposing (activeHand)
+import Game.HandDrag as HandDrag
 import Game.HandGesture as HandGesture
 import Game.Rules.Card as Card
 import Game.Dealer as Dealer
@@ -42,7 +41,7 @@ import Http
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
 import Game.Physics.BoardGeometry exposing (refereeBounds)
-import Game.Status as Status exposing (StatusKind(..), StatusMessage)
+import Game.Status exposing (StatusKind(..), StatusMessage)
 import Main.Gesture
     exposing
         ( pointDecoder
@@ -50,18 +49,17 @@ import Main.Gesture
         , startHandDrag
         )
 import Main.Msg exposing (Msg(..))
+import Game.ActionLog exposing (ActionLogBundle)
 import Main.State
     exposing
-        ( ActionLogBundle
-        , ActionLogEntry
-        , Model
+        ( Model
         , baseModel
         , collapseUndos
         , encodeGameState
         )
 import Main.Types exposing (PathFrame(..), Point)
 import Main.View as View exposing (popupForCompleteTurn, statusForCompleteTurn)
-import Main.Wire as Wire exposing (encodeGesturePoint, fetchActionLog, fetchNewSession, pathFrameString)
+import Main.Wire as Wire exposing (fetchActionLog, fetchNewSession)
 import Time
 
 
@@ -331,8 +329,15 @@ handleMouseUp releasePoint tMs model =
 
         DraggingBoardCard d ->
             let
-                ( outcome, cmd ) =
-                    handleMouseUpBoard releasePoint tMs d model
+                outcome =
+                    BoardDrag.handleMouseUp releasePoint
+                        tMs
+                        d
+                        { board = model.gameState.board
+                        , boardRect = model.boardRect
+                        , actionLog = model.actionLog
+                        , nextSeq = model.nextSeq
+                        }
 
                 gs0 =
                     model.gameState
@@ -340,17 +345,25 @@ handleMouseUp releasePoint tMs model =
             ( { model
                 | drag = NotDragging
                 , gameState = { gs0 | board = outcome.board }
-                , status = outcome.status
+                , status = outcome.status |> Maybe.withDefault model.status
                 , actionLog = outcome.actionLog
                 , nextSeq = outcome.nextSeq
               }
-            , cmd
+            , outcome.outboundPayload
+                |> Maybe.map (Wire.sendAction model.sessionId)
+                |> Maybe.withDefault Cmd.none
             )
 
         DraggingHandCard d ->
             let
-                ( outcome, cmd ) =
-                    handleMouseUpHand releasePoint d model
+                outcome =
+                    HandDrag.handleMouseUp releasePoint
+                        d
+                        { gameState = model.gameState
+                        , boardRect = model.boardRect
+                        , actionLog = model.actionLog
+                        , nextSeq = model.nextSeq
+                        }
 
                 gs0 =
                     model.gameState
@@ -363,320 +376,15 @@ handleMouseUp releasePoint tMs model =
                         , hands = outcome.hands
                         , cardsPlayedThisTurn = outcome.cardsPlayedThisTurn
                     }
-                , status = outcome.status
+                , status = outcome.status |> Maybe.withDefault model.status
                 , actionLog = outcome.actionLog
                 , nextSeq = outcome.nextSeq
               }
-            , cmd
+            , outcome.outboundPayload
+                |> Maybe.map (Wire.sendAction model.sessionId)
+                |> Maybe.withDefault Cmd.none
             )
 
-
-{-| Narrow return type for `handleMouseUpBoard`: the three
-fields that a board-card mouseup actually mutates. The
-caller patches these onto its full Model. This is a shim
-toward letting Puzzles call `handleMouseUpBoard` without
-knowing the full Model shape.
--}
-type alias BoardOutcome =
-    { board : List CardStack
-    , status : StatusMessage
-    , actionLog : List ActionLogEntry
-    , nextSeq : Int
-    }
-
-
-{-| Resolve a board-card mouseup. Each action variant produces
-a `newModel` (engine-applied + log-appended) and an
-`outboundPayloadForAgent` (the JSON body that goes to the
-server's action log). The per-action `outboundPayloadForAgent`
-is built inline — the `Wire.sendAction` body shape lives at
-the one site that authors it.
--}
-handleMouseUpBoard : Point -> Float -> BoardCardDragInfo -> Model -> ( BoardOutcome, Cmd Msg )
-handleMouseUpBoard releasePoint tMs d model =
-    case BoardGesture.handleMouseUp releasePoint tMs d model.boardRect of
-        BoardGesture.Split p ->
-            let
-                newBoard =
-                    Execute.split p.stack p.cardIndex model.gameState.board
-
-                splitStatus =
-                    { text = "Be careful with splitting! Splits only pay off when you get more cards on the board or make prettier piles."
-                    , kind = Scold
-                    }
-
-                entry =
-                    { action = GameEvent.Split p
-                    , gesturePath = Nothing
-                    , pathFrame = ViewportFrame
-                    }
-
-                outcome =
-                    { board = newBoard
-                    , status = Status.geometryFeedback model.gameState.board newBoard |> Maybe.withDefault splitStatus
-                    , actionLog = model.actionLog ++ [ entry ]
-                    , nextSeq = model.nextSeq + 1
-                    }
-
-                outboundPayloadForAgent =
-                    Encode.object
-                        [ ( "seq", Encode.int model.nextSeq )
-                        , ( "action"
-                          , Encode.object
-                                [ ( "action", Encode.string "split" )
-                                , ( "stack", encodeCardStack p.stack )
-                                , ( "card_index", Encode.int p.cardIndex )
-                                ]
-                          )
-                        ]
-            in
-            ( outcome, Wire.sendAction model.sessionId outboundPayloadForAgent )
-
-        BoardGesture.MergeStack p ->
-            let
-                newBoard =
-                    Execute.mergeStack p.source p.target p.side model.gameState.board
-
-                entry =
-                    { action = GameEvent.MergeStack { source = p.source, target = p.target, side = p.side }
-                    , gesturePath = Just p.envelope.path
-                    , pathFrame = p.envelope.frame
-                    }
-
-                outcome =
-                    { board = newBoard
-                    , status = Status.geometryFeedback model.gameState.board newBoard |> Maybe.withDefault (Status.mergeStatus newBoard)
-                    , actionLog = model.actionLog ++ [ entry ]
-                    , nextSeq = model.nextSeq + 1
-                    }
-
-                outboundPayloadForAgent =
-                    Encode.object
-                        [ ( "seq", Encode.int model.nextSeq )
-                        , ( "action"
-                          , Encode.object
-                                [ ( "action", Encode.string "merge_stack" )
-                                , ( "source", encodeCardStack p.source )
-                                , ( "target", encodeCardStack p.target )
-                                , ( "side"
-                                  , Encode.string
-                                        (case p.side of
-                                            Left ->
-                                                "left"
-
-                                            Right ->
-                                                "right"
-                                        )
-                                  )
-                                ]
-                          )
-                        , ( "gesture_metadata"
-                          , Encode.object
-                                [ ( "path", Encode.list encodeGesturePoint p.envelope.path )
-                                , ( "path_frame", Encode.string (pathFrameString p.envelope.frame) )
-                                , ( "pointer_type", Encode.string "mouse" )
-                                ]
-                          )
-                        ]
-            in
-            ( outcome, Wire.sendAction model.sessionId outboundPayloadForAgent )
-
-        BoardGesture.MoveStack p ->
-            let
-                newBoard =
-                    Execute.moveStack p.stack p.newLoc model.gameState.board
-
-                moveStackStatus =
-                    { text = "Moved!", kind = Inform }
-
-                entry =
-                    { action = GameEvent.MoveStack { stack = p.stack, newLoc = p.newLoc }
-                    , gesturePath = Just p.envelope.path
-                    , pathFrame = p.envelope.frame
-                    }
-
-                outcome =
-                    { board = newBoard
-                    , status = Status.geometryFeedback model.gameState.board newBoard |> Maybe.withDefault moveStackStatus
-                    , actionLog = model.actionLog ++ [ entry ]
-                    , nextSeq = model.nextSeq + 1
-                    }
-
-                outboundPayloadForAgent =
-                    Encode.object
-                        [ ( "seq", Encode.int model.nextSeq )
-                        , ( "action"
-                          , Encode.object
-                                [ ( "action", Encode.string "move_stack" )
-                                , ( "stack", encodeCardStack p.stack )
-                                , ( "new_loc", encodeBoardLocation p.newLoc )
-                                ]
-                          )
-                        , ( "gesture_metadata"
-                          , Encode.object
-                                [ ( "path", Encode.list encodeGesturePoint p.envelope.path )
-                                , ( "path_frame", Encode.string (pathFrameString p.envelope.frame) )
-                                , ( "pointer_type", Encode.string "mouse" )
-                                ]
-                          )
-                        ]
-            in
-            ( outcome, Wire.sendAction model.sessionId outboundPayloadForAgent )
-
-        BoardGesture.BoardCardOffBoard ->
-            let
-                outcome =
-                    { board = model.gameState.board
-                    , status = offBoardScold
-                    , actionLog = model.actionLog
-                    , nextSeq = model.nextSeq
-                    }
-            in
-            ( outcome, Cmd.none )
-
-
-{-| Narrow return type for `handleMouseUpHand`, parallel to
-`BoardOutcome` but with the additional fields a hand action
-can mutate (`hands` for the active-hand write-back,
-`cardsPlayedThisTurn` for the per-turn counter).
--}
-type alias HandOutcome =
-    { board : List CardStack
-    , hands : List Hand
-    , cardsPlayedThisTurn : Int
-    , status : StatusMessage
-    , actionLog : List ActionLogEntry
-    , nextSeq : Int
-    }
-
-
-{-| Resolve a hand-card mouseup. Mirrors `handleMouseUpBoard`
-but for the hand-origin variants. Hand actions ship pathless
-(no `gesture_metadata`); replay re-synthesizes via DOM
-measurement on the resume path.
--}
-handleMouseUpHand : Point -> HandCardDragInfo -> Model -> ( HandOutcome, Cmd Msg )
-handleMouseUpHand releasePoint d model =
-    case HandGesture.handleMouseUp releasePoint d model.boardRect of
-        HandGesture.MergeHand p ->
-            let
-                next =
-                    Execute.mergeHand p.handCard p.target p.side model.gameState.board (activeHand model.gameState)
-
-                modelWithHand =
-                    setActiveHand next.hand model.gameState
-
-                outcome =
-                    { board = next.board
-                    , hands = modelWithHand.hands
-                    , cardsPlayedThisTurn = model.gameState.cardsPlayedThisTurn + 1
-                    , status = Status.geometryFeedback model.gameState.board next.board |> Maybe.withDefault (Status.mergeStatus next.board)
-                    , actionLog =
-                        model.actionLog
-                            ++ [ { action = GameEvent.MergeHand p
-                                 , gesturePath = Nothing
-                                 , pathFrame = ViewportFrame
-                                 }
-                               ]
-                    , nextSeq = model.nextSeq + 1
-                    }
-
-                outboundPayloadForAgent =
-                    Encode.object
-                        [ ( "seq", Encode.int model.nextSeq )
-                        , ( "action"
-                          , Encode.object
-                                [ ( "action", Encode.string "merge_hand" )
-                                , ( "hand_card", Card.encodeCard p.handCard )
-                                , ( "target", encodeCardStack p.target )
-                                , ( "side"
-                                  , Encode.string
-                                        (case p.side of
-                                            Left ->
-                                                "left"
-
-                                            Right ->
-                                                "right"
-                                        )
-                                  )
-                                ]
-                          )
-                        ]
-            in
-            ( outcome, Wire.sendAction model.sessionId outboundPayloadForAgent )
-
-        HandGesture.PlaceHand p ->
-            let
-                next =
-                    Execute.placeHand p.handCard p.loc model.gameState.board (activeHand model.gameState)
-
-                modelWithHand =
-                    setActiveHand next.hand model.gameState
-
-                placeHandStatus =
-                    { text = "On the board!", kind = Inform }
-
-                outcome =
-                    { board = next.board
-                    , hands = modelWithHand.hands
-                    , cardsPlayedThisTurn = model.gameState.cardsPlayedThisTurn + 1
-                    , status = Status.geometryFeedback model.gameState.board next.board |> Maybe.withDefault placeHandStatus
-                    , actionLog =
-                        model.actionLog
-                            ++ [ { action = GameEvent.PlaceHand p
-                                 , gesturePath = Nothing
-                                 , pathFrame = ViewportFrame
-                                 }
-                               ]
-                    , nextSeq = model.nextSeq + 1
-                    }
-
-                outboundPayloadForAgent =
-                    Encode.object
-                        [ ( "seq", Encode.int model.nextSeq )
-                        , ( "action"
-                          , Encode.object
-                                [ ( "action", Encode.string "place_hand" )
-                                , ( "hand_card", Card.encodeCard p.handCard )
-                                , ( "loc", encodeBoardLocation p.loc )
-                                ]
-                          )
-                        ]
-            in
-            ( outcome, Wire.sendAction model.sessionId outboundPayloadForAgent )
-
-        HandGesture.HandCardOffBoard ->
-            let
-                outcome =
-                    { board = model.gameState.board
-                    , hands = model.gameState.hands
-                    , cardsPlayedThisTurn = model.gameState.cardsPlayedThisTurn
-                    , status = offBoardScold
-                    , actionLog = model.actionLog
-                    , nextSeq = model.nextSeq
-                    }
-            in
-            ( outcome, Cmd.none )
-
-        HandGesture.HandNothing ->
-            let
-                outcome =
-                    { board = model.gameState.board
-                    , hands = model.gameState.hands
-                    , cardsPlayedThisTurn = model.gameState.cardsPlayedThisTurn
-                    , status = model.status
-                    , actionLog = model.actionLog
-                    , nextSeq = model.nextSeq
-                    }
-            in
-            ( outcome, Cmd.none )
-
-
-offBoardScold : StatusMessage
-offBoardScold =
-    { text = "Don't knock cards off the board, please. You're not a cat!"
-    , kind = Scold
-    }
 
 
 clickCompleteTurn : Model -> ( Model, Cmd Msg )

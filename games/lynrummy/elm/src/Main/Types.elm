@@ -2,6 +2,8 @@ module Main.Types exposing
     ( GesturePoint
     , PathFrame(..)
     , Point
+    , encodeGesturePoint
+    , pathFrameString
     )
 
 {-| Small shared data types — extracted from `Main.State` so
@@ -12,6 +14,8 @@ Anything in the codebase can import them without inheriting
 the game's `Model` or any other state-shape baggage.
 
 -}
+
+import Json.Encode as Encode exposing (Value)
 
 
 type alias Point =
@@ -43,3 +47,22 @@ frame the containing path is tagged with (see `PathFrame`).
 -}
 type alias GesturePoint =
     { tMs : Float, x : Int, y : Int }
+
+
+encodeGesturePoint : GesturePoint -> Value
+encodeGesturePoint p =
+    Encode.object
+        [ ( "t", Encode.float p.tMs )
+        , ( "x", Encode.int p.x )
+        , ( "y", Encode.int p.y )
+        ]
+
+
+pathFrameString : PathFrame -> String
+pathFrameString frame =
+    case frame of
+        ViewportFrame ->
+            "viewport"
+
+        BoardFrame ->
+            "board"

@@ -1,7 +1,5 @@
 module Main.State exposing
-    ( ActionLogBundle
-    , ActionLogEntry
-    , EnvelopeForGesture
+    ( EnvelopeForGesture
     , Flags
     , Model
     , PopupContent
@@ -27,6 +25,7 @@ in `Game.Drag`; small leaf types (`Point`, `PathFrame`,
 
 -}
 
+import Game.ActionLog as ActionLog exposing (ActionLogEntry)
 import Game.CardStack as CardStack
 import Game.Dealer
 import Game.Drag exposing (DragState(..))
@@ -37,7 +36,7 @@ import Game.Physics.GestureArbitration as GA
 import Game.Rules.Card as Card exposing (Card)
 import Game.Status exposing (StatusKind(..), StatusMessage)
 import Json.Encode as Encode exposing (Value)
-import Main.Types exposing (GesturePoint, PathFrame)
+import Main.Types exposing (GesturePoint)
 
 
 
@@ -185,7 +184,7 @@ land in the action-log with the same envelope as human drags.
 
 -}
 type alias EnvelopeForGesture =
-    { path : List GesturePoint, frame : PathFrame }
+    ActionLog.EnvelopeForGesture
 
 
 
@@ -231,27 +230,6 @@ encodeHand : Hand -> Value
 encodeHand h =
     Encode.object
         [ ( "hand_cards", Encode.list CardStack.encodeHandCard h.handCards ) ]
-
-
-{-| Bundle returned by /sessions/:id/actions — the action log
-plus the session-specific initial-state snapshot. Initial state
-lets `ClickInstantReplay` rewind to the session's actual seeded
-deal instead of a hardcoded Dealer fixture. Each action entry
-also carries any captured gesture telemetry, so replay can
-re-animate the original drag at real speed.
--}
-type alias ActionLogBundle =
-    { initialState : GameState
-    , actions : List ActionLogEntry
-    }
-
-
-type alias ActionLogEntry =
-    { action : GameEvent
-    , gesturePath : Maybe (List GesturePoint)
-    , pathFrame : PathFrame
-    }
-
 
 
 -- ACTION LOG HELPERS

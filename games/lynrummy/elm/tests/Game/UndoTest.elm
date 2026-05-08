@@ -23,7 +23,8 @@ import Game.Game exposing (GameState)
 import Game.GameEvent exposing (GameEvent(..))
 import Game.Hand as Hand
 import Game.Rules.Card exposing (CardValue(..), OriginDeck(..), Suit(..))
-import Main.State as State exposing (ActionLogEntry)
+import Game.ActionLog exposing (ActionLogEntry)
+import Main.State as State
 import Main.Types exposing (PathFrame(..))
 import Test exposing (Test, describe, test)
 

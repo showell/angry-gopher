@@ -3,6 +3,7 @@ module Game.Status exposing
     , StatusMessage
     , geometryFeedback
     , mergeStatus
+    , offBoardScold
     )
 
 {-| Status messages and the helpers that build them. -}
@@ -110,3 +111,10 @@ isCompleteType t =
 
         StackType.Dup ->
             False
+
+
+offBoardScold : StatusMessage
+offBoardScold =
+    { text = "Don't knock cards off the board, please. You're not a cat!"
+    , kind = Scold
+    }

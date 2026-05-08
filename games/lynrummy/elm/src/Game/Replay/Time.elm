@@ -28,6 +28,7 @@ Phases, same as the `ReplayAnimationState` sum type in `Main.State`:
 -}
 
 import Browser.Dom
+import Game.ActionLog as ActionLog
 import Game.CardStack exposing (CardStack)
 import Game.Drag as Drag exposing (DragState(..))
 import Game.Execute as Execute
@@ -60,7 +61,7 @@ import Time
 type alias ClickInstantReplayInputs =
     { gameId : String
     , initialGameState : GameState
-    , actionLog : List State.ActionLogEntry
+    , actionLog : List ActionLog.ActionLogEntry
     }
 
 

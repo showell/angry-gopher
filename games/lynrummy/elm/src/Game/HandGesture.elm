@@ -17,7 +17,7 @@ variants carry no envelope.
 
 import Game.BoardActions exposing (Side)
 import Game.CardStack as CardStack exposing (BoardLocation, CardStack)
-import Game.HandDrag exposing (HandCardDragInfo)
+import Game.Drag exposing (HandCardDragInfo)
 import Game.Physics.BoardGeometry as BG
 import Game.Physics.GestureArbitration as GA
 import Game.Rules.Card exposing (Card)

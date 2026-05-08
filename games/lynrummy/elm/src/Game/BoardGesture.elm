@@ -21,7 +21,7 @@ rather than shared via Maybe-flagged helpers.
 -}
 
 import Game.BoardActions exposing (Side)
-import Game.BoardDrag exposing (BoardCardDragInfo)
+import Game.Drag exposing (BoardCardDragInfo)
 import Game.CardStack as CardStack exposing (BoardLocation, CardStack)
 import Game.Physics.BoardGeometry as BG
 import Game.Physics.GestureArbitration as GA

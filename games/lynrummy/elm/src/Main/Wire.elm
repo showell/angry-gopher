@@ -1,8 +1,6 @@
 module Main.Wire exposing
-    ( encodeGesturePoint
-    , fetchActionLog
+    ( fetchActionLog
     , fetchNewSession
-    , pathFrameString
     , sendAction
     )
 
@@ -33,7 +31,7 @@ import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode exposing (Value)
 import Main.Msg exposing (Msg(..))
 import Game.Game exposing (GameState)
-import Main.State exposing (ActionLogBundle, ActionLogEntry)
+import Game.ActionLog exposing (ActionLogBundle, ActionLogEntry)
 import Main.Types exposing (GesturePoint, PathFrame(..))
 
 
@@ -89,26 +87,6 @@ sendAction maybeSessionId body =
 
         Nothing ->
             Cmd.none
-
-
-pathFrameString : PathFrame -> String
-pathFrameString frame =
-    case frame of
-        BoardFrame ->
-            "board"
-
-        ViewportFrame ->
-            "viewport"
-
-
-encodeGesturePoint : GesturePoint -> Value
-encodeGesturePoint p =
-    Encode.object
-        [ ( "t", Encode.float p.tMs )
-        , ( "x", Encode.int p.x )
-        , ( "y", Encode.int p.y )
-        ]
-
 
 
 -- INBOUND DECODERS
