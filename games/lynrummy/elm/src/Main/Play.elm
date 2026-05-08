@@ -50,7 +50,7 @@ import Main.Gesture
         , startHandDrag
         )
 import Main.Msg exposing (Msg(..))
-import Main.State as State
+import Main.State
     exposing
         ( ActionLogBundle
         , ActionLogEntry
@@ -228,7 +228,6 @@ update msg model =
                         ( maybeNew, cmd ) =
                             ReplayTime.replayFrame
                                 (toFloat (Time.posixToMillis nowPosix))
-                                model.boardRect
                                 rs
                     in
                     withNoOutput ( { model | replayState = maybeNew }, cmd )

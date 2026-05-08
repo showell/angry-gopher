@@ -849,7 +849,7 @@ runReplayLoop model rs nowMs budget =
     else
         let
             ( maybeNext, _ ) =
-                ReplayTime.replayFrame nowMs model.boardRect rs
+                ReplayTime.replayFrame nowMs rs
         in
         case maybeNext of
             Nothing ->

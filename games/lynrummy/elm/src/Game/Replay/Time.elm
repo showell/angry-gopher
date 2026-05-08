@@ -100,8 +100,8 @@ clickReplayPauseToggle rs =
 no-op when paused. Returns `Nothing` when the queue drains
 (the caller clears `replayState` from Model).
 -}
-replayFrame : Float -> Maybe GA.Rect -> ReplayState -> ( Maybe ReplayState, Cmd Msg )
-replayFrame nowMs maybeBoardRect rs =
+replayFrame : Float -> ReplayState -> ( Maybe ReplayState, Cmd Msg )
+replayFrame nowMs rs =
     if rs.paused then
         ( Just rs, Cmd.none )
 
@@ -117,7 +117,6 @@ replayFrame nowMs maybeBoardRect rs =
                             entry.action
                             entry.gesturePath
                             { rs | eventPlan = rest }
-                            maybeBoardRect
                             nowMs
                             |> mapStateAndCmd Just
 
@@ -180,10 +179,9 @@ prepareReplayStep :
     GameEvent
     -> Maybe (List GesturePoint)
     -> ReplayState
-    -> Maybe GA.Rect
     -> Float
     -> ( ReplayState, Cmd Msg )
-prepareReplayStep action maybePath rs maybeBoardRect nowMs =
+prepareReplayStep action maybePath rs nowMs =
     let
         startAnimating anim =
             case Space.interpPath anim.path 0 of
