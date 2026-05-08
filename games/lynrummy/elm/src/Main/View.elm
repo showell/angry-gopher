@@ -49,7 +49,7 @@ drag math honest.
 -}
 
 import Game.Physics.BoardGeometry as BoardGeometry
-import Game.Game exposing (CompleteTurnOutcome)
+import Game.Game exposing (CompleteTurnOutcome, GameState)
 import Game.Hand exposing (Hand)
 import Game.PlayerTurn exposing (CompleteTurnResult(..))
 import Game.Rules.Card exposing (Card)
@@ -329,6 +329,15 @@ layouts:
     is irrelevant there.
 
 -}
+type alias PlayerPanelInfo =
+    { gameState : GameState
+    , drag : Drag.DragState
+    , hintedCards : List Card
+    , canUndo : Bool
+    , replay : Maybe ReplayProgress
+    }
+
+
 leftSidebar : Model -> Html Msg
 leftSidebar model =
     div
@@ -336,22 +345,29 @@ leftSidebar model =
         , style "padding-right" "20px"
         , style "border-right" "1px gray solid"
         ]
-        (playerHands model)
-
-
-playerHands : Model -> List (Html Msg)
-playerHands model =
-    let
-        activeInfo : ActivePlayerInfo
-        activeInfo =
-            { drag = model.drag
+        (playerHands
+            { gameState = model.gameState
+            , drag = model.drag
             , hintedCards = model.hintedCards
             , canUndo = canUndoThisTurn model
             , replay = model.replay
             }
+        )
+
+
+playerHands : PlayerPanelInfo -> List (Html Msg)
+playerHands info =
+    let
+        activeInfo : ActivePlayerInfo
+        activeInfo =
+            { drag = info.drag
+            , hintedCards = info.hintedCards
+            , canUndo = info.canUndo
+            , replay = info.replay
+            }
 
         renderRow idx hand =
-            if idx == model.gameState.activePlayerIndex then
+            if idx == info.gameState.activePlayerIndex then
                 viewActivePlayerRow activeInfo idx hand
 
             else
@@ -362,10 +378,10 @@ playerHands model =
         , style "font-size" "13px"
         , style "margin-top" "12px"
         ]
-        [ Html.text ("Turn " ++ String.fromInt (model.gameState.turnIndex + 1)) ]
-        :: List.indexedMap renderRow model.gameState.hands
+        [ Html.text ("Turn " ++ String.fromInt (info.gameState.turnIndex + 1)) ]
+        :: List.indexedMap renderRow info.gameState.hands
     )
-        ++ [ deckRemainingLine (List.length model.gameState.deck) ]
+        ++ [ deckRemainingLine (List.length info.gameState.deck) ]
 
 
 deckRemainingLine : Int -> Html Msg
