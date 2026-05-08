@@ -512,5 +512,10 @@ boardColumn model =
     div
         [ style "min-width" "800px" ]
         [ View.viewBoardHeading
-        , BoardView.boardWithWings model
+        , BoardView.boardWithWings
+            { board = model.gameState.board
+            , boardRect = model.boardRect
+            , drag = model.drag
+            , gameId = model.gameId
+            }
         ]

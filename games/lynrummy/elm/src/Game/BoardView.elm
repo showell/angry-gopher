@@ -33,7 +33,7 @@ import Html exposing (Html, div)
 import Html.Attributes exposing (id, style)
 import Main.Gesture as Gesture
 import Main.Msg exposing (Msg)
-import Main.State exposing (Model, boardDomIdFor)
+import Main.State exposing (boardDomIdFor)
 
 
 
@@ -85,13 +85,17 @@ viewBoard stacks =
 -- DRAG-AWARE BOARD
 
 
-boardWithWings : Model -> Html Msg
-boardWithWings model =
-    let
-        boardElements =
-            boardChildren model.gameState.board model.boardRect model.drag
-    in
-    boardShellWith [ id (boardDomIdFor model.gameId) ] boardElements
+boardWithWings :
+    { board : List CardStack
+    , boardRect : Maybe GA.Rect
+    , drag : DragState
+    , gameId : String
+    }
+    -> Html Msg
+boardWithWings { board, boardRect, drag, gameId } =
+    boardShellWith
+        [ id (boardDomIdFor gameId) ]
+        (boardChildren board boardRect drag)
 
 
 boardChildren : List CardStack -> Maybe GA.Rect -> DragState -> List (Html Msg)
