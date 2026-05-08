@@ -3,27 +3,30 @@ module Game.UndoTest exposing (suite)
 {-| Tests for the Undo feature.
 
 Covers:
-  - `Game.Reducer.undoAction` — round-trip for all five primitives:
+  - `Game.Execute.undoEvent` — round-trip for all five primitives:
     Split, MergeStack, MergeHand, PlaceHand, MoveStack.
   - `Main.State.collapseUndos` — token collapsing in the action log.
   - `Main.State.canUndoThisTurn` — button-enable predicate.
 
-Strategy: for `undoAction`, apply an action with `applyAction` then
-immediately `undoAction` on the result and assert equality with the
-pre-action state.  This sidesteps fragile board-construction and
-directly verifies the round-trip invariant.
+Strategy: for `undoEvent`, apply an action with `applyEvent` then
+immediately `undoEvent` on the result and assert the relevant
+post-undo invariants. This sidesteps fragile board-construction
+and directly verifies the round-trip.
 -}
 
 import Expect
 import Game.BoardActions exposing (Side(..))
-import Game.Rules.Card exposing (CardValue(..), OriginDeck(..), Suit(..))
 import Game.CardStack exposing (CardStack, HandCardState(..))
-import Game.Hand as Hand
-import Game.Reducer as Reducer
+import Game.Dealer
+import Game.Execute as Execute
+import Game.Game exposing (GameState)
 import Game.GameEvent exposing (GameEvent(..))
+import Game.Hand as Hand
+import Game.Rules.Card exposing (CardValue(..), OriginDeck(..), Suit(..))
 import Main.State as State exposing (ActionLogEntry)
 import Main.Types exposing (PathFrame(..))
 import Test exposing (Test, describe, test)
+
 
 
 -- ---------------------------------------------------------------------------
@@ -32,7 +35,7 @@ import Test exposing (Test, describe, test)
 
 
 {-| Return the CardStack at position `idx` in state.board. -}
-stackAt : Int -> Reducer.State -> CardStack
+stackAt : Int -> GameState -> CardStack
 stackAt idx state =
     state.board
         |> List.drop idx
@@ -41,11 +44,7 @@ stackAt idx state =
             { boardCards = [], loc = { top = 0, left = 0 } }
 
 
-{-| Construct a minimal ActionLogEntry for a GameEvent.
-`gesturePath` and `pathFrame` are inconsequential for the
-`collapseUndos` / `canUndoThisTurn` tests; we use the cheapest
-valid values.
--}
+{-| Construct a minimal ActionLogEntry for a GameEvent. -}
 logEntry : GameEvent -> ActionLogEntry
 logEntry action =
     { action = action
@@ -55,8 +54,6 @@ logEntry action =
 
 
 {-| Build a model with the given action log by starting from baseModel.
-Elm's record-update syntax requires a local binding, not a
-module-qualified name, so we can't write `{ State.baseModel | ... }`.
 -}
 modelWithLog : List ActionLogEntry -> State.Model
 modelWithLog entries =
@@ -67,20 +64,33 @@ modelWithLog entries =
     { base | actionLog = entries }
 
 
+initialGameState : GameState
+initialGameState =
+    { board = Game.Dealer.initialBoard
+    , hands = [ Hand.empty, Hand.empty ]
+    , activePlayerIndex = 0
+    , turnIndex = 0
+    , deck = []
+    , cardsPlayedThisTurn = 0
+    , victorAwarded = False
+    }
+
+
+
 -- ---------------------------------------------------------------------------
--- undoAction: round-trip tests
+-- undoEvent: round-trip tests
 -- ---------------------------------------------------------------------------
 
 
-suiteUndoAction : Test
-suiteUndoAction =
-    describe "Reducer.undoAction — round-trip invariant"
+suiteUndoEvent : Test
+suiteUndoEvent =
+    describe "Execute.undoEvent — round-trip invariant"
         [ describe "MoveStack"
             [ test "undoing a MoveStack restores the original location of the moved stack" <|
                 \_ ->
                     let
                         before =
-                            Reducer.initialState
+                            initialGameState
 
                         originalStack =
                             stackAt 0 before
@@ -92,10 +102,10 @@ suiteUndoAction =
                                 }
 
                         after =
-                            Reducer.applyAction action before
+                            Execute.applyEvent action before
 
                         restored =
-                            Reducer.undoAction action after
+                            Execute.undoEvent action after
 
                         -- applyChange removes and re-appends, so the
                         -- restored stack ends up at the tail; locate it
@@ -115,7 +125,7 @@ suiteUndoAction =
                 \_ ->
                     let
                         before =
-                            Reducer.initialState
+                            initialGameState
 
                         action =
                             MoveStack
@@ -124,10 +134,10 @@ suiteUndoAction =
                                 }
 
                         after =
-                            Reducer.applyAction action before
+                            Execute.applyEvent action before
 
                         restored =
-                            Reducer.undoAction action after
+                            Execute.undoEvent action after
                     in
                     List.length restored.board |> Expect.equal (List.length before.board)
             ]
@@ -135,11 +145,8 @@ suiteUndoAction =
             [ test "undoing a Split re-merges the two pieces" <|
                 \_ ->
                     let
-                        -- Stack 0 is KS,AS,2S,3S — splitting at index 2
-                        -- yields KS,AS and 2S,3S; undo should restore the
-                        -- original four-card stack.
                         before =
-                            Reducer.initialState
+                            initialGameState
 
                         action =
                             Split
@@ -148,10 +155,10 @@ suiteUndoAction =
                                 }
 
                         after =
-                            Reducer.applyAction action before
+                            Execute.applyEvent action before
 
                         restored =
-                            Reducer.undoAction action after
+                            Execute.undoEvent action after
                     in
                     List.length restored.board
                         |> Expect.equal (List.length before.board)
@@ -159,7 +166,7 @@ suiteUndoAction =
                 \_ ->
                     let
                         before =
-                            Reducer.initialState
+                            initialGameState
 
                         action =
                             Split
@@ -168,10 +175,10 @@ suiteUndoAction =
                                 }
 
                         after =
-                            Reducer.applyAction action before
+                            Execute.applyEvent action before
 
                         restored =
-                            Reducer.undoAction action after
+                            Execute.undoEvent action after
 
                         countCards s =
                             List.length s.boardCards
@@ -186,16 +193,9 @@ suiteUndoAction =
             [ test "undoing a MergeStack restores both source and target stacks" <|
                 \_ ->
                     let
-                        -- The opening board has six stacks. Stack 4 is
-                        -- "AC,AD,AH" (a set) and stack 0 is "KS,AS,2S,3S".
-                        -- We split stack 0 at index 1 to get a single "AS1"
-                        -- card, then merge it onto the AC,AD,AH set.
-                        -- Simpler: just verify board count round-trips.
                         before =
-                            Reducer.initialState
+                            initialGameState
 
-                        -- Split stack 2 (2H,3H,4H) at index 1 to produce
-                        -- a two-card stack we can observe.
                         splitAction =
                             Split
                                 { stack = stackAt 2 before
@@ -203,10 +203,8 @@ suiteUndoAction =
                                 }
 
                         afterSplit =
-                            Reducer.applyAction splitAction before
+                            Execute.applyEvent splitAction before
 
-                        -- Now afterSplit has 7 stacks. Pick the last two
-                        -- (the halves from the split) and merge them.
                         sourceIdx =
                             List.length afterSplit.board - 1
 
@@ -221,10 +219,10 @@ suiteUndoAction =
                                 }
 
                         afterMerge =
-                            Reducer.applyAction mergeAction afterSplit
+                            Execute.applyEvent mergeAction afterSplit
 
                         restored =
-                            Reducer.undoAction mergeAction afterMerge
+                            Execute.undoEvent mergeAction afterMerge
                     in
                     List.length restored.board
                         |> Expect.equal (List.length afterSplit.board)
@@ -236,12 +234,11 @@ suiteUndoAction =
                         card7H =
                             { value = Seven, suit = Heart, originDeck = DeckTwo }
 
+                        beforeHand =
+                            Hand.addCards [ card7H ] HandNormal Hand.empty
+
                         before =
-                            let
-                                s =
-                                    Reducer.initialState
-                            in
-                            { s | hand = Hand.addCards [ card7H ] HandNormal s.hand }
+                            { initialGameState | hands = [ beforeHand, Hand.empty ] }
 
                         action =
                             PlaceHand
@@ -250,13 +247,13 @@ suiteUndoAction =
                                 }
 
                         after =
-                            Reducer.applyAction action before
+                            Execute.applyEvent action before
 
                         restored =
-                            Reducer.undoAction action after
+                            Execute.undoEvent action after
                     in
                     Expect.all
-                        [ \r -> Hand.size r.hand |> Expect.equal (Hand.size before.hand)
+                        [ \r -> Hand.size (Hand.activeHand r) |> Expect.equal (Hand.size beforeHand)
                         , \r -> List.length r.board |> Expect.equal (List.length before.board)
                         ]
                         restored
@@ -268,12 +265,11 @@ suiteUndoAction =
                         card7H =
                             { value = Seven, suit = Heart, originDeck = DeckTwo }
 
+                        beforeHand =
+                            Hand.addCards [ card7H ] HandNormal Hand.empty
+
                         before =
-                            let
-                                s =
-                                    Reducer.initialState
-                            in
-                            { s | hand = Hand.addCards [ card7H ] HandNormal s.hand }
+                            { initialGameState | hands = [ beforeHand, Hand.empty ] }
 
                         -- Stack index 3 is "7S,7D,7C"
                         action =
@@ -284,28 +280,29 @@ suiteUndoAction =
                                 }
 
                         after =
-                            Reducer.applyAction action before
+                            Execute.applyEvent action before
 
                         restored =
-                            Reducer.undoAction action after
+                            Execute.undoEvent action after
                     in
                     Expect.all
-                        [ \r -> Hand.size r.hand |> Expect.equal (Hand.size before.hand)
+                        [ \r -> Hand.size (Hand.activeHand r) |> Expect.equal (Hand.size beforeHand)
                         , \r -> List.length r.board |> Expect.equal (List.length before.board)
                         ]
                         restored
             ]
         , describe "no-ops for non-undoable actions"
-            [ test "undoAction CompleteTurn is a no-op" <|
+            [ test "undoEvent CompleteTurn is a no-op" <|
                 \_ ->
-                    Reducer.undoAction CompleteTurn Reducer.initialState
-                        |> Expect.equal Reducer.initialState
-            , test "undoAction Undo is a no-op" <|
+                    Execute.undoEvent CompleteTurn initialGameState
+                        |> Expect.equal initialGameState
+            , test "undoEvent Undo is a no-op" <|
                 \_ ->
-                    Reducer.undoAction Undo Reducer.initialState
-                        |> Expect.equal Reducer.initialState
+                    Execute.undoEvent Undo initialGameState
+                        |> Expect.equal initialGameState
             ]
         ]
+
 
 
 -- ---------------------------------------------------------------------------
@@ -324,7 +321,7 @@ suiteCollapseUndos =
             \_ ->
                 let
                     entries =
-                        [ logEntry (MoveStack { stack = stackAt 0 Reducer.initialState, newLoc = { top = 10, left = 20 } }) ]
+                        [ logEntry (MoveStack { stack = stackAt 0 initialGameState, newLoc = { top = 10, left = 20 } }) ]
                 in
                 State.collapseUndos entries
                     |> Expect.equal entries
@@ -336,7 +333,7 @@ suiteCollapseUndos =
             \_ ->
                 let
                     move =
-                        logEntry (MoveStack { stack = stackAt 0 Reducer.initialState, newLoc = { top = 10, left = 20 } })
+                        logEntry (MoveStack { stack = stackAt 0 initialGameState, newLoc = { top = 10, left = 20 } })
 
                     entries =
                         [ move, logEntry Undo ]
@@ -347,7 +344,7 @@ suiteCollapseUndos =
             \_ ->
                 let
                     s =
-                        Reducer.initialState
+                        initialGameState
 
                     move1 =
                         logEntry (MoveStack { stack = stackAt 0 s, newLoc = { top = 10, left = 20 } })
@@ -369,14 +366,13 @@ suiteCollapseUndos =
                     entries =
                         [ ct, logEntry Undo ]
                 in
-                -- CompleteTurn is pinned; Undo cannot pop it.
                 State.collapseUndos entries
                     |> Expect.equal [ ct ]
         , test "Undo past CompleteTurn stops at CompleteTurn boundary" <|
             \_ ->
                 let
                     s =
-                        Reducer.initialState
+                        initialGameState
 
                     move =
                         logEntry (MoveStack { stack = stackAt 0 s, newLoc = { top = 10, left = 20 } })
@@ -384,8 +380,6 @@ suiteCollapseUndos =
                     ct =
                         logEntry CompleteTurn
 
-                    -- CompleteTurn then another action then Undo cancels
-                    -- only the action after CompleteTurn, not CompleteTurn itself.
                     entries =
                         [ move, ct, move, logEntry Undo ]
                 in
@@ -395,7 +389,7 @@ suiteCollapseUndos =
             \_ ->
                 let
                     s =
-                        Reducer.initialState
+                        initialGameState
 
                     move1 =
                         logEntry (MoveStack { stack = stackAt 0 s, newLoc = { top = 10, left = 20 } })
@@ -406,6 +400,7 @@ suiteCollapseUndos =
                 State.collapseUndos [ move1, move2, logEntry Undo ]
                     |> Expect.equal [ move1 ]
         ]
+
 
 
 -- ---------------------------------------------------------------------------
@@ -424,7 +419,7 @@ suiteCanUndoThisTurn =
             \_ ->
                 let
                     move =
-                        logEntry (MoveStack { stack = stackAt 0 Reducer.initialState, newLoc = { top = 10, left = 20 } })
+                        logEntry (MoveStack { stack = stackAt 0 initialGameState, newLoc = { top = 10, left = 20 } })
                 in
                 State.canUndoThisTurn (modelWithLog [ move ])
                     |> Expect.equal True
@@ -432,7 +427,7 @@ suiteCanUndoThisTurn =
             \_ ->
                 let
                     move =
-                        logEntry (MoveStack { stack = stackAt 0 Reducer.initialState, newLoc = { top = 10, left = 20 } })
+                        logEntry (MoveStack { stack = stackAt 0 initialGameState, newLoc = { top = 10, left = 20 } })
                 in
                 State.canUndoThisTurn (modelWithLog [ move, logEntry Undo ])
                     |> Expect.equal False
@@ -440,7 +435,7 @@ suiteCanUndoThisTurn =
             \_ ->
                 let
                     move =
-                        logEntry (MoveStack { stack = stackAt 0 Reducer.initialState, newLoc = { top = 10, left = 20 } })
+                        logEntry (MoveStack { stack = stackAt 0 initialGameState, newLoc = { top = 10, left = 20 } })
 
                     ct =
                         logEntry CompleteTurn
@@ -451,13 +446,13 @@ suiteCanUndoThisTurn =
             \_ ->
                 let
                     move =
-                        logEntry (MoveStack { stack = stackAt 0 Reducer.initialState, newLoc = { top = 10, left = 20 } })
+                        logEntry (MoveStack { stack = stackAt 0 initialGameState, newLoc = { top = 10, left = 20 } })
 
                     ct =
                         logEntry CompleteTurn
 
                     move2 =
-                        logEntry (MoveStack { stack = stackAt 1 Reducer.initialState, newLoc = { top = 50, left = 60 } })
+                        logEntry (MoveStack { stack = stackAt 1 initialGameState, newLoc = { top = 50, left = 60 } })
                 in
                 State.canUndoThisTurn (modelWithLog [ move, ct, move2 ])
                     |> Expect.equal True
@@ -465,7 +460,7 @@ suiteCanUndoThisTurn =
             \_ ->
                 let
                     s =
-                        Reducer.initialState
+                        initialGameState
 
                     move1 =
                         logEntry (MoveStack { stack = stackAt 0 s, newLoc = { top = 10, left = 20 } })
@@ -478,6 +473,7 @@ suiteCanUndoThisTurn =
         ]
 
 
+
 -- ---------------------------------------------------------------------------
 -- Suite
 -- ---------------------------------------------------------------------------
@@ -486,7 +482,7 @@ suiteCanUndoThisTurn =
 suite : Test
 suite =
     describe "Undo feature"
-        [ suiteUndoAction
+        [ suiteUndoEvent
         , suiteCollapseUndos
         , suiteCanUndoThisTurn
         ]

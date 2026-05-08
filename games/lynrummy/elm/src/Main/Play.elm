@@ -32,7 +32,6 @@ import Game.HandDrag exposing (HandCardDragInfo)
 import Game.HandGesture as HandGesture
 import Game.Rules.Card as Card
 import Game.Dealer as Dealer
-import Game.Reducer as Reducer
 import Game.Game as Game
 import Game.PlayerTurn exposing (CompleteTurnResult(..))
 import Game.Random as Random
@@ -692,12 +691,6 @@ clickUndo model =
 
         Just lastAction ->
             let
-                pre =
-                    { board = model.gameState.board, hand = activeHand model.gameState }
-
-                post =
-                    Reducer.undoAction lastAction pre
-
                 undoEntry =
                     { action = GameEvent.Undo
                     , gesturePath = Nothing
@@ -707,30 +700,9 @@ clickUndo model =
                 seq =
                     model.nextSeq
 
-                cardsAdjust =
-                    case lastAction of
-                        GameEvent.MergeHand _ ->
-                            -1
-
-                        GameEvent.PlaceHand _ ->
-                            -1
-
-                        _ ->
-                            0
-
-                gs0 =
-                    model.gameState
-
-                newGameState =
-                    setActiveHand post.hand
-                        { gs0
-                            | board = post.board
-                            , cardsPlayedThisTurn = gs0.cardsPlayedThisTurn + cardsAdjust
-                        }
-
                 newModel =
                     { model
-                        | gameState = newGameState
+                        | gameState = Execute.undoEvent lastAction model.gameState
                         , actionLog = model.actionLog ++ [ undoEntry ]
                         , nextSeq = seq + 1
                         , status = { text = "Undone.", kind = Inform }

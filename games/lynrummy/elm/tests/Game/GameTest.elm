@@ -43,7 +43,7 @@ state. `Game.applyCompleteTurn` returns
 `(GameState, CompleteTurnOutcome)`; most tests here only
 inspect the state.
 -}
-applyTurn : GameState a -> GameState a
+applyTurn : GameState -> GameState
 applyTurn =
     Tuple.first << Game.applyCompleteTurn wideBounds
 
@@ -74,7 +74,7 @@ lonelyHand =
 fields. The board is empty; outgoing hand can be overridden
 via the record accessor.
 -}
-baseState : GameState {}
+baseState : GameState
 baseState =
     { board = []
     , hands = [ lonelyHand, Hand.empty ]

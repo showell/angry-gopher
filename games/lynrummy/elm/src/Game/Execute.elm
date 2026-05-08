@@ -1,4 +1,4 @@
-module Game.Execute exposing (applyEvent, mergeHand, mergeStack, moveStack, placeHand, split)
+module Game.Execute exposing (applyEvent, mergeHand, mergeStack, moveStack, placeHand, split, undoEvent)
 
 {-| Honest board mutators, one per `GameEvent` variant. Each
 function takes the board (and whatever per-action data it
@@ -46,28 +46,144 @@ applyEvent event state =
 
         MergeHand p ->
             let
+                preHand =
+                    Hand.activeHand state
+
                 next =
-                    mergeHand p.handCard p.target p.side state.board (Hand.activeHand state)
+                    mergeHand p.handCard p.target p.side state.board preHand
             in
             Hand.setActiveHand next.hand
                 { state
                     | board = next.board
-                    , cardsPlayedThisTurn = state.cardsPlayedThisTurn + 1
+                    , cardsPlayedThisTurn =
+                        state.cardsPlayedThisTurn + (Hand.size preHand - Hand.size next.hand)
                 }
 
         PlaceHand p ->
             let
+                preHand =
+                    Hand.activeHand state
+
                 next =
-                    placeHand p.handCard p.loc state.board (Hand.activeHand state)
+                    placeHand p.handCard p.loc state.board preHand
             in
             Hand.setActiveHand next.hand
                 { state
                     | board = next.board
-                    , cardsPlayedThisTurn = state.cardsPlayedThisTurn + 1
+                    , cardsPlayedThisTurn =
+                        state.cardsPlayedThisTurn + (Hand.size preHand - Hand.size next.hand)
                 }
 
         CompleteTurn ->
             Tuple.first (Game.applyCompleteTurn refereeBounds state)
+
+        Undo ->
+            state
+
+
+{-| Reverse a `GameEvent` against a `GameState`. Each variant
+carries its pre-action stacks in the payload, so the post-
+action shape is fully derivable: swapping `stacksToRemove`
+and `stacksToAdd` undoes the mutation. Hand actions also
+return the released card to the active hand and decrement
+`cardsPlayedThisTurn`. `CompleteTurn` and `Undo` are no-ops.
+-}
+undoEvent : GameEvent -> GameState -> GameState
+undoEvent event state =
+    case event of
+        MoveStack { stack, newLoc } ->
+            let
+                change =
+                    { stacksToRemove = [ { stack | loc = newLoc } ]
+                    , stacksToAdd = [ stack ]
+                    , handCardsToRelease = []
+                    }
+            in
+            { state | board = applyBoardChange change state.board }
+
+        Split { stack, cardIndex } ->
+            let
+                change =
+                    { stacksToRemove = CardStack.split cardIndex stack
+                    , stacksToAdd = [ stack ]
+                    , handCardsToRelease = []
+                    }
+            in
+            { state | board = applyBoardChange change state.board }
+
+        MergeStack { source, target, side } ->
+            case BoardActions.tryStackMerge target source side of
+                Just mergeChange ->
+                    case mergeChange.stacksToAdd of
+                        [ merged ] ->
+                            let
+                                change =
+                                    { stacksToRemove = [ merged ]
+                                    , stacksToAdd = [ target, source ]
+                                    , handCardsToRelease = []
+                                    }
+                            in
+                            { state | board = applyBoardChange change state.board }
+
+                        _ ->
+                            state
+
+                Nothing ->
+                    state
+
+        MergeHand { handCard, target, side } ->
+            let
+                hc =
+                    { card = handCard, state = CardStack.HandNormal }
+            in
+            case BoardActions.tryHandMerge target hc side of
+                Just mergeChange ->
+                    case mergeChange.stacksToAdd of
+                        [ merged ] ->
+                            let
+                                change =
+                                    { stacksToRemove = [ merged ]
+                                    , stacksToAdd = [ target ]
+                                    , handCardsToRelease = []
+                                    }
+
+                                newHand =
+                                    Hand.addHandCards [ hc ] (Hand.activeHand state)
+                            in
+                            Hand.setActiveHand newHand
+                                { state
+                                    | board = applyBoardChange change state.board
+                                    , cardsPlayedThisTurn = state.cardsPlayedThisTurn - 1
+                                }
+
+                        _ ->
+                            state
+
+                Nothing ->
+                    state
+
+        PlaceHand { handCard, loc } ->
+            let
+                hc =
+                    { card = handCard, state = CardStack.HandNormal }
+
+                change =
+                    { stacksToRemove = [ CardStack.fromHandCard hc loc ]
+                    , stacksToAdd = []
+                    , handCardsToRelease = []
+                    }
+
+                newHand =
+                    Hand.addHandCards [ hc ] (Hand.activeHand state)
+            in
+            Hand.setActiveHand newHand
+                { state
+                    | board = applyBoardChange change state.board
+                    , cardsPlayedThisTurn = state.cardsPlayedThisTurn - 1
+                }
+
+        CompleteTurn ->
+            state
 
         Undo ->
             state

@@ -643,6 +643,7 @@ import Game.CardStack as CardStack
 import Game.BoardActions as BoardActions
 import Game.BoardGesture as BoardGesture
 import Game.Drag as Drag exposing (DragState(..))
+import Game.Hand as Hand
 import Game.HandGesture as HandGesture
 import Game.Physics.GestureArbitration as GA
 import Game.Physics.PlaceStack
@@ -652,7 +653,7 @@ import Game.Replay.Time as ReplayTime
 import Game.Rules.StackType as StackType
 import Game.WingView as WingView
 import Game.GameEvent as GameEvent exposing (GameEvent)
-import Main.Apply as Apply
+import Game.Execute as Execute
 import Main.Gesture as Gesture
 import Main.Msg as Msg
 import Main.Play as Play
@@ -804,10 +805,10 @@ buildEagerAndActions initialModel specs =
                 spec :: rest ->
                     let
                         action =
-                            resolveSpec spec model.board
+                            resolveSpec spec model.gameState.board
 
                         next =
-                            (Apply.applyAction action model).model
+                            { model | gameState = Execute.applyEvent action model.gameState }
                     in
                     loop next (action :: acc) rest
     in
@@ -987,7 +988,8 @@ const elmReplayInvariantTmpl = `            let
                     State.baseModel
 
                 initialModel =
-                    { base | board = board, sessionId = Just 0 }
+                    let gs0 = base.gameState
+                    in { base | gameState = { gs0 | board = board }, sessionId = Just 0 }
 
                 ( eagerModel, actions ) =
                     buildEagerAndActions initialModel
@@ -999,14 +1001,11 @@ const elmReplayInvariantTmpl = `            let
 `
 
 const elmReplayInvariantChecks = `            Expect.all
-                [ \_ -> Expect.equal eagerModel.board replayedModel.board
-                , \_ -> Expect.equal eagerModel.hands replayedModel.hands
-                , \_ -> Expect.equal eagerModel.activePlayerIndex replayedModel.activePlayerIndex
-                , \_ -> Expect.equal eagerModel.turnIndex replayedModel.turnIndex`
+                [ \_ -> Expect.equal eagerModel.gameState replayedModel.gameState`
 
 const elmReplayInvariantVictoryChecks = `
-                , \_ -> if List.all isCleanStack eagerModel.board then Expect.pass else Expect.fail ("final eager board not victory; incomplete stacks present: " ++ Debug.toString (firstIncompleteStack eagerModel.board))
-                , \_ -> if List.all isCleanStack replayedModel.board then Expect.pass else Expect.fail ("final replayed board not victory; incomplete stacks present: " ++ Debug.toString (firstIncompleteStack replayedModel.board))`
+                , \_ -> if List.all isCleanStack eagerModel.gameState.board then Expect.pass else Expect.fail ("final eager board not victory; incomplete stacks present: " ++ Debug.toString (firstIncompleteStack eagerModel.gameState.board))
+                , \_ -> if List.all isCleanStack replayedModel.gameState.board then Expect.pass else Expect.fail ("final replayed board not victory; incomplete stacks present: " ++ Debug.toString (firstIncompleteStack replayedModel.gameState.board))`
 
 const elmReplayInvariantClose = `
                 ]
@@ -1090,11 +1089,14 @@ func elmUndoWalkthrough(b *strings.Builder, sc Scenario) {
 	fmt.Fprintf(b, "%s    base =\n%s        State.baseModel\n\n", ind, ind)
 
 	// Build m0: inject board, sessionId, and optional hand cards.
+	// Model has gameState : GameState, so we patch via a let-binding
+	// (Elm doesn't support dotted-path on the LHS of a record update).
 	if len(sc.Hand) > 0 {
-		fmt.Fprintf(b, "%s    m0 =\n%s        State.setActiveHand { handCards = %s }\n%s            { base | board = board, sessionId = Just 0 }\n",
-			ind, ind, elmHandCards(sc.Hand), ind)
+		fmt.Fprintf(b, "%s    m0 =\n%s        let\n%s            gs0 = base.gameState\n%s            gs1 = Hand.setActiveHand { handCards = %s } { gs0 | board = board }\n%s        in\n%s        { base | gameState = gs1, sessionId = Just 0 }\n",
+			ind, ind, ind, ind, elmHandCards(sc.Hand), ind, ind)
 	} else {
-		fmt.Fprintf(b, "%s    m0 =\n%s        { base | board = board, sessionId = Just 0 }\n", ind, ind)
+		fmt.Fprintf(b, "%s    m0 =\n%s        let gs0 = base.gameState\n%s        in { base | gameState = { gs0 | board = board }, sessionId = Just 0 }\n",
+			ind, ind, ind)
 	}
 
 	for i, step := range sc.Steps {
@@ -1122,8 +1124,8 @@ func elmUndoWalkthrough(b *strings.Builder, sc Scenario) {
 				ind, act, ind, elmHandAction(*step.Action, prev))
 			fmt.Fprintf(b, "%s    %s =\n%s        { action = %s, gesturePath = Nothing, pathFrame = BoardFrame }\n\n",
 				ind, entry, ind, act)
-			fmt.Fprintf(b, "%s    %s =\n%s        (Apply.applyAction %s %s).model\n\n",
-				ind, post, ind, act, prev)
+			fmt.Fprintf(b, "%s    %s =\n%s        { %s | gameState = Execute.applyEvent %s %s.gameState }\n\n",
+				ind, post, ind, prev, act, prev)
 			fmt.Fprintf(b, "%s    %s =\n%s        { %s | actionLog = %s.actionLog ++ [ %s ] }\n",
 				ind, cur, ind, post, prev, entry)
 
@@ -1136,12 +1138,12 @@ func elmUndoWalkthrough(b *strings.Builder, sc Scenario) {
 
 			fmt.Fprintf(b, "%s    %s =\n%s        %s\n\n",
 				ind, spec, ind, elmReplaySpec(*step.Action))
-			fmt.Fprintf(b, "%s    %s =\n%s        resolveSpec %s %s.board\n\n",
+			fmt.Fprintf(b, "%s    %s =\n%s        resolveSpec %s %s.gameState.board\n\n",
 				ind, act, ind, spec, prev)
 			fmt.Fprintf(b, "%s    %s =\n%s        { action = %s, gesturePath = Nothing, pathFrame = BoardFrame }\n\n",
 				ind, entry, ind, act)
-			fmt.Fprintf(b, "%s    %s =\n%s        (Apply.applyAction %s %s).model\n\n",
-				ind, post, ind, act, prev)
+			fmt.Fprintf(b, "%s    %s =\n%s        { %s | gameState = Execute.applyEvent %s %s.gameState }\n\n",
+				ind, post, ind, prev, act, prev)
 			fmt.Fprintf(b, "%s    %s =\n%s        { %s | actionLog = %s.actionLog ++ [ %s ] }\n",
 				ind, cur, ind, post, prev, entry)
 		}
@@ -1154,11 +1156,11 @@ func elmUndoWalkthrough(b *strings.Builder, sc Scenario) {
 		model := fmt.Sprintf("m%d", i+1)
 		if step.ExpectBoardCount != nil {
 			checks = append(checks, fmt.Sprintf(
-				"\\_ -> List.length %s.board |> Expect.equal %d", model, *step.ExpectBoardCount))
+				"\\_ -> List.length %s.gameState.board |> Expect.equal %d", model, *step.ExpectBoardCount))
 		}
 		if step.ExpectHandCount != nil {
 			checks = append(checks, fmt.Sprintf(
-				"\\_ -> List.length (State.activeHand %s).handCards |> Expect.equal %d", model, *step.ExpectHandCount))
+				"\\_ -> List.length (Hand.activeHand %s.gameState).handCards |> Expect.equal %d", model, *step.ExpectHandCount))
 		}
 		if step.ExpectUndoable != nil {
 			checks = append(checks, fmt.Sprintf(
@@ -1168,20 +1170,20 @@ func elmUndoWalkthrough(b *strings.Builder, sc Scenario) {
 			cards := elmRawCards(step.ExpectStack)
 			label := elmCompactCardList(step.ExpectStack)
 			checks = append(checks, fmt.Sprintf(
-				"\\_ -> if List.any (\\s -> List.map .card s.boardCards == %s) %s.board then Expect.pass else Expect.fail \"board missing stack [%s]\"",
+				"\\_ -> if List.any (\\s -> List.map .card s.boardCards == %s) %s.gameState.board then Expect.pass else Expect.fail \"board missing stack [%s]\"",
 				cards, model, label))
 		}
 		if step.ExpectHandContains != nil {
 			card := elmCompactCard(*step.ExpectHandContains)
 			label := elmCompactCardList([]Card{*step.ExpectHandContains})
 			checks = append(checks, fmt.Sprintf(
-				"\\_ -> if List.any (\\hc -> hc.card == parseCard %s) (State.activeHand %s).handCards then Expect.pass else Expect.fail \"hand missing card %s\"",
+				"\\_ -> if List.any (\\hc -> hc.card == parseCard %s) (Hand.activeHand %s.gameState).handCards then Expect.pass else Expect.fail \"hand missing card %s\"",
 				card, model, label))
 		}
 		if step.ExpectLoc != nil {
 			loc := *step.ExpectLoc
 			checks = append(checks, fmt.Sprintf(
-				"\\_ -> if List.any (\\s -> s.loc == { top = %d, left = %d }) %s.board then Expect.pass else Expect.fail \"board missing stack at (%d, %d)\"",
+				"\\_ -> if List.any (\\s -> s.loc == { top = %d, left = %d }) %s.gameState.board then Expect.pass else Expect.fail \"board missing stack at (%d, %d)\"",
 				loc.Top, loc.Left, model, loc.Top, loc.Left))
 		}
 	}
@@ -1192,7 +1194,7 @@ func elmUndoWalkthrough(b *strings.Builder, sc Scenario) {
 	if len(sc.ExpectFinalBoard) > 0 {
 		lastModel := fmt.Sprintf("m%d", len(sc.Steps))
 		checks = append(checks, fmt.Sprintf(
-			"\\_ ->\n%s        let\n%s            byLoc =\n%s                List.sortBy (\\s -> ( s.loc.top, s.loc.left ))\n%s            cardRows =\n%s                List.map (.boardCards >> List.map .card)\n%s            expectedFinalBoard =\n%s                %s\n%s        in\n%s        cardRows (byLoc %s.board) |> Expect.equal (cardRows (byLoc expectedFinalBoard))",
+			"\\_ ->\n%s        let\n%s            byLoc =\n%s                List.sortBy (\\s -> ( s.loc.top, s.loc.left ))\n%s            cardRows =\n%s                List.map (.boardCards >> List.map .card)\n%s            expectedFinalBoard =\n%s                %s\n%s        in\n%s        cardRows (byLoc %s.gameState.board) |> Expect.equal (cardRows (byLoc expectedFinalBoard))",
 			ind, ind, ind, ind, ind, ind, ind,
 			elmStacks(sc.ExpectFinalBoard, ind+"                "),
 			ind, ind, lastModel))
@@ -1223,7 +1225,7 @@ func elmHandAction(a ReplayAction, prevModel string) string {
 		return fmt.Sprintf("GameEvent.PlaceHand { handCard = parseCard %s, loc = { top = %d, left = %d } }",
 			card, a.NewLoc.Top, a.NewLoc.Left)
 	case "merge_hand":
-		return fmt.Sprintf("GameEvent.MergeHand { handCard = parseCard %s, target = findStackByContent %s %s.board, side = %s }",
+		return fmt.Sprintf("GameEvent.MergeHand { handCard = parseCard %s, target = findStackByContent %s %s.gameState.board, side = %s }",
 			card,
 			elmRawCards(cardsFromCards(a.Target)),
 			prevModel,
@@ -1426,7 +1428,7 @@ func elmFloaterTopLeft(b *strings.Builder, sc Scenario) {
 		b.WriteString(ind + "let\n")
 		elmStackVar(b, sc, ind)
 		fmt.Fprintf(b, "%s    base =\n%s        State.baseModel\n\n", ind, ind)
-		fmt.Fprintf(b, "%s    model =\n%s        { base | board = [ stack ] }\n\n", ind, ind)
+		fmt.Fprintf(b, "%s    model =\n%s        let gs0 = base.gameState in { base | gameState = { gs0 | board = [ stack ] } }\n\n", ind, ind)
 		fmt.Fprintf(b, "%s    mousedownClient =\n%s        { x = %d, y = %d }\n\n", ind, ind, md.X, md.Y)
 		fmt.Fprintf(b, "%s    ( afterDown, _ ) =\n%s        Gesture.startBoardCardDrag\n%s            { stack = stack, cardIndex = %d }\n%s            mousedownClient\n%s            0\n%s            model\n\n",
 			ind, ind, ind, sc.DragCardIndex, ind, ind, ind)
@@ -1457,7 +1459,7 @@ func elmFloaterTopLeft(b *strings.Builder, sc Scenario) {
 		b.WriteString(ind + "let\n")
 		elmStackVar(b, sc, ind)
 		fmt.Fprintf(b, "%s    base =\n%s        State.baseModel\n\n", ind, ind)
-		fmt.Fprintf(b, "%s    model =\n%s        { base | board = [ stack ] }\n\n", ind, ind)
+		fmt.Fprintf(b, "%s    model =\n%s        let gs0 = base.gameState in { base | gameState = { gs0 | board = [ stack ] } }\n\n", ind, ind)
 		fmt.Fprintf(b, "%s    delta =\n%s        { x = %d, y = %d }\n\n", ind, ind, dlt.X, dlt.Y)
 		b.WriteString(ind + "    shiftFor down =\n")
 		b.WriteString(ind + "        let\n")
@@ -1516,11 +1518,11 @@ func elmPathFrame(b *strings.Builder, sc Scenario) {
 		fmt.Fprintf(b, "%s    card =\n%s        parseCard %s\n\n", ind, ind, cardToken)
 		fmt.Fprintf(b, "%s    hc =\n%s        { card = card, state = HandNormal }\n\n", ind, ind)
 		fmt.Fprintf(b, "%s    base =\n%s        State.baseModel\n\n", ind, ind)
-		fmt.Fprintf(b, "%s    model =\n%s        State.setActiveHand { handCards = [ hc ] } base\n\n", ind, ind)
+		fmt.Fprintf(b, "%s    model =\n%s        { base | gameState = Hand.setActiveHand { handCards = [ hc ] } base.gameState }\n\n", ind, ind)
 	} else {
 		elmStackVar(b, sc, ind)
 		fmt.Fprintf(b, "%s    base =\n%s        State.baseModel\n\n", ind, ind)
-		fmt.Fprintf(b, "%s    model =\n%s        { base | board = [ stack ] }\n\n", ind, ind)
+		fmt.Fprintf(b, "%s    model =\n%s        let gs0 = base.gameState in { base | gameState = { gs0 | board = [ stack ] } }\n\n", ind, ind)
 	}
 
 	// Emit the drag start call.

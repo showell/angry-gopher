@@ -13,7 +13,7 @@ this suite exists to keep it alive.
 import Expect
 import Game.Game exposing (CompleteTurnOutcome)
 import Game.PlayerTurn exposing (CompleteTurnResult(..))
-import Main.State exposing (StatusKind(..))
+import Game.Status exposing (StatusKind(..))
 import Main.View exposing (popupForCompleteTurn, statusForCompleteTurn)
 import Test exposing (Test, describe, test)
 

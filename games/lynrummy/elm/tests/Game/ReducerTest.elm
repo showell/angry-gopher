@@ -1,25 +1,26 @@
 module Game.ReducerTest exposing (suite)
 
-{-| Tests for `Game.Reducer.applyAction`. Each action type
+{-| Tests for `Game.Execute.applyEvent`. Each action type
 gets a transition test; a longer test sequences several actions
-and checks end-state. CompleteTurn / Undo verify they are
-no-ops here (turn-logic handled elsewhere).
+and checks end-state. CompleteTurn / Undo verify they pass
+state through (CompleteTurn's full turn-flip is exercised in
+GameTest, which is the dedicated CompleteTurn suite).
 -}
 
 import Expect
 import Game.BoardActions exposing (Side(..))
-import Game.Rules.Card exposing (CardValue(..), OriginDeck(..), Suit(..))
 import Game.CardStack exposing (BoardCardState(..), CardStack, HandCardState(..))
-import Game.Hand as Hand
-import Game.Reducer as Reducer
+import Game.Dealer
+import Game.Execute as Execute
+import Game.Game exposing (GameState)
 import Game.GameEvent exposing (GameEvent(..))
+import Game.Hand as Hand
+import Game.Rules.Card exposing (CardValue(..), OriginDeck(..), Suit(..))
 import Test exposing (Test, describe, test)
 
 
-{-| Return the CardStack at index idx of the given state's board.
-Used to build wire-layer references for tests.
--}
-stackAt : Int -> Reducer.State -> CardStack
+{-| Return the CardStack at index idx of the given state's board. -}
+stackAt : Int -> GameState -> CardStack
 stackAt idx state =
     state.board
         |> List.drop idx
@@ -29,8 +30,7 @@ stackAt idx state =
             { boardCards = [], loc = { top = 0, left = 0 } }
 
 
-{-| A synthetic ghost CardStack that no real board will match.
--}
+{-| A synthetic ghost CardStack that no real board will match. -}
 ghostStack : CardStack
 ghostStack =
     { boardCards =
@@ -42,18 +42,30 @@ ghostStack =
     }
 
 
+initialGameState : GameState
+initialGameState =
+    { board = Game.Dealer.initialBoard
+    , hands = [ Hand.empty, Hand.empty ]
+    , activePlayerIndex = 0
+    , turnIndex = 0
+    , deck = []
+    , cardsPlayedThisTurn = 0
+    , victorAwarded = False
+    }
+
+
 suite : Test
 suite =
-    describe "Reducer.applyAction"
+    describe "Execute.applyEvent"
         [ describe "Split"
             [ test "splits stack 0 (KS,AS,2S,3S) at index 2 → two stacks replace one" <|
                 \_ ->
                     let
                         before =
-                            Reducer.initialState
+                            initialGameState
 
                         after =
-                            Reducer.applyAction
+                            Execute.applyEvent
                                 (Split { stack = stackAt 0 before, cardIndex = 2 })
                                 before
                     in
@@ -65,13 +77,13 @@ suite =
                 \_ ->
                     let
                         before =
-                            Reducer.initialState
+                            initialGameState
 
                         newLoc =
                             { top = 300, left = 400 }
 
                         after =
-                            Reducer.applyAction
+                            Execute.applyEvent
                                 (MoveStack { stack = stackAt 0 before, newLoc = newLoc })
                                 before
 
@@ -93,17 +105,19 @@ suite =
                         card7H =
                             { value = Seven, suit = Heart, originDeck = DeckTwo }
 
+                        beforeHand =
+                            Hand.addCards [ card7H ] HandNormal Hand.empty
+
                         before =
-                            let s = Reducer.initialState
-                            in { s | hand = Hand.addCards [ card7H ] HandNormal s.hand }
+                            { initialGameState | hands = [ beforeHand, Hand.empty ] }
 
                         after =
-                            Reducer.applyAction
+                            Execute.applyEvent
                                 (PlaceHand { handCard = card7H, loc = { top = 400, left = 500 } })
                                 before
                     in
                     Expect.all
-                        [ \a -> Hand.size a.hand |> Expect.equal (Hand.size before.hand - 1)
+                        [ \a -> Hand.size (Hand.activeHand a) |> Expect.equal (Hand.size beforeHand - 1)
                         , \a -> List.length a.board |> Expect.equal (List.length before.board + 1)
                         ]
                         after
@@ -115,13 +129,15 @@ suite =
                         card7H =
                             { value = Seven, suit = Heart, originDeck = DeckTwo }
 
+                        beforeHand =
+                            Hand.addCards [ card7H ] HandNormal Hand.empty
+
                         before =
-                            let s = Reducer.initialState
-                            in { s | hand = Hand.addCards [ card7H ] HandNormal s.hand }
+                            { initialGameState | hands = [ beforeHand, Hand.empty ] }
 
                         -- Stack index 3 in the opening board is "7S,7D,7C".
                         after =
-                            Reducer.applyAction
+                            Execute.applyEvent
                                 (MergeHand
                                     { handCard = card7H
                                     , target = stackAt 3 before
@@ -131,44 +147,40 @@ suite =
                                 before
                     in
                     Expect.all
-                        [ \a -> Hand.size a.hand |> Expect.equal (Hand.size before.hand - 1)
+                        [ \a -> Hand.size (Hand.activeHand a) |> Expect.equal (Hand.size beforeHand - 1)
                         , \a -> List.length a.board |> Expect.equal (List.length before.board)
                         ]
                         after
             ]
-        , describe "no-ops for turn-logic actions (not modeled in Replay)"
-            [ test "CompleteTurn is a no-op" <|
+        , describe "Undo passes through; CompleteTurn flips turn semantics"
+            [ test "Undo is a pass-through" <|
                 \_ ->
-                    Reducer.applyAction CompleteTurn Reducer.initialState
-                        |> Expect.equal Reducer.initialState
-            , test "Undo is a no-op (snapshots come later)" <|
-                \_ ->
-                    Reducer.applyAction Undo Reducer.initialState
-                        |> Expect.equal Reducer.initialState
+                    Execute.applyEvent Undo initialGameState
+                        |> Expect.equal initialGameState
             ]
         , describe "silent pass-through on invalid references"
             [ test "Split on a ghost stack is a no-op" <|
                 \_ ->
-                    Reducer.applyAction
+                    Execute.applyEvent
                         (Split { stack = ghostStack, cardIndex = 0 })
-                        Reducer.initialState
-                        |> Expect.equal Reducer.initialState
+                        initialGameState
+                        |> Expect.equal initialGameState
             , test "MoveStack on a ghost stack is a no-op" <|
                 \_ ->
-                    Reducer.applyAction
+                    Execute.applyEvent
                         (MoveStack { stack = ghostStack, newLoc = { top = 10, left = 10 } })
-                        Reducer.initialState
-                        |> Expect.equal Reducer.initialState
+                        initialGameState
+                        |> Expect.equal initialGameState
             , test "MergeHand with a card not in hand is a no-op" <|
                 \_ ->
                     let
                         before =
-                            Reducer.initialState
+                            initialGameState
 
                         notInHand =
                             { value = Ace, suit = Spade, originDeck = DeckTwo }
                     in
-                    Reducer.applyAction
+                    Execute.applyEvent
                         (MergeHand
                             { handCard = notInHand
                             , target = stackAt 3 before
@@ -183,19 +195,15 @@ suite =
                 \_ ->
                     let
                         start =
-                            Reducer.initialState
+                            initialGameState
 
                         step1 =
-                            Reducer.applyAction
+                            Execute.applyEvent
                                 (Split { stack = stackAt 0 start, cardIndex = 2 })
                                 start
 
-                        -- After the split, one of the halves is at
-                        -- the END of the list (applyChange appends).
-                        -- Use the first half (at index 0) as the
-                        -- reference for the move.
                         step2 =
-                            Reducer.applyAction
+                            Execute.applyEvent
                                 (MoveStack
                                     { stack = stackAt 0 step1
                                     , newLoc = { top = 500, left = 400 }

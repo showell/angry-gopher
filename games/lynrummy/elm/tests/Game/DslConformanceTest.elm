@@ -27,6 +27,7 @@ import Game.CardStack as CardStack
 import Game.BoardActions as BoardActions
 import Game.BoardGesture as BoardGesture
 import Game.Drag as Drag exposing (DragState(..))
+import Game.Hand as Hand
 import Game.HandGesture as HandGesture
 import Game.Physics.GestureArbitration as GA
 import Game.Physics.PlaceStack
@@ -36,7 +37,7 @@ import Game.Replay.Time as ReplayTime
 import Game.Rules.StackType as StackType
 import Game.WingView as WingView
 import Game.GameEvent as GameEvent exposing (GameEvent)
-import Main.Apply as Apply
+import Game.Execute as Execute
 import Main.Gesture as Gesture
 import Main.Msg as Msg
 import Main.Play as Play
@@ -188,10 +189,10 @@ buildEagerAndActions initialModel specs =
                 spec :: rest ->
                     let
                         action =
-                            resolveSpec spec model.board
+                            resolveSpec spec model.gameState.board
 
                         next =
-                            (Apply.applyAction action model).model
+                            { model | gameState = Execute.applyEvent action model.gameState }
                     in
                     loop next (action :: acc) rest
     in
@@ -1309,7 +1310,7 @@ dragInvariantBoardDragInitialFloater =
                     State.baseModel
 
                 model =
-                    { base | board = [ stack ] }
+                    let gs0 = base.gameState in { base | gameState = { gs0 | board = [ stack ] } }
 
                 ( afterDown, _ ) =
                     Gesture.startBoardCardDrag
@@ -1338,7 +1339,7 @@ dragInvariantBoardDragPathFrame =
                     State.baseModel
 
                 model =
-                    { base | board = [ stack ] }
+                    let gs0 = base.gameState in { base | gameState = { gs0 | board = [ stack ] } }
 
                 ( afterDown, _ ) =
                     Gesture.startBoardCardDrag
@@ -1367,7 +1368,7 @@ dragInvariantFloaterShift =
                     State.baseModel
 
                 model =
-                    { base | board = [ stack ] }
+                    let gs0 = base.gameState in { base | gameState = { gs0 | board = [ stack ] } }
 
                 mousedownClient =
                     { x = 540, y = 310 }
@@ -1412,7 +1413,7 @@ dragInvariantGrabPointInvariant =
                     State.baseModel
 
                 model =
-                    { base | board = [ stack ] }
+                    let gs0 = base.gameState in { base | gameState = { gs0 | board = [ stack ] } }
 
                 delta =
                     { x = 15, y = 8 }
@@ -1460,7 +1461,7 @@ dragInvariantHandDragPathFrame =
                     State.baseModel
 
                 model =
-                    State.setActiveHand { handCards = [ hc ] } base
+                    { base | gameState = Hand.setActiveHand { handCards = [ hc ] } base.gameState }
 
                 ( afterDown, _ ) =
                     Gesture.startHandDrag
@@ -2547,7 +2548,8 @@ undoRestoresPosition =
                     State.baseModel
 
                 m0 =
-                    { base | board = board, sessionId = Just 0 }
+                    let gs0 = base.gameState
+                    in { base | gameState = { gs0 | board = board }, sessionId = Just 0 }
 
                 -- board has two stacks at their initial positions
                 m1 =
@@ -2558,13 +2560,13 @@ undoRestoresPosition =
                     SpecMoveStack [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ] { top = 400, left = 300 }
 
                 action2 =
-                    resolveSpec spec2 m1.board
+                    resolveSpec spec2 m1.gameState.board
 
                 entry2 =
                     { action = action2, gesturePath = Nothing, pathFrame = BoardFrame }
 
                 m2post =
-                    (Apply.applyAction action2 m1).model
+                    { m1 | gameState = Execute.applyEvent action2 m1.gameState }
 
                 m2 =
                     { m2post | actionLog = m1.actionLog ++ [ entry2 ] }
@@ -2574,14 +2576,14 @@ undoRestoresPosition =
                     Play.update Msg.ClickUndo m2
             in
             Expect.all
-                [ \_ -> List.length m1.board |> Expect.equal 2
+                [ \_ -> List.length m1.gameState.board |> Expect.equal 2
                 , \_ -> State.canUndoThisTurn m1 |> Expect.equal False
-                , \_ -> List.length m2.board |> Expect.equal 2
+                , \_ -> List.length m2.gameState.board |> Expect.equal 2
                 , \_ -> State.canUndoThisTurn m2 |> Expect.equal True
-                , \_ -> if List.any (\s -> s.loc == { top = 400, left = 300 }) m2.board then Expect.pass else Expect.fail "board missing stack at (400, 300)"
-                , \_ -> List.length m3.board |> Expect.equal 2
+                , \_ -> if List.any (\s -> s.loc == { top = 400, left = 300 }) m2.gameState.board then Expect.pass else Expect.fail "board missing stack at (400, 300)"
+                , \_ -> List.length m3.gameState.board |> Expect.equal 2
                 , \_ -> State.canUndoThisTurn m3 |> Expect.equal False
-                , \_ -> if List.any (\s -> s.loc == { top = 20, left = 70 }) m3.board then Expect.pass else Expect.fail "board missing stack at (20, 70)"
+                , \_ -> if List.any (\s -> s.loc == { top = 20, left = 70 }) m3.gameState.board then Expect.pass else Expect.fail "board missing stack at (20, 70)"
                 , \_ ->
                     let
                         byLoc =
@@ -2593,7 +2595,7 @@ undoRestoresPosition =
                             , { boardCards = [ boardCard "TD1", boardCard "JD1", boardCard "QD1", boardCard "KD1" ], loc = { top = 80, left = 160 } }
                             ]
                     in
-                    cardRows (byLoc m3.board) |> Expect.equal (cardRows (byLoc expectedFinalBoard))
+                    cardRows (byLoc m3.gameState.board) |> Expect.equal (cardRows (byLoc expectedFinalBoard))
                 ]
                 ()
 
@@ -2612,7 +2614,8 @@ undoSplitPieceReturnsToSplitPosition =
                     State.baseModel
 
                 m0 =
-                    { base | board = board, sessionId = Just 0 }
+                    let gs0 = base.gameState
+                    in { base | gameState = { gs0 | board = board }, sessionId = Just 0 }
 
                 -- board has two stacks at their initial positions
                 m1 =
@@ -2623,13 +2626,13 @@ undoSplitPieceReturnsToSplitPosition =
                     SpecSplit [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ] 2
 
                 action2 =
-                    resolveSpec spec2 m1.board
+                    resolveSpec spec2 m1.gameState.board
 
                 entry2 =
                     { action = action2, gesturePath = Nothing, pathFrame = BoardFrame }
 
                 m2post =
-                    (Apply.applyAction action2 m1).model
+                    { m1 | gameState = Execute.applyEvent action2 m1.gameState }
 
                 m2 =
                     { m2post | actionLog = m1.actionLog ++ [ entry2 ] }
@@ -2639,13 +2642,13 @@ undoSplitPieceReturnsToSplitPosition =
                     SpecMoveStack [ parseCard "2S1", parseCard "3S1" ] { top = 500, left = 400 }
 
                 action3 =
-                    resolveSpec spec3 m2.board
+                    resolveSpec spec3 m2.gameState.board
 
                 entry3 =
                     { action = action3, gesturePath = Nothing, pathFrame = BoardFrame }
 
                 m3post =
-                    (Apply.applyAction action3 m2).model
+                    { m2 | gameState = Execute.applyEvent action3 m2.gameState }
 
                 m3 =
                     { m3post | actionLog = m2.actionLog ++ [ entry3 ] }
@@ -2659,20 +2662,20 @@ undoSplitPieceReturnsToSplitPosition =
                     Play.update Msg.ClickUndo m4
             in
             Expect.all
-                [ \_ -> List.length m1.board |> Expect.equal 2
+                [ \_ -> List.length m1.gameState.board |> Expect.equal 2
                 , \_ -> State.canUndoThisTurn m1 |> Expect.equal False
-                , \_ -> List.length m2.board |> Expect.equal 3
+                , \_ -> List.length m2.gameState.board |> Expect.equal 3
                 , \_ -> State.canUndoThisTurn m2 |> Expect.equal True
-                , \_ -> if List.any (\s -> s.loc == { top = 16, left = 140 }) m2.board then Expect.pass else Expect.fail "board missing stack at (16, 140)"
-                , \_ -> List.length m3.board |> Expect.equal 3
+                , \_ -> if List.any (\s -> s.loc == { top = 16, left = 140 }) m2.gameState.board then Expect.pass else Expect.fail "board missing stack at (16, 140)"
+                , \_ -> List.length m3.gameState.board |> Expect.equal 3
                 , \_ -> State.canUndoThisTurn m3 |> Expect.equal True
-                , \_ -> if List.any (\s -> s.loc == { top = 500, left = 400 }) m3.board then Expect.pass else Expect.fail "board missing stack at (500, 400)"
-                , \_ -> List.length m4.board |> Expect.equal 3
+                , \_ -> if List.any (\s -> s.loc == { top = 500, left = 400 }) m3.gameState.board then Expect.pass else Expect.fail "board missing stack at (500, 400)"
+                , \_ -> List.length m4.gameState.board |> Expect.equal 3
                 , \_ -> State.canUndoThisTurn m4 |> Expect.equal True
-                , \_ -> if List.any (\s -> s.loc == { top = 16, left = 140 }) m4.board then Expect.pass else Expect.fail "board missing stack at (16, 140)"
-                , \_ -> List.length m5.board |> Expect.equal 2
+                , \_ -> if List.any (\s -> s.loc == { top = 16, left = 140 }) m4.gameState.board then Expect.pass else Expect.fail "board missing stack at (16, 140)"
+                , \_ -> List.length m5.gameState.board |> Expect.equal 2
                 , \_ -> State.canUndoThisTurn m5 |> Expect.equal False
-                , \_ -> if List.any (\s -> s.loc == { top = 20, left = 70 }) m5.board then Expect.pass else Expect.fail "board missing stack at (20, 70)"
+                , \_ -> if List.any (\s -> s.loc == { top = 20, left = 70 }) m5.gameState.board then Expect.pass else Expect.fail "board missing stack at (20, 70)"
                 , \_ ->
                     let
                         byLoc =
@@ -2684,7 +2687,7 @@ undoSplitPieceReturnsToSplitPosition =
                             , { boardCards = [ boardCard "TD1", boardCard "JD1", boardCard "QD1", boardCard "KD1" ], loc = { top = 80, left = 160 } }
                             ]
                     in
-                    cardRows (byLoc m5.board) |> Expect.equal (cardRows (byLoc expectedFinalBoard))
+                    cardRows (byLoc m5.gameState.board) |> Expect.equal (cardRows (byLoc expectedFinalBoard))
                 ]
                 ()
 
@@ -2707,8 +2710,11 @@ undoWalkthroughMergeHand =
                     State.baseModel
 
                 m0 =
-                    State.setActiveHand { handCards = [ handCard "7H2" ] }
-                        { base | board = board, sessionId = Just 0 }
+                    let
+                        gs0 = base.gameState
+                        gs1 = Hand.setActiveHand { handCards = [ handCard "7H2" ] } { gs0 | board = board }
+                    in
+                    { base | gameState = gs1, sessionId = Just 0 }
 
                 -- one card in hand, six stacks on board, nothing to undo
                 m1 =
@@ -2716,13 +2722,13 @@ undoWalkthroughMergeHand =
 
                 -- player merges 7H' from hand onto the 7S-7D-7C set on the right
                 action2 =
-                    GameEvent.MergeHand { handCard = parseCard "7H2", target = findStackByContent [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ] m1.board, side = BoardActions.Right }
+                    GameEvent.MergeHand { handCard = parseCard "7H2", target = findStackByContent [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ] m1.gameState.board, side = BoardActions.Right }
 
                 entry2 =
                     { action = action2, gesturePath = Nothing, pathFrame = BoardFrame }
 
                 m2post =
-                    (Apply.applyAction action2 m1).model
+                    { m1 | gameState = Execute.applyEvent action2 m1.gameState }
 
                 m2 =
                     { m2post | actionLog = m1.actionLog ++ [ entry2 ] }
@@ -2732,18 +2738,18 @@ undoWalkthroughMergeHand =
                     Play.update Msg.ClickUndo m2
             in
             Expect.all
-                [ \_ -> List.length m1.board |> Expect.equal 6
-                , \_ -> List.length (State.activeHand m1).handCards |> Expect.equal 1
+                [ \_ -> List.length m1.gameState.board |> Expect.equal 6
+                , \_ -> List.length (Hand.activeHand m1.gameState).handCards |> Expect.equal 1
                 , \_ -> State.canUndoThisTurn m1 |> Expect.equal False
-                , \_ -> List.length m2.board |> Expect.equal 6
-                , \_ -> List.length (State.activeHand m2).handCards |> Expect.equal 0
+                , \_ -> List.length m2.gameState.board |> Expect.equal 6
+                , \_ -> List.length (Hand.activeHand m2.gameState).handCards |> Expect.equal 0
                 , \_ -> State.canUndoThisTurn m2 |> Expect.equal True
-                , \_ -> if List.any (\s -> List.map .card s.boardCards == [ parseCard "7S1", parseCard "7D1", parseCard "7C1", parseCard "7H2" ]) m2.board then Expect.pass else Expect.fail "board missing stack [7S 7D 7C 7H']"
-                , \_ -> List.length m3.board |> Expect.equal 6
-                , \_ -> List.length (State.activeHand m3).handCards |> Expect.equal 1
+                , \_ -> if List.any (\s -> List.map .card s.boardCards == [ parseCard "7S1", parseCard "7D1", parseCard "7C1", parseCard "7H2" ]) m2.gameState.board then Expect.pass else Expect.fail "board missing stack [7S 7D 7C 7H']"
+                , \_ -> List.length m3.gameState.board |> Expect.equal 6
+                , \_ -> List.length (Hand.activeHand m3.gameState).handCards |> Expect.equal 1
                 , \_ -> State.canUndoThisTurn m3 |> Expect.equal False
-                , \_ -> if List.any (\s -> List.map .card s.boardCards == [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]) m3.board then Expect.pass else Expect.fail "board missing stack [7S 7D 7C]"
-                , \_ -> if List.any (\hc -> hc.card == parseCard "7H2") (State.activeHand m3).handCards then Expect.pass else Expect.fail "hand missing card 7H'"
+                , \_ -> if List.any (\s -> List.map .card s.boardCards == [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ]) m3.gameState.board then Expect.pass else Expect.fail "board missing stack [7S 7D 7C]"
+                , \_ -> if List.any (\hc -> hc.card == parseCard "7H2") (Hand.activeHand m3.gameState).handCards then Expect.pass else Expect.fail "hand missing card 7H'"
                 , \_ ->
                     let
                         byLoc =
@@ -2759,7 +2765,7 @@ undoWalkthroughMergeHand =
                             , { boardCards = [ boardCard "2C1", boardCard "3D1", boardCard "4C1", boardCard "5H1", boardCard "6S1", boardCard "7H1" ], loc = { top = 320, left = 70 } }
                             ]
                     in
-                    cardRows (byLoc m3.board) |> Expect.equal (cardRows (byLoc expectedFinalBoard))
+                    cardRows (byLoc m3.gameState.board) |> Expect.equal (cardRows (byLoc expectedFinalBoard))
                 ]
                 ()
 
@@ -2778,7 +2784,8 @@ undoWalkthroughMergeStack =
                     State.baseModel
 
                 m0 =
-                    { base | board = board, sessionId = Just 0 }
+                    let gs0 = base.gameState
+                    in { base | gameState = { gs0 | board = board }, sessionId = Just 0 }
 
                 -- two stacks on board, nothing to undo
                 m1 =
@@ -2789,13 +2796,13 @@ undoWalkthroughMergeStack =
                     SpecMergeStack [ parseCard "7H1", parseCard "8H1", parseCard "9H1" ] [ parseCard "4H1", parseCard "5H1", parseCard "6H1" ] BoardActions.Right
 
                 action2 =
-                    resolveSpec spec2 m1.board
+                    resolveSpec spec2 m1.gameState.board
 
                 entry2 =
                     { action = action2, gesturePath = Nothing, pathFrame = BoardFrame }
 
                 m2post =
-                    (Apply.applyAction action2 m1).model
+                    { m1 | gameState = Execute.applyEvent action2 m1.gameState }
 
                 m2 =
                     { m2post | actionLog = m1.actionLog ++ [ entry2 ] }
@@ -2809,16 +2816,16 @@ undoWalkthroughMergeStack =
                     m3
             in
             Expect.all
-                [ \_ -> List.length m1.board |> Expect.equal 2
+                [ \_ -> List.length m1.gameState.board |> Expect.equal 2
                 , \_ -> State.canUndoThisTurn m1 |> Expect.equal False
-                , \_ -> List.length m2.board |> Expect.equal 1
+                , \_ -> List.length m2.gameState.board |> Expect.equal 1
                 , \_ -> State.canUndoThisTurn m2 |> Expect.equal True
-                , \_ -> if List.any (\s -> List.map .card s.boardCards == [ parseCard "4H1", parseCard "5H1", parseCard "6H1", parseCard "7H1", parseCard "8H1", parseCard "9H1" ]) m2.board then Expect.pass else Expect.fail "board missing stack [4H 5H 6H 7H 8H 9H]"
-                , \_ -> List.length m3.board |> Expect.equal 2
+                , \_ -> if List.any (\s -> List.map .card s.boardCards == [ parseCard "4H1", parseCard "5H1", parseCard "6H1", parseCard "7H1", parseCard "8H1", parseCard "9H1" ]) m2.gameState.board then Expect.pass else Expect.fail "board missing stack [4H 5H 6H 7H 8H 9H]"
+                , \_ -> List.length m3.gameState.board |> Expect.equal 2
                 , \_ -> State.canUndoThisTurn m3 |> Expect.equal False
-                , \_ -> if List.any (\s -> List.map .card s.boardCards == [ parseCard "7H1", parseCard "8H1", parseCard "9H1" ]) m3.board then Expect.pass else Expect.fail "board missing stack [7H 8H 9H]"
-                , \_ -> List.length m4.board |> Expect.equal 2
-                , \_ -> if List.any (\s -> List.map .card s.boardCards == [ parseCard "4H1", parseCard "5H1", parseCard "6H1" ]) m4.board then Expect.pass else Expect.fail "board missing stack [4H 5H 6H]"
+                , \_ -> if List.any (\s -> List.map .card s.boardCards == [ parseCard "7H1", parseCard "8H1", parseCard "9H1" ]) m3.gameState.board then Expect.pass else Expect.fail "board missing stack [7H 8H 9H]"
+                , \_ -> List.length m4.gameState.board |> Expect.equal 2
+                , \_ -> if List.any (\s -> List.map .card s.boardCards == [ parseCard "4H1", parseCard "5H1", parseCard "6H1" ]) m4.gameState.board then Expect.pass else Expect.fail "board missing stack [4H 5H 6H]"
                 , \_ ->
                     let
                         byLoc =
@@ -2830,7 +2837,7 @@ undoWalkthroughMergeStack =
                             , { boardCards = [ boardCard "7H1", boardCard "8H1", boardCard "9H1" ], loc = { top = 80, left = 160 } }
                             ]
                     in
-                    cardRows (byLoc m4.board) |> Expect.equal (cardRows (byLoc expectedFinalBoard))
+                    cardRows (byLoc m4.gameState.board) |> Expect.equal (cardRows (byLoc expectedFinalBoard))
                 ]
                 ()
 
@@ -2853,8 +2860,11 @@ undoWalkthroughPlaceHand =
                     State.baseModel
 
                 m0 =
-                    State.setActiveHand { handCards = [ handCard "7H2" ] }
-                        { base | board = board, sessionId = Just 0 }
+                    let
+                        gs0 = base.gameState
+                        gs1 = Hand.setActiveHand { handCards = [ handCard "7H2" ] } { gs0 | board = board }
+                    in
+                    { base | gameState = gs1, sessionId = Just 0 }
 
                 -- one card in hand, six stacks on board, nothing to undo
                 m1 =
@@ -2868,7 +2878,7 @@ undoWalkthroughPlaceHand =
                     { action = action2, gesturePath = Nothing, pathFrame = BoardFrame }
 
                 m2post =
-                    (Apply.applyAction action2 m1).model
+                    { m1 | gameState = Execute.applyEvent action2 m1.gameState }
 
                 m2 =
                     { m2post | actionLog = m1.actionLog ++ [ entry2 ] }
@@ -2878,16 +2888,16 @@ undoWalkthroughPlaceHand =
                     Play.update Msg.ClickUndo m2
             in
             Expect.all
-                [ \_ -> List.length m1.board |> Expect.equal 6
-                , \_ -> List.length (State.activeHand m1).handCards |> Expect.equal 1
+                [ \_ -> List.length m1.gameState.board |> Expect.equal 6
+                , \_ -> List.length (Hand.activeHand m1.gameState).handCards |> Expect.equal 1
                 , \_ -> State.canUndoThisTurn m1 |> Expect.equal False
-                , \_ -> List.length m2.board |> Expect.equal 7
-                , \_ -> List.length (State.activeHand m2).handCards |> Expect.equal 0
+                , \_ -> List.length m2.gameState.board |> Expect.equal 7
+                , \_ -> List.length (Hand.activeHand m2.gameState).handCards |> Expect.equal 0
                 , \_ -> State.canUndoThisTurn m2 |> Expect.equal True
-                , \_ -> List.length m3.board |> Expect.equal 6
-                , \_ -> List.length (State.activeHand m3).handCards |> Expect.equal 1
+                , \_ -> List.length m3.gameState.board |> Expect.equal 6
+                , \_ -> List.length (Hand.activeHand m3.gameState).handCards |> Expect.equal 1
                 , \_ -> State.canUndoThisTurn m3 |> Expect.equal False
-                , \_ -> if List.any (\hc -> hc.card == parseCard "7H2") (State.activeHand m3).handCards then Expect.pass else Expect.fail "hand missing card 7H'"
+                , \_ -> if List.any (\hc -> hc.card == parseCard "7H2") (Hand.activeHand m3.gameState).handCards then Expect.pass else Expect.fail "hand missing card 7H'"
                 , \_ ->
                     let
                         byLoc =
@@ -2903,7 +2913,7 @@ undoWalkthroughPlaceHand =
                             , { boardCards = [ boardCard "2C1", boardCard "3D1", boardCard "4C1", boardCard "5H1", boardCard "6S1", boardCard "7H1" ], loc = { top = 320, left = 70 } }
                             ]
                     in
-                    cardRows (byLoc m3.board) |> Expect.equal (cardRows (byLoc expectedFinalBoard))
+                    cardRows (byLoc m3.gameState.board) |> Expect.equal (cardRows (byLoc expectedFinalBoard))
                 ]
                 ()
 
@@ -2926,7 +2936,8 @@ undoWalkthroughSplitThenMove =
                     State.baseModel
 
                 m0 =
-                    { base | board = board, sessionId = Just 0 }
+                    let gs0 = base.gameState
+                    in { base | gameState = { gs0 | board = board }, sessionId = Just 0 }
 
                 -- board starts with six stacks, nothing to undo yet
                 m1 =
@@ -2937,13 +2948,13 @@ undoWalkthroughSplitThenMove =
                     SpecSplit [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ] 2
 
                 action2 =
-                    resolveSpec spec2 m1.board
+                    resolveSpec spec2 m1.gameState.board
 
                 entry2 =
                     { action = action2, gesturePath = Nothing, pathFrame = BoardFrame }
 
                 m2post =
-                    (Apply.applyAction action2 m1).model
+                    { m1 | gameState = Execute.applyEvent action2 m1.gameState }
 
                 m2 =
                     { m2post | actionLog = m1.actionLog ++ [ entry2 ] }
@@ -2953,13 +2964,13 @@ undoWalkthroughSplitThenMove =
                     SpecMoveStack [ parseCard "2S1", parseCard "3S1" ] { top = 400, left = 300 }
 
                 action3 =
-                    resolveSpec spec3 m2.board
+                    resolveSpec spec3 m2.gameState.board
 
                 entry3 =
                     { action = action3, gesturePath = Nothing, pathFrame = BoardFrame }
 
                 m3post =
-                    (Apply.applyAction action3 m2).model
+                    { m2 | gameState = Execute.applyEvent action3 m2.gameState }
 
                 m3 =
                     { m3post | actionLog = m2.actionLog ++ [ entry3 ] }
@@ -2973,17 +2984,17 @@ undoWalkthroughSplitThenMove =
                     Play.update Msg.ClickUndo m4
             in
             Expect.all
-                [ \_ -> List.length m1.board |> Expect.equal 6
+                [ \_ -> List.length m1.gameState.board |> Expect.equal 6
                 , \_ -> State.canUndoThisTurn m1 |> Expect.equal False
-                , \_ -> List.length m2.board |> Expect.equal 7
+                , \_ -> List.length m2.gameState.board |> Expect.equal 7
                 , \_ -> State.canUndoThisTurn m2 |> Expect.equal True
-                , \_ -> List.length m3.board |> Expect.equal 7
+                , \_ -> List.length m3.gameState.board |> Expect.equal 7
                 , \_ -> State.canUndoThisTurn m3 |> Expect.equal True
-                , \_ -> List.length m4.board |> Expect.equal 7
+                , \_ -> List.length m4.gameState.board |> Expect.equal 7
                 , \_ -> State.canUndoThisTurn m4 |> Expect.equal True
-                , \_ -> List.length m5.board |> Expect.equal 6
+                , \_ -> List.length m5.gameState.board |> Expect.equal 6
                 , \_ -> State.canUndoThisTurn m5 |> Expect.equal False
-                , \_ -> if List.any (\s -> List.map .card s.boardCards == [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]) m5.board then Expect.pass else Expect.fail "board missing stack [KS AS 2S 3S]"
+                , \_ -> if List.any (\s -> List.map .card s.boardCards == [ parseCard "KS1", parseCard "AS1", parseCard "2S1", parseCard "3S1" ]) m5.gameState.board then Expect.pass else Expect.fail "board missing stack [KS AS 2S 3S]"
                 , \_ ->
                     let
                         byLoc =
@@ -2999,7 +3010,7 @@ undoWalkthroughSplitThenMove =
                             , { boardCards = [ boardCard "2C1", boardCard "3D1", boardCard "4C1", boardCard "5H1", boardCard "6S1", boardCard "7H1" ], loc = { top = 320, left = 70 } }
                             ]
                     in
-                    cardRows (byLoc m5.board) |> Expect.equal (cardRows (byLoc expectedFinalBoard))
+                    cardRows (byLoc m5.gameState.board) |> Expect.equal (cardRows (byLoc expectedFinalBoard))
                 ]
                 ()
 
@@ -3052,7 +3063,8 @@ walkthroughPuzzleA3001Seed1 =
                     State.baseModel
 
                 initialModel =
-                    { base | board = board, sessionId = Just 0 }
+                    let gs0 = base.gameState
+                    in { base | gameState = { gs0 | board = board }, sessionId = Just 0 }
 
                 ( eagerModel, actions ) =
                     buildEagerAndActions initialModel
@@ -3068,10 +3080,7 @@ walkthroughPuzzleA3001Seed1 =
                     runReplay initialModel actions
             in
             Expect.all
-                [ \_ -> Expect.equal eagerModel.board replayedModel.board
-                , \_ -> Expect.equal eagerModel.hands replayedModel.hands
-                , \_ -> Expect.equal eagerModel.activePlayerIndex replayedModel.activePlayerIndex
-                , \_ -> Expect.equal eagerModel.turnIndex replayedModel.turnIndex
+                [ \_ -> Expect.equal eagerModel.gameState replayedModel.gameState
                 ]
                 ()
 
@@ -3104,7 +3113,8 @@ walkthroughPuzzleA3002Seed2 =
                     State.baseModel
 
                 initialModel =
-                    { base | board = board, sessionId = Just 0 }
+                    let gs0 = base.gameState
+                    in { base | gameState = { gs0 | board = board }, sessionId = Just 0 }
 
                 ( eagerModel, actions ) =
                     buildEagerAndActions initialModel
@@ -3119,10 +3129,7 @@ walkthroughPuzzleA3002Seed2 =
                     runReplay initialModel actions
             in
             Expect.all
-                [ \_ -> Expect.equal eagerModel.board replayedModel.board
-                , \_ -> Expect.equal eagerModel.hands replayedModel.hands
-                , \_ -> Expect.equal eagerModel.activePlayerIndex replayedModel.activePlayerIndex
-                , \_ -> Expect.equal eagerModel.turnIndex replayedModel.turnIndex
+                [ \_ -> Expect.equal eagerModel.gameState replayedModel.gameState
                 ]
                 ()
 
@@ -3149,7 +3156,8 @@ walkthroughPuzzleA3003Seed3 =
                     State.baseModel
 
                 initialModel =
-                    { base | board = board, sessionId = Just 0 }
+                    let gs0 = base.gameState
+                    in { base | gameState = { gs0 | board = board }, sessionId = Just 0 }
 
                 ( eagerModel, actions ) =
                     buildEagerAndActions initialModel
@@ -3162,10 +3170,7 @@ walkthroughPuzzleA3003Seed3 =
                     runReplay initialModel actions
             in
             Expect.all
-                [ \_ -> Expect.equal eagerModel.board replayedModel.board
-                , \_ -> Expect.equal eagerModel.hands replayedModel.hands
-                , \_ -> Expect.equal eagerModel.activePlayerIndex replayedModel.activePlayerIndex
-                , \_ -> Expect.equal eagerModel.turnIndex replayedModel.turnIndex
+                [ \_ -> Expect.equal eagerModel.gameState replayedModel.gameState
                 ]
                 ()
 
@@ -3193,7 +3198,8 @@ walkthroughPuzzleA3004Seed4 =
                     State.baseModel
 
                 initialModel =
-                    { base | board = board, sessionId = Just 0 }
+                    let gs0 = base.gameState
+                    in { base | gameState = { gs0 | board = board }, sessionId = Just 0 }
 
                 ( eagerModel, actions ) =
                     buildEagerAndActions initialModel
@@ -3210,10 +3216,7 @@ walkthroughPuzzleA3004Seed4 =
                     runReplay initialModel actions
             in
             Expect.all
-                [ \_ -> Expect.equal eagerModel.board replayedModel.board
-                , \_ -> Expect.equal eagerModel.hands replayedModel.hands
-                , \_ -> Expect.equal eagerModel.activePlayerIndex replayedModel.activePlayerIndex
-                , \_ -> Expect.equal eagerModel.turnIndex replayedModel.turnIndex
+                [ \_ -> Expect.equal eagerModel.gameState replayedModel.gameState
                 ]
                 ()
 
@@ -3251,7 +3254,8 @@ walkthroughPuzzleA3005Seed5 =
                     State.baseModel
 
                 initialModel =
-                    { base | board = board, sessionId = Just 0 }
+                    let gs0 = base.gameState
+                    in { base | gameState = { gs0 | board = board }, sessionId = Just 0 }
 
                 ( eagerModel, actions ) =
                     buildEagerAndActions initialModel
@@ -3266,10 +3270,7 @@ walkthroughPuzzleA3005Seed5 =
                     runReplay initialModel actions
             in
             Expect.all
-                [ \_ -> Expect.equal eagerModel.board replayedModel.board
-                , \_ -> Expect.equal eagerModel.hands replayedModel.hands
-                , \_ -> Expect.equal eagerModel.activePlayerIndex replayedModel.activePlayerIndex
-                , \_ -> Expect.equal eagerModel.turnIndex replayedModel.turnIndex
+                [ \_ -> Expect.equal eagerModel.gameState replayedModel.gameState
                 ]
                 ()
 
