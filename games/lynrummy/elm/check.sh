@@ -29,20 +29,39 @@ fi
 # editing this script. src/Main/ is excluded intentionally — Main
 # modules are exercised by the full `elm make src/Main.elm`
 # build below.
+echo "==> Type-checking standalone"
+t0=$SECONDS
+n=0
+slow_lines=""
 while IFS= read -r m; do
-  echo "==> Type-checking $m standalone"
+  m_t0=$SECONDS
   "$ELM_BIN" make "$m" --output=/dev/null >/dev/null
+  m_dt=$((SECONDS - m_t0))
+  n=$((n + 1))
+  if [ "$m_dt" -ge 2 ]; then
+    slow_lines+="    [standalone] ${m_dt}s  ${m}"$'\n'
+  fi
 done < <(find src/Game -name '*.elm' | sort)
+echo "    [phase] standalone (${n} modules): $((SECONDS - t0))s"
+if [ -n "$slow_lines" ]; then
+  printf '%s' "$slow_lines"
+fi
 
 echo "==> Building Main"
+t0=$SECONDS
 "$ELM_BIN" make src/Main.elm --output=elm.js >/dev/null
+echo "    [phase] build-main: $((SECONDS - t0))s"
 
 echo "==> Running LynRummy tests"
+t0=$SECONDS
 "$ELM_TEST_BIN" --compiler "$ELM_BIN" 2>&1 | tail -3
+echo "    [phase] elm-test: $((SECONDS - t0))s"
 
 if [ -x "$ELM_REVIEW_BIN" ]; then
   echo "==> elm-review"
+  t0=$SECONDS
   "$ELM_REVIEW_BIN" --compiler "$ELM_BIN" 2>&1 | tail -3
+  echo "    [phase] elm-review: $((SECONDS - t0))s"
 fi
 
 echo "All LynRummy modules compile, tests pass, elm-review clean."

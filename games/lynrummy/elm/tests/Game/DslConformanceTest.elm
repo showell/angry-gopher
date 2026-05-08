@@ -212,38 +212,35 @@ runReplay initialModel actions =
                 )
                 actions
 
-        seeded =
-            { initialModel
-                | replay = Just { pending = entries, paused = False }
-                , replayAnim = State.NotAnimating
+        seededReplay : State.ReplayState
+        seededReplay =
+            { gameState = initialModel.gameState
+            , eventPlan = entries
+            , paused = False
+            , drag = Drag.NotDragging
+            , anim = State.NotAnimating
             }
     in
-    runReplayLoop seeded 0 5000
+    runReplayLoop initialModel seededReplay 0 5000
 
 
-runReplayLoop : State.Model -> Float -> Int -> State.Model
-runReplayLoop model nowMs budget =
-    case model.replay of
-        Nothing ->
-            model
+runReplayLoop : State.Model -> State.ReplayState -> Float -> Int -> State.Model
+runReplayLoop model rs nowMs budget =
+    if budget <= 0 then
+        Debug.todo
+            "runReplayLoop budget exhausted — replay FSM did not complete"
 
-        Just _ ->
-            if budget <= 0 then
-                -- Test-time guard: if the FSM doesn't drain the
-                -- queue within this many ticks, the test would
-                -- hang. Hand-origin actions in particular can
-                -- park in AwaitingHandRect indefinitely under
-                -- elm-test (no DOM). Bail loudly via Debug.todo
-                -- so the failure mode is visible.
-                Debug.todo
-                    "runReplayLoop budget exhausted — replay FSM did not complete"
+    else
+        let
+            ( maybeNext, _ ) =
+                ReplayTime.replayFrame nowMs model.boardRect rs
+        in
+        case maybeNext of
+            Nothing ->
+                { model | gameState = rs.gameState }
 
-            else
-                let
-                    ( next, _ ) =
-                        ReplayTime.replayFrame nowMs model
-                in
-                runReplayLoop next (nowMs + 50) (budget - 1)
+            Just next ->
+                runReplayLoop model next (nowMs + 50) (budget - 1)
 
 
 

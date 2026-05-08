@@ -36,6 +36,15 @@ set -e
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_DIR"
 
+# Timing helper — prints elapsed seconds for each phase.
+phase() {
+    local label="$1"
+    shift
+    local t0=$SECONDS
+    "$@"
+    echo "    [phase] ${label}: $((SECONDS - t0))s"
+}
+
 echo "==> fixturegen"
 # A handful of DSLs are TS-runner-only — their TS test scripts
 # have their own DSL parser and hardcoded paths. Filter them out
@@ -43,13 +52,13 @@ echo "==> fixturegen"
 # correspond to registered fixturegen ops.
 DSLS=$(ls ./games/lynrummy/conformance/scenarios/*.dsl \
     | grep -vE 'physical_plan_corpus\.dsl|replay_walkthroughs\.dsl|verb_to_primitives.*\.dsl')
-go run ./cmd/fixturegen $DSLS
+phase "fixturegen" go run ./cmd/fixturegen $DSLS
 
 echo "==> TS conformance"
-(cd games/lynrummy/ts && npm test)
+phase "ts-tests" bash -c "cd games/lynrummy/ts && npm test"
 
 echo "==> Elm conformance"
-(cd games/lynrummy/elm && ./check.sh)
+phase "elm-check" bash -c "cd games/lynrummy/elm && ./check.sh"
 
 echo
 echo "Conformance gate passed."
