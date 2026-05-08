@@ -72,7 +72,7 @@ finish payload origin nowMs model =
             Nothing
 
         Just source ->
-            CardStack.findStack payload.target model.board
+            CardStack.findStack payload.target model.gameState.board
                 |> Maybe.andThen
                     (\stack ->
                         Space.stackLandingInLiveViewport model stack payload.side

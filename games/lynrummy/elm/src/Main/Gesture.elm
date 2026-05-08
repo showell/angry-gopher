@@ -83,7 +83,7 @@ startBoardCardDrag { stack, cardIndex } clientPoint tMs model =
         NotDragging ->
             let
                 wings =
-                    WingOracle.wingsForStack stack model.board
+                    WingOracle.wingsForStack stack model.gameState.board
             in
             -- Intra-board: the floater starts exactly where
             -- the stack is. `stack.loc` is already a
@@ -115,11 +115,11 @@ re-synthesizes via DOM measurement).
 -}
 startHandDrag : Card -> Point -> Float -> Model -> ( Model, Cmd Msg )
 startHandDrag card clientPoint _ model =
-    case ( model.drag, findHandCard card (activeHand model).handCards ) of
+    case ( model.drag, findHandCard card (activeHand model.gameState).handCards ) of
         ( NotDragging, Just handCard ) ->
             let
                 wings =
-                    WingOracle.wingsForHandCard handCard model.board
+                    WingOracle.wingsForHandCard handCard model.gameState.board
 
                 -- Hand-origin: the floater is rendered as a
                 -- viewport overlay. We don't know the hand

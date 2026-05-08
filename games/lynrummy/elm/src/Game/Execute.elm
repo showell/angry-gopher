@@ -32,7 +32,7 @@ turn-flip via `Game.applyCompleteTurn`; `Undo` is a no-op
 (handled separately by `Reducer.undoAction`).
 
 -}
-applyEvent : GameEvent -> GameState a -> GameState a
+applyEvent : GameEvent -> GameState -> GameState
 applyEvent event state =
     case event of
         Split p ->

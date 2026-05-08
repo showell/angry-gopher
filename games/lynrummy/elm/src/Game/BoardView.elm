@@ -89,7 +89,7 @@ boardWithWings : Model -> Html Msg
 boardWithWings model =
     let
         boardElements =
-            boardChildren model.board model.boardRect model.drag
+            boardChildren model.gameState.board model.boardRect model.drag
     in
     boardShellWith [ id (boardDomIdFor model.gameId) ] boardElements
 

@@ -85,15 +85,7 @@ clickInstantReplay model =
         Just baseline ->
             let
                 rewound =
-                    { model
-                        | board = baseline.board
-                        , hands = baseline.hands
-                        , activePlayerIndex = baseline.activePlayerIndex
-                        , turnIndex = baseline.turnIndex
-                        , deck = baseline.deck
-                        , cardsPlayedThisTurn = baseline.cardsPlayedThisTurn
-                        , victorAwarded = baseline.victorAwarded
-                    }
+                    { model | gameState = baseline }
             in
             ( { rewound
                 | status = { text = "Replaying…", kind = Inform }
@@ -174,12 +166,10 @@ replayFrame nowMs model =
                                 )
 
                             DragAnimation.Done { pendingAction } ->
-                                let
-                                    modelAfter =
-                                        Execute.applyEvent pendingAction { model | drag = NotDragging }
-                                in
-                                ( { modelAfter
-                                    | replayAnim = Beating { untilMs = nowMs + 1000 }
+                                ( { model
+                                    | drag = NotDragging
+                                    , gameState = Execute.applyEvent pendingAction model.gameState
+                                    , replayAnim = Beating { untilMs = nowMs + 1000 }
                                   }
                                 , Cmd.none
                                 )
@@ -280,12 +270,9 @@ prepareReplayStep action maybePath model nowMs =
                     applyImmediate
 
         applyImmediate =
-            let
-                modelAfter =
-                    Execute.applyEvent action model
-            in
-            ( { modelAfter
-                | replayAnim = Beating { untilMs = nowMs + beatAfter action }
+            ( { model
+                | gameState = Execute.applyEvent action model.gameState
+                , replayAnim = Beating { untilMs = nowMs + beatAfter action }
                 , drag = NotDragging
               }
             , Cmd.none
@@ -389,12 +376,9 @@ handCardRectReceived result model =
             in
             let
                 applyNow =
-                    let
-                        modelAfter =
-                            Execute.applyEvent ctx.action model
-                    in
-                    ( { modelAfter
-                        | replayAnim = Beating { untilMs = nowMs + beatAfter ctx.action }
+                    ( { model
+                        | gameState = Execute.applyEvent ctx.action model.gameState
+                        , replayAnim = Beating { untilMs = nowMs + beatAfter ctx.action }
                         , drag = NotDragging
                       }
                     , Cmd.none
@@ -426,12 +410,10 @@ handCardRectReceived result model =
             let
                 _ =
                     Debug.log "HandCardRectReceived err" err
-
-                modelAfter =
-                    Execute.applyEvent ctx.action model
             in
-            ( { modelAfter
-                | replayAnim = Beating { untilMs = 1000 }
+            ( { model
+                | gameState = Execute.applyEvent ctx.action model.gameState
+                , replayAnim = Beating { untilMs = 1000 }
                 , drag = NotDragging
               }
             , Cmd.none

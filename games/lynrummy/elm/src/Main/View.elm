@@ -344,8 +344,8 @@ playerHands model =
         , style "font-size" "13px"
         , style "margin-top" "12px"
         ]
-        [ Html.text ("Turn " ++ String.fromInt (model.turnIndex + 1)) ]
-        :: List.indexedMap (viewPlayerRow model) model.hands
+        [ Html.text ("Turn " ++ String.fromInt (model.gameState.turnIndex + 1)) ]
+        :: List.indexedMap (viewPlayerRow model) model.gameState.hands
     )
         ++ [ deckRemainingLine model ]
 
@@ -363,7 +363,7 @@ deckRemainingLine model =
         ]
         [ Html.text
             ("Deck: "
-                ++ String.fromInt (List.length model.deck)
+                ++ String.fromInt (List.length model.gameState.deck)
                 ++ " cards left"
             )
         ]
@@ -377,7 +377,7 @@ viewPlayerRow : Model -> Int -> Hand -> Html Msg
 viewPlayerRow model idx hand =
     let
         isActive =
-            idx == model.activePlayerIndex
+            idx == model.gameState.activePlayerIndex
 
         playerName =
             "Player " ++ String.fromInt (idx + 1)

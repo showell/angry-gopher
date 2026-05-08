@@ -5,14 +5,13 @@ module Main.State exposing
     , Flags
     , Model
     , PopupContent
-    , RemoteState
     , ReplayAnimationState(..)
     , ReplayProgress
     , baseModel
     , boardDomIdFor
     , canUndoThisTurn
     , collapseUndos
-    , encodeRemoteState
+    , encodeGameState
     )
 
 {-| All application-wide data types and the initial Model.
@@ -31,6 +30,7 @@ in `Game.Drag`; small leaf types (`Point`, `PathFrame`,
 import Game.CardStack as CardStack
 import Game.Dealer
 import Game.Drag exposing (DragState(..))
+import Game.Game exposing (GameState)
 import Game.GameEvent exposing (GameEvent(..))
 import Game.Hand as Hand exposing (Hand)
 import Game.Physics.GestureArbitration as GA
@@ -44,31 +44,8 @@ import Main.Types exposing (GesturePoint, PathFrame)
 -- MODEL
 
 
-{-| The full client state. Field groups:
-
-  - **Game-state fields** — shape of `Game.Game.GameState`,
-    threaded through `Main.Apply.applyAction` and
-    `Game.applyCompleteTurn`. Changes here reflect real game
-    progression.
-  - **UI-layer fields** — drag state, popup, status, score
-    display, replay progress. These are the client's own
-    concerns that never cross the wire.
-
-The extensible-record pattern lets `Game.applyCompleteTurn`
-operate on Model directly without wrapping/unwrapping.
-
--}
 type alias Model =
-    { -- Game-state fields.
-      board : List CardStack.CardStack
-    , hands : List Hand
-    , activePlayerIndex : Int
-    , turnIndex : Int
-    , deck : List Card
-    , cardsPlayedThisTurn : Int
-    , victorAwarded : Bool
-
-    -- UI-layer fields.
+    { gameState : GameState
     , drag : DragState
 
     -- Live DOM-measured board rect. Populated lazily on the
@@ -85,7 +62,7 @@ type alias Model =
     , nextSeq : Int
     , replay : Maybe ReplayProgress
     , replayAnim : ReplayAnimationState
-    , replayBaseline : Maybe RemoteState
+    , replayBaseline : Maybe GameState
 
     -- Constant string forming the board's DOM id (via
     -- `boardDomIdFor`). Multi-Play-per-page hosting retired
@@ -226,29 +203,14 @@ type alias Flags =
 -- SERVER-RESPONSE DATA SHAPES
 
 
-{-| Authoritative game-state snapshot as the server computes it.
-Elm pulls this once on session bootstrap; after that, all state
-updates flow through `Main.Apply.applyAction` /
-`Game.applyCompleteTurn`. Shape carries every field required to
-reconstitute the autonomous game.
--}
-type alias RemoteState =
-    { board : List CardStack.CardStack
-    , hands : List Hand
-    , activePlayerIndex : Int
-    , turnIndex : Int
-    , deck : List Card
-    , cardsPlayedThisTurn : Int
-    , victorAwarded : Bool
-    }
 
 
 {-| Mirror of the `initialStateDecoder` shape on the wire — produces
 JSON that the server stores in `meta.initial_state` and that
 `initialStateDecoder` can read back on resume.
 -}
-encodeRemoteState : RemoteState -> Value
-encodeRemoteState rs =
+encodeGameState : GameState -> Value
+encodeGameState rs =
     Encode.object
         [ ( "board", Encode.list CardStack.encodeCardStack rs.board )
         , ( "hands", Encode.list encodeHand rs.hands )
@@ -274,7 +236,7 @@ also carries any captured gesture telemetry, so replay can
 re-animate the original drag at real speed.
 -}
 type alias ActionLogBundle =
-    { initialState : RemoteState
+    { initialState : GameState
     , actions : List ActionLogEntry
     }
 
@@ -381,19 +343,15 @@ Instant Replay rewind target.
 -}
 baseModel : Model
 baseModel =
-    { -- Game-state fields. Hands start empty as a placeholder
-      -- before bootstrap; the real deal arrives from the
-      -- session bootstrap (existing session) or from
-      -- `Game.Dealer.dealFullGame` (fresh page load).
-      board = Game.Dealer.initialBoard
-    , hands = [ Hand.empty, Hand.empty ]
-    , activePlayerIndex = 0
-    , turnIndex = 0
-    , deck = []
-    , cardsPlayedThisTurn = 0
-    , victorAwarded = False
-
-    -- UI-layer fields.
+    { gameState =
+        { board = Game.Dealer.initialBoard
+        , hands = [ Hand.empty, Hand.empty ]
+        , activePlayerIndex = 0
+        , turnIndex = 0
+        , deck = []
+        , cardsPlayedThisTurn = 0
+        , victorAwarded = False
+        }
     , drag = NotDragging
     , boardRect = Nothing
     , sessionId = Nothing

@@ -32,20 +32,14 @@ import Game.Rules.Card exposing (Card)
 import Game.Rules.Referee as Referee
 
 
-{-| Every field required to run a full LynRummy game. Open
-record — host models can add UI-only fields (drag state, popup,
-replay progress, etc.) and still pass themselves to these
-transitions.
--}
-type alias GameState a =
-    { a
-        | board : List CardStack
-        , hands : List Hand
-        , activePlayerIndex : Int
-        , turnIndex : Int
-        , deck : List Card
-        , cardsPlayedThisTurn : Int
-        , victorAwarded : Bool
+type alias GameState =
+    { board : List CardStack
+    , hands : List Hand
+    , activePlayerIndex : Int
+    , turnIndex : Int
+    , deck : List Card
+    , cardsPlayedThisTurn : Int
+    , victorAwarded : Bool
     }
 
 
@@ -81,7 +75,7 @@ No I/O, no randomness — the deck is drawn in order. Callers
 who want shuffling seed it before passing it in.
 
 -}
-applyCompleteTurn : BoardBounds -> GameState a -> ( GameState a, CompleteTurnOutcome )
+applyCompleteTurn : BoardBounds -> GameState -> ( GameState, CompleteTurnOutcome )
 applyCompleteTurn bounds state =
     case Referee.validateTurnComplete state.board bounds of
         Err err ->
@@ -112,7 +106,7 @@ applyCompleteTurn bounds state =
             applyValidTurn state
 
 
-applyValidTurn : GameState a -> ( GameState a, CompleteTurnOutcome )
+applyValidTurn : GameState -> ( GameState, CompleteTurnOutcome )
 applyValidTurn state =
     let
         outgoingIdx =

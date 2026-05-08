@@ -58,7 +58,7 @@ import Main.State as State
         , Model
         , baseModel
         , collapseUndos
-        , encodeRemoteState
+        , encodeGameState
         )
 import Main.Types exposing (PathFrame(..), Point)
 import Main.View as View exposing (popupForCompleteTurn, statusForCompleteTurn)
@@ -118,7 +118,7 @@ init config =
                 setup =
                     Dealer.dealFullGame (Random.initSeed seedSource)
 
-                initialRS : State.RemoteState
+                initialRS : Game.GameState
                 initialRS =
                     { board = setup.board
                     , hands = setup.hands
@@ -131,13 +131,11 @@ init config =
 
                 dealtModel =
                     { baseModel
-                        | board = setup.board
-                        , hands = setup.hands
-                        , deck = setup.deck
+                        | gameState = initialRS
                         , replayBaseline = Just initialRS
                     }
             in
-            ( dealtModel, fetchNewSession (encodeRemoteState initialRS) )
+            ( dealtModel, fetchNewSession (encodeGameState initialRS) )
 
         ResumeSession sid ->
             ( { baseModel
@@ -293,10 +291,13 @@ handleMouseUp releasePoint tMs model =
             let
                 ( outcome, cmd ) =
                     handleMouseUpBoard releasePoint tMs d model
+
+                gs0 =
+                    model.gameState
             in
             ( { model
                 | drag = NotDragging
-                , board = outcome.board
+                , gameState = { gs0 | board = outcome.board }
                 , status = outcome.status
                 , actionLog = outcome.actionLog
                 , nextSeq = outcome.nextSeq
@@ -308,12 +309,18 @@ handleMouseUp releasePoint tMs model =
             let
                 ( outcome, cmd ) =
                     handleMouseUpHand releasePoint d model
+
+                gs0 =
+                    model.gameState
             in
             ( { model
                 | drag = NotDragging
-                , board = outcome.board
-                , hands = outcome.hands
-                , cardsPlayedThisTurn = outcome.cardsPlayedThisTurn
+                , gameState =
+                    { gs0
+                        | board = outcome.board
+                        , hands = outcome.hands
+                        , cardsPlayedThisTurn = outcome.cardsPlayedThisTurn
+                    }
                 , status = outcome.status
                 , actionLog = outcome.actionLog
                 , nextSeq = outcome.nextSeq
@@ -349,7 +356,7 @@ handleMouseUpBoard releasePoint tMs d model =
         BoardGesture.Split p ->
             let
                 newBoard =
-                    Execute.split p.stack p.cardIndex model.board
+                    Execute.split p.stack p.cardIndex model.gameState.board
 
                 splitStatus =
                     { text = "Be careful with splitting! Splits only pay off when you get more cards on the board or make prettier piles."
@@ -364,7 +371,7 @@ handleMouseUpBoard releasePoint tMs d model =
 
                 outcome =
                     { board = newBoard
-                    , status = Status.geometryFeedback model.board newBoard |> Maybe.withDefault splitStatus
+                    , status = Status.geometryFeedback model.gameState.board newBoard |> Maybe.withDefault splitStatus
                     , actionLog = model.actionLog ++ [ entry ]
                     , nextSeq = model.nextSeq + 1
                     }
@@ -386,7 +393,7 @@ handleMouseUpBoard releasePoint tMs d model =
         BoardGesture.MergeStack p ->
             let
                 newBoard =
-                    Execute.mergeStack p.source p.target p.side model.board
+                    Execute.mergeStack p.source p.target p.side model.gameState.board
 
                 entry =
                     { action = GameEvent.MergeStack { source = p.source, target = p.target, side = p.side }
@@ -396,7 +403,7 @@ handleMouseUpBoard releasePoint tMs d model =
 
                 outcome =
                     { board = newBoard
-                    , status = Status.geometryFeedback model.board newBoard |> Maybe.withDefault (Status.mergeStatus newBoard)
+                    , status = Status.geometryFeedback model.gameState.board newBoard |> Maybe.withDefault (Status.mergeStatus newBoard)
                     , actionLog = model.actionLog ++ [ entry ]
                     , nextSeq = model.nextSeq + 1
                     }
@@ -435,7 +442,7 @@ handleMouseUpBoard releasePoint tMs d model =
         BoardGesture.MoveStack p ->
             let
                 newBoard =
-                    Execute.moveStack p.stack p.newLoc model.board
+                    Execute.moveStack p.stack p.newLoc model.gameState.board
 
                 moveStackStatus =
                     { text = "Moved!", kind = Inform }
@@ -448,7 +455,7 @@ handleMouseUpBoard releasePoint tMs d model =
 
                 outcome =
                     { board = newBoard
-                    , status = Status.geometryFeedback model.board newBoard |> Maybe.withDefault moveStackStatus
+                    , status = Status.geometryFeedback model.gameState.board newBoard |> Maybe.withDefault moveStackStatus
                     , actionLog = model.actionLog ++ [ entry ]
                     , nextSeq = model.nextSeq + 1
                     }
@@ -477,7 +484,7 @@ handleMouseUpBoard releasePoint tMs d model =
         BoardGesture.BoardCardOffBoard ->
             let
                 outcome =
-                    { board = model.board
+                    { board = model.gameState.board
                     , status = offBoardScold
                     , actionLog = model.actionLog
                     , nextSeq = model.nextSeq
@@ -512,16 +519,16 @@ handleMouseUpHand releasePoint d model =
         HandGesture.MergeHand p ->
             let
                 next =
-                    Execute.mergeHand p.handCard p.target p.side model.board (activeHand model)
+                    Execute.mergeHand p.handCard p.target p.side model.gameState.board (activeHand model.gameState)
 
                 modelWithHand =
-                    setActiveHand next.hand model
+                    setActiveHand next.hand model.gameState
 
                 outcome =
                     { board = next.board
                     , hands = modelWithHand.hands
-                    , cardsPlayedThisTurn = model.cardsPlayedThisTurn + 1
-                    , status = Status.geometryFeedback model.board next.board |> Maybe.withDefault (Status.mergeStatus next.board)
+                    , cardsPlayedThisTurn = model.gameState.cardsPlayedThisTurn + 1
+                    , status = Status.geometryFeedback model.gameState.board next.board |> Maybe.withDefault (Status.mergeStatus next.board)
                     , actionLog =
                         model.actionLog
                             ++ [ { action = GameEvent.MergeHand p
@@ -559,10 +566,10 @@ handleMouseUpHand releasePoint d model =
         HandGesture.PlaceHand p ->
             let
                 next =
-                    Execute.placeHand p.handCard p.loc model.board (activeHand model)
+                    Execute.placeHand p.handCard p.loc model.gameState.board (activeHand model.gameState)
 
                 modelWithHand =
-                    setActiveHand next.hand model
+                    setActiveHand next.hand model.gameState
 
                 placeHandStatus =
                     { text = "On the board!", kind = Inform }
@@ -570,8 +577,8 @@ handleMouseUpHand releasePoint d model =
                 outcome =
                     { board = next.board
                     , hands = modelWithHand.hands
-                    , cardsPlayedThisTurn = model.cardsPlayedThisTurn + 1
-                    , status = Status.geometryFeedback model.board next.board |> Maybe.withDefault placeHandStatus
+                    , cardsPlayedThisTurn = model.gameState.cardsPlayedThisTurn + 1
+                    , status = Status.geometryFeedback model.gameState.board next.board |> Maybe.withDefault placeHandStatus
                     , actionLog =
                         model.actionLog
                             ++ [ { action = GameEvent.PlaceHand p
@@ -599,9 +606,9 @@ handleMouseUpHand releasePoint d model =
         HandGesture.HandCardOffBoard ->
             let
                 outcome =
-                    { board = model.board
-                    , hands = model.hands
-                    , cardsPlayedThisTurn = model.cardsPlayedThisTurn
+                    { board = model.gameState.board
+                    , hands = model.gameState.hands
+                    , cardsPlayedThisTurn = model.gameState.cardsPlayedThisTurn
                     , status = offBoardScold
                     , actionLog = model.actionLog
                     , nextSeq = model.nextSeq
@@ -612,9 +619,9 @@ handleMouseUpHand releasePoint d model =
         HandGesture.HandNothing ->
             let
                 outcome =
-                    { board = model.board
-                    , hands = model.hands
-                    , cardsPlayedThisTurn = model.cardsPlayedThisTurn
+                    { board = model.gameState.board
+                    , hands = model.gameState.hands
+                    , cardsPlayedThisTurn = model.gameState.cardsPlayedThisTurn
                     , status = model.status
                     , actionLog = model.actionLog
                     , nextSeq = model.nextSeq
@@ -634,7 +641,7 @@ clickCompleteTurn : Model -> ( Model, Cmd Msg )
 clickCompleteTurn model =
     let
         ( afterTurn, turnOutcome ) =
-            Game.applyCompleteTurn refereeBounds model
+            Game.applyCompleteTurn refereeBounds model.gameState
     in
     case turnOutcome.result of
         Failure ->
@@ -657,8 +664,9 @@ clickCompleteTurn model =
                     }
 
                 newModel =
-                    { afterTurn
-                        | actionLog = model.actionLog ++ [ completeTurnEntry ]
+                    { model
+                        | gameState = afterTurn
+                        , actionLog = model.actionLog ++ [ completeTurnEntry ]
                         , nextSeq = seq + 1
                         , status = statusForCompleteTurn (Ok turnOutcome)
                         , popup = popupForCompleteTurn (Ok turnOutcome)
@@ -685,7 +693,7 @@ clickUndo model =
         Just lastAction ->
             let
                 pre =
-                    { board = model.board, hand = activeHand model }
+                    { board = model.gameState.board, hand = activeHand model.gameState }
 
                 post =
                     Reducer.undoAction lastAction pre
@@ -710,19 +718,27 @@ clickUndo model =
                         _ ->
                             0
 
-                newModel =
+                gs0 =
+                    model.gameState
+
+                newGameState =
                     setActiveHand post.hand
-                        { model
+                        { gs0
                             | board = post.board
-                            , cardsPlayedThisTurn = model.cardsPlayedThisTurn + cardsAdjust
-                            , actionLog = model.actionLog ++ [ undoEntry ]
-                            , nextSeq = seq + 1
-                            , status = { text = "Undone.", kind = Inform }
-                            , hintedCards = []
-                            , drag = NotDragging
-                            , replay = Nothing
-                            , replayAnim = State.NotAnimating
+                            , cardsPlayedThisTurn = gs0.cardsPlayedThisTurn + cardsAdjust
                         }
+
+                newModel =
+                    { model
+                        | gameState = newGameState
+                        , actionLog = model.actionLog ++ [ undoEntry ]
+                        , nextSeq = seq + 1
+                        , status = { text = "Undone.", kind = Inform }
+                        , hintedCards = []
+                        , drag = NotDragging
+                        , replay = Nothing
+                        , replayAnim = State.NotAnimating
+                    }
 
                 outboundPayloadForAgent =
                     Encode.object
@@ -795,7 +811,7 @@ requestGameHint model =
             model.nextEngineRequestId
 
         hand =
-            (activeHand model).handCards
+            (activeHand model.gameState).handCards
                 |> List.map .card
 
         payload =
@@ -803,7 +819,7 @@ requestGameHint model =
                 [ ( "request_id", Encode.int reqId )
                 , ( "op", Encode.string "game_hint" )
                 , ( "hand", Encode.list Card.encodeCard hand )
-                , ( "board", encodeBoardForEngine model.board )
+                , ( "board", encodeBoardForEngine model.gameState.board )
                 ]
     in
     ( { model
@@ -975,7 +991,7 @@ bootstrapFromBundle bundle model =
                 }
     in
     List.foldl
-        (\entry m -> Execute.applyEvent entry.action m)
+        (\entry m -> { m | gameState = Execute.applyEvent entry.action m.gameState })
         atInitial
         (collapseUndos bundle.actions)
 
@@ -984,18 +1000,9 @@ bootstrapFromBundle bundle model =
 pin it as the replay baseline. Used by `bootstrapFromBundle`
 on the resume path.
 -}
-modelAtInitial : State.RemoteState -> Model -> Model
+modelAtInitial : Game.GameState -> Model -> Model
 modelAtInitial initial model =
-    { model
-        | board = initial.board
-        , hands = initial.hands
-        , activePlayerIndex = initial.activePlayerIndex
-        , turnIndex = initial.turnIndex
-        , deck = initial.deck
-        , cardsPlayedThisTurn = initial.cardsPlayedThisTurn
-        , victorAwarded = initial.victorAwarded
-        , replayBaseline = Just initial
-    }
+    { model | gameState = initial, replayBaseline = Just initial }
 
 
 

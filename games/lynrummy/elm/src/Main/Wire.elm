@@ -32,7 +32,8 @@ import Http
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode exposing (Value)
 import Main.Msg exposing (Msg(..))
-import Main.State exposing (ActionLogBundle, ActionLogEntry, RemoteState)
+import Game.Game exposing (GameState)
+import Main.State exposing (ActionLogBundle, ActionLogEntry)
 import Main.Types exposing (GesturePoint, PathFrame(..))
 
 
@@ -127,9 +128,9 @@ handDecoder =
 {-| The dealt-state record as the server stores it. Same shape
 the Puzzles catalog ships per puzzle.
 -}
-initialStateDecoder : Decoder RemoteState
+initialStateDecoder : Decoder GameState
 initialStateDecoder =
-    Decode.map7 RemoteState
+    Decode.map7 GameState
         (Decode.field "board" (Decode.list CardStack.cardStackDecoder))
         (Decode.field "hands" (Decode.list handDecoder))
         (Decode.field "active_player_index" Decode.int)

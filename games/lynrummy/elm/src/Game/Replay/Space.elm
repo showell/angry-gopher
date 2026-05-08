@@ -288,7 +288,7 @@ boardEndpoints : GameEvent -> Model -> Maybe ( Point, Point )
 boardEndpoints action model =
     case action of
         GameEvent.MoveStack p ->
-            CardStack.findStack p.stack model.board
+            CardStack.findStack p.stack model.gameState.board
                 |> Maybe.map
                     (\src ->
                         ( { x = src.loc.left, y = src.loc.top }
@@ -318,8 +318,8 @@ boardEndpoints action model =
                     , { x = endLeft + 2, y = tgt.loc.top - 2 }
                     )
                 )
-                (CardStack.findStack p.source model.board)
-                (CardStack.findStack p.target model.board)
+                (CardStack.findStack p.source model.gameState.board)
+                (CardStack.findStack p.target model.gameState.board)
 
         _ ->
             Nothing
@@ -428,7 +428,7 @@ interpPathHelp prev remaining targetTs =
 
 boardStackSource : CardStack -> Model -> Maybe DragSource
 boardStackSource ref model =
-    CardStack.findStack ref model.board
+    CardStack.findStack ref model.gameState.board
         |> Maybe.map FromBoardStack
 
 
@@ -436,7 +436,7 @@ handCardSource : Card -> Model -> Maybe DragSource
 handCardSource card model =
     let
         hand =
-            activeHand model
+            activeHand model.gameState
 
         present =
             List.any (\hc -> hc.card == card) hand.handCards
