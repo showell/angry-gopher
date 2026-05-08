@@ -22,7 +22,7 @@ mouseup-time outcome judgment, not a state machine.
 
 `HandCardDragInfo` has no `cardIndex` (hand cards have no
 Split semantic) and no `originalCursor` (no click-vs-drag
-arbitration for hand drags). It also has no `gesturePath`:
+arbitration for hand drags). It also has no `boardPath`:
 hand-origin drag paths are never replayed from a captured
 sequence — replay re-synthesizes them via live DOM
 measurement, so capturing them would be dead weight.
@@ -39,9 +39,10 @@ import Game.CardStack exposing (BoardLocation, CardStack)
 import Game.Physics.WingOracle exposing (WingId)
 import Game.Rules.Card exposing (Card)
 import Game.StackView as StackView
+import Game.TimeLoc exposing (TimeLoc)
 import Html exposing (Html)
 import Html.Attributes exposing (style)
-import Main.Types exposing (GesturePoint, Point)
+import Main.Types exposing (Point)
 
 
 type alias BoardCardDragInfo =
@@ -50,7 +51,7 @@ type alias BoardCardDragInfo =
     , originalCursor : Point
     , cursor : Point
     , floaterTopLeft : BoardLocation
-    , gesturePath : List GesturePoint
+    , boardPath : List TimeLoc
     , wings : List WingId
     }
 

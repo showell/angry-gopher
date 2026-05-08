@@ -5,34 +5,21 @@ module Main.Wire exposing
     )
 
 {-| HTTP surface between the Elm client and the Gopher server.
-The server is a dumb URL-keyed file store as of LEAN_PASS phase 2
-(2026-04-28); this module is a thin afterthought layer, not a
-load-bearing concept in the Elm app's architecture.
-
-Three outbound calls (`fetchNewSession`, `fetchActionLog`,
-`sendAction`) plus the inbound decoders for the bootstrap
-bundle. `sendAction` is now a thin wrapper: take a `Maybe Int`
-session id and a fully-formed JSON body, POST if there's a
-session, no-op otherwise. The body is built at the dispatch
-site (in `Main.Play.handleMouseUp`) with exactly the fields
-the action carries — no `Maybe Envelope` parameter, no shared
-envelope-wrapper. `encodeGesturePoint` and `pathFrameString`
-are exposed as primitive helpers for callers that splice
-gesture metadata into their bodies.
+The server is a dumb URL-keyed file store; this module is a
+thin afterthought layer.
 
 -}
 
-import Game.Rules.Card as Card
+import Game.ActionLog exposing (ActionLogBundle, ActionLogEntry)
 import Game.CardStack as CardStack
+import Game.Game exposing (GameState)
 import Game.Hand exposing (Hand)
+import Game.Rules.Card as Card
 import Game.WireAction as WA
 import Http
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode exposing (Value)
 import Main.Msg exposing (Msg(..))
-import Game.Game exposing (GameState)
-import Game.ActionLog exposing (ActionLogBundle, ActionLogEntry)
-import Main.Types exposing (GesturePoint, PathFrame(..))
 
 
 
@@ -40,7 +27,7 @@ import Main.Types exposing (GesturePoint, PathFrame(..))
 
 
 {-| Create a new session. Elm has already dealt the game
-locally; this just registers it. Body: `{label, initial_state}`.
+locally; this just registers it.
 -}
 fetchNewSession : Value -> Cmd Msg
 fetchNewSession initialState =
@@ -57,10 +44,6 @@ fetchNewSession initialState =
         }
 
 
-{-| Bootstrap a session for resume: fetch the meta + action log.
-Elm decodes initial_state from `meta.initial_state` and replays
-the actions locally.
--}
 fetchActionLog : Int -> Cmd Msg
 fetchActionLog sid =
     Http.get
@@ -69,12 +52,6 @@ fetchActionLog sid =
         }
 
 
-{-| POST a fully-formed body to the action log endpoint.
-No-op when the session id is `Nothing` (offline mode — the
-session hasn't been allocated yet). The dispatch site builds
-the body inline, knowing exactly what fields its action
-carries — there is no shared envelope-wrapper here.
--}
 sendAction : Maybe Int -> Value -> Cmd Msg
 sendAction maybeSessionId body =
     case maybeSessionId of
@@ -87,6 +64,7 @@ sendAction maybeSessionId body =
 
         Nothing ->
             Cmd.none
+
 
 
 -- INBOUND DECODERS
@@ -103,9 +81,6 @@ handDecoder =
         |> Decode.map (\cards -> { handCards = cards })
 
 
-{-| The dealt-state record as the server stores it. Same shape
-the Puzzles catalog ships per puzzle.
--}
 initialStateDecoder : Decoder GameState
 initialStateDecoder =
     Decode.map7 GameState
@@ -127,38 +102,4 @@ actionLogDecoder =
 
 actionLogEntryDecoder : Decoder ActionLogEntry
 actionLogEntryDecoder =
-    Decode.map3 ActionLogEntry
-        (Decode.field "action" WA.decoder)
-        (Decode.maybe
-            (Decode.at [ "gesture_metadata", "path" ] (Decode.list gesturePointDecoder))
-        )
-        (Decode.oneOf
-            [ Decode.at [ "gesture_metadata", "path_frame" ] pathFrameDecoder
-            , Decode.succeed ViewportFrame
-            ]
-        )
-
-
-pathFrameDecoder : Decoder PathFrame
-pathFrameDecoder =
-    Decode.string
-        |> Decode.andThen
-            (\s ->
-                case s of
-                    "board" ->
-                        Decode.succeed BoardFrame
-
-                    "viewport" ->
-                        Decode.succeed ViewportFrame
-
-                    other ->
-                        Decode.fail ("Unknown path_frame: " ++ other)
-            )
-
-
-gesturePointDecoder : Decoder GesturePoint
-gesturePointDecoder =
-    Decode.map3 (\t x y -> { tMs = t, x = x, y = y })
-        (Decode.field "t" Decode.float)
-        (Decode.field "x" Decode.int)
-        (Decode.field "y" Decode.int)
+    Decode.map (\action -> { action = action }) WA.entryDecoder

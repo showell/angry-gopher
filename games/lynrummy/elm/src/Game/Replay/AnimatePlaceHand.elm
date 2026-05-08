@@ -61,8 +61,12 @@ finish payload origin nowMs gameState maybeBoardRect =
                 { left = payload.loc.left, top = payload.loc.top }
                 |> Maybe.map
                     (\target ->
+                        let
+                            viewportPath =
+                                Space.linearPath origin target nowMs
+                        in
                         { startMs = nowMs
-                        , path = Space.linearPath origin target nowMs
+                        , path = viewportPath
                         , source = source
                         , pendingAction = GameEvent.PlaceHand payload
                         }

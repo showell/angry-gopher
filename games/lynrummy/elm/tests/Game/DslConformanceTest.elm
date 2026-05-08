@@ -42,7 +42,6 @@ import Main.Gesture as Gesture
 import Main.Msg as Msg
 import Main.Play as Play
 import Main.State as State
-import Main.Types exposing (PathFrame(..))
 import Test exposing (Test, describe, test)
 
 
@@ -169,10 +168,11 @@ resolveSpec spec board =
                 { source = findStackByContent src board
                 , target = findStackByContent tgt board
                 , side = side
+                , boardPath = []
                 }
 
         SpecMoveStack cards loc ->
-            GameEvent.MoveStack { stack = findStackByContent cards board, newLoc = loc }
+            GameEvent.MoveStack { stack = findStackByContent cards board, newLoc = loc, boardPath = [] }
 
         SpecCompleteTurn ->
             GameEvent.CompleteTurn
@@ -205,10 +205,7 @@ runReplay initialModel actions =
         entries =
             List.map
                 (\a ->
-                    { action = a
-                    , gesturePath = Nothing
-                    , pathFrame = BoardFrame
-                    }
+                    { action = a }
                 )
                 actions
 
@@ -1324,35 +1321,6 @@ dragInvariantBoardDragInitialFloater =
                     Expect.fail "expected DraggingBoardCard state"
 
 
-dragInvariantBoardDragPathFrame : Test
-dragInvariantBoardDragPathFrame =
-    test "drag_invariant_board_drag_path_frame" <|
-        \_ ->
-            let
-                stack =
-                    { boardCards = [ boardCard "2C1", boardCard "3D1", boardCard "4C1" ], loc = { top = 200, left = 100 } }
-
-                base =
-                    State.baseModel
-
-                model =
-                    let gs0 = base.gameState in { base | gameState = { gs0 | board = [ stack ] } }
-
-                ( afterDown, _ ) =
-                    Gesture.startBoardCardDrag
-                        { stack = stack, cardIndex = 0 }
-                        { x = 410, y = 310 }
-                        0
-                        model
-            in
-            case afterDown.drag of
-                DraggingBoardCard _ ->
-                    Expect.pass
-
-                _ ->
-                    Expect.fail ("expected DraggingBoardCard state")
-
-
 dragInvariantFloaterShift : Test
 dragInvariantFloaterShift =
     test "drag_invariant_floater_shift" <|
@@ -1441,38 +1409,6 @@ dragInvariantGrabPointInvariant =
                             Nothing
             in
             Expect.equal (shiftFor { x = 410, y = 310 }) (shiftFor { x = 500, y = 320 })
-
-
-dragInvariantHandDragPathFrame : Test
-dragInvariantHandDragPathFrame =
-    test "drag_invariant_hand_drag_path_frame" <|
-        \_ ->
-            let
-                card =
-                    parseCard "6H1"
-
-                hc =
-                    { card = card, state = HandNormal }
-
-                base =
-                    State.baseModel
-
-                model =
-                    { base | gameState = Hand.setActiveHand { handCards = [ hc ] } base.gameState }
-
-                ( afterDown, _ ) =
-                    Gesture.startHandDrag
-                        card
-                        { x = 50, y = 120 }
-                        0
-                        model
-            in
-            case afterDown.drag of
-                DraggingHandCard _ ->
-                    Expect.pass
-
-                _ ->
-                    Expect.fail ("expected DraggingHandCard state")
 
 
 engulfGrowing2partialIntoLegalRun : Test
@@ -2001,7 +1937,7 @@ gestureMergeStack234Onto567Left =
                     , originalCursor = { x = -1000, y = 0 }
                     , cursor = { x = 0, y = 0 }
                     , floaterTopLeft = floater
-                    , gesturePath = []
+                    , boardPath = []
                     , wings = [ wing ]
                     }
 
@@ -2037,7 +1973,7 @@ gestureMergeStack567Onto234Right =
                     , originalCursor = { x = -1000, y = 0 }
                     , cursor = { x = 0, y = 0 }
                     , floaterTopLeft = floater
-                    , gesturePath = []
+                    , boardPath = []
                     , wings = [ wing ]
                     }
 
@@ -2067,7 +2003,7 @@ gestureMoveStackOffBoardRejected =
                     , originalCursor = { x = -1000, y = 0 }
                     , cursor = { x = 700, y = 400 }
                     , floaterTopLeft = floater
-                    , gesturePath = []
+                    , boardPath = []
                     , wings = []
                     }
 
@@ -2093,7 +2029,7 @@ gestureMoveStackValidDrop =
                     , originalCursor = { x = -1000, y = 0 }
                     , cursor = { x = 700, y = 400 }
                     , floaterTopLeft = floater
-                    , gesturePath = []
+                    , boardPath = []
                     , wings = []
                     }
 
@@ -2158,7 +2094,7 @@ gestureSplitSurvivingClickIntent =
                     , originalCursor = { x = 0, y = 0 }
                     , cursor = { x = 0, y = 0 }
                     , floaterTopLeft = floater
-                    , gesturePath = []
+                    , boardPath = []
                     , wings = []
                     }
 
@@ -2560,7 +2496,7 @@ undoRestoresPosition =
                     resolveSpec spec2 m1.gameState.board
 
                 entry2 =
-                    { action = action2, gesturePath = Nothing, pathFrame = BoardFrame }
+                    { action = action2 }
 
                 m2post =
                     { m1 | gameState = Execute.applyEvent action2 m1.gameState }
@@ -2626,7 +2562,7 @@ undoSplitPieceReturnsToSplitPosition =
                     resolveSpec spec2 m1.gameState.board
 
                 entry2 =
-                    { action = action2, gesturePath = Nothing, pathFrame = BoardFrame }
+                    { action = action2 }
 
                 m2post =
                     { m1 | gameState = Execute.applyEvent action2 m1.gameState }
@@ -2642,7 +2578,7 @@ undoSplitPieceReturnsToSplitPosition =
                     resolveSpec spec3 m2.gameState.board
 
                 entry3 =
-                    { action = action3, gesturePath = Nothing, pathFrame = BoardFrame }
+                    { action = action3 }
 
                 m3post =
                     { m2 | gameState = Execute.applyEvent action3 m2.gameState }
@@ -2722,7 +2658,7 @@ undoWalkthroughMergeHand =
                     GameEvent.MergeHand { handCard = parseCard "7H2", target = findStackByContent [ parseCard "7S1", parseCard "7D1", parseCard "7C1" ] m1.gameState.board, side = BoardActions.Right }
 
                 entry2 =
-                    { action = action2, gesturePath = Nothing, pathFrame = BoardFrame }
+                    { action = action2 }
 
                 m2post =
                     { m1 | gameState = Execute.applyEvent action2 m1.gameState }
@@ -2796,7 +2732,7 @@ undoWalkthroughMergeStack =
                     resolveSpec spec2 m1.gameState.board
 
                 entry2 =
-                    { action = action2, gesturePath = Nothing, pathFrame = BoardFrame }
+                    { action = action2 }
 
                 m2post =
                     { m1 | gameState = Execute.applyEvent action2 m1.gameState }
@@ -2872,7 +2808,7 @@ undoWalkthroughPlaceHand =
                     GameEvent.PlaceHand { handCard = parseCard "7H2", loc = { top = 400, left = 300 } }
 
                 entry2 =
-                    { action = action2, gesturePath = Nothing, pathFrame = BoardFrame }
+                    { action = action2 }
 
                 m2post =
                     { m1 | gameState = Execute.applyEvent action2 m1.gameState }
@@ -2948,7 +2884,7 @@ undoWalkthroughSplitThenMove =
                     resolveSpec spec2 m1.gameState.board
 
                 entry2 =
-                    { action = action2, gesturePath = Nothing, pathFrame = BoardFrame }
+                    { action = action2 }
 
                 m2post =
                     { m1 | gameState = Execute.applyEvent action2 m1.gameState }
@@ -2964,7 +2900,7 @@ undoWalkthroughSplitThenMove =
                     resolveSpec spec3 m2.gameState.board
 
                 entry3 =
-                    { action = action3, gesturePath = Nothing, pathFrame = BoardFrame }
+                    { action = action3 }
 
                 m3post =
                     { m2 | gameState = Execute.applyEvent action3 m2.gameState }
@@ -3621,10 +3557,8 @@ suite =
         , corpusSid148
         , deckIdentityMismatchInRemove
         , dragInvariantBoardDragInitialFloater
-        , dragInvariantBoardDragPathFrame
         , dragInvariantFloaterShift
         , dragInvariantGrabPointInvariant
-        , dragInvariantHandDragPathFrame
         , engulfGrowing2partialIntoLegalRun
         , extra001JCJDp
         , extra002JCJDp

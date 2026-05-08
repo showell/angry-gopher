@@ -84,7 +84,7 @@ suite =
 
                         after =
                             Execute.applyEvent
-                                (MoveStack { stack = stackAt 0 before, newLoc = newLoc })
+                                (MoveStack { stack = stackAt 0 before, newLoc = newLoc, boardPath = [] })
                                 before
 
                         -- Moved stack is appended at the end of
@@ -168,7 +168,7 @@ suite =
             , test "MoveStack on a ghost stack is a no-op" <|
                 \_ ->
                     Execute.applyEvent
-                        (MoveStack { stack = ghostStack, newLoc = { top = 10, left = 10 } })
+                        (MoveStack { stack = ghostStack, newLoc = { top = 10, left = 10 }, boardPath = [] })
                         initialGameState
                         |> Expect.equal initialGameState
             , test "MergeHand with a card not in hand is a no-op" <|
@@ -207,6 +207,7 @@ suite =
                                 (MoveStack
                                     { stack = stackAt 0 step1
                                     , newLoc = { top = 500, left = 400 }
+                                    , boardPath = []
                                     }
                                 )
                                 step1

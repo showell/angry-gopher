@@ -1,33 +1,32 @@
-module Game.WireAction exposing (decoder)
+module Game.WireAction exposing (entryDecoder)
 
-{-| Wire decoder for `Game.GameEvent.GameEvent`. The type
-itself lives in `Game.GameEvent`; this module is the inbound
-half of the serialization layer (used when the action log is
-fetched from the server during resume).
+{-| Wire decoder for action-log entries. The wire shape mirrors
+the in-memory `GameEvent` exactly: each action is a single JSON
+object that names its kind and carries its full payload — for
+`merge_stack` and `move_stack`, that includes `board_path`.
 
-The encoder used to live here too, but since the wire body is
-built at the dispatch site in `Main.Play.handleMouseUp` (where
-the per-action shape is already in hand), there is no
-`encode` function — the JSON-shape of each action is at its
-one and only producer.
+The encoder lives at the dispatch site
+(`Game.BoardDrag.handleMouseUp` and friends).
 
 -}
 
-import Json.Decode as Decode exposing (Decoder)
 import Game.BoardActions exposing (Side(..))
+import Game.CardStack exposing (boardLocationDecoder, cardStackDecoder)
 import Game.GameEvent exposing (GameEvent(..))
 import Game.Rules.Card as Card
-import Game.CardStack exposing (boardLocationDecoder, cardStackDecoder)
+import Game.TimeLoc exposing (TimeLoc)
+import Json.Decode as Decode exposing (Decoder)
 
 
+entryDecoder : Decoder GameEvent
+entryDecoder =
+    Decode.at [ "action", "action" ] Decode.string
+        |> Decode.andThen actionDecoder
 
--- DECODE
 
-
-decoder : Decoder GameEvent
-decoder =
-    Decode.field "action" Decode.string
-        |> Decode.andThen decoderForAction
+actionDecoder : String -> Decoder GameEvent
+actionDecoder kind =
+    Decode.field "action" (decoderForAction kind)
 
 
 decoderForAction : String -> Decoder GameEvent
@@ -42,13 +41,19 @@ decoderForAction kind =
                 (Decode.field "card_index" Decode.int)
 
         "merge_stack" ->
-            Decode.map3
-                (\source target side ->
-                    MergeStack { source = source, target = target, side = side }
+            Decode.map4
+                (\source target side path ->
+                    MergeStack
+                        { source = source
+                        , target = target
+                        , side = side
+                        , boardPath = path
+                        }
                 )
                 (Decode.field "source" cardStackDecoder)
                 (Decode.field "target" cardStackDecoder)
                 (Decode.field "side" sideDecoder)
+                (Decode.field "board_path" (Decode.list timeLocDecoder))
 
         "merge_hand" ->
             Decode.map3
@@ -66,12 +71,17 @@ decoderForAction kind =
                 (Decode.field "loc" boardLocationDecoder)
 
         "move_stack" ->
-            Decode.map2
-                (\stack newLoc ->
-                    MoveStack { stack = stack, newLoc = newLoc }
+            Decode.map3
+                (\stack newLoc path ->
+                    MoveStack
+                        { stack = stack
+                        , newLoc = newLoc
+                        , boardPath = path
+                        }
                 )
                 (Decode.field "stack" cardStackDecoder)
                 (Decode.field "new_loc" boardLocationDecoder)
+                (Decode.field "board_path" (Decode.list timeLocDecoder))
 
         "complete_turn" ->
             Decode.succeed CompleteTurn
@@ -98,3 +108,12 @@ sideDecoder =
                     other ->
                         Decode.fail ("Unknown side: " ++ other)
             )
+
+
+timeLocDecoder : Decoder TimeLoc
+timeLocDecoder =
+    Decode.map3 (\t l u -> { tMs = t, left = l, top = u })
+        (Decode.field "t_ms" Decode.float)
+        (Decode.field "left" Decode.int)
+        (Decode.field "top" Decode.int)
+

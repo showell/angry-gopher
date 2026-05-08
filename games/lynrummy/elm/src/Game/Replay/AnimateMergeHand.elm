@@ -80,8 +80,12 @@ finish payload origin nowMs gameState maybeBoardRect =
                         Space.stackLandingInLiveViewport maybeBoardRect stack payload.side
                             |> Maybe.map
                                 (\landing ->
+                                    let
+                                        viewportPath =
+                                            Space.linearPath origin landing nowMs
+                                    in
                                     { startMs = nowMs
-                                    , path = Space.linearPath origin landing nowMs
+                                    , path = viewportPath
                                     , source = source
                                     , pendingAction = GameEvent.MergeHand payload
                                     }

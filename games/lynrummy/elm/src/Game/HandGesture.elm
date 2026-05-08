@@ -7,8 +7,7 @@ module Game.HandGesture exposing
 
 {-| Per-side resolution for hand-card mouseup gestures.
 Symmetric to `Game.BoardGesture`. Hand-origin actions ship
-pathless (replay re-synthesizes via DOM), so the action
-variants carry no envelope.
+pathless (replay re-synthesizes via DOM).
 
 `handleMouseUp` returns a `HandMouseUp` value that flows up to
 `Main.Play.update` for dispatch.
@@ -33,7 +32,7 @@ cousins; update in `Main.Play` translates and feeds them to
 `HandNothing` covers the rect-not-measured race (the user
 released before `BoardRectReceived` arrived) — drop is not
 geometrically interpretable yet. Mirror of
-`BoardGesture.BoardMouseUp`, minus the envelope.
+`BoardGesture.BoardMouseUp`, minus the path.
 -}
 type HandMouseUp
     = MergeHand { handCard : Card, target : CardStack, side : Side }

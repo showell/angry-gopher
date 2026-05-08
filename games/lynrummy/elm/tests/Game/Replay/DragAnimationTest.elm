@@ -38,7 +38,7 @@ import Game.CardStack exposing (BoardCard, BoardCardState(..), CardStack)
 import Game.Replay.DragAnimation as DA
 import Game.Replay.Space as Space
 import Game.GameEvent as GameEvent exposing (GameEvent)
-import Main.Types exposing (GesturePoint)
+import Game.TimeLoc exposing (TimeLoc)
 import Test exposing (Test, describe, test)
 
 
@@ -63,11 +63,11 @@ fixtureStack =
 -- A simple 3-point path from (0,0) at t=1000 to (100,0) at
 -- t=2000. Straight line, 1-second duration, 1ms-per-pixel
 -- equivalent for arithmetic clarity.
-fixturePath : List GesturePoint
+fixturePath : List TimeLoc
 fixturePath =
-    [ { tMs = 1000, x = 0, y = 0 }
-    , { tMs = 1500, x = 50, y = 0 }
-    , { tMs = 2000, x = 100, y = 0 }
+    [ { tMs = 1000, left = 0, top = 0 }
+    , { tMs = 1500, left = 50, top = 0 }
+    , { tMs = 2000, left = 100, top = 0 }
     ]
 
 
@@ -77,6 +77,7 @@ fixtureAction =
         { source = fixtureStack
         , target = fixtureStack
         , side = BoardActions.Right
+        , boardPath = []
         }
 
 
@@ -180,7 +181,7 @@ suite =
                         singleAnim =
                             { fixtureAnim
                                 | path =
-                                    [ { tMs = 1000, x = 50, y = 50 } ]
+                                    [ { tMs = 1000, left = 50, top = 50 } ]
                             }
                     in
                     DA.step 1000 singleAnim

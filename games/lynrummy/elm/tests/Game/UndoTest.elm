@@ -25,7 +25,6 @@ import Game.Hand as Hand
 import Game.Rules.Card exposing (CardValue(..), OriginDeck(..), Suit(..))
 import Game.ActionLog exposing (ActionLogEntry)
 import Main.State as State
-import Main.Types exposing (PathFrame(..))
 import Test exposing (Test, describe, test)
 
 
@@ -48,10 +47,7 @@ stackAt idx state =
 {-| Construct a minimal ActionLogEntry for a GameEvent. -}
 logEntry : GameEvent -> ActionLogEntry
 logEntry action =
-    { action = action
-    , gesturePath = Nothing
-    , pathFrame = BoardFrame
-    }
+    { action = action }
 
 
 {-| Build a model with the given action log by starting from baseModel.
@@ -100,6 +96,7 @@ suiteUndoEvent =
                             MoveStack
                                 { stack = originalStack
                                 , newLoc = { top = 500, left = 600 }
+                                , boardPath = []
                                 }
 
                         after =
@@ -132,6 +129,7 @@ suiteUndoEvent =
                             MoveStack
                                 { stack = stackAt 0 before
                                 , newLoc = { top = 500, left = 600 }
+                                , boardPath = []
                                 }
 
                         after =
@@ -217,6 +215,7 @@ suiteUndoEvent =
                                 { source = stackAt sourceIdx afterSplit
                                 , target = stackAt targetIdx afterSplit
                                 , side = Right
+                                , boardPath = []
                                 }
 
                         afterMerge =
@@ -322,7 +321,7 @@ suiteCollapseUndos =
             \_ ->
                 let
                     entries =
-                        [ logEntry (MoveStack { stack = stackAt 0 initialGameState, newLoc = { top = 10, left = 20 } }) ]
+                        [ logEntry (MoveStack { stack = stackAt 0 initialGameState, newLoc = { top = 10, left = 20 }, boardPath = [] }) ]
                 in
                 State.collapseUndos entries
                     |> Expect.equal entries
@@ -334,7 +333,7 @@ suiteCollapseUndos =
             \_ ->
                 let
                     move =
-                        logEntry (MoveStack { stack = stackAt 0 initialGameState, newLoc = { top = 10, left = 20 } })
+                        logEntry (MoveStack { stack = stackAt 0 initialGameState, newLoc = { top = 10, left = 20 }, boardPath = [] })
 
                     entries =
                         [ move, logEntry Undo ]
@@ -348,10 +347,10 @@ suiteCollapseUndos =
                         initialGameState
 
                     move1 =
-                        logEntry (MoveStack { stack = stackAt 0 s, newLoc = { top = 10, left = 20 } })
+                        logEntry (MoveStack { stack = stackAt 0 s, newLoc = { top = 10, left = 20 }, boardPath = [] })
 
                     move2 =
-                        logEntry (MoveStack { stack = stackAt 1 s, newLoc = { top = 30, left = 40 } })
+                        logEntry (MoveStack { stack = stackAt 1 s, newLoc = { top = 30, left = 40 }, boardPath = [] })
 
                     entries =
                         [ move1, move2, logEntry Undo, logEntry Undo ]
@@ -376,7 +375,7 @@ suiteCollapseUndos =
                         initialGameState
 
                     move =
-                        logEntry (MoveStack { stack = stackAt 0 s, newLoc = { top = 10, left = 20 } })
+                        logEntry (MoveStack { stack = stackAt 0 s, newLoc = { top = 10, left = 20 }, boardPath = [] })
 
                     ct =
                         logEntry CompleteTurn
@@ -393,10 +392,10 @@ suiteCollapseUndos =
                         initialGameState
 
                     move1 =
-                        logEntry (MoveStack { stack = stackAt 0 s, newLoc = { top = 10, left = 20 } })
+                        logEntry (MoveStack { stack = stackAt 0 s, newLoc = { top = 10, left = 20 }, boardPath = [] })
 
                     move2 =
-                        logEntry (MoveStack { stack = stackAt 1 s, newLoc = { top = 30, left = 40 } })
+                        logEntry (MoveStack { stack = stackAt 1 s, newLoc = { top = 30, left = 40 }, boardPath = [] })
                 in
                 State.collapseUndos [ move1, move2, logEntry Undo ]
                     |> Expect.equal [ move1 ]
@@ -420,7 +419,7 @@ suiteCanUndoThisTurn =
             \_ ->
                 let
                     move =
-                        logEntry (MoveStack { stack = stackAt 0 initialGameState, newLoc = { top = 10, left = 20 } })
+                        logEntry (MoveStack { stack = stackAt 0 initialGameState, newLoc = { top = 10, left = 20 }, boardPath = [] })
                 in
                 State.canUndoThisTurn (modelWithLog [ move ])
                     |> Expect.equal True
@@ -428,7 +427,7 @@ suiteCanUndoThisTurn =
             \_ ->
                 let
                     move =
-                        logEntry (MoveStack { stack = stackAt 0 initialGameState, newLoc = { top = 10, left = 20 } })
+                        logEntry (MoveStack { stack = stackAt 0 initialGameState, newLoc = { top = 10, left = 20 }, boardPath = [] })
                 in
                 State.canUndoThisTurn (modelWithLog [ move, logEntry Undo ])
                     |> Expect.equal False
@@ -436,7 +435,7 @@ suiteCanUndoThisTurn =
             \_ ->
                 let
                     move =
-                        logEntry (MoveStack { stack = stackAt 0 initialGameState, newLoc = { top = 10, left = 20 } })
+                        logEntry (MoveStack { stack = stackAt 0 initialGameState, newLoc = { top = 10, left = 20 }, boardPath = [] })
 
                     ct =
                         logEntry CompleteTurn
@@ -447,13 +446,13 @@ suiteCanUndoThisTurn =
             \_ ->
                 let
                     move =
-                        logEntry (MoveStack { stack = stackAt 0 initialGameState, newLoc = { top = 10, left = 20 } })
+                        logEntry (MoveStack { stack = stackAt 0 initialGameState, newLoc = { top = 10, left = 20 }, boardPath = [] })
 
                     ct =
                         logEntry CompleteTurn
 
                     move2 =
-                        logEntry (MoveStack { stack = stackAt 1 initialGameState, newLoc = { top = 50, left = 60 } })
+                        logEntry (MoveStack { stack = stackAt 1 initialGameState, newLoc = { top = 50, left = 60 }, boardPath = [] })
                 in
                 State.canUndoThisTurn (modelWithLog [ move, ct, move2 ])
                     |> Expect.equal True
@@ -464,10 +463,10 @@ suiteCanUndoThisTurn =
                         initialGameState
 
                     move1 =
-                        logEntry (MoveStack { stack = stackAt 0 s, newLoc = { top = 10, left = 20 } })
+                        logEntry (MoveStack { stack = stackAt 0 s, newLoc = { top = 10, left = 20 }, boardPath = [] })
 
                     move2 =
-                        logEntry (MoveStack { stack = stackAt 1 s, newLoc = { top = 30, left = 40 } })
+                        logEntry (MoveStack { stack = stackAt 1 s, newLoc = { top = 30, left = 40 }, boardPath = [] })
                 in
                 State.canUndoThisTurn (modelWithLog [ move1, move2, logEntry Undo, logEntry Undo ])
                     |> Expect.equal False

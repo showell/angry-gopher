@@ -49,7 +49,8 @@ import Main.State as State
         ( ReplayAnimationState(..)
         , ReplayState
         )
-import Main.Types exposing (GesturePoint, Point)
+import Game.TimeLoc exposing (TimeLoc)
+import Main.Types exposing (Point)
 import Task
 import Time
 
@@ -116,7 +117,6 @@ replayFrame nowMs rs =
                     entry :: rest ->
                         prepareReplayStep
                             entry.action
-                            entry.gesturePath
                             { rs | eventPlan = rest }
                             nowMs
                             |> mapStateAndCmd Just
@@ -173,16 +173,12 @@ mapStateAndCmd f ( a, cmd ) =
 
 
 {-| Transition from NotAnimating into the right next replay
-state, given an action and its captured gesture path (if any).
-See module-level comment for the decision tree.
+state. The path (if any) lives inside the GameEvent's
+MergeStack/MoveStack variant; the event itself carries it
+end-to-end.
 -}
-prepareReplayStep :
-    GameEvent
-    -> Maybe (List GesturePoint)
-    -> ReplayState
-    -> Float
-    -> ( ReplayState, Cmd Msg )
-prepareReplayStep action maybePath rs nowMs =
+prepareReplayStep : GameEvent -> ReplayState -> Float -> ( ReplayState, Cmd Msg )
+prepareReplayStep action rs nowMs =
     let
         startAnimating anim =
             case Space.interpPath anim.path 0 of
@@ -206,27 +202,22 @@ prepareReplayStep action maybePath rs nowMs =
             , Cmd.none
             )
 
-        animateFromCaptured path =
-            case path of
-                [] ->
+        animateFromCaptured =
+            case startBoardAnim action rs.gameState.board nowMs of
+                Just anim ->
+                    startAnimating anim
+
+                Nothing ->
+                    -- Captured path was deemed valid by
+                    -- pathStillValid but the underlying
+                    -- source-stack lookup (boardStackSource)
+                    -- still failed. Escalate to JIT.
                     jitOrApply
-
-                _ ->
-                    case startBoardAnim action path rs.gameState.board nowMs of
-                        Just anim ->
-                            startAnimating anim
-
-                        Nothing ->
-                            -- Captured path was deemed valid by
-                            -- pathStillValid but the underlying
-                            -- source-stack lookup (boardStackSource)
-                            -- still failed. Escalate to JIT.
-                            jitOrApply
 
         jitOrApply =
             case Space.synthesizeBoardPath action rs.gameState.board nowMs of
-                Just ( synthPath, _ ) ->
-                    case startBoardAnim action synthPath rs.gameState.board nowMs of
+                Just synthPath ->
+                    case startBoardAnimWithPath action synthPath rs.gameState.board nowMs of
                         Just anim ->
                             startAnimating anim
 
@@ -251,16 +242,33 @@ prepareReplayStep action maybePath rs nowMs =
                         Nothing ->
                             applyImmediate
     in
-    case maybePath of
+    case capturedBoardPath action of
         Just (p :: rest) ->
             if Space.isPathStillValid (p :: rest) action rs.gameState.board then
-                animateFromCaptured (p :: rest)
+                animateFromCaptured
 
             else
                 jitOrApply
 
         _ ->
             jitOrApply
+
+
+{-| Pull the captured board path out of an event variant.
+Only `MergeStack` and `MoveStack` carry one; everything else
+returns Nothing.
+-}
+capturedBoardPath : GameEvent -> Maybe (List TimeLoc)
+capturedBoardPath action =
+    case action of
+        GameEvent.MergeStack p ->
+            Just p.boardPath
+
+        GameEvent.MoveStack p ->
+            Just p.boardPath
+
+        _ ->
+            Nothing
 
 
 
@@ -365,16 +373,12 @@ beatAfter action =
 
 
 {-| Dispatch a board-origin wire action to its per-operation
-Animate module. Nothing means the action is hand-origin (or an
-unsupported kind).
+Animate module. The path is read from the event's payload.
+Nothing means the action is hand-origin (or an unsupported
+kind).
 -}
-startBoardAnim :
-    GameEvent
-    -> List GesturePoint
-    -> List CardStack
-    -> Float
-    -> Maybe Space.AnimationInfo
-startBoardAnim action path board nowMs =
+startBoardAnim : GameEvent -> List CardStack -> Float -> Maybe Space.AnimationInfo
+startBoardAnim action board nowMs =
     case action of
         GameEvent.Split _ ->
             -- Splits are CLICKS in the live UI; replay should not
@@ -383,10 +387,32 @@ startBoardAnim action path board nowMs =
             Nothing
 
         GameEvent.MergeStack payload ->
-            AnimateMergeStack.start payload path board nowMs
+            AnimateMergeStack.start payload board nowMs
 
         GameEvent.MoveStack payload ->
-            AnimateMoveStack.start payload path board nowMs
+            AnimateMoveStack.start payload board nowMs
+
+        _ ->
+            Nothing
+
+
+{-| JIT path: synthesizeBoardPath produced a fresh path, hand
+it to the Animate module by overriding the event's boardPath
+in flight.
+-}
+startBoardAnimWithPath :
+    GameEvent
+    -> List TimeLoc
+    -> List CardStack
+    -> Float
+    -> Maybe Space.AnimationInfo
+startBoardAnimWithPath action path board nowMs =
+    case action of
+        GameEvent.MergeStack p ->
+            AnimateMergeStack.start { p | boardPath = path } board nowMs
+
+        GameEvent.MoveStack p ->
+            AnimateMoveStack.start { p | boardPath = path } board nowMs
 
         _ ->
             Nothing

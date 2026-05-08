@@ -29,7 +29,8 @@ and stays test-light.
 
 import Game.Replay.Space as Space
 import Game.GameEvent exposing (GameEvent)
-import Main.Types exposing (GesturePoint, Point)
+import Game.TimeLoc exposing (TimeLoc)
+import Main.Types exposing (Point)
 
 
 {-| The result of advancing the animation by one frame.
@@ -68,7 +69,7 @@ step :
     ->
         { a
             | startMs : Float
-            , path : List GesturePoint
+            , path : List TimeLoc
             , pendingAction : GameEvent
         }
     -> Step

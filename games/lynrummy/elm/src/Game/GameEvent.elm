@@ -20,13 +20,14 @@ Type-only module — encoder/decoder live in
 import Game.BoardActions exposing (Side)
 import Game.Rules.Card exposing (Card)
 import Game.CardStack exposing (BoardLocation, CardStack)
+import Game.TimeLoc exposing (TimeLoc)
 
 
 type GameEvent
     = Split { stack : CardStack, cardIndex : Int }
-    | MergeStack { source : CardStack, target : CardStack, side : Side }
+    | MergeStack { source : CardStack, target : CardStack, side : Side, boardPath : List TimeLoc }
     | MergeHand { handCard : Card, target : CardStack, side : Side }
     | PlaceHand { handCard : Card, loc : BoardLocation }
-    | MoveStack { stack : CardStack, newLoc : BoardLocation }
+    | MoveStack { stack : CardStack, newLoc : BoardLocation, boardPath : List TimeLoc }
     | CompleteTurn
     | Undo

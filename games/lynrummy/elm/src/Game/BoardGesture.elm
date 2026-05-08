@@ -9,8 +9,8 @@ module Game.BoardGesture exposing
 
 `handleMouseUp` returns a `BoardMouseUp` value — a parallel-to-
 `GameEvent` outcome shape that flows up to `Main.Play.update`,
-which dispatches on the variant. Action variants carry the
-gesture envelope inline so `Play` can fire `Wire.sendAction`
+which dispatches on the variant. Drag variants carry the
+captured `boardPath` inline so `Play` can fire `Wire.sendAction`
 without re-deriving the path.
 
 Lifted out of `Main.Gesture` so the board ladder lives in one
@@ -26,26 +26,23 @@ import Game.CardStack as CardStack exposing (BoardLocation, CardStack)
 import Game.Physics.BoardGeometry as BG
 import Game.Physics.GestureArbitration as GA
 import Game.Status as Status
+import Game.TimeLoc exposing (TimeLoc)
 import Game.WingView as WingView
-import Main.State as State
-import Main.Types exposing (PathFrame(..), Point)
+import Main.Types exposing (Point)
 
 
 {-| Result of resolving a board-card mouseup. `MergeStack` and
-`MoveStack` carry the GameEvent payload AND the gesture
-envelope so `Main.Play.update` can both `applyAction` and
-`Wire.sendAction` without re-deriving anything. `Split` is the
+`MoveStack` carry the captured `boardPath` (in board frame)
+so `Main.Play.update` can both apply the event and send the
+wire payload without re-deriving anything. `Split` is the
 click case (cursor stayed within `clickThreshold` of mousedown),
-so it has no meaningful gesture and ships pathless.
-`BoardCardOffBoard` is the scold case — the user dropped the
-cards off the board. There's intentionally no "nothing happened"
-variant: every mouseup on a board-card drag resolves into one
-of these four cases.
+so it has no meaningful gesture. `BoardCardOffBoard` is the
+scold case — the user dropped the cards off the board.
 -}
 type BoardMouseUp
     = Split { stack : CardStack, cardIndex : Int }
-    | MergeStack { source : CardStack, target : CardStack, side : Side, envelope : State.EnvelopeForGesture }
-    | MoveStack { stack : CardStack, newLoc : BoardLocation, envelope : State.EnvelopeForGesture }
+    | MergeStack { source : CardStack, target : CardStack, side : Side, boardPath : List TimeLoc }
+    | MoveStack { stack : CardStack, newLoc : BoardLocation, boardPath : List TimeLoc }
     | BoardCardOffBoard
 
 
@@ -72,9 +69,9 @@ handleMouseUp releasePoint tMs d boardRect =
             { d
                 | cursor = releasePoint
                 , floaterTopLeft = releaseFloater
-                , gesturePath =
-                    d.gesturePath
-                        ++ [ { tMs = tMs, x = releaseFloater.left, y = releaseFloater.top } ]
+                , boardPath =
+                    d.boardPath
+                        ++ [ { tMs = tMs, left = releaseFloater.left, top = releaseFloater.top } ]
             }
     in
     case resolveBoardCardGesture dFull boardRect of
@@ -90,11 +87,6 @@ handleMouseUp releasePoint tMs d boardRect =
 is still within `clickThreshold` of `originalCursor`, emit a
 `Split` at the captured `cardIndex`. Returns Nothing only for
 the off-board case — caller maps that to `BoardCardOffBoard`.
-
-Action variants carry the gesture envelope (path + frame)
-constructed from `d.gesturePath`; the frame is always
-`BoardFrame` for board-origin drags.
-
 -}
 resolveBoardCardGesture : BoardCardDragInfo -> Maybe GA.Rect -> Maybe BoardMouseUp
 resolveBoardCardGesture d boardRect =
@@ -103,9 +95,6 @@ resolveBoardCardGesture d boardRect =
 
     else
         let
-            envelope =
-                { path = d.gesturePath, frame = BoardFrame }
-
             hovered =
                 WingView.hoveredWing d.floaterTopLeft (CardStack.stackDisplayWidth d.stack) d.wings
         in
@@ -116,14 +105,14 @@ resolveBoardCardGesture d boardRect =
                         { source = d.stack
                         , target = wing.target
                         , side = wing.side
-                        , envelope = envelope
+                        , boardPath = d.boardPath
                         }
                     )
 
             Nothing ->
                 if isCursorOverBoard d.cursor boardRect then
                     if isDropFootprintInBounds (CardStack.size d.stack) d.floaterTopLeft then
-                        Just (MoveStack { stack = d.stack, newLoc = d.floaterTopLeft, envelope = envelope })
+                        Just (MoveStack { stack = d.stack, newLoc = d.floaterTopLeft, boardPath = d.boardPath })
 
                     else
                         Nothing
@@ -161,14 +150,14 @@ mouseMove pos tMs d currentStatus =
             }
 
         nextPath =
-            d.gesturePath
-                ++ [ { tMs = tMs, x = nextFloater.left, y = nextFloater.top } ]
+            d.boardPath
+                ++ [ { tMs = tMs, left = nextFloater.left, top = nextFloater.top } ]
 
         nextD =
             { d
                 | cursor = pos
                 , floaterTopLeft = nextFloater
-                , gesturePath = nextPath
+                , boardPath = nextPath
             }
 
         hover floaterTopLeft =

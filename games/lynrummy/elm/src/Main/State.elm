@@ -1,6 +1,5 @@
 module Main.State exposing
-    ( EnvelopeForGesture
-    , Flags
+    ( Flags
     , Model
     , PopupContent
     , ReplayAnimationState(..)
@@ -12,20 +11,9 @@ module Main.State exposing
     , encodeGameState
     )
 
-{-| All application-wide data types and the initial Model.
+{-| All application-wide data types and the initial Model. -}
 
-Extracted from the pre-split Main.elm monolith 2026-04-19 during
-the refactor that unwound "one big module" (an artifact of the
-original TS game's deployment constraint that no longer applies).
-
-This module is pure types + trivial helpers — no I/O, no
-rendering, no update logic, no Msg. Drag state types now live
-in `Game.Drag`; small leaf types (`Point`, `PathFrame`,
-`GesturePoint`) live in `Main.Types`.
-
--}
-
-import Game.ActionLog as ActionLog exposing (ActionLogEntry)
+import Game.ActionLog exposing (ActionLogEntry)
 import Game.CardStack as CardStack
 import Game.Dealer
 import Game.Drag exposing (DragState(..))
@@ -35,8 +23,8 @@ import Game.Hand as Hand exposing (Hand)
 import Game.Physics.GestureArbitration as GA
 import Game.Rules.Card as Card exposing (Card)
 import Game.Status exposing (StatusKind(..), StatusMessage)
+import Game.TimeLoc exposing (TimeLoc)
 import Json.Encode as Encode exposing (Value)
-import Main.Types exposing (GesturePoint)
 
 
 
@@ -145,7 +133,7 @@ type ReplayAnimationState
     = NotAnimating
     | Animating
         { startMs : Float
-        , path : List GesturePoint
+        , path : List TimeLoc
         , pendingAction : GameEvent
         }
     | Beating { untilMs : Float }
@@ -163,29 +151,6 @@ type alias PopupContent =
     { admin : String
     , body : String
     }
-
-
-{-| Captured drag telemetry attached to a wire-bound action. A
-sequence of timestamped points plus the coordinate frame those
-points live in. Travels alongside primitives on the wire (in
-`Main.Wire.encodeEnvelope`'s `gesture_metadata`) and through the
-in-process action-log entries that drive Instant Replay.
-
-Hand-origin actions (`MergeHand`, `PlaceHand`) ship as `Nothing`:
-they always replay via live DOM measurement, so a captured path
-would be dead weight. Drag-derived intra-board actions ship a
-`Just envelope` after translating viewport samples to board
-frame at the send boundary. Non-drag actions (button clicks,
-`CompleteTurn`) ship `Nothing`.
-
-The shape is also produced by the agent-gesture synthesizer
-(`Main.Play.synthesizeAgentGestures`) so agent-driven actions
-land in the action-log with the same envelope as human drags.
-
--}
-type alias EnvelopeForGesture =
-    ActionLog.EnvelopeForGesture
-
 
 
 -- FLAGS

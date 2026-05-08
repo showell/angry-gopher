@@ -97,8 +97,8 @@ startBoardCardDrag { stack, cardIndex } clientPoint tMs model =
                         , originalCursor = clientPoint
                         , cursor = clientPoint
                         , floaterTopLeft = stack.loc
-                        , gesturePath =
-                            [ { tMs = tMs, x = stack.loc.left, y = stack.loc.top } ]
+                        , boardPath =
+                            [ { tMs = tMs, left = stack.loc.left, top = stack.loc.top } ]
                         , wings = wings
                         }
               }
@@ -113,8 +113,8 @@ startBoardCardDrag { stack, cardIndex } clientPoint tMs model =
 is unused — hand drags don't capture a gesture path (replay
 re-synthesizes via DOM measurement).
 -}
-startHandDrag : Card -> Point -> Float -> Model -> ( Model, Cmd Msg )
-startHandDrag card clientPoint _ model =
+startHandDrag : Card -> Point -> Model -> ( Model, Cmd Msg )
+startHandDrag card clientPoint model =
     case ( model.drag, findHandCard card (activeHand model.gameState).handCards ) of
         ( NotDragging, Just handCard ) ->
             let

@@ -17,7 +17,7 @@ import Game.Physics.GestureArbitration as GA
 import Game.Rules.Card as Card
 import Game.Status as Status exposing (StatusMessage)
 import Json.Encode as Encode exposing (Value)
-import Main.Types exposing (PathFrame(..), Point)
+import Main.Types exposing (Point)
 
 
 {-| Inputs `handleMouseUp` reads. The hand variant needs the
@@ -82,11 +82,7 @@ handleMouseUp releasePoint d input =
             , status = Just (Status.geometryFeedback input.gameState.board next.board |> Maybe.withDefault (Status.mergeStatus next.board))
             , actionLog =
                 input.actionLog
-                    ++ [ { action = GameEvent.MergeHand p
-                         , gesturePath = Nothing
-                         , pathFrame = ViewportFrame
-                         }
-                       ]
+                    ++ [ { action = GameEvent.MergeHand p } ]
             , nextSeq = input.nextSeq + 1
             , outboundPayload = Just payload
             }
@@ -120,11 +116,7 @@ handleMouseUp releasePoint d input =
             , status = Just (Status.geometryFeedback input.gameState.board next.board |> Maybe.withDefault placeHandStatus)
             , actionLog =
                 input.actionLog
-                    ++ [ { action = GameEvent.PlaceHand p
-                         , gesturePath = Nothing
-                         , pathFrame = ViewportFrame
-                         }
-                       ]
+                    ++ [ { action = GameEvent.PlaceHand p } ]
             , nextSeq = input.nextSeq + 1
             , outboundPayload = Just payload
             }

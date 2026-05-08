@@ -13,8 +13,9 @@ import Game.Execute as Execute
 import Game.GameEvent as GameEvent
 import Game.Physics.GestureArbitration as GA
 import Game.Status as Status exposing (StatusMessage)
+import Game.TimeLoc exposing (encodeTimeLoc)
 import Json.Encode as Encode exposing (Value)
-import Main.Types as Types exposing (PathFrame(..), Point)
+import Main.Types exposing (Point)
 
 
 {-| Inputs `handleMouseUp` reads from the host model. Caller
@@ -62,12 +63,6 @@ handleMouseUp releasePoint tMs d input =
                     , kind = Status.Scold
                     }
 
-                entry =
-                    { action = GameEvent.Split p
-                    , gesturePath = Nothing
-                    , pathFrame = ViewportFrame
-                    }
-
                 payload =
                     Encode.object
                         [ ( "seq", Encode.int input.nextSeq )
@@ -82,7 +77,7 @@ handleMouseUp releasePoint tMs d input =
             in
             { board = newBoard
             , status = Just (Status.geometryFeedback input.board newBoard |> Maybe.withDefault splitStatus)
-            , actionLog = input.actionLog ++ [ entry ]
+            , actionLog = input.actionLog ++ [ { action = GameEvent.Split p } ]
             , nextSeq = input.nextSeq + 1
             , outboundPayload = Just payload
             }
@@ -92,11 +87,13 @@ handleMouseUp releasePoint tMs d input =
                 newBoard =
                     Execute.mergeStack p.source p.target p.side input.board
 
-                entry =
-                    { action = GameEvent.MergeStack { source = p.source, target = p.target, side = p.side }
-                    , gesturePath = Just p.envelope.path
-                    , pathFrame = p.envelope.frame
-                    }
+                event =
+                    GameEvent.MergeStack
+                        { source = p.source
+                        , target = p.target
+                        , side = p.side
+                        , boardPath = p.boardPath
+                        }
 
                 payload =
                     Encode.object
@@ -107,20 +104,14 @@ handleMouseUp releasePoint tMs d input =
                                 , ( "source", encodeCardStack p.source )
                                 , ( "target", encodeCardStack p.target )
                                 , ( "side", Encode.string (sideString p.side) )
-                                ]
-                          )
-                        , ( "gesture_metadata"
-                          , Encode.object
-                                [ ( "path", Encode.list Types.encodeGesturePoint p.envelope.path )
-                                , ( "path_frame", Encode.string (Types.pathFrameString p.envelope.frame) )
-                                , ( "pointer_type", Encode.string "mouse" )
+                                , ( "board_path", Encode.list encodeTimeLoc p.boardPath )
                                 ]
                           )
                         ]
             in
             { board = newBoard
             , status = Just (Status.geometryFeedback input.board newBoard |> Maybe.withDefault (Status.mergeStatus newBoard))
-            , actionLog = input.actionLog ++ [ entry ]
+            , actionLog = input.actionLog ++ [ { action = event } ]
             , nextSeq = input.nextSeq + 1
             , outboundPayload = Just payload
             }
@@ -133,11 +124,12 @@ handleMouseUp releasePoint tMs d input =
                 moveStackStatus =
                     { text = "Moved!", kind = Status.Inform }
 
-                entry =
-                    { action = GameEvent.MoveStack { stack = p.stack, newLoc = p.newLoc }
-                    , gesturePath = Just p.envelope.path
-                    , pathFrame = p.envelope.frame
-                    }
+                event =
+                    GameEvent.MoveStack
+                        { stack = p.stack
+                        , newLoc = p.newLoc
+                        , boardPath = p.boardPath
+                        }
 
                 payload =
                     Encode.object
@@ -147,20 +139,14 @@ handleMouseUp releasePoint tMs d input =
                                 [ ( "action", Encode.string "move_stack" )
                                 , ( "stack", encodeCardStack p.stack )
                                 , ( "new_loc", encodeBoardLocation p.newLoc )
-                                ]
-                          )
-                        , ( "gesture_metadata"
-                          , Encode.object
-                                [ ( "path", Encode.list Types.encodeGesturePoint p.envelope.path )
-                                , ( "path_frame", Encode.string (Types.pathFrameString p.envelope.frame) )
-                                , ( "pointer_type", Encode.string "mouse" )
+                                , ( "board_path", Encode.list encodeTimeLoc p.boardPath )
                                 ]
                           )
                         ]
             in
             { board = newBoard
             , status = Just (Status.geometryFeedback input.board newBoard |> Maybe.withDefault moveStackStatus)
-            , actionLog = input.actionLog ++ [ entry ]
+            , actionLog = input.actionLog ++ [ { action = event } ]
             , nextSeq = input.nextSeq + 1
             , outboundPayload = Just payload
             }

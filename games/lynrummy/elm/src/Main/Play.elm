@@ -57,7 +57,7 @@ import Main.State
         , collapseUndos
         , encodeGameState
         )
-import Main.Types exposing (PathFrame(..), Point)
+import Main.Types exposing (Point)
 import Main.View as View exposing (popupForCompleteTurn, statusForCompleteTurn)
 import Main.Wire as Wire exposing (fetchActionLog, fetchNewSession)
 import Time
@@ -163,8 +163,8 @@ update msg model =
                     model
                 )
 
-        MouseDownOnHandCard { card, point, time } ->
-            withNoOutput (startHandDrag card point time model)
+        MouseDownOnHandCard { card, point } ->
+            withNoOutput (startHandDrag card point model)
 
         MouseMove pos tMs ->
             ( mouseMove pos tMs model, Cmd.none, NoOutput )
@@ -408,10 +408,7 @@ clickCompleteTurn model =
                     model.nextSeq
 
                 completeTurnEntry =
-                    { action = GameEvent.CompleteTurn
-                    , gesturePath = Nothing
-                    , pathFrame = ViewportFrame
-                    }
+                    { action = GameEvent.CompleteTurn }
 
                 newModel =
                     { model
@@ -443,10 +440,7 @@ clickUndo model =
         Just lastAction ->
             let
                 undoEntry =
-                    { action = GameEvent.Undo
-                    , gesturePath = Nothing
-                    , pathFrame = ViewportFrame
-                    }
+                    { action = GameEvent.Undo }
 
                 seq =
                     model.nextSeq
