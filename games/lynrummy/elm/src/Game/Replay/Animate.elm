@@ -38,13 +38,11 @@ The `Phase` sum type splits the two cadences:
 -}
 
 import Game.ActionLog exposing (ActionLogEntry)
-import Game.CardStack exposing (CardStack)
 import Game.Execute as Execute
 import Game.Game exposing (GameState)
-import Game.GameEvent as GameEvent exposing (GameEvent)
+import Game.GameEvent as GameEvent
 import Game.Replay.BoardDragAnimate as BoardDragAnimate
 import Game.Replay.ReplayState exposing (Phase(..), ReplayState)
-import Game.TimeLoc exposing (TimeLoc)
 
 
 {-| Per-step beat in milliseconds. The user wants enough time
@@ -104,10 +102,12 @@ tickBeat nowMs nextBeatMs rs =
         popAndDispatch nowMs rs
 
 
-{-| Pop the next entry off the queue and dispatch it: either
-into a board-drag animation (MergeStack / MoveStack — they
-carry a path), or apply directly and re-enter Beat (everything
-else).
+{-| Pop the next entry off the queue and dispatch by event
+variant. Each variant inlines what it does: MergeStack and
+MoveStack enter `Animating`; the other four (Split,
+MergeHand, PlaceHand, CompleteTurn) teleport via
+`Execute.applyEvent` and re-enter `Beat`. `Undo` is
+unreachable — `collapseUndos` strips them at start.
 
 `Completed` fires when the queue is already drained.
 
@@ -119,47 +119,73 @@ popAndDispatch nowMs rs =
             Completed
 
         entry :: rest ->
-            case boardDragInputs entry.action of
-                Just inputs ->
+            let
+                rsPopped =
+                    { rs | queue = rest }
+
+                nextBeat =
+                    nowMs + beatMs
+            in
+            case entry.action of
+                GameEvent.MergeStack p ->
                     StillReplaying
-                        { rs
-                            | queue = rest
-                            , phase =
+                        { rsPopped
+                            | phase =
                                 Animating
                                     (BoardDragAnimate.start
-                                        { sourceStack = inputs.sourceStack
-                                        , path = inputs.path
+                                        { sourceStack = p.source
+                                        , path = p.boardPath
                                         , startMs = nowMs
                                         , pendingAction = entry.action
                                         }
                                     )
                         }
 
-                Nothing ->
+                GameEvent.MoveStack p ->
                     StillReplaying
-                        { rs
-                            | queue = rest
-                            , gameState = Execute.applyEvent entry.action rs.gameState
-                            , phase = Beat { nextBeatMs = nowMs + beatMs }
+                        { rsPopped
+                            | phase =
+                                Animating
+                                    (BoardDragAnimate.start
+                                        { sourceStack = p.stack
+                                        , path = p.boardPath
+                                        , startMs = nowMs
+                                        , pendingAction = entry.action
+                                        }
+                                    )
                         }
 
+                GameEvent.Split _ ->
+                    StillReplaying
+                        { rsPopped
+                            | gameState = Execute.applyEvent entry.action rs.gameState
+                            , phase = Beat { nextBeatMs = nextBeat }
+                        }
 
-{-| Returns Just inputs when the event is one of the two
-animatable board-drag variants, Nothing otherwise. Asymmetric
-field naming (`p.source` vs `p.stack`) is a known quirk of
-the GameEvent payloads we don't fix here.
--}
-boardDragInputs : GameEvent -> Maybe { sourceStack : CardStack, path : List TimeLoc }
-boardDragInputs action =
-    case action of
-        GameEvent.MergeStack p ->
-            Just { sourceStack = p.source, path = p.boardPath }
+                GameEvent.MergeHand _ ->
+                    StillReplaying
+                        { rsPopped
+                            | gameState = Execute.applyEvent entry.action rs.gameState
+                            , phase = Beat { nextBeatMs = nextBeat }
+                        }
 
-        GameEvent.MoveStack p ->
-            Just { sourceStack = p.stack, path = p.boardPath }
+                GameEvent.PlaceHand _ ->
+                    StillReplaying
+                        { rsPopped
+                            | gameState = Execute.applyEvent entry.action rs.gameState
+                            , phase = Beat { nextBeatMs = nextBeat }
+                        }
 
-        _ ->
-            Nothing
+                GameEvent.CompleteTurn ->
+                    StillReplaying
+                        { rsPopped
+                            | gameState = Execute.applyEvent entry.action rs.gameState
+                            , phase = Beat { nextBeatMs = nextBeat }
+                        }
+
+                GameEvent.Undo ->
+                    Debug.todo
+                        "Animate.popAndDispatch: Undo reached the queue (collapseUndos should have stripped it)"
 
 
 tickAnimating : Int -> BoardDragAnimate.State -> ReplayState -> TickResult
