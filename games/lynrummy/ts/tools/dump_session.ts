@@ -5,19 +5,21 @@
 // silent corruption.
 //
 // Usage:
-//   node tools/dump_session.ts <session_id>          # full game
-//   node tools/dump_session.ts <session_id> <name>   # puzzle session
+//   node tools/dump_session.ts <session_id>            # full game
+//   node tools/dump_session.ts --puzzle <session_id>   # puzzle V2
 //
 // Lines are emitted in DSL syntax (split / merge_stack /
-// merge_hand / place_hand / move_stack / complete_turn) just
-// like trace_game.ts, threaded through a sim built from the
-// session's meta.initial_state when present. CompleteTurn
-// breaks emit "complete_turn" verbatim.
+// merge_hand / place_hand / move_stack / complete_turn /
+// undo) threaded through a sim built from the session's
+// initial state. Undo rewinds the sim so subsequent lines
+// resolve their stack references against the correct board.
+// A final-board summary follows the trace.
 
 import * as fs from "node:fs";
 import * as path from "node:path";
 
 import type { Card } from "../src/rules/card.ts";
+import { cardLabel } from "../src/rules/card.ts";
 import type { BoardStack } from "../src/geometry.ts";
 import type { Primitive, Side } from "../src/primitives.ts";
 import { applyLocally } from "../src/primitives.ts";
@@ -102,46 +104,46 @@ function findStackByCards(sim: readonly BoardStack[], cards: readonly Card[]): n
   throw new Error(`stack not found on board: [${cards.map(c => `${c[0]},${c[1]},${c[2]}`).join(" ")}]`);
 }
 
+function formatStack(s: BoardStack): string {
+  return `[${s.cards.map(cardLabel).join(" ")}] @ (${s.loc.top},${s.loc.left})`;
+}
+
 function main(): void {
   const args = process.argv.slice(2);
-  if (args.length < 1) {
-    console.error("usage: node tools/dump_session.ts <session_id> [<puzzle_name>]");
+  let isPuzzle = false;
+  const positional: string[] = [];
+  for (const a of args) {
+    if (a === "--puzzle") isPuzzle = true;
+    else positional.push(a);
+  }
+  if (positional.length < 1) {
+    console.error("usage: node tools/dump_session.ts [--puzzle] <session_id>");
     process.exit(2);
   }
-  const sessionId = args[0]!;
-  const puzzleName = args[1];
+  const sessionId = positional[0]!;
 
   const dataRoot = path.resolve(
     path.dirname(new URL(import.meta.url).pathname),
-    "../../data/lynrummy-elm",
+    "../../data",
   );
 
-  let sessionDir: string;
-  let actionsPath: string;
-  let metaPath: string;
-  if (puzzleName) {
-    sessionDir = path.join(dataRoot, "puzzle-sessions", sessionId, puzzleName);
-    actionsPath = path.join(sessionDir, "actions.jsonl");
-    metaPath = path.join(dataRoot, "puzzle-sessions", sessionId, "meta.json");
-  } else {
-    sessionDir = path.join(dataRoot, "sessions", sessionId);
-    actionsPath = path.join(sessionDir, "actions.jsonl");
-    metaPath = path.join(sessionDir, "meta.json");
-  }
+  const sessionDir = isPuzzle
+    ? path.join(dataRoot, "puzzle", "sessions", sessionId)
+    : path.join(dataRoot, "lynrummy-elm", "sessions", sessionId);
+  const actionsPath = path.join(sessionDir, "actions.jsonl");
+  const metaPath = path.join(sessionDir, "meta.json");
 
   if (!fs.existsSync(actionsPath)) {
     console.error(`no actions.jsonl at ${actionsPath}`);
     process.exit(1);
   }
 
-  // Build sim from meta.initial_state when present. Puzzle
-  // sessions don't carry an initial_state in their session-level
-  // meta (the puzzle catalog supplies it); for puzzles, sim
-  // starts empty and grows from place_hand actions.
+  // Build sim from meta. Full game uses `initial_state.board`;
+  // puzzle V2 uses `initial_board` directly.
   let sim: readonly BoardStack[] = [];
   if (fs.existsSync(metaPath)) {
     const meta = JSON.parse(fs.readFileSync(metaPath, "utf8"));
-    const initial = meta?.initial_state?.board;
+    const initial = isPuzzle ? meta?.initial_board : meta?.initial_state?.board;
     if (Array.isArray(initial)) {
       sim = (initial as JsonCardStack[]).map(jsonStackToBoardStack);
     }
@@ -150,8 +152,15 @@ function main(): void {
   const text = fs.readFileSync(actionsPath, "utf8");
   const lines = text.split("\n").filter(l => l.length > 0);
   const out: string[] = [];
-  out.push(`# session ${sessionId}${puzzleName ? `/${puzzleName}` : ""} — ${lines.length} actions`);
+  out.push(`# session ${sessionId}${isPuzzle ? " (puzzle)" : ""} — ${lines.length} actions`);
   out.push("");
+
+  // Undo stack: pre-action sim snapshots + descriptions, one
+  // per board-mutating action. CompleteTurn clears the stack
+  // (undo can't cross a turn boundary). Undo pops the stack
+  // and rewinds sim. Mirrors the Game.ActionLog.collapseUndos
+  // semantics on the Elm side.
+  const undoStack: { simBefore: readonly BoardStack[]; descrip: string }[] = [];
 
   for (const line of lines) {
     let env: { seq: number; action: any };
@@ -162,17 +171,40 @@ function main(): void {
       continue;
     }
     const a = env.action;
+    const seqStr = String(env.seq).padStart(3);
+
     if (a?.action === "complete_turn") {
-      out.push(`${String(env.seq).padStart(3)}  complete_turn`);
+      out.push(`${seqStr}  complete_turn`);
+      undoStack.length = 0;
       continue;
     }
+
+    if (a?.action === "undo") {
+      const top = undoStack.pop();
+      if (top) {
+        sim = top.simBefore;
+        out.push(`${seqStr}  undo  (cancels: ${top.descrip})`);
+      } else {
+        out.push(`${seqStr}  undo  (no-op)`);
+      }
+      continue;
+    }
+
     const prim = envelopeToPrim(a, sim);
     if (prim === null) {
-      out.push(`${String(env.seq).padStart(3)}  ?? ${a?.action ?? "unknown"}`);
+      out.push(`${seqStr}  ?? ${a?.action ?? "unknown"}`);
       continue;
     }
-    out.push(`${String(env.seq).padStart(3)}  ${primToDslLine(prim, sim)}`);
+    const descrip = primToDslLine(prim, sim);
+    out.push(`${seqStr}  ${descrip}`);
+    undoStack.push({ simBefore: sim, descrip });
     sim = applyLocally(sim, prim);
+  }
+
+  out.push("");
+  out.push(`# final board (${sim.length} stack${sim.length === 1 ? "" : "s"})`);
+  for (const s of sim) {
+    out.push(`  ${formatStack(s)}`);
   }
 
   process.stdout.write(out.join("\n") + "\n");
