@@ -285,9 +285,14 @@ the animation FSM signals that an animation has completed
 (via `BoardAnimationDone` / `HandAnimationDone`). The replay's
 phase transition (Animating* → Beating) already happened in
 `Game.Replay.Time.replayFrame`; this handler does the
-logical apply that the animation was visualizing. If
-`replayState` is gone (user clicked away, etc.), drop the
-event silently.
+logical apply that the animation was visualizing.
+
+The Nothing case is unreachable by construction — the Msg
+was emitted by the replay engine itself, which only runs
+when `replayState` is `Just`. Between the Cmd emit and the
+Msg dispatch (~one frame), no current code path clears
+`replayState`. We log loudly if it ever happens — silent
+no-op would mask a real divergence.
 -}
 applyReplayEvent : GameEvent -> Model -> Model
 applyReplayEvent event model =
@@ -296,6 +301,10 @@ applyReplayEvent event model =
             { model | replayState = Just { rs | gameState = Execute.applyEvent event rs.gameState } }
 
         Nothing ->
+            let
+                _ =
+                    Debug.log "applyReplayEvent: unexpected — replayState was Nothing when animation-done Msg arrived" event
+            in
             model
 
 
