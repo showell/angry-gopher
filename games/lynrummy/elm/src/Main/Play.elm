@@ -25,6 +25,7 @@ import Game.BoardDrag as BoardDrag
 import Game.BoardGesture as BoardGesture
 import Game.CardStack exposing (CardStack)
 import Game.Drag exposing (DragState(..))
+import Game.Engine as Engine
 import Game.Execute as Execute
 import Game.Hand exposing (activeHand)
 import Game.HandDrag as HandDrag
@@ -273,7 +274,7 @@ update msg model =
             clickHint model
 
         GameHintReceived value ->
-            withNoOutput (applyGameHintResponse value model)
+            withNoOutput (handleHintResponse value model)
 
 
 withNoOutput : ( Model, Cmd Msg ) -> ( Model, Cmd Msg, Output )
@@ -545,18 +546,6 @@ boardRectReceived result model =
 
 clickHint : Model -> ( Model, Cmd Msg, Output )
 clickHint model =
-    requestGameHint model
-
-
-{-| Full-game hint payload. Sends the active player's hand AND
-the board, expecting a `lines: string[]` response to display
-verbatim in the status bar. No `puzzle_name` field — there's
-only one Play instance in the full-game host, no routing needed.
-The response arrives on the `gameHintResponse` port → dispatches
-as a `GameHintReceived` Msg → handled by `applyGameHintResponse`.
--}
-requestGameHint : Model -> ( Model, Cmd Msg, Output )
-requestGameHint model =
     let
         reqId =
             model.nextEngineRequestId
@@ -566,12 +555,7 @@ requestGameHint model =
                 |> List.map .card
 
         payload =
-            Encode.object
-                [ ( "request_id", Encode.int reqId )
-                , ( "op", Encode.string "game_hint" )
-                , ( "hand", Encode.list Card.encodeCard hand )
-                , ( "board", encodeBoardForEngine model.gameState.board )
-                ]
+            Engine.buildGameHintRequest reqId hand model.gameState.board
     in
     ( { model
         | hintedCards = []
@@ -584,84 +568,42 @@ requestGameHint model =
     )
 
 
-{-| Encode the live board into the snake_case shape the TS
-engine bundle expects on the JS side: a list of stacks, each a
-list of `{value, suit, origin_deck}` card objects. The JS glue
-translates these into Card tuples before invoking the engine.
--}
-encodeBoardForEngine : List CardStack -> Encode.Value
-encodeBoardForEngine board =
-    Encode.list
-        (\stack ->
-            Encode.list Card.encodeCard
-                (List.map .card stack.boardCards)
-        )
-        board
+handleHintResponse : Encode.Value -> Model -> ( Model, Cmd Msg )
+handleHintResponse value model =
+    case Engine.decodeHintResponse model.pendingEngineRequest value of
+        Engine.HintStaleId ->
+            ( model, Cmd.none )
 
+        Engine.HintError detail ->
+            ( { model
+                | pendingEngineRequest = Nothing
+                , status = { text = "Engine error: " ++ detail, kind = Scold }
+              }
+            , Cmd.none
+            )
 
-{-| Decode a `game_hint` response and display it. Arrives on its
-own port (`gameHintResponse`) — no op-dispatch needed — so the
-decoder is just `{ request_id, ok, lines, error? }` plus a
-stale-id check. Lines are joined verbatim into the status bar;
-all phrasing lives TS-side in `formatHint`.
--}
-applyGameHintResponse : Encode.Value -> Model -> ( Model, Cmd Msg )
-applyGameHintResponse value model =
-    let
-        decoder =
-            Decode.map3 (\rid ok mLines -> { rid = rid, ok = ok, lines = mLines })
-                (Decode.field "request_id" Decode.int)
-                (Decode.field "ok" Decode.bool)
-                (Decode.maybe (Decode.field "lines" (Decode.list Decode.string)))
+        Engine.HintLines [] ->
+            ( { model
+                | pendingEngineRequest = Nothing
+                , hintedCards = []
+                , status = { text = "No hint — no obvious play for this hand on this board.", kind = Inform }
+              }
+            , Cmd.none
+            )
 
-        errDecoder =
-            Decode.field "error" Decode.string
-    in
-    case Decode.decodeValue decoder value of
-        Ok r ->
-            if model.pendingEngineRequest /= Just r.rid then
-                ( model, Cmd.none )
+        Engine.HintLines lines ->
+            ( { model
+                | pendingEngineRequest = Nothing
+                , hintedCards = []
+                , status = { text = String.join "\n" lines, kind = Inform }
+              }
+            , Cmd.none
+            )
 
-            else if not r.ok then
-                let
-                    detail =
-                        Decode.decodeValue errDecoder value
-                            |> Result.withDefault "(no detail)"
-                in
-                ( { model
-                    | pendingEngineRequest = Nothing
-                    , status = { text = "Engine error: " ++ detail, kind = Scold }
-                  }
-                , Cmd.none
-                )
-
-            else
-                let
-                    lines =
-                        Maybe.withDefault [] r.lines
-
-                    cleared =
-                        { model | pendingEngineRequest = Nothing, hintedCards = [] }
-                in
-                case lines of
-                    [] ->
-                        ( { cleared
-                            | status = { text = "No hint — no obvious play for this hand on this board.", kind = Inform }
-                          }
-                        , Cmd.none
-                        )
-
-                    _ ->
-                        ( { cleared
-                            | status = { text = String.join "\n" lines, kind = Inform }
-                          }
-                        , Cmd.none
-                        )
-
-        Err err ->
+        Engine.HintDecodeError err ->
             let
                 _ =
-                    Debug.log "applyGameHintResponse decode err" err
+                    Debug.log "handleHintResponse decode err" err
             in
             ( { model
                 | pendingEngineRequest = Nothing
