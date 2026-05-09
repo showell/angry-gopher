@@ -389,11 +389,20 @@ subscriptions model =
 
 view : Model -> Html Msg
 view model =
+    -- Left sidebar (controls) + board on the right. Laptop has
+    -- more horizontal than vertical room — the sidebar layout
+    -- claws back the vertical space the old top-stacked Undo
+    -- button consumed.
     div
         [ style "padding" "20px"
         , style "font-family" "system-ui, sans-serif"
+        , style "display" "flex"
+        , style "gap" "20px"
+        , style "align-items" "flex-start"
         ]
-        [ div [ style "margin-bottom" "10px" ] [ undoButton model ]
+        [ div
+            [ style "min-width" "120px" ]
+            [ undoButton model ]
         , BoardView.boardColumn
             { board = model.board
             , boardRect = model.boardRect
