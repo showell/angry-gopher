@@ -24,16 +24,12 @@ Three operations the host (`Main.Play`) plumbs through:
     showing the completion ceremony); the engine never
     reaches up into the Model itself.
 
-The `Phase` sum type splits the two cadences:
-
-  - `Beat` is the inter-action wait. The deadline
-    (`nextBeatMs = 0` sentinel for "arm on next frame") lets
-    the first beat time start from the next animation frame
-    regardless of when the click landed.
-  - `Animating` delegates per-frame work to
-    `Game.Replay.BoardDragAnimate`. When that sub-machine
-    signals `Done`, we apply the pending action to
-    `gameState` and re-enter `Beat`.
+`tick` is the workhorse: dispatch on phase → if Beat, dispatch
+on time → if armed and overdue, pop the queue → dispatch on
+event variant. The only real handoffs are to
+`BoardDragAnimate` (path interpolation — a real computation)
+and `Execute.applyEvent` (the apply layer). Everything else
+stays inline so the case ladder reads top-to-bottom.
 
 -}
 
@@ -84,119 +80,94 @@ tick : Int -> ReplayState -> TickResult
 tick nowMs rs =
     case rs.phase of
         Beat { nextBeatMs } ->
-            tickBeat nowMs nextBeatMs rs
+            if nextBeatMs == 0 then
+                StillReplaying { rs | phase = Beat { nextBeatMs = nowMs + beatMs } }
+
+            else if nowMs < nextBeatMs then
+                StillReplaying rs
+
+            else
+                case rs.queue of
+                    [] ->
+                        Completed
+
+                    entry :: rest ->
+                        let
+                            rsPopped =
+                                { rs | queue = rest }
+
+                            nextBeat =
+                                nowMs + beatMs
+                        in
+                        case entry.action of
+                            GameEvent.MergeStack p ->
+                                StillReplaying
+                                    { rsPopped
+                                        | phase =
+                                            Animating
+                                                (BoardDragAnimate.start
+                                                    { sourceStack = p.source
+                                                    , path = p.boardPath
+                                                    , startMs = nowMs
+                                                    , pendingAction = entry.action
+                                                    }
+                                                )
+                                    }
+
+                            GameEvent.MoveStack p ->
+                                StillReplaying
+                                    { rsPopped
+                                        | phase =
+                                            Animating
+                                                (BoardDragAnimate.start
+                                                    { sourceStack = p.stack
+                                                    , path = p.boardPath
+                                                    , startMs = nowMs
+                                                    , pendingAction = entry.action
+                                                    }
+                                                )
+                                    }
+
+                            GameEvent.Split _ ->
+                                StillReplaying
+                                    { rsPopped
+                                        | gameState = Execute.applyEvent entry.action rs.gameState
+                                        , phase = Beat { nextBeatMs = nextBeat }
+                                    }
+
+                            GameEvent.MergeHand _ ->
+                                StillReplaying
+                                    { rsPopped
+                                        | gameState = Execute.applyEvent entry.action rs.gameState
+                                        , phase = Beat { nextBeatMs = nextBeat }
+                                    }
+
+                            GameEvent.PlaceHand _ ->
+                                StillReplaying
+                                    { rsPopped
+                                        | gameState = Execute.applyEvent entry.action rs.gameState
+                                        , phase = Beat { nextBeatMs = nextBeat }
+                                    }
+
+                            GameEvent.CompleteTurn ->
+                                StillReplaying
+                                    { rsPopped
+                                        | gameState = Execute.applyEvent entry.action rs.gameState
+                                        , phase = Beat { nextBeatMs = nextBeat }
+                                    }
+
+                            GameEvent.Undo ->
+                                Debug.todo
+                                    "Animate.tick: Undo reached the queue (collapseUndos should have stripped it)"
 
         Animating dragState ->
-            tickAnimating nowMs dragState rs
+            case BoardDragAnimate.step nowMs dragState of
+                BoardDragAnimate.InProgress nextDragState ->
+                    StillReplaying { rs | phase = Animating nextDragState }
 
-
-tickBeat : Int -> Int -> ReplayState -> TickResult
-tickBeat nowMs nextBeatMs rs =
-    if nextBeatMs == 0 then
-        StillReplaying { rs | phase = Beat { nextBeatMs = nowMs + beatMs } }
-
-    else if nowMs < nextBeatMs then
-        StillReplaying rs
-
-    else
-        popAndDispatch nowMs rs
-
-
-{-| Pop the next entry off the queue and dispatch by event
-variant. Each variant inlines what it does: MergeStack and
-MoveStack enter `Animating`; the other four (Split,
-MergeHand, PlaceHand, CompleteTurn) teleport via
-`Execute.applyEvent` and re-enter `Beat`. `Undo` is
-unreachable — `collapseUndos` strips them at start.
-
-`Completed` fires when the queue is already drained.
-
--}
-popAndDispatch : Int -> ReplayState -> TickResult
-popAndDispatch nowMs rs =
-    case rs.queue of
-        [] ->
-            Completed
-
-        entry :: rest ->
-            let
-                rsPopped =
-                    { rs | queue = rest }
-
-                nextBeat =
-                    nowMs + beatMs
-            in
-            case entry.action of
-                GameEvent.MergeStack p ->
+                BoardDragAnimate.Done { pendingAction } ->
                     StillReplaying
-                        { rsPopped
-                            | phase =
-                                Animating
-                                    (BoardDragAnimate.start
-                                        { sourceStack = p.source
-                                        , path = p.boardPath
-                                        , startMs = nowMs
-                                        , pendingAction = entry.action
-                                        }
-                                    )
+                        { rs
+                            | gameState = Execute.applyEvent pendingAction rs.gameState
+                            , phase = Beat { nextBeatMs = nowMs + beatMs }
                         }
-
-                GameEvent.MoveStack p ->
-                    StillReplaying
-                        { rsPopped
-                            | phase =
-                                Animating
-                                    (BoardDragAnimate.start
-                                        { sourceStack = p.stack
-                                        , path = p.boardPath
-                                        , startMs = nowMs
-                                        , pendingAction = entry.action
-                                        }
-                                    )
-                        }
-
-                GameEvent.Split _ ->
-                    StillReplaying
-                        { rsPopped
-                            | gameState = Execute.applyEvent entry.action rs.gameState
-                            , phase = Beat { nextBeatMs = nextBeat }
-                        }
-
-                GameEvent.MergeHand _ ->
-                    StillReplaying
-                        { rsPopped
-                            | gameState = Execute.applyEvent entry.action rs.gameState
-                            , phase = Beat { nextBeatMs = nextBeat }
-                        }
-
-                GameEvent.PlaceHand _ ->
-                    StillReplaying
-                        { rsPopped
-                            | gameState = Execute.applyEvent entry.action rs.gameState
-                            , phase = Beat { nextBeatMs = nextBeat }
-                        }
-
-                GameEvent.CompleteTurn ->
-                    StillReplaying
-                        { rsPopped
-                            | gameState = Execute.applyEvent entry.action rs.gameState
-                            , phase = Beat { nextBeatMs = nextBeat }
-                        }
-
-                GameEvent.Undo ->
-                    Debug.todo
-                        "Animate.popAndDispatch: Undo reached the queue (collapseUndos should have stripped it)"
-
-
-tickAnimating : Int -> BoardDragAnimate.State -> ReplayState -> TickResult
-tickAnimating nowMs dragState rs =
-    case BoardDragAnimate.step nowMs dragState of
-        BoardDragAnimate.InProgress nextDragState ->
-            StillReplaying { rs | phase = Animating nextDragState }
-
-        BoardDragAnimate.Done { pendingAction } ->
-            StillReplaying
-                { rs
-                    | gameState = Execute.applyEvent pendingAction rs.gameState
-                    , phase = Beat { nextBeatMs = nowMs + beatMs }
-                }
