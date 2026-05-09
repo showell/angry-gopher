@@ -51,6 +51,7 @@ import Game.Physics.BoardGeometry as BoardGeometry
 import Game.Physics.GestureArbitration as GA
 import Game.PointerInput as PointerInput
 import Game.Popup as Popup
+import Game.Replay.ReplayState exposing (Phase(..), ReplayState)
 import Game.Sidebar as Sidebar
 import Game.Status as Status
 import Html exposing (Html, div)
@@ -129,7 +130,7 @@ sidebarInfo model =
     case model.replayState of
         Just rs ->
             { gameState = rs.gameState
-            , drag = Drag.NotDragging
+            , drag = replayDrag rs
             , hintedCards = []
             , canUndo = False
             , replay = Just { paused = rs.paused }
@@ -158,7 +159,7 @@ boardColumnInput model =
         ( board, drag ) =
             case model.replayState of
                 Just rs ->
-                    ( rs.gameState.board, Drag.NotDragging )
+                    ( rs.gameState.board, replayDrag rs )
 
                 Nothing ->
                     ( model.gameState.board, model.drag )
@@ -169,3 +170,17 @@ boardColumnInput model =
     , gameId = model.gameId
     , cardMouseDown = PointerInput.cardMouseDown MouseDownOnBoardCard
     }
+
+
+{-| The drag state the View should render during a replay.
+While `Animating`, surface the sub-machine's `dragInfo` so
+the floater is visible. Other phases (Beat) are no-drag.
+-}
+replayDrag : ReplayState -> Drag.DragState
+replayDrag rs =
+    case rs.phase of
+        Animating dragState ->
+            Drag.DraggingBoardCard dragState.dragInfo
+
+        Beat _ ->
+            Drag.NotDragging
