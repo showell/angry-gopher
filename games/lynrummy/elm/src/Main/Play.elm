@@ -27,6 +27,7 @@ import Game.Drag exposing (DragState(..))
 import Game.Engine as Engine
 import Game.Execute as Execute
 import Game.Hand exposing (activeHand)
+import Game.TurnControl as TurnControl
 import Game.HandDrag as HandDrag
 import Game.HandGesture as HandGesture
 import Game.Dealer as Dealer
@@ -423,83 +424,46 @@ handleMouseUp releasePoint tMs model =
 
 clickCompleteTurn : Model -> ( Model, Cmd Msg )
 clickCompleteTurn model =
-    let
-        ( afterTurn, turnOutcome ) =
-            Game.applyCompleteTurn refereeBounds model.gameState
-    in
-    case turnOutcome.result of
-        Failure ->
+    case TurnControl.attemptCompleteTurn { gameState = model.gameState, nextSeq = model.nextSeq } of
+        TurnControl.TurnRejected r ->
+            ( { model | status = r.status, popup = r.popup }, Cmd.none )
+
+        TurnControl.TurnCompleted r ->
             ( { model
-                | status = Status.statusForCompleteTurn (Ok turnOutcome)
-                , popup = Popup.popupForCompleteTurn (Ok turnOutcome)
+                | gameState = r.newGameState
+                , actionLog = model.actionLog ++ [ r.appendedEntry ]
+                , nextSeq = model.nextSeq + 1
+                , status = r.status
+                , popup = r.popup
               }
-            , Cmd.none
+            , Wire.sendAction model.sessionId r.outboundPayload
             )
-
-        _ ->
-            let
-                seq =
-                    model.nextSeq
-
-                completeTurnEntry =
-                    { action = GameEvent.CompleteTurn }
-
-                newModel =
-                    { model
-                        | gameState = afterTurn
-                        , actionLog = model.actionLog ++ [ completeTurnEntry ]
-                        , nextSeq = seq + 1
-                        , status = Status.statusForCompleteTurn (Ok turnOutcome)
-                        , popup = Popup.popupForCompleteTurn (Ok turnOutcome)
-                    }
-
-                outboundPayloadForAgent =
-                    Encode.object
-                        [ ( "seq", Encode.int seq )
-                        , ( "action"
-                          , Encode.object
-                                [ ( "action", Encode.string "complete_turn" ) ]
-                          )
-                        ]
-            in
-            ( newModel, Wire.sendAction model.sessionId outboundPayloadForAgent )
 
 
 clickUndo : Model -> ( Model, Cmd Msg )
 clickUndo model =
-    case lastUndoableAction model of
-        Nothing ->
+    case
+        TurnControl.attemptUndo
+            { gameState = model.gameState
+            , lastUndoableAction = lastUndoableAction model
+            , nextSeq = model.nextSeq
+            }
+    of
+        TurnControl.NothingToUndo ->
             ( model, Cmd.none )
 
-        Just lastAction ->
-            let
-                undoEntry =
-                    { action = GameEvent.Undo }
-
-                seq =
-                    model.nextSeq
-
-                newModel =
-                    { model
-                        | gameState = Execute.undoEvent lastAction model.gameState
-                        , actionLog = model.actionLog ++ [ undoEntry ]
-                        , nextSeq = seq + 1
-                        , status = { text = "Undone.", kind = Inform }
-                        , hintedCards = []
-                        , drag = NotDragging
-                        , replayState = Nothing
-                    }
-
-                outboundPayloadForAgent =
-                    Encode.object
-                        [ ( "seq", Encode.int seq )
-                        , ( "action"
-                          , Encode.object
-                                [ ( "action", Encode.string "undo" ) ]
-                          )
-                        ]
-            in
-            ( newModel, Wire.sendAction model.sessionId outboundPayloadForAgent )
+        TurnControl.DidUndo r ->
+            ( { model
+                | gameState = r.newGameState
+                , actionLog = model.actionLog ++ [ r.appendedEntry ]
+                , nextSeq = model.nextSeq + 1
+                , status = { text = "Undone.", kind = Inform }
+                , hintedCards = []
+                , drag = NotDragging
+                , replayState = Nothing
+              }
+            , Wire.sendAction model.sessionId r.outboundPayload
+            )
 
 
 boardRectReceived :
