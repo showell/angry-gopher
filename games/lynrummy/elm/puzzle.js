@@ -7637,22 +7637,6 @@ var $author$project$Game$Drag$draggedOverlay = function (drag) {
 			return $elm$html$Html$text('');
 	}
 };
-var $author$project$Game$View$sectionHeading = function (label) {
-	return A2(
-		$elm$html$Html$div,
-		_List_fromArray(
-			[
-				A2($elm$html$Html$Attributes$style, 'color', $author$project$Game$View$navy),
-				A2($elm$html$Html$Attributes$style, 'font-weight', 'bold'),
-				A2($elm$html$Html$Attributes$style, 'font-size', '19px'),
-				A2($elm$html$Html$Attributes$style, 'margin-top', '20px')
-			]),
-		_List_fromArray(
-			[
-				$elm$html$Html$text(label)
-			]));
-};
-var $author$project$Game$View$viewBoardHeading = $author$project$Game$View$sectionHeading('Board');
 var $author$project$Game$BoardView$boardColumn = function (input) {
 	return A2(
 		$elm$html$Html$div,
@@ -7662,7 +7646,6 @@ var $author$project$Game$BoardView$boardColumn = function (input) {
 			]),
 		_List_fromArray(
 			[
-				$author$project$Game$View$viewBoardHeading,
 				$author$project$Game$BoardView$boardWithWings(input),
 				$author$project$Game$Drag$draggedOverlay(input.drag)
 			]));

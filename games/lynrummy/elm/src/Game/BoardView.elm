@@ -27,7 +27,7 @@ import Game.CardStack as CardStack exposing (CardStack)
 import Game.Drag as Drag exposing (DragState(..))
 import Game.Physics.GestureArbitration as GA
 import Game.StackView as StackView
-import Game.View as View exposing (navy)
+import Game.View exposing (navy)
 import Game.WingView as WingView
 import Html exposing (Html, div)
 import Html.Attributes exposing (id, style)
@@ -178,8 +178,7 @@ boardColumn :
 boardColumn input =
     div
         [ style "min-width" "800px" ]
-        [ View.viewBoardHeading
-        , boardWithWings input
+        [ boardWithWings input
         , Drag.draggedOverlay input.drag
         ]
 

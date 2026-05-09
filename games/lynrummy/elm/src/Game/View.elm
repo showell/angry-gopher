@@ -1,6 +1,5 @@
 module Game.View exposing
     ( navy
-    , viewBoardHeading
     , viewHand
     , viewHandHeading
     )
@@ -37,11 +36,6 @@ navy =
 
 
 -- HEADINGS
-
-
-viewBoardHeading : Html msg
-viewBoardHeading =
-    sectionHeading "Board"
 
 
 viewHandHeading : Html msg
