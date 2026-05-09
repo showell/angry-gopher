@@ -182,6 +182,9 @@ replayDrag rs =
         AnimatingAction dragState ->
             Drag.DraggingBoardCard dragState.dragInfo
 
+        AnimatingHandAction handState ->
+            Drag.DraggingHandCard handState.dragInfo
+
         Starting ->
             Drag.NotDragging
 
@@ -189,4 +192,7 @@ replayDrag rs =
             Drag.NotDragging
 
         ExecutingAction _ ->
+            Drag.NotDragging
+
+        AwaitingHandRect _ ->
             Drag.NotDragging

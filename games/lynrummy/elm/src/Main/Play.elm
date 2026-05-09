@@ -24,9 +24,11 @@ import Browser.Events
 import Game.ActionLog as ActionLog
 import Game.BoardDrag as BoardDrag
 import Game.BoardGesture as BoardGesture
+import Game.BoardView as BoardView
 import Game.Drag exposing (DragState(..))
 import Game.Engine as Engine
 import Game.Hand exposing (activeHand)
+import Game.HandLayout as HandLayout
 import Game.TurnControl as TurnControl
 import Game.HandDrag as HandDrag
 import Game.HandGesture as HandGesture
@@ -34,6 +36,7 @@ import Game.Dealer as Dealer
 import Game.Game as Game
 import Game.Random as Random
 import Game.Replay.Animate as Animate
+import Game.Rules.Card as Card
 import Html exposing (Html)
 import Http
 import Json.Encode as Encode
@@ -207,7 +210,11 @@ update msg model =
                     , drag = NotDragging
                     , status = { text = "Replaying…", kind = Inform }
                   }
-                , Cmd.none
+                , -- Hand-drag animations need the live board rect
+                  -- to translate board-frame destinations into
+                  -- viewport coords. Fetch on every click in case
+                  -- the page has scrolled since the last drag.
+                  fetchBoardRectCmd model.gameId
                 )
 
         ClickReplayPauseToggle ->
@@ -227,6 +234,12 @@ update msg model =
                             withNoOutput
                                 ( { model | replayState = Just nextRs }, Cmd.none )
 
+                        Animate.NeedHandCardRect nextRs card ->
+                            withNoOutput
+                                ( { model | replayState = Just nextRs }
+                                , fetchHandCardRectCmd card
+                                )
+
                         Animate.Completed ->
                             withNoOutput ( model, dispatchSelf ReplayCompleted )
 
@@ -238,6 +251,28 @@ update msg model =
                   }
                 , Cmd.none
                 )
+
+        HandCardRectReceived (Ok ( element, posix )) ->
+            withNoOutput
+                ( { model
+                    | replayState =
+                        Maybe.map
+                            (Animate.handCardRectReceived
+                                (Time.posixToMillis posix)
+                                element
+                                model.boardRect
+                            )
+                            model.replayState
+                  }
+                , Cmd.none
+                )
+
+        HandCardRectReceived (Err err) ->
+            let
+                _ =
+                    Debug.log "HandCardRectReceived err" err
+            in
+            withNoOutput ( model, Cmd.none )
 
         ActionLogFetched (Ok bundle) ->
             ( bootstrapFromBundle bundle model, Cmd.none, NoOutput )
@@ -268,6 +303,30 @@ itself never names a Msg.
 dispatchSelf : Msg -> Cmd Msg
 dispatchSelf msg =
     Task.succeed () |> Task.perform (\_ -> msg)
+
+
+{-| Measure the board's live rect; result lands in
+`BoardRectReceived`. Fired at replay-click time so
+hand-animation destination math has viewport coords ready.
+-}
+fetchBoardRectCmd : String -> Cmd Msg
+fetchBoardRectCmd gameId =
+    Browser.Dom.getElement (BoardView.boardDomIdFor gameId)
+        |> Task.attempt BoardRectReceived
+
+
+{-| Measure the hand card's live rect AND grab the current
+time (animation start clock). The replay engine signaled
+`NeedHandCardRect` for this card; the result lands in
+`HandCardRectReceived`.
+-}
+fetchHandCardRectCmd : Card.Card -> Cmd Msg
+fetchHandCardRectCmd card =
+    Task.attempt HandCardRectReceived
+        (Task.map2 Tuple.pair
+            (Browser.Dom.getElement (HandLayout.handCardDomId card))
+            Time.now
+        )
 
 
 {-| Shared shape for the four `Result.Err` branches in `update`

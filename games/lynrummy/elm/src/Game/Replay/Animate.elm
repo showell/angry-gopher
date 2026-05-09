@@ -1,5 +1,6 @@
 module Game.Replay.Animate exposing
     ( TickResult(..)
+    , handCardRectReceived
     , start
     , tick
     , togglePause
@@ -8,7 +9,7 @@ module Game.Replay.Animate exposing
 {-| The Instant Replay state machine. Pure data transforms
 on `ReplayState`; no Msg types, no Cmd, no Model.
 
-Three operations the host (`Main.Play`) plumbs through:
+Four operations the host (`Main.Play`) plumbs through:
 
   - `start initialEntries initialGameState` — open a fresh
     replay. Caller passes an already-collapsed queue
@@ -17,25 +18,35 @@ Three operations the host (`Main.Play`) plumbs through:
     InBeat, transition to `Starting` so resumption gets a
     fresh full beat from the next frame.
   - `tick nowMs rs` — one animation-frame step. Returns
-    `StillReplaying rs2` when more work remains, or
-    `Completed` when the queue empties.
+    `StillReplaying`, `NeedHandCardRect` (host fires a DOM
+    query), or `Completed`.
+  - `handCardRectReceived nowMs element maybeBoardRect rs` —
+    host calls this when its DOM query resolves; we transition
+    `AwaitingHandRect` → `AnimatingHandAction`.
 
-`tick` is the workhorse; it dispatches by phase and handles
-each case inline. The variant-by-variant decision of "what
-phase do we enter for this action" is delegated to
-`startNextAction` — that's the only real handoff inside
-`Animate`, because the decision IS the computation. Other
-handoffs are to `BoardDragAnimate` (path interpolation) and
-`Execute.applyEvent` (the apply layer).
+`tick` is the workhorse; the only function it delegates to
+inside `Animate` is `startNextAction`, which decides what
+phase a popped action becomes (real computation). Real
+handoffs outside `Animate` are to `BoardDragAnimate` /
+`HandDragAnimate` (path interpolation) and `Execute.applyEvent`
+(the apply layer).
 
 -}
 
+import Browser.Dom
 import Game.ActionLog exposing (ActionLogEntry)
+import Game.BoardActions as BoardActions
+import Game.CardStack as CardStack
 import Game.Execute as Execute
 import Game.Game exposing (GameState)
 import Game.GameEvent as GameEvent
+import Game.Physics.BoardGeometry as BG
+import Game.Physics.GestureArbitration as GA
+import Game.Point exposing (Point)
 import Game.Replay.BoardDragAnimate as BoardDragAnimate
+import Game.Replay.HandDragAnimate as HandDragAnimate
 import Game.Replay.ReplayState exposing (Phase(..), ReplayState)
+import Game.Rules.Card exposing (Card)
 
 
 {-| Per-step beat in milliseconds. The user wants enough time
@@ -49,6 +60,7 @@ beatMs =
 
 type TickResult
     = StillReplaying ReplayState
+    | NeedHandCardRect ReplayState Card
     | Completed
 
 
@@ -100,11 +112,19 @@ tick nowMs rs =
                         Completed
 
                     entry :: rest ->
-                        StillReplaying
-                            { rs
-                                | queue = rest
-                                , phase = startNextAction nowMs entry
-                            }
+                        let
+                            ( newPhase, maybeMeasure ) =
+                                startNextAction nowMs entry
+
+                            newRs =
+                                { rs | queue = rest, phase = newPhase }
+                        in
+                        case maybeMeasure of
+                            Just card ->
+                                NeedHandCardRect newRs card
+
+                            Nothing ->
+                                StillReplaying newRs
 
         ExecutingAction entry ->
             StillReplaying
@@ -125,24 +145,42 @@ tick nowMs rs =
                             , phase = InBeat { nextBeatMs = nextBeat }
                         }
 
+        AwaitingHandRect _ ->
+            -- Waiting for the host's DOM query to resolve.
+            -- Re-emitting NeedHandCardRect would fire a second
+            -- query; the host fires once, on the InBeat→
+            -- AwaitingHandRect transition. Just hold.
+            StillReplaying rs
 
-{-| Decide which phase to enter when popping `entry` off the
-queue. Board-drag events open an `AnimatingAction` (with the
-sub-machine pre-built); everything else slates an
-`ExecutingAction` for the next tick to apply. The extra tick
-between pop and apply costs ~16ms inside a 1500ms beat — no
-perceptual difference, but it gives every action variant a
-uniform "what do I become" answer.
+        AnimatingHandAction handState ->
+            case HandDragAnimate.step nowMs handState of
+                HandDragAnimate.InProgress nextHandState ->
+                    StillReplaying { rs | phase = AnimatingHandAction nextHandState }
+
+                HandDragAnimate.Done { pendingAction } ->
+                    StillReplaying
+                        { rs
+                            | gameState = Execute.applyEvent pendingAction rs.gameState
+                            , phase = InBeat { nextBeatMs = nextBeat }
+                        }
+
+
+{-| Decide what phase to enter when popping `entry` off the
+queue, plus optionally name a hand card the host should
+DOM-measure. Board-drag events open `AnimatingAction`
+immediately. Hand-drag events open `AwaitingHandRect` and
+ask the host to measure the source hand card. Everything
+else slates `ExecutingAction` for the next tick.
 
 `Undo` is unreachable — `collapseUndos` strips them at the
 top of replay.
 
 -}
-startNextAction : Int -> ActionLogEntry -> Phase
+startNextAction : Int -> ActionLogEntry -> ( Phase, Maybe Card )
 startNextAction nowMs entry =
     case entry.action of
         GameEvent.MergeStack p ->
-            AnimatingAction
+            ( AnimatingAction
                 (BoardDragAnimate.start
                     { sourceStack = p.source
                     , path = p.boardPath
@@ -150,9 +188,11 @@ startNextAction nowMs entry =
                     , pendingAction = entry.action
                     }
                 )
+            , Nothing
+            )
 
         GameEvent.MoveStack p ->
-            AnimatingAction
+            ( AnimatingAction
                 (BoardDragAnimate.start
                     { sourceStack = p.stack
                     , path = p.boardPath
@@ -160,19 +200,124 @@ startNextAction nowMs entry =
                     , pendingAction = entry.action
                     }
                 )
+            , Nothing
+            )
+
+        GameEvent.MergeHand p ->
+            ( AwaitingHandRect entry, Just p.handCard )
+
+        GameEvent.PlaceHand p ->
+            ( AwaitingHandRect entry, Just p.handCard )
 
         GameEvent.Split _ ->
-            ExecutingAction entry
-
-        GameEvent.MergeHand _ ->
-            ExecutingAction entry
-
-        GameEvent.PlaceHand _ ->
-            ExecutingAction entry
+            ( ExecutingAction entry, Nothing )
 
         GameEvent.CompleteTurn ->
-            ExecutingAction entry
+            ( ExecutingAction entry, Nothing )
 
         GameEvent.Undo ->
             Debug.todo
                 "Animate.startNextAction: Undo reached the queue (collapseUndos should have stripped it)"
+
+
+{-| Host calls this when its `Browser.Dom.getElement` for the
+hand card resolves. We compute the destination from the
+pending action's payload + the live board rect, hand it to
+`HandDragAnimate.start`, and transition to
+`AnimatingHandAction`.
+
+If `boardRect` is missing (replay started before the live
+board was ever measured) we can't translate board-frame
+locations into viewport coords; in that case we fall back to
+applying the event immediately so the queue keeps moving.
+-}
+handCardRectReceived :
+    Int
+    -> Browser.Dom.Element
+    -> Maybe GA.Rect
+    -> ReplayState
+    -> ReplayState
+handCardRectReceived nowMs element maybeBoardRect rs =
+    case rs.phase of
+        AwaitingHandRect entry ->
+            case handAnimationFor entry (elementTopLeftInViewport element) maybeBoardRect nowMs of
+                Just handState ->
+                    { rs | phase = AnimatingHandAction handState }
+
+                Nothing ->
+                    { rs
+                        | gameState = Execute.applyEvent entry.action rs.gameState
+                        , phase = InBeat { nextBeatMs = nowMs + beatMs }
+                    }
+
+        _ ->
+            -- Wrong phase (rect arrived after we transitioned
+            -- away — pause-toggled, replay completed, etc.).
+            -- Drop the late result.
+            rs
+
+
+{-| Build the hand-animation State for a popped hand action.
+Dispatches by variant to compute the floater's destination
+in viewport coords, then composes `HandDragAnimate.start`.
+Returns Nothing when `boardRect` is missing — the only
+reason this can fail by construction.
+-}
+handAnimationFor : ActionLogEntry -> Point -> Maybe GA.Rect -> Int -> Maybe HandDragAnimate.State
+handAnimationFor entry origin maybeBoardRect nowMs =
+    case maybeBoardRect of
+        Nothing ->
+            Nothing
+
+        Just boardRect ->
+            case entry.action of
+                GameEvent.MergeHand p ->
+                    let
+                        size =
+                            CardStack.size p.target
+
+                        landingLeft =
+                            case p.side of
+                                BoardActions.Right ->
+                                    p.target.loc.left + size * BG.cardPitch
+
+                                BoardActions.Left ->
+                                    p.target.loc.left - BG.cardPitch
+                    in
+                    Just
+                        (HandDragAnimate.start
+                            { handCard = p.handCard
+                            , origin = origin
+                            , destination =
+                                { x = boardRect.x + landingLeft
+                                , y = boardRect.y + p.target.loc.top
+                                }
+                            , startMs = nowMs
+                            , pendingAction = entry.action
+                            }
+                        )
+
+                GameEvent.PlaceHand p ->
+                    Just
+                        (HandDragAnimate.start
+                            { handCard = p.handCard
+                            , origin = origin
+                            , destination =
+                                { x = boardRect.x + p.loc.left
+                                , y = boardRect.y + p.loc.top
+                                }
+                            , startMs = nowMs
+                            , pendingAction = entry.action
+                            }
+                        )
+
+                _ ->
+                    Debug.todo
+                        "Animate.handAnimationFor: AwaitingHandRect entry must carry a hand action"
+
+
+elementTopLeftInViewport : Browser.Dom.Element -> Point
+elementTopLeftInViewport element =
+    { x = round (element.element.x - element.viewport.x)
+    , y = round (element.element.y - element.viewport.y)
+    }
