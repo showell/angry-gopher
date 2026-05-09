@@ -5229,10 +5229,12 @@ var $author$project$Puzzle$puzzleStacks = _List_fromArray(
 			]))
 	]);
 var $author$project$Puzzle$initialModel = {
+	actionLog: _List_Nil,
 	board: $author$project$Puzzle$puzzleStacks,
 	boardRect: $elm$core$Maybe$Nothing,
 	drag: $author$project$Game$Drag$NotDragging,
 	gameId: 'puzzle',
+	initialBoard: $author$project$Puzzle$puzzleStacks,
 	status: {kind: $author$project$Game$Status$Inform, text: 'Drag stacks to merge or move them.'}
 };
 var $elm$core$Platform$Cmd$batch = _Platform_batch;
@@ -5708,176 +5710,8 @@ var $author$project$Puzzle$boardRectReceived = F2(
 			return model;
 		}
 	});
-var $author$project$Game$GameEvent$MergeStack = function (a) {
-	return {$: 'MergeStack', a: a};
-};
-var $author$project$Game$GameEvent$MoveStack = function (a) {
-	return {$: 'MoveStack', a: a};
-};
-var $author$project$Game$Status$Scold = {$: 'Scold'};
-var $author$project$Game$GameEvent$Split = function (a) {
-	return {$: 'Split', a: a};
-};
-var $elm$json$Json$Encode$int = _Json_wrap;
-var $elm$json$Json$Encode$object = function (pairs) {
-	return _Json_wrap(
-		A3(
-			$elm$core$List$foldl,
-			F2(
-				function (_v0, obj) {
-					var k = _v0.a;
-					var v = _v0.b;
-					return A3(_Json_addField, k, v, obj);
-				}),
-			_Json_emptyObject(_Utils_Tuple0),
-			pairs));
-};
-var $author$project$Game$CardStack$encodeBoardLocation = function (loc) {
-	return $elm$json$Json$Encode$object(
-		_List_fromArray(
-			[
-				_Utils_Tuple2(
-				'top',
-				$elm$json$Json$Encode$int(loc.top)),
-				_Utils_Tuple2(
-				'left',
-				$elm$json$Json$Encode$int(loc.left))
-			]));
-};
-var $author$project$Game$CardStack$boardCardStateToInt = function (s) {
-	switch (s.$) {
-		case 'FirmlyOnBoard':
-			return 0;
-		case 'FreshlyPlayed':
-			return 1;
-		default:
-			return 2;
-	}
-};
-var $author$project$Game$Rules$Card$cardValueToInt = function (v) {
-	switch (v.$) {
-		case 'Ace':
-			return 1;
-		case 'Two':
-			return 2;
-		case 'Three':
-			return 3;
-		case 'Four':
-			return 4;
-		case 'Five':
-			return 5;
-		case 'Six':
-			return 6;
-		case 'Seven':
-			return 7;
-		case 'Eight':
-			return 8;
-		case 'Nine':
-			return 9;
-		case 'Ten':
-			return 10;
-		case 'Jack':
-			return 11;
-		case 'Queen':
-			return 12;
-		default:
-			return 13;
-	}
-};
-var $author$project$Game$Rules$Card$originDeckToInt = function (d) {
-	if (d.$ === 'DeckOne') {
-		return 0;
-	} else {
-		return 1;
-	}
-};
-var $author$project$Game$Rules$Card$suitToInt = function (s) {
-	switch (s.$) {
-		case 'Club':
-			return 0;
-		case 'Diamond':
-			return 1;
-		case 'Spade':
-			return 2;
-		default:
-			return 3;
-	}
-};
-var $author$project$Game$Rules$Card$encodeCard = function (card) {
-	return $elm$json$Json$Encode$object(
-		_List_fromArray(
-			[
-				_Utils_Tuple2(
-				'value',
-				$elm$json$Json$Encode$int(
-					$author$project$Game$Rules$Card$cardValueToInt(card.value))),
-				_Utils_Tuple2(
-				'suit',
-				$elm$json$Json$Encode$int(
-					$author$project$Game$Rules$Card$suitToInt(card.suit))),
-				_Utils_Tuple2(
-				'origin_deck',
-				$elm$json$Json$Encode$int(
-					$author$project$Game$Rules$Card$originDeckToInt(card.originDeck)))
-			]));
-};
-var $author$project$Game$CardStack$encodeBoardCard = function (bc) {
-	return $elm$json$Json$Encode$object(
-		_List_fromArray(
-			[
-				_Utils_Tuple2(
-				'card',
-				$author$project$Game$Rules$Card$encodeCard(bc.card)),
-				_Utils_Tuple2(
-				'state',
-				$elm$json$Json$Encode$int(
-					$author$project$Game$CardStack$boardCardStateToInt(bc.state)))
-			]));
-};
-var $elm$json$Json$Encode$list = F2(
-	function (func, entries) {
-		return _Json_wrap(
-			A3(
-				$elm$core$List$foldl,
-				_Json_addEntry(func),
-				_Json_emptyArray(_Utils_Tuple0),
-				entries));
-	});
-var $author$project$Game$CardStack$encodeCardStack = function (stack) {
-	return $elm$json$Json$Encode$object(
-		_List_fromArray(
-			[
-				_Utils_Tuple2(
-				'board_cards',
-				A2($elm$json$Json$Encode$list, $author$project$Game$CardStack$encodeBoardCard, stack.boardCards)),
-				_Utils_Tuple2(
-				'loc',
-				$author$project$Game$CardStack$encodeBoardLocation(stack.loc))
-			]));
-};
-var $elm$json$Json$Encode$float = _Json_wrap;
-var $author$project$Game$TimeLoc$encodeTimeLoc = function (t) {
-	return $elm$json$Json$Encode$object(
-		_List_fromArray(
-			[
-				_Utils_Tuple2(
-				't_ms',
-				$elm$json$Json$Encode$float(t.tMs)),
-				_Utils_Tuple2(
-				'left',
-				$elm$json$Json$Encode$int(t.left)),
-				_Utils_Tuple2(
-				'top',
-				$elm$json$Json$Encode$int(t.top))
-			]));
-};
-var $author$project$Game$Status$Celebrate = {$: 'Celebrate'};
-var $author$project$Game$Physics$BoardGeometry$CleanlySpaced = {$: 'CleanlySpaced'};
-var $author$project$Game$Physics$BoardGeometry$Crowded = {$: 'Crowded'};
-var $author$project$Game$Physics$BoardGeometry$Illegal = {$: 'Illegal'};
-var $author$project$Game$Physics$BoardGeometry$OutOfBounds = {$: 'OutOfBounds'};
-var $author$project$Game$Physics$BoardGeometry$Overlap = {$: 'Overlap'};
-var $author$project$Game$Physics$BoardGeometry$TooClose = {$: 'TooClose'};
+var $author$project$Game$GameEvent$Undo = {$: 'Undo'};
+var $elm$core$Debug$log = _Debug_log;
 var $elm$core$List$any = F2(
 	function (isOkay, list) {
 		any:
@@ -5899,164 +5733,6 @@ var $elm$core$List$any = F2(
 			}
 		}
 	});
-var $author$project$Game$Physics$BoardGeometry$checkBounds = F2(
-	function (bounds, _v0) {
-		var i = _v0.a;
-		var r = _v0.b;
-		return ((r.left < 0) || ((r.top < 0) || ((_Utils_cmp(r.right, bounds.maxWidth) > 0) || (_Utils_cmp(r.bottom, bounds.maxHeight) > 0)))) ? $elm$core$Maybe$Just(
-			{
-				kind: $author$project$Game$Physics$BoardGeometry$OutOfBounds,
-				message: 'Stack ' + ($elm$core$String$fromInt(i) + (' extends outside the board (rect: ' + ($elm$core$String$fromInt(r.left) + (',' + ($elm$core$String$fromInt(r.top) + (' → ' + ($elm$core$String$fromInt(r.right) + (',' + ($elm$core$String$fromInt(r.bottom) + (', bounds: ' + ($elm$core$String$fromInt(bounds.maxWidth) + ('x' + ($elm$core$String$fromInt(bounds.maxHeight) + ')'))))))))))))),
-				stackIndices: _List_fromArray(
-					[i])
-			}) : $elm$core$Maybe$Nothing;
-	});
-var $author$project$Game$Physics$BoardGeometry$isRectsOverlap = F2(
-	function (a, b) {
-		return (_Utils_cmp(a.left, b.right) < 0) && ((_Utils_cmp(a.right, b.left) > 0) && ((_Utils_cmp(a.top, b.bottom) < 0) && (_Utils_cmp(a.bottom, b.top) > 0)));
-	});
-var $author$project$Game$Physics$BoardGeometry$padRect = F2(
-	function (margin, r) {
-		return {bottom: r.bottom + margin, left: r.left - margin, right: r.right + margin, top: r.top - margin};
-	});
-var $author$project$Game$Physics$BoardGeometry$checkPair = F3(
-	function (margin, _v0, _v1) {
-		var i = _v0.a;
-		var a = _v0.b;
-		var j = _v1.a;
-		var b = _v1.b;
-		return A2($author$project$Game$Physics$BoardGeometry$isRectsOverlap, a, b) ? $elm$core$Maybe$Just(
-			{
-				kind: $author$project$Game$Physics$BoardGeometry$Overlap,
-				message: 'Stacks ' + ($elm$core$String$fromInt(i) + (' and ' + ($elm$core$String$fromInt(j) + ' overlap'))),
-				stackIndices: _List_fromArray(
-					[i, j])
-			}) : (A2(
-			$author$project$Game$Physics$BoardGeometry$isRectsOverlap,
-			A2($author$project$Game$Physics$BoardGeometry$padRect, margin, a),
-			b) ? $elm$core$Maybe$Just(
-			{
-				kind: $author$project$Game$Physics$BoardGeometry$TooClose,
-				message: 'Stacks ' + ($elm$core$String$fromInt(i) + (' and ' + ($elm$core$String$fromInt(j) + (' are too close (within ' + ($elm$core$String$fromInt(margin) + 'px margin)'))))),
-				stackIndices: _List_fromArray(
-					[i, j])
-			}) : $elm$core$Maybe$Nothing);
-	});
-var $author$project$Game$Physics$BoardGeometry$collectPairErrors = F2(
-	function (margin, rects) {
-		if (!rects.b) {
-			return _List_Nil;
-		} else {
-			var head = rects.a;
-			var rest = rects.b;
-			var fromHead = A2(
-				$elm$core$List$filterMap,
-				A2($author$project$Game$Physics$BoardGeometry$checkPair, margin, head),
-				rest);
-			return _Utils_ap(
-				fromHead,
-				A2($author$project$Game$Physics$BoardGeometry$collectPairErrors, margin, rest));
-		}
-	});
-var $author$project$Game$Physics$BoardGeometry$cardHeight = 40;
-var $author$project$Game$CardStack$size = function (s) {
-	return $elm$core$List$length(s.boardCards);
-};
-var $author$project$Game$CardStack$cardWidth = 27;
-var $author$project$Game$Physics$BoardGeometry$cardPitch = $author$project$Game$CardStack$cardWidth + 6;
-var $author$project$Game$Physics$BoardGeometry$stackWidth = function (cardCount) {
-	return (cardCount <= 0) ? 0 : ($author$project$Game$CardStack$cardWidth + ((cardCount - 1) * $author$project$Game$Physics$BoardGeometry$cardPitch));
-};
-var $author$project$Game$Physics$BoardGeometry$stackRect = function (s) {
-	return {
-		bottom: s.loc.top + $author$project$Game$Physics$BoardGeometry$cardHeight,
-		left: s.loc.left,
-		right: s.loc.left + $author$project$Game$Physics$BoardGeometry$stackWidth(
-			$author$project$Game$CardStack$size(s)),
-		top: s.loc.top
-	};
-};
-var $author$project$Game$Physics$BoardGeometry$validateBoardGeometry = F2(
-	function (stacks, bounds) {
-		var rects = A2(
-			$elm$core$List$indexedMap,
-			F2(
-				function (i, s) {
-					return _Utils_Tuple2(
-						i,
-						$author$project$Game$Physics$BoardGeometry$stackRect(s));
-				}),
-			stacks);
-		var pairErrors = A2($author$project$Game$Physics$BoardGeometry$collectPairErrors, bounds.margin, rects);
-		var boundsErrors = A2(
-			$elm$core$List$filterMap,
-			$author$project$Game$Physics$BoardGeometry$checkBounds(bounds),
-			rects);
-		return _Utils_ap(boundsErrors, pairErrors);
-	});
-var $author$project$Game$Physics$BoardGeometry$classifyBoardGeometry = F2(
-	function (stacks, bounds) {
-		var isIllegalKind = function (kind) {
-			return _Utils_eq(kind, $author$project$Game$Physics$BoardGeometry$OutOfBounds) || _Utils_eq(kind, $author$project$Game$Physics$BoardGeometry$Overlap);
-		};
-		var errors = A2($author$project$Game$Physics$BoardGeometry$validateBoardGeometry, stacks, bounds);
-		return A2(
-			$elm$core$List$any,
-			function (e) {
-				return isIllegalKind(e.kind);
-			},
-			errors) ? $author$project$Game$Physics$BoardGeometry$Illegal : (A2(
-			$elm$core$List$any,
-			function (e) {
-				return _Utils_eq(e.kind, $author$project$Game$Physics$BoardGeometry$TooClose);
-			},
-			errors) ? $author$project$Game$Physics$BoardGeometry$Crowded : $author$project$Game$Physics$BoardGeometry$CleanlySpaced);
-	});
-var $author$project$Game$Physics$BoardGeometry$refereeBounds = {margin: 7, maxHeight: 600, maxWidth: 800};
-var $author$project$Game$Status$geometryFeedback = F2(
-	function (oldBoard, newBoard) {
-		var _v0 = _Utils_Tuple2(
-			A2($author$project$Game$Physics$BoardGeometry$classifyBoardGeometry, oldBoard, $author$project$Game$Physics$BoardGeometry$refereeBounds),
-			A2($author$project$Game$Physics$BoardGeometry$classifyBoardGeometry, newBoard, $author$project$Game$Physics$BoardGeometry$refereeBounds));
-		_v0$2:
-		while (true) {
-			switch (_v0.b.$) {
-				case 'CleanlySpaced':
-					if (_v0.a.$ === 'Crowded') {
-						var _v1 = _v0.a;
-						var _v2 = _v0.b;
-						return $elm$core$Maybe$Just(
-							{kind: $author$project$Game$Status$Celebrate, text: 'Nice and tidy!'});
-					} else {
-						break _v0$2;
-					}
-				case 'Crowded':
-					var _v3 = _v0.b;
-					return $elm$core$Maybe$Just(
-						{kind: $author$project$Game$Status$Scold, text: 'Board is getting tight — try spacing stacks out!'});
-				default:
-					break _v0$2;
-			}
-		}
-		return $elm$core$Maybe$Nothing;
-	});
-var $author$project$Game$BoardGesture$BoardCardOffBoard = {$: 'BoardCardOffBoard'};
-var $author$project$Game$BoardGesture$MergeStack = function (a) {
-	return {$: 'MergeStack', a: a};
-};
-var $author$project$Game$BoardGesture$MoveStack = function (a) {
-	return {$: 'MoveStack', a: a};
-};
-var $author$project$Game$BoardGesture$Split = function (a) {
-	return {$: 'Split', a: a};
-};
-var $author$project$Game$Physics$GestureArbitration$clickThreshold = 9;
-var $author$project$Game$Physics$GestureArbitration$distSquared = F2(
-	function (a, b) {
-		var dy = a.y - b.y;
-		var dx = a.x - b.x;
-		return (dx * dx) + (dy * dy);
-	});
 var $elm$core$List$filter = F2(
 	function (isGood, list) {
 		return A3(
@@ -6067,127 +5743,6 @@ var $elm$core$List$filter = F2(
 				}),
 			_List_Nil,
 			list);
-	});
-var $elm$core$List$head = function (list) {
-	if (list.b) {
-		var x = list.a;
-		var xs = list.b;
-		return $elm$core$Maybe$Just(x);
-	} else {
-		return $elm$core$Maybe$Nothing;
-	}
-};
-var $elm$core$Basics$negate = function (n) {
-	return -n;
-};
-var $elm$core$Basics$abs = function (n) {
-	return (n < 0) ? (-n) : n;
-};
-var $author$project$Game$CardStack$stackPitch = $author$project$Game$CardStack$cardWidth + 6;
-var $author$project$Game$CardStack$stackDisplayWidth = function (s) {
-	return $author$project$Game$CardStack$size(s) * $author$project$Game$CardStack$stackPitch;
-};
-var $author$project$Game$Physics$WingOracle$eventualFloaterTopLeft = F2(
-	function (wing, sourceWidth) {
-		var left = function () {
-			var _v0 = wing.side;
-			if (_v0.$ === 'Left') {
-				return wing.target.loc.left - sourceWidth;
-			} else {
-				return wing.target.loc.left + $author$project$Game$CardStack$stackDisplayWidth(wing.target);
-			}
-		}();
-		return {left: left, top: wing.target.loc.top};
-	});
-var $author$project$Game$WingView$wingSnapTolerance = ($author$project$Game$CardStack$stackPitch / 2) | 0;
-var $author$project$Game$WingView$isNearLanding = F3(
-	function (floaterTopLeft, floaterWidth, wing) {
-		var ev = A2($author$project$Game$Physics$WingOracle$eventualFloaterTopLeft, wing, floaterWidth);
-		var dy = $elm$core$Basics$abs(floaterTopLeft.top - ev.top);
-		var dx = $elm$core$Basics$abs(floaterTopLeft.left - ev.left);
-		return (_Utils_cmp(dx, $author$project$Game$WingView$wingSnapTolerance) < 0) && (_Utils_cmp(dy, $author$project$Game$WingView$wingSnapTolerance) < 0);
-	});
-var $author$project$Game$WingView$hoveredWing = F3(
-	function (floaterTopLeft, floaterWidth, wings) {
-		return $elm$core$List$head(
-			A2(
-				$elm$core$List$filter,
-				A2($author$project$Game$WingView$isNearLanding, floaterTopLeft, floaterWidth),
-				wings));
-	});
-var $elm$core$Basics$ge = _Utils_ge;
-var $author$project$Game$Physics$GestureArbitration$isCursorInRect = F2(
-	function (p, r) {
-		return (_Utils_cmp(p.x, r.x) > -1) && ((_Utils_cmp(p.x, r.x + r.width) < 0) && ((_Utils_cmp(p.y, r.y) > -1) && (_Utils_cmp(p.y, r.y + r.height) < 0)));
-	});
-var $author$project$Game$BoardGesture$isCursorOverBoard = F2(
-	function (cursor, maybeRect) {
-		if (maybeRect.$ === 'Just') {
-			var rect = maybeRect.a;
-			return A2($author$project$Game$Physics$GestureArbitration$isCursorInRect, cursor, rect);
-		} else {
-			return false;
-		}
-	});
-var $author$project$Game$BoardGesture$isDropFootprintInBounds = F2(
-	function (cardCount, loc) {
-		var bounds = $author$project$Game$Physics$BoardGeometry$refereeBounds;
-		return (loc.left >= 0) && ((loc.top >= 0) && ((_Utils_cmp(
-			loc.left + $author$project$Game$Physics$BoardGeometry$stackWidth(cardCount),
-			bounds.maxWidth) < 1) && (_Utils_cmp(loc.top + $author$project$Game$Physics$BoardGeometry$cardHeight, bounds.maxHeight) < 1)));
-	});
-var $author$project$Game$BoardGesture$resolveBoardCardGesture = F2(
-	function (d, boardRect) {
-		if (_Utils_cmp(
-			A2($author$project$Game$Physics$GestureArbitration$distSquared, d.cursor, d.originalCursor),
-			$author$project$Game$Physics$GestureArbitration$clickThreshold) < 1) {
-			return $elm$core$Maybe$Just(
-				$author$project$Game$BoardGesture$Split(
-					{cardIndex: d.cardIndex, stack: d.stack}));
-		} else {
-			var hovered = A3(
-				$author$project$Game$WingView$hoveredWing,
-				d.floaterTopLeft,
-				$author$project$Game$CardStack$stackDisplayWidth(d.stack),
-				d.wings);
-			if (hovered.$ === 'Just') {
-				var wing = hovered.a;
-				return $elm$core$Maybe$Just(
-					$author$project$Game$BoardGesture$MergeStack(
-						{boardPath: d.boardPath, side: wing.side, source: d.stack, target: wing.target}));
-			} else {
-				return A2($author$project$Game$BoardGesture$isCursorOverBoard, d.cursor, boardRect) ? (A2(
-					$author$project$Game$BoardGesture$isDropFootprintInBounds,
-					$author$project$Game$CardStack$size(d.stack),
-					d.floaterTopLeft) ? $elm$core$Maybe$Just(
-					$author$project$Game$BoardGesture$MoveStack(
-						{boardPath: d.boardPath, newLoc: d.floaterTopLeft, stack: d.stack})) : $elm$core$Maybe$Nothing) : $elm$core$Maybe$Nothing;
-			}
-		}
-	});
-var $author$project$Game$BoardGesture$handleMouseUp = F4(
-	function (releasePoint, tMs, d, boardRect) {
-		var delta = {x: releasePoint.x - d.cursor.x, y: releasePoint.y - d.cursor.y};
-		var releaseFloater = {left: d.floaterTopLeft.left + delta.x, top: d.floaterTopLeft.top + delta.y};
-		var dFull = _Utils_update(
-			d,
-			{
-				boardPath: _Utils_ap(
-					d.boardPath,
-					_List_fromArray(
-						[
-							{left: releaseFloater.left, tMs: tMs, top: releaseFloater.top}
-						])),
-				cursor: releasePoint,
-				floaterTopLeft: releaseFloater
-			});
-		var _v0 = A2($author$project$Game$BoardGesture$resolveBoardCardGesture, dFull, boardRect);
-		if (_v0.$ === 'Just') {
-			var outcome = _v0.a;
-			return outcome;
-		} else {
-			return $author$project$Game$BoardGesture$BoardCardOffBoard;
-		}
 	});
 var $author$project$Game$CardStack$isCardsEqualInOrder = F2(
 	function (xs, ys) {
@@ -6239,6 +5794,15 @@ var $author$project$Game$Execute$applyBoardChange = F2(
 				board),
 			change.stacksToAdd);
 	});
+var $elm$core$List$head = function (list) {
+	if (list.b) {
+		var x = list.a;
+		var xs = list.b;
+		return $elm$core$Maybe$Just(x);
+	} else {
+		return $elm$core$Maybe$Nothing;
+	}
+};
 var $author$project$Game$CardStack$findStack = F2(
 	function (ref, board) {
 		return $elm$core$List$head(
@@ -6247,7 +5811,7 @@ var $author$project$Game$CardStack$findStack = F2(
 				$author$project$Game$CardStack$isStacksEqual(ref),
 				board));
 	});
-var $elm$core$Debug$log = _Debug_log;
+var $author$project$Game$CardStack$cardWidth = 27;
 var $author$project$Game$Rules$StackType$Bogus = {$: 'Bogus'};
 var $author$project$Game$Rules$StackType$Dup = {$: 'Dup'};
 var $author$project$Game$Rules$StackType$Incomplete = {$: 'Incomplete'};
@@ -6406,6 +5970,9 @@ var $author$project$Game$CardStack$maybeMerge = F3(
 			return $author$project$Game$CardStack$isProblematic(merged) ? $elm$core$Maybe$Nothing : $elm$core$Maybe$Just(merged);
 		}
 	});
+var $author$project$Game$CardStack$size = function (s) {
+	return $elm$core$List$length(s.boardCards);
+};
 var $author$project$Game$CardStack$leftMerge = F2(
 	function (self, other) {
 		var loc = {
@@ -6480,60 +6047,6 @@ var $elm$core$Basics$composeL = F3(
 		return g(
 			f(x));
 	});
-var $elm$core$List$all = F2(
-	function (isOkay, list) {
-		return !A2(
-			$elm$core$List$any,
-			A2($elm$core$Basics$composeL, $elm$core$Basics$not, isOkay),
-			list);
-	});
-var $elm$core$Basics$composeR = F3(
-	function (f, g, x) {
-		return g(
-			f(x));
-	});
-var $author$project$Game$Status$isCompleteType = function (t) {
-	switch (t.$) {
-		case 'Set':
-			return true;
-		case 'PureRun':
-			return true;
-		case 'RedBlackRun':
-			return true;
-		case 'Incomplete':
-			return false;
-		case 'Bogus':
-			return false;
-		default:
-			return false;
-	}
-};
-var $author$project$Game$Status$stackCards = function (stack) {
-	return A2(
-		$elm$core$List$map,
-		function ($) {
-			return $.card;
-		},
-		stack.boardCards);
-};
-var $author$project$Game$Status$isCleanBoard = function (board) {
-	return A2(
-		$elm$core$List$all,
-		A2(
-			$elm$core$Basics$composeR,
-			$author$project$Game$Status$stackCards,
-			A2($elm$core$Basics$composeR, $author$project$Game$Rules$StackType$getStackType, $author$project$Game$Status$isCompleteType)),
-		board);
-};
-var $author$project$Game$Status$mergeStatus = function (board) {
-	var _v0 = $elm$core$List$reverse(board);
-	if (!_v0.b) {
-		return {kind: $author$project$Game$Status$Inform, text: 'Merged.'};
-	} else {
-		var mergedStack = _v0.a;
-		return ($author$project$Game$CardStack$size(mergedStack) < 3) ? {kind: $author$project$Game$Status$Scold, text: 'Nice, but where\'s the third card?'} : ($author$project$Game$Status$isCleanBoard(board) ? {kind: $author$project$Game$Status$Celebrate, text: 'Combined! Clean board!'} : {kind: $author$project$Game$Status$Celebrate, text: 'Combined!'});
-	}
-};
 var $author$project$Game$Execute$moveStack = F3(
 	function (stack, newLoc, board) {
 		var _v0 = A2($author$project$Game$CardStack$findStack, stack, board);
@@ -6558,14 +6071,6 @@ var $author$project$Game$Execute$moveStack = F3(
 			return board;
 		}
 	});
-var $author$project$Game$Status$offBoardScold = {kind: $author$project$Game$Status$Scold, text: 'Don\'t knock cards off the board, please. You\'re not a cat!'};
-var $author$project$Game$BoardDrag$sideString = function (side) {
-	if (side.$ === 'Left') {
-		return 'left';
-	} else {
-		return 'right';
-	}
-};
 var $elm$core$List$drop = F2(
 	function (n, list) {
 		drop:
@@ -6587,6 +6092,9 @@ var $elm$core$List$drop = F2(
 			}
 		}
 	});
+var $elm$core$Basics$negate = function (n) {
+	return -n;
+};
 var $elm$core$List$takeReverse = F3(
 	function (n, list, kept) {
 		takeReverse:
@@ -6767,6 +6275,584 @@ var $author$project$Game$Execute$split = F3(
 			return board;
 		}
 	});
+var $author$project$Puzzle$applyForPuzzle = F2(
+	function (event, board) {
+		switch (event.$) {
+			case 'Split':
+				var p = event.a;
+				return A3($author$project$Game$Execute$split, p.stack, p.cardIndex, board);
+			case 'MergeStack':
+				var p = event.a;
+				return A4($author$project$Game$Execute$mergeStack, p.source, p.target, p.side, board);
+			case 'MoveStack':
+				var p = event.a;
+				return A3($author$project$Game$Execute$moveStack, p.stack, p.newLoc, board);
+			default:
+				var _v1 = A2($elm$core$Debug$log, 'puzzle.applyForPuzzle: unexpected event in log', event);
+				return board;
+		}
+	});
+var $author$project$Puzzle$popLast = function (list) {
+	var _v0 = $elm$core$List$reverse(list);
+	if (!_v0.b) {
+		return list;
+	} else {
+		var rest = _v0.b;
+		return $elm$core$List$reverse(rest);
+	}
+};
+var $author$project$Puzzle$collapseUndos = function (entries) {
+	return A3(
+		$elm$core$List$foldl,
+		F2(
+			function (entry, stack) {
+				var _v0 = entry.action;
+				if (_v0.$ === 'Undo') {
+					return $author$project$Puzzle$popLast(stack);
+				} else {
+					return _Utils_ap(
+						stack,
+						_List_fromArray(
+							[entry]));
+				}
+			}),
+		_List_Nil,
+		entries);
+};
+var $elm$core$List$isEmpty = function (xs) {
+	if (!xs.b) {
+		return true;
+	} else {
+		return false;
+	}
+};
+var $author$project$Puzzle$canUndo = function (model) {
+	return !$elm$core$List$isEmpty(
+		$author$project$Puzzle$collapseUndos(model.actionLog));
+};
+var $author$project$Puzzle$clickUndo = function (model) {
+	if ($author$project$Puzzle$canUndo(model)) {
+		var nextLog = _Utils_ap(
+			model.actionLog,
+			_List_fromArray(
+				[
+					{action: $author$project$Game$GameEvent$Undo}
+				]));
+		var effective = $author$project$Puzzle$collapseUndos(nextLog);
+		return _Utils_update(
+			model,
+			{
+				actionLog: nextLog,
+				board: A3(
+					$elm$core$List$foldl,
+					$author$project$Puzzle$applyForPuzzle,
+					model.initialBoard,
+					A2(
+						$elm$core$List$map,
+						function ($) {
+							return $.action;
+						},
+						effective))
+			});
+	} else {
+		return model;
+	}
+};
+var $author$project$Game$GameEvent$MergeStack = function (a) {
+	return {$: 'MergeStack', a: a};
+};
+var $author$project$Game$GameEvent$MoveStack = function (a) {
+	return {$: 'MoveStack', a: a};
+};
+var $author$project$Game$Status$Scold = {$: 'Scold'};
+var $author$project$Game$GameEvent$Split = function (a) {
+	return {$: 'Split', a: a};
+};
+var $elm$json$Json$Encode$int = _Json_wrap;
+var $elm$json$Json$Encode$object = function (pairs) {
+	return _Json_wrap(
+		A3(
+			$elm$core$List$foldl,
+			F2(
+				function (_v0, obj) {
+					var k = _v0.a;
+					var v = _v0.b;
+					return A3(_Json_addField, k, v, obj);
+				}),
+			_Json_emptyObject(_Utils_Tuple0),
+			pairs));
+};
+var $author$project$Game$CardStack$encodeBoardLocation = function (loc) {
+	return $elm$json$Json$Encode$object(
+		_List_fromArray(
+			[
+				_Utils_Tuple2(
+				'top',
+				$elm$json$Json$Encode$int(loc.top)),
+				_Utils_Tuple2(
+				'left',
+				$elm$json$Json$Encode$int(loc.left))
+			]));
+};
+var $author$project$Game$CardStack$boardCardStateToInt = function (s) {
+	switch (s.$) {
+		case 'FirmlyOnBoard':
+			return 0;
+		case 'FreshlyPlayed':
+			return 1;
+		default:
+			return 2;
+	}
+};
+var $author$project$Game$Rules$Card$cardValueToInt = function (v) {
+	switch (v.$) {
+		case 'Ace':
+			return 1;
+		case 'Two':
+			return 2;
+		case 'Three':
+			return 3;
+		case 'Four':
+			return 4;
+		case 'Five':
+			return 5;
+		case 'Six':
+			return 6;
+		case 'Seven':
+			return 7;
+		case 'Eight':
+			return 8;
+		case 'Nine':
+			return 9;
+		case 'Ten':
+			return 10;
+		case 'Jack':
+			return 11;
+		case 'Queen':
+			return 12;
+		default:
+			return 13;
+	}
+};
+var $author$project$Game$Rules$Card$originDeckToInt = function (d) {
+	if (d.$ === 'DeckOne') {
+		return 0;
+	} else {
+		return 1;
+	}
+};
+var $author$project$Game$Rules$Card$suitToInt = function (s) {
+	switch (s.$) {
+		case 'Club':
+			return 0;
+		case 'Diamond':
+			return 1;
+		case 'Spade':
+			return 2;
+		default:
+			return 3;
+	}
+};
+var $author$project$Game$Rules$Card$encodeCard = function (card) {
+	return $elm$json$Json$Encode$object(
+		_List_fromArray(
+			[
+				_Utils_Tuple2(
+				'value',
+				$elm$json$Json$Encode$int(
+					$author$project$Game$Rules$Card$cardValueToInt(card.value))),
+				_Utils_Tuple2(
+				'suit',
+				$elm$json$Json$Encode$int(
+					$author$project$Game$Rules$Card$suitToInt(card.suit))),
+				_Utils_Tuple2(
+				'origin_deck',
+				$elm$json$Json$Encode$int(
+					$author$project$Game$Rules$Card$originDeckToInt(card.originDeck)))
+			]));
+};
+var $author$project$Game$CardStack$encodeBoardCard = function (bc) {
+	return $elm$json$Json$Encode$object(
+		_List_fromArray(
+			[
+				_Utils_Tuple2(
+				'card',
+				$author$project$Game$Rules$Card$encodeCard(bc.card)),
+				_Utils_Tuple2(
+				'state',
+				$elm$json$Json$Encode$int(
+					$author$project$Game$CardStack$boardCardStateToInt(bc.state)))
+			]));
+};
+var $elm$json$Json$Encode$list = F2(
+	function (func, entries) {
+		return _Json_wrap(
+			A3(
+				$elm$core$List$foldl,
+				_Json_addEntry(func),
+				_Json_emptyArray(_Utils_Tuple0),
+				entries));
+	});
+var $author$project$Game$CardStack$encodeCardStack = function (stack) {
+	return $elm$json$Json$Encode$object(
+		_List_fromArray(
+			[
+				_Utils_Tuple2(
+				'board_cards',
+				A2($elm$json$Json$Encode$list, $author$project$Game$CardStack$encodeBoardCard, stack.boardCards)),
+				_Utils_Tuple2(
+				'loc',
+				$author$project$Game$CardStack$encodeBoardLocation(stack.loc))
+			]));
+};
+var $elm$json$Json$Encode$float = _Json_wrap;
+var $author$project$Game$TimeLoc$encodeTimeLoc = function (t) {
+	return $elm$json$Json$Encode$object(
+		_List_fromArray(
+			[
+				_Utils_Tuple2(
+				't_ms',
+				$elm$json$Json$Encode$float(t.tMs)),
+				_Utils_Tuple2(
+				'left',
+				$elm$json$Json$Encode$int(t.left)),
+				_Utils_Tuple2(
+				'top',
+				$elm$json$Json$Encode$int(t.top))
+			]));
+};
+var $author$project$Game$Status$Celebrate = {$: 'Celebrate'};
+var $author$project$Game$Physics$BoardGeometry$CleanlySpaced = {$: 'CleanlySpaced'};
+var $author$project$Game$Physics$BoardGeometry$Crowded = {$: 'Crowded'};
+var $author$project$Game$Physics$BoardGeometry$Illegal = {$: 'Illegal'};
+var $author$project$Game$Physics$BoardGeometry$OutOfBounds = {$: 'OutOfBounds'};
+var $author$project$Game$Physics$BoardGeometry$Overlap = {$: 'Overlap'};
+var $author$project$Game$Physics$BoardGeometry$TooClose = {$: 'TooClose'};
+var $author$project$Game$Physics$BoardGeometry$checkBounds = F2(
+	function (bounds, _v0) {
+		var i = _v0.a;
+		var r = _v0.b;
+		return ((r.left < 0) || ((r.top < 0) || ((_Utils_cmp(r.right, bounds.maxWidth) > 0) || (_Utils_cmp(r.bottom, bounds.maxHeight) > 0)))) ? $elm$core$Maybe$Just(
+			{
+				kind: $author$project$Game$Physics$BoardGeometry$OutOfBounds,
+				message: 'Stack ' + ($elm$core$String$fromInt(i) + (' extends outside the board (rect: ' + ($elm$core$String$fromInt(r.left) + (',' + ($elm$core$String$fromInt(r.top) + (' → ' + ($elm$core$String$fromInt(r.right) + (',' + ($elm$core$String$fromInt(r.bottom) + (', bounds: ' + ($elm$core$String$fromInt(bounds.maxWidth) + ('x' + ($elm$core$String$fromInt(bounds.maxHeight) + ')'))))))))))))),
+				stackIndices: _List_fromArray(
+					[i])
+			}) : $elm$core$Maybe$Nothing;
+	});
+var $author$project$Game$Physics$BoardGeometry$isRectsOverlap = F2(
+	function (a, b) {
+		return (_Utils_cmp(a.left, b.right) < 0) && ((_Utils_cmp(a.right, b.left) > 0) && ((_Utils_cmp(a.top, b.bottom) < 0) && (_Utils_cmp(a.bottom, b.top) > 0)));
+	});
+var $author$project$Game$Physics$BoardGeometry$padRect = F2(
+	function (margin, r) {
+		return {bottom: r.bottom + margin, left: r.left - margin, right: r.right + margin, top: r.top - margin};
+	});
+var $author$project$Game$Physics$BoardGeometry$checkPair = F3(
+	function (margin, _v0, _v1) {
+		var i = _v0.a;
+		var a = _v0.b;
+		var j = _v1.a;
+		var b = _v1.b;
+		return A2($author$project$Game$Physics$BoardGeometry$isRectsOverlap, a, b) ? $elm$core$Maybe$Just(
+			{
+				kind: $author$project$Game$Physics$BoardGeometry$Overlap,
+				message: 'Stacks ' + ($elm$core$String$fromInt(i) + (' and ' + ($elm$core$String$fromInt(j) + ' overlap'))),
+				stackIndices: _List_fromArray(
+					[i, j])
+			}) : (A2(
+			$author$project$Game$Physics$BoardGeometry$isRectsOverlap,
+			A2($author$project$Game$Physics$BoardGeometry$padRect, margin, a),
+			b) ? $elm$core$Maybe$Just(
+			{
+				kind: $author$project$Game$Physics$BoardGeometry$TooClose,
+				message: 'Stacks ' + ($elm$core$String$fromInt(i) + (' and ' + ($elm$core$String$fromInt(j) + (' are too close (within ' + ($elm$core$String$fromInt(margin) + 'px margin)'))))),
+				stackIndices: _List_fromArray(
+					[i, j])
+			}) : $elm$core$Maybe$Nothing);
+	});
+var $author$project$Game$Physics$BoardGeometry$collectPairErrors = F2(
+	function (margin, rects) {
+		if (!rects.b) {
+			return _List_Nil;
+		} else {
+			var head = rects.a;
+			var rest = rects.b;
+			var fromHead = A2(
+				$elm$core$List$filterMap,
+				A2($author$project$Game$Physics$BoardGeometry$checkPair, margin, head),
+				rest);
+			return _Utils_ap(
+				fromHead,
+				A2($author$project$Game$Physics$BoardGeometry$collectPairErrors, margin, rest));
+		}
+	});
+var $author$project$Game$Physics$BoardGeometry$cardHeight = 40;
+var $author$project$Game$Physics$BoardGeometry$cardPitch = $author$project$Game$CardStack$cardWidth + 6;
+var $author$project$Game$Physics$BoardGeometry$stackWidth = function (cardCount) {
+	return (cardCount <= 0) ? 0 : ($author$project$Game$CardStack$cardWidth + ((cardCount - 1) * $author$project$Game$Physics$BoardGeometry$cardPitch));
+};
+var $author$project$Game$Physics$BoardGeometry$stackRect = function (s) {
+	return {
+		bottom: s.loc.top + $author$project$Game$Physics$BoardGeometry$cardHeight,
+		left: s.loc.left,
+		right: s.loc.left + $author$project$Game$Physics$BoardGeometry$stackWidth(
+			$author$project$Game$CardStack$size(s)),
+		top: s.loc.top
+	};
+};
+var $author$project$Game$Physics$BoardGeometry$validateBoardGeometry = F2(
+	function (stacks, bounds) {
+		var rects = A2(
+			$elm$core$List$indexedMap,
+			F2(
+				function (i, s) {
+					return _Utils_Tuple2(
+						i,
+						$author$project$Game$Physics$BoardGeometry$stackRect(s));
+				}),
+			stacks);
+		var pairErrors = A2($author$project$Game$Physics$BoardGeometry$collectPairErrors, bounds.margin, rects);
+		var boundsErrors = A2(
+			$elm$core$List$filterMap,
+			$author$project$Game$Physics$BoardGeometry$checkBounds(bounds),
+			rects);
+		return _Utils_ap(boundsErrors, pairErrors);
+	});
+var $author$project$Game$Physics$BoardGeometry$classifyBoardGeometry = F2(
+	function (stacks, bounds) {
+		var isIllegalKind = function (kind) {
+			return _Utils_eq(kind, $author$project$Game$Physics$BoardGeometry$OutOfBounds) || _Utils_eq(kind, $author$project$Game$Physics$BoardGeometry$Overlap);
+		};
+		var errors = A2($author$project$Game$Physics$BoardGeometry$validateBoardGeometry, stacks, bounds);
+		return A2(
+			$elm$core$List$any,
+			function (e) {
+				return isIllegalKind(e.kind);
+			},
+			errors) ? $author$project$Game$Physics$BoardGeometry$Illegal : (A2(
+			$elm$core$List$any,
+			function (e) {
+				return _Utils_eq(e.kind, $author$project$Game$Physics$BoardGeometry$TooClose);
+			},
+			errors) ? $author$project$Game$Physics$BoardGeometry$Crowded : $author$project$Game$Physics$BoardGeometry$CleanlySpaced);
+	});
+var $author$project$Game$Physics$BoardGeometry$refereeBounds = {margin: 7, maxHeight: 600, maxWidth: 800};
+var $author$project$Game$Status$geometryFeedback = F2(
+	function (oldBoard, newBoard) {
+		var _v0 = _Utils_Tuple2(
+			A2($author$project$Game$Physics$BoardGeometry$classifyBoardGeometry, oldBoard, $author$project$Game$Physics$BoardGeometry$refereeBounds),
+			A2($author$project$Game$Physics$BoardGeometry$classifyBoardGeometry, newBoard, $author$project$Game$Physics$BoardGeometry$refereeBounds));
+		_v0$2:
+		while (true) {
+			switch (_v0.b.$) {
+				case 'CleanlySpaced':
+					if (_v0.a.$ === 'Crowded') {
+						var _v1 = _v0.a;
+						var _v2 = _v0.b;
+						return $elm$core$Maybe$Just(
+							{kind: $author$project$Game$Status$Celebrate, text: 'Nice and tidy!'});
+					} else {
+						break _v0$2;
+					}
+				case 'Crowded':
+					var _v3 = _v0.b;
+					return $elm$core$Maybe$Just(
+						{kind: $author$project$Game$Status$Scold, text: 'Board is getting tight — try spacing stacks out!'});
+				default:
+					break _v0$2;
+			}
+		}
+		return $elm$core$Maybe$Nothing;
+	});
+var $author$project$Game$BoardGesture$BoardCardOffBoard = {$: 'BoardCardOffBoard'};
+var $author$project$Game$BoardGesture$MergeStack = function (a) {
+	return {$: 'MergeStack', a: a};
+};
+var $author$project$Game$BoardGesture$MoveStack = function (a) {
+	return {$: 'MoveStack', a: a};
+};
+var $author$project$Game$BoardGesture$Split = function (a) {
+	return {$: 'Split', a: a};
+};
+var $author$project$Game$Physics$GestureArbitration$clickThreshold = 9;
+var $author$project$Game$Physics$GestureArbitration$distSquared = F2(
+	function (a, b) {
+		var dy = a.y - b.y;
+		var dx = a.x - b.x;
+		return (dx * dx) + (dy * dy);
+	});
+var $elm$core$Basics$abs = function (n) {
+	return (n < 0) ? (-n) : n;
+};
+var $author$project$Game$CardStack$stackPitch = $author$project$Game$CardStack$cardWidth + 6;
+var $author$project$Game$CardStack$stackDisplayWidth = function (s) {
+	return $author$project$Game$CardStack$size(s) * $author$project$Game$CardStack$stackPitch;
+};
+var $author$project$Game$Physics$WingOracle$eventualFloaterTopLeft = F2(
+	function (wing, sourceWidth) {
+		var left = function () {
+			var _v0 = wing.side;
+			if (_v0.$ === 'Left') {
+				return wing.target.loc.left - sourceWidth;
+			} else {
+				return wing.target.loc.left + $author$project$Game$CardStack$stackDisplayWidth(wing.target);
+			}
+		}();
+		return {left: left, top: wing.target.loc.top};
+	});
+var $author$project$Game$WingView$wingSnapTolerance = ($author$project$Game$CardStack$stackPitch / 2) | 0;
+var $author$project$Game$WingView$isNearLanding = F3(
+	function (floaterTopLeft, floaterWidth, wing) {
+		var ev = A2($author$project$Game$Physics$WingOracle$eventualFloaterTopLeft, wing, floaterWidth);
+		var dy = $elm$core$Basics$abs(floaterTopLeft.top - ev.top);
+		var dx = $elm$core$Basics$abs(floaterTopLeft.left - ev.left);
+		return (_Utils_cmp(dx, $author$project$Game$WingView$wingSnapTolerance) < 0) && (_Utils_cmp(dy, $author$project$Game$WingView$wingSnapTolerance) < 0);
+	});
+var $author$project$Game$WingView$hoveredWing = F3(
+	function (floaterTopLeft, floaterWidth, wings) {
+		return $elm$core$List$head(
+			A2(
+				$elm$core$List$filter,
+				A2($author$project$Game$WingView$isNearLanding, floaterTopLeft, floaterWidth),
+				wings));
+	});
+var $elm$core$Basics$ge = _Utils_ge;
+var $author$project$Game$Physics$GestureArbitration$isCursorInRect = F2(
+	function (p, r) {
+		return (_Utils_cmp(p.x, r.x) > -1) && ((_Utils_cmp(p.x, r.x + r.width) < 0) && ((_Utils_cmp(p.y, r.y) > -1) && (_Utils_cmp(p.y, r.y + r.height) < 0)));
+	});
+var $author$project$Game$BoardGesture$isCursorOverBoard = F2(
+	function (cursor, maybeRect) {
+		if (maybeRect.$ === 'Just') {
+			var rect = maybeRect.a;
+			return A2($author$project$Game$Physics$GestureArbitration$isCursorInRect, cursor, rect);
+		} else {
+			return false;
+		}
+	});
+var $author$project$Game$BoardGesture$isDropFootprintInBounds = F2(
+	function (cardCount, loc) {
+		var bounds = $author$project$Game$Physics$BoardGeometry$refereeBounds;
+		return (loc.left >= 0) && ((loc.top >= 0) && ((_Utils_cmp(
+			loc.left + $author$project$Game$Physics$BoardGeometry$stackWidth(cardCount),
+			bounds.maxWidth) < 1) && (_Utils_cmp(loc.top + $author$project$Game$Physics$BoardGeometry$cardHeight, bounds.maxHeight) < 1)));
+	});
+var $author$project$Game$BoardGesture$resolveBoardCardGesture = F2(
+	function (d, boardRect) {
+		if (_Utils_cmp(
+			A2($author$project$Game$Physics$GestureArbitration$distSquared, d.cursor, d.originalCursor),
+			$author$project$Game$Physics$GestureArbitration$clickThreshold) < 1) {
+			return $elm$core$Maybe$Just(
+				$author$project$Game$BoardGesture$Split(
+					{cardIndex: d.cardIndex, stack: d.stack}));
+		} else {
+			var hovered = A3(
+				$author$project$Game$WingView$hoveredWing,
+				d.floaterTopLeft,
+				$author$project$Game$CardStack$stackDisplayWidth(d.stack),
+				d.wings);
+			if (hovered.$ === 'Just') {
+				var wing = hovered.a;
+				return $elm$core$Maybe$Just(
+					$author$project$Game$BoardGesture$MergeStack(
+						{boardPath: d.boardPath, side: wing.side, source: d.stack, target: wing.target}));
+			} else {
+				return A2($author$project$Game$BoardGesture$isCursorOverBoard, d.cursor, boardRect) ? (A2(
+					$author$project$Game$BoardGesture$isDropFootprintInBounds,
+					$author$project$Game$CardStack$size(d.stack),
+					d.floaterTopLeft) ? $elm$core$Maybe$Just(
+					$author$project$Game$BoardGesture$MoveStack(
+						{boardPath: d.boardPath, newLoc: d.floaterTopLeft, stack: d.stack})) : $elm$core$Maybe$Nothing) : $elm$core$Maybe$Nothing;
+			}
+		}
+	});
+var $author$project$Game$BoardGesture$handleMouseUp = F4(
+	function (releasePoint, tMs, d, boardRect) {
+		var delta = {x: releasePoint.x - d.cursor.x, y: releasePoint.y - d.cursor.y};
+		var releaseFloater = {left: d.floaterTopLeft.left + delta.x, top: d.floaterTopLeft.top + delta.y};
+		var dFull = _Utils_update(
+			d,
+			{
+				boardPath: _Utils_ap(
+					d.boardPath,
+					_List_fromArray(
+						[
+							{left: releaseFloater.left, tMs: tMs, top: releaseFloater.top}
+						])),
+				cursor: releasePoint,
+				floaterTopLeft: releaseFloater
+			});
+		var _v0 = A2($author$project$Game$BoardGesture$resolveBoardCardGesture, dFull, boardRect);
+		if (_v0.$ === 'Just') {
+			var outcome = _v0.a;
+			return outcome;
+		} else {
+			return $author$project$Game$BoardGesture$BoardCardOffBoard;
+		}
+	});
+var $elm$core$List$all = F2(
+	function (isOkay, list) {
+		return !A2(
+			$elm$core$List$any,
+			A2($elm$core$Basics$composeL, $elm$core$Basics$not, isOkay),
+			list);
+	});
+var $elm$core$Basics$composeR = F3(
+	function (f, g, x) {
+		return g(
+			f(x));
+	});
+var $author$project$Game$Status$isCompleteType = function (t) {
+	switch (t.$) {
+		case 'Set':
+			return true;
+		case 'PureRun':
+			return true;
+		case 'RedBlackRun':
+			return true;
+		case 'Incomplete':
+			return false;
+		case 'Bogus':
+			return false;
+		default:
+			return false;
+	}
+};
+var $author$project$Game$Status$stackCards = function (stack) {
+	return A2(
+		$elm$core$List$map,
+		function ($) {
+			return $.card;
+		},
+		stack.boardCards);
+};
+var $author$project$Game$Status$isCleanBoard = function (board) {
+	return A2(
+		$elm$core$List$all,
+		A2(
+			$elm$core$Basics$composeR,
+			$author$project$Game$Status$stackCards,
+			A2($elm$core$Basics$composeR, $author$project$Game$Rules$StackType$getStackType, $author$project$Game$Status$isCompleteType)),
+		board);
+};
+var $author$project$Game$Status$mergeStatus = function (board) {
+	var _v0 = $elm$core$List$reverse(board);
+	if (!_v0.b) {
+		return {kind: $author$project$Game$Status$Inform, text: 'Merged.'};
+	} else {
+		var mergedStack = _v0.a;
+		return ($author$project$Game$CardStack$size(mergedStack) < 3) ? {kind: $author$project$Game$Status$Scold, text: 'Nice, but where\'s the third card?'} : ($author$project$Game$Status$isCleanBoard(board) ? {kind: $author$project$Game$Status$Celebrate, text: 'Combined! Clean board!'} : {kind: $author$project$Game$Status$Celebrate, text: 'Combined!'});
+	}
+};
+var $author$project$Game$Status$offBoardScold = {kind: $author$project$Game$Status$Scold, text: 'Don\'t knock cards off the board, please. You\'re not a cat!'};
+var $author$project$Game$BoardDrag$sideString = function (side) {
+	if (side.$ === 'Left') {
+		return 'left';
+	} else {
+		return 'right';
+	}
+};
 var $elm$json$Json$Encode$string = _Json_wrap;
 var $elm$core$Maybe$withDefault = F2(
 	function (_default, maybe) {
@@ -6949,10 +7035,11 @@ var $author$project$Puzzle$handleMouseUp = F3(
 					releasePoint,
 					tMs,
 					d,
-					{actionLog: _List_Nil, board: model.board, boardRect: model.boardRect, nextSeq: 0});
+					{actionLog: model.actionLog, board: model.board, boardRect: model.boardRect, nextSeq: 0});
 				return _Utils_update(
 					model,
 					{
+						actionLog: outcome.actionLog,
 						board: outcome.board,
 						drag: $author$project$Game$Drag$NotDragging,
 						status: A2($elm$core$Maybe$withDefault, model.status, outcome.status)
@@ -7168,10 +7255,14 @@ var $author$project$Puzzle$update = F2(
 				return _Utils_Tuple2(
 					A3($author$project$Puzzle$handleMouseUp, pos, tMs, model),
 					$elm$core$Platform$Cmd$none);
-			default:
+			case 'BoardRectReceived':
 				var result = msg.a;
 				return _Utils_Tuple2(
 					A2($author$project$Puzzle$boardRectReceived, result, model),
+					$elm$core$Platform$Cmd$none);
+			default:
+				return _Utils_Tuple2(
+					$author$project$Puzzle$clickUndo(model),
 					$elm$core$Platform$Cmd$none);
 		}
 	});
@@ -7691,6 +7782,71 @@ var $author$project$Puzzle$cardMouseDown = F2(
 					$author$project$Puzzle$pointAndTimeDecoder))
 			]);
 	});
+var $author$project$Puzzle$ClickUndo = {$: 'ClickUndo'};
+var $elm$html$Html$button = _VirtualDom_node('button');
+var $elm$html$Html$Events$onClick = function (msg) {
+	return A2(
+		$elm$html$Html$Events$on,
+		'click',
+		$elm$json$Json$Decode$succeed(msg));
+};
+var $author$project$Game$Button$themedAttrs = _List_fromArray(
+	[
+		A2($elm$html$Html$Attributes$style, 'padding', '6px 12px'),
+		A2($elm$html$Html$Attributes$style, 'font-size', '14px'),
+		A2($elm$html$Html$Attributes$style, 'border', '1px solid ' + $author$project$Game$View$navy),
+		A2($elm$html$Html$Attributes$style, 'background', 'white'),
+		A2($elm$html$Html$Attributes$style, 'color', $author$project$Game$View$navy),
+		A2($elm$html$Html$Attributes$style, 'border-radius', '3px'),
+		A2($elm$html$Html$Attributes$style, 'cursor', 'pointer')
+	]);
+var $author$project$Game$Button$button = F2(
+	function (label, msg) {
+		return A2(
+			$elm$html$Html$button,
+			A2(
+				$elm$core$List$cons,
+				$elm$html$Html$Events$onClick(msg),
+				$author$project$Game$Button$themedAttrs),
+			_List_fromArray(
+				[
+					$elm$html$Html$text(label)
+				]));
+	});
+var $elm$json$Json$Encode$bool = _Json_wrap;
+var $elm$html$Html$Attributes$boolProperty = F2(
+	function (key, bool) {
+		return A2(
+			_VirtualDom_property,
+			key,
+			$elm$json$Json$Encode$bool(bool));
+	});
+var $elm$html$Html$Attributes$disabled = $elm$html$Html$Attributes$boolProperty('disabled');
+var $author$project$Game$Button$disabledAttrs = _List_fromArray(
+	[
+		A2($elm$html$Html$Attributes$style, 'padding', '6px 12px'),
+		A2($elm$html$Html$Attributes$style, 'font-size', '14px'),
+		A2($elm$html$Html$Attributes$style, 'border', '1px solid #bbb'),
+		A2($elm$html$Html$Attributes$style, 'background', '#f5f5f5'),
+		A2($elm$html$Html$Attributes$style, 'color', '#bbb'),
+		A2($elm$html$Html$Attributes$style, 'border-radius', '3px'),
+		A2($elm$html$Html$Attributes$style, 'cursor', 'not-allowed')
+	]);
+var $author$project$Game$Button$disabledButton = function (label) {
+	return A2(
+		$elm$html$Html$button,
+		A2(
+			$elm$core$List$cons,
+			$elm$html$Html$Attributes$disabled(true),
+			$author$project$Game$Button$disabledAttrs),
+		_List_fromArray(
+			[
+				$elm$html$Html$text(label)
+			]));
+};
+var $author$project$Puzzle$undoButton = function (model) {
+	return $author$project$Puzzle$canUndo(model) ? A2($author$project$Game$Button$button, 'Undo', $author$project$Puzzle$ClickUndo) : $author$project$Game$Button$disabledButton('Undo');
+};
 var $author$project$Puzzle$view = function (model) {
 	return A2(
 		$elm$html$Html$div,
@@ -7701,6 +7857,16 @@ var $author$project$Puzzle$view = function (model) {
 			]),
 		_List_fromArray(
 			[
+				A2(
+				$elm$html$Html$div,
+				_List_fromArray(
+					[
+						A2($elm$html$Html$Attributes$style, 'margin-bottom', '10px')
+					]),
+				_List_fromArray(
+					[
+						$author$project$Puzzle$undoButton(model)
+					])),
 				$author$project$Game$BoardView$boardColumn(
 				{board: model.board, boardRect: model.boardRect, cardMouseDown: $author$project$Puzzle$cardMouseDown, drag: model.drag, gameId: model.gameId})
 			]));

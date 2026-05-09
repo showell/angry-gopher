@@ -4,25 +4,35 @@ module Puzzle exposing (main)
 
 Dedicated host: own Msg, own Model, no `Main.*` imports.
 Composes `Game.*` building blocks directly (BoardView,
-BoardGesture, BoardDrag, Drag). V2 supports board-card drag
-(move + merge + click=split). No hint, no undo, no replay,
-no agent, no wire — drags mutate local Model only.
+BoardGesture, BoardDrag, Drag, Button). Supports board-card
+drag (move + merge + click=split) and Undo. No hint, no
+replay, no agent, no wire — actions mutate local Model only.
 
-The status field is held but not rendered in V1; the gesture
-machinery produces a status on each interaction and we keep
-the latest. A status bar can be added later without changing
-the update path.
+Undo follows the full-game model: clicking Undo appends a
+`GameEvent.Undo` token to `actionLog`; `collapseUndos` derives
+the effective sequence; the board is recomputed by folding
+`applyForPuzzle` over that sequence from `initialBoard`. This
+records state faithfully — every user action (including
+undos) is in the log.
+
+A puzzle wire is not yet implemented, so `BoardDrag`'s
+`outboundPayload` is ignored and `nextSeq = 0`. When the wire
+arrives we'll switch to the full-game seq + payload pattern.
 
 -}
 
 import Browser
 import Browser.Dom
 import Browser.Events
+import Game.ActionLog exposing (ActionLogEntry)
 import Game.BoardDrag as BoardDrag
 import Game.BoardGesture as BoardGesture
 import Game.BoardView as BoardView
+import Game.Button as Button
 import Game.CardStack exposing (BoardCardState(..), CardStack)
 import Game.Drag exposing (DragState(..))
+import Game.Execute as Execute
+import Game.GameEvent as GameEvent exposing (GameEvent(..))
 import Game.Physics.GestureArbitration as GA
 import Game.Point exposing (Point)
 import Game.Rules.Card exposing (CardValue(..), OriginDeck(..), Suit(..))
@@ -39,7 +49,9 @@ import Task
 
 
 type alias Model =
-    { board : List CardStack
+    { initialBoard : List CardStack
+    , board : List CardStack
+    , actionLog : List ActionLogEntry
     , drag : DragState
     , boardRect : Maybe GA.Rect
     , status : Status.StatusMessage
@@ -49,7 +61,9 @@ type alias Model =
 
 initialModel : Model
 initialModel =
-    { board = puzzleStacks
+    { initialBoard = puzzleStacks
+    , board = puzzleStacks
+    , actionLog = []
     , drag = NotDragging
     , boardRect = Nothing
     , status = { text = "Drag stacks to merge or move them.", kind = Status.Inform }
@@ -71,6 +85,7 @@ type Msg
     | MouseMove Point Float
     | MouseUp Point Float
     | BoardRectReceived (Result Browser.Dom.Error Browser.Dom.Element)
+    | ClickUndo
 
 
 
@@ -91,6 +106,9 @@ update msg model =
 
         BoardRectReceived result ->
             ( boardRectReceived result model, Cmd.none )
+
+        ClickUndo ->
+            ( clickUndo model, Cmd.none )
 
 
 startBoardCardDrag :
@@ -156,20 +174,106 @@ handleMouseUp releasePoint tMs model =
                         d
                         { board = model.board
                         , boardRect = model.boardRect
+                        , actionLog = model.actionLog
 
-                        -- Puzzle has no log / no wire; pass empty
-                        -- inputs and ignore the matching outcome
-                        -- fields. The pure board patch is what we
-                        -- want.
-                        , actionLog = []
+                        -- No puzzle wire yet; the seq + outboundPayload
+                        -- BoardDrag would build are unused. Stub
+                        -- nextSeq, ignore outcome.outboundPayload.
                         , nextSeq = 0
                         }
             in
             { model
                 | drag = NotDragging
                 , board = outcome.board
+                , actionLog = outcome.actionLog
                 , status = outcome.status |> Maybe.withDefault model.status
             }
+
+
+{-| Append a `Undo` token to the action log and rebuild the
+board by folding effective (post-collapse) events from
+`initialBoard`. No-op when nothing is left to undo.
+-}
+clickUndo : Model -> Model
+clickUndo model =
+    if canUndo model then
+        let
+            nextLog =
+                model.actionLog ++ [ { action = GameEvent.Undo } ]
+
+            effective =
+                collapseUndos nextLog
+        in
+        { model
+            | actionLog = nextLog
+            , board =
+                List.foldl applyForPuzzle
+                    model.initialBoard
+                    (List.map .action effective)
+        }
+
+    else
+        model
+
+
+canUndo : Model -> Bool
+canUndo model =
+    not (List.isEmpty (collapseUndos model.actionLog))
+
+
+{-| Apply one event to the puzzle's board. The puzzle's
+universe of actions is just the three board verbs; any other
+variant in the log signals a real bug, so we log loudly (the
+existing convention in `Game.Execute`).
+-}
+applyForPuzzle : GameEvent -> List CardStack -> List CardStack
+applyForPuzzle event board =
+    case event of
+        Split p ->
+            Execute.split p.stack p.cardIndex board
+
+        MergeStack p ->
+            Execute.mergeStack p.source p.target p.side board
+
+        MoveStack p ->
+            Execute.moveStack p.stack p.newLoc board
+
+        _ ->
+            let
+                _ =
+                    Debug.log "puzzle.applyForPuzzle: unexpected event in log" event
+            in
+            board
+
+
+{-| Local copy of `Main.State.collapseUndos`, simplified:
+puzzles have no `CompleteTurn` so popping never has to skip
+across a turn boundary. The full game's version is more
+elaborate; the puzzle's is honest about its smaller universe.
+-}
+collapseUndos : List ActionLogEntry -> List ActionLogEntry
+collapseUndos entries =
+    List.foldl
+        (\entry stack ->
+            case entry.action of
+                Undo ->
+                    popLast stack
+
+                _ ->
+                    stack ++ [ entry ]
+        )
+        []
+        entries
+
+
+popLast : List a -> List a
+popLast list =
+    case List.reverse list of
+        [] ->
+            list
+
+        _ :: rest ->
+            List.reverse rest
 
 
 boardRectReceived : Result Browser.Dom.Error Browser.Dom.Element -> Model -> Model
@@ -267,7 +371,8 @@ view model =
         [ style "padding" "20px"
         , style "font-family" "system-ui, sans-serif"
         ]
-        [ BoardView.boardColumn
+        [ div [ style "margin-bottom" "10px" ] [ undoButton model ]
+        , BoardView.boardColumn
             { board = model.board
             , boardRect = model.boardRect
             , drag = model.drag
@@ -275,6 +380,15 @@ view model =
             , cardMouseDown = cardMouseDown
             }
         ]
+
+
+undoButton : Model -> Html Msg
+undoButton model =
+    if canUndo model then
+        Button.button "Undo" ClickUndo
+
+    else
+        Button.disabledButton "Undo"
 
 
 
