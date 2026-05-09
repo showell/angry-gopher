@@ -39,11 +39,10 @@ import Html exposing (Html)
 import Http
 import Json.Encode as Encode
 import Game.Status as Status exposing (StatusKind(..), StatusMessage)
+import Game.PointerInput as PointerInput
 import Main.Gesture
     exposing
-        ( mouseMoveDecoder
-        , mouseUpDecoder
-        , startBoardCardDrag
+        ( startBoardCardDrag
         , startHandDrag
         )
 import Main.Msg exposing (Msg(..))
@@ -571,8 +570,8 @@ subscriptions model =
                     []
 
                 _ ->
-                    [ Browser.Events.onMouseMove mouseMoveDecoder
-                    , Browser.Events.onMouseUp mouseUpDecoder
+                    [ Browser.Events.onMouseMove (PointerInput.mouseMoveDecoder MouseMove)
+                    , Browser.Events.onMouseUp (PointerInput.mouseUpDecoder MouseUp)
                     ]
 
         replaySubs =

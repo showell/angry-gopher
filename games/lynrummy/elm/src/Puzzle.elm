@@ -35,12 +35,11 @@ import Game.Execute as Execute
 import Game.GameEvent as GameEvent exposing (GameEvent(..))
 import Game.Physics.GestureArbitration as GA
 import Game.Point exposing (Point)
+import Game.PointerInput as PointerInput
 import Game.Rules.Card exposing (CardValue(..), OriginDeck(..), Suit(..))
 import Game.Status as Status
 import Html exposing (Html, div)
 import Html.Attributes exposing (style)
-import Html.Events as Events
-import Json.Decode as Decode exposing (Decoder)
 import Task
 
 
@@ -301,50 +300,6 @@ fetchBoardRect gameId =
 
 
 
--- DECODERS / EVENT HOOKS
-
-
-pointDecoder : Decoder Point
-pointDecoder =
-    Decode.map2 (\x y -> { x = round x, y = round y })
-        (Decode.field "clientX" Decode.float)
-        (Decode.field "clientY" Decode.float)
-
-
-pointAndTimeDecoder : Decoder ( Point, Float )
-pointAndTimeDecoder =
-    Decode.map2 Tuple.pair
-        pointDecoder
-        (Decode.field "timeStamp" Decode.float)
-
-
-mouseMoveDecoder : Decoder Msg
-mouseMoveDecoder =
-    Decode.map2 MouseMove
-        pointDecoder
-        (Decode.field "timeStamp" Decode.float)
-
-
-mouseUpDecoder : Decoder Msg
-mouseUpDecoder =
-    Decode.map2 MouseUp
-        pointDecoder
-        (Decode.field "timeStamp" Decode.float)
-
-
-cardMouseDown : CardStack -> Int -> List (Html.Attribute Msg)
-cardMouseDown stack cardIdx =
-    [ Events.on "mousedown"
-        (Decode.map
-            (\( p, t ) ->
-                MouseDownOnBoardCard { stack = stack, cardIndex = cardIdx, point = p, time = t }
-            )
-            pointAndTimeDecoder
-        )
-    ]
-
-
-
 -- SUBSCRIPTIONS
 
 
@@ -356,8 +311,8 @@ subscriptions model =
 
         _ ->
             Sub.batch
-                [ Browser.Events.onMouseMove mouseMoveDecoder
-                , Browser.Events.onMouseUp mouseUpDecoder
+                [ Browser.Events.onMouseMove (PointerInput.mouseMoveDecoder MouseMove)
+                , Browser.Events.onMouseUp (PointerInput.mouseUpDecoder MouseUp)
                 ]
 
 
@@ -377,7 +332,7 @@ view model =
             , boardRect = model.boardRect
             , drag = model.drag
             , gameId = model.gameId
-            , cardMouseDown = cardMouseDown
+            , cardMouseDown = PointerInput.cardMouseDown MouseDownOnBoardCard
             }
         ]
 

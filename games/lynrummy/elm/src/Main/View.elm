@@ -49,12 +49,12 @@ import Game.CardStack exposing (CardStack)
 import Game.Drag as Drag
 import Game.Physics.BoardGeometry as BoardGeometry
 import Game.Physics.GestureArbitration as GA
+import Game.PointerInput as PointerInput
 import Game.Popup as Popup
 import Game.Sidebar as Sidebar
 import Game.Status as Status
 import Html exposing (Html, div)
 import Html.Attributes exposing (style)
-import Main.Gesture as Gesture
 import Main.Msg exposing (Msg(..))
 import Main.State
     exposing
@@ -194,5 +194,5 @@ boardColumnInput model =
     , boardRect = model.boardRect
     , drag = drag
     , gameId = model.gameId
-    , cardMouseDown = Gesture.cardMouseDown
+    , cardMouseDown = PointerInput.cardMouseDown MouseDownOnBoardCard
     }

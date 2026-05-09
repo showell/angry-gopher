@@ -1,8 +1,5 @@
 module Main.Gesture exposing
-    ( cardMouseDown
-    , handCardAttrs
-    , mouseMoveDecoder
-    , mouseUpDecoder
+    ( handCardAttrs
     , startBoardCardDrag
     , startHandDrag
     )
@@ -49,13 +46,14 @@ import Game.BoardGesture as BoardGesture
 import Game.BoardView exposing (boardDomIdFor)
 import Game.Drag exposing (DragState(..))
 import Game.HandGesture as HandGesture
+import Game.PointerInput as PointerInput
 import Game.Rules.Card exposing (Card)
 import Game.CardStack exposing (CardStack, HandCard)
 import Html
 import Html.Attributes exposing (style)
 import Html.Events as Events
 import Game.Hand exposing (activeHand)
-import Json.Decode as Decode exposing (Decoder)
+import Json.Decode as Decode
 import Main.Msg exposing (Msg(..))
 import Main.State exposing (Model)
 import Game.Point exposing (Point)
@@ -139,64 +137,7 @@ fetchBoardRect gameId =
 
 
 
--- DECODERS
-
-
-pointDecoder : Decoder Point
-pointDecoder =
-    Decode.map2 (\x y -> { x = round x, y = round y })
-        (Decode.field "clientX" Decode.float)
-        (Decode.field "clientY" Decode.float)
-
-
-{-| Decoder for mousedown / mouseup events that also captures the
-`MouseEvent.timeStamp`.
--}
-pointAndTimeDecoder : Decoder ( Point, Float )
-pointAndTimeDecoder =
-    Decode.map2 Tuple.pair
-        pointDecoder
-        (Decode.field "timeStamp" Decode.float)
-
-
-{-| Document-level mousemove decoder. Wired into
-`Browser.Events.onMouseMove` while a drag is live.
--}
-mouseMoveDecoder : Decoder Msg
-mouseMoveDecoder =
-    Decode.map2 MouseMove
-        pointDecoder
-        (Decode.field "timeStamp" Decode.float)
-
-
-{-| Document-level mouseup decoder. Wired into
-`Browser.Events.onMouseUp` while a drag is live.
--}
-mouseUpDecoder : Decoder Msg
-mouseUpDecoder =
-    Decode.map2 MouseUp
-        pointDecoder
-        (Decode.field "timeStamp" Decode.float)
-
-
-
 -- VIEW-SIDE STYLING HOOKS
-
-
-{-| Mousedown handler for a board card. Emits
-`MouseDownOnBoardCard` carrying the CardStack the card lives in
-and the card's position within that stack.
--}
-cardMouseDown : CardStack -> Int -> List (Html.Attribute Msg)
-cardMouseDown stack cardIdx =
-    [ Events.on "mousedown"
-        (Decode.map
-            (\( p, t ) ->
-                MouseDownOnBoardCard { stack = stack, cardIndex = cardIdx, point = p, time = t }
-            )
-            pointAndTimeDecoder
-        )
-    ]
 
 
 {-| Per-hand-card attribute list. Three responsibilities:
@@ -226,7 +167,7 @@ handCardAttrs drag hintedCards hc =
                     [ Events.on "mousedown"
                         (Decode.map
                             (\( p, t ) -> MouseDownOnHandCard { card = hc.card, point = p, time = t })
-                            pointAndTimeDecoder
+                            PointerInput.pointAndTimeDecoder
                         )
                     ]
 
