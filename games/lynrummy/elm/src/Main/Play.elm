@@ -43,7 +43,9 @@ import Game.Physics.BoardGeometry exposing (refereeBounds)
 import Game.Status as Status exposing (StatusKind(..), StatusMessage)
 import Main.Gesture
     exposing
-        ( pointDecoder
+        ( mouseMoveDecoder
+        , mouseUpDecoder
+        , pointDecoder
         , startBoardCardDrag
         , startHandDrag
         )
@@ -614,20 +616,6 @@ handleHintResponse value model =
 
 
 -- SUBSCRIPTIONS
-
-
-mouseMoveDecoder : Decoder Msg
-mouseMoveDecoder =
-    Decode.map2 MouseMove
-        pointDecoder
-        (Decode.field "timeStamp" Decode.float)
-
-
-mouseUpDecoder : Decoder Msg
-mouseUpDecoder =
-    Decode.map2 MouseUp
-        pointDecoder
-        (Decode.field "timeStamp" Decode.float)
 
 
 subscriptions : Model -> Sub Msg

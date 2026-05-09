@@ -1,6 +1,8 @@
 module Main.Gesture exposing
     ( cardMouseDown
     , handCardAttrs
+    , mouseMoveDecoder
+    , mouseUpDecoder
     , pointDecoder
     , startBoardCardDrag
     , startHandDrag
@@ -184,6 +186,26 @@ pointDecoder =
 pointAndTimeDecoder : Decoder ( Point, Float )
 pointAndTimeDecoder =
     Decode.map2 Tuple.pair
+        pointDecoder
+        (Decode.field "timeStamp" Decode.float)
+
+
+{-| Document-level mousemove decoder. Wired into
+`Browser.Events.onMouseMove` while a drag is live.
+-}
+mouseMoveDecoder : Decoder Msg
+mouseMoveDecoder =
+    Decode.map2 MouseMove
+        pointDecoder
+        (Decode.field "timeStamp" Decode.float)
+
+
+{-| Document-level mouseup decoder. Wired into
+`Browser.Events.onMouseUp` while a drag is live.
+-}
+mouseUpDecoder : Decoder Msg
+mouseUpDecoder =
+    Decode.map2 MouseUp
         pointDecoder
         (Decode.field "timeStamp" Decode.float)
 
