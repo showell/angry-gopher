@@ -182,5 +182,8 @@ replayDrag rs =
         Animating dragState ->
             Drag.DraggingBoardCard dragState.dragInfo
 
-        Beat _ ->
+        InBeat _ ->
+            Drag.NotDragging
+
+        Starting ->
             Drag.NotDragging
