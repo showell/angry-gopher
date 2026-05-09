@@ -3,6 +3,7 @@ module Game.BoardGesture exposing
     , handleMouseUp
     , mouseMove
     , resolveBoardCardGesture
+    , startBoardDragInfo
     )
 
 {-| Per-side resolution for board-card mouseup gestures.
@@ -25,6 +26,7 @@ import Game.BoardDragTypes exposing (BoardCardDragInfo)
 import Game.CardStack as CardStack exposing (BoardLocation, CardStack)
 import Game.Physics.BoardGeometry as BG
 import Game.Physics.GestureArbitration as GA
+import Game.Physics.WingOracle as WingOracle
 import Game.Status as Status
 import Game.TimeLoc exposing (TimeLoc)
 import Game.WingView as WingView
@@ -44,6 +46,30 @@ type BoardMouseUp
     | MergeStack { source : CardStack, target : CardStack, side : Side, boardPath : List TimeLoc }
     | MoveStack { stack : CardStack, newLoc : BoardLocation, boardPath : List TimeLoc }
     | BoardCardOffBoard
+
+
+{-| Construct a fresh `BoardCardDragInfo` from a mousedown.
+Pure: no Model, no Cmd. Hosts wrap this for their own Model
+shape (full game patches `model.drag`; puzzle host patches its
+own drag field). Wings are computed once at start and pinned.
+-}
+startBoardDragInfo :
+    { stack : CardStack
+    , cardIndex : Int
+    , cursor : Point
+    , tMs : Float
+    , board : List CardStack
+    }
+    -> BoardCardDragInfo
+startBoardDragInfo { stack, cardIndex, cursor, tMs, board } =
+    { stack = stack
+    , cardIndex = cardIndex
+    , originalCursor = cursor
+    , cursor = cursor
+    , floaterTopLeft = stack.loc
+    , boardPath = [ { tMs = tMs, left = stack.loc.left, top = stack.loc.top } ]
+    , wings = WingOracle.wingsForStack stack board
+    }
 
 
 {-| Mouseup handler for a board-card drag. Caller has

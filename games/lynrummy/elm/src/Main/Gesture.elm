@@ -45,6 +45,7 @@ answered exactly once, at mouseup, as an outcome judgment.
 -}
 
 import Browser.Dom
+import Game.BoardGesture as BoardGesture
 import Game.BoardView exposing (boardDomIdFor)
 import Game.Drag exposing (DragState(..))
 import Game.Physics.WingOracle as WingOracle
@@ -79,26 +80,17 @@ startBoardCardDrag :
 startBoardCardDrag { stack, cardIndex } clientPoint tMs model =
     case model.drag of
         NotDragging ->
-            let
-                wings =
-                    WingOracle.wingsForStack stack model.gameState.board
-            in
-            -- Intra-board: the floater starts exactly where
-            -- the stack is. `stack.loc` is already a
-            -- `BoardLocation` — same shape as `floaterTopLeft`,
-            -- no translation.
             ( { model
                 | drag =
                     DraggingBoardCard
-                        { stack = stack
-                        , cardIndex = cardIndex
-                        , originalCursor = clientPoint
-                        , cursor = clientPoint
-                        , floaterTopLeft = stack.loc
-                        , boardPath =
-                            [ { tMs = tMs, left = stack.loc.left, top = stack.loc.top } ]
-                        , wings = wings
-                        }
+                        (BoardGesture.startBoardDragInfo
+                            { stack = stack
+                            , cardIndex = cardIndex
+                            , cursor = clientPoint
+                            , tMs = tMs
+                            , board = model.gameState.board
+                            }
+                        )
               }
             , fetchBoardRect model.gameId
             )
