@@ -1,7 +1,7 @@
 module Main.ViewTest exposing (suite)
 
-{-| Tests for the turn-ceremony helpers in Main.View:
-`statusForCompleteTurn` and `popupForCompleteTurn`.
+{-| Tests for the turn-ceremony helpers in Game.Status and
+Game.Popup: `statusForCompleteTurn` and `popupForCompleteTurn`.
 
 These are the functions that translate a CompleteTurnOutcome into
 the status bar message and popup the player sees. Each
@@ -13,8 +13,8 @@ this suite exists to keep it alive.
 import Expect
 import Game.Game exposing (CompleteTurnOutcome)
 import Game.PlayerTurn exposing (CompleteTurnResult(..))
-import Game.Status exposing (StatusKind(..))
-import Main.View exposing (popupForCompleteTurn, statusForCompleteTurn)
+import Game.Popup exposing (popupForCompleteTurn)
+import Game.Status exposing (StatusKind(..), statusForCompleteTurn)
 import Test exposing (Test, describe, test)
 
 

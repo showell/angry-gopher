@@ -23,14 +23,12 @@ import Browser.Dom
 import Browser.Events
 import Game.BoardDrag as BoardDrag
 import Game.BoardGesture as BoardGesture
-import Game.CardStack exposing (CardStack)
 import Game.Drag exposing (DragState(..))
 import Game.Engine as Engine
 import Game.Execute as Execute
 import Game.Hand exposing (activeHand)
 import Game.HandDrag as HandDrag
 import Game.HandGesture as HandGesture
-import Game.Rules.Card as Card
 import Game.Dealer as Dealer
 import Game.Game as Game
 import Game.PlayerTurn exposing (CompleteTurnResult(..))
@@ -50,7 +48,6 @@ import Main.Gesture
         , startHandDrag
         )
 import Main.Msg exposing (Msg(..))
-import Game.ActionLog exposing (ActionLogBundle)
 import Main.State
     exposing
         ( Model

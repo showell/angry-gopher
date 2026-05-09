@@ -45,14 +45,9 @@ drag math honest.
 -}
 
 import Game.Physics.BoardGeometry as BoardGeometry
-import Game.Game exposing (CompleteTurnOutcome, GameState)
-import Game.Hand exposing (Hand)
-import Game.PlayerTurn exposing (CompleteTurnResult(..))
-import Game.Rules.Card exposing (Card)
 import Game.View as View
 import Html exposing (Html, div)
-import Html.Attributes exposing (href, style)
-import Html.Events as Events
+import Html.Attributes exposing (style)
 import Game.BoardView as BoardView
 import Game.Drag as Drag
 import Game.Popup as Popup
@@ -63,7 +58,6 @@ import Main.State
     exposing
         ( Model
         , ReplayAnimationState(..)
-        , ReplayState
         , canUndoThisTurn
         )
 
