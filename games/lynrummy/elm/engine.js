@@ -2678,6 +2678,14 @@ var LynRummyEngine = (() => {
   // games/lynrummy/ts/src/hand_play.ts
   var PROJECTION_MAX_STATES = 5e3;
   var HINT_MAX_PLAN_LENGTH = 5;
+  var HINT_MAX_TROUBLE_OUTER = 10;
+  function findPlanForBuckets(initial, maxStates = PROJECTION_MAX_STATES) {
+    return solveStateWithDescs(initial, {
+      maxTroubleOuter: HINT_MAX_TROUBLE_OUTER,
+      maxStates,
+      maxPlanLength: HINT_MAX_PLAN_LENGTH
+    });
+  }
   function findPlay(hand, board, opts = {}) {
     const maxStates = opts.maxStates ?? PROJECTION_MAX_STATES;
     const stats = opts.stats;
@@ -2786,18 +2794,11 @@ var LynRummyEngine = (() => {
     const cards = [];
     for (const s of extraStacks) for (const c of s) cards.push(c);
     if (stats === void 0) {
-      const plan2 = solveStateWithDescs(initial, {
-        maxTroubleOuter: 10,
-        maxStates,
-        maxPlanLength: HINT_MAX_PLAN_LENGTH
-      });
+      const plan2 = findPlanForBuckets(initial, maxStates);
       return plan2 === null ? null : plan2.map((p) => p.line);
     }
     const t0 = performance.now();
-    const plan = solveStateWithDescs(initial, {
-      maxTroubleOuter: 10,
-      maxStates
-    });
+    const plan = findPlanForBuckets(initial, maxStates);
     const wallMs = performance.now() - t0;
     stats.projections.push({
       kind,
@@ -2839,7 +2840,10 @@ var LynRummyEngine = (() => {
           action: "merge_stack",
           source: jsonStack(sim[prim.sourceStack]),
           target: jsonStack(sim[prim.targetStack]),
-          side: prim.side
+          side: prim.side,
+          // Agent has no captured path; replay synthesizes one
+          // via the JIT path in Game.Replay.Space.
+          board_path: []
         };
       case "merge_hand":
         return {
@@ -2858,7 +2862,8 @@ var LynRummyEngine = (() => {
         return {
           action: "move_stack",
           stack: jsonStack(sim[prim.stackIndex]),
-          new_loc: { top: prim.newLoc.top, left: prim.newLoc.left }
+          new_loc: { top: prim.newLoc.top, left: prim.newLoc.left },
+          board_path: []
         };
     }
   }
