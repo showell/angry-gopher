@@ -1,7 +1,6 @@
 module Game.BoardView exposing
     ( boardColumn
     , boardDomIdFor
-    , viewBoard
     )
 
 {-| The board widget — stacks, drag wings, and the
@@ -60,23 +59,6 @@ boardShellWith extraAttrs children =
             ]
     in
     div (baseAttrs ++ extraAttrs) children
-
-
-
--- STATIC RENDERING
---
--- The minimum surface to draw a board: a list of positioned
--- stacks on the standard board shell. No model, no drag
--- state, no gameId. Used by surfaces where there's nothing
--- to interact with (the puzzle V1, snapshot views).
---
--- Polymorphic in `msg` so callers with their own Msg type
--- can use it without going through `Main.Msg`.
-
-
-viewBoard : List CardStack -> Html msg
-viewBoard stacks =
-    boardShellWith [] (List.map StackView.viewStack stacks)
 
 
 

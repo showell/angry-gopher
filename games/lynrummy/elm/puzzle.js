@@ -80,6 +80,190 @@ function A9(fun, a, b, c, d, e, f, g, h, i) {
 console.warn('Compiled in DEV mode. Follow the advice at https://elm-lang.org/0.19.1/optimize for better performance and smaller assets.');
 
 
+// EQUALITY
+
+function _Utils_eq(x, y)
+{
+	for (
+		var pair, stack = [], isEqual = _Utils_eqHelp(x, y, 0, stack);
+		isEqual && (pair = stack.pop());
+		isEqual = _Utils_eqHelp(pair.a, pair.b, 0, stack)
+		)
+	{}
+
+	return isEqual;
+}
+
+function _Utils_eqHelp(x, y, depth, stack)
+{
+	if (x === y)
+	{
+		return true;
+	}
+
+	if (typeof x !== 'object' || x === null || y === null)
+	{
+		typeof x === 'function' && _Debug_crash(5);
+		return false;
+	}
+
+	if (depth > 100)
+	{
+		stack.push(_Utils_Tuple2(x,y));
+		return true;
+	}
+
+	/**/
+	if (x.$ === 'Set_elm_builtin')
+	{
+		x = $elm$core$Set$toList(x);
+		y = $elm$core$Set$toList(y);
+	}
+	if (x.$ === 'RBNode_elm_builtin' || x.$ === 'RBEmpty_elm_builtin')
+	{
+		x = $elm$core$Dict$toList(x);
+		y = $elm$core$Dict$toList(y);
+	}
+	//*/
+
+	/**_UNUSED/
+	if (x.$ < 0)
+	{
+		x = $elm$core$Dict$toList(x);
+		y = $elm$core$Dict$toList(y);
+	}
+	//*/
+
+	for (var key in x)
+	{
+		if (!_Utils_eqHelp(x[key], y[key], depth + 1, stack))
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
+var _Utils_equal = F2(_Utils_eq);
+var _Utils_notEqual = F2(function(a, b) { return !_Utils_eq(a,b); });
+
+
+
+// COMPARISONS
+
+// Code in Generate/JavaScript.hs, Basics.js, and List.js depends on
+// the particular integer values assigned to LT, EQ, and GT.
+
+function _Utils_cmp(x, y, ord)
+{
+	if (typeof x !== 'object')
+	{
+		return x === y ? /*EQ*/ 0 : x < y ? /*LT*/ -1 : /*GT*/ 1;
+	}
+
+	/**/
+	if (x instanceof String)
+	{
+		var a = x.valueOf();
+		var b = y.valueOf();
+		return a === b ? 0 : a < b ? -1 : 1;
+	}
+	//*/
+
+	/**_UNUSED/
+	if (typeof x.$ === 'undefined')
+	//*/
+	/**/
+	if (x.$[0] === '#')
+	//*/
+	{
+		return (ord = _Utils_cmp(x.a, y.a))
+			? ord
+			: (ord = _Utils_cmp(x.b, y.b))
+				? ord
+				: _Utils_cmp(x.c, y.c);
+	}
+
+	// traverse conses until end of a list or a mismatch
+	for (; x.b && y.b && !(ord = _Utils_cmp(x.a, y.a)); x = x.b, y = y.b) {} // WHILE_CONSES
+	return ord || (x.b ? /*GT*/ 1 : y.b ? /*LT*/ -1 : /*EQ*/ 0);
+}
+
+var _Utils_lt = F2(function(a, b) { return _Utils_cmp(a, b) < 0; });
+var _Utils_le = F2(function(a, b) { return _Utils_cmp(a, b) < 1; });
+var _Utils_gt = F2(function(a, b) { return _Utils_cmp(a, b) > 0; });
+var _Utils_ge = F2(function(a, b) { return _Utils_cmp(a, b) >= 0; });
+
+var _Utils_compare = F2(function(x, y)
+{
+	var n = _Utils_cmp(x, y);
+	return n < 0 ? $elm$core$Basics$LT : n ? $elm$core$Basics$GT : $elm$core$Basics$EQ;
+});
+
+
+// COMMON VALUES
+
+var _Utils_Tuple0_UNUSED = 0;
+var _Utils_Tuple0 = { $: '#0' };
+
+function _Utils_Tuple2_UNUSED(a, b) { return { a: a, b: b }; }
+function _Utils_Tuple2(a, b) { return { $: '#2', a: a, b: b }; }
+
+function _Utils_Tuple3_UNUSED(a, b, c) { return { a: a, b: b, c: c }; }
+function _Utils_Tuple3(a, b, c) { return { $: '#3', a: a, b: b, c: c }; }
+
+function _Utils_chr_UNUSED(c) { return c; }
+function _Utils_chr(c) { return new String(c); }
+
+
+// RECORDS
+
+function _Utils_update(oldRecord, updatedFields)
+{
+	var newRecord = {};
+
+	for (var key in oldRecord)
+	{
+		newRecord[key] = oldRecord[key];
+	}
+
+	for (var key in updatedFields)
+	{
+		newRecord[key] = updatedFields[key];
+	}
+
+	return newRecord;
+}
+
+
+// APPEND
+
+var _Utils_append = F2(_Utils_ap);
+
+function _Utils_ap(xs, ys)
+{
+	// append Strings
+	if (typeof xs === 'string')
+	{
+		return xs + ys;
+	}
+
+	// append Lists
+	if (!xs.b)
+	{
+		return ys;
+	}
+	var root = _List_Cons(xs.a, ys);
+	xs = xs.b
+	for (var curr = root; xs.b; xs = xs.b) // WHILE_CONS
+	{
+		curr = curr.b = _List_Cons(xs.a, ys);
+	}
+	return root;
+}
+
+
+
 var _List_Nil_UNUSED = { $: 0 };
 var _List_Nil = { $: '[]' };
 
@@ -605,190 +789,6 @@ function _Debug_regionToString(region)
 		return 'on line ' + region.start.line;
 	}
 	return 'on lines ' + region.start.line + ' through ' + region.end.line;
-}
-
-
-
-// EQUALITY
-
-function _Utils_eq(x, y)
-{
-	for (
-		var pair, stack = [], isEqual = _Utils_eqHelp(x, y, 0, stack);
-		isEqual && (pair = stack.pop());
-		isEqual = _Utils_eqHelp(pair.a, pair.b, 0, stack)
-		)
-	{}
-
-	return isEqual;
-}
-
-function _Utils_eqHelp(x, y, depth, stack)
-{
-	if (x === y)
-	{
-		return true;
-	}
-
-	if (typeof x !== 'object' || x === null || y === null)
-	{
-		typeof x === 'function' && _Debug_crash(5);
-		return false;
-	}
-
-	if (depth > 100)
-	{
-		stack.push(_Utils_Tuple2(x,y));
-		return true;
-	}
-
-	/**/
-	if (x.$ === 'Set_elm_builtin')
-	{
-		x = $elm$core$Set$toList(x);
-		y = $elm$core$Set$toList(y);
-	}
-	if (x.$ === 'RBNode_elm_builtin' || x.$ === 'RBEmpty_elm_builtin')
-	{
-		x = $elm$core$Dict$toList(x);
-		y = $elm$core$Dict$toList(y);
-	}
-	//*/
-
-	/**_UNUSED/
-	if (x.$ < 0)
-	{
-		x = $elm$core$Dict$toList(x);
-		y = $elm$core$Dict$toList(y);
-	}
-	//*/
-
-	for (var key in x)
-	{
-		if (!_Utils_eqHelp(x[key], y[key], depth + 1, stack))
-		{
-			return false;
-		}
-	}
-	return true;
-}
-
-var _Utils_equal = F2(_Utils_eq);
-var _Utils_notEqual = F2(function(a, b) { return !_Utils_eq(a,b); });
-
-
-
-// COMPARISONS
-
-// Code in Generate/JavaScript.hs, Basics.js, and List.js depends on
-// the particular integer values assigned to LT, EQ, and GT.
-
-function _Utils_cmp(x, y, ord)
-{
-	if (typeof x !== 'object')
-	{
-		return x === y ? /*EQ*/ 0 : x < y ? /*LT*/ -1 : /*GT*/ 1;
-	}
-
-	/**/
-	if (x instanceof String)
-	{
-		var a = x.valueOf();
-		var b = y.valueOf();
-		return a === b ? 0 : a < b ? -1 : 1;
-	}
-	//*/
-
-	/**_UNUSED/
-	if (typeof x.$ === 'undefined')
-	//*/
-	/**/
-	if (x.$[0] === '#')
-	//*/
-	{
-		return (ord = _Utils_cmp(x.a, y.a))
-			? ord
-			: (ord = _Utils_cmp(x.b, y.b))
-				? ord
-				: _Utils_cmp(x.c, y.c);
-	}
-
-	// traverse conses until end of a list or a mismatch
-	for (; x.b && y.b && !(ord = _Utils_cmp(x.a, y.a)); x = x.b, y = y.b) {} // WHILE_CONSES
-	return ord || (x.b ? /*GT*/ 1 : y.b ? /*LT*/ -1 : /*EQ*/ 0);
-}
-
-var _Utils_lt = F2(function(a, b) { return _Utils_cmp(a, b) < 0; });
-var _Utils_le = F2(function(a, b) { return _Utils_cmp(a, b) < 1; });
-var _Utils_gt = F2(function(a, b) { return _Utils_cmp(a, b) > 0; });
-var _Utils_ge = F2(function(a, b) { return _Utils_cmp(a, b) >= 0; });
-
-var _Utils_compare = F2(function(x, y)
-{
-	var n = _Utils_cmp(x, y);
-	return n < 0 ? $elm$core$Basics$LT : n ? $elm$core$Basics$GT : $elm$core$Basics$EQ;
-});
-
-
-// COMMON VALUES
-
-var _Utils_Tuple0_UNUSED = 0;
-var _Utils_Tuple0 = { $: '#0' };
-
-function _Utils_Tuple2_UNUSED(a, b) { return { a: a, b: b }; }
-function _Utils_Tuple2(a, b) { return { $: '#2', a: a, b: b }; }
-
-function _Utils_Tuple3_UNUSED(a, b, c) { return { a: a, b: b, c: c }; }
-function _Utils_Tuple3(a, b, c) { return { $: '#3', a: a, b: b, c: c }; }
-
-function _Utils_chr_UNUSED(c) { return c; }
-function _Utils_chr(c) { return new String(c); }
-
-
-// RECORDS
-
-function _Utils_update(oldRecord, updatedFields)
-{
-	var newRecord = {};
-
-	for (var key in oldRecord)
-	{
-		newRecord[key] = oldRecord[key];
-	}
-
-	for (var key in updatedFields)
-	{
-		newRecord[key] = updatedFields[key];
-	}
-
-	return newRecord;
-}
-
-
-// APPEND
-
-var _Utils_append = F2(_Utils_ap);
-
-function _Utils_ap(xs, ys)
-{
-	// append Strings
-	if (typeof xs === 'string')
-	{
-		return xs + ys;
-	}
-
-	// append Lists
-	if (!xs.b)
-	{
-		return ys;
-	}
-	var root = _List_Cons(xs.a, ys);
-	xs = xs.b
-	for (var curr = root; xs.b; xs = xs.b) // WHILE_CONS
-	{
-		curr = curr.b = _List_Cons(xs.a, ys);
-	}
-	return root;
 }
 
 
@@ -4379,32 +4379,9 @@ function _Browser_load(url)
 	}));
 }
 var $elm$core$Basics$EQ = {$: 'EQ'};
+var $elm$core$Basics$GT = {$: 'GT'};
 var $elm$core$Basics$LT = {$: 'LT'};
 var $elm$core$List$cons = _List_cons;
-var $elm$core$Elm$JsArray$foldr = _JsArray_foldr;
-var $elm$core$Array$foldr = F3(
-	function (func, baseCase, _v0) {
-		var tree = _v0.c;
-		var tail = _v0.d;
-		var helper = F2(
-			function (node, acc) {
-				if (node.$ === 'SubTree') {
-					var subTree = node.a;
-					return A3($elm$core$Elm$JsArray$foldr, helper, acc, subTree);
-				} else {
-					var values = node.a;
-					return A3($elm$core$Elm$JsArray$foldr, func, acc, values);
-				}
-			});
-		return A3(
-			$elm$core$Elm$JsArray$foldr,
-			helper,
-			A3($elm$core$Elm$JsArray$foldr, func, baseCase, tail),
-			tree);
-	});
-var $elm$core$Array$toList = function (array) {
-	return A3($elm$core$Array$foldr, $elm$core$List$cons, _List_Nil, array);
-};
 var $elm$core$Dict$foldr = F3(
 	function (func, acc, t) {
 		foldr:
@@ -4457,7 +4434,30 @@ var $elm$core$Set$toList = function (_v0) {
 	var dict = _v0.a;
 	return $elm$core$Dict$keys(dict);
 };
-var $elm$core$Basics$GT = {$: 'GT'};
+var $elm$core$Elm$JsArray$foldr = _JsArray_foldr;
+var $elm$core$Array$foldr = F3(
+	function (func, baseCase, _v0) {
+		var tree = _v0.c;
+		var tail = _v0.d;
+		var helper = F2(
+			function (node, acc) {
+				if (node.$ === 'SubTree') {
+					var subTree = node.a;
+					return A3($elm$core$Elm$JsArray$foldr, helper, acc, subTree);
+				} else {
+					var values = node.a;
+					return A3($elm$core$Elm$JsArray$foldr, func, acc, values);
+				}
+			});
+		return A3(
+			$elm$core$Elm$JsArray$foldr,
+			helper,
+			A3($elm$core$Elm$JsArray$foldr, func, baseCase, tail),
+			tree);
+	});
+var $elm$core$Array$toList = function (array) {
+	return A3($elm$core$Array$foldr, $elm$core$List$cons, _List_Nil, array);
+};
 var $elm$core$Result$Err = function (a) {
 	return {$: 'Err', a: a};
 };
@@ -5166,28 +5166,9 @@ var $elm$core$Task$perform = F2(
 			$elm$core$Task$Perform(
 				A2($elm$core$Task$map, toMessage, task)));
 	});
-var $elm$core$Platform$Cmd$batch = _Platform_batch;
-var $elm$core$Platform$Cmd$none = $elm$core$Platform$Cmd$batch(_List_Nil);
-var $elm$core$Platform$Sub$batch = _Platform_batch;
-var $elm$core$Platform$Sub$none = $elm$core$Platform$Sub$batch(_List_Nil);
-var $elm$browser$Browser$sandbox = function (impl) {
-	return _Browser_element(
-		{
-			init: function (_v0) {
-				return _Utils_Tuple2(impl.init, $elm$core$Platform$Cmd$none);
-			},
-			subscriptions: function (_v1) {
-				return $elm$core$Platform$Sub$none;
-			},
-			update: F2(
-				function (msg, model) {
-					return _Utils_Tuple2(
-						A2(impl.update, msg, model),
-						$elm$core$Platform$Cmd$none);
-				}),
-			view: impl.view
-		});
-};
+var $elm$browser$Browser$element = _Browser_element;
+var $author$project$Game$Status$Inform = {$: 'Inform'};
+var $author$project$Game$Drag$NotDragging = {$: 'NotDragging'};
 var $author$project$Game$Rules$Card$Ace = {$: 'Ace'};
 var $author$project$Game$Rules$Card$Club = {$: 'Club'};
 var $author$project$Game$Rules$Card$Eight = {$: 'Eight'};
@@ -5247,30 +5228,1029 @@ var $author$project$Puzzle$puzzleStacks = _List_fromArray(
 				_Utils_Tuple2($author$project$Game$Rules$Card$Queen, $author$project$Game$Rules$Card$Club)
 			]))
 	]);
-var $elm$html$Html$div = _VirtualDom_node('div');
-var $author$project$Game$View$navy = '#000080';
-var $elm$virtual_dom$VirtualDom$style = _VirtualDom_style;
-var $elm$html$Html$Attributes$style = $elm$virtual_dom$VirtualDom$style;
-var $author$project$Game$BoardView$boardShellWith = F2(
-	function (extraAttrs, children) {
-		var baseAttrs = _List_fromArray(
-			[
-				A2($elm$html$Html$Attributes$style, 'background-color', 'khaki'),
-				A2($elm$html$Html$Attributes$style, 'border', '1px solid ' + $author$project$Game$View$navy),
-				A2($elm$html$Html$Attributes$style, 'border-radius', '15px'),
-				A2($elm$html$Html$Attributes$style, 'position', 'relative'),
-				A2($elm$html$Html$Attributes$style, 'width', '800px'),
-				A2($elm$html$Html$Attributes$style, 'height', '600px'),
-				A2($elm$html$Html$Attributes$style, 'margin-top', '8px')
-			]);
-		return A2(
-			$elm$html$Html$div,
-			_Utils_ap(baseAttrs, extraAttrs),
-			children);
+var $author$project$Puzzle$initialModel = {
+	board: $author$project$Puzzle$puzzleStacks,
+	boardRect: $elm$core$Maybe$Nothing,
+	drag: $author$project$Game$Drag$NotDragging,
+	gameId: 'puzzle',
+	status: {kind: $author$project$Game$Status$Inform, text: 'Drag stacks to merge or move them.'}
+};
+var $elm$core$Platform$Cmd$batch = _Platform_batch;
+var $elm$core$Platform$Cmd$none = $elm$core$Platform$Cmd$batch(_List_Nil);
+var $author$project$Puzzle$init = function (_v0) {
+	return _Utils_Tuple2($author$project$Puzzle$initialModel, $elm$core$Platform$Cmd$none);
+};
+var $elm$core$Platform$Sub$batch = _Platform_batch;
+var $author$project$Puzzle$MouseMove = F2(
+	function (a, b) {
+		return {$: 'MouseMove', a: a, b: b};
 	});
-var $author$project$Game$Rules$StackType$Incomplete = {$: 'Incomplete'};
+var $elm$json$Json$Decode$field = _Json_decodeField;
+var $elm$json$Json$Decode$float = _Json_decodeFloat;
+var $elm$core$Basics$round = _Basics_round;
+var $author$project$Puzzle$pointDecoder = A3(
+	$elm$json$Json$Decode$map2,
+	F2(
+		function (x, y) {
+			return {
+				x: $elm$core$Basics$round(x),
+				y: $elm$core$Basics$round(y)
+			};
+		}),
+	A2($elm$json$Json$Decode$field, 'clientX', $elm$json$Json$Decode$float),
+	A2($elm$json$Json$Decode$field, 'clientY', $elm$json$Json$Decode$float));
+var $author$project$Puzzle$mouseMoveDecoder = A3(
+	$elm$json$Json$Decode$map2,
+	$author$project$Puzzle$MouseMove,
+	$author$project$Puzzle$pointDecoder,
+	A2($elm$json$Json$Decode$field, 'timeStamp', $elm$json$Json$Decode$float));
+var $author$project$Puzzle$MouseUp = F2(
+	function (a, b) {
+		return {$: 'MouseUp', a: a, b: b};
+	});
+var $author$project$Puzzle$mouseUpDecoder = A3(
+	$elm$json$Json$Decode$map2,
+	$author$project$Puzzle$MouseUp,
+	$author$project$Puzzle$pointDecoder,
+	A2($elm$json$Json$Decode$field, 'timeStamp', $elm$json$Json$Decode$float));
+var $elm$core$Platform$Sub$none = $elm$core$Platform$Sub$batch(_List_Nil);
+var $elm$browser$Browser$Events$Document = {$: 'Document'};
+var $elm$browser$Browser$Events$MySub = F3(
+	function (a, b, c) {
+		return {$: 'MySub', a: a, b: b, c: c};
+	});
+var $elm$browser$Browser$Events$State = F2(
+	function (subs, pids) {
+		return {pids: pids, subs: subs};
+	});
+var $elm$core$Dict$RBEmpty_elm_builtin = {$: 'RBEmpty_elm_builtin'};
+var $elm$core$Dict$empty = $elm$core$Dict$RBEmpty_elm_builtin;
+var $elm$browser$Browser$Events$init = $elm$core$Task$succeed(
+	A2($elm$browser$Browser$Events$State, _List_Nil, $elm$core$Dict$empty));
+var $elm$browser$Browser$Events$nodeToKey = function (node) {
+	if (node.$ === 'Document') {
+		return 'd_';
+	} else {
+		return 'w_';
+	}
+};
+var $elm$browser$Browser$Events$addKey = function (sub) {
+	var node = sub.a;
+	var name = sub.b;
+	return _Utils_Tuple2(
+		_Utils_ap(
+			$elm$browser$Browser$Events$nodeToKey(node),
+			name),
+		sub);
+};
+var $elm$core$Dict$Black = {$: 'Black'};
+var $elm$core$Dict$RBNode_elm_builtin = F5(
+	function (a, b, c, d, e) {
+		return {$: 'RBNode_elm_builtin', a: a, b: b, c: c, d: d, e: e};
+	});
+var $elm$core$Dict$Red = {$: 'Red'};
+var $elm$core$Dict$balance = F5(
+	function (color, key, value, left, right) {
+		if ((right.$ === 'RBNode_elm_builtin') && (right.a.$ === 'Red')) {
+			var _v1 = right.a;
+			var rK = right.b;
+			var rV = right.c;
+			var rLeft = right.d;
+			var rRight = right.e;
+			if ((left.$ === 'RBNode_elm_builtin') && (left.a.$ === 'Red')) {
+				var _v3 = left.a;
+				var lK = left.b;
+				var lV = left.c;
+				var lLeft = left.d;
+				var lRight = left.e;
+				return A5(
+					$elm$core$Dict$RBNode_elm_builtin,
+					$elm$core$Dict$Red,
+					key,
+					value,
+					A5($elm$core$Dict$RBNode_elm_builtin, $elm$core$Dict$Black, lK, lV, lLeft, lRight),
+					A5($elm$core$Dict$RBNode_elm_builtin, $elm$core$Dict$Black, rK, rV, rLeft, rRight));
+			} else {
+				return A5(
+					$elm$core$Dict$RBNode_elm_builtin,
+					color,
+					rK,
+					rV,
+					A5($elm$core$Dict$RBNode_elm_builtin, $elm$core$Dict$Red, key, value, left, rLeft),
+					rRight);
+			}
+		} else {
+			if ((((left.$ === 'RBNode_elm_builtin') && (left.a.$ === 'Red')) && (left.d.$ === 'RBNode_elm_builtin')) && (left.d.a.$ === 'Red')) {
+				var _v5 = left.a;
+				var lK = left.b;
+				var lV = left.c;
+				var _v6 = left.d;
+				var _v7 = _v6.a;
+				var llK = _v6.b;
+				var llV = _v6.c;
+				var llLeft = _v6.d;
+				var llRight = _v6.e;
+				var lRight = left.e;
+				return A5(
+					$elm$core$Dict$RBNode_elm_builtin,
+					$elm$core$Dict$Red,
+					lK,
+					lV,
+					A5($elm$core$Dict$RBNode_elm_builtin, $elm$core$Dict$Black, llK, llV, llLeft, llRight),
+					A5($elm$core$Dict$RBNode_elm_builtin, $elm$core$Dict$Black, key, value, lRight, right));
+			} else {
+				return A5($elm$core$Dict$RBNode_elm_builtin, color, key, value, left, right);
+			}
+		}
+	});
+var $elm$core$Basics$compare = _Utils_compare;
+var $elm$core$Dict$insertHelp = F3(
+	function (key, value, dict) {
+		if (dict.$ === 'RBEmpty_elm_builtin') {
+			return A5($elm$core$Dict$RBNode_elm_builtin, $elm$core$Dict$Red, key, value, $elm$core$Dict$RBEmpty_elm_builtin, $elm$core$Dict$RBEmpty_elm_builtin);
+		} else {
+			var nColor = dict.a;
+			var nKey = dict.b;
+			var nValue = dict.c;
+			var nLeft = dict.d;
+			var nRight = dict.e;
+			var _v1 = A2($elm$core$Basics$compare, key, nKey);
+			switch (_v1.$) {
+				case 'LT':
+					return A5(
+						$elm$core$Dict$balance,
+						nColor,
+						nKey,
+						nValue,
+						A3($elm$core$Dict$insertHelp, key, value, nLeft),
+						nRight);
+				case 'EQ':
+					return A5($elm$core$Dict$RBNode_elm_builtin, nColor, nKey, value, nLeft, nRight);
+				default:
+					return A5(
+						$elm$core$Dict$balance,
+						nColor,
+						nKey,
+						nValue,
+						nLeft,
+						A3($elm$core$Dict$insertHelp, key, value, nRight));
+			}
+		}
+	});
+var $elm$core$Dict$insert = F3(
+	function (key, value, dict) {
+		var _v0 = A3($elm$core$Dict$insertHelp, key, value, dict);
+		if ((_v0.$ === 'RBNode_elm_builtin') && (_v0.a.$ === 'Red')) {
+			var _v1 = _v0.a;
+			var k = _v0.b;
+			var v = _v0.c;
+			var l = _v0.d;
+			var r = _v0.e;
+			return A5($elm$core$Dict$RBNode_elm_builtin, $elm$core$Dict$Black, k, v, l, r);
+		} else {
+			var x = _v0;
+			return x;
+		}
+	});
+var $elm$core$Dict$fromList = function (assocs) {
+	return A3(
+		$elm$core$List$foldl,
+		F2(
+			function (_v0, dict) {
+				var key = _v0.a;
+				var value = _v0.b;
+				return A3($elm$core$Dict$insert, key, value, dict);
+			}),
+		$elm$core$Dict$empty,
+		assocs);
+};
+var $elm$core$Process$kill = _Scheduler_kill;
+var $elm$core$Dict$foldl = F3(
+	function (func, acc, dict) {
+		foldl:
+		while (true) {
+			if (dict.$ === 'RBEmpty_elm_builtin') {
+				return acc;
+			} else {
+				var key = dict.b;
+				var value = dict.c;
+				var left = dict.d;
+				var right = dict.e;
+				var $temp$func = func,
+					$temp$acc = A3(
+					func,
+					key,
+					value,
+					A3($elm$core$Dict$foldl, func, acc, left)),
+					$temp$dict = right;
+				func = $temp$func;
+				acc = $temp$acc;
+				dict = $temp$dict;
+				continue foldl;
+			}
+		}
+	});
+var $elm$core$Dict$merge = F6(
+	function (leftStep, bothStep, rightStep, leftDict, rightDict, initialResult) {
+		var stepState = F3(
+			function (rKey, rValue, _v0) {
+				stepState:
+				while (true) {
+					var list = _v0.a;
+					var result = _v0.b;
+					if (!list.b) {
+						return _Utils_Tuple2(
+							list,
+							A3(rightStep, rKey, rValue, result));
+					} else {
+						var _v2 = list.a;
+						var lKey = _v2.a;
+						var lValue = _v2.b;
+						var rest = list.b;
+						if (_Utils_cmp(lKey, rKey) < 0) {
+							var $temp$rKey = rKey,
+								$temp$rValue = rValue,
+								$temp$_v0 = _Utils_Tuple2(
+								rest,
+								A3(leftStep, lKey, lValue, result));
+							rKey = $temp$rKey;
+							rValue = $temp$rValue;
+							_v0 = $temp$_v0;
+							continue stepState;
+						} else {
+							if (_Utils_cmp(lKey, rKey) > 0) {
+								return _Utils_Tuple2(
+									list,
+									A3(rightStep, rKey, rValue, result));
+							} else {
+								return _Utils_Tuple2(
+									rest,
+									A4(bothStep, lKey, lValue, rValue, result));
+							}
+						}
+					}
+				}
+			});
+		var _v3 = A3(
+			$elm$core$Dict$foldl,
+			stepState,
+			_Utils_Tuple2(
+				$elm$core$Dict$toList(leftDict),
+				initialResult),
+			rightDict);
+		var leftovers = _v3.a;
+		var intermediateResult = _v3.b;
+		return A3(
+			$elm$core$List$foldl,
+			F2(
+				function (_v4, result) {
+					var k = _v4.a;
+					var v = _v4.b;
+					return A3(leftStep, k, v, result);
+				}),
+			intermediateResult,
+			leftovers);
+	});
+var $elm$browser$Browser$Events$Event = F2(
+	function (key, event) {
+		return {event: event, key: key};
+	});
+var $elm$core$Platform$sendToSelf = _Platform_sendToSelf;
+var $elm$browser$Browser$Events$spawn = F3(
+	function (router, key, _v0) {
+		var node = _v0.a;
+		var name = _v0.b;
+		var actualNode = function () {
+			if (node.$ === 'Document') {
+				return _Browser_doc;
+			} else {
+				return _Browser_window;
+			}
+		}();
+		return A2(
+			$elm$core$Task$map,
+			function (value) {
+				return _Utils_Tuple2(key, value);
+			},
+			A3(
+				_Browser_on,
+				actualNode,
+				name,
+				function (event) {
+					return A2(
+						$elm$core$Platform$sendToSelf,
+						router,
+						A2($elm$browser$Browser$Events$Event, key, event));
+				}));
+	});
+var $elm$core$Dict$union = F2(
+	function (t1, t2) {
+		return A3($elm$core$Dict$foldl, $elm$core$Dict$insert, t2, t1);
+	});
+var $elm$browser$Browser$Events$onEffects = F3(
+	function (router, subs, state) {
+		var stepRight = F3(
+			function (key, sub, _v6) {
+				var deads = _v6.a;
+				var lives = _v6.b;
+				var news = _v6.c;
+				return _Utils_Tuple3(
+					deads,
+					lives,
+					A2(
+						$elm$core$List$cons,
+						A3($elm$browser$Browser$Events$spawn, router, key, sub),
+						news));
+			});
+		var stepLeft = F3(
+			function (_v4, pid, _v5) {
+				var deads = _v5.a;
+				var lives = _v5.b;
+				var news = _v5.c;
+				return _Utils_Tuple3(
+					A2($elm$core$List$cons, pid, deads),
+					lives,
+					news);
+			});
+		var stepBoth = F4(
+			function (key, pid, _v2, _v3) {
+				var deads = _v3.a;
+				var lives = _v3.b;
+				var news = _v3.c;
+				return _Utils_Tuple3(
+					deads,
+					A3($elm$core$Dict$insert, key, pid, lives),
+					news);
+			});
+		var newSubs = A2($elm$core$List$map, $elm$browser$Browser$Events$addKey, subs);
+		var _v0 = A6(
+			$elm$core$Dict$merge,
+			stepLeft,
+			stepBoth,
+			stepRight,
+			state.pids,
+			$elm$core$Dict$fromList(newSubs),
+			_Utils_Tuple3(_List_Nil, $elm$core$Dict$empty, _List_Nil));
+		var deadPids = _v0.a;
+		var livePids = _v0.b;
+		var makeNewPids = _v0.c;
+		return A2(
+			$elm$core$Task$andThen,
+			function (pids) {
+				return $elm$core$Task$succeed(
+					A2(
+						$elm$browser$Browser$Events$State,
+						newSubs,
+						A2(
+							$elm$core$Dict$union,
+							livePids,
+							$elm$core$Dict$fromList(pids))));
+			},
+			A2(
+				$elm$core$Task$andThen,
+				function (_v1) {
+					return $elm$core$Task$sequence(makeNewPids);
+				},
+				$elm$core$Task$sequence(
+					A2($elm$core$List$map, $elm$core$Process$kill, deadPids))));
+	});
+var $elm$core$List$maybeCons = F3(
+	function (f, mx, xs) {
+		var _v0 = f(mx);
+		if (_v0.$ === 'Just') {
+			var x = _v0.a;
+			return A2($elm$core$List$cons, x, xs);
+		} else {
+			return xs;
+		}
+	});
+var $elm$core$List$filterMap = F2(
+	function (f, xs) {
+		return A3(
+			$elm$core$List$foldr,
+			$elm$core$List$maybeCons(f),
+			_List_Nil,
+			xs);
+	});
+var $elm$browser$Browser$Events$onSelfMsg = F3(
+	function (router, _v0, state) {
+		var key = _v0.key;
+		var event = _v0.event;
+		var toMessage = function (_v2) {
+			var subKey = _v2.a;
+			var _v3 = _v2.b;
+			var node = _v3.a;
+			var name = _v3.b;
+			var decoder = _v3.c;
+			return _Utils_eq(subKey, key) ? A2(_Browser_decodeEvent, decoder, event) : $elm$core$Maybe$Nothing;
+		};
+		var messages = A2($elm$core$List$filterMap, toMessage, state.subs);
+		return A2(
+			$elm$core$Task$andThen,
+			function (_v1) {
+				return $elm$core$Task$succeed(state);
+			},
+			$elm$core$Task$sequence(
+				A2(
+					$elm$core$List$map,
+					$elm$core$Platform$sendToApp(router),
+					messages)));
+	});
+var $elm$browser$Browser$Events$subMap = F2(
+	function (func, _v0) {
+		var node = _v0.a;
+		var name = _v0.b;
+		var decoder = _v0.c;
+		return A3(
+			$elm$browser$Browser$Events$MySub,
+			node,
+			name,
+			A2($elm$json$Json$Decode$map, func, decoder));
+	});
+_Platform_effectManagers['Browser.Events'] = _Platform_createManager($elm$browser$Browser$Events$init, $elm$browser$Browser$Events$onEffects, $elm$browser$Browser$Events$onSelfMsg, 0, $elm$browser$Browser$Events$subMap);
+var $elm$browser$Browser$Events$subscription = _Platform_leaf('Browser.Events');
+var $elm$browser$Browser$Events$on = F3(
+	function (node, name, decoder) {
+		return $elm$browser$Browser$Events$subscription(
+			A3($elm$browser$Browser$Events$MySub, node, name, decoder));
+	});
+var $elm$browser$Browser$Events$onMouseMove = A2($elm$browser$Browser$Events$on, $elm$browser$Browser$Events$Document, 'mousemove');
+var $elm$browser$Browser$Events$onMouseUp = A2($elm$browser$Browser$Events$on, $elm$browser$Browser$Events$Document, 'mouseup');
+var $author$project$Puzzle$subscriptions = function (model) {
+	var _v0 = model.drag;
+	if (_v0.$ === 'NotDragging') {
+		return $elm$core$Platform$Sub$none;
+	} else {
+		return $elm$core$Platform$Sub$batch(
+			_List_fromArray(
+				[
+					$elm$browser$Browser$Events$onMouseMove($author$project$Puzzle$mouseMoveDecoder),
+					$elm$browser$Browser$Events$onMouseUp($author$project$Puzzle$mouseUpDecoder)
+				]));
+	}
+};
+var $author$project$Puzzle$boardRectReceived = F2(
+	function (result, model) {
+		if (result.$ === 'Ok') {
+			var element = result.a;
+			return _Utils_update(
+				model,
+				{
+					boardRect: $elm$core$Maybe$Just(
+						{
+							height: $elm$core$Basics$round(element.element.height),
+							width: $elm$core$Basics$round(element.element.width),
+							x: $elm$core$Basics$round(element.element.x - element.viewport.x),
+							y: $elm$core$Basics$round(element.element.y - element.viewport.y)
+						})
+				});
+		} else {
+			return model;
+		}
+	});
+var $author$project$Game$GameEvent$MergeStack = function (a) {
+	return {$: 'MergeStack', a: a};
+};
+var $author$project$Game$GameEvent$MoveStack = function (a) {
+	return {$: 'MoveStack', a: a};
+};
+var $author$project$Game$Status$Scold = {$: 'Scold'};
+var $author$project$Game$GameEvent$Split = function (a) {
+	return {$: 'Split', a: a};
+};
+var $elm$json$Json$Encode$int = _Json_wrap;
+var $elm$json$Json$Encode$object = function (pairs) {
+	return _Json_wrap(
+		A3(
+			$elm$core$List$foldl,
+			F2(
+				function (_v0, obj) {
+					var k = _v0.a;
+					var v = _v0.b;
+					return A3(_Json_addField, k, v, obj);
+				}),
+			_Json_emptyObject(_Utils_Tuple0),
+			pairs));
+};
+var $author$project$Game$CardStack$encodeBoardLocation = function (loc) {
+	return $elm$json$Json$Encode$object(
+		_List_fromArray(
+			[
+				_Utils_Tuple2(
+				'top',
+				$elm$json$Json$Encode$int(loc.top)),
+				_Utils_Tuple2(
+				'left',
+				$elm$json$Json$Encode$int(loc.left))
+			]));
+};
+var $author$project$Game$CardStack$boardCardStateToInt = function (s) {
+	switch (s.$) {
+		case 'FirmlyOnBoard':
+			return 0;
+		case 'FreshlyPlayed':
+			return 1;
+		default:
+			return 2;
+	}
+};
+var $author$project$Game$Rules$Card$cardValueToInt = function (v) {
+	switch (v.$) {
+		case 'Ace':
+			return 1;
+		case 'Two':
+			return 2;
+		case 'Three':
+			return 3;
+		case 'Four':
+			return 4;
+		case 'Five':
+			return 5;
+		case 'Six':
+			return 6;
+		case 'Seven':
+			return 7;
+		case 'Eight':
+			return 8;
+		case 'Nine':
+			return 9;
+		case 'Ten':
+			return 10;
+		case 'Jack':
+			return 11;
+		case 'Queen':
+			return 12;
+		default:
+			return 13;
+	}
+};
+var $author$project$Game$Rules$Card$originDeckToInt = function (d) {
+	if (d.$ === 'DeckOne') {
+		return 0;
+	} else {
+		return 1;
+	}
+};
+var $author$project$Game$Rules$Card$suitToInt = function (s) {
+	switch (s.$) {
+		case 'Club':
+			return 0;
+		case 'Diamond':
+			return 1;
+		case 'Spade':
+			return 2;
+		default:
+			return 3;
+	}
+};
+var $author$project$Game$Rules$Card$encodeCard = function (card) {
+	return $elm$json$Json$Encode$object(
+		_List_fromArray(
+			[
+				_Utils_Tuple2(
+				'value',
+				$elm$json$Json$Encode$int(
+					$author$project$Game$Rules$Card$cardValueToInt(card.value))),
+				_Utils_Tuple2(
+				'suit',
+				$elm$json$Json$Encode$int(
+					$author$project$Game$Rules$Card$suitToInt(card.suit))),
+				_Utils_Tuple2(
+				'origin_deck',
+				$elm$json$Json$Encode$int(
+					$author$project$Game$Rules$Card$originDeckToInt(card.originDeck)))
+			]));
+};
+var $author$project$Game$CardStack$encodeBoardCard = function (bc) {
+	return $elm$json$Json$Encode$object(
+		_List_fromArray(
+			[
+				_Utils_Tuple2(
+				'card',
+				$author$project$Game$Rules$Card$encodeCard(bc.card)),
+				_Utils_Tuple2(
+				'state',
+				$elm$json$Json$Encode$int(
+					$author$project$Game$CardStack$boardCardStateToInt(bc.state)))
+			]));
+};
+var $elm$json$Json$Encode$list = F2(
+	function (func, entries) {
+		return _Json_wrap(
+			A3(
+				$elm$core$List$foldl,
+				_Json_addEntry(func),
+				_Json_emptyArray(_Utils_Tuple0),
+				entries));
+	});
+var $author$project$Game$CardStack$encodeCardStack = function (stack) {
+	return $elm$json$Json$Encode$object(
+		_List_fromArray(
+			[
+				_Utils_Tuple2(
+				'board_cards',
+				A2($elm$json$Json$Encode$list, $author$project$Game$CardStack$encodeBoardCard, stack.boardCards)),
+				_Utils_Tuple2(
+				'loc',
+				$author$project$Game$CardStack$encodeBoardLocation(stack.loc))
+			]));
+};
+var $elm$json$Json$Encode$float = _Json_wrap;
+var $author$project$Game$TimeLoc$encodeTimeLoc = function (t) {
+	return $elm$json$Json$Encode$object(
+		_List_fromArray(
+			[
+				_Utils_Tuple2(
+				't_ms',
+				$elm$json$Json$Encode$float(t.tMs)),
+				_Utils_Tuple2(
+				'left',
+				$elm$json$Json$Encode$int(t.left)),
+				_Utils_Tuple2(
+				'top',
+				$elm$json$Json$Encode$int(t.top))
+			]));
+};
+var $author$project$Game$Status$Celebrate = {$: 'Celebrate'};
+var $author$project$Game$Physics$BoardGeometry$CleanlySpaced = {$: 'CleanlySpaced'};
+var $author$project$Game$Physics$BoardGeometry$Crowded = {$: 'Crowded'};
+var $author$project$Game$Physics$BoardGeometry$Illegal = {$: 'Illegal'};
+var $author$project$Game$Physics$BoardGeometry$OutOfBounds = {$: 'OutOfBounds'};
+var $author$project$Game$Physics$BoardGeometry$Overlap = {$: 'Overlap'};
+var $author$project$Game$Physics$BoardGeometry$TooClose = {$: 'TooClose'};
+var $elm$core$List$any = F2(
+	function (isOkay, list) {
+		any:
+		while (true) {
+			if (!list.b) {
+				return false;
+			} else {
+				var x = list.a;
+				var xs = list.b;
+				if (isOkay(x)) {
+					return true;
+				} else {
+					var $temp$isOkay = isOkay,
+						$temp$list = xs;
+					isOkay = $temp$isOkay;
+					list = $temp$list;
+					continue any;
+				}
+			}
+		}
+	});
+var $author$project$Game$Physics$BoardGeometry$checkBounds = F2(
+	function (bounds, _v0) {
+		var i = _v0.a;
+		var r = _v0.b;
+		return ((r.left < 0) || ((r.top < 0) || ((_Utils_cmp(r.right, bounds.maxWidth) > 0) || (_Utils_cmp(r.bottom, bounds.maxHeight) > 0)))) ? $elm$core$Maybe$Just(
+			{
+				kind: $author$project$Game$Physics$BoardGeometry$OutOfBounds,
+				message: 'Stack ' + ($elm$core$String$fromInt(i) + (' extends outside the board (rect: ' + ($elm$core$String$fromInt(r.left) + (',' + ($elm$core$String$fromInt(r.top) + (' → ' + ($elm$core$String$fromInt(r.right) + (',' + ($elm$core$String$fromInt(r.bottom) + (', bounds: ' + ($elm$core$String$fromInt(bounds.maxWidth) + ('x' + ($elm$core$String$fromInt(bounds.maxHeight) + ')'))))))))))))),
+				stackIndices: _List_fromArray(
+					[i])
+			}) : $elm$core$Maybe$Nothing;
+	});
+var $author$project$Game$Physics$BoardGeometry$isRectsOverlap = F2(
+	function (a, b) {
+		return (_Utils_cmp(a.left, b.right) < 0) && ((_Utils_cmp(a.right, b.left) > 0) && ((_Utils_cmp(a.top, b.bottom) < 0) && (_Utils_cmp(a.bottom, b.top) > 0)));
+	});
+var $author$project$Game$Physics$BoardGeometry$padRect = F2(
+	function (margin, r) {
+		return {bottom: r.bottom + margin, left: r.left - margin, right: r.right + margin, top: r.top - margin};
+	});
+var $author$project$Game$Physics$BoardGeometry$checkPair = F3(
+	function (margin, _v0, _v1) {
+		var i = _v0.a;
+		var a = _v0.b;
+		var j = _v1.a;
+		var b = _v1.b;
+		return A2($author$project$Game$Physics$BoardGeometry$isRectsOverlap, a, b) ? $elm$core$Maybe$Just(
+			{
+				kind: $author$project$Game$Physics$BoardGeometry$Overlap,
+				message: 'Stacks ' + ($elm$core$String$fromInt(i) + (' and ' + ($elm$core$String$fromInt(j) + ' overlap'))),
+				stackIndices: _List_fromArray(
+					[i, j])
+			}) : (A2(
+			$author$project$Game$Physics$BoardGeometry$isRectsOverlap,
+			A2($author$project$Game$Physics$BoardGeometry$padRect, margin, a),
+			b) ? $elm$core$Maybe$Just(
+			{
+				kind: $author$project$Game$Physics$BoardGeometry$TooClose,
+				message: 'Stacks ' + ($elm$core$String$fromInt(i) + (' and ' + ($elm$core$String$fromInt(j) + (' are too close (within ' + ($elm$core$String$fromInt(margin) + 'px margin)'))))),
+				stackIndices: _List_fromArray(
+					[i, j])
+			}) : $elm$core$Maybe$Nothing);
+	});
+var $author$project$Game$Physics$BoardGeometry$collectPairErrors = F2(
+	function (margin, rects) {
+		if (!rects.b) {
+			return _List_Nil;
+		} else {
+			var head = rects.a;
+			var rest = rects.b;
+			var fromHead = A2(
+				$elm$core$List$filterMap,
+				A2($author$project$Game$Physics$BoardGeometry$checkPair, margin, head),
+				rest);
+			return _Utils_ap(
+				fromHead,
+				A2($author$project$Game$Physics$BoardGeometry$collectPairErrors, margin, rest));
+		}
+	});
+var $author$project$Game$Physics$BoardGeometry$cardHeight = 40;
+var $author$project$Game$CardStack$size = function (s) {
+	return $elm$core$List$length(s.boardCards);
+};
+var $author$project$Game$CardStack$cardWidth = 27;
+var $author$project$Game$Physics$BoardGeometry$cardPitch = $author$project$Game$CardStack$cardWidth + 6;
+var $author$project$Game$Physics$BoardGeometry$stackWidth = function (cardCount) {
+	return (cardCount <= 0) ? 0 : ($author$project$Game$CardStack$cardWidth + ((cardCount - 1) * $author$project$Game$Physics$BoardGeometry$cardPitch));
+};
+var $author$project$Game$Physics$BoardGeometry$stackRect = function (s) {
+	return {
+		bottom: s.loc.top + $author$project$Game$Physics$BoardGeometry$cardHeight,
+		left: s.loc.left,
+		right: s.loc.left + $author$project$Game$Physics$BoardGeometry$stackWidth(
+			$author$project$Game$CardStack$size(s)),
+		top: s.loc.top
+	};
+};
+var $author$project$Game$Physics$BoardGeometry$validateBoardGeometry = F2(
+	function (stacks, bounds) {
+		var rects = A2(
+			$elm$core$List$indexedMap,
+			F2(
+				function (i, s) {
+					return _Utils_Tuple2(
+						i,
+						$author$project$Game$Physics$BoardGeometry$stackRect(s));
+				}),
+			stacks);
+		var pairErrors = A2($author$project$Game$Physics$BoardGeometry$collectPairErrors, bounds.margin, rects);
+		var boundsErrors = A2(
+			$elm$core$List$filterMap,
+			$author$project$Game$Physics$BoardGeometry$checkBounds(bounds),
+			rects);
+		return _Utils_ap(boundsErrors, pairErrors);
+	});
+var $author$project$Game$Physics$BoardGeometry$classifyBoardGeometry = F2(
+	function (stacks, bounds) {
+		var isIllegalKind = function (kind) {
+			return _Utils_eq(kind, $author$project$Game$Physics$BoardGeometry$OutOfBounds) || _Utils_eq(kind, $author$project$Game$Physics$BoardGeometry$Overlap);
+		};
+		var errors = A2($author$project$Game$Physics$BoardGeometry$validateBoardGeometry, stacks, bounds);
+		return A2(
+			$elm$core$List$any,
+			function (e) {
+				return isIllegalKind(e.kind);
+			},
+			errors) ? $author$project$Game$Physics$BoardGeometry$Illegal : (A2(
+			$elm$core$List$any,
+			function (e) {
+				return _Utils_eq(e.kind, $author$project$Game$Physics$BoardGeometry$TooClose);
+			},
+			errors) ? $author$project$Game$Physics$BoardGeometry$Crowded : $author$project$Game$Physics$BoardGeometry$CleanlySpaced);
+	});
+var $author$project$Game$Physics$BoardGeometry$refereeBounds = {margin: 7, maxHeight: 600, maxWidth: 800};
+var $author$project$Game$Status$geometryFeedback = F2(
+	function (oldBoard, newBoard) {
+		var _v0 = _Utils_Tuple2(
+			A2($author$project$Game$Physics$BoardGeometry$classifyBoardGeometry, oldBoard, $author$project$Game$Physics$BoardGeometry$refereeBounds),
+			A2($author$project$Game$Physics$BoardGeometry$classifyBoardGeometry, newBoard, $author$project$Game$Physics$BoardGeometry$refereeBounds));
+		_v0$2:
+		while (true) {
+			switch (_v0.b.$) {
+				case 'CleanlySpaced':
+					if (_v0.a.$ === 'Crowded') {
+						var _v1 = _v0.a;
+						var _v2 = _v0.b;
+						return $elm$core$Maybe$Just(
+							{kind: $author$project$Game$Status$Celebrate, text: 'Nice and tidy!'});
+					} else {
+						break _v0$2;
+					}
+				case 'Crowded':
+					var _v3 = _v0.b;
+					return $elm$core$Maybe$Just(
+						{kind: $author$project$Game$Status$Scold, text: 'Board is getting tight — try spacing stacks out!'});
+				default:
+					break _v0$2;
+			}
+		}
+		return $elm$core$Maybe$Nothing;
+	});
+var $author$project$Game$BoardGesture$BoardCardOffBoard = {$: 'BoardCardOffBoard'};
+var $author$project$Game$BoardGesture$MergeStack = function (a) {
+	return {$: 'MergeStack', a: a};
+};
+var $author$project$Game$BoardGesture$MoveStack = function (a) {
+	return {$: 'MoveStack', a: a};
+};
+var $author$project$Game$BoardGesture$Split = function (a) {
+	return {$: 'Split', a: a};
+};
+var $author$project$Game$Physics$GestureArbitration$clickThreshold = 9;
+var $author$project$Game$Physics$GestureArbitration$distSquared = F2(
+	function (a, b) {
+		var dy = a.y - b.y;
+		var dx = a.x - b.x;
+		return (dx * dx) + (dy * dy);
+	});
+var $elm$core$List$filter = F2(
+	function (isGood, list) {
+		return A3(
+			$elm$core$List$foldr,
+			F2(
+				function (x, xs) {
+					return isGood(x) ? A2($elm$core$List$cons, x, xs) : xs;
+				}),
+			_List_Nil,
+			list);
+	});
+var $elm$core$List$head = function (list) {
+	if (list.b) {
+		var x = list.a;
+		var xs = list.b;
+		return $elm$core$Maybe$Just(x);
+	} else {
+		return $elm$core$Maybe$Nothing;
+	}
+};
+var $elm$core$Basics$negate = function (n) {
+	return -n;
+};
+var $elm$core$Basics$abs = function (n) {
+	return (n < 0) ? (-n) : n;
+};
+var $author$project$Game$CardStack$stackPitch = $author$project$Game$CardStack$cardWidth + 6;
+var $author$project$Game$CardStack$stackDisplayWidth = function (s) {
+	return $author$project$Game$CardStack$size(s) * $author$project$Game$CardStack$stackPitch;
+};
+var $author$project$Game$Physics$WingOracle$eventualFloaterTopLeft = F2(
+	function (wing, sourceWidth) {
+		var left = function () {
+			var _v0 = wing.side;
+			if (_v0.$ === 'Left') {
+				return wing.target.loc.left - sourceWidth;
+			} else {
+				return wing.target.loc.left + $author$project$Game$CardStack$stackDisplayWidth(wing.target);
+			}
+		}();
+		return {left: left, top: wing.target.loc.top};
+	});
+var $author$project$Game$WingView$wingSnapTolerance = ($author$project$Game$CardStack$stackPitch / 2) | 0;
+var $author$project$Game$WingView$isNearLanding = F3(
+	function (floaterTopLeft, floaterWidth, wing) {
+		var ev = A2($author$project$Game$Physics$WingOracle$eventualFloaterTopLeft, wing, floaterWidth);
+		var dy = $elm$core$Basics$abs(floaterTopLeft.top - ev.top);
+		var dx = $elm$core$Basics$abs(floaterTopLeft.left - ev.left);
+		return (_Utils_cmp(dx, $author$project$Game$WingView$wingSnapTolerance) < 0) && (_Utils_cmp(dy, $author$project$Game$WingView$wingSnapTolerance) < 0);
+	});
+var $author$project$Game$WingView$hoveredWing = F3(
+	function (floaterTopLeft, floaterWidth, wings) {
+		return $elm$core$List$head(
+			A2(
+				$elm$core$List$filter,
+				A2($author$project$Game$WingView$isNearLanding, floaterTopLeft, floaterWidth),
+				wings));
+	});
+var $elm$core$Basics$ge = _Utils_ge;
+var $author$project$Game$Physics$GestureArbitration$isCursorInRect = F2(
+	function (p, r) {
+		return (_Utils_cmp(p.x, r.x) > -1) && ((_Utils_cmp(p.x, r.x + r.width) < 0) && ((_Utils_cmp(p.y, r.y) > -1) && (_Utils_cmp(p.y, r.y + r.height) < 0)));
+	});
+var $author$project$Game$BoardGesture$isCursorOverBoard = F2(
+	function (cursor, maybeRect) {
+		if (maybeRect.$ === 'Just') {
+			var rect = maybeRect.a;
+			return A2($author$project$Game$Physics$GestureArbitration$isCursorInRect, cursor, rect);
+		} else {
+			return false;
+		}
+	});
+var $author$project$Game$BoardGesture$isDropFootprintInBounds = F2(
+	function (cardCount, loc) {
+		var bounds = $author$project$Game$Physics$BoardGeometry$refereeBounds;
+		return (loc.left >= 0) && ((loc.top >= 0) && ((_Utils_cmp(
+			loc.left + $author$project$Game$Physics$BoardGeometry$stackWidth(cardCount),
+			bounds.maxWidth) < 1) && (_Utils_cmp(loc.top + $author$project$Game$Physics$BoardGeometry$cardHeight, bounds.maxHeight) < 1)));
+	});
+var $author$project$Game$BoardGesture$resolveBoardCardGesture = F2(
+	function (d, boardRect) {
+		if (_Utils_cmp(
+			A2($author$project$Game$Physics$GestureArbitration$distSquared, d.cursor, d.originalCursor),
+			$author$project$Game$Physics$GestureArbitration$clickThreshold) < 1) {
+			return $elm$core$Maybe$Just(
+				$author$project$Game$BoardGesture$Split(
+					{cardIndex: d.cardIndex, stack: d.stack}));
+		} else {
+			var hovered = A3(
+				$author$project$Game$WingView$hoveredWing,
+				d.floaterTopLeft,
+				$author$project$Game$CardStack$stackDisplayWidth(d.stack),
+				d.wings);
+			if (hovered.$ === 'Just') {
+				var wing = hovered.a;
+				return $elm$core$Maybe$Just(
+					$author$project$Game$BoardGesture$MergeStack(
+						{boardPath: d.boardPath, side: wing.side, source: d.stack, target: wing.target}));
+			} else {
+				return A2($author$project$Game$BoardGesture$isCursorOverBoard, d.cursor, boardRect) ? (A2(
+					$author$project$Game$BoardGesture$isDropFootprintInBounds,
+					$author$project$Game$CardStack$size(d.stack),
+					d.floaterTopLeft) ? $elm$core$Maybe$Just(
+					$author$project$Game$BoardGesture$MoveStack(
+						{boardPath: d.boardPath, newLoc: d.floaterTopLeft, stack: d.stack})) : $elm$core$Maybe$Nothing) : $elm$core$Maybe$Nothing;
+			}
+		}
+	});
+var $author$project$Game$BoardGesture$handleMouseUp = F4(
+	function (releasePoint, tMs, d, boardRect) {
+		var delta = {x: releasePoint.x - d.cursor.x, y: releasePoint.y - d.cursor.y};
+		var releaseFloater = {left: d.floaterTopLeft.left + delta.x, top: d.floaterTopLeft.top + delta.y};
+		var dFull = _Utils_update(
+			d,
+			{
+				boardPath: _Utils_ap(
+					d.boardPath,
+					_List_fromArray(
+						[
+							{left: releaseFloater.left, tMs: tMs, top: releaseFloater.top}
+						])),
+				cursor: releasePoint,
+				floaterTopLeft: releaseFloater
+			});
+		var _v0 = A2($author$project$Game$BoardGesture$resolveBoardCardGesture, dFull, boardRect);
+		if (_v0.$ === 'Just') {
+			var outcome = _v0.a;
+			return outcome;
+		} else {
+			return $author$project$Game$BoardGesture$BoardCardOffBoard;
+		}
+	});
+var $author$project$Game$CardStack$isCardsEqualInOrder = F2(
+	function (xs, ys) {
+		var _v0 = _Utils_Tuple2(xs, ys);
+		_v0$2:
+		while (true) {
+			if (!_v0.a.b) {
+				if (!_v0.b.b) {
+					return true;
+				} else {
+					break _v0$2;
+				}
+			} else {
+				if (_v0.b.b) {
+					var _v1 = _v0.a;
+					var x = _v1.a;
+					var xrest = _v1.b;
+					var _v2 = _v0.b;
+					var y = _v2.a;
+					var yrest = _v2.b;
+					return _Utils_eq(x.card, y.card) && A2($author$project$Game$CardStack$isCardsEqualInOrder, xrest, yrest);
+				} else {
+					break _v0$2;
+				}
+			}
+		}
+		return false;
+	});
+var $author$project$Game$CardStack$isLocsEqual = F2(
+	function (a, b) {
+		return _Utils_eq(a.top, b.top) && _Utils_eq(a.left, b.left);
+	});
+var $author$project$Game$CardStack$isStacksEqual = F2(
+	function (a, b) {
+		return A2($author$project$Game$CardStack$isLocsEqual, a.loc, b.loc) && A2($author$project$Game$CardStack$isCardsEqualInOrder, a.boardCards, b.boardCards);
+	});
+var $elm$core$Basics$not = _Basics_not;
+var $author$project$Game$Execute$applyBoardChange = F2(
+	function (change, board) {
+		return _Utils_ap(
+			A2(
+				$elm$core$List$filter,
+				function (s) {
+					return !A2(
+						$elm$core$List$any,
+						$author$project$Game$CardStack$isStacksEqual(s),
+						change.stacksToRemove);
+				},
+				board),
+			change.stacksToAdd);
+	});
+var $author$project$Game$CardStack$findStack = F2(
+	function (ref, board) {
+		return $elm$core$List$head(
+			A2(
+				$elm$core$List$filter,
+				$author$project$Game$CardStack$isStacksEqual(ref),
+				board));
+	});
+var $elm$core$Debug$log = _Debug_log;
 var $author$project$Game$Rules$StackType$Bogus = {$: 'Bogus'};
 var $author$project$Game$Rules$StackType$Dup = {$: 'Dup'};
+var $author$project$Game$Rules$StackType$Incomplete = {$: 'Incomplete'};
 var $author$project$Game$Rules$StackType$Set = {$: 'Set'};
 var $author$project$Game$Rules$StackType$PureRun = {$: 'PureRun'};
 var $author$project$Game$Rules$StackType$RedBlackRun = {$: 'RedBlackRun'};
@@ -5340,27 +6320,6 @@ var $author$project$Game$Rules$StackType$cardPairStackType = F2(
 			$author$project$Game$Rules$Card$cardColor(a),
 			$author$project$Game$Rules$Card$cardColor(b))) ? $author$project$Game$Rules$StackType$RedBlackRun : $author$project$Game$Rules$StackType$Bogus)) : $author$project$Game$Rules$StackType$Bogus));
 	});
-var $elm$core$List$any = F2(
-	function (isOkay, list) {
-		any:
-		while (true) {
-			if (!list.b) {
-				return false;
-			} else {
-				var x = list.a;
-				var xs = list.b;
-				if (isOkay(x)) {
-					return true;
-				} else {
-					var $temp$isOkay = isOkay,
-						$temp$list = xs;
-					isOkay = $temp$isOkay;
-					list = $temp$list;
-					continue any;
-				}
-			}
-		}
-	});
 var $author$project$Game$Rules$StackType$hasDuplicateCards = function (cards) {
 	if (!cards.b) {
 		return false;
@@ -5390,7 +6349,6 @@ var $author$project$Game$Rules$StackType$isFollowsConsistentPattern = F2(
 			return true;
 		}
 	});
-var $elm$core$Basics$not = _Basics_not;
 var $author$project$Game$Rules$StackType$getStackType = function (cards) {
 	if (!cards.b) {
 		return $author$project$Game$Rules$StackType$Incomplete;
@@ -5425,14 +6383,825 @@ var $author$project$Game$CardStack$stackType = function (s) {
 	return $author$project$Game$Rules$StackType$getStackType(
 		$author$project$Game$CardStack$stackCards(s));
 };
+var $author$project$Game$CardStack$isProblematic = function (s) {
+	var _v0 = $author$project$Game$CardStack$stackType(s);
+	switch (_v0.$) {
+		case 'Bogus':
+			return true;
+		case 'Dup':
+			return true;
+		default:
+			return false;
+	}
+};
+var $author$project$Game$CardStack$maybeMerge = F3(
+	function (s1, s2, loc) {
+		if (A2($author$project$Game$CardStack$isStacksEqual, s1, s2)) {
+			return $elm$core$Maybe$Nothing;
+		} else {
+			var merged = {
+				boardCards: _Utils_ap(s1.boardCards, s2.boardCards),
+				loc: loc
+			};
+			return $author$project$Game$CardStack$isProblematic(merged) ? $elm$core$Maybe$Nothing : $elm$core$Maybe$Just(merged);
+		}
+	});
+var $author$project$Game$CardStack$leftMerge = F2(
+	function (self, other) {
+		var loc = {
+			left: self.loc.left - (($author$project$Game$CardStack$cardWidth + 6) * $author$project$Game$CardStack$size(other)),
+			top: self.loc.top
+		};
+		return A3($author$project$Game$CardStack$maybeMerge, other, self, loc);
+	});
+var $author$project$Game$CardStack$rightMerge = F2(
+	function (self, other) {
+		var loc = {left: self.loc.left, top: self.loc.top};
+		return A3($author$project$Game$CardStack$maybeMerge, self, other, loc);
+	});
+var $author$project$Game$BoardActions$tryMerge = F3(
+	function (stack, other, side) {
+		if (side.$ === 'Left') {
+			return A2($author$project$Game$CardStack$leftMerge, stack, other);
+		} else {
+			return A2($author$project$Game$CardStack$rightMerge, stack, other);
+		}
+	});
+var $author$project$Game$BoardActions$tryStackMerge = F3(
+	function (stack, other, side) {
+		var _v0 = A3($author$project$Game$BoardActions$tryMerge, stack, other, side);
+		if (_v0.$ === 'Nothing') {
+			return $elm$core$Maybe$Nothing;
+		} else {
+			var merged = _v0.a;
+			return $elm$core$Maybe$Just(
+				{
+					handCardsToRelease: _List_Nil,
+					stacksToAdd: _List_fromArray(
+						[merged]),
+					stacksToRemove: _List_fromArray(
+						[stack, other])
+				});
+		}
+	});
+var $author$project$Game$Execute$mergeStack = F4(
+	function (source, target, side, board) {
+		var _v0 = _Utils_Tuple2(
+			A2($author$project$Game$CardStack$findStack, source, board),
+			A2($author$project$Game$CardStack$findStack, target, board));
+		if (_v0.a.$ === 'Just') {
+			if (_v0.b.$ === 'Just') {
+				var realSource = _v0.a.a;
+				var realTarget = _v0.b.a;
+				var _v1 = A3($author$project$Game$BoardActions$tryStackMerge, realTarget, realSource, side);
+				if (_v1.$ === 'Just') {
+					var change = _v1.a;
+					return A2($author$project$Game$Execute$applyBoardChange, change, board);
+				} else {
+					var _v2 = A2(
+						$elm$core$Debug$log,
+						'[Execute.mergeStack] tryStackMerge rejected — skipping (rules bug?)',
+						{side: side, source: source, target: target});
+					return board;
+				}
+			} else {
+				var _v5 = _v0.b;
+				var _v6 = A2($elm$core$Debug$log, '[Execute.mergeStack] target stack not on board — skipping (bridge bug)', target);
+				return board;
+			}
+		} else {
+			var _v3 = _v0.a;
+			var _v4 = A2($elm$core$Debug$log, '[Execute.mergeStack] source stack not on board — skipping (bridge bug)', source);
+			return board;
+		}
+	});
+var $elm$core$Basics$composeL = F3(
+	function (g, f, x) {
+		return g(
+			f(x));
+	});
+var $elm$core$List$all = F2(
+	function (isOkay, list) {
+		return !A2(
+			$elm$core$List$any,
+			A2($elm$core$Basics$composeL, $elm$core$Basics$not, isOkay),
+			list);
+	});
+var $elm$core$Basics$composeR = F3(
+	function (f, g, x) {
+		return g(
+			f(x));
+	});
+var $author$project$Game$Status$isCompleteType = function (t) {
+	switch (t.$) {
+		case 'Set':
+			return true;
+		case 'PureRun':
+			return true;
+		case 'RedBlackRun':
+			return true;
+		case 'Incomplete':
+			return false;
+		case 'Bogus':
+			return false;
+		default:
+			return false;
+	}
+};
+var $author$project$Game$Status$stackCards = function (stack) {
+	return A2(
+		$elm$core$List$map,
+		function ($) {
+			return $.card;
+		},
+		stack.boardCards);
+};
+var $author$project$Game$Status$isCleanBoard = function (board) {
+	return A2(
+		$elm$core$List$all,
+		A2(
+			$elm$core$Basics$composeR,
+			$author$project$Game$Status$stackCards,
+			A2($elm$core$Basics$composeR, $author$project$Game$Rules$StackType$getStackType, $author$project$Game$Status$isCompleteType)),
+		board);
+};
+var $author$project$Game$Status$mergeStatus = function (board) {
+	var _v0 = $elm$core$List$reverse(board);
+	if (!_v0.b) {
+		return {kind: $author$project$Game$Status$Inform, text: 'Merged.'};
+	} else {
+		var mergedStack = _v0.a;
+		return ($author$project$Game$CardStack$size(mergedStack) < 3) ? {kind: $author$project$Game$Status$Scold, text: 'Nice, but where\'s the third card?'} : ($author$project$Game$Status$isCleanBoard(board) ? {kind: $author$project$Game$Status$Celebrate, text: 'Combined! Clean board!'} : {kind: $author$project$Game$Status$Celebrate, text: 'Combined!'});
+	}
+};
+var $author$project$Game$Execute$moveStack = F3(
+	function (stack, newLoc, board) {
+		var _v0 = A2($author$project$Game$CardStack$findStack, stack, board);
+		if (_v0.$ === 'Just') {
+			var real = _v0.a;
+			return _Utils_ap(
+				A2(
+					$elm$core$List$filter,
+					A2(
+						$elm$core$Basics$composeL,
+						$elm$core$Basics$not,
+						$author$project$Game$CardStack$isStacksEqual(real)),
+					board),
+				_List_fromArray(
+					[
+						_Utils_update(
+						real,
+						{loc: newLoc})
+					]));
+		} else {
+			var _v1 = A2($elm$core$Debug$log, '[Execute.moveStack] stack not on board — skipping (bridge bug)', stack);
+			return board;
+		}
+	});
+var $author$project$Game$Status$offBoardScold = {kind: $author$project$Game$Status$Scold, text: 'Don\'t knock cards off the board, please. You\'re not a cat!'};
+var $author$project$Game$BoardDrag$sideString = function (side) {
+	if (side.$ === 'Left') {
+		return 'left';
+	} else {
+		return 'right';
+	}
+};
+var $elm$core$List$drop = F2(
+	function (n, list) {
+		drop:
+		while (true) {
+			if (n <= 0) {
+				return list;
+			} else {
+				if (!list.b) {
+					return list;
+				} else {
+					var x = list.a;
+					var xs = list.b;
+					var $temp$n = n - 1,
+						$temp$list = xs;
+					n = $temp$n;
+					list = $temp$list;
+					continue drop;
+				}
+			}
+		}
+	});
+var $elm$core$List$takeReverse = F3(
+	function (n, list, kept) {
+		takeReverse:
+		while (true) {
+			if (n <= 0) {
+				return kept;
+			} else {
+				if (!list.b) {
+					return kept;
+				} else {
+					var x = list.a;
+					var xs = list.b;
+					var $temp$n = n - 1,
+						$temp$list = xs,
+						$temp$kept = A2($elm$core$List$cons, x, kept);
+					n = $temp$n;
+					list = $temp$list;
+					kept = $temp$kept;
+					continue takeReverse;
+				}
+			}
+		}
+	});
+var $elm$core$List$takeTailRec = F2(
+	function (n, list) {
+		return $elm$core$List$reverse(
+			A3($elm$core$List$takeReverse, n, list, _List_Nil));
+	});
+var $elm$core$List$takeFast = F3(
+	function (ctr, n, list) {
+		if (n <= 0) {
+			return _List_Nil;
+		} else {
+			var _v0 = _Utils_Tuple2(n, list);
+			_v0$1:
+			while (true) {
+				_v0$5:
+				while (true) {
+					if (!_v0.b.b) {
+						return list;
+					} else {
+						if (_v0.b.b.b) {
+							switch (_v0.a) {
+								case 1:
+									break _v0$1;
+								case 2:
+									var _v2 = _v0.b;
+									var x = _v2.a;
+									var _v3 = _v2.b;
+									var y = _v3.a;
+									return _List_fromArray(
+										[x, y]);
+								case 3:
+									if (_v0.b.b.b.b) {
+										var _v4 = _v0.b;
+										var x = _v4.a;
+										var _v5 = _v4.b;
+										var y = _v5.a;
+										var _v6 = _v5.b;
+										var z = _v6.a;
+										return _List_fromArray(
+											[x, y, z]);
+									} else {
+										break _v0$5;
+									}
+								default:
+									if (_v0.b.b.b.b && _v0.b.b.b.b.b) {
+										var _v7 = _v0.b;
+										var x = _v7.a;
+										var _v8 = _v7.b;
+										var y = _v8.a;
+										var _v9 = _v8.b;
+										var z = _v9.a;
+										var _v10 = _v9.b;
+										var w = _v10.a;
+										var tl = _v10.b;
+										return (ctr > 1000) ? A2(
+											$elm$core$List$cons,
+											x,
+											A2(
+												$elm$core$List$cons,
+												y,
+												A2(
+													$elm$core$List$cons,
+													z,
+													A2(
+														$elm$core$List$cons,
+														w,
+														A2($elm$core$List$takeTailRec, n - 4, tl))))) : A2(
+											$elm$core$List$cons,
+											x,
+											A2(
+												$elm$core$List$cons,
+												y,
+												A2(
+													$elm$core$List$cons,
+													z,
+													A2(
+														$elm$core$List$cons,
+														w,
+														A3($elm$core$List$takeFast, ctr + 1, n - 4, tl)))));
+									} else {
+										break _v0$5;
+									}
+							}
+						} else {
+							if (_v0.a === 1) {
+								break _v0$1;
+							} else {
+								break _v0$5;
+							}
+						}
+					}
+				}
+				return list;
+			}
+			var _v1 = _v0.b;
+			var x = _v1.a;
+			return _List_fromArray(
+				[x]);
+		}
+	});
+var $elm$core$List$take = F2(
+	function (n, list) {
+		return A3($elm$core$List$takeFast, 0, n, list);
+	});
+var $author$project$Game$CardStack$leftSplit = F2(
+	function (leftCount, s) {
+		var rightSideOffset = (leftCount * ($author$project$Game$CardStack$cardWidth + 6)) + 8;
+		var rightLoc = {left: s.loc.left + rightSideOffset, top: s.loc.top};
+		var rightCards = A2($elm$core$List$drop, leftCount, s.boardCards);
+		var leftSideOffset = -2;
+		var leftLoc = {left: s.loc.left + leftSideOffset, top: s.loc.top - 4};
+		var leftCards = A2($elm$core$List$take, leftCount, s.boardCards);
+		return _List_fromArray(
+			[
+				{boardCards: leftCards, loc: leftLoc},
+				{boardCards: rightCards, loc: rightLoc}
+			]);
+	});
+var $author$project$Game$CardStack$rightSplit = F2(
+	function (leftCount, s) {
+		var rightSideOffset = (leftCount * ($author$project$Game$CardStack$cardWidth + 6)) + 4;
+		var rightLoc = {left: s.loc.left + rightSideOffset, top: s.loc.top - 4};
+		var rightCards = A2($elm$core$List$drop, leftCount, s.boardCards);
+		var leftSideOffset = -8;
+		var leftLoc = {left: s.loc.left + leftSideOffset, top: s.loc.top};
+		var leftCards = A2($elm$core$List$take, leftCount, s.boardCards);
+		return _List_fromArray(
+			[
+				{boardCards: leftCards, loc: leftLoc},
+				{boardCards: rightCards, loc: rightLoc}
+			]);
+	});
+var $author$project$Game$CardStack$split = F2(
+	function (cardIndex, s) {
+		return ($author$project$Game$CardStack$size(s) <= 1) ? _List_fromArray(
+			[s]) : ((_Utils_cmp(
+			cardIndex + 1,
+			($author$project$Game$CardStack$size(s) / 2) | 0) < 1) ? A2($author$project$Game$CardStack$leftSplit, cardIndex + 1, s) : A2($author$project$Game$CardStack$rightSplit, cardIndex, s));
+	});
+var $author$project$Game$Execute$split = F3(
+	function (stack, cardIndex, board) {
+		var _v0 = A2($author$project$Game$CardStack$findStack, stack, board);
+		if (_v0.$ === 'Just') {
+			var real = _v0.a;
+			return _Utils_ap(
+				A2(
+					$elm$core$List$filter,
+					A2(
+						$elm$core$Basics$composeL,
+						$elm$core$Basics$not,
+						$author$project$Game$CardStack$isStacksEqual(real)),
+					board),
+				A2($author$project$Game$CardStack$split, cardIndex, real));
+		} else {
+			var _v1 = A2($elm$core$Debug$log, '[Execute.split] stack not on board — skipping (bridge bug)', stack);
+			return board;
+		}
+	});
+var $elm$json$Json$Encode$string = _Json_wrap;
+var $elm$core$Maybe$withDefault = F2(
+	function (_default, maybe) {
+		if (maybe.$ === 'Just') {
+			var value = maybe.a;
+			return value;
+		} else {
+			return _default;
+		}
+	});
+var $author$project$Game$BoardDrag$handleMouseUp = F4(
+	function (releasePoint, tMs, d, input) {
+		var _v0 = A4($author$project$Game$BoardGesture$handleMouseUp, releasePoint, tMs, d, input.boardRect);
+		switch (_v0.$) {
+			case 'Split':
+				var p = _v0.a;
+				var splitStatus = {kind: $author$project$Game$Status$Scold, text: 'Be careful with splitting! Splits only pay off when you get more cards on the board or make prettier piles.'};
+				var payload = $elm$json$Json$Encode$object(
+					_List_fromArray(
+						[
+							_Utils_Tuple2(
+							'seq',
+							$elm$json$Json$Encode$int(input.nextSeq)),
+							_Utils_Tuple2(
+							'action',
+							$elm$json$Json$Encode$object(
+								_List_fromArray(
+									[
+										_Utils_Tuple2(
+										'action',
+										$elm$json$Json$Encode$string('split')),
+										_Utils_Tuple2(
+										'stack',
+										$author$project$Game$CardStack$encodeCardStack(p.stack)),
+										_Utils_Tuple2(
+										'card_index',
+										$elm$json$Json$Encode$int(p.cardIndex))
+									])))
+						]));
+				var newBoard = A3($author$project$Game$Execute$split, p.stack, p.cardIndex, input.board);
+				return {
+					actionLog: _Utils_ap(
+						input.actionLog,
+						_List_fromArray(
+							[
+								{
+								action: $author$project$Game$GameEvent$Split(p)
+							}
+							])),
+					board: newBoard,
+					nextSeq: input.nextSeq + 1,
+					outboundPayload: $elm$core$Maybe$Just(payload),
+					status: $elm$core$Maybe$Just(
+						A2(
+							$elm$core$Maybe$withDefault,
+							splitStatus,
+							A2($author$project$Game$Status$geometryFeedback, input.board, newBoard)))
+				};
+			case 'MergeStack':
+				var p = _v0.a;
+				var payload = $elm$json$Json$Encode$object(
+					_List_fromArray(
+						[
+							_Utils_Tuple2(
+							'seq',
+							$elm$json$Json$Encode$int(input.nextSeq)),
+							_Utils_Tuple2(
+							'action',
+							$elm$json$Json$Encode$object(
+								_List_fromArray(
+									[
+										_Utils_Tuple2(
+										'action',
+										$elm$json$Json$Encode$string('merge_stack')),
+										_Utils_Tuple2(
+										'source',
+										$author$project$Game$CardStack$encodeCardStack(p.source)),
+										_Utils_Tuple2(
+										'target',
+										$author$project$Game$CardStack$encodeCardStack(p.target)),
+										_Utils_Tuple2(
+										'side',
+										$elm$json$Json$Encode$string(
+											$author$project$Game$BoardDrag$sideString(p.side))),
+										_Utils_Tuple2(
+										'board_path',
+										A2($elm$json$Json$Encode$list, $author$project$Game$TimeLoc$encodeTimeLoc, p.boardPath))
+									])))
+						]));
+				var newBoard = A4($author$project$Game$Execute$mergeStack, p.source, p.target, p.side, input.board);
+				var event = $author$project$Game$GameEvent$MergeStack(
+					{boardPath: p.boardPath, side: p.side, source: p.source, target: p.target});
+				return {
+					actionLog: _Utils_ap(
+						input.actionLog,
+						_List_fromArray(
+							[
+								{action: event}
+							])),
+					board: newBoard,
+					nextSeq: input.nextSeq + 1,
+					outboundPayload: $elm$core$Maybe$Just(payload),
+					status: $elm$core$Maybe$Just(
+						A2(
+							$elm$core$Maybe$withDefault,
+							$author$project$Game$Status$mergeStatus(newBoard),
+							A2($author$project$Game$Status$geometryFeedback, input.board, newBoard)))
+				};
+			case 'MoveStack':
+				var p = _v0.a;
+				var payload = $elm$json$Json$Encode$object(
+					_List_fromArray(
+						[
+							_Utils_Tuple2(
+							'seq',
+							$elm$json$Json$Encode$int(input.nextSeq)),
+							_Utils_Tuple2(
+							'action',
+							$elm$json$Json$Encode$object(
+								_List_fromArray(
+									[
+										_Utils_Tuple2(
+										'action',
+										$elm$json$Json$Encode$string('move_stack')),
+										_Utils_Tuple2(
+										'stack',
+										$author$project$Game$CardStack$encodeCardStack(p.stack)),
+										_Utils_Tuple2(
+										'new_loc',
+										$author$project$Game$CardStack$encodeBoardLocation(p.newLoc)),
+										_Utils_Tuple2(
+										'board_path',
+										A2($elm$json$Json$Encode$list, $author$project$Game$TimeLoc$encodeTimeLoc, p.boardPath))
+									])))
+						]));
+				var newBoard = A3($author$project$Game$Execute$moveStack, p.stack, p.newLoc, input.board);
+				var moveStackStatus = {kind: $author$project$Game$Status$Inform, text: 'Moved!'};
+				var event = $author$project$Game$GameEvent$MoveStack(
+					{boardPath: p.boardPath, newLoc: p.newLoc, stack: p.stack});
+				return {
+					actionLog: _Utils_ap(
+						input.actionLog,
+						_List_fromArray(
+							[
+								{action: event}
+							])),
+					board: newBoard,
+					nextSeq: input.nextSeq + 1,
+					outboundPayload: $elm$core$Maybe$Just(payload),
+					status: $elm$core$Maybe$Just(
+						A2(
+							$elm$core$Maybe$withDefault,
+							moveStackStatus,
+							A2($author$project$Game$Status$geometryFeedback, input.board, newBoard)))
+				};
+			default:
+				return {
+					actionLog: input.actionLog,
+					board: input.board,
+					nextSeq: input.nextSeq,
+					outboundPayload: $elm$core$Maybe$Nothing,
+					status: $elm$core$Maybe$Just($author$project$Game$Status$offBoardScold)
+				};
+		}
+	});
+var $author$project$Puzzle$handleMouseUp = F3(
+	function (releasePoint, tMs, model) {
+		var _v0 = model.drag;
+		switch (_v0.$) {
+			case 'NotDragging':
+				return model;
+			case 'DraggingHandCard':
+				return _Utils_update(
+					model,
+					{drag: $author$project$Game$Drag$NotDragging});
+			default:
+				var d = _v0.a;
+				var outcome = A4(
+					$author$project$Game$BoardDrag$handleMouseUp,
+					releasePoint,
+					tMs,
+					d,
+					{actionLog: _List_Nil, board: model.board, boardRect: model.boardRect, nextSeq: 0});
+				return _Utils_update(
+					model,
+					{
+						board: outcome.board,
+						drag: $author$project$Game$Drag$NotDragging,
+						status: A2($elm$core$Maybe$withDefault, model.status, outcome.status)
+					});
+		}
+	});
+var $author$project$Game$Drag$DraggingBoardCard = function (a) {
+	return {$: 'DraggingBoardCard', a: a};
+};
+var $author$project$Game$BoardGesture$wingHoverStatus = {kind: $author$project$Game$Status$Inform, text: 'Drop stack to complete merge.'};
+var $author$project$Game$BoardGesture$hoverStatus = F3(
+	function (currentHover, nextHover, currentStatus) {
+		if (!_Utils_eq(nextHover, currentHover)) {
+			if (nextHover.$ === 'Just') {
+				return $author$project$Game$BoardGesture$wingHoverStatus;
+			} else {
+				return currentStatus;
+			}
+		} else {
+			return currentStatus;
+		}
+	});
+var $author$project$Game$BoardGesture$mouseMove = F4(
+	function (pos, tMs, d, currentStatus) {
+		var hover = function (floaterTopLeft) {
+			return A3(
+				$author$project$Game$WingView$hoveredWing,
+				floaterTopLeft,
+				$author$project$Game$CardStack$stackDisplayWidth(d.stack),
+				d.wings);
+		};
+		var delta = {x: pos.x - d.cursor.x, y: pos.y - d.cursor.y};
+		var nextFloater = {left: d.floaterTopLeft.left + delta.x, top: d.floaterTopLeft.top + delta.y};
+		var nextPath = _Utils_ap(
+			d.boardPath,
+			_List_fromArray(
+				[
+					{left: nextFloater.left, tMs: tMs, top: nextFloater.top}
+				]));
+		var nextD = _Utils_update(
+			d,
+			{boardPath: nextPath, cursor: pos, floaterTopLeft: nextFloater});
+		var nextStatus = A3(
+			$author$project$Game$BoardGesture$hoverStatus,
+			hover(d.floaterTopLeft),
+			hover(nextD.floaterTopLeft),
+			currentStatus);
+		return _Utils_Tuple2(nextD, nextStatus);
+	});
+var $author$project$Puzzle$mouseMove = F3(
+	function (pos, tMs, model) {
+		var _v0 = model.drag;
+		switch (_v0.$) {
+			case 'DraggingBoardCard':
+				var d = _v0.a;
+				var _v1 = A4($author$project$Game$BoardGesture$mouseMove, pos, tMs, d, model.status);
+				var nextD = _v1.a;
+				var nextStatus = _v1.b;
+				return _Utils_update(
+					model,
+					{
+						drag: $author$project$Game$Drag$DraggingBoardCard(nextD),
+						status: nextStatus
+					});
+			case 'DraggingHandCard':
+				return model;
+			default:
+				return model;
+		}
+	});
+var $author$project$Puzzle$BoardRectReceived = function (a) {
+	return {$: 'BoardRectReceived', a: a};
+};
+var $elm$core$Task$onError = _Scheduler_onError;
+var $elm$core$Task$attempt = F2(
+	function (resultToMessage, task) {
+		return $elm$core$Task$command(
+			$elm$core$Task$Perform(
+				A2(
+					$elm$core$Task$onError,
+					A2(
+						$elm$core$Basics$composeL,
+						A2($elm$core$Basics$composeL, $elm$core$Task$succeed, resultToMessage),
+						$elm$core$Result$Err),
+					A2(
+						$elm$core$Task$andThen,
+						A2(
+							$elm$core$Basics$composeL,
+							A2($elm$core$Basics$composeL, $elm$core$Task$succeed, resultToMessage),
+							$elm$core$Result$Ok),
+						task))));
+	});
+var $author$project$Game$BoardView$boardDomIdFor = function (gameId) {
+	return 'lynrummy-board-' + gameId;
+};
+var $elm$browser$Browser$Dom$getElement = _Browser_getElement;
+var $author$project$Puzzle$fetchBoardRect = function (gameId) {
+	return A2(
+		$elm$core$Task$attempt,
+		$author$project$Puzzle$BoardRectReceived,
+		$elm$browser$Browser$Dom$getElement(
+			$author$project$Game$BoardView$boardDomIdFor(gameId)));
+};
+var $elm$core$List$append = F2(
+	function (xs, ys) {
+		if (!ys.b) {
+			return xs;
+		} else {
+			return A3($elm$core$List$foldr, $elm$core$List$cons, ys, xs);
+		}
+	});
+var $elm$core$List$concat = function (lists) {
+	return A3($elm$core$List$foldr, $elm$core$List$append, _List_Nil, lists);
+};
+var $elm$core$List$concatMap = F2(
+	function (f, list) {
+		return $elm$core$List$concat(
+			A2($elm$core$List$map, f, list));
+	});
+var $author$project$Game$BoardActions$Left = {$: 'Left'};
+var $author$project$Game$BoardActions$Right = {$: 'Right'};
+var $author$project$Game$Physics$WingOracle$stackWingsForTarget = F2(
+	function (source, target) {
+		if (A2($author$project$Game$CardStack$isStacksEqual, target, source)) {
+			return _List_Nil;
+		} else {
+			var rightWing = function () {
+				var _v1 = A3($author$project$Game$BoardActions$tryStackMerge, target, source, $author$project$Game$BoardActions$Right);
+				if (_v1.$ === 'Just') {
+					return _List_fromArray(
+						[
+							{side: $author$project$Game$BoardActions$Right, target: target}
+						]);
+				} else {
+					return _List_Nil;
+				}
+			}();
+			var leftWing = function () {
+				var _v0 = A3($author$project$Game$BoardActions$tryStackMerge, target, source, $author$project$Game$BoardActions$Left);
+				if (_v0.$ === 'Just') {
+					return _List_fromArray(
+						[
+							{side: $author$project$Game$BoardActions$Left, target: target}
+						]);
+				} else {
+					return _List_Nil;
+				}
+			}();
+			return _Utils_ap(leftWing, rightWing);
+		}
+	});
+var $author$project$Game$Physics$WingOracle$wingsForStack = F2(
+	function (source, board) {
+		return A2(
+			$elm$core$List$concatMap,
+			$author$project$Game$Physics$WingOracle$stackWingsForTarget(source),
+			board);
+	});
+var $author$project$Game$BoardGesture$startBoardDragInfo = function (_v0) {
+	var stack = _v0.stack;
+	var cardIndex = _v0.cardIndex;
+	var cursor = _v0.cursor;
+	var tMs = _v0.tMs;
+	var board = _v0.board;
+	return {
+		boardPath: _List_fromArray(
+			[
+				{left: stack.loc.left, tMs: tMs, top: stack.loc.top}
+			]),
+		cardIndex: cardIndex,
+		cursor: cursor,
+		floaterTopLeft: stack.loc,
+		originalCursor: cursor,
+		stack: stack,
+		wings: A2($author$project$Game$Physics$WingOracle$wingsForStack, stack, board)
+	};
+};
+var $author$project$Puzzle$startBoardCardDrag = F5(
+	function (stack, cardIndex, clientPoint, tMs, model) {
+		var _v0 = model.drag;
+		if (_v0.$ === 'NotDragging') {
+			return _Utils_Tuple2(
+				_Utils_update(
+					model,
+					{
+						drag: $author$project$Game$Drag$DraggingBoardCard(
+							$author$project$Game$BoardGesture$startBoardDragInfo(
+								{board: model.board, cardIndex: cardIndex, cursor: clientPoint, stack: stack, tMs: tMs}))
+					}),
+				$author$project$Puzzle$fetchBoardRect(model.gameId));
+		} else {
+			return _Utils_Tuple2(model, $elm$core$Platform$Cmd$none);
+		}
+	});
+var $author$project$Puzzle$update = F2(
+	function (msg, model) {
+		switch (msg.$) {
+			case 'MouseDownOnBoardCard':
+				var stack = msg.a.stack;
+				var cardIndex = msg.a.cardIndex;
+				var point = msg.a.point;
+				var time = msg.a.time;
+				return A5($author$project$Puzzle$startBoardCardDrag, stack, cardIndex, point, time, model);
+			case 'MouseMove':
+				var pos = msg.a;
+				var tMs = msg.b;
+				return _Utils_Tuple2(
+					A3($author$project$Puzzle$mouseMove, pos, tMs, model),
+					$elm$core$Platform$Cmd$none);
+			case 'MouseUp':
+				var pos = msg.a;
+				var tMs = msg.b;
+				return _Utils_Tuple2(
+					A3($author$project$Puzzle$handleMouseUp, pos, tMs, model),
+					$elm$core$Platform$Cmd$none);
+			default:
+				var result = msg.a;
+				return _Utils_Tuple2(
+					A2($author$project$Puzzle$boardRectReceived, result, model),
+					$elm$core$Platform$Cmd$none);
+		}
+	});
+var $elm$virtual_dom$VirtualDom$style = _VirtualDom_style;
+var $elm$html$Html$Attributes$style = $elm$virtual_dom$VirtualDom$style;
+var $author$project$Game$Drag$floatingAttrs = F2(
+	function (floaterTopLeft, positioningAttrs) {
+		return _Utils_ap(
+			positioningAttrs,
+			_List_fromArray(
+				[
+					A2(
+					$elm$html$Html$Attributes$style,
+					'top',
+					$elm$core$String$fromInt(floaterTopLeft.top) + 'px'),
+					A2(
+					$elm$html$Html$Attributes$style,
+					'left',
+					$elm$core$String$fromInt(floaterTopLeft.left) + 'px'),
+					A2($elm$html$Html$Attributes$style, 'pointer-events', 'none'),
+					A2($elm$html$Html$Attributes$style, 'z-index', '1000')
+				]));
+	});
+var $elm$html$Html$div = _VirtualDom_node('div');
 var $author$project$Game$CardStack$isIncomplete = function (s) {
 	return _Utils_eq(
 		$author$project$Game$CardStack$stackType(s),
 		$author$project$Game$Rules$StackType$Incomplete);
 };
-var $author$project$Game$Physics$BoardGeometry$cardHeight = 40;
 var $author$project$Game$StackView$cardHeightPx = $elm$core$String$fromInt($author$project$Game$Physics$BoardGeometry$cardHeight) + 'px';
-var $author$project$Game$CardStack$cardWidth = 27;
 var $author$project$Game$StackView$cardWidthPx = $elm$core$String$fromInt($author$project$Game$CardStack$cardWidth) + 'px';
 var $author$project$Game$Rules$Card$suitEmojiStr = function (suit) {
 	switch (suit.$) {
@@ -5612,26 +7381,348 @@ var $author$project$Game$StackView$viewStackWithAttrs = F2(
 			},
 			stack);
 	});
+var $author$project$Game$Drag$renderBoardFloater = F2(
+	function (d, positioningAttrs) {
+		return A2(
+			$author$project$Game$StackView$viewStackWithAttrs,
+			A2($author$project$Game$Drag$floatingAttrs, d.floaterTopLeft, positioningAttrs),
+			d.stack);
+	});
+var $author$project$Game$BoardView$getOverlayNodes = function (drag) {
+	switch (drag.$) {
+		case 'DraggingBoardCard':
+			var d = drag.a;
+			return _List_fromArray(
+				[
+					A2(
+					$author$project$Game$Drag$renderBoardFloater,
+					d,
+					_List_fromArray(
+						[
+							A2($elm$html$Html$Attributes$style, 'position', 'absolute')
+						]))
+				]);
+		case 'DraggingHandCard':
+			return _List_Nil;
+		default:
+			return _List_Nil;
+	}
+};
+var $author$project$Game$WingView$mergeableGreen = 'hsl(105, 72.70%, 87.10%)';
+var $author$project$Game$WingView$mergeableHover = '#E0B0FF';
+var $author$project$Game$WingView$cardHeightPx = $elm$core$String$fromInt($author$project$Game$Physics$BoardGeometry$cardHeight) + 'px';
+var $author$project$Game$WingView$viewWing = function (_v0) {
+	var top = _v0.top;
+	var left = _v0.left;
+	var width = _v0.width;
+	var bgColor = _v0.bgColor;
+	var extraAttrs = _v0.extraAttrs;
+	var base = _List_fromArray(
+		[
+			A2($elm$html$Html$Attributes$style, 'position', 'absolute'),
+			A2(
+			$elm$html$Html$Attributes$style,
+			'top',
+			$elm$core$String$fromInt(top) + 'px'),
+			A2(
+			$elm$html$Html$Attributes$style,
+			'left',
+			$elm$core$String$fromInt(left) + 'px'),
+			A2(
+			$elm$html$Html$Attributes$style,
+			'width',
+			$elm$core$String$fromInt(width) + 'px'),
+			A2($elm$html$Html$Attributes$style, 'height', $author$project$Game$WingView$cardHeightPx),
+			A2($elm$html$Html$Attributes$style, 'padding', '1px'),
+			A2($elm$html$Html$Attributes$style, 'background-color', bgColor),
+			A2($elm$html$Html$Attributes$style, 'user-select', 'none'),
+			A2($elm$html$Html$Attributes$style, 'text-align', 'center'),
+			A2($elm$html$Html$Attributes$style, 'vertical-align', 'center'),
+			A2($elm$html$Html$Attributes$style, 'font-size', '17px'),
+			A2($elm$html$Html$Attributes$style, 'box-sizing', 'border-box'),
+			A2($elm$html$Html$Attributes$style, 'border', '1px solid transparent')
+		]);
+	return A2(
+		$elm$html$Html$div,
+		_Utils_ap(base, extraAttrs),
+		_List_fromArray(
+			[
+				A2(
+				$elm$html$Html$div,
+				_List_fromArray(
+					[
+						A2($elm$html$Html$Attributes$style, 'color', 'transparent')
+					]),
+				_List_fromArray(
+					[
+						$elm$html$Html$text('+')
+					])),
+				A2(
+				$elm$html$Html$div,
+				_List_fromArray(
+					[
+						A2($elm$html$Html$Attributes$style, 'color', 'transparent')
+					]),
+				_List_fromArray(
+					[
+						$elm$html$Html$text('+')
+					]))
+			]));
+};
+var $author$project$Game$WingView$renderWing = F2(
+	function (rect, hovering) {
+		var bgColor = hovering ? $author$project$Game$WingView$mergeableHover : $author$project$Game$WingView$mergeableGreen;
+		return $author$project$Game$WingView$viewWing(
+			{bgColor: bgColor, extraAttrs: _List_Nil, left: rect.left, top: rect.top, width: rect.width});
+	});
+var $author$project$Game$Physics$WingOracle$wingBoardRect = function (wing) {
+	var left = function () {
+		var _v0 = wing.side;
+		if (_v0.$ === 'Left') {
+			return wing.target.loc.left - $author$project$Game$CardStack$stackPitch;
+		} else {
+			return wing.target.loc.left + $author$project$Game$CardStack$stackDisplayWidth(wing.target);
+		}
+	}();
+	return {height: $author$project$Game$Physics$BoardGeometry$cardHeight, left: left, top: wing.target.loc.top, width: $author$project$Game$CardStack$stackPitch};
+};
+var $author$project$Game$WingView$renderWingWithHover = F2(
+	function (hovered, wing) {
+		return A2(
+			$author$project$Game$WingView$renderWing,
+			$author$project$Game$Physics$WingOracle$wingBoardRect(wing),
+			_Utils_eq(
+				hovered,
+				$elm$core$Maybe$Just(wing)));
+	});
+var $author$project$Game$WingView$getWingNodes = F2(
+	function (drag, maybeBoardRect) {
+		switch (drag.$) {
+			case 'DraggingBoardCard':
+				var d = drag.a;
+				var hovered = A3(
+					$author$project$Game$WingView$hoveredWing,
+					d.floaterTopLeft,
+					$author$project$Game$CardStack$stackDisplayWidth(d.stack),
+					d.wings);
+				return A2(
+					$elm$core$List$map,
+					$author$project$Game$WingView$renderWingWithHover(hovered),
+					d.wings);
+			case 'DraggingHandCard':
+				var d = drag.a;
+				if (maybeBoardRect.$ === 'Just') {
+					var rect = maybeBoardRect.a;
+					var floaterBoardLoc = {left: d.floaterTopLeft.x - rect.x, top: d.floaterTopLeft.y - rect.y};
+					var hovered = A3($author$project$Game$WingView$hoveredWing, floaterBoardLoc, $author$project$Game$CardStack$stackPitch, d.wings);
+					return A2(
+						$elm$core$List$map,
+						$author$project$Game$WingView$renderWingWithHover(hovered),
+						d.wings);
+				} else {
+					return _List_Nil;
+				}
+			default:
+				return _List_Nil;
+		}
+	});
 var $author$project$Game$StackView$viewStack = function (stack) {
 	return A2($author$project$Game$StackView$viewStackWithAttrs, _List_Nil, stack);
 };
-var $author$project$Game$BoardView$viewBoard = function (stacks) {
+var $author$project$Game$StackView$viewStackWithCardAttrs = F2(
+	function (attrsForCard, stack) {
+		return A3($author$project$Game$StackView$viewStackInternal, _List_Nil, attrsForCard, stack);
+	});
+var $author$project$Game$BoardView$viewStackForBoard = F3(
+	function (drag, cardMouseDown, stack) {
+		switch (drag.$) {
+			case 'DraggingBoardCard':
+				var d = drag.a;
+				return A2($author$project$Game$CardStack$isStacksEqual, d.stack, stack) ? $elm$html$Html$text('') : $author$project$Game$StackView$viewStack(stack);
+			case 'DraggingHandCard':
+				return $author$project$Game$StackView$viewStack(stack);
+			default:
+				return A2(
+					$author$project$Game$StackView$viewStackWithCardAttrs,
+					cardMouseDown(stack),
+					stack);
+		}
+	});
+var $author$project$Game$BoardView$boardChildren = F4(
+	function (board, maybeBoardRect, drag, cardMouseDown) {
+		var wingNodes = A2($author$project$Game$WingView$getWingNodes, drag, maybeBoardRect);
+		var stackNodes = A2(
+			$elm$core$List$map,
+			A2($author$project$Game$BoardView$viewStackForBoard, drag, cardMouseDown),
+			board);
+		var boardOverlayNodes = $author$project$Game$BoardView$getOverlayNodes(drag);
+		return _Utils_ap(
+			stackNodes,
+			_Utils_ap(wingNodes, boardOverlayNodes));
+	});
+var $author$project$Game$View$navy = '#000080';
+var $author$project$Game$BoardView$boardShellWith = F2(
+	function (extraAttrs, children) {
+		var baseAttrs = _List_fromArray(
+			[
+				A2($elm$html$Html$Attributes$style, 'background-color', 'khaki'),
+				A2($elm$html$Html$Attributes$style, 'border', '1px solid ' + $author$project$Game$View$navy),
+				A2($elm$html$Html$Attributes$style, 'border-radius', '15px'),
+				A2($elm$html$Html$Attributes$style, 'position', 'relative'),
+				A2($elm$html$Html$Attributes$style, 'width', '800px'),
+				A2($elm$html$Html$Attributes$style, 'height', '600px'),
+				A2($elm$html$Html$Attributes$style, 'margin-top', '8px')
+			]);
+		return A2(
+			$elm$html$Html$div,
+			_Utils_ap(baseAttrs, extraAttrs),
+			children);
+	});
+var $elm$html$Html$Attributes$stringProperty = F2(
+	function (key, string) {
+		return A2(
+			_VirtualDom_property,
+			key,
+			$elm$json$Json$Encode$string(string));
+	});
+var $elm$html$Html$Attributes$id = $elm$html$Html$Attributes$stringProperty('id');
+var $author$project$Game$BoardView$boardWithWings = function (_v0) {
+	var board = _v0.board;
+	var boardRect = _v0.boardRect;
+	var drag = _v0.drag;
+	var gameId = _v0.gameId;
+	var cardMouseDown = _v0.cardMouseDown;
 	return A2(
 		$author$project$Game$BoardView$boardShellWith,
-		_List_Nil,
-		A2($elm$core$List$map, $author$project$Game$StackView$viewStack, stacks));
+		_List_fromArray(
+			[
+				$elm$html$Html$Attributes$id(
+				$author$project$Game$BoardView$boardDomIdFor(gameId))
+			]),
+		A4($author$project$Game$BoardView$boardChildren, board, boardRect, drag, cardMouseDown));
 };
-var $author$project$Puzzle$view = function (_v0) {
-	return $author$project$Game$BoardView$viewBoard($author$project$Puzzle$puzzleStacks);
-};
-var $author$project$Puzzle$main = $elm$browser$Browser$sandbox(
-	{
-		init: _Utils_Tuple0,
-		update: F2(
-			function (_v0, _v1) {
-				return _Utils_Tuple0;
-			}),
-		view: $author$project$Puzzle$view
+var $author$project$Game$StackView$viewCardWithAttrs = F2(
+	function (extraAttrs, card) {
+		return A2($author$project$Game$StackView$viewPlayingCardWith, extraAttrs, card);
 	});
+var $author$project$Game$Drag$renderHandFloater = F2(
+	function (d, positioningAttrs) {
+		return A2(
+			$author$project$Game$StackView$viewCardWithAttrs,
+			_Utils_ap(
+				A2(
+					$author$project$Game$Drag$floatingAttrs,
+					{left: d.floaterTopLeft.x, top: d.floaterTopLeft.y},
+					positioningAttrs),
+				_List_fromArray(
+					[
+						A2($elm$html$Html$Attributes$style, 'background-color', 'white')
+					])),
+			d.card);
+	});
+var $author$project$Game$Drag$draggedOverlay = function (drag) {
+	switch (drag.$) {
+		case 'DraggingHandCard':
+			var d = drag.a;
+			return A2(
+				$author$project$Game$Drag$renderHandFloater,
+				d,
+				_List_fromArray(
+					[
+						A2($elm$html$Html$Attributes$style, 'position', 'fixed')
+					]));
+		case 'DraggingBoardCard':
+			return $elm$html$Html$text('');
+		default:
+			return $elm$html$Html$text('');
+	}
+};
+var $author$project$Game$View$sectionHeading = function (label) {
+	return A2(
+		$elm$html$Html$div,
+		_List_fromArray(
+			[
+				A2($elm$html$Html$Attributes$style, 'color', $author$project$Game$View$navy),
+				A2($elm$html$Html$Attributes$style, 'font-weight', 'bold'),
+				A2($elm$html$Html$Attributes$style, 'font-size', '19px'),
+				A2($elm$html$Html$Attributes$style, 'margin-top', '20px')
+			]),
+		_List_fromArray(
+			[
+				$elm$html$Html$text(label)
+			]));
+};
+var $author$project$Game$View$viewBoardHeading = $author$project$Game$View$sectionHeading('Board');
+var $author$project$Game$BoardView$boardColumn = function (input) {
+	return A2(
+		$elm$html$Html$div,
+		_List_fromArray(
+			[
+				A2($elm$html$Html$Attributes$style, 'min-width', '800px')
+			]),
+		_List_fromArray(
+			[
+				$author$project$Game$View$viewBoardHeading,
+				$author$project$Game$BoardView$boardWithWings(input),
+				$author$project$Game$Drag$draggedOverlay(input.drag)
+			]));
+};
+var $author$project$Puzzle$MouseDownOnBoardCard = function (a) {
+	return {$: 'MouseDownOnBoardCard', a: a};
+};
+var $elm$virtual_dom$VirtualDom$Normal = function (a) {
+	return {$: 'Normal', a: a};
+};
+var $elm$virtual_dom$VirtualDom$on = _VirtualDom_on;
+var $elm$html$Html$Events$on = F2(
+	function (event, decoder) {
+		return A2(
+			$elm$virtual_dom$VirtualDom$on,
+			event,
+			$elm$virtual_dom$VirtualDom$Normal(decoder));
+	});
+var $elm$core$Tuple$pair = F2(
+	function (a, b) {
+		return _Utils_Tuple2(a, b);
+	});
+var $author$project$Puzzle$pointAndTimeDecoder = A3(
+	$elm$json$Json$Decode$map2,
+	$elm$core$Tuple$pair,
+	$author$project$Puzzle$pointDecoder,
+	A2($elm$json$Json$Decode$field, 'timeStamp', $elm$json$Json$Decode$float));
+var $author$project$Puzzle$cardMouseDown = F2(
+	function (stack, cardIdx) {
+		return _List_fromArray(
+			[
+				A2(
+				$elm$html$Html$Events$on,
+				'mousedown',
+				A2(
+					$elm$json$Json$Decode$map,
+					function (_v0) {
+						var p = _v0.a;
+						var t = _v0.b;
+						return $author$project$Puzzle$MouseDownOnBoardCard(
+							{cardIndex: cardIdx, point: p, stack: stack, time: t});
+					},
+					$author$project$Puzzle$pointAndTimeDecoder))
+			]);
+	});
+var $author$project$Puzzle$view = function (model) {
+	return A2(
+		$elm$html$Html$div,
+		_List_fromArray(
+			[
+				A2($elm$html$Html$Attributes$style, 'padding', '20px'),
+				A2($elm$html$Html$Attributes$style, 'font-family', 'system-ui, sans-serif')
+			]),
+		_List_fromArray(
+			[
+				$author$project$Game$BoardView$boardColumn(
+				{board: model.board, boardRect: model.boardRect, cardMouseDown: $author$project$Puzzle$cardMouseDown, drag: model.drag, gameId: model.gameId})
+			]));
+};
+var $author$project$Puzzle$main = $elm$browser$Browser$element(
+	{init: $author$project$Puzzle$init, subscriptions: $author$project$Puzzle$subscriptions, update: $author$project$Puzzle$update, view: $author$project$Puzzle$view});
 _Platform_export({'Puzzle':{'init':$author$project$Puzzle$main(
 	$elm$json$Json$Decode$succeed(_Utils_Tuple0))(0)}});}(this));
