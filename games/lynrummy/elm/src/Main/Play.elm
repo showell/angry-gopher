@@ -41,7 +41,7 @@ import Http
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
 import Game.Physics.BoardGeometry exposing (refereeBounds)
-import Game.Status exposing (StatusKind(..), StatusMessage)
+import Game.Status as Status exposing (StatusKind(..), StatusMessage)
 import Main.Gesture
     exposing
         ( pointDecoder
@@ -59,7 +59,7 @@ import Main.State
         )
 import Game.Point exposing (Point)
 import Game.Popup as Popup
-import Main.View as View exposing (statusForCompleteTurn)
+import Main.View as View
 import Main.Wire as Wire exposing (fetchActionLog, fetchNewSession)
 import Time
 
@@ -431,7 +431,7 @@ clickCompleteTurn model =
     case turnOutcome.result of
         Failure ->
             ( { model
-                | status = statusForCompleteTurn (Ok turnOutcome)
+                | status = Status.statusForCompleteTurn (Ok turnOutcome)
                 , popup = Popup.popupForCompleteTurn (Ok turnOutcome)
               }
             , Cmd.none
@@ -450,7 +450,7 @@ clickCompleteTurn model =
                         | gameState = afterTurn
                         , actionLog = model.actionLog ++ [ completeTurnEntry ]
                         , nextSeq = seq + 1
-                        , status = statusForCompleteTurn (Ok turnOutcome)
+                        , status = Status.statusForCompleteTurn (Ok turnOutcome)
                         , popup = Popup.popupForCompleteTurn (Ok turnOutcome)
                     }
 

@@ -1,7 +1,4 @@
-module Main.View exposing
-    ( statusForCompleteTurn
-    , view
-    )
+module Main.View exposing (view)
 
 {-| The game-surface view layer — composes the top bar, status
 bar, hand column, board column, drag overlay, and popup into
@@ -70,33 +67,6 @@ import Main.State
         , canUndoThisTurn
         )
 
-
-
--- CEREMONY HELPERS
-
-
-statusForCompleteTurn : Result outcome CompleteTurnOutcome -> StatusMessage
-statusForCompleteTurn outcome =
-    case outcome of
-        Ok o ->
-            case o.result of
-                Success ->
-                    { text = "Turn complete. Board is growing!", kind = Celebrate }
-
-                SuccessButNeedsCards ->
-                    { text = "Turn complete, but you didn't play any cards.", kind = Inform }
-
-                SuccessAsVictor ->
-                    { text = "Hand emptied — victor!", kind = Celebrate }
-
-                SuccessWithHandEmptied ->
-                    { text = "Hand emptied — nice.", kind = Celebrate }
-
-                Failure ->
-                    { text = "Board isn't clean — tidy up before ending the turn.", kind = Scold }
-
-        Err _ ->
-            { text = "Couldn't reach the server to complete the turn.", kind = Scold }
 
 
 -- TOP-LEVEL VIEW

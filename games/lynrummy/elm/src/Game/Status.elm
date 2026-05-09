@@ -4,14 +4,41 @@ module Game.Status exposing
     , geometryFeedback
     , mergeStatus
     , offBoardScold
+    , statusForCompleteTurn
     )
 
 {-| Status messages and the helpers that build them. -}
 
 import Game.CardStack as CardStack exposing (CardStack)
+import Game.Game exposing (CompleteTurnOutcome)
 import Game.Physics.BoardGeometry as BoardGeometry exposing (BoardGeometryStatus(..))
+import Game.PlayerTurn exposing (CompleteTurnResult(..))
 import Game.Rules.Card
 import Game.Rules.StackType as StackType
+
+
+statusForCompleteTurn : Result outcome CompleteTurnOutcome -> StatusMessage
+statusForCompleteTurn outcome =
+    case outcome of
+        Ok o ->
+            case o.result of
+                Success ->
+                    { text = "Turn complete. Board is growing!", kind = Celebrate }
+
+                SuccessButNeedsCards ->
+                    { text = "Turn complete, but you didn't play any cards.", kind = Inform }
+
+                SuccessAsVictor ->
+                    { text = "Hand emptied — victor!", kind = Celebrate }
+
+                SuccessWithHandEmptied ->
+                    { text = "Hand emptied — nice.", kind = Celebrate }
+
+                Failure ->
+                    { text = "Board isn't clean — tidy up before ending the turn.", kind = Scold }
+
+        Err _ ->
+            { text = "Couldn't reach the server to complete the turn.", kind = Scold }
 
 
 type alias StatusMessage =
