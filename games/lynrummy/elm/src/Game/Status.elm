@@ -1,9 +1,12 @@
 module Game.Status exposing
     ( StatusKind(..)
     , StatusMessage
+    , actionLogFetchFailedStatus
+    , actionRejectedStatus
     , geometryFeedback
     , mergeStatus
     , offBoardScold
+    , sessionAllocFailedStatus
     , statusForCompleteTurn
     )
 
@@ -143,5 +146,26 @@ isCompleteType t =
 offBoardScold : StatusMessage
 offBoardScold =
     { text = "Don't knock cards off the board, please. You're not a cat!"
+    , kind = Scold
+    }
+
+
+actionRejectedStatus : StatusMessage
+actionRejectedStatus =
+    { text = "Server rejected action — check console; state may be out of sync."
+    , kind = Scold
+    }
+
+
+sessionAllocFailedStatus : StatusMessage
+sessionAllocFailedStatus =
+    { text = "Could not allocate a session — check console."
+    , kind = Scold
+    }
+
+
+actionLogFetchFailedStatus : StatusMessage
+actionLogFetchFailedStatus =
+    { text = "Could not load action log — check console."
     , kind = Scold
     }

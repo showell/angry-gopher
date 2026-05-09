@@ -177,7 +177,7 @@ update msg model =
             ( model, Cmd.none, NoOutput )
 
         ActionSent (Err err) ->
-            logAndScold "ActionSent" err actionRejectedStatus model
+            logAndScold "ActionSent" err Status.actionRejectedStatus model
 
         SessionReceived (Ok sid) ->
             -- Session id allocated by the server. State was
@@ -188,7 +188,7 @@ update msg model =
             )
 
         SessionReceived (Err err) ->
-            logAndScold "SessionReceived" err sessionAllocFailedStatus model
+            logAndScold "SessionReceived" err Status.sessionAllocFailedStatus model
 
         ClickCompleteTurn ->
             withNoOutput (clickCompleteTurn model)
@@ -264,7 +264,7 @@ update msg model =
             ( bootstrapFromBundle bundle model, Cmd.none, NoOutput )
 
         ActionLogFetched (Err err) ->
-            logAndScold "ActionLogFetched" err actionLogFetchFailedStatus model
+            logAndScold "ActionLogFetched" err Status.actionLogFetchFailedStatus model
 
         BoardRectReceived result ->
             withNoOutput (boardRectReceived result model)
@@ -757,36 +757,6 @@ modelAtInitial initial model =
 
 
 
--- STATUS MESSAGES
---
--- Named StatusMessage values for each failure / interrupt
--- site in this module, mirroring the convention used in
--- Main.Apply (`splitStatus`, `placeHandStatus`, etc.).
--- Lifting them to named values keeps the dispatch in
--- `update` legible and makes "what's the full set of
--- failure messages this module can produce?" a one-screen
--- read.
-
-
-actionRejectedStatus : StatusMessage
-actionRejectedStatus =
-    { text = "Server rejected action — check console; state may be out of sync."
-    , kind = Scold
-    }
-
-
-sessionAllocFailedStatus : StatusMessage
-sessionAllocFailedStatus =
-    { text = "Could not allocate a session — check console."
-    , kind = Scold
-    }
-
-
-actionLogFetchFailedStatus : StatusMessage
-actionLogFetchFailedStatus =
-    { text = "Could not load action log — check console."
-    , kind = Scold
-    }
 
 
 
