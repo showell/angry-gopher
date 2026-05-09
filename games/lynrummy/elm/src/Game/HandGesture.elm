@@ -3,6 +3,7 @@ module Game.HandGesture exposing
     , handleMouseUp
     , mouseMove
     , resolveHandCardGesture
+    , startHandDragInfo
     )
 
 {-| Per-side resolution for hand-card mouseup gestures.
@@ -15,10 +16,11 @@ pathless (replay re-synthesizes via DOM).
 -}
 
 import Game.BoardActions exposing (Side)
-import Game.CardStack as CardStack exposing (BoardLocation, CardStack)
+import Game.CardStack as CardStack exposing (BoardLocation, CardStack, HandCard)
 import Game.HandDragTypes exposing (HandCardDragInfo)
 import Game.Physics.BoardGeometry as BG
 import Game.Physics.GestureArbitration as GA
+import Game.Physics.WingOracle as WingOracle
 import Game.Rules.Card exposing (Card)
 import Game.Status as Status
 import Game.WingView as WingView
@@ -39,6 +41,30 @@ type HandMouseUp
     | PlaceHand { handCard : Card, loc : BoardLocation }
     | HandCardOffBoard
     | HandNothing
+
+
+{-| Construct a fresh `HandCardDragInfo` from a mousedown.
+Pure: no Model, no Cmd. Mirror of
+`BoardGesture.startBoardDragInfo`. The initial floater seed is
+"slightly above-and-left of the cursor" — hand-origin drags
+don't capture the source rect, so the seed is a heuristic
+that gets overwritten on the first MouseMove.
+-}
+startHandDragInfo :
+    { handCard : HandCard
+    , cursor : Point
+    , board : List CardStack
+    }
+    -> HandCardDragInfo
+startHandDragInfo { handCard, cursor, board } =
+    { card = handCard.card
+    , cursor = cursor
+    , floaterTopLeft =
+        { x = cursor.x - CardStack.stackPitch // 2
+        , y = cursor.y - 20
+        }
+    , wings = WingOracle.wingsForHandCard handCard board
+    }
 
 
 {-| Mouseup handler for a hand-card drag. Caller has

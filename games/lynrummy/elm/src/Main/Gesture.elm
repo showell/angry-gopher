@@ -48,9 +48,9 @@ import Browser.Dom
 import Game.BoardGesture as BoardGesture
 import Game.BoardView exposing (boardDomIdFor)
 import Game.Drag exposing (DragState(..))
-import Game.Physics.WingOracle as WingOracle
+import Game.HandGesture as HandGesture
 import Game.Rules.Card exposing (Card)
-import Game.CardStack as CardStack exposing (CardStack, HandCard)
+import Game.CardStack exposing (CardStack, HandCard)
 import Html
 import Html.Attributes exposing (style)
 import Html.Events as Events
@@ -99,39 +99,20 @@ startBoardCardDrag { stack, cardIndex } clientPoint tMs model =
             ( model, Cmd.none )
 
 
-{-| Start a drag from a hand card. The `tMs` mousedown timestamp
-is unused — hand drags don't capture a gesture path (replay
-re-synthesizes via DOM measurement).
--}
+{-| Start a drag from a hand card. -}
 startHandDrag : Card -> Point -> Model -> ( Model, Cmd Msg )
 startHandDrag card clientPoint model =
     case ( model.drag, findHandCard card (activeHand model.gameState).handCards ) of
         ( NotDragging, Just handCard ) ->
-            let
-                wings =
-                    WingOracle.wingsForHandCard handCard model.gameState.board
-
-                -- Hand-origin: the floater is rendered as a
-                -- viewport overlay. We don't know the hand
-                -- card's exact viewport rect without a DOM
-                -- measurement, so we approximate the initial
-                -- floater as "a bit above-and-left of the
-                -- cursor" — clientPoint minus a local
-                -- half-pitch / 20-px offset. Not stored
-                -- anywhere; used only to seed `floaterTopLeft`.
-                initialFloater =
-                    { x = clientPoint.x - CardStack.stackPitch // 2
-                    , y = clientPoint.y - 20
-                    }
-            in
             ( { model
                 | drag =
                     DraggingHandCard
-                        { card = card
-                        , cursor = clientPoint
-                        , floaterTopLeft = initialFloater
-                        , wings = wings
-                        }
+                        (HandGesture.startHandDragInfo
+                            { handCard = handCard
+                            , cursor = clientPoint
+                            , board = model.gameState.board
+                            }
+                        )
               }
             , fetchBoardRect model.gameId
             )
