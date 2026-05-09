@@ -11,14 +11,14 @@ gameState/drag, which is what makes this module reusable
 across live-play and replay views.
 -}
 
+import Game.Button as Button
 import Game.Drag as Drag
 import Game.Hand exposing (Hand)
 import Game.Rules.Card exposing (Card)
 import Game.Game exposing (GameState)
 import Game.View as View
 import Html exposing (Html, div)
-import Html.Attributes as Attr exposing (href, style)
-import Html.Events as Events
+import Html.Attributes exposing (style)
 import Main.Gesture as Gesture
 import Main.Msg exposing (Msg(..))
 import Main.State exposing (ReplayState)
@@ -153,77 +153,34 @@ viewTurnControls { canUndo, replay } =
         , style "gap" "8px"
         , style "flex-wrap" "wrap"
         ]
-        [ gameButton "Complete turn" ClickCompleteTurn
+        [ Button.button "Complete turn" ClickCompleteTurn
         , (if canUndo then
-            gameButton "Undo" ClickUndo
+            Button.button "Undo" ClickUndo
 
            else
-            disabledGameButton "Undo"
+            Button.disabledButton "Undo"
           )
-        , gameButton "Hint" ClickHint
+        , Button.button "Hint" ClickHint
         , viewReplayControl replay
-        , gameLink "← Lobby" "/gopher/game-lobby"
+        , Button.link "← Lobby" "/gopher/game-lobby"
         ]
 
 
 {-| Replay button — Resume / Pause when a replay is in
-progress, or "Instant replay" when not.
+progress, or "Instant replay" when not. The full-game label
+is "Instant replay"; puzzles can pick a different label
+(e.g. "Replay solution") since `Game.Button` is just the
+styling — labels stay caller-side.
 -}
 viewReplayControl : Maybe ReplayState -> Html Msg
 viewReplayControl maybeReplay =
     case maybeReplay of
         Just progress ->
             if progress.paused then
-                gameButton "Resume" ClickReplayPauseToggle
+                Button.button "Resume" ClickReplayPauseToggle
 
             else
-                gameButton "Pause" ClickReplayPauseToggle
+                Button.button "Pause" ClickReplayPauseToggle
 
         Nothing ->
-            gameButton "Instant replay" ClickInstantReplay
-
-
-gameLink : String -> String -> Html Msg
-gameLink label url =
-    Html.a
-        [ href url
-        , style "padding" "6px 12px"
-        , style "font-size" "14px"
-        , style "border" ("1px solid " ++ View.navy)
-        , style "background" "white"
-        , style "color" View.navy
-        , style "border-radius" "3px"
-        , style "cursor" "pointer"
-        , style "text-decoration" "none"
-        ]
-        [ Html.text label ]
-
-
-gameButton : String -> Msg -> Html Msg
-gameButton label msg =
-    Html.button
-        [ Events.onClick msg
-        , style "padding" "6px 12px"
-        , style "font-size" "14px"
-        , style "border" ("1px solid " ++ View.navy)
-        , style "background" "white"
-        , style "color" View.navy
-        , style "border-radius" "3px"
-        , style "cursor" "pointer"
-        ]
-        [ Html.text label ]
-
-
-disabledGameButton : String -> Html Msg
-disabledGameButton label =
-    Html.button
-        [ Attr.disabled True
-        , style "padding" "6px 12px"
-        , style "font-size" "14px"
-        , style "border" "1px solid #bbb"
-        , style "background" "#f5f5f5"
-        , style "color" "#bbb"
-        , style "border-radius" "3px"
-        , style "cursor" "not-allowed"
-        ]
-        [ Html.text label ]
+            Button.button "Instant replay" ClickInstantReplay
