@@ -14,12 +14,14 @@ module Main.State exposing
 {-| All application-wide data types and the initial Model. -}
 
 import Game.ActionLog exposing (ActionLogEntry)
+import Game.BoardDragTypes exposing (BoardCardDragInfo)
 import Game.CardStack as CardStack
 import Game.Dealer
 import Game.Drag exposing (DragState(..))
 import Game.Game exposing (GameState)
 import Game.GameEvent exposing (GameEvent(..))
 import Game.Hand as Hand exposing (Hand)
+import Game.HandDragTypes exposing (HandCardDragInfo)
 import Game.Physics.GestureArbitration as GA
 import Game.Rules.Card as Card exposing (Card)
 import Game.Status exposing (StatusKind(..), StatusMessage)
@@ -99,42 +101,43 @@ type alias ReplayState =
     { gameState : GameState
     , eventPlan : List ActionLogEntry
     , paused : Bool
-    , drag : DragState
     , anim : ReplayAnimationState
     }
 
 
-{-| Per-step animation state for Instant Replay. Separated from
-`ReplayProgress` so the replay walker can be driven at real-time
-cadence (matching the captured gesture durations) for drag-
-derived actions, and a fixed 1-second "beat" between actions.
+{-| Per-step animation state for Instant Replay.
 
 Phases:
 
-  - **NotAnimating** — transient: between `step` increment and
-    the first animation frame of the new step. Replay init
+  - **NotAnimating** — transient between steps. Replay init
     enters here.
-  - **Animating** — a drag-derived action is replaying. The
-    cursor position is interpolated along `path` by
-    `(nowMs - startMs)`. When elapsed ≥ path duration, apply
-    the action and switch to `Beating`. The seeded `DragState`
-    lives in `model.drag`; per-frame updates patch only its
-    `floaterTopLeft`.
-  - **Beating** — holding a 1-second gap between actions.
-    When `nowMs ≥ untilMs`, advance `step` and return to
-    `NotAnimating`.
-  - **PreRolling** — holding the rewound starting board on screen
-    for a moment before the very first action fires, so the
-    viewer registers the initial state. When `nowMs ≥ untilMs`,
-    returns to `NotAnimating` WITHOUT advancing `step`.
+  - **AnimatingBoard / AnimatingHand** — a drag is replaying.
+    Each variant carries its own `dragInfo` (the live drag data
+    the view renders) plus the path being interpolated.
+    Splitting board vs hand at the type level eliminates the
+    parallel `rs.drag` field and the runtime variant-tag
+    re-discovery that `setFloaterTopLeft` used to do.
+  - **Beating** — 1-second gap between actions.
+  - **PreRolling** — hold the rewound starting board briefly
+    before action 0 fires.
+  - **AwaitingHandRect** — fired a `Browser.Dom.getElement` for
+    a hand card's live rect; transitions to `AnimatingHand`
+    when the Task resolves.
 
 -}
 type ReplayAnimationState
     = NotAnimating
-    | Animating
+    | AnimatingBoard
         { startMs : Float
         , path : List TimeLoc
         , pendingAction : GameEvent
+        , dragInfo : BoardCardDragInfo
+        }
+    | AnimatingHand
+        { startMs : Float
+        , path : List TimeLoc
+        , pendingAction : GameEvent
+        , dragInfo : HandCardDragInfo
         }
     | Beating { untilMs : Float }
     | PreRolling { untilMs : Float }

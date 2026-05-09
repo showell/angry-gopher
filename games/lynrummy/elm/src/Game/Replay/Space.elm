@@ -1,6 +1,5 @@
 module Game.Replay.Space exposing
     ( AnimationInfo
-    , animatedDragState
     , boardStackSource
     , elementTopLeftInViewport
     , handCardSource
@@ -29,7 +28,7 @@ See `Game.Replay.Time` for the companion clock half.
 import Browser.Dom
 import Game.BoardActions as BoardActions
 import Game.CardStack as CardStack exposing (CardStack)
-import Game.Drag exposing (DragSource(..), DragState(..))
+import Game.Drag exposing (DragSource(..))
 import Game.Game exposing (GameState)
 import Game.GameEvent as GameEvent exposing (GameEvent)
 import Game.Hand as Hand
@@ -342,30 +341,3 @@ handCardSource card gameState =
     else
         Nothing
 
-
-
--- RENDER ADAPTER
-
-
-animatedDragState : { a | source : DragSource } -> Point -> DragState
-animatedDragState anim floaterTopLeft =
-    case anim.source of
-        FromBoardStack stack ->
-            DraggingBoardCard
-                { stack = stack
-                , cardIndex = 0
-                , originalCursor = { x = 0, y = 0 }
-                , cursor = { x = 0, y = 0 }
-                , floaterTopLeft =
-                    { left = floaterTopLeft.x, top = floaterTopLeft.y }
-                , boardPath = []
-                , wings = []
-                }
-
-        FromHandCard card ->
-            DraggingHandCard
-                { card = card
-                , cursor = { x = 0, y = 0 }
-                , floaterTopLeft = floaterTopLeft
-                , wings = []
-                }

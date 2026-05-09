@@ -10,32 +10,26 @@ module Game.Replay.Time exposing
 clock-driven Msg handlers. Operates on `ReplayState` only —
 Model never enters this module.
 
-Phases, same as the `ReplayAnimationState` sum type in `Main.State`:
-
-  - **PreRolling** — hold the rewound board for ~1s so the viewer
-    registers the starting state before action 0 fires.
-  - **NotAnimating** — transient between step N-1 and step N.
-    Looks up the next action; if none, replay is done; if yes,
-    `prepareReplayStep` decides which animation path applies.
-  - **Animating** — interpolate cursor along `path` every frame.
-    When elapsed ≥ path duration, apply the action and beat.
-  - **AwaitingHandRect** — fired a `Browser.Dom.getElement` Task
-    for a hand card's live rect; wait for
-    `HandCardRectReceived` to transition us to Animating.
-  - **Beating** — hold ~1s between actions (2.5s for
-    CompleteTurn, since a lot happens at once).
+Phases match the `ReplayAnimationState` sum type in
+`Main.State`. Drag state lives inside the
+`AnimatingBoard` / `AnimatingHand` variants now (no
+parallel `rs.drag` field), so the variant tag IS the
+disambiguator the view uses to render the floater.
 
 -}
 
 import Browser.Dom
 import Game.ActionLog as ActionLog
+import Game.BoardDragTypes exposing (BoardCardDragInfo)
 import Game.CardStack exposing (CardStack)
-import Game.Drag as Drag exposing (DragState(..))
+import Game.Drag exposing (DragSource(..))
 import Game.Execute as Execute
 import Game.Game exposing (GameState)
 import Game.GameEvent as GameEvent exposing (GameEvent)
+import Game.HandDragTypes exposing (HandCardDragInfo)
 import Game.HandLayout as HandLayout
 import Game.Physics.GestureArbitration as GA
+import Game.Point exposing (Point)
 import Game.Replay.AnimateMergeHand as AnimateMergeHand
 import Game.Replay.AnimateMergeStack as AnimateMergeStack
 import Game.Replay.AnimateMoveStack as AnimateMoveStack
@@ -43,14 +37,13 @@ import Game.Replay.AnimatePlaceHand as AnimatePlaceHand
 import Game.Replay.DragAnimation as DragAnimation
 import Game.Replay.Space as Space
 import Game.Rules.Card
+import Game.TimeLoc exposing (TimeLoc)
 import Main.Msg exposing (Msg(..))
 import Main.State as State
     exposing
         ( ReplayAnimationState(..)
         , ReplayState
         )
-import Game.TimeLoc exposing (TimeLoc)
-import Game.Point exposing (Point)
 import Task
 import Time
 
@@ -68,16 +61,13 @@ type alias ClickInstantReplayInputs =
 
 {-| Construct a fresh ReplayState seeded from the session's
 pre-first-action snapshot, and emit the cmd that fetches the
-live board rect. Caller (Main.Play) is responsible for
-attaching the new ReplayState to Model and force-clearing
-`model.drag`.
+live board rect.
 -}
 clickInstantReplay : ClickInstantReplayInputs -> ( ReplayState, Cmd Msg )
 clickInstantReplay inputs =
     ( { gameState = inputs.initialGameState
       , eventPlan = State.collapseUndos inputs.actionLog
       , paused = False
-      , drag = NotDragging
       , anim = PreRolling { untilMs = 0 }
       }
     , Task.attempt BoardRectReceived
@@ -121,18 +111,47 @@ replayFrame nowMs rs =
                             nowMs
                             |> mapStateAndCmd Just
 
-            Animating anim ->
-                case DragAnimation.step nowMs anim of
+            AnimatingBoard a ->
+                case DragAnimation.step nowMs a of
                     DragAnimation.InProgress { floaterTopLeft } ->
-                        ( Just { rs | drag = Drag.setFloaterTopLeft floaterTopLeft rs.drag }
+                        let
+                            d =
+                                a.dragInfo
+
+                            newDragInfo =
+                                { d | floaterTopLeft = pointToBoardLoc floaterTopLeft }
+                        in
+                        ( Just { rs | anim = AnimatingBoard { a | dragInfo = newDragInfo } }
                         , Cmd.none
                         )
 
                     DragAnimation.Done { pendingAction } ->
                         ( Just
                             { rs
-                                | drag = NotDragging
-                                , gameState = Execute.applyEvent pendingAction rs.gameState
+                                | gameState = Execute.applyEvent pendingAction rs.gameState
+                                , anim = Beating { untilMs = nowMs + 1000 }
+                            }
+                        , Cmd.none
+                        )
+
+            AnimatingHand a ->
+                case DragAnimation.step nowMs a of
+                    DragAnimation.InProgress { floaterTopLeft } ->
+                        let
+                            d =
+                                a.dragInfo
+
+                            newDragInfo =
+                                { d | floaterTopLeft = floaterTopLeft }
+                        in
+                        ( Just { rs | anim = AnimatingHand { a | dragInfo = newDragInfo } }
+                        , Cmd.none
+                        )
+
+                    DragAnimation.Done { pendingAction } ->
+                        ( Just
+                            { rs
+                                | gameState = Execute.applyEvent pendingAction rs.gameState
                                 , anim = Beating { untilMs = nowMs + 1000 }
                             }
                         , Cmd.none
@@ -168,14 +187,18 @@ mapStateAndCmd f ( a, cmd ) =
     ( f a, cmd )
 
 
+pointToBoardLoc : Point -> { left : Int, top : Int }
+pointToBoardLoc p =
+    { left = p.x, top = p.y }
+
+
 
 -- STEP PREP
 
 
 {-| Transition from NotAnimating into the right next replay
-state. The path (if any) lives inside the GameEvent's
-MergeStack/MoveStack variant; the event itself carries it
-end-to-end.
+state. Branches on the resolved AnimationInfo's source to
+build either AnimatingBoard or AnimatingHand directly.
 -}
 prepareReplayStep : GameEvent -> ReplayState -> Float -> ( ReplayState, Cmd Msg )
 prepareReplayStep action rs nowMs =
@@ -183,10 +206,7 @@ prepareReplayStep action rs nowMs =
         startAnimating anim =
             case Space.interpPath anim.path 0 of
                 Just cursor ->
-                    ( { rs
-                        | anim = Animating { startMs = anim.startMs, path = anim.path, pendingAction = anim.pendingAction }
-                        , drag = Space.animatedDragState anim cursor
-                      }
+                    ( { rs | anim = animStateFor anim cursor }
                     , Cmd.none
                     )
 
@@ -197,7 +217,6 @@ prepareReplayStep action rs nowMs =
             ( { rs
                 | gameState = Execute.applyEvent action rs.gameState
                 , anim = Beating { untilMs = nowMs + beatAfter action }
-                , drag = NotDragging
               }
             , Cmd.none
             )
@@ -254,6 +273,58 @@ prepareReplayStep action rs nowMs =
             jitOrApply
 
 
+{-| Given an AnimationInfo + the initial cursor position,
+build the right per-variant `ReplayAnimationState`. The
+`source` tag determines the variant; once chosen, the
+type system enforces the per-variant dragInfo shape.
+-}
+animStateFor : Space.AnimationInfo -> Point -> ReplayAnimationState
+animStateFor anim cursor =
+    case anim.source of
+        FromBoardStack stack ->
+            AnimatingBoard
+                { startMs = anim.startMs
+                , path = anim.path
+                , pendingAction = anim.pendingAction
+                , dragInfo = boardDragInfoFor stack cursor
+                }
+
+        FromHandCard card ->
+            AnimatingHand
+                { startMs = anim.startMs
+                , path = anim.path
+                , pendingAction = anim.pendingAction
+                , dragInfo = handDragInfoFor card cursor
+                }
+
+
+{-| Initial BoardCardDragInfo for a replay's first frame.
+Replay-only fields (`cardIndex`, `originalCursor`, `cursor`,
+`boardPath`) are zero-valued — replay never reads them, and
+the View doesn't either (no click-vs-drag arbitration during
+replay).
+-}
+boardDragInfoFor : CardStack -> Point -> BoardCardDragInfo
+boardDragInfoFor stack cursor =
+    { stack = stack
+    , cardIndex = 0
+    , originalCursor = { x = 0, y = 0 }
+    , cursor = { x = 0, y = 0 }
+    , floaterTopLeft = pointToBoardLoc cursor
+    , boardPath = []
+    , wings = []
+    }
+
+
+handDragInfoFor : Game.Rules.Card.Card -> Point -> HandCardDragInfo
+handDragInfoFor card cursor =
+    { card = card
+    , cursor = { x = 0, y = 0 }
+    , floaterTopLeft = cursor
+    , wings = []
+    }
+
+
 {-| Pull the captured board path out of an event variant.
 Only `MergeStack` and `MoveStack` carry one; everything else
 returns Nothing.
@@ -276,13 +347,9 @@ capturedBoardPath action =
 
 
 {-| Handle `HandCardRectReceived`: the async continuation of
-`prepareReplayStep` for hand-origin actions. When the Task
-succeeds we know the card's live center; pair that with the
-target endpoint, synthesize a linear path, and begin Animating.
-
-If the target can't be resolved — or the DOM query failed —
-apply the action immediately and beat.
-
+`prepareReplayStep` for hand-origin actions. Builds an
+`AnimatingHand` variant directly from the resolved
+AnimationInfo + initial cursor.
 -}
 handCardRectReceived :
     Result Browser.Dom.Error ( Browser.Dom.Element, Time.Posix )
@@ -306,7 +373,6 @@ handCardRectReceived result maybeBoardRect rs =
                     ( { rs
                         | gameState = Execute.applyEvent ctx.action rs.gameState
                         , anim = Beating { untilMs = nowMs + beatAfter ctx.action }
-                        , drag = NotDragging
                       }
                     , Cmd.none
                     )
@@ -315,10 +381,7 @@ handCardRectReceived result maybeBoardRect rs =
                 Just anim ->
                     case Space.interpPath anim.path 0 of
                         Just cursor ->
-                            ( { rs
-                                | anim = Animating { startMs = anim.startMs, path = anim.path, pendingAction = anim.pendingAction }
-                                , drag = Space.animatedDragState anim cursor
-                              }
+                            ( { rs | anim = animStateFor anim cursor }
                             , Cmd.none
                             )
 
@@ -341,7 +404,6 @@ handCardRectReceived result maybeBoardRect rs =
             ( { rs
                 | gameState = Execute.applyEvent ctx.action rs.gameState
                 , anim = Beating { untilMs = 1000 }
-                , drag = NotDragging
               }
             , Cmd.none
             )

@@ -817,7 +817,6 @@ runReplay initialModel actions =
             { gameState = initialModel.gameState
             , eventPlan = entries
             , paused = False
-            , drag = Drag.NotDragging
             , anim = State.NotAnimating
             }
     in

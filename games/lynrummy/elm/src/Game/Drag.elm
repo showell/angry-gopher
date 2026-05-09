@@ -3,7 +3,6 @@ module Game.Drag exposing
     , DragState(..)
     , draggedOverlay
     , renderBoardFloater
-    , setFloaterTopLeft
     )
 
 {-| Drag state types and the rendering of an in-flight drag.
@@ -36,7 +35,6 @@ floater never emits its own events.
 import Game.BoardDragTypes exposing (BoardCardDragInfo)
 import Game.CardStack exposing (CardStack)
 import Game.HandDragTypes exposing (HandCardDragInfo)
-import Game.Point exposing (Point)
 import Game.Rules.Card exposing (Card)
 import Game.StackView as StackView
 import Html exposing (Html)
@@ -61,28 +59,6 @@ without holding a live drag state. Will be revisited.
 type DragSource
     = FromBoardStack CardStack
     | FromHandCard Card
-
-
-{-| Patch a new floater position into whichever variant is
-active. Used by the replay frame loop: `DragAnimation.step`
-computes the next floater point (as a generic `Point` from
-the interpolator), and we lift it into the variant's expected
-shape — `BoardLocation` for board drags (which live in board
-frame), `Point` for hand drags (still in viewport frame).
--}
-setFloaterTopLeft : Point -> DragState -> DragState
-setFloaterTopLeft point state =
-    case state of
-        NotDragging ->
-            NotDragging
-
-        DraggingBoardCard d ->
-            DraggingBoardCard
-                { d | floaterTopLeft = { left = point.x, top = point.y } }
-
-        DraggingHandCard d ->
-            DraggingHandCard { d | floaterTopLeft = point }
-
 
 
 -- RENDERING

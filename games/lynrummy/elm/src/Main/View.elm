@@ -66,6 +66,7 @@ import Main.State
     exposing
         ( Model
         , PopupContent
+        , ReplayAnimationState(..)
         , ReplayState
         , canUndoThisTurn
         )
@@ -337,6 +338,25 @@ type alias PlayerPanelInfo =
     }
 
 
+{-| Surface the drag the floater should render during replay.
+The replay engine no longer keeps a parallel `drag` field on
+ReplayState — the active drag (if any) lives inside the
+AnimatingBoard / AnimatingHand variant of `rs.anim`. Other
+phases imply NotDragging.
+-}
+dragFromAnim : ReplayAnimationState -> Drag.DragState
+dragFromAnim anim =
+    case anim of
+        AnimatingBoard a ->
+            Drag.DraggingBoardCard a.dragInfo
+
+        AnimatingHand a ->
+            Drag.DraggingHandCard a.dragInfo
+
+        _ ->
+            Drag.NotDragging
+
+
 leftSidebar : Model -> Html Msg
 leftSidebar model =
     let
@@ -344,7 +364,7 @@ leftSidebar model =
             case model.replayState of
                 Just rs ->
                     { gameState = rs.gameState
-                    , drag = rs.drag
+                    , drag = dragFromAnim rs.anim
                     , hintedCards = []
                     , canUndo = False
                     , replay = Just rs
@@ -562,7 +582,7 @@ boardColumn model =
         ( board, drag ) =
             case model.replayState of
                 Just rs ->
-                    ( rs.gameState.board, rs.drag )
+                    ( rs.gameState.board, dragFromAnim rs.anim )
 
                 Nothing ->
                     ( model.gameState.board, model.drag )
