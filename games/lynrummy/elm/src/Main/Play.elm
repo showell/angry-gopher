@@ -37,7 +37,6 @@ import Game.Replay.Time as ReplayTime
 import Game.GameEvent as GameEvent exposing (GameEvent)
 import Html exposing (Html)
 import Http
-import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
 import Game.Physics.BoardGeometry exposing (refereeBounds)
 import Game.Status as Status exposing (StatusKind(..), StatusMessage)
@@ -45,7 +44,6 @@ import Main.Gesture
     exposing
         ( mouseMoveDecoder
         , mouseUpDecoder
-        , pointDecoder
         , startBoardCardDrag
         , startHandDrag
         )

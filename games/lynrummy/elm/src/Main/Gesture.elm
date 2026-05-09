@@ -3,7 +3,6 @@ module Main.Gesture exposing
     , handCardAttrs
     , mouseMoveDecoder
     , mouseUpDecoder
-    , pointDecoder
     , startBoardCardDrag
     , startHandDrag
     )

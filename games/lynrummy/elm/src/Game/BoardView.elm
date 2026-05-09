@@ -1,6 +1,5 @@
 module Game.BoardView exposing
     ( boardColumn
-    , boardWithWings
     , viewBoard
     )
 
