@@ -67,7 +67,7 @@ togglePause rs =
 tick : Int -> ReplayState -> TickResult
 tick nowMs rs =
     if rs.nextBeatMs == 0 then
-        StillReplaying (armBeat nowMs rs)
+        StillReplaying { rs | nextBeatMs = nowMs + beatMs }
 
     else if nowMs < rs.nextBeatMs then
         StillReplaying rs
@@ -76,9 +76,9 @@ tick nowMs rs =
         stepOne nowMs rs
 
 
-{-| The work of advancing one frame past the deadline: pop
-the next entry, fold it into `gameState`, re-arm the beat.
-Returns `Completed` if the queue was already drained.
+{-| Advance one frame past the deadline. Three responsibilities,
+visible top-to-bottom: pop the queue, apply the popped event
+to `gameState`, schedule the next beat.
 -}
 stepOne : Int -> ReplayState -> TickResult
 stepOne nowMs rs =
@@ -87,17 +87,16 @@ stepOne nowMs rs =
             Completed
 
         entry :: rest ->
-            { rs | queue = rest }
-                |> applyEntry entry
-                |> armBeat nowMs
-                |> StillReplaying
+            let
+                nextGameState =
+                    Execute.applyEvent entry.action rs.gameState
 
-
-applyEntry : ActionLogEntry -> ReplayState -> ReplayState
-applyEntry entry rs =
-    { rs | gameState = Execute.applyEvent entry.action rs.gameState }
-
-
-armBeat : Int -> ReplayState -> ReplayState
-armBeat nowMs rs =
-    { rs | nextBeatMs = nowMs + beatMs }
+                nextBeatMs =
+                    nowMs + beatMs
+            in
+            StillReplaying
+                { rs
+                    | queue = rest
+                    , gameState = nextGameState
+                    , nextBeatMs = nextBeatMs
+                }
