@@ -1,6 +1,5 @@
 module Game.Drag exposing
-    ( DragSource(..)
-    , DragState(..)
+    ( DragState(..)
     , draggedOverlay
     , renderBoardFloater
     )
@@ -19,10 +18,7 @@ mouseup-time outcome judgment, not a state machine.
 
 `HandCardDragInfo` has no `cardIndex` (hand cards have no
 Split semantic) and no `originalCursor` (no click-vs-drag
-arbitration for hand drags). It also has no `boardPath`:
-hand-origin drag paths are never replayed from a captured
-sequence — replay re-synthesizes them via live DOM
-measurement, so capturing them would be dead weight.
+arbitration for hand drags).
 
 The rendering helpers (`draggedOverlay`, `renderBoardFloater`,
 `renderHandFloater`) live alongside the types: a drag's
@@ -33,9 +29,7 @@ floater never emits its own events.
 -}
 
 import Game.BoardDragTypes exposing (BoardCardDragInfo)
-import Game.CardStack exposing (CardStack)
 import Game.HandDragTypes exposing (HandCardDragInfo)
-import Game.Rules.Card exposing (Card)
 import Game.StackView as StackView
 import Html exposing (Html)
 import Html.Attributes exposing (style)
@@ -45,20 +39,6 @@ type DragState
     = NotDragging
     | DraggingBoardCard BoardCardDragInfo
     | DraggingHandCard HandCardDragInfo
-
-
-{-| Identity of a drag's source (which board stack or hand
-card was picked up). The live `DragState` already encodes this
-in its variant tag, so live code never needs `DragSource`.
-
-Kept alive specifically for the replay subsystem, which carries
-the source identity through its FSM (Animating, AwaitingHandRect)
-without holding a live drag state. Will be revisited.
-
--}
-type DragSource
-    = FromBoardStack CardStack
-    | FromHandCard Card
 
 
 -- RENDERING
