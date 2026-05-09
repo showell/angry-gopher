@@ -1,8 +1,6 @@
 module Main.State exposing
     ( Flags
     , Model
-    , ReplayAnimationState(..)
-    , ReplayState
     , baseModel
     , bootstrapFromBundle
     , canUndoThisTurn
@@ -14,19 +12,16 @@ module Main.State exposing
 
 import Game.ActionLog as ActionLog exposing (ActionLogBundle, ActionLogEntry)
 import Game.Execute as Execute
-import Game.BoardDragTypes exposing (BoardCardDragInfo)
 import Game.CardStack as CardStack
 import Game.Dealer
 import Game.Drag exposing (DragState(..))
 import Game.Game exposing (GameState)
 import Game.GameEvent exposing (GameEvent(..))
 import Game.Hand as Hand exposing (Hand)
-import Game.HandDragTypes exposing (HandCardDragInfo)
 import Game.Physics.GestureArbitration as GA
 import Game.Popup exposing (PopupContent)
 import Game.Rules.Card as Card exposing (Card)
 import Game.Status exposing (StatusKind(..), StatusMessage)
-import Game.TimeLoc exposing (TimeLoc)
 import Json.Encode as Encode exposing (Value)
 
 
@@ -39,16 +34,14 @@ type alias Model =
 
     -- The session's pre-first-action snapshot. Pinned at
     -- bootstrap (new-session deal or resume's bundle) and
-    -- never mutated thereafter. Instant Replay seeds its
-    -- ReplayState's gameState from this.
+    -- never mutated thereafter. Reserved for the
+    -- under-construction Instant Replay rebuild.
     , initialGameState : GameState
     , drag : DragState
 
     -- Live DOM-measured board rect. Populated lazily on the
-    -- first drag-start (or replay-start) of the session via
-    -- `Browser.Dom.getElement`; reused thereafter. Lifted out
-    -- of drag state so it isn't re-fetched per drag and so
-    -- replay doesn't need a parallel storage site.
+    -- first drag-start of the session via
+    -- `Browser.Dom.getElement`; reused thereafter.
     , boardRect : Maybe GA.Rect
     , sessionId : Maybe Int
     , status : StatusMessage
@@ -56,12 +49,6 @@ type alias Model =
     , popup : Maybe PopupContent
     , actionLog : List ActionLogEntry
     , nextSeq : Int
-
-    -- When `Just`, replay is in flight; the engine owns its
-    -- own gameState/drag/anim/eventPlan. When `Nothing`,
-    -- the live game is on screen. Replaces the prior trio
-    -- (replay / replayAnim / replayBaseline).
-    , replayState : Maybe ReplayState
 
     -- Constant string forming the board's DOM id (via
     -- `boardDomIdFor`). Multi-Play-per-page hosting retired
@@ -80,69 +67,6 @@ type alias Model =
     -- back.
     , nextEngineRequestId : Int
     }
-
-
-{-| The replay engine's complete working state — only present
-on Model when replay is in flight (`Maybe ReplayState`).
-
-`gameState` is the replay's frame-by-frame view of the world;
-it advances as `eventPlan` is consumed, while `Model.gameState`
-stays at the live game position. `drag` is the synthesized
-animation drag that paints the floater (independent of the
-live drag, which is force-cleared during replay). `anim` is
-the per-step FSM. `eventPlan` is the queue of entries left to
-walk — sliced from `actionLog` at replay start.
-
-Subscription during replay is `Browser.Events.onAnimationFrame`
-(not a fixed Time.every tick) so drag animations can interpolate
-cursor position smoothly.
-
--}
-type alias ReplayState =
-    { gameState : GameState
-    , eventPlan : List ActionLogEntry
-    , paused : Bool
-    , anim : ReplayAnimationState
-    }
-
-
-{-| Per-step animation state for Instant Replay.
-
-Phases:
-
-  - **NotAnimating** — transient between steps. Replay init
-    enters here.
-  - **AnimatingBoard / AnimatingHand** — a drag is replaying.
-    Each variant carries its own `dragInfo` (the live drag data
-    the view renders) plus the path being interpolated.
-    Splitting board vs hand at the type level eliminates the
-    parallel `rs.drag` field and the runtime variant-tag
-    re-discovery that `setFloaterTopLeft` used to do.
-  - **Beating** — 1-second gap between actions.
-  - **PreRolling** — hold the rewound starting board briefly
-    before action 0 fires.
-  - **AwaitingHandRect** — fired a `Browser.Dom.getElement` for
-    a hand card's live rect; transitions to `AnimatingHand`
-    when the Task resolves.
-
--}
-type ReplayAnimationState
-    = NotAnimating
-    | AnimatingBoard
-        { startMs : Float
-        , path : List TimeLoc
-        , pendingAction : GameEvent
-        , dragInfo : BoardCardDragInfo
-        }
-    | AnimatingHand
-        { startMs : Float
-        , path : List TimeLoc
-        , pendingAction : GameEvent
-        , dragInfo : HandCardDragInfo
-        }
-    | Beating { untilMs : Float }
-    | PreRolling { untilMs : Float }
-    | AwaitingHandRect { action : GameEvent }
 
 
 -- FLAGS
@@ -253,7 +177,6 @@ baseModel =
     , popup = Nothing
     , actionLog = []
     , nextSeq = 1
-    , replayState = Nothing
     , gameId = "default"
     , pendingEngineRequest = Nothing
     , nextEngineRequestId = 1
@@ -266,8 +189,8 @@ baseModel =
 
 {-| Hydrate a Model from a server-fetched ActionLogBundle:
 pin the bundle's initial state as both the live `gameState`
-and the immutable `initialGameState` (used by Instant Replay's
-ReplayState seed), then fold the action log forward.
+and the immutable `initialGameState` (reserved for Instant
+Replay's rebuild), then fold the action log forward.
 -}
 bootstrapFromBundle : ActionLogBundle -> Model -> Model
 bootstrapFromBundle bundle model =

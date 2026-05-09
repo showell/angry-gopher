@@ -12,12 +12,10 @@ Extracted 2026-04-19 from the pre-split `Main.elm` monolith.
 import Browser.Dom
 import Game.ActionLog exposing (ActionLogBundle)
 import Game.CardStack exposing (CardStack)
-import Game.GameEvent exposing (GameEvent)
 import Game.Point exposing (Point)
 import Game.Rules.Card exposing (Card)
 import Http
 import Json.Encode as Encode
-import Time
 
 
 {-| Four flavours of constructor, grouped here for scan-ability:
@@ -29,12 +27,9 @@ import Time
     detection is computed in Elm on every MouseMove from the
     floater's rect, not dispatched by DOM events.
   - **Button clicks** — ClickCompleteTurn, ClickUndo, ClickHint,
-    ClickInstantReplay, ClickReplayPauseToggle, PopupOk.
+    ClickInstantReplay, PopupOk.
   - **HTTP responses** — ActionSent (fire-and-forget),
     SessionReceived, ActionLogFetched.
-  - **Timer** — ReplayFrame (fires via onAnimationFrame
-    during replay; drives drag re-animation + inter-action
-    beat).
 
 -}
 {- MouseMove and MouseUp deliberately drop the `MouseDownOn*`
@@ -60,7 +55,6 @@ type Msg
     | MouseMove Point Float
     | MouseUp Point Float
     | BoardRectReceived (Result Browser.Dom.Error Browser.Dom.Element)
-    | HandCardRectReceived (Result Browser.Dom.Error ( Browser.Dom.Element, Time.Posix ))
     | ActionSent (Result Http.Error ())
     | SessionReceived (Result Http.Error Int)
     | ClickCompleteTurn
@@ -68,9 +62,5 @@ type Msg
     | ClickHint
     | PopupOk
     | ClickInstantReplay
-    | ReplayFrame Time.Posix
-    | ClickReplayPauseToggle
-    | BoardAnimationDone GameEvent
-    | HandAnimationDone GameEvent
     | ActionLogFetched (Result Http.Error ActionLogBundle)
     | GameHintReceived Encode.Value

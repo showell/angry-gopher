@@ -59,7 +59,6 @@ import Main.Msg exposing (Msg(..))
 import Main.State
     exposing
         ( Model
-        , ReplayAnimationState(..)
         , canUndoThisTurn
         )
 
@@ -109,14 +108,7 @@ view model =
             , style "left" (String.fromInt BoardGeometry.boardViewportLeft ++ "px")
             ]
             [ BoardView.boardColumn (boardColumnInput model) ]
-        , Popup.viewPopup PopupOk
-            (case model.replayState of
-                Just _ ->
-                    Nothing
-
-                Nothing ->
-                    model.popup
-            )
+        , Popup.viewPopup PopupOk model.popup
         ]
 
 
@@ -124,53 +116,18 @@ view model =
 -- LEFT SIDEBAR
 --
 -- Implementation lives in `Game.Sidebar`. View only builds
--- the `PlayerPanelInfo` from Model (sourcing from replay
--- when active) and hands it off.
-
-
-{-| Surface the drag the floater should render during replay.
-The replay engine no longer keeps a parallel `drag` field on
-ReplayState — the active drag (if any) lives inside the
-AnimatingBoard / AnimatingHand variant of `rs.anim`. Other
-phases imply NotDragging.
--}
-dragFromAnim : ReplayAnimationState -> Drag.DragState
-dragFromAnim anim =
-    case anim of
-        AnimatingBoard a ->
-            Drag.DraggingBoardCard a.dragInfo
-
-        AnimatingHand a ->
-            Drag.DraggingHandCard a.dragInfo
-
-        _ ->
-            Drag.NotDragging
+-- the `PlayerPanelInfo` from Model and hands it off.
 
 
 sidebarInfo : Model -> Sidebar.PlayerPanelInfo
 sidebarInfo model =
-    case model.replayState of
-        Just rs ->
-            { gameState = rs.gameState
-            , drag = dragFromAnim rs.anim
-            , hintedCards = []
-            , canUndo = False
-            , replay = Just rs
-            }
-
-        Nothing ->
-            { gameState = model.gameState
-            , drag = model.drag
-            , hintedCards = model.hintedCards
-            , canUndo = canUndoThisTurn model
-            , replay = Nothing
-            }
+    { gameState = model.gameState
+    , drag = model.drag
+    , hintedCards = model.hintedCards
+    , canUndo = canUndoThisTurn model
+    }
 
 
-
-{-| Build the BoardView.boardColumn input record from Model,
-sourcing board+drag from replay when active.
--}
 boardColumnInput :
     Model
     ->
@@ -181,18 +138,9 @@ boardColumnInput :
         , cardMouseDown : CardStack -> Int -> List (Html.Attribute Msg)
         }
 boardColumnInput model =
-    let
-        ( board, drag ) =
-            case model.replayState of
-                Just rs ->
-                    ( rs.gameState.board, dragFromAnim rs.anim )
-
-                Nothing ->
-                    ( model.gameState.board, model.drag )
-    in
-    { board = board
+    { board = model.gameState.board
     , boardRect = model.boardRect
-    , drag = drag
+    , drag = model.drag
     , gameId = model.gameId
     , cardMouseDown = PointerInput.cardMouseDown MouseDownOnBoardCard
     }

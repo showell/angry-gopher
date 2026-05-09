@@ -25,7 +25,6 @@ import Game.BoardDrag as BoardDrag
 import Game.BoardGesture as BoardGesture
 import Game.Drag exposing (DragState(..))
 import Game.Engine as Engine
-import Game.Execute as Execute
 import Game.Hand exposing (activeHand)
 import Game.TurnControl as TurnControl
 import Game.HandDrag as HandDrag
@@ -33,8 +32,6 @@ import Game.HandGesture as HandGesture
 import Game.Dealer as Dealer
 import Game.Game as Game
 import Game.Random as Random
-import Game.Replay.Time as ReplayTime
-import Game.GameEvent exposing (GameEvent)
 import Html exposing (Html)
 import Http
 import Json.Encode as Encode
@@ -57,7 +54,6 @@ import Main.State
 import Game.Point exposing (Point)
 import Main.View as View
 import Main.Wire as Wire exposing (fetchActionLog, fetchNewSession)
-import Time
 
 
 
@@ -197,64 +193,10 @@ update msg model =
 
         ClickInstantReplay ->
             let
-                ( newRS, cmd ) =
-                    ReplayTime.clickInstantReplay
-                        { gameId = model.gameId
-                        , initialGameState = model.initialGameState
-                        , actionLog = model.actionLog
-                        }
+                _ =
+                    Debug.log "ClickInstantReplay" "under construction"
             in
-            withNoOutput
-                ( { model
-                    | replayState = Just newRS
-                    , status = { text = "Replaying…", kind = Inform }
-                    , drag = NotDragging
-                  }
-                , cmd
-                )
-
-        ReplayFrame nowPosix ->
-            case model.replayState of
-                Nothing ->
-                    withNoOutput ( model, Cmd.none )
-
-                Just rs ->
-                    let
-                        ( maybeNew, cmd ) =
-                            ReplayTime.replayFrame
-                                (toFloat (Time.posixToMillis nowPosix))
-                                rs
-                    in
-                    withNoOutput ( { model | replayState = maybeNew }, cmd )
-
-        ClickReplayPauseToggle ->
-            case model.replayState of
-                Nothing ->
-                    withNoOutput ( model, Cmd.none )
-
-                Just rs ->
-                    withNoOutput
-                        ( { model | replayState = Just (ReplayTime.clickReplayPauseToggle rs) }
-                        , Cmd.none
-                        )
-
-        HandCardRectReceived result ->
-            case model.replayState of
-                Nothing ->
-                    withNoOutput ( model, Cmd.none )
-
-                Just rs ->
-                    let
-                        ( newRS, cmd ) =
-                            ReplayTime.handCardRectReceived result model.boardRect rs
-                    in
-                    withNoOutput ( { model | replayState = Just newRS }, cmd )
-
-        BoardAnimationDone event ->
-            withNoOutput ( applyReplayEvent event model, Cmd.none )
-
-        HandAnimationDone event ->
-            withNoOutput ( applyReplayEvent event model, Cmd.none )
+            withNoOutput ( model, Cmd.none )
 
         ActionLogFetched (Ok bundle) ->
             ( bootstrapFromBundle bundle model, Cmd.none, NoOutput )
@@ -275,34 +217,6 @@ update msg model =
 withNoOutput : ( Model, Cmd Msg ) -> ( Model, Cmd Msg, Output )
 withNoOutput ( m, c ) =
     ( m, c, NoOutput )
-
-
-{-| Advance the replay's gameState by one event. Fired when
-the animation FSM signals that an animation has completed
-(via `BoardAnimationDone` / `HandAnimationDone`). The replay's
-phase transition (Animating* → Beating) already happened in
-`Game.Replay.Time.replayFrame`; this handler does the
-logical apply that the animation was visualizing.
-
-The Nothing case is unreachable by construction — the Msg
-was emitted by the replay engine itself, which only runs
-when `replayState` is `Just`. Between the Cmd emit and the
-Msg dispatch (~one frame), no current code path clears
-`replayState`. We log loudly if it ever happens — silent
-no-op would mask a real divergence.
--}
-applyReplayEvent : GameEvent -> Model -> Model
-applyReplayEvent event model =
-    case model.replayState of
-        Just rs ->
-            { model | replayState = Just { rs | gameState = Execute.applyEvent event rs.gameState } }
-
-        Nothing ->
-            let
-                _ =
-                    Debug.log "applyReplayEvent: unexpected — replayState was Nothing when animation-done Msg arrived" event
-            in
-            model
 
 
 {-| Shared shape for the four `Result.Err` branches in `update`
@@ -456,7 +370,6 @@ clickUndo model =
                 , status = { text = "Undone.", kind = Inform }
                 , hintedCards = []
                 , drag = NotDragging
-                , replayState = Nothing
               }
             , Wire.sendAction model.sessionId r.outboundPayload
             )
@@ -563,30 +476,15 @@ handleHintResponse value model =
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-    let
-        dragSubs =
-            case model.drag of
-                NotDragging ->
-                    []
+    case model.drag of
+        NotDragging ->
+            Sub.none
 
-                _ ->
-                    [ Browser.Events.onMouseMove (PointerInput.mouseMoveDecoder MouseMove)
-                    , Browser.Events.onMouseUp (PointerInput.mouseUpDecoder MouseUp)
-                    ]
-
-        replaySubs =
-            case model.replayState of
-                Just rs ->
-                    if rs.paused then
-                        []
-
-                    else
-                        [ Browser.Events.onAnimationFrame ReplayFrame ]
-
-                Nothing ->
-                    []
-    in
-    Sub.batch (dragSubs ++ replaySubs)
+        _ ->
+            Sub.batch
+                [ Browser.Events.onMouseMove (PointerInput.mouseMoveDecoder MouseMove)
+                , Browser.Events.onMouseUp (PointerInput.mouseUpDecoder MouseUp)
+                ]
 
 
 

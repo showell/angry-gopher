@@ -4,11 +4,7 @@ module Game.Sidebar exposing
     )
 
 {-| The left sidebar of the play surface. Owns the player-row
-layout, turn controls, and the small button styles. Caller
-(Main.View) builds the `PlayerPanelInfo` from Model — during
-replay, the same shape can be sourced from the replay's
-gameState/drag, which is what makes this module reusable
-across live-play and replay views.
+layout, turn controls, and the small button styles.
 -}
 
 import Game.Button as Button
@@ -21,7 +17,6 @@ import Html exposing (Html, div)
 import Html.Attributes exposing (style)
 import Main.Gesture as Gesture
 import Main.Msg exposing (Msg(..))
-import Main.State exposing (ReplayState)
 
 
 type alias PlayerPanelInfo =
@@ -29,7 +24,6 @@ type alias PlayerPanelInfo =
     , drag : Drag.DragState
     , hintedCards : List Card
     , canUndo : Bool
-    , replay : Maybe ReplayState
     }
 
 
@@ -37,7 +31,6 @@ type alias ActivePlayerInfo =
     { drag : Drag.DragState
     , hintedCards : List Card
     , canUndo : Bool
-    , replay : Maybe ReplayState
     }
 
 
@@ -59,7 +52,6 @@ playerHands info =
             { drag = info.drag
             , hintedCards = info.hintedCards
             , canUndo = info.canUndo
-            , replay = info.replay
             }
 
         renderRow idx hand =
@@ -97,7 +89,7 @@ viewActivePlayerRow info idx hand =
         , View.viewHand
             { attrsForCard = Gesture.handCardAttrs info.drag info.hintedCards }
             hand
-        , viewTurnControls { canUndo = info.canUndo, replay = info.replay }
+        , viewTurnControls { canUndo = info.canUndo }
         ]
 
 
@@ -145,8 +137,8 @@ playerRowShell { isActive, idx } body =
         )
 
 
-viewTurnControls : { canUndo : Bool, replay : Maybe ReplayState } -> Html Msg
-viewTurnControls { canUndo, replay } =
+viewTurnControls : { canUndo : Bool } -> Html Msg
+viewTurnControls { canUndo } =
     div
         [ style "margin-top" "12px"
         , style "display" "flex"
@@ -161,26 +153,6 @@ viewTurnControls { canUndo, replay } =
             Button.disabledButton "Undo"
           )
         , Button.button "Hint" ClickHint
-        , viewReplayControl replay
+        , Button.button "Instant replay" ClickInstantReplay
         , Button.link "← Lobby" "/gopher/game-lobby"
         ]
-
-
-{-| Replay button — Resume / Pause when a replay is in
-progress, or "Instant replay" when not. The full-game label
-is "Instant replay"; puzzles can pick a different label
-(e.g. "Replay solution") since `Game.Button` is just the
-styling — labels stay caller-side.
--}
-viewReplayControl : Maybe ReplayState -> Html Msg
-viewReplayControl maybeReplay =
-    case maybeReplay of
-        Just progress ->
-            if progress.paused then
-                Button.button "Resume" ClickReplayPauseToggle
-
-            else
-                Button.button "Pause" ClickReplayPauseToggle
-
-        Nothing ->
-            Button.button "Instant replay" ClickInstantReplay
