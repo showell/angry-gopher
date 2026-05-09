@@ -1,5 +1,6 @@
 module Game.BoardView exposing
-    ( boardWithWings
+    ( boardColumn
+    , boardWithWings
     , viewBoard
     )
 
@@ -27,7 +28,7 @@ import Game.CardStack as CardStack exposing (CardStack)
 import Game.Drag as Drag exposing (DragState(..))
 import Game.Physics.GestureArbitration as GA
 import Game.StackView as StackView
-import Game.View exposing (navy)
+import Game.View as View exposing (navy)
 import Game.WingView as WingView
 import Html exposing (Html, div)
 import Html.Attributes exposing (id, style)
@@ -163,3 +164,27 @@ getOverlayNodes drag =
 
         NotDragging ->
             []
+
+
+
+-- BOARD COLUMN
+--
+-- Top-level board column: heading + drag-aware board + the
+-- viewport-frame floater overlay (for hand-card drags). One
+-- entry-point for callers (Main.View, future puzzle host).
+
+
+boardColumn :
+    { board : List CardStack
+    , boardRect : Maybe GA.Rect
+    , drag : DragState
+    , gameId : String
+    }
+    -> Html Msg
+boardColumn input =
+    div
+        [ style "min-width" "800px" ]
+        [ View.viewBoardHeading
+        , boardWithWings input
+        , Drag.draggedOverlay input.drag
+        ]

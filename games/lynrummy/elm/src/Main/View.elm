@@ -44,16 +44,17 @@ drag math honest.
 
 -}
 
-import Game.Physics.BoardGeometry as BoardGeometry
-import Game.View as View
-import Html exposing (Html, div)
-import Html.Attributes exposing (style)
 import Game.BoardView as BoardView
+import Game.CardStack exposing (CardStack)
 import Game.Drag as Drag
+import Game.Physics.BoardGeometry as BoardGeometry
+import Game.Physics.GestureArbitration as GA
 import Game.Popup as Popup
 import Game.Sidebar as Sidebar
-import Main.Msg exposing (Msg(..))
 import Game.Status as Status
+import Html exposing (Html, div)
+import Html.Attributes exposing (style)
+import Main.Msg exposing (Msg(..))
 import Main.State
     exposing
         ( Model
@@ -106,7 +107,7 @@ view model =
             , style "top" (String.fromInt BoardGeometry.boardViewportTop ++ "px")
             , style "left" (String.fromInt BoardGeometry.boardViewportLeft ++ "px")
             ]
-            [ boardColumn model ]
+            [ BoardView.boardColumn (boardColumnInput model) ]
         , Popup.viewPopup PopupOk
             (case model.replayState of
                 Just _ ->
@@ -166,11 +167,18 @@ sidebarInfo model =
 
 
 
--- BOARD COLUMN
-
-
-boardColumn : Model -> Html Msg
-boardColumn model =
+{-| Build the BoardView.boardColumn input record from Model,
+sourcing board+drag from replay when active.
+-}
+boardColumnInput :
+    Model
+    ->
+        { board : List CardStack
+        , boardRect : Maybe GA.Rect
+        , drag : Drag.DragState
+        , gameId : String
+        }
+boardColumnInput model =
     let
         ( board, drag ) =
             case model.replayState of
@@ -180,14 +188,8 @@ boardColumn model =
                 Nothing ->
                     ( model.gameState.board, model.drag )
     in
-    div
-        [ style "min-width" "800px" ]
-        [ View.viewBoardHeading
-        , BoardView.boardWithWings
-            { board = board
-            , boardRect = model.boardRect
-            , drag = drag
-            , gameId = model.gameId
-            }
-        , Drag.draggedOverlay drag
-        ]
+    { board = board
+    , boardRect = model.boardRect
+    , drag = drag
+    , gameId = model.gameId
+    }
