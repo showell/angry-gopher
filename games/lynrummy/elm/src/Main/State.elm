@@ -9,6 +9,7 @@ module Main.State exposing
     , canUndoThisTurn
     , collapseUndos
     , encodeGameState
+    , lastUndoableAction
     )
 
 {-| All application-wide data types and the initial Model. -}
@@ -237,17 +238,26 @@ current turn.
 -}
 canUndoThisTurn : Model -> Bool
 canUndoThisTurn model =
+    lastUndoableAction model /= Nothing
+
+
+{-| The most recent action eligible for undo, or Nothing.
+"Eligible" = top of `collapseUndos`'s effective list AND not a
+CompleteTurn (turn flips can't be undone).
+-}
+lastUndoableAction : Model -> Maybe GameEvent
+lastUndoableAction model =
     case List.reverse (collapseUndos model.actionLog) of
         [] ->
-            False
+            Nothing
 
         last :: _ ->
             case last.action of
                 CompleteTurn ->
-                    False
+                    Nothing
 
                 _ ->
-                    True
+                    Just last.action
 
 
 

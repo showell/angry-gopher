@@ -55,8 +55,8 @@ import Main.State
         ( Model
         , baseModel
         , bootstrapFromBundle
-        , collapseUndos
         , encodeGameState
+        , lastUndoableAction
         )
 import Game.Point exposing (Point)
 import Game.Popup as Popup
@@ -502,21 +502,6 @@ clickUndo model =
                         ]
             in
             ( newModel, Wire.sendAction model.sessionId outboundPayloadForAgent )
-
-
-lastUndoableAction : Model -> Maybe GameEvent
-lastUndoableAction model =
-    case List.reverse (collapseUndos model.actionLog) of
-        [] ->
-            Nothing
-
-        last :: _ ->
-            case last.action of
-                GameEvent.CompleteTurn ->
-                    Nothing
-
-                _ ->
-                    Just last.action
 
 
 boardRectReceived :
