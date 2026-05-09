@@ -424,36 +424,92 @@ undoButton model =
 
 
 -- THE PUZZLE
+--
+-- Conformance scenario `puzzle_a3_004_seed4` from
+-- games/lynrummy/puzzles/puzzles.json. Three-line solution
+-- (peel + yank + push). The trouble is the singleton 7D' and
+-- the rainbow stack [2C 3D 4C 5H 6S 7H 8C]; the canonical
+-- solver pulls 8C and 6S off the rainbow to form [6S 7D' 8C],
+-- then pushes the leftover 7H onto the 7-set.
+--
+-- This is a placeholder for server-down puzzle data. When we
+-- ship the server-side payload (per the puzzle wire commit),
+-- this hardcoded board goes away.
 
 
 puzzleStacks : List CardStack
 puzzleStacks =
-    [ stackAt 100 100
-        [ ( Seven, Heart )
-        , ( Eight, Heart )
-        , ( Nine, Heart )
+    [ stackAt 80 160
+        [ ( Ten, Diamond, DeckOne )
+        , ( Jack, Diamond, DeckOne )
+        , ( Queen, Diamond, DeckOne )
+        , ( King, Diamond, DeckOne )
         ]
-    , stackAt 220 100
-        [ ( King, Club )
-        , ( Ace, Club )
-        , ( Two, Club )
+    , stackAt 200 40
+        [ ( Seven, Spade, DeckOne )
+        , ( Seven, Diamond, DeckOne )
+        , ( Seven, Club, DeckOne )
         ]
-    , stackAt 340 100
-        [ ( Queen, Club )
+    , stackAt 260 130
+        [ ( Ace, Club, DeckOne )
+        , ( Ace, Diamond, DeckOne )
+        , ( Ace, Heart, DeckOne )
+        ]
+    , stackAt 392 52
+        [ ( Three, Spade, DeckTwo )
+        , ( Four, Spade, DeckOne )
+        , ( Five, Spade, DeckTwo )
+        ]
+    , stackAt 467 52
+        [ ( Six, Diamond, DeckOne )
+        , ( Seven, Club, DeckTwo )
+        , ( Eight, Heart, DeckOne )
+        ]
+    , stackAt 542 52
+        [ ( Jack, Heart, DeckOne )
+        , ( Queen, Spade, DeckOne )
+        , ( King, Diamond, DeckTwo )
+        ]
+    , stackAt 320 70
+        [ ( Two, Club, DeckOne )
+        , ( Three, Diamond, DeckOne )
+        , ( Four, Club, DeckOne )
+        , ( Five, Heart, DeckOne )
+        , ( Six, Spade, DeckOne )
+        , ( Seven, Heart, DeckOne )
+        , ( Eight, Club, DeckOne )
+        ]
+    , stackAt 20 62
+        [ ( King, Spade, DeckOne )
+        , ( Ace, Spade, DeckOne )
+        , ( Two, Spade, DeckOne )
+        ]
+    , stackAt 140 59
+        [ ( Ace, Heart, DeckTwo )
+        , ( Two, Heart, DeckOne )
+        , ( Three, Heart, DeckOne )
+        ]
+    , stackAt 392 187
+        [ ( Two, Heart, DeckTwo )
+        , ( Three, Spade, DeckOne )
+        , ( Four, Heart, DeckOne )
+        ]
+    , stackAt 152 187
+        [ ( Seven, Diamond, DeckTwo )
         ]
     ]
 
 
-stackAt : Int -> Int -> List ( CardValue, Suit ) -> CardStack
-stackAt top left valuesAndSuits =
+stackAt : Int -> Int -> List ( CardValue, Suit, OriginDeck ) -> CardStack
+stackAt top left cards =
     { boardCards =
         List.map
-            (\( v, s ) ->
-                { card = { value = v, suit = s, originDeck = DeckOne }
+            (\( v, s, d ) ->
+                { card = { value = v, suit = s, originDeck = d }
                 , state = FirmlyOnBoard
                 }
             )
-            valuesAndSuits
+            cards
     , loc = { top = top, left = left }
     }
 
