@@ -1,6 +1,5 @@
 module Main.View exposing
-    ( popupForCompleteTurn
-    , statusForCompleteTurn
+    ( statusForCompleteTurn
     , view
     )
 
@@ -59,18 +58,17 @@ import Html.Attributes exposing (href, style)
 import Html.Events as Events
 import Game.BoardView as BoardView
 import Game.Drag as Drag
+import Game.Popup as Popup
 import Main.Gesture as Gesture
 import Main.Msg exposing (Msg(..))
 import Game.Status exposing (StatusKind(..), StatusMessage)
 import Main.State
     exposing
         ( Model
-        , PopupContent
         , ReplayAnimationState(..)
         , ReplayState
         , canUndoThisTurn
         )
-import Main.Util exposing (pluralize)
 
 
 
@@ -99,70 +97,6 @@ statusForCompleteTurn outcome =
 
         Err _ ->
             { text = "Couldn't reach the server to complete the turn.", kind = Scold }
-
-
-{-| Picks the right character (Angry Cat / Oliver / Steve) and
-writes the per-branch narration. Angry Cat scolds dirty boards,
-Oliver sympathizes when no cards played, Steve celebrates
-everything else. The "will receive" framing keeps the UI on
-the pre-flip view until the user dismisses.
--}
-popupForCompleteTurn : Result outcome CompleteTurnOutcome -> Maybe PopupContent
-popupForCompleteTurn result =
-    case result of
-        Ok outcome ->
-            Just (popupFromOutcome outcome)
-
-        Err _ ->
-            Just
-                { admin = "Angry Cat"
-                , body = "Couldn't reach the server to complete your turn."
-                }
-
-
-popupFromOutcome : CompleteTurnOutcome -> PopupContent
-popupFromOutcome { result, cardsDrawn } =
-    case result of
-        Failure ->
-            { admin = "Angry Cat"
-            , body =
-                "The board is not clean!\n\n(nor is my litter box)\n\n"
-                    ++ "Drag stacks back where they belong."
-            }
-
-        SuccessButNeedsCards ->
-            { admin = "Oliver"
-            , body =
-                "Sorry you couldn't find a move.\n\n"
-                    ++ "I'm going back to my nap!\n\n"
-                    ++ "We have dealt you "
-                    ++ pluralize cardsDrawn "more card"
-                    ++ " for your next turn."
-            }
-
-        SuccessAsVictor ->
-            { admin = "Steve"
-            , body =
-                "You are the first person to play all their cards!\n\n"
-                    ++ "We have dealt you "
-                    ++ pluralize cardsDrawn "more card"
-                    ++ " for your next turn.\n\n"
-                    ++ "Keep winning!"
-            }
-
-        SuccessWithHandEmptied ->
-            { admin = "Steve"
-            , body =
-                "Good job — hand emptied!\n\n"
-                    ++ "We have dealt you "
-                    ++ pluralize cardsDrawn "more card"
-                    ++ " for your next turn."
-            }
-
-        Success ->
-            { admin = "Steve"
-            , body = "The board is growing!"
-            }
 
 
 -- TOP-LEVEL VIEW
@@ -209,7 +143,7 @@ view model =
             , style "left" (String.fromInt BoardGeometry.boardViewportLeft ++ "px")
             ]
             [ boardColumn model ]
-        , viewPopup
+        , Popup.viewPopup PopupOk
             (case model.replayState of
                 Just _ ->
                     Nothing
@@ -218,71 +152,6 @@ view model =
                     model.popup
             )
         ]
-
-
-
--- POPUP
-
-
-{-| Cheapest-possible popup rendering: fixed-position backdrop
-covering the viewport, centred white card with the admin's
-name, the body text (pre-wrapped to preserve newlines), and a
-single OK button. No focus trap, no ESC handler, no
-click-outside dismiss — just the OK button. Good enough for
-ceremony.
--}
-viewPopup : Maybe PopupContent -> Html Msg
-viewPopup maybePopup =
-    case maybePopup of
-        Nothing ->
-            Html.text ""
-
-        Just { admin, body } ->
-            div
-                [ style "position" "fixed"
-                , style "inset" "0"
-                , style "background-color" "rgba(0, 0, 0, 0.45)"
-                , style "display" "flex"
-                , style "align-items" "center"
-                , style "justify-content" "center"
-                , style "z-index" "2000"
-                ]
-                [ div
-                    [ style "background" "white"
-                    , style "border" ("1px solid " ++ View.navy)
-                    , style "border-radius" "12px"
-                    , style "padding" "24px 28px"
-                    , style "max-width" "420px"
-                    , style "box-shadow" "0 10px 30px rgba(0, 0, 0, 0.25)"
-                    ]
-                    [ div
-                        [ style "font-weight" "bold"
-                        , style "color" View.navy
-                        , style "font-size" "15px"
-                        , style "margin-bottom" "10px"
-                        ]
-                        [ Html.text admin ]
-                    , Html.pre
-                        [ style "font-family" "inherit"
-                        , style "white-space" "pre-wrap"
-                        , style "margin" "0 0 18px 0"
-                        , style "font-size" "14px"
-                        , style "line-height" "1.45"
-                        ]
-                        [ Html.text body ]
-                    , Html.button
-                        [ Events.onClick PopupOk
-                        , style "background" View.navy
-                        , style "color" "white"
-                        , style "border" "none"
-                        , style "padding" "8px 20px"
-                        , style "border-radius" "4px"
-                        , style "cursor" "pointer"
-                        , style "font-size" "14px"
-                        ]
-                        [ Html.text "OK" ]
-                    ]
-                ]
 
 
 

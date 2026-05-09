@@ -1,7 +1,6 @@
 module Main.State exposing
     ( Flags
     , Model
-    , PopupContent
     , ReplayAnimationState(..)
     , ReplayState
     , baseModel
@@ -23,6 +22,7 @@ import Game.GameEvent exposing (GameEvent(..))
 import Game.Hand as Hand exposing (Hand)
 import Game.HandDragTypes exposing (HandCardDragInfo)
 import Game.Physics.GestureArbitration as GA
+import Game.Popup exposing (PopupContent)
 import Game.Rules.Card as Card exposing (Card)
 import Game.Status exposing (StatusKind(..), StatusMessage)
 import Game.TimeLoc exposing (TimeLoc)
@@ -142,18 +142,6 @@ type ReplayAnimationState
     | Beating { untilMs : Float }
     | PreRolling { untilMs : Float }
     | AwaitingHandRect { action : GameEvent }
-
-
-{-| Cheapest-possible popup for turn-boundary ceremony. One
-character speaks (admin), delivers a multi-line message, user
-clicks OK to dismiss + advance. The body is the full text —
-caller builds it with whatever narrative (you scored N, we'll
-deal M next turn, etc.).
--}
-type alias PopupContent =
-    { admin : String
-    , body : String
-    }
 
 
 -- FLAGS

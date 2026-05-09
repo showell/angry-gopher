@@ -58,7 +58,8 @@ import Main.State
         , encodeGameState
         )
 import Game.Point exposing (Point)
-import Main.View as View exposing (popupForCompleteTurn, statusForCompleteTurn)
+import Game.Popup as Popup
+import Main.View as View exposing (statusForCompleteTurn)
 import Main.Wire as Wire exposing (fetchActionLog, fetchNewSession)
 import Time
 
@@ -431,7 +432,7 @@ clickCompleteTurn model =
         Failure ->
             ( { model
                 | status = statusForCompleteTurn (Ok turnOutcome)
-                , popup = popupForCompleteTurn (Ok turnOutcome)
+                , popup = Popup.popupForCompleteTurn (Ok turnOutcome)
               }
             , Cmd.none
             )
@@ -450,7 +451,7 @@ clickCompleteTurn model =
                         , actionLog = model.actionLog ++ [ completeTurnEntry ]
                         , nextSeq = seq + 1
                         , status = statusForCompleteTurn (Ok turnOutcome)
-                        , popup = popupForCompleteTurn (Ok turnOutcome)
+                        , popup = Popup.popupForCompleteTurn (Ok turnOutcome)
                     }
 
                 outboundPayloadForAgent =
