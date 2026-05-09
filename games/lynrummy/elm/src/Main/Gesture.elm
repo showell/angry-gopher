@@ -45,6 +45,7 @@ answered exactly once, at mouseup, as an outcome judgment.
 -}
 
 import Browser.Dom
+import Game.BoardView exposing (boardDomIdFor)
 import Game.Drag exposing (DragState(..))
 import Game.Physics.WingOracle as WingOracle
 import Game.Rules.Card exposing (Card)
@@ -55,11 +56,7 @@ import Html.Events as Events
 import Game.Hand exposing (activeHand)
 import Json.Decode as Decode exposing (Decoder)
 import Main.Msg exposing (Msg(..))
-import Main.State
-    exposing
-        ( Model
-        , boardDomIdFor
-        )
+import Main.State exposing (Model)
 import Game.Point exposing (Point)
 import Task
 

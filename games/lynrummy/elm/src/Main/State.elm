@@ -4,7 +4,6 @@ module Main.State exposing
     , ReplayAnimationState(..)
     , ReplayState
     , baseModel
-    , boardDomIdFor
     , bootstrapFromBundle
     , canUndoThisTurn
     , collapseUndos
@@ -258,21 +257,6 @@ lastUndoableAction model =
 
                 _ ->
                     Just last.action
-
-
-
--- DOM ID
-
-
-{-| CSS id of the board element. The main app uses `gameId =
-"default"` (a constant; multi-Play-per-page hosting retired
-with the puzzle gallery, so disambiguation is no longer
-load-bearing — the parameter survives so the DOM contract is
-unchanged).
--}
-boardDomIdFor : String -> String
-boardDomIdFor gameId =
-    "lynrummy-board-" ++ gameId
 
 
 

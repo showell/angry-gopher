@@ -35,6 +35,7 @@ import Game.Replay.AnimateMergeStack as AnimateMergeStack
 import Game.Replay.AnimateMoveStack as AnimateMoveStack
 import Game.Replay.AnimatePlaceHand as AnimatePlaceHand
 import Game.Replay.DragAnimation as DragAnimation
+import Game.BoardView exposing (boardDomIdFor)
 import Game.Replay.Space as Space
 import Game.Rules.Card
 import Game.TimeLoc exposing (TimeLoc)
@@ -71,7 +72,7 @@ clickInstantReplay inputs =
       , anim = PreRolling { untilMs = 0 }
       }
     , Task.attempt BoardRectReceived
-        (Browser.Dom.getElement (State.boardDomIdFor inputs.gameId))
+        (Browser.Dom.getElement (boardDomIdFor inputs.gameId))
     )
 
 

@@ -54,6 +54,7 @@ import Game.Sidebar as Sidebar
 import Game.Status as Status
 import Html exposing (Html, div)
 import Html.Attributes exposing (style)
+import Main.Gesture as Gesture
 import Main.Msg exposing (Msg(..))
 import Main.State
     exposing
@@ -177,6 +178,7 @@ boardColumnInput :
         , boardRect : Maybe GA.Rect
         , drag : Drag.DragState
         , gameId : String
+        , cardMouseDown : CardStack -> Int -> List (Html.Attribute Msg)
         }
 boardColumnInput model =
     let
@@ -192,4 +194,5 @@ boardColumnInput model =
     , boardRect = model.boardRect
     , drag = drag
     , gameId = model.gameId
+    , cardMouseDown = Gesture.cardMouseDown
     }

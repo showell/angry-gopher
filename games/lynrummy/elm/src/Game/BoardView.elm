@@ -1,5 +1,6 @@
 module Game.BoardView exposing
     ( boardColumn
+    , boardDomIdFor
     , viewBoard
     )
 
@@ -31,9 +32,6 @@ import Game.View as View exposing (navy)
 import Game.WingView as WingView
 import Html exposing (Html, div)
 import Html.Attributes exposing (id, style)
-import Main.Gesture as Gesture
-import Main.Msg exposing (Msg)
-import Main.State exposing (boardDomIdFor)
 
 
 
@@ -90,19 +88,25 @@ boardWithWings :
     , boardRect : Maybe GA.Rect
     , drag : DragState
     , gameId : String
+    , cardMouseDown : CardStack -> Int -> List (Html.Attribute msg)
     }
-    -> Html Msg
-boardWithWings { board, boardRect, drag, gameId } =
+    -> Html msg
+boardWithWings { board, boardRect, drag, gameId, cardMouseDown } =
     boardShellWith
         [ id (boardDomIdFor gameId) ]
-        (boardChildren board boardRect drag)
+        (boardChildren board boardRect drag cardMouseDown)
 
 
-boardChildren : List CardStack -> Maybe GA.Rect -> DragState -> List (Html Msg)
-boardChildren board maybeBoardRect drag =
+boardChildren :
+    List CardStack
+    -> Maybe GA.Rect
+    -> DragState
+    -> (CardStack -> Int -> List (Html.Attribute msg))
+    -> List (Html msg)
+boardChildren board maybeBoardRect drag cardMouseDown =
     let
         stackNodes =
-            List.map (viewStackForBoard drag) board
+            List.map (viewStackForBoard drag cardMouseDown) board
 
         wingNodes =
             WingView.getWingNodes drag maybeBoardRect
@@ -113,8 +117,12 @@ boardChildren board maybeBoardRect drag =
     stackNodes ++ wingNodes ++ boardOverlayNodes
 
 
-viewStackForBoard : DragState -> CardStack -> Html Msg
-viewStackForBoard drag stack =
+viewStackForBoard :
+    DragState
+    -> (CardStack -> Int -> List (Html.Attribute msg))
+    -> CardStack
+    -> Html msg
+viewStackForBoard drag cardMouseDown stack =
     case drag of
         DraggingBoardCard d ->
             -- Hide the source stack — the floater renders in
@@ -136,7 +144,7 @@ viewStackForBoard drag stack =
             StackView.viewStack stack
 
         NotDragging ->
-            StackView.viewStackWithCardAttrs (Gesture.cardMouseDown stack) stack
+            StackView.viewStackWithCardAttrs (cardMouseDown stack) stack
 
 
 
@@ -152,7 +160,7 @@ straightforward.
 The viewport-frame counterpart for hand drags is
 `Game.Drag.draggedOverlay`.
 -}
-getOverlayNodes : DragState -> List (Html Msg)
+getOverlayNodes : DragState -> List (Html msg)
 getOverlayNodes drag =
     case drag of
         DraggingBoardCard d ->
@@ -171,6 +179,10 @@ getOverlayNodes drag =
 -- Top-level board column: heading + drag-aware board + the
 -- viewport-frame floater overlay (for hand-card drags). One
 -- entry-point for callers (Main.View, future puzzle host).
+--
+-- Msg-polymorphic: callers pass their own `cardMouseDown`
+-- attr-builder so the board widget itself never needs to know
+-- about the host's Msg constructors.
 
 
 boardColumn :
@@ -178,8 +190,9 @@ boardColumn :
     , boardRect : Maybe GA.Rect
     , drag : DragState
     , gameId : String
+    , cardMouseDown : CardStack -> Int -> List (Html.Attribute msg)
     }
-    -> Html Msg
+    -> Html msg
 boardColumn input =
     div
         [ style "min-width" "800px" ]
@@ -187,3 +200,18 @@ boardColumn input =
         , boardWithWings input
         , Drag.draggedOverlay input.drag
         ]
+
+
+
+-- DOM ID
+--
+-- CSS id of the board element. Lives here (the producer) so
+-- Game.BoardView can be host-independent. Hosts pass `gameId =
+-- "default"` (the main app's value); the parameter is
+-- preserved so the DOM contract is unchanged in case multi-
+-- Play hosting returns.
+
+
+boardDomIdFor : String -> String
+boardDomIdFor gameId =
+    "lynrummy-board-" ++ gameId
