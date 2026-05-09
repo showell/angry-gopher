@@ -32,14 +32,12 @@ import Game.HandDrag as HandDrag
 import Game.HandGesture as HandGesture
 import Game.Dealer as Dealer
 import Game.Game as Game
-import Game.PlayerTurn exposing (CompleteTurnResult(..))
 import Game.Random as Random
 import Game.Replay.Time as ReplayTime
-import Game.GameEvent as GameEvent exposing (GameEvent)
+import Game.GameEvent exposing (GameEvent)
 import Html exposing (Html)
 import Http
 import Json.Encode as Encode
-import Game.Physics.BoardGeometry exposing (refereeBounds)
 import Game.Status as Status exposing (StatusKind(..), StatusMessage)
 import Main.Gesture
     exposing
@@ -58,7 +56,6 @@ import Main.State
         , lastUndoableAction
         )
 import Game.Point exposing (Point)
-import Game.Popup as Popup
 import Main.View as View
 import Main.Wire as Wire exposing (fetchActionLog, fetchNewSession)
 import Time
