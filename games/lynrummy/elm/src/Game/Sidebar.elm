@@ -24,6 +24,7 @@ type alias PlayerPanelInfo =
     , drag : Drag.DragState
     , hintedCards : List Card
     , canUndo : Bool
+    , replay : Maybe { paused : Bool }
     }
 
 
@@ -31,6 +32,7 @@ type alias ActivePlayerInfo =
     { drag : Drag.DragState
     , hintedCards : List Card
     , canUndo : Bool
+    , replay : Maybe { paused : Bool }
     }
 
 
@@ -52,6 +54,7 @@ playerHands info =
             { drag = info.drag
             , hintedCards = info.hintedCards
             , canUndo = info.canUndo
+            , replay = info.replay
             }
 
         renderRow idx hand =
@@ -89,7 +92,7 @@ viewActivePlayerRow info idx hand =
         , View.viewHand
             { attrsForCard = Gesture.handCardAttrs info.drag info.hintedCards }
             hand
-        , viewTurnControls { canUndo = info.canUndo }
+        , viewTurnControls { canUndo = info.canUndo, replay = info.replay }
         ]
 
 
@@ -137,8 +140,8 @@ playerRowShell { isActive, idx } body =
         )
 
 
-viewTurnControls : { canUndo : Bool } -> Html Msg
-viewTurnControls { canUndo } =
+viewTurnControls : { canUndo : Bool, replay : Maybe { paused : Bool } } -> Html Msg
+viewTurnControls { canUndo, replay } =
     div
         [ style "margin-top" "12px"
         , style "display" "flex"
@@ -153,6 +156,20 @@ viewTurnControls { canUndo } =
             Button.disabledButton "Undo"
           )
         , Button.button "Hint" ClickHint
-        , Button.button "Instant replay" ClickInstantReplay
+        , viewReplayControl replay
         , Button.link "← Lobby" "/gopher/game-lobby"
         ]
+
+
+viewReplayControl : Maybe { paused : Bool } -> Html Msg
+viewReplayControl maybeReplay =
+    case maybeReplay of
+        Just rs ->
+            if rs.paused then
+                Button.button "Resume" ClickReplayPauseToggle
+
+            else
+                Button.button "Pause" ClickReplayPauseToggle
+
+        Nothing ->
+            Button.button "Instant replay" ClickInstantReplay

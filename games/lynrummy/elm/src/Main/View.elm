@@ -117,15 +117,31 @@ view model =
 --
 -- Implementation lives in `Game.Sidebar`. View only builds
 -- the `PlayerPanelInfo` from Model and hands it off.
+--
+-- During Instant Replay, the sidebar + board are sourced
+-- from `model.replayState`'s evolving `gameState`. The live
+-- `model.gameState` is preserved untouched behind the scenes
+-- and snaps back when `ReplayCompleted` clears `replayState`.
 
 
 sidebarInfo : Model -> Sidebar.PlayerPanelInfo
 sidebarInfo model =
-    { gameState = model.gameState
-    , drag = model.drag
-    , hintedCards = model.hintedCards
-    , canUndo = canUndoThisTurn model
-    }
+    case model.replayState of
+        Just rs ->
+            { gameState = rs.gameState
+            , drag = Drag.NotDragging
+            , hintedCards = []
+            , canUndo = False
+            , replay = Just { paused = rs.paused }
+            }
+
+        Nothing ->
+            { gameState = model.gameState
+            , drag = model.drag
+            , hintedCards = model.hintedCards
+            , canUndo = canUndoThisTurn model
+            , replay = Nothing
+            }
 
 
 boardColumnInput :
@@ -138,9 +154,18 @@ boardColumnInput :
         , cardMouseDown : CardStack -> Int -> List (Html.Attribute Msg)
         }
 boardColumnInput model =
-    { board = model.gameState.board
+    let
+        ( board, drag ) =
+            case model.replayState of
+                Just rs ->
+                    ( rs.gameState.board, Drag.NotDragging )
+
+                Nothing ->
+                    ( model.gameState.board, model.drag )
+    in
+    { board = board
     , boardRect = model.boardRect
-    , drag = model.drag
+    , drag = drag
     , gameId = model.gameId
     , cardMouseDown = PointerInput.cardMouseDown MouseDownOnBoardCard
     }

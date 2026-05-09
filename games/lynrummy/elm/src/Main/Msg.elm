@@ -16,6 +16,7 @@ import Game.Point exposing (Point)
 import Game.Rules.Card exposing (Card)
 import Http
 import Json.Encode as Encode
+import Time
 
 
 {-| Four flavours of constructor, grouped here for scan-ability:
@@ -27,9 +28,14 @@ import Json.Encode as Encode
     detection is computed in Elm on every MouseMove from the
     floater's rect, not dispatched by DOM events.
   - **Button clicks** — ClickCompleteTurn, ClickUndo, ClickHint,
-    ClickInstantReplay, PopupOk.
+    ClickInstantReplay, ClickReplayPauseToggle, PopupOk.
   - **HTTP responses** — ActionSent (fire-and-forget),
     SessionReceived, ActionLogFetched.
+  - **Replay** — ReplayTick (per-frame timer while a replay
+    is unpaused; `Game.Replay.Animate.tick` decides whether
+    to advance), ReplayCompleted (self-dispatched when the
+    engine signals `Completed`; Main clears `replayState`
+    and shows the completion ceremony).
 
 -}
 {- MouseMove and MouseUp deliberately drop the `MouseDownOn*`
@@ -62,5 +68,8 @@ type Msg
     | ClickHint
     | PopupOk
     | ClickInstantReplay
+    | ClickReplayPauseToggle
+    | ReplayTick Time.Posix
+    | ReplayCompleted
     | ActionLogFetched (Result Http.Error ActionLogBundle)
     | GameHintReceived Encode.Value

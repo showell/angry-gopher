@@ -21,6 +21,7 @@ Output.
 
 import Browser.Dom
 import Browser.Events
+import Game.ActionLog as ActionLog
 import Game.BoardDrag as BoardDrag
 import Game.BoardGesture as BoardGesture
 import Game.Drag exposing (DragState(..))
@@ -32,6 +33,7 @@ import Game.HandGesture as HandGesture
 import Game.Dealer as Dealer
 import Game.Game as Game
 import Game.Random as Random
+import Game.Replay.Animate as Animate
 import Html exposing (Html)
 import Http
 import Json.Encode as Encode
@@ -54,6 +56,8 @@ import Main.State
 import Game.Point exposing (Point)
 import Main.View as View
 import Main.Wire as Wire exposing (fetchActionLog, fetchNewSession)
+import Task
+import Time
 
 
 
@@ -192,11 +196,48 @@ update msg model =
             ( { model | popup = Nothing }, Cmd.none, NoOutput )
 
         ClickInstantReplay ->
-            let
-                _ =
-                    Debug.log "ClickInstantReplay" "under construction"
-            in
-            withNoOutput ( model, Cmd.none )
+            withNoOutput
+                ( { model
+                    | replayState =
+                        Just
+                            (Animate.start
+                                (ActionLog.collapseUndos model.actionLog)
+                                model.initialGameState
+                            )
+                    , drag = NotDragging
+                    , status = { text = "Replaying…", kind = Inform }
+                  }
+                , Cmd.none
+                )
+
+        ClickReplayPauseToggle ->
+            withNoOutput
+                ( { model | replayState = Maybe.map Animate.togglePause model.replayState }
+                , Cmd.none
+                )
+
+        ReplayTick nowPosix ->
+            case model.replayState of
+                Nothing ->
+                    withNoOutput ( model, Cmd.none )
+
+                Just rs ->
+                    case Animate.tick (Time.posixToMillis nowPosix) rs of
+                        Animate.StillReplaying nextRs ->
+                            withNoOutput
+                                ( { model | replayState = Just nextRs }, Cmd.none )
+
+                        Animate.Completed ->
+                            withNoOutput ( model, dispatchSelf ReplayCompleted )
+
+        ReplayCompleted ->
+            withNoOutput
+                ( { model
+                    | replayState = Nothing
+                    , status = { text = "Replay completed! Continue playing.", kind = Inform }
+                  }
+                , Cmd.none
+                )
 
         ActionLogFetched (Ok bundle) ->
             ( bootstrapFromBundle bundle model, Cmd.none, NoOutput )
@@ -217,6 +258,16 @@ update msg model =
 withNoOutput : ( Model, Cmd Msg ) -> ( Model, Cmd Msg, Output )
 withNoOutput ( m, c ) =
     ( m, c, NoOutput )
+
+
+{-| Fire a Msg into our own update on the next runtime cycle.
+Used by `ReplayTick`'s `Completed` branch so Main's update
+loop is the one that clears `replayState` — the engine
+itself never names a Msg.
+-}
+dispatchSelf : Msg -> Cmd Msg
+dispatchSelf msg =
+    Task.succeed () |> Task.perform (\_ -> msg)
 
 
 {-| Shared shape for the four `Result.Err` branches in `update`
@@ -476,6 +527,14 @@ handleHintResponse value model =
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
+    Sub.batch
+        [ dragSubscriptions model
+        , replaySubscriptions model
+        ]
+
+
+dragSubscriptions : Model -> Sub Msg
+dragSubscriptions model =
     case model.drag of
         NotDragging ->
             Sub.none
@@ -485,6 +544,24 @@ subscriptions model =
                 [ Browser.Events.onMouseMove (PointerInput.mouseMoveDecoder MouseMove)
                 , Browser.Events.onMouseUp (PointerInput.mouseUpDecoder MouseUp)
                 ]
+
+
+{-| Subscribe to per-frame ticks while a replay is in flight
+and not paused. The handler in `update` extracts `nowMs` and
+delegates to `Animate.tick`.
+-}
+replaySubscriptions : Model -> Sub Msg
+replaySubscriptions model =
+    case model.replayState of
+        Just rs ->
+            if rs.paused then
+                Sub.none
+
+            else
+                Browser.Events.onAnimationFrame ReplayTick
+
+        Nothing ->
+            Sub.none
 
 
 

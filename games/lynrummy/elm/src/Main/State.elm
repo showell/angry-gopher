@@ -20,6 +20,7 @@ import Game.GameEvent exposing (GameEvent(..))
 import Game.Hand as Hand exposing (Hand)
 import Game.Physics.GestureArbitration as GA
 import Game.Popup exposing (PopupContent)
+import Game.Replay.ReplayState exposing (ReplayState)
 import Game.Rules.Card as Card exposing (Card)
 import Game.Status exposing (StatusKind(..), StatusMessage)
 import Json.Encode as Encode exposing (Value)
@@ -34,8 +35,8 @@ type alias Model =
 
     -- The session's pre-first-action snapshot. Pinned at
     -- bootstrap (new-session deal or resume's bundle) and
-    -- never mutated thereafter. Reserved for the
-    -- under-construction Instant Replay rebuild.
+    -- never mutated thereafter. Instant Replay seeds its
+    -- ReplayState's gameState from this.
     , initialGameState : GameState
     , drag : DragState
 
@@ -49,6 +50,12 @@ type alias Model =
     , popup : Maybe PopupContent
     , actionLog : List ActionLogEntry
     , nextSeq : Int
+
+    -- When `Just`, an Instant Replay is in flight. Owned end-
+    -- to-end by `Game.Replay.Animate`; Main only plumbs Msgs
+    -- in and out of it. Cleared back to `Nothing` when the
+    -- engine signals `Completed`.
+    , replayState : Maybe ReplayState
 
     -- Constant string forming the board's DOM id (via
     -- `boardDomIdFor`). Multi-Play-per-page hosting retired
@@ -177,6 +184,7 @@ baseModel =
     , popup = Nothing
     , actionLog = []
     , nextSeq = 1
+    , replayState = Nothing
     , gameId = "default"
     , pendingEngineRequest = Nothing
     , nextEngineRequestId = 1
