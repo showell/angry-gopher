@@ -210,11 +210,11 @@ update msg model =
                     , drag = NotDragging
                     , status = { text = "Replaying…", kind = Inform }
                   }
-                , -- Hand-drag animations need the live board rect
-                  -- to translate board-frame destinations into
-                  -- viewport coords. Fetch on every click in case
-                  -- the page has scrolled since the last drag.
-                  fetchBoardRectCmd model.gameId
+                , -- Hand animations measure the board fresh per
+                  -- action (bundled with the hand card rect) so
+                  -- a scroll between actions doesn't desync the
+                  -- two endpoints. Nothing to fetch at click time.
+                  Cmd.none
                 )
 
         ClickReplayPauseToggle ->
@@ -237,7 +237,7 @@ update msg model =
                         Animate.NeedHandCardRect nextRs card ->
                             withNoOutput
                                 ( { model | replayState = Just nextRs }
-                                , fetchHandCardRectCmd card
+                                , fetchHandCardRectCmd card model.gameId
                                 )
 
                         Animate.Completed ->
@@ -252,15 +252,15 @@ update msg model =
                 , Cmd.none
                 )
 
-        HandCardRectReceived (Ok ( element, posix )) ->
+        HandCardRectReceived (Ok ( handElement, boardElement, posix )) ->
             withNoOutput
                 ( { model
                     | replayState =
                         Maybe.map
                             (Animate.handCardRectReceived
                                 (Time.posixToMillis posix)
-                                element
-                                model.boardRect
+                                handElement
+                                boardElement
                             )
                             model.replayState
                   }
@@ -305,26 +305,18 @@ dispatchSelf msg =
     Task.succeed () |> Task.perform (\_ -> msg)
 
 
-{-| Measure the board's live rect; result lands in
-`BoardRectReceived`. Fired at replay-click time so
-hand-animation destination math has viewport coords ready.
+{-| Measure the hand card's live rect AND the board's live
+rect AND grab the current time, all on the same Task tick.
+Bundling the two element queries ensures a page scroll
+between replay actions doesn't desync hand origin and board
+destination. Result lands in `HandCardRectReceived`.
 -}
-fetchBoardRectCmd : String -> Cmd Msg
-fetchBoardRectCmd gameId =
-    Browser.Dom.getElement (BoardView.boardDomIdFor gameId)
-        |> Task.attempt BoardRectReceived
-
-
-{-| Measure the hand card's live rect AND grab the current
-time (animation start clock). The replay engine signaled
-`NeedHandCardRect` for this card; the result lands in
-`HandCardRectReceived`.
--}
-fetchHandCardRectCmd : Card.Card -> Cmd Msg
-fetchHandCardRectCmd card =
+fetchHandCardRectCmd : Card.Card -> String -> Cmd Msg
+fetchHandCardRectCmd card gameId =
     Task.attempt HandCardRectReceived
-        (Task.map2 Tuple.pair
+        (Task.map3 (\h b t -> ( h, b, t ))
             (Browser.Dom.getElement (HandLayout.handCardDomId card))
+            (Browser.Dom.getElement (BoardView.boardDomIdFor gameId))
             Time.now
         )
 

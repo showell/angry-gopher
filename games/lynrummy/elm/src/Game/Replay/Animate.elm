@@ -220,35 +220,39 @@ startNextAction nowMs entry =
                 "Animate.startNextAction: Undo reached the queue (collapseUndos should have stripped it)"
 
 
-{-| Host calls this when its `Browser.Dom.getElement` for the
-hand card resolves. We compute the destination from the
-pending action's payload + the live board rect, hand it to
-`HandDragAnimate.start`, and transition to
+{-| Host calls this when its combined Task (hand card +
+board element) resolves. We compute the hand origin and the
+live board rect from the two elements, build the destination
+from the pending action's payload + that fresh board rect,
+hand it to `HandDragAnimate.start`, and transition to
 `AnimatingHandAction`.
 
-If `boardRect` is missing (replay started before the live
-board was ever measured) we can't translate board-frame
-locations into viewport coords; in that case we fall back to
-applying the event immediately so the queue keeps moving.
+Both rects are fetched on the same tick so a page scroll
+between actions doesn't desync hand origin and board
+destination — the symmetric fix to a long-standing
+asymmetry where only the hand rect was fresh.
+
 -}
 handCardRectReceived :
     Int
     -> Browser.Dom.Element
-    -> Maybe GA.Rect
+    -> Browser.Dom.Element
     -> ReplayState
     -> ReplayState
-handCardRectReceived nowMs element maybeBoardRect rs =
+handCardRectReceived nowMs handElement boardElement rs =
     case rs.phase of
         AwaitingHandRect entry ->
-            case handAnimationFor entry (elementTopLeftInViewport element) maybeBoardRect nowMs of
-                Just handState ->
-                    { rs | phase = AnimatingHandAction handState }
+            let
+                origin =
+                    elementTopLeftInViewport handElement
 
-                Nothing ->
-                    { rs
-                        | gameState = Execute.applyEvent entry.action rs.gameState
-                        , phase = InBeat { nextBeatMs = nowMs + beatMs }
-                    }
+                boardRect =
+                    boardRectFromElement boardElement
+
+                handState =
+                    handAnimationFor entry origin boardRect nowMs
+            in
+            { rs | phase = AnimatingHandAction handState }
 
         _ ->
             -- Wrong phase (rect arrived after we transitioned
@@ -260,64 +264,65 @@ handCardRectReceived nowMs element maybeBoardRect rs =
 {-| Build the hand-animation State for a popped hand action.
 Dispatches by variant to compute the floater's destination
 in viewport coords, then composes `HandDragAnimate.start`.
-Returns Nothing when `boardRect` is missing — the only
-reason this can fail by construction.
+The path is total — `AwaitingHandRect` is only entered for
+hand-action variants, so any other variant here is a
+contract violation.
 -}
-handAnimationFor : ActionLogEntry -> Point -> Maybe GA.Rect -> Int -> Maybe HandDragAnimate.State
-handAnimationFor entry origin maybeBoardRect nowMs =
-    case maybeBoardRect of
-        Nothing ->
-            Nothing
+handAnimationFor : ActionLogEntry -> Point -> GA.Rect -> Int -> HandDragAnimate.State
+handAnimationFor entry origin boardRect nowMs =
+    case entry.action of
+        GameEvent.MergeHand p ->
+            let
+                size =
+                    CardStack.size p.target
 
-        Just boardRect ->
-            case entry.action of
-                GameEvent.MergeHand p ->
-                    let
-                        size =
-                            CardStack.size p.target
+                landingLeft =
+                    case p.side of
+                        BoardActions.Right ->
+                            p.target.loc.left + size * BG.cardPitch
 
-                        landingLeft =
-                            case p.side of
-                                BoardActions.Right ->
-                                    p.target.loc.left + size * BG.cardPitch
+                        BoardActions.Left ->
+                            p.target.loc.left - BG.cardPitch
+            in
+            HandDragAnimate.start
+                { handCard = p.handCard
+                , origin = origin
+                , destination =
+                    { x = boardRect.x + landingLeft
+                    , y = boardRect.y + p.target.loc.top
+                    }
+                , startMs = nowMs
+                , pendingAction = entry.action
+                }
 
-                                BoardActions.Left ->
-                                    p.target.loc.left - BG.cardPitch
-                    in
-                    Just
-                        (HandDragAnimate.start
-                            { handCard = p.handCard
-                            , origin = origin
-                            , destination =
-                                { x = boardRect.x + landingLeft
-                                , y = boardRect.y + p.target.loc.top
-                                }
-                            , startMs = nowMs
-                            , pendingAction = entry.action
-                            }
-                        )
+        GameEvent.PlaceHand p ->
+            HandDragAnimate.start
+                { handCard = p.handCard
+                , origin = origin
+                , destination =
+                    { x = boardRect.x + p.loc.left
+                    , y = boardRect.y + p.loc.top
+                    }
+                , startMs = nowMs
+                , pendingAction = entry.action
+                }
 
-                GameEvent.PlaceHand p ->
-                    Just
-                        (HandDragAnimate.start
-                            { handCard = p.handCard
-                            , origin = origin
-                            , destination =
-                                { x = boardRect.x + p.loc.left
-                                , y = boardRect.y + p.loc.top
-                                }
-                            , startMs = nowMs
-                            , pendingAction = entry.action
-                            }
-                        )
-
-                _ ->
-                    Debug.todo
-                        "Animate.handAnimationFor: AwaitingHandRect entry must carry a hand action"
+        _ ->
+            Debug.todo
+                "Animate.handAnimationFor: AwaitingHandRect entry must carry a hand action"
 
 
 elementTopLeftInViewport : Browser.Dom.Element -> Point
 elementTopLeftInViewport element =
     { x = round (element.element.x - element.viewport.x)
     , y = round (element.element.y - element.viewport.y)
+    }
+
+
+boardRectFromElement : Browser.Dom.Element -> GA.Rect
+boardRectFromElement element =
+    { x = round (element.element.x - element.viewport.x)
+    , y = round (element.element.y - element.viewport.y)
+    , width = round element.element.width
+    , height = round element.element.height
     }
