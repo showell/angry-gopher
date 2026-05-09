@@ -57,7 +57,7 @@ import Main.State
         , collapseUndos
         , encodeGameState
         )
-import Main.Types exposing (Point)
+import Game.Point exposing (Point)
 import Main.View as View exposing (popupForCompleteTurn, statusForCompleteTurn)
 import Main.Wire as Wire exposing (fetchActionLog, fetchNewSession)
 import Time

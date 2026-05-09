@@ -15,7 +15,7 @@ import Json.Encode as Encode
 import Game.Rules.Card exposing (Card)
 import Game.CardStack exposing (CardStack)
 import Game.ActionLog exposing (ActionLogBundle)
-import Main.Types exposing (Point)
+import Game.Point exposing (Point)
 import Time
 
 

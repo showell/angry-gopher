@@ -1,4 +1,4 @@
-module Main.Types exposing (Point)
+module Game.Point exposing (Point)
 
 
 type alias Point =

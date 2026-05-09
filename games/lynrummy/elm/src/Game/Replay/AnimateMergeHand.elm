@@ -28,7 +28,7 @@ import Game.Rules.Card exposing (Card)
 import Game.CardStack as CardStack exposing (CardStack)
 import Game.Replay.Space as Space
 import Game.GameEvent as GameEvent
-import Main.Types exposing (Point)
+import Game.Point exposing (Point)
 
 
 

@@ -30,7 +30,7 @@ and stays test-light.
 import Game.Replay.Space as Space
 import Game.GameEvent exposing (GameEvent)
 import Game.TimeLoc exposing (TimeLoc)
-import Main.Types exposing (Point)
+import Game.Point exposing (Point)
 
 
 {-| The result of advancing the animation by one frame.

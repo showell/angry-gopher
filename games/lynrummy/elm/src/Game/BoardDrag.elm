@@ -8,14 +8,14 @@ import Game.ActionLog exposing (ActionLogEntry)
 import Game.BoardActions exposing (Side(..))
 import Game.BoardGesture as BoardGesture
 import Game.CardStack exposing (CardStack, encodeBoardLocation, encodeCardStack)
-import Game.Drag exposing (BoardCardDragInfo)
+import Game.BoardDragTypes exposing (BoardCardDragInfo)
 import Game.Execute as Execute
 import Game.GameEvent as GameEvent
 import Game.Physics.GestureArbitration as GA
 import Game.Status as Status exposing (StatusMessage)
 import Game.TimeLoc exposing (encodeTimeLoc)
 import Json.Encode as Encode exposing (Value)
-import Main.Types exposing (Point)
+import Game.Point exposing (Point)
 
 
 {-| Inputs `handleMouseUp` reads from the host model. Caller

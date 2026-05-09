@@ -1,8 +1,6 @@
 module Game.Drag exposing
-    ( BoardCardDragInfo
-    , DragSource(..)
+    ( DragSource(..)
     , DragState(..)
-    , HandCardDragInfo
     , draggedOverlay
     , renderBoardFloater
     , setFloaterTopLeft
@@ -35,33 +33,14 @@ floater never emits its own events.
 
 -}
 
-import Game.CardStack exposing (BoardLocation, CardStack)
-import Game.Physics.WingOracle exposing (WingId)
+import Game.BoardDragTypes exposing (BoardCardDragInfo)
+import Game.CardStack exposing (CardStack)
+import Game.HandDragTypes exposing (HandCardDragInfo)
+import Game.Point exposing (Point)
 import Game.Rules.Card exposing (Card)
 import Game.StackView as StackView
-import Game.TimeLoc exposing (TimeLoc)
 import Html exposing (Html)
 import Html.Attributes exposing (style)
-import Main.Types exposing (Point)
-
-
-type alias BoardCardDragInfo =
-    { stack : CardStack
-    , cardIndex : Int
-    , originalCursor : Point
-    , cursor : Point
-    , floaterTopLeft : BoardLocation
-    , boardPath : List TimeLoc
-    , wings : List WingId
-    }
-
-
-type alias HandCardDragInfo =
-    { card : Card
-    , cursor : Point
-    , floaterTopLeft : Point
-    , wings : List WingId
-    }
 
 
 type DragState

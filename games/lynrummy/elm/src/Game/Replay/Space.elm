@@ -37,7 +37,7 @@ import Game.Physics.BoardGeometry as BG
 import Game.Physics.GestureArbitration as GA
 import Game.Rules.Card exposing (Card)
 import Game.TimeLoc exposing (TimeLoc)
-import Main.Types exposing (Point)
+import Game.Point exposing (Point)
 
 
 

@@ -50,7 +50,7 @@ import Main.State as State
         , ReplayState
         )
 import Game.TimeLoc exposing (TimeLoc)
-import Main.Types exposing (Point)
+import Game.Point exposing (Point)
 import Task
 import Time
 

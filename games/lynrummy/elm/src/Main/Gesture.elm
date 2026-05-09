@@ -59,7 +59,7 @@ import Main.State
         ( Model
         , boardDomIdFor
         )
-import Main.Types exposing (Point)
+import Game.Point exposing (Point)
 import Task
 
 

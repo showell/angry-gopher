@@ -21,14 +21,14 @@ rather than shared via Maybe-flagged helpers.
 -}
 
 import Game.BoardActions exposing (Side)
-import Game.Drag exposing (BoardCardDragInfo)
+import Game.BoardDragTypes exposing (BoardCardDragInfo)
 import Game.CardStack as CardStack exposing (BoardLocation, CardStack)
 import Game.Physics.BoardGeometry as BG
 import Game.Physics.GestureArbitration as GA
 import Game.Status as Status
 import Game.TimeLoc exposing (TimeLoc)
 import Game.WingView as WingView
-import Main.Types exposing (Point)
+import Game.Point exposing (Point)
 
 
 {-| Result of resolving a board-card mouseup. `MergeStack` and

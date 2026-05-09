@@ -16,13 +16,13 @@ pathless (replay re-synthesizes via DOM).
 
 import Game.BoardActions exposing (Side)
 import Game.CardStack as CardStack exposing (BoardLocation, CardStack)
-import Game.Drag exposing (HandCardDragInfo)
+import Game.HandDragTypes exposing (HandCardDragInfo)
 import Game.Physics.BoardGeometry as BG
 import Game.Physics.GestureArbitration as GA
 import Game.Rules.Card exposing (Card)
 import Game.Status as Status
 import Game.WingView as WingView
-import Main.Types exposing (Point)
+import Game.Point exposing (Point)
 
 
 {-| Result of resolving a hand-card mouseup. `MergeHand` and
