@@ -8,9 +8,11 @@ module Game.Status exposing
     , offBoardScold
     , sessionAllocFailedStatus
     , statusForCompleteTurn
+    , viewStatusBar
     )
 
-{-| Status messages and the helpers that build them. -}
+{-| Status messages, the helpers that build them, and the
+status-bar renderer. -}
 
 import Game.CardStack as CardStack exposing (CardStack)
 import Game.Game exposing (CompleteTurnOutcome)
@@ -18,6 +20,32 @@ import Game.Physics.BoardGeometry as BoardGeometry exposing (BoardGeometryStatus
 import Game.PlayerTurn exposing (CompleteTurnResult(..))
 import Game.Rules.Card
 import Game.Rules.StackType as StackType
+import Html exposing (Html, div)
+import Html.Attributes exposing (style)
+
+
+viewStatusBar : StatusMessage -> Html msg
+viewStatusBar status =
+    let
+        color =
+            case status.kind of
+                Inform ->
+                    "#31708f"
+
+                Celebrate ->
+                    "green"
+
+                Scold ->
+                    "red"
+    in
+    div
+        [ style "padding" "6px 20px"
+        , style "font-size" "15px"
+        , style "color" color
+        , style "border-bottom" "1px solid #eee"
+        , style "white-space" "pre-wrap"
+        ]
+        [ Html.text status.text ]
 
 
 statusForCompleteTurn : Result outcome CompleteTurnOutcome -> StatusMessage

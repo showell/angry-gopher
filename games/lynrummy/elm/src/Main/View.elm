@@ -58,7 +58,7 @@ import Game.Drag as Drag
 import Game.Popup as Popup
 import Game.Sidebar as Sidebar
 import Main.Msg exposing (Msg(..))
-import Game.Status exposing (StatusKind(..), StatusMessage)
+import Game.Status as Status
 import Main.State
     exposing
         ( Model
@@ -99,7 +99,7 @@ view model =
             , style "left" "0"
             , style "right" "0"
             ]
-            [ viewStatusBar model.status ]
+            [ Status.viewStatusBar model.status ]
         , div
             [ style "position" "absolute"
             , style "top" (String.fromInt BoardGeometry.boardViewportTop ++ "px")
@@ -122,34 +122,6 @@ view model =
                     model.popup
             )
         ]
-
-
-
--- STATUS BAR
-
-
-viewStatusBar : StatusMessage -> Html Msg
-viewStatusBar status =
-    let
-        color =
-            case status.kind of
-                Inform ->
-                    "#31708f"
-
-                Celebrate ->
-                    "green"
-
-                Scold ->
-                    "red"
-    in
-    div
-        [ style "padding" "6px 20px"
-        , style "font-size" "15px"
-        , style "color" color
-        , style "border-bottom" "1px solid #eee"
-        , style "white-space" "pre-wrap"
-        ]
-        [ Html.text status.text ]
 
 
 
