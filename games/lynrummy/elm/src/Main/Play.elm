@@ -55,6 +55,7 @@ import Main.State
     exposing
         ( Model
         , baseModel
+        , bootstrapFromBundle
         , collapseUndos
         , encodeGameState
         )
@@ -670,32 +671,6 @@ view =
 
 
 
--- BOOTSTRAP
-
-
-bootstrapFromBundle : ActionLogBundle -> Model -> Model
-bootstrapFromBundle bundle model =
-    let
-        atInitial =
-            modelAtInitial bundle.initialState
-                { model
-                    | actionLog = bundle.actions
-                    , nextSeq = List.length bundle.actions + 1
-                }
-    in
-    List.foldl
-        (\entry m -> { m | gameState = Execute.applyEvent entry.action m.gameState })
-        atInitial
-        (collapseUndos bundle.actions)
-
-
-{-| Pin the bundle's initial state as both the live gameState
-and the immutable initialGameState (used by Instant Replay's
-ReplayState seed). Used by `bootstrapFromBundle` on resume.
--}
-modelAtInitial : Game.GameState -> Model -> Model
-modelAtInitial initial model =
-    { model | gameState = initial, initialGameState = initial }
 
 
 

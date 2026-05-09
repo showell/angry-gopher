@@ -5,6 +5,7 @@ module Main.State exposing
     , ReplayState
     , baseModel
     , boardDomIdFor
+    , bootstrapFromBundle
     , canUndoThisTurn
     , collapseUndos
     , encodeGameState
@@ -12,7 +13,8 @@ module Main.State exposing
 
 {-| All application-wide data types and the initial Model. -}
 
-import Game.ActionLog exposing (ActionLogEntry)
+import Game.ActionLog exposing (ActionLogBundle, ActionLogEntry)
+import Game.Execute as Execute
 import Game.BoardDragTypes exposing (BoardCardDragInfo)
 import Game.CardStack as CardStack
 import Game.Dealer
@@ -301,3 +303,29 @@ baseModel =
     , pendingEngineRequest = Nothing
     , nextEngineRequestId = 1
     }
+
+
+
+-- BOOTSTRAP
+
+
+{-| Hydrate a Model from a server-fetched ActionLogBundle:
+pin the bundle's initial state as both the live `gameState`
+and the immutable `initialGameState` (used by Instant Replay's
+ReplayState seed), then fold the action log forward.
+-}
+bootstrapFromBundle : ActionLogBundle -> Model -> Model
+bootstrapFromBundle bundle model =
+    let
+        atInitial =
+            { model
+                | actionLog = bundle.actions
+                , nextSeq = List.length bundle.actions + 1
+                , gameState = bundle.initialState
+                , initialGameState = bundle.initialState
+            }
+    in
+    List.foldl
+        (\entry m -> { m | gameState = Execute.applyEvent entry.action m.gameState })
+        atInitial
+        (collapseUndos bundle.actions)
