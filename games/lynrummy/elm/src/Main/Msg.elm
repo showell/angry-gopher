@@ -10,12 +10,13 @@ Extracted 2026-04-19 from the pre-split `Main.elm` monolith.
 -}
 
 import Browser.Dom
+import Game.ActionLog exposing (ActionLogBundle)
+import Game.CardStack exposing (CardStack)
+import Game.GameEvent exposing (GameEvent)
+import Game.Point exposing (Point)
+import Game.Rules.Card exposing (Card)
 import Http
 import Json.Encode as Encode
-import Game.Rules.Card exposing (Card)
-import Game.CardStack exposing (CardStack)
-import Game.ActionLog exposing (ActionLogBundle)
-import Game.Point exposing (Point)
 import Time
 
 
@@ -69,5 +70,7 @@ type Msg
     | ClickInstantReplay
     | ReplayFrame Time.Posix
     | ClickReplayPauseToggle
+    | BoardAnimationDone GameEvent
+    | HandAnimationDone GameEvent
     | ActionLogFetched (Result Http.Error ActionLogBundle)
     | GameHintReceived Encode.Value

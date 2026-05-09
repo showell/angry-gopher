@@ -199,44 +199,25 @@ buildEagerAndActions initialModel specs =
     loop initialModel [] specs
 
 
+{-| Test-only "teleport-style" replay: apply each event in
+sequence and return the final model. This skips the
+animation FSM entirely — these tests verify END-STATE, not
+animation frames (DragAnimationTest covers the FSM).
+
+The fact that this is a clean one-liner is an honesty signal:
+animation is decoupled from event-application. Tests apply;
+production animates between applies.
+-}
 runReplay : State.Model -> List GameEvent -> State.Model
 runReplay initialModel actions =
     let
-        entries =
-            List.map
-                (\a ->
-                    { action = a }
-                )
-                actions
+        gs0 =
+            initialModel.gameState
 
-        seededReplay : State.ReplayState
-        seededReplay =
-            { gameState = initialModel.gameState
-            , eventPlan = entries
-            , paused = False
-            , anim = State.NotAnimating
-            }
+        finalGameState =
+            List.foldl Execute.applyEvent gs0 actions
     in
-    runReplayLoop initialModel seededReplay 0 5000
-
-
-runReplayLoop : State.Model -> State.ReplayState -> Float -> Int -> State.Model
-runReplayLoop model rs nowMs budget =
-    if budget <= 0 then
-        Debug.todo
-            "runReplayLoop budget exhausted — replay FSM did not complete"
-
-    else
-        let
-            ( maybeNext, _ ) =
-                ReplayTime.replayFrame nowMs rs
-        in
-        case maybeNext of
-            Nothing ->
-                { model | gameState = rs.gameState }
-
-            Just next ->
-                runReplayLoop model next (nowMs + 50) (budget - 1)
+    { initialModel | gameState = finalGameState }
 
 
 

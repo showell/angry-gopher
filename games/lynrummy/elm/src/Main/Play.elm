@@ -253,6 +253,12 @@ update msg model =
                     in
                     withNoOutput ( { model | replayState = Just newRS }, cmd )
 
+        BoardAnimationDone event ->
+            withNoOutput ( applyReplayEvent event model, Cmd.none )
+
+        HandAnimationDone event ->
+            withNoOutput ( applyReplayEvent event model, Cmd.none )
+
         ActionLogFetched (Ok bundle) ->
             ( bootstrapFromBundle bundle model, Cmd.none, NoOutput )
 
@@ -272,6 +278,25 @@ update msg model =
 withNoOutput : ( Model, Cmd Msg ) -> ( Model, Cmd Msg, Output )
 withNoOutput ( m, c ) =
     ( m, c, NoOutput )
+
+
+{-| Advance the replay's gameState by one event. Fired when
+the animation FSM signals that an animation has completed
+(via `BoardAnimationDone` / `HandAnimationDone`). The replay's
+phase transition (Animating* → Beating) already happened in
+`Game.Replay.Time.replayFrame`; this handler does the
+logical apply that the animation was visualizing. If
+`replayState` is gone (user clicked away, etc.), drop the
+event silently.
+-}
+applyReplayEvent : GameEvent -> Model -> Model
+applyReplayEvent event model =
+    case model.replayState of
+        Just rs ->
+            { model | replayState = Just { rs | gameState = Execute.applyEvent event rs.gameState } }
+
+        Nothing ->
+            model
 
 
 {-| Shared shape for the four `Result.Err` branches in `update`

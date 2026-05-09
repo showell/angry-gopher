@@ -126,12 +126,8 @@ replayFrame nowMs rs =
                         )
 
                     DragAnimation.Done { pendingAction } ->
-                        ( Just
-                            { rs
-                                | gameState = Execute.applyEvent pendingAction rs.gameState
-                                , anim = Beating { untilMs = nowMs + 1000 }
-                            }
-                        , Cmd.none
+                        ( Just { rs | anim = Beating { untilMs = nowMs + 1000 } }
+                        , dispatchMsg (BoardAnimationDone pendingAction)
                         )
 
             AnimatingHand a ->
@@ -149,12 +145,8 @@ replayFrame nowMs rs =
                         )
 
                     DragAnimation.Done { pendingAction } ->
-                        ( Just
-                            { rs
-                                | gameState = Execute.applyEvent pendingAction rs.gameState
-                                , anim = Beating { untilMs = nowMs + 1000 }
-                            }
-                        , Cmd.none
+                        ( Just { rs | anim = Beating { untilMs = nowMs + 1000 } }
+                        , dispatchMsg (HandAnimationDone pendingAction)
                         )
 
             Beating { untilMs } ->
@@ -190,6 +182,16 @@ mapStateAndCmd f ( a, cmd ) =
 pointToBoardLoc : Point -> { left : Int, top : Int }
 pointToBoardLoc p =
     { left = p.x, top = p.y }
+
+
+{-| Fire a Msg synchronously via the runtime. Used to hand
+animation-done events up to `Main.Play.update` so the
+"apply the event" step lives in one place — not entangled
+with the per-frame animation FSM.
+-}
+dispatchMsg : Msg -> Cmd Msg
+dispatchMsg msg =
+    Task.succeed () |> Task.perform (\_ -> msg)
 
 
 
