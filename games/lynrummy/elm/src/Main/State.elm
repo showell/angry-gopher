@@ -6,14 +6,13 @@ module Main.State exposing
     , baseModel
     , bootstrapFromBundle
     , canUndoThisTurn
-    , collapseUndos
     , encodeGameState
     , lastUndoableAction
     )
 
 {-| All application-wide data types and the initial Model. -}
 
-import Game.ActionLog exposing (ActionLogBundle, ActionLogEntry)
+import Game.ActionLog as ActionLog exposing (ActionLogBundle, ActionLogEntry)
 import Game.Execute as Execute
 import Game.BoardDragTypes exposing (BoardCardDragInfo)
 import Game.CardStack as CardStack
@@ -193,44 +192,6 @@ encodeHand h =
 -- ACTION LOG HELPERS
 
 
-{-| Collapse Undo tokens: each Undo cancels the most recent
-non-CompleteTurn entry. The result is the effective action
-sequence — what replay and bootstrap should actually apply.
-
-Used by bootstrapFromBundle (to fold only effective actions)
-and clickInstantReplay (so replay never animates Undo tokens).
-
--}
-collapseUndos : List ActionLogEntry -> List ActionLogEntry
-collapseUndos entries =
-    List.foldl
-        (\entry stack ->
-            case entry.action of
-                Undo ->
-                    popLastUndoable stack
-
-                _ ->
-                    stack ++ [ entry ]
-        )
-        []
-        entries
-
-
-popLastUndoable : List ActionLogEntry -> List ActionLogEntry
-popLastUndoable entries =
-    case List.reverse entries of
-        [] ->
-            entries
-
-        last :: rest ->
-            case last.action of
-                CompleteTurn ->
-                    entries
-
-                _ ->
-                    List.reverse rest
-
-
 {-| True when clicking Undo would do something — the effective
 action list has at least one non-CompleteTurn entry in the
 current turn.
@@ -246,7 +207,7 @@ CompleteTurn (turn flips can't be undone).
 -}
 lastUndoableAction : Model -> Maybe GameEvent
 lastUndoableAction model =
-    case List.reverse (collapseUndos model.actionLog) of
+    case List.reverse (ActionLog.collapseUndos model.actionLog) of
         [] ->
             Nothing
 
@@ -322,4 +283,4 @@ bootstrapFromBundle bundle model =
     List.foldl
         (\entry m -> { m | gameState = Execute.applyEvent entry.action m.gameState })
         atInitial
-        (collapseUndos bundle.actions)
+        (ActionLog.collapseUndos bundle.actions)

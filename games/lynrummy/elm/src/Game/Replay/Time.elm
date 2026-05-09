@@ -40,7 +40,7 @@ import Game.Replay.Space as Space
 import Game.Rules.Card
 import Game.TimeLoc exposing (TimeLoc)
 import Main.Msg exposing (Msg(..))
-import Main.State as State
+import Main.State
     exposing
         ( ReplayAnimationState(..)
         , ReplayState
@@ -67,7 +67,7 @@ live board rect.
 clickInstantReplay : ClickInstantReplayInputs -> ( ReplayState, Cmd Msg )
 clickInstantReplay inputs =
     ( { gameState = inputs.initialGameState
-      , eventPlan = State.collapseUndos inputs.actionLog
+      , eventPlan = ActionLog.collapseUndos inputs.actionLog
       , paused = False
       , anim = PreRolling { untilMs = 0 }
       }

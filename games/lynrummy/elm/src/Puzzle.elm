@@ -24,7 +24,7 @@ arrives we'll switch to the full-game seq + payload pattern.
 import Browser
 import Browser.Dom
 import Browser.Events
-import Game.ActionLog exposing (ActionLogEntry)
+import Game.ActionLog as ActionLog exposing (ActionLogEntry)
 import Game.BoardDrag as BoardDrag
 import Game.BoardGesture as BoardGesture
 import Game.BoardView as BoardView
@@ -201,7 +201,7 @@ clickUndo model =
                 model.actionLog ++ [ { action = GameEvent.Undo } ]
 
             effective =
-                collapseUndos nextLog
+                ActionLog.collapseUndos nextLog
         in
         { model
             | actionLog = nextLog
@@ -217,7 +217,7 @@ clickUndo model =
 
 canUndo : Model -> Bool
 canUndo model =
-    not (List.isEmpty (collapseUndos model.actionLog))
+    not (List.isEmpty (ActionLog.collapseUndos model.actionLog))
 
 
 {-| Apply one event to the puzzle's board. The puzzle's
@@ -243,36 +243,6 @@ applyForPuzzle event board =
                     Debug.log "puzzle.applyForPuzzle: unexpected event in log" event
             in
             board
-
-
-{-| Local copy of `Main.State.collapseUndos`, simplified:
-puzzles have no `CompleteTurn` so popping never has to skip
-across a turn boundary. The full game's version is more
-elaborate; the puzzle's is honest about its smaller universe.
--}
-collapseUndos : List ActionLogEntry -> List ActionLogEntry
-collapseUndos entries =
-    List.foldl
-        (\entry stack ->
-            case entry.action of
-                Undo ->
-                    popLast stack
-
-                _ ->
-                    stack ++ [ entry ]
-        )
-        []
-        entries
-
-
-popLast : List a -> List a
-popLast list =
-    case List.reverse list of
-        [] ->
-            list
-
-        _ :: rest ->
-            List.reverse rest
 
 
 boardRectReceived : Result Browser.Dom.Error Browser.Dom.Element -> Model -> Model
