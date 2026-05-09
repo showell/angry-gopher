@@ -1,26 +1,25 @@
 module Puzzle exposing (main)
 
-{-| Puzzle V2 — drag-aware single-puzzle surface.
+{-| Puzzle V3 — drag-aware single-puzzle surface.
 
 Dedicated host: own Msg, own Model, no `Main.*` imports.
-Composes `Game.*` building blocks directly (BoardView,
-BoardGesture, BoardDrag, Drag, Button). Supports board-card
-drag (move + merge + click=split) and Undo.
+Composes `Game.*` building blocks directly. Supports
+board-card drag (move + merge + click=split) and Undo.
 
-Wire: at boot we POST `/gopher/puzzle/sessions` with the
-initial board; the server allocates an id, writes meta.json,
-and returns `{session_id}`. Each subsequent action (board
-drag outcome or Undo) is shipped to
-`/gopher/puzzle/sessions/<id>/actions` as a `{seq, action}`
-envelope — same wire shape as the full game's. The agent
-reads these on disk to study Steve's solutions.
+The HTML page (served by `views/puzzle.go`) bakes both
+`session_id` and `initial_board` into the Elm flags — the
+client starts ready-to-play with no follow-up round trip
+before the first action can ship.
+
+Each subsequent action (board drag outcome or Undo) is shipped
+to `/gopher/puzzle/sessions/<id>/actions` as a `{seq, action}`
+envelope — same wire shape as the full game's. The agent reads
+these on disk to study Steve's solutions.
 
 Undo follows the full-game model: clicking Undo appends a
 `GameEvent.Undo` token to `actionLog`; `collapseUndos` derives
 the effective sequence; the board is recomputed by folding
-`applyForPuzzle` over that sequence from `initialBoard`. The
-local Model stays correct even before the session id arrives;
-the wire layer goes silent until it does.
+`applyForPuzzle` over that sequence from `initialBoard`.
 
 -}
 
@@ -32,21 +31,41 @@ import Game.BoardDrag as BoardDrag
 import Game.BoardGesture as BoardGesture
 import Game.BoardView as BoardView
 import Game.Button as Button
-import Game.CardStack as CardStack exposing (BoardCardState(..), CardStack)
+import Game.CardStack as CardStack exposing (CardStack)
 import Game.Drag exposing (DragState(..))
 import Game.Execute as Execute
 import Game.GameEvent as GameEvent exposing (GameEvent(..))
 import Game.Physics.GestureArbitration as GA
 import Game.Point exposing (Point)
 import Game.PointerInput as PointerInput
-import Game.Rules.Card exposing (CardValue(..), OriginDeck(..), Suit(..))
 import Game.Status as Status exposing (StatusKind(..))
 import Html exposing (Html, div)
 import Html.Attributes exposing (style)
 import Http
-import Json.Decode as Decode exposing (Decoder)
+import Json.Decode as Decode
 import Json.Encode as Encode exposing (Value)
 import Task
+
+
+
+-- FLAGS
+
+
+{-| Server-baked flags. The Go handler picks the puzzle, allocates
+a session, and emits `{session_id, initial_board}` in the page's
+`Elm.Puzzle.init` call. We decode it once at boot.
+-}
+type alias DecodedFlags =
+    { sessionId : Int
+    , initialBoard : List CardStack
+    }
+
+
+flagsDecoder : Decode.Decoder DecodedFlags
+flagsDecoder =
+    Decode.map2 DecodedFlags
+        (Decode.field "session_id" Decode.int)
+        (Decode.field "initial_board" (Decode.list CardStack.cardStackDecoder))
 
 
 
@@ -61,28 +80,36 @@ type alias Model =
     , boardRect : Maybe GA.Rect
     , status : Status.StatusMessage
     , gameId : String
-    , sessionId : Maybe Int
+    , sessionId : Int
     , nextSeq : Int
     }
 
 
-initialModel : Model
-initialModel =
-    { initialBoard = puzzleStacks
-    , board = puzzleStacks
-    , actionLog = []
-    , drag = NotDragging
-    , boardRect = Nothing
-    , status = { text = "Drag stacks to merge or move them.", kind = Status.Inform }
-    , gameId = "puzzle"
-    , sessionId = Nothing
-    , nextSeq = 1
-    }
+init : Decode.Value -> ( Model, Cmd Msg )
+init flagsValue =
+    case Decode.decodeValue flagsDecoder flagsValue of
+        Ok flags ->
+            ( { initialBoard = flags.initialBoard
+              , board = flags.initialBoard
+              , actionLog = []
+              , drag = NotDragging
+              , boardRect = Nothing
+              , status = { text = "Drag stacks to merge or move them.", kind = Inform }
+              , gameId = "puzzle"
+              , sessionId = flags.sessionId
+              , nextSeq = 1
+              }
+            , Cmd.none
+            )
 
-
-init : () -> ( Model, Cmd Msg )
-init () =
-    ( initialModel, fetchNewPuzzleSession initialModel.initialBoard )
+        Err err ->
+            -- Server contract violated: flags didn't carry the
+            -- shape the client requires. Crash loud — this is a
+            -- developer-time problem, not a user-time one.
+            Debug.todo
+                ("Puzzle flags failed to decode: "
+                    ++ Decode.errorToString err
+                )
 
 
 
@@ -95,7 +122,6 @@ type Msg
     | MouseUp Point Float
     | BoardRectReceived (Result Browser.Dom.Error Browser.Dom.Element)
     | ClickUndo
-    | SessionReceived (Result Http.Error Int)
     | ActionSent (Result Http.Error ())
 
 
@@ -120,9 +146,6 @@ update msg model =
 
         ClickUndo ->
             clickUndo model
-
-        SessionReceived result ->
-            ( sessionReceived result model, Cmd.none )
 
         ActionSent (Ok _) ->
             ( model, Cmd.none )
@@ -311,59 +334,17 @@ fetchBoardRect gameId =
         |> Task.attempt BoardRectReceived
 
 
-sessionReceived : Result Http.Error Int -> Model -> Model
-sessionReceived result model =
-    case result of
-        Ok sid ->
-            { model | sessionId = Just sid }
-
-        Err err ->
-            let
-                _ =
-                    Debug.log "puzzle.SessionReceived err" err
-            in
-            { model
-                | status =
-                    { text = "Couldn't allocate puzzle session — see console."
-                    , kind = Scold
-                    }
-            }
-
-
 
 -- WIRE
 
 
-fetchNewPuzzleSession : List CardStack -> Cmd Msg
-fetchNewPuzzleSession initialBoard =
+sendAction : Int -> Value -> Cmd Msg
+sendAction sessionId body =
     Http.post
-        { url = "/gopher/puzzle/sessions"
-        , body =
-            Http.jsonBody
-                (Encode.object
-                    [ ( "initial_board", Encode.list CardStack.encodeCardStack initialBoard ) ]
-                )
-        , expect = Http.expectJson SessionReceived sessionIdDecoder
+        { url = "/gopher/puzzle/sessions/" ++ String.fromInt sessionId ++ "/actions"
+        , body = Http.jsonBody body
+        , expect = Http.expectWhatever ActionSent
         }
-
-
-sendAction : Maybe Int -> Value -> Cmd Msg
-sendAction maybeSessionId body =
-    case maybeSessionId of
-        Just sid ->
-            Http.post
-                { url = "/gopher/puzzle/sessions/" ++ String.fromInt sid ++ "/actions"
-                , body = Http.jsonBody body
-                , expect = Http.expectWhatever ActionSent
-                }
-
-        Nothing ->
-            Cmd.none
-
-
-sessionIdDecoder : Decoder Int
-sessionIdDecoder =
-    Decode.field "session_id" Decode.int
 
 
 
@@ -389,10 +370,6 @@ subscriptions model =
 
 view : Model -> Html Msg
 view model =
-    -- Left sidebar (controls) + board on the right. Laptop has
-    -- more horizontal than vertical room — the sidebar layout
-    -- claws back the vertical space the old top-stacked Undo
-    -- button consumed.
     div
         [ style "padding" "20px"
         , style "font-family" "system-ui, sans-serif"
@@ -422,99 +399,7 @@ undoButton model =
         Button.disabledButton "Undo"
 
 
-
--- THE PUZZLE
---
--- Conformance scenario `puzzle_a3_004_seed4` from
--- games/lynrummy/puzzles/puzzles.json. Three-line solution
--- (peel + yank + push). The trouble is the singleton 7D' and
--- the rainbow stack [2C 3D 4C 5H 6S 7H 8C]; the canonical
--- solver pulls 8C and 6S off the rainbow to form [6S 7D' 8C],
--- then pushes the leftover 7H onto the 7-set.
---
--- This is a placeholder for server-down puzzle data. When we
--- ship the server-side payload (per the puzzle wire commit),
--- this hardcoded board goes away.
-
-
-puzzleStacks : List CardStack
-puzzleStacks =
-    [ stackAt 80 160
-        [ ( Ten, Diamond, DeckOne )
-        , ( Jack, Diamond, DeckOne )
-        , ( Queen, Diamond, DeckOne )
-        , ( King, Diamond, DeckOne )
-        ]
-    , stackAt 200 40
-        [ ( Seven, Spade, DeckOne )
-        , ( Seven, Diamond, DeckOne )
-        , ( Seven, Club, DeckOne )
-        ]
-    , stackAt 260 130
-        [ ( Ace, Club, DeckOne )
-        , ( Ace, Diamond, DeckOne )
-        , ( Ace, Heart, DeckOne )
-        ]
-    , stackAt 392 52
-        [ ( Three, Spade, DeckTwo )
-        , ( Four, Spade, DeckOne )
-        , ( Five, Spade, DeckTwo )
-        ]
-    , stackAt 467 52
-        [ ( Six, Diamond, DeckOne )
-        , ( Seven, Club, DeckTwo )
-        , ( Eight, Heart, DeckOne )
-        ]
-    , stackAt 542 52
-        [ ( Jack, Heart, DeckOne )
-        , ( Queen, Spade, DeckOne )
-        , ( King, Diamond, DeckTwo )
-        ]
-    , stackAt 320 70
-        [ ( Two, Club, DeckOne )
-        , ( Three, Diamond, DeckOne )
-        , ( Four, Club, DeckOne )
-        , ( Five, Heart, DeckOne )
-        , ( Six, Spade, DeckOne )
-        , ( Seven, Heart, DeckOne )
-        , ( Eight, Club, DeckOne )
-        ]
-    , stackAt 20 62
-        [ ( King, Spade, DeckOne )
-        , ( Ace, Spade, DeckOne )
-        , ( Two, Spade, DeckOne )
-        ]
-    , stackAt 140 59
-        [ ( Ace, Heart, DeckTwo )
-        , ( Two, Heart, DeckOne )
-        , ( Three, Heart, DeckOne )
-        ]
-    , stackAt 392 187
-        [ ( Two, Heart, DeckTwo )
-        , ( Three, Spade, DeckOne )
-        , ( Four, Heart, DeckOne )
-        ]
-    , stackAt 152 187
-        [ ( Seven, Diamond, DeckTwo )
-        ]
-    ]
-
-
-stackAt : Int -> Int -> List ( CardValue, Suit, OriginDeck ) -> CardStack
-stackAt top left cards =
-    { boardCards =
-        List.map
-            (\( v, s, d ) ->
-                { card = { value = v, suit = s, originDeck = d }
-                , state = FirmlyOnBoard
-                }
-            )
-            cards
-    , loc = { top = top, left = left }
-    }
-
-
-main : Program () Model Msg
+main : Program Decode.Value Model Msg
 main =
     Browser.element
         { init = init
