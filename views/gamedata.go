@@ -49,10 +49,20 @@ const GameDataRoot = "games/lynrummy/data"
 
 const lynrummyElmRoot = GameDataRoot + "/lynrummy-elm"
 
+// puzzleRoot is the on-disk root for puzzle session data.
+// Parallel namespace to the full-game sessions; the agent
+// reads on-disk solutions to learn from past plays — same
+// motivation as the full-game corpus.
+const puzzleRoot = GameDataRoot + "/puzzle"
+
 // nextSessionIDPath is the full-game counter file. A single
 // file rather than per-table sequences keeps allocation cheap
 // and visible.
 var nextSessionIDPath = filepath.Join(GameDataRoot, "next-session-id.txt")
+
+// nextPuzzleIDPath is the puzzle counter file. Distinct from
+// the full-game counter so the two id streams don't collide.
+var nextPuzzleIDPath = filepath.Join(GameDataRoot, "next-puzzle-id.txt")
 
 // sessionIDMu serializes counter increments. Single-process
 // server; a mutex is sufficient.
@@ -91,6 +101,42 @@ func allocateID(path string) (int64, error) {
 // games/lynrummy/data/next-session-id.txt.
 func AllocateSessionID() (int64, error) {
 	return allocateID(nextSessionIDPath)
+}
+
+// AllocatePuzzleSessionID returns the next sequential puzzle
+// session id, 1-based, persisted via
+// games/lynrummy/data/next-puzzle-id.txt.
+func AllocatePuzzleSessionID() (int64, error) {
+	return allocateID(nextPuzzleIDPath)
+}
+
+// PuzzleSessionDir returns the on-disk directory for a puzzle
+// session.
+func PuzzleSessionDir(sessionID int64) string {
+	return filepath.Join(puzzleRoot, "sessions", strconv.FormatInt(sessionID, 10))
+}
+
+// WritePuzzleSessionFile writes body to <puzzle-session-dir>/<rel>,
+// creating parent dirs as needed.
+func WritePuzzleSessionFile(sessionID int64, rel string, body []byte) error {
+	full := filepath.Join(PuzzleSessionDir(sessionID), rel)
+	if err := os.MkdirAll(filepath.Dir(full), 0755); err != nil {
+		return err
+	}
+	return os.WriteFile(full, body, 0644)
+}
+
+// PuzzleSessionExists reports whether a puzzle session
+// directory is on disk.
+func PuzzleSessionExists(sessionID int64) bool {
+	info, err := os.Stat(PuzzleSessionDir(sessionID))
+	return err == nil && info.IsDir()
+}
+
+// AppendPuzzleSessionLine appends one line to
+// <puzzle-session-dir>/<rel>.
+func AppendPuzzleSessionLine(sessionID int64, rel string, body []byte) error {
+	return AppendJSONLLine(filepath.Join(PuzzleSessionDir(sessionID), rel), body)
 }
 
 // SessionDir returns the on-disk directory for a full-game

@@ -5,19 +5,22 @@ module Puzzle exposing (main)
 Dedicated host: own Msg, own Model, no `Main.*` imports.
 Composes `Game.*` building blocks directly (BoardView,
 BoardGesture, BoardDrag, Drag, Button). Supports board-card
-drag (move + merge + click=split) and Undo. No hint, no
-replay, no agent, no wire — actions mutate local Model only.
+drag (move + merge + click=split) and Undo.
+
+Wire: at boot we POST `/gopher/puzzle/sessions` with the
+initial board; the server allocates an id, writes meta.json,
+and returns `{session_id}`. Each subsequent action (board
+drag outcome or Undo) is shipped to
+`/gopher/puzzle/sessions/<id>/actions` as a `{seq, action}`
+envelope — same wire shape as the full game's. The agent
+reads these on disk to study Steve's solutions.
 
 Undo follows the full-game model: clicking Undo appends a
 `GameEvent.Undo` token to `actionLog`; `collapseUndos` derives
 the effective sequence; the board is recomputed by folding
-`applyForPuzzle` over that sequence from `initialBoard`. This
-records state faithfully — every user action (including
-undos) is in the log.
-
-A puzzle wire is not yet implemented, so `BoardDrag`'s
-`outboundPayload` is ignored and `nextSeq = 0`. When the wire
-arrives we'll switch to the full-game seq + payload pattern.
+`applyForPuzzle` over that sequence from `initialBoard`. The
+local Model stays correct even before the session id arrives;
+the wire layer goes silent until it does.
 
 -}
 
@@ -29,7 +32,7 @@ import Game.BoardDrag as BoardDrag
 import Game.BoardGesture as BoardGesture
 import Game.BoardView as BoardView
 import Game.Button as Button
-import Game.CardStack exposing (BoardCardState(..), CardStack)
+import Game.CardStack as CardStack exposing (BoardCardState(..), CardStack)
 import Game.Drag exposing (DragState(..))
 import Game.Execute as Execute
 import Game.GameEvent as GameEvent exposing (GameEvent(..))
@@ -37,9 +40,12 @@ import Game.Physics.GestureArbitration as GA
 import Game.Point exposing (Point)
 import Game.PointerInput as PointerInput
 import Game.Rules.Card exposing (CardValue(..), OriginDeck(..), Suit(..))
-import Game.Status as Status
+import Game.Status as Status exposing (StatusKind(..))
 import Html exposing (Html, div)
 import Html.Attributes exposing (style)
+import Http
+import Json.Decode as Decode exposing (Decoder)
+import Json.Encode as Encode exposing (Value)
 import Task
 
 
@@ -55,6 +61,8 @@ type alias Model =
     , boardRect : Maybe GA.Rect
     , status : Status.StatusMessage
     , gameId : String
+    , sessionId : Maybe Int
+    , nextSeq : Int
     }
 
 
@@ -67,12 +75,14 @@ initialModel =
     , boardRect = Nothing
     , status = { text = "Drag stacks to merge or move them.", kind = Status.Inform }
     , gameId = "puzzle"
+    , sessionId = Nothing
+    , nextSeq = 1
     }
 
 
 init : () -> ( Model, Cmd Msg )
 init () =
-    ( initialModel, Cmd.none )
+    ( initialModel, fetchNewPuzzleSession initialModel.initialBoard )
 
 
 
@@ -85,6 +95,8 @@ type Msg
     | MouseUp Point Float
     | BoardRectReceived (Result Browser.Dom.Error Browser.Dom.Element)
     | ClickUndo
+    | SessionReceived (Result Http.Error Int)
+    | ActionSent (Result Http.Error ())
 
 
 
@@ -101,13 +113,30 @@ update msg model =
             ( mouseMove pos tMs model, Cmd.none )
 
         MouseUp pos tMs ->
-            ( handleMouseUp pos tMs model, Cmd.none )
+            handleMouseUp pos tMs model
 
         BoardRectReceived result ->
             ( boardRectReceived result model, Cmd.none )
 
         ClickUndo ->
-            ( clickUndo model, Cmd.none )
+            clickUndo model
+
+        SessionReceived result ->
+            ( sessionReceived result model, Cmd.none )
+
+        ActionSent (Ok _) ->
+            ( model, Cmd.none )
+
+        ActionSent (Err err) ->
+            let
+                _ =
+                    Debug.log "puzzle.ActionSent err" err
+            in
+            ( { model
+                | status = { text = "Couldn't save action — see console.", kind = Scold }
+              }
+            , Cmd.none
+            )
 
 
 startBoardCardDrag :
@@ -156,14 +185,14 @@ mouseMove pos tMs model =
             model
 
 
-handleMouseUp : Point -> Float -> Model -> Model
+handleMouseUp : Point -> Float -> Model -> ( Model, Cmd Msg )
 handleMouseUp releasePoint tMs model =
     case model.drag of
         NotDragging ->
-            model
+            ( model, Cmd.none )
 
         DraggingHandCard _ ->
-            { model | drag = NotDragging }
+            ( { model | drag = NotDragging }, Cmd.none )
 
         DraggingBoardCard d ->
             let
@@ -174,26 +203,28 @@ handleMouseUp releasePoint tMs model =
                         { board = model.board
                         , boardRect = model.boardRect
                         , actionLog = model.actionLog
-
-                        -- No puzzle wire yet; the seq + outboundPayload
-                        -- BoardDrag would build are unused. Stub
-                        -- nextSeq, ignore outcome.outboundPayload.
-                        , nextSeq = 0
+                        , nextSeq = model.nextSeq
                         }
             in
-            { model
+            ( { model
                 | drag = NotDragging
                 , board = outcome.board
                 , actionLog = outcome.actionLog
                 , status = outcome.status |> Maybe.withDefault model.status
-            }
+                , nextSeq = outcome.nextSeq
+              }
+            , outcome.outboundPayload
+                |> Maybe.map (sendAction model.sessionId)
+                |> Maybe.withDefault Cmd.none
+            )
 
 
-{-| Append a `Undo` token to the action log and rebuild the
-board by folding effective (post-collapse) events from
-`initialBoard`. No-op when nothing is left to undo.
+{-| Append a `Undo` token to the action log, rebuild the board
+by folding effective (post-collapse) events from `initialBoard`,
+and ship the Undo envelope to the wire. No-op when nothing is
+left to undo.
 -}
-clickUndo : Model -> Model
+clickUndo : Model -> ( Model, Cmd Msg )
 clickUndo model =
     if canUndo model then
         let
@@ -202,17 +233,28 @@ clickUndo model =
 
             effective =
                 ActionLog.collapseUndos nextLog
+
+            payload =
+                Encode.object
+                    [ ( "seq", Encode.int model.nextSeq )
+                    , ( "action"
+                      , Encode.object [ ( "action", Encode.string "undo" ) ]
+                      )
+                    ]
         in
-        { model
+        ( { model
             | actionLog = nextLog
             , board =
                 List.foldl applyForPuzzle
                     model.initialBoard
                     (List.map .action effective)
-        }
+            , nextSeq = model.nextSeq + 1
+          }
+        , sendAction model.sessionId payload
+        )
 
     else
-        model
+        ( model, Cmd.none )
 
 
 canUndo : Model -> Bool
@@ -267,6 +309,61 @@ fetchBoardRect : String -> Cmd Msg
 fetchBoardRect gameId =
     Browser.Dom.getElement (BoardView.boardDomIdFor gameId)
         |> Task.attempt BoardRectReceived
+
+
+sessionReceived : Result Http.Error Int -> Model -> Model
+sessionReceived result model =
+    case result of
+        Ok sid ->
+            { model | sessionId = Just sid }
+
+        Err err ->
+            let
+                _ =
+                    Debug.log "puzzle.SessionReceived err" err
+            in
+            { model
+                | status =
+                    { text = "Couldn't allocate puzzle session — see console."
+                    , kind = Scold
+                    }
+            }
+
+
+
+-- WIRE
+
+
+fetchNewPuzzleSession : List CardStack -> Cmd Msg
+fetchNewPuzzleSession initialBoard =
+    Http.post
+        { url = "/gopher/puzzle/sessions"
+        , body =
+            Http.jsonBody
+                (Encode.object
+                    [ ( "initial_board", Encode.list CardStack.encodeCardStack initialBoard ) ]
+                )
+        , expect = Http.expectJson SessionReceived sessionIdDecoder
+        }
+
+
+sendAction : Maybe Int -> Value -> Cmd Msg
+sendAction maybeSessionId body =
+    case maybeSessionId of
+        Just sid ->
+            Http.post
+                { url = "/gopher/puzzle/sessions/" ++ String.fromInt sid ++ "/actions"
+                , body = Http.jsonBody body
+                , expect = Http.expectWhatever ActionSent
+                }
+
+        Nothing ->
+            Cmd.none
+
+
+sessionIdDecoder : Decoder Int
+sessionIdDecoder =
+    Decode.field "session_id" Decode.int
 
 
 
