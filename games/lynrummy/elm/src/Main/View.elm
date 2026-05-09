@@ -179,11 +179,14 @@ the floater is visible. Other phases (Beat) are no-drag.
 replayDrag : ReplayState -> Drag.DragState
 replayDrag rs =
     case rs.phase of
-        Animating dragState ->
+        AnimatingAction dragState ->
             Drag.DraggingBoardCard dragState.dragInfo
+
+        Starting ->
+            Drag.NotDragging
 
         InBeat _ ->
             Drag.NotDragging
 
-        Starting ->
+        ExecutingAction _ ->
             Drag.NotDragging

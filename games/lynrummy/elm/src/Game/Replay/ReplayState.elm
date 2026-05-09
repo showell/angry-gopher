@@ -27,9 +27,8 @@ type alias ReplayState =
     }
 
 
-{-| Replay's three durable phases. Transient transitions
-(applying an event, signaling completion) happen within
-one tick and don't show up here.
+{-| Replay's four phases. Each tick reads `phase`, does its
+phase-appropriate work, and transitions accordingly.
 
   - `Starting` — pre-arm. The clock hasn't been seen yet;
     the first frame to arrive sets the next beat deadline.
@@ -37,12 +36,20 @@ one tick and don't show up here.
     gives a fresh full beat.
   - `InBeat` — holding between actions. `nextBeatMs` is the
     absolute deadline at which the next entry pops.
-  - `Animating` — a board-drag animation is in flight; the
-    sub-machine in `Game.Replay.BoardDragAnimate` owns its
-    own state and signals completion via its `Outcome` type.
+  - `ExecutingAction` — transient (one tick): a non-animated
+    action has been popped and the next tick will fold it
+    into `gameState` via `Execute.applyEvent`.
+  - `AnimatingAction` — a board-drag animation is in flight;
+    the sub-machine in `Game.Replay.BoardDragAnimate` owns
+    its own state.
+
+The `*Action` suffix marks the two phases that represent a
+popped action being processed; `Starting` and `InBeat` are
+in-between idle phases.
 
 -}
 type Phase
     = Starting
     | InBeat { nextBeatMs : Int }
-    | Animating BoardDragAnimate.State
+    | ExecutingAction ActionLogEntry
+    | AnimatingAction BoardDragAnimate.State
