@@ -27,11 +27,12 @@ func HandleGames(w http.ResponseWriter, r *http.Request) {
 	PageFooter(w)
 }
 
-// renderGamesHero: single-tile hero for LynRummy (the only
-// playable game). Critter studies were ripped 2026-04-20.
+// renderGamesHero: tiles for the LynRummy full game and its
+// daily puzzle. Critter studies were ripped 2026-04-20.
 func renderGamesHero(w http.ResponseWriter) {
 	fmt.Fprint(w, `<style>
-.games-hero { margin:20px 0 28px; }
+.games-hero { margin:20px 0 28px; display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+@media (max-width: 640px) { .games-hero { grid-template-columns:1fr; } }
 .games-tile { border:1px solid #ccc; border-radius:8px; padding:22px; background:#fcfcf8;
               display:flex; flex-direction:column; }
 .games-tile h2 { margin:0 0 6px; font-size:22px; color:#000080; }
@@ -57,6 +58,13 @@ func renderGamesHero(w http.ResponseWriter) {
     <p>Two-player rummy with a real referee. Drag cards from your hand to the board, build runs and sets, hit Complete Turn when you're happy with your play.</p>
     <div class="cta">
       <a class="play-btn" href="/gopher/lynrummy-elm/">Play LynRummy →</a>
+    </div>
+  </div>
+  <div class="games-tile">
+    <h2>Puzzle</h2>
+    <p>A single board, mid-game. Drag stacks to merge or split your way to a clean meld layout. Solo, no opponent — undo is free, and Replay walks back through your moves.</p>
+    <div class="cta">
+      <a class="play-btn" href="/gopher/puzzle/">Solve the puzzle →</a>
     </div>
   </div>
 </div>`)
