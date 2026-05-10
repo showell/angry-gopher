@@ -24,11 +24,9 @@ import Browser.Events
 import Game.ActionLog as ActionLog
 import Game.BoardDrag as BoardDrag
 import Game.BoardGesture as BoardGesture
-import Game.BoardView as BoardView
 import Game.Drag exposing (DragState(..))
 import Game.Engine as Engine
 import Game.Hand exposing (activeHand)
-import Game.HandLayout as HandLayout
 import Game.TurnControl as TurnControl
 import Game.HandDrag as HandDrag
 import Game.HandGesture as HandGesture
@@ -38,7 +36,6 @@ import Game.Random as Random
 import Game.Replay.Animate as Animate
 import Game.Replay.HandDragAnimate as HandDragAnimate
 import Game.Replay.ReplayState exposing (Phase(..), ReplayState)
-import Game.Rules.Card as Card
 import Html exposing (Html)
 import Http
 import Json.Encode as Encode
@@ -231,16 +228,9 @@ update msg model =
                     withNoOutput ( model, Cmd.none )
 
                 Just rs ->
-                    case Animate.tick (Time.posixToMillis nowPosix) rs of
-                        Animate.StillReplaying nextRs ->
-                            withNoOutput
-                                ( { model | replayState = Just nextRs }, Cmd.none )
-
-                        Animate.NeedHandCardRect nextRs card ->
-                            withNoOutput
-                                ( { model | replayState = Just nextRs }
-                                , fetchHandCardRectCmd card model.gameId
-                                )
+                    case Animate.tick (animateConfig model.gameId) (Time.posixToMillis nowPosix) rs of
+                        Animate.StillReplaying nextRs cmd ->
+                            withNoOutput ( { model | replayState = Just nextRs }, cmd )
 
                         Animate.Completed ->
                             withNoOutput ( model, dispatchSelf ReplayCompleted )
@@ -307,20 +297,17 @@ dispatchSelf msg =
     Task.succeed () |> Task.perform (\_ -> msg)
 
 
-{-| Measure the hand card's live rect AND the board's live
-rect AND grab the current time, all on the same Task tick.
-Bundling the two element queries ensures a page scroll
-between replay actions doesn't desync hand origin and board
-destination. Result lands in `HandCardRectReceived`.
+{-| Wire the host's `HandCardRectReceived` Msg + `gameId`
+into the `HandDragAnimate.Config` shape that `Animate.tick`
+forwards down to the hand sub-machine. The sub-machine
+builds the actual measurement Cmd; we just supply the bits
+it needs to address the host.
 -}
-fetchHandCardRectCmd : Card.Card -> String -> Cmd Msg
-fetchHandCardRectCmd card gameId =
-    Task.attempt HandCardRectReceived
-        (Task.map3 (\h b t -> ( h, b, t ))
-            (Browser.Dom.getElement (HandLayout.handCardDomId card))
-            (Browser.Dom.getElement (BoardView.boardDomIdFor gameId))
-            Time.now
-        )
+animateConfig : String -> HandDragAnimate.Config Msg
+animateConfig gameId =
+    { measureMsg = HandCardRectReceived
+    , gameId = gameId
+    }
 
 
 {-| Feed a freshly-resolved DOM measurement into the hand

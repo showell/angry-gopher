@@ -5,8 +5,11 @@ module Game.Replay.Animate exposing
     , togglePause
     )
 
-{-| The Instant Replay state machine. Pure data transforms
-on `ReplayState`; no Msg types, no Cmd, no Model.
+{-| The Instant Replay state machine. Mostly pure data
+transforms on `ReplayState`; the only side-effect surface
+is the measurement Cmd produced by `HandDragAnimate.step`,
+which `tick` forwards back to the host alongside its
+state result.
 
 Three operations the host (`Main.Play`) plumbs through:
 
@@ -16,21 +19,14 @@ Three operations the host (`Main.Play`) plumbs through:
   - `togglePause rs` — flip `paused`. When the replay was
     InBeat, transition to `Starting` so resumption gets a
     fresh full beat from the next frame.
-  - `tick nowMs rs` — one animation-frame step. Returns
-    `StillReplaying`, `NeedHandCardRect` (host fires a DOM
-    query), or `Completed`.
+  - `tick config nowMs rs` — one animation-frame step.
+    Returns `StillReplaying nextRs cmd` (with `Cmd.none`
+    most ticks; the measurement Cmd on the first frame
+    after a hand action pops) or `Completed`.
 
 The host feeds DOM measurements back via a small phase-shape
 helper of its own (`Main.Play.installHandMeasurement`) that
-calls into `HandDragAnimate.measurementReceived` — that path
-is shape-work, not engine logic, so it doesn't live here.
-
-`tick` is the workhorse; the only function it delegates to
-inside `Animate` is `startNextAction`, which decides what
-phase a popped action becomes (real computation). Real
-handoffs outside `Animate` are to `BoardDragAnimate` /
-`HandDragAnimate` (path interpolation + measurement) and
-`Execute.applyEvent` (the apply layer).
+calls into `HandDragAnimate.measurementReceived`.
 
 -}
 
@@ -41,7 +37,6 @@ import Game.GameEvent as GameEvent
 import Game.Replay.BoardDragAnimate as BoardDragAnimate
 import Game.Replay.HandDragAnimate as HandDragAnimate
 import Game.Replay.ReplayState exposing (Phase(..), ReplayState)
-import Game.Rules.Card exposing (Card)
 
 
 {-| Per-step beat in milliseconds. The user wants enough time
@@ -53,9 +48,8 @@ beatMs =
     1500
 
 
-type TickResult
-    = StillReplaying ReplayState
-    | NeedHandCardRect ReplayState Card
+type TickResult msg
+    = StillReplaying ReplayState (Cmd msg)
     | Completed
 
 
@@ -87,15 +81,15 @@ togglePause rs =
     { rs | paused = not rs.paused, phase = nextPhase }
 
 
-tick : Int -> ReplayState -> TickResult
-tick nowMs rs =
+tick : HandDragAnimate.Config msg -> Int -> ReplayState -> TickResult msg
+tick config nowMs rs =
     case rs.phase of
         Starting ->
-            StillReplaying { rs | phase = InBeat { nextBeatMs = nowMs + beatMs } }
+            StillReplaying { rs | phase = InBeat { nextBeatMs = nowMs + beatMs } } Cmd.none
 
         InBeat { nextBeatMs } ->
             if nowMs < nextBeatMs then
-                StillReplaying rs
+                StillReplaying rs Cmd.none
 
             else
                 case rs.queue of
@@ -113,28 +107,26 @@ tick nowMs rs =
                                 , gameState = dispatched.gameState
                                 , phase = dispatched.phase
                             }
+                            Cmd.none
 
         ActionCompleted ->
-            StillReplaying { rs | phase = InBeat { nextBeatMs = nowMs + beatMs } }
+            StillReplaying { rs | phase = InBeat { nextBeatMs = nowMs + beatMs } } Cmd.none
 
         AnimatingBoardAction dragState ->
             case BoardDragAnimate.step nowMs rs.gameState dragState of
                 BoardDragAnimate.InProgress nextDragState ->
-                    StillReplaying { rs | phase = AnimatingBoardAction nextDragState }
+                    StillReplaying { rs | phase = AnimatingBoardAction nextDragState } Cmd.none
 
                 BoardDragAnimate.Done { newGameState } ->
-                    StillReplaying { rs | gameState = newGameState, phase = ActionCompleted }
+                    StillReplaying { rs | gameState = newGameState, phase = ActionCompleted } Cmd.none
 
         AnimatingHandAction handState ->
-            case HandDragAnimate.step nowMs rs.gameState handState of
-                HandDragAnimate.InProgress nextHandState ->
-                    StillReplaying { rs | phase = AnimatingHandAction nextHandState }
+            case HandDragAnimate.step config nowMs rs.gameState handState of
+                ( HandDragAnimate.InProgress nextHandState, cmd ) ->
+                    StillReplaying { rs | phase = AnimatingHandAction nextHandState } cmd
 
-                HandDragAnimate.NeedsMeasurement nextHandState card ->
-                    NeedHandCardRect { rs | phase = AnimatingHandAction nextHandState } card
-
-                HandDragAnimate.Done { newGameState } ->
-                    StillReplaying { rs | gameState = newGameState, phase = ActionCompleted }
+                ( HandDragAnimate.Done { newGameState }, _ ) ->
+                    StillReplaying { rs | gameState = newGameState, phase = ActionCompleted } Cmd.none
 
 
 {-| Decide what to do for the popped `entry`: either start

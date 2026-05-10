@@ -1,5 +1,6 @@
 module Game.Replay.HandDragAnimate exposing
-    ( Outcome(..)
+    ( Config
+    , Outcome(..)
     , State
     , dragInfo
     , measurementReceived
@@ -12,38 +13,49 @@ module Game.Replay.HandDragAnimate exposing
 Hand-drag animation has three stages, all owned here:
 
   - **NotYetMeasured** — just popped off the queue. The
-    next `step` emits `NeedsMeasurement` (transitioning
-    self to `AwaitingMeasurement`) so the host fires its
-    DOM query exactly once.
+    next `step` produces the DOM-measurement Cmd (using the
+    host-supplied `Config`) and advances to
+    `AwaitingMeasurement` so subsequent ticks don't refire.
   - **AwaitingMeasurement** — request is in flight. `step`
     is idle here. `measurementReceived` consumes the
     response and transitions to `InFlight`.
   - **InFlight** — the path is being interpolated; each
     `step` advances the floater. `Done` fires when the
-    path's duration has elapsed.
+    path's duration has elapsed and folds `pendingAction`
+    into the supplied `gameState`.
 
 Same shape for `MergeHand` and `PlaceHand` — the merge-vs-
-place distinction matters at landing time (handled by
-`Execute.applyEvent` in the outer machine) and at
-destination computation (a stack-side adjacency vs. an
-explicit board location, dispatched inside
-`measurementReceived`); the in-flight visual is identical.
+place distinction matters at landing time (handled inside
+`step` via `Execute.applyEvent`) and at destination
+computation (a stack-side adjacency vs. an explicit board
+location, dispatched inside `measurementReceived`); the
+in-flight visual is identical.
+
+The host passes a `Config msg` carrying its `gameId` (for
+the board's DOM id) and the `Msg` constructor that should
+fire when the measurement Task resolves. The Cmd is built
+here so callers don't have to translate "I need
+measurement" signals into Cmds themselves.
 
 -}
 
 import Browser.Dom
 import Game.ActionLog exposing (ActionLogEntry)
 import Game.BoardActions as BoardActions
+import Game.BoardView as BoardView
 import Game.CardStack as CardStack
 import Game.Execute as Execute
 import Game.Game exposing (GameState)
 import Game.GameEvent as GameEvent exposing (GameEvent)
 import Game.HandDragTypes exposing (HandCardDragInfo)
+import Game.HandLayout as HandLayout
 import Game.Physics.BoardGeometry as BG
 import Game.Physics.GestureArbitration as GA
 import Game.Point exposing (Point)
 import Game.Rules.Card exposing (Card)
 import Game.TimeLoc exposing (TimeLoc)
+import Task
+import Time
 
 
 type State
@@ -62,8 +74,13 @@ type alias InFlightData =
 
 type Outcome
     = InProgress State
-    | NeedsMeasurement State Card
     | Done { newGameState : GameState }
+
+
+type alias Config msg =
+    { measureMsg : Result Browser.Dom.Error ( Browser.Dom.Element, Browser.Dom.Element, Time.Posix ) -> msg
+    , gameId : String
+    }
 
 
 start : ActionLogEntry -> State
@@ -119,18 +136,20 @@ dragInfo state =
             Nothing
 
 
-step : Int -> GameState -> State -> Outcome
-step nowMs gameState state =
+step : Config msg -> Int -> GameState -> State -> ( Outcome, Cmd msg )
+step config nowMs gameState state =
     case state of
         NotYetMeasured entry ->
-            -- First tick after pop. Emit the measurement
-            -- request exactly once and advance the substate
-            -- so subsequent ticks don't refire it.
-            NeedsMeasurement (AwaitingMeasurement entry) (handCardOf entry.action)
+            -- First tick after pop. Build the measurement
+            -- Cmd and advance the substate so subsequent
+            -- ticks see AwaitingMeasurement and idle out.
+            ( InProgress (AwaitingMeasurement entry)
+            , measurementCmd config (handCardOf entry.action)
+            )
 
         AwaitingMeasurement _ ->
             -- Idle; the host's measurement Cmd is in flight.
-            InProgress state
+            ( InProgress state, Cmd.none )
 
         InFlight d ->
             let
@@ -138,13 +157,32 @@ step nowMs gameState state =
                     toFloat (nowMs - d.startMs)
             in
             if elapsedMs >= duration d.path then
-                Done { newGameState = Execute.applyEvent d.pendingAction gameState }
+                ( Done { newGameState = Execute.applyEvent d.pendingAction gameState }
+                , Cmd.none
+                )
 
             else
-                InProgress
+                ( InProgress
                     (InFlight
                         { d | dragInfo_ = setFloater (interp d.path elapsedMs) d.dragInfo_ }
                     )
+                , Cmd.none
+                )
+
+
+{-| Bundle the hand card's live rect, the board's live rect,
+and the current time into one Task. Same-tick fetching keeps
+hand origin and board destination from desyncing across a
+page scroll between actions.
+-}
+measurementCmd : Config msg -> Card -> Cmd msg
+measurementCmd config card =
+    Task.attempt config.measureMsg
+        (Task.map3 (\h b t -> ( h, b, t ))
+            (Browser.Dom.getElement (HandLayout.handCardDomId card))
+            (Browser.Dom.getElement (BoardView.boardDomIdFor config.gameId))
+            Time.now
+        )
 
 
 handCardOf : GameEvent -> Card
