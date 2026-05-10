@@ -3,21 +3,21 @@ module Game.Replay.HandDragAnimate exposing
     , State
     , dragInfo
     , measurementReceived
-    , measureRequest
     , start
     , step
     )
 
 {-| The hand-drag sub-state-machine for Instant Replay.
 
-Hand-drag animation has two stages, both owned here:
+Hand-drag animation has three stages, all owned here:
 
-  - **AwaitingMeasurement** — the floater can't render until
-    we know the hand card's live viewport position and the
-    board's live offset. The state holds the popped entry
-    and waits. `measureRequest` exposes which card the host
-    should DOM-measure; `measurementReceived` transitions
-    to the in-flight stage with a synthesized linear path.
+  - **NotYetMeasured** — just popped off the queue. The
+    next `step` emits `NeedsMeasurement` (transitioning
+    self to `AwaitingMeasurement`) so the host fires its
+    DOM query exactly once.
+  - **AwaitingMeasurement** — request is in flight. `step`
+    is idle here. `measurementReceived` consumes the
+    response and transitions to `InFlight`.
   - **InFlight** — the path is being interpolated; each
     `step` advances the floater. `Done` fires when the
     path's duration has elapsed.
@@ -45,7 +45,8 @@ import Game.TimeLoc exposing (TimeLoc)
 
 
 type State
-    = AwaitingMeasurement ActionLogEntry
+    = NotYetMeasured ActionLogEntry
+    | AwaitingMeasurement ActionLogEntry
     | InFlight InFlightData
 
 
@@ -59,36 +60,13 @@ type alias InFlightData =
 
 type Outcome
     = InProgress State
+    | NeedsMeasurement State Card
     | Done { pendingAction : GameEvent }
 
 
 start : ActionLogEntry -> State
 start entry =
-    AwaitingMeasurement entry
-
-
-{-| The hand card the host should DOM-measure, or Nothing
-once the animation has progressed past the measurement
-stage. The outer machine emits its `NeedHandCardRect` signal
-exactly when this returns `Just`.
--}
-measureRequest : State -> Maybe Card
-measureRequest state =
-    case state of
-        AwaitingMeasurement entry ->
-            case entry.action of
-                GameEvent.MergeHand p ->
-                    Just p.handCard
-
-                GameEvent.PlaceHand p ->
-                    Just p.handCard
-
-                _ ->
-                    Debug.todo
-                        "HandDragAnimate.measureRequest: AwaitingMeasurement entry must carry a hand action"
-
-        InFlight _ ->
-            Nothing
+    NotYetMeasured entry
 
 
 {-| Host calls this when the bundled DOM query resolves.
@@ -118,29 +96,36 @@ measurementReceived nowMs handElement boardElement state =
             in
             InFlight (buildInFlight entry origin boardRect nowMs)
 
-        InFlight _ ->
-            -- Late result (e.g., second resolution after a
-            -- pause-toggle). Drop it.
+        _ ->
+            -- Late result (e.g., resolution after a
+            -- pause-toggle drove us past the awaiting
+            -- stage). Drop it.
             state
 
 
 {-| Per-frame access to the floater data the View renders.
-`Nothing` while AwaitingMeasurement (the floater hasn't
-appeared yet); `Just info` once InFlight.
+`Nothing` while pre-flight (no floater yet); `Just info`
+once InFlight.
 -}
 dragInfo : State -> Maybe HandCardDragInfo
 dragInfo state =
     case state of
-        AwaitingMeasurement _ ->
-            Nothing
-
         InFlight d ->
             Just d.dragInfo_
+
+        _ ->
+            Nothing
 
 
 step : Int -> State -> Outcome
 step nowMs state =
     case state of
+        NotYetMeasured entry ->
+            -- First tick after pop. Emit the measurement
+            -- request exactly once and advance the substate
+            -- so subsequent ticks don't refire it.
+            NeedsMeasurement (AwaitingMeasurement entry) (handCardOf entry.action)
+
         AwaitingMeasurement _ ->
             -- Idle; the host's measurement Cmd is in flight.
             InProgress state
@@ -158,6 +143,20 @@ step nowMs state =
                     (InFlight
                         { d | dragInfo_ = setFloater (interp d.path elapsedMs) d.dragInfo_ }
                     )
+
+
+handCardOf : GameEvent -> Card
+handCardOf action =
+    case action of
+        GameEvent.MergeHand p ->
+            p.handCard
+
+        GameEvent.PlaceHand p ->
+            p.handCard
+
+        _ ->
+            Debug.todo
+                "HandDragAnimate.handCardOf: NotYetMeasured entry must carry a hand action"
 
 
 

@@ -107,19 +107,8 @@ tick nowMs rs =
                         Completed
 
                     entry :: rest ->
-                        let
-                            ( newPhase, maybeMeasure ) =
-                                startNextAction nowMs entry
-
-                            newRs =
-                                { rs | queue = rest, phase = newPhase }
-                        in
-                        case maybeMeasure of
-                            Just card ->
-                                NeedHandCardRect newRs card
-
-                            Nothing ->
-                                StillReplaying newRs
+                        StillReplaying
+                            { rs | queue = rest, phase = startNextAction nowMs entry }
 
         ExecutingAction entry ->
             StillReplaying
@@ -145,6 +134,9 @@ tick nowMs rs =
                 HandDragAnimate.InProgress nextHandState ->
                     StillReplaying { rs | phase = AnimatingHandAction nextHandState }
 
+                HandDragAnimate.NeedsMeasurement nextHandState card ->
+                    NeedHandCardRect { rs | phase = AnimatingHandAction nextHandState } card
+
                 HandDragAnimate.Done { pendingAction } ->
                     StillReplaying
                         { rs
@@ -154,23 +146,23 @@ tick nowMs rs =
 
 
 {-| Decide what phase to enter when popping `entry` off the
-queue, plus optionally name a hand card the host should
-DOM-measure. Board-drag events open `AnimatingBoardAction`
-immediately. Hand-drag events open `AnimatingHandAction`
-with `HandDragAnimate`'s AwaitingMeasurement substate; the
-sub-machine answers `measureRequest` so the host knows
-which card to query. Everything else slates `ExecutingAction`
-for the next tick.
+queue. Board-drag events open `AnimatingBoardAction` with a
+fully-built sub-state. Hand-drag events open
+`AnimatingHandAction` with `HandDragAnimate`'s `NotYetMeasured`
+substate — the sub-machine emits the measurement request on
+its next `step`, so this function never sees a `Card` and
+the return type stays a single `Phase`. Everything else
+slates `ExecutingAction` for the next tick.
 
 `Undo` is unreachable — `collapseUndos` strips them at the
 top of replay.
 
 -}
-startNextAction : Int -> ActionLogEntry -> ( Phase, Maybe Card )
+startNextAction : Int -> ActionLogEntry -> Phase
 startNextAction nowMs entry =
     case entry.action of
         GameEvent.MergeStack p ->
-            ( AnimatingBoardAction
+            AnimatingBoardAction
                 (BoardDragAnimate.start
                     { sourceStack = p.source
                     , path = p.boardPath
@@ -178,11 +170,9 @@ startNextAction nowMs entry =
                     , pendingAction = entry.action
                     }
                 )
-            , Nothing
-            )
 
         GameEvent.MoveStack p ->
-            ( AnimatingBoardAction
+            AnimatingBoardAction
                 (BoardDragAnimate.start
                     { sourceStack = p.stack
                     , path = p.boardPath
@@ -190,28 +180,18 @@ startNextAction nowMs entry =
                     , pendingAction = entry.action
                     }
                 )
-            , Nothing
-            )
 
         GameEvent.MergeHand _ ->
-            let
-                handState =
-                    HandDragAnimate.start entry
-            in
-            ( AnimatingHandAction handState, HandDragAnimate.measureRequest handState )
+            AnimatingHandAction (HandDragAnimate.start entry)
 
         GameEvent.PlaceHand _ ->
-            let
-                handState =
-                    HandDragAnimate.start entry
-            in
-            ( AnimatingHandAction handState, HandDragAnimate.measureRequest handState )
+            AnimatingHandAction (HandDragAnimate.start entry)
 
         GameEvent.Split _ ->
-            ( ExecutingAction entry, Nothing )
+            ExecutingAction entry
 
         GameEvent.CompleteTurn ->
-            ( ExecutingAction entry, Nothing )
+            ExecutingAction entry
 
         GameEvent.Undo ->
             Debug.todo
