@@ -32,7 +32,7 @@ import Game.BoardGesture as BoardGesture
 import Game.BoardView as BoardView
 import Game.Button as Button
 import Game.CardStack as CardStack exposing (CardStack)
-import Game.Drag exposing (DragState(..))
+import Game.Drag as Drag exposing (DragState(..))
 import Game.Execute as Execute
 import Game.GameEvent as GameEvent exposing (GameEvent(..))
 import Game.Physics.GestureArbitration as GA
@@ -44,7 +44,9 @@ import Html.Attributes exposing (style)
 import Http
 import Json.Decode as Decode
 import Json.Encode as Encode exposing (Value)
+import Puzzle.Replay as Replay
 import Task
+import Time
 
 
 
@@ -82,6 +84,7 @@ type alias Model =
     , gameId : String
     , sessionId : Int
     , nextSeq : Int
+    , replayState : Maybe Replay.ReplayState
     }
 
 
@@ -98,6 +101,7 @@ init flagsValue =
               , gameId = "puzzle"
               , sessionId = flags.sessionId
               , nextSeq = 1
+              , replayState = Nothing
               }
             , Cmd.none
             )
@@ -122,6 +126,10 @@ type Msg
     | MouseUp Point Float
     | BoardRectReceived (Result Browser.Dom.Error Browser.Dom.Element)
     | ClickUndo
+    | ClickInstantReplay
+    | ClickReplayPauseToggle
+    | ReplayTick Time.Posix
+    | ReplayCompleted
     | ActionSent (Result Http.Error ())
 
 
@@ -146,6 +154,46 @@ update msg model =
 
         ClickUndo ->
             clickUndo model
+
+        ClickInstantReplay ->
+            ( { model
+                | replayState =
+                    Just
+                        (Replay.start
+                            (ActionLog.collapseUndos model.actionLog)
+                            model.initialBoard
+                        )
+                , drag = NotDragging
+                , status = { text = "Replaying…", kind = Inform }
+              }
+            , Cmd.none
+            )
+
+        ClickReplayPauseToggle ->
+            ( { model | replayState = Maybe.map Replay.togglePause model.replayState }
+            , Cmd.none
+            )
+
+        ReplayTick nowPosix ->
+            case model.replayState of
+                Nothing ->
+                    ( model, Cmd.none )
+
+                Just rs ->
+                    case Replay.tick (Time.posixToMillis nowPosix) rs of
+                        Replay.StillReplaying nextRs ->
+                            ( { model | replayState = Just nextRs }, Cmd.none )
+
+                        Replay.Completed ->
+                            ( model, dispatchSelf ReplayCompleted )
+
+        ReplayCompleted ->
+            ( { model
+                | replayState = Nothing
+                , status = { text = "Replay completed! Continue playing.", kind = Inform }
+              }
+            , Cmd.none
+            )
 
         ActionSent (Ok _) ->
             ( model, Cmd.none )
@@ -353,6 +401,14 @@ sendAction sessionId body =
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
+    Sub.batch
+        [ dragSubscriptions model
+        , replaySubscriptions model
+        ]
+
+
+dragSubscriptions : Model -> Sub Msg
+dragSubscriptions model =
     case model.drag of
         NotDragging ->
             Sub.none
@@ -364,12 +420,40 @@ subscriptions model =
                 ]
 
 
+replaySubscriptions : Model -> Sub Msg
+replaySubscriptions model =
+    case model.replayState of
+        Just rs ->
+            if rs.paused then
+                Sub.none
+
+            else
+                Browser.Events.onAnimationFrame ReplayTick
+
+        Nothing ->
+            Sub.none
+
+
+dispatchSelf : Msg -> Cmd Msg
+dispatchSelf msg =
+    Task.succeed () |> Task.perform (\_ -> msg)
+
+
 
 -- VIEW
 
 
 view : Model -> Html Msg
 view model =
+    let
+        ( board, drag ) =
+            case model.replayState of
+                Just rs ->
+                    ( rs.board, replayDrag rs )
+
+                Nothing ->
+                    ( model.board, model.drag )
+    in
     div
         [ style "padding" "20px"
         , style "font-family" "system-ui, sans-serif"
@@ -378,25 +462,66 @@ view model =
         , style "align-items" "flex-start"
         ]
         [ div
-            [ style "min-width" "120px" ]
-            [ undoButton model ]
+            [ style "min-width" "120px"
+            , style "display" "flex"
+            , style "flex-direction" "column"
+            , style "gap" "8px"
+            ]
+            [ undoButton model
+            , replayButton model
+            ]
         , BoardView.boardColumn
-            { board = model.board
+            { board = board
             , boardRect = model.boardRect
-            , drag = model.drag
+            , drag = drag
             , gameId = model.gameId
             , cardMouseDown = PointerInput.cardMouseDown MouseDownOnBoardCard
             }
         ]
 
 
+{-| Drag the View should render during a replay. Animating
+phases surface the sub-machine's dragInfo; idle phases show
+no floater.
+-}
+replayDrag : Replay.ReplayState -> Drag.DragState
+replayDrag rs =
+    case rs.phase of
+        Replay.AnimatingBoardAction state ->
+            Drag.DraggingBoardCard state.dragInfo
+
+        _ ->
+            Drag.NotDragging
+
+
 undoButton : Model -> Html Msg
 undoButton model =
-    if canUndo model then
+    if model.replayState == Nothing && canUndo model then
         Button.button "Undo" ClickUndo
 
     else
         Button.disabledButton "Undo"
+
+
+replayButton : Model -> Html Msg
+replayButton model =
+    case model.replayState of
+        Just rs ->
+            if rs.paused then
+                Button.button "Resume" ClickReplayPauseToggle
+
+            else
+                Button.button "Pause" ClickReplayPauseToggle
+
+        Nothing ->
+            -- Compare against the post-collapse log so a fully
+            -- undone session reports "nothing to replay" rather
+            -- than firing an immediate Completed.
+            if List.isEmpty (ActionLog.collapseUndos model.actionLog) then
+                Button.disabledButton "Replay"
+
+            else
+                Button.button "Replay" ClickInstantReplay
 
 
 main : Program Decode.Value Model Msg
