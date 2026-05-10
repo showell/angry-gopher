@@ -36,6 +36,8 @@ import Game.Dealer as Dealer
 import Game.Game as Game
 import Game.Random as Random
 import Game.Replay.Animate as Animate
+import Game.Replay.HandDragAnimate as HandDragAnimate
+import Game.Replay.ReplayState exposing (Phase(..), ReplayState)
 import Game.Rules.Card as Card
 import Html exposing (Html)
 import Http
@@ -257,7 +259,7 @@ update msg model =
                 ( { model
                     | replayState =
                         Maybe.map
-                            (Animate.handCardRectReceived
+                            (installHandMeasurement
                                 (Time.posixToMillis posix)
                                 handElement
                                 boardElement
@@ -319,6 +321,39 @@ fetchHandCardRectCmd card gameId =
             (Browser.Dom.getElement (BoardView.boardDomIdFor gameId))
             Time.now
         )
+
+
+{-| Feed a freshly-resolved DOM measurement into the hand
+sub-machine if the replay is currently waiting for one.
+Late results (replay completed, pause-toggled away) are
+dropped. The phase-shape work lives in the host because the
+host is the one routing the measurement Msg back; pushing
+this into `Animate` would add an Animate function that does
+nothing but re-wrap a `HandDragAnimate.measurementReceived`
+call.
+-}
+installHandMeasurement :
+    Int
+    -> Browser.Dom.Element
+    -> Browser.Dom.Element
+    -> ReplayState
+    -> ReplayState
+installHandMeasurement nowMs handElement boardElement rs =
+    case rs.phase of
+        AnimatingHandAction handState ->
+            { rs
+                | phase =
+                    AnimatingHandAction
+                        (HandDragAnimate.measurementReceived
+                            nowMs
+                            handElement
+                            boardElement
+                            handState
+                        )
+            }
+
+        _ ->
+            rs
 
 
 {-| Shared shape for the four `Result.Err` branches in `update`

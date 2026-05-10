@@ -1,6 +1,5 @@
 module Game.Replay.Animate exposing
     ( TickResult(..)
-    , handCardRectReceived
     , start
     , tick
     , togglePause
@@ -9,7 +8,7 @@ module Game.Replay.Animate exposing
 {-| The Instant Replay state machine. Pure data transforms
 on `ReplayState`; no Msg types, no Cmd, no Model.
 
-Four operations the host (`Main.Play`) plumbs through:
+Three operations the host (`Main.Play`) plumbs through:
 
   - `start initialEntries initialGameState` — open a fresh
     replay. Caller passes an already-collapsed queue
@@ -20,11 +19,11 @@ Four operations the host (`Main.Play`) plumbs through:
   - `tick nowMs rs` — one animation-frame step. Returns
     `StillReplaying`, `NeedHandCardRect` (host fires a DOM
     query), or `Completed`.
-  - `handCardRectReceived nowMs handElement boardElement rs`
-    — host calls this when its DOM query resolves; we
-    delegate into `HandDragAnimate.measurementReceived` to
-    transition the hand sub-machine from awaiting to
-    in-flight.
+
+The host feeds DOM measurements back via a small phase-shape
+helper of its own (`Main.Play.installHandMeasurement`) that
+calls into `HandDragAnimate.measurementReceived` — that path
+is shape-work, not engine logic, so it doesn't live here.
 
 `tick` is the workhorse; the only function it delegates to
 inside `Animate` is `startNextAction`, which decides what
@@ -35,7 +34,6 @@ handoffs outside `Animate` are to `BoardDragAnimate` /
 
 -}
 
-import Browser.Dom
 import Game.ActionLog exposing (ActionLogEntry)
 import Game.Execute as Execute
 import Game.Game exposing (GameState)
@@ -218,37 +216,3 @@ startNextAction nowMs entry =
         GameEvent.Undo ->
             Debug.todo
                 "Animate.startNextAction: Undo reached the queue (collapseUndos should have stripped it)"
-
-
-{-| Host calls this when its bundled DOM query (hand card +
-board element + time) resolves. We thread the elements down
-into the `HandDragAnimate` sub-machine, which extracts both
-viewport coords, builds the linear path, and transitions
-itself from AwaitingMeasurement to InFlight. Animate just
-routes — the geometry math lives one level down.
--}
-handCardRectReceived :
-    Int
-    -> Browser.Dom.Element
-    -> Browser.Dom.Element
-    -> ReplayState
-    -> ReplayState
-handCardRectReceived nowMs handElement boardElement rs =
-    case rs.phase of
-        AnimatingHandAction handState ->
-            { rs
-                | phase =
-                    AnimatingHandAction
-                        (HandDragAnimate.measurementReceived
-                            nowMs
-                            handElement
-                            boardElement
-                            handState
-                        )
-            }
-
-        _ ->
-            -- Wrong phase (rect arrived after we transitioned
-            -- away — pause-toggled, replay completed, etc.).
-            -- Drop the late result.
-            rs
