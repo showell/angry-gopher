@@ -37,21 +37,23 @@ phase-appropriate work, and transitions accordingly.
     gives a fresh full beat.
   - `InBeat` — holding between actions. `nextBeatMs` is the
     absolute deadline at which the next entry pops.
-  - `ExecutingAction` — transient (one tick): a non-animated
-    action has been popped and the next tick will fold it
-    into `gameState` via `Execute.applyEvent`.
-  - `AnimatingBoardAction` — a board-drag animation is in flight.
+  - `ActionCompleted` — transient (one tick): an action has
+    just been applied (either inline by `startNextAction`
+    for instant-apply events, or by a sub-machine's `Done`
+    outcome for animated events). The next tick schedules
+    the inter-action beat and transitions to `InBeat`.
+  - `AnimatingBoardAction` — a board-drag animation is in
+    flight. The sub-machine applies its event and signals
+    `Done` when the path completes.
   - `AnimatingHandAction` — a hand-drag animation is in
-    flight. Its sub-state owns the AwaitingMeasurement vs
-    InFlight distinction; the outer phase doesn't split.
-
-The `*Action` suffix marks the phases that represent a
-popped action being processed; the others are idle / waiting.
+    flight. Same shape as the board side; the sub-state
+    owns the NotYetMeasured / AwaitingMeasurement / InFlight
+    distinctions internally.
 
 -}
 type Phase
     = Starting
     | InBeat { nextBeatMs : Int }
-    | ExecutingAction ActionLogEntry
+    | ActionCompleted
     | AnimatingBoardAction BoardDragAnimate.State
     | AnimatingHandAction HandDragAnimate.State

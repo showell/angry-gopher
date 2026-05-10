@@ -35,6 +35,8 @@ import Browser.Dom
 import Game.ActionLog exposing (ActionLogEntry)
 import Game.BoardActions as BoardActions
 import Game.CardStack as CardStack
+import Game.Execute as Execute
+import Game.Game exposing (GameState)
 import Game.GameEvent as GameEvent exposing (GameEvent)
 import Game.HandDragTypes exposing (HandCardDragInfo)
 import Game.Physics.BoardGeometry as BG
@@ -61,7 +63,7 @@ type alias InFlightData =
 type Outcome
     = InProgress State
     | NeedsMeasurement State Card
-    | Done { pendingAction : GameEvent }
+    | Done { newGameState : GameState }
 
 
 start : ActionLogEntry -> State
@@ -117,8 +119,8 @@ dragInfo state =
             Nothing
 
 
-step : Int -> State -> Outcome
-step nowMs state =
+step : Int -> GameState -> State -> Outcome
+step nowMs gameState state =
     case state of
         NotYetMeasured entry ->
             -- First tick after pop. Emit the measurement
@@ -136,7 +138,7 @@ step nowMs state =
                     toFloat (nowMs - d.startMs)
             in
             if elapsedMs >= duration d.path then
-                Done { pendingAction = d.pendingAction }
+                Done { newGameState = Execute.applyEvent d.pendingAction gameState }
 
             else
                 InProgress

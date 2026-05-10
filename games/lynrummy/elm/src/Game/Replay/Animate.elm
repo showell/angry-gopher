@@ -89,13 +89,9 @@ togglePause rs =
 
 tick : Int -> ReplayState -> TickResult
 tick nowMs rs =
-    let
-        nextBeat =
-            nowMs + beatMs
-    in
     case rs.phase of
         Starting ->
-            StillReplaying { rs | phase = InBeat { nextBeatMs = nextBeat } }
+            StillReplaying { rs | phase = InBeat { nextBeatMs = nowMs + beatMs } }
 
         InBeat { nextBeatMs } ->
             if nowMs < nextBeatMs then
@@ -107,91 +103,110 @@ tick nowMs rs =
                         Completed
 
                     entry :: rest ->
+                        let
+                            dispatched =
+                                startNextAction nowMs entry rs.gameState
+                        in
                         StillReplaying
-                            { rs | queue = rest, phase = startNextAction nowMs entry }
+                            { rs
+                                | queue = rest
+                                , gameState = dispatched.gameState
+                                , phase = dispatched.phase
+                            }
 
-        ExecutingAction entry ->
-            StillReplaying
-                { rs
-                    | gameState = Execute.applyEvent entry.action rs.gameState
-                    , phase = InBeat { nextBeatMs = nextBeat }
-                }
+        ActionCompleted ->
+            StillReplaying { rs | phase = InBeat { nextBeatMs = nowMs + beatMs } }
 
         AnimatingBoardAction dragState ->
-            case BoardDragAnimate.step nowMs dragState of
+            case BoardDragAnimate.step nowMs rs.gameState dragState of
                 BoardDragAnimate.InProgress nextDragState ->
                     StillReplaying { rs | phase = AnimatingBoardAction nextDragState }
 
-                BoardDragAnimate.Done { pendingAction } ->
-                    StillReplaying
-                        { rs
-                            | gameState = Execute.applyEvent pendingAction rs.gameState
-                            , phase = InBeat { nextBeatMs = nextBeat }
-                        }
+                BoardDragAnimate.Done { newGameState } ->
+                    StillReplaying { rs | gameState = newGameState, phase = ActionCompleted }
 
         AnimatingHandAction handState ->
-            case HandDragAnimate.step nowMs handState of
+            case HandDragAnimate.step nowMs rs.gameState handState of
                 HandDragAnimate.InProgress nextHandState ->
                     StillReplaying { rs | phase = AnimatingHandAction nextHandState }
 
                 HandDragAnimate.NeedsMeasurement nextHandState card ->
                     NeedHandCardRect { rs | phase = AnimatingHandAction nextHandState } card
 
-                HandDragAnimate.Done { pendingAction } ->
-                    StillReplaying
-                        { rs
-                            | gameState = Execute.applyEvent pendingAction rs.gameState
-                            , phase = InBeat { nextBeatMs = nextBeat }
-                        }
+                HandDragAnimate.Done { newGameState } ->
+                    StillReplaying { rs | gameState = newGameState, phase = ActionCompleted }
 
 
-{-| Decide what phase to enter when popping `entry` off the
-queue. Board-drag events open `AnimatingBoardAction` with a
-fully-built sub-state. Hand-drag events open
-`AnimatingHandAction` with `HandDragAnimate`'s `NotYetMeasured`
-substate — the sub-machine emits the measurement request on
-its next `step`, so this function never sees a `Card` and
-the return type stays a single `Phase`. Everything else
-slates `ExecutingAction` for the next tick.
+{-| Decide what to do for the popped `entry`: either start
+an animation phase (drag events) or apply the event inline
+(instant events). For drag events the sub-machine eventually
+applies the action itself when its path completes; for
+instant events we apply here and slate `ActionCompleted` so
+the next tick schedules the beat.
+
+The signature accepts and returns `gameState` because
+instant-apply branches need to fold into it; drag branches
+echo it back unchanged.
 
 `Undo` is unreachable — `collapseUndos` strips them at the
 top of replay.
 
 -}
-startNextAction : Int -> ActionLogEntry -> Phase
-startNextAction nowMs entry =
+startNextAction :
+    Int
+    -> ActionLogEntry
+    -> GameState
+    ->
+        { gameState : GameState
+        , phase : Phase
+        }
+startNextAction nowMs entry gameState =
     case entry.action of
         GameEvent.MergeStack p ->
-            AnimatingBoardAction
-                (BoardDragAnimate.start
-                    { sourceStack = p.source
-                    , path = p.boardPath
-                    , startMs = nowMs
-                    , pendingAction = entry.action
-                    }
-                )
+            { gameState = gameState
+            , phase =
+                AnimatingBoardAction
+                    (BoardDragAnimate.start
+                        { sourceStack = p.source
+                        , path = p.boardPath
+                        , startMs = nowMs
+                        , pendingAction = entry.action
+                        }
+                    )
+            }
 
         GameEvent.MoveStack p ->
-            AnimatingBoardAction
-                (BoardDragAnimate.start
-                    { sourceStack = p.stack
-                    , path = p.boardPath
-                    , startMs = nowMs
-                    , pendingAction = entry.action
-                    }
-                )
+            { gameState = gameState
+            , phase =
+                AnimatingBoardAction
+                    (BoardDragAnimate.start
+                        { sourceStack = p.stack
+                        , path = p.boardPath
+                        , startMs = nowMs
+                        , pendingAction = entry.action
+                        }
+                    )
+            }
 
         GameEvent.MergeHand _ ->
-            AnimatingHandAction (HandDragAnimate.start entry)
+            { gameState = gameState
+            , phase = AnimatingHandAction (HandDragAnimate.start entry)
+            }
 
         GameEvent.PlaceHand _ ->
-            AnimatingHandAction (HandDragAnimate.start entry)
+            { gameState = gameState
+            , phase = AnimatingHandAction (HandDragAnimate.start entry)
+            }
 
         GameEvent.Split _ ->
-            ExecutingAction entry
+            { gameState = Execute.applyEvent entry.action gameState
+            , phase = ActionCompleted
+            }
 
         GameEvent.CompleteTurn ->
-            ExecutingAction entry
+            { gameState = Execute.applyEvent entry.action gameState
+            , phase = ActionCompleted
+            }
 
         GameEvent.Undo ->
             Debug.todo

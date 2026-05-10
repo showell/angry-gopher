@@ -199,5 +199,5 @@ replayDrag rs =
         InBeat _ ->
             Drag.NotDragging
 
-        ExecutingAction _ ->
+        ActionCompleted ->
             Drag.NotDragging

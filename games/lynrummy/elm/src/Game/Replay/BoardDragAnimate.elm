@@ -21,6 +21,8 @@ empty `path` is a contract violation, not a thing to handle.
 
 import Game.BoardDragTypes exposing (BoardCardDragInfo)
 import Game.CardStack exposing (CardStack)
+import Game.Execute as Execute
+import Game.Game exposing (GameState)
 import Game.GameEvent exposing (GameEvent)
 import Game.Point exposing (Point)
 import Game.TimeLoc exposing (TimeLoc)
@@ -36,7 +38,7 @@ type alias State =
 
 type Outcome
     = InProgress State
-    | Done { pendingAction : GameEvent }
+    | Done { newGameState : GameState }
 
 
 start :
@@ -70,18 +72,21 @@ start { sourceStack, path, startMs, pendingAction } =
             }
 
 
-{-| Advance one frame. Returns `Done` once `nowMs - startMs`
-exceeds the path's total duration, otherwise updates the
-floater's position via linear interpolation.
+{-| Advance one frame. Once `nowMs - startMs` exceeds the
+path's total duration, fold `pendingAction` into the
+provided `gameState` via `Execute.applyEvent` and signal
+`Done` with the new state. The apply lives here (rather
+than in the outer machine) so the sub-machine fully owns
+the action it was started for.
 -}
-step : Int -> State -> Outcome
-step nowMs state =
+step : Int -> GameState -> State -> Outcome
+step nowMs gameState state =
     let
         elapsedMs =
             toFloat (nowMs - state.startMs)
     in
     if elapsedMs >= duration state.path then
-        Done { pendingAction = state.pendingAction }
+        Done { newGameState = Execute.applyEvent state.pendingAction gameState }
 
     else
         InProgress
