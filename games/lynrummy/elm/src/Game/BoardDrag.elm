@@ -37,7 +37,7 @@ agnostic so Puzzles can call it without a wire.
 -}
 type alias BoardOutcome =
     { board : List CardStack
-    , status : Maybe StatusMessage
+    , status : StatusMessage
     , actionLog : List ActionLogEntry
     , nextSeq : Int
     , outboundPayload : Maybe Value
@@ -76,7 +76,7 @@ handleMouseUp releasePoint tMs d input =
                         ]
             in
             { board = newBoard
-            , status = Just (Status.geometryFeedback input.board newBoard |> Maybe.withDefault splitStatus)
+            , status = Status.geometryFeedback input.board newBoard |> Maybe.withDefault splitStatus
             , actionLog = input.actionLog ++ [ { action = GameEvent.Split p } ]
             , nextSeq = input.nextSeq + 1
             , outboundPayload = Just payload
@@ -110,7 +110,7 @@ handleMouseUp releasePoint tMs d input =
                         ]
             in
             { board = newBoard
-            , status = Just (Status.geometryFeedback input.board newBoard |> Maybe.withDefault (Status.mergeStatus newBoard))
+            , status = Status.geometryFeedback input.board newBoard |> Maybe.withDefault (Status.mergeStatus newBoard)
             , actionLog = input.actionLog ++ [ { action = event } ]
             , nextSeq = input.nextSeq + 1
             , outboundPayload = Just payload
@@ -145,7 +145,7 @@ handleMouseUp releasePoint tMs d input =
                         ]
             in
             { board = newBoard
-            , status = Just (Status.geometryFeedback input.board newBoard |> Maybe.withDefault moveStackStatus)
+            , status = Status.geometryFeedback input.board newBoard |> Maybe.withDefault moveStackStatus
             , actionLog = input.actionLog ++ [ { action = event } ]
             , nextSeq = input.nextSeq + 1
             , outboundPayload = Just payload
@@ -153,7 +153,7 @@ handleMouseUp releasePoint tMs d input =
 
         BoardGesture.BoardCardOffBoard ->
             { board = input.board
-            , status = Just Status.offBoardScold
+            , status = Status.offBoardScold
             , actionLog = input.actionLog
             , nextSeq = input.nextSeq
             , outboundPayload = Nothing

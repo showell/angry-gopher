@@ -30,13 +30,13 @@ import Json.Encode as Encode exposing (Value)
 type CompleteTurnAttempt
     = TurnRejected
         { status : StatusMessage
-        , popup : Maybe PopupContent
+        , popup : PopupContent
         }
     | TurnCompleted
         { newGameState : GameState
         , appendedEntry : ActionLogEntry
         , status : StatusMessage
-        , popup : Maybe PopupContent
+        , popup : PopupContent
         , outboundPayload : Value
         }
 

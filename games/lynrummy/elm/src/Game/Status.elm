@@ -4,6 +4,7 @@ module Game.Status exposing
     , actionLogFetchFailedStatus
     , actionRejectedStatus
     , geometryFeedback
+    , handNothingStatus
     , mergeStatus
     , offBoardScold
     , sessionAllocFailedStatus
@@ -175,6 +176,13 @@ offBoardScold : StatusMessage
 offBoardScold =
     { text = "Don't knock cards off the board, please. You're not a cat!"
     , kind = Scold
+    }
+
+
+handNothingStatus : StatusMessage
+handNothingStatus =
+    { text = "Drop on a stack to merge, or on open space to place."
+    , kind = Inform
     }
 
 

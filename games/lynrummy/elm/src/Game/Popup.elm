@@ -33,17 +33,16 @@ type alias PopupContent =
 attempt. `Err` (wire failure) gets a generic Angry Cat scold;
 `Ok` branches into per-result narration.
 -}
-popupForCompleteTurn : Result outcome CompleteTurnOutcome -> Maybe PopupContent
+popupForCompleteTurn : Result outcome CompleteTurnOutcome -> PopupContent
 popupForCompleteTurn result =
     case result of
         Ok outcome ->
-            Just (popupFromOutcome outcome)
+            popupFromOutcome outcome
 
         Err _ ->
-            Just
-                { admin = "Angry Cat"
-                , body = "Couldn't reach the server to complete your turn."
-                }
+            { admin = "Angry Cat"
+            , body = "Couldn't reach the server to complete your turn."
+            }
 
 
 popupFromOutcome : CompleteTurnOutcome -> PopupContent

@@ -269,7 +269,7 @@ handleMouseUp releasePoint tMs model =
                 | drag = NotDragging
                 , board = outcome.board
                 , actionLog = outcome.actionLog
-                , status = outcome.status |> Maybe.withDefault model.status
+                , status = outcome.status
                 , nextSeq = outcome.nextSeq
               }
             , outcome.outboundPayload

@@ -41,7 +41,7 @@ type alias HandOutcome =
     { board : List CardStack
     , hands : List Hand
     , cardsPlayedThisTurn : Int
-    , status : Maybe StatusMessage
+    , status : StatusMessage
     , actionLog : List ActionLogEntry
     , nextSeq : Int
     , outboundPayload : Maybe Value
@@ -79,7 +79,7 @@ handleMouseUp releasePoint d input =
             { board = next.board
             , hands = gsWithHand.hands
             , cardsPlayedThisTurn = input.gameState.cardsPlayedThisTurn + 1
-            , status = Just (Status.geometryFeedback input.gameState.board next.board |> Maybe.withDefault (Status.mergeStatus next.board))
+            , status = Status.geometryFeedback input.gameState.board next.board |> Maybe.withDefault (Status.mergeStatus next.board)
             , actionLog =
                 input.actionLog
                     ++ [ { action = GameEvent.MergeHand p } ]
@@ -113,7 +113,7 @@ handleMouseUp releasePoint d input =
             { board = next.board
             , hands = gsWithHand.hands
             , cardsPlayedThisTurn = input.gameState.cardsPlayedThisTurn + 1
-            , status = Just (Status.geometryFeedback input.gameState.board next.board |> Maybe.withDefault placeHandStatus)
+            , status = Status.geometryFeedback input.gameState.board next.board |> Maybe.withDefault placeHandStatus
             , actionLog =
                 input.actionLog
                     ++ [ { action = GameEvent.PlaceHand p } ]
@@ -125,7 +125,7 @@ handleMouseUp releasePoint d input =
             { board = input.gameState.board
             , hands = input.gameState.hands
             , cardsPlayedThisTurn = input.gameState.cardsPlayedThisTurn
-            , status = Just Status.offBoardScold
+            , status = Status.offBoardScold
             , actionLog = input.actionLog
             , nextSeq = input.nextSeq
             , outboundPayload = Nothing
@@ -135,7 +135,7 @@ handleMouseUp releasePoint d input =
             { board = input.gameState.board
             , hands = input.gameState.hands
             , cardsPlayedThisTurn = input.gameState.cardsPlayedThisTurn
-            , status = Nothing
+            , status = Status.handNothingStatus
             , actionLog = input.actionLog
             , nextSeq = input.nextSeq
             , outboundPayload = Nothing

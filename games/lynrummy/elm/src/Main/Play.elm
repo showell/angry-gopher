@@ -414,7 +414,7 @@ handleMouseUp releasePoint tMs model =
             ( { model
                 | drag = NotDragging
                 , gameState = { gs0 | board = outcome.board }
-                , status = outcome.status |> Maybe.withDefault model.status
+                , status = outcome.status
                 , actionLog = outcome.actionLog
                 , nextSeq = outcome.nextSeq
               }
@@ -445,7 +445,7 @@ handleMouseUp releasePoint tMs model =
                         , hands = outcome.hands
                         , cardsPlayedThisTurn = outcome.cardsPlayedThisTurn
                     }
-                , status = outcome.status |> Maybe.withDefault model.status
+                , status = outcome.status
                 , actionLog = outcome.actionLog
                 , nextSeq = outcome.nextSeq
               }
@@ -460,7 +460,7 @@ clickCompleteTurn : Model -> ( Model, Cmd Msg )
 clickCompleteTurn model =
     case TurnControl.attemptCompleteTurn { gameState = model.gameState, nextSeq = model.nextSeq } of
         TurnControl.TurnRejected r ->
-            ( { model | status = r.status, popup = r.popup }, Cmd.none )
+            ( { model | status = r.status, popup = Just r.popup }, Cmd.none )
 
         TurnControl.TurnCompleted r ->
             ( { model
@@ -468,7 +468,7 @@ clickCompleteTurn model =
                 , actionLog = model.actionLog ++ [ r.appendedEntry ]
                 , nextSeq = model.nextSeq + 1
                 , status = r.status
-                , popup = r.popup
+                , popup = Just r.popup
               }
             , Wire.sendAction model.sessionId r.outboundPayload
             )
