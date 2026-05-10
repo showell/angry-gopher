@@ -1,21 +1,13 @@
 module Game.ActionLog exposing
-    ( ActionLogBundle
-    , ActionLogEntry
+    ( ActionLogEntry
     , collapseUndos
     )
 
-import Game.Game exposing (GameState)
 import Game.GameEvent exposing (GameEvent(..))
 
 
 type alias ActionLogEntry =
     { action : GameEvent }
-
-
-type alias ActionLogBundle =
-    { initialState : GameState
-    , actions : List ActionLogEntry
-    }
 
 
 {-| Collapse `Undo` tokens against the actions they cancel,

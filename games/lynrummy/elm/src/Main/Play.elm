@@ -266,8 +266,8 @@ update msg model =
             in
             withNoOutput ( model, Cmd.none )
 
-        ActionLogFetched (Ok bundle) ->
-            ( bootstrapFromBundle bundle model, Cmd.none, NoOutput )
+        ActionLogFetched (Ok ( initialState, actions )) ->
+            ( bootstrapFromBundle initialState actions model, Cmd.none, NoOutput )
 
         ActionLogFetched (Err err) ->
             logAndScold "ActionLogFetched" err Status.actionLogFetchFailedStatus model

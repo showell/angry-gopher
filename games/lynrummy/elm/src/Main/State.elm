@@ -1,6 +1,5 @@
 module Main.State exposing
-    ( Flags
-    , Model
+    ( Model
     , baseModel
     , bootstrapFromBundle
     , canUndoThisTurn
@@ -10,7 +9,7 @@ module Main.State exposing
 
 {-| All application-wide data types and the initial Model. -}
 
-import Game.ActionLog as ActionLog exposing (ActionLogBundle, ActionLogEntry)
+import Game.ActionLog as ActionLog exposing (ActionLogEntry)
 import Game.Execute as Execute
 import Game.CardStack as CardStack
 import Game.Dealer
@@ -74,27 +73,6 @@ type alias Model =
     -- back.
     , nextEngineRequestId : Int
     }
-
-
--- FLAGS
-
-
-{-| Flags from the HTML harness. `initialSessionId` is server-side
-rendered from the URL (present on reload so the UI resumes the
-same game rather than dropping back to the lobby); `seedSource`
-is `Date.now()` from the host page, used by `Play.init` to seed
-`Game.Dealer.dealFullGame` for fresh sessions.
--}
-type alias Flags =
-    { initialSessionId : Maybe Int
-    , seedSource : Int
-    }
-
-
-
--- SERVER-RESPONSE DATA SHAPES
-
-
 
 
 {-| Mirror of the `initialStateDecoder` shape on the wire — produces
@@ -195,23 +173,23 @@ baseModel =
 -- BOOTSTRAP
 
 
-{-| Hydrate a Model from a server-fetched ActionLogBundle:
-pin the bundle's initial state as both the live `gameState`
-and the immutable `initialGameState` (reserved for Instant
-Replay's rebuild), then fold the action log forward.
+{-| Hydrate a Model from a server-fetched action log: pin the
+initial state as both the live `gameState` and the immutable
+`initialGameState` (reserved for Instant Replay's rebuild), then
+fold the action log forward.
 -}
-bootstrapFromBundle : ActionLogBundle -> Model -> Model
-bootstrapFromBundle bundle model =
+bootstrapFromBundle : GameState -> List ActionLogEntry -> Model -> Model
+bootstrapFromBundle initialState actions model =
     let
         atInitial =
             { model
-                | actionLog = bundle.actions
-                , nextSeq = List.length bundle.actions + 1
-                , gameState = bundle.initialState
-                , initialGameState = bundle.initialState
+                | actionLog = actions
+                , nextSeq = List.length actions + 1
+                , gameState = initialState
+                , initialGameState = initialState
             }
     in
     List.foldl
         (\entry m -> { m | gameState = Execute.applyEvent entry.action m.gameState })
         atInitial
-        (ActionLog.collapseUndos bundle.actions)
+        (ActionLog.collapseUndos actions)

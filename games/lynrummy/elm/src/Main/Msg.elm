@@ -10,8 +10,9 @@ Extracted 2026-04-19 from the pre-split `Main.elm` monolith.
 -}
 
 import Browser.Dom
-import Game.ActionLog exposing (ActionLogBundle)
+import Game.ActionLog exposing (ActionLogEntry)
 import Game.CardStack exposing (CardStack)
+import Game.Game exposing (GameState)
 import Game.Point exposing (Point)
 import Game.Rules.Card exposing (Card)
 import Http
@@ -72,5 +73,5 @@ type Msg
     | ClickReplayPauseToggle
     | ReplayTick Time.Posix
     | ReplayCompleted
-    | ActionLogFetched (Result Http.Error ActionLogBundle)
+    | ActionLogFetched (Result Http.Error ( GameState, List ActionLogEntry ))
     | GameHintReceived Encode.Value

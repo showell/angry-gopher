@@ -10,7 +10,7 @@ thin afterthought layer.
 
 -}
 
-import Game.ActionLog exposing (ActionLogBundle, ActionLogEntry)
+import Game.ActionLog exposing (ActionLogEntry)
 import Game.CardStack as CardStack
 import Game.Game exposing (GameState)
 import Game.Hand exposing (Hand)
@@ -93,9 +93,9 @@ initialStateDecoder =
         (Decode.field "victor_awarded" Decode.bool)
 
 
-actionLogDecoder : Decoder ActionLogBundle
+actionLogDecoder : Decoder ( GameState, List ActionLogEntry )
 actionLogDecoder =
-    Decode.map2 ActionLogBundle
+    Decode.map2 Tuple.pair
         (Decode.at [ "meta", "initial_state" ] initialStateDecoder)
         (Decode.field "actions" (Decode.list actionLogEntryDecoder))
 

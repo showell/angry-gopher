@@ -27,7 +27,19 @@ import Html.Attributes exposing (style)
 import Json.Encode as Encode
 import Main.Msg as MainMsg exposing (Msg)
 import Main.Play as Play
-import Main.State exposing (Flags, Model)
+import Main.State exposing (Model)
+
+
+{-| Flags from the HTML harness. `initialSessionId` is server-side
+rendered from the URL (present on reload so the UI resumes the
+same game rather than dropping back to the lobby); `seedSource`
+is `Date.now()` from the host page, used by `Play.init` to seed
+`Game.Dealer.dealFullGame` for fresh sessions.
+-}
+type alias Flags =
+    { initialSessionId : Maybe Int
+    , seedSource : Int
+    }
 
 
 {-| Port: updates the URL path to `/gopher/lynrummy-elm/play/<sid>`
