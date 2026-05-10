@@ -636,7 +636,6 @@ import Game.Physics.GestureArbitration as GA
 import Game.Physics.PlaceStack
 import Game.Physics.WingOracle as WingOracle
 import Game.Rules.Referee as Referee exposing (RefereeStage(..), refereeStageToString)
-import Game.Replay.Time as ReplayTime
 import Game.Rules.StackType as StackType
 import Game.WingView as WingView
 import Game.GameEvent as GameEvent exposing (GameEvent)
