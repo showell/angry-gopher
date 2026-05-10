@@ -5,7 +5,7 @@ module Game.UndoTest exposing (suite)
 Covers:
   - `Game.Execute.undoEvent` — round-trip for all five primitives:
     Split, MergeStack, MergeHand, PlaceHand, MoveStack.
-  - `Main.State.collapseUndos` — token collapsing in the action log.
+  - `Main.ActionLog.collapseUndos` — token collapsing in the action log.
   - `Main.State.canUndoThisTurn` — button-enable predicate.
 
 Strategy: for `undoEvent`, apply an action with `applyEvent` then
@@ -23,7 +23,7 @@ import Game.Game exposing (GameState)
 import Game.GameEvent exposing (GameEvent(..))
 import Game.Hand as Hand
 import Game.Rules.Card exposing (CardValue(..), OriginDeck(..), Suit(..))
-import Game.ActionLog exposing (ActionLogEntry)
+import Game.ActionLog as ActionLog exposing (ActionLogEntry)
 import Main.State as State
 import Test exposing (Test, describe, test)
 
@@ -312,10 +312,10 @@ suiteUndoEvent =
 
 suiteCollapseUndos : Test
 suiteCollapseUndos =
-    describe "State.collapseUndos"
+    describe "ActionLog.collapseUndos"
         [ test "empty log stays empty" <|
             \_ ->
-                State.collapseUndos []
+                ActionLog.collapseUndos []
                     |> Expect.equal []
         , test "single action with no Undo is unchanged" <|
             \_ ->
@@ -323,11 +323,11 @@ suiteCollapseUndos =
                     entries =
                         [ logEntry (MoveStack { stack = stackAt 0 initialGameState, newLoc = { top = 10, left = 20 }, boardPath = [] }) ]
                 in
-                State.collapseUndos entries
+                ActionLog.collapseUndos entries
                     |> Expect.equal entries
         , test "single Undo on empty log produces empty list" <|
             \_ ->
-                State.collapseUndos [ logEntry Undo ]
+                ActionLog.collapseUndos [ logEntry Undo ]
                     |> Expect.equal []
         , test "action then Undo cancels the action" <|
             \_ ->
@@ -338,7 +338,7 @@ suiteCollapseUndos =
                     entries =
                         [ move, logEntry Undo ]
                 in
-                State.collapseUndos entries
+                ActionLog.collapseUndos entries
                     |> Expect.equal []
         , test "double Undo cancels two actions" <|
             \_ ->
@@ -355,7 +355,7 @@ suiteCollapseUndos =
                     entries =
                         [ move1, move2, logEntry Undo, logEntry Undo ]
                 in
-                State.collapseUndos entries
+                ActionLog.collapseUndos entries
                     |> Expect.equal []
         , test "Undo does NOT pop CompleteTurn" <|
             \_ ->
@@ -366,7 +366,7 @@ suiteCollapseUndos =
                     entries =
                         [ ct, logEntry Undo ]
                 in
-                State.collapseUndos entries
+                ActionLog.collapseUndos entries
                     |> Expect.equal [ ct ]
         , test "Undo past CompleteTurn stops at CompleteTurn boundary" <|
             \_ ->
@@ -383,7 +383,7 @@ suiteCollapseUndos =
                     entries =
                         [ move, ct, move, logEntry Undo ]
                 in
-                State.collapseUndos entries
+                ActionLog.collapseUndos entries
                     |> Expect.equal [ move, ct ]
         , test "interleaved Undos: two actions, one Undo leaves one action" <|
             \_ ->
@@ -397,7 +397,7 @@ suiteCollapseUndos =
                     move2 =
                         logEntry (MoveStack { stack = stackAt 1 s, newLoc = { top = 30, left = 40 }, boardPath = [] })
                 in
-                State.collapseUndos [ move1, move2, logEntry Undo ]
+                ActionLog.collapseUndos [ move1, move2, logEntry Undo ]
                     |> Expect.equal [ move1 ]
         ]
 
