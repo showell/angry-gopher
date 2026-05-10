@@ -28,6 +28,16 @@ import Game.Hand as Hand exposing (Hand)
 import Game.Random as Random
 
 
+{-| Bundle returned by `dealFullGame`: initial board, both
+players' 15-card hands, and the remaining draw deck.
+-}
+type alias GameSetup =
+    { board : List CardStack
+    , hands : List Hand
+    , deck : List Card
+    }
+
+
 
 -- BOARD
 
@@ -69,16 +79,6 @@ rowLoc row =
 
 
 -- FULL DEAL (seed-driven)
-
-
-{-| Bundle returned by `dealFullGame`: initial board, both
-players' 15-card hands, and the remaining draw deck.
--}
-type alias GameSetup =
-    { board : List CardStack
-    , hands : List Hand
-    , deck : List Card
-    }
 
 
 {-| Build a complete, playable initial game state from a seed.

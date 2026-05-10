@@ -49,10 +49,6 @@ import Task
 import Time
 
 
-
--- FLAGS
-
-
 {-| Server-baked flags. The Go handler picks the puzzle, allocates
 a session, and emits `{session_id, initial_board}` in the page's
 `Elm.Puzzle.init` call. We decode it once at boot.
@@ -61,17 +57,6 @@ type alias DecodedFlags =
     { sessionId : Int
     , initialBoard : List CardStack
     }
-
-
-flagsDecoder : Decode.Decoder DecodedFlags
-flagsDecoder =
-    Decode.map2 DecodedFlags
-        (Decode.field "session_id" Decode.int)
-        (Decode.field "initial_board" (Decode.list CardStack.cardStackDecoder))
-
-
-
--- MODEL
 
 
 type alias Model =
@@ -86,6 +71,26 @@ type alias Model =
     , nextSeq : Int
     , replayState : Maybe Replay.ReplayState
     }
+
+
+type Msg
+    = MouseDownOnBoardCard { stack : CardStack, cardIndex : Int, point : Point, time : Float }
+    | MouseMove Point Float
+    | MouseUp Point Float
+    | BoardRectReceived (Result Browser.Dom.Error Browser.Dom.Element)
+    | ClickUndo
+    | ClickInstantReplay
+    | ClickReplayPauseToggle
+    | ReplayTick Time.Posix
+    | ReplayCompleted
+    | ActionSent (Result Http.Error ())
+
+
+flagsDecoder : Decode.Decoder DecodedFlags
+flagsDecoder =
+    Decode.map2 DecodedFlags
+        (Decode.field "session_id" Decode.int)
+        (Decode.field "initial_board" (Decode.list CardStack.cardStackDecoder))
 
 
 init : Decode.Value -> ( Model, Cmd Msg )
@@ -114,23 +119,6 @@ init flagsValue =
                 ("Puzzle flags failed to decode: "
                     ++ Decode.errorToString err
                 )
-
-
-
--- MSG
-
-
-type Msg
-    = MouseDownOnBoardCard { stack : CardStack, cardIndex : Int, point : Point, time : Float }
-    | MouseMove Point Float
-    | MouseUp Point Float
-    | BoardRectReceived (Result Browser.Dom.Error Browser.Dom.Element)
-    | ClickUndo
-    | ClickInstantReplay
-    | ClickReplayPauseToggle
-    | ReplayTick Time.Posix
-    | ReplayCompleted
-    | ActionSent (Result Http.Error ())
 
 
 

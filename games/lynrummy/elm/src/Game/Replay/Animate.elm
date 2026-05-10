@@ -40,6 +40,11 @@ import Game.Replay.HandDragAnimate as HandDragAnimate
 import Game.Replay.ReplayState exposing (Phase(..), ReplayState)
 
 
+type TickResult msg
+    = StillReplaying ReplayState (Cmd msg)
+    | Completed
+
+
 {-| Per-step beat in milliseconds. The user wants enough time
 to register each teleport / animation landing before the
 next one lands.
@@ -47,11 +52,6 @@ next one lands.
 beatMs : Int
 beatMs =
     700
-
-
-type TickResult msg
-    = StillReplaying ReplayState (Cmd msg)
-    | Completed
 
 
 start : List ActionLogEntry -> GameState -> ReplayState

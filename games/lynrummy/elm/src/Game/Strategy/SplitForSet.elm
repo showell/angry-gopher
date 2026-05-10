@@ -15,18 +15,18 @@ import Game.Strategy.Helpers exposing (extractCard, freshlyPlayed, pushNewStack)
 import Game.Strategy.Trick exposing (Play, Trick)
 
 
+type alias Candidate =
+    { stackIdx : Int
+    , cardIdx : Int
+    , card : Card
+    }
+
+
 trick : Trick
 trick =
     { id = "split_for_set"
     , description = "Take two same-value cards out of the board and form a new set with your hand card."
     , findPlays = findPlays
-    }
-
-
-type alias Candidate =
-    { stackIdx : Int
-    , cardIdx : Int
-    , card : Card
     }
 
 

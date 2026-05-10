@@ -24,6 +24,16 @@ import Html exposing (Html, div)
 import Html.Attributes exposing (style)
 
 
+type StatusKind
+    = Inform
+    | Celebrate
+    | Scold
+
+
+type alias StatusMessage =
+    { text : String, kind : StatusKind }
+
+
 viewStatusBar : StatusMessage -> Html msg
 viewStatusBar status =
     let
@@ -70,16 +80,6 @@ statusForCompleteTurn outcome =
 
         Err _ ->
             { text = "Couldn't reach the server to complete the turn.", kind = Scold }
-
-
-type alias StatusMessage =
-    { text : String, kind : StatusKind }
-
-
-type StatusKind
-    = Inform
-    | Celebrate
-    | Scold
 
 
 {-| Surface a board-geometry tidiness change as a status

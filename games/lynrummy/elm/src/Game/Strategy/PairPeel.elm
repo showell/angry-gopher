@@ -27,17 +27,17 @@ import Game.Strategy.Helpers exposing (dummyLoc, extractCard, freshlyPlayed)
 import Game.Strategy.Trick exposing (Play, Trick)
 
 
+type alias PairNeed =
+    { value : CardValue
+    , suits : List Suit
+    }
+
+
 trick : Trick
 trick =
     { id = "pair_peel"
     , description = "Peel a board card to complete a pair in your hand."
     , findPlays = findPlays
-    }
-
-
-type alias PairNeed =
-    { value : CardValue
-    , suits : List Suit
     }
 
 

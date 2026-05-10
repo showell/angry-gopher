@@ -44,11 +44,23 @@ import Bitwise
 
 
 
--- SEED
+-- TYPES
 
 
 type Seed
     = Seed Int
+
+
+{-| Backed by a `List` for simplicity; O(n) swaps, but deck size
+is 104 so this is fine. Could upgrade to `elm/core` Array if
+performance ever matters.
+-}
+type alias ItemArray a =
+    List a
+
+
+
+-- SEED
 
 
 initSeed : Int -> Seed
@@ -161,15 +173,6 @@ fisherYates i seed arr =
 
 
 -- ARRAY HELPERS
---
--- Using `Array` from elm/core directly, aliased so the function
--- signatures read cleanly.
-
-
-type alias ItemArray a =
-    List a -- Backed by a list for simplicity; O(n) swaps, but
-    -- deck size is 104 so this is fine. Could upgrade to
-    -- elm/core Array if performance matters later.
 
 
 itemsToArray : List a -> ItemArray a

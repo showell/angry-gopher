@@ -22,9 +22,11 @@ import Game.GameEvent as GameEvent
 import Game.Replay.BoardDragAnimate as BoardDragAnimate
 
 
-beatMs : Int
-beatMs =
-    700
+type Phase
+    = Starting
+    | InBeat { nextBeatMs : Int }
+    | ActionCompleted
+    | AnimatingBoardAction BoardDragAnimate.State
 
 
 type alias ReplayState =
@@ -35,16 +37,14 @@ type alias ReplayState =
     }
 
 
-type Phase
-    = Starting
-    | InBeat { nextBeatMs : Int }
-    | ActionCompleted
-    | AnimatingBoardAction BoardDragAnimate.State
-
-
 type TickResult
     = StillReplaying ReplayState
     | Completed
+
+
+beatMs : Int
+beatMs =
+    700
 
 
 start : List ActionLogEntry -> List CardStack -> ReplayState

@@ -76,18 +76,18 @@ type HandDragAnimateAction
         }
 
 
-type State
-    = NotYetMeasured HandDragAnimateAction
-    | AwaitingMeasurement HandDragAnimateAction
-    | InFlight InFlightData
-
-
 type alias InFlightData =
     { path : List TimeLoc
     , startMs : Int
     , pendingAction : HandDragAnimateAction
     , dragInfo_ : HandCardDragInfo
     }
+
+
+type State
+    = NotYetMeasured HandDragAnimateAction
+    | AwaitingMeasurement HandDragAnimateAction
+    | InFlight InFlightData
 
 
 type Outcome

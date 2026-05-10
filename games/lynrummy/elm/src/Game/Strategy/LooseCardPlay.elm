@@ -29,14 +29,6 @@ import Game.Strategy.Helpers
 import Game.Strategy.Trick exposing (Play, Trick)
 
 
-trick : Trick
-trick =
-    { id = "loose_card_play"
-    , description = "Move one board card to a new home, then play a hand card on the resulting board."
-    , findPlays = findPlays
-    }
-
-
 type alias LooseMove =
     { srcIdx : Int
     , srcCardIdx : Int
@@ -44,6 +36,14 @@ type alias LooseMove =
     , destIdx : Int
     , destCard : Card -- anchor
     , handCard : HandCard
+    }
+
+
+trick : Trick
+trick =
+    { id = "loose_card_play"
+    , description = "Move one board card to a new home, then play a hand card on the resulting board."
+    , findPlays = findPlays
     }
 
 

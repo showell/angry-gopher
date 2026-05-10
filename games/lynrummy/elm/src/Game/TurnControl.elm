@@ -27,10 +27,6 @@ import Game.Status as Status exposing (StatusMessage)
 import Json.Encode as Encode exposing (Value)
 
 
-
--- COMPLETE TURN
-
-
 type CompleteTurnAttempt
     = TurnRejected
         { status : StatusMessage
@@ -43,6 +39,19 @@ type CompleteTurnAttempt
         , popup : Maybe PopupContent
         , outboundPayload : Value
         }
+
+
+type UndoAttempt
+    = NothingToUndo
+    | DidUndo
+        { newGameState : GameState
+        , appendedEntry : ActionLogEntry
+        , outboundPayload : Value
+        }
+
+
+
+-- COMPLETE TURN
 
 
 attemptCompleteTurn :
@@ -82,15 +91,6 @@ attemptCompleteTurn { gameState, nextSeq } =
 
 
 -- UNDO
-
-
-type UndoAttempt
-    = NothingToUndo
-    | DidUndo
-        { newGameState : GameState
-        , appendedEntry : ActionLogEntry
-        , outboundPayload : Value
-        }
 
 
 attemptUndo :

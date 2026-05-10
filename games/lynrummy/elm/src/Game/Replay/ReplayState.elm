@@ -20,14 +20,6 @@ import Game.Replay.BoardDragAnimate as BoardDragAnimate
 import Game.Replay.HandDragAnimate as HandDragAnimate
 
 
-type alias ReplayState =
-    { queue : List ActionLogEntry
-    , gameState : GameState
-    , paused : Bool
-    , phase : Phase
-    }
-
-
 {-| Replay's five phases. Each tick reads `phase`, does its
 phase-appropriate work, and transitions accordingly.
 
@@ -57,3 +49,11 @@ type Phase
     | ActionCompleted
     | AnimatingBoardAction BoardDragAnimate.State
     | AnimatingHandAction HandDragAnimate.State
+
+
+type alias ReplayState =
+    { queue : List ActionLogEntry
+    , gameState : GameState
+    , paused : Bool
+    , phase : Phase
+    }

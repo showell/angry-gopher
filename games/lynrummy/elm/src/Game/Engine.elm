@@ -24,6 +24,17 @@ import Json.Decode as Decode
 import Json.Encode as Encode exposing (Value)
 
 
+{-| Decoded shape of a `game_hint` response. The `StaleId`
+variant signals that the response was for an earlier request
+the user has since superseded — caller should drop it.
+-}
+type HintResponse
+    = HintLines (List String)
+    | HintError String
+    | HintStaleId
+    | HintDecodeError String
+
+
 {-| Build the `game_hint` request payload — sent over the
 `engineRequest` port. The engine replies on `gameHintResponse`
 with the matching `request_id`.
@@ -50,17 +61,6 @@ encodeBoardForEngine board =
                 (List.map .card stack.boardCards)
         )
         board
-
-
-{-| Decoded shape of a `game_hint` response. The `StaleId`
-variant signals that the response was for an earlier request
-the user has since superseded — caller should drop it.
--}
-type HintResponse
-    = HintLines (List String)
-    | HintError String
-    | HintStaleId
-    | HintDecodeError String
 
 
 {-| Decode a `game_hint` response value. Pass the currently-

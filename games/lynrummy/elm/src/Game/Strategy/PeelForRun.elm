@@ -21,18 +21,18 @@ import Game.Strategy.Helpers exposing (extractCard, freshlyPlayed, pushNewStack)
 import Game.Strategy.Trick exposing (Play, Trick)
 
 
+type alias Neighbor =
+    { stackIdx : Int
+    , cardIdx : Int
+    , card : Card
+    }
+
+
 trick : Trick
 trick =
     { id = "peel_for_run"
     , description = "Peel two adjacent-value board cards to form a new run with your hand card."
     , findPlays = findPlays
-    }
-
-
-type alias Neighbor =
-    { stackIdx : Int
-    , cardIdx : Int
-    , card : Card
     }
 
 

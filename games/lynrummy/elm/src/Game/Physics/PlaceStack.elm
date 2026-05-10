@@ -18,6 +18,25 @@ both runners against them.
 import Game.CardStack as CardStack exposing (BoardLocation, CardStack)
 
 
+type alias Rect =
+    { left : Int
+    , top : Int
+    , right : Int
+    , bottom : Int
+    }
+
+
+type alias ScanArgs =
+    { existingRects : List Rect
+    , newW : Int
+    , newH : Int
+    , minLeft : Int
+    , minTop : Int
+    , maxLeft : Int
+    , maxTop : Int
+    }
+
+
 
 -- CONSTANTS (mirror ts/src/geometry.ts)
 
@@ -109,14 +128,6 @@ stackWidth cardCount =
 
 
 -- INTERNAL: RECTANGLES
-
-
-type alias Rect =
-    { left : Int
-    , top : Int
-    , right : Int
-    , bottom : Int
-    }
 
 
 stackRect : CardStack -> Rect
@@ -218,17 +229,6 @@ findOpenLoc existing cardCount =
 
                     Nothing ->
                         gridSweep existingRects newW newH
-
-
-type alias ScanArgs =
-    { existingRects : List Rect
-    , newW : Int
-    , newH : Int
-    , minLeft : Int
-    , minTop : Int
-    , maxLeft : Int
-    , maxTop : Int
-    }
 
 
 {-| Column-major scan with PACK_GAP padding (Python's Phase 1 / 2

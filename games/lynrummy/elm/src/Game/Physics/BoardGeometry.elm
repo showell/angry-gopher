@@ -39,6 +39,42 @@ import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode exposing (Value)
 
 
+type alias BoardBounds =
+    { maxWidth : Int
+    , maxHeight : Int
+    , margin : Int -- minimum gap between stacks
+    }
+
+
+type GeometryErrorKind
+    = OutOfBounds
+    | Overlap
+    | TooClose -- pair-level; rolls up into BoardGeometryStatus.Crowded
+
+
+type alias GeometryError =
+    { kind : GeometryErrorKind
+    , message : String
+    , stackIndices : List Int
+    }
+
+
+type BoardGeometryStatus
+    = CleanlySpaced
+    | Crowded
+    | Illegal
+
+
+{-| Internal — board / stack rectangles for overlap math.
+-}
+type alias Rect =
+    { left : Int
+    , top : Int
+    , right : Int
+    , bottom : Int
+    }
+
+
 
 -- CONSTANTS
 
@@ -86,16 +122,6 @@ stackWidth cardCount =
 
 
 
--- TYPES
-
-
-type alias BoardBounds =
-    { maxWidth : Int
-    , maxHeight : Int
-    , margin : Int -- minimum gap between stacks
-    }
-
-
 {-| Bounds the kitchen-table game's referee uses to validate
 end-of-turn layouts. The server no longer validates (dumb
 file storage as of LEAN_PASS phase 2); this is purely
@@ -104,37 +130,6 @@ client-side.
 refereeBounds : BoardBounds
 refereeBounds =
     { maxWidth = 800, maxHeight = 600, margin = 7 }
-
-
-type GeometryErrorKind
-    = OutOfBounds
-    | Overlap
-    | TooClose -- pair-level; rolls up into BoardGeometryStatus.Crowded
-
-
-type alias GeometryError =
-    { kind : GeometryErrorKind
-    , message : String
-    , stackIndices : List Int
-    }
-
-
-type BoardGeometryStatus
-    = CleanlySpaced
-    | Crowded
-    | Illegal
-
-
-
--- INTERNAL: Rect
-
-
-type alias Rect =
-    { left : Int
-    , top : Int
-    , right : Int
-    , bottom : Int
-    }
 
 
 stackRect : CardStack -> Rect
