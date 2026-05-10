@@ -310,7 +310,7 @@ update msg model =
             clickHint model
 
         GameHintReceived value ->
-            handleHintResponse value model
+            ( handleHintResponse value model, Cmd.none, NoOutput )
 
 
 -- UPDATE HELPERS
@@ -504,53 +504,41 @@ clickHint model =
     )
 
 
-handleHintResponse : Encode.Value -> Model -> ( Model, Cmd Msg, Output )
+handleHintResponse : Encode.Value -> Model -> Model
 handleHintResponse value model =
     case Engine.decodeHintResponse model.pendingEngineRequest value of
         Engine.HintStaleId ->
-            ( model, Cmd.none, NoOutput )
+            model
 
         Engine.HintError detail ->
-            ( { model
+            { model
                 | pendingEngineRequest = Nothing
                 , status = { text = "Engine error: " ++ detail, kind = Scold }
-              }
-            , Cmd.none
-            , NoOutput
-            )
+            }
 
         Engine.HintLines [] ->
-            ( { model
+            { model
                 | pendingEngineRequest = Nothing
                 , hintedCards = []
                 , status = { text = "No hint — no obvious play for this hand on this board.", kind = Inform }
-              }
-            , Cmd.none
-            , NoOutput
-            )
+            }
 
         Engine.HintLines lines ->
-            ( { model
+            { model
                 | pendingEngineRequest = Nothing
                 , hintedCards = []
                 , status = { text = String.join "\n" lines, kind = Inform }
-              }
-            , Cmd.none
-            , NoOutput
-            )
+            }
 
         Engine.HintDecodeError err ->
             let
                 _ =
                     Debug.log "handleHintResponse decode err" err
             in
-            ( { model
+            { model
                 | pendingEngineRequest = Nothing
                 , status = { text = "Engine game-hint response could not be decoded — see console.", kind = Scold }
-              }
-            , Cmd.none
-            , NoOutput
-            )
+            }
 
 
 
