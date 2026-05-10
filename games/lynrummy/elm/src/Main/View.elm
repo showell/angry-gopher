@@ -134,7 +134,12 @@ sidebarInfo model =
             , drag = replayDrag rs
             , hintedCards = []
             , canUndo = False
-            , replay = Just { paused = rs.paused }
+            , replayControl =
+                if rs.paused then
+                    Sidebar.ShowResume
+
+                else
+                    Sidebar.ShowPause
             }
 
         Nothing ->
@@ -142,7 +147,7 @@ sidebarInfo model =
             , drag = model.drag
             , hintedCards = model.hintedCards
             , canUndo = canUndoThisTurn model
-            , replay = Nothing
+            , replayControl = Sidebar.ShowReplay
             }
 
 

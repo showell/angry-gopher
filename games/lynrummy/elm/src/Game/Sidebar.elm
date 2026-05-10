@@ -1,5 +1,6 @@
 module Game.Sidebar exposing
     ( PlayerPanelInfo
+    , ReplayControl(..)
     , leftSidebar
     )
 
@@ -19,12 +20,23 @@ import Main.Gesture as Gesture
 import Main.Msg exposing (Msg(..))
 
 
+{-| Which replay-related button the sidebar should render. The
+caller (`Main.View`) already inspects the live replay state and
+hands one of three concrete states down — the sidebar never
+sees a Maybe-bool.
+-}
+type ReplayControl
+    = ShowReplay
+    | ShowPause
+    | ShowResume
+
+
 type alias PlayerPanelInfo =
     { gameState : GameState
     , drag : Drag.DragState
     , hintedCards : List Card
     , canUndo : Bool
-    , replay : Maybe { paused : Bool }
+    , replayControl : ReplayControl
     }
 
 
@@ -32,7 +44,7 @@ type alias ActivePlayerInfo =
     { drag : Drag.DragState
     , hintedCards : List Card
     , canUndo : Bool
-    , replay : Maybe { paused : Bool }
+    , replayControl : ReplayControl
     }
 
 
@@ -54,7 +66,7 @@ playerHands info =
             { drag = info.drag
             , hintedCards = info.hintedCards
             , canUndo = info.canUndo
-            , replay = info.replay
+            , replayControl = info.replayControl
             }
 
         renderRow idx hand =
@@ -92,7 +104,7 @@ viewActivePlayerRow info idx hand =
         , View.viewHand
             { attrsForCard = Gesture.handCardAttrs info.drag info.hintedCards }
             hand
-        , viewTurnControls { canUndo = info.canUndo, replay = info.replay }
+        , viewTurnControls { canUndo = info.canUndo, replayControl = info.replayControl }
         ]
 
 
@@ -140,8 +152,8 @@ playerRowShell { isActive, idx } body =
         )
 
 
-viewTurnControls : { canUndo : Bool, replay : Maybe { paused : Bool } } -> Html Msg
-viewTurnControls { canUndo, replay } =
+viewTurnControls : { canUndo : Bool, replayControl : ReplayControl } -> Html Msg
+viewTurnControls { canUndo, replayControl } =
     div
         [ style "margin-top" "12px"
         , style "display" "flex"
@@ -156,20 +168,19 @@ viewTurnControls { canUndo, replay } =
             Button.disabledButton "Undo"
           )
         , Button.button "Hint" ClickHint
-        , viewReplayControl replay
+        , viewReplayControl replayControl
         , Button.link "← Lobby" "/gopher/game-lobby"
         ]
 
 
-viewReplayControl : Maybe { paused : Bool } -> Html Msg
-viewReplayControl maybeReplay =
-    case maybeReplay of
-        Just rs ->
-            if rs.paused then
-                Button.button "Resume" ClickReplayPauseToggle
-
-            else
-                Button.button "Pause" ClickReplayPauseToggle
-
-        Nothing ->
+viewReplayControl : ReplayControl -> Html Msg
+viewReplayControl control =
+    case control of
+        ShowReplay ->
             Button.button "Instant replay" ClickInstantReplay
+
+        ShowPause ->
+            Button.button "Pause" ClickReplayPauseToggle
+
+        ShowResume ->
+            Button.button "Resume" ClickReplayPauseToggle
