@@ -154,22 +154,28 @@ update : Msg -> Model -> ( Model, Cmd Msg, Output )
 update msg model =
     case msg of
         MouseDownOnBoardCard { stack, cardIndex, point, time } ->
-            withNoOutput
-                (startBoardCardDrag
-                    { stack = stack, cardIndex = cardIndex }
-                    point
-                    time
-                    model
-                )
+            let
+                ( m, c ) =
+                    startBoardCardDrag
+                        { stack = stack, cardIndex = cardIndex }
+                        point
+                        time
+                        model
+            in
+            ( m, c, NoOutput )
 
         MouseDownOnHandCard { card, point } ->
-            withNoOutput (startHandDrag card point model)
+            let
+                ( m, c ) =
+                    startHandDrag card point model
+            in
+            ( m, c, NoOutput )
 
         MouseMove pos tMs ->
             ( mouseMove pos tMs model, Cmd.none, NoOutput )
 
         MouseUp pos tMs ->
-            withNoOutput (handleMouseUp pos tMs model)
+            handleMouseUp pos tMs model
 
         ActionSent (Ok ()) ->
             ( model, Cmd.none, NoOutput )
@@ -189,82 +195,82 @@ update msg model =
             logAndScold "SessionReceived" err Status.sessionAllocFailedStatus model
 
         ClickCompleteTurn ->
-            withNoOutput (clickCompleteTurn model)
+            clickCompleteTurn model
 
         ClickUndo ->
-            withNoOutput (clickUndo model)
+            clickUndo model
 
         PopupOk ->
             ( { model | popup = Nothing }, Cmd.none, NoOutput )
 
         ClickInstantReplay ->
-            withNoOutput
-                ( { model
-                    | replayState =
-                        Just
-                            (Animate.start
-                                (ActionLog.collapseUndos model.actionLog)
-                                model.initialGameState
-                            )
-                    , drag = NotDragging
-                    , status = { text = "Replaying…", kind = Inform }
-                  }
-                , -- Hand animations measure the board fresh per
-                  -- action (bundled with the hand card rect) so
-                  -- a scroll between actions doesn't desync the
-                  -- two endpoints. Nothing to fetch at click time.
-                  Cmd.none
-                )
+            ( { model
+                | replayState =
+                    Just
+                        (Animate.start
+                            (ActionLog.collapseUndos model.actionLog)
+                            model.initialGameState
+                        )
+                , drag = NotDragging
+                , status = { text = "Replaying…", kind = Inform }
+              }
+            , -- Hand animations measure the board fresh per
+              -- action (bundled with the hand card rect) so
+              -- a scroll between actions doesn't desync the
+              -- two endpoints. Nothing to fetch at click time.
+              Cmd.none
+            , NoOutput
+            )
 
         ClickReplayPauseToggle ->
-            withNoOutput
-                ( { model | replayState = Maybe.map Animate.togglePause model.replayState }
-                , Cmd.none
-                )
+            ( { model | replayState = Maybe.map Animate.togglePause model.replayState }
+            , Cmd.none
+            , NoOutput
+            )
 
         ReplayTick nowPosix ->
             case model.replayState of
                 Nothing ->
-                    withNoOutput ( model, Cmd.none )
+                    ( model, Cmd.none, NoOutput )
 
                 Just rs ->
                     case Animate.tick (animateConfig model.gameId) (Time.posixToMillis nowPosix) rs of
                         Animate.StillReplaying nextRs cmd ->
-                            withNoOutput ( { model | replayState = Just nextRs }, cmd )
+                            ( { model | replayState = Just nextRs }, cmd, NoOutput )
 
                         Animate.Completed ->
-                            withNoOutput ( model, dispatchSelf ReplayCompleted )
+                            ( model, dispatchSelf ReplayCompleted, NoOutput )
 
         ReplayCompleted ->
-            withNoOutput
-                ( { model
-                    | replayState = Nothing
-                    , status = { text = "Replay completed! Continue playing.", kind = Inform }
-                  }
-                , Cmd.none
-                )
+            ( { model
+                | replayState = Nothing
+                , status = { text = "Replay completed! Continue playing.", kind = Inform }
+              }
+            , Cmd.none
+            , NoOutput
+            )
 
         HandCardRectReceived (Ok ( handElement, boardElement, posix )) ->
-            withNoOutput
-                ( { model
-                    | replayState =
-                        Maybe.map
-                            (installHandMeasurement
-                                (Time.posixToMillis posix)
-                                handElement
-                                boardElement
-                            )
-                            model.replayState
-                  }
-                , Cmd.none
-                )
+            ( { model
+                | replayState =
+                    Maybe.map
+                        (installHandMeasurement
+                            (Time.posixToMillis posix)
+                            handElement
+                            boardElement
+                        )
+                        model.replayState
+              }
+            , Cmd.none
+            , NoOutput
+            )
 
         HandCardRectReceived (Err err) ->
             let
                 _ =
                     Debug.log "HandCardRectReceived err" err
             in
-            withNoOutput ( model, Cmd.none )
+            ( model, Cmd.none, NoOutput )
 
         ActionLogFetched (Ok ( initialState, actions )) ->
             ( bootstrapFromBundle initialState actions model, Cmd.none, NoOutput )
@@ -273,18 +279,13 @@ update msg model =
             logAndScold "ActionLogFetched" err Status.actionLogFetchFailedStatus model
 
         BoardRectReceived result ->
-            withNoOutput (boardRectReceived result model)
+            boardRectReceived result model
 
         ClickHint ->
             clickHint model
 
         GameHintReceived value ->
-            withNoOutput (handleHintResponse value model)
-
-
-withNoOutput : ( Model, Cmd Msg ) -> ( Model, Cmd Msg, Output )
-withNoOutput ( m, c ) =
-    ( m, c, NoOutput )
+            handleHintResponse value model
 
 
 {-| Fire a Msg into our own update on the next runtime cycle.
@@ -390,11 +391,11 @@ to the per-side handler. The board/hand split is load-bearing
 indirection — Puzzles can import `handleMouseUpBoard` without
 pulling in any of the hand-card complexity.
 -}
-handleMouseUp : Point -> Float -> Model -> ( Model, Cmd Msg )
+handleMouseUp : Point -> Float -> Model -> ( Model, Cmd Msg, Output )
 handleMouseUp releasePoint tMs model =
     case model.drag of
         NotDragging ->
-            ( model, Cmd.none )
+            ( model, Cmd.none, NoOutput )
 
         DraggingBoardCard d ->
             let
@@ -421,6 +422,7 @@ handleMouseUp releasePoint tMs model =
             , outcome.outboundPayload
                 |> Maybe.map (Wire.sendAction model.sessionId)
                 |> Maybe.withDefault Cmd.none
+            , NoOutput
             )
 
         DraggingHandCard d ->
@@ -452,15 +454,16 @@ handleMouseUp releasePoint tMs model =
             , outcome.outboundPayload
                 |> Maybe.map (Wire.sendAction model.sessionId)
                 |> Maybe.withDefault Cmd.none
+            , NoOutput
             )
 
 
 
-clickCompleteTurn : Model -> ( Model, Cmd Msg )
+clickCompleteTurn : Model -> ( Model, Cmd Msg, Output )
 clickCompleteTurn model =
     case TurnControl.attemptCompleteTurn { gameState = model.gameState, nextSeq = model.nextSeq } of
         TurnControl.TurnRejected r ->
-            ( { model | status = r.status, popup = Just r.popup }, Cmd.none )
+            ( { model | status = r.status, popup = Just r.popup }, Cmd.none, NoOutput )
 
         TurnControl.TurnCompleted r ->
             ( { model
@@ -471,10 +474,11 @@ clickCompleteTurn model =
                 , popup = Just r.popup
               }
             , Wire.sendAction model.sessionId r.outboundPayload
+            , NoOutput
             )
 
 
-clickUndo : Model -> ( Model, Cmd Msg )
+clickUndo : Model -> ( Model, Cmd Msg, Output )
 clickUndo model =
     case
         TurnControl.attemptUndo
@@ -484,7 +488,7 @@ clickUndo model =
             }
     of
         TurnControl.NothingToUndo ->
-            ( model, Cmd.none )
+            ( model, Cmd.none, NoOutput )
 
         TurnControl.DidUndo r ->
             ( { model
@@ -496,13 +500,14 @@ clickUndo model =
                 , drag = NotDragging
               }
             , Wire.sendAction model.sessionId r.outboundPayload
+            , NoOutput
             )
 
 
 boardRectReceived :
     Result Browser.Dom.Error Browser.Dom.Element
     -> Model
-    -> ( Model, Cmd Msg )
+    -> ( Model, Cmd Msg, Output )
 boardRectReceived result model =
     case result of
         Ok element ->
@@ -514,14 +519,14 @@ boardRectReceived result model =
                     , height = round element.element.height
                     }
             in
-            ( { model | boardRect = Just rect }, Cmd.none )
+            ( { model | boardRect = Just rect }, Cmd.none, NoOutput )
 
         Err err ->
             let
                 _ =
                     Debug.log "BoardRectReceived err" err
             in
-            ( model, Cmd.none )
+            ( model, Cmd.none, NoOutput )
 
 
 clickHint : Model -> ( Model, Cmd Msg, Output )
@@ -548,11 +553,11 @@ clickHint model =
     )
 
 
-handleHintResponse : Encode.Value -> Model -> ( Model, Cmd Msg )
+handleHintResponse : Encode.Value -> Model -> ( Model, Cmd Msg, Output )
 handleHintResponse value model =
     case Engine.decodeHintResponse model.pendingEngineRequest value of
         Engine.HintStaleId ->
-            ( model, Cmd.none )
+            ( model, Cmd.none, NoOutput )
 
         Engine.HintError detail ->
             ( { model
@@ -560,6 +565,7 @@ handleHintResponse value model =
                 , status = { text = "Engine error: " ++ detail, kind = Scold }
               }
             , Cmd.none
+            , NoOutput
             )
 
         Engine.HintLines [] ->
@@ -569,6 +575,7 @@ handleHintResponse value model =
                 , status = { text = "No hint — no obvious play for this hand on this board.", kind = Inform }
               }
             , Cmd.none
+            , NoOutput
             )
 
         Engine.HintLines lines ->
@@ -578,6 +585,7 @@ handleHintResponse value model =
                 , status = { text = String.join "\n" lines, kind = Inform }
               }
             , Cmd.none
+            , NoOutput
             )
 
         Engine.HintDecodeError err ->
@@ -590,6 +598,7 @@ handleHintResponse value model =
                 , status = { text = "Engine game-hint response could not be decoded — see console.", kind = Scold }
               }
             , Cmd.none
+            , NoOutput
             )
 
 
