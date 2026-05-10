@@ -455,28 +455,31 @@ view model =
                     ( model.board, model.drag )
     in
     div
-        [ style "padding" "20px"
-        , style "font-family" "system-ui, sans-serif"
-        , style "display" "flex"
-        , style "gap" "20px"
-        , style "align-items" "flex-start"
-        ]
-        [ div
-            [ style "min-width" "120px"
+        [ style "font-family" "system-ui, sans-serif" ]
+        [ Status.viewStatusBar model.status
+        , div
+            [ style "padding" "20px"
             , style "display" "flex"
-            , style "flex-direction" "column"
-            , style "gap" "8px"
+            , style "gap" "20px"
+            , style "align-items" "flex-start"
             ]
-            [ undoButton model
-            , replayButton model
+            [ div
+                [ style "min-width" "120px"
+                , style "display" "flex"
+                , style "flex-direction" "column"
+                , style "gap" "8px"
+                ]
+                [ undoButton model
+                , replayButton model
+                ]
+            , BoardView.boardColumn
+                { board = board
+                , boardRect = model.boardRect
+                , drag = drag
+                , gameId = model.gameId
+                , cardMouseDown = PointerInput.cardMouseDown MouseDownOnBoardCard
+                }
             ]
-        , BoardView.boardColumn
-            { board = board
-            , boardRect = model.boardRect
-            , drag = drag
-            , gameId = model.gameId
-            , cardMouseDown = PointerInput.cardMouseDown MouseDownOnBoardCard
-            }
         ]
 
 
