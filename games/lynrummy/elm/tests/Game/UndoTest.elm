@@ -325,10 +325,6 @@ suiteCollapseUndos =
                 in
                 ActionLog.collapseUndos entries
                     |> Expect.equal entries
-        , test "single Undo on empty log produces empty list" <|
-            \_ ->
-                ActionLog.collapseUndos [ logEntry Undo ]
-                    |> Expect.equal []
         , test "action then Undo cancels the action" <|
             \_ ->
                 let
@@ -357,7 +353,7 @@ suiteCollapseUndos =
                 in
                 ActionLog.collapseUndos entries
                     |> Expect.equal []
-        , test "Undo does NOT pop CompleteTurn" <|
+        , test "Undo cancels a CompleteTurn like any other action" <|
             \_ ->
                 let
                     ct =
@@ -367,8 +363,8 @@ suiteCollapseUndos =
                         [ ct, logEntry Undo ]
                 in
                 ActionLog.collapseUndos entries
-                    |> Expect.equal [ ct ]
-        , test "Undo past CompleteTurn stops at CompleteTurn boundary" <|
+                    |> Expect.equal []
+        , test "single Undo cancels only the most recent action" <|
             \_ ->
                 let
                     s =

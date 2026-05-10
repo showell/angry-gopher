@@ -18,43 +18,55 @@ type alias ActionLogBundle =
     }
 
 
-{-| Collapse `Undo` tokens: each Undo cancels the most recent
-non-`CompleteTurn` entry. The result is the effective action
-sequence — what replay and bootstrap should actually apply.
+{-| Collapse `Undo` tokens against the actions they cancel,
+producing the effective action sequence — what replay and
+bootstrap should actually apply.
 
-Used by the full-game `bootstrapFromBundle` (to fold only
-effective actions), `clickInstantReplay` (so replay never
-animates Undo tokens), and the puzzle host's redo-from-initial
-on undo. Puzzle logs never contain `CompleteTurn`, so the
-turn-boundary guard is a no-op there — same function works for
-both hosts.
+Each `Undo` cancels the most recent non-Undo entry. The
+algorithm walks the reversed log left-to-right counting
+pending undos: an `Undo` increments the counter; any other
+entry either cancels a pending undo (if the counter is
+positive) or survives (consed onto `accum` in original
+order).
+
+If the log finishes with `pendingUndos > 0`, that's a
+contract violation — the input has more undo tokens than
+undoable actions — and we panic rather than silently drop
+the extras.
+
+`CompleteTurn` is not special-cased here: it can be
+undone like any other action. The UI gate against undoing
+across a turn boundary lives in `Main.State.lastUndoableAction`,
+which is where it belongs (it's a UX policy, not a data
+invariant).
 
 -}
 collapseUndos : List ActionLogEntry -> List ActionLogEntry
 collapseUndos entries =
-    List.foldl
-        (\entry stack ->
-            case entry.action of
-                Undo ->
-                    popLastUndoable stack
+    let
+        ( accum, pendingUndos ) =
+            List.foldl
+                (\entry ( kept, pending ) ->
+                    case entry.action of
+                        Undo ->
+                            ( kept, pending + 1 )
 
-                _ ->
-                    stack ++ [ entry ]
-        )
-        []
-        entries
+                        _ ->
+                            if pending > 0 then
+                                ( kept, pending - 1 )
 
+                            else
+                                ( entry :: kept, pending )
+                )
+                ( [], 0 )
+                (List.reverse entries)
+    in
+    if pendingUndos > 0 then
+        Debug.todo
+            ("Game.ActionLog.collapseUndos: "
+                ++ String.fromInt pendingUndos
+                ++ " unmatched Undo token(s) in the log"
+            )
 
-popLastUndoable : List ActionLogEntry -> List ActionLogEntry
-popLastUndoable entries =
-    case List.reverse entries of
-        [] ->
-            entries
-
-        last :: rest ->
-            case last.action of
-                CompleteTurn ->
-                    entries
-
-                _ ->
-                    List.reverse rest
+    else
+        accum
