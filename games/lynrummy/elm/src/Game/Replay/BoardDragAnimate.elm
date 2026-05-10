@@ -114,9 +114,16 @@ step nowMs board state =
         Done { newBoard = applyToBoard state.pendingAction board }
 
     else
+        let
+            p =
+                interp state.path elapsedMs
+
+            info =
+                state.dragInfo
+        in
         InProgress
             { state
-                | dragInfo = setFloater (interp state.path elapsedMs) state.dragInfo
+                | dragInfo = { info | floaterTopLeft = { left = p.x, top = p.y } }
             }
 
 
@@ -132,11 +139,6 @@ applyToBoard action board =
 
         Merge m ->
             Execute.mergeStack m.sourceStack m.targetStack m.side board
-
-
-setFloater : Point -> BoardCardDragInfo -> BoardCardDragInfo
-setFloater p info =
-    { info | floaterTopLeft = { left = p.x, top = p.y } }
 
 
 duration : List TimeLoc -> Float

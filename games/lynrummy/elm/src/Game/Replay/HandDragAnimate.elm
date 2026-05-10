@@ -189,9 +189,16 @@ step config nowMs gameState state =
                 )
 
             else
+                let
+                    p =
+                        interp d.path elapsedMs
+
+                    info =
+                        d.dragInfo_
+                in
                 ( InProgress
                     (InFlight
-                        { d | dragInfo_ = setFloater (interp d.path elapsedMs) d.dragInfo_ }
+                        { d | dragInfo_ = { info | floaterTopLeft = p, cursor = p } }
                     )
                 , Cmd.none
                 )
@@ -333,11 +340,6 @@ boardRectFromElement element =
 
 
 -- PATH MATH
-
-
-setFloater : Point -> HandCardDragInfo -> HandCardDragInfo
-setFloater p info =
-    { info | floaterTopLeft = p, cursor = p }
 
 
 duration : List TimeLoc -> Float
