@@ -46,7 +46,7 @@ next one lands.
 -}
 beatMs : Int
 beatMs =
-    1500
+    700
 
 
 type TickResult msg
