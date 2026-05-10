@@ -20,29 +20,26 @@ Four operations the host (`Main.Play`) plumbs through:
   - `tick nowMs rs` — one animation-frame step. Returns
     `StillReplaying`, `NeedHandCardRect` (host fires a DOM
     query), or `Completed`.
-  - `handCardRectReceived nowMs element maybeBoardRect rs` —
-    host calls this when its DOM query resolves; we transition
-    `AwaitingHandRect` → `AnimatingHandAction`.
+  - `handCardRectReceived nowMs handElement boardElement rs`
+    — host calls this when its DOM query resolves; we
+    delegate into `HandDragAnimate.measurementReceived` to
+    transition the hand sub-machine from awaiting to
+    in-flight.
 
 `tick` is the workhorse; the only function it delegates to
 inside `Animate` is `startNextAction`, which decides what
 phase a popped action becomes (real computation). Real
 handoffs outside `Animate` are to `BoardDragAnimate` /
-`HandDragAnimate` (path interpolation) and `Execute.applyEvent`
-(the apply layer).
+`HandDragAnimate` (path interpolation + measurement) and
+`Execute.applyEvent` (the apply layer).
 
 -}
 
 import Browser.Dom
 import Game.ActionLog exposing (ActionLogEntry)
-import Game.BoardActions as BoardActions
-import Game.CardStack as CardStack
 import Game.Execute as Execute
 import Game.Game exposing (GameState)
 import Game.GameEvent as GameEvent
-import Game.Physics.BoardGeometry as BG
-import Game.Physics.GestureArbitration as GA
-import Game.Point exposing (Point)
 import Game.Replay.BoardDragAnimate as BoardDragAnimate
 import Game.Replay.HandDragAnimate as HandDragAnimate
 import Game.Replay.ReplayState exposing (Phase(..), ReplayState)
@@ -145,13 +142,6 @@ tick nowMs rs =
                             , phase = InBeat { nextBeatMs = nextBeat }
                         }
 
-        AwaitingHandRect _ ->
-            -- Waiting for the host's DOM query to resolve.
-            -- Re-emitting NeedHandCardRect would fire a second
-            -- query; the host fires once, on the InBeat→
-            -- AwaitingHandRect transition. Just hold.
-            StillReplaying rs
-
         AnimatingHandAction handState ->
             case HandDragAnimate.step nowMs handState of
                 HandDragAnimate.InProgress nextHandState ->
@@ -168,9 +158,11 @@ tick nowMs rs =
 {-| Decide what phase to enter when popping `entry` off the
 queue, plus optionally name a hand card the host should
 DOM-measure. Board-drag events open `AnimatingAction`
-immediately. Hand-drag events open `AwaitingHandRect` and
-ask the host to measure the source hand card. Everything
-else slates `ExecutingAction` for the next tick.
+immediately. Hand-drag events open `AnimatingHandAction`
+with `HandDragAnimate`'s AwaitingMeasurement substate; the
+sub-machine answers `measureRequest` so the host knows
+which card to query. Everything else slates `ExecutingAction`
+for the next tick.
 
 `Undo` is unreachable — `collapseUndos` strips them at the
 top of replay.
@@ -203,11 +195,19 @@ startNextAction nowMs entry =
             , Nothing
             )
 
-        GameEvent.MergeHand p ->
-            ( AwaitingHandRect entry, Just p.handCard )
+        GameEvent.MergeHand _ ->
+            let
+                handState =
+                    HandDragAnimate.start entry
+            in
+            ( AnimatingHandAction handState, HandDragAnimate.measureRequest handState )
 
-        GameEvent.PlaceHand p ->
-            ( AwaitingHandRect entry, Just p.handCard )
+        GameEvent.PlaceHand _ ->
+            let
+                handState =
+                    HandDragAnimate.start entry
+            in
+            ( AnimatingHandAction handState, HandDragAnimate.measureRequest handState )
 
         GameEvent.Split _ ->
             ( ExecutingAction entry, Nothing )
@@ -220,18 +220,12 @@ startNextAction nowMs entry =
                 "Animate.startNextAction: Undo reached the queue (collapseUndos should have stripped it)"
 
 
-{-| Host calls this when its combined Task (hand card +
-board element) resolves. We compute the hand origin and the
-live board rect from the two elements, build the destination
-from the pending action's payload + that fresh board rect,
-hand it to `HandDragAnimate.start`, and transition to
-`AnimatingHandAction`.
-
-Both rects are fetched on the same tick so a page scroll
-between actions doesn't desync hand origin and board
-destination — the symmetric fix to a long-standing
-asymmetry where only the hand rect was fresh.
-
+{-| Host calls this when its bundled DOM query (hand card +
+board element + time) resolves. We thread the elements down
+into the `HandDragAnimate` sub-machine, which extracts both
+viewport coords, builds the linear path, and transitions
+itself from AwaitingMeasurement to InFlight. Animate just
+routes — the geometry math lives one level down.
 -}
 handCardRectReceived :
     Int
@@ -241,88 +235,20 @@ handCardRectReceived :
     -> ReplayState
 handCardRectReceived nowMs handElement boardElement rs =
     case rs.phase of
-        AwaitingHandRect entry ->
-            let
-                origin =
-                    elementTopLeftInViewport handElement
-
-                boardRect =
-                    boardRectFromElement boardElement
-
-                handState =
-                    handAnimationFor entry origin boardRect nowMs
-            in
-            { rs | phase = AnimatingHandAction handState }
+        AnimatingHandAction handState ->
+            { rs
+                | phase =
+                    AnimatingHandAction
+                        (HandDragAnimate.measurementReceived
+                            nowMs
+                            handElement
+                            boardElement
+                            handState
+                        )
+            }
 
         _ ->
             -- Wrong phase (rect arrived after we transitioned
             -- away — pause-toggled, replay completed, etc.).
             -- Drop the late result.
             rs
-
-
-{-| Build the hand-animation State for a popped hand action.
-Dispatches by variant to compute the floater's destination
-in viewport coords, then composes `HandDragAnimate.start`.
-The path is total — `AwaitingHandRect` is only entered for
-hand-action variants, so any other variant here is a
-contract violation.
--}
-handAnimationFor : ActionLogEntry -> Point -> GA.Rect -> Int -> HandDragAnimate.State
-handAnimationFor entry origin boardRect nowMs =
-    case entry.action of
-        GameEvent.MergeHand p ->
-            let
-                size =
-                    CardStack.size p.target
-
-                landingLeft =
-                    case p.side of
-                        BoardActions.Right ->
-                            p.target.loc.left + size * BG.cardPitch
-
-                        BoardActions.Left ->
-                            p.target.loc.left - BG.cardPitch
-            in
-            HandDragAnimate.start
-                { handCard = p.handCard
-                , origin = origin
-                , destination =
-                    { x = boardRect.x + landingLeft
-                    , y = boardRect.y + p.target.loc.top
-                    }
-                , startMs = nowMs
-                , pendingAction = entry.action
-                }
-
-        GameEvent.PlaceHand p ->
-            HandDragAnimate.start
-                { handCard = p.handCard
-                , origin = origin
-                , destination =
-                    { x = boardRect.x + p.loc.left
-                    , y = boardRect.y + p.loc.top
-                    }
-                , startMs = nowMs
-                , pendingAction = entry.action
-                }
-
-        _ ->
-            Debug.todo
-                "Animate.handAnimationFor: AwaitingHandRect entry must carry a hand action"
-
-
-elementTopLeftInViewport : Browser.Dom.Element -> Point
-elementTopLeftInViewport element =
-    { x = round (element.element.x - element.viewport.x)
-    , y = round (element.element.y - element.viewport.y)
-    }
-
-
-boardRectFromElement : Browser.Dom.Element -> GA.Rect
-boardRectFromElement element =
-    { x = round (element.element.x - element.viewport.x)
-    , y = round (element.element.y - element.viewport.y)
-    , width = round element.element.width
-    , height = round element.element.height
-    }

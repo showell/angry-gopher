@@ -28,7 +28,7 @@ type alias ReplayState =
     }
 
 
-{-| Replay's six phases. Each tick reads `phase`, does its
+{-| Replay's five phases. Each tick reads `phase`, does its
 phase-appropriate work, and transitions accordingly.
 
   - `Starting` — pre-arm. The clock hasn't been seen yet;
@@ -41,13 +41,9 @@ phase-appropriate work, and transitions accordingly.
     action has been popped and the next tick will fold it
     into `gameState` via `Execute.applyEvent`.
   - `AnimatingAction` — a board-drag animation is in flight.
-  - `AwaitingHandRect` — waiting for the host to measure the
-    hand card's viewport position. Hand-drag origins depend
-    on live layout, so the host fires
-    `Browser.Dom.getElement` and feeds the rect back via
-    `Animate.handCardRectReceived`.
   - `AnimatingHandAction` — a hand-drag animation is in
-    flight.
+    flight. Its sub-state owns the AwaitingMeasurement vs
+    InFlight distinction; the outer phase doesn't split.
 
 The `*Action` suffix marks the phases that represent a
 popped action being processed; the others are idle / waiting.
@@ -58,5 +54,4 @@ type Phase
     | InBeat { nextBeatMs : Int }
     | ExecutingAction ActionLogEntry
     | AnimatingAction BoardDragAnimate.State
-    | AwaitingHandRect ActionLogEntry
     | AnimatingHandAction HandDragAnimate.State

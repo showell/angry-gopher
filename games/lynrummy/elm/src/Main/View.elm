@@ -51,6 +51,7 @@ import Game.Physics.BoardGeometry as BoardGeometry
 import Game.Physics.GestureArbitration as GA
 import Game.PointerInput as PointerInput
 import Game.Popup as Popup
+import Game.Replay.HandDragAnimate as HandDragAnimate
 import Game.Replay.ReplayState exposing (Phase(..), ReplayState)
 import Game.Sidebar as Sidebar
 import Game.Status as Status
@@ -183,7 +184,14 @@ replayDrag rs =
             Drag.DraggingBoardCard dragState.dragInfo
 
         AnimatingHandAction handState ->
-            Drag.DraggingHandCard handState.dragInfo
+            case HandDragAnimate.dragInfo handState of
+                Just info ->
+                    Drag.DraggingHandCard info
+
+                Nothing ->
+                    -- AwaitingMeasurement — floater hasn't
+                    -- appeared yet.
+                    Drag.NotDragging
 
         Starting ->
             Drag.NotDragging
@@ -192,7 +200,4 @@ replayDrag rs =
             Drag.NotDragging
 
         ExecutingAction _ ->
-            Drag.NotDragging
-
-        AwaitingHandRect _ ->
             Drag.NotDragging
