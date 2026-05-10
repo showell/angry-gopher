@@ -28,7 +28,6 @@ import Game.BoardActions exposing (Side)
 import Game.BoardDragTypes exposing (BoardCardDragInfo)
 import Game.CardStack exposing (BoardLocation, CardStack)
 import Game.Execute as Execute
-import Game.Game exposing (GameState)
 import Game.Point exposing (Point)
 import Game.TimeLoc exposing (TimeLoc)
 
@@ -57,7 +56,7 @@ type alias State =
 
 type Outcome
     = InProgress State
-    | Done { newGameState : GameState }
+    | Done { newBoard : List CardStack }
 
 
 start : { startMs : Int, pendingAction : BoardDragAnimateAction } -> State
@@ -98,15 +97,21 @@ variant and call the right `Execute` board operation
 directly. The apply lives here (rather than in the outer
 machine) so the sub-machine fully owns the action it was
 started for.
+
+The sub-machine deliberately operates on `List CardStack`
+rather than the full `GameState` — the board is everything
+a stack-move/merge animation cares about. The outer machine
+plugs the returned board back into its game state.
+
 -}
-step : Int -> GameState -> State -> Outcome
-step nowMs gameState state =
+step : Int -> List CardStack -> State -> Outcome
+step nowMs board state =
     let
         elapsedMs =
             toFloat (nowMs - state.startMs)
     in
     if elapsedMs >= duration state.path then
-        Done { newGameState = applyToBoard state.pendingAction gameState }
+        Done { newBoard = applyToBoard state.pendingAction board }
 
     else
         InProgress
@@ -115,22 +120,18 @@ step nowMs gameState state =
             }
 
 
-{-| Apply the pending board action to the game state.
-Dispatches on the variant to call the right `Execute`
-operation directly — no GameEvent in sight.
+{-| Apply the pending board action to the board. Dispatches
+on the variant to call the right `Execute` operation
+directly — no GameEvent in sight.
 -}
-applyToBoard : BoardDragAnimateAction -> GameState -> GameState
-applyToBoard action gameState =
+applyToBoard : BoardDragAnimateAction -> List CardStack -> List CardStack
+applyToBoard action board =
     case action of
         Move m ->
-            { gameState
-                | board = Execute.moveStack m.sourceStack m.newLoc gameState.board
-            }
+            Execute.moveStack m.sourceStack m.newLoc board
 
         Merge m ->
-            { gameState
-                | board = Execute.mergeStack m.sourceStack m.targetStack m.side gameState.board
-            }
+            Execute.mergeStack m.sourceStack m.targetStack m.side board
 
 
 setFloater : Point -> BoardCardDragInfo -> BoardCardDragInfo

@@ -114,12 +114,21 @@ tick config nowMs rs =
             StillReplaying { rs | phase = InBeat { nextBeatMs = nowMs + beatMs } } Cmd.none
 
         AnimatingBoardAction dragState ->
-            case BoardDragAnimate.step nowMs rs.gameState dragState of
+            case BoardDragAnimate.step nowMs rs.gameState.board dragState of
                 BoardDragAnimate.InProgress nextDragState ->
                     StillReplaying { rs | phase = AnimatingBoardAction nextDragState } Cmd.none
 
-                BoardDragAnimate.Done { newGameState } ->
-                    StillReplaying { rs | gameState = newGameState, phase = ActionCompleted } Cmd.none
+                BoardDragAnimate.Done { newBoard } ->
+                    let
+                        gs0 =
+                            rs.gameState
+                    in
+                    StillReplaying
+                        { rs
+                            | gameState = { gs0 | board = newBoard }
+                            , phase = ActionCompleted
+                        }
+                        Cmd.none
 
         AnimatingHandAction handState ->
             case HandDragAnimate.step config nowMs rs.gameState handState of
