@@ -55,7 +55,7 @@ Server-rendered pages at `/gopher/*` with Basic auth:
 | `/gopher/` | Landing page |
 | `/gopher/game-lobby` | Games launch pad (LynRummy) |
 | `/gopher/lynrummy-elm/` | Elm LynRummy client |
-| `/gopher/puzzles/` | Curated puzzle gallery |
+| `/gopher/puzzle/` | Single-board LynRummy puzzle |
 | `/gopher/wiki/` | Wiki viewer over repo source |
 | `/gopher/docs/` | Markdown essay viewer |
 | `/gopher/claude/` | Pointer-out to claude-collab (port 9100) |

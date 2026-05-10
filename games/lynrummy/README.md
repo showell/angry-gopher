@@ -12,11 +12,10 @@ deal, play, hint, agent-play, replay, resume. There is no
 public release yet. Steve plays solo or against the agent
 through the in-browser UI; everything runs locally.
 
-The TS solver is wired into both the live-game Hint button
-and the puzzle gallery's "Let agent play" button, so the
-strongest available player is always one click away. Full
-games can be auto-played end-to-end against a fixed seed for
-testing or analysis.
+The TS solver is wired into the live-game Hint button so
+the strongest available player is always one click away.
+Full games can be auto-played end-to-end against a fixed
+seed for testing or analysis.
 
 A hard-earned tuning note: hint plan-depth (`HINT_MAX_PLAN_LENGTH`
 in `ts/src/hand_play.ts`) is **5**, not 4. Depth 4 looks fine on
@@ -34,10 +33,8 @@ The TS agent at `ts/` owns three end-to-end jobs:
   a fixed seed; writes the result as an Elm-replayable JSON
   transcript Steve can step through in the UI. Driver:
   `npm run bench:end-of-deck -- --write-transcript [seeds...]`.
-- **Hint generation.** Both surfaces (full game + Puzzles)
-  call into `hand_play.ts:findPlay` over Elm ports for the
-  Hint button. The Puzzle "Let agent play" button uses the
-  same engine to drive a complete puzzle solution.
+- **Hint generation.** The full game's Hint button calls
+  into `hand_play.ts:findPlay` over Elm ports.
 - **Conformance + perf gates.** `ops/check-conformance` runs
   the TS suite (leaf primitives + engine cross-check + verb
   fixtures + physical-plan integration + replay walkthroughs
@@ -77,13 +74,15 @@ the gate isn't load-bearing.
 - `ts/` — the TypeScript agent (solver, verb pipeline,
   self-play, transcript writer, browser bundle). See
   [`ts/README.md`](./ts/README.md).
-- `elm/` — the in-browser UI (full game + Puzzles gallery,
-  both embedding `Main.Play`). See
+- `elm/` — the in-browser UI: full game (`Main.elm`) and
+  the single-board puzzle (`Puzzle.elm`). See
   [`elm/README.md`](./elm/README.md).
-- `puzzles/` — the curated puzzle catalog the gallery loads.
-  Refresh via `ts/tools/generate_puzzles.ts`.
+- `conformance/mined_seeds.json` — positioned mid-game
+  boards the puzzle host picks from. Generated upstream by
+  `ts/tools/generate_puzzles.ts`.
 - `data/` — file-system-backed session storage (full games
-  + per-puzzle attempts). All committed.
+  in `lynrummy-elm/sessions/`, puzzle attempts in
+  `puzzle/sessions/`). All committed.
 - `conformance/` — DSL scenarios that pin the cross-language
   contract between Elm and TS. Compiled to fixtures by
   `cmd/fixturegen`.

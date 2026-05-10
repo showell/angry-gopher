@@ -9,11 +9,11 @@ so you don't have to remember flags.
 - **`ops/start`** — launches the dev server (Go on `:9000`,
   reload-on-write). Reads from already-built artifacts; does
   not rebuild.
-- **`ops/build_elm`** — rebuilds **everything the puzzles
-  page needs**, in order:
+- **`ops/build_elm`** — rebuilds **everything the browser
+  needs**, in order:
   1. `ops/build_engine_js` (TS engine → JS bundle)
   2. `Main.elm` → `games/lynrummy/elm/elm.js`
-  3. `Puzzles.elm` → `games/lynrummy/elm/puzzles.js`
+  3. `Puzzle.elm` → `games/lynrummy/elm/puzzle.js`
 
 After editing any `.elm` or any `.ts` file under
 `games/lynrummy/ts/src/`, run `ops/build_elm` and reload the
@@ -22,17 +22,17 @@ browser.
 ## Build artifacts
 
 All three live at `games/lynrummy/elm/` and are served by
-`views/lynrummy_elm.go` and `views/puzzles.go`:
+`views/lynrummy_elm.go` and `views/puzzle.go`:
 
 | File | Source | Served at |
 |------|--------|-----------|
 | `elm.js` | `elm/src/Main.elm` | `/gopher/lynrummy-elm/elm.js` |
-| `puzzles.js` | `elm/src/Puzzles.elm` | `/gopher/puzzles/puzzles.js` |
-| `engine.js` | `ts/src/engine_entry.ts` (esbuild bundle) | `/gopher/puzzles/engine.js` |
+| `puzzle.js` | `elm/src/Puzzle.elm` | `/gopher/puzzle/puzzle.js` |
+| `engine.js` | `ts/src/engine_entry.ts` (esbuild bundle) | `/gopher/lynrummy-elm/engine.js` |
 
 `engine.js` exposes a single browser global: `LynRummyEngine`,
 with `solveBoard(board)`, `solveStateWithDescs(state)`, and
-`findPlay(hand, board)` exported. The Elm puzzles client
+`findPlay(hand, board)` exported. The full-game Elm client
 calls into it via `port engineRequest` / `port engineResponse`
 mediated by a small JS glue file.
 
@@ -56,11 +56,16 @@ These don't run on every build — invoke as needed:
   `conformance/scenarios/*.dsl` to Elm tests +
   `conformance/fixtures/*.json`. Run it after editing any
   `.dsl` scenario.
-- **Puzzle catalog.** `games/lynrummy/ts/tools/generate_puzzles.ts`
-  re-mines the 5-puzzle gallery into
-  `games/lynrummy/puzzles/puzzles.json`. Hard-coded N=5 (no
-  CLI args). Re-run after engine changes that should reshape
-  the catalog.
+- **Puzzle catalogs.** Two TS tools mine boards for puzzle
+  use:
+  - `games/lynrummy/ts/tools/generate_puzzles.ts` writes
+    `games/lynrummy/puzzles/puzzles.json` (the small a3_*
+    catalog used by `planner_puzzles.dsl`).
+  - `games/lynrummy/ts/tools/replay_puzzles.ts` emits
+    `puzzle_walkthroughs.dsl`.
+  The single-puzzle UI host (`/gopher/puzzle/`) reads its
+  featured board from `conformance/mined_seeds.json`; the
+  hard-coded `featuredPuzzleName` lives in `views/puzzle.go`.
 - **Bench baselines.** `npm run bench:gen-baseline` (in `ts/`)
   rebuilds the 81-card baseline DSL suite. Don't regenerate
   unless you're explicitly tracking a perf shift.

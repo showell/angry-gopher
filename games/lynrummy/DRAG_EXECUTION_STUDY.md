@@ -120,7 +120,9 @@ without peering into the subject's head:
   outbound capture: does the re-animation look like what actually
   happened? Yes = capture is faithful. No = data is suspect and the bug
   is in the capture pipe.
-- Sessions are read post-hoc directly from SQLite for analysis.
+- Sessions are read post-hoc directly from
+  `games/lynrummy/data/lynrummy-elm/sessions/<id>/actions.jsonl`
+  for analysis.
 
 ## Replay as validation gate
 

@@ -18,11 +18,12 @@ covers principles; that one covers the artifacts.
   UI replays.
 - **Elm is the autonomous client.** Deals, referees, replays,
   renders. `games/lynrummy/elm/`. Two surfaces — the full
-  game (`Main.elm`) and the Puzzles gallery (`Puzzles.elm`),
-  both embedding `Main.Play`. All hint requests (both
-  surfaces) and the puzzle "Let agent play" button route
-  through the TS engine over Elm ports + the JS glue. No
-  Elm code path computes a hint or runs the BFS itself.
+  game (`Main.elm`, embedding `Main.Play`) and the
+  single-board puzzle (`Puzzle.elm`, a dedicated host that
+  composes `Game.*` primitives directly). The full game's
+  Hint button routes through the TS engine over Elm ports +
+  the JS glue. No Elm code path computes a hint or runs the
+  BFS itself.
 - **Go server is dumb file storage.** No referee, no dealer,
   no replay. Sequential session-id allocation is the one
   smart exception.
@@ -120,12 +121,11 @@ Consequences:
       resume) — server reads the on-disk action log and
       bundles it; Elm replays it locally to reach the live
       state.
-    - `GET /puzzles/catalog` (puzzles) — server reads
-      `puzzles.json` and allocates a fresh puzzle-session id.
-  These could in principle be inlined into the page-render
-  flags (the data is already on Go's side); separating them
-  is a code-organization choice, not an architectural
-  requirement. Once they land, the Elm UI is fully primed.
+  The puzzle host is the inverse of the above: its
+  page-render flags carry `{session_id, initial_board}`
+  directly, so the Elm client has zero post-load bootstrap
+  fetches. Once these land (or, for the puzzle host, once
+  the page renders), the Elm UI is fully primed.
 - **Ongoing play is fully local.** After bootstrap completes,
   no inbound HTTP gates user input. The only "pending" state
   the Elm UI tracks is for TS engine responses (Hint shows
@@ -147,15 +147,15 @@ Consequences:
 ## The cast of components
 
 - **Elm UI.** The autonomous client. Two surfaces — full
-  game (`Main.elm`) and the Puzzles gallery (`Puzzles.elm`),
-  both embedding `Main.Play`. Deals locally
-  (`Game.Dealer.dealFullGame seed`), runs its own referee,
-  appends to its own action log, can replay at any time.
-  Originates events from drags, from the **TS engine** (Hint
-  for both surfaces; Let-Agent-Play for Puzzles only) over
-  Elm ports + the JS glue, or from a stored transcript.
-  Once bootstrap is done, the Elm UI's only Go-bound traffic
-  is outbound action and gesture-telemetry POSTs.
+  game (`Main.elm`, embedding `Main.Play`) and the
+  single-board puzzle (`Puzzle.elm`, dedicated host).
+  Deals locally (`Game.Dealer.dealFullGame seed`), runs its
+  own referee, appends to its own action log, can replay at
+  any time. Originates events from drags, from the **TS
+  engine** (Hint button on the full-game surface) over Elm
+  ports + the JS glue, or from a stored transcript. Once
+  bootstrap is done, the Elm UI's only Go-bound traffic is
+  outbound action POSTs.
 - **TypeScript agent.** A complete player without a
   presentation layer, at `games/lynrummy/ts/`. Owns the
   solver (`engine_v2.ts`) and the physical-execution layer
@@ -189,11 +189,12 @@ Engagement levels:
 - **Outbound-only after bootstrap.** Actor pulls down what it
   needs at startup, then writes events for others (or later
   replay) without pulling anything back. The Elm UI operates
-  here: three bootstrap fetches once (session creation /
-  resume bundle / puzzle catalog), then fire-and-forget
-  action + telemetry POSTs for the rest of play. The TS agent
-  operates here too when generating transcripts; Steve
-  watches the result via Elm replay.
+  here: at most one bootstrap fetch (session creation OR
+  resume bundle for the full game; the puzzle host gets its
+  bootstrap data baked into Elm flags at HTML-render time
+  instead), then fire-and-forget action POSTs for the rest
+  of play. The TS agent operates here too when generating
+  transcripts; Steve watches the result via Elm replay.
 - **Two-way coordination.** Both actors post events AND
   integrate events from the other during ongoing play. Each
   incoming event passes through the receiving actor's referee
@@ -369,7 +370,7 @@ All build, launch, and test ops go through `ops/` scripts
 - `ops/start` — kill stale processes, rebuild Go, recompile
   Elm, start both servers, wait for ready.
 - `ops/build_elm` — bundle the TS engine to `engine.js` (via
-  `ops/build_engine_js`), then compile Main.elm + Puzzles.elm.
+  `ops/build_engine_js`), then compile Main.elm + Puzzle.elm.
   Full build steps documented in
   [`BUILDING.md`](./BUILDING.md).
 - `ops/check-conformance` — **the commit gate for Elm
@@ -389,8 +390,9 @@ Don't hand-compose `go run .`, `elm make`, or `go test ./...`
   [`./ts/PHYSICAL_PLAN.md`](./ts/PHYSICAL_PLAN.md) and
   [`./ts/ENGINE_V2.md`](./ts/ENGINE_V2.md).
 - [`./elm/README.md`](./elm/README.md) — Elm UI. Two
-  surfaces (full game + Puzzles) embedding `Main.Play`.
-  Hints + agent-play route through the TS engine.
+  surfaces: the full game (`Main.elm`, embedding
+  `Main.Play`) and the single-board puzzle (`Puzzle.elm`,
+  dedicated host). Hints route through the TS engine.
 
 ### Cross-cutting
 
@@ -428,62 +430,57 @@ ones worth naming inline:
 - **`doctrine_eliminate_dont_paper_over.md`** — change the
   shape, not the adapter.
 
-## Elm components should be easy to embed
+## Two host shapes for two domains
 
-When a feature earns a second surface (the main play
-surface AND a gallery of curated puzzle panels each with
-their own play instance), the architecture should make that
-cheap:
+The repo has two browser entry points, each with the host
+shape its domain wants:
 
-- **Extract the whole-app logic into a component module**
-  (`Main.Play`, `Game.Replay`) with init/update/view/
-  subscriptions + a typed `Output` union for the few things
-  the host legitimately needs.
-- **Shrink `Main.elm` to a thin harness** — ports,
-  `Browser.element` boot, routing Output into host
-  concerns.
-- **Per-instance DOM ids.** `gameId : String` so multiple
-  instances coexist without DOM collisions.
-- **`position: relative` + fixed size on the component's
-  outer div.** Host decides where it lives in the page.
-- **Fixed-position overlays are fine.** Drag floaters,
-  popups, modals stay viewport-level.
+- **Embedding (full game).** `Main.elm` is a thin harness;
+  `Main.Play` is the embeddable component. Exposes
+  `init / update / view / subscriptions` + a typed `Output`
+  union for the few things the host legitimately needs.
+  Extracted so a future host (tutorial, side-by-side
+  agent-vs-human viewer) can host it without rebuilding.
+- **Dedicated host (puzzle).** `Puzzle.elm` composes
+  `Game.*` primitives directly without going through
+  `Main.Play`. Carries its own `Msg` / `Model` / replay
+  engine. The puzzle's domain (board only, no hand, no turn
+  cycle) made unified-Msg/Model contortions Maybe-everywhere;
+  going dedicated dropped that complexity.
 
-For new Elm features: if it could plausibly show up in more
-than one host context, design it as a component from the
-start.
+Choose by domain. If a new surface plausibly wants
+full-game semantics, embed `Main.Play`; if its domain is
+materially narrower, follow `Puzzle.elm`'s pattern.
 
-## Puzzles as study instrument
+## The puzzle host
 
-The Puzzles gallery (`/gopher/puzzles/`) observes play on
-curated mid-game situations and feeds divergences back into
-the agent.
+The puzzle host (`/gopher/puzzle/`) renders a single
+mid-game position seeded from
+`conformance/mined_seeds.json`. Solo, no opponent — drag,
+undo, replay; no agent-play, no scoring.
 
-- Catalog: `games/lynrummy/puzzles/puzzles.json` is the
-  committed gallery served at `/gopher/puzzles/catalog`.
-  Currently frozen; refresh by writing a TS generator from
-  scratch when needed. The catalog response carries a
-  freshly-allocated `session_id` that all panels share —
-  there is no sign-on / login gate (Lyn Rummy is solo).
-- Elm gallery: one Play instance per puzzle, sharing a single
-  page-load session id. Human plays inline; drags capture via
-  the normal telemetry pipeline.
-- Per-attempt session data: a single page-load session under
-  `data/lynrummy-elm/puzzle-sessions/<id>/` hosts every
-  puzzle on the page. Actions append to
-  `<puzzle_name>/actions.jsonl` and annotations to
-  `<puzzle_name>/annotations.jsonl` — keyed in the URL
-  (`POST /gopher/puzzles/sessions/<id>/<puzzle_name>/action`),
-  not body-peeked — so each puzzle's per-Play seq counter
-  (which restarts at 1, embedded in each line) doesn't clobber
-  its siblings.
-  Puzzle sessions live in their own top-level namespace
-  separate from full-game sessions
-  (`data/lynrummy-elm/sessions/`); they allocate ids from a
-  separate counter (`next-puzzle-session-id.txt`). They are
-  not resumable — a page reload terminates the attempt by
-  design — so they do not need the full-game bootstrap or
-  session-browser machinery.
+- Featured board: hardcoded `featuredPuzzleName` in
+  `views/puzzle.go`. To rotate, edit the string and restart.
+- Server-baked flags: at HTML-render time `views/puzzle.go`
+  picks the puzzle, allocates a session id, writes
+  `meta.json`, and emits `{session_id, initial_board}` into
+  the Elm `Browser.element` flags. The client has zero
+  follow-up bootstrap fetches.
+- Wire: `POST /gopher/puzzle/sessions/<id>/actions` for
+  every drag outcome and Undo, fire-and-forget. Files land
+  at
+  `games/lynrummy/data/puzzle/sessions/<id>/{meta.json,actions.jsonl}`.
+- Replay: the puzzle has its own engine in
+  `Puzzle/Replay.elm` — a simpler sibling of
+  `Game.Replay.Animate` that operates on `List CardStack`
+  (no GameState, no hand-card logic). Reuses
+  `Game.Replay.BoardDragAnimate` directly for the path-driven
+  floater.
+- Puzzle sessions live in their own top-level namespace
+  (`data/puzzle/sessions/`) separate from full-game sessions
+  (`data/lynrummy-elm/sessions/`) and allocate ids from a
+  separate counter (`next-puzzle-id.txt`). They are not
+  resumable: a page reload starts a fresh session.
 
 ## Algorithm benchmarks
 

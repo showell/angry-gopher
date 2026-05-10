@@ -5,17 +5,18 @@ word-or-phrase used in the system, with where it lives. Not
 yet rationalized — that's the conversation we're saving for
 after Phase 1.
 
-## DB schema
-- `lynrummy_puzzle_seeds.initial_state_json` — full state blob
-- `lynrummy_puzzle_seeds.puzzle_name` — human-readable id
-- `lynrummy_elm_sessions.label` — human-readable session tag
-- `lynrummy_elm_sessions.deck_seed` — RNG seed (0 for puzzles)
-- `lynrummy_actions` — per-action log table (each row is one
-  WireAction blob persisted by `lynrummyElmActions`)
+> **Historical:** the DB schema and `POST /new-puzzle-session`
+> sections that originally headed this file have been retired.
+> Sessions live as JSONL files under
+> `games/lynrummy/data/lynrummy-elm/sessions/` (full game) and
+> `games/lynrummy/data/puzzle/sessions/` (puzzle); the wire
+> endpoints are now `POST /gopher/lynrummy-elm/sessions/<id>/actions`
+> and `POST /gopher/puzzle/sessions/<id>/actions`. The wire
+> `WireAction` shape itself is unchanged.
 
 ## Wire (HTTP)
-- `POST /new-puzzle-session` body: `{label, puzzle_name, initial_state}`
-- `POST /actions?session=N` body: a WireAction (see below)
+- `POST /gopher/lynrummy-elm/sessions/<id>/actions` body: a `{seq, action, ...}` envelope wrapping a WireAction
+- `POST /gopher/puzzle/sessions/<id>/actions` body: same shape
 - WireAction shape (from `views/lynrummy_elm.go`): JSON object
   with `action: "..."` discriminator.
 
@@ -29,8 +30,8 @@ after Phase 1.
 - `move_stack` — relocate a board stack to a new position
   without changing its contents.
 
-## Python BFS-internal "verbs" (extract sub-vocabulary)
-Live as the `verb` field of `ExtractAbsorbDesc`:
+## BFS-internal "verbs" (extract sub-vocabulary)
+(Originally Python; live now in the TS engine.) Live as the `verb` field of `ExtractAbsorbDesc`:
 - `peel` — extract from an end of a length-4+ run, or
   any-position of a length-4+ set.
 - `pluck` — extract from interior of a length-7+ run, both
@@ -41,7 +42,7 @@ Live as the `verb` field of `ExtractAbsorbDesc`:
   position of length-3 set.
 - `split_out` — extract from interior of length-3 run.
 
-## Python BFS Move types (the planner DSL output)
+## BFS Move types (the planner DSL output)
 - `ExtractAbsorbDesc` — verb-based extract + absorb onto
   trouble/growing.
 - `FreePullDesc` — pull a TROUBLE singleton onto another
@@ -53,20 +54,20 @@ Live as the `verb` field of `ExtractAbsorbDesc`:
 - `ShiftDesc` — peel a donor card to replace the stolen end
   of a length-3 run.
 
-## Verb → Primitive layer (`verbs.py`)
-Public: `move_to_primitives(desc, board) → List[primitive]`.
-A "primitive" is a single-action dict with shape `{action,
-stack_index, ...}` — i.e., a WireAction without the wire
-(no session id wrapping). Internal helpers:
-`_extract_absorb_prims`, `_free_pull_prims`, `_push_prims`,
-`_splice_prims`, `_shift_prims`.
+## Verb → Primitive layer
+(Originally `verbs.py`; lives now in `games/lynrummy/ts/src/verbs.ts`.)
+Public: `physicalPlan(initialBoard, hand, planDescs)` over
+honest state. A "primitive" is a single-action dict with
+shape `{action, stack_index, ...}` — i.e., a WireAction
+without the wire (no session id wrapping).
 
 ## Gestures (UI-layer)
-From `gesture_synth.py`:
-- A "gesture" = a drag path with timing. Synthesized from a
-  primitive (split, merge_stack, move_stack) when the agent
-  needs to mimic a human-like motion for the watching
-  player. Pure UI concept; not on the wire as such.
+- A "gesture" = a drag path with timing. Captured live from
+  the user's pointer in `Game.BoardGesture` /
+  `Game.HandGesture`; for replay the path is either
+  captured from the original drag (board) or synthesized
+  from a linear interpolation between measured DOM rects
+  (hand). Pure UI concept; not on the wire as such.
 
 ## Naming-tension observations (initial)
 - The word **action** appears on the wire as the discriminator

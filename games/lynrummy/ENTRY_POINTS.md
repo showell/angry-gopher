@@ -1,6 +1,6 @@
 # Lyn Rummy — entry points and maturity
 
-**Status:** Living document. Last refreshed 2026-05-04.
+**Status:** Living document. Last refreshed 2026-05-10.
 
 A catch-up reference — what code is actually running today,
 what it does, and how mature each piece is. Companion to
@@ -16,20 +16,18 @@ Two Elm `Browser.element` boots, both compiled from
 | Source | Output | URL | Role |
 |---|---|---|---|
 | `src/Main.elm` | `elm.js` | `/gopher/lynrummy-elm/` | Full Lyn Rummy game client |
-| `src/Puzzles.elm` | `puzzles.js` | `/gopher/puzzles/` | Puzzle gallery (multi-panel) |
+| `src/Puzzle.elm` | `puzzle.js` | `/gopher/puzzle/` | Single-board puzzle |
 
-Both share the same `Game.*` and `Main.*` source tree. The
-Puzzles gallery is a vertical stack of `Main.Play`
-instances, one per mined puzzle, sharing a single page-load
-session id.
+The full-game host embeds `Main.Play`. The puzzle host is
+dedicated — it composes `Game.*` primitives directly and
+keeps its own replay engine in `src/Puzzle/Replay.elm`.
 
 **Maturity: both are production code paths.** The full game
 runs end-to-end (deal → play → complete turns → score). The
-puzzle gallery hosts the "Let agent play" + "Hint" buttons
-plus per-panel annotations the user uses to exercise the
-agent on real puzzles. The Puzzles surface began life as a
-SPIKE called BOARD_LAB; that framing has been outgrown by
-real use, and the rename to "Puzzles" landed 2026-04-27.
+puzzle host renders one mid-game position at a time,
+seeded from `conformance/mined_seeds.json` (featured name
+hardcoded in `views/puzzle.go`); supports drag, undo,
+replay.
 
 
 ## Server-side handlers (Go)
@@ -45,12 +43,14 @@ In `views/`:
   Elm-posted envelopes to
   `games/lynrummy/data/lynrummy-elm/sessions/<id>/{meta.json,actions.jsonl,annotations.jsonl}`.
   Each line of `actions.jsonl` is `{seq, action, gesture_metadata?}`.
-- `puzzles.go` — puzzle HTTP surface: catalog at page-load
-  (allocates a puzzle-session id from a separate counter),
-  then puzzle plays write to
-  `/gopher/puzzles/sessions/<id>/<puzzle_name>/{action,annotate}`.
-  Files land under
-  `games/lynrummy/data/lynrummy-elm/puzzle-sessions/<id>/<puzzle_name>/{actions,annotations}.jsonl`.
+- `puzzle.go` — puzzle HTTP surface: at page-render time it
+  picks the featured puzzle from
+  `conformance/mined_seeds.json`, allocates a session id from
+  a separate counter, writes `meta.json`, and bakes
+  `{session_id, initial_board}` into Elm flags so the client
+  has zero post-load round-trips. Subsequent action POSTs land
+  at `/gopher/puzzle/sessions/<id>/actions`, appending to
+  `games/lynrummy/data/puzzle/sessions/<id>/actions.jsonl`.
   Puzzle and full-game sessions live in distinct on-disk
   namespaces and never share session ids.
 - `gamedata.go` — file-storage primitives shared by both
@@ -69,8 +69,10 @@ In `views/`:
   driven puzzle catalog generator. Plays the agent across
   several seeded games and captures the first state past
   ~30 cards on board where engine_v2 returns a length-3 plan.
-  Writes `games/lynrummy/puzzles/puzzles.json` (the
-  Elm-loaded gallery catalog). Hard-coded N=5 puzzles.
+  Writes `games/lynrummy/puzzles/puzzles.json` (the small a3_*
+  catalog used by `planner_puzzles.dsl`). Hard-coded N=5.
+- `games/lynrummy/ts/tools/replay_puzzles.ts` — emits
+  `puzzle_walkthroughs.dsl` from the puzzle catalog.
 - `tools/export_replay_walkthroughs.ts` — concatenates
   per-puzzle primitive sequences from
   `conformance/scenarios/verb_to_primitives_corpus.dsl`
@@ -134,8 +136,8 @@ From `games/lynrummy/ts/`:
   The canonical conformance run point.
 
 The single canonical run point for both elm-test and
-elm-review is `games/lynrummy/elm/`. The Puzzles gallery
-shares this single project (unified 2026-04-27).
+elm-review is `games/lynrummy/elm/`. The puzzle host shares
+this single project.
 
 
 ## What is NOT current (avoid confusion)
@@ -144,7 +146,7 @@ shares this single project (unified 2026-04-27).
   Still in the repo but not in the agent flow.
 - `games/lynrummy/elm/src/Game/Strategy/` — orphan
   production code (the legacy trick engine). Not imported
-  by anything Main / Puzzles renders; pending deletion.
+  by anything `Main.*` / `Puzzle.*` renders; pending deletion.
 
 ---
 

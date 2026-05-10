@@ -2,9 +2,10 @@
 
 The Elm LynRummy client. Renders the board + hand, captures
 live drag gestures, runs its own referee, keeps its own
-action log, replays stored logs. Two surfaces — the full game
-(`Main.elm`) and the Puzzles gallery (`Puzzles.elm`) — both
-embed `Main.Play`.
+action log, replays stored logs. Two surfaces — the full
+game (`Main.elm`, embedding `Main.Play`) and the
+single-board puzzle (`Puzzle.elm`, a dedicated host that
+composes `Game.*` primitives directly).
 
 ## Setup
 
@@ -20,19 +21,19 @@ gitignored.
 
 Once running, the Elm UI talks to two systems:
 
-- **TS engine** via Elm ports + `engine_glue.js`. Two entry
-  points: the Hint button (full game + puzzles) and the
-  Let-Agent-Play button (puzzles only). All other gameplay
-  logic — dealing, refereeing, turn transitions, replay —
-  lives in Elm.
+- **TS engine** via Elm ports + `engine_glue.js`. One entry
+  point: the Hint button on the full-game surface. All other
+  gameplay logic — dealing, refereeing, turn transitions,
+  replay — lives in Elm.
 - **Go server** via HTTP. Bootstrap (one follow-up fetch
   after the HTML page load, depending on the surface mode:
   `POST /new-session` for a fresh full game, `GET
-  /sessions/<sid>/actions` for a resumed full game,
-  `GET /puzzles/catalog` for the Puzzles gallery) plus
-  outbound writes during play (action POSTs + gesture
-  telemetry, all fire-and-forget). After bootstrap, no Elm
-  code path waits on a Go HTTP response.
+  /sessions/<sid>/actions` for a resumed full game; the
+  puzzle host gets its session id + initial board baked into
+  Elm flags at HTML-render time, so it has no follow-up
+  bootstrap fetch) plus outbound writes during play (action
+  POSTs, fire-and-forget). After bootstrap, no Elm code path
+  waits on a Go HTTP response.
 
 For the system-level picture, see
 [`../ARCHITECTURE.md`](../ARCHITECTURE.md). For concrete
@@ -93,28 +94,25 @@ The TS agent uses the same rule shapes; see
 `../ts/src/rules/card.ts` and
 `../ts/src/classified_card_stack.ts`.
 
-## Embeddable-component design goal
+## Two-host design
 
-The app is structured so `Main.Play` embeds into hosts other
-than `Main.elm` — for example the Puzzles gallery, where
-each puzzle panel embeds its own `Main.State.Model`. The
-split:
+Two browser entry points share the rendering primitives in
+`Game.*` but otherwise own their own `Msg` / `Model` shapes:
 
-- **`Main.Play`** — the embeddable component. Exposes
-  `Config` (`NewSession` / `ResumeSession` / `PuzzleSession`),
-  `Output`, plus `init / update / view / subscriptions` (and
-  `mouseMove`). The component's `Model` lives in
-  `Main.State`; the `Msg` type lives in `Main.Msg`. Hosts
-  import them directly from there.
-- **`Main.elm`** — thin harness. Owns the URL-pinning port,
-  the engine port pair, `Browser.element` boot, and the
-  viewport-filling outer shell. Routes Play's Output into
-  port calls.
-- **`Main.State.Model.gameId`** — per-instance id used by
-  `State.boardDomIdFor` so multiple Play instances coexist
-  on one page without DOM collisions.
+- **`Main.elm`** (full game) — owns the embeddable
+  `Main.Play` component. `Main.State.Model` carries
+  GameState + drag + action log + replay state; `Main.Msg`
+  is the unified Msg.
+- **`Puzzle.elm`** (single-board puzzle) — dedicated host.
+  Composes `Game.*` primitives directly: `Game.BoardView`,
+  `Game.BoardGesture`, `Game.BoardDrag`, `Game.Drag`,
+  `Game.PointerInput`, `Game.ActionLog`, `Game.Execute`,
+  plus its sibling replay engine `Puzzle.Replay`. Doesn't
+  import `Main.*`.
 
-When adding a new surface that might embed Play (tutorial
-host, side-by-side agent-vs-human viewer, etc.), import
-`Main.Play` directly and follow the `Puzzles.elm` pattern.
-`Game.Replay` follows the same shape.
+The dedicated-host pattern (vs. embedding) was the right
+shape once the puzzle's domain (board only, no hand, no
+turn cycle) made unified-Msg/Model contortions
+Maybe-everywhere. New surfaces with a different domain
+should follow `Puzzle.elm`'s pattern; new surfaces that
+genuinely want full-game semantics can embed `Main.Play`.

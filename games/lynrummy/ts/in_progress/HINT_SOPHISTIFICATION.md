@@ -8,8 +8,8 @@ its closing-out / docs cleanup pass. Resume after that.
 ## What this is
 
 `TS_ELM_INTEGRATION` Phase 1 routed the full-game Hint button
-through the canonical TS engine — the same engine the puzzle
-agent uses. The integration itself works: hints are
+through the canonical TS engine — the same engine self-play
+uses. The integration itself works: hints are
 correct, the dirty-board contract is enforced, the legacy Elm
 BFS port retired. Real-game testing then exposed three classes
 of *sophistication gap* — places where the engine's hints are
