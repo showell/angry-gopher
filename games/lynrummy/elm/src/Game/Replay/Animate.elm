@@ -128,10 +128,10 @@ tick nowMs rs =
                     , phase = InBeat { nextBeatMs = nextBeat }
                 }
 
-        AnimatingAction dragState ->
+        AnimatingBoardAction dragState ->
             case BoardDragAnimate.step nowMs dragState of
                 BoardDragAnimate.InProgress nextDragState ->
-                    StillReplaying { rs | phase = AnimatingAction nextDragState }
+                    StillReplaying { rs | phase = AnimatingBoardAction nextDragState }
 
                 BoardDragAnimate.Done { pendingAction } ->
                     StillReplaying
@@ -155,7 +155,7 @@ tick nowMs rs =
 
 {-| Decide what phase to enter when popping `entry` off the
 queue, plus optionally name a hand card the host should
-DOM-measure. Board-drag events open `AnimatingAction`
+DOM-measure. Board-drag events open `AnimatingBoardAction`
 immediately. Hand-drag events open `AnimatingHandAction`
 with `HandDragAnimate`'s AwaitingMeasurement substate; the
 sub-machine answers `measureRequest` so the host knows
@@ -170,7 +170,7 @@ startNextAction : Int -> ActionLogEntry -> ( Phase, Maybe Card )
 startNextAction nowMs entry =
     case entry.action of
         GameEvent.MergeStack p ->
-            ( AnimatingAction
+            ( AnimatingBoardAction
                 (BoardDragAnimate.start
                     { sourceStack = p.source
                     , path = p.boardPath
@@ -182,7 +182,7 @@ startNextAction nowMs entry =
             )
 
         GameEvent.MoveStack p ->
-            ( AnimatingAction
+            ( AnimatingBoardAction
                 (BoardDragAnimate.start
                     { sourceStack = p.stack
                     , path = p.boardPath

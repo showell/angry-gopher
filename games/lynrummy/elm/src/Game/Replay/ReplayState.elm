@@ -40,7 +40,7 @@ phase-appropriate work, and transitions accordingly.
   - `ExecutingAction` — transient (one tick): a non-animated
     action has been popped and the next tick will fold it
     into `gameState` via `Execute.applyEvent`.
-  - `AnimatingAction` — a board-drag animation is in flight.
+  - `AnimatingBoardAction` — a board-drag animation is in flight.
   - `AnimatingHandAction` — a hand-drag animation is in
     flight. Its sub-state owns the AwaitingMeasurement vs
     InFlight distinction; the outer phase doesn't split.
@@ -53,5 +53,5 @@ type Phase
     = Starting
     | InBeat { nextBeatMs : Int }
     | ExecutingAction ActionLogEntry
-    | AnimatingAction BoardDragAnimate.State
+    | AnimatingBoardAction BoardDragAnimate.State
     | AnimatingHandAction HandDragAnimate.State
