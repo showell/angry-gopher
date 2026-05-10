@@ -19,7 +19,6 @@ Output.
 
 -}
 
-import Browser.Dom
 import Browser.Events
 import Game.ActionLog as ActionLog
 import Game.BoardDrag as BoardDrag
@@ -151,29 +150,8 @@ init config =
 update : Msg -> Model -> ( Model, Cmd Msg, Output )
 update msg model =
     case msg of
-        MouseDownOnBoardCard { stack, cardIndex, point, time } ->
-            let
-                ( m, c ) =
-                    startBoardCardDrag
-                        { stack = stack, cardIndex = cardIndex }
-                        point
-                        time
-                        model
-            in
-            ( m, c, NoOutput )
-
-        MouseDownOnHandCard { card, point } ->
-            let
-                ( m, c ) =
-                    startHandDrag card point model
-            in
-            ( m, c, NoOutput )
-
-        MouseMove pos tMs ->
-            ( mouseMove pos tMs model, Cmd.none, NoOutput )
-
-        MouseUp pos tMs ->
-            handleMouseUp pos tMs model
+        PopupOk ->
+            ( { model | popup = Nothing }, Cmd.none, NoOutput )
 
         ActionSent (Ok ()) ->
             ( model, Cmd.none, NoOutput )
@@ -200,14 +178,15 @@ update msg model =
             in
             ( { model | status = Status.sessionAllocFailedStatus }, Cmd.none, NoOutput )
 
-        ClickCompleteTurn ->
-            clickCompleteTurn model
+        ActionLogFetched (Ok ( initialState, actions )) ->
+            ( bootstrapFromBundle initialState actions model, Cmd.none, NoOutput )
 
-        ClickUndo ->
-            clickUndo model
-
-        PopupOk ->
-            ( { model | popup = Nothing }, Cmd.none, NoOutput )
+        ActionLogFetched (Err err) ->
+            let
+                _ =
+                    Debug.log "ActionLogFetched err" err
+            in
+            ( { model | status = Status.actionLogFetchFailedStatus }, Cmd.none, NoOutput )
 
         ClickInstantReplay ->
             ( { model
@@ -293,24 +272,159 @@ update msg model =
             in
             ( model, Cmd.none, NoOutput )
 
-        ActionLogFetched (Ok ( initialState, actions )) ->
-            ( bootstrapFromBundle initialState actions model, Cmd.none, NoOutput )
-
-        ActionLogFetched (Err err) ->
-            let
-                _ =
-                    Debug.log "ActionLogFetched err" err
-            in
-            ( { model | status = Status.actionLogFetchFailedStatus }, Cmd.none, NoOutput )
-
-        BoardRectReceived result ->
-            boardRectReceived result model
-
         ClickHint ->
             clickHint model
 
         GameHintReceived value ->
             ( handleHintResponse value model, Cmd.none, NoOutput )
+
+        -- Pointer-gesture + wire-action cluster. MouseDown / MouseMove
+        -- / BoardRectReceived feed into MouseUp's resolution; MouseUp,
+        -- ClickCompleteTurn, and ClickUndo all produce wire actions.
+        MouseDownOnBoardCard { stack, cardIndex, point, time } ->
+            let
+                ( m, c ) =
+                    startBoardCardDrag
+                        { stack = stack, cardIndex = cardIndex }
+                        point
+                        time
+                        model
+            in
+            ( m, c, NoOutput )
+
+        MouseDownOnHandCard { card, point } ->
+            let
+                ( m, c ) =
+                    startHandDrag card point model
+            in
+            ( m, c, NoOutput )
+
+        MouseMove pos tMs ->
+            ( mouseMove pos tMs model, Cmd.none, NoOutput )
+
+        BoardRectReceived (Ok element) ->
+            let
+                rect =
+                    { x = round (element.element.x - element.viewport.x)
+                    , y = round (element.element.y - element.viewport.y)
+                    , width = round element.element.width
+                    , height = round element.element.height
+                    }
+            in
+            ( { model | boardRect = Just rect }, Cmd.none, NoOutput )
+
+        BoardRectReceived (Err err) ->
+            let
+                _ =
+                    Debug.log "BoardRectReceived err" err
+            in
+            ( model, Cmd.none, NoOutput )
+
+        MouseUp pos tMs ->
+            case model.drag of
+                NotDragging ->
+                    ( model, Cmd.none, NoOutput )
+
+                DraggingBoardCard d ->
+                    let
+                        outcome =
+                            BoardDrag.handleMouseUp pos
+                                tMs
+                                d
+                                { board = model.gameState.board
+                                , boardRect = model.boardRect
+                                , actionLog = model.actionLog
+                                , nextSeq = model.nextSeq
+                                }
+
+                        gs0 =
+                            model.gameState
+                    in
+                    ( { model
+                        | drag = NotDragging
+                        , gameState = { gs0 | board = outcome.board }
+                        , status = outcome.status
+                        , actionLog = outcome.actionLog
+                        , nextSeq = outcome.nextSeq
+                      }
+                    , outcome.outboundPayload
+                        |> Maybe.map (Wire.sendAction model.sessionId)
+                        |> Maybe.withDefault Cmd.none
+                    , NoOutput
+                    )
+
+                DraggingHandCard d ->
+                    let
+                        outcome =
+                            HandDrag.handleMouseUp pos
+                                d
+                                { gameState = model.gameState
+                                , boardRect = model.boardRect
+                                , actionLog = model.actionLog
+                                , nextSeq = model.nextSeq
+                                }
+
+                        gs0 =
+                            model.gameState
+                    in
+                    ( { model
+                        | drag = NotDragging
+                        , gameState =
+                            { gs0
+                                | board = outcome.board
+                                , hands = outcome.hands
+                                , cardsPlayedThisTurn = outcome.cardsPlayedThisTurn
+                            }
+                        , status = outcome.status
+                        , actionLog = outcome.actionLog
+                        , nextSeq = outcome.nextSeq
+                      }
+                    , outcome.outboundPayload
+                        |> Maybe.map (Wire.sendAction model.sessionId)
+                        |> Maybe.withDefault Cmd.none
+                    , NoOutput
+                    )
+
+        ClickCompleteTurn ->
+            case TurnControl.attemptCompleteTurn { gameState = model.gameState, nextSeq = model.nextSeq } of
+                TurnControl.TurnRejected r ->
+                    ( { model | status = r.status, popup = Just r.popup }, Cmd.none, NoOutput )
+
+                TurnControl.TurnCompleted r ->
+                    ( { model
+                        | gameState = r.newGameState
+                        , actionLog = model.actionLog ++ [ r.appendedEntry ]
+                        , nextSeq = model.nextSeq + 1
+                        , status = r.status
+                        , popup = Just r.popup
+                      }
+                    , Wire.sendAction model.sessionId r.outboundPayload
+                    , NoOutput
+                    )
+
+        ClickUndo ->
+            case
+                TurnControl.attemptUndo
+                    { gameState = model.gameState
+                    , lastUndoableAction = lastUndoableAction model
+                    , nextSeq = model.nextSeq
+                    }
+            of
+                TurnControl.NothingToUndo ->
+                    ( model, Cmd.none, NoOutput )
+
+                TurnControl.DidUndo r ->
+                    ( { model
+                        | gameState = r.newGameState
+                        , actionLog = model.actionLog ++ [ r.appendedEntry ]
+                        , nextSeq = model.nextSeq + 1
+                        , status = { text = "Undone.", kind = Inform }
+                        , hintedCards = []
+                        , drag = NotDragging
+                      }
+                    , Wire.sendAction model.sessionId r.outboundPayload
+                    , NoOutput
+                    )
 
 
 -- UPDATE HELPERS
@@ -335,149 +449,6 @@ mouseMove pos tMs model =
 
         NotDragging ->
             model
-
-
-{-| Thin dispatcher: pattern match on `model.drag` and delegate
-to the per-side handler. The board/hand split is load-bearing
-indirection — Puzzles can import `handleMouseUpBoard` without
-pulling in any of the hand-card complexity.
--}
-handleMouseUp : Point -> Float -> Model -> ( Model, Cmd Msg, Output )
-handleMouseUp releasePoint tMs model =
-    case model.drag of
-        NotDragging ->
-            ( model, Cmd.none, NoOutput )
-
-        DraggingBoardCard d ->
-            let
-                outcome =
-                    BoardDrag.handleMouseUp releasePoint
-                        tMs
-                        d
-                        { board = model.gameState.board
-                        , boardRect = model.boardRect
-                        , actionLog = model.actionLog
-                        , nextSeq = model.nextSeq
-                        }
-
-                gs0 =
-                    model.gameState
-            in
-            ( { model
-                | drag = NotDragging
-                , gameState = { gs0 | board = outcome.board }
-                , status = outcome.status
-                , actionLog = outcome.actionLog
-                , nextSeq = outcome.nextSeq
-              }
-            , outcome.outboundPayload
-                |> Maybe.map (Wire.sendAction model.sessionId)
-                |> Maybe.withDefault Cmd.none
-            , NoOutput
-            )
-
-        DraggingHandCard d ->
-            let
-                outcome =
-                    HandDrag.handleMouseUp releasePoint
-                        d
-                        { gameState = model.gameState
-                        , boardRect = model.boardRect
-                        , actionLog = model.actionLog
-                        , nextSeq = model.nextSeq
-                        }
-
-                gs0 =
-                    model.gameState
-            in
-            ( { model
-                | drag = NotDragging
-                , gameState =
-                    { gs0
-                        | board = outcome.board
-                        , hands = outcome.hands
-                        , cardsPlayedThisTurn = outcome.cardsPlayedThisTurn
-                    }
-                , status = outcome.status
-                , actionLog = outcome.actionLog
-                , nextSeq = outcome.nextSeq
-              }
-            , outcome.outboundPayload
-                |> Maybe.map (Wire.sendAction model.sessionId)
-                |> Maybe.withDefault Cmd.none
-            , NoOutput
-            )
-
-
-
-clickCompleteTurn : Model -> ( Model, Cmd Msg, Output )
-clickCompleteTurn model =
-    case TurnControl.attemptCompleteTurn { gameState = model.gameState, nextSeq = model.nextSeq } of
-        TurnControl.TurnRejected r ->
-            ( { model | status = r.status, popup = Just r.popup }, Cmd.none, NoOutput )
-
-        TurnControl.TurnCompleted r ->
-            ( { model
-                | gameState = r.newGameState
-                , actionLog = model.actionLog ++ [ r.appendedEntry ]
-                , nextSeq = model.nextSeq + 1
-                , status = r.status
-                , popup = Just r.popup
-              }
-            , Wire.sendAction model.sessionId r.outboundPayload
-            , NoOutput
-            )
-
-
-clickUndo : Model -> ( Model, Cmd Msg, Output )
-clickUndo model =
-    case
-        TurnControl.attemptUndo
-            { gameState = model.gameState
-            , lastUndoableAction = lastUndoableAction model
-            , nextSeq = model.nextSeq
-            }
-    of
-        TurnControl.NothingToUndo ->
-            ( model, Cmd.none, NoOutput )
-
-        TurnControl.DidUndo r ->
-            ( { model
-                | gameState = r.newGameState
-                , actionLog = model.actionLog ++ [ r.appendedEntry ]
-                , nextSeq = model.nextSeq + 1
-                , status = { text = "Undone.", kind = Inform }
-                , hintedCards = []
-                , drag = NotDragging
-              }
-            , Wire.sendAction model.sessionId r.outboundPayload
-            , NoOutput
-            )
-
-
-boardRectReceived :
-    Result Browser.Dom.Error Browser.Dom.Element
-    -> Model
-    -> ( Model, Cmd Msg, Output )
-boardRectReceived result model =
-    case result of
-        Ok element ->
-            let
-                rect =
-                    { x = round (element.element.x - element.viewport.x)
-                    , y = round (element.element.y - element.viewport.y)
-                    , width = round element.element.width
-                    , height = round element.element.height
-                    }
-            in
-            ( { model | boardRect = Just rect }, Cmd.none, NoOutput )
-
-        Err err ->
-            let
-                _ =
-                    Debug.log "BoardRectReceived err" err
-            in
-            ( model, Cmd.none, NoOutput )
 
 
 clickHint : Model -> ( Model, Cmd Msg, Output )
