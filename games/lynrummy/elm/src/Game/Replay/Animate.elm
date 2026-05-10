@@ -159,10 +159,14 @@ startNextAction nowMs entry gameState =
             , phase =
                 AnimatingBoardAction
                     (BoardDragAnimate.start
-                        { sourceStack = p.source
-                        , path = p.boardPath
-                        , startMs = nowMs
-                        , pendingAction = entry.action
+                        { startMs = nowMs
+                        , pendingAction =
+                            BoardDragAnimate.Merge
+                                { sourceStack = p.source
+                                , targetStack = p.target
+                                , side = p.side
+                                , boardPath = p.boardPath
+                                }
                         }
                     )
             }
@@ -172,10 +176,13 @@ startNextAction nowMs entry gameState =
             , phase =
                 AnimatingBoardAction
                     (BoardDragAnimate.start
-                        { sourceStack = p.stack
-                        , path = p.boardPath
-                        , startMs = nowMs
-                        , pendingAction = entry.action
+                        { startMs = nowMs
+                        , pendingAction =
+                            BoardDragAnimate.Move
+                                { sourceStack = p.stack
+                                , newLoc = p.newLoc
+                                , boardPath = p.boardPath
+                                }
                         }
                     )
             }

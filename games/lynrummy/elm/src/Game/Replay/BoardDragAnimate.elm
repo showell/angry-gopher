@@ -1,5 +1,6 @@
 module Game.Replay.BoardDragAnimate exposing
-    ( Outcome(..)
+    ( BoardDragAnimateAction(..)
+    , Outcome(..)
     , State
     , start
     , step
@@ -7,31 +8,49 @@ module Game.Replay.BoardDragAnimate exposing
 
 {-| The board-drag sub-state-machine for Instant Replay.
 
-Same animation shape for `MergeStack` and `MoveStack` — the
+Same animation shape for stack-merge and stack-move — the
 floater flies along a captured path; the merge-vs-move
-distinction only matters at landing time, which is the outer
-machine's job (apply via `Execute.applyEvent`).
+distinction matters only at landing time, where this module
+calls `Execute.mergeStack` / `Execute.moveStack` directly.
 
-The path is mandatory and arrives intact in the event's
-payload. We own every caller (Elm gestures, TS agent
-transcript writer, Go server, conformance fixtures), so an
-empty `path` is a contract violation, not a thing to handle.
+The state machine is intentionally GameEvent-free: callers
+convert their own event payloads into a
+`BoardDragAnimateAction` at start time (where they have the
+earned knowledge of which variant they're dealing with),
+and we then own the action through to its application. The
+shape uses `sourceStack` consistently across both variants —
+the asymmetric `source` / `stack` field names from
+`Game.GameEvent` get normalized at the conversion boundary.
 
 -}
 
+import Game.BoardActions exposing (Side)
 import Game.BoardDragTypes exposing (BoardCardDragInfo)
-import Game.CardStack exposing (CardStack)
+import Game.CardStack exposing (BoardLocation, CardStack)
 import Game.Execute as Execute
 import Game.Game exposing (GameState)
-import Game.GameEvent exposing (GameEvent)
 import Game.Point exposing (Point)
 import Game.TimeLoc exposing (TimeLoc)
+
+
+type BoardDragAnimateAction
+    = Move
+        { sourceStack : CardStack
+        , newLoc : BoardLocation
+        , boardPath : List TimeLoc
+        }
+    | Merge
+        { sourceStack : CardStack
+        , targetStack : CardStack
+        , side : Side
+        , boardPath : List TimeLoc
+        }
 
 
 type alias State =
     { path : List TimeLoc
     , startMs : Int
-    , pendingAction : GameEvent
+    , pendingAction : BoardDragAnimateAction
     , dragInfo : BoardCardDragInfo
     }
 
@@ -41,18 +60,19 @@ type Outcome
     | Done { newGameState : GameState }
 
 
-start :
-    { sourceStack : CardStack
-    , path : List TimeLoc
-    , startMs : Int
-    , pendingAction : GameEvent
-    }
-    -> State
-start { sourceStack, path, startMs, pendingAction } =
+start : { startMs : Int, pendingAction : BoardDragAnimateAction } -> State
+start { startMs, pendingAction } =
+    let
+        ( sourceStack, path ) =
+            case pendingAction of
+                Move m ->
+                    ( m.sourceStack, m.boardPath )
+
+                Merge m ->
+                    ( m.sourceStack, m.boardPath )
+    in
     case path of
         [] ->
-            -- Caller contract violated: every board-drag event
-            -- carries a non-empty boardPath in its payload.
             Debug.todo
                 "BoardDragAnimate.start: empty path — caller must provide a path"
 
@@ -73,11 +93,11 @@ start { sourceStack, path, startMs, pendingAction } =
 
 
 {-| Advance one frame. Once `nowMs - startMs` exceeds the
-path's total duration, fold `pendingAction` into the
-provided `gameState` via `Execute.applyEvent` and signal
-`Done` with the new state. The apply lives here (rather
-than in the outer machine) so the sub-machine fully owns
-the action it was started for.
+path's total duration, dispatch on the pending action's
+variant and call the right `Execute` board operation
+directly. The apply lives here (rather than in the outer
+machine) so the sub-machine fully owns the action it was
+started for.
 -}
 step : Int -> GameState -> State -> Outcome
 step nowMs gameState state =
@@ -86,12 +106,30 @@ step nowMs gameState state =
             toFloat (nowMs - state.startMs)
     in
     if elapsedMs >= duration state.path then
-        Done { newGameState = Execute.applyEvent state.pendingAction gameState }
+        Done { newGameState = applyToBoard state.pendingAction gameState }
 
     else
         InProgress
             { state
                 | dragInfo = setFloater (interp state.path elapsedMs) state.dragInfo
+            }
+
+
+{-| Apply the pending board action to the game state.
+Dispatches on the variant to call the right `Execute`
+operation directly — no GameEvent in sight.
+-}
+applyToBoard : BoardDragAnimateAction -> GameState -> GameState
+applyToBoard action gameState =
+    case action of
+        Move m ->
+            { gameState
+                | board = Execute.moveStack m.sourceStack m.newLoc gameState.board
+            }
+
+        Merge m ->
+            { gameState
+                | board = Execute.mergeStack m.sourceStack m.targetStack m.side gameState.board
             }
 
 
