@@ -188,14 +188,31 @@ startNextAction nowMs entry gameState =
                     )
             }
 
-        GameEvent.MergeHand _ ->
+        GameEvent.MergeHand p ->
             { gameState = gameState
-            , phase = AnimatingHandAction (HandDragAnimate.start entry)
+            , phase =
+                AnimatingHandAction
+                    (HandDragAnimate.start
+                        (HandDragAnimate.MergeHand
+                            { handCard = p.handCard
+                            , targetStack = p.target
+                            , side = p.side
+                            }
+                        )
+                    )
             }
 
-        GameEvent.PlaceHand _ ->
+        GameEvent.PlaceHand p ->
             { gameState = gameState
-            , phase = AnimatingHandAction (HandDragAnimate.start entry)
+            , phase =
+                AnimatingHandAction
+                    (HandDragAnimate.start
+                        (HandDragAnimate.PlaceHand
+                            { handCard = p.handCard
+                            , loc = p.loc
+                            }
+                        )
+                    )
             }
 
         GameEvent.Split p ->

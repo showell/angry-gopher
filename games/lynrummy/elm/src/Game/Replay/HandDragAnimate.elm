@@ -1,5 +1,6 @@
 module Game.Replay.HandDragAnimate exposing
     ( Config
+    , HandDragAnimateAction(..)
     , Outcome(..)
     , State
     , dragInfo
@@ -12,7 +13,7 @@ module Game.Replay.HandDragAnimate exposing
 
 Hand-drag animation has three stages, all owned here:
 
-  - **NotYetMeasured** — just popped off the queue. The
+  - **NotYetMeasured** — just constructed by the caller. The
     next `step` produces the DOM-measurement Cmd (using the
     host-supplied `Config`) and advances to
     `AwaitingMeasurement` so subsequent ticks don't refire.
@@ -21,15 +22,21 @@ Hand-drag animation has three stages, all owned here:
     response and transitions to `InFlight`.
   - **InFlight** — the path is being interpolated; each
     `step` advances the floater. `Done` fires when the
-    path's duration has elapsed and folds `pendingAction`
-    into the supplied `gameState`.
+    path's duration has elapsed and folds the action into
+    the supplied `gameState` directly via `Execute.mergeHand`
+    or `Execute.placeHand`.
 
 Same shape for `MergeHand` and `PlaceHand` — the merge-vs-
-place distinction matters at landing time (handled inside
-`step` via `Execute.applyEvent`) and at destination
-computation (a stack-side adjacency vs. an explicit board
-location, dispatched inside `measurementReceived`); the
-in-flight visual is identical.
+place distinction matters at landing time and at destination
+computation; the in-flight visual is identical.
+
+The state machine is intentionally GameEvent-free: callers
+convert their own event payloads into a
+`HandDragAnimateAction` at start time, and we own the action
+through to its application. The shape uses `targetStack`
+(parallel to `BoardDragAnimateAction.Merge`) to normalize
+the GameEvent's `target` field name at the conversion
+boundary.
 
 The host passes a `Config msg` carrying its `gameId` (for
 the board's DOM id) and the `Msg` constructor that should
@@ -40,13 +47,12 @@ measurement" signals into Cmds themselves.
 -}
 
 import Browser.Dom
-import Game.ActionLog exposing (ActionLogEntry)
-import Game.BoardActions as BoardActions
+import Game.BoardActions as BoardActions exposing (Side)
 import Game.BoardView as BoardView
-import Game.CardStack as CardStack
+import Game.CardStack as CardStack exposing (BoardLocation, CardStack)
 import Game.Execute as Execute
 import Game.Game exposing (GameState)
-import Game.GameEvent as GameEvent exposing (GameEvent)
+import Game.Hand as Hand
 import Game.HandDragTypes exposing (HandCardDragInfo)
 import Game.HandLayout as HandLayout
 import Game.Physics.BoardGeometry as BG
@@ -58,16 +64,28 @@ import Task
 import Time
 
 
+type HandDragAnimateAction
+    = MergeHand
+        { handCard : Card
+        , targetStack : CardStack
+        , side : Side
+        }
+    | PlaceHand
+        { handCard : Card
+        , loc : BoardLocation
+        }
+
+
 type State
-    = NotYetMeasured ActionLogEntry
-    | AwaitingMeasurement ActionLogEntry
+    = NotYetMeasured HandDragAnimateAction
+    | AwaitingMeasurement HandDragAnimateAction
     | InFlight InFlightData
 
 
 type alias InFlightData =
     { path : List TimeLoc
     , startMs : Int
-    , pendingAction : GameEvent
+    , pendingAction : HandDragAnimateAction
     , dragInfo_ : HandCardDragInfo
     }
 
@@ -83,9 +101,9 @@ type alias Config msg =
     }
 
 
-start : ActionLogEntry -> State
-start entry =
-    NotYetMeasured entry
+start : HandDragAnimateAction -> State
+start action =
+    NotYetMeasured action
 
 
 {-| Host calls this when the bundled DOM query resolves.
@@ -105,7 +123,7 @@ measurementReceived :
     -> State
 measurementReceived nowMs handElement boardElement state =
     case state of
-        AwaitingMeasurement entry ->
+        AwaitingMeasurement action ->
             let
                 origin =
                     elementTopLeftInViewport handElement
@@ -113,7 +131,7 @@ measurementReceived nowMs handElement boardElement state =
                 boardRect =
                     boardRectFromElement boardElement
             in
-            InFlight (buildInFlight entry origin boardRect nowMs)
+            InFlight (buildInFlight action origin boardRect nowMs)
 
         _ ->
             -- Late result (e.g., resolution after a
@@ -139,12 +157,21 @@ dragInfo state =
 step : Config msg -> Int -> GameState -> State -> ( Outcome, Cmd msg )
 step config nowMs gameState state =
     case state of
-        NotYetMeasured entry ->
+        NotYetMeasured action ->
             -- First tick after pop. Build the measurement
             -- Cmd and advance the substate so subsequent
             -- ticks see AwaitingMeasurement and idle out.
-            ( InProgress (AwaitingMeasurement entry)
-            , measurementCmd config (handCardOf entry.action)
+            let
+                card =
+                    case action of
+                        MergeHand p ->
+                            p.handCard
+
+                        PlaceHand p ->
+                            p.handCard
+            in
+            ( InProgress (AwaitingMeasurement action)
+            , measurementCmd config card
             )
 
         AwaitingMeasurement _ ->
@@ -157,7 +184,7 @@ step config nowMs gameState state =
                     toFloat (nowMs - d.startMs)
             in
             if elapsedMs >= duration d.path then
-                ( Done { newGameState = Execute.applyEvent d.pendingAction gameState }
+                ( Done { newGameState = applyHandAction d.pendingAction gameState }
                 , Cmd.none
                 )
 
@@ -168,6 +195,35 @@ step config nowMs gameState state =
                     )
                 , Cmd.none
                 )
+
+
+{-| Apply the pending hand action to the game state.
+Dispatches on the variant to call the right `Execute`
+operation directly, then re-wraps the active hand and
+updates `cardsPlayedThisTurn` — the same accounting
+`Execute.applyEvent` does for hand events, but inlined so
+this module doesn't touch GameEvent.
+-}
+applyHandAction : HandDragAnimateAction -> GameState -> GameState
+applyHandAction action gameState =
+    let
+        preHand =
+            Hand.activeHand gameState
+
+        next =
+            case action of
+                MergeHand p ->
+                    Execute.mergeHand p.handCard p.targetStack p.side gameState.board preHand
+
+                PlaceHand p ->
+                    Execute.placeHand p.handCard p.loc gameState.board preHand
+    in
+    Hand.setActiveHand next.hand
+        { gameState
+            | board = next.board
+            , cardsPlayedThisTurn =
+                gameState.cardsPlayedThisTurn + (Hand.size preHand - Hand.size next.hand)
+        }
 
 
 {-| Bundle the hand card's live rect, the board's live rect,
@@ -185,20 +241,6 @@ measurementCmd config card =
         )
 
 
-handCardOf : GameEvent -> Card
-handCardOf action =
-    case action of
-        GameEvent.MergeHand p ->
-            p.handCard
-
-        GameEvent.PlaceHand p ->
-            p.handCard
-
-        _ ->
-            Debug.todo
-                "HandDragAnimate.handCardOf: NotYetMeasured entry must carry a hand action"
-
-
 
 -- IN-FLIGHT CONSTRUCTION
 
@@ -208,34 +250,34 @@ popped hand action. Dispatches by variant to compute the
 floater's destination in viewport coords, then composes
 `linearPath` + a fresh `HandCardDragInfo`.
 -}
-buildInFlight : ActionLogEntry -> Point -> GA.Rect -> Int -> InFlightData
-buildInFlight entry origin boardRect nowMs =
-    case entry.action of
-        GameEvent.MergeHand p ->
+buildInFlight : HandDragAnimateAction -> Point -> GA.Rect -> Int -> InFlightData
+buildInFlight action origin boardRect nowMs =
+    case action of
+        MergeHand p ->
             let
                 size =
-                    CardStack.size p.target
+                    CardStack.size p.targetStack
 
                 landingLeft =
                     case p.side of
                         BoardActions.Right ->
-                            p.target.loc.left + size * BG.cardPitch
+                            p.targetStack.loc.left + size * BG.cardPitch
 
                         BoardActions.Left ->
-                            p.target.loc.left - BG.cardPitch
+                            p.targetStack.loc.left - BG.cardPitch
             in
             inFlightFor
                 { handCard = p.handCard
                 , origin = origin
                 , destination =
                     { x = boardRect.x + landingLeft
-                    , y = boardRect.y + p.target.loc.top
+                    , y = boardRect.y + p.targetStack.loc.top
                     }
                 , startMs = nowMs
-                , pendingAction = entry.action
+                , pendingAction = action
                 }
 
-        GameEvent.PlaceHand p ->
+        PlaceHand p ->
             inFlightFor
                 { handCard = p.handCard
                 , origin = origin
@@ -244,12 +286,8 @@ buildInFlight entry origin boardRect nowMs =
                     , y = boardRect.y + p.loc.top
                     }
                 , startMs = nowMs
-                , pendingAction = entry.action
+                , pendingAction = action
                 }
-
-        _ ->
-            Debug.todo
-                "HandDragAnimate.buildInFlight: AwaitingMeasurement entry must carry a hand action"
 
 
 inFlightFor :
@@ -257,7 +295,7 @@ inFlightFor :
     , origin : Point
     , destination : Point
     , startMs : Int
-    , pendingAction : GameEvent
+    , pendingAction : HandDragAnimateAction
     }
     -> InFlightData
 inFlightFor { handCard, origin, destination, startMs, pendingAction } =
