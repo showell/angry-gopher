@@ -35,11 +35,10 @@ import Game.Game as Game
 import Game.Random as Random
 import Game.Replay.Animate as Animate
 import Game.Replay.HandDragAnimate as HandDragAnimate
-import Game.Replay.ReplayState exposing (Phase(..), ReplayState)
+import Game.Replay.ReplayState exposing (Phase(..))
 import Html exposing (Html)
-import Http
 import Json.Encode as Encode
-import Game.Status as Status exposing (StatusKind(..), StatusMessage)
+import Game.Status as Status exposing (StatusKind(..))
 import Game.PointerInput as PointerInput
 import Main.Gesture
     exposing
@@ -58,7 +57,6 @@ import Main.State
 import Game.Point exposing (Point)
 import Main.View as View
 import Main.Wire as Wire exposing (fetchActionLog, fetchNewSession)
-import Task
 import Time
 
 
@@ -181,7 +179,11 @@ update msg model =
             ( model, Cmd.none, NoOutput )
 
         ActionSent (Err err) ->
-            logAndScold "ActionSent" err Status.actionRejectedStatus model
+            let
+                _ =
+                    Debug.log "ActionSent err" err
+            in
+            ( { model | status = Status.actionRejectedStatus }, Cmd.none, NoOutput )
 
         SessionReceived (Ok sid) ->
             -- Session id allocated by the server. State was
@@ -192,7 +194,11 @@ update msg model =
             )
 
         SessionReceived (Err err) ->
-            logAndScold "SessionReceived" err Status.sessionAllocFailedStatus model
+            let
+                _ =
+                    Debug.log "SessionReceived err" err
+            in
+            ( { model | status = Status.sessionAllocFailedStatus }, Cmd.none, NoOutput )
 
         ClickCompleteTurn ->
             clickCompleteTurn model
@@ -234,33 +240,48 @@ update msg model =
                     ( model, Cmd.none, NoOutput )
 
                 Just rs ->
-                    case Animate.tick (animateConfig model.gameId) (Time.posixToMillis nowPosix) rs of
+                    let
+                        config =
+                            { measureMsg = HandCardRectReceived
+                            , gameId = model.gameId
+                            }
+                    in
+                    case Animate.tick config (Time.posixToMillis nowPosix) rs of
                         Animate.StillReplaying nextRs cmd ->
                             ( { model | replayState = Just nextRs }, cmd, NoOutput )
 
                         Animate.Completed ->
-                            ( model, dispatchSelf ReplayCompleted, NoOutput )
-
-        ReplayCompleted ->
-            ( { model
-                | replayState = Nothing
-                , status = { text = "Replay completed! Continue playing.", kind = Inform }
-              }
-            , Cmd.none
-            , NoOutput
-            )
+                            ( { model
+                                | replayState = Nothing
+                                , status = { text = "Replay completed! Continue playing.", kind = Inform }
+                              }
+                            , Cmd.none
+                            , NoOutput
+                            )
 
         HandCardRectReceived (Ok ( handElement, boardElement, posix )) ->
-            ( { model
-                | replayState =
-                    Maybe.map
-                        (installHandMeasurement
-                            (Time.posixToMillis posix)
-                            handElement
-                            boardElement
-                        )
-                        model.replayState
-              }
+            let
+                -- Late measurement results (replay completed, or
+                -- pause-toggle drove us past AwaitingMeasurement)
+                -- are dropped; the rs phase guards that.
+                applyMeasurement rs =
+                    case rs.phase of
+                        AnimatingHandAction handState ->
+                            { rs
+                                | phase =
+                                    AnimatingHandAction
+                                        (HandDragAnimate.measurementReceived
+                                            (Time.posixToMillis posix)
+                                            handElement
+                                            boardElement
+                                            handState
+                                        )
+                            }
+
+                        _ ->
+                            rs
+            in
+            ( { model | replayState = Maybe.map applyMeasurement model.replayState }
             , Cmd.none
             , NoOutput
             )
@@ -276,7 +297,11 @@ update msg model =
             ( bootstrapFromBundle initialState actions model, Cmd.none, NoOutput )
 
         ActionLogFetched (Err err) ->
-            logAndScold "ActionLogFetched" err Status.actionLogFetchFailedStatus model
+            let
+                _ =
+                    Debug.log "ActionLogFetched err" err
+            in
+            ( { model | status = Status.actionLogFetchFailedStatus }, Cmd.none, NoOutput )
 
         BoardRectReceived result ->
             boardRectReceived result model
@@ -286,80 +311,6 @@ update msg model =
 
         GameHintReceived value ->
             handleHintResponse value model
-
-
-{-| Fire a Msg into our own update on the next runtime cycle.
-Used by `ReplayTick`'s `Completed` branch so Main's update
-loop is the one that clears `replayState` — the engine
-itself never names a Msg.
--}
-dispatchSelf : Msg -> Cmd Msg
-dispatchSelf msg =
-    Task.succeed () |> Task.perform (\_ -> msg)
-
-
-{-| Wire the host's `HandCardRectReceived` Msg + `gameId`
-into the `HandDragAnimate.Config` shape that `Animate.tick`
-forwards down to the hand sub-machine. The sub-machine
-builds the actual measurement Cmd; we just supply the bits
-it needs to address the host.
--}
-animateConfig : String -> HandDragAnimate.Config Msg
-animateConfig gameId =
-    { measureMsg = HandCardRectReceived
-    , gameId = gameId
-    }
-
-
-{-| Feed a freshly-resolved DOM measurement into the hand
-sub-machine if the replay is currently waiting for one.
-Late results (replay completed, pause-toggled away) are
-dropped. The phase-shape work lives in the host because the
-host is the one routing the measurement Msg back; pushing
-this into `Animate` would add an Animate function that does
-nothing but re-wrap a `HandDragAnimate.measurementReceived`
-call.
--}
-installHandMeasurement :
-    Int
-    -> Browser.Dom.Element
-    -> Browser.Dom.Element
-    -> ReplayState
-    -> ReplayState
-installHandMeasurement nowMs handElement boardElement rs =
-    case rs.phase of
-        AnimatingHandAction handState ->
-            { rs
-                | phase =
-                    AnimatingHandAction
-                        (HandDragAnimate.measurementReceived
-                            nowMs
-                            handElement
-                            boardElement
-                            handState
-                        )
-            }
-
-        _ ->
-            rs
-
-
-{-| Shared shape for the four `Result.Err` branches in `update`
-that handle wire failures: log the underlying `Http.Error` to
-the console (so devtools has the gory details), set the
-model's status to a named Scold message, and return with
-`Cmd.none + NoOutput`. The `_ = Debug.log ...` binding pattern
-preserves the side-effect across the helper boundary —
-without the `_ =` binding Elm would optimize the call away.
--}
-logAndScold : String -> Http.Error -> StatusMessage -> Model -> ( Model, Cmd Msg, Output )
-logAndScold label err status model =
-    let
-        _ =
-            Debug.log (label ++ " err") err
-    in
-    ( { model | status = status }, Cmd.none, NoOutput )
-
 
 
 -- UPDATE HELPERS

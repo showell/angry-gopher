@@ -82,7 +82,6 @@ type Msg
     | ClickInstantReplay
     | ClickReplayPauseToggle
     | ReplayTick Time.Posix
-    | ReplayCompleted
     | ActionSent (Result Http.Error ())
 
 
@@ -173,15 +172,12 @@ update msg model =
                             ( { model | replayState = Just nextRs }, Cmd.none )
 
                         Replay.Completed ->
-                            ( model, dispatchSelf ReplayCompleted )
-
-        ReplayCompleted ->
-            ( { model
-                | replayState = Nothing
-                , status = { text = "Replay completed! Continue playing.", kind = Inform }
-              }
-            , Cmd.none
-            )
+                            ( { model
+                                | replayState = Nothing
+                                , status = { text = "Replay completed! Continue playing.", kind = Inform }
+                              }
+                            , Cmd.none
+                            )
 
         ActionSent (Ok _) ->
             ( model, Cmd.none )
@@ -420,12 +416,6 @@ replaySubscriptions model =
 
         Nothing ->
             Sub.none
-
-
-dispatchSelf : Msg -> Cmd Msg
-dispatchSelf msg =
-    Task.succeed () |> Task.perform (\_ -> msg)
-
 
 
 -- VIEW

@@ -34,9 +34,7 @@ import Time
     SessionReceived, ActionLogFetched.
   - **Replay** — ReplayTick (per-frame timer while a replay
     is unpaused; `Game.Replay.Animate.tick` decides whether
-    to advance), ReplayCompleted (self-dispatched when the
-    engine signals `Completed`; Main clears `replayState`
-    and shows the completion ceremony).
+    to advance).
 
 -}
 {- MouseMove and MouseUp deliberately drop the `MouseDownOn*`
@@ -72,6 +70,5 @@ type Msg
     | ClickInstantReplay
     | ClickReplayPauseToggle
     | ReplayTick Time.Posix
-    | ReplayCompleted
     | ActionLogFetched (Result Http.Error ( GameState, List ActionLogEntry ))
     | GameHintReceived Encode.Value
