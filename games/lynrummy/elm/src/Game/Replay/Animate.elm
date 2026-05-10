@@ -32,8 +32,9 @@ calls into `HandDragAnimate.measurementReceived`.
 
 import Game.ActionLog exposing (ActionLogEntry)
 import Game.Execute as Execute
-import Game.Game exposing (GameState)
+import Game.Game as Game exposing (GameState)
 import Game.GameEvent as GameEvent
+import Game.Physics.BoardGeometry exposing (refereeBounds)
 import Game.Replay.BoardDragAnimate as BoardDragAnimate
 import Game.Replay.HandDragAnimate as HandDragAnimate
 import Game.Replay.ReplayState exposing (Phase(..), ReplayState)
@@ -197,13 +198,14 @@ startNextAction nowMs entry gameState =
             , phase = AnimatingHandAction (HandDragAnimate.start entry)
             }
 
-        GameEvent.Split _ ->
-            { gameState = Execute.applyEvent entry.action gameState
+        GameEvent.Split p ->
+            { gameState =
+                { gameState | board = Execute.split p.stack p.cardIndex gameState.board }
             , phase = ActionCompleted
             }
 
         GameEvent.CompleteTurn ->
-            { gameState = Execute.applyEvent entry.action gameState
+            { gameState = Tuple.first (Game.applyCompleteTurn refereeBounds gameState)
             , phase = ActionCompleted
             }
 
