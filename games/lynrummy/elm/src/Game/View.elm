@@ -16,7 +16,7 @@ shared across surfaces.
 -}
 
 import Game.Physics.BoardGeometry as BG
-import Game.Rules.Card as Card exposing (Suit)
+import Game.Rules.Card as Card exposing (Card, Suit)
 import Game.CardStack exposing (HandCard, HandCardState(..))
 import Game.Hand as Hand exposing (Hand)
 import Game.HandLayout as HandLayout
@@ -63,13 +63,17 @@ order (Heart, Spade, Diamond, Club), each row sorted by value
 ascending. Empty suit rows are skipped. Faithful port of
 `PhysicalHand.populate` in `game.ts:1589`.
 
-`attrsForCard` supplies the mousedown handler (and any other
-per-card attributes) keyed by hand-card index within the full
-hand list.
+Per-card decoration is computed at the leaf (`viewPlacedHandCard`)
+from three orthogonal inputs threaded through `config`: source
+card (for opacity dim), mousedown builder (for pointer events),
+and hinted-cards list (for hint highlight).
 
 -}
 viewHand :
-    { attrsForCard : HandCard -> List (Html.Attribute msg) }
+    { sourceCard : Maybe Card
+    , cardMouseDown : Maybe (HandCard -> List (Html.Attribute msg))
+    , hintedCards : List Card
+    }
     -> Hand
     -> Html msg
 viewHand config hand =
@@ -119,11 +123,17 @@ suitToRowIdx suit =
 
 
 viewPlacedHandCard :
-    { attrsForCard : HandCard -> List (Html.Attribute msg) }
+    { sourceCard : Maybe Card
+    , cardMouseDown : Maybe (HandCard -> List (Html.Attribute msg))
+    , hintedCards : List Card
+    }
     -> { row : Int, col : Int, handCard : HandCard }
     -> Html msg
 viewPlacedHandCard config slot =
     let
+        hc =
+            slot.handCard
+
         center =
             HandLayout.positionAt { row = slot.row, col = slot.col }
 
@@ -138,13 +148,41 @@ viewPlacedHandCard config slot =
             , style "top" (String.fromInt localTop ++ "px")
             , style "left" (String.fromInt localLeft ++ "px")
             , style "cursor" "grab"
-            , style "background-color" (handCardBgColor slot.handCard)
-            , id (HandLayout.handCardDomId slot.handCard.card)
+            , style "background-color" (handCardBgColor hc)
+            , id (HandLayout.handCardDomId hc.card)
             ]
+
+        -- Three orthogonal per-card concerns: hint highlight
+        -- (background override), source dim (opacity), pointer
+        -- events (mousedown when idle, otherwise disabled).
+        -- `pointer-events: none` for the source card falls out
+        -- for free — a hand drag implies cardMouseDown is
+        -- Nothing.
+        hintAttrs =
+            if List.any (\c -> c == hc.card) config.hintedCards then
+                [ style "background-color" "lightgreen" ]
+
+            else
+                []
+
+        sourceDimAttrs =
+            if config.sourceCard == Just hc.card then
+                [ style "opacity" "0.35" ]
+
+            else
+                []
+
+        pointerAttrs =
+            case config.cardMouseDown of
+                Just attrs ->
+                    attrs hc
+
+                Nothing ->
+                    [ style "pointer-events" "none" ]
     in
     StackView.viewCardWithAttrs
-        (positionedAttrs ++ config.attrsForCard slot.handCard)
-        slot.handCard.card
+        (positionedAttrs ++ hintAttrs ++ sourceDimAttrs ++ pointerAttrs)
+        hc.card
 
 
 {-| Background color per HandCardState. Faithful port of

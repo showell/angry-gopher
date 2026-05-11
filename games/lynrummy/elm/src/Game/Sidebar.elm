@@ -101,42 +101,14 @@ deckRemainingLine deckCount =
 
 viewActivePlayerRow : ActivePlayerInfo -> Int -> Hand -> Html Msg
 viewActivePlayerRow info idx hand =
-    let
-        -- Three orthogonal per-card concerns: hint highlight
-        -- (background), source dim (opacity), pointer events
-        -- (mousedown when idle, otherwise disabled).
-        -- `pointer-events: none` for the source card falls out
-        -- for free — a hand drag implies cardMouseDown is
-        -- Nothing.
-        attrsForCard hc =
-            let
-                hintAttrs =
-                    if List.any (\c -> c == hc.card) info.hintedCards then
-                        [ style "background-color" "lightgreen" ]
-
-                    else
-                        []
-
-                sourceDimAttrs =
-                    if info.sourceCard == Just hc.card then
-                        [ style "opacity" "0.35" ]
-
-                    else
-                        []
-
-                pointerAttrs =
-                    case info.cardMouseDown of
-                        Just attrs ->
-                            attrs hc
-
-                        Nothing ->
-                            [ style "pointer-events" "none" ]
-            in
-            hintAttrs ++ sourceDimAttrs ++ pointerAttrs
-    in
     playerRowShell { isActive = True, idx = idx }
         [ View.viewHandHeading
-        , View.viewHand { attrsForCard = attrsForCard } hand
+        , View.viewHand
+            { sourceCard = info.sourceCard
+            , cardMouseDown = info.cardMouseDown
+            , hintedCards = info.hintedCards
+            }
+            hand
         , viewTurnControls { canUndo = info.canUndo, replayControl = info.replayControl }
         ]
 
