@@ -19,7 +19,8 @@ the Elm-emit code in `cmd/fixturegen`) goes away.
 
 import Dict
 import Expect
-import Game.CardStack exposing (BoardCardState(..), CardStack)
+import Game.BoardActions exposing (Side(..))
+import Game.CardStack exposing (BoardCardState(..), CardStack, HandCard, HandCardState(..))
 import Game.ConformanceDsl as Dsl
 import Game.DslContent
 import Game.Physics.BoardGeometry as BoardGeometry
@@ -28,6 +29,8 @@ import Game.Physics.BoardGeometry as BoardGeometry
         , GeometryErrorKind(..)
         )
 import Game.Physics.PlaceStack as PlaceStack
+import Game.Physics.WingOracle as WingOracle
+import Game.Rules.Card as Card exposing (Card, OriginDeck(..))
 import Test exposing (Test, describe, test)
 
 
@@ -61,6 +64,12 @@ verify sc =
 
         "validate_board_geometry" ->
             verifyValidateBoardGeometry sc
+
+        "wings_for_stack" ->
+            verifyWingsForStack sc
+
+        "wings_for_hand_card" ->
+            verifyWingsForHandCard sc
 
         _ ->
             -- Verifier not yet ported from fixturegen. The legacy
@@ -275,6 +284,186 @@ parseIntList s =
 
     else
         Nothing
+
+
+
+-- wings_for_stack / wings_for_hand_card
+
+
+verifyWingsForStack : Dsl.Scenario -> Expect.Expectation
+verifyWingsForStack sc =
+    case List.head sc.source of
+        Nothing ->
+            Expect.fail "wings_for_stack scenario missing source block"
+
+        Just src ->
+            let
+                source =
+                    stackFromDsl src
+
+                board =
+                    stacksFromDsl sc.board
+
+                actual =
+                    WingOracle.wingsForStack source board
+                        |> List.map wingKey
+
+                expected =
+                    parseExpectedWings sc
+            in
+            actual |> Expect.equal expected
+
+
+verifyWingsForHandCard : Dsl.Scenario -> Expect.Expectation
+verifyWingsForHandCard sc =
+    case Dict.get "hand_card" sc.otherScalars |> Maybe.andThen parseHandCardToken of
+        Nothing ->
+            Expect.fail "wings_for_hand_card scenario missing hand_card"
+
+        Just hc ->
+            let
+                actual =
+                    WingOracle.wingsForHandCard hc (stacksFromDsl sc.board)
+                        |> List.map wingKey
+
+                expected =
+                    parseExpectedWings sc
+            in
+            actual |> Expect.equal expected
+
+
+wingKey : WingOracle.WingId -> ( List Card, Side )
+wingKey w =
+    ( List.map .card w.target.boardCards, w.side )
+
+
+parseExpectedWings : Dsl.Scenario -> List ( List Card, Side )
+parseExpectedWings sc =
+    case Dict.get "expect_wings" sc.otherBlocks of
+        Nothing ->
+            []
+
+        Just rawLines ->
+            groupWingEntries rawLines
+                |> List.filterMap parseWingEntry
+
+
+groupWingEntries : List String -> List (List String)
+groupWingEntries lines =
+    case lines of
+        [] ->
+            []
+
+        first :: rest ->
+            if String.startsWith "- " first then
+                let
+                    ( more, after ) =
+                        spanNonDash rest
+                in
+                (first :: more) :: groupWingEntries after
+
+            else
+                -- skip stray non-dash prefix lines (shouldn't happen
+                -- with well-formed input)
+                groupWingEntries rest
+
+
+spanNonDash : List String -> ( List String, List String )
+spanNonDash lines =
+    case lines of
+        [] ->
+            ( [], [] )
+
+        head :: rest ->
+            if String.startsWith "- " head then
+                ( [], lines )
+
+            else
+                let
+                    ( more, after ) =
+                        spanNonDash rest
+                in
+                ( head :: more, after )
+
+
+parseWingEntry : List String -> Maybe ( List Card, Side )
+parseWingEntry entryLines =
+    let
+        fields =
+            List.map normalizeWingLine entryLines
+                |> List.filterMap parseKeyVal
+                |> Dict.fromList
+
+        target =
+            Dict.get "target" fields
+                |> Maybe.map parseCardTokens
+
+        side =
+            Dict.get "side" fields
+                |> Maybe.andThen parseSide
+    in
+    Maybe.map2 Tuple.pair target side
+
+
+normalizeWingLine : String -> String
+normalizeWingLine s =
+    if String.startsWith "- " s then
+        String.trim (String.dropLeft 2 s)
+
+    else
+        String.trim s
+
+
+parseKeyVal : String -> Maybe ( String, String )
+parseKeyVal s =
+    case String.indexes ":" s of
+        idx :: _ ->
+            Just
+                ( String.trim (String.left idx s)
+                , String.trim (String.dropLeft (idx + 1) s)
+                )
+
+        [] ->
+            Nothing
+
+
+parseSide : String -> Maybe Side
+parseSide s =
+    case s of
+        "Left" ->
+            Just Left
+
+        "Right" ->
+            Just Right
+
+        _ ->
+            Nothing
+
+
+parseCardTokens : String -> List Card
+parseCardTokens raw =
+    String.words (String.trim raw)
+        |> List.filter (\w -> w /= "")
+        |> List.filterMap parseCardTokenForExpect
+
+
+parseCardTokenForExpect : String -> Maybe Card
+parseCardTokenForExpect raw =
+    let
+        ( base, deck ) =
+            if String.endsWith "'" raw then
+                ( String.dropRight 1 raw, DeckTwo )
+
+            else
+                ( raw, DeckOne )
+    in
+    Card.cardFromLabel base deck
+
+
+parseHandCardToken : String -> Maybe HandCard
+parseHandCardToken raw =
+    parseCardTokenForExpect raw
+        |> Maybe.map (\c -> { card = c, state = HandNormal })
 
 
 
