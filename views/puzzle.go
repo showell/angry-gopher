@@ -45,7 +45,10 @@ import (
 var PuzzleJSPath = "games/lynrummy/elm/puzzle.js"
 
 // puzzleSeedsPath — pre-mined puzzles with positioned boards.
-const puzzleSeedsPath = "games/lynrummy/conformance/mined_seeds.json"
+// Catalog is pure DSL: `puzzle <name>` headers, each followed by
+// indented `at (top, left): cards` lines that pass straight
+// through to Elm's Game.BoardDsl on the wire.
+const puzzleSeedsPath = "games/lynrummy/conformance/mined_seeds.dsl"
 
 // featuredPuzzleName — the puzzle every visit currently
 // receives. Hardcoded; rotation / catalog selection can be
@@ -112,31 +115,36 @@ func puzzleAppendAction(w http.ResponseWriter, r *http.Request, sessionID int64)
 	fmt.Fprint(w, `{"ok":true}`)
 }
 
-// loadPuzzleBoard reads mined_seeds.json and returns the
-// initial_state.board for the named puzzle as raw JSON
-// (passes straight through to Elm flags, no re-encoding).
-func loadPuzzleBoard(name string) (json.RawMessage, error) {
+// loadPuzzleBoard reads mined_seeds.dsl and returns the
+// named puzzle's body — the multi-line `at (top, left): cards`
+// block that Game.BoardDsl on the Elm side parses. The catalog
+// itself isn't JSON, so this is a thin string scan: find the
+// `puzzle <name>` header line and return the indented body up
+// to the next blank line or `puzzle ` header.
+func loadPuzzleBoard(name string) (string, error) {
 	data, err := os.ReadFile(puzzleSeedsPath)
 	if err != nil {
-		return nil, fmt.Errorf("read %s: %w", puzzleSeedsPath, err)
+		return "", fmt.Errorf("read %s: %w", puzzleSeedsPath, err)
 	}
-	var doc struct {
-		Seeds []struct {
-			PuzzleName   string `json:"puzzle_name"`
-			InitialState struct {
-				Board json.RawMessage `json:"board"`
-			} `json:"initial_state"`
-		} `json:"seeds"`
-	}
-	if err := json.Unmarshal(data, &doc); err != nil {
-		return nil, fmt.Errorf("decode %s: %w", puzzleSeedsPath, err)
-	}
-	for _, s := range doc.Seeds {
-		if s.PuzzleName == name {
-			return s.InitialState.Board, nil
+	header := "puzzle " + name
+	var body []string
+	inBlock := false
+	for _, line := range strings.Split(string(data), "\n") {
+		if inBlock {
+			if line == "" || strings.HasPrefix(line, "puzzle ") {
+				break
+			}
+			body = append(body, strings.TrimLeft(line, " "))
+			continue
+		}
+		if line == header {
+			inBlock = true
 		}
 	}
-	return nil, fmt.Errorf("puzzle %q not found in %s", name, puzzleSeedsPath)
+	if !inBlock {
+		return "", fmt.Errorf("puzzle %q not found in %s", name, puzzleSeedsPath)
+	}
+	return strings.Join(body, "\n"), nil
 }
 
 // puzzlePage allocates a puzzle session, loads the featured
@@ -148,15 +156,9 @@ func loadPuzzleBoard(name string) (json.RawMessage, error) {
 // Game.BoardDsl on the Elm side — same grammar as the .dsl
 // fixtures and the action-log wire.
 func puzzlePage(w http.ResponseWriter) {
-	boardJSON, err := loadPuzzleBoard(featuredPuzzleName)
+	boardDSL, err := loadPuzzleBoard(featuredPuzzleName)
 	if err != nil {
 		http.Error(w, "load puzzle: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	boardDSL, err := boardJSONToDSL(boardJSON)
-	if err != nil {
-		http.Error(w, "convert board: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
