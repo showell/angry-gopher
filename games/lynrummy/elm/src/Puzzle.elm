@@ -28,10 +28,11 @@ import Browser.Dom
 import Browser.Events
 import Game.ActionLog as ActionLog exposing (ActionLogEntry)
 import Game.BoardDrag as BoardDrag
+import Game.BoardDsl as BoardDsl
 import Game.BoardGesture as BoardGesture
 import Game.BoardView as BoardView
 import Game.Button as Button
-import Game.CardStack as CardStack exposing (CardStack)
+import Game.CardStack exposing (CardStack)
 import Game.Drag as Drag exposing (DragState(..))
 import Game.Execute as Execute
 import Game.GameEvent as GameEvent exposing (GameEvent(..))
@@ -88,7 +89,17 @@ flagsDecoder : Decode.Decoder DecodedFlags
 flagsDecoder =
     Decode.map2 DecodedFlags
         (Decode.field "session_id" Decode.int)
-        (Decode.field "initial_board" (Decode.list CardStack.cardStackDecoder))
+        (Decode.field "initial_board" Decode.string
+            |> Decode.andThen
+                (\dsl ->
+                    case BoardDsl.parseBoard dsl of
+                        Ok stacks ->
+                            Decode.succeed stacks
+
+                        Err msg ->
+                            Decode.fail ("initial_board DSL: " ++ msg)
+                )
+        )
 
 
 init : Decode.Value -> ( Model, Cmd Msg )

@@ -143,10 +143,20 @@ func loadPuzzleBoard(name string) (json.RawMessage, error) {
 // puzzle's initial board, writes meta.json, and renders the
 // HTML host with both `session_id` and `initial_board` baked
 // into the Elm flags. Zero post-load round trips before play.
+//
+// `initial_board` is the multi-line DSL string parsed by
+// Game.BoardDsl on the Elm side — same grammar as the .dsl
+// fixtures and the action-log wire.
 func puzzlePage(w http.ResponseWriter) {
-	board, err := loadPuzzleBoard(featuredPuzzleName)
+	boardJSON, err := loadPuzzleBoard(featuredPuzzleName)
 	if err != nil {
 		http.Error(w, "load puzzle: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	boardDSL, err := boardJSONToDSL(boardJSON)
+	if err != nil {
+		http.Error(w, "convert board: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -159,7 +169,7 @@ func puzzlePage(w http.ResponseWriter) {
 	meta := map[string]any{
 		"created_at":    time.Now().Unix(),
 		"puzzle_name":   featuredPuzzleName,
-		"initial_board": board,
+		"initial_board": boardDSL,
 	}
 	metaJSON, err := json.MarshalIndent(meta, "", "  ")
 	if err != nil {
@@ -173,7 +183,7 @@ func puzzlePage(w http.ResponseWriter) {
 
 	flags := map[string]any{
 		"session_id":    id,
-		"initial_board": board,
+		"initial_board": boardDSL,
 	}
 	flagsJSON, err := json.Marshal(flags)
 	if err != nil {
