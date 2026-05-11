@@ -73,20 +73,28 @@ view model =
                 _ ->
                     []
 
-        -- Wings: both Dragging variants carry a `wings` field;
-        -- the only per-variant difference is how to compute the
-        -- floater's location in board frame (board-card: already
-        -- there; hand-card: subtract boardRect to translate from
-        -- viewport). Hand-card pre-rect-arrival → no wings.
-        ( wings, hoveredWing ) =
+        wings =
             case drag of
                 DraggingBoardCard d ->
-                    ( d.wings
-                    , WingView.hoveredWing
+                    d.wings
+
+                DraggingHandCard d ->
+                    d.wings
+
+                NotDragging ->
+                    []
+
+        -- Hover detection needs the floater in board frame.
+        -- Board-card floater is already board-frame; hand-card
+        -- floater is viewport-frame (`position: fixed`), so we
+        -- subtract boardRect. Pre-rect-arrival → no hover.
+        hoveredWing =
+            case drag of
+                DraggingBoardCard d ->
+                    WingView.hoveredWing
                         d.floaterTopLeft
                         (CardStack.stackDisplayWidth d.stack)
                         d.wings
-                    )
 
                 DraggingHandCard d ->
                     case model.boardRect of
@@ -97,15 +105,13 @@ view model =
                                     , top = d.floaterTopLeft.y - rect.y
                                     }
                             in
-                            ( d.wings
-                            , WingView.hoveredWing floaterBoardLoc CardStack.stackPitch d.wings
-                            )
+                            WingView.hoveredWing floaterBoardLoc CardStack.stackPitch d.wings
 
                         Nothing ->
-                            ( [], Nothing )
+                            Nothing
 
                 NotDragging ->
-                    ( [], Nothing )
+                    Nothing
     in
     div
         [ style "font-family" "system-ui, sans-serif"

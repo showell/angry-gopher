@@ -404,20 +404,26 @@ view model =
                 _ ->
                     []
 
-        -- Puzzles never have hand drags; the dispatch is just
-        -- the board-card branch + the empty fallback.
-        ( wings, hoveredWing ) =
+        -- Puzzles never have hand drags; dispatches are just the
+        -- board-card branch + empty fallback.
+        wings =
             case drag of
                 DraggingBoardCard d ->
-                    ( d.wings
-                    , WingView.hoveredWing
+                    d.wings
+
+                _ ->
+                    []
+
+        hoveredWing =
+            case drag of
+                DraggingBoardCard d ->
+                    WingView.hoveredWing
                         d.floaterTopLeft
                         (CardStack.stackDisplayWidth d.stack)
                         d.wings
-                    )
 
                 _ ->
-                    ( [], Nothing )
+                    Nothing
     in
     div
         [ style "font-family" "system-ui, sans-serif" ]
