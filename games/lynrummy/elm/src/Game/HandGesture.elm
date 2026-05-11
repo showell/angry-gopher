@@ -44,11 +44,10 @@ type HandMouseUp
 
 
 {-| Construct a fresh `HandCardDragInfo` from a mousedown.
-Pure: no Model, no Cmd. Mirror of
-`BoardGesture.startBoardDragInfo`. The initial floater seed is
-"slightly above-and-left of the cursor" — hand-origin drags
-don't capture the source rect, so the seed is a heuristic
-that gets overwritten on the first MouseMove.
+Mirror of `BoardGesture.startBoardDragInfo`. The initial
+floater seed is "slightly above-and-left of the cursor" —
+hand-origin drags don't capture the source rect, so the seed
+is a heuristic that gets overwritten on the first MouseMove.
 -}
 startHandDragInfo :
     { handCard : HandCard
@@ -158,11 +157,9 @@ resolveHandCardGesture d maybeRect =
                         Nothing
 
 
-{-| Mousemove handler for a hand-card drag. Pure state
-transformation — caller wraps the returned `Info` into
-`DraggingHandCard`. Hand drags don't capture a gesture path,
-so no `tMs`. No `Cmd Msg` slot — mousemove never emits
-commands.
+{-| Mousemove handler for a hand-card drag. Caller wraps the
+returned `Info` into `DraggingHandCard`. Hand drags don't
+capture a gesture path, so no `tMs`.
 -}
 mouseMove :
     Point

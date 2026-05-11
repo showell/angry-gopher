@@ -49,9 +49,7 @@ type BoardMouseUp
 
 
 {-| Construct a fresh `BoardCardDragInfo` from a mousedown.
-Pure: no Model, no Cmd. Hosts wrap this for their own Model
-shape (full game patches `model.drag`; puzzle host patches its
-own drag field). Wings are computed once at start and pinned.
+Wings are computed once at start and pinned.
 -}
 startBoardDragInfo :
     { stack : CardStack

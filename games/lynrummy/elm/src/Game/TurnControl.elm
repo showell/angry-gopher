@@ -5,15 +5,10 @@ module Game.TurnControl exposing
     , attemptUndo
     )
 
-{-| Pure logic for the two turn-boundary actions: "Complete
-turn" and "Undo." Each returns a typed variant the caller
-(Main.Play) dispatches on to patch Model + fire the wire
-Cmd.
-
-This module is Cmd-free and Msg-free — the DSL wire lines
-are returned as `outboundPayload : String`; the host wraps
-them in `Wire.sendAction` at the call site.
-
+{-| The two turn-boundary actions: "Complete turn" and "Undo."
+Each returns a typed variant the caller dispatches on. DSL
+wire lines are returned as `outboundPayload : String` — the
+host wraps them in `Wire.sendAction` at the call site.
 -}
 
 import Game.ActionLog exposing (ActionLogEntry)

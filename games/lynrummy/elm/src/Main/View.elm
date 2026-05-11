@@ -1,47 +1,14 @@
 module Main.View exposing (view)
 
-{-| The game-surface view layer — composes the top bar, status
-bar, hand column, board column, drag overlay, and popup into
-an **embeddable** 1100×700 div (`position: relative`). The
-main app's Main.elm wraps this in a viewport-filling outer
-shell; Puzzles' Puzzles.elm places it directly inside each
-puzzle panel.
+{-| The full-game view layer — composes the status bar, left
+sidebar, board column, and popup into a 1100×700 div
+(`position: relative`). Main.elm wraps this in a viewport-
+filling outer shell.
 
-Plus the turn-ceremony helpers (`statusForCompleteTurn`,
-`popupForCompleteTurn`) that produce the status/popup records
-update writes into Model.
-
-Extracted 2026-04-19 from the pre-split `Main.elm` monolith;
-rewritten as embeddable 2026-04-23
-(REFACTOR\_EMBEDDABLE\_PLAY phase III).
-
-
-## Visual structure
-
-    Html (position: relative, 1100×700, embeddable)
-    ├── viewStatusBar           // at (0, 0), ~32px tall
-    ├── leftSidebar            // at (20, 100), 240px wide
-    │   ├── playerHands         // main app: turn # + per-player rows + turn controls
-    │   └── puzzleControls      // Puzzles: Hint / Let agent play / Replay
-    ├── boardColumn             // at (boardViewportLeft, boardViewportTop)
-    │   └── boardWithWings      // id = `boardDomIdFor model.gameId`
-    │       ├── viewStackForBoard (×N)
-    │       └── viewWingAt       (×M, during drag only)
-    ├── draggedOverlay          // floating drag card (position: fixed)
-    └── viewPopup               // modal ceremony (position: fixed)
-
-The drag floater and popup stay `position: fixed` — they're
-viewport-level overlays that work the same whether the view
-is inside the main app's viewport shell or inside a lab
-panel on a scrolling page.
-
-Note: `boardViewportLeft/Top` name the DOCUMENTARY position
-inside this embeddable frame. The drag floater and replay
-synthesizer DOM-measure the board's LIVE rect per drag /
-per replay-start. When the Play surface sits inside a lab
-panel on a scrolling page, live measurement is what keeps
-drag math honest.
-
+`boardViewportLeft/Top` name the documentary position of the
+board inside this frame; the drag floater and replay
+synthesizer DOM-measure the board's live rect per drag /
+per replay-start to stay honest under scrolling.
 -}
 
 import Game.BoardView as BoardView
@@ -71,17 +38,11 @@ import Main.State
 
 view : Model -> Html Msg
 view model =
-    -- Embeddable container. `position: relative` makes this div
-    -- the positioning context for its absolute-positioned
-    -- children (top-bar, status-bar, hand column, board column).
-    -- Host wraps this (Main.elm wraps in a viewport-filling
-    -- shell for the main app; Puzzles.elm places it inside a
-    -- puzzle card). The drag floater and popup stay
-    -- `position: fixed` since they're viewport-level overlays
-    -- — consistent across hosts.
-    --
-    -- Fixed width/height give absolute children a well-defined
-    -- frame and prevent the div from collapsing in normal flow.
+    -- `position: relative` so absolutely-positioned children
+    -- (status bar, sidebar, board column) place inside this
+    -- div. Drag floater and popup stay `position: fixed`
+    -- (rendered inside `boardColumn` / here) — they're
+    -- viewport-level overlays.
     div
         [ style "font-family" "system-ui, sans-serif"
         , style "position" "relative"
