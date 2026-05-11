@@ -2,9 +2,11 @@ module Game.InitialStateDslTest exposing (suite)
 
 import Expect
 import Game.CardStack exposing (BoardCardState(..), HandCardState(..))
+import Game.Dealer as Dealer
 import Game.Game exposing (GameState)
 import Game.Hand as Hand
 import Game.InitialStateDsl as InitialStateDsl
+import Game.Random
 import Game.Rules.Card exposing (Card, CardValue(..), OriginDeck(..), Suit(..))
 import Test exposing (Test, describe, test)
 
@@ -43,6 +45,36 @@ suite =
                     |> InitialStateDsl.parseGameState
                     |> Result.map (always ())
                     |> Expect.equal (Err "unknown scalar key: bogus_key")
+        , test "real Dealer output: format is idempotent" <|
+            \_ ->
+                -- The Dealer is the production source of new-game
+                -- GameStates. The wire round-trip canonicalizes
+                -- hand-card order (sorted by suit then value),
+                -- so value equality between dealtState and
+                -- parse(format(dealtState)) wouldn't hold. What
+                -- DOES hold — and what the wire actually needs —
+                -- is that re-emitting the parsed state gives
+                -- byte-identical DSL.
+                let
+                    setup =
+                        Dealer.dealFullGame (Game.Random.initSeed 42)
+
+                    dealtState =
+                        { board = setup.board
+                        , hands = setup.hands
+                        , activePlayerIndex = 0
+                        , turnIndex = 0
+                        , deck = setup.deck
+                        , cardsPlayedThisTurn = 0
+                        , victorAwarded = False
+                        }
+
+                    rendered =
+                        InitialStateDsl.formatGameState dealtState
+                in
+                InitialStateDsl.parseGameState rendered
+                    |> Result.map InitialStateDsl.formatGameState
+                    |> Expect.equal (Ok rendered)
         ]
 
 
