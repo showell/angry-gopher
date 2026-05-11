@@ -100,6 +100,10 @@ the gate isn't load-bearing.
   design (events, action logs, frames of reference, who runs
   what) and the DSL examples that make the wire format
   concrete. Read at every named-project kickoff.
+- [`BOUNDARIES.md`](./BOUNDARIES.md) — mandatory before any
+  substantial refactor or new-code work. 8 diagnostics for
+  function / module / type boundary decisions plus the
+  eliminate-don't-paper-over meta-principle.
 - [`ENTRY_POINTS.md`](./ENTRY_POINTS.md) — concrete entry
   points (Elm boots, server handlers, conformance test
   surfaces).
