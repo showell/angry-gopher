@@ -30,9 +30,13 @@ the worked examples are seed-42 turns 10 and 11. See
 The TS agent at `ts/` owns three end-to-end jobs:
 
 - **Self-play.** Plays full 2-hand games to deck-low against
-  a fixed seed; writes the result as an Elm-replayable JSON
-  transcript Steve can step through in the UI. Driver:
+  a fixed seed; writes the result as an Elm-replayable DSL
+  transcript (`meta` + `actions.dsl`) Steve can step through
+  in the UI. Driver:
   `npm run bench:end-of-deck -- --write-transcript [seeds...]`.
+  The writer round-trips the emitted files through
+  `applyLocally` before returning — agent transcripts can't
+  ship broken.
 - **Hint generation.** The full game's Hint button calls
   into `hand_play.ts:findPlay` over Elm ports.
 - **Conformance + perf gates.** `ops/check-conformance` runs
@@ -77,22 +81,25 @@ the gate isn't load-bearing.
 - `elm/` — the in-browser UI: full game (`Main.elm`) and
   the single-board puzzle (`Puzzle.elm`). See
   [`elm/README.md`](./elm/README.md).
-- `conformance/mined_seeds.json` — positioned mid-game
-  boards the puzzle host picks from. Generated upstream by
-  `ts/tools/generate_puzzles.ts`.
-- `data/` — file-system-backed session storage (full games
-  in `lynrummy-elm/sessions/`, puzzle attempts in
-  `puzzle/sessions/`). All committed.
-- `conformance/` — DSL scenarios that pin the cross-language
-  contract between Elm and TS. Parsed natively at test time
-  by both runners (no codegen step).
+- `conformance/mined_seeds.dsl` — positioned mid-game boards
+  the puzzle host picks from. One `puzzle <name>` block per
+  entry.
+- `data/` — file-system-backed session storage (full games in
+  `lynrummy-elm/sessions/`, puzzle attempts in
+  `puzzle/sessions/`); each session dir is `meta` + `actions.dsl`.
+- `conformance/scenarios/*.dsl` — scenarios pinning the
+  cross-language contract between Elm and TS. Most parsing
+  happens inside each runner at test time; `ops/embed_dsls_for_elm.ts`
+  is the one codegen step (inlines `.dsl` files into Elm so
+  the test runner doesn't need `fs`).
 
 ## Where to read next
 
 - [`RULES.md`](./RULES.md) — what the game actually is.
 - [`ARCHITECTURE.md`](./ARCHITECTURE.md) — the system-wide
-  design (events, action logs, frames of reference, who
-  runs what). Read at every named-project kickoff.
+  design (events, action logs, frames of reference, who runs
+  what) and the DSL examples that make the wire format
+  concrete. Read at every named-project kickoff.
 - [`ENTRY_POINTS.md`](./ENTRY_POINTS.md) — concrete entry
   points (Elm boots, server handlers, conformance test
   surfaces).

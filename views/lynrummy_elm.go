@@ -47,23 +47,9 @@ var EngineJSPath = "games/lynrummy/elm/engine.js"
 // the TS engine bundle. Lives next to engine.js.
 var EngineGlueJSPath = "games/lynrummy/elm/engine_glue.js"
 
-// HandleLynRummyElm dispatches /gopher/lynrummy-elm/*.
-//
-// Routes:
-//   GET  /                              → Elm play page
-//   GET  /elm.js                        → compiled Elm
-//   GET  /play/<id>                     → Elm play page with session id baked in
-//   POST /new-session                   → allocate id, write meta.json
-//   POST /sessions/<id>/actions         → append one envelope to actions.jsonl (DUMB)
-//   POST /sessions/<id>/annotations     → append one envelope to annotations.jsonl (DUMB)
-//   GET  /sessions                      → HTML list of full-game session dirs
-//   GET  /api/sessions                  → JSON list
-//   GET  /sessions/<id>                 → HTML detail (file listing)
-//   GET  /sessions/<id>/actions         → bundle: {meta, actions[]} for Elm bootstrap
-//
-// Each envelope on actions.jsonl is `{seq, action}` — the seq is
-// Elm-authored (rides in the body, not the URL) and the server
-// appends verbatim. Order on disk = order Elm sent.
+// HandleLynRummyElm dispatches /gopher/lynrummy-elm/*. The
+// switch below is the route table; per-handler comments name
+// each route's wire shape.
 func HandleLynRummyElm(w http.ResponseWriter, r *http.Request) {
 	sub := strings.TrimPrefix(r.URL.Path, "/gopher/lynrummy-elm")
 	sub = strings.TrimPrefix(sub, "/")
@@ -97,17 +83,8 @@ func HandleLynRummyElm(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleSessionRoute fans out the per-session URL space.
-// `rest` is everything after "sessions/" — e.g.
-// "7", "7/actions", "7/annotations".
-//
-// GET  /<id>                bundle (HTML detail)
-// GET  /<id>/actions        bootstrap JSON ({meta, actions})
-// POST /<id>/actions        append one envelope to actions.jsonl
-// POST /<id>/annotations    append one envelope to annotations.jsonl
-//
-// Seq numbers ride in the POST body now, not the URL — so /actions
-// and /annotations are single endpoints distinguished by HTTP method.
+// handleSessionRoute fans out the per-session URL space. The
+// switch below is the route table.
 func handleSessionRoute(w http.ResponseWriter, r *http.Request, rest string) {
 	parts := strings.Split(rest, "/")
 	idStr := parts[0]
@@ -332,7 +309,7 @@ func lynrummyElmSessionDetail(w http.ResponseWriter, sessionID int64) {
 	}
 	meta, _ := ReadSessionMeta(sessionID)
 	actionCount, _ := CountSessionActions(sessionID)
-	annotationCount, _ := CountJSONLLines(filepath.Join(SessionDir(sessionID), "annotations.jsonl"))
+	annotationCount, _ := CountTextLines(filepath.Join(SessionDir(sessionID), "annotations.jsonl"))
 
 	eastern, _ := time.LoadLocation("America/New_York")
 	ts := ""

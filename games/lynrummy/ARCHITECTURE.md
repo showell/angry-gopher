@@ -14,7 +14,7 @@ covers principles; that one covers the artifacts.
   BFS solver (`engine_v2.ts`, A* with kitchen-table heuristic
   + card-tracker liveness pruning), the verb→primitive
   pipeline, and `agent_player.ts` which plays full 2-hand
-  games down to deck-low. TS writes JSON transcripts the Elm
+  games down to deck-low. TS writes DSL transcripts the Elm
   UI replays.
 - **Elm is the autonomous client.** Deals, referees, replays,
   renders. `games/lynrummy/elm/`. Two surfaces — the full
@@ -30,6 +30,88 @@ covers principles; that one covers the artifacts.
 
 For cross-cutting working-style conventions, see
 `~/showell_repos/claude-collab/agent_collab/`.
+
+## DSL is the lingua franca
+
+One canonical text grammar carries every long-lived artifact:
+conformance fixtures, on-disk session files, the resume wire,
+the puzzle-page boot flag, and agent self-play transcripts.
+Three runtimes (Elm, TypeScript, Go) speak it. Most tests
+parse `.dsl` files at run time — and there's no separate
+syntax-reference manual, because the examples are the spec.
+
+A board on disk:
+
+```
+at ( 20,  70): K♠ A♠ 2♠ 3♠
+at ( 80, 160): T♦ J♦ Q♦ K♦
+at (140, 100): 2♥ 3♥ 4♥
+```
+
+`at (top, left): cards` per stack. Loc coords padded to width
+three so the `): ` separator lines up across stacks. `♥' / ♦' /
+...` (trailing apostrophe) means the deck-2 copy of that card.
+
+One action on the wire (`actions.dsl`):
+
+```
+6) move_stack [2♣ 3♦ 4♣ 5♥ 6♠ 7♥] at (62,320) -> (334,320) :: path (62,320@29176)(65,320@29269)(73,320@29285) ... (334,320@30394)
+```
+
+Seq number, verb, source-stack ref, destination, then a
+captured drag path as `(left,top@tMs)` samples. Other verbs
+have the same shape but different operands (`split [...] @N`,
+`merge_stack [src] -> [tgt] /side`, `merge_hand <card> -> [tgt]
+/side`, `place_hand <card> -> (loc)`, `complete_turn`, `undo`).
+
+A full-game session header (`meta`, the first half of a resume
+bundle):
+
+```
+created_at: 1778500538
+label:
+
+board:
+  at ( 20,  70): K♠ A♠ 2♠ 3♠
+  ...
+
+Player One Hand:
+  8♥ 9♥ T♥' Q♥' K♥'
+  3♦' 8♦' Q♦'
+  2♣' 5♣ 7♣' 8♣' 9♣ T♣ K♣'
+
+Player Two Hand:
+  ...
+
+deck: 4♠' 4♦ 6♠' Q♠ 5♠' T♣' 3♥' A♠' ...
+
+active_player: 0
+turn_index: 0
+cards_played_this_turn: 0
+victor_awarded: false
+```
+
+Top-level scalars at the bottom, named sections in between.
+Hand rows mirror the UI panel: one indented line per non-empty
+suit, in Heart-Spade-Diamond-Club display order, each row
+sorted by value. Open the file in your editor and you see what
+the player sees on screen.
+
+**Pipeline.** `ops/check-conformance` is the single entry point;
+it runs `ops/embed_dsls_for_elm.ts` (the one codegen step —
+inlines `.dsl` files into a generated `tests/Game/DslContent.elm`
+so the Elm runner can read them without `fs`), then the TS
+suite, then the Elm suite. Most parsing happens at test time
+inside each runner via `tests/Game/ConformanceDsl.elm` and
+`ts/test/conformance_dsl.ts`. There are also some traditional
+non-DSL unit tests (pure helpers, decoders, hand-sorted UI
+rendering) — they continue to pull their weight and aren't
+worth converting.
+
+**Bridges.** The DSL is the load-bearing example of the
+redundancy-as-asset paradigm: two independent runners parse
+the same scenarios and must agree scenario-by-scenario. See
+[`../../BRIDGES.md`](../../BRIDGES.md).
 
 ## What Lyn Rummy is
 
@@ -111,21 +193,23 @@ Consequences:
   referee module; the TS agent uses `applyLocally` +
   `findViolation` / `assertNoOverlap` per primitive.
 - **Bootstrap pulls down the data the client needs to play.**
-  The Elm UI does this with three follow-up fetches AFTER the
-  HTML page loads — once each, before play becomes
-  interactive:
-    - `POST /new-session` (full game, fresh start) — server
-      allocates a session id and writes `meta.json`; Elm uses
-      the id in subsequent action POST URLs.
+  The Elm UI does this with at most one follow-up fetch AFTER
+  the HTML page loads, depending on the surface mode:
+    - `POST /new-session` (full game, fresh start) — Elm
+      POSTs the locally-dealt initial state as a DSL string
+      (`text/plain` body, parseable by Elm itself on resume);
+      server allocates a session id and writes the body
+      verbatim to `<session>/meta`.
     - `GET /sessions/<sid>/actions` (full game, deep-link
-      resume) — server reads the on-disk action log and
-      bundles it; Elm replays it locally to reach the live
-      state.
-  The puzzle host is the inverse of the above: its
-  page-render flags carry `{session_id, initial_board}`
-  directly, so the Elm client has zero post-load bootstrap
-  fetches. Once these land (or, for the puzzle host, once
-  the page renders), the Elm UI is fully primed.
+      resume) — server returns one `text/plain` document:
+      the meta DSL, a `---` separator line, then the
+      action-log DSL. Elm splits and parses each half.
+  The puzzle host is the inverse: its page-render carries the
+  entire boot payload (`session_id:` scalar + `board:` block)
+  inside the Elm `Browser.element` flag as one DSL string, so
+  the puzzle client has zero post-load bootstrap fetches. Once
+  bootstrap lands (or, for the puzzle host, once the page
+  renders), the Elm UI is fully primed.
 - **Ongoing play is fully local.** After bootstrap completes,
   no inbound HTTP gates user input. The only "pending" state
   the Elm UI tracks is for TS engine responses (Hint shows
@@ -162,16 +246,20 @@ Consequences:
   (`verbs.ts` + `physical_plan.ts`) that turns a solver plan
   into the primitive sequence a human at the kitchen table
   would emit. `agent_player.ts` plays full 2-hand games to
-  deck-low; `transcript.ts` writes them as Elm-replayable
-  JSON. The TS agent has no DOM — so it cannot speak
-  pixel-level viewport coords for a live drag — but it
+  deck-low; `transcript.ts` writes them as Elm-replayable DSL
+  (`meta` + `actions.dsl`) and `validate_session.ts` reads the
+  emitted files back through the same `applyLocally` the
+  conformance walkthroughs use. The TS agent has no DOM — so
+  it cannot speak pixel-level viewport coords for a live drag — but it
   KNOWS the board frame and reasons about geometry there.
   Discipline: **constraints must be real, not artificial.**
   "TS has no eyes" is not the same as "TS has no geometry."
 - **Go server (Angry Gopher).** Dumb URL-keyed file storage
   for LynRummy session data. SQLite hosts only the seeded
-  `users` table; LynRummy session data lives as plain JSON
-  under `games/lynrummy/data/`.
+  `users` table; LynRummy session files (`meta`, `actions.dsl`)
+  live as DSL under `games/lynrummy/data/`. The server never
+  parses what it stores beyond prepending its own scalars to
+  the meta header.
 
 ## Multiple action logs, one event shape
 
@@ -184,7 +272,7 @@ without translation.
 Engagement levels:
 
 - **Fully autonomous.** Log never leaves the actor. The TS
-  agent in self-play operates here, writing JSON straight to
+  agent in self-play operates here, writing DSL straight to
   the file system without any HTTP.
 - **Outbound-only after bootstrap.** Actor pulls down what it
   needs at startup, then writes events for others (or later
@@ -457,20 +545,20 @@ materially narrower, follow `Puzzle.elm`'s pattern.
 
 The puzzle host (`/gopher/puzzle/`) renders a single
 mid-game position seeded from
-`conformance/mined_seeds.json`. Solo, no opponent — drag,
+`conformance/mined_seeds.dsl`. Solo, no opponent — drag,
 undo, replay; no agent-play, no scoring.
 
 - Featured board: hardcoded `featuredPuzzleName` in
   `views/puzzle.go`. To rotate, edit the string and restart.
-- Server-baked flags: at HTML-render time `views/puzzle.go`
-  picks the puzzle, allocates a session id, writes
-  `meta.json`, and emits `{session_id, initial_board}` into
-  the Elm `Browser.element` flags. The client has zero
-  follow-up bootstrap fetches.
+- Server-baked flag: at HTML-render time `views/puzzle.go`
+  picks the puzzle, allocates a session id, writes the
+  session's `meta` DSL file, and emits a single DSL string
+  (containing both the `session_id:` scalar and the `board:`
+  block) into the Elm `Browser.element` flag. The client has
+  zero follow-up bootstrap fetches.
 - Wire: `POST /gopher/puzzle/sessions/<id>/actions` for
-  every drag outcome and Undo, fire-and-forget. Files land
-  at
-  `games/lynrummy/data/puzzle/sessions/<id>/{meta.json,actions.jsonl}`.
+  every drag outcome and Undo, fire-and-forget. Files land at
+  `games/lynrummy/data/puzzle/sessions/<id>/{meta,actions.dsl}`.
 - Replay: the puzzle has its own engine in
   `Puzzle/Replay.elm` — a simpler sibling of
   `Game.Replay.Animate` that operates on `List CardStack`

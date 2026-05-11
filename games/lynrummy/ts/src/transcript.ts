@@ -54,9 +54,11 @@ import {
 // --- Puzzle-catalog JSON encoder ------------------------------------
 //
 // Kept for `tools/generate_puzzles.ts`, which writes
-// `mined_seeds.json` (the puzzle-catalog data file, consumed by
-// the Go server). The puzzle catalog is JSON; the transcript
-// session files are DSL — different concerns, separate encoders.
+// `mined_seeds.dsl` (the puzzle-catalog data file, consumed by
+// the Go server). The puzzle catalog is DSL; this JSON encoder
+// is kept only because `tools/generate_puzzles.ts` still writes
+// its small a3_* catalog as JSON. Eventually that catalog
+// should follow the same DSL migration.
 
 export interface RemoteStateJson {
   board: JsonCardStack[];

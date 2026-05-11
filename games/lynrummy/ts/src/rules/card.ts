@@ -52,7 +52,7 @@ export function parseCardLabel(label: string): Card {
 /** Render a Card as a label string. Trailing apostrophe denotes
  *  the second deck (e.g. `8C'`, `QH'`); deck-0 cards render bare.
  *  This is the unified deck-suffix convention across DSL, plan-
- *  line strings, UI display, and `tools/show_session.py`. */
+ *  line strings, and UI display. */
 export function cardLabel(c: Card): string {
   const base = RANKS[c[0] - 1]! + SUITS[c[1]]!;
   return c[2] === 0 ? base : `${base}'`;

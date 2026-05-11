@@ -18,8 +18,8 @@ Concretely: "Claude finds the spec and says it's by design, then Steve looks at 
 DSL to find what was miscommunicated." The DSL is where design intent is written
 down in a form that's both executable and human-readable.
 
-A secondary benefit: cross-language conformance. Some scenarios run against both
-Elm and Python, locking the rule across both implementations.
+A secondary benefit: cross-language conformance. Scenarios run against both
+Elm and TypeScript, locking the rule across both implementations.
 
 ---
 
@@ -44,25 +44,13 @@ codegen step.
 
 ---
 
-## What's already covered (189 scenarios, 770 tests)
+## What's already covered
 
-| File | Scenarios | What it encodes |
-|------|-----------|-----------------|
-| `replay_walkthroughs.dsl` | 27 | Replay fidelity across all primitives |
-| `planner.dsl` + corpus files | 51 | BFS planner: move enumeration, solve paths |
-| `tricks.dsl` | 18 | Strategy/hint rules |
-| `board_geometry.dsl` | 16 | Proximity, overlap, TooClose/Crowded/Illegal |
-| `gesture.dsl` | 11 | Full drag state machine |
-| `referee.dsl` | 10 | Referee validation rules |
-| `wing_oracle.dsl` | 9 | `wingsForStack` (4) + `wingsForHandCard` (4) + dual-deck guard (1) |
-| `click_arbitration.dsl` | 8 | Click-vs-drag threshold: distSquared > 9 kills intent |
-| `undo_walkthrough.dsl` | 7 | Undo round-trips for all 5 primitives + position invariants |
-| `place_stack.dsl` | 5 | Place stack scenarios |
-| `drag_invariant.dsl` | 5 | floaterTopLeft invariant, pathFrame correctness |
-| `click_agent_play.dsl` | 4 | Click-agent play scenarios |
-
-Three Elm test files were **fully superseded and deleted** in a prior session:
-`BoardGeometryTest.elm`, `DragInvariantTest.elm`, `GestureTest.elm`.
+Browse `conformance/scenarios/*.dsl` — each file's name and top-comment names its
+domain (replay walkthroughs, planner corpus, referee, wing oracle, click
+arbitration, undo, board geometry, gesture, etc.). The op set is whatever the
+`verify` dispatcher in `tests/Game/ConformanceTests.elm` cases on; grep that to
+enumerate live ops.
 
 ---
 
@@ -71,7 +59,7 @@ Three Elm test files were **fully superseded and deleted** in a prior session:
 **High value — port these:**
 - Rules that answer "is this a bug or by design?" — merge rejection, duplicate
   card rejection, direction constraints, position invariants
-- Cross-language rules — anything Python and Elm both implement
+- Cross-language rules — anything Elm and TS both implement
 - Tests where the Elm code obscures the rule (lots of boilerplate, buried intent)
 
 **Low value — leave as Elm tests:**
@@ -120,53 +108,28 @@ rule genuinely needs its own shape.
 
 ---
 
-## Remaining work — prioritized
+## Remaining conversion opportunities
 
-### High value
+Several `tests/Game/*Test.elm` files in the Elm tree still encode rules that
+could move to DSL — `BoardActionsTest`, `HintTest`, `ReducerTest`,
+`PlayerTurnTest`. Skim each before porting; some sections test
+implementation plumbing (`BoardChange` internals, `collapseUndos`, pure
+geometry) that's better left as Elm unit tests. The selection criteria above
+apply: rules → DSL, plumbing → unit test.
 
-**`BoardActionsTest.elm` (313 lines) — partial conversion**
-
-The high-value subset:
-- Wrong-direction merge rejected: `tryStackMerge [4H 5H 6H] left [7H 8H 9H]`
-  → Nothing. Already documented in wing_oracle (only Right wing appears), but
-  a direct negative scenario is clearer.
-- `findAllHandMerges` returning empty for an incompatible card. This one is
-  already covered by `wing_oracle.dsl`'s `wings_for_hand_card_no_valid_group`.
-
-Skip: `tryHandMerge`/`tryStackMerge`/`placeHandCard`/`moveStackTo` struct-field
-tests — they inspect `BoardChange` internals (count of stacksToRemove etc.).
-Those are implementation tests, not rule tests.
-
-**`HintTest.elm` (109 lines)**
-
-Tests the hint/strategy layer. Worth a look — if it encodes rules about when
-hints fire vs. don't fire, those belong in DSL form alongside `tricks.dsl`.
-
-**`ReducerTest.elm` (209 lines)**
-
-Read it first. If it tests game-state transitions (e.g. "after completing a turn,
-scores update correctly"), those could be high-value scenarios.
-
-**`PlayerTurnTest.elm` (173 lines)**
-
-Similar — if it encodes turn-boundary rules, worth porting.
-
-### Low value (skip unless specifically tasked)
-
-- `GestureArbitrationTest.elm` — remaining tests are `distSquared`, `isCursorInRect`
-  (pure geometry), `applySplit` (covered by split actions). Not worth porting.
-- `WingOracleTest.elm` — remaining test is `wingBoardRect` (positional math, Elm-only).
-- `UndoTest.elm` — remaining sections are `collapseUndos` (action log plumbing),
-  `canUndoThisTurn` (already covered via `expect_undoable:` in existing scenarios).
-- `WireTest.elm` — wire format round-trips. Serialization layer, not game logic.
-- `CardStackTest.elm` — pure helpers: `agedFromPriorTurn`, `maybeMerge`, etc.
+`tests/Game/{CardStack,Wire,GestureArbitration,WingOracle}Test.elm` are mostly
+serialization round-trips and pure helpers; leave them alone.
 
 ---
 
-## Key gotchas learned during this session
+## Key gotchas
 
-**Coordinate convention:** DSL uses `at (top, left)` — top first, left second.
-Matches Elm's `{ top, left }` record field order. Easy to get backwards.
+**Two coordinate conventions, both pinned by Elm source:** the
+board-block grammar uses `at (top, left): cards`. The action-log grammar
+(`actions.dsl`, the wire) uses `(left, top)` inside `-> (...)`,
+`at (...)` stack-refs, and `path (...)` samples — that's what Elm's
+`Game.GameEvent.locStr` emits. Don't try to unify them; the live wire is
+where the latter convention lives.
 
 **Sets vs. runs for wing direction:** a hand card can merge onto a set from either
 side (Left and Right wings both fire). A run extension only offers the

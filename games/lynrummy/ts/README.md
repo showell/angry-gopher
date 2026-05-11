@@ -34,9 +34,16 @@ for hints all live here.
   (board cleanliness, hand arithmetic, card conservation)
   throw on violation.
 - **Transcript:** [`transcript.ts`](src/transcript.ts) —
-  writes Elm-replayable session JSON straight to the file
-  system (no HTTP). Asserts `findViolation == null` after
-  every primitive.
+  writes Elm-replayable DSL session files (`meta` + `actions.dsl`)
+  straight to the file system (no HTTP). Per-event encoders
+  in [`wire_action_dsl.ts`](src/wire_action_dsl.ts) mirror Elm's
+  `Game.GameEvent.elm` byte-for-byte. Each move_stack /
+  merge_stack carries a quintic-eased drag path synthesized
+  by [`wire_path_synth.ts`](src/wire_path_synth.ts). Asserts
+  `findViolation == null` after every primitive;
+  [`validate_session.ts`](src/validate_session.ts) re-reads
+  the emitted files and replays through the same `applyLocally`
+  the conformance tests use.
 - **Browser bundle entry:**
   [`engine_entry.ts`](src/engine_entry.ts) — `solveBoard`,
   `gameHintLines`, `agentPlay`, exposed as
@@ -49,9 +56,11 @@ for hints all live here.
 This subtree owns three end-to-end responsibilities:
 
 - **Generating sample games for review.** Full 2-hand
-  self-play + Elm-replayable transcript writing.
+  self-play + Elm-replayable DSL transcript writing.
   Driver: `npm run bench:end-of-deck -- --write-transcript [seeds...]`.
-  Output: `data/lynrummy-elm/sessions/<id>/{meta.json, actions/*.json}`.
+  Output: `data/lynrummy-elm/sessions/<id>/{meta, actions.dsl}`.
+  The driver round-trip-validates the emitted files before
+  exiting.
 - **Running the conformance suite.** The canonical gate
   `ops/check-conformance` embeds the DSL files into Elm,
   runs `npm test` here, then Elm `check.sh`. Both TS and
@@ -78,9 +87,14 @@ This subtree owns three end-to-end responsibilities:
 | `src/primitives.ts` | Primitive types + `applyLocally`. |
 | `src/geometry.ts` | Geometry constants, `findOpenLoc`, `findViolation`, `findCrowding`. |
 | `src/agent_player.ts` | Full-game player (2-hand, deck-low termination). |
-| `src/transcript.ts` | Elm-replayable JSON session writer. |
+| `src/transcript.ts` | DSL session writer (meta + actions.dsl). |
+| `src/wire_action_dsl.ts` | Per-event DSL emitters (splitDsl, mergeStackDsl, …). |
+| `src/wire_action_parser.ts` | Live-format action-line parser (tolerant of decorators). |
+| `src/wire_path_synth.ts` | Quintic-eased drag path synthesis (port of Python `gesture_synth`). |
+| `src/initial_state_dsl.ts` | GameState ↔ multi-section DSL composer. |
+| `src/validate_session.ts` | Re-reads a written session, replays via `applyLocally`. |
 | `src/engine_entry.ts` | Browser-bundle entry; exports `LynRummyEngine`. |
-| `src/wire_json.ts` | Primitive ↔ Elm-wire JSON. |
+| `src/wire_json.ts` | Primitive ↔ Elm-port JSON (hint shuttle in the browser). |
 | `tools/generate_puzzles.ts` | Self-play-driven puzzle catalog generator. |
 | `tools/replay_puzzles.ts` | Re-emit `puzzle_walkthroughs.dsl` from the catalog. |
 

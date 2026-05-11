@@ -46,6 +46,24 @@ agent** at `games/lynrummy/ts/`; the Elm client at
 `games/lynrummy/elm/` is the autonomous dealer + referee +
 UI.
 
+A short, canonical DSL is the **lingua franca** across all
+three runtimes — same grammar carries conformance fixtures,
+on-disk session files (`meta`, `actions.dsl`), the new-session
+wire body, the resume bundle, and agent transcripts. Sample
+session header:
+```
+created_at: 1778500538
+label:
+
+board:
+  at ( 20,  70): K♠ A♠ 2♠ 3♠
+  ...
+```
+Full grammar tour + 2-3 examples + the run-mechanism live in
+[`games/lynrummy/ARCHITECTURE.md`](games/lynrummy/ARCHITECTURE.md)
+under "DSL is the lingua franca". Most parsing happens at
+test time; conformance is gated by `ops/check-conformance`.
+
 ## HTML views
 
 Server-rendered pages at `/gopher/*` with Basic auth:

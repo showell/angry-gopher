@@ -25,15 +25,21 @@ Once running, the Elm UI talks to two systems:
   point: the Hint button on the full-game surface. All other
   gameplay logic — dealing, refereeing, turn transitions,
   replay — lives in Elm.
-- **Go server** via HTTP. Bootstrap (one follow-up fetch
-  after the HTML page load, depending on the surface mode:
-  `POST /new-session` for a fresh full game, `GET
-  /sessions/<sid>/actions` for a resumed full game; the
-  puzzle host gets its session id + initial board baked into
-  Elm flags at HTML-render time, so it has no follow-up
-  bootstrap fetch) plus outbound writes during play (action
-  POSTs, fire-and-forget). After bootstrap, no Elm code path
-  waits on a Go HTTP response.
+- **Go server** via HTTP. Bootstrap is at most one follow-up
+  fetch after the HTML page load, depending on the surface
+  mode:
+  - `POST /new-session` (full game, fresh start) ships the
+    locally-dealt initial state as a `text/plain` DSL body.
+  - `GET /sessions/<sid>/actions` (full game, resume) returns
+    one `text/plain` document: the meta DSL, a `---` separator
+    line, then the action-log DSL. Elm splits on `---` and
+    parses each half.
+  - The puzzle host has zero follow-up bootstrap fetches —
+    its `Browser.element` flag is a single DSL string carrying
+    `session_id:` + a `board:` block.
+  After bootstrap, outbound writes during play are action
+  POSTs (DSL line in the body, fire-and-forget). No Elm code
+  path waits on a Go HTTP response.
 
 For the system-level picture, see
 [`../ARCHITECTURE.md`](../ARCHITECTURE.md). For concrete

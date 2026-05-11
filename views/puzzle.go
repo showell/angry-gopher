@@ -1,33 +1,7 @@
-// Puzzle V3 — drag-aware single-puzzle surface, server-shipped
-// payload, persisted action log.
-//
-// /gopher/puzzle/                              → HTML page; allocates a
-//                                                 puzzle session, picks
-//                                                 the featured puzzle,
-//                                                 and bakes both into the
-//                                                 Elm flags so the client
-//                                                 starts ready-to-play
-//                                                 with no follow-up round
-//                                                 trip.
-// /gopher/puzzle/puzzle.js                     → compiled Elm
-// POST /gopher/puzzle/sessions/<id>/actions    → append envelope to actions.jsonl
-//
-// Storage layout mirrors the full game's:
-//   games/lynrummy/data/puzzle/sessions/<id>/
-//     meta             — DSL: created_at + puzzle_name scalars,
-//                        then a `board:` block (the puzzle's
-//                        positioned starting layout)
-//     actions.dsl      — one wire-DSL line per Elm-sent action
-//
-// Wire shape is identical to the full game's actions.jsonl
-// envelope: {seq, action: {...}}. The agent reads these on
-// disk to study Steve's solutions — same motivation behind the
-// full-game session corpus.
-//
-// Puzzle source: games/lynrummy/conformance/mined_seeds.json,
-// indexed by puzzle_name. The featured puzzle is hardcoded
-// here for now; a future iteration could accept ?id=<name> or
-// rotate through a catalog.
+// Puzzle V3 — drag-aware single-puzzle surface. Standard
+// golang routing applies; storage shape mirrors the full game
+// (`meta` DSL + `actions.dsl`), under
+// `games/lynrummy/data/puzzle/sessions/<id>/`.
 
 package views
 
@@ -73,9 +47,6 @@ func HandlePuzzle(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handlePuzzleSessionRoute fans out the per-session URL space.
-//
-// POST /<id>/actions   append one envelope to actions.jsonl
 func handlePuzzleSessionRoute(w http.ResponseWriter, r *http.Request, rest string) {
 	parts := strings.Split(rest, "/")
 	idStr := parts[0]
@@ -96,9 +67,8 @@ func handlePuzzleSessionRoute(w http.ResponseWriter, r *http.Request, rest strin
 	}
 }
 
-// puzzleAppendAction is the dumb append handler for puzzle
-// sessions. POST body → one appended line in actions.jsonl.
-// The seq Elm assigned rides inside the body.
+// puzzleAppendAction appends the POST body verbatim as one
+// line in `actions.dsl`. The seq prefix is Elm-authored.
 func puzzleAppendAction(w http.ResponseWriter, r *http.Request, sessionID int64) {
 	if !PuzzleSessionExists(sessionID) {
 		http.NotFound(w, r)

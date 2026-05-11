@@ -1,33 +1,14 @@
-// gamedata: filesystem-backed storage for LynRummy session data.
+// gamedata: filesystem-backed storage for LynRummy session
+// data. Dumb URL-keyed file store under games/lynrummy/data/;
+// meta is last-write-wins, action/annotation files are append-
+// only. Sequential session-id allocation via a per-namespace
+// counter is the one smart exception.
 //
-// The Go server is a dumb URL-keyed file store for LynRummy.
-// POSTs land at paths under games/lynrummy/data/. Last-write-wins
-// for meta; actions and annotations are append-only JSONL streams.
-// The only "smart" exception is sequential session-id allocation
-// via a per-namespace counter file.
+// Per-line atomicity comes from POSIX append semantics (writes
+// < PIPE_BUF are atomic); Lyn Rummy lines are well under 4 kB.
 //
-// Layout:
-//
-//   games/lynrummy/data/
-//     next-session-id.txt                  # counter for full-game sessions
-//     lynrummy-elm/
-//       sessions/<id>/                     # full-game sessions
-//         meta.json                        # {label, deck_seed, created_at, [initial_state]}
-//         actions.jsonl                    # one action per line; Elm-assigned seq embedded
-//         annotations.jsonl                # one annotation per line (rare)
-//
-// Each line of an actions.jsonl / annotations.jsonl file is a
-// compact JSON object Elm sent verbatim — the server's only
-// intervention is `json.Compact` to guarantee no internal
-// newlines, plus the trailing '\n'. Order on disk = order Elm
-// sent. Per-line atomicity comes from POSIX append semantics
-// (writes < PIPE_BUF are atomic); Lyn Rummy actions are well
-// under 4 kB so this is safe without further locking. Concurrent
-// writes are not a real concern in our single-actor flow but
-// the property is preserved if it ever became one.
-//
-// Helpers below are deliberately thin — append/read with
-// auto-mkdirs. Handlers compose them.
+// Helpers below are thin (append / read with auto-mkdir);
+// handlers compose them.
 package views
 
 import (
@@ -146,8 +127,7 @@ func SessionDir(sessionID int64) string {
 }
 
 // WriteSessionFile writes body to <session-dir>/<rel>, creating
-// parent dirs as needed. `rel` is a relative path like
-// "meta.json" or "actions/3.json".
+// parent dirs as needed. `rel` is a relative path like `meta`.
 func WriteSessionFile(sessionID int64, rel string, body []byte) error {
 	full := filepath.Join(SessionDir(sessionID), rel)
 	if err := os.MkdirAll(filepath.Dir(full), 0755); err != nil {
@@ -172,8 +152,10 @@ func SessionExists(sessionID int64) bool {
 
 // AppendJSONLLine appends one JSON-encoded line to `path`. The
 // body is run through json.Compact first (in case Elm sent
-// pretty-printed JSON), then written as compact-body + '\n' in a
-// single Write call so POSIX append-atomicity holds.
+// pretty-printed JSON), then written as compact-body + '\n' in
+// a single Write call so POSIX append-atomicity holds. Only
+// annotations.jsonl uses this path now — wire-DSL actions take
+// AppendTextLine instead.
 func AppendJSONLLine(path string, body []byte) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return err
@@ -192,8 +174,9 @@ func AppendJSONLLine(path string, body []byte) error {
 	return err
 }
 
-// AppendSessionLine appends one line to <session-dir>/<rel> for
-// a full-game session. Common case: rel="actions.jsonl".
+// AppendSessionLine appends one JSON-encoded line to
+// <session-dir>/<rel>; the wire-DSL path uses
+// AppendSessionDslLine instead.
 func AppendSessionLine(sessionID int64, rel string, body []byte) error {
 	return AppendJSONLLine(filepath.Join(SessionDir(sessionID), rel), body)
 }
@@ -255,50 +238,9 @@ func ReadSessionActionLines(sessionID int64) ([]string, error) {
 	return ReadTextLines(filepath.Join(SessionDir(sessionID), "actions.dsl"))
 }
 
-// ReadJSONLLines parses `path` as JSONL: one JSON value per
-// non-empty line. Empty lines are skipped. Returns
-// ([]json.RawMessage{}, nil) if the file doesn't exist.
-func ReadJSONLLines(path string) ([]json.RawMessage, error) {
-	f, err := os.Open(path)
-	if os.IsNotExist(err) {
-		return []json.RawMessage{}, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-	var out []json.RawMessage
-	scanner := bufio.NewScanner(f)
-	// Sessions can carry many actions; bump the per-line buffer
-	// well above the 4 kB atomicity ceiling so a long board_path
-	// on a merge_stack / move_stack doesn't truncate.
-	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
-	for scanner.Scan() {
-		line := scanner.Bytes()
-		if len(line) == 0 {
-			continue
-		}
-		// Copy: scanner reuses the slice on each iteration.
-		raw := make(json.RawMessage, len(line))
-		copy(raw, line)
-		out = append(out, raw)
-	}
-	if err := scanner.Err(); err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-// ReadSessionActions reads <session>/actions.jsonl as a list of
-// raw envelopes (each line as Elm sent it).
-func ReadSessionActions(sessionID int64) ([]json.RawMessage, error) {
-	return ReadJSONLLines(filepath.Join(SessionDir(sessionID), "actions.jsonl"))
-}
-
-// CountJSONLLines returns the number of non-empty lines in
-// `path`, or 0 if the file is missing. Used for action counts
-// in the sessions HTML list.
-func CountJSONLLines(path string) (int, error) {
+// CountTextLines returns the number of non-empty lines in
+// `path`, or 0 if the file is missing.
+func CountTextLines(path string) (int, error) {
 	f, err := os.Open(path)
 	if os.IsNotExist(err) {
 		return 0, nil
@@ -318,10 +260,9 @@ func CountJSONLLines(path string) (int, error) {
 	return n, scanner.Err()
 }
 
-// CountSessionActions is a convenience for the sessions HTML
-// list (action count column).
+// CountSessionActions counts the lines in <session>/actions.dsl.
 func CountSessionActions(sessionID int64) (int, error) {
-	return CountJSONLLines(filepath.Join(SessionDir(sessionID), "actions.jsonl"))
+	return CountTextLines(filepath.Join(SessionDir(sessionID), "actions.dsl"))
 }
 
 // ListSessionIDs returns every full-game session-id directory

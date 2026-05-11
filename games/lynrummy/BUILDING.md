@@ -60,7 +60,7 @@ These don't run on every build — invoke as needed:
   - `games/lynrummy/ts/tools/replay_puzzles.ts` emits
     `puzzle_walkthroughs.dsl`.
   The single-puzzle UI host (`/gopher/puzzle/`) reads its
-  featured board from `conformance/mined_seeds.json`; the
+  featured board from `conformance/mined_seeds.dsl`; the
   hard-coded `featuredPuzzleName` lives in `views/puzzle.go`.
 - **Bench baselines.** `npm run bench:gen-baseline` (in `ts/`)
   rebuilds the 81-card baseline DSL suite. Don't regenerate
@@ -71,7 +71,5 @@ These don't run on every build — invoke as needed:
 - **Node.js** with npm + `npx` on PATH (used by both Elm
   install and esbuild).
 - **Go** (for `ops/start`).
-- **Python 3** (for `tools/show_session.py` and the legacy
-  parallel solver tests under `python/`).
 - The Elm compiler comes from `games/lynrummy/elm/node_modules/`
   — run `npm install` there once on a fresh checkout.

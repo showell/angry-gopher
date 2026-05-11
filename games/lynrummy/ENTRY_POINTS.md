@@ -24,10 +24,9 @@ keeps its own replay engine in `src/Puzzle/Replay.elm`.
 
 **Maturity: both are production code paths.** The full game
 runs end-to-end (deal → play → complete turns → score). The
-puzzle host renders one mid-game position at a time,
-seeded from `conformance/mined_seeds.json` (featured name
-hardcoded in `views/puzzle.go`); supports drag, undo,
-replay.
+puzzle host renders one mid-game position at a time, seeded
+from `conformance/mined_seeds.dsl` (featured name hardcoded
+in `views/puzzle.go`); supports drag, undo, replay.
 
 
 ## Server-side handlers (Go)
@@ -40,17 +39,17 @@ In `views/`:
 
 - `lynrummy_elm.go` — full-game HTTP surface: allocates
   sequential session ids (the one smart exception), appends
-  Elm-posted envelopes to
-  `games/lynrummy/data/lynrummy-elm/sessions/<id>/{meta.json,actions.jsonl,annotations.jsonl}`.
-  Each line of `actions.jsonl` is `{seq, action, gesture_metadata?}`.
+  Elm-posted action lines to
+  `games/lynrummy/data/lynrummy-elm/sessions/<id>/{meta,actions.dsl,annotations.jsonl}`.
+  Each line of `actions.dsl` is one wire-DSL action.
 - `puzzle.go` — puzzle HTTP surface: at page-render time it
-  picks the featured puzzle from
-  `conformance/mined_seeds.json`, allocates a session id from
-  a separate counter, writes `meta.json`, and bakes
-  `{session_id, initial_board}` into Elm flags so the client
-  has zero post-load round-trips. Subsequent action POSTs land
-  at `/gopher/puzzle/sessions/<id>/actions`, appending to
-  `games/lynrummy/data/puzzle/sessions/<id>/actions.jsonl`.
+  picks the featured puzzle from `conformance/mined_seeds.dsl`,
+  allocates a session id from a separate counter, writes the
+  session's DSL `meta` file, and bakes a single DSL string
+  (`session_id:` + `board:` block) into the Elm flag so the
+  client has zero post-load round-trips. Subsequent action
+  POSTs land at `/gopher/puzzle/sessions/<id>/actions`,
+  appending to `games/lynrummy/data/puzzle/sessions/<id>/actions.dsl`.
   Puzzle and full-game sessions live in distinct on-disk
   namespaces and never share session ids.
 - `gamedata.go` — file-storage primitives shared by both
@@ -108,8 +107,10 @@ The canonical agent. Modules:
 - `src/physical_plan.ts` — the loop. `physicalPlan(initialBoard,
   hand, planDescs)` over honest state.
 - `src/agent_player.ts` — full 2-hand games to deck-low.
-- `src/transcript.ts` — Elm-replayable JSON writer
-  (file-system, no HTTP).
+- `src/transcript.ts` — Elm-replayable DSL writer (`meta` +
+  `actions.dsl`, file-system, no HTTP).
+- `src/validate_session.ts` — re-reads emitted sessions and
+  replays via `applyLocally`; the bench script gates on this.
 - `src/classified_card_stack.ts`, `src/buckets.ts`,
   `src/move.ts`, `src/enumerator.ts`, `src/hand_play.ts` —
   the BFS infrastructure.
@@ -142,11 +143,9 @@ this single project.
 
 ## What is NOT current (avoid confusion)
 
-- The Cat TS UI (`angry-cat/`) — legacy Lyn Rummy UI.
-  Still in the repo but not in the agent flow.
 - `games/lynrummy/elm/src/Game/Strategy/` — orphan
-  production code (the legacy trick engine). Not imported
-  by anything `Main.*` / `Puzzle.*` renders; pending deletion.
+  production code (the legacy trick engine). Not imported by
+  anything `Main.*` / `Puzzle.*` renders; pending deletion.
 
 ---
 

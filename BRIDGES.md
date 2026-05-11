@@ -49,6 +49,12 @@ This is the load-bearing example: when adding a cross-
 language behavior, build the bridge first (DSL scenarios +
 runners on each side) and let the bridge enforce parity.
 
+The same grammar also serves as the runtime wire format (Elm
+↔ Go session storage, agent-written transcripts, the puzzle
+boot flag) — see `games/lynrummy/ARCHITECTURE.md` § "DSL is
+the lingua franca". So the bridge isn't a test-only construct;
+it's the single text shape every long-lived artifact uses.
+
 ## See also
 
 - [`games/lynrummy/ARCHITECTURE.md`](games/lynrummy/ARCHITECTURE.md)
