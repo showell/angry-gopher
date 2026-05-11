@@ -9,12 +9,11 @@ layout, turn controls, and the small button styles.
 -}
 
 import Game.Button as Button
-import Game.CardStack exposing (HandCard)
 import Game.Hand exposing (Hand)
 import Game.Rules.Card exposing (Card)
 import Game.Game exposing (GameState)
 import Game.View as View
-import Html exposing (Html, Attribute, div)
+import Html exposing (Html, div)
 import Html.Attributes exposing (style)
 import Main.Msg exposing (Msg(..))
 
@@ -34,7 +33,6 @@ type alias PlayerPanelInfo =
     { gameState : GameState
     , handIsInteractive : Bool
     , sourceCard : Maybe Card
-    , cardMouseDown : HandCard -> List (Attribute Msg)
     , hintedCards : List Card
     , canUndo : Bool
     , replayControl : ReplayControl
@@ -44,7 +42,6 @@ type alias PlayerPanelInfo =
 type alias ActivePlayerInfo =
     { handIsInteractive : Bool
     , sourceCard : Maybe Card
-    , cardMouseDown : HandCard -> List (Attribute Msg)
     , hintedCards : List Card
     , canUndo : Bool
     , replayControl : ReplayControl
@@ -68,7 +65,6 @@ playerHands info =
         activeInfo =
             { handIsInteractive = info.handIsInteractive
             , sourceCard = info.sourceCard
-            , cardMouseDown = info.cardMouseDown
             , hintedCards = info.hintedCards
             , canUndo = info.canUndo
             , replayControl = info.replayControl
@@ -106,7 +102,7 @@ viewActivePlayerRow : ActivePlayerInfo -> Int -> Hand -> Html Msg
 viewActivePlayerRow info idx hand =
     playerRowShell { isActive = True, idx = idx }
         [ View.viewHandHeading
-        , View.viewHand info.handIsInteractive info.sourceCard info.hintedCards info.cardMouseDown hand
+        , View.viewHand info.handIsInteractive info.sourceCard info.hintedCards hand
         , viewTurnControls { canUndo = info.canUndo, replayControl = info.replayControl }
         ]
 

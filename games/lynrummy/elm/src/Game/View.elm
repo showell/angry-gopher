@@ -16,6 +16,7 @@ shared across surfaces.
 -}
 
 import Game.Physics.BoardGeometry as BG
+import Game.PointerInput as PointerInput
 import Game.Rules.Card as Card exposing (Card, Suit)
 import Game.CardStack exposing (HandCard, HandCardState(..))
 import Game.Hand as Hand exposing (Hand)
@@ -23,6 +24,7 @@ import Game.HandLayout as HandLayout
 import Game.StackView as StackView
 import Html exposing (Html, div, text)
 import Html.Attributes exposing (id, style)
+import Main.Msg exposing (Msg(..))
 
 
 
@@ -64,21 +66,20 @@ ascending. Empty suit rows are skipped. Faithful port of
 `PhysicalHand.populate` in `game.ts:1589`.
 
 Per-card decoration is computed at the leaf
-(`viewPlacedHandCard`) from four inputs: `handIsInteractive`
+(`viewPlacedHandCard`) from three inputs: `handIsInteractive`
 (false while any drag is in flight), `sourceCard` (the dim
-overlay's target, if any), `hintedCards` (hint highlight),
-and `cardMouseDown` (per-card mousedown attr builder — always
-a real per-card function; only used when interactive).
+overlay's target, if any), and `hintedCards` (hint highlight).
+The mousedown handler attaches `Main.Msg.MouseDownOnHandCard`
+directly — this module is full-game-specific.
 
 -}
 viewHand :
     Bool
     -> Maybe Card
     -> List Card
-    -> (HandCard -> List (Html.Attribute msg))
     -> Hand
-    -> Html msg
-viewHand handIsInteractive sourceCard hintedCards cardMouseDown hand =
+    -> Html Msg
+viewHand handIsInteractive sourceCard hintedCards hand =
     let
         -- The hand DSL encoder consumes the same `sortIntoSuitRows`
         -- helper. Shared canonicalization keeps the on-screen
@@ -105,7 +106,7 @@ viewHand handIsInteractive sourceCard hintedCards cardMouseDown hand =
         , style "width" (String.fromInt (240 - 20) ++ "px")
         , style "height" (String.fromInt containerHeight ++ "px")
         ]
-        (List.map (viewPlacedHandCard handIsInteractive sourceCard hintedCards cardMouseDown) slots)
+        (List.map (viewPlacedHandCard handIsInteractive sourceCard hintedCards) slots)
 
 
 suitToRowIdx : Suit -> Int
@@ -128,10 +129,9 @@ viewPlacedHandCard :
     Bool
     -> Maybe Card
     -> List Card
-    -> (HandCard -> List (Html.Attribute msg))
     -> { row : Int, col : Int, handCard : HandCard }
-    -> Html msg
-viewPlacedHandCard handIsInteractive sourceCard hintedCards cardMouseDown slot =
+    -> Html Msg
+viewPlacedHandCard handIsInteractive sourceCard hintedCards slot =
     let
         hc =
             slot.handCard
@@ -170,7 +170,7 @@ viewPlacedHandCard handIsInteractive sourceCard hintedCards cardMouseDown slot =
 
         eventAttrs =
             if handIsInteractive then
-                cardMouseDown hc
+                PointerInput.handCardMouseDown MouseDownOnHandCard hc
 
             else
                 [ style "pointer-events" "none" ]

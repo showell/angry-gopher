@@ -201,16 +201,12 @@ sidebarInfo model drag =
 
                 _ ->
                     Nothing
-
-        cardMouseDown =
-            PointerInput.handCardMouseDown MouseDownOnHandCard
     in
     case model.replayState of
         Just rs ->
             { gameState = rs.gameState
             , handIsInteractive = handIsInteractive
             , sourceCard = sourceCard
-            , cardMouseDown = cardMouseDown
             , hintedCards = []
             , canUndo = False
             , replayControl =
@@ -225,7 +221,6 @@ sidebarInfo model drag =
             { gameState = model.gameState
             , handIsInteractive = handIsInteractive
             , sourceCard = sourceCard
-            , cardMouseDown = cardMouseDown
             , hintedCards = model.hintedCards
             , canUndo = canUndoThisTurn model.actionLog
             , replayControl = Sidebar.ShowReplay
