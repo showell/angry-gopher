@@ -1563,7 +1563,7 @@ verifyShiftEqualsDelta sc stack cardIndex =
                     withBoardCardDrag stack cardIndex mousedown (modelWithStack stack)
 
                 afterMove =
-                    Play.mouseMove
+                    applyBoardCardMouseMove
                         { x = mousedown.x + delta.x, y = mousedown.y + delta.y }
                         100
                         afterDown
@@ -1602,7 +1602,7 @@ verifyGrabPointInvariant sc stack =
                             withBoardCardDrag stack 0 down model
 
                         afterMove =
-                            Play.mouseMove
+                            applyBoardCardMouseMove
                                 { x = down.x + delta.x, y = down.y + delta.y }
                                 100
                                 afterDown
@@ -1670,6 +1670,23 @@ withBoardCardDrag stack cardIndex cursor model =
                     }
                 )
     }
+
+
+{-| Advance an in-flight board-card drag by a mousemove. Mirror
+of `update`'s `MouseMove` arm restricted to the `DraggingBoardCard`
+case. Tests guarantee the drag is board-card. -}
+applyBoardCardMouseMove : Point -> Int -> State.Model -> State.Model
+applyBoardCardMouseMove pos tMs model =
+    case model.drag of
+        DraggingBoardCard d ->
+            let
+                ( nextD, _ ) =
+                    BoardGesture.mouseMove pos tMs d model.status
+            in
+            { model | drag = DraggingBoardCard nextD }
+
+        _ ->
+            model
 
 
 expectLocField : String -> Dsl.Scenario -> Maybe BoardLocation

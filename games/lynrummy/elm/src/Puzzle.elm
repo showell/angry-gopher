@@ -137,15 +137,6 @@ init flagsValue =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        MouseDownOnBoardCard { stack, cardIndex, point, time } ->
-            startBoardCardDrag stack cardIndex point time model
-
-        MouseMove pos tMs ->
-            ( mouseMove pos tMs model, Cmd.none )
-
-        MouseUp pos tMs ->
-            handleMouseUp pos tMs model
-
         BoardRectReceived (Ok element) ->
             ( { model
                 | boardRect =
@@ -161,6 +152,29 @@ update msg model =
 
         BoardRectReceived (Err _) ->
             ( model, Cmd.none )
+
+        MouseDownOnBoardCard { stack, cardIndex, point, time } ->
+            startBoardCardDrag stack cardIndex point time model
+
+        MouseMove pos tMs ->
+            case model.drag of
+                DraggingBoardCard d ->
+                    let
+                        ( nextD, nextStatus ) =
+                            BoardGesture.mouseMove pos tMs d model.status
+                    in
+                    ( { model | drag = DraggingBoardCard nextD, status = nextStatus }
+                    , Cmd.none
+                    )
+
+                DraggingHandCard _ ->
+                    ( model, Cmd.none )
+
+                NotDragging ->
+                    ( model, Cmd.none )
+
+        MouseUp pos tMs ->
+            handleMouseUp pos tMs model
 
         ClickUndo ->
             clickUndo model
@@ -239,28 +253,12 @@ startBoardCardDrag stack cardIndex clientPoint tMs model =
                             }
                         )
               }
-            , fetchBoardRect model.gameId
+            , Browser.Dom.getElement (BoardView.boardDomIdFor model.gameId)
+                |> Task.attempt BoardRectReceived
             )
 
         _ ->
             ( model, Cmd.none )
-
-
-mouseMove : Point -> Int -> Model -> Model
-mouseMove pos tMs model =
-    case model.drag of
-        DraggingBoardCard d ->
-            let
-                ( nextD, nextStatus ) =
-                    BoardGesture.mouseMove pos tMs d model.status
-            in
-            { model | drag = DraggingBoardCard nextD, status = nextStatus }
-
-        DraggingHandCard _ ->
-            model
-
-        NotDragging ->
-            model
 
 
 handleMouseUp : Point -> Int -> Model -> ( Model, Cmd Msg )
@@ -355,13 +353,6 @@ applyForPuzzle event board =
                     Debug.log "puzzle.applyForPuzzle: unexpected event in log" event
             in
             board
-
-
-fetchBoardRect : String -> Cmd Msg
-fetchBoardRect gameId =
-    Browser.Dom.getElement (BoardView.boardDomIdFor gameId)
-        |> Task.attempt BoardRectReceived
-
 
 
 -- WIRE

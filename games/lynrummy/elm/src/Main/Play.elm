@@ -2,7 +2,6 @@ module Main.Play exposing
     ( Config(..)
     , Output(..)
     , init
-    , mouseMove
     , subscriptions
     , update
     , view
@@ -50,7 +49,6 @@ import Main.State
         , bootstrapFromBundle
         , lastUndoableAction
         )
-import Game.Point exposing (Point)
 import Main.View as View
 import Main.Wire as Wire exposing (fetchActionLog, fetchNewSession)
 import Task
@@ -271,15 +269,34 @@ update msg model =
             in
             ( model, Cmd.none, NoOutput )
 
+        BoardRectReceived (Ok element) ->
+            let
+                rect =
+                    { x = round (element.element.x - element.viewport.x)
+                    , y = round (element.element.y - element.viewport.y)
+                    , width = round element.element.width
+                    , height = round element.element.height
+                    }
+            in
+            ( { model | boardRect = Just rect }, Cmd.none, NoOutput )
+
+        BoardRectReceived (Err err) ->
+            let
+                _ =
+                    Debug.log "BoardRectReceived err" err
+            in
+            ( model, Cmd.none, NoOutput )
+
         ClickHint ->
             clickHint model
 
         GameHintReceived value ->
             ( handleHintResponse value model, Cmd.none, NoOutput )
 
-        -- Pointer-gesture + wire-action cluster. MouseDown / MouseMove
-        -- / BoardRectReceived feed into MouseUp's resolution; MouseUp,
-        -- ClickCompleteTurn, and ClickUndo all produce wire actions.
+        -- Pointer-gesture + wire-action cluster. MouseDown starts a
+        -- drag and kicks off board-rect measurement; MouseMove
+        -- advances the dragInfo's floater; MouseUp resolves into a
+        -- wire action via BoardDrag / HandDrag.
         MouseDownOnBoardCard { stack, cardIndex, point, time } ->
             case model.drag of
                 NotDragging ->
@@ -294,7 +311,8 @@ update msg model =
                                 }
                     in
                     ( { model | drag = DraggingBoardCard dragInfo }
-                    , fetchBoardRect model.gameId
+                    , Browser.Dom.getElement (boardDomIdFor model.gameId)
+                        |> Task.attempt BoardRectReceived
                     , NoOutput
                     )
 
@@ -313,7 +331,8 @@ update msg model =
                                 }
                     in
                     ( { model | drag = DraggingHandCard dragInfo }
-                    , fetchBoardRect model.gameId
+                    , Browser.Dom.getElement (boardDomIdFor model.gameId)
+                        |> Task.attempt BoardRectReceived
                     , NoOutput
                     )
 
@@ -321,25 +340,29 @@ update msg model =
                     ( model, Cmd.none, NoOutput )
 
         MouseMove pos tMs ->
-            ( mouseMove pos tMs model, Cmd.none, NoOutput )
+            case model.drag of
+                DraggingBoardCard d ->
+                    let
+                        ( nextD, nextStatus ) =
+                            BoardGesture.mouseMove pos tMs d model.status
+                    in
+                    ( { model | drag = DraggingBoardCard nextD, status = nextStatus }
+                    , Cmd.none
+                    , NoOutput
+                    )
 
-        BoardRectReceived (Ok element) ->
-            let
-                rect =
-                    { x = round (element.element.x - element.viewport.x)
-                    , y = round (element.element.y - element.viewport.y)
-                    , width = round element.element.width
-                    , height = round element.element.height
-                    }
-            in
-            ( { model | boardRect = Just rect }, Cmd.none, NoOutput )
+                DraggingHandCard d ->
+                    let
+                        ( nextD, nextStatus ) =
+                            HandGesture.mouseMove pos d model.boardRect model.status
+                    in
+                    ( { model | drag = DraggingHandCard nextD, status = nextStatus }
+                    , Cmd.none
+                    , NoOutput
+                    )
 
-        BoardRectReceived (Err err) ->
-            let
-                _ =
-                    Debug.log "BoardRectReceived err" err
-            in
-            ( model, Cmd.none, NoOutput )
+                NotDragging ->
+                    ( model, Cmd.none, NoOutput )
 
         MouseUp pos tMs ->
             case model.drag of
@@ -449,39 +472,6 @@ update msg model =
 
 
 -- UPDATE HELPERS
-
-
-{-| Fire a `Browser.Dom.getElement` Task to capture the board's
-viewport rectangle. The rect arrives via `BoardRectReceived`.
-Hand-origin drags need it to translate viewport-frame floaters
-into board frame; intra-board drags don't strictly need it but
-the fetch is harmless.
--}
-fetchBoardRect : String -> Cmd Msg
-fetchBoardRect gameId =
-    Browser.Dom.getElement (boardDomIdFor gameId)
-        |> Task.attempt BoardRectReceived
-
-
-mouseMove : Point -> Int -> Model -> Model
-mouseMove pos tMs model =
-    case model.drag of
-        DraggingBoardCard d ->
-            let
-                ( nextD, nextStatus ) =
-                    BoardGesture.mouseMove pos tMs d model.status
-            in
-            { model | drag = DraggingBoardCard nextD, status = nextStatus }
-
-        DraggingHandCard d ->
-            let
-                ( nextD, nextStatus ) =
-                    HandGesture.mouseMove pos d model.boardRect model.status
-            in
-            { model | drag = DraggingHandCard nextD, status = nextStatus }
-
-        NotDragging ->
-            model
 
 
 clickHint : Model -> ( Model, Cmd Msg, Output )
