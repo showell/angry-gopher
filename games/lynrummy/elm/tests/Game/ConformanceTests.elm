@@ -846,7 +846,7 @@ verifyUndoWalkthrough sc =
                 Expect.pass
 
             else
-                expectFinalBoard sc.expectFinalBoard finalModel
+                expectFinalBoard sc.expectFinalBoard finalModel.gameState.board
     in
     Expect.all
         ((\_ -> finalBoardCheck) :: List.map always perStepChecks)
@@ -976,29 +976,31 @@ parseMergeHand board body =
 stepExpectation : State.Model -> Dsl.Step -> Expect.Expectation
 stepExpectation model step =
     let
+        board =
+            model.gameState.board
+
+        handCards =
+            (Hand.activeHand model.gameState).handCards
+
         checks =
             List.filterMap identity
                 [ Dict.get "expect_board_count" step.fields
                     |> Maybe.andThen String.toInt
-                    |> Maybe.map (\n -> List.length model.gameState.board |> Expect.equal n)
+                    |> Maybe.map (\n -> List.length board |> Expect.equal n)
                 , Dict.get "expect_hand_count" step.fields
                     |> Maybe.andThen String.toInt
-                    |> Maybe.map
-                        (\n ->
-                            List.length (Hand.activeHand model.gameState).handCards
-                                |> Expect.equal n
-                        )
+                    |> Maybe.map (\n -> List.length handCards |> Expect.equal n)
                 , Dict.get "expect_undoable" step.fields
                     |> Maybe.andThen parseBool
                     |> Maybe.map (\b -> State.canUndoThisTurn model.actionLog |> Expect.equal b)
                 , Dict.get "expect_stack" step.fields
-                    |> Maybe.map (checkBoardHasStack model)
+                    |> Maybe.map (checkBoardHasStack board)
                 , Dict.get "expect_hand_contains" step.fields
                     |> Maybe.andThen parseCardTokenForExpect
-                    |> Maybe.map (checkHandContains model)
+                    |> Maybe.map (checkHandContains handCards)
                 , Dict.get "expect_loc" step.fields
                     |> Maybe.andThen parseParenIntPair
-                    |> Maybe.map (\( top, left ) -> checkBoardHasLoc model { top = top, left = left })
+                    |> Maybe.map (\( top, left ) -> checkBoardHasLoc board { top = top, left = left })
                 ]
     in
     case checks of
@@ -1009,31 +1011,31 @@ stepExpectation model step =
             Expect.all (List.map always checks) ()
 
 
-checkBoardHasStack : State.Model -> String -> Expect.Expectation
-checkBoardHasStack model raw =
+checkBoardHasStack : List CardStack -> String -> Expect.Expectation
+checkBoardHasStack board raw =
     let
         want =
             parseCardTokens raw
     in
-    if List.any (\s -> List.map .card s.boardCards == want) model.gameState.board then
+    if List.any (\s -> List.map .card s.boardCards == want) board then
         Expect.pass
 
     else
         Expect.fail ("board missing stack [" ++ raw ++ "]")
 
 
-checkHandContains : State.Model -> Card -> Expect.Expectation
-checkHandContains model card =
-    if List.any (\hc -> hc.card == card) (Hand.activeHand model.gameState).handCards then
+checkHandContains : List HandCard -> Card -> Expect.Expectation
+checkHandContains handCards card =
+    if List.any (\hc -> hc.card == card) handCards then
         Expect.pass
 
     else
         Expect.fail "hand missing expected card"
 
 
-checkBoardHasLoc : State.Model -> BoardLocation -> Expect.Expectation
-checkBoardHasLoc model loc =
-    if List.any (\s -> s.loc == loc) model.gameState.board then
+checkBoardHasLoc : List CardStack -> BoardLocation -> Expect.Expectation
+checkBoardHasLoc board loc =
+    if List.any (\s -> s.loc == loc) board then
         Expect.pass
 
     else
@@ -1046,8 +1048,8 @@ checkBoardHasLoc model loc =
             )
 
 
-expectFinalBoard : List Dsl.Stack -> State.Model -> Expect.Expectation
-expectFinalBoard expectedStacks model =
+expectFinalBoard : List Dsl.Stack -> List CardStack -> Expect.Expectation
+expectFinalBoard expectedStacks board =
     let
         byLoc =
             List.sortBy (\s -> ( s.loc.top, s.loc.left ))
@@ -1058,7 +1060,7 @@ expectFinalBoard expectedStacks model =
         expected =
             stacksFromDsl expectedStacks
     in
-    cardRows (byLoc model.gameState.board)
+    cardRows (byLoc board)
         |> Expect.equal (cardRows (byLoc expected))
 
 
