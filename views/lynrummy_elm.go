@@ -207,8 +207,7 @@ func lynrummyElmAppendSessionLine(w http.ResponseWriter, r *http.Request, sessio
 		http.Error(w, "append: "+err2.Error(), http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	fmt.Fprint(w, `{"ok":true}`)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // --- Session reads ---

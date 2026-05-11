@@ -14,8 +14,10 @@
 //
 // Storage layout mirrors the full game's:
 //   games/lynrummy/data/puzzle/sessions/<id>/
-//     meta.json        — {created_at, puzzle_name, initial_board}
-//     actions.jsonl    — one Elm-sent envelope per line
+//     meta             — DSL: created_at + puzzle_name scalars,
+//                        then a `board:` block (the puzzle's
+//                        positioned starting layout)
+//     actions.dsl      — one wire-DSL line per Elm-sent action
 //
 // Wire shape is identical to the full game's actions.jsonl
 // envelope: {seq, action: {...}}. The agent reads these on
@@ -111,8 +113,7 @@ func puzzleAppendAction(w http.ResponseWriter, r *http.Request, sessionID int64)
 		http.Error(w, "append: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	fmt.Fprint(w, `{"ok":true}`)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // loadPuzzleBoard reads mined_seeds.dsl and returns the
@@ -121,6 +122,20 @@ func puzzleAppendAction(w http.ResponseWriter, r *http.Request, sessionID int64)
 // itself isn't JSON, so this is a thin string scan: find the
 // `puzzle <name>` header line and return the indented body up
 // to the next blank line or `puzzle ` header.
+// indentLines prefixes every line of `src` with two spaces —
+// turns a flat block of `at (...)` lines into a body under a
+// `board:` header. Trailing blank lines are preserved as-is.
+func indentLines(src string) string {
+	lines := strings.Split(src, "\n")
+	for i, l := range lines {
+		if l != "" {
+			lines[i] = "  " + l
+		}
+	}
+	return strings.Join(lines, "\n")
+}
+
+
 func loadPuzzleBoard(name string) (string, error) {
 	data, err := os.ReadFile(puzzleSeedsPath)
 	if err != nil {
@@ -168,17 +183,17 @@ func puzzlePage(w http.ResponseWriter) {
 		return
 	}
 
-	meta := map[string]any{
-		"created_at":    time.Now().Unix(),
-		"puzzle_name":   featuredPuzzleName,
-		"initial_board": boardDSL,
-	}
-	metaJSON, err := json.MarshalIndent(meta, "", "  ")
-	if err != nil {
-		http.Error(w, "encode meta: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if err := WritePuzzleSessionFile(id, "meta.json", append(metaJSON, '\n')); err != nil {
+	// meta DSL: server-owned scalars at the top, then the
+	// `board:` block. Same shape the full-game flow uses, so
+	// `cat`-ing the file shows the entire session header in one
+	// view — no JSON escaping around the board content.
+	metaDSL := fmt.Sprintf(
+		"created_at: %d\npuzzle_name: %s\n\nboard:\n%s\n",
+		time.Now().Unix(),
+		featuredPuzzleName,
+		indentLines(boardDSL),
+	)
+	if err := WritePuzzleSessionFile(id, "meta", []byte(metaDSL)); err != nil {
 		http.Error(w, "write meta: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
