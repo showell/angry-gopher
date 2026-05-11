@@ -45,12 +45,12 @@ import Main.Gesture
         , startHandDrag
         )
 import Main.Msg exposing (Msg(..))
+import Game.InitialStateDsl as InitialStateDsl
 import Main.State
     exposing
         ( Model
         , baseModel
         , bootstrapFromBundle
-        , encodeGameState
         , lastUndoableAction
         )
 import Game.Point exposing (Point)
@@ -128,7 +128,7 @@ init config =
                         , initialGameState = initialRS
                     }
             in
-            ( dealtModel, fetchNewSession (encodeGameState initialRS) )
+            ( dealtModel, fetchNewSession (InitialStateDsl.formatGameState initialRS) )
 
         ResumeSession sid ->
             ( { baseModel

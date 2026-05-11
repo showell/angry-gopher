@@ -16,14 +16,12 @@ resume bootstrap returns `{meta: {...}, actions: [...]}` where
 -}
 
 import Game.ActionLog exposing (ActionLogEntry)
-import Game.CardStack as CardStack
 import Game.Game exposing (GameState)
-import Game.Hand exposing (Hand)
-import Game.Rules.Card as Card
+import Game.InitialStateDsl as InitialStateDsl
 import Game.WireAction as WA
 import Http
 import Json.Decode as Decode exposing (Decoder)
-import Json.Encode as Encode exposing (Value)
+import Json.Encode as Encode
 import Main.Msg exposing (Msg(..))
 
 
@@ -32,9 +30,11 @@ import Main.Msg exposing (Msg(..))
 
 
 {-| Create a new session. Elm has already dealt the game
-locally; this just registers it.
+locally; this just registers it. `initialState` is the
+DSL-encoded GameState (a multi-line string). The server is
+dumb storage and persists it verbatim in `meta.initial_state`.
 -}
-fetchNewSession : Value -> Cmd Msg
+fetchNewSession : String -> Cmd Msg
 fetchNewSession initialState =
     Http.post
         { url = "/gopher/lynrummy-elm/new-session"
@@ -42,7 +42,7 @@ fetchNewSession initialState =
             Http.jsonBody
                 (Encode.object
                     [ ( "label", Encode.string "" )
-                    , ( "initial_state", initialState )
+                    , ( "initial_state", Encode.string initialState )
                     ]
                 )
         , expect = Http.expectJson SessionReceived sessionIdDecoder
@@ -80,22 +80,18 @@ sessionIdDecoder =
     Decode.field "session_id" Decode.int
 
 
-handDecoder : Decoder Hand
-handDecoder =
-    Decode.field "hand_cards" (Decode.list CardStack.handCardDecoder)
-        |> Decode.map (\cards -> { handCards = cards })
-
-
 initialStateDecoder : Decoder GameState
 initialStateDecoder =
-    Decode.map7 GameState
-        (Decode.field "board" (Decode.list CardStack.cardStackDecoder))
-        (Decode.field "hands" (Decode.list handDecoder))
-        (Decode.field "active_player_index" Decode.int)
-        (Decode.field "turn_index" Decode.int)
-        (Decode.field "deck" (Decode.list Card.cardDecoder))
-        (Decode.field "cards_played_this_turn" Decode.int)
-        (Decode.field "victor_awarded" Decode.bool)
+    Decode.string
+        |> Decode.andThen
+            (\dsl ->
+                case InitialStateDsl.parseGameState dsl of
+                    Ok gs ->
+                        Decode.succeed gs
+
+                    Err msg ->
+                        Decode.fail ("initial_state DSL: " ++ msg)
+            )
 
 
 actionLogDecoder : Decoder ( GameState, List ActionLogEntry )

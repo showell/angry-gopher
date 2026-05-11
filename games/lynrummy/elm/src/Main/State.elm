@@ -3,7 +3,6 @@ module Main.State exposing
     , baseModel
     , bootstrapFromBundle
     , canUndoThisTurn
-    , encodeGameState
     , lastUndoableAction
     )
 
@@ -11,18 +10,16 @@ module Main.State exposing
 
 import Game.ActionLog as ActionLog exposing (ActionLogEntry)
 import Game.Execute as Execute
-import Game.CardStack as CardStack
 import Game.Dealer
 import Game.Drag exposing (DragState(..))
 import Game.Game exposing (GameState)
 import Game.GameEvent exposing (GameEvent(..))
-import Game.Hand as Hand exposing (Hand)
+import Game.Hand as Hand
 import Game.Physics.GestureArbitration as GA
+import Game.Rules.Card exposing (Card)
 import Game.Popup exposing (PopupContent)
 import Game.Replay.ReplayState exposing (ReplayState)
-import Game.Rules.Card as Card exposing (Card)
 import Game.Status exposing (StatusKind(..), StatusMessage)
-import Json.Encode as Encode exposing (Value)
 
 
 
@@ -73,29 +70,6 @@ type alias Model =
     -- back.
     , nextEngineRequestId : Int
     }
-
-
-{-| Mirror of the `initialStateDecoder` shape on the wire — produces
-JSON that the server stores in `meta.initial_state` and that
-`initialStateDecoder` can read back on resume.
--}
-encodeGameState : GameState -> Value
-encodeGameState rs =
-    Encode.object
-        [ ( "board", Encode.list CardStack.encodeCardStack rs.board )
-        , ( "hands", Encode.list encodeHand rs.hands )
-        , ( "active_player_index", Encode.int rs.activePlayerIndex )
-        , ( "turn_index", Encode.int rs.turnIndex )
-        , ( "deck", Encode.list Card.encodeCard rs.deck )
-        , ( "cards_played_this_turn", Encode.int rs.cardsPlayedThisTurn )
-        , ( "victor_awarded", Encode.bool rs.victorAwarded )
-        ]
-
-
-encodeHand : Hand -> Value
-encodeHand h =
-    Encode.object
-        [ ( "hand_cards", Encode.list CardStack.encodeHandCard h.handCards ) ]
 
 
 -- ACTION LOG HELPERS
