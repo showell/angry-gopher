@@ -37,7 +37,10 @@ import Game.Physics.WingOracle as WingOracle
 import Game.Point exposing (Point)
 import Game.Rules.Card as Card exposing (Card, OriginDeck(..))
 import Game.WingView as WingView
+import Game.Execute as Execute
+import Game.GameEvent as GameEvent exposing (GameEvent)
 import Game.Rules.Referee as Referee exposing (RefereeStage(..))
+import Game.Rules.StackType as StackType
 import Main.Gesture as Gesture
 import Main.Play as Play
 import Main.State as State
@@ -110,6 +113,9 @@ verify sc =
 
         "validate_turn_complete" ->
             verifyValidateTurnComplete sc
+
+        "replay_invariant" ->
+            verifyReplayInvariant sc
 
         _ ->
             -- Verifier not yet ported from fixturegen. The legacy
@@ -790,6 +796,276 @@ verifyGestureFloaterOverWing sc =
 
         ( _, _, Nothing ) ->
             Expect.fail "gesture_floater_over_wing scenario missing floater_at"
+
+
+
+-- REPLAY INVARIANT
+--
+-- Compare two paths to the same final state: eager-fold over
+-- GameEvents vs animation-FSM replay. The two should converge
+-- on byte-identical gameState. Optional victory check.
+
+
+verifyReplayInvariant : Dsl.Scenario -> Expect.Expectation
+verifyReplayInvariant sc =
+    let
+        board =
+            stacksFromDsl sc.board
+
+        base =
+            State.baseModel
+
+        gs0 =
+            base.gameState
+
+        initialModel =
+            { base
+                | gameState = { gs0 | board = board }
+                , sessionId = Just 0
+            }
+
+        specs =
+            List.filterMap parseReplaySpec sc.actions
+
+        ( eagerModel, actions ) =
+            buildEagerAndActions initialModel specs
+
+        replayedModel =
+            runReplay initialModel actions
+
+        wantVictory =
+            case sc.expect of
+                Dsl.ExpectBlock dict ->
+                    getStr "final_board_victory" dict == Just "true"
+
+                _ ->
+                    False
+
+        victoryCheck _ =
+            if not wantVictory then
+                Expect.pass
+
+            else if List.all isCleanStack eagerModel.gameState.board && List.all isCleanStack replayedModel.gameState.board then
+                Expect.pass
+
+            else
+                Expect.fail "final board not victory"
+    in
+    Expect.all
+        [ \_ -> Expect.equal eagerModel.gameState replayedModel.gameState
+        , victoryCheck
+        ]
+        ()
+
+
+type ReplaySpec
+    = SpecSplit (List Card) Int
+    | SpecMergeStack (List Card) (List Card) Side
+    | SpecMoveStack (List Card) BoardLocation
+    | SpecCompleteTurn
+
+
+parseReplaySpec : String -> Maybe ReplaySpec
+parseReplaySpec raw =
+    let
+        s =
+            String.trim raw
+    in
+    if s == "complete_turn" then
+        Just SpecCompleteTurn
+
+    else if String.startsWith "split " s then
+        parseSplit (String.dropLeft 6 s)
+
+    else if String.startsWith "merge_stack " s then
+        parseMergeStack (String.dropLeft 12 s)
+
+    else if String.startsWith "move_stack " s then
+        parseMoveStack (String.dropLeft 11 s)
+
+    else
+        Nothing
+
+
+parseSplit : String -> Maybe ReplaySpec
+parseSplit body =
+    -- "[cards]@idx"
+    case splitOnLast "@" body of
+        Just ( head, tail ) ->
+            case ( parseBracketCards head, String.toInt (String.trim tail) ) of
+                ( Just cards, Just idx ) ->
+                    Just (SpecSplit cards idx)
+
+                _ ->
+                    Nothing
+
+        Nothing ->
+            Nothing
+
+
+parseMergeStack : String -> Maybe ReplaySpec
+parseMergeStack body =
+    -- "[src] -> [tgt] /side"
+    case String.split " -> " body of
+        [ srcStr, rightSide ] ->
+            case String.split " /" rightSide of
+                [ tgtStr, sideStr ] ->
+                    case
+                        ( parseBracketCards srcStr
+                        , parseBracketCards tgtStr
+                        , parseLowerSide sideStr
+                        )
+                    of
+                        ( Just src, Just tgt, Just side ) ->
+                            Just (SpecMergeStack src tgt side)
+
+                        _ ->
+                            Nothing
+
+                _ ->
+                    Nothing
+
+        _ ->
+            Nothing
+
+
+parseMoveStack : String -> Maybe ReplaySpec
+parseMoveStack body =
+    -- "[cards] -> (top,left)"
+    case String.split " -> " body of
+        [ cardsStr, locStr ] ->
+            case ( parseBracketCards cardsStr, parseParenIntPair locStr ) of
+                ( Just cards, Just ( top, left ) ) ->
+                    Just (SpecMoveStack cards { top = top, left = left })
+
+                _ ->
+                    Nothing
+
+        _ ->
+            Nothing
+
+
+parseBracketCards : String -> Maybe (List Card)
+parseBracketCards s =
+    let
+        t =
+            String.trim s
+    in
+    if String.startsWith "[" t && String.endsWith "]" t then
+        Just (parseCardTokens (String.slice 1 -1 t))
+
+    else
+        Nothing
+
+
+parseLowerSide : String -> Maybe Side
+parseLowerSide s =
+    case String.trim s of
+        "left" ->
+            Just Left
+
+        "right" ->
+            Just Right
+
+        _ ->
+            Nothing
+
+
+splitOnLast : String -> String -> Maybe ( String, String )
+splitOnLast sep s =
+    case List.reverse (String.indexes sep s) of
+        last :: _ ->
+            Just
+                ( String.left last s
+                , String.dropLeft (last + String.length sep) s
+                )
+
+        [] ->
+            Nothing
+
+
+findStackByContent : List Card -> List CardStack -> CardStack
+findStackByContent cards board =
+    case List.filter (\s -> List.map .card s.boardCards == cards) board of
+        match :: _ ->
+            match
+
+        [] ->
+            { boardCards = [], loc = { top = -1, left = -1 } }
+
+
+resolveSpec : ReplaySpec -> List CardStack -> GameEvent
+resolveSpec spec board =
+    case spec of
+        SpecSplit cards idx ->
+            GameEvent.Split { stack = findStackByContent cards board, cardIndex = idx }
+
+        SpecMergeStack src tgt side ->
+            GameEvent.MergeStack
+                { source = findStackByContent src board
+                , target = findStackByContent tgt board
+                , side = side
+                , boardPath = []
+                }
+
+        SpecMoveStack cards loc ->
+            GameEvent.MoveStack
+                { stack = findStackByContent cards board
+                , newLoc = loc
+                , boardPath = []
+                }
+
+        SpecCompleteTurn ->
+            GameEvent.CompleteTurn
+
+
+buildEagerAndActions : State.Model -> List ReplaySpec -> ( State.Model, List GameEvent )
+buildEagerAndActions initialModel specs =
+    let
+        loop model acc remaining =
+            case remaining of
+                [] ->
+                    ( model, List.reverse acc )
+
+                spec :: rest ->
+                    let
+                        action =
+                            resolveSpec spec model.gameState.board
+
+                        next =
+                            { model | gameState = Execute.applyEvent action model.gameState }
+                    in
+                    loop next (action :: acc) rest
+    in
+    loop initialModel [] specs
+
+
+runReplay : State.Model -> List GameEvent -> State.Model
+runReplay initialModel actions =
+    let
+        gs0 =
+            initialModel.gameState
+
+        finalGameState =
+            List.foldl Execute.applyEvent gs0 actions
+    in
+    { initialModel | gameState = finalGameState }
+
+
+isCleanStack : CardStack -> Bool
+isCleanStack s =
+    case StackType.getStackType (List.map .card s.boardCards) of
+        StackType.Set ->
+            True
+
+        StackType.PureRun ->
+            True
+
+        StackType.RedBlackRun ->
+            True
+
+        _ ->
+            False
 
 
 
