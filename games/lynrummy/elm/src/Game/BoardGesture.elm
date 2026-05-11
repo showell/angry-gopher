@@ -12,12 +12,8 @@ module Game.BoardGesture exposing
 `GameEvent` outcome shape that flows up to `Main.Play.update`,
 which dispatches on the variant. Drag variants carry the
 captured `boardPath` inline so `Play` can fire `Wire.sendAction`
-without re-deriving the path.
-
-Lifted out of `Main.Gesture` so the board ladder lives in one
-file alongside its sibling `Game.HandGesture`. The shared
-small helper `isDropFootprintInBounds` is duplicated per-side
-rather than shared via Maybe-flagged helpers.
+without re-deriving the path. The hand-card sibling is
+`Game.HandGesture`.
 
 -}
 

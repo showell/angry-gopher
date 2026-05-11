@@ -6,9 +6,9 @@ module Game.PointerInput exposing
     )
 
 {-| Pointer-event decoders + the board-card mousedown attr
-builder. Shared between the full-game host (`Main.Gesture`)
-and the puzzle host. Msg-polymorphic where relevant — callers
-pass their own constructors.
+builder. Shared between the full-game and puzzle hosts.
+Msg-polymorphic where relevant — callers pass their own
+constructors.
 
 -}
 

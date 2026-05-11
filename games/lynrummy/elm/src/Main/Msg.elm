@@ -1,12 +1,9 @@
 module Main.Msg exposing (Msg(..))
 
 {-| The `Msg` type — every way the Elm runtime can nudge the
-update function. Kept in its own module so `Main.Wire`,
-`Main.Gesture`, `Main.View`, and `Main.elm` can all reference
-its constructors without cyclic imports.
-
-Extracted 2026-04-19 from the pre-split `Main.elm` monolith.
-
+update function. Lives in its own module so `Main.Wire`,
+`Main.View`, and `Main.elm` can all reference its constructors
+without cyclic imports.
 -}
 
 import Browser.Dom

@@ -9,14 +9,17 @@ layout, turn controls, and the small button styles.
 -}
 
 import Game.Button as Button
-import Game.Drag as Drag
+import Game.CardStack exposing (HandCard)
+import Game.Drag as Drag exposing (DragState(..))
 import Game.Hand exposing (Hand)
+import Game.PointerInput as PointerInput
 import Game.Rules.Card exposing (Card)
 import Game.Game exposing (GameState)
 import Game.View as View
-import Html exposing (Html, div)
+import Html exposing (Html, Attribute, div)
 import Html.Attributes exposing (style)
-import Main.Gesture as Gesture
+import Html.Events as Events
+import Json.Decode as Decode
 import Main.Msg exposing (Msg(..))
 
 
@@ -102,10 +105,47 @@ viewActivePlayerRow info idx hand =
     playerRowShell { isActive = True, idx = idx }
         [ View.viewHandHeading
         , View.viewHand
-            { attrsForCard = Gesture.handCardAttrs info.drag info.hintedCards }
+            { attrsForCard = handCardAttrs info.drag info.hintedCards }
             hand
         , viewTurnControls { canUndo = info.canUndo, replayControl = info.replayControl }
         ]
+
+
+{-| Per-hand-card attributes: hint highlight (light green if the
+card identity is in `hintedCards`), mousedown hook when idle,
+and dim + pointer-disable on the dragged source so the floater
+is the only visible / interactive piece.
+-}
+handCardAttrs : DragState -> List Card -> HandCard -> List (Attribute Msg)
+handCardAttrs drag hintedCards hc =
+    let
+        hintAttrs =
+            if List.any (\c -> c == hc.card) hintedCards then
+                [ style "background-color" "lightgreen" ]
+
+            else
+                []
+    in
+    hintAttrs
+        ++ (case drag of
+                NotDragging ->
+                    [ Events.on "mousedown"
+                        (Decode.map
+                            (\( p, t ) -> MouseDownOnHandCard { card = hc.card, point = p, time = t })
+                            PointerInput.pointAndTimeDecoder
+                        )
+                    ]
+
+                DraggingHandCard d ->
+                    if d.card == hc.card then
+                        [ style "opacity" "0.35", style "pointer-events" "none" ]
+
+                    else
+                        [ style "pointer-events" "none" ]
+
+                DraggingBoardCard _ ->
+                    [ style "pointer-events" "none" ]
+           )
 
 
 viewInactivePlayerRow : Int -> Hand -> Html Msg

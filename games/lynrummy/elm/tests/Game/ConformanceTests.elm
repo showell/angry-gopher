@@ -34,7 +34,6 @@ import Game.GameEvent as GameEvent exposing (GameEvent)
 import Game.Hand as Hand
 import Game.Rules.Referee as Referee exposing (RefereeStage(..))
 import Game.Rules.StackType as StackType
-import Main.Gesture as Gesture
 import Main.Msg as Msg
 import Main.Play as Play
 import Main.State as State
@@ -1564,7 +1563,7 @@ verifyShiftEqualsDelta sc stack cardIndex =
                     modelWithStack stack
 
                 ( afterDown, _ ) =
-                    Gesture.startBoardCardDrag
+                    Play.startBoardCardDrag
                         { stack = stack, cardIndex = cardIndex }
                         mousedown
                         0
@@ -1607,7 +1606,7 @@ verifyGrabPointInvariant sc stack =
                 shiftFor down =
                     let
                         ( afterDown, _ ) =
-                            Gesture.startBoardCardDrag
+                            Play.startBoardCardDrag
                                 { stack = stack, cardIndex = 0 }
                                 down
                                 0
@@ -1644,7 +1643,7 @@ verifyInitialFloaterAt sc stack cardIndex expected =
                     modelWithStack stack
 
                 ( afterDown, _ ) =
-                    Gesture.startBoardCardDrag
+                    Play.startBoardCardDrag
                         { stack = stack, cardIndex = cardIndex }
                         mousedown
                         0
