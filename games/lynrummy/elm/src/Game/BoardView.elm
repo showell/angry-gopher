@@ -18,7 +18,7 @@ not a state the View needs to know about.
 
 import Game.CardStack as CardStack exposing (CardStack)
 import Game.Drag exposing (DragState(..))
-import Game.Physics.GestureArbitration as GA
+import Game.Physics.WingOracle exposing (WingId)
 import Game.StackView as StackView
 import Game.View exposing (navy)
 import Game.WingView as WingView
@@ -42,20 +42,21 @@ CompleteTurn.
 -}
 boardShell :
     { board : List CardStack
-    , boardRect : Maybe GA.Rect
     , drag : DragState
     , gameId : String
     , cardMouseDown : CardStack -> Int -> List (Html.Attribute msg)
+    , wings : List WingId
+    , hoveredWing : Maybe WingId
     , boardFloaters : List (Html msg)
     }
     -> Html msg
-boardShell { board, boardRect, drag, gameId, cardMouseDown, boardFloaters } =
+boardShell { board, drag, gameId, cardMouseDown, wings, hoveredWing, boardFloaters } =
     let
         stackNodes =
             List.map (viewStackForBoard drag cardMouseDown) board
 
         wingNodes =
-            WingView.getWingNodes drag boardRect
+            List.map (WingView.renderWingWithHover hoveredWing) wings
     in
     div
         [ id (boardDomIdFor gameId)

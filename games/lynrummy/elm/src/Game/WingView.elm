@@ -1,6 +1,6 @@
 module Game.WingView exposing
-    ( getWingNodes
-    , hoveredWing
+    ( hoveredWing
+    , renderWingWithHover
     )
 
 {-| All the fiddly wing stuff in one place: rendering, color
@@ -23,9 +23,7 @@ mean two files for the same concept.
 -}
 
 import Game.CardStack as CardStack exposing (BoardLocation)
-import Game.Drag exposing (DragState(..))
 import Game.Physics.BoardGeometry as BG
-import Game.Physics.GestureArbitration as GA
 import Game.Physics.WingOracle as WingOracle exposing (WingId)
 import Html exposing (Html, div, text)
 import Html.Attributes exposing (style)
@@ -110,52 +108,12 @@ hoveredWing floaterTopLeft floaterWidth wings =
 -- RENDERING
 
 
-{-| Wing nodes for a board shell, given the live drag state
-and (when relevant) the live board rect. Computes the hovered
-wing once per branch and reuses it across all wings; one
-named computation, not nested expressions.
-
-Empty list when no drag is live, or when a hand drag's rect
-hasn't arrived yet.
-
+{-| Render a wing at its eventual landing position, in the
+mauve-hover color if it matches `hovered`, otherwise the
+mergeable-green color. Caller dispatches DragState once to
+extract `wings : List WingId` + `hovered : Maybe WingId` and
+maps this function over the list.
 -}
-getWingNodes : DragState -> Maybe GA.Rect -> List (Html msg)
-getWingNodes drag maybeBoardRect =
-    case drag of
-        DraggingBoardCard d ->
-            let
-                hovered =
-                    hoveredWing
-                        d.floaterTopLeft
-                        (CardStack.stackDisplayWidth d.stack)
-                        d.wings
-            in
-            List.map (renderWingWithHover hovered) d.wings
-
-        DraggingHandCard d ->
-            case maybeBoardRect of
-                Just rect ->
-                    let
-                        floaterBoardLoc =
-                            { left = d.floaterTopLeft.x - rect.x
-                            , top = d.floaterTopLeft.y - rect.y
-                            }
-
-                        hovered =
-                            hoveredWing
-                                floaterBoardLoc
-                                CardStack.stackPitch
-                                d.wings
-                    in
-                    List.map (renderWingWithHover hovered) d.wings
-
-                Nothing ->
-                    []
-
-        NotDragging ->
-            []
-
-
 renderWingWithHover : Maybe WingId -> WingId -> Html msg
 renderWingWithHover hovered wing =
     renderWing (WingOracle.wingBoardRect wing) (hovered == Just wing)

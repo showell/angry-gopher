@@ -32,7 +32,7 @@ import Game.PuzzleFlagDsl as PuzzleFlagDsl
 import Game.BoardGesture as BoardGesture
 import Game.BoardView as BoardView
 import Game.Button as Button
-import Game.CardStack exposing (CardStack)
+import Game.CardStack as CardStack exposing (CardStack)
 import Game.Drag as Drag exposing (DragState(..))
 import Game.Execute as Execute
 import Game.GameEvent as GameEvent exposing (GameEvent(..))
@@ -40,6 +40,7 @@ import Game.Physics.GestureArbitration as GA
 import Game.Point exposing (Point)
 import Game.PointerInput as PointerInput
 import Game.Status as Status exposing (StatusKind(..))
+import Game.WingView as WingView
 import Html exposing (Html, div)
 import Html.Attributes exposing (style)
 import Http
@@ -402,6 +403,21 @@ view model =
 
                 _ ->
                     []
+
+        -- Puzzles never have hand drags; the dispatch is just
+        -- the board-card branch + the empty fallback.
+        ( wings, hoveredWing ) =
+            case drag of
+                DraggingBoardCard d ->
+                    ( d.wings
+                    , WingView.hoveredWing
+                        d.floaterTopLeft
+                        (CardStack.stackDisplayWidth d.stack)
+                        d.wings
+                    )
+
+                _ ->
+                    ( [], Nothing )
     in
     div
         [ style "font-family" "system-ui, sans-serif" ]
@@ -423,10 +439,11 @@ view model =
                 ]
             , BoardView.boardShell
                 { board = board
-                , boardRect = model.boardRect
                 , drag = drag
                 , gameId = model.gameId
                 , cardMouseDown = PointerInput.cardMouseDown MouseDownOnBoardCard
+                , wings = wings
+                , hoveredWing = hoveredWing
                 , boardFloaters = boardFloaters
                 }
             ]

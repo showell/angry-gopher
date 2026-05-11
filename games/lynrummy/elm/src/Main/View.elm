@@ -12,6 +12,7 @@ per replay-start to stay honest under scrolling.
 -}
 
 import Game.BoardView as BoardView
+import Game.CardStack as CardStack
 import Game.Drag as Drag exposing (DragState(..))
 import Game.Physics.BoardGeometry as BoardGeometry
 import Game.PointerInput as PointerInput
@@ -20,6 +21,7 @@ import Game.Replay.HandDragAnimate as HandDragAnimate
 import Game.Replay.ReplayState exposing (Phase(..), ReplayState)
 import Game.Sidebar as Sidebar
 import Game.Status as Status
+import Game.WingView as WingView
 import Html exposing (Html, div)
 import Html.Attributes exposing (style)
 import Main.Msg exposing (Msg(..))
@@ -70,6 +72,40 @@ view model =
 
                 _ ->
                     []
+
+        -- Wings: both Dragging variants carry a `wings` field;
+        -- the only per-variant difference is how to compute the
+        -- floater's location in board frame (board-card: already
+        -- there; hand-card: subtract boardRect to translate from
+        -- viewport). Hand-card pre-rect-arrival → no wings.
+        ( wings, hoveredWing ) =
+            case drag of
+                DraggingBoardCard d ->
+                    ( d.wings
+                    , WingView.hoveredWing
+                        d.floaterTopLeft
+                        (CardStack.stackDisplayWidth d.stack)
+                        d.wings
+                    )
+
+                DraggingHandCard d ->
+                    case model.boardRect of
+                        Just rect ->
+                            let
+                                floaterBoardLoc =
+                                    { left = d.floaterTopLeft.x - rect.x
+                                    , top = d.floaterTopLeft.y - rect.y
+                                    }
+                            in
+                            ( d.wings
+                            , WingView.hoveredWing floaterBoardLoc CardStack.stackPitch d.wings
+                            )
+
+                        Nothing ->
+                            ( [], Nothing )
+
+                NotDragging ->
+                    ( [], Nothing )
     in
     div
         [ style "font-family" "system-ui, sans-serif"
@@ -100,10 +136,11 @@ view model =
             ]
             [ BoardView.boardShell
                 { board = board
-                , boardRect = model.boardRect
                 , drag = drag
                 , gameId = model.gameId
                 , cardMouseDown = PointerInput.cardMouseDown MouseDownOnBoardCard
+                , wings = wings
+                , hoveredWing = hoveredWing
                 , boardFloaters = boardFloaters
                 }
             ]
