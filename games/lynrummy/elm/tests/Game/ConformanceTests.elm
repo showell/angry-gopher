@@ -990,7 +990,7 @@ stepExpectation model step =
                         )
                 , Dict.get "expect_undoable" step.fields
                     |> Maybe.andThen parseBool
-                    |> Maybe.map (\b -> State.canUndoThisTurn model |> Expect.equal b)
+                    |> Maybe.map (\b -> State.canUndoThisTurn model.actionLog |> Expect.equal b)
                 , Dict.get "expect_stack" step.fields
                     |> Maybe.map (checkBoardHasStack model)
                 , Dict.get "expect_hand_contains" step.fields

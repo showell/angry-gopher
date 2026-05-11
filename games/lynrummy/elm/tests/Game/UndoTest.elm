@@ -50,17 +50,6 @@ logEntry action =
     { action = action }
 
 
-{-| Build a model with the given action log by starting from baseModel.
--}
-modelWithLog : List ActionLogEntry -> State.Model
-modelWithLog entries =
-    let
-        base =
-            State.baseModel
-    in
-    { base | actionLog = entries }
-
-
 initialGameState : GameState
 initialGameState =
     { board = Game.Dealer.initialBoard
@@ -409,7 +398,7 @@ suiteCanUndoThisTurn =
     describe "State.canUndoThisTurn"
         [ test "False on empty action log" <|
             \_ ->
-                State.canUndoThisTurn (modelWithLog [])
+                State.canUndoThisTurn []
                     |> Expect.equal False
         , test "True after one action" <|
             \_ ->
@@ -417,7 +406,7 @@ suiteCanUndoThisTurn =
                     move =
                         logEntry (MoveStack { stack = stackAt 0 initialGameState, newLoc = { top = 10, left = 20 }, boardPath = [] })
                 in
-                State.canUndoThisTurn (modelWithLog [ move ])
+                State.canUndoThisTurn [ move ]
                     |> Expect.equal True
         , test "False after undoing the only action" <|
             \_ ->
@@ -425,7 +414,7 @@ suiteCanUndoThisTurn =
                     move =
                         logEntry (MoveStack { stack = stackAt 0 initialGameState, newLoc = { top = 10, left = 20 }, boardPath = [] })
                 in
-                State.canUndoThisTurn (modelWithLog [ move, logEntry Undo ])
+                State.canUndoThisTurn [ move, logEntry Undo ]
                     |> Expect.equal False
         , test "False when last effective entry is CompleteTurn" <|
             \_ ->
@@ -436,7 +425,7 @@ suiteCanUndoThisTurn =
                     ct =
                         logEntry CompleteTurn
                 in
-                State.canUndoThisTurn (modelWithLog [ move, ct ])
+                State.canUndoThisTurn [ move, ct ]
                     |> Expect.equal False
         , test "True when there is still an action after a CompleteTurn" <|
             \_ ->
@@ -450,7 +439,7 @@ suiteCanUndoThisTurn =
                     move2 =
                         logEntry (MoveStack { stack = stackAt 1 initialGameState, newLoc = { top = 50, left = 60 }, boardPath = [] })
                 in
-                State.canUndoThisTurn (modelWithLog [ move, ct, move2 ])
+                State.canUndoThisTurn [ move, ct, move2 ]
                     |> Expect.equal True
         , test "False when multiple actions are all undone" <|
             \_ ->
@@ -464,7 +453,7 @@ suiteCanUndoThisTurn =
                     move2 =
                         logEntry (MoveStack { stack = stackAt 1 s, newLoc = { top = 30, left = 40 }, boardPath = [] })
                 in
-                State.canUndoThisTurn (modelWithLog [ move1, move2, logEntry Undo, logEntry Undo ])
+                State.canUndoThisTurn [ move1, move2, logEntry Undo, logEntry Undo ]
                     |> Expect.equal False
         ]
 

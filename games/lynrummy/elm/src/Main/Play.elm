@@ -406,7 +406,7 @@ update msg model =
             case
                 TurnControl.attemptUndo
                     { gameState = model.gameState
-                    , lastUndoableAction = lastUndoableAction model
+                    , lastUndoableAction = lastUndoableAction model.actionLog
                     , nextSeq = model.nextSeq
                     }
             of

@@ -107,7 +107,7 @@ sidebarInfo model =
             { gameState = model.gameState
             , drag = model.drag
             , hintedCards = model.hintedCards
-            , canUndo = canUndoThisTurn model
+            , canUndo = canUndoThisTurn model.actionLog
             , replayControl = Sidebar.ShowReplay
             }
 

@@ -79,18 +79,18 @@ type alias Model =
 action list has at least one non-CompleteTurn entry in the
 current turn.
 -}
-canUndoThisTurn : Model -> Bool
-canUndoThisTurn model =
-    lastUndoableAction model /= Nothing
+canUndoThisTurn : List ActionLogEntry -> Bool
+canUndoThisTurn log =
+    lastUndoableAction log /= Nothing
 
 
 {-| The most recent action eligible for undo, or Nothing.
 "Eligible" = top of `collapseUndos`'s effective list AND not a
 CompleteTurn (turn flips can't be undone).
 -}
-lastUndoableAction : Model -> Maybe GameEvent
-lastUndoableAction model =
-    case List.reverse (ActionLog.collapseUndos model.actionLog) of
+lastUndoableAction : List ActionLogEntry -> Maybe GameEvent
+lastUndoableAction log =
+    case List.reverse (ActionLog.collapseUndos log) of
         [] ->
             Nothing
 
