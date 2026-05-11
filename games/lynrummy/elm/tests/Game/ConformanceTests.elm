@@ -37,6 +37,7 @@ import Game.Physics.WingOracle as WingOracle
 import Game.Point exposing (Point)
 import Game.Rules.Card as Card exposing (Card, OriginDeck(..))
 import Game.WingView as WingView
+import Game.Rules.Referee as Referee exposing (RefereeStage(..))
 import Main.Gesture as Gesture
 import Main.Play as Play
 import Main.State as State
@@ -103,6 +104,12 @@ verify sc =
 
         "floater_top_left" ->
             verifyFloaterTopLeft sc
+
+        "validate_game_move" ->
+            verifyValidateGameMove sc
+
+        "validate_turn_complete" ->
+            verifyValidateTurnComplete sc
 
         _ ->
             -- Verifier not yet ported from fixturegen. The legacy
@@ -783,6 +790,124 @@ verifyGestureFloaterOverWing sc =
 
         ( _, _, Nothing ) ->
             Expect.fail "gesture_floater_over_wing scenario missing floater_at"
+
+
+
+-- REFEREE: validate_game_move / validate_turn_complete
+
+
+verifyValidateGameMove : Dsl.Scenario -> Expect.Expectation
+verifyValidateGameMove sc =
+    let
+        move =
+            { boardBefore = stacksFromDsl sc.boardBefore
+            , stacksToRemove = stacksFromDsl sc.stacksToRemove
+            , stacksToAdd = stacksFromDsl sc.stacksToAdd
+            , handCardsPlayed = parseHandCards sc
+            }
+
+        result =
+            Referee.validateGameMove move BoardGeometry.refereeBounds
+    in
+    checkRefereeResult sc result
+
+
+verifyValidateTurnComplete : Dsl.Scenario -> Expect.Expectation
+verifyValidateTurnComplete sc =
+    let
+        result =
+            Referee.validateTurnComplete
+                (stacksFromDsl sc.board)
+                BoardGeometry.refereeBounds
+    in
+    checkRefereeResult sc result
+
+
+checkRefereeResult : Dsl.Scenario -> Result Referee.RefereeError () -> Expect.Expectation
+checkRefereeResult sc result =
+    case sc.expect of
+        Dsl.ExpectScalar "ok" ->
+            case result of
+                Ok _ ->
+                    Expect.pass
+
+                Err err ->
+                    Expect.fail
+                        (Referee.refereeStageToString err.stage
+                            ++ ": "
+                            ++ err.message
+                        )
+
+        Dsl.ExpectBlock dict ->
+            let
+                stage =
+                    getStr "stage" dict
+                        |> Maybe.andThen parseRefereeStage
+
+                msgSubstr =
+                    getStr "message_contains" dict
+                        |> Maybe.withDefault ""
+            in
+            case ( result, stage ) of
+                ( Ok _, _ ) ->
+                    Expect.fail "expected error, got Ok"
+
+                ( Err err, Just want ) ->
+                    if err.stage /= want then
+                        Expect.fail
+                            ("stage: want "
+                                ++ Referee.refereeStageToString want
+                                ++ ", got "
+                                ++ Referee.refereeStageToString err.stage
+                            )
+
+                    else if msgSubstr /= "" && not (String.contains msgSubstr err.message) then
+                        Expect.fail
+                            ("message substring \""
+                                ++ msgSubstr
+                                ++ "\" not found in: "
+                                ++ err.message
+                            )
+
+                    else
+                        Expect.pass
+
+                ( Err _, Nothing ) ->
+                    Expect.fail "referee scenario expect block missing stage"
+
+        _ ->
+            Expect.fail "referee scenario missing expect"
+
+
+parseRefereeStage : String -> Maybe RefereeStage
+parseRefereeStage s =
+    case s of
+        "protocol" ->
+            Just Protocol
+
+        "geometry" ->
+            Just Geometry
+
+        "semantics" ->
+            Just Semantics
+
+        "inventory" ->
+            Just Inventory
+
+        _ ->
+            Nothing
+
+
+parseHandCards : Dsl.Scenario -> List HandCard
+parseHandCards sc =
+    Dict.get "hand_cards_played" sc.otherScalars
+        |> Maybe.map
+            (\raw ->
+                String.words (String.trim raw)
+                    |> List.filter (\w -> w /= "")
+                    |> List.filterMap parseHandCardToken
+            )
+        |> Maybe.withDefault []
 
 
 
