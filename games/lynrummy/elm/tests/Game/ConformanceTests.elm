@@ -1559,15 +1559,8 @@ verifyShiftEqualsDelta sc stack cardIndex =
     of
         ( Just mousedown, Just delta ) ->
             let
-                model =
-                    modelWithStack stack
-
-                ( afterDown, _ ) =
-                    Play.startBoardCardDrag
-                        { stack = stack, cardIndex = cardIndex }
-                        mousedown
-                        0
-                        model
+                afterDown =
+                    withBoardCardDrag stack cardIndex mousedown (modelWithStack stack)
 
                 afterMove =
                     Play.mouseMove
@@ -1605,12 +1598,8 @@ verifyGrabPointInvariant sc stack =
 
                 shiftFor down =
                     let
-                        ( afterDown, _ ) =
-                            Play.startBoardCardDrag
-                                { stack = stack, cardIndex = 0 }
-                                down
-                                0
-                                model
+                        afterDown =
+                            withBoardCardDrag stack 0 down model
 
                         afterMove =
                             Play.mouseMove
@@ -1639,15 +1628,8 @@ verifyInitialFloaterAt sc stack cardIndex expected =
     case scalarPoint "mousedown" sc of
         Just mousedown ->
             let
-                model =
-                    modelWithStack stack
-
-                ( afterDown, _ ) =
-                    Play.startBoardCardDrag
-                        { stack = stack, cardIndex = cardIndex }
-                        mousedown
-                        0
-                        model
+                afterDown =
+                    withBoardCardDrag stack cardIndex mousedown (modelWithStack stack)
             in
             case afterDown.drag of
                 DraggingBoardCard d ->
@@ -1670,6 +1652,24 @@ modelWithStack stack =
             base.gameState
     in
     { base | gameState = { gs0 | board = [ stack ] } }
+
+
+{-| Seed a model with an in-flight board-card drag at `cursor`.
+Mirror of what `update`'s `MouseDownOnBoardCard` arm does. -}
+withBoardCardDrag : CardStack -> Int -> Point -> State.Model -> State.Model
+withBoardCardDrag stack cardIndex cursor model =
+    { model
+        | drag =
+            DraggingBoardCard
+                (BoardGesture.startBoardDragInfo
+                    { stack = stack
+                    , cardIndex = cardIndex
+                    , cursor = cursor
+                    , tMs = 0
+                    , board = model.gameState.board
+                    }
+                )
+    }
 
 
 expectLocField : String -> Dsl.Scenario -> Maybe BoardLocation

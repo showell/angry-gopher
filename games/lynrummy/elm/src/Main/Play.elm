@@ -3,7 +3,6 @@ module Main.Play exposing
     , Output(..)
     , init
     , mouseMove
-    , startBoardCardDrag
     , subscriptions
     , update
     , view
@@ -26,7 +25,6 @@ import Game.ActionLog as ActionLog
 import Game.BoardDrag as BoardDrag
 import Game.BoardGesture as BoardGesture
 import Game.BoardView exposing (boardDomIdFor)
-import Game.CardStack exposing (CardStack, HandCard)
 import Game.Drag exposing (DragState(..))
 import Game.Engine as Engine
 import Game.Hand exposing (activeHand)
@@ -39,7 +37,6 @@ import Game.Random as Random
 import Game.Replay.Animate as Animate
 import Game.Replay.HandDragAnimate as HandDragAnimate
 import Game.Replay.ReplayState exposing (Phase(..))
-import Game.Rules.Card exposing (Card)
 import Html exposing (Html)
 import Json.Encode as Encode
 import Game.Status as Status exposing (StatusKind(..))
@@ -240,15 +237,12 @@ update msg model =
                             )
 
         HandCardRectReceived (Ok ( handElement, boardElement, posix )) ->
-            let
-                -- Late measurement results (replay completed, or
-                -- pause-toggle drove us past AwaitingMeasurement)
-                -- are dropped; the rs phase guards that.
-                applyMeasurement rs =
+            case model.replayState of
+                Just rs ->
                     case rs.phase of
                         AnimatingHandAction handState ->
-                            { rs
-                                | phase =
+                            let
+                                nextPhase =
                                     AnimatingHandAction
                                         (HandDragAnimate.measurementReceived
                                             (Time.posixToMillis posix)
@@ -256,15 +250,19 @@ update msg model =
                                             boardElement
                                             handState
                                         )
-                            }
+                            in
+                            ( { model | replayState = Just { rs | phase = nextPhase } }
+                            , Cmd.none
+                            , NoOutput
+                            )
 
                         _ ->
-                            rs
-            in
-            ( { model | replayState = Maybe.map applyMeasurement model.replayState }
-            , Cmd.none
-            , NoOutput
-            )
+                            -- Late measurement: replay either completed or
+                            -- pause-toggled past AwaitingMeasurement. Drop.
+                            ( model, Cmd.none, NoOutput )
+
+                Nothing ->
+                    ( model, Cmd.none, NoOutput )
 
         HandCardRectReceived (Err err) ->
             let
@@ -283,22 +281,44 @@ update msg model =
         -- / BoardRectReceived feed into MouseUp's resolution; MouseUp,
         -- ClickCompleteTurn, and ClickUndo all produce wire actions.
         MouseDownOnBoardCard { stack, cardIndex, point, time } ->
-            let
-                ( m, c ) =
-                    startBoardCardDrag
-                        { stack = stack, cardIndex = cardIndex }
-                        point
-                        time
-                        model
-            in
-            ( m, c, NoOutput )
+            case model.drag of
+                NotDragging ->
+                    let
+                        dragInfo =
+                            BoardGesture.startBoardDragInfo
+                                { stack = stack
+                                , cardIndex = cardIndex
+                                , cursor = point
+                                , tMs = time
+                                , board = model.gameState.board
+                                }
+                    in
+                    ( { model | drag = DraggingBoardCard dragInfo }
+                    , fetchBoardRect model.gameId
+                    , NoOutput
+                    )
 
-        MouseDownOnHandCard { card, point } ->
-            let
-                ( m, c ) =
-                    startHandDrag card point model
-            in
-            ( m, c, NoOutput )
+                _ ->
+                    ( model, Cmd.none, NoOutput )
+
+        MouseDownOnHandCard { handCard, point } ->
+            case model.drag of
+                NotDragging ->
+                    let
+                        dragInfo =
+                            HandGesture.startHandDragInfo
+                                { handCard = handCard
+                                , cursor = point
+                                , board = model.gameState.board
+                                }
+                    in
+                    ( { model | drag = DraggingHandCard dragInfo }
+                    , fetchBoardRect model.gameId
+                    , NoOutput
+                    )
+
+                _ ->
+                    ( model, Cmd.none, NoOutput )
 
         MouseMove pos tMs ->
             ( mouseMove pos tMs model, Cmd.none, NoOutput )
@@ -429,66 +449,6 @@ update msg model =
 
 
 -- UPDATE HELPERS
-
-
-{-| Start a drag from a board card. The floater's initial
-top-left is `stack.loc` (board frame, no translation).
-`cardIndex` is captured for the eventual click-vs-drag
-arbitration at mouseup. Exported so conformance tests can
-exercise drag-start → mouseMove sequences.
--}
-startBoardCardDrag :
-    { stack : CardStack, cardIndex : Int }
-    -> Point
-    -> Int
-    -> Model
-    -> ( Model, Cmd Msg )
-startBoardCardDrag { stack, cardIndex } clientPoint tMs model =
-    case model.drag of
-        NotDragging ->
-            ( { model
-                | drag =
-                    DraggingBoardCard
-                        (BoardGesture.startBoardDragInfo
-                            { stack = stack
-                            , cardIndex = cardIndex
-                            , cursor = clientPoint
-                            , tMs = tMs
-                            , board = model.gameState.board
-                            }
-                        )
-              }
-            , fetchBoardRect model.gameId
-            )
-
-        _ ->
-            ( model, Cmd.none )
-
-
-startHandDrag : Card -> Point -> Model -> ( Model, Cmd Msg )
-startHandDrag card clientPoint model =
-    case ( model.drag, findHandCard card (activeHand model.gameState).handCards ) of
-        ( NotDragging, Just handCard ) ->
-            ( { model
-                | drag =
-                    DraggingHandCard
-                        (HandGesture.startHandDragInfo
-                            { handCard = handCard
-                            , cursor = clientPoint
-                            , board = model.gameState.board
-                            }
-                        )
-              }
-            , fetchBoardRect model.gameId
-            )
-
-        _ ->
-            ( model, Cmd.none )
-
-
-findHandCard : Card -> List HandCard -> Maybe HandCard
-findHandCard target cards =
-    List.filter (\hc -> hc.card == target) cards |> List.head
 
 
 {-| Fire a `Browser.Dom.getElement` Task to capture the board's

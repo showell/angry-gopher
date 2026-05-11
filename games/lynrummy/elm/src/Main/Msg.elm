@@ -8,10 +8,9 @@ without cyclic imports.
 
 import Browser.Dom
 import Game.ActionLog exposing (ActionLogEntry)
-import Game.CardStack exposing (CardStack)
+import Game.CardStack exposing (CardStack, HandCard)
 import Game.Game exposing (GameState)
 import Game.Point exposing (Point)
-import Game.Rules.Card exposing (Card)
 import Http
 import Json.Encode as Encode
 import Time
@@ -53,7 +52,7 @@ import Time
 -}
 type Msg
     = MouseDownOnBoardCard { stack : CardStack, cardIndex : Int, point : Point, time : Int }
-    | MouseDownOnHandCard { card : Card, point : Point, time : Int }
+    | MouseDownOnHandCard { handCard : HandCard, point : Point }
     | MouseMove Point Int
     | MouseUp Point Int
     | BoardRectReceived (Result Browser.Dom.Error Browser.Dom.Element)

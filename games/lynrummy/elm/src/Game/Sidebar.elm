@@ -131,8 +131,8 @@ handCardAttrs drag hintedCards hc =
                 NotDragging ->
                     [ Events.on "mousedown"
                         (Decode.map
-                            (\( p, t ) -> MouseDownOnHandCard { card = hc.card, point = p, time = t })
-                            PointerInput.pointAndTimeDecoder
+                            (\p -> MouseDownOnHandCard { handCard = hc, point = p })
+                            PointerInput.pointDecoder
                         )
                     ]
 

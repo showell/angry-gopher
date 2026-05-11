@@ -2,7 +2,7 @@ module Game.PointerInput exposing
     ( cardMouseDown
     , mouseMoveDecoder
     , mouseUpDecoder
-    , pointAndTimeDecoder
+    , pointDecoder
     )
 
 {-| Pointer-event decoders + the board-card mousedown attr
