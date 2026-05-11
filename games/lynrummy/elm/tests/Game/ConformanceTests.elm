@@ -18,7 +18,6 @@ import Game.CardStack as CardStack exposing (BoardCardState(..), BoardLocation, 
 import Game.ConformanceDsl as Dsl
 import Game.DslContent
 import Game.HandGesture as HandGesture
-import Game.Drag exposing (DragState(..))
 import Game.Physics.BoardGeometry as BoardGeometry
     exposing
         ( BoardGeometryStatus(..)
@@ -34,6 +33,7 @@ import Game.GameEvent as GameEvent exposing (GameEvent)
 import Game.Hand as Hand
 import Game.Rules.Referee as Referee exposing (RefereeStage(..))
 import Game.Rules.StackType as StackType
+import Game.Status as Status
 import Main.Msg as Msg
 import Main.Play as Play
 import Main.State as State
@@ -1559,25 +1559,27 @@ verifyShiftEqualsDelta sc stack cardIndex =
     of
         ( Just mousedown, Just delta ) ->
             let
-                afterDown =
-                    withBoardCardDrag stack cardIndex mousedown (modelWithStack stack)
+                before =
+                    BoardGesture.startBoardDragInfo
+                        { stack = stack
+                        , cardIndex = cardIndex
+                        , cursor = mousedown
+                        , tMs = 0
+                        , board = [ stack ]
+                        }
 
-                afterMove =
-                    applyBoardCardMouseMove
+                ( after, _ ) =
+                    BoardGesture.mouseMove
                         { x = mousedown.x + delta.x, y = mousedown.y + delta.y }
                         100
-                        afterDown
+                        before
+                        idleStatus
             in
-            case ( afterDown.drag, afterMove.drag ) of
-                ( DraggingBoardCard before, DraggingBoardCard after ) ->
-                    Expect.equal
-                        { left = before.floaterTopLeft.left + delta.x
-                        , top = before.floaterTopLeft.top + delta.y
-                        }
-                        after.floaterTopLeft
-
-                _ ->
-                    Expect.fail "expected both states to be DraggingBoardCard"
+            Expect.equal
+                { left = before.floaterTopLeft.left + delta.x
+                , top = before.floaterTopLeft.top + delta.y
+                }
+                after.floaterTopLeft
 
         _ ->
             Expect.fail "floater_top_left shift_equals_delta missing mousedown or mousemove_delta"
@@ -1593,29 +1595,27 @@ verifyGrabPointInvariant sc stack =
     of
         ( Just a, Just bpt, Just delta ) ->
             let
-                model =
-                    modelWithStack stack
-
                 shiftFor down =
                     let
-                        afterDown =
-                            withBoardCardDrag stack 0 down model
-
-                        afterMove =
-                            applyBoardCardMouseMove
-                                { x = down.x + delta.x, y = down.y + delta.y }
-                                100
-                                afterDown
-                    in
-                    case ( afterDown.drag, afterMove.drag ) of
-                        ( DraggingBoardCard before, DraggingBoardCard after ) ->
-                            Just
-                                { x = after.floaterTopLeft.left - before.floaterTopLeft.left
-                                , y = after.floaterTopLeft.top - before.floaterTopLeft.top
+                        before =
+                            BoardGesture.startBoardDragInfo
+                                { stack = stack
+                                , cardIndex = 0
+                                , cursor = down
+                                , tMs = 0
+                                , board = [ stack ]
                                 }
 
-                        _ ->
-                            Nothing
+                        ( after, _ ) =
+                            BoardGesture.mouseMove
+                                { x = down.x + delta.x, y = down.y + delta.y }
+                                100
+                                before
+                                idleStatus
+                    in
+                    { x = after.floaterTopLeft.left - before.floaterTopLeft.left
+                    , y = after.floaterTopLeft.top - before.floaterTopLeft.top
+                    }
             in
             Expect.equal (shiftFor a) (shiftFor bpt)
 
@@ -1627,66 +1627,23 @@ verifyInitialFloaterAt : Dsl.Scenario -> CardStack -> Int -> BoardLocation -> Ex
 verifyInitialFloaterAt sc stack cardIndex expected =
     case scalarPoint "mousedown" sc of
         Just mousedown ->
-            let
-                afterDown =
-                    withBoardCardDrag stack cardIndex mousedown (modelWithStack stack)
-            in
-            case afterDown.drag of
-                DraggingBoardCard d ->
-                    d.floaterTopLeft |> Expect.equal expected
-
-                _ ->
-                    Expect.fail "expected DraggingBoardCard state"
+            (BoardGesture.startBoardDragInfo
+                { stack = stack
+                , cardIndex = cardIndex
+                , cursor = mousedown
+                , tMs = 0
+                , board = [ stack ]
+                }
+            ).floaterTopLeft
+                |> Expect.equal expected
 
         Nothing ->
             Expect.fail "floater_top_left initial_floater_at missing mousedown"
 
 
-modelWithStack : CardStack -> State.Model
-modelWithStack stack =
-    let
-        base =
-            State.baseModel
-
-        gs0 =
-            base.gameState
-    in
-    { base | gameState = { gs0 | board = [ stack ] } }
-
-
-{-| Seed a model with an in-flight board-card drag at `cursor`.
-Mirror of what `update`'s `MouseDownOnBoardCard` arm does. -}
-withBoardCardDrag : CardStack -> Int -> Point -> State.Model -> State.Model
-withBoardCardDrag stack cardIndex cursor model =
-    { model
-        | drag =
-            DraggingBoardCard
-                (BoardGesture.startBoardDragInfo
-                    { stack = stack
-                    , cardIndex = cardIndex
-                    , cursor = cursor
-                    , tMs = 0
-                    , board = model.gameState.board
-                    }
-                )
-    }
-
-
-{-| Advance an in-flight board-card drag by a mousemove. Mirror
-of `update`'s `MouseMove` arm restricted to the `DraggingBoardCard`
-case. Tests guarantee the drag is board-card. -}
-applyBoardCardMouseMove : Point -> Int -> State.Model -> State.Model
-applyBoardCardMouseMove pos tMs model =
-    case model.drag of
-        DraggingBoardCard d ->
-            let
-                ( nextD, _ ) =
-                    BoardGesture.mouseMove pos tMs d model.status
-            in
-            { model | drag = DraggingBoardCard nextD }
-
-        _ ->
-            model
+idleStatus : Status.StatusMessage
+idleStatus =
+    { text = "", kind = Status.Inform }
 
 
 expectLocField : String -> Dsl.Scenario -> Maybe BoardLocation
