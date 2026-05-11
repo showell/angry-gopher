@@ -63,20 +63,22 @@ order (Heart, Spade, Diamond, Club), each row sorted by value
 ascending. Empty suit rows are skipped. Faithful port of
 `PhysicalHand.populate` in `game.ts:1589`.
 
-Per-card decoration is computed at the leaf (`viewPlacedHandCard`)
-from three orthogonal inputs threaded through `config`: source
-card (for opacity dim), mousedown builder (for pointer events),
-and hinted-cards list (for hint highlight).
+Per-card decoration is computed at the leaf
+(`viewPlacedHandCard`) from three orthogonal inputs:
+`sourceCard` (for the dim overlay), `hintedCards` (for the
+hint highlight), and `cardEventAttrs` (per-card interaction
+attrs — mousedown when idle, `pointer-events: none` while a
+drag is in flight; the host bakes that decision into the
+closure).
 
 -}
 viewHand :
-    { sourceCard : Maybe Card
-    , cardMouseDown : Maybe (HandCard -> List (Html.Attribute msg))
-    , hintedCards : List Card
-    }
+    Maybe Card
+    -> List Card
+    -> (HandCard -> List (Html.Attribute msg))
     -> Hand
     -> Html msg
-viewHand config hand =
+viewHand sourceCard hintedCards cardEventAttrs hand =
     let
         -- The hand DSL encoder consumes the same `sortIntoSuitRows`
         -- helper. Shared canonicalization keeps the on-screen
@@ -103,7 +105,7 @@ viewHand config hand =
         , style "width" (String.fromInt (240 - 20) ++ "px")
         , style "height" (String.fromInt containerHeight ++ "px")
         ]
-        (List.map (viewPlacedHandCard config) slots)
+        (List.map (viewPlacedHandCard sourceCard hintedCards cardEventAttrs) slots)
 
 
 suitToRowIdx : Suit -> Int
@@ -123,13 +125,12 @@ suitToRowIdx suit =
 
 
 viewPlacedHandCard :
-    { sourceCard : Maybe Card
-    , cardMouseDown : Maybe (HandCard -> List (Html.Attribute msg))
-    , hintedCards : List Card
-    }
+    Maybe Card
+    -> List Card
+    -> (HandCard -> List (Html.Attribute msg))
     -> { row : Int, col : Int, handCard : HandCard }
     -> Html msg
-viewPlacedHandCard config slot =
+viewPlacedHandCard sourceCard hintedCards cardEventAttrs slot =
     let
         hc =
             slot.handCard
@@ -152,36 +153,22 @@ viewPlacedHandCard config slot =
             , id (HandLayout.handCardDomId hc.card)
             ]
 
-        -- Three orthogonal per-card concerns: hint highlight
-        -- (background override), source dim (opacity), pointer
-        -- events (mousedown when idle, otherwise disabled).
-        -- `pointer-events: none` for the source card falls out
-        -- for free — a hand drag implies cardMouseDown is
-        -- Nothing.
         hintAttrs =
-            if List.any (\c -> c == hc.card) config.hintedCards then
+            if List.any (\c -> c == hc.card) hintedCards then
                 [ style "background-color" "lightgreen" ]
 
             else
                 []
 
         sourceDimAttrs =
-            if config.sourceCard == Just hc.card then
+            if sourceCard == Just hc.card then
                 [ style "opacity" "0.35" ]
 
             else
                 []
-
-        pointerAttrs =
-            case config.cardMouseDown of
-                Just attrs ->
-                    attrs hc
-
-                Nothing ->
-                    [ style "pointer-events" "none" ]
     in
     StackView.viewCardWithAttrs
-        (positionedAttrs ++ hintAttrs ++ sourceDimAttrs ++ pointerAttrs)
+        (positionedAttrs ++ hintAttrs ++ sourceDimAttrs ++ cardEventAttrs hc)
         hc.card
 
 

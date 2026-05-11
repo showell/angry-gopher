@@ -199,19 +199,24 @@ sidebarInfo model drag =
                 _ ->
                     Nothing
 
-        cardMouseDown =
+        -- Idle: mousedown handler attaches. Drag in flight:
+        -- pointer-events:none so the in-flight drag isn't
+        -- re-triggered by stray events. The host bakes that
+        -- decision into the closure; downstream just calls it
+        -- per card.
+        cardEventAttrs =
             case drag of
                 NotDragging ->
-                    Just (PointerInput.handCardMouseDown MouseDownOnHandCard)
+                    PointerInput.handCardMouseDown MouseDownOnHandCard
 
                 _ ->
-                    Nothing
+                    \_ -> [ style "pointer-events" "none" ]
     in
     case model.replayState of
         Just rs ->
             { gameState = rs.gameState
             , sourceCard = sourceCard
-            , cardMouseDown = cardMouseDown
+            , cardEventAttrs = cardEventAttrs
             , hintedCards = []
             , canUndo = False
             , replayControl =
@@ -225,7 +230,7 @@ sidebarInfo model drag =
         Nothing ->
             { gameState = model.gameState
             , sourceCard = sourceCard
-            , cardMouseDown = cardMouseDown
+            , cardEventAttrs = cardEventAttrs
             , hintedCards = model.hintedCards
             , canUndo = canUndoThisTurn model.actionLog
             , replayControl = Sidebar.ShowReplay
