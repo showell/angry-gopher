@@ -394,6 +394,14 @@ view model =
 
                 Nothing ->
                     ( model.board, model.drag )
+
+        boardFloaters =
+            case drag of
+                DraggingBoardCard d ->
+                    [ Drag.renderBoardFloater d [ style "position" "absolute" ] ]
+
+                _ ->
+                    []
     in
     div
         [ style "font-family" "system-ui, sans-serif" ]
@@ -419,6 +427,7 @@ view model =
                 , drag = drag
                 , gameId = model.gameId
                 , cardMouseDown = PointerInput.cardMouseDown MouseDownOnBoardCard
+                , boardFloaters = boardFloaters
                 }
             ]
         ]

@@ -12,10 +12,8 @@ per replay-start to stay honest under scrolling.
 -}
 
 import Game.BoardView as BoardView
-import Game.CardStack exposing (CardStack)
-import Game.Drag as Drag
+import Game.Drag as Drag exposing (DragState(..))
 import Game.Physics.BoardGeometry as BoardGeometry
-import Game.Physics.GestureArbitration as GA
 import Game.PointerInput as PointerInput
 import Game.Popup as Popup
 import Game.Replay.HandDragAnimate as HandDragAnimate
@@ -43,6 +41,28 @@ view model =
     -- div. Drag floater and popup stay `position: fixed`
     -- (rendered inside `boardColumn` / here) — they're
     -- viewport-level overlays.
+    let
+        ( board, drag ) =
+            case model.replayState of
+                Just rs ->
+                    ( rs.gameState.board, replayDrag rs )
+
+                Nothing ->
+                    ( model.gameState.board, model.drag )
+
+        -- The board floater is a `position: absolute` child of
+        -- the board shell (which is `position: relative`), so it
+        -- lives INSIDE the board column. Dispatch on drag once
+        -- here; pass the resulting nodes down so BoardView never
+        -- has to inspect drag for floater purposes.
+        boardFloaters =
+            case drag of
+                DraggingBoardCard d ->
+                    [ Drag.renderBoardFloater d [ style "position" "absolute" ] ]
+
+                _ ->
+                    []
+    in
     div
         [ style "font-family" "system-ui, sans-serif"
         , style "position" "relative"
@@ -70,7 +90,15 @@ view model =
             , style "top" (String.fromInt BoardGeometry.boardViewportTop ++ "px")
             , style "left" (String.fromInt BoardGeometry.boardViewportLeft ++ "px")
             ]
-            [ BoardView.boardColumn (boardColumnInput model) ]
+            [ BoardView.boardColumn
+                { board = board
+                , boardRect = model.boardRect
+                , drag = drag
+                , gameId = model.gameId
+                , cardMouseDown = PointerInput.cardMouseDown MouseDownOnBoardCard
+                , boardFloaters = boardFloaters
+                }
+            ]
         , Popup.viewPopup PopupOk model.popup
         ]
 
@@ -110,33 +138,6 @@ sidebarInfo model =
             , canUndo = canUndoThisTurn model.actionLog
             , replayControl = Sidebar.ShowReplay
             }
-
-
-boardColumnInput :
-    Model
-    ->
-        { board : List CardStack
-        , boardRect : Maybe GA.Rect
-        , drag : Drag.DragState
-        , gameId : String
-        , cardMouseDown : CardStack -> Int -> List (Html.Attribute Msg)
-        }
-boardColumnInput model =
-    let
-        ( board, drag ) =
-            case model.replayState of
-                Just rs ->
-                    ( rs.gameState.board, replayDrag rs )
-
-                Nothing ->
-                    ( model.gameState.board, model.drag )
-    in
-    { board = board
-    , boardRect = model.boardRect
-    , drag = drag
-    , gameId = model.gameId
-    , cardMouseDown = PointerInput.cardMouseDown MouseDownOnBoardCard
-    }
 
 
 {-| The drag state the View should render during a replay.

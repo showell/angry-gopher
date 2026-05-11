@@ -71,32 +71,20 @@ boardWithWings :
     , drag : DragState
     , gameId : String
     , cardMouseDown : CardStack -> Int -> List (Html.Attribute msg)
+    , boardFloaters : List (Html msg)
     }
     -> Html msg
-boardWithWings { board, boardRect, drag, gameId, cardMouseDown } =
-    boardShellWith
-        [ id (boardDomIdFor gameId) ]
-        (boardChildren board boardRect drag cardMouseDown)
-
-
-boardChildren :
-    List CardStack
-    -> Maybe GA.Rect
-    -> DragState
-    -> (CardStack -> Int -> List (Html.Attribute msg))
-    -> List (Html msg)
-boardChildren board maybeBoardRect drag cardMouseDown =
+boardWithWings { board, boardRect, drag, gameId, cardMouseDown, boardFloaters } =
     let
         stackNodes =
             List.map (viewStackForBoard drag cardMouseDown) board
 
         wingNodes =
-            WingView.getWingNodes drag maybeBoardRect
-
-        boardOverlayNodes =
-            getOverlayNodes drag
+            WingView.getWingNodes drag boardRect
     in
-    stackNodes ++ wingNodes ++ boardOverlayNodes
+    boardShellWith
+        [ id (boardDomIdFor gameId) ]
+        (stackNodes ++ wingNodes ++ boardFloaters)
 
 
 viewStackForBoard :
@@ -130,37 +118,17 @@ viewStackForBoard drag cardMouseDown stack =
 
 
 
--- DRAG OVERLAYS
-
-
-{-| Board-frame drag overlay nodes: a DOM child of the board
-shell (which is `position: relative`) with `position: absolute`
-and board-frame top/left. Renders intra-board drags. Empty list
-when no overlay applies — keeps the caller's concatenation
-straightforward.
-
-The viewport-frame counterpart for hand drags is
-`Game.Drag.draggedOverlay`.
--}
-getOverlayNodes : DragState -> List (Html msg)
-getOverlayNodes drag =
-    case drag of
-        DraggingBoardCard d ->
-            [ Drag.renderBoardFloater d [ style "position" "absolute" ] ]
-
-        DraggingHandCard _ ->
-            []
-
-        NotDragging ->
-            []
-
-
-
 -- BOARD COLUMN
 --
--- Top-level board column: heading + drag-aware board + the
--- viewport-frame floater overlay (for hand-card drags). One
--- entry-point for callers (Main.View, future puzzle host).
+-- Top-level board column: drag-aware board (board-frame stack
+-- nodes + wing targets + caller-supplied board floater nodes)
+-- plus the viewport-frame floater overlay for hand-card drags.
+--
+-- `boardFloaters` is built and dispatched by the caller — the
+-- board-frame floater is a `position: absolute` DOM child of
+-- the (`position: relative`) board shell, so it has to be
+-- threaded in alongside the stack nodes. The viewport-frame
+-- hand floater lives at this level via `Drag.draggedOverlay`.
 --
 -- Msg-polymorphic: callers pass their own `cardMouseDown`
 -- attr-builder so the board widget itself never needs to know
@@ -173,6 +141,7 @@ boardColumn :
     , drag : DragState
     , gameId : String
     , cardMouseDown : CardStack -> Int -> List (Html.Attribute msg)
+    , boardFloaters : List (Html msg)
     }
     -> Html msg
 boardColumn input =
