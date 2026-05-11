@@ -123,7 +123,7 @@ removeFirstMatch target cards =
 {-| Group a hand into display rows — one row per non-empty
 suit, in `Card.allSuits` order (Heart, Spade, Diamond, Club),
 each row sorted ascending by value. The hand UI
-(`Game.View.viewHand`) and the hand DSL encoder
+(`Game.HandView.viewHand`) and the hand DSL encoder
 (`Game.HandDsl.formatHand`) both consume this so the layout
 is byte-canonical across surfaces.
 -}

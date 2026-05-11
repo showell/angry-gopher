@@ -19,7 +19,7 @@ not a state the View needs to know about.
 import Game.CardStack as CardStack exposing (CardStack)
 import Game.Physics.WingOracle exposing (WingId)
 import Game.StackView as StackView
-import Game.View exposing (navy)
+import Game.Colors exposing (navy)
 import Game.WingView as WingView
 import Html exposing (Html, div)
 import Html.Attributes exposing (id, style)

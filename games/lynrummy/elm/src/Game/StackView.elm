@@ -8,8 +8,8 @@ module Game.StackView exposing
 {-| HTML rendering primitives for cards and card-stacks.
 
 Stack-shape only — no drag state, no wings, no board shell.
-Composers (`Game.BoardView`, `Game.View`'s hand layout) build
-on top of these.
+Composers (`Game.BoardView`, `Game.HandView`) build on top of
+these.
 
 -}
 

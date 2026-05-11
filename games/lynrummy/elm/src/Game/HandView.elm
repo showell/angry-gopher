@@ -1,17 +1,15 @@
-module Game.View exposing
-    ( navy
-    , viewHand
+module Game.HandView exposing
+    ( viewHand
     , viewHandHeading
     )
 
-{-| Section headings, hand layout, and shared color constants.
+{-| The hand widget — rows of suits, with per-card decoration
+(hint highlight, source dim, mousedown / pointer-events
+toggle) computed at the leaf `viewPlacedHandCard`. Parallel to
+`Game.BoardView` on the board side.
 
-Stack and card rendering moved to `Game.StackView`; wing
-rendering and hover-detection moved to `Game.WingView`; the
-board shell + drag-aware composition moved to
-`Game.BoardView`. This module is the residual: hand rendering
-(rows of suits) plus the heading helpers and the navy color
-shared across surfaces.
+Full-game-specific: this module references `Main.Msg.MouseDownOnHandCard`
+directly. Puzzles have no hand, so they never call into here.
 
 -}
 
@@ -22,22 +20,14 @@ import Game.CardStack exposing (HandCard, HandCardState(..))
 import Game.Hand as Hand exposing (Hand)
 import Game.HandLayout as HandLayout
 import Game.StackView as StackView
+import Game.Colors exposing (navy)
 import Html exposing (Html, div, text)
 import Html.Attributes exposing (id, style)
 import Main.Msg exposing (Msg(..))
 
 
 
--- COLOR
-
-
-navy : String
-navy =
-    "#000080"
-
-
-
--- HEADINGS
+-- HEADING
 
 
 viewHandHeading : Html msg
@@ -70,7 +60,7 @@ Per-card decoration is computed at the leaf
 (false while any drag is in flight), `sourceCard` (the dim
 overlay's target, if any), and `hintedCards` (hint highlight).
 The mousedown handler attaches `Main.Msg.MouseDownOnHandCard`
-directly — this module is full-game-specific.
+directly.
 
 -}
 viewHand :

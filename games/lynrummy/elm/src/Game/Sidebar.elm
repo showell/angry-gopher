@@ -9,10 +9,11 @@ layout, turn controls, and the small button styles.
 -}
 
 import Game.Button as Button
+import Game.Colors as Colors
 import Game.Hand exposing (Hand)
+import Game.HandView as HandView
 import Game.Rules.Card exposing (Card)
 import Game.Game exposing (GameState)
-import Game.View as View
 import Html exposing (Html, div)
 import Html.Attributes exposing (style)
 import Main.Msg exposing (Msg(..))
@@ -101,8 +102,8 @@ deckRemainingLine deckCount =
 viewActivePlayerRow : ActivePlayerInfo -> Int -> Hand -> Html Msg
 viewActivePlayerRow info idx hand =
     playerRowShell { isActive = True, idx = idx }
-        [ View.viewHandHeading
-        , View.viewHand info.handIsInteractive info.sourceCard info.hintedCards hand
+        [ HandView.viewHandHeading
+        , HandView.viewHand info.handIsInteractive info.sourceCard info.hintedCards hand
         , viewTurnControls { canUndo = info.canUndo, replayControl = info.replayControl }
         ]
 
@@ -130,7 +131,7 @@ playerRowShell { isActive, idx } body =
 
         nameColor =
             if isActive then
-                View.navy
+                Colors.navy
 
             else
                 "#666"

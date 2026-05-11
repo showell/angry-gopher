@@ -16,7 +16,7 @@ Msg, so this module doesn't need to know about `Main.Msg`.
 
 import Game.Game exposing (CompleteTurnOutcome)
 import Game.PlayerTurn exposing (CompleteTurnResult(..))
-import Game.View as View
+import Game.Colors as Colors
 import Html exposing (Html, div)
 import Html.Attributes exposing (style)
 import Html.Events as Events
@@ -111,7 +111,7 @@ viewPopup dismissMsg maybePopup =
                 ]
                 [ div
                     [ style "background" "white"
-                    , style "border" ("1px solid " ++ View.navy)
+                    , style "border" ("1px solid " ++ Colors.navy)
                     , style "border-radius" "12px"
                     , style "padding" "24px 28px"
                     , style "max-width" "420px"
@@ -119,7 +119,7 @@ viewPopup dismissMsg maybePopup =
                     ]
                     [ div
                         [ style "font-weight" "bold"
-                        , style "color" View.navy
+                        , style "color" Colors.navy
                         , style "font-size" "15px"
                         , style "margin-bottom" "10px"
                         ]
@@ -134,7 +134,7 @@ viewPopup dismissMsg maybePopup =
                         [ Html.text body ]
                     , Html.button
                         [ Events.onClick dismissMsg
-                        , style "background" View.navy
+                        , style "background" Colors.navy
                         , style "color" "white"
                         , style "border" "none"
                         , style "padding" "8px 20px"

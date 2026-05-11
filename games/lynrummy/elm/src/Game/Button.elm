@@ -15,7 +15,7 @@ back-channeling into full-game concerns.
 
 -}
 
-import Game.View exposing (navy)
+import Game.Colors exposing (navy)
 import Html exposing (Html)
 import Html.Attributes as Attr exposing (href, style)
 import Html.Events as Events

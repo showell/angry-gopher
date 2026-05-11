@@ -9,7 +9,7 @@ module Game.HandDsl exposing
     A♠ 3♠ K♠
     7♣ 9♣
 
-is the visible card content of `Game.View.viewHand` collapsed
+is the visible card content of `Game.HandView.viewHand` collapsed
 into text — one indented line per non-empty suit (suits in UI
 order: Heart, Spade, Diamond, Club; cards sorted ascending by
 value). Empty hands emit zero rows.
