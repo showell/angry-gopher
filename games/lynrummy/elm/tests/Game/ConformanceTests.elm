@@ -1518,8 +1518,8 @@ verifyClickArbitration sc =
 --     single mouseMove.
 --   grab_point_invariant: two distinct mousedown grab points
 --     produce the same floater shift for the same delta.
---   initial_floater_at: after startBoardCardDrag, the floater
---     equals the source stack's loc.
+--   initial_floater_at: BoardGesture.startBoardDragInfo's
+--     floaterTopLeft equals the source stack's loc.
 
 
 verifyFloaterTopLeft : Dsl.Scenario -> Expect.Expectation
