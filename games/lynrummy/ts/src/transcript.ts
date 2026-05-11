@@ -39,6 +39,7 @@ import {
   completeTurnDsl,
   type Stack as DslStack,
 } from "./wire_action_dsl.ts";
+import { moveStackPath, mergeStackPath } from "./wire_path_synth.ts";
 import { formatGameState } from "./initial_state_dsl.ts";
 import {
   type JsonCard,
@@ -278,7 +279,15 @@ export function writeSession(
 /** Render one primitive as a wire-DSL line. The dispatch here is
  *  the load-bearing one: each branch has earned knowledge of the
  *  action's payload shape, and calls the specific encoder with
- *  the exact fields it needs. */
+ *  the exact fields it needs.
+ *
+ *  board-drag actions (`merge_stack`, `move_stack`) carry a path:
+ *  the replay's `BoardDragAnimate.start` requires a non-empty
+ *  path to seed the floater. The agent didn't actually drag,
+ *  so we synthesize a 2-point linear path: source loc at t=0,
+ *  destination at t=300ms. The endpoints are visual only — the
+ *  rule application at end-of-animation reads source/target/side
+ *  from the action itself, not the path. */
 function primitiveDsl(
   seq: number,
   prim: Primitive,
@@ -287,13 +296,17 @@ function primitiveDsl(
   switch (prim.action) {
     case "split":
       return splitDsl(seq, boardStackForDsl(sim[prim.stackIndex]!), prim.cardIndex);
-    case "merge_stack":
+    case "merge_stack": {
+      const source = boardStackForDsl(sim[prim.sourceStack]!);
+      const target = boardStackForDsl(sim[prim.targetStack]!);
       return mergeStackDsl(
         seq,
-        boardStackForDsl(sim[prim.sourceStack]!),
-        boardStackForDsl(sim[prim.targetStack]!),
+        source,
+        target,
         prim.side,
+        mergeStackPath(source, target, prim.side),
       );
+    }
     case "merge_hand":
       return mergeHandDsl(
         seq,
@@ -303,12 +316,10 @@ function primitiveDsl(
       );
     case "place_hand":
       return placeHandDsl(seq, prim.handCard, prim.loc);
-    case "move_stack":
-      return moveStackDsl(
-        seq,
-        boardStackForDsl(sim[prim.stackIndex]!),
-        prim.newLoc,
-      );
+    case "move_stack": {
+      const stack = boardStackForDsl(sim[prim.stackIndex]!);
+      return moveStackDsl(seq, stack, prim.newLoc, moveStackPath(stack, prim.newLoc));
+    }
   }
 }
 
