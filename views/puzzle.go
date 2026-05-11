@@ -198,13 +198,18 @@ func puzzlePage(w http.ResponseWriter) {
 		return
 	}
 
-	flags := map[string]any{
-		"session_id":    id,
-		"initial_board": boardDSL,
-	}
-	flagsJSON, err := json.Marshal(flags)
+	// Flag is one DSL string — `session_id:` scalar then a
+	// `board:` block. Elm's Game.PuzzleFlagDsl parses it whole.
+	// Same single-string shape the resume bundle uses for full
+	// games, so the JS boundary carries the same canonical text.
+	flagDSL := fmt.Sprintf(
+		"session_id: %d\n\nboard:\n%s\n",
+		id,
+		indentLines(boardDSL),
+	)
+	flagJSON, err := json.Marshal(flagDSL)
 	if err != nil {
-		http.Error(w, "encode flags: "+err.Error(), http.StatusInternalServerError)
+		http.Error(w, "encode flag: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -220,5 +225,5 @@ func puzzlePage(w http.ResponseWriter) {
 <script>
   Elm.Puzzle.init({ node: document.getElementById("root"), flags: %s });
 </script>
-</body></html>`, flagsJSON)
+</body></html>`, flagJSON)
 }

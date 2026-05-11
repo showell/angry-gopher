@@ -28,7 +28,7 @@ import Browser.Dom
 import Browser.Events
 import Game.ActionLog as ActionLog exposing (ActionLogEntry)
 import Game.BoardDrag as BoardDrag
-import Game.BoardDsl as BoardDsl
+import Game.PuzzleFlagDsl as PuzzleFlagDsl
 import Game.BoardGesture as BoardGesture
 import Game.BoardView as BoardView
 import Game.Button as Button
@@ -87,19 +87,19 @@ type Msg
 
 flagsDecoder : Decode.Decoder DecodedFlags
 flagsDecoder =
-    Decode.map2 DecodedFlags
-        (Decode.field "session_id" Decode.int)
-        (Decode.field "initial_board" Decode.string
-            |> Decode.andThen
-                (\dsl ->
-                    case BoardDsl.parseBoard dsl of
-                        Ok stacks ->
-                            Decode.succeed stacks
+    Decode.string
+        |> Decode.andThen
+            (\dsl ->
+                case PuzzleFlagDsl.parsePuzzleFlag dsl of
+                    Ok flag ->
+                        Decode.succeed
+                            { sessionId = flag.sessionId
+                            , initialBoard = flag.board
+                            }
 
-                        Err msg ->
-                            Decode.fail ("initial_board DSL: " ++ msg)
-                )
-        )
+                    Err msg ->
+                        Decode.fail msg
+            )
 
 
 init : Decode.Value -> ( Model, Cmd Msg )
