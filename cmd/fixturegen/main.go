@@ -14,7 +14,6 @@ package main
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -308,25 +307,22 @@ type Card struct {
 
 // --- Entry point ---
 
-const (
-	elmOutPath  = "./games/lynrummy/elm/tests/Game/DslConformanceTest.elm"
-	jsonOutPath = "./games/lynrummy/conformance/fixtures.json"
-)
+const elmOutPath = "./games/lynrummy/elm/tests/Game/DslConformanceTest.elm"
 
 // --- Op registry ---
 //
 // One declaration per scenario op. To add a new op:
 //
 //   1. Append an OpKind row below.
-//   2. Implement the per-target emitter functions you flagged
-//      true (Elm). The TS runner reads JSON fixtures at runtime —
-//      add a dispatch entry in
-//      games/lynrummy/ts/test/test_engine_conformance.ts.
+//   2. Implement the Elm emitter function if Elm=true. Ops
+//      without an Elm emitter generate an `Expect.pass` body
+//      in the Elm test runner — for TS-only ops the real test
+//      lives in games/lynrummy/ts/test/test_engine_conformance.ts
+//      (which parses the .dsl files natively).
 //   3. If the op needs new scalar / block / expectation fields,
 //      extend the parser (applyScalarField / applyBlockField /
 //      parseExpectBlock) and the AST struct (Scenario /
-//      Expectation), plus the JSON shape (jsonScenario /
-//      jsonExpect / toJSONScenario) if the op is TS:true.
+//      Expectation).
 //
 // fixturegen verifies at startup that every op encountered in
 // the .dsl files is registered here, so a forgotten
@@ -337,7 +333,6 @@ const (
 type OpKind struct {
 	Name    string
 	Elm     bool                             // emit an Elm test stub for this op
-	TS      bool                             // include in conformance fixtures.json (TS reads it)
 	EmitElm func(*strings.Builder, Scenario) // body of the generated Elm test thunk (Elm=true)
 }
 
@@ -357,16 +352,13 @@ var opRegistry = []OpKind{
 	},
 	{
 		Name: "enumerate_moves",
-		TS:   true,
 	},
 	{
 		Name: "solve",
-		TS:   true,
 	},
 	{
 		Name:    "find_open_loc",
 		Elm:     true,
-		TS:      true,
 		EmitElm: elmFindOpenLoc,
 	},
 	{
@@ -475,7 +467,6 @@ var opRegistry = []OpKind{
 		// TS-only: no Elm hint-for-hand layer. Tests
 		// hand_play.findPlay + formatHint end-to-end.
 		Name: "hint_for_hand",
-		TS:   true,
 	},
 }
 
@@ -544,9 +535,6 @@ func main() {
 	if err := emitElm(all, elmOutPath); err != nil {
 		die(fmt.Errorf("elm emit: %w", err))
 	}
-	if err := emitJSON(all, jsonOutPath); err != nil {
-		die(fmt.Errorf("json emit: %w", err))
-	}
 
 	// Idempotence: regen and diff; a clean generator never produces
 	// different output for the same input.
@@ -554,7 +542,7 @@ func main() {
 		die(fmt.Errorf("regen not idempotent: %w", err))
 	}
 
-	fmt.Printf("Emitted %d scenarios → Elm test file + JSON fixtures (idempotent).\n", len(all))
+	fmt.Printf("Emitted %d scenarios → Elm test file (idempotent).\n", len(all))
 }
 
 func die(err error) {
@@ -578,23 +566,12 @@ func checkIdempotence(all []Scenario) error {
 	if err != nil {
 		return err
 	}
-	originalJSON, err := os.ReadFile(jsonOutPath)
-	if err != nil {
-		return err
-	}
 	if err := emitElm(all, elmOutPath); err != nil {
 		return err
 	}
-	if err := emitJSON(all, jsonOutPath); err != nil {
-		return err
-	}
 	afterElm, _ := os.ReadFile(elmOutPath)
-	afterJSON, _ := os.ReadFile(jsonOutPath)
 	if !bytes.Equal(originalElm, afterElm) {
 		return fmt.Errorf("Elm output differs on second regen")
-	}
-	if !bytes.Equal(originalJSON, afterJSON) {
-		return fmt.Errorf("JSON output differs on second regen")
 	}
 	return nil
 }
@@ -2073,231 +2050,6 @@ func elmDeck(d int) string {
 
 func elmBoardState(s int) string {
 	return []string{"FirmlyOnBoard", "FreshlyPlayed", "FreshlyPlayedByLastPlayer"}[s]
-}
-
-// --- JSON emission (for TS, interpreted — no codegen) ---
-//
-// TS reads the JSON at runtime and dispatches per op. Only
-// scenarios whose op has TS:true are included; the Elm emitter
-// handles the rest.
-
-type jsonCard struct {
-	Value      int `json:"value"`
-	Suit       int `json:"suit"`
-	OriginDeck int `json:"origin_deck"`
-}
-
-type jsonBoardCard struct {
-	Card  jsonCard `json:"card"`
-	State int      `json:"state"`
-}
-
-type jsonHandCard struct {
-	Card  jsonCard `json:"card"`
-	State int      `json:"state"`
-}
-
-type jsonStack struct {
-	BoardCards []jsonBoardCard `json:"board_cards"`
-	Loc        jsonLoc         `json:"loc"`
-}
-
-type jsonLoc struct {
-	Top  int `json:"top"`
-	Left int `json:"left"`
-}
-
-type jsonSuggestion struct {
-	TrickID   string     `json:"trick_id"`
-	HandCards []jsonCard `json:"hand_cards"`
-}
-
-type jsonExpect struct {
-	Kind        string           `json:"kind"`
-	Suggestions []jsonSuggestion `json:"suggestions,omitempty"`
-	// Planner ops.
-	Yields          string `json:"yields,omitempty"`
-	NarrateContains string `json:"narrate_contains,omitempty"`
-	HintContains    string `json:"hint_contains,omitempty"`
-	// Solver op.
-	NoPlan     bool     `json:"no_plan,omitempty"`
-	PlanLength int      `json:"plan_length,omitempty"`
-	PlanLines  []string `json:"plan_lines,omitempty"`
-	// Geometry op.
-	Loc *jsonLoc `json:"loc,omitempty"`
-}
-
-type jsonScenario struct {
-	Name   string         `json:"name"`
-	Desc   string         `json:"desc"`
-	Op     string         `json:"op"`
-	Trick  string         `json:"trick,omitempty"`
-	Hand   []jsonHandCard `json:"hand"`
-	Board  []jsonStack    `json:"board"`
-	// Four-bucket state for `enumerate_moves`. Empty arrays for
-	// non-planner ops keep the JSON shape uniform.
-	Helper   []jsonStack `json:"helper,omitempty"`
-	Trouble  []jsonStack `json:"trouble,omitempty"`
-	Growing  []jsonStack `json:"growing,omitempty"`
-	Complete []jsonStack `json:"complete,omitempty"`
-	// Geometry op (`find_open_loc`).
-	Existing  []jsonStack `json:"existing,omitempty"`
-	CardCount int         `json:"card_count,omitempty"`
-	// Hint op (`hint_for_hand`). Flat label strings so the TS
-	// handler can call hand_play.findPlay directly.
-	HintHand  []string   `json:"hint_hand,omitempty"`
-	HintBoard [][]string `json:"hint_board,omitempty"`
-	HintSteps []string   `json:"hint_steps,omitempty"`
-	Expect    jsonExpect  `json:"expect"`
-}
-
-func emitJSON(scenarios []Scenario, outPath string) error {
-	var out []jsonScenario
-	for _, sc := range scenarios {
-		if op, ok := opByName[sc.Op]; !ok || !op.TS {
-			continue
-		}
-		out = append(out, toJSONScenario(sc))
-	}
-	if out == nil {
-		out = []jsonScenario{}
-	}
-	// Indent for humans — diffs should be readable.
-	bs, err := json.MarshalIndent(out, "", "  ")
-	if err != nil {
-		return err
-	}
-	bs = append(bs, '\n')
-	if err := os.MkdirAll(filepath.Dir(outPath), 0755); err != nil {
-		return err
-	}
-	return os.WriteFile(outPath, bs, 0644)
-}
-
-func toJSONScenario(sc Scenario) jsonScenario {
-	js := jsonScenario{
-		Name:      sc.Name,
-		Desc:      sc.Desc,
-		Op:        sc.Op,
-		Trick:     sc.Trick,
-		Hand:      toJSONHand(sc.Hand),
-		Board:     toJSONBoard(sc.Board),
-		Helper:    toJSONBoard(sc.Helper),
-		Trouble:   toJSONBoard(sc.Trouble),
-		Growing:   toJSONBoard(sc.Growing),
-		Complete:  toJSONBoard(sc.Complete),
-		Existing:  toJSONBoard(sc.Existing),
-		CardCount: sc.CardCount,
-		HintHand:  toHintHandLabels(sc.Hand),
-		HintBoard: toHintBoardLabels(sc.HintBoard),
-		HintSteps: sc.HintSteps,
-	}
-	js.Expect = jsonExpect{
-		Kind:            sc.Expect.Kind,
-		Yields:          sc.Expect.Planner.Yields,
-		NarrateContains: sc.Expect.Planner.NarrateContains,
-		HintContains:    sc.Expect.Planner.HintContains,
-		NoPlan:          sc.Expect.Solve.NoPlan,
-		PlanLength:      sc.Expect.Solve.PlanLength,
-		PlanLines:       sc.Expect.Solve.PlanLines,
-	}
-	if sc.Expect.Geometry.Loc != nil {
-		js.Expect.Loc = &jsonLoc{Top: sc.Expect.Geometry.Loc.Top, Left: sc.Expect.Geometry.Loc.Left}
-	}
-	for _, es := range sc.Expect.Suggestions {
-		js.Expect.Suggestions = append(js.Expect.Suggestions, jsonSuggestion{
-			TrickID:   es.TrickID,
-			HandCards: toJSONCards(es.HandCards),
-		})
-	}
-	return js
-}
-
-func toJSONHand(cs []Card) []jsonHandCard {
-	out := make([]jsonHandCard, 0, len(cs))
-	for _, c := range cs {
-		out = append(out, jsonHandCard{
-			Card:  jsonCard{Value: c.Value, Suit: c.Suit, OriginDeck: c.Deck},
-			State: 0,
-		})
-	}
-	return out
-}
-
-func toJSONBoard(ss []Stack) []jsonStack {
-	out := make([]jsonStack, 0, len(ss))
-	for _, s := range ss {
-		bcs := make([]jsonBoardCard, 0, len(s.Cards))
-		for _, c := range s.Cards {
-			bcs = append(bcs, jsonBoardCard{
-				Card:  jsonCard{Value: c.Value, Suit: c.Suit, OriginDeck: c.Deck},
-				State: c.BoardState,
-			})
-		}
-		out = append(out, jsonStack{BoardCards: bcs, Loc: jsonLoc{Top: s.Top, Left: s.Left}})
-	}
-	return out
-}
-
-func toJSONCards(cs []Card) []jsonCard {
-	out := make([]jsonCard, 0, len(cs))
-	for _, c := range cs {
-		out = append(out, jsonCard{Value: c.Value, Suit: c.Suit, OriginDeck: c.Deck})
-	}
-	return out
-}
-
-// toHintHandLabels converts a []Card to the label-string form used
-// by hint_for_hand JSON output (e.g. "3S:1", "4S"). The `:N` deck
-// suffix is included only when the deck is non-zero, matching the
-// card_label function in agent_prelude.
-func toHintHandLabels(cs []Card) []string {
-	if len(cs) == 0 {
-		return nil
-	}
-	out := make([]string, 0, len(cs))
-	for _, c := range cs {
-		out = append(out, cardLabel(c))
-	}
-	return out
-}
-
-// toHintBoardLabels converts a [][]Card (hint board) to [][]string.
-func toHintBoardLabels(stacks [][]Card) [][]string {
-	if len(stacks) == 0 {
-		return nil
-	}
-	out := make([][]string, 0, len(stacks))
-	for _, stack := range stacks {
-		row := make([]string, 0, len(stack))
-		for _, c := range stack {
-			row = append(row, cardLabel(c))
-		}
-		out = append(out, row)
-	}
-	return out
-}
-
-// cardLabel renders a Card in the unified DSL shorthand:
-// "<value><suit>" for deck 0, "<value><suit>'" for deck 1.
-// (Deck > 1 isn't a real game state — the double deck has only
-// decks 0 and 1 — but defend against it for sanity.)
-func cardLabel(c Card) string {
-	const ranks = "A23456789TJQK"
-	const suits = "CDSH"
-	v := c.Value
-	s := c.Suit
-	if v < 1 || v > 13 || s < 0 || s > 3 {
-		return "??"
-	}
-	base := string(ranks[v-1]) + string(suits[s])
-	if c.Deck == 1 {
-		return base + "'"
-	}
-	if c.Deck != 0 {
-		return base + "'" + strconv.Itoa(c.Deck)
-	}
-	return base
 }
 
 // --- Parser (unchanged) ---

@@ -13,14 +13,14 @@
 # is how orphaned type constructors survive undetected.
 #
 # Three steps:
-#   1. cmd/fixturegen — DSL → Elm test code + TS JSON fixtures.
-#      Surfaces registered-op drift loudly (per
-#      cmd/fixturegen/ADDING_AN_OP.md). TS+Elm now cover the
-#      contract; Go and Python targets are retired.
+#   1. cmd/fixturegen — DSL → Elm test code (the only remaining
+#      codegen target). Surfaces registered-op drift loudly (per
+#      cmd/fixturegen/ADDING_AN_OP.md). TS no longer routes
+#      through fixturegen — it parses .dsl natively now.
 #   2. TS conformance — runs the engine + leaf primitives + verb
 #      fixtures + physical_plan + replay walkthroughs + agent
-#      self-play (npm test). The TS-only DSLs have their own
-#      parsers and don't go through fixturegen.
+#      self-play (npm test). All TS tests parse their .dsl
+#      inputs directly via per-test or shared TS parsers.
 #   3. Elm check.sh — standalone type-checks, elm-test (700+),
 #      elm make, elm-review.
 #

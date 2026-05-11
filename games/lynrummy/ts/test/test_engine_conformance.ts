@@ -1,8 +1,8 @@
 // test_engine_conformance.ts — TS scenario-level conformance runner.
 //
-// Reads `conformance/fixtures.json` (the canonical JSON emitted by
-// `cmd/fixturegen` from the DSL scenarios) and runs the TS engine
-// against the `enumerate_moves` and `solve` ops:
+// Parses the .dsl scenarios natively via `conformance_dsl.ts` (no
+// fixtures.json hop) and runs the TS engine against the
+// `enumerate_moves` and `solve` ops:
 //
 //   - All `enumerate_moves` scenarios — assert the matching `yields`
 //     type (or `narrate_contains` / `hint_contains` substring) is
@@ -37,11 +37,33 @@ import { classifyBuckets, type Buckets, type RawBuckets } from "../src/buckets.t
 import { findPlay, formatHint } from "../src/hand_play.ts";
 import { classifyStack } from "../src/classified_card_stack.ts";
 import { findOpenLoc, type BoardStack } from "../src/geometry.ts";
+import { parseConformanceDsl } from "./conformance_dsl.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const FIXTURES_PATH = path.resolve(
-  __dirname, "../../conformance/fixtures.json");
+const SCENARIOS_DIR = path.resolve(__dirname, "../../conformance/scenarios");
+
+// DSL files that contain TS-routed ops (enumerate_moves, solve,
+// find_open_loc, hint_for_hand). The other DSLs are Elm-only or
+// have their own dedicated TS runners.
+const TS_ROUTED_DSLS = [
+  "baseline_board_81.dsl",
+  "hint_dirty_board.dsl",
+  "hint_game_seed42.dsl",
+  "place_stack.dsl",
+  "planner.dsl",
+  "planner_corpus.dsl",
+  "planner_corpus_extras.dsl",
+  "planner_mined.dsl",
+  "planner_puzzles.dsl",
+];
+
+const TS_ROUTED_OPS = new Set([
+  "enumerate_moves",
+  "solve",
+  "find_open_loc",
+  "hint_for_hand",
+]);
 
 interface BoardCard {
   card: { value: number; suit: number; origin_deck: number };
@@ -300,38 +322,23 @@ const TS_HANDLED_OPS = new Set<string>([
 // or don't admit at all.
 const TS_OUT_OF_SCOPE_OPS: Record<string, string> = {};
 
-/**
- * Refuse to run if any .dsl scenario file is newer than
- * fixtures.json. Without this check, an edit to a .dsl
- * combined with a forgotten fixturegen run silently tests
- * the OLD fixtures — confusing failures, wrong signal.
- */
-function assertFixturesFresh(): void {
-  const dslDir = path.resolve(__dirname, "../../conformance/scenarios");
-  if (!fs.existsSync(dslDir)) return;
-  const fixturesMtime = fs.statSync(FIXTURES_PATH).mtimeMs;
-  const stale: string[] = [];
-  for (const f of fs.readdirSync(dslDir)) {
-    if (!f.endsWith(".dsl")) continue;
-    const dslMtime = fs.statSync(path.join(dslDir, f)).mtimeMs;
-    if (dslMtime > fixturesMtime) stale.push(f);
+function loadScenarios(): Scenario[] {
+  const out: Scenario[] = [];
+  for (const dslName of TS_ROUTED_DSLS) {
+    const dslPath = path.join(SCENARIOS_DIR, dslName);
+    const text = fs.readFileSync(dslPath, "utf8");
+    const parsed = parseConformanceDsl(text);
+    for (const sc of parsed) {
+      if (TS_ROUTED_OPS.has(sc.op)) {
+        out.push(sc as unknown as Scenario);
+      }
+    }
   }
-  if (stale.length > 0) {
-    console.error(
-      `\nfixtures.json is stale — newer .dsl files: ${stale.join(", ")}\n` +
-      `Run \`go run ./cmd/fixturegen <dsls>\` (or \`ops/check-conformance\`) to regenerate.\n`,
-    );
-    process.exit(2);
-  }
+  return out;
 }
 
 function main(): void {
-  if (!fs.existsSync(FIXTURES_PATH)) {
-    console.error(`no conformance fixtures at ${FIXTURES_PATH}`);
-    process.exit(1);
-  }
-  assertFixturesFresh();
-  let scenarios: Scenario[] = JSON.parse(fs.readFileSync(FIXTURES_PATH, "utf8"));
+  let scenarios: Scenario[] = loadScenarios();
 
   // CLI parsing — order-insensitive: any non-flag arg is a name
   // substring filter; `--repair` switches into pin-rewrite mode.
@@ -439,7 +446,7 @@ function main(): void {
     console.log();
     console.log(`Rewriting ${repairs.size} pin block(s) in DSL files...`);
     rewriteDslPins(repairs);
-    console.log("Done. Now run `go run ./cmd/fixturegen ...` to refresh fixtures.json.");
+    console.log("Done.");
   }
 
   if (Object.keys(outOfScopeCounts).length > 0) {
