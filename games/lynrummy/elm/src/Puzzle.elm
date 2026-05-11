@@ -146,8 +146,21 @@ update msg model =
         MouseUp pos tMs ->
             handleMouseUp pos tMs model
 
-        BoardRectReceived result ->
-            ( boardRectReceived result model, Cmd.none )
+        BoardRectReceived (Ok element) ->
+            ( { model
+                | boardRect =
+                    Just
+                        { x = round (element.element.x - element.viewport.x)
+                        , y = round (element.element.y - element.viewport.y)
+                        , width = round element.element.width
+                        , height = round element.element.height
+                        }
+              }
+            , Cmd.none
+            )
+
+        BoardRectReceived (Err _) ->
+            ( model, Cmd.none )
 
         ClickUndo ->
             clickUndo model
@@ -291,7 +304,7 @@ left to undo.
 -}
 clickUndo : Model -> ( Model, Cmd Msg )
 clickUndo model =
-    if canUndo model then
+    if canUndo model.actionLog then
         let
             nextLog =
                 model.actionLog ++ [ { action = GameEvent.Undo } ]
@@ -314,9 +327,9 @@ clickUndo model =
         ( model, Cmd.none )
 
 
-canUndo : Model -> Bool
-canUndo model =
-    not (List.isEmpty (ActionLog.collapseUndos model.actionLog))
+canUndo : List ActionLogEntry -> Bool
+canUndo log =
+    not (List.isEmpty (ActionLog.collapseUndos log))
 
 
 {-| Apply one event to the puzzle's board. The puzzle's
@@ -342,24 +355,6 @@ applyForPuzzle event board =
                     Debug.log "puzzle.applyForPuzzle: unexpected event in log" event
             in
             board
-
-
-boardRectReceived : Result Browser.Dom.Error Browser.Dom.Element -> Model -> Model
-boardRectReceived result model =
-    case result of
-        Ok element ->
-            { model
-                | boardRect =
-                    Just
-                        { x = round (element.element.x - element.viewport.x)
-                        , y = round (element.element.y - element.viewport.y)
-                        , width = round element.element.width
-                        , height = round element.element.height
-                        }
-            }
-
-        Err _ ->
-            model
 
 
 fetchBoardRect : String -> Cmd Msg
@@ -480,7 +475,7 @@ replayDrag rs =
 
 undoButton : Model -> Html Msg
 undoButton model =
-    if model.replayState == Nothing && canUndo model then
+    if model.replayState == Nothing && canUndo model.actionLog then
         Button.button "Undo" ClickUndo
 
     else
