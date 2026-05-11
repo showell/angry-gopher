@@ -20,17 +20,22 @@ the Elm-emit code in `cmd/fixturegen`) goes away.
 import Dict
 import Expect
 import Game.BoardActions exposing (Side(..))
-import Game.CardStack exposing (BoardCardState(..), CardStack, HandCard, HandCardState(..))
+import Game.BoardGesture as BoardGesture
+import Game.CardStack as CardStack exposing (BoardCardState(..), BoardLocation, CardStack, HandCard, HandCardState(..))
 import Game.ConformanceDsl as Dsl
 import Game.DslContent
+import Game.HandGesture as HandGesture
 import Game.Physics.BoardGeometry as BoardGeometry
     exposing
         ( BoardGeometryStatus(..)
         , GeometryErrorKind(..)
         )
+import Game.Physics.GestureArbitration as GA
 import Game.Physics.PlaceStack as PlaceStack
 import Game.Physics.WingOracle as WingOracle
+import Game.Point exposing (Point)
 import Game.Rules.Card as Card exposing (Card, OriginDeck(..))
+import Game.WingView as WingView
 import Test exposing (Test, describe, test)
 
 
@@ -70,6 +75,24 @@ verify sc =
 
         "wings_for_hand_card" ->
             verifyWingsForHandCard sc
+
+        "gesture_split" ->
+            verifyGestureSplit sc
+
+        "gesture_merge_stack" ->
+            verifyGestureMergeStack sc
+
+        "gesture_merge_hand" ->
+            verifyGestureMergeHand sc
+
+        "gesture_move_stack" ->
+            verifyGestureMoveStack sc
+
+        "gesture_place_hand" ->
+            verifyGesturePlaceHand sc
+
+        "gesture_floater_over_wing" ->
+            verifyGestureFloaterOverWing sc
 
         _ ->
             -- Verifier not yet ported from fixturegen. The legacy
@@ -464,6 +487,353 @@ parseHandCardToken : String -> Maybe HandCard
 parseHandCardToken raw =
     parseCardTokenForExpect raw
         |> Maybe.map (\c -> { card = c, state = HandNormal })
+
+
+
+-- GESTURE OPS
+--
+-- Shared shape: each gesture scenario describes the inputs to a
+-- pure resolution function (BoardGesture.resolveBoardCardGesture
+-- or HandGesture.resolveHandCardGesture or WingView.hoveredWing)
+-- and asserts the result. Scalars `floater_at`, `cursor`,
+-- `hovered_side`, `gesture_click_intent`, `hand_card` ride on
+-- otherScalars; source comes from sc.board (board drag) or
+-- otherScalars.hand_card (hand drag); the target stack comes from
+-- sc.target.
+
+
+defaultBoardRect : GA.Rect
+defaultBoardRect =
+    { x = 300, y = 100, width = 800, height = 600 }
+
+
+verifyGestureSplit : Dsl.Scenario -> Expect.Expectation
+verifyGestureSplit sc =
+    case ( sourceStackFromBoard sc, scalarPoint "floater_at" sc ) of
+        ( Just sourceStack, Just floater ) ->
+            let
+                cardIndex =
+                    Dict.get "gesture_click_intent" sc.otherScalars
+                        |> Maybe.andThen String.toInt
+                        |> Maybe.withDefault 0
+
+                d =
+                    { stack = sourceStack
+                    , cardIndex = cardIndex
+                    , originalCursor = { x = 0, y = 0 }
+                    , cursor = { x = 0, y = 0 }
+                    , floaterTopLeft = pointToLoc floater
+                    , boardPath = []
+                    , wings = []
+                    }
+            in
+            case BoardGesture.resolveBoardCardGesture d Nothing of
+                Just (BoardGesture.Split p) ->
+                    expectStr "card_index" sc
+                        |> Maybe.andThen String.toInt
+                        |> Maybe.map (\n -> p.cardIndex |> Expect.equal n)
+                        |> Maybe.withDefault (Expect.fail "gesture_split missing expect.card_index")
+
+                other ->
+                    Expect.fail ("expected Split; got " ++ Debug.toString other)
+
+        ( Nothing, _ ) ->
+            Expect.fail "gesture_split scenario missing source (board stack)"
+
+        ( _, Nothing ) ->
+            Expect.fail "gesture_split scenario missing floater_at"
+
+
+verifyGestureMergeStack : Dsl.Scenario -> Expect.Expectation
+verifyGestureMergeStack sc =
+    case
+        ( sourceStackFromBoard sc
+        , List.head sc.target
+        , scalarPoint "floater_at" sc
+        )
+    of
+        ( Just sourceStack, Just targetDsl, Just floater ) ->
+            let
+                targetStack =
+                    stackFromDsl targetDsl
+
+                wing =
+                    { target = targetStack
+                    , side =
+                        Dict.get "hovered_side" sc.otherScalars
+                            |> Maybe.andThen parseSide
+                            |> Maybe.withDefault Left
+                    }
+
+                d =
+                    { stack = sourceStack
+                    , cardIndex = 0
+                    , originalCursor = { x = -1000, y = 0 }
+                    , cursor = { x = 0, y = 0 }
+                    , floaterTopLeft = pointToLoc floater
+                    , boardPath = []
+                    , wings = [ wing ]
+                    }
+            in
+            case BoardGesture.resolveBoardCardGesture d Nothing of
+                Just (BoardGesture.MergeStack p) ->
+                    expectSide sc
+                        |> Maybe.map (\side -> p.side |> Expect.equal side)
+                        |> Maybe.withDefault (Expect.fail "gesture_merge_stack missing expect.side")
+
+                other ->
+                    Expect.fail ("expected MergeStack; got " ++ Debug.toString other)
+
+        ( Nothing, _, _ ) ->
+            Expect.fail "gesture_merge_stack scenario missing source (board stack)"
+
+        ( _, Nothing, _ ) ->
+            Expect.fail "gesture_merge_stack scenario missing target"
+
+        ( _, _, Nothing ) ->
+            Expect.fail "gesture_merge_stack scenario missing floater_at"
+
+
+verifyGestureMergeHand : Dsl.Scenario -> Expect.Expectation
+verifyGestureMergeHand sc =
+    case
+        ( Dict.get "hand_card" sc.otherScalars |> Maybe.andThen parseHandCardToken
+        , List.head sc.target
+        , scalarPoint "floater_at" sc
+        )
+    of
+        ( Just hc, Just targetDsl, Just floater ) ->
+            let
+                targetStack =
+                    stackFromDsl targetDsl
+
+                wing =
+                    { target = targetStack
+                    , side =
+                        Dict.get "hovered_side" sc.otherScalars
+                            |> Maybe.andThen parseSide
+                            |> Maybe.withDefault Left
+                    }
+
+                d =
+                    { card = hc.card
+                    , cursor = { x = 0, y = 0 }
+                    , floaterTopLeft = floater
+                    , wings = [ wing ]
+                    }
+            in
+            case HandGesture.resolveHandCardGesture d (Just defaultBoardRect) of
+                Just (HandGesture.MergeHand p) ->
+                    expectSide sc
+                        |> Maybe.map (\side -> p.side |> Expect.equal side)
+                        |> Maybe.withDefault (Expect.fail "gesture_merge_hand missing expect.side")
+
+                other ->
+                    Expect.fail ("expected MergeHand; got " ++ Debug.toString other)
+
+        ( Nothing, _, _ ) ->
+            Expect.fail "gesture_merge_hand scenario missing hand_card"
+
+        ( _, Nothing, _ ) ->
+            Expect.fail "gesture_merge_hand scenario missing target"
+
+        ( _, _, Nothing ) ->
+            Expect.fail "gesture_merge_hand scenario missing floater_at"
+
+
+verifyGestureMoveStack : Dsl.Scenario -> Expect.Expectation
+verifyGestureMoveStack sc =
+    case ( sourceStackFromBoard sc, scalarPoint "floater_at" sc ) of
+        ( Just sourceStack, Just floater ) ->
+            let
+                cursor =
+                    scalarPoint "cursor" sc
+                        |> Maybe.withDefault { x = 700, y = 400 }
+
+                d =
+                    { stack = sourceStack
+                    , cardIndex = 0
+                    , originalCursor = { x = -1000, y = 0 }
+                    , cursor = cursor
+                    , floaterTopLeft = pointToLoc floater
+                    , boardPath = []
+                    , wings = []
+                    }
+
+                result =
+                    BoardGesture.resolveBoardCardGesture d (Just defaultBoardRect)
+            in
+            if expectScalarBool "rejected" sc then
+                result |> Expect.equal Nothing
+
+            else
+                case result of
+                    Just (BoardGesture.MoveStack p) ->
+                        Expect.all
+                            [ \_ ->
+                                expectInt "new_loc_left" sc
+                                    |> Maybe.map (\n -> p.newLoc.left |> Expect.equal n)
+                                    |> Maybe.withDefault Expect.pass
+                            , \_ ->
+                                expectInt "new_loc_top" sc
+                                    |> Maybe.map (\n -> p.newLoc.top |> Expect.equal n)
+                                    |> Maybe.withDefault Expect.pass
+                            ]
+                            ()
+
+                    other ->
+                        Expect.fail ("expected MoveStack; got " ++ Debug.toString other)
+
+        ( Nothing, _ ) ->
+            Expect.fail "gesture_move_stack scenario missing source (board stack)"
+
+        ( _, Nothing ) ->
+            Expect.fail "gesture_move_stack scenario missing floater_at"
+
+
+verifyGesturePlaceHand : Dsl.Scenario -> Expect.Expectation
+verifyGesturePlaceHand sc =
+    case
+        ( Dict.get "hand_card" sc.otherScalars |> Maybe.andThen parseHandCardToken
+        , scalarPoint "floater_at" sc
+        )
+    of
+        ( Just hc, Just floater ) ->
+            let
+                cursor =
+                    scalarPoint "cursor" sc
+                        |> Maybe.withDefault { x = 0, y = 0 }
+
+                d =
+                    { card = hc.card
+                    , cursor = cursor
+                    , floaterTopLeft = floater
+                    , wings = []
+                    }
+            in
+            case HandGesture.resolveHandCardGesture d (Just defaultBoardRect) of
+                Just (HandGesture.PlaceHand p) ->
+                    Expect.all
+                        [ \_ ->
+                            expectInt "loc_left" sc
+                                |> Maybe.map (\n -> p.loc.left |> Expect.equal n)
+                                |> Maybe.withDefault Expect.pass
+                        , \_ ->
+                            expectInt "loc_top" sc
+                                |> Maybe.map (\n -> p.loc.top |> Expect.equal n)
+                                |> Maybe.withDefault Expect.pass
+                        ]
+                        ()
+
+                other ->
+                    Expect.fail ("expected PlaceHand; got " ++ Debug.toString other)
+
+        ( Nothing, _ ) ->
+            Expect.fail "gesture_place_hand scenario missing hand_card"
+
+        ( _, Nothing ) ->
+            Expect.fail "gesture_place_hand scenario missing floater_at"
+
+
+verifyGestureFloaterOverWing : Dsl.Scenario -> Expect.Expectation
+verifyGestureFloaterOverWing sc =
+    case
+        ( sourceStackFromBoard sc
+        , List.head sc.target
+        , scalarPoint "floater_at" sc
+        )
+    of
+        ( Just sourceStack, Just targetDsl, Just floater ) ->
+            let
+                wing =
+                    { target = stackFromDsl targetDsl
+                    , side =
+                        Dict.get "hovered_side" sc.otherScalars
+                            |> Maybe.andThen parseSide
+                            |> Maybe.withDefault Left
+                    }
+
+                result =
+                    WingView.hoveredWing
+                        (pointToLoc floater)
+                        (CardStack.stackDisplayWidth sourceStack)
+                        [ wing ]
+            in
+            if expectScalarBool "has_wing" sc then
+                result |> Expect.equal (Just wing)
+
+            else
+                result |> Expect.equal Nothing
+
+        ( Nothing, _, _ ) ->
+            Expect.fail "gesture_floater_over_wing scenario missing source (board stack)"
+
+        ( _, Nothing, _ ) ->
+            Expect.fail "gesture_floater_over_wing scenario missing target"
+
+        ( _, _, Nothing ) ->
+            Expect.fail "gesture_floater_over_wing scenario missing floater_at"
+
+
+
+-- GESTURE HELPERS
+
+
+sourceStackFromBoard : Dsl.Scenario -> Maybe CardStack
+sourceStackFromBoard sc =
+    List.head sc.board |> Maybe.map stackFromDsl
+
+
+scalarPoint : String -> Dsl.Scenario -> Maybe Point
+scalarPoint key sc =
+    Dict.get key sc.otherScalars
+        |> Maybe.andThen parseParenIntPair
+        |> Maybe.map (\( x, y ) -> { x = x, y = y })
+
+
+pointToLoc : Point -> BoardLocation
+pointToLoc p =
+    { left = p.x, top = p.y }
+
+
+parseParenIntPair : String -> Maybe ( Int, Int )
+parseParenIntPair s =
+    let
+        t =
+            String.trim s
+    in
+    if String.startsWith "(" t && String.endsWith ")" t then
+        case String.split "," (String.slice 1 -1 t) of
+            [ a, b ] ->
+                Maybe.map2 Tuple.pair
+                    (String.toInt (String.trim a))
+                    (String.toInt (String.trim b))
+
+            _ ->
+                Nothing
+
+    else
+        Nothing
+
+
+expectSide : Dsl.Scenario -> Maybe Side
+expectSide sc =
+    expectStr "side" sc |> Maybe.andThen parseSide
+
+
+expectInt : String -> Dsl.Scenario -> Maybe Int
+expectInt key sc =
+    expectStr key sc |> Maybe.andThen String.toInt
+
+
+expectScalarBool : String -> Dsl.Scenario -> Bool
+expectScalarBool key sc =
+    case expectStr key sc of
+        Just "true" ->
+            True
+
+        _ ->
+            False
 
 
 
