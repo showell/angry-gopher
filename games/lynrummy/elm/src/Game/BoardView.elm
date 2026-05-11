@@ -3,18 +3,18 @@ module Game.BoardView exposing
     , boardDomIdFor
     )
 
-{-| The board widget — stacks, drag wings, and the
-board-frame overlay for an in-flight intra-board drag.
+{-| The board widget — stacks, drag wings, and a caller-
+supplied list of in-board floater nodes.
 
 `boardShellWith` (private) is the bare board shell (khaki
-rectangle, `position: relative`, fixed 800×600). Used both
-by the drag-aware `boardWithWings` and by the puzzle's
-static `viewBoard`.
+rectangle, `position: relative`, fixed 800×600).
 
-`boardWithWings` is the in-flow drag-aware board (shell with
-stack children and, during a drag, wing targets and a
-board-frame floater). The viewport-frame floater for
-hand-origin drags lives in `Game.Drag.draggedOverlay`.
+`boardWithWings` is the drag-aware board (shell + stack
+children + wing targets + the caller-supplied `boardFloaters`).
+The viewport-frame floater for hand-origin drags is also
+caller-rendered — `position: fixed` makes it
+DOM-position-independent, so it lives at the host's view
+level, not here.
 
 A drag is rendered immediately on mousedown; the source stack
 hides and the floater takes over at the same screen position.
@@ -24,7 +24,7 @@ not a state the View needs to know about.
 -}
 
 import Game.CardStack as CardStack exposing (CardStack)
-import Game.Drag as Drag exposing (DragState(..))
+import Game.Drag exposing (DragState(..))
 import Game.Physics.GestureArbitration as GA
 import Game.StackView as StackView
 import Game.View exposing (navy)
@@ -121,14 +121,15 @@ viewStackForBoard drag cardMouseDown stack =
 -- BOARD COLUMN
 --
 -- Top-level board column: drag-aware board (board-frame stack
--- nodes + wing targets + caller-supplied board floater nodes)
--- plus the viewport-frame floater overlay for hand-card drags.
+-- nodes + wing targets + caller-supplied `boardFloaters`).
 --
 -- `boardFloaters` is built and dispatched by the caller — the
 -- board-frame floater is a `position: absolute` DOM child of
 -- the (`position: relative`) board shell, so it has to be
 -- threaded in alongside the stack nodes. The viewport-frame
--- hand floater lives at this level via `Drag.draggedOverlay`.
+-- hand floater is host-rendered too (also caller-side
+-- dispatch), but doesn't need to thread through here —
+-- `position: fixed` makes it DOM-position-independent.
 --
 -- Msg-polymorphic: callers pass their own `cardMouseDown`
 -- attr-builder so the board widget itself never needs to know
@@ -147,9 +148,7 @@ boardColumn :
 boardColumn input =
     div
         [ style "min-width" "800px" ]
-        [ boardWithWings input
-        , Drag.draggedOverlay input.drag
-        ]
+        [ boardWithWings input ]
 
 
 

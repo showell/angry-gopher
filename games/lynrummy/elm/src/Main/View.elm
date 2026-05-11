@@ -50,15 +50,23 @@ view model =
                 Nothing ->
                     ( model.gameState.board, model.drag )
 
-        -- The board floater is a `position: absolute` child of
-        -- the board shell (which is `position: relative`), so it
-        -- lives INSIDE the board column. Dispatch on drag once
-        -- here; pass the resulting nodes down so BoardView never
-        -- has to inspect drag for floater purposes.
+        -- Board floater (board-frame) is a `position: absolute`
+        -- DOM child of the `position: relative` board shell, so
+        -- it has to be threaded down to BoardView. Hand floater
+        -- (viewport-frame) is `position: fixed`, so it lives
+        -- here at the top level — DOM position doesn't matter.
         boardFloaters =
             case drag of
                 DraggingBoardCard d ->
                     [ Drag.renderBoardFloater d [ style "position" "absolute" ] ]
+
+                _ ->
+                    []
+
+        handFloaters =
+            case drag of
+                DraggingHandCard d ->
+                    [ Drag.renderHandFloater d [ style "position" "fixed" ] ]
 
                 _ ->
                     []
@@ -71,21 +79,21 @@ view model =
         , style "overflow" "hidden"
         , style "background" "#f4f4ec"
         ]
-        [ div
+        ([ div
             [ style "position" "absolute"
             , style "top" "0"
             , style "left" "0"
             , style "right" "0"
             ]
             [ Status.viewStatusBar model.status ]
-        , div
+         , div
             [ style "position" "absolute"
             , style "top" (String.fromInt BoardGeometry.boardViewportTop ++ "px")
             , style "left" "20px"
             , style "width" (String.fromInt (BoardGeometry.boardViewportLeft - 40) ++ "px")
             ]
             [ Sidebar.leftSidebar (sidebarInfo model) ]
-        , div
+         , div
             [ style "position" "absolute"
             , style "top" (String.fromInt BoardGeometry.boardViewportTop ++ "px")
             , style "left" (String.fromInt BoardGeometry.boardViewportLeft ++ "px")
@@ -99,8 +107,10 @@ view model =
                 , boardFloaters = boardFloaters
                 }
             ]
-        , Popup.viewPopup PopupOk model.popup
-        ]
+         , Popup.viewPopup PopupOk model.popup
+         ]
+            ++ handFloaters
+        )
 
 
 

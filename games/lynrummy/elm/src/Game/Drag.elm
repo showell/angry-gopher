@@ -1,7 +1,7 @@
 module Game.Drag exposing
     ( DragState(..)
-    , draggedOverlay
     , renderBoardFloater
+    , renderHandFloater
     )
 
 {-| Drag state types and the rendering of an in-flight drag.
@@ -20,11 +20,14 @@ mouseup-time outcome judgment, not a state machine.
 Split semantic) and no `originalCursor` (no click-vs-drag
 arbitration for hand drags).
 
-The rendering helpers (`draggedOverlay`, `renderBoardFloater`,
+The two render helpers (`renderBoardFloater`,
 `renderHandFloater`) live alongside the types: a drag's
 visual is intrinsic to what a drag IS, and they only ever
-read fields the type already exposes. msg-polymorphic — the
-floater never emits its own events.
+read fields the type already exposes. The dispatch on which
+to render (or neither) lives in the host's view — by the
+time we're rendering a floater, the host has earned that
+knowledge. msg-polymorphic — the floater never emits its
+own events.
 
 -}
 
@@ -42,23 +45,6 @@ type DragState
 
 
 -- RENDERING
-
-
-{-| Viewport-frame drag overlay (`position: fixed`). Renders
-hand-origin drags only — board-frame floaters render as a
-DOM child of the board shell via `renderBoardFloater`.
--}
-draggedOverlay : DragState -> Html msg
-draggedOverlay drag =
-    case drag of
-        DraggingHandCard d ->
-            renderHandFloater d [ style "position" "fixed" ]
-
-        DraggingBoardCard _ ->
-            Html.text ""
-
-        NotDragging ->
-            Html.text ""
 
 
 {-| Board-frame floater for an intra-board drag. Caller
