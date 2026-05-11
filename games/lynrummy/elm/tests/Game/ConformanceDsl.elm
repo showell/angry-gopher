@@ -24,6 +24,7 @@ shape — verifiers project the fields they need.
 -}
 
 import Dict exposing (Dict)
+import Game.BoardDsl as BoardDsl
 import Game.CardStack exposing (BoardLocation)
 import Game.Rules.Card as Card exposing (Card, OriginDeck(..))
 
@@ -482,120 +483,30 @@ parseStacks lines =
 
 parseStackLine : Line -> Stack
 parseStackLine line =
-    if not (String.startsWith "at " line.content) then
-        Debug.todo
-            ("ConformanceDsl: expected 'at (t,l): cards' at line "
-                ++ String.fromInt line.lineNum
-                ++ ": "
-                ++ line.raw
-            )
+    -- Delegate to BoardDsl so production and tests share one
+    -- grammar. BoardDsl returns a CardStack (with BoardCard +
+    -- state); we project state out and keep loc + bare cards.
+    case BoardDsl.parseStackLine line.content of
+        Ok cs ->
+            { cards = List.map .card cs.boardCards, loc = cs.loc }
 
-    else
-        let
-            rest =
-                String.dropLeft 3 line.content
-        in
-        case String.indexes ")" rest of
-            close :: _ ->
-                let
-                    inside =
-                        String.slice 1 close rest
-
-                    tail =
-                        String.trim (String.dropLeft (close + 1) rest)
-
-                    ( top, left ) =
-                        parseTopLeft inside line.lineNum line.raw
-
-                    cardStr =
-                        if String.startsWith ":" tail then
-                            String.trim (String.dropLeft 1 tail)
-
-                        else
-                            Debug.todo
-                                ("ConformanceDsl: expected ':' after location at line "
-                                    ++ String.fromInt line.lineNum
-                                )
-                in
-                { cards = parseCardList cardStr
-                , loc = { top = top, left = left }
-                }
-
-            [] ->
-                Debug.todo
-                    ("ConformanceDsl: missing ')' at line "
-                        ++ String.fromInt line.lineNum
-                    )
-
-
-parseTopLeft : String -> Int -> String -> ( Int, Int )
-parseTopLeft inside lineNum raw =
-    case String.split "," inside of
-        [ a, b ] ->
-            case ( String.toInt (String.trim a), String.toInt (String.trim b) ) of
-                ( Just top, Just left ) ->
-                    ( top, left )
-
-                _ ->
-                    Debug.todo
-                        ("ConformanceDsl: non-integer (top,left) at line "
-                            ++ String.fromInt lineNum
-                            ++ ": "
-                            ++ raw
-                        )
-
-        _ ->
+        Err msg ->
             Debug.todo
-                ("ConformanceDsl: bad location syntax at line "
-                    ++ String.fromInt lineNum
+                ("ConformanceDsl: line "
+                    ++ String.fromInt line.lineNum
                     ++ ": "
-                    ++ raw
+                    ++ msg
                 )
 
 
 parseCardList : String -> List Card
 parseCardList s =
-    String.words (String.trim s)
-        |> List.filter (\w -> w /= "")
-        |> List.map parseCardToken
+    case BoardDsl.parseCardTokens s of
+        Ok cs ->
+            cs
 
-
-parseCardToken : String -> Card
-parseCardToken raw =
-    let
-        -- Strip trailing state markers (`*` = FreshlyPlayed,
-        -- `**` = FreshlyPlayedByLastPlayer). Cards on the wire
-        -- carry state via these suffixes; the parser drops them
-        -- here so all consumers see bare Cards. Verifiers that
-        -- need state can re-parse the original token via the raw
-        -- DSL text.
-        tok =
-            raw
-                |> dropSuffix "**"
-                |> dropSuffix "*"
-
-        ( base, deck ) =
-            if String.endsWith "'" tok then
-                ( String.dropRight 1 tok, DeckTwo )
-
-            else
-                ( tok, DeckOne )
-    in
-    case Card.cardFromLabel base deck of
-        Just c ->
-            c
-
-        Nothing ->
-            Debug.todo ("ConformanceDsl: invalid card label: " ++ raw)
-
-
-dropSuffix : String -> String -> String
-dropSuffix suffix s =
-    if String.endsWith suffix s then
-        String.dropRight (String.length suffix) s
-
-    else
-        s
+        Err msg ->
+            Debug.todo ("ConformanceDsl: " ++ msg)
 
 
 cardLabel : Card -> String
