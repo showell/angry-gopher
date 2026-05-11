@@ -29,6 +29,8 @@ import Game.Physics.WingOracle as WingOracle
 import Game.Point exposing (Point)
 import Game.Rules.Card as Card exposing (Card, OriginDeck(..))
 import Game.WingView as WingView
+import Game.ActionLog exposing (ActionLogEntry)
+import Game.Game exposing (GameState)
 import Game.GameEvent as GameEvent exposing (GameEvent)
 import Game.Hand as Hand
 import Game.Rules.Referee as Referee exposing (RefereeStage(..))
@@ -107,8 +109,8 @@ verify sc =
         "validate_turn_complete" ->
             verifyValidateTurnComplete sc
 
-        "replay_invariant" ->
-            verifyReplayInvariant sc
+        "resume_walkthrough" ->
+            verifyResumeWalkthrough sc
 
         "undo_walkthrough" ->
             verifyUndoWalkthrough sc
@@ -1074,39 +1076,47 @@ parseBool s =
 
 
 
--- REPLAY INVARIANT
+-- RESUME WALKTHROUGH
 --
--- Compare two paths to the same final state: eager-fold over
--- GameEvents vs animation-FSM replay. The two should converge
--- on byte-identical gameState. Optional victory check.
+-- Drive `State.bootstrapFromBundle` over a full agent-play action
+-- log and assert the reconstructed final board is all-clean. This
+-- is the live production path for resuming a session: the server
+-- ships meta + actions.dsl, Elm decodes them and calls
+-- bootstrapFromBundle, which folds collapseUndos over applyEvent.
+--
+-- The test catches:
+--   - regressions in `bootstrapFromBundle` itself (the resume
+--     pipeline),
+--   - regressions in `State.applyEvent`'s verb dispatch (Split /
+--     MergeStack / MoveStack / CompleteTurn),
+--   - regressions in `Execute.{split, mergeStack, moveStack,
+--     mergeHand, placeHand}` and the geometry / hand bookkeeping
+--     they delegate to,
+--   - regressions in `StackType.getStackType` (drives the
+--     isCleanStack predicate the victory check reads).
+--
+-- It does NOT exercise `collapseUndos` meaningfully — current
+-- corpus has no Undo entries in any walkthrough.
 
 
-verifyReplayInvariant : Dsl.Scenario -> Expect.Expectation
-verifyReplayInvariant sc =
+verifyResumeWalkthrough : Dsl.Scenario -> Expect.Expectation
+verifyResumeWalkthrough sc =
     let
-        board =
-            stacksFromDsl sc.board
+        baseGameState =
+            State.baseModel.gameState
 
-        base =
-            State.baseModel
+        initialState =
+            { baseGameState | board = stacksFromDsl sc.board }
 
-        gs0 =
-            base.gameState
+        -- Build the action log by resolving each content-keyed spec
+        -- against the running board (live play emits content-keyed
+        -- actions too). Each entry becomes part of the action log
+        -- the resume bundle would deliver.
+        actionLog =
+            buildActionLog initialState (List.filterMap parseReplaySpec sc.actions)
 
-        initialModel =
-            { base
-                | gameState = { gs0 | board = board }
-                , sessionId = Just 0
-            }
-
-        specs =
-            List.filterMap parseReplaySpec sc.actions
-
-        ( eagerModel, actions ) =
-            buildEagerAndActions initialModel specs
-
-        replayedModel =
-            runReplay initialModel actions
+        finalModel =
+            State.bootstrapFromBundle initialState actionLog State.baseModel
 
         wantVictory =
             case sc.expect of
@@ -1115,22 +1125,36 @@ verifyReplayInvariant sc =
 
                 _ ->
                     False
-
-        victoryCheck _ =
-            if not wantVictory then
-                Expect.pass
-
-            else if List.all isCleanStack eagerModel.gameState.board && List.all isCleanStack replayedModel.gameState.board then
-                Expect.pass
-
-            else
-                Expect.fail "final board not victory"
     in
-    Expect.all
-        [ \_ -> Expect.equal eagerModel.gameState replayedModel.gameState
-        , victoryCheck
-        ]
-        ()
+    if not wantVictory then
+        Expect.pass
+
+    else if List.all isCleanStack finalModel.gameState.board then
+        Expect.pass
+
+    else
+        Expect.fail "final board not victory"
+
+
+buildActionLog : GameState -> List ReplaySpec -> List ActionLogEntry
+buildActionLog initialState specs =
+    let
+        loop state acc remaining =
+            case remaining of
+                [] ->
+                    List.reverse acc
+
+                spec :: rest ->
+                    let
+                        action =
+                            resolveSpec spec state.board
+
+                        nextState =
+                            State.applyEvent action state
+                    in
+                    loop nextState ({ action = action } :: acc) rest
+    in
+    loop initialState [] specs
 
 
 type ReplaySpec
@@ -1292,39 +1316,6 @@ resolveSpec spec board =
 
         SpecCompleteTurn ->
             GameEvent.CompleteTurn
-
-
-buildEagerAndActions : State.Model -> List ReplaySpec -> ( State.Model, List GameEvent )
-buildEagerAndActions initialModel specs =
-    let
-        loop model acc remaining =
-            case remaining of
-                [] ->
-                    ( model, List.reverse acc )
-
-                spec :: rest ->
-                    let
-                        action =
-                            resolveSpec spec model.gameState.board
-
-                        next =
-                            { model | gameState = State.applyEvent action model.gameState }
-                    in
-                    loop next (action :: acc) rest
-    in
-    loop initialModel [] specs
-
-
-runReplay : State.Model -> List GameEvent -> State.Model
-runReplay initialModel actions =
-    let
-        gs0 =
-            initialModel.gameState
-
-        finalGameState =
-            List.foldl State.applyEvent gs0 actions
-    in
-    { initialModel | gameState = finalGameState }
 
 
 isCleanStack : CardStack -> Bool

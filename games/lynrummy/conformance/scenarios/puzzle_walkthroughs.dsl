@@ -12,8 +12,8 @@
 # puzzles are board-only.
 
 scenario walkthrough_puzzle_a3_001_seed1
-  desc: Full primitive walkthrough for a3_001_seed1 (3-line); replay + eager agree, final board victory.
-  op: replay_invariant
+  desc: Full primitive walkthrough for a3_001_seed1 (3-line); bootstrapFromBundle reconstructs to a victory board.
+  op: resume_walkthrough
   board:
     at (200,40): 7S 7D 7C
     at (20,111): AS 2S 3S
@@ -36,10 +36,12 @@ scenario walkthrough_puzzle_a3_001_seed1
     - merge_stack [AC] -> [QC' KH] /right
     - move_stack [TD JD QD] -> (467,52)
     - merge_stack [KD] -> [TD JD QD] /right
+  expect:
+    final_board_victory: true
 
 scenario walkthrough_puzzle_a3_002_seed2
-  desc: Full primitive walkthrough for a3_002_seed2 (3-line); replay + eager agree, final board victory.
-  op: replay_invariant
+  desc: Full primitive walkthrough for a3_002_seed2 (3-line); bootstrapFromBundle reconstructs to a victory board.
+  op: resume_walkthrough
   board:
     at (200,40): 7S 7D 7C
     at (392,52): TH TC' TS
@@ -64,10 +66,12 @@ scenario walkthrough_puzzle_a3_002_seed2
     - merge_stack [6D'] -> [5C'] /right
     - merge_stack [5S] -> [5H' 5C 5D] /right
     - merge_stack [7S'] -> [5C' 6D'] /right
+  expect:
+    final_board_victory: true
 
 scenario walkthrough_puzzle_a3_003_seed3
-  desc: Full primitive walkthrough for a3_003_seed3 (3-line); replay + eager agree, final board victory.
-  op: replay_invariant
+  desc: Full primitive walkthrough for a3_003_seed3 (3-line); bootstrapFromBundle reconstructs to a victory board.
+  op: resume_walkthrough
   board:
     at (20,70): KS AS 2S 3S
     at (140,100): 2H 3H 4H
@@ -84,10 +88,12 @@ scenario walkthrough_puzzle_a3_003_seed3
     - merge_stack [7S] -> [5S 6S'] /right
     - split [2C 3D 4C 5H 6S 7H]@5
     - merge_stack [7H] -> [7D 7C] /left
+  expect:
+    final_board_victory: true
 
 scenario walkthrough_puzzle_a3_004_seed4
-  desc: Full primitive walkthrough for a3_004_seed4 (3-line); replay + eager agree, final board victory.
-  op: replay_invariant
+  desc: Full primitive walkthrough for a3_004_seed4 (3-line); bootstrapFromBundle reconstructs to a victory board.
+  op: resume_walkthrough
   board:
     at (80,160): TD JD QD KD
     at (200,40): 7S 7D 7C
@@ -109,10 +115,12 @@ scenario walkthrough_puzzle_a3_004_seed4
     - move_stack [7D' 8C] -> (152,220)
     - merge_stack [6S] -> [7D' 8C] /left
     - merge_stack [7H] -> [7S 7D 7C] /left
+  expect:
+    final_board_victory: true
 
 scenario walkthrough_puzzle_a3_005_seed5
-  desc: Full primitive walkthrough for a3_005_seed5 (3-line); replay + eager agree, final board victory.
-  op: replay_invariant
+  desc: Full primitive walkthrough for a3_005_seed5 (3-line); bootstrapFromBundle reconstructs to a victory board.
+  op: resume_walkthrough
   board:
     at (467,52): KH KC' KD
     at (392,187): 4H' 4D' 4C
@@ -142,4 +150,6 @@ scenario walkthrough_puzzle_a3_005_seed5
     - move_stack [2D 3S'] -> (227,250)
     - merge_stack [AS] -> [2D 3S'] /left
     - merge_stack [3C'] -> [3H' 3S 3D] /right
+  expect:
+    final_board_victory: true
 

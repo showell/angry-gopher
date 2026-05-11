@@ -3719,8 +3719,8 @@ scenario puzzle_a3_005_seed5
 # puzzles are board-only.
 
 scenario walkthrough_puzzle_a3_001_seed1
-  desc: Full primitive walkthrough for a3_001_seed1 (3-line); replay + eager agree, final board victory.
-  op: replay_invariant
+  desc: Full primitive walkthrough for a3_001_seed1 (3-line); bootstrapFromBundle reconstructs to a victory board.
+  op: resume_walkthrough
   board:
     at (200,40): 7S 7D 7C
     at (20,111): AS 2S 3S
@@ -3743,10 +3743,12 @@ scenario walkthrough_puzzle_a3_001_seed1
     - merge_stack [AC] -> [QC' KH] /right
     - move_stack [TD JD QD] -> (467,52)
     - merge_stack [KD] -> [TD JD QD] /right
+  expect:
+    final_board_victory: true
 
 scenario walkthrough_puzzle_a3_002_seed2
-  desc: Full primitive walkthrough for a3_002_seed2 (3-line); replay + eager agree, final board victory.
-  op: replay_invariant
+  desc: Full primitive walkthrough for a3_002_seed2 (3-line); bootstrapFromBundle reconstructs to a victory board.
+  op: resume_walkthrough
   board:
     at (200,40): 7S 7D 7C
     at (392,52): TH TC' TS
@@ -3771,10 +3773,12 @@ scenario walkthrough_puzzle_a3_002_seed2
     - merge_stack [6D'] -> [5C'] /right
     - merge_stack [5S] -> [5H' 5C 5D] /right
     - merge_stack [7S'] -> [5C' 6D'] /right
+  expect:
+    final_board_victory: true
 
 scenario walkthrough_puzzle_a3_003_seed3
-  desc: Full primitive walkthrough for a3_003_seed3 (3-line); replay + eager agree, final board victory.
-  op: replay_invariant
+  desc: Full primitive walkthrough for a3_003_seed3 (3-line); bootstrapFromBundle reconstructs to a victory board.
+  op: resume_walkthrough
   board:
     at (20,70): KS AS 2S 3S
     at (140,100): 2H 3H 4H
@@ -3791,10 +3795,12 @@ scenario walkthrough_puzzle_a3_003_seed3
     - merge_stack [7S] -> [5S 6S'] /right
     - split [2C 3D 4C 5H 6S 7H]@5
     - merge_stack [7H] -> [7D 7C] /left
+  expect:
+    final_board_victory: true
 
 scenario walkthrough_puzzle_a3_004_seed4
-  desc: Full primitive walkthrough for a3_004_seed4 (3-line); replay + eager agree, final board victory.
-  op: replay_invariant
+  desc: Full primitive walkthrough for a3_004_seed4 (3-line); bootstrapFromBundle reconstructs to a victory board.
+  op: resume_walkthrough
   board:
     at (80,160): TD JD QD KD
     at (200,40): 7S 7D 7C
@@ -3816,10 +3822,12 @@ scenario walkthrough_puzzle_a3_004_seed4
     - move_stack [7D' 8C] -> (152,220)
     - merge_stack [6S] -> [7D' 8C] /left
     - merge_stack [7H] -> [7S 7D 7C] /left
+  expect:
+    final_board_victory: true
 
 scenario walkthrough_puzzle_a3_005_seed5
-  desc: Full primitive walkthrough for a3_005_seed5 (3-line); replay + eager agree, final board victory.
-  op: replay_invariant
+  desc: Full primitive walkthrough for a3_005_seed5 (3-line); bootstrapFromBundle reconstructs to a victory board.
+  op: resume_walkthrough
   board:
     at (467,52): KH KC' KD
     at (392,187): 4H' 4D' 4C
@@ -3849,6 +3857,8 @@ scenario walkthrough_puzzle_a3_005_seed5
     - move_stack [2D 3S'] -> (227,250)
     - merge_stack [AS] -> [2D 3S'] /left
     - merge_stack [3C'] -> [3H' 3S 3D] /right
+  expect:
+    final_board_victory: true
 
 """
       )
@@ -3996,8 +4006,8 @@ scenario identity_reorder_breaks_match
 # agent only emits board-origin primitives.
 
 scenario walkthrough_mined_001_4S_4Cp1
-  desc: Full agent-play walkthrough for mined_001_4S_4Cp1; eager + replay agree, final board victory.
-  op: replay_invariant
+  desc: Full agent-play walkthrough for mined_001_4S_4Cp1; bootstrapFromBundle reconstructs to a victory board.
+  op: resume_walkthrough
   board:
     at (26,26): 2H 3H 4H
     at (107,52): 7S 7D 7C
@@ -4023,8 +4033,8 @@ scenario walkthrough_mined_001_4S_4Cp1
     final_board_victory: true
 
 scenario walkthrough_mined_002_QDp1
-  desc: Full agent-play walkthrough for mined_002_QDp1; eager + replay agree, final board victory.
-  op: replay_invariant
+  desc: Full agent-play walkthrough for mined_002_QDp1; bootstrapFromBundle reconstructs to a victory board.
+  op: resume_walkthrough
   board:
     at (26,26): 7S 7D 7C
     at (107,52): AS 2S 3S
@@ -4055,8 +4065,8 @@ scenario walkthrough_mined_002_QDp1
     final_board_victory: true
 
 scenario walkthrough_mined_003_6D
-  desc: Full agent-play walkthrough for mined_003_6D; eager + replay agree, final board victory.
-  op: replay_invariant
+  desc: Full agent-play walkthrough for mined_003_6D; bootstrapFromBundle reconstructs to a victory board.
+  op: resume_walkthrough
   board:
     at (26,26): 2H 3H 4H
     at (107,52): 7S 7D 7C
@@ -4084,8 +4094,8 @@ scenario walkthrough_mined_003_6D
     final_board_victory: true
 
 scenario walkthrough_mined_004_5C_6Dp1
-  desc: Full agent-play walkthrough for mined_004_5C_6Dp1; eager + replay agree, final board victory.
-  op: replay_invariant
+  desc: Full agent-play walkthrough for mined_004_5C_6Dp1; bootstrapFromBundle reconstructs to a victory board.
+  op: resume_walkthrough
   board:
     at (26,26): KS AS 2S 3S
     at (107,52): TD JD QD KD
@@ -4107,8 +4117,8 @@ scenario walkthrough_mined_004_5C_6Dp1
     final_board_victory: true
 
 scenario walkthrough_mined_005_2Hp1
-  desc: Full agent-play walkthrough for mined_005_2Hp1; eager + replay agree, final board victory.
-  op: replay_invariant
+  desc: Full agent-play walkthrough for mined_005_2Hp1; bootstrapFromBundle reconstructs to a victory board.
+  op: resume_walkthrough
   board:
     at (26,26): KS AS 2S 3S
     at (107,52): TD JD QD KD
@@ -4132,8 +4142,8 @@ scenario walkthrough_mined_005_2Hp1
     final_board_victory: true
 
 scenario walkthrough_mined_006_6Cp1
-  desc: Full agent-play walkthrough for mined_006_6Cp1; eager + replay agree, final board victory.
-  op: replay_invariant
+  desc: Full agent-play walkthrough for mined_006_6Cp1; bootstrapFromBundle reconstructs to a victory board.
+  op: resume_walkthrough
   board:
     at (26,26): 4S' 5D' 6C
     at (107,52): 5C 6D' 7C
@@ -4150,7 +4160,6 @@ scenario walkthrough_mined_006_6Cp1
     - split [3D 4C 5H 6S]@3
     - merge_stack [6S] -> [6C'] /right
     - split [5C 6D' 7C]@0
-    - move_stack [6D' 7C] -> (332,172)
     - split [6D' 7C]@0
     - merge_stack [6D'] -> [6C' 6S] /right
     - merge_stack [5C] -> [AC' 2H' 3S 4H] /right
@@ -4160,8 +4169,8 @@ scenario walkthrough_mined_006_6Cp1
     final_board_victory: true
 
 scenario walkthrough_mined_007_5Cp1_6C
-  desc: Full agent-play walkthrough for mined_007_5Cp1_6C; eager + replay agree, final board victory.
-  op: replay_invariant
+  desc: Full agent-play walkthrough for mined_007_5Cp1_6C; bootstrapFromBundle reconstructs to a victory board.
+  op: resume_walkthrough
   board:
     at (26,26): KS AS 2S 3S
     at (107,52): TD JD QD KD
@@ -4183,8 +4192,8 @@ scenario walkthrough_mined_007_5Cp1_6C
     final_board_victory: true
 
 scenario walkthrough_mined_008_QHp1
-  desc: Full agent-play walkthrough for mined_008_QHp1; eager + replay agree, final board victory.
-  op: replay_invariant
+  desc: Full agent-play walkthrough for mined_008_QHp1; bootstrapFromBundle reconstructs to a victory board.
+  op: resume_walkthrough
   board:
     at (26,26): TD JD QD KD
     at (107,52): 2H 3H 4H
@@ -4200,7 +4209,6 @@ scenario walkthrough_mined_008_QHp1
     - split [JS' QS' KS]@0
     - move_stack [QH'] -> (242,220)
     - merge_stack [JS'] -> [QH'] /left
-    - move_stack [TD JD QD KD] -> (317,187)
     - split [TD JD QD KD]@0
     - move_stack [JS' QH'] -> (242,220)
     - merge_stack [TD] -> [JS' QH'] /left
@@ -4210,8 +4218,8 @@ scenario walkthrough_mined_008_QHp1
     final_board_victory: true
 
 scenario walkthrough_mined_009_JC
-  desc: Full agent-play walkthrough for mined_009_JC; eager + replay agree, final board victory.
-  op: replay_invariant
+  desc: Full agent-play walkthrough for mined_009_JC; bootstrapFromBundle reconstructs to a victory board.
+  op: resume_walkthrough
   board:
     at (26,26): AC AD AH
     at (107,52): 9H' TC' JH
@@ -4227,7 +4235,6 @@ scenario walkthrough_mined_009_JC
     - split [9S TD JS' QH']@3
     - merge_stack [QH'] -> [JC] /right
     - split [QS' KS AS 2S 3S]@0
-    - move_stack [KS AS 2S 3S] -> (482,112)
     - split [KS AS 2S 3S]@0
     - merge_stack [KS] -> [JC QH'] /right
     - move_stack [9H' TC' JH] -> (407,187)
@@ -4236,8 +4243,8 @@ scenario walkthrough_mined_009_JC
     final_board_victory: true
 
 scenario walkthrough_mined_010_3Hp1
-  desc: Full agent-play walkthrough for mined_010_3Hp1; eager + replay agree, final board victory.
-  op: replay_invariant
+  desc: Full agent-play walkthrough for mined_010_3Hp1; bootstrapFromBundle reconstructs to a victory board.
+  op: resume_walkthrough
   board:
     at (26,26): TD JD QD KD
     at (107,52): 2H 3H 4H
@@ -4267,8 +4274,8 @@ scenario walkthrough_mined_010_3Hp1
     final_board_victory: true
 
 scenario walkthrough_mined_011_JC
-  desc: Full agent-play walkthrough for mined_011_JC; eager + replay agree, final board victory.
-  op: replay_invariant
+  desc: Full agent-play walkthrough for mined_011_JC; bootstrapFromBundle reconstructs to a victory board.
+  op: resume_walkthrough
   board:
     at (26,26): 7S 7D 7C
     at (107,52): 9H' 9C 9D
@@ -4297,8 +4304,8 @@ scenario walkthrough_mined_011_JC
     final_board_victory: true
 
 scenario walkthrough_mined_012_QC_KC
-  desc: Full agent-play walkthrough for mined_012_QC_KC; eager + replay agree, final board victory.
-  op: replay_invariant
+  desc: Full agent-play walkthrough for mined_012_QC_KC; bootstrapFromBundle reconstructs to a victory board.
+  op: resume_walkthrough
   board:
     at (26,26): KS AS 2S 3S
     at (107,52): TD JD QD KD
@@ -4319,8 +4326,8 @@ scenario walkthrough_mined_012_QC_KC
     final_board_victory: true
 
 scenario walkthrough_mined_013_AHp1
-  desc: Full agent-play walkthrough for mined_013_AHp1; eager + replay agree, final board victory.
-  op: replay_invariant
+  desc: Full agent-play walkthrough for mined_013_AHp1; bootstrapFromBundle reconstructs to a victory board.
+  op: resume_walkthrough
   board:
     at (26,26): KS AS 2S 3S
     at (107,52): 7S 7D 7C
@@ -4333,12 +4340,10 @@ scenario walkthrough_mined_013_AHp1
     at (257,187): TC' JH QC
     at (332,187): AH'
   actions:
-    - move_stack [KS AS 2S 3S] -> (167,247)
     - split [KS AS 2S 3S]@0
     - move_stack [AH'] -> (332,220)
     - merge_stack [KS] -> [AH'] /left
     - split [AS 2S 3S]@0
-    - move_stack [2S 3S] -> (407,247)
     - split [2S 3S]@0
     - merge_stack [2S] -> [KS AH'] /right
     - merge_stack [AS] -> [2D 3C' 4D' 5S 6D'] /left
@@ -4350,8 +4355,8 @@ scenario walkthrough_mined_013_AHp1
     final_board_victory: true
 
 scenario walkthrough_mined_014_5C
-  desc: Full agent-play walkthrough for mined_014_5C; eager + replay agree, final board victory.
-  op: replay_invariant
+  desc: Full agent-play walkthrough for mined_014_5C; bootstrapFromBundle reconstructs to a victory board.
+  op: resume_walkthrough
   board:
     at (26,26): 7S 7D 7C
     at (107,52): TD JD QD KD AD
@@ -4378,8 +4383,8 @@ scenario walkthrough_mined_014_5C
     final_board_victory: true
 
 scenario walkthrough_mined_015_3Cp1
-  desc: Full agent-play walkthrough for mined_015_3Cp1; eager + replay agree, final board victory.
-  op: replay_invariant
+  desc: Full agent-play walkthrough for mined_015_3Cp1; bootstrapFromBundle reconstructs to a victory board.
+  op: resume_walkthrough
   board:
     at (26,26): KS AS 2S 3S
     at (107,52): 2H 3H 4H
@@ -4398,7 +4403,6 @@ scenario walkthrough_mined_015_3Cp1
     - split [AC AD AH]@0
     - move_stack [AD AH] -> (407,187)
     - split [AD AH]@0
-    - move_stack [2C 3C'] -> (257,145)
     - merge_stack [AC] -> [2C 3C'] /left
     - merge_stack [AD] -> [JD QD KD] /right
     - merge_stack [AH] -> [2H 3H 4H] /left
@@ -4406,8 +4410,8 @@ scenario walkthrough_mined_015_3Cp1
     final_board_victory: true
 
 scenario walkthrough_mined_016_TCp1
-  desc: Full agent-play walkthrough for mined_016_TCp1; eager + replay agree, final board victory.
-  op: replay_invariant
+  desc: Full agent-play walkthrough for mined_016_TCp1; bootstrapFromBundle reconstructs to a victory board.
+  op: resume_walkthrough
   board:
     at (26,26): 7S 7D 7C
     at (107,52): 8D 9D TD
@@ -4433,8 +4437,8 @@ scenario walkthrough_mined_016_TCp1
     final_board_victory: true
 
 scenario walkthrough_mined_017_5Dp1_6Dp1
-  desc: Full agent-play walkthrough for mined_017_5Dp1_6Dp1; eager + replay agree, final board victory.
-  op: replay_invariant
+  desc: Full agent-play walkthrough for mined_017_5Dp1_6Dp1; bootstrapFromBundle reconstructs to a victory board.
+  op: resume_walkthrough
   board:
     at (26,26): KS AS 2S 3S
     at (107,52): TD JD QD KD
@@ -4455,8 +4459,8 @@ scenario walkthrough_mined_017_5Dp1_6Dp1
     final_board_victory: true
 
 scenario walkthrough_mined_018_2Sp1_3Hp1
-  desc: Full agent-play walkthrough for mined_018_2Sp1_3Hp1; eager + replay agree, final board victory.
-  op: replay_invariant
+  desc: Full agent-play walkthrough for mined_018_2Sp1_3Hp1; bootstrapFromBundle reconstructs to a victory board.
+  op: resume_walkthrough
   board:
     at (26,26): KS AS 2S 3S
     at (107,52): 2H 3H 4H
@@ -4472,7 +4476,6 @@ scenario walkthrough_mined_018_2Sp1_3Hp1
     - split [AC AD AH]@0
     - move_stack [AD AH] -> (407,187)
     - split [AD AH]@0
-    - move_stack [2S' 3H'] -> (257,145)
     - merge_stack [AD] -> [2S' 3H'] /left
     - split [2C 3D 4C 5H 6S 7H]@0
     - move_stack [AC] -> (482,187)
@@ -4486,8 +4489,8 @@ scenario walkthrough_mined_018_2Sp1_3Hp1
     final_board_victory: true
 
 scenario walkthrough_mined_019_2D
-  desc: Full agent-play walkthrough for mined_019_2D; eager + replay agree, final board victory.
-  op: replay_invariant
+  desc: Full agent-play walkthrough for mined_019_2D; bootstrapFromBundle reconstructs to a victory board.
+  op: resume_walkthrough
   board:
     at (26,26): 7S 7D 7C
     at (107,52): JD QD KD
@@ -4502,7 +4505,6 @@ scenario walkthrough_mined_019_2D
     at (317,187): 2D
   actions:
     - split [KS AD 2C']@0
-    - move_stack [AD 2C'] -> (392,187)
     - split [AD 2C']@0
     - move_stack [2D] -> (317,220)
     - merge_stack [AD] -> [2D] /left
@@ -4517,8 +4519,8 @@ scenario walkthrough_mined_019_2D
     final_board_victory: true
 
 scenario walkthrough_mined_020_2Dp1_3Cp1
-  desc: Full agent-play walkthrough for mined_020_2Dp1_3Cp1; eager + replay agree, final board victory.
-  op: replay_invariant
+  desc: Full agent-play walkthrough for mined_020_2Dp1_3Cp1; bootstrapFromBundle reconstructs to a victory board.
+  op: resume_walkthrough
   board:
     at (26,26): KS AS 2S 3S
     at (107,52): 2H 3H 4H
@@ -4541,8 +4543,8 @@ scenario walkthrough_mined_020_2Dp1_3Cp1
     final_board_victory: true
 
 scenario walkthrough_mined_021_8Dp1
-  desc: Full agent-play walkthrough for mined_021_8Dp1; eager + replay agree, final board victory.
-  op: replay_invariant
+  desc: Full agent-play walkthrough for mined_021_8Dp1; bootstrapFromBundle reconstructs to a victory board.
+  op: resume_walkthrough
   board:
     at (26,26): KS AS 2S 3S
     at (107,52): TD JD QD KD
@@ -4572,8 +4574,8 @@ scenario walkthrough_mined_021_8Dp1
     final_board_victory: true
 
 scenario walkthrough_mined_022_AHp1_ADp1
-  desc: Full agent-play walkthrough for mined_022_AHp1_ADp1; eager + replay agree, final board victory.
-  op: replay_invariant
+  desc: Full agent-play walkthrough for mined_022_AHp1_ADp1; bootstrapFromBundle reconstructs to a victory board.
+  op: resume_walkthrough
   board:
     at (26,26): KS AS 2S 3S
     at (107,52): TD JD QD KD
@@ -4594,8 +4596,8 @@ scenario walkthrough_mined_022_AHp1_ADp1
     final_board_victory: true
 
 scenario walkthrough_mined_023_3C
-  desc: Full agent-play walkthrough for mined_023_3C; eager + replay agree, final board victory.
-  op: replay_invariant
+  desc: Full agent-play walkthrough for mined_023_3C; bootstrapFromBundle reconstructs to a victory board.
+  op: resume_walkthrough
   board:
     at (26,26): KS AS 2S 3S
     at (107,52): 9C TH JS
@@ -4617,8 +4619,8 @@ scenario walkthrough_mined_023_3C
     final_board_victory: true
 
 scenario walkthrough_mined_024_2D
-  desc: Full agent-play walkthrough for mined_024_2D; eager + replay agree, final board victory.
-  op: replay_invariant
+  desc: Full agent-play walkthrough for mined_024_2D; bootstrapFromBundle reconstructs to a victory board.
+  op: resume_walkthrough
   board:
     at (26,26): KS AS 2S 3S
     at (107,52): TD JD QD KD
@@ -4643,8 +4645,8 @@ scenario walkthrough_mined_024_2D
     final_board_victory: true
 
 scenario walkthrough_mined_025_TSp1
-  desc: Full agent-play walkthrough for mined_025_TSp1; eager + replay agree, final board victory.
-  op: replay_invariant
+  desc: Full agent-play walkthrough for mined_025_TSp1; bootstrapFromBundle reconstructs to a victory board.
+  op: resume_walkthrough
   board:
     at (26,26): 7S 7D 7C
     at (107,52): 2C 3D 4C 5H 6S 7H

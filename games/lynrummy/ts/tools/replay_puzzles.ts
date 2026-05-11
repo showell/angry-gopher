@@ -8,7 +8,7 @@
 //      plan_lines gate.
 //
 //   2. conformance/scenarios/puzzle_walkthroughs.dsl
-//      `op: replay_invariant` scenarios pinning the FULL primitive
+//      `op: resume_walkthrough` scenarios pinning the FULL primitive
 //      sequence for each puzzle (verb expansion + geometry pre-
 //      flight, threaded across moves). Drives
 //      test_replay_walkthroughs.
@@ -186,8 +186,8 @@ function emitPlannerScenario(r: PuzzleResult): string {
 function emitWalkthroughScenario(r: PuzzleResult): string {
   const lines: string[] = [];
   lines.push(`scenario walkthrough_puzzle_${r.puzzle.name}`);
-  lines.push(`  desc: Full primitive walkthrough for ${r.puzzle.title}; replay + eager agree, final board victory.`);
-  lines.push(`  op: replay_invariant`);
+  lines.push(`  desc: Full primitive walkthrough for ${r.puzzle.title}; bootstrapFromBundle reconstructs to a victory board.`);
+  lines.push(`  op: resume_walkthrough`);
   lines.push(`  board:`);
   for (const stack of r.board) {
     lines.push(`    at (${stack.loc.top},${stack.loc.left}): ${dslStack(stack.cards)}`);
@@ -201,6 +201,8 @@ function emitWalkthroughScenario(r: PuzzleResult): string {
       lines.push(`    - ${primToDslLine(prim, simAtEmit)}`);
     }
   }
+  lines.push(`  expect:`);
+  lines.push(`    final_board_victory: true`);
   return lines.join("\n") + "\n\n";
 }
 

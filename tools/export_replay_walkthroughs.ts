@@ -1,5 +1,5 @@
 // export_replay_walkthroughs.ts — auto-generate one
-// `replay_invariant` DSL scenario per mined puzzle by reading
+// `resume_walkthrough` DSL scenario per mined puzzle by reading
 // pre-computed primitive sequences from
 // `conformance/scenarios/verb_to_primitives_corpus.dsl` and
 // concatenating each puzzle's plan-step primitives into a single
@@ -106,8 +106,8 @@ function renderScenario(
 ): string {
   const lines: string[] = [];
   lines.push(`scenario walkthrough_${puzzle}`);
-  lines.push(`  desc: Full agent-play walkthrough for ${puzzle}; eager + replay agree, final board victory.`);
-  lines.push(`  op: replay_invariant`);
+  lines.push(`  desc: Full agent-play walkthrough for ${puzzle}; bootstrapFromBundle reconstructs to a victory board.`);
+  lines.push(`  op: resume_walkthrough`);
   lines.push(`  board:`);
   for (const b of initialBoard) {
     lines.push(`    at (${b.top},${b.left}): ${b.cards}`);
