@@ -207,11 +207,22 @@ formatBoard stacks =
         |> String.join "\n"
 
 
+{-| Emit a stack line with the loc pair right-padded to width
+three on each axis so the `): ` separator lines up across a
+multi-stack block. The cards trail off at varying widths — the
+goal is to make it easy to scan PAST the coords to where the
+cards begin.
+-}
 formatStackLine : CardStack -> String
 formatStackLine s =
     "at ("
-        ++ String.fromInt s.loc.top
+        ++ padInt 3 s.loc.top
         ++ ", "
-        ++ String.fromInt s.loc.left
+        ++ padInt 3 s.loc.left
         ++ "): "
         ++ String.join " " (List.map (.card >> Card.cardStr) s.boardCards)
+
+
+padInt : Int -> Int -> String
+padInt width n =
+    String.padLeft width ' ' (String.fromInt n)

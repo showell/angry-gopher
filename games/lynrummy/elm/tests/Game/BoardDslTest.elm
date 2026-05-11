@@ -55,17 +55,24 @@ suite =
         , describe "format ∘ parse round-trip"
             [ test "single stack" <|
                 \_ ->
-                    roundTrip "at (26, 26): 2♥ 3♥ 4♥"
-            , test "multiple stacks" <|
+                    roundTrip "at ( 26,  26): 2♥ 3♥ 4♥"
+            , test "multiple stacks — coords aligned at width 3" <|
                 \_ ->
                     roundTrip
-                        ("at (26, 26): 2♥ 3♥ 4♥\n"
-                            ++ "at (107, 52): 7♠ 7♦ 7♣\n"
-                            ++ "at (182, 52): A♣ A♦ A♥"
+                        ("at ( 26,  26): 2♥ 3♥ 4♥\n"
+                            ++ "at (107,  52): 7♠ 7♦ 7♣\n"
+                            ++ "at (482, 187): A♣ A♦ A♥"
                         )
             , test "dual-deck cards survive" <|
                 \_ ->
-                    roundTrip "at (0, 0): K♦ K♦' K♥' K♠"
+                    roundTrip "at (  0,   0): K♦ K♦' K♥' K♠"
+            ]
+        , describe "parser tolerates unpadded coords"
+            [ test "unpadded round-trips through formatter to padded" <|
+                \_ ->
+                    BoardDsl.parseBoard "at (26, 26): 2♥ 3♥ 4♥"
+                        |> Result.map BoardDsl.formatBoard
+                        |> Expect.equal (Ok "at ( 26,  26): 2♥ 3♥ 4♥")
             ]
         ]
 

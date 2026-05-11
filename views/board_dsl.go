@@ -67,7 +67,10 @@ func formatStackLine(s boardDslJSON) (string, error) {
 		}
 		cards = append(cards, token)
 	}
-	return fmt.Sprintf("at (%d, %d): %s", s.Loc.Top, s.Loc.Left, strings.Join(cards, " ")), nil
+	// Right-pad each coord to width 3 so the "): " separator
+	// lines up across stacks — see the matching Elm formatter
+	// in Game.BoardDsl.formatStackLine.
+	return fmt.Sprintf("at (%3d, %3d): %s", s.Loc.Top, s.Loc.Left, strings.Join(cards, " ")), nil
 }
 
 // formatCardToken mirrors Elm's `Card.cardStr` — value letter +
