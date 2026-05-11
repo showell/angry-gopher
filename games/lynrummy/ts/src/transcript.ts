@@ -1,30 +1,20 @@
 // transcript.ts — write an Elm-replayable session directory from a
-// TS agent self-play game.
+// TS agent self-play game. Pure DSL on disk; no JSON envelopes.
 //
 // Output shape (matches what `views/lynrummy_elm.go` writes when a
-// human plays in the browser, which is what Elm's `Wire.fetchActionLog`
-// reads back on replay):
+// human plays in the browser, which is what Elm's
+// `Wire.fetchActionLog` reads back on replay):
 //
-//   <sessions_dir>/<id>/meta.json     {created_at, label, initial_state}
-//   <sessions_dir>/<id>/actions.jsonl        one envelope per line: {seq, action}
+//   <sessions_dir>/<id>/meta            multi-line DSL: server-owned
+//                                       scalars (created_at, label),
+//                                       then the GameState block
+//   <sessions_dir>/<id>/actions.dsl     one wire-DSL line per
+//                                       primitive (live action-log
+//                                       grammar — same syntax Elm
+//                                       writes during a human game)
 //
-// The actions are wire-shaped `WireAction` envelopes — same vocabulary
-// the Elm UI POSTs to the server during live play. Replay walks the
-// log forward and applies each action through Elm's eager applier.
-//
-// Per Steve, 2026-05-03: agents use the file system directly (no HTTP).
-// This module writes files; it doesn't talk to the Go server.
-//
-// Card-state convention: every card is FirmlyOnBoard (state=0) /
-// HandNormal (state=0). Animation states (FreshlyPlayed, FreshlyDrawn)
-// are runtime UI concerns Elm sets locally during gameplay; from a
-// fresh-replay perspective they don't matter.
-//
-// Public surface:
-//   - `writeSession` — write a full agent self-play session directory.
-//   - `encodeInitialState` — encode (board, hands, deck) to the
-//     Wire.initialStateDecoder JSON shape; reused by tools/generate_puzzles.ts
-//     for board-only puzzle catalogs.
+// Per Steve, 2026-05-03: agents use the file system directly (no
+// HTTP). This module writes files; it doesn't talk to the Go server.
 
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -40,6 +30,63 @@ import {
 import { planMergeStackOnBoard } from "./verbs.ts";
 import type { GameResult, JoinEvent } from "./agent_player.ts";
 import { physicalPlan } from "./physical_plan.ts";
+import {
+  splitDsl,
+  mergeStackDsl,
+  mergeHandDsl,
+  placeHandDsl,
+  moveStackDsl,
+  completeTurnDsl,
+  type Stack as DslStack,
+} from "./wire_action_dsl.ts";
+import { formatGameState } from "./initial_state_dsl.ts";
+import {
+  type JsonCard,
+  type JsonHand,
+  type JsonCardStack,
+  jsonCard,
+  jsonHandCard,
+  jsonStack,
+} from "./wire_json.ts";
+
+
+// --- Puzzle-catalog JSON encoder ------------------------------------
+//
+// Kept for `tools/generate_puzzles.ts`, which writes
+// `mined_seeds.json` (the puzzle-catalog data file, consumed by
+// the Go server). The puzzle catalog is JSON; the transcript
+// session files are DSL — different concerns, separate encoders.
+
+export interface RemoteStateJson {
+  board: JsonCardStack[];
+  hands: JsonHand[];
+  scores: number[];
+  active_player_index: number;
+  turn_index: number;
+  deck: JsonCard[];
+  cards_played_this_turn: number;
+  victor_awarded: boolean;
+  turn_start_board_score: number;
+}
+
+export function encodeInitialState(
+  board: readonly BoardStack[],
+  hands: readonly (readonly Card[])[],
+  deck: readonly Card[],
+): RemoteStateJson {
+  return {
+    board: board.map(jsonStack),
+    hands: hands.map(h => ({ hand_cards: h.map(jsonHandCard) })),
+    scores: hands.map(() => 0),
+    active_player_index: 0,
+    turn_index: 0,
+    deck: deck.map(jsonCard),
+    cards_played_this_turn: 0,
+    victor_awarded: false,
+    turn_start_board_score: 0,
+  };
+}
+
 
 // --- Invariant: no two stacks ever overlap, ever ---------------------
 //
@@ -68,6 +115,7 @@ function assertNoOverlap(
     );
   }
 }
+
 
 // --- Session-dir layout ----------------------------------------------
 
@@ -102,75 +150,16 @@ function allocateSessionId(p: Paths): number {
   return n;
 }
 
-// --- TS Card → Elm-wire JSON -----------------------------------------
-//
-// Encoders live in wire_json.ts (browser-safe; no fs). Re-exported
-// here so older imports (paths that read this file) keep working.
-
-import {
-  type JsonCard,
-  type JsonHand,
-  type JsonCardStack,
-  type WireActionJson,
-  jsonCard,
-  jsonHandCard,
-  jsonStack,
-  primToWire,
-} from "./wire_json.ts";
-
-export { jsonStack, primToWire, type WireActionJson } from "./wire_json.ts";
-
-// --- Initial-state encoder -------------------------------------------
-//
-// `encodeInitialState` is exported (used by tools/generate_puzzles.ts
-// for board-only puzzles, where hands and deck come in empty). It
-// produces the Wire.initialStateDecoder-compatible JSON shape — the
-// same shape `views/lynrummy_elm.go` writes for live human sessions.
-// Callers control the puzzle-vs-game distinction by what they pass:
-// puzzles pass `[[], []]` for hands and `[]` for deck; live sessions
-// pass real ones. No sibling encoder needed — the surface is the same
-// shape, only the inputs differ.
-
-export interface RemoteStateJson {
-  board: JsonCardStack[];
-  hands: JsonHand[];
-  scores: number[];
-  active_player_index: number;
-  turn_index: number;
-  deck: JsonCard[];
-  cards_played_this_turn: number;
-  victor_awarded: boolean;
-  turn_start_board_score: number;
-}
-
-export function encodeInitialState(
-  board: readonly BoardStack[],
-  hands: readonly (readonly Card[])[],
-  deck: readonly Card[],
-): RemoteStateJson {
-  return {
-    board: board.map(jsonStack),
-    hands: hands.map(h => ({ hand_cards: h.map(jsonHandCard) })),
-    scores: hands.map(() => 0),
-    active_player_index: 0,
-    turn_index: 0,
-    deck: deck.map(jsonCard),
-    cards_played_this_turn: 0,
-    victor_awarded: false,
-    turn_start_board_score: 0,
-  };
-}
 
 // --- Join-event materialization --------------------------------------
 //
-// `joinBoardRuns` (agent_player.ts) records each greedy run-merge as a
-// `JoinEvent { src, tgt }`. The merged stack reads `[...src, ...tgt]`,
+// `joinBoardRuns` (agent_player.ts) records each greedy run-merge as
+// a `JoinEvent { src, tgt }`. The merged stack reads `[...src, ...tgt]`,
 // matching `merge_stack` with side="left". We materialize each event
 // into a `merge_stack` primitive at apply time, looking up indices on
 // the LIVE sim board (the agent's index space differs from the
 // transcript's, since `applyMergeStack` appends the merged stack to
 // the end of the array).
-
 function applyJoinEvents(
   sim: readonly BoardStack[],
   joins: readonly JoinEvent[],
@@ -180,13 +169,14 @@ function applyJoinEvents(
   for (const j of joins) {
     // Reuse the verb-level planner: handles geometry pre-flight
     // (injects a `move_stack` ahead of the merge if the in-place
-    // result would crowd). Always side="left" because joinBoardRuns
-    // builds the merged stack as `[...src, ...tgt]`.
+    // result would crowd). Always side="left" because
+    // joinBoardRuns builds the merged stack as `[...src, ...tgt]`.
     const planned = planMergeStackOnBoard(cur, j.src, j.tgt, "left");
     for (const p of planned.prims) cur = writePrim(cur, p);
   }
   return cur;
 }
+
 
 // --- Top-level writer ------------------------------------------------
 
@@ -194,7 +184,7 @@ export interface TranscriptOpts {
   /** Override the data dir (defaults to the repo's
    *  `games/lynrummy/data`). */
   readonly dataDir?: string;
-  /** Session label written into meta.json. */
+  /** Session label written into meta. */
   readonly label?: string;
 }
 
@@ -211,6 +201,7 @@ export interface TranscriptResult {
   readonly actionsWritten: number;
 }
 
+
 /** Write an Elm-replayable session for one agent self-play game.
  *  Returns the allocated session id + on-disk path. */
 export function writeSession(
@@ -223,33 +214,37 @@ export function writeSession(
   const sessionDir = path.join(p.sessionsDir, String(sessionId));
   fs.mkdirSync(sessionDir, { recursive: true });
 
-  const meta = {
-    created_at: Math.floor(Date.now() / 1000),
-    label: opts.label ?? "agent self-play",
-    initial_state: encodeInitialState(
-      inputs.initialBoard, inputs.initialHands, inputs.initialDeck),
-  };
-  fs.writeFileSync(
-    path.join(sessionDir, "meta.json"),
-    JSON.stringify(meta, null, 2) + "\n",
+  // --- meta ---
+  const gameStateDsl = formatGameState({
+    board: inputs.initialBoard.map(boardStackForDsl),
+    hands: inputs.initialHands,
+    deck: inputs.initialDeck,
+    activePlayer: 0,
+    turnIndex: 0,
+    cardsPlayedThisTurn: 0,
+    victorAwarded: false,
+  });
+  const metaBody = formatMeta(
+    Math.floor(Date.now() / 1000),
+    opts.label ?? "agent self-play",
+    gameStateDsl,
   );
+  fs.writeFileSync(path.join(sessionDir, "meta"), metaBody);
 
-  // Append one envelope ({seq, action}) per primitive to
-  // actions.jsonl. The seq matches what Elm assigns at runtime —
-  // monotonic, embedded in the body, ride-along not load-bearing
-  // for routing. assertNoOverlap discipline mirrors the live path.
-  const actionsPath = path.join(sessionDir, "actions.jsonl");
+  // --- actions.dsl ---
+  // Per-primitive: dispatch on action kind once (earned knowledge),
+  // call the specific DSL emitter, append the line, advance sim,
+  // run the no-overlap check.
+  const actionsPath = path.join(sessionDir, "actions.dsl");
   fs.writeFileSync(actionsPath, "");
   const seqRef = { n: 1 };
+
   const writePrim = (
     actSim: readonly BoardStack[],
     prim: Primitive,
   ): readonly BoardStack[] => {
-    const wire = primToWire(prim, actSim);
-    fs.appendFileSync(
-      actionsPath,
-      JSON.stringify({ seq: seqRef.n, action: wire }) + "\n",
-    );
+    const line = primitiveDsl(seqRef.n, prim, actSim);
+    fs.appendFileSync(actionsPath, line + "\n");
     seqRef.n++;
     const next = applyLocally(actSim, prim);
     assertNoOverlap(next, `after-primitive ${prim.action}`);
@@ -258,9 +253,6 @@ export function writeSession(
 
   let sim: readonly BoardStack[] = inputs.initialBoard;
   for (const turn of inputs.result.turns) {
-    // Walk the turn's interleaved step stream. Each step is either a
-    // groom (replay run-merges as `merge_stack` primitives) or a
-    // play (expand into physical primitives via `physicalPlan`).
     for (const step of turn.steps) {
       if (step.kind === "groom") {
         sim = applyJoinEvents(sim, step.joins, writePrim);
@@ -269,12 +261,9 @@ export function writeSession(
         for (const prim of prims) sim = writePrim(sim, prim);
       }
     }
-    // CompleteTurn at end of every turn (Elm's local logic deals
-    // the next 3 / 5 from initial_state.deck on receipt).
-    fs.appendFileSync(
-      actionsPath,
-      JSON.stringify({ seq: seqRef.n, action: { action: "complete_turn" } }) + "\n",
-    );
+    // CompleteTurn at end of every turn. Elm's local logic deals
+    // the next 3 / 5 from initial_state.deck on receipt.
+    fs.appendFileSync(actionsPath, completeTurnDsl(seqRef.n) + "\n");
     seqRef.n++;
   }
 
@@ -283,4 +272,61 @@ export function writeSession(
     sessionDir,
     actionsWritten: seqRef.n - 1,
   };
+}
+
+
+/** Render one primitive as a wire-DSL line. The dispatch here is
+ *  the load-bearing one: each branch has earned knowledge of the
+ *  action's payload shape, and calls the specific encoder with
+ *  the exact fields it needs. */
+function primitiveDsl(
+  seq: number,
+  prim: Primitive,
+  sim: readonly BoardStack[],
+): string {
+  switch (prim.action) {
+    case "split":
+      return splitDsl(seq, boardStackForDsl(sim[prim.stackIndex]!), prim.cardIndex);
+    case "merge_stack":
+      return mergeStackDsl(
+        seq,
+        boardStackForDsl(sim[prim.sourceStack]!),
+        boardStackForDsl(sim[prim.targetStack]!),
+        prim.side,
+      );
+    case "merge_hand":
+      return mergeHandDsl(
+        seq,
+        prim.handCard,
+        boardStackForDsl(sim[prim.targetStack]!),
+        prim.side,
+      );
+    case "place_hand":
+      return placeHandDsl(seq, prim.handCard, prim.loc);
+    case "move_stack":
+      return moveStackDsl(
+        seq,
+        boardStackForDsl(sim[prim.stackIndex]!),
+        prim.newLoc,
+      );
+  }
+}
+
+
+function boardStackForDsl(s: BoardStack): DslStack {
+  return { cards: s.cards, loc: s.loc };
+}
+
+
+/** Render the on-disk meta document: top-level scalars, blank
+ *  line, then the game-state DSL. Trailing newline so file ends
+ *  cleanly. Symmetric to Go's FormatSessionMeta. */
+function formatMeta(
+  createdAt: number,
+  label: string,
+  gameStateDsl: string,
+): string {
+  let out = `created_at: ${createdAt}\nlabel: ${label}\n\n${gameStateDsl}`;
+  if (!out.endsWith("\n")) out += "\n";
+  return out;
 }

@@ -21,6 +21,7 @@ import { parseCardLabel, cardLabel } from "../src/rules/card.ts";
 import { playFullGame, type GameResult } from "../src/agent_player.ts";
 import { describe, type Desc } from "../src/move.ts";
 import { writeSession } from "../src/transcript.ts";
+import { validateSession } from "../src/validate_session.ts";
 
 const HAND_SIZE = 15;
 const NUM_PLAYERS = 2;
@@ -228,6 +229,16 @@ function main(): void {
         { label: `agent self-play (seed=${seed})` },
       );
       console.log(`  → wrote session #${t.sessionId} (${t.actionsWritten} actions) to ${t.sessionDir}`);
+      // Round-trip validation: re-read the emitted files, parse
+      // via the production wire parsers, replay through
+      // applyLocally + findViolation. Same engine the
+      // conformance walkthroughs use — if this passes, the
+      // transcript is both properly formatted AND rule-abiding.
+      const v = validateSession(t.sessionDir);
+      if (!v.ok) {
+        throw new Error(`session #${t.sessionId} validation failed: ${v.msg}`);
+      }
+      console.log(`  → validated session #${t.sessionId} (${v.actionsApplied} actions replayed clean)`);
     }
   }
 }
