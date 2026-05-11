@@ -25,6 +25,7 @@ import Game.CardStack as CardStack exposing (BoardCardState(..), BoardLocation, 
 import Game.ConformanceDsl as Dsl
 import Game.DslContent
 import Game.HandGesture as HandGesture
+import Game.Drag exposing (DragState(..))
 import Game.Physics.BoardGeometry as BoardGeometry
     exposing
         ( BoardGeometryStatus(..)
@@ -36,6 +37,9 @@ import Game.Physics.WingOracle as WingOracle
 import Game.Point exposing (Point)
 import Game.Rules.Card as Card exposing (Card, OriginDeck(..))
 import Game.WingView as WingView
+import Main.Gesture as Gesture
+import Main.Play as Play
+import Main.State as State
 import Test exposing (Test, describe, test)
 
 
@@ -93,6 +97,12 @@ verify sc =
 
         "gesture_floater_over_wing" ->
             verifyGestureFloaterOverWing sc
+
+        "click_arbitration" ->
+            verifyClickArbitration sc
+
+        "floater_top_left" ->
+            verifyFloaterTopLeft sc
 
         _ ->
             -- Verifier not yet ported from fixturegen. The legacy
@@ -773,6 +783,233 @@ verifyGestureFloaterOverWing sc =
 
         ( _, _, Nothing ) ->
             Expect.fail "gesture_floater_over_wing scenario missing floater_at"
+
+
+
+-- click_arbitration
+
+
+verifyClickArbitration : Dsl.Scenario -> Expect.Expectation
+verifyClickArbitration sc =
+    case ( scalarPoint "mousedown" sc, scalarPoint "current" sc ) of
+        ( Just md, Just cur ) ->
+            let
+                initialIntent =
+                    Dict.get "initial_click_intent" sc.otherScalars
+                        |> Maybe.andThen String.toInt
+
+                expected =
+                    case Dict.get "expect_click_intent" sc.otherScalars of
+                        Just "nothing" ->
+                            Just Nothing
+
+                        Just s ->
+                            Just (Just (Maybe.withDefault 0 (String.toInt s)))
+
+                        Nothing ->
+                            Nothing
+
+                preKill =
+                    scalarPoint "pre_kill_at" sc
+
+                intentAfterKill =
+                    case preKill of
+                        Just pk ->
+                            GA.clickIntentAfterMove md pk initialIntent
+
+                        Nothing ->
+                            initialIntent
+
+                actual =
+                    GA.clickIntentAfterMove md cur intentAfterKill
+            in
+            case expected of
+                Just exp ->
+                    actual |> Expect.equal exp
+
+                Nothing ->
+                    Expect.fail "click_arbitration scenario missing expect_click_intent"
+
+        _ ->
+            Expect.fail "click_arbitration scenario missing mousedown or current"
+
+
+
+-- floater_top_left
+--
+-- Three sub-cases distinguished by which expect-field is present:
+--   shift_equals_delta: floater.shift == cursor.delta after a
+--     single mouseMove.
+--   grab_point_invariant: two distinct mousedown grab points
+--     produce the same floater shift for the same delta.
+--   initial_floater_at: after startBoardCardDrag, the floater
+--     equals the source stack's loc.
+
+
+verifyFloaterTopLeft : Dsl.Scenario -> Expect.Expectation
+verifyFloaterTopLeft sc =
+    case List.head sc.board |> Maybe.map stackFromDsl of
+        Nothing ->
+            Expect.fail "floater_top_left scenario missing board"
+
+        Just stack ->
+            let
+                cardIndex =
+                    Dict.get "card_index" sc.otherScalars
+                        |> Maybe.andThen String.toInt
+                        |> Maybe.withDefault 0
+            in
+            if expectScalarBool "shift_equals_delta" sc then
+                verifyShiftEqualsDelta sc stack cardIndex
+
+            else if expectScalarBool "grab_point_invariant" sc then
+                verifyGrabPointInvariant sc stack
+
+            else
+                case expectLocField "initial_floater_at" sc of
+                    Just expected ->
+                        verifyInitialFloaterAt sc stack cardIndex expected
+
+                    Nothing ->
+                        Expect.fail "floater_top_left scenario missing shift_equals_delta / grab_point_invariant / initial_floater_at"
+
+
+verifyShiftEqualsDelta : Dsl.Scenario -> CardStack -> Int -> Expect.Expectation
+verifyShiftEqualsDelta sc stack cardIndex =
+    case
+        ( scalarPoint "mousedown" sc
+        , scalarPoint "mousemove_delta" sc
+        )
+    of
+        ( Just mousedown, Just delta ) ->
+            let
+                model =
+                    modelWithStack stack
+
+                ( afterDown, _ ) =
+                    Gesture.startBoardCardDrag
+                        { stack = stack, cardIndex = cardIndex }
+                        mousedown
+                        0
+                        model
+
+                afterMove =
+                    Play.mouseMove
+                        { x = mousedown.x + delta.x, y = mousedown.y + delta.y }
+                        100
+                        afterDown
+            in
+            case ( afterDown.drag, afterMove.drag ) of
+                ( DraggingBoardCard before, DraggingBoardCard after ) ->
+                    Expect.equal
+                        { left = before.floaterTopLeft.left + delta.x
+                        , top = before.floaterTopLeft.top + delta.y
+                        }
+                        after.floaterTopLeft
+
+                _ ->
+                    Expect.fail "expected both states to be DraggingBoardCard"
+
+        _ ->
+            Expect.fail "floater_top_left shift_equals_delta missing mousedown or mousemove_delta"
+
+
+verifyGrabPointInvariant : Dsl.Scenario -> CardStack -> Expect.Expectation
+verifyGrabPointInvariant sc stack =
+    case
+        ( scalarPoint "mousedown_a" sc
+        , scalarPoint "mousedown_b" sc
+        , scalarPoint "delta" sc
+        )
+    of
+        ( Just a, Just bpt, Just delta ) ->
+            let
+                model =
+                    modelWithStack stack
+
+                shiftFor down =
+                    let
+                        ( afterDown, _ ) =
+                            Gesture.startBoardCardDrag
+                                { stack = stack, cardIndex = 0 }
+                                down
+                                0
+                                model
+
+                        afterMove =
+                            Play.mouseMove
+                                { x = down.x + delta.x, y = down.y + delta.y }
+                                100
+                                afterDown
+                    in
+                    case ( afterDown.drag, afterMove.drag ) of
+                        ( DraggingBoardCard before, DraggingBoardCard after ) ->
+                            Just
+                                { x = after.floaterTopLeft.left - before.floaterTopLeft.left
+                                , y = after.floaterTopLeft.top - before.floaterTopLeft.top
+                                }
+
+                        _ ->
+                            Nothing
+            in
+            Expect.equal (shiftFor a) (shiftFor bpt)
+
+        _ ->
+            Expect.fail "floater_top_left grab_point_invariant missing mousedown_a/mousedown_b/delta"
+
+
+verifyInitialFloaterAt : Dsl.Scenario -> CardStack -> Int -> BoardLocation -> Expect.Expectation
+verifyInitialFloaterAt sc stack cardIndex expected =
+    case scalarPoint "mousedown" sc of
+        Just mousedown ->
+            let
+                model =
+                    modelWithStack stack
+
+                ( afterDown, _ ) =
+                    Gesture.startBoardCardDrag
+                        { stack = stack, cardIndex = cardIndex }
+                        mousedown
+                        0
+                        model
+            in
+            case afterDown.drag of
+                DraggingBoardCard d ->
+                    d.floaterTopLeft |> Expect.equal expected
+
+                _ ->
+                    Expect.fail "expected DraggingBoardCard state"
+
+        Nothing ->
+            Expect.fail "floater_top_left initial_floater_at missing mousedown"
+
+
+modelWithStack : CardStack -> State.Model
+modelWithStack stack =
+    let
+        base =
+            State.baseModel
+
+        gs0 =
+            base.gameState
+    in
+    { base | gameState = { gs0 | board = [ stack ] } }
+
+
+expectLocField : String -> Dsl.Scenario -> Maybe BoardLocation
+expectLocField key sc =
+    case sc.expect of
+        Dsl.ExpectBlock dict ->
+            case Dict.get key dict of
+                Just (Dsl.ExpectStr s) ->
+                    parseParenIntPair s
+                        |> Maybe.map (\( x, y ) -> { left = x, top = y })
+
+                _ ->
+                    Nothing
+
+        _ ->
+            Nothing
 
 
 
