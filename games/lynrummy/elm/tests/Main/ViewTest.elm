@@ -73,31 +73,31 @@ popupTests =
         [ test "Failure → Angry Cat scolds dirty board" <|
             \_ ->
                 popupForCompleteTurn (Ok (outcome Failure))
-                    |> Maybe.map .admin
-                    |> Expect.equal (Just "Angry Cat")
+                    |> .admin
+                    |> Expect.equal "Angry Cat"
         , test "SuccessButNeedsCards → Oliver sympathizes" <|
             \_ ->
                 popupForCompleteTurn (Ok (outcome SuccessButNeedsCards))
-                    |> Maybe.map .admin
-                    |> Expect.equal (Just "Oliver")
+                    |> .admin
+                    |> Expect.equal "Oliver"
         , test "Success → Steve celebrates" <|
             \_ ->
                 popupForCompleteTurn (Ok (outcome Success))
-                    |> Maybe.map .admin
-                    |> Expect.equal (Just "Steve")
+                    |> .admin
+                    |> Expect.equal "Steve"
         , test "SuccessAsVictor → Steve celebrates" <|
             \_ ->
                 popupForCompleteTurn (Ok (outcome SuccessAsVictor))
-                    |> Maybe.map .admin
-                    |> Expect.equal (Just "Steve")
+                    |> .admin
+                    |> Expect.equal "Steve"
         , test "SuccessWithHandEmptied → Steve celebrates" <|
             \_ ->
                 popupForCompleteTurn (Ok (outcome SuccessWithHandEmptied))
-                    |> Maybe.map .admin
-                    |> Expect.equal (Just "Steve")
+                    |> .admin
+                    |> Expect.equal "Steve"
         , test "Err → Angry Cat (server unreachable)" <|
             \_ ->
                 popupForCompleteTurn (Err ())
-                    |> Maybe.map .admin
-                    |> Expect.equal (Just "Angry Cat")
+                    |> .admin
+                    |> Expect.equal "Angry Cat"
         ]

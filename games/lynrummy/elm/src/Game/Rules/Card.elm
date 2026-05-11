@@ -351,6 +351,18 @@ suitFromLabel label =
         "S" ->
             Just Spade
 
+        "♣" ->
+            Just Club
+
+        "♦" ->
+            Just Diamond
+
+        "♥" ->
+            Just Heart
+
+        "♠" ->
+            Just Spade
+
         _ ->
             Nothing
 

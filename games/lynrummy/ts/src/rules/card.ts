@@ -11,6 +11,9 @@
 
 export const RANKS = "A23456789TJQK";
 export const SUITS = "CDSH";
+// Unicode suit glyphs accepted as parser input alongside ASCII.
+// Index-aligned with SUITS so SUITS_UNICODE[i] is the same suit as SUITS[i].
+export const SUITS_UNICODE = "♣♦♠♥";
 
 // RED = {Diamonds, Hearts}.
 export const RED: ReadonlySet<number> = new Set([1, 3]);
@@ -38,7 +41,8 @@ export function parseCardLabel(label: string): Card {
     throw new Error(`invalid card label: ${JSON.stringify(label)}`);
   }
   const rankIdx = RANKS.indexOf(label[0]!);
-  const suitIdx = SUITS.indexOf(label[1]!);
+  let suitIdx = SUITS.indexOf(label[1]!);
+  if (suitIdx < 0) suitIdx = SUITS_UNICODE.indexOf(label[1]!);
   if (rankIdx < 0 || suitIdx < 0) {
     throw new Error(`invalid card label: ${JSON.stringify(label)}`);
   }
