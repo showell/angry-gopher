@@ -51,8 +51,18 @@ boardShell :
     -> Html msg
 boardShell { board, gameId, sourceStack, cardMouseDown, wings, hoveredWing, boardFloaters } =
     let
+        -- Source stack of an in-flight board drag is filtered
+        -- out — the floater renders in its place.
+        visibleStacks =
+            case sourceStack of
+                Just src ->
+                    List.filter (not << CardStack.isStacksEqual src) board
+
+                Nothing ->
+                    board
+
         stackNodes =
-            List.map (viewStackForBoard sourceStack cardMouseDown) board
+            List.map (viewStackForBoard cardMouseDown) visibleStacks
 
         wingNodes =
             List.map (WingView.renderWingWithHover hoveredWing) wings
@@ -71,37 +81,20 @@ boardShell { board, gameId, sourceStack, cardMouseDown, wings, hoveredWing, boar
         (stackNodes ++ wingNodes ++ boardFloaters)
 
 
-{-| Per-stack rendering. Two independent facts:
-
-  - `sourceStack` (Just iff a board-card drag is in flight) —
-    if this stack is the source, hide it (the floater renders
-    in its place).
-  - `cardMouseDown` (Just iff no drag is in flight) — attach
-    per-card mousedown handlers only when idle.
-
+{-| Render a board stack. Per-card mousedown attrs are attached
+iff `cardMouseDown` is `Just` (i.e. no drag is in flight).
 -}
 viewStackForBoard :
-    Maybe CardStack
-    -> Maybe (CardStack -> Int -> List (Html.Attribute msg))
+    Maybe (CardStack -> Int -> List (Html.Attribute msg))
     -> CardStack
     -> Html msg
-viewStackForBoard sourceStack cardMouseDown stack =
-    let
-        isSource =
-            sourceStack
-                |> Maybe.map (\src -> CardStack.isStacksEqual src stack)
-                |> Maybe.withDefault False
-    in
-    if isSource then
-        Html.text ""
+viewStackForBoard cardMouseDown stack =
+    case cardMouseDown of
+        Just attrs ->
+            StackView.viewStackWithCardAttrs (attrs stack) stack
 
-    else
-        case cardMouseDown of
-            Just attrs ->
-                StackView.viewStackWithCardAttrs (attrs stack) stack
-
-            Nothing ->
-                StackView.viewStack stack
+        Nothing ->
+            StackView.viewStack stack
 
 
 
