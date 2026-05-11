@@ -98,7 +98,7 @@ view model =
             , style "top" (String.fromInt BoardGeometry.boardViewportTop ++ "px")
             , style "left" (String.fromInt BoardGeometry.boardViewportLeft ++ "px")
             ]
-            [ BoardView.boardColumn
+            [ BoardView.boardShell
                 { board = board
                 , boardRect = model.boardRect
                 , drag = drag

@@ -1,6 +1,6 @@
 module Game.BoardView exposing
-    ( boardColumn
-    , boardDomIdFor
+    ( boardDomIdFor
+    , boardShell
     )
 
 {-| The board widget — khaki 800×600 rectangle, `position:
@@ -64,6 +64,7 @@ boardShell { board, boardRect, drag, gameId, cardMouseDown, boardFloaters } =
         , style "border-radius" "15px"
         , style "position" "relative"
         , style "width" "800px"
+        , style "min-width" "800px"
         , style "height" "600px"
         , style "margin-top" "8px"
         ]
@@ -98,40 +99,6 @@ viewStackForBoard drag cardMouseDown stack =
 
         NotDragging ->
             StackView.viewStackWithCardAttrs (cardMouseDown stack) stack
-
-
-
--- BOARD COLUMN
---
--- Top-level board column: drag-aware board (board-frame stack
--- nodes + wing targets + caller-supplied `boardFloaters`).
---
--- `boardFloaters` is built and dispatched by the caller — the
--- board-frame floater is a `position: absolute` DOM child of
--- the (`position: relative`) board shell, so it has to be
--- threaded in alongside the stack nodes. The viewport-frame
--- hand floater is host-rendered too (also caller-side
--- dispatch), but doesn't need to thread through here —
--- `position: fixed` makes it DOM-position-independent.
---
--- Msg-polymorphic: callers pass their own `cardMouseDown`
--- attr-builder so the board widget itself never needs to know
--- about the host's Msg constructors.
-
-
-boardColumn :
-    { board : List CardStack
-    , boardRect : Maybe GA.Rect
-    , drag : DragState
-    , gameId : String
-    , cardMouseDown : CardStack -> Int -> List (Html.Attribute msg)
-    , boardFloaters : List (Html msg)
-    }
-    -> Html msg
-boardColumn input =
-    div
-        [ style "min-width" "800px" ]
-        [ boardShell input ]
 
 
 

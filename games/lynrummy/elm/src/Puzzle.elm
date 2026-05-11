@@ -421,7 +421,7 @@ view model =
                 [ undoButton model
                 , replayButton model
                 ]
-            , BoardView.boardColumn
+            , BoardView.boardShell
                 { board = board
                 , boardRect = model.boardRect
                 , drag = drag
