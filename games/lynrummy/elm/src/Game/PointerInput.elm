@@ -1,8 +1,8 @@
 module Game.PointerInput exposing
     ( cardMouseDown
+    , handCardMouseDown
     , mouseMoveDecoder
     , mouseUpDecoder
-    , pointDecoder
     )
 
 {-| Pointer-event decoders + the board-card mousedown attr
@@ -12,7 +12,7 @@ constructors.
 
 -}
 
-import Game.CardStack exposing (CardStack)
+import Game.CardStack exposing (CardStack, HandCard)
 import Game.Point exposing (Point)
 import Html
 import Html.Events as Events
@@ -82,5 +82,22 @@ cardMouseDown toMsg stack cardIdx =
                 toMsg { stack = stack, cardIndex = cardIdx, point = p, time = t }
             )
             pointAndTimeDecoder
+        )
+    ]
+
+
+{-| Mousedown attr-builder for a hand card. Mirror of
+`cardMouseDown` minus the time stamp (hand drags don't capture
+a gesture path).
+-}
+handCardMouseDown :
+    ({ handCard : HandCard, point : Point } -> msg)
+    -> HandCard
+    -> List (Html.Attribute msg)
+handCardMouseDown toMsg hc =
+    [ Events.on "mousedown"
+        (Decode.map
+            (\p -> toMsg { handCard = hc, point = p })
+            pointDecoder
         )
     ]

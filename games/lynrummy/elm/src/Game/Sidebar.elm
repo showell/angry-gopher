@@ -10,16 +10,12 @@ layout, turn controls, and the small button styles.
 
 import Game.Button as Button
 import Game.CardStack exposing (HandCard)
-import Game.Drag as Drag exposing (DragState(..))
 import Game.Hand exposing (Hand)
-import Game.PointerInput as PointerInput
 import Game.Rules.Card exposing (Card)
 import Game.Game exposing (GameState)
 import Game.View as View
 import Html exposing (Html, Attribute, div)
 import Html.Attributes exposing (style)
-import Html.Events as Events
-import Json.Decode as Decode
 import Main.Msg exposing (Msg(..))
 
 
@@ -36,7 +32,8 @@ type ReplayControl
 
 type alias PlayerPanelInfo =
     { gameState : GameState
-    , drag : Drag.DragState
+    , sourceCard : Maybe Card
+    , cardMouseDown : Maybe (HandCard -> List (Attribute Msg))
     , hintedCards : List Card
     , canUndo : Bool
     , replayControl : ReplayControl
@@ -44,7 +41,8 @@ type alias PlayerPanelInfo =
 
 
 type alias ActivePlayerInfo =
-    { drag : Drag.DragState
+    { sourceCard : Maybe Card
+    , cardMouseDown : Maybe (HandCard -> List (Attribute Msg))
     , hintedCards : List Card
     , canUndo : Bool
     , replayControl : ReplayControl
@@ -66,7 +64,8 @@ playerHands info =
     let
         activeInfo : ActivePlayerInfo
         activeInfo =
-            { drag = info.drag
+            { sourceCard = info.sourceCard
+            , cardMouseDown = info.cardMouseDown
             , hintedCards = info.hintedCards
             , canUndo = info.canUndo
             , replayControl = info.replayControl
@@ -105,19 +104,32 @@ viewActivePlayerRow info idx hand =
     playerRowShell { isActive = True, idx = idx }
         [ View.viewHandHeading
         , View.viewHand
-            { attrsForCard = handCardAttrs info.drag info.hintedCards }
+            { attrsForCard = handCardAttrs info.sourceCard info.cardMouseDown info.hintedCards }
             hand
         , viewTurnControls { canUndo = info.canUndo, replayControl = info.replayControl }
         ]
 
 
-{-| Per-hand-card attributes: hint highlight (light green if the
-card identity is in `hintedCards`), mousedown hook when idle,
-and dim + pointer-disable on the dragged source so the floater
-is the only visible / interactive piece.
+{-| Per-hand-card attributes. Three independent decisions:
+
+  - **Hint highlight** — light green if this card's identity
+    is in `hintedCards`.
+  - **Source-card dim** — if this card is the source of an
+    in-flight hand drag (`sourceCard`), dim it and disable
+    pointer events so the floater is the only interactive
+    piece.
+  - **Mousedown handler** — attach iff `cardMouseDown` is
+    `Just` (i.e. no drag is in flight); otherwise disable
+    pointer events.
+
 -}
-handCardAttrs : DragState -> List Card -> HandCard -> List (Attribute Msg)
-handCardAttrs drag hintedCards hc =
+handCardAttrs :
+    Maybe Card
+    -> Maybe (HandCard -> List (Attribute Msg))
+    -> List Card
+    -> HandCard
+    -> List (Attribute Msg)
+handCardAttrs sourceCard cardMouseDown hintedCards hc =
     let
         hintAttrs =
             if List.any (\c -> c == hc.card) hintedCards then
@@ -127,24 +139,16 @@ handCardAttrs drag hintedCards hc =
                 []
     in
     hintAttrs
-        ++ (case drag of
-                NotDragging ->
-                    [ Events.on "mousedown"
-                        (Decode.map
-                            (\p -> MouseDownOnHandCard { handCard = hc, point = p })
-                            PointerInput.pointDecoder
-                        )
-                    ]
+        ++ (if sourceCard == Just hc.card then
+                [ style "opacity" "0.35", style "pointer-events" "none" ]
 
-                DraggingHandCard d ->
-                    if d.card == hc.card then
-                        [ style "opacity" "0.35", style "pointer-events" "none" ]
+            else
+                case cardMouseDown of
+                    Just attrs ->
+                        attrs hc
 
-                    else
+                    Nothing ->
                         [ style "pointer-events" "none" ]
-
-                DraggingBoardCard _ ->
-                    [ style "pointer-events" "none" ]
            )
 
 

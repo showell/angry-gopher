@@ -155,7 +155,7 @@ view model =
             , style "left" "20px"
             , style "width" (String.fromInt (BoardGeometry.boardViewportLeft - 40) ++ "px")
             ]
-            [ Sidebar.leftSidebar (sidebarInfo model) ]
+            [ Sidebar.leftSidebar (sidebarInfo model drag) ]
          , div
             [ style "position" "absolute"
             , style "top" (String.fromInt BoardGeometry.boardViewportTop ++ "px")
@@ -188,12 +188,30 @@ view model =
 -- and snaps back when `ReplayCompleted` clears `replayState`.
 
 
-sidebarInfo : Model -> Sidebar.PlayerPanelInfo
-sidebarInfo model =
+sidebarInfo : Model -> Drag.DragState -> Sidebar.PlayerPanelInfo
+sidebarInfo model drag =
+    let
+        sourceCard =
+            case drag of
+                DraggingHandCard d ->
+                    Just d.card
+
+                _ ->
+                    Nothing
+
+        cardMouseDown =
+            case drag of
+                NotDragging ->
+                    Just (PointerInput.handCardMouseDown MouseDownOnHandCard)
+
+                _ ->
+                    Nothing
+    in
     case model.replayState of
         Just rs ->
             { gameState = rs.gameState
-            , drag = replayDrag rs
+            , sourceCard = sourceCard
+            , cardMouseDown = cardMouseDown
             , hintedCards = []
             , canUndo = False
             , replayControl =
@@ -206,7 +224,8 @@ sidebarInfo model =
 
         Nothing ->
             { gameState = model.gameState
-            , drag = model.drag
+            , sourceCard = sourceCard
+            , cardMouseDown = cardMouseDown
             , hintedCards = model.hintedCards
             , canUndo = canUndoThisTurn model.actionLog
             , replayControl = Sidebar.ShowReplay
