@@ -89,7 +89,7 @@ suiteUndoEvent =
                                 }
 
                         after =
-                            Execute.applyEvent action before
+                            State.applyEvent action before
 
                         restored =
                             Execute.undoEvent action after
@@ -122,7 +122,7 @@ suiteUndoEvent =
                                 }
 
                         after =
-                            Execute.applyEvent action before
+                            State.applyEvent action before
 
                         restored =
                             Execute.undoEvent action after
@@ -143,7 +143,7 @@ suiteUndoEvent =
                                 }
 
                         after =
-                            Execute.applyEvent action before
+                            State.applyEvent action before
 
                         restored =
                             Execute.undoEvent action after
@@ -163,7 +163,7 @@ suiteUndoEvent =
                                 }
 
                         after =
-                            Execute.applyEvent action before
+                            State.applyEvent action before
 
                         restored =
                             Execute.undoEvent action after
@@ -191,7 +191,7 @@ suiteUndoEvent =
                                 }
 
                         afterSplit =
-                            Execute.applyEvent splitAction before
+                            State.applyEvent splitAction before
 
                         sourceIdx =
                             List.length afterSplit.board - 1
@@ -208,7 +208,7 @@ suiteUndoEvent =
                                 }
 
                         afterMerge =
-                            Execute.applyEvent mergeAction afterSplit
+                            State.applyEvent mergeAction afterSplit
 
                         restored =
                             Execute.undoEvent mergeAction afterMerge
@@ -236,7 +236,7 @@ suiteUndoEvent =
                                 }
 
                         after =
-                            Execute.applyEvent action before
+                            State.applyEvent action before
 
                         restored =
                             Execute.undoEvent action after
@@ -269,7 +269,7 @@ suiteUndoEvent =
                                 }
 
                         after =
-                            Execute.applyEvent action before
+                            State.applyEvent action before
 
                         restored =
                             Execute.undoEvent action after

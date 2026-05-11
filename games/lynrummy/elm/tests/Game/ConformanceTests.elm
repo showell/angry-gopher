@@ -30,7 +30,6 @@ import Game.Physics.WingOracle as WingOracle
 import Game.Point exposing (Point)
 import Game.Rules.Card as Card exposing (Card, OriginDeck(..))
 import Game.WingView as WingView
-import Game.Execute as Execute
 import Game.GameEvent as GameEvent exposing (GameEvent)
 import Game.Hand as Hand
 import Game.Rules.Referee as Referee exposing (RefereeStage(..))
@@ -802,7 +801,7 @@ verifyGestureFloaterOverWing sc =
 -- Walks a sequence of steps, each producing a (model, expectations)
 -- transition. Steps come in five shapes:
 --   undo:                Play.update Msg.ClickUndo
---   place_hand X -> loc: GameEvent.PlaceHand, log, Execute.applyEvent
+--   place_hand X -> loc: GameEvent.PlaceHand, log, State.applyEvent
 --   merge_hand X -> [t] /side: GameEvent.MergeHand, log, applyEvent
 --   board verbs:         ReplaySpec → resolveSpec → log → applyEvent
 --   no action:           alias previous model (observation only)
@@ -900,7 +899,7 @@ applyTransitionAction prev raw =
                     { action = action }
 
                 next =
-                    { prev | gameState = Execute.applyEvent action prev.gameState }
+                    { prev | gameState = State.applyEvent action prev.gameState }
             in
             { next | actionLog = prev.actionLog ++ [ entry ] }
 
@@ -1310,7 +1309,7 @@ buildEagerAndActions initialModel specs =
                             resolveSpec spec model.gameState.board
 
                         next =
-                            { model | gameState = Execute.applyEvent action model.gameState }
+                            { model | gameState = State.applyEvent action model.gameState }
                     in
                     loop next (action :: acc) rest
     in
@@ -1324,7 +1323,7 @@ runReplay initialModel actions =
             initialModel.gameState
 
         finalGameState =
-            List.foldl Execute.applyEvent gs0 actions
+            List.foldl State.applyEvent gs0 actions
     in
     { initialModel | gameState = finalGameState }
 

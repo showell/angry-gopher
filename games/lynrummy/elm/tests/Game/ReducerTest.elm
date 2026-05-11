@@ -1,6 +1,6 @@
 module Game.ReducerTest exposing (suite)
 
-{-| Tests for `Game.Execute.applyEvent`. Each action type
+{-| Tests for `Main.State.applyEvent`. Each action type
 gets a transition test; a longer test sequences several actions
 and checks end-state. CompleteTurn / Undo verify they pass
 state through (CompleteTurn's full turn-flip is exercised in
@@ -11,11 +11,11 @@ import Expect
 import Game.BoardActions exposing (Side(..))
 import Game.CardStack exposing (BoardCardState(..), CardStack, HandCardState(..))
 import Game.Dealer
-import Game.Execute as Execute
 import Game.Game exposing (GameState)
 import Game.GameEvent exposing (GameEvent(..))
 import Game.Hand as Hand
 import Game.Rules.Card exposing (CardValue(..), OriginDeck(..), Suit(..))
+import Main.State as State
 import Test exposing (Test, describe, test)
 
 
@@ -56,7 +56,7 @@ initialGameState =
 
 suite : Test
 suite =
-    describe "Execute.applyEvent"
+    describe "State.applyEvent"
         [ describe "Split"
             [ test "splits stack 0 (KS,AS,2S,3S) at index 2 → two stacks replace one" <|
                 \_ ->
@@ -65,7 +65,7 @@ suite =
                             initialGameState
 
                         after =
-                            Execute.applyEvent
+                            State.applyEvent
                                 (Split { stack = stackAt 0 before, cardIndex = 2 })
                                 before
                     in
@@ -83,7 +83,7 @@ suite =
                             { top = 300, left = 400 }
 
                         after =
-                            Execute.applyEvent
+                            State.applyEvent
                                 (MoveStack { stack = stackAt 0 before, newLoc = newLoc, boardPath = [] })
                                 before
 
@@ -112,7 +112,7 @@ suite =
                             { initialGameState | hands = [ beforeHand, Hand.empty ] }
 
                         after =
-                            Execute.applyEvent
+                            State.applyEvent
                                 (PlaceHand { handCard = card7H, loc = { top = 400, left = 500 } })
                                 before
                     in
@@ -137,7 +137,7 @@ suite =
 
                         -- Stack index 3 in the opening board is "7S,7D,7C".
                         after =
-                            Execute.applyEvent
+                            State.applyEvent
                                 (MergeHand
                                     { handCard = card7H
                                     , target = stackAt 3 before
@@ -155,19 +155,19 @@ suite =
         , describe "Undo passes through; CompleteTurn flips turn semantics"
             [ test "Undo is a pass-through" <|
                 \_ ->
-                    Execute.applyEvent Undo initialGameState
+                    State.applyEvent Undo initialGameState
                         |> Expect.equal initialGameState
             ]
         , describe "silent pass-through on invalid references"
             [ test "Split on a ghost stack is a no-op" <|
                 \_ ->
-                    Execute.applyEvent
+                    State.applyEvent
                         (Split { stack = ghostStack, cardIndex = 0 })
                         initialGameState
                         |> Expect.equal initialGameState
             , test "MoveStack on a ghost stack is a no-op" <|
                 \_ ->
-                    Execute.applyEvent
+                    State.applyEvent
                         (MoveStack { stack = ghostStack, newLoc = { top = 10, left = 10 }, boardPath = [] })
                         initialGameState
                         |> Expect.equal initialGameState
@@ -180,7 +180,7 @@ suite =
                         notInHand =
                             { value = Ace, suit = Spade, originDeck = DeckTwo }
                     in
-                    Execute.applyEvent
+                    State.applyEvent
                         (MergeHand
                             { handCard = notInHand
                             , target = stackAt 3 before
@@ -198,12 +198,12 @@ suite =
                             initialGameState
 
                         step1 =
-                            Execute.applyEvent
+                            State.applyEvent
                                 (Split { stack = stackAt 0 start, cardIndex = 2 })
                                 start
 
                         step2 =
-                            Execute.applyEvent
+                            State.applyEvent
                                 (MoveStack
                                     { stack = stackAt 0 step1
                                     , newLoc = { top = 500, left = 400 }

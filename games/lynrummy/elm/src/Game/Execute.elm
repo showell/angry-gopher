@@ -1,4 +1,4 @@
-module Game.Execute exposing (applyEvent, mergeHand, mergeStack, moveStack, placeHand, split, undoEvent)
+module Game.Execute exposing (mergeHand, mergeStack, moveStack, placeHand, split, undoEvent)
 
 {-| Honest board mutators, one per `GameEvent` variant. Each
 function takes the board (and whatever per-action data it
@@ -15,70 +15,10 @@ divergence cascades downstream and gets harder to trace.
 
 import Game.BoardActions as BoardActions exposing (Side)
 import Game.CardStack as CardStack exposing (BoardLocation, CardStack, findStack, isStacksEqual)
-import Game.Game as Game exposing (GameState)
+import Game.Game exposing (GameState)
 import Game.GameEvent exposing (GameEvent(..))
 import Game.Hand as Hand exposing (Hand)
-import Game.Physics.BoardGeometry exposing (refereeBounds)
 import Game.Rules.Card exposing (Card)
-
-
-{-| Dispatch a `GameEvent` to the appropriate per-variant
-mutator. Operates on any extensible record that satisfies the
-`GameState` shape (a Model, a replay state, a test-fixture
-record, etc.). The function knows how to advance every
-variant's state — physics actions update board + active
-hand + cardsPlayedThisTurn; `CompleteTurn` triggers the full
-turn-flip via `Game.applyCompleteTurn`; `Undo` is a no-op
-(handled separately by `Reducer.undoAction`).
-
--}
-applyEvent : GameEvent -> GameState -> GameState
-applyEvent event state =
-    case event of
-        Split p ->
-            { state | board = split p.stack p.cardIndex state.board }
-
-        MergeStack p ->
-            { state | board = mergeStack p.source p.target p.side state.board }
-
-        MoveStack p ->
-            { state | board = moveStack p.stack p.newLoc state.board }
-
-        MergeHand p ->
-            let
-                preHand =
-                    Hand.activeHand state
-
-                next =
-                    mergeHand p.handCard p.target p.side state.board preHand
-            in
-            Hand.setActiveHand next.hand
-                { state
-                    | board = next.board
-                    , cardsPlayedThisTurn =
-                        state.cardsPlayedThisTurn + (Hand.size preHand - Hand.size next.hand)
-                }
-
-        PlaceHand p ->
-            let
-                preHand =
-                    Hand.activeHand state
-
-                next =
-                    placeHand p.handCard p.loc state.board preHand
-            in
-            Hand.setActiveHand next.hand
-                { state
-                    | board = next.board
-                    , cardsPlayedThisTurn =
-                        state.cardsPlayedThisTurn + (Hand.size preHand - Hand.size next.hand)
-                }
-
-        CompleteTurn ->
-            Tuple.first (Game.applyCompleteTurn refereeBounds state)
-
-        Undo ->
-            state
 
 
 {-| Reverse a `GameEvent` against a `GameState`. Each variant

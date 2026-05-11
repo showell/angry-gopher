@@ -1,5 +1,6 @@
 module Main.State exposing
     ( Model
+    , applyEvent
     , baseModel
     , bootstrapFromBundle
     , canUndoThisTurn
@@ -12,9 +13,10 @@ import Game.ActionLog as ActionLog exposing (ActionLogEntry)
 import Game.Execute as Execute
 import Game.Dealer
 import Game.Drag exposing (DragState(..))
-import Game.Game exposing (GameState)
+import Game.Game as Game exposing (GameState)
 import Game.GameEvent exposing (GameEvent(..))
 import Game.Hand as Hand
+import Game.Physics.BoardGeometry exposing (refereeBounds)
 import Game.Physics.GestureArbitration as GA
 import Game.Rules.Card exposing (Card)
 import Game.Popup exposing (PopupContent)
@@ -164,6 +166,60 @@ bootstrapFromBundle initialState actions model =
             }
     in
     List.foldl
-        (\entry m -> { m | gameState = Execute.applyEvent entry.action m.gameState })
+        (\entry m -> { m | gameState = applyEvent entry.action m.gameState })
         atInitial
         (ActionLog.collapseUndos actions)
+
+
+{-| The UI serializes core game actions transparently back and
+forth with the Go server (and file system). We replay them
+back here so that players can resume where the prior session
+left off.
+-}
+applyEvent : GameEvent -> GameState -> GameState
+applyEvent event state =
+    case event of
+        Split p ->
+            { state | board = Execute.split p.stack p.cardIndex state.board }
+
+        MergeStack p ->
+            { state | board = Execute.mergeStack p.source p.target p.side state.board }
+
+        MoveStack p ->
+            { state | board = Execute.moveStack p.stack p.newLoc state.board }
+
+        MergeHand p ->
+            let
+                preHand =
+                    Hand.activeHand state
+
+                next =
+                    Execute.mergeHand p.handCard p.target p.side state.board preHand
+            in
+            Hand.setActiveHand next.hand
+                { state
+                    | board = next.board
+                    , cardsPlayedThisTurn =
+                        state.cardsPlayedThisTurn + (Hand.size preHand - Hand.size next.hand)
+                }
+
+        PlaceHand p ->
+            let
+                preHand =
+                    Hand.activeHand state
+
+                next =
+                    Execute.placeHand p.handCard p.loc state.board preHand
+            in
+            Hand.setActiveHand next.hand
+                { state
+                    | board = next.board
+                    , cardsPlayedThisTurn =
+                        state.cardsPlayedThisTurn + (Hand.size preHand - Hand.size next.hand)
+                }
+
+        CompleteTurn ->
+            Tuple.first (Game.applyCompleteTurn refereeBounds state)
+
+        Undo ->
+            state
