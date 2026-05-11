@@ -9,6 +9,7 @@ module Game.Hand exposing
     , resetState
     , setActiveHand
     , size
+    , sortIntoSuitRows
     )
 
 {-| Faithful port of the `Hand` class in
@@ -17,7 +18,7 @@ list of `HandCard`s; operations add, remove, reset state, and
 query.
 -}
 
-import Game.Rules.Card exposing (Card)
+import Game.Rules.Card as Card exposing (Card, Suit)
 import Game.CardStack exposing (HandCard, HandCardState(..), isHandCardSameCard)
 
 
@@ -117,6 +118,33 @@ removeFirstMatch target cards =
 
             else
                 c :: removeFirstMatch target rest
+
+
+{-| Group a hand into display rows — one row per non-empty
+suit, in `Card.allSuits` order (Heart, Spade, Diamond, Club),
+each row sorted ascending by value. The hand UI
+(`Game.View.viewHand`) and the hand DSL encoder
+(`Game.HandDsl.formatHand`) both consume this so the layout
+is byte-canonical across surfaces.
+-}
+sortIntoSuitRows : Hand -> List ( Suit, List HandCard )
+sortIntoSuitRows hand =
+    Card.allSuits
+        |> List.filterMap (suitRow hand.handCards)
+
+
+suitRow : List HandCard -> Suit -> Maybe ( Suit, List HandCard )
+suitRow handCards suit =
+    case
+        handCards
+            |> List.filter (\hc -> hc.card.suit == suit)
+            |> List.sortBy (\hc -> Card.cardValueToInt hc.card.value)
+    of
+        [] ->
+            Nothing
+
+        cards ->
+            Just ( suit, cards )
 
 
 {-| Called after the player's turn ends. Resets every hand

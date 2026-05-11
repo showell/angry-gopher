@@ -16,9 +16,9 @@ shared across surfaces.
 -}
 
 import Game.Physics.BoardGeometry as BG
-import Game.Rules.Card as Card
+import Game.Rules.Card as Card exposing (Suit)
 import Game.CardStack exposing (HandCard, HandCardState(..))
-import Game.Hand exposing (Hand)
+import Game.Hand as Hand exposing (Hand)
 import Game.HandLayout as HandLayout
 import Game.StackView as StackView
 import Html exposing (Html, div, text)
@@ -74,22 +74,22 @@ viewHand :
     -> Html msg
 viewHand config hand =
     let
-        rows =
-            List.indexedMap
-                (\rowIdx suit ->
-                    hand.handCards
-                        |> List.filter (\hc -> hc.card.suit == suit)
-                        |> List.sortBy (\hc -> Card.cardValueToInt hc.card.value)
-                        |> List.indexedMap
+        -- The hand DSL encoder consumes the same `sortIntoSuitRows`
+        -- helper. Shared canonicalization keeps the on-screen
+        -- layout and the DSL emission in lockstep.
+        slots =
+            Hand.sortIntoSuitRows hand
+                |> List.concatMap
+                    (\( suit, cards ) ->
+                        List.indexedMap
                             (\colIdx hc ->
-                                { row = rowIdx
+                                { row = suitToRowIdx suit
                                 , col = colIdx
                                 , handCard = hc
                                 }
                             )
-                )
-                Card.allSuits
-                |> List.concat
+                            cards
+                    )
 
         containerHeight =
             4 * HandLayout.suitRowHeight
@@ -99,7 +99,23 @@ viewHand config hand =
         , style "width" (String.fromInt (240 - 20) ++ "px")
         , style "height" (String.fromInt containerHeight ++ "px")
         ]
-        (List.map (viewPlacedHandCard config) rows)
+        (List.map (viewPlacedHandCard config) slots)
+
+
+suitToRowIdx : Suit -> Int
+suitToRowIdx suit =
+    case suit of
+        Card.Heart ->
+            0
+
+        Card.Spade ->
+            1
+
+        Card.Diamond ->
+            2
+
+        Card.Club ->
+            3
 
 
 viewPlacedHandCard :
