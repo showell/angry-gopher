@@ -14,6 +14,27 @@ they don't substitute for them.
 
 ---
 
+## How to read existing docstrings and prose
+
+Treat any docstring, README paragraph, or `.md` body as a
+**statement of historical intent**, not a current fact. The
+person who wrote it believed it at the time; whether it's still
+true depends on how much has happened since.
+
+Skim with skepticism. When a comment claims X about a function
+and the function's body is six lines below, the body wins
+without question. When a doc names a file path, grep for it
+before relying on the name. When the prose says "we never do
+Y," look for a counter-example before designing around it.
+
+That said — drift-prone or not, prose often carries WHY in a
+way the code can't. Don't dismiss it; just verify before you
+spend on it. A good rule of thumb: if you'd act differently
+based on whether the prose is right, spend ten seconds
+checking. If you wouldn't, save the keystrokes and move on.
+
+---
+
 ## Pick the right archetype before writing
 
 Every doc is one of:
