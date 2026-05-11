@@ -45,7 +45,6 @@ scenario wings_for_stack_no_valid_merge
     at (200, 300): 7C 7D 7H
   source:
     at (200, 100): AC AD AH
-  expect_wings: []
 
 
 scenario wings_for_stack_self_excluded
@@ -55,7 +54,6 @@ scenario wings_for_stack_self_excluded
     at (200, 100): 2C 3D 4C
   source:
     at (200, 100): 2C 3D 4C
-  expect_wings: []
 
 
 scenario wings_for_hand_card_7S_onto_7set_right
@@ -77,7 +75,6 @@ scenario wings_for_hand_card_duplicate_rejected
   hand_card: 7H
   board:
     at (200, 100): 7H 7D 7C
-  expect_wings: []
 
 
 scenario wings_for_hand_card_no_valid_group
@@ -86,7 +83,6 @@ scenario wings_for_hand_card_no_valid_group
   hand_card: KS
   board:
     at (200, 100): 4H 5H 6H
-  expect_wings: []
 
 
 scenario wings_for_hand_card_onto_run_right

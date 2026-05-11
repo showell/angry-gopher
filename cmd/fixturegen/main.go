@@ -2838,13 +2838,13 @@ func parseReplayActions(children []line, path string) ([]ReplayAction, error) {
 
 // parseWalkthroughSteps parses a `steps:` block inside an
 // `undo_walkthrough` scenario. The block is a list of step
-// groups, each starting with `- step: <label>` followed by
+// groups, each headed by `step_N:` followed by `desc:` and
 // optional sub-fields (`action:`, `expect_board_count:`,
-// `expect_hand_count:`, `expect_undoable:`).
+// `expect_hand_count:`, `expect_undoable:`, etc.).
 //
 // Indentation convention (relative to the scenario body):
 //   `steps:` itself is at indent 1.
-//   `- step:` entries are at indent 2.
+//   `step_N:` entries are at indent 2.
 //   Sub-fields are at indent 3.
 func parseWalkthroughSteps(children []line, path string) ([]WalkthroughStep, error) {
 	var steps []WalkthroughStep
@@ -2857,16 +2857,16 @@ func parseWalkthroughSteps(children []line, path string) ([]WalkthroughStep, err
 		}
 		switch {
 		case l.indent == baseIndent:
-			// Step header: "- step: <label>"
+			// Step header: "step_N:"
 			t := strings.TrimSpace(l.content)
-			if !strings.HasPrefix(t, "- step:") {
-				return nil, fmt.Errorf("%s:%d: expected '- step: <label>', got %q", path, l.lineNum, t)
+			if !strings.HasPrefix(t, "step_") || !strings.HasSuffix(t, ":") {
+				return nil, fmt.Errorf("%s:%d: expected 'step_N:', got %q", path, l.lineNum, t)
 			}
 			if cur != nil {
 				steps = append(steps, *cur)
 			}
-			label := strings.TrimSpace(t[len("- step:"):])
-			cur = &WalkthroughStep{Label: label}
+			// Label is set later from the `desc:` sub-field.
+			cur = &WalkthroughStep{}
 
 		case l.indent == baseIndent+1:
 			// Sub-field of the current step.
@@ -2875,6 +2875,8 @@ func parseWalkthroughSteps(children []line, path string) ([]WalkthroughStep, err
 			}
 			key, val, _ := splitField(strings.TrimSpace(l.content))
 			switch key {
+			case "desc":
+				cur.Label = strings.TrimSpace(val)
 			case "action":
 				act, err := parseReplayAction(strings.TrimSpace(val))
 				if err != nil {
