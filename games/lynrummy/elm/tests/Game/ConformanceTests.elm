@@ -17,10 +17,17 @@ the Elm-emit code in `cmd/fixturegen`) goes away.
 
 -}
 
+import Dict
 import Expect
+import Game.CardStack exposing (BoardCardState(..), CardStack)
 import Game.ConformanceDsl as Dsl
 import Game.DslContent
 import Game.Physics.BoardGeometry as BoardGeometry
+    exposing
+        ( BoardGeometryStatus(..)
+        , GeometryErrorKind(..)
+        )
+import Game.Physics.PlaceStack as PlaceStack
 import Test exposing (Test, describe, test)
 
 
@@ -46,7 +53,249 @@ verify sc =
         "stack_height_constant" ->
             BoardGeometry.stackHeight |> Expect.equal 40
 
+        "find_open_loc" ->
+            verifyFindOpenLoc sc
+
+        "classify_board_geometry" ->
+            verifyClassifyBoardGeometry sc
+
+        "validate_board_geometry" ->
+            verifyValidateBoardGeometry sc
+
         _ ->
             -- Verifier not yet ported from fixturegen. The legacy
             -- DslConformanceTest.elm still covers this op.
             Expect.pass
+
+
+
+-- HELPERS
+
+
+{-| Convert parsed DSL stacks into CardStacks. Each bare Card
+becomes a `BoardCard` marked `FirmlyOnBoard`. State markers
+(`*` / `**`) are dropped by the DSL parser today; verifiers
+that need freshness re-parse from the raw token.
+-}
+stacksFromDsl : List Dsl.Stack -> List CardStack
+stacksFromDsl =
+    List.map stackFromDsl
+
+
+stackFromDsl : Dsl.Stack -> CardStack
+stackFromDsl s =
+    { boardCards = List.map (\c -> { card = c, state = FirmlyOnBoard }) s.cards
+    , loc = s.loc
+    }
+
+
+
+-- find_open_loc
+
+
+verifyFindOpenLoc : Dsl.Scenario -> Expect.Expectation
+verifyFindOpenLoc sc =
+    case ( sc.cardCount, expectLoc sc ) of
+        ( Just count, Just expected ) ->
+            PlaceStack.findOpenLoc (stacksFromDsl sc.existing) count
+                |> Expect.equal expected
+
+        ( Nothing, _ ) ->
+            Expect.fail "find_open_loc scenario missing card_count"
+
+        ( _, Nothing ) ->
+            Expect.fail "find_open_loc scenario missing expect.loc"
+
+
+expectLoc : Dsl.Scenario -> Maybe { top : Int, left : Int }
+expectLoc sc =
+    case sc.expect of
+        Dsl.ExpectBlock dict ->
+            case Dict.get "loc" dict of
+                Just (Dsl.ExpectLoc loc) ->
+                    Just loc
+
+                _ ->
+                    Nothing
+
+        _ ->
+            Nothing
+
+
+
+-- classify_board_geometry
+
+
+verifyClassifyBoardGeometry : Dsl.Scenario -> Expect.Expectation
+verifyClassifyBoardGeometry sc =
+    case expectStr "geometry_status" sc of
+        Nothing ->
+            Expect.fail "classify_board_geometry scenario missing geometry_status"
+
+        Just raw ->
+            case parseGeometryStatus raw of
+                Just status ->
+                    BoardGeometry.classifyBoardGeometry
+                        (stacksFromDsl sc.board)
+                        BoardGeometry.refereeBounds
+                        |> Expect.equal status
+
+                Nothing ->
+                    Expect.fail ("unknown geometry status: " ++ raw)
+
+
+parseGeometryStatus : String -> Maybe BoardGeometryStatus
+parseGeometryStatus s =
+    case s of
+        "CleanlySpaced" ->
+            Just CleanlySpaced
+
+        "Crowded" ->
+            Just Crowded
+
+        "Illegal" ->
+            Just Illegal
+
+        _ ->
+            Nothing
+
+
+
+-- validate_board_geometry
+
+
+verifyValidateBoardGeometry : Dsl.Scenario -> Expect.Expectation
+verifyValidateBoardGeometry sc =
+    let
+        errors =
+            BoardGeometry.validateBoardGeometry
+                (stacksFromDsl sc.board)
+                BoardGeometry.refereeBounds
+    in
+    case sc.expect of
+        Dsl.ExpectScalar "ok" ->
+            errors |> Expect.equal []
+
+        Dsl.ExpectBlock dict ->
+            verifyGeometryErrorBlock dict errors
+
+        _ ->
+            Expect.fail "validate_board_geometry scenario missing expect"
+
+
+verifyGeometryErrorBlock :
+    Dict.Dict String Dsl.ExpectField
+    -> List BoardGeometry.GeometryError
+    -> Expect.Expectation
+verifyGeometryErrorBlock dict errors =
+    let
+        kind =
+            getStr "kind" dict
+
+        checks =
+            List.filterMap identity
+                [ kind
+                    |> Maybe.andThen
+                        (\k ->
+                            if k == "ok" then
+                                Just (Expect.equal [] errors)
+
+                            else
+                                Nothing
+                        )
+                , getStr "error_count" dict
+                    |> Maybe.andThen String.toInt
+                    |> Maybe.map (\n -> List.length errors |> Expect.equal n)
+                , getStr "any_error_kind" dict
+                    |> Maybe.andThen parseGeometryKind
+                    |> Maybe.map
+                        (\k ->
+                            List.any (\e -> e.kind == k) errors
+                                |> Expect.equal True
+                        )
+                , getStr "no_error_kind" dict
+                    |> Maybe.andThen parseGeometryKind
+                    |> Maybe.map
+                        (\k ->
+                            List.any (\e -> e.kind == k) errors
+                                |> Expect.equal False
+                        )
+                , getStr "overlap_count" dict
+                    |> Maybe.andThen String.toInt
+                    |> Maybe.map
+                        (\n ->
+                            List.filter (\e -> e.kind == Overlap) errors
+                                |> List.length
+                                |> Expect.equal n
+                        )
+                , getStr "overlap_stack_indices" dict
+                    |> Maybe.andThen parseIntList
+                    |> Maybe.map
+                        (\indices ->
+                            List.filter (\e -> e.kind == Overlap) errors
+                                |> List.head
+                                |> Maybe.map .stackIndices
+                                |> Expect.equal (Just indices)
+                        )
+                ]
+    in
+    case checks of
+        [] ->
+            Expect.fail "validate_board_geometry scenario missing assertions"
+
+        _ ->
+            Expect.all (List.map always checks) ()
+
+
+parseGeometryKind : String -> Maybe GeometryErrorKind
+parseGeometryKind s =
+    case s of
+        "out_of_bounds" ->
+            Just OutOfBounds
+
+        "overlap" ->
+            Just Overlap
+
+        "too_close" ->
+            Just TooClose
+
+        _ ->
+            Nothing
+
+
+parseIntList : String -> Maybe (List Int)
+parseIntList s =
+    let
+        parts =
+            String.words s
+                |> List.map String.toInt
+    in
+    if List.all (\m -> m /= Nothing) parts then
+        Just (List.filterMap identity parts)
+
+    else
+        Nothing
+
+
+
+-- EXPECT-BLOCK ACCESSORS
+
+
+expectStr : String -> Dsl.Scenario -> Maybe String
+expectStr key sc =
+    case sc.expect of
+        Dsl.ExpectBlock dict ->
+            getStr key dict
+
+        _ ->
+            Nothing
+
+
+getStr : String -> Dict.Dict String Dsl.ExpectField -> Maybe String
+getStr key dict =
+    case Dict.get key dict of
+        Just (Dsl.ExpectStr s) ->
+            Just s
+
+        _ ->
+            Nothing
