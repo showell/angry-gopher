@@ -5,15 +5,8 @@ module Game.ConformanceTests exposing (suite)
 Parses every embedded `.dsl` file in `Game.DslContent.allFiles`
 via `Game.ConformanceDsl.parseConformanceDsl`, then dispatches
 each scenario to its op-specific verifier. Verifiers are
-hand-written Elm functions in this module (formerly emitted
-as templated Elm code from `cmd/fixturegen`).
-
-Phase 3 of the DSL retirement: as each op gets a real
-verifier, scenarios that op covers stop being `Expect.pass`
-stubs and start asserting real behavior. The legacy
-`DslConformanceTest.elm` still covers everything during the
-transition; once all ops are ported here, that file (and
-the Elm-emit code in `cmd/fixturegen`) goes away.
+hand-written Elm functions in this module; the `verify`
+case-match is the live op registry.
 
 -}
 

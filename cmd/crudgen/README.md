@@ -39,4 +39,3 @@ go run ./cmd/crudgen ./views/*.claude
 ## References
 
 - Memory: `feedback_trust_codegen_layers.md` — multi-layer codegen is within Claude's wheelhouse.
-- Sibling: `cmd/fixturegen/` — shipped codegen system for LynRummy conformance; uses the same mechanism + discipline.

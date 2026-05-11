@@ -67,7 +67,7 @@ Server-rendered pages at `/gopher/*` with Basic auth:
 ops/start              Start Gopher (9000) + Angry Cat (8000)
 ops/list               List ops commands
 ops/check              Full preflight (conformance + Go build)
-ops/check-conformance  Conformance gate (fixturegen + TS + Elm)
+ops/check-conformance  Conformance gate (TS + Elm)
 ```
 
 Do not hand-compose `go test ./...` or `elm make` calls — the

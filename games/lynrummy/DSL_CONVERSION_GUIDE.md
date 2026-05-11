@@ -27,17 +27,20 @@ Elm and Python, locking the rule across both implementations.
 
 ```
 games/lynrummy/conformance/scenarios/*.dsl
-        ↓  (cmd/fixturegen/main.go parses + emits)
-games/lynrummy/elm/tests/Game/DslConformanceTest.elm
+        ↓  (parsed natively at test time by both runners)
+TS: games/lynrummy/ts/test/conformance_dsl.ts + per-test consumers
+Elm: tests/Game/ConformanceDsl.elm  →  tests/Game/ConformanceTests.elm
         ↓  (ops/check-conformance runs everything)
-elm-test + Python conformance suite + elm-review
+elm-test + TS conformance suite + elm-review
 ```
 
 The canonical command is `ops/check-conformance`. Always run it before reporting
 done. It compiles Elm, runs all tests, and runs elm-review.
 
-`cmd/fixturegen/main.go` is the code generator. It has **four design principles at
-the top** (lines 31–54) — read them before adding any new op.
+Each `op:` in a `.dsl` scenario dispatches at test time to a hand-written
+verifier — in Elm via the `verify` case-match in
+`tests/Game/ConformanceTests.elm`, in TS via per-test runners. There is no
+codegen step.
 
 ---
 
@@ -79,9 +82,10 @@ Three Elm test files were **fully superseded and deleted** in a prior session:
 - Wire format round-trips — serialization layer, not game logic
 - Tests already implicitly covered by higher-level scenarios
 
-**Ask before adding a new fixturegen op:** if a test can be expressed with existing
-ops (`undo_walkthrough`, `wings_for_stack`, etc.), prefer that. New ops cost
-fixturegen complexity; only add them when the rule genuinely needs its own shape.
+**Ask before adding a new op:** if a test can be expressed with existing ops
+(`undo_walkthrough`, `wings_for_stack`, etc.), prefer that. New ops cost a
+verifier in each runner that needs to dispatch on them; only add them when the
+rule genuinely needs its own shape.
 
 ---
 
@@ -92,20 +96,21 @@ fixturegen complexity; only add them when the rule genuinely needs its own shape
 2. **Filter by value.** Apply the criteria above. A 200-line test file might yield
    only 4 high-value scenarios worth porting.
 
-3. **Check whether the op already exists.** Grep fixturegen for the function name
-   being tested. If an op exists, write the DSL directly. If not, decide whether
-   a new op is warranted (usually yes if the rule is game-logic, no if it's a
-   helper).
+3. **Check whether the op already exists.** Grep the `verify` case-match in
+   `tests/Game/ConformanceTests.elm` (and the TS dispatcher) for the op name.
+   If it exists, write the DSL directly. If not, decide whether a new op is
+   warranted (usually yes if the rule is game-logic, no if it's a helper).
 
 4. **Add scenarios to the right `.dsl` file.** If the test fits an existing file
    (e.g. wing logic → `wing_oracle.dsl`), add there. If it's a new domain, create
    a new file.
 
-5. **If adding a new op to fixturegen:** follow all four design principles. Add a
-   per-op `Expect*` type (not generic map). One emitter function per op. Use
-   `toKey` / card-content comparison rather than board lookups with fallbacks —
-   the `wings_for_stack` emitter is the canonical pattern after the fragility fix
-   in this session.
+5. **If adding a new op:** add a `case "op_name" -> verifyX sc` arm in
+   `tests/Game/ConformanceTests.elm` and a matching TS dispatcher arm if the
+   rule is cross-language. Compare via stripped keys (cards + side, not full
+   stack values with locs) so a typo produces a direct mismatch rather than a
+   confusing lookup failure — the `wings_for_stack` verifier is the canonical
+   pattern.
 
 6. **Run `ops/check-conformance`.** Gate must be green before calling it done.
 

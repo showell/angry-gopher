@@ -252,7 +252,7 @@ function applyBlockField(sc: ParsedScenario, key: string, children: Line[]): voi
       return;
     }
     case "expect_steps": {
-      // Match fixturegen's omitempty: only set when non-empty.
+      // Only set when non-empty (matches the historical omitempty shape).
       const steps = parseDashLines(children);
       if (steps.length > 0) sc.hint_steps = steps;
       return;

@@ -5,8 +5,8 @@
 // contents). The Elm-side conformance test parses each
 // entry at test time via Game.ConformanceDsl.parseConformanceDsl.
 //
-// Replaces fixturegen's Elm test-stub codegen with a simple
-// data embed.
+// Embeds each .dsl as a raw string so the Elm-side parser
+// can run at test time — no codegen.
 
 import * as fs from "node:fs";
 import * as path from "node:path";

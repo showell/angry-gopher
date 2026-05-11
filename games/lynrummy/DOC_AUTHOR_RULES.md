@@ -120,9 +120,10 @@ list, fixture types), the doc must either:
 2. Be regenerated mechanically from the canonical source.
 
 Hand-copied enumerations always drift. The canonical example of the
-failure: `ENTRY_POINTS.md` once listed 9 fixturegen ops by hand;
+failure: `ENTRY_POINTS.md` once listed 9 conformance ops by hand;
 two were fictional and the real registry had 23. Now it points at
-`opRegistry` in `cmd/fixturegen/main.go` and is unfalsifiable.
+the `verify` dispatcher in `tests/Game/ConformanceTests.elm` and is
+unfalsifiable.
 
 ---
 

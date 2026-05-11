@@ -12,22 +12,16 @@
 # catches dead code that elm-test alone misses — skipping it
 # is how orphaned type constructors survive undetected.
 #
-# Three steps:
-#   1. cmd/fixturegen — DSL → Elm test code (the only remaining
-#      codegen target). Surfaces registered-op drift loudly (per
-#      cmd/fixturegen/ADDING_AN_OP.md). TS no longer routes
-#      through fixturegen — it parses .dsl natively now.
-#   2. TS conformance — runs the engine + leaf primitives + verb
+# Two steps:
+#   1. TS conformance — runs the engine + leaf primitives + verb
 #      fixtures + physical_plan + replay walkthroughs + agent
 #      self-play (npm test). All TS tests parse their .dsl
 #      inputs directly via per-test or shared TS parsers.
-#   3. Elm check.sh — standalone type-checks, elm-test (700+),
-#      elm make, elm-review.
-#
-# KNOWN: total wall time ~26s, dominated by Elm compiling the
-# generated DslConformanceTest.elm (~277KB). Accepted for now —
-# further optimization adds complexity not worth the tradeoff
-# at current test count. Revisit if the suite grows substantially.
+#   2. Elm check.sh — embeds DSLs into Elm via
+#      ops/embed_dsls_for_elm.ts, then standalone type-checks,
+#      runs elm-test (1000+ — every scenario parsed at test
+#      time and dispatched to a hand-written verifier in
+#      tests/Game/ConformanceTests.elm), elm make, elm-review.
 #
 # Exits non-zero on any step's failure.
 
@@ -59,15 +53,6 @@ phase() {
     "$@"
     echo "    [phase] ${label}: $((SECONDS - t0))s"
 }
-
-echo "==> fixturegen"
-# A handful of DSLs are TS-runner-only — their TS test scripts
-# have their own DSL parser and hardcoded paths. Filter them out
-# of fixturegen so the cross-language gate only sees DSLs that
-# correspond to registered fixturegen ops.
-DSLS=$(ls ./games/lynrummy/conformance/scenarios/*.dsl \
-    | grep -vE 'physical_plan_corpus\.dsl|replay_walkthroughs\.dsl|verb_to_primitives.*\.dsl')
-phase "fixturegen" go run ./cmd/fixturegen $DSLS
 
 echo "==> embed DSLs for Elm"
 phase "embed-dsls" ./ops/embed_dsls_for_elm.ts

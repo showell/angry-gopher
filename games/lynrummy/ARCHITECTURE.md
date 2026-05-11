@@ -374,8 +374,8 @@ All build, launch, and test ops go through `ops/` scripts
   Full build steps documented in
   [`BUILDING.md`](./BUILDING.md).
 - `ops/check-conformance` — **the commit gate for Elm
-  work.** Runs fixturegen + TS conformance + elm-test +
-  elm-review. Do not commit Elm without a passing run.
+  work.** Embeds .dsl files into Elm, runs TS conformance +
+  elm-test + elm-review. Do not commit Elm without a passing run.
 - `ops/check` — full preflight (conformance + Go build).
 
 Don't hand-compose `go run .`, `elm make`, or `go test ./...`
@@ -402,13 +402,14 @@ Don't hand-compose `go run .`, `elm make`, or `go test ./...`
 
 ### Conformance & testing
 
-- `../../cmd/fixturegen/main.go` — DSL → Elm + JSON
-  generator. The cross-language parity bridge between Elm
-  and TS. Don't run ad-hoc; use `ops/check-conformance`.
 - `games/lynrummy/conformance/scenarios/*.dsl` — canonical
-  scenarios. **New agents: read `undo_walkthrough.dsl`
-  early.** It's the most compact readable summary of how
-  the game's interaction model actually works.
+  scenarios. Parsed natively at test time by both runners:
+  Elm via `tests/Game/ConformanceDsl.elm` →
+  `tests/Game/ConformanceTests.elm` (per-op verifiers); TS
+  via `ts/test/conformance_dsl.ts` and per-test consumers.
+  **New agents: read `undo_walkthrough.dsl` early.** It's
+  the most compact readable summary of how the game's
+  interaction model actually works.
 - TS-specific gesture-layer fixtures live in
   `physical_plan_corpus.dsl` (integration: hand cards +
   multi-verb plans + R1/R3 cases) and

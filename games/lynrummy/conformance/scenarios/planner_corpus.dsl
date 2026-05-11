@@ -10,9 +10,8 @@
 
 # matches Python's baseline depth distribution. Same
 
-# fixture exercises Python (test_dsl_conformance.py)
-
-# and Elm (DslConformanceTest.elm). Port-parity check.
+# fixture exercises TS (test_engine_conformance.ts) and
+# Elm (tests/Game/ConformanceTests.elm). Port-parity check.
 
 
 

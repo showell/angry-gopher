@@ -15,7 +15,7 @@ set -e
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_DIR"
 
-echo "==> conformance gate (fixturegen + TS + Elm)"
+echo "==> conformance gate (TS + Elm)"
 ./ops/check-conformance
 
 echo "==> go build ./..."

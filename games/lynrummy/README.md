@@ -84,8 +84,8 @@ the gate isn't load-bearing.
   in `lynrummy-elm/sessions/`, puzzle attempts in
   `puzzle/sessions/`). All committed.
 - `conformance/` — DSL scenarios that pin the cross-language
-  contract between Elm and TS. Compiled to fixtures by
-  `cmd/fixturegen`.
+  contract between Elm and TS. Parsed natively at test time
+  by both runners (no codegen step).
 
 ## Where to read next
 
@@ -100,4 +100,4 @@ the gate isn't load-bearing.
   [`ts/PHYSICAL_PLAN.md`](./ts/PHYSICAL_PLAN.md) — solver
   design and the gesture-layer doctrine.
 - [`BUILDING.md`](./BUILDING.md) — build steps (Elm compile,
-  TS engine bundle, fixturegen).
+  TS engine bundle).

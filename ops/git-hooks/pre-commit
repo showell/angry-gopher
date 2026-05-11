@@ -2,7 +2,7 @@
 # Pre-commit gate: run ops/check before any commit.
 #
 # The gate exists because we keep rediscovering silent-failure
-# bugs (severed fixturegen bridge, sidecar drift, stale generated
+# bugs (severed conformance bridge, sidecar drift, stale generated
 # tests). The fix isn't discipline-by-wish — it's a gate nothing
 # can pass through without the checks running.
 #

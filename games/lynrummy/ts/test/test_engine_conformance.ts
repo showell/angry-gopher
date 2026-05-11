@@ -356,7 +356,7 @@ function main(): void {
   if (repair) {
     console.log("REPAIR MODE: solve-scenario plan_lines and hint_for_hand");
     console.log("expect_steps pins will be rewritten from current engine");
-    console.log("output. Re-run fixturegen after repair.");
+    console.log("output. Re-run ops/check-conformance after repair.");
     console.log();
   }
   // Repair-mode collection: scenarioName → {kind, lines}.

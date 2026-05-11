@@ -10,9 +10,8 @@
 
 # lines match Python's canonical output. Runs in both
 
-# `test_dsl_conformance.py` (Python) and
-
-# `DslConformanceTest.elm` (Elm).
+# `test_engine_conformance.ts` (TS) and the Elm
+# conformance runner (`tests/Game/ConformanceTests.elm`).
 
 
 

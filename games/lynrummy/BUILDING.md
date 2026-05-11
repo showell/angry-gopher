@@ -52,10 +52,6 @@ mediated by a small JS glue file.
 
 These don't run on every build — invoke as needed:
 
-- **Conformance fixtures.** `cmd/fixturegen` (Go) compiles
-  `conformance/scenarios/*.dsl` to Elm tests +
-  `conformance/fixtures/*.json`. Run it after editing any
-  `.dsl` scenario.
 - **Puzzle catalogs.** Two TS tools mine boards for puzzle
   use:
   - `games/lynrummy/ts/tools/generate_puzzles.ts` writes
@@ -74,7 +70,7 @@ These don't run on every build — invoke as needed:
 
 - **Node.js** with npm + `npx` on PATH (used by both Elm
   install and esbuild).
-- **Go** (for `ops/start` and `cmd/fixturegen`).
+- **Go** (for `ops/start`).
 - **Python 3** (for `tools/show_session.py` and the legacy
   parallel solver tests under `python/`).
 - The Elm compiler comes from `games/lynrummy/elm/node_modules/`

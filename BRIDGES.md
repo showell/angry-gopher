@@ -29,14 +29,15 @@ latent bug farm.
 ## Canonical example: the LynRummy DSL conformance harness
 
 `games/lynrummy/conformance/scenarios/*.dsl` is a single set
-of scenario files. `cmd/fixturegen` compiles them into two
-independent test surfaces:
+of scenario files. Both runners parse them natively at test
+time:
 
-- An Elm test module:
-  `games/lynrummy/elm/tests/Game/DslConformanceTest.elm`.
-- A JSON fixture file the TS suite reads:
-  `games/lynrummy/conformance/fixtures.json`, consumed by
-  `games/lynrummy/ts/test/test_engine_conformance.ts`.
+- Elm: `tests/Game/ConformanceDsl.elm` parses the embedded
+  scenarios (`ops/embed_dsls_for_elm.ts` writes them into
+  `tests/Game/DslContent.elm`); `tests/Game/ConformanceTests.elm`
+  dispatches each scenario to its op-specific verifier.
+- TS: `games/lynrummy/ts/test/conformance_dsl.ts` plus
+  per-test runners (`test_engine_conformance.ts` et al.).
 
 The Elm and TS sides implement the same engine independently
 (no shared code), and both must pass scenario-by-scenario.

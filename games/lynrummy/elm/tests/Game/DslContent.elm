@@ -2238,9 +2238,8 @@ scenario solve_shift_subproblem_capture_59
 
 # matches Python's baseline depth distribution. Same
 
-# fixture exercises Python (test_dsl_conformance.py)
-
-# and Elm (DslConformanceTest.elm). Port-parity check.
+# fixture exercises TS (test_engine_conformance.ts) and
+# Elm (tests/Game/ConformanceTests.elm). Port-parity check.
 
 
 
@@ -3385,9 +3384,8 @@ scenario extra_028_KDp
 
 # lines match Python's canonical output. Runs in both
 
-# `test_dsl_conformance.py` (Python) and
-
-# `DslConformanceTest.elm` (Elm).
+# `test_engine_conformance.ts` (TS) and the Elm
+# conformance runner (`tests/Game/ConformanceTests.elm`).
 
 
 

@@ -84,15 +84,15 @@ The 81-card timing gold is generated from TS — see
 plan-text scenarios (`planner_corpus*.dsl`,
 `planner_mined.dsl`) are committed-and-static.
 
-### DSL → test code
+### DSL conformance dispatch
 
-- `cmd/fixturegen` — reads
-  `games/lynrummy/conformance/scenarios/*.dsl`, emits Elm test
-  code + JSON fixtures (consumed by Python conformance) +
-  ops manifest. Op set is registered in `cmd/fixturegen/main.go`'s
-  `opRegistry` (single source of truth). Run
-  `git grep '^\s*Name:' cmd/fixturegen/main.go` to enumerate.
-  Go target retired 2026-04-28 with the Go domain package.
+- `games/lynrummy/conformance/scenarios/*.dsl` is parsed
+  natively by both runners at test time (no codegen step).
+  Elm: `tests/Game/ConformanceDsl.elm` →
+  `tests/Game/ConformanceTests.elm` (the `verify` case-match
+  is the live op registry — grep `case sc.op of`). TS:
+  `games/lynrummy/ts/test/conformance_dsl.ts` + per-test
+  runners.
   **Run via `ops/check-conformance`**, not ad-hoc.
 
 ### TypeScript agent (`games/lynrummy/ts/`)
