@@ -424,6 +424,22 @@ view model =
 
                 _ ->
                     Nothing
+
+        sourceStack =
+            case drag of
+                DraggingBoardCard d ->
+                    Just d.stack
+
+                _ ->
+                    Nothing
+
+        cardMouseDown =
+            case drag of
+                NotDragging ->
+                    Just (PointerInput.cardMouseDown MouseDownOnBoardCard)
+
+                _ ->
+                    Nothing
     in
     div
         [ style "font-family" "system-ui, sans-serif" ]
@@ -445,9 +461,9 @@ view model =
                 ]
             , BoardView.boardShell
                 { board = board
-                , drag = drag
                 , gameId = model.gameId
-                , cardMouseDown = PointerInput.cardMouseDown MouseDownOnBoardCard
+                , sourceStack = sourceStack
+                , cardMouseDown = cardMouseDown
                 , wings = wings
                 , hoveredWing = hoveredWing
                 , boardFloaters = boardFloaters

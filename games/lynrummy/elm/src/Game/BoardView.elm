@@ -17,7 +17,6 @@ not a state the View needs to know about.
 -}
 
 import Game.CardStack as CardStack exposing (CardStack)
-import Game.Drag exposing (DragState(..))
 import Game.Physics.WingOracle exposing (WingId)
 import Game.StackView as StackView
 import Game.View exposing (navy)
@@ -42,18 +41,18 @@ CompleteTurn.
 -}
 boardShell :
     { board : List CardStack
-    , drag : DragState
     , gameId : String
-    , cardMouseDown : CardStack -> Int -> List (Html.Attribute msg)
+    , sourceStack : Maybe CardStack
+    , cardMouseDown : Maybe (CardStack -> Int -> List (Html.Attribute msg))
     , wings : List WingId
     , hoveredWing : Maybe WingId
     , boardFloaters : List (Html msg)
     }
     -> Html msg
-boardShell { board, drag, gameId, cardMouseDown, wings, hoveredWing, boardFloaters } =
+boardShell { board, gameId, sourceStack, cardMouseDown, wings, hoveredWing, boardFloaters } =
     let
         stackNodes =
-            List.map (viewStackForBoard drag cardMouseDown) board
+            List.map (viewStackForBoard sourceStack cardMouseDown) board
 
         wingNodes =
             List.map (WingView.renderWingWithHover hoveredWing) wings
@@ -72,34 +71,37 @@ boardShell { board, drag, gameId, cardMouseDown, wings, hoveredWing, boardFloate
         (stackNodes ++ wingNodes ++ boardFloaters)
 
 
+{-| Per-stack rendering. Two independent facts:
+
+  - `sourceStack` (Just iff a board-card drag is in flight) —
+    if this stack is the source, hide it (the floater renders
+    in its place).
+  - `cardMouseDown` (Just iff no drag is in flight) — attach
+    per-card mousedown handlers only when idle.
+
+-}
 viewStackForBoard :
-    DragState
-    -> (CardStack -> Int -> List (Html.Attribute msg))
+    Maybe CardStack
+    -> Maybe (CardStack -> Int -> List (Html.Attribute msg))
     -> CardStack
     -> Html msg
-viewStackForBoard drag cardMouseDown stack =
-    case drag of
-        DraggingBoardCard d ->
-            -- Hide the source stack — the floater renders in
-            -- its place. At mousedown the floater is at
-            -- exactly stack.loc, so the visual swap is a
-            -- no-op; from there forward, the floater follows
-            -- the cursor.
-            if CardStack.isStacksEqual d.stack stack then
-                Html.text ""
+viewStackForBoard sourceStack cardMouseDown stack =
+    let
+        isSource =
+            sourceStack
+                |> Maybe.map (\src -> CardStack.isStacksEqual src stack)
+                |> Maybe.withDefault False
+    in
+    if isSource then
+        Html.text ""
 
-            else
+    else
+        case cardMouseDown of
+            Just attrs ->
+                StackView.viewStackWithCardAttrs (attrs stack) stack
+
+            Nothing ->
                 StackView.viewStack stack
-
-        DraggingHandCard _ ->
-            -- Hand-card drags don't affect any board stack's
-            -- rendering; we still hide the stack-level
-            -- mousedown handlers so the in-flight drag isn't
-            -- re-triggered by stray events.
-            StackView.viewStack stack
-
-        NotDragging ->
-            StackView.viewStackWithCardAttrs (cardMouseDown stack) stack
 
 
 
