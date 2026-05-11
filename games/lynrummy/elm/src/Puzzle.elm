@@ -154,7 +154,26 @@ update msg model =
             ( model, Cmd.none )
 
         MouseDownOnBoardCard { stack, cardIndex, point, time } ->
-            startBoardCardDrag stack cardIndex point time model
+            case model.drag of
+                NotDragging ->
+                    ( { model
+                        | drag =
+                            DraggingBoardCard
+                                (BoardGesture.startBoardDragInfo
+                                    { stack = stack
+                                    , cardIndex = cardIndex
+                                    , cursor = point
+                                    , tMs = time
+                                    , board = model.board
+                                    }
+                                )
+                      }
+                    , Browser.Dom.getElement (BoardView.boardDomIdFor model.gameId)
+                        |> Task.attempt BoardRectReceived
+                    )
+
+                _ ->
+                    ( model, Cmd.none )
 
         MouseMove pos tMs ->
             case model.drag of
@@ -173,11 +192,60 @@ update msg model =
                 NotDragging ->
                     ( model, Cmd.none )
 
-        MouseUp pos tMs ->
-            handleMouseUp pos tMs model
+        MouseUp releasePoint tMs ->
+            case model.drag of
+                NotDragging ->
+                    ( model, Cmd.none )
+
+                DraggingHandCard _ ->
+                    ( { model | drag = NotDragging }, Cmd.none )
+
+                DraggingBoardCard d ->
+                    let
+                        outcome =
+                            BoardDrag.handleMouseUp releasePoint
+                                tMs
+                                d
+                                { board = model.board
+                                , boardRect = model.boardRect
+                                , actionLog = model.actionLog
+                                , nextSeq = model.nextSeq
+                                }
+                    in
+                    ( { model
+                        | drag = NotDragging
+                        , board = outcome.board
+                        , actionLog = outcome.actionLog
+                        , status = outcome.status
+                        , nextSeq = outcome.nextSeq
+                      }
+                    , outcome.outboundPayload
+                        |> Maybe.map (sendAction model.sessionId)
+                        |> Maybe.withDefault Cmd.none
+                    )
 
         ClickUndo ->
-            clickUndo model
+            if canUndo model.actionLog then
+                let
+                    nextLog =
+                        model.actionLog ++ [ { action = GameEvent.Undo } ]
+
+                    effective =
+                        ActionLog.collapseUndos nextLog
+                in
+                ( { model
+                    | actionLog = nextLog
+                    , board =
+                        List.foldl applyForPuzzle
+                            model.initialBoard
+                            (List.map .action effective)
+                    , nextSeq = model.nextSeq + 1
+                  }
+                , sendAction model.sessionId (GameEvent.undoDsl model.nextSeq)
+                )
+
+            else
+                ( model, Cmd.none )
 
         ClickInstantReplay ->
             ( { model
@@ -229,100 +297,6 @@ update msg model =
               }
             , Cmd.none
             )
-
-
-startBoardCardDrag :
-    CardStack
-    -> Int
-    -> Point
-    -> Int
-    -> Model
-    -> ( Model, Cmd Msg )
-startBoardCardDrag stack cardIndex clientPoint tMs model =
-    case model.drag of
-        NotDragging ->
-            ( { model
-                | drag =
-                    DraggingBoardCard
-                        (BoardGesture.startBoardDragInfo
-                            { stack = stack
-                            , cardIndex = cardIndex
-                            , cursor = clientPoint
-                            , tMs = tMs
-                            , board = model.board
-                            }
-                        )
-              }
-            , Browser.Dom.getElement (BoardView.boardDomIdFor model.gameId)
-                |> Task.attempt BoardRectReceived
-            )
-
-        _ ->
-            ( model, Cmd.none )
-
-
-handleMouseUp : Point -> Int -> Model -> ( Model, Cmd Msg )
-handleMouseUp releasePoint tMs model =
-    case model.drag of
-        NotDragging ->
-            ( model, Cmd.none )
-
-        DraggingHandCard _ ->
-            ( { model | drag = NotDragging }, Cmd.none )
-
-        DraggingBoardCard d ->
-            let
-                outcome =
-                    BoardDrag.handleMouseUp releasePoint
-                        tMs
-                        d
-                        { board = model.board
-                        , boardRect = model.boardRect
-                        , actionLog = model.actionLog
-                        , nextSeq = model.nextSeq
-                        }
-            in
-            ( { model
-                | drag = NotDragging
-                , board = outcome.board
-                , actionLog = outcome.actionLog
-                , status = outcome.status
-                , nextSeq = outcome.nextSeq
-              }
-            , outcome.outboundPayload
-                |> Maybe.map (sendAction model.sessionId)
-                |> Maybe.withDefault Cmd.none
-            )
-
-
-{-| Append a `Undo` token to the action log, rebuild the board
-by folding effective (post-collapse) events from `initialBoard`,
-and ship the Undo envelope to the wire. No-op when nothing is
-left to undo.
--}
-clickUndo : Model -> ( Model, Cmd Msg )
-clickUndo model =
-    if canUndo model.actionLog then
-        let
-            nextLog =
-                model.actionLog ++ [ { action = GameEvent.Undo } ]
-
-            effective =
-                ActionLog.collapseUndos nextLog
-        in
-        ( { model
-            | actionLog = nextLog
-            , board =
-                List.foldl applyForPuzzle
-                    model.initialBoard
-                    (List.map .action effective)
-            , nextSeq = model.nextSeq + 1
-          }
-        , sendAction model.sessionId (GameEvent.undoDsl model.nextSeq)
-        )
-
-    else
-        ( model, Cmd.none )
 
 
 canUndo : List ActionLogEntry -> Bool
