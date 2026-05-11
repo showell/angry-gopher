@@ -101,62 +101,44 @@ deckRemainingLine deckCount =
 
 viewActivePlayerRow : ActivePlayerInfo -> Int -> Hand -> Html Msg
 viewActivePlayerRow info idx hand =
+    let
+        -- Three orthogonal per-card concerns: hint highlight
+        -- (background), source dim (opacity), pointer events
+        -- (mousedown when idle, otherwise disabled).
+        -- `pointer-events: none` for the source card falls out
+        -- for free — a hand drag implies cardMouseDown is
+        -- Nothing.
+        attrsForCard hc =
+            let
+                hintAttrs =
+                    if List.any (\c -> c == hc.card) info.hintedCards then
+                        [ style "background-color" "lightgreen" ]
+
+                    else
+                        []
+
+                sourceDimAttrs =
+                    if info.sourceCard == Just hc.card then
+                        [ style "opacity" "0.35" ]
+
+                    else
+                        []
+
+                pointerAttrs =
+                    case info.cardMouseDown of
+                        Just attrs ->
+                            attrs hc
+
+                        Nothing ->
+                            [ style "pointer-events" "none" ]
+            in
+            hintAttrs ++ sourceDimAttrs ++ pointerAttrs
+    in
     playerRowShell { isActive = True, idx = idx }
         [ View.viewHandHeading
-        , View.viewHand
-            { attrsForCard = handCardAttrs info.sourceCard info.cardMouseDown info.hintedCards }
-            hand
+        , View.viewHand { attrsForCard = attrsForCard } hand
         , viewTurnControls { canUndo = info.canUndo, replayControl = info.replayControl }
         ]
-
-
-{-| Per-hand-card attributes. Three orthogonal concerns
-concatenated:
-
-  - **Hint highlight** — light green background iff this
-    card's identity is in `hintedCards`.
-  - **Source-card dim** — half-opacity iff this card is the
-    source of an in-flight hand drag.
-  - **Pointer events** — mousedown handler when idle
-    (`cardMouseDown` is `Just`), otherwise `pointer-events:
-    none` so the in-flight drag isn't re-triggered by stray
-    events.
-
-The `pointer-events: none` for the source card falls out for
-free: a hand drag implies `cardMouseDown` is `Nothing`.
-
--}
-handCardAttrs :
-    Maybe Card
-    -> Maybe (HandCard -> List (Attribute Msg))
-    -> List Card
-    -> HandCard
-    -> List (Attribute Msg)
-handCardAttrs sourceCard cardMouseDown hintedCards hc =
-    let
-        hintAttrs =
-            if List.any (\c -> c == hc.card) hintedCards then
-                [ style "background-color" "lightgreen" ]
-
-            else
-                []
-
-        sourceDimAttrs =
-            if sourceCard == Just hc.card then
-                [ style "opacity" "0.35" ]
-
-            else
-                []
-
-        pointerAttrs =
-            case cardMouseDown of
-                Just attrs ->
-                    attrs hc
-
-                Nothing ->
-                    [ style "pointer-events" "none" ]
-    in
-    hintAttrs ++ sourceDimAttrs ++ pointerAttrs
 
 
 viewInactivePlayerRow : Int -> Hand -> Html Msg
