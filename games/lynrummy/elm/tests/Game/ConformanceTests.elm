@@ -39,9 +39,11 @@ import Game.Rules.Card as Card exposing (Card, OriginDeck(..))
 import Game.WingView as WingView
 import Game.Execute as Execute
 import Game.GameEvent as GameEvent exposing (GameEvent)
+import Game.Hand as Hand
 import Game.Rules.Referee as Referee exposing (RefereeStage(..))
 import Game.Rules.StackType as StackType
 import Main.Gesture as Gesture
+import Main.Msg as Msg
 import Main.Play as Play
 import Main.State as State
 import Test exposing (Test, describe, test)
@@ -116,6 +118,9 @@ verify sc =
 
         "replay_invariant" ->
             verifyReplayInvariant sc
+
+        "undo_walkthrough" ->
+            verifyUndoWalkthrough sc
 
         _ ->
             -- Verifier not yet ported from fixturegen. The legacy
@@ -796,6 +801,285 @@ verifyGestureFloaterOverWing sc =
 
         ( _, _, Nothing ) ->
             Expect.fail "gesture_floater_over_wing scenario missing floater_at"
+
+
+
+-- UNDO WALKTHROUGH
+--
+-- Walks a sequence of steps, each producing a (model, expectations)
+-- transition. Steps come in five shapes:
+--   undo:                Play.update Msg.ClickUndo
+--   place_hand X -> loc: GameEvent.PlaceHand, log, Execute.applyEvent
+--   merge_hand X -> [t] /side: GameEvent.MergeHand, log, applyEvent
+--   board verbs:         ReplaySpec → resolveSpec → log → applyEvent
+--   no action:           alias previous model (observation only)
+
+
+verifyUndoWalkthrough : Dsl.Scenario -> Expect.Expectation
+verifyUndoWalkthrough sc =
+    let
+        board =
+            stacksFromDsl sc.board
+
+        base =
+            State.baseModel
+
+        gs0 =
+            base.gameState
+
+        m0 =
+            if List.isEmpty sc.hand then
+                { base
+                    | gameState = { gs0 | board = board }
+                    , sessionId = Just 0
+                }
+
+            else
+                let
+                    handCards =
+                        List.map (\c -> { card = c, state = HandNormal }) sc.hand
+
+                    gs1 =
+                        Hand.setActiveHand { handCards = handCards }
+                            { gs0 | board = board }
+                in
+                { base | gameState = gs1, sessionId = Just 0 }
+
+        ( finalModel, perStepChecks ) =
+            applyUndoSteps m0 sc.steps
+
+        finalBoardCheck =
+            if List.isEmpty sc.expectFinalBoard then
+                Expect.pass
+
+            else
+                expectFinalBoard sc.expectFinalBoard finalModel
+    in
+    Expect.all
+        ((\_ -> finalBoardCheck) :: List.map always perStepChecks)
+        ()
+
+
+applyUndoSteps : State.Model -> List Dsl.Step -> ( State.Model, List Expect.Expectation )
+applyUndoSteps initial steps =
+    let
+        loop model expectations remaining =
+            case remaining of
+                [] ->
+                    ( model, List.reverse expectations )
+
+                step :: rest ->
+                    let
+                        next =
+                            transitionUndoStep model step
+
+                        stepCheck =
+                            stepExpectation next step
+                    in
+                    loop next (stepCheck :: expectations) rest
+    in
+    loop initial [] steps
+
+
+transitionUndoStep : State.Model -> Dsl.Step -> State.Model
+transitionUndoStep prev step =
+    case Dict.get "action" step.fields of
+        Nothing ->
+            prev
+
+        Just "undo" ->
+            let
+                ( model, _, _ ) =
+                    Play.update Msg.ClickUndo prev
+            in
+            model
+
+        Just raw ->
+            applyTransitionAction prev raw
+
+
+applyTransitionAction : State.Model -> String -> State.Model
+applyTransitionAction prev raw =
+    case parseStepAction prev raw of
+        Just action ->
+            let
+                entry =
+                    { action = action }
+
+                next =
+                    { prev | gameState = Execute.applyEvent action prev.gameState }
+            in
+            { next | actionLog = prev.actionLog ++ [ entry ] }
+
+        Nothing ->
+            prev
+
+
+parseStepAction : State.Model -> String -> Maybe GameEvent
+parseStepAction model raw =
+    let
+        s =
+            String.trim raw
+    in
+    if String.startsWith "place_hand " s then
+        parsePlaceHand (String.dropLeft 11 s)
+
+    else if String.startsWith "merge_hand " s then
+        parseMergeHand model.gameState.board (String.dropLeft 11 s)
+
+    else
+        parseReplaySpec s
+            |> Maybe.map (\spec -> resolveSpec spec model.gameState.board)
+
+
+parsePlaceHand : String -> Maybe GameEvent
+parsePlaceHand body =
+    -- "<card> -> (top,left)"
+    case String.split " -> " body of
+        [ cardStr, locStr ] ->
+            case ( parseCardTokenForExpect (String.trim cardStr), parseParenIntPair locStr ) of
+                ( Just card, Just ( top, left ) ) ->
+                    Just (GameEvent.PlaceHand { handCard = card, loc = { top = top, left = left } })
+
+                _ ->
+                    Nothing
+
+        _ ->
+            Nothing
+
+
+parseMergeHand : List CardStack -> String -> Maybe GameEvent
+parseMergeHand board body =
+    -- "<card> -> [tgt] /side"
+    case String.split " -> " body of
+        [ cardStr, rightSide ] ->
+            case String.split " /" rightSide of
+                [ tgtStr, sideStr ] ->
+                    case
+                        ( parseCardTokenForExpect (String.trim cardStr)
+                        , parseBracketCards tgtStr
+                        , parseLowerSide sideStr
+                        )
+                    of
+                        ( Just card, Just tgt, Just side ) ->
+                            Just
+                                (GameEvent.MergeHand
+                                    { handCard = card
+                                    , target = findStackByContent tgt board
+                                    , side = side
+                                    }
+                                )
+
+                        _ ->
+                            Nothing
+
+                _ ->
+                    Nothing
+
+        _ ->
+            Nothing
+
+
+stepExpectation : State.Model -> Dsl.Step -> Expect.Expectation
+stepExpectation model step =
+    let
+        checks =
+            List.filterMap identity
+                [ Dict.get "expect_board_count" step.fields
+                    |> Maybe.andThen String.toInt
+                    |> Maybe.map (\n -> List.length model.gameState.board |> Expect.equal n)
+                , Dict.get "expect_hand_count" step.fields
+                    |> Maybe.andThen String.toInt
+                    |> Maybe.map
+                        (\n ->
+                            List.length (Hand.activeHand model.gameState).handCards
+                                |> Expect.equal n
+                        )
+                , Dict.get "expect_undoable" step.fields
+                    |> Maybe.andThen parseBool
+                    |> Maybe.map (\b -> State.canUndoThisTurn model |> Expect.equal b)
+                , Dict.get "expect_stack" step.fields
+                    |> Maybe.map (checkBoardHasStack model)
+                , Dict.get "expect_hand_contains" step.fields
+                    |> Maybe.andThen parseCardTokenForExpect
+                    |> Maybe.map (checkHandContains model)
+                , Dict.get "expect_loc" step.fields
+                    |> Maybe.andThen parseParenIntPair
+                    |> Maybe.map (\( top, left ) -> checkBoardHasLoc model { top = top, left = left })
+                ]
+    in
+    case checks of
+        [] ->
+            Expect.pass
+
+        _ ->
+            Expect.all (List.map always checks) ()
+
+
+checkBoardHasStack : State.Model -> String -> Expect.Expectation
+checkBoardHasStack model raw =
+    let
+        want =
+            parseCardTokens raw
+    in
+    if List.any (\s -> List.map .card s.boardCards == want) model.gameState.board then
+        Expect.pass
+
+    else
+        Expect.fail ("board missing stack [" ++ raw ++ "]")
+
+
+checkHandContains : State.Model -> Card -> Expect.Expectation
+checkHandContains model card =
+    if List.any (\hc -> hc.card == card) (Hand.activeHand model.gameState).handCards then
+        Expect.pass
+
+    else
+        Expect.fail "hand missing expected card"
+
+
+checkBoardHasLoc : State.Model -> BoardLocation -> Expect.Expectation
+checkBoardHasLoc model loc =
+    if List.any (\s -> s.loc == loc) model.gameState.board then
+        Expect.pass
+
+    else
+        Expect.fail
+            ("board missing stack at ("
+                ++ String.fromInt loc.top
+                ++ ", "
+                ++ String.fromInt loc.left
+                ++ ")"
+            )
+
+
+expectFinalBoard : List Dsl.Stack -> State.Model -> Expect.Expectation
+expectFinalBoard expectedStacks model =
+    let
+        byLoc =
+            List.sortBy (\s -> ( s.loc.top, s.loc.left ))
+
+        cardRows =
+            List.map (.boardCards >> List.map .card)
+
+        expected =
+            stacksFromDsl expectedStacks
+    in
+    cardRows (byLoc model.gameState.board)
+        |> Expect.equal (cardRows (byLoc expected))
+
+
+parseBool : String -> Maybe Bool
+parseBool s =
+    case s of
+        "true" ->
+            Just True
+
+        "false" ->
+            Just False
+
+        _ ->
+            Nothing
 
 
 

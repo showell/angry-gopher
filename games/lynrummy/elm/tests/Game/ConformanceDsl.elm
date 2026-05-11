@@ -51,6 +51,7 @@ type alias Scenario =
     , hintSteps : List String
     , actions : List String -- raw action DSL lines (replay scenarios)
     , steps : List Step -- structured steps (undo walkthrough)
+    , expectFinalBoard : List Stack -- undo-walkthrough top-level final-board check
     , expect : Expect
     , -- Anything else (gesture scalars like `cursor`, `floater_at`,
       -- `mousedown`, op-specific blocks, etc.) lands here. Verifiers
@@ -242,6 +243,7 @@ empty =
     , hintSteps = []
     , actions = []
     , steps = []
+    , expectFinalBoard = []
     , expect = ExpectEmpty
     , otherScalars = Dict.empty
     , otherBlocks = Dict.empty
@@ -456,6 +458,9 @@ applyBlock key children sc =
 
         "steps" ->
             { sc | steps = parseSteps children }
+
+        "expect_final_board" ->
+            { sc | expectFinalBoard = parseStacks children }
 
         "expect" ->
             { sc | expect = ExpectBlock (parseExpectBlock children) }
