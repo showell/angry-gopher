@@ -2591,6 +2591,14 @@ func parseExpectBlock(e *Expectation, children []line, path string) error {
 		} else {
 			switch key {
 			// --- base fields (shared across multiple ops) ---
+			case "kind":
+				// Tag form for op-discriminated expects (`expect:
+				// error` style, now spelled as `kind: error` inside
+				// the expect block).
+				e.Kind = val
+				if val == "no_plan" {
+					e.Solve.NoPlan = true
+				}
 			case "hand_played":
 				cards, err := parseCards(val)
 				if err != nil {

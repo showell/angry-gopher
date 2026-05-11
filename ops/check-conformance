@@ -69,6 +69,9 @@ DSLS=$(ls ./games/lynrummy/conformance/scenarios/*.dsl \
     | grep -vE 'physical_plan_corpus\.dsl|replay_walkthroughs\.dsl|verb_to_primitives.*\.dsl')
 phase "fixturegen" go run ./cmd/fixturegen $DSLS
 
+echo "==> embed DSLs for Elm"
+phase "embed-dsls" ./ops/embed_dsls_for_elm.ts
+
 if [ "$SKIP_SLOW" = "1" ]; then
     echo "==> TS conformance (--skip-slow: omitting engine + agent self-play)"
     phase "ts-tests" bash -c "cd games/lynrummy/ts && npm run -s test:skip-slow"

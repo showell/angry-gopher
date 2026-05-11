@@ -31,7 +31,8 @@ scenario inventory_card_from_nowhere
   stacks_to_add:
     at (10,10): AH* 2H* 3H*
   hand_cards_played: AH 2H
-  expect: error
+  expect:
+    kind: error
     stage: inventory
     message_contains: no source
 
@@ -48,7 +49,8 @@ scenario turn_complete_rejects_incomplete
   op: validate_turn_complete
   board:
     at (10,10): AH 2H
-  expect: error
+  expect:
+    kind: error
     stage: semantics
     message_contains: incomplete
 
@@ -60,7 +62,8 @@ scenario geometry_out_of_bounds
   stacks_to_add:
     at (10,790): AH*
   hand_cards_played: AH
-  expect: error
+  expect:
+    kind: error
     stage: geometry
     message_contains: outside
 
@@ -73,7 +76,8 @@ scenario geometry_overlap
     at (10,10): AH*
     at (10,10): 2S*
   hand_cards_played: AH 2S
-  expect: error
+  expect:
+    kind: error
     stage: geometry
     message_contains: overlap
 
@@ -87,7 +91,8 @@ scenario deck_identity_mismatch_in_remove
   stacks_to_add:
     at (10,10): 5H' 6H' 7H' 8H'*
   hand_cards_played: 8H'
-  expect: error
+  expect:
+    kind: error
     stage: inventory
     message_contains: not on the board
 
@@ -100,7 +105,8 @@ scenario geometry_crowded
     at (10,10): AH*
     at (10,40): 2S*
   hand_cards_played: AH 2S
-  expect: error
+  expect:
+    kind: error
     stage: geometry
     message_contains: too close
 
@@ -114,6 +120,7 @@ scenario identity_reorder_breaks_match
   stacks_to_add:
     at (100,100): 5C 5S 5H 5D*
   hand_cards_played: 5D
-  expect: error
+  expect:
+    kind: error
     stage: inventory
     message_contains: not on the board

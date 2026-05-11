@@ -54,7 +54,8 @@ scenario board_geometry_out_of_bounds_right
   op: validate_board_geometry
   board:
     at (10,780): AC AC AC
-  expect: error
+  expect:
+    kind: error
     error_count: 1
     any_error_kind: out_of_bounds
 
@@ -64,7 +65,8 @@ scenario board_geometry_out_of_bounds_bottom
   op: validate_board_geometry
   board:
     at (570,10): AC AC AC
-  expect: error
+  expect:
+    kind: error
     error_count: 1
     any_error_kind: out_of_bounds
 
@@ -74,7 +76,8 @@ scenario board_geometry_out_of_bounds_negative_x
   op: validate_board_geometry
   board:
     at (10,-5): AC AC AC
-  expect: error
+  expect:
+    kind: error
     error_count: 1
     any_error_kind: out_of_bounds
 
@@ -85,7 +88,8 @@ scenario board_geometry_identical_positions_overlap
   board:
     at (10,10): AC AC AC
     at (10,10): AC AC AC
-  expect: error
+  expect:
+    kind: error
     any_error_kind: overlap
 
 
@@ -95,7 +99,8 @@ scenario board_geometry_horizontal_partial_overlap
   board:
     at (10,10): AC AC AC AC AC
     at (10,50): AC AC AC AC AC
-  expect: error
+  expect:
+    kind: error
     any_error_kind: overlap
 
 
@@ -105,7 +110,8 @@ scenario board_geometry_too_close_not_overlap
   board:
     at (10,10): AC AC AC
     at (10,109): AC AC AC
-  expect: error
+  expect:
+    kind: error
     any_error_kind: too_close
     no_error_kind: overlap
 
@@ -117,7 +123,8 @@ scenario board_geometry_three_stacks_only_overlapping_pair
     at (10,10): AC AC AC
     at (100,10): AC AC AC
     at (10,10): AC AC AC
-  expect: error
+  expect:
+    kind: error
     overlap_count: 1
     overlap_stack_indices: 0 2
 

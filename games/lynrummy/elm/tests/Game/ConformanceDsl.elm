@@ -3,6 +3,7 @@ module Game.ConformanceDsl exposing
     , ExpectField(..)
     , Scenario
     , Stack
+    , Step
     , parseConformanceDsl
     )
 
@@ -49,14 +50,25 @@ type alias Scenario =
     , hintBoard : List (List String)
     , hintSteps : List String
     , actions : List String -- raw action DSL lines (replay scenarios)
-    , steps : List String -- raw step DSL lines (undo walkthrough)
+    , steps : List Step -- structured steps (undo walkthrough)
     , expect : Expect
+    , -- Anything else (gesture scalars like `cursor`, `floater_at`,
+      -- `mousedown`, op-specific blocks, etc.) lands here. Verifiers
+      -- project by key.
+      otherScalars : Dict String String
+    , otherBlocks : Dict String (List String) -- raw child line contents
     }
 
 
 type alias Stack =
     { cards : List Card -- bare cards (no state) — verifiers add state if needed
     , loc : BoardLocation
+    }
+
+
+type alias Step =
+    { name : String -- "step_1", "step_2", ...
+    , fields : Dict String String -- desc, action, expect_*
     }
 
 
@@ -231,6 +243,8 @@ empty =
     , actions = []
     , steps = []
     , expect = ExpectEmpty
+    , otherScalars = Dict.empty
+    , otherBlocks = Dict.empty
     }
 
 
@@ -382,7 +396,9 @@ applyScalar key val sc =
             { sc | expect = ExpectScalar val }
 
         _ ->
-            Debug.todo ("ConformanceDsl: unknown scalar field \"" ++ key ++ ": " ++ val ++ "\"")
+            -- Op-specific scalar (gesture coords, click intent,
+            -- mousedown points, etc.). Verifiers project by key.
+            { sc | otherScalars = Dict.insert key val sc.otherScalars }
 
 
 applyBlock : String -> List Line -> Scenario -> Scenario
@@ -439,13 +455,15 @@ applyBlock key children sc =
             { sc | actions = parseDashLines children }
 
         "steps" ->
-            { sc | steps = parseDashLines children }
+            { sc | steps = parseSteps children }
 
         "expect" ->
             { sc | expect = ExpectBlock (parseExpectBlock children) }
 
         _ ->
-            Debug.todo ("ConformanceDsl: unknown block field \"" ++ key ++ "\"")
+            -- Op-specific block. Capture raw child line content for
+            -- the op's verifier to interpret.
+            { sc | otherBlocks = Dict.insert key (List.map .content children) sc.otherBlocks }
 
 
 
@@ -538,8 +556,19 @@ parseCardList s =
 
 
 parseCardToken : String -> Card
-parseCardToken tok =
+parseCardToken raw =
     let
+        -- Strip trailing state markers (`*` = FreshlyPlayed,
+        -- `**` = FreshlyPlayedByLastPlayer). Cards on the wire
+        -- carry state via these suffixes; the parser drops them
+        -- here so all consumers see bare Cards. Verifiers that
+        -- need state can re-parse the original token via the raw
+        -- DSL text.
+        tok =
+            raw
+                |> dropSuffix "**"
+                |> dropSuffix "*"
+
         ( base, deck ) =
             if String.endsWith "'" tok then
                 ( String.dropRight 1 tok, DeckTwo )
@@ -552,7 +581,16 @@ parseCardToken tok =
             c
 
         Nothing ->
-            Debug.todo ("ConformanceDsl: invalid card label: " ++ tok)
+            Debug.todo ("ConformanceDsl: invalid card label: " ++ raw)
+
+
+dropSuffix : String -> String -> String
+dropSuffix suffix s =
+    if String.endsWith suffix s then
+        String.dropRight (String.length suffix) s
+
+    else
+        s
 
 
 cardLabel : Card -> String
@@ -664,6 +702,41 @@ parseDashCardLists =
         )
 
 
+parseSteps : List Line -> List Step
+parseSteps children =
+    case children of
+        [] ->
+            []
+
+        first :: _ ->
+            let
+                baseIndent =
+                    first.indent
+
+                entries =
+                    groupEntries baseIndent children
+            in
+            List.map entryToStep entries
+
+
+entryToStep : Entry -> Step
+entryToStep entry =
+    let
+        fields =
+            entry.children
+                |> List.filterMap
+                    (\line ->
+                        let
+                            ( key, val ) =
+                                splitKey line.content line.lineNum line.raw
+                        in
+                        Just ( key, val )
+                    )
+                |> Dict.fromList
+    in
+    { name = entry.key, fields = fields }
+
+
 
 -- EXPECT BLOCK
 
@@ -728,14 +801,9 @@ applyExpectBlockField key children acc =
         Dict.insert key (ExpectLines (parseDashLines children)) acc
 
     else
-        -- Unknown nested block shape — bail with a clear message
-        -- rather than silently storing opaque children. Add a
-        -- handler here when a verifier needs it.
-        Debug.todo
-            ("ConformanceDsl: nested-block expect field \""
-                ++ key
-                ++ "\" not yet supported"
-            )
+        -- Unknown nested block shape inside expect. Capture as raw
+        -- child line content; the op's verifier interprets.
+        Dict.insert key (ExpectLines (List.map .content children)) acc
 
 
 allDashLines : List Line -> Bool
