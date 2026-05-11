@@ -110,17 +110,20 @@ viewActivePlayerRow info idx hand =
         ]
 
 
-{-| Per-hand-card attributes. Three independent decisions:
+{-| Per-hand-card attributes. Three orthogonal concerns
+concatenated:
 
-  - **Hint highlight** — light green if this card's identity
-    is in `hintedCards`.
-  - **Source-card dim** — if this card is the source of an
-    in-flight hand drag (`sourceCard`), dim it and disable
-    pointer events so the floater is the only interactive
-    piece.
-  - **Mousedown handler** — attach iff `cardMouseDown` is
-    `Just` (i.e. no drag is in flight); otherwise disable
-    pointer events.
+  - **Hint highlight** — light green background iff this
+    card's identity is in `hintedCards`.
+  - **Source-card dim** — half-opacity iff this card is the
+    source of an in-flight hand drag.
+  - **Pointer events** — mousedown handler when idle
+    (`cardMouseDown` is `Just`), otherwise `pointer-events:
+    none` so the in-flight drag isn't re-triggered by stray
+    events.
+
+The `pointer-events: none` for the source card falls out for
+free: a hand drag implies `cardMouseDown` is `Nothing`.
 
 -}
 handCardAttrs :
@@ -137,19 +140,23 @@ handCardAttrs sourceCard cardMouseDown hintedCards hc =
 
             else
                 []
-    in
-    hintAttrs
-        ++ (if sourceCard == Just hc.card then
-                [ style "opacity" "0.35", style "pointer-events" "none" ]
+
+        sourceDimAttrs =
+            if sourceCard == Just hc.card then
+                [ style "opacity" "0.35" ]
 
             else
-                case cardMouseDown of
-                    Just attrs ->
-                        attrs hc
+                []
 
-                    Nothing ->
-                        [ style "pointer-events" "none" ]
-           )
+        pointerAttrs =
+            case cardMouseDown of
+                Just attrs ->
+                    attrs hc
+
+                Nothing ->
+                    [ style "pointer-events" "none" ]
+    in
+    hintAttrs ++ sourceDimAttrs ++ pointerAttrs
 
 
 viewInactivePlayerRow : Int -> Hand -> Html Msg
