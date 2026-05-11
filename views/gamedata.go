@@ -198,6 +198,63 @@ func AppendSessionLine(sessionID int64, rel string, body []byte) error {
 	return AppendJSONLLine(filepath.Join(SessionDir(sessionID), rel), body)
 }
 
+// AppendTextLine appends `body` followed by a newline to `path`.
+// No JSON validation — `body` is the literal line. Used by the
+// wire-DSL action log (actions.dsl).
+func AppendTextLine(path string, body []byte) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return err
+	}
+	var buf bytes.Buffer
+	buf.Write(bytes.TrimRight(body, "\n"))
+	buf.WriteByte('\n')
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY|os.O_CREATE, 0644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	_, err = f.Write(buf.Bytes())
+	return err
+}
+
+// AppendSessionDslLine appends one DSL line to <session-dir>/<rel>
+// for a full-game session. Used for actions.dsl on the wire.
+func AppendSessionDslLine(sessionID int64, rel string, body []byte) error {
+	return AppendTextLine(filepath.Join(SessionDir(sessionID), rel), body)
+}
+
+// AppendPuzzleSessionDslLine appends one DSL line to a puzzle
+// session's <rel> file.
+func AppendPuzzleSessionDslLine(sessionID int64, rel string, body []byte) error {
+	return AppendTextLine(filepath.Join(PuzzleSessionDir(sessionID), rel), body)
+}
+
+// ReadTextLines returns the non-empty lines of `path`, or
+// ([]string{}, nil) if the file doesn't exist.
+func ReadTextLines(path string) ([]string, error) {
+	data, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return []string{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	lines := strings.Split(strings.TrimRight(string(data), "\n"), "\n")
+	out := make([]string, 0, len(lines))
+	for _, line := range lines {
+		if line != "" {
+			out = append(out, line)
+		}
+	}
+	return out, nil
+}
+
+// ReadSessionActionLines reads <session>/actions.dsl as a list
+// of raw DSL lines.
+func ReadSessionActionLines(sessionID int64) ([]string, error) {
+	return ReadTextLines(filepath.Join(SessionDir(sessionID), "actions.dsl"))
+}
+
 // ReadJSONLLines parses `path` as JSONL: one JSON value per
 // non-empty line. Empty lines are skipped. Returns
 // ([]json.RawMessage{}, nil) if the file doesn't exist.

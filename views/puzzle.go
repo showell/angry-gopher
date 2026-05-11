@@ -104,7 +104,7 @@ func puzzleAppendAction(w http.ResponseWriter, r *http.Request, sessionID int64)
 		http.Error(w, "read body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	if err := AppendPuzzleSessionLine(sessionID, "actions.jsonl", body); err != nil {
+	if err := AppendPuzzleSessionDslLine(sessionID, "actions.dsl", body); err != nil {
 		http.Error(w, "append: "+err.Error(), http.StatusInternalServerError)
 		return
 	}

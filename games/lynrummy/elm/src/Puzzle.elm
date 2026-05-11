@@ -43,7 +43,6 @@ import Html exposing (Html, div)
 import Html.Attributes exposing (style)
 import Http
 import Json.Decode as Decode
-import Json.Encode as Encode exposing (Value)
 import Puzzle.Replay as Replay
 import Task
 import Time
@@ -288,14 +287,6 @@ clickUndo model =
 
             effective =
                 ActionLog.collapseUndos nextLog
-
-            payload =
-                Encode.object
-                    [ ( "seq", Encode.int model.nextSeq )
-                    , ( "action"
-                      , Encode.object [ ( "action", Encode.string "undo" ) ]
-                      )
-                    ]
         in
         ( { model
             | actionLog = nextLog
@@ -305,7 +296,7 @@ clickUndo model =
                     (List.map .action effective)
             , nextSeq = model.nextSeq + 1
           }
-        , sendAction model.sessionId payload
+        , sendAction model.sessionId (GameEvent.undoDsl model.nextSeq)
         )
 
     else
@@ -370,11 +361,11 @@ fetchBoardRect gameId =
 -- WIRE
 
 
-sendAction : Int -> Value -> Cmd Msg
-sendAction sessionId body =
+sendAction : Int -> String -> Cmd Msg
+sendAction sessionId line =
     Http.post
         { url = "/gopher/puzzle/sessions/" ++ String.fromInt sessionId ++ "/actions"
-        , body = Http.jsonBody body
+        , body = Http.stringBody "text/plain" line
         , expect = Http.expectWhatever ActionSent
         }
 
@@ -416,6 +407,7 @@ replaySubscriptions model =
 
         Nothing ->
             Sub.none
+
 
 
 -- VIEW

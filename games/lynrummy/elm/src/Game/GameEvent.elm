@@ -1,4 +1,13 @@
-module Game.GameEvent exposing (GameEvent(..))
+module Game.GameEvent exposing
+    ( GameEvent(..)
+    , completeTurnDsl
+    , mergeHandDsl
+    , mergeStackDsl
+    , moveStackDsl
+    , placeHandDsl
+    , splitDsl
+    , undoDsl
+    )
 
 {-| The fundamental player-action vocabulary of Lyn Rummy.
 Each value names a thing the player did — Split, MergeStack,
@@ -12,14 +21,28 @@ index. Cards are globally unique in the double deck, so a card
 list identifies a stack unambiguously AND stays stable under
 the reducer's reordering.
 
-Type-only module — encoder/decoder live in
-`Game.WireAction` (which imports the type from here).
+Per-event wire emitters live here. Each dispatch site already
+has earned knowledge of which event fired, so it calls the
+specific encoder (no GameEvent value built just to re-dispatch
+on it). The matching parser lives in `Game.WireAction`.
+
+Grammar — each line is `N) action_body[ :: path (...)]`,
+where stack references carry their loc inline so the parser
+stays stateless:
+
+    44) move_stack [A♥ 2♥ 3♥'] at (10,53) -> (22,300) :: path (10,53@0)(22,300@500)
+    45) merge_stack [4♦'] at (407,200) -> [4♠ 4♣'] at (200,100) /right :: path (...)
+    46) split [2♦' 3♠' 4♦'] at (332,52) @2
+    47) merge_hand 7♥' -> [7♠ 7♦ 7♣] at (107,52) /right
+    48) place_hand 7♥' -> (400,300)
+    49) complete_turn
+    50) undo
 
 -}
 
-import Game.BoardActions exposing (Side)
-import Game.Rules.Card exposing (Card)
+import Game.BoardActions exposing (Side(..))
 import Game.CardStack exposing (BoardLocation, CardStack)
+import Game.Rules.Card as Card exposing (Card)
 import Game.TimeLoc exposing (TimeLoc)
 
 
@@ -31,3 +54,114 @@ type GameEvent
     | MoveStack { stack : CardStack, newLoc : BoardLocation, boardPath : List TimeLoc }
     | CompleteTurn
     | Undo
+
+
+
+-- PER-EVENT WIRE EMITTERS
+
+
+splitDsl : Int -> CardStack -> Int -> String
+splitDsl seq stack cardIndex =
+    seqPrefix seq
+        ++ "split "
+        ++ stackRef stack
+        ++ " @"
+        ++ String.fromInt cardIndex
+
+
+mergeStackDsl : Int -> CardStack -> CardStack -> Side -> List TimeLoc -> String
+mergeStackDsl seq source target side boardPath =
+    seqPrefix seq
+        ++ "merge_stack "
+        ++ stackRef source
+        ++ " -> "
+        ++ stackRef target
+        ++ " /"
+        ++ sideStr side
+        ++ pathSuffix boardPath
+
+
+mergeHandDsl : Int -> Card -> CardStack -> Side -> String
+mergeHandDsl seq handCard target side =
+    seqPrefix seq
+        ++ "merge_hand "
+        ++ Card.cardStr handCard
+        ++ " -> "
+        ++ stackRef target
+        ++ " /"
+        ++ sideStr side
+
+
+placeHandDsl : Int -> Card -> BoardLocation -> String
+placeHandDsl seq handCard loc =
+    seqPrefix seq
+        ++ "place_hand "
+        ++ Card.cardStr handCard
+        ++ " -> "
+        ++ locStr loc
+
+
+moveStackDsl : Int -> CardStack -> BoardLocation -> List TimeLoc -> String
+moveStackDsl seq stack newLoc boardPath =
+    seqPrefix seq
+        ++ "move_stack "
+        ++ stackRef stack
+        ++ " -> "
+        ++ locStr newLoc
+        ++ pathSuffix boardPath
+
+
+completeTurnDsl : Int -> String
+completeTurnDsl seq =
+    seqPrefix seq ++ "complete_turn"
+
+
+undoDsl : Int -> String
+undoDsl seq =
+    seqPrefix seq ++ "undo"
+
+
+
+-- SHARED INTERNALS
+
+
+seqPrefix : Int -> String
+seqPrefix n =
+    String.fromInt n ++ ") "
+
+
+stackRef : CardStack -> String
+stackRef s =
+    "["
+        ++ String.join " " (List.map (.card >> Card.cardStr) s.boardCards)
+        ++ "] at "
+        ++ locStr s.loc
+
+
+locStr : BoardLocation -> String
+locStr loc =
+    "(" ++ String.fromInt loc.left ++ "," ++ String.fromInt loc.top ++ ")"
+
+
+sideStr : Side -> String
+sideStr s =
+    case s of
+        Left ->
+            "left"
+
+        Right ->
+            "right"
+
+
+pathSuffix : List TimeLoc -> String
+pathSuffix path =
+    if List.isEmpty path then
+        ""
+
+    else
+        " :: path " ++ String.concat (List.map timeLocStr path)
+
+
+timeLocStr : TimeLoc -> String
+timeLocStr t =
+    "(" ++ String.fromInt t.left ++ "," ++ String.fromInt t.top ++ "@" ++ String.fromInt t.tMs ++ ")"

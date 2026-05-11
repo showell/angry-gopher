@@ -5,17 +5,14 @@ module Game.BoardDrag exposing
     )
 
 import Game.ActionLog exposing (ActionLogEntry)
-import Game.BoardActions exposing (Side(..))
-import Game.BoardGesture as BoardGesture
-import Game.CardStack exposing (CardStack, encodeBoardLocation, encodeCardStack)
 import Game.BoardDragTypes exposing (BoardCardDragInfo)
+import Game.BoardGesture as BoardGesture
+import Game.CardStack exposing (CardStack)
 import Game.Execute as Execute
 import Game.GameEvent as GameEvent
 import Game.Physics.GestureArbitration as GA
-import Game.Status as Status exposing (StatusMessage)
-import Game.TimeLoc exposing (encodeTimeLoc)
-import Json.Encode as Encode exposing (Value)
 import Game.Point exposing (Point)
+import Game.Status as Status exposing (StatusMessage)
 
 
 {-| Inputs `handleMouseUp` reads from the host model. Caller
@@ -40,15 +37,16 @@ type alias BoardOutcome =
     , status : StatusMessage
     , actionLog : List ActionLogEntry
     , nextSeq : Int
-    , outboundPayload : Maybe Value
+    , outboundPayload : Maybe String
     }
 
 
 {-| Resolve a board-card mouseup. Each action variant produces
 the new board state, an action-log append, and (for accepted
-actions) the JSON payload the host should ship to the agent.
-The per-action payload is built inline here — one site authors
-the wire shape.
+actions) the DSL line the host should ship to the agent. Each
+case constructs the DSL line directly via the matching
+`GameEvent.*Dsl` helper — no GameEvent value built just to
+re-dispatch on it.
 -}
 handleMouseUp : Point -> Int -> BoardCardDragInfo -> HandleMouseUpInput -> BoardOutcome
 handleMouseUp releasePoint tMs d input =
@@ -62,24 +60,12 @@ handleMouseUp releasePoint tMs d input =
                     { text = "Be careful with splitting! Splits only pay off when you get more cards on the board or make prettier piles."
                     , kind = Status.Scold
                     }
-
-                payload =
-                    Encode.object
-                        [ ( "seq", Encode.int input.nextSeq )
-                        , ( "action"
-                          , Encode.object
-                                [ ( "action", Encode.string "split" )
-                                , ( "stack", encodeCardStack p.stack )
-                                , ( "card_index", Encode.int p.cardIndex )
-                                ]
-                          )
-                        ]
             in
             { board = newBoard
             , status = Status.geometryFeedback input.board newBoard |> Maybe.withDefault splitStatus
             , actionLog = input.actionLog ++ [ { action = GameEvent.Split p } ]
             , nextSeq = input.nextSeq + 1
-            , outboundPayload = Just payload
+            , outboundPayload = Just (GameEvent.splitDsl input.nextSeq p.stack p.cardIndex)
             }
 
         BoardGesture.MergeStack p ->
@@ -94,26 +80,13 @@ handleMouseUp releasePoint tMs d input =
                         , side = p.side
                         , boardPath = p.boardPath
                         }
-
-                payload =
-                    Encode.object
-                        [ ( "seq", Encode.int input.nextSeq )
-                        , ( "action"
-                          , Encode.object
-                                [ ( "action", Encode.string "merge_stack" )
-                                , ( "source", encodeCardStack p.source )
-                                , ( "target", encodeCardStack p.target )
-                                , ( "side", Encode.string (sideString p.side) )
-                                , ( "board_path", Encode.list encodeTimeLoc p.boardPath )
-                                ]
-                          )
-                        ]
             in
             { board = newBoard
             , status = Status.geometryFeedback input.board newBoard |> Maybe.withDefault (Status.mergeStatus newBoard)
             , actionLog = input.actionLog ++ [ { action = event } ]
             , nextSeq = input.nextSeq + 1
-            , outboundPayload = Just payload
+            , outboundPayload =
+                Just (GameEvent.mergeStackDsl input.nextSeq p.source p.target p.side p.boardPath)
             }
 
         BoardGesture.MoveStack p ->
@@ -130,25 +103,13 @@ handleMouseUp releasePoint tMs d input =
                         , newLoc = p.newLoc
                         , boardPath = p.boardPath
                         }
-
-                payload =
-                    Encode.object
-                        [ ( "seq", Encode.int input.nextSeq )
-                        , ( "action"
-                          , Encode.object
-                                [ ( "action", Encode.string "move_stack" )
-                                , ( "stack", encodeCardStack p.stack )
-                                , ( "new_loc", encodeBoardLocation p.newLoc )
-                                , ( "board_path", Encode.list encodeTimeLoc p.boardPath )
-                                ]
-                          )
-                        ]
             in
             { board = newBoard
             , status = Status.geometryFeedback input.board newBoard |> Maybe.withDefault moveStackStatus
             , actionLog = input.actionLog ++ [ { action = event } ]
             , nextSeq = input.nextSeq + 1
-            , outboundPayload = Just payload
+            , outboundPayload =
+                Just (GameEvent.moveStackDsl input.nextSeq p.stack p.newLoc p.boardPath)
             }
 
         BoardGesture.BoardCardOffBoard ->
@@ -158,13 +119,3 @@ handleMouseUp releasePoint tMs d input =
             , nextSeq = input.nextSeq
             , outboundPayload = Nothing
             }
-
-
-sideString : Side -> String
-sideString side =
-    case side of
-        Left ->
-            "left"
-
-        Right ->
-            "right"

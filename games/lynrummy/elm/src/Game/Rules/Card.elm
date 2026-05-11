@@ -283,7 +283,19 @@ suitEmojiStr suit =
 
 cardStr : Card -> String
 cardStr card =
-    valueStr card.value ++ suitEmojiStr card.suit
+    valueStr card.value
+        ++ suitEmojiStr card.suit
+        ++ deckSuffix card.originDeck
+
+
+deckSuffix : OriginDeck -> String
+deckSuffix d =
+    case d of
+        DeckOne ->
+            ""
+
+        DeckTwo ->
+            "'"
 
 
 

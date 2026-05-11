@@ -10,9 +10,9 @@ turn" and "Undo." Each returns a typed variant the caller
 (Main.Play) dispatches on to patch Model + fire the wire
 Cmd.
 
-This module is Cmd-free and Msg-free — the Encode.Value
-payloads are returned as data; the host wraps them in
-`Wire.sendAction` at the call site.
+This module is Cmd-free and Msg-free — the DSL wire lines
+are returned as `outboundPayload : String`; the host wraps
+them in `Wire.sendAction` at the call site.
 
 -}
 
@@ -24,7 +24,6 @@ import Game.Physics.BoardGeometry exposing (refereeBounds)
 import Game.PlayerTurn exposing (CompleteTurnResult(..))
 import Game.Popup as Popup exposing (PopupContent)
 import Game.Status as Status exposing (StatusMessage)
-import Json.Encode as Encode exposing (Value)
 
 
 type CompleteTurnAttempt
@@ -37,7 +36,7 @@ type CompleteTurnAttempt
         , appendedEntry : ActionLogEntry
         , status : StatusMessage
         , popup : PopupContent
-        , outboundPayload : Value
+        , outboundPayload : String
         }
 
 
@@ -46,7 +45,7 @@ type UndoAttempt
     | DidUndo
         { newGameState : GameState
         , appendedEntry : ActionLogEntry
-        , outboundPayload : Value
+        , outboundPayload : String
         }
 
 
@@ -78,14 +77,7 @@ attemptCompleteTurn { gameState, nextSeq } =
                 , appendedEntry = { action = GameEvent.CompleteTurn }
                 , status = status
                 , popup = popup
-                , outboundPayload =
-                    Encode.object
-                        [ ( "seq", Encode.int nextSeq )
-                        , ( "action"
-                          , Encode.object
-                                [ ( "action", Encode.string "complete_turn" ) ]
-                          )
-                        ]
+                , outboundPayload = GameEvent.completeTurnDsl nextSeq
                 }
 
 
@@ -108,14 +100,7 @@ attemptUndo { gameState, lastUndoableAction, nextSeq } =
             DidUndo
                 { newGameState = undoEvent lastAction gameState
                 , appendedEntry = { action = GameEvent.Undo }
-                , outboundPayload =
-                    Encode.object
-                        [ ( "seq", Encode.int nextSeq )
-                        , ( "action"
-                          , Encode.object
-                                [ ( "action", Encode.string "undo" ) ]
-                          )
-                        ]
+                , outboundPayload = GameEvent.undoDsl nextSeq
                 }
 
 

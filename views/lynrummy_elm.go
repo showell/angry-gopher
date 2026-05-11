@@ -226,8 +226,16 @@ func lynrummyElmAppendSessionLine(w http.ResponseWriter, r *http.Request, sessio
 		http.Error(w, "read body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	if err := AppendSessionLine(sessionID, rel+".jsonl", body); err != nil {
-		http.Error(w, "append: "+err.Error(), http.StatusInternalServerError)
+	// Actions are wire-DSL text lines (rel="actions" → actions.dsl).
+	// Annotations stay JSONL — separate concern, different consumer.
+	var err2 error
+	if rel == "actions" {
+		err2 = AppendSessionDslLine(sessionID, rel+".dsl", body)
+	} else {
+		err2 = AppendSessionLine(sessionID, rel+".jsonl", body)
+	}
+	if err2 != nil {
+		http.Error(w, "append: "+err2.Error(), http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
@@ -253,7 +261,7 @@ func lynrummyElmSessionBootstrap(w http.ResponseWriter, sessionID int64) {
 		http.Error(w, "read meta: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	actions, err := ReadSessionActions(sessionID)
+	actions, err := ReadSessionActionLines(sessionID)
 	if err != nil {
 		http.Error(w, "read actions: "+err.Error(), http.StatusInternalServerError)
 		return

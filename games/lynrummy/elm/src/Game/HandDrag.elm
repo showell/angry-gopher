@@ -5,19 +5,16 @@ module Game.HandDrag exposing
     )
 
 import Game.ActionLog exposing (ActionLogEntry)
-import Game.BoardActions exposing (Side(..))
-import Game.CardStack exposing (CardStack, encodeBoardLocation, encodeCardStack)
-import Game.HandDragTypes exposing (HandCardDragInfo)
+import Game.CardStack exposing (CardStack)
 import Game.Execute as Execute
 import Game.Game exposing (GameState)
 import Game.GameEvent as GameEvent
 import Game.Hand as Hand exposing (Hand)
+import Game.HandDragTypes exposing (HandCardDragInfo)
 import Game.HandGesture as HandGesture
 import Game.Physics.GestureArbitration as GA
-import Game.Rules.Card as Card
-import Game.Status as Status exposing (StatusMessage)
-import Json.Encode as Encode exposing (Value)
 import Game.Point exposing (Point)
+import Game.Status as Status exposing (StatusMessage)
 
 
 {-| Inputs `handleMouseUp` reads. The hand variant needs the
@@ -44,7 +41,7 @@ type alias HandOutcome =
     , status : StatusMessage
     , actionLog : List ActionLogEntry
     , nextSeq : Int
-    , outboundPayload : Maybe Value
+    , outboundPayload : Maybe String
     }
 
 
@@ -62,19 +59,6 @@ handleMouseUp releasePoint d input =
 
                 gsWithHand =
                     Hand.setActiveHand next.hand input.gameState
-
-                payload =
-                    Encode.object
-                        [ ( "seq", Encode.int input.nextSeq )
-                        , ( "action"
-                          , Encode.object
-                                [ ( "action", Encode.string "merge_hand" )
-                                , ( "hand_card", Card.encodeCard p.handCard )
-                                , ( "target", encodeCardStack p.target )
-                                , ( "side", Encode.string (sideString p.side) )
-                                ]
-                          )
-                        ]
             in
             { board = next.board
             , hands = gsWithHand.hands
@@ -84,7 +68,7 @@ handleMouseUp releasePoint d input =
                 input.actionLog
                     ++ [ { action = GameEvent.MergeHand p } ]
             , nextSeq = input.nextSeq + 1
-            , outboundPayload = Just payload
+            , outboundPayload = Just (GameEvent.mergeHandDsl input.nextSeq p.handCard p.target p.side)
             }
 
         HandGesture.PlaceHand p ->
@@ -97,18 +81,6 @@ handleMouseUp releasePoint d input =
 
                 placeHandStatus =
                     { text = "On the board!", kind = Status.Inform }
-
-                payload =
-                    Encode.object
-                        [ ( "seq", Encode.int input.nextSeq )
-                        , ( "action"
-                          , Encode.object
-                                [ ( "action", Encode.string "place_hand" )
-                                , ( "hand_card", Card.encodeCard p.handCard )
-                                , ( "loc", encodeBoardLocation p.loc )
-                                ]
-                          )
-                        ]
             in
             { board = next.board
             , hands = gsWithHand.hands
@@ -118,7 +90,7 @@ handleMouseUp releasePoint d input =
                 input.actionLog
                     ++ [ { action = GameEvent.PlaceHand p } ]
             , nextSeq = input.nextSeq + 1
-            , outboundPayload = Just payload
+            , outboundPayload = Just (GameEvent.placeHandDsl input.nextSeq p.handCard p.loc)
             }
 
         HandGesture.HandCardOffBoard ->
@@ -140,13 +112,3 @@ handleMouseUp releasePoint d input =
             , nextSeq = input.nextSeq
             , outboundPayload = Nothing
             }
-
-
-sideString : Side -> String
-sideString side =
-    case side of
-        Left ->
-            "left"
-
-        Right ->
-            "right"
