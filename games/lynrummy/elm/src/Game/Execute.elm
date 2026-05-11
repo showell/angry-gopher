@@ -1,13 +1,17 @@
 module Game.Execute exposing (mergeHand, mergeStack, moveStack, placeHand, split, undoEvent)
 
-{-| Honest board mutators, one per `GameEvent` variant. Each
-function takes the board (and whatever per-action data it
-needs) and returns the new board — no `Maybe`s in the
-signature.
+{-| Honest mutators for the game's primitive actions.
 
-If the caller passes a stack that isn't on the board, that's
-a bridge bug; the function logs it loudly via `Debug.log`
-and returns the board unchanged. The log is the
+Board-only verbs (`split`, `mergeStack`, `moveStack`) take and
+return a board. Hand verbs (`mergeHand`, `placeHand`) take and
+return a full `GameState` because the action must update
+board + active hand + `cardsPlayedThisTurn` atomically — a card
+can only be in one place at a time, so the post-call state has
+to be the consistent one (not an intermediate `{ board, hand }`
+the caller would need to splice back).
+
+Bridge-bug failures (referenced card or stack not present) log
+via `Debug.log` and return the input unchanged. The log is the
 surfacer; without it (or with silent identity-return) the
 divergence cascades downstream and gets harder to trace.
 
@@ -17,7 +21,7 @@ import Game.BoardActions as BoardActions exposing (Side)
 import Game.CardStack as CardStack exposing (BoardLocation, CardStack, findStack, isStacksEqual)
 import Game.Game exposing (GameState)
 import Game.GameEvent exposing (GameEvent(..))
-import Game.Hand as Hand exposing (Hand)
+import Game.Hand as Hand
 import Game.Rules.Card exposing (Card)
 
 
@@ -207,27 +211,26 @@ mergeStack source target side board =
             board
 
 
-{-| Merge `handCard` onto `target` from the given side. Returns
-the new (board, hand) — board has the merged stack, hand has
-the merged card removed. Failure cases (target missing, hand
-card missing, tryHandMerge rejects) log and return board+hand
-unchanged.
+{-| Merge `handCard` onto `target` from the given side. Atomically
+moves the card from the active hand onto the board and bumps
+`cardsPlayedThisTurn`. Failure cases (target missing, hand card
+missing, `tryHandMerge` rejects) log and return state unchanged.
 -}
-mergeHand :
-    Card
-    -> CardStack
-    -> Side
-    -> List CardStack
-    -> Hand
-    -> { board : List CardStack, hand : Hand }
-mergeHand handCardId target side board hand =
-    case ( findStack target board, Hand.findHandCard handCardId hand ) of
+mergeHand : Card -> CardStack -> Side -> GameState -> GameState
+mergeHand handCardId target side state =
+    let
+        hand =
+            Hand.activeHand state
+    in
+    case ( findStack target state.board, Hand.findHandCard handCardId hand ) of
         ( Just realTarget, Just hc ) ->
             case BoardActions.tryHandMerge realTarget hc side of
                 Just change ->
-                    { board = applyBoardChange change board
-                    , hand = Hand.removeHandCard hc hand
-                    }
+                    Hand.setActiveHand (Hand.removeHandCard hc hand)
+                        { state
+                            | board = applyBoardChange change state.board
+                            , cardsPlayedThisTurn = state.cardsPlayedThisTurn + 1
+                        }
 
                 Nothing ->
                     let
@@ -235,14 +238,14 @@ mergeHand handCardId target side board hand =
                             Debug.log "[Execute.mergeHand] tryHandMerge rejected — skipping (rules bug?)"
                                 { handCard = handCardId, target = target, side = side }
                     in
-                    { board = board, hand = hand }
+                    state
 
         ( Nothing, _ ) ->
             let
                 _ =
                     Debug.log "[Execute.mergeHand] target stack not on board — skipping (bridge bug)" target
             in
-            { board = board, hand = hand }
+            state
 
         ( _, Nothing ) ->
             let
@@ -254,26 +257,27 @@ mergeHand handCardId target side board hand =
                         )
                         { handCard = handCardId, handSize = List.length hand.handCards }
             in
-            { board = board, hand = hand }
+            state
 
 
-{-| Place `handCard` on the board at `loc`. Returns the new
-(board, hand) — board has the new singleton stack, hand has
-the placed card removed. Bridge-bug case: hand card not in
-active hand → log + board+hand unchanged.
+{-| Place `handCard` on the board at `loc`. Atomically moves the
+card from the active hand to a new singleton stack and bumps
+`cardsPlayedThisTurn`. Bridge-bug case: hand card not in active
+hand → log + state unchanged.
 -}
-placeHand :
-    Card
-    -> BoardLocation
-    -> List CardStack
-    -> Hand
-    -> { board : List CardStack, hand : Hand }
-placeHand handCardId loc board hand =
+placeHand : Card -> BoardLocation -> GameState -> GameState
+placeHand handCardId loc state =
+    let
+        hand =
+            Hand.activeHand state
+    in
     case Hand.findHandCard handCardId hand of
         Just hc ->
-            { board = applyBoardChange (BoardActions.placeHandCardAt hc loc) board
-            , hand = Hand.removeHandCard hc hand
-            }
+            Hand.setActiveHand (Hand.removeHandCard hc hand)
+                { state
+                    | board = applyBoardChange (BoardActions.placeHandCardAt hc loc) state.board
+                    , cardsPlayedThisTurn = state.cardsPlayedThisTurn + 1
+                }
 
         Nothing ->
             let
@@ -285,7 +289,7 @@ placeHand handCardId loc board hand =
                         )
                         { handCard = handCardId, handSize = List.length hand.handCards }
             in
-            { board = board, hand = hand }
+            state
 
 
 

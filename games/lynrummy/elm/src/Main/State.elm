@@ -189,34 +189,10 @@ applyEvent event state =
             { state | board = Execute.moveStack p.stack p.newLoc state.board }
 
         MergeHand p ->
-            let
-                preHand =
-                    Hand.activeHand state
-
-                next =
-                    Execute.mergeHand p.handCard p.target p.side state.board preHand
-            in
-            Hand.setActiveHand next.hand
-                { state
-                    | board = next.board
-                    , cardsPlayedThisTurn =
-                        state.cardsPlayedThisTurn + (Hand.size preHand - Hand.size next.hand)
-                }
+            Execute.mergeHand p.handCard p.target p.side state
 
         PlaceHand p ->
-            let
-                preHand =
-                    Hand.activeHand state
-
-                next =
-                    Execute.placeHand p.handCard p.loc state.board preHand
-            in
-            Hand.setActiveHand next.hand
-                { state
-                    | board = next.board
-                    , cardsPlayedThisTurn =
-                        state.cardsPlayedThisTurn + (Hand.size preHand - Hand.size next.hand)
-                }
+            Execute.placeHand p.handCard p.loc state
 
         CompleteTurn ->
             Tuple.first (Game.applyCompleteTurn refereeBounds state)

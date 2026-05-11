@@ -9,7 +9,7 @@ import Game.CardStack exposing (CardStack)
 import Game.Execute as Execute
 import Game.Game exposing (GameState)
 import Game.GameEvent as GameEvent
-import Game.Hand as Hand exposing (Hand)
+import Game.Hand exposing (Hand)
 import Game.HandDragTypes exposing (HandCardDragInfo)
 import Game.HandGesture as HandGesture
 import Game.Physics.GestureArbitration as GA
@@ -54,16 +54,13 @@ handleMouseUp releasePoint d input =
     case HandGesture.handleMouseUp releasePoint d input.boardRect of
         HandGesture.MergeHand p ->
             let
-                next =
-                    Execute.mergeHand p.handCard p.target p.side input.gameState.board (Hand.activeHand input.gameState)
-
-                gsWithHand =
-                    Hand.setActiveHand next.hand input.gameState
+                nextState =
+                    Execute.mergeHand p.handCard p.target p.side input.gameState
             in
-            { board = next.board
-            , hands = gsWithHand.hands
-            , cardsPlayedThisTurn = input.gameState.cardsPlayedThisTurn + 1
-            , status = Status.geometryFeedback input.gameState.board next.board |> Maybe.withDefault (Status.mergeStatus next.board)
+            { board = nextState.board
+            , hands = nextState.hands
+            , cardsPlayedThisTurn = nextState.cardsPlayedThisTurn
+            , status = Status.geometryFeedback input.gameState.board nextState.board |> Maybe.withDefault (Status.mergeStatus nextState.board)
             , actionLog =
                 input.actionLog
                     ++ [ { action = GameEvent.MergeHand p } ]
@@ -73,19 +70,16 @@ handleMouseUp releasePoint d input =
 
         HandGesture.PlaceHand p ->
             let
-                next =
-                    Execute.placeHand p.handCard p.loc input.gameState.board (Hand.activeHand input.gameState)
-
-                gsWithHand =
-                    Hand.setActiveHand next.hand input.gameState
+                nextState =
+                    Execute.placeHand p.handCard p.loc input.gameState
 
                 placeHandStatus =
                     { text = "On the board!", kind = Status.Inform }
             in
-            { board = next.board
-            , hands = gsWithHand.hands
-            , cardsPlayedThisTurn = input.gameState.cardsPlayedThisTurn + 1
-            , status = Status.geometryFeedback input.gameState.board next.board |> Maybe.withDefault placeHandStatus
+            { board = nextState.board
+            , hands = nextState.hands
+            , cardsPlayedThisTurn = nextState.cardsPlayedThisTurn
+            , status = Status.geometryFeedback input.gameState.board nextState.board |> Maybe.withDefault placeHandStatus
             , actionLog =
                 input.actionLog
                     ++ [ { action = GameEvent.PlaceHand p } ]

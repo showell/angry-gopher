@@ -52,7 +52,6 @@ import Game.BoardView as BoardView
 import Game.CardStack as CardStack exposing (BoardLocation, CardStack)
 import Game.Execute as Execute
 import Game.Game exposing (GameState)
-import Game.Hand as Hand
 import Game.HandDragTypes exposing (HandCardDragInfo)
 import Game.HandLayout as HandLayout
 import Game.Physics.BoardGeometry as BG
@@ -204,33 +203,18 @@ step config nowMs gameState state =
                 )
 
 
-{-| Apply the pending hand action to the game state.
-Dispatches on the variant to call the right `Execute`
-operation directly, then re-wraps the active hand and
-updates `cardsPlayedThisTurn` — the same accounting
-`Execute.applyEvent` does for hand events, but inlined so
-this module doesn't touch GameEvent.
+{-| Apply the pending hand action to the game state. Dispatches
+on the variant to call the right `Execute` op directly, without
+going through the `GameEvent` envelope.
 -}
 applyHandAction : HandDragAnimateAction -> GameState -> GameState
 applyHandAction action gameState =
-    let
-        preHand =
-            Hand.activeHand gameState
+    case action of
+        MergeHand p ->
+            Execute.mergeHand p.handCard p.targetStack p.side gameState
 
-        next =
-            case action of
-                MergeHand p ->
-                    Execute.mergeHand p.handCard p.targetStack p.side gameState.board preHand
-
-                PlaceHand p ->
-                    Execute.placeHand p.handCard p.loc gameState.board preHand
-    in
-    Hand.setActiveHand next.hand
-        { gameState
-            | board = next.board
-            , cardsPlayedThisTurn =
-                gameState.cardsPlayedThisTurn + (Hand.size preHand - Hand.size next.hand)
-        }
+        PlaceHand p ->
+            Execute.placeHand p.handCard p.loc gameState
 
 
 {-| Bundle the hand card's live rect, the board's live rect,
