@@ -44,12 +44,11 @@ boardShell :
     , gameId : String
     , sourceStack : Maybe CardStack
     , cardMouseDown : Maybe (CardStack -> Int -> List (Html.Attribute msg))
-    , wings : List WingId
-    , hoveredWing : Maybe WingId
+    , wingsWithHover : List ( WingId, Bool )
     , boardFloaters : List (Html msg)
     }
     -> Html msg
-boardShell { board, gameId, sourceStack, cardMouseDown, wings, hoveredWing, boardFloaters } =
+boardShell { board, gameId, sourceStack, cardMouseDown, wingsWithHover, boardFloaters } =
     let
         -- Source stack of an in-flight board drag is filtered
         -- out — the floater renders in its place.
@@ -65,7 +64,7 @@ boardShell { board, gameId, sourceStack, cardMouseDown, wings, hoveredWing, boar
             List.map (viewStackForBoard cardMouseDown) visibleStacks
 
         wingNodes =
-            List.map (WingView.renderWingWithHover hoveredWing) wings
+            List.map WingView.renderWingWithHover wingsWithHover
     in
     div
         [ id (boardDomIdFor gameId)

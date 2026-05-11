@@ -440,6 +440,9 @@ view model =
 
                 _ ->
                     Nothing
+
+        wingsWithHover =
+            List.map (\w -> ( w, hoveredWing == Just w )) wings
     in
     div
         [ style "font-family" "system-ui, sans-serif" ]
@@ -464,8 +467,7 @@ view model =
                 , gameId = model.gameId
                 , sourceStack = sourceStack
                 , cardMouseDown = cardMouseDown
-                , wings = wings
-                , hoveredWing = hoveredWing
+                , wingsWithHover = wingsWithHover
                 , boardFloaters = boardFloaters
                 }
             ]

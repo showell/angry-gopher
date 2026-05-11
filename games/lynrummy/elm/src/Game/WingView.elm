@@ -108,15 +108,13 @@ hoveredWing floaterTopLeft floaterWidth wings =
 -- RENDERING
 
 
-{-| Render a wing at its eventual landing position, in the
-mauve-hover color if it matches `hovered`, otherwise the
-mergeable-green color. Caller dispatches DragState once to
-extract `wings : List WingId` + `hovered : Maybe WingId` and
-maps this function over the list.
+{-| Render a wing at its eventual landing position. The caller
+pre-pairs each wing with its hover bool — mauve when hovered,
+mergeable-green otherwise.
 -}
-renderWingWithHover : Maybe WingId -> WingId -> Html msg
-renderWingWithHover hovered wing =
-    renderWing (WingOracle.wingBoardRect wing) (hovered == Just wing)
+renderWingWithHover : ( WingId, Bool ) -> Html msg
+renderWingWithHover ( wing, hovered ) =
+    renderWing (WingOracle.wingBoardRect wing) hovered
 
 
 renderWing : { left : Int, top : Int, width : Int, height : Int } -> Bool -> Html msg
