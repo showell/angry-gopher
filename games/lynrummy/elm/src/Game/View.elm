@@ -64,21 +64,21 @@ ascending. Empty suit rows are skipped. Faithful port of
 `PhysicalHand.populate` in `game.ts:1589`.
 
 Per-card decoration is computed at the leaf
-(`viewPlacedHandCard`) from three orthogonal inputs:
-`sourceCard` (for the dim overlay), `hintedCards` (for the
-hint highlight), and `cardEventAttrs` (per-card interaction
-attrs — mousedown when idle, `pointer-events: none` while a
-drag is in flight; the host bakes that decision into the
-closure).
+(`viewPlacedHandCard`) from four inputs: `handIsInteractive`
+(false while any drag is in flight), `sourceCard` (the dim
+overlay's target, if any), `hintedCards` (hint highlight),
+and `cardMouseDown` (per-card mousedown attr builder — always
+a real per-card function; only used when interactive).
 
 -}
 viewHand :
-    Maybe Card
+    Bool
+    -> Maybe Card
     -> List Card
     -> (HandCard -> List (Html.Attribute msg))
     -> Hand
     -> Html msg
-viewHand sourceCard hintedCards cardEventAttrs hand =
+viewHand handIsInteractive sourceCard hintedCards cardMouseDown hand =
     let
         -- The hand DSL encoder consumes the same `sortIntoSuitRows`
         -- helper. Shared canonicalization keeps the on-screen
@@ -105,7 +105,7 @@ viewHand sourceCard hintedCards cardEventAttrs hand =
         , style "width" (String.fromInt (240 - 20) ++ "px")
         , style "height" (String.fromInt containerHeight ++ "px")
         ]
-        (List.map (viewPlacedHandCard sourceCard hintedCards cardEventAttrs) slots)
+        (List.map (viewPlacedHandCard handIsInteractive sourceCard hintedCards cardMouseDown) slots)
 
 
 suitToRowIdx : Suit -> Int
@@ -125,12 +125,13 @@ suitToRowIdx suit =
 
 
 viewPlacedHandCard :
-    Maybe Card
+    Bool
+    -> Maybe Card
     -> List Card
     -> (HandCard -> List (Html.Attribute msg))
     -> { row : Int, col : Int, handCard : HandCard }
     -> Html msg
-viewPlacedHandCard sourceCard hintedCards cardEventAttrs slot =
+viewPlacedHandCard handIsInteractive sourceCard hintedCards cardMouseDown slot =
     let
         hc =
             slot.handCard
@@ -166,9 +167,16 @@ viewPlacedHandCard sourceCard hintedCards cardEventAttrs slot =
 
             else
                 []
+
+        eventAttrs =
+            if handIsInteractive then
+                cardMouseDown hc
+
+            else
+                [ style "pointer-events" "none" ]
     in
     StackView.viewCardWithAttrs
-        (positionedAttrs ++ hintAttrs ++ sourceDimAttrs ++ cardEventAttrs hc)
+        (positionedAttrs ++ hintAttrs ++ sourceDimAttrs ++ eventAttrs)
         hc.card
 
 

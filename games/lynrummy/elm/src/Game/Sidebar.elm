@@ -32,8 +32,9 @@ type ReplayControl
 
 type alias PlayerPanelInfo =
     { gameState : GameState
+    , handIsInteractive : Bool
     , sourceCard : Maybe Card
-    , cardEventAttrs : HandCard -> List (Attribute Msg)
+    , cardMouseDown : HandCard -> List (Attribute Msg)
     , hintedCards : List Card
     , canUndo : Bool
     , replayControl : ReplayControl
@@ -41,8 +42,9 @@ type alias PlayerPanelInfo =
 
 
 type alias ActivePlayerInfo =
-    { sourceCard : Maybe Card
-    , cardEventAttrs : HandCard -> List (Attribute Msg)
+    { handIsInteractive : Bool
+    , sourceCard : Maybe Card
+    , cardMouseDown : HandCard -> List (Attribute Msg)
     , hintedCards : List Card
     , canUndo : Bool
     , replayControl : ReplayControl
@@ -64,8 +66,9 @@ playerHands info =
     let
         activeInfo : ActivePlayerInfo
         activeInfo =
-            { sourceCard = info.sourceCard
-            , cardEventAttrs = info.cardEventAttrs
+            { handIsInteractive = info.handIsInteractive
+            , sourceCard = info.sourceCard
+            , cardMouseDown = info.cardMouseDown
             , hintedCards = info.hintedCards
             , canUndo = info.canUndo
             , replayControl = info.replayControl
@@ -103,7 +106,7 @@ viewActivePlayerRow : ActivePlayerInfo -> Int -> Hand -> Html Msg
 viewActivePlayerRow info idx hand =
     playerRowShell { isActive = True, idx = idx }
         [ View.viewHandHeading
-        , View.viewHand info.sourceCard info.hintedCards info.cardEventAttrs hand
+        , View.viewHand info.handIsInteractive info.sourceCard info.hintedCards info.cardMouseDown hand
         , viewTurnControls { canUndo = info.canUndo, replayControl = info.replayControl }
         ]
 
