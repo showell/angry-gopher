@@ -26,35 +26,44 @@ pointDecoder =
         (Decode.field "clientY" Decode.float)
 
 
-{-| Decoder for mousedown events: pulls the cursor point AND
-the `MouseEvent.timeStamp` (used for gesture-path capture).
+{-| `MouseEvent.timeStamp` is a `DOMHighResTimeStamp` — JS
+gives us a Float (modern browsers clamp the fractional part to
+~1ms for Spectre mitigation anyway). We floor to Int once here
+at the JS↔Elm boundary so the rest of the codebase only sees
+integer milliseconds.
 -}
-pointAndTimeDecoder : Decoder ( Point, Float )
+timeStampDecoder : Decoder Int
+timeStampDecoder =
+    Decode.field "timeStamp" Decode.float
+        |> Decode.map floor
+
+
+pointAndTimeDecoder : Decoder ( Point, Int )
 pointAndTimeDecoder =
     Decode.map2 Tuple.pair
         pointDecoder
-        (Decode.field "timeStamp" Decode.float)
+        timeStampDecoder
 
 
 {-| Document-level mousemove decoder. Wired into
 `Browser.Events.onMouseMove` while a drag is live. Caller
-supplies its own `Point -> Float -> msg` constructor.
+supplies its own `Point -> Int -> msg` constructor.
 -}
-mouseMoveDecoder : (Point -> Float -> msg) -> Decoder msg
+mouseMoveDecoder : (Point -> Int -> msg) -> Decoder msg
 mouseMoveDecoder toMsg =
     Decode.map2 toMsg
         pointDecoder
-        (Decode.field "timeStamp" Decode.float)
+        timeStampDecoder
 
 
 {-| Document-level mouseup decoder. Wired into
 `Browser.Events.onMouseUp` while a drag is live.
 -}
-mouseUpDecoder : (Point -> Float -> msg) -> Decoder msg
+mouseUpDecoder : (Point -> Int -> msg) -> Decoder msg
 mouseUpDecoder toMsg =
     Decode.map2 toMsg
         pointDecoder
-        (Decode.field "timeStamp" Decode.float)
+        timeStampDecoder
 
 
 {-| Mousedown attr-builder for a board card. Caller passes a
@@ -62,7 +71,7 @@ record-shaped constructor (`MouseDownOnBoardCard` or its
 puzzle-host equivalent).
 -}
 cardMouseDown :
-    ({ stack : CardStack, cardIndex : Int, point : Point, time : Float } -> msg)
+    ({ stack : CardStack, cardIndex : Int, point : Point, time : Int } -> msg)
     -> CardStack
     -> Int
     -> List (Html.Attribute msg)

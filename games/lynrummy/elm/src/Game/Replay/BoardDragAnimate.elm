@@ -108,7 +108,7 @@ step : Int -> List CardStack -> State -> Outcome
 step nowMs board state =
     let
         elapsedMs =
-            toFloat (nowMs - state.startMs)
+            nowMs - state.startMs
     in
     if elapsedMs >= duration state.path then
         Done { newBoard = applyToBoard state.pendingAction board }
@@ -141,7 +141,7 @@ applyToBoard action board =
             Execute.mergeStack m.sourceStack m.targetStack m.side board
 
 
-duration : List TimeLoc -> Float
+duration : List TimeLoc -> Int
 duration path =
     case ( List.head path, List.head (List.reverse path) ) of
         ( Just first, Just last ) ->
@@ -155,7 +155,7 @@ duration path =
 Caller has already gated on `elapsedMs < duration path`, so
 the path is non-empty and the elapsed time falls inside it.
 -}
-interp : List TimeLoc -> Float -> Point
+interp : List TimeLoc -> Int -> Point
 interp path elapsedMs =
     case path of
         [] ->
@@ -165,7 +165,7 @@ interp path elapsedMs =
             interpHelp first path (first.tMs + elapsedMs)
 
 
-interpHelp : TimeLoc -> List TimeLoc -> Float -> Point
+interpHelp : TimeLoc -> List TimeLoc -> Int -> Point
 interpHelp prev remaining targetTs =
     case remaining of
         [] ->
@@ -179,7 +179,7 @@ interpHelp prev remaining targetTs =
                 else
                     let
                         frac =
-                            clamp 0 1 ((targetTs - prev.tMs) / (curr.tMs - prev.tMs))
+                            clamp 0 1 (toFloat (targetTs - prev.tMs) / toFloat (curr.tMs - prev.tMs))
                     in
                     { x = round (toFloat prev.left + frac * toFloat (curr.left - prev.left))
                     , y = round (toFloat prev.top + frac * toFloat (curr.top - prev.top))

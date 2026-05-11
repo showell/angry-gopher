@@ -430,7 +430,7 @@ update msg model =
 -- UPDATE HELPERS
 
 
-mouseMove : Point -> Float -> Model -> Model
+mouseMove : Point -> Int -> Model -> Model
 mouseMove pos tMs model =
     case model.drag of
         DraggingBoardCard d ->

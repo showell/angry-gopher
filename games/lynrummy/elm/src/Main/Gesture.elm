@@ -72,7 +72,7 @@ arbitration at mouseup.
 startBoardCardDrag :
     { stack : CardStack, cardIndex : Int }
     -> Point
-    -> Float
+    -> Int
     -> Model
     -> ( Model, Cmd Msg )
 startBoardCardDrag { stack, cardIndex } clientPoint tMs model =

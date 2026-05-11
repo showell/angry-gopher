@@ -181,7 +181,7 @@ step config nowMs gameState state =
         InFlight d ->
             let
                 elapsedMs =
-                    toFloat (nowMs - d.startMs)
+                    nowMs - d.startMs
             in
             if elapsedMs >= duration d.path then
                 ( Done { newGameState = applyHandAction d.pendingAction gameState }
@@ -306,7 +306,7 @@ inFlightFor :
     }
     -> InFlightData
 inFlightFor { handCard, origin, destination, startMs, pendingAction } =
-    { path = linearPath origin destination (toFloat startMs)
+    { path = linearPath origin destination startMs
     , startMs = startMs
     , pendingAction = pendingAction
     , dragInfo_ =
@@ -342,7 +342,7 @@ boardRectFromElement element =
 -- PATH MATH
 
 
-duration : List TimeLoc -> Float
+duration : List TimeLoc -> Int
 duration path =
     case ( List.head path, List.head (List.reverse path) ) of
         ( Just first, Just last ) ->
@@ -357,7 +357,7 @@ points. Duration scales with distance so short hops feel
 brisk and long hops feel deliberate; the floor avoids
 zero-duration paths if origin and destination collide.
 -}
-linearPath : Point -> Point -> Float -> List TimeLoc
+linearPath : Point -> Point -> Int -> List TimeLoc
 linearPath start_ end startMs =
     let
         dx =
@@ -383,7 +383,7 @@ linearPath start_ end startMs =
                 frac =
                     toFloat i / toFloat (samples - 1)
             in
-            { tMs = startMs + frac * totalMs
+            { tMs = startMs + floor (frac * totalMs)
             , left = round (toFloat start_.x + dx * frac)
             , top = round (toFloat start_.y + dy * frac)
             }
@@ -391,7 +391,7 @@ linearPath start_ end startMs =
     List.range 0 (samples - 1) |> List.map sample
 
 
-interp : List TimeLoc -> Float -> Point
+interp : List TimeLoc -> Int -> Point
 interp path elapsedMs =
     case path of
         [] ->
@@ -401,7 +401,7 @@ interp path elapsedMs =
             interpHelp first path (first.tMs + elapsedMs)
 
 
-interpHelp : TimeLoc -> List TimeLoc -> Float -> Point
+interpHelp : TimeLoc -> List TimeLoc -> Int -> Point
 interpHelp prev remaining targetTs =
     case remaining of
         [] ->
@@ -415,7 +415,7 @@ interpHelp prev remaining targetTs =
                 else
                     let
                         frac =
-                            clamp 0 1 ((targetTs - prev.tMs) / (curr.tMs - prev.tMs))
+                            clamp 0 1 (toFloat (targetTs - prev.tMs) / toFloat (curr.tMs - prev.tMs))
                     in
                     { x = round (toFloat prev.left + frac * toFloat (curr.left - prev.left))
                     , y = round (toFloat prev.top + frac * toFloat (curr.top - prev.top))

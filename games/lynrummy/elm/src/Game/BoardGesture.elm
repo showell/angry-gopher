@@ -57,7 +57,7 @@ startBoardDragInfo :
     { stack : CardStack
     , cardIndex : Int
     , cursor : Point
-    , tMs : Float
+    , tMs : Int
     , board : List CardStack
     }
     -> BoardCardDragInfo
@@ -78,7 +78,7 @@ along with the live board rect. Builds the final info (release
 point + closing gesture sample), then resolves into a
 `BoardMouseUp` that the caller dispatches on.
 -}
-handleMouseUp : Point -> Float -> BoardCardDragInfo -> Maybe GA.Rect -> BoardMouseUp
+handleMouseUp : Point -> Int -> BoardCardDragInfo -> Maybe GA.Rect -> BoardMouseUp
 handleMouseUp releasePoint tMs d boardRect =
     let
         delta =
@@ -159,7 +159,7 @@ because mousemove never emits commands.
 -}
 mouseMove :
     Point
-    -> Float
+    -> Int
     -> BoardCardDragInfo
     -> Status.StatusMessage
     -> ( BoardCardDragInfo, Status.StatusMessage )

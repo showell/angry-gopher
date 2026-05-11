@@ -55,10 +55,10 @@ import Time
    comment. This is the comment.
 -}
 type Msg
-    = MouseDownOnBoardCard { stack : CardStack, cardIndex : Int, point : Point, time : Float }
-    | MouseDownOnHandCard { card : Card, point : Point, time : Float }
-    | MouseMove Point Float
-    | MouseUp Point Float
+    = MouseDownOnBoardCard { stack : CardStack, cardIndex : Int, point : Point, time : Int }
+    | MouseDownOnHandCard { card : Card, point : Point, time : Int }
+    | MouseMove Point Int
+    | MouseUp Point Int
     | BoardRectReceived (Result Browser.Dom.Error Browser.Dom.Element)
     | HandCardRectReceived (Result Browser.Dom.Error ( Browser.Dom.Element, Browser.Dom.Element, Time.Posix ))
     | ActionSent (Result Http.Error ())

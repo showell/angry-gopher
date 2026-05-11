@@ -113,7 +113,7 @@ sideDecoder =
 timeLocDecoder : Decoder TimeLoc
 timeLocDecoder =
     Decode.map3 (\t l u -> { tMs = t, left = l, top = u })
-        (Decode.field "t_ms" Decode.float)
+        (Decode.field "t_ms" Decode.int)
         (Decode.field "left" Decode.int)
         (Decode.field "top" Decode.int)
 

@@ -50,7 +50,7 @@ actions) the JSON payload the host should ship to the agent.
 The per-action payload is built inline here — one site authors
 the wire shape.
 -}
-handleMouseUp : Point -> Float -> BoardCardDragInfo -> HandleMouseUpInput -> BoardOutcome
+handleMouseUp : Point -> Int -> BoardCardDragInfo -> HandleMouseUpInput -> BoardOutcome
 handleMouseUp releasePoint tMs d input =
     case BoardGesture.handleMouseUp releasePoint tMs d input.boardRect of
         BoardGesture.Split p ->

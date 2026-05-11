@@ -74,9 +74,9 @@ type alias Model =
 
 
 type Msg
-    = MouseDownOnBoardCard { stack : CardStack, cardIndex : Int, point : Point, time : Float }
-    | MouseMove Point Float
-    | MouseUp Point Float
+    = MouseDownOnBoardCard { stack : CardStack, cardIndex : Int, point : Point, time : Int }
+    | MouseMove Point Int
+    | MouseUp Point Int
     | BoardRectReceived (Result Browser.Dom.Error Browser.Dom.Element)
     | ClickUndo
     | ClickInstantReplay
@@ -198,7 +198,7 @@ startBoardCardDrag :
     CardStack
     -> Int
     -> Point
-    -> Float
+    -> Int
     -> Model
     -> ( Model, Cmd Msg )
 startBoardCardDrag stack cardIndex clientPoint tMs model =
@@ -223,7 +223,7 @@ startBoardCardDrag stack cardIndex clientPoint tMs model =
             ( model, Cmd.none )
 
 
-mouseMove : Point -> Float -> Model -> Model
+mouseMove : Point -> Int -> Model -> Model
 mouseMove pos tMs model =
     case model.drag of
         DraggingBoardCard d ->
@@ -240,7 +240,7 @@ mouseMove pos tMs model =
             model
 
 
-handleMouseUp : Point -> Float -> Model -> ( Model, Cmd Msg )
+handleMouseUp : Point -> Int -> Model -> ( Model, Cmd Msg )
 handleMouseUp releasePoint tMs model =
     case model.drag of
         NotDragging ->
