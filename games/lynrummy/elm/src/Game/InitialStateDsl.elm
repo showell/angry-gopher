@@ -280,6 +280,19 @@ applyScalarLine line gs =
 setScalar : String -> String -> GameState -> Result String GameState
 setScalar key val gs =
     case key of
+        -- Server-owned meta scalars. Present in the on-disk meta
+        -- DSL and the resume payload; not part of GameState. Parsed
+        -- as scalars (so they pass the "unknown key" check) and
+        -- discarded. Elm doesn't surface them today.
+        "created_at" ->
+            Ok gs
+
+        "label" ->
+            Ok gs
+
+        "deck_seed" ->
+            Ok gs
+
         "deck" ->
             BoardDsl.parseCardTokens val
                 |> Result.map (\d -> { gs | deck = d })

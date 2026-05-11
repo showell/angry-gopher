@@ -8,10 +8,11 @@ module Main.Wire exposing
 The server is a dumb URL-keyed file store; this module is a
 thin afterthought layer.
 
-Actions ride the wire as DSL text lines (one per action). The
-resume bootstrap returns `{meta: {...}, actions: [...]}` where
-`actions[]` is a list of DSL strings — Elm parses each via
-`Game.WireAction.parseDsl`.
+Everything on the wire is DSL text — no JSON envelopes (apart
+from the new-session response, which still carries one int).
+Resume payload is one text/plain document: the meta DSL, then
+a `---` separator line, then the action-log DSL lines. Elm
+splits and parses each half.
 
 -}
 
@@ -21,7 +22,6 @@ import Game.InitialStateDsl as InitialStateDsl
 import Game.WireAction as WA
 import Http
 import Json.Decode as Decode exposing (Decoder)
-import Json.Encode as Encode
 import Main.Msg exposing (Msg(..))
 
 
@@ -31,20 +31,14 @@ import Main.Msg exposing (Msg(..))
 
 {-| Create a new session. Elm has already dealt the game
 locally; this just registers it. `initialState` is the
-DSL-encoded GameState (a multi-line string). The server is
-dumb storage and persists it verbatim in `meta.initial_state`.
+DSL-encoded GameState. Server prepends its own metadata
+scalars and persists the result verbatim in `meta`.
 -}
 fetchNewSession : String -> Cmd Msg
 fetchNewSession initialState =
     Http.post
         { url = "/gopher/lynrummy-elm/new-session"
-        , body =
-            Http.jsonBody
-                (Encode.object
-                    [ ( "label", Encode.string "" )
-                    , ( "initial_state", Encode.string initialState )
-                    ]
-                )
+        , body = Http.stringBody "text/plain" initialState
         , expect = Http.expectJson SessionReceived sessionIdDecoder
         }
 
@@ -53,7 +47,7 @@ fetchActionLog : Int -> Cmd Msg
 fetchActionLog sid =
     Http.get
         { url = "/gopher/lynrummy-elm/sessions/" ++ String.fromInt sid ++ "/actions"
-        , expect = Http.expectJson ActionLogFetched actionLogDecoder
+        , expect = Http.expectStringResponse ActionLogFetched parseResumeBundle
         }
 
 
@@ -80,37 +74,64 @@ sessionIdDecoder =
     Decode.field "session_id" Decode.int
 
 
-initialStateDecoder : Decoder GameState
-initialStateDecoder =
-    Decode.string
-        |> Decode.andThen
-            (\dsl ->
-                case InitialStateDsl.parseGameState dsl of
-                    Ok gs ->
-                        Decode.succeed gs
+{-| Resume bundle is one text/plain document: meta DSL, then a
+line containing exactly `---`, then the action-log DSL. Split,
+parse each half, surface either as an Http error so the caller
+sees a uniform failure shape.
+-}
+parseResumeBundle :
+    Http.Response String
+    -> Result Http.Error ( GameState, List ActionLogEntry )
+parseResumeBundle response =
+    case response of
+        Http.GoodStatus_ _ body ->
+            splitBundle body
+                |> Result.andThen
+                    (\( metaDsl, actionsDsl ) ->
+                        Result.map2 Tuple.pair
+                            (InitialStateDsl.parseGameState metaDsl)
+                            (parseActionLines actionsDsl)
+                    )
+                |> Result.mapError (\msg -> Http.BadBody msg)
 
-                    Err msg ->
-                        Decode.fail ("initial_state DSL: " ++ msg)
-            )
+        Http.BadStatus_ meta _ ->
+            Err (Http.BadStatus meta.statusCode)
+
+        Http.NetworkError_ ->
+            Err Http.NetworkError
+
+        Http.Timeout_ ->
+            Err Http.Timeout
+
+        Http.BadUrl_ url ->
+            Err (Http.BadUrl url)
 
 
-actionLogDecoder : Decoder ( GameState, List ActionLogEntry )
-actionLogDecoder =
-    Decode.map2 Tuple.pair
-        (Decode.at [ "meta", "initial_state" ] initialStateDecoder)
-        (Decode.field "actions" (Decode.list Decode.string)
-            |> Decode.andThen parseDslLines
-        )
+splitBundle : String -> Result String ( String, String )
+splitBundle src =
+    case String.split "\n---\n" src of
+        [ meta, actions ] ->
+            Ok ( meta, actions )
+
+        [ _ ] ->
+            -- No actions yet (fresh session). The separator is
+            -- still required even if the second half is empty;
+            -- treat its absence as a server bug rather than
+            -- silently inferring.
+            Err "resume bundle missing '---' separator"
+
+        _ ->
+            Err "resume bundle has multiple '---' separators"
 
 
-parseDslLines : List String -> Decoder (List ActionLogEntry)
-parseDslLines lines =
-    case sequenceParse lines of
-        Ok parsed ->
-            Decode.succeed (List.map (\p -> { action = p.event }) parsed)
-
-        Err err ->
-            Decode.fail ("action log DSL parse: " ++ err)
+parseActionLines : String -> Result String (List ActionLogEntry)
+parseActionLines src =
+    src
+        |> String.lines
+        |> List.map String.trim
+        |> List.filter (\l -> l /= "")
+        |> sequenceParse
+        |> Result.map (List.map (\p -> { action = p.event }))
 
 
 sequenceParse : List String -> Result String (List WA.ParsedLine)

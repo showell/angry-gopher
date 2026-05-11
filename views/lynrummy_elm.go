@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"html"
 	"io"
-	mathRand "math/rand"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -136,37 +135,22 @@ func handleSessionRoute(w http.ResponseWriter, r *http.Request, rest string) {
 
 // --- Session creation ---
 
-// lynrummyElmNewSession creates a fresh full-game session. Body
-// is optional; if present, may carry `{label, initial_state}`.
-// Server allocates id, generates deck_seed (when no
-// initial_state), writes meta.json, returns the id.
-//
-// "Server is dumb" means: anything Elm sends in the body lands
-// in meta.json verbatim, alongside the few fields the server
-// must own (created_at, deck_seed, session_id is implicit in
-// path).
+// lynrummyElmNewSession creates a fresh full-game session.
+// Request body is text/plain: Elm's DSL-encoded GameState. The
+// server allocates an id, prepends `created_at` (server-owned),
+// writes the merged DSL to <session>/meta, and returns the id
+// as JSON. The game-state DSL itself is stored verbatim — the
+// server doesn't parse or validate it.
 func lynrummyElmNewSession(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	var bodyMap map[string]any
-	if r.ContentLength > 0 {
-		body, err := io.ReadAll(r.Body)
-		if err != nil {
-			http.Error(w, "read body: "+err.Error(), http.StatusBadRequest)
-			return
-		}
-		if len(body) > 0 {
-			if err := json.Unmarshal(body, &bodyMap); err != nil {
-				http.Error(w, "decode body: "+err.Error(), http.StatusBadRequest)
-				return
-			}
-		}
-	}
-	if bodyMap == nil {
-		bodyMap = map[string]any{}
+	gameStateDSL, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "read body: "+err.Error(), http.StatusBadRequest)
+		return
 	}
 
 	id, err := AllocateSessionID()
@@ -175,32 +159,17 @@ func lynrummyElmNewSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	bodyMap["created_at"] = time.Now().Unix()
-	if _, hasInitial := bodyMap["initial_state"]; !hasInitial {
-		// Server-dealt: generate a non-zero deck seed so the
-		// dealer has a reproducible point of departure. Elm
-		// uses this on bootstrap to compute the initial board.
-		seed := time.Now().UnixNano()*1_000_003 + mathRand.Int63()
-		if seed == 0 {
-			seed = 1
-		}
-		bodyMap["deck_seed"] = seed
+	meta := SessionMeta{
+		CreatedAt:    time.Now().Unix(),
+		Label:        "",
+		GameStateDSL: string(gameStateDSL),
 	}
-
-	metaJSON, err := json.MarshalIndent(bodyMap, "", "  ")
-	if err != nil {
-		http.Error(w, "encode meta: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
-	if err := WriteSessionFile(id, "meta.json", append(metaJSON, '\n')); err != nil {
+	if err := WriteSessionFile(id, "meta", []byte(FormatSessionMeta(meta))); err != nil {
 		http.Error(w, "write meta: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	resp := map[string]any{"session_id": id}
-	if seed, ok := bodyMap["deck_seed"]; ok {
-		resp["deck_seed"] = seed
-	}
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	json.NewEncoder(w).Encode(resp)
 }
@@ -244,36 +213,33 @@ func lynrummyElmAppendSessionLine(w http.ResponseWriter, r *http.Request, sessio
 
 // --- Session reads ---
 
-// lynrummyElmSessionBootstrap returns the dumb bundle: the
-// session's meta blob and its action log, both as the Elm
-// client posted them. No initial_state synthesis — Elm derives
-// that locally from meta.deck_seed using its own dealer.
-//
-// Response shape:
-//   {"session_id": N, "meta": {...}, "actions": [<envelope>...]}
+// lynrummyElmSessionBootstrap returns the resume bundle as one
+// text/plain document: the meta DSL (everything the on-disk
+// `meta` file holds), a separator line `---`, then the action
+// log DSL. Elm splits on the separator and parses each half.
 func lynrummyElmSessionBootstrap(w http.ResponseWriter, sessionID int64) {
 	if !SessionExists(sessionID) {
 		http.NotFound(w, nil)
 		return
 	}
-	meta, err := ReadSessionMeta(sessionID)
+	metaBytes, err := ReadSessionFile(sessionID, "meta")
 	if err != nil && !os.IsNotExist(err) {
 		http.Error(w, "read meta: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
-	actions, err := ReadSessionActionLines(sessionID)
-	if err != nil {
+	actionsBytes, err := ReadSessionFile(sessionID, "actions.dsl")
+	if err != nil && !os.IsNotExist(err) {
 		http.Error(w, "read actions: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	payload := map[string]any{
-		"session_id": sessionID,
-		"meta":       meta,
-		"actions":    actions,
-	}
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	json.NewEncoder(w).Encode(payload)
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	// meta + "---" separator + actions. The meta file already
+	// ends in a newline; the separator line stands alone; the
+	// actions file may be empty (fresh session) or end in `\n`.
+	w.Write(metaBytes)
+	w.Write([]byte("---\n"))
+	w.Write(actionsBytes)
 }
 
 // lynrummyElmSessionsList is the HTML browser of full-game
@@ -393,15 +359,14 @@ pre { background: #f4f4ec; padding: 12px; border: 1px solid #ddd; overflow-x: au
 <nav><a href="/gopher/lynrummy-elm/sessions">← All sessions</a> &nbsp;·&nbsp; <a href="/gopher/lynrummy-elm/">Play</a></nav>
 <h1>Session #%d</h1>
 <p class="sub">Started %s%s</p>
-<h3>meta.json</h3>`,
+<h3>meta</h3>`,
 		sessionID, sessionID, html.EscapeString(ts), labelSuffix(SessionLabel(meta)))
-	if meta != nil {
-		pretty, _ := json.MarshalIndent(meta, "", "  ")
-		fmt.Fprintf(w, `<pre>%s</pre>`, html.EscapeString(string(pretty)))
+	if rawMeta, err := ReadSessionFile(sessionID, "meta"); err == nil {
+		fmt.Fprintf(w, `<pre>%s</pre>`, html.EscapeString(string(rawMeta)))
 	} else {
-		fmt.Fprint(w, `<p class="muted">no meta.json</p>`)
+		fmt.Fprint(w, `<p class="muted">no meta file</p>`)
 	}
-	fmt.Fprintf(w, `<p>actions.jsonl: <strong>%d</strong> lines</p>`, actionCount)
+	fmt.Fprintf(w, `<p>actions.dsl: <strong>%d</strong> lines</p>`, actionCount)
 	fmt.Fprintf(w, `<p>annotations.jsonl: <strong>%d</strong> lines</p>`, annotationCount)
 	fmt.Fprint(w, `</body></html>`)
 }

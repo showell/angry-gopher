@@ -350,42 +350,25 @@ func ListSessionIDs() ([]int64, error) {
 	return ids, nil
 }
 
-// ReadSessionMeta loads <session>/meta.json into a generic map.
-// Returns (nil, os.ErrNotExist) when missing.
-func ReadSessionMeta(sessionID int64) (map[string]any, error) {
-	body, err := ReadSessionFile(sessionID, "meta.json")
+// ReadSessionMeta loads <session>/meta (the DSL file) and
+// parses out the server-owned scalars. The game-state DSL stays
+// verbatim in SessionMeta.GameStateDSL — server never edits it.
+// Returns (zero, os.ErrNotExist) when missing.
+func ReadSessionMeta(sessionID int64) (SessionMeta, error) {
+	body, err := ReadSessionFile(sessionID, "meta")
 	if err != nil {
-		return nil, err
+		return SessionMeta{}, err
 	}
-	var m map[string]any
-	if err := json.Unmarshal(body, &m); err != nil {
-		return nil, fmt.Errorf("decode meta.json: %w", err)
-	}
-	return m, nil
+	return ParseSessionMeta(string(body)), nil
 }
 
-// SessionCreatedAt returns the meta's created_at as int64, or
-// 0 if absent. Used by HTML lists.
-func SessionCreatedAt(meta map[string]any) int64 {
-	if v, ok := meta["created_at"]; ok {
-		switch x := v.(type) {
-		case float64:
-			return int64(x)
-		case int64:
-			return x
-		case int:
-			return int64(x)
-		}
-	}
-	return 0
+// SessionCreatedAt returns the meta's created_at, or 0 if
+// absent. Used by HTML list pages.
+func SessionCreatedAt(meta SessionMeta) int64 {
+	return meta.CreatedAt
 }
 
-// SessionLabel returns meta["label"] as string, or "".
-func SessionLabel(meta map[string]any) string {
-	if v, ok := meta["label"]; ok {
-		if s, ok := v.(string); ok {
-			return s
-		}
-	}
-	return ""
+// SessionLabel returns meta.Label, or "".
+func SessionLabel(meta SessionMeta) string {
+	return meta.Label
 }
