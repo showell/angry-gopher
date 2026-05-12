@@ -1,6 +1,6 @@
 module Puzzle.Animate exposing
-    ( Phase(..)
-    , ReplayState
+    ( AnimationState
+    , Phase(..)
     , TickResult(..)
     , start
     , tick
@@ -29,7 +29,7 @@ type Phase
     | AnimatingBoardAction BoardDragAnimate.State
 
 
-type alias ReplayState =
+type alias AnimationState =
     { queue : List ActionLogEntry
     , board : List CardStack
     , paused : Bool
@@ -38,7 +38,7 @@ type alias ReplayState =
 
 
 type TickResult
-    = StillReplaying ReplayState
+    = StillAnimating AnimationState
     | Completed
 
 
@@ -47,7 +47,7 @@ beatMs =
     700
 
 
-start : List ActionLogEntry -> List CardStack -> ReplayState
+start : List ActionLogEntry -> List CardStack -> AnimationState
 start queue board =
     { queue = queue
     , board = board
@@ -56,7 +56,7 @@ start queue board =
     }
 
 
-togglePause : ReplayState -> ReplayState
+togglePause : AnimationState -> AnimationState
 togglePause rs =
     let
         nextPhase =
@@ -70,15 +70,15 @@ togglePause rs =
     { rs | paused = not rs.paused, phase = nextPhase }
 
 
-tick : Int -> ReplayState -> TickResult
+tick : Int -> AnimationState -> TickResult
 tick nowMs rs =
     case rs.phase of
         Starting ->
-            StillReplaying { rs | phase = InBeat { nextBeatMs = nowMs + beatMs } }
+            StillAnimating { rs | phase = InBeat { nextBeatMs = nowMs + beatMs } }
 
         InBeat { nextBeatMs } ->
             if nowMs < nextBeatMs then
-                StillReplaying rs
+                StillAnimating rs
 
             else
                 case rs.queue of
@@ -90,7 +90,7 @@ tick nowMs rs =
                             dispatched =
                                 startNextAction nowMs entry rs.board
                         in
-                        StillReplaying
+                        StillAnimating
                             { rs
                                 | queue = rest
                                 , board = dispatched.board
@@ -98,15 +98,15 @@ tick nowMs rs =
                             }
 
         ActionCompleted ->
-            StillReplaying { rs | phase = InBeat { nextBeatMs = nowMs + beatMs } }
+            StillAnimating { rs | phase = InBeat { nextBeatMs = nowMs + beatMs } }
 
         AnimatingBoardAction dragState ->
             case BoardDragAnimate.step nowMs rs.board dragState of
                 BoardDragAnimate.InProgress nextDragState ->
-                    StillReplaying { rs | phase = AnimatingBoardAction nextDragState }
+                    StillAnimating { rs | phase = AnimatingBoardAction nextDragState }
 
                 BoardDragAnimate.Done { newBoard } ->
-                    StillReplaying { rs | board = newBoard, phase = ActionCompleted }
+                    StillAnimating { rs | board = newBoard, phase = ActionCompleted }
 
 
 startNextAction :

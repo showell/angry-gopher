@@ -70,7 +70,7 @@ type alias Model =
     , gameId : String
     , sessionId : Int
     , nextSeq : Int
-    , replayState : Maybe Animate.ReplayState
+    , replayState : Maybe Animate.AnimationState
     }
 
 
@@ -274,7 +274,7 @@ update msg model =
 
                 Just rs ->
                     case Animate.tick (Time.posixToMillis nowPosix) rs of
-                        Animate.StillReplaying nextRs ->
+                        Animate.StillAnimating nextRs ->
                             ( { model | replayState = Just nextRs }, Cmd.none )
 
                         Animate.Completed ->
@@ -478,7 +478,7 @@ view model =
 phases surface the sub-machine's dragInfo; idle phases show
 no floater.
 -}
-replayDrag : Animate.ReplayState -> Drag.DragState
+replayDrag : Animate.AnimationState -> Drag.DragState
 replayDrag rs =
     case rs.phase of
         Animate.AnimatingBoardAction state ->
