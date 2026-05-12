@@ -20,7 +20,7 @@ import Game.Physics.BoardGeometry exposing (refereeBounds)
 import Game.Physics.GestureArbitration as GA
 import Game.Rules.Card exposing (Card)
 import Game.Popup exposing (PopupContent)
-import Game.Animation.ReplayState exposing (ReplayState)
+import Game.Animation.Animate exposing (ReplayState)
 import Game.Status exposing (StatusKind(..), StatusMessage)
 
 

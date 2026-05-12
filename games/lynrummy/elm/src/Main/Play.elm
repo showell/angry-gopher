@@ -33,9 +33,8 @@ import Game.HandGesture as HandGesture
 import Game.Dealer as Dealer
 import Game.Game as Game
 import Game.Random as Random
-import Game.Animation.Animate as Animate
+import Game.Animation.Animate as Animate exposing (Phase(..))
 import Game.Animation.HandDragAnimate as HandDragAnimate
-import Game.Animation.ReplayState exposing (Phase(..))
 import Html exposing (Html)
 import Json.Encode as Encode
 import Game.Status as Status exposing (StatusKind(..))
