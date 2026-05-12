@@ -114,17 +114,13 @@ playerHands info =
             )
             info.gameState.hands
     )
-        ++ [ deckRemainingLine (List.length info.gameState.deck) ]
-
-
-deckRemainingLine : Int -> Html Msg
-deckRemainingLine deckCount =
-    div
-        [ style "color" "#666"
-        , style "font-size" "13px"
-        , style "margin-top" "8px"
-        ]
-        [ Html.text ("Deck: " ++ String.fromInt deckCount ++ " cards left") ]
+        ++ [ div
+                [ style "color" "#666"
+                , style "font-size" "13px"
+                , style "margin-top" "8px"
+                ]
+                [ Html.text ("Deck: " ++ String.fromInt (List.length info.gameState.deck) ++ " cards left") ]
+           ]
 
 
 
