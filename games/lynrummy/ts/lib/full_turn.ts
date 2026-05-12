@@ -18,7 +18,8 @@
 //           (the draw). One individual player's turn.
 
 import type { Card } from "../src/rules/card.ts";
-import { fullStep, type PlayStep, type TurnStep } from "./full_step.ts";
+import { fullStep } from "./full_step.ts";
+import type { PlayStep, TurnStep } from "./step_types.ts";
 
 // --- Records ----------------------------------------------------------
 //

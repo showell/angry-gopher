@@ -17,45 +17,13 @@
 import type { Card } from "../src/rules/card.ts";
 import type { Buckets, RawBuckets } from "../src/buckets.ts";
 import { classifyBuckets } from "../src/buckets.ts";
-import {
-  classifyStack,
-  type ClassifiedCardStack,
-} from "../src/classified_card_stack.ts";
+import { classifyStack } from "../src/classified_card_stack.ts";
 import { findPlay, findPlanForBuckets, type PlayResult } from "../src/hand_play.ts";
 import { describe, type Desc } from "../src/move.ts";
 import { enumerateMoves } from "../src/enumerator.ts";
-import { tryGroom, type GroomStep } from "./groom.ts";
-
-// --- Card-key utility ------------------------------------------------
-
-export function cardKey(c: Card): string {
-  return `${c[0]},${c[1]},${c[2]}`;
-}
-
-// --- Step shapes -----------------------------------------------------
-
-/** One successful findPlay → applyPlay round-trip. */
-export interface PlayStep {
-  readonly kind: "play";
-  readonly placements: readonly Card[];
-  readonly planDescs: readonly Desc[];
-  readonly findPlayMs: number;
-  readonly applyMs: number;
-  /** Total wall time the agent spent producing this step,
-   *  including the cheap groom probe that came up empty. This is
-   *  what the human watching agent-as-Player-Two will perceive
-   *  as "agent thinking…" between primitives. */
-  readonly wallMs: number;
-}
-
-/** Returned by `fullStep` to signal the turn is over (no grooms
- *  available AND no findPlay succeeded, or the hand is empty). */
-export interface EndStep {
-  readonly kind: "end";
-  readonly outcome: "hand_empty" | "stuck";
-}
-
-export type TurnStep = GroomStep | PlayStep;
+import { tryGroom } from "./groom.ts";
+import type { GroomStep, PlayStep, EndStep } from "./step_types.ts";
+import { assertBoardClean, cardKey } from "./board.ts";
 
 /** One step result, plus the post-step (board, hand). For `end` the
  *  state is unchanged from the inputs; for `groom`/`play` the state
@@ -83,43 +51,6 @@ function applyPlan(initial: Buckets, plan: readonly { desc: Desc }[]): Buckets {
     state = matched;
   }
   return state;
-}
-
-// --- Invariant assertions --------------------------------------------
-//
-// Per memory/feedback_dont_paper_over_problems.md: invariants are
-// permanent (always-on, throw on violation). If `assertBoardClean`
-// ever fires, the agent's internal state has diverged from what the
-// rules guarantee — every downstream symptom (transcript drift,
-// replay confusion, geometry chaos) cascades from here.
-
-/** Every stack on the board must classify as a legal length-3+ kind
- *  (run / rb / set). The BFS guarantee is that every applyPlay
- *  produces a clean board; if this fires, either the BFS was wrong
- *  or applyPlan diverged from solveStateWithDescs. */
-function assertBoardClean(
-  board: readonly (readonly Card[])[],
-  ctx: string,
-): void {
-  for (let i = 0; i < board.length; i++) {
-    const stack = board[i]!;
-    const ccs: ClassifiedCardStack | null = classifyStack(stack);
-    if (ccs === null) {
-      throw new Error(
-        `[full_step ${ctx}] stack ${i} failed to classify: [${stack.map(cardKey).join(" ")}]`,
-      );
-    }
-    if (ccs.n < 3) {
-      throw new Error(
-        `[full_step ${ctx}] stack ${i} length ${ccs.n} (${ccs.kind}) — not graduated: [${stack.map(cardKey).join(" ")}]`,
-      );
-    }
-    if (ccs.kind !== "run" && ccs.kind !== "rb" && ccs.kind !== "set") {
-      throw new Error(
-        `[full_step ${ctx}] stack ${i} kind ${ccs.kind} not a length-3+ legal kind: [${stack.map(cardKey).join(" ")}]`,
-      );
-    }
-  }
 }
 
 function partition(

@@ -20,7 +20,7 @@
 
 import type { Card } from "../src/rules/card.ts";
 import { simulateFullTurn, type GameTurnRecord } from "./full_turn.ts";
-import { cardKey } from "./full_step.ts";
+import { cardKey } from "./board.ts";
 
 export interface GameResult {
   readonly turns: readonly GameTurnRecord[];

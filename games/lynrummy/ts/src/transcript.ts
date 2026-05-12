@@ -29,7 +29,7 @@ import {
 } from "./primitives.ts";
 import { planMergeStackOnBoard } from "./verbs.ts";
 import type { GameResult } from "../lib/full_game.ts";
-import type { JoinEvent } from "../lib/groom.ts";
+import type { JoinEvent } from "../lib/step_types.ts";
 import { physicalPlan } from "./physical_plan.ts";
 import {
   splitDsl,

@@ -23,28 +23,9 @@ import {
   KIND_RUN,
   KIND_RB,
 } from "../src/classified_card_stack.ts";
+import type { GroomStep, JoinEvent } from "./step_types.ts";
 
 const MAX_JOINED_LEN = 15;
-
-/** One greedy run-merge: the contents of the two stacks at the moment
- *  of the merge. The merged stack reads `[...src, ...tgt]` (matches
- *  `merge_stack` with side="left"). Transcript writers materialize
- *  these into wire-level `merge_stack` primitives. */
-export interface JoinEvent {
-  readonly src: readonly Card[];
-  readonly tgt: readonly Card[];
-}
-
-/** A non-empty batch of greedy run-merges. Transcript writers
- *  replay these as `merge_stack` primitives so the wire-level
- *  board stays in sync with the agent's logical board. */
-export interface GroomStep {
-  readonly kind: "groom";
-  readonly joins: readonly JoinEvent[];
-  /** Total wall time the agent spent producing this step
-   *  (the joinBoardRuns probe). */
-  readonly wallMs: number;
-}
 
 /** Probe for a groom-able board. Returns the `GroomStep` plus the
  *  post-groom board if any merges fired; returns `null` when there's
