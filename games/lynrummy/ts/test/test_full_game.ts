@@ -1,7 +1,7 @@
-// test_agent_player.ts — automated invariant check over agent self-play.
+// test_full_game.ts — automated invariant check over the full-game loop.
 //
-// agent_player.ts asserts these invariants permanently (throws on
-// violation per memory/feedback_dont_paper_over_problems.md):
+// The loop asserts these invariants permanently (throws on violation;
+// see the don't-paper-over rule in claude memory):
 //
 //   - every applyPlay → clean board (every stack length-3+ legal)
 //   - simulateFullTurn outcome === "hand_empty" iff hand is empty
@@ -15,7 +15,7 @@
 
 import type { Card } from "../src/rules/card.ts";
 import { parseCardLabel } from "../src/rules/card.ts";
-import { playFullGame } from "../src/agent_player.ts";
+import { playFullGame } from "../lib/full_game.ts";
 
 const HAND_SIZE = 15;
 const NUM_PLAYERS = 2;

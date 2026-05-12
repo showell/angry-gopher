@@ -38,7 +38,7 @@ import type { Card } from "../src/rules/card.ts";
 import { parseCardLabel } from "../src/rules/card.ts";
 import type { BoardStack, Loc } from "../src/geometry.ts";
 import { findOpenLoc } from "../src/geometry.ts";
-import { playFullGame, type PlayStep, type JoinEvent } from "../src/agent_player.ts";
+import { playFullGame, type PlayStep, type JoinEvent } from "../lib/full_game.ts";
 import { physicalPlan } from "../src/physical_plan.ts";
 import { applyLocally, findStackIndex } from "../src/primitives.ts";
 import { encodeInitialState, type RemoteStateJson } from "../src/transcript.ts";
@@ -125,9 +125,7 @@ function shuffle<T>(arr: readonly T[], rand: () => number): T[] {
 // --- Cards-on-the-board metric --------------------------------------
 //
 // "Total cards visible across all stacks on the board" — sum of stack
-// lengths. No helper exists in src/ specifically for this (the closest
-// is `totalCardCount` private to agent_player.ts), so we redefine it
-// here. Trivially correct.
+// lengths. Trivially correct.
 
 function cardsOnBoard(board: readonly BoardStack[]): number {
   let n = 0;
@@ -146,7 +144,7 @@ function cardsOnBoard(board: readonly BoardStack[]): number {
 // sized for the placement count.
 //
 // This mirrors the augmented-buckets shape `applyPlay` constructs
-// in agent_player.ts (`partition([...board, [...play.placements]])`),
+// inside the full-game loop (`partition([...board, [...play.placements]])`),
 // just lifted to the positioned-stack representation so we can serialize
 // it as `initial_state.board`.
 

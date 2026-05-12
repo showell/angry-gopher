@@ -54,7 +54,7 @@ elm-review + the cross-language integration suites (leaf
 primitives, verb fixtures, physical_plan, replay
 walkthroughs). Skips the two TS-only suites that are
 essentially engine-workouts — `test_engine_conformance.ts`
-and `test_agent_player.ts`. Both stress the BFS solver and
+and `test_full_game.ts`. Both stress the BFS solver and
 run byte-identical when the engine hasn't changed; running
 them after an Elm-only edit is wasted budget.
 

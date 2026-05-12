@@ -1,4 +1,5 @@
-// agent_player.ts — agent self-play loop for Lyn Rummy.
+// full_game.ts — the full-game loop for Lyn Rummy. Main entry:
+// `playFullGame`.
 //
 // Two layers, smaller to larger:
 //
@@ -35,18 +36,18 @@
 // inside applyPlay for replaying a chosen play to derive the new
 // clean board.
 
-import type { Card } from "./rules/card.ts";
-import type { Buckets, RawBuckets } from "./buckets.ts";
-import { classifyBuckets } from "./buckets.ts";
+import type { Card } from "../src/rules/card.ts";
+import type { Buckets, RawBuckets } from "../src/buckets.ts";
+import { classifyBuckets } from "../src/buckets.ts";
 import {
   classifyStack,
   type ClassifiedCardStack,
   KIND_RUN,
   KIND_RB,
-} from "./classified_card_stack.ts";
-import { findPlay, findPlanForBuckets, type PlayResult } from "./hand_play.ts";
-import { describe, type Desc } from "./move.ts";
-import { enumerateMoves } from "./enumerator.ts";
+} from "../src/classified_card_stack.ts";
+import { findPlay, findPlanForBuckets, type PlayResult } from "../src/hand_play.ts";
+import { describe, type Desc } from "../src/move.ts";
+import { enumerateMoves } from "../src/enumerator.ts";
 
 // --- Plan replay (apply a plan to derive the post-plan Buckets) -----
 
@@ -92,17 +93,17 @@ function assertBoardClean(
     const ccs: ClassifiedCardStack | null = classifyStack(stack);
     if (ccs === null) {
       throw new Error(
-        `[agent_player ${ctx}] stack ${i} failed to classify: [${stack.map(cardKey).join(" ")}]`,
+        `[full_game ${ctx}] stack ${i} failed to classify: [${stack.map(cardKey).join(" ")}]`,
       );
     }
     if (ccs.n < 3) {
       throw new Error(
-        `[agent_player ${ctx}] stack ${i} length ${ccs.n} (${ccs.kind}) — not graduated: [${stack.map(cardKey).join(" ")}]`,
+        `[full_game ${ctx}] stack ${i} length ${ccs.n} (${ccs.kind}) — not graduated: [${stack.map(cardKey).join(" ")}]`,
       );
     }
     if (ccs.kind !== "run" && ccs.kind !== "rb" && ccs.kind !== "set") {
       throw new Error(
-        `[agent_player ${ctx}] stack ${i} kind ${ccs.kind} not a length-3+ legal kind: [${stack.map(cardKey).join(" ")}]`,
+        `[full_game ${ctx}] stack ${i} kind ${ccs.kind} not a length-3+ legal kind: [${stack.map(cardKey).join(" ")}]`,
       );
     }
   }
@@ -137,13 +138,13 @@ function assertCardsConserved(
   const got = collectCardKeys(board, hand, deck);
   if (got.length !== expected.length) {
     throw new Error(
-      `[agent_player ${ctx}] card-count drift: expected ${expected.length}, got ${got.length} (board=${totalCardCount(board)} hand=${hand.length} deck=${deck.length})`,
+      `[full_game ${ctx}] card-count drift: expected ${expected.length}, got ${got.length} (board=${totalCardCount(board)} hand=${hand.length} deck=${deck.length})`,
     );
   }
   for (let i = 0; i < got.length; i++) {
     if (got[i] !== expected[i]) {
       throw new Error(
-        `[agent_player ${ctx}] card-set drift at sorted index ${i}: expected ${expected[i]}, got ${got[i]}`,
+        `[full_game ${ctx}] card-set drift at sorted index ${i}: expected ${expected[i]}, got ${got[i]}`,
       );
     }
   }
@@ -416,7 +417,7 @@ export function nextStep(
     // contradiction — two engine invocations on the same augmented
     // state disagreed on solvability. Don't paper over; surface.
     throw new Error(
-      `[agent_player nextStep] applyPlay returned null for a play findPlay just produced. `
+      `[full_game nextStep] applyPlay returned null for a play findPlay just produced. `
       + `This indicates a divergence between findPlay's engine call and applyPlay's `
       + `(both go through solveStateWithDescs). Placements: [${play.placements.map(cardKey).join(" ")}]. `
       + `Plan length: ${play.plan.length}.`,
@@ -496,7 +497,7 @@ export function simulateFullTurn(
   // Per-turn invariants.
   if (handBefore - cardsPlayed.length !== hand.length) {
     throw new Error(
-      `[agent_player simulateFullTurn] turn ${turnNum} player ${activePlayerIndex} `
+      `[full_game simulateFullTurn] turn ${turnNum} player ${activePlayerIndex} `
       + `hand arithmetic: handBefore (${handBefore}) - cardsPlayed (${cardsPlayed.length}) `
       + `= ${handBefore - cardsPlayed.length}, expected handAfterPlays ${hand.length}`,
     );

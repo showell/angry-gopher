@@ -3,7 +3,7 @@
 The TS solver — best-first search by `f = plan_length +
 trouble heuristic`, not depth-first BFS. Boundary interface:
 `Buckets in, PlanLine[] | null out`. Used by every TS-side
-caller — `agent_player.ts`, `hand_play.ts`, the conformance
+caller — the full-game loop, `hand_play.ts`, the conformance
 suite — and by the Elm UI via the `LynRummyEngine` browser
 bundle.
 

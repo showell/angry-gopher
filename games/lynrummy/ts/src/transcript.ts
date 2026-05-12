@@ -28,7 +28,7 @@ import {
   applyLocally,
 } from "./primitives.ts";
 import { planMergeStackOnBoard } from "./verbs.ts";
-import type { GameResult, JoinEvent } from "./agent_player.ts";
+import type { GameResult, JoinEvent } from "../lib/full_game.ts";
 import { physicalPlan } from "./physical_plan.ts";
 import {
   splitDsl,
@@ -156,8 +156,9 @@ function allocateSessionId(p: Paths): number {
 
 // --- Join-event materialization --------------------------------------
 //
-// `joinBoardRuns` (agent_player.ts) records each greedy run-merge as
-// a `JoinEvent { src, tgt }`. The merged stack reads `[...src, ...tgt]`,
+// `joinBoardRuns` (in the full-game loop) records each greedy
+// run-merge as a `JoinEvent { src, tgt }`. The merged stack reads
+// `[...src, ...tgt]`,
 // matching `merge_stack` with side="left". We materialize each event
 // into a `merge_stack` primitive at apply time, looking up indices on
 // the LIVE sim board (the agent's index space differs from the

@@ -29,10 +29,11 @@ for hints all live here.
 - **Loop:** [`physical_plan.ts`](src/physical_plan.ts) — one
   loop over the solver's plan with honest state (sim = real
   board, pendingHand = cards in hand).
-- **Player:** [`agent_player.ts`](src/agent_player.ts) —
-  drives full 2-hand games to deck-low. Permanent invariants
-  (board cleanliness, hand arithmetic, card conservation)
-  throw on violation.
+- **Full-game loop:** [`lib/full_game.ts`](lib/full_game.ts) —
+  `playFullGame` drives full 2-hand games to deck-low. Library
+  consumed by the top-level `generate-game` driver and by the
+  puzzle catalog tool. Permanent invariants (board cleanliness,
+  hand arithmetic, card conservation) throw on violation.
 - **Transcript writer:** [`transcript.ts`](src/transcript.ts) —
   writes Elm-replayable DSL session files (`meta` +
   `actions.dsl`). Currently re-expands the agent's abstract
@@ -59,7 +60,7 @@ for hints all live here.
 ## How agent games are written
 
 **Doctrine.** The agent emits DSL primitives inline as it
-plays. Each call to `agent_player.ts:nextStep` decides one
+plays. Each call to `lib/full_game.ts:nextStep` decides one
 move, expands it to wire primitives against the live geometry,
 and emits one wire-DSL line per primitive (via
 `wire_action_dsl.ts`). The post-step state is geometry-aware
@@ -78,7 +79,7 @@ There is exactly one DSL-emission point. A second writer
 that re-expands primitives is a layering bug.
 
 **Current state (2026-05-12).** The code does not yet match
-this doctrine. `agent_player.ts` produces abstract
+this doctrine. `lib/full_game.ts` produces abstract
 `PlayStep`/`GroomStep` records (placements + plan descs;
 joins) without expanding them. `transcript.ts:writeSession`
 re-runs the verb expanders (`physicalPlan`,
@@ -120,7 +121,7 @@ This subtree owns three end-to-end responsibilities:
 | `src/physical_plan.ts` | The physical-execution loop. |
 | `src/primitives.ts` | Primitive types + `applyLocally`. |
 | `src/geometry.ts` | Geometry constants, `findOpenLoc`, `findViolation`, `findCrowding`. |
-| `src/agent_player.ts` | Full-game player (2-hand, deck-low termination). |
+| `lib/full_game.ts` | Full-game loop (2-hand, deck-low termination). |
 | `src/transcript.ts` | DSL session writer (meta + actions.dsl). |
 | `src/wire_action_dsl.ts` | Per-event DSL emitters (splitDsl, mergeStackDsl, …). |
 | `src/wire_action_parser.ts` | Live-format action-line parser (tolerant of decorators). |
@@ -157,7 +158,7 @@ hundreds across both runners.
 | `npm run test:verbs` | `conformance/scenarios/verb_to_primitives*.dsl` |
 | `npm run test:physical-plan` | `conformance/scenarios/physical_plan_corpus.dsl` |
 | `npm run test:replay-walkthroughs` | `conformance/scenarios/replay_walkthroughs.dsl` |
-| `npm run test:agent-player` | (no DSL — plays full games against fixed seeds) |
+| `npm run test:full-game` | (no DSL — plays full games against fixed seeds) |
 
 All DSL runners assert `findViolation == null` after every
 emitted primitive — overlap drift fails the moment it appears,

@@ -11,7 +11,7 @@
 
 import type { Card } from "./src/rules/card.ts";
 import { parseCardLabel } from "./src/rules/card.ts";
-import { playFullGame } from "./src/agent_player.ts";
+import { playFullGame } from "./lib/full_game.ts";
 import { writeSession } from "./src/transcript.ts";
 import { validateSession } from "./src/validate_session.ts";
 

@@ -36,9 +36,9 @@ motions a player will actually perform.
   `merge_hand` per R1; the hint phrasing should follow.
 
 The fix lives in `formatHint` (or a sibling). It probably wants
-to lower the BFS plan to the same primitive sequence
-`agent_player.ts` would execute, then describe each primitive
-as one human-action line.
+to lower the BFS plan to the same primitive sequence the
+full-game loop would execute, then describe each primitive as
+one human-action line.
 
 This class is fully separable from (B) and (C). It changes
 *how* hints read, not *which* hint the engine picks.

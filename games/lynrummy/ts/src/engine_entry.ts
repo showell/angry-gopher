@@ -121,7 +121,7 @@ export function gameHintLines(
   return formatHint(findPlay(hand, board));
 }
 
-// Re-exports — used by tests and by the agent_player code path.
+// Re-exports — used by tests and by the full-game loop.
 export { solveStateWithDescs } from "./engine_v2.ts";
 export { findPlay } from "./hand_play.ts";
 export { jsonStack } from "./wire_json.ts";

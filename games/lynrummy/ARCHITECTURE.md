@@ -12,9 +12,10 @@ covers principles; that one covers the artifacts.
 
 - **TypeScript is the agent.** Its job is to generate full
   games for Steve to review or continue in the Elm UI. Entry
-  point: `games/lynrummy/ts/agent_player.ts`. Output is a DSL
-  transcript on the file system that the Go server serves to
-  Elm for replay. See [`ts/README.md`](./ts/README.md).
+  point: `npm run generate-game` (from `games/lynrummy/ts/`).
+  Output is a DSL transcript on the file system that the Go
+  server serves to Elm for replay. See
+  [`ts/README.md`](./ts/README.md).
 - **Elm is the autonomous client.** Deals, referees, replays,
   renders. `games/lynrummy/elm/`. Two surfaces — the full
   game (`Main.elm`, embedding `Game.Play`) and the
@@ -223,9 +224,8 @@ Consequences:
   `games/lynrummy/data/`) can see what happened. The server
   is not part of any decision loop.
 - **Autonomous TS-agent play doesn't touch the server at all.**
-  `agent_player.ts` plays a complete game locally;
-  `transcript.ts` writes the result straight to the file
-  system, no HTTP.
+  The TS full-game loop plays a complete game locally and
+  writes the result straight to the file system, no HTTP.
 
 ## The cast of components
 
@@ -244,9 +244,9 @@ Consequences:
   solver (`engine_v2.ts`) and the physical-execution layer
   (`verbs.ts` + `physical_plan.ts`) that turns a solver plan
   into the primitive sequence a human at the kitchen table
-  would emit. `agent_player.ts` plays full 2-hand games to
-  deck-low; `transcript.ts` writes them as Elm-replayable DSL
-  (`meta` + `actions.dsl`) and `validate_session.ts` reads the
+  would emit. The full-game loop plays 2-hand games to
+  deck-low; a transcript writer emits Elm-replayable DSL
+  (`meta` + `actions.dsl`); a session validator reads the
   emitted files back through the same `applyLocally` the
   conformance walkthroughs use. The TS agent has no DOM — so
   it cannot speak pixel-level viewport coords for a live drag — but it
