@@ -106,13 +106,13 @@ function projectSingleton(
   }
   const initial: RawBuckets = { helper, trouble, growing: [], complete: [] };
   const t0 = performance.now();
-  const plan = solveStateWithDescs(initial, {
+  const result = solveStateWithDescs(initial, {
     maxTroubleOuter: 10,
     maxStates: MAX_STATES,
   });
   const ms = performance.now() - t0;
-  if (plan === null) return { plan: null, ms };
-  return { plan: plan.map(p => p.line), ms };
+  if (result === null) return { plan: null, ms };
+  return { plan: result.plan.map(p => p.line), ms };
 }
 
 interface SingletonResult {

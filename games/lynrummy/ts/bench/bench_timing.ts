@@ -68,7 +68,7 @@ export function timeSolver(
     : classifyBuckets(state as RawBuckets);
 
   // Warmup.
-  let plan = solveStateWithDescs(buckets, {
+  let result = solveStateWithDescs(buckets, {
     maxTroubleOuter: 10,
     maxStates,
   });
@@ -77,14 +77,14 @@ export function timeSolver(
   for (let i = 0; i < nRuns; i++) {
     maybeGc();
     const t0 = nowMs();
-    plan = solveStateWithDescs(buckets, {
+    result = solveStateWithDescs(buckets, {
       maxTroubleOuter: 10,
       maxStates,
     });
     const elapsed = nowMs() - t0;
     if (elapsed < bestMs) bestMs = elapsed;
   }
-  return { plan, bestMs };
+  return { plan: result === null ? null : result.plan, bestMs };
 }
 
 function isClassified(state: Buckets | RawBuckets): state is Buckets {

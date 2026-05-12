@@ -109,16 +109,16 @@ interface PuzzleResult {
 function runPuzzle(p: JsonPuzzle): PuzzleResult {
   const board = decodeBoard(p.initial_state.board);
   const buckets = partitionBoard(board);
-  const plan = solveStateWithDescs({
+  const result = solveStateWithDescs({
     helper: buckets.helper, trouble: buckets.trouble, growing: [], complete: [],
   });
-  if (plan === null) {
+  if (result === null) {
     return { puzzle: p, board, buckets, planLines: null, primitives: [] };
   }
-  const planLines: string[] = plan.map(pl => pl.line);
+  const planLines: string[] = result.plan.map(pl => pl.line);
   const primitives: { prim: Primitive; simAtEmit: readonly BoardStack[] }[] = [];
   let sim: readonly BoardStack[] = board;
-  for (const pl of plan) {
+  for (const pl of result.plan) {
     const prims = expandVerb(pl.desc, sim, new Set());
     for (const prim of prims) {
       primitives.push({ prim, simAtEmit: sim });

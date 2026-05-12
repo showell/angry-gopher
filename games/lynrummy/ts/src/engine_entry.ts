@@ -6,7 +6,7 @@
 // translation at the wire boundary.
 
 import type { Card } from "./rules/card.ts";
-import type { PlanLine } from "./engine_v2.ts";
+import type { PlanLine, SolveResult } from "./engine_v2.ts";
 import { solveStateWithDescs } from "./engine_v2.ts";
 import {
   classifyStack,
@@ -36,7 +36,8 @@ import { primToWire, type WireActionJson } from "./wire_json.ts";
 export function solveBoard(
   board: readonly (readonly Card[])[],
 ): readonly PlanLine[] | null {
-  return solveBucketsFromCardLists(board);
+  const result = solveBucketsFromCardLists(board);
+  return result === null ? null : result.plan;
 }
 
 /**
@@ -60,15 +61,15 @@ export function agentPlay(
   board: readonly BoardStack[],
 ): readonly { line: string; wire_actions: readonly WireActionJson[] }[] | null {
   const cardLists = board.map(s => s.cards);
-  const plan = solveBucketsFromCardLists(cardLists);
-  if (plan === null) return null;
+  const result = solveBucketsFromCardLists(cardLists);
+  if (result === null) return null;
 
   // Thread sim forward across moves. Each desc expands against the
   // current sim, then the resulting primitives advance sim before
   // the next desc expands.
   let sim: readonly BoardStack[] = board;
   const out: { line: string; wire_actions: WireActionJson[] }[] = [];
-  for (const planLine of plan) {
+  for (const planLine of result.plan) {
     const prims = expandVerb(planLine.desc, sim, new Set());
     const wireActions: WireActionJson[] = [];
     for (const p of prims) {
@@ -82,7 +83,7 @@ export function agentPlay(
 
 function solveBucketsFromCardLists(
   board: readonly (readonly Card[])[],
-): readonly PlanLine[] | null {
+): SolveResult | null {
   const helper: Card[][] = [];
   const trouble: Card[][] = [];
   for (const stack of board) {

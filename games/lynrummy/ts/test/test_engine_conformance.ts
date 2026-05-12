@@ -209,7 +209,8 @@ function isCleanFinal(b: Buckets): { ok: boolean; msg: string } {
 
 function runSolve(sc: Scenario): RunResult {
   const raw = buildRawBuckets(sc);
-  const plan = findPlanForBuckets(raw);
+  const result = findPlanForBuckets(raw);
+  const plan = result === null ? null : result.plan;
 
   const expect = sc.expect;
   if (expect["no_plan"]) {
@@ -393,10 +394,11 @@ function main(): void {
           res = runSolve(sc);  // no_plan stays no_plan; nothing to capture
         } else {
           const raw = buildRawBuckets(sc);
-          const plan = findPlanForBuckets(raw);
-          if (plan === null) {
+          const result = findPlanForBuckets(raw);
+          if (result === null) {
             res = { ok: false, msg: `REPAIR: engine returned null for pinned scenario` };
           } else {
+            const plan = result.plan;
             repairs.set(sc.name, { kind: "plan_lines", lines: plan.map(p => p.line) });
             res = { ok: true, msg: `REPAIRED — ${plan.length} plan-line(s) recorded` };
           }

@@ -24,6 +24,11 @@ export interface PlanLine {
   readonly desc: Desc;
 }
 
+export interface SolveResult {
+  readonly plan: readonly PlanLine[];
+  readonly finalBuckets: Buckets;
+}
+
 interface SolveOptions {
   readonly maxDepth?: number;
 }
@@ -123,7 +128,7 @@ export function solveTurn(
      *  (e.g. proving no_plan in conformance tests). */
     maxPlanLength?: number;
   } = {},
-): PlanLine[] | null {
+): SolveResult | null {
   const budget = opts.budget ?? 50000;
   const maxPlanLength = opts.maxPlanLength;
   const h = opts.heuristic ?? HEURISTICS.half_debt!;
@@ -148,11 +153,11 @@ export function solveTurn(
 
   pq.push({ buckets: initial, queue: initialQueue, plan: [], score: h(initial) });
 
-  let best: PlanLine[] | null = null;
+  let best: SolveResult | null = null;
   let visits = 0;
   while (pq.size() > 0 && visits < budget) {
     const cur = pq.pop()!;
-    if (best !== null && cur.plan.length >= best.length) continue;
+    if (best !== null && cur.plan.length >= best.plan.length) continue;
     if (dedup) {
       const sig = sigFn(cur.buckets, queueToLineage(cur.queue));
       if (closed.has(sig)) continue;
@@ -162,7 +167,9 @@ export function solveTurn(
     visits++;
     if (cur.queue.length === 0) {
       if (isVictory(cur.buckets.trouble, cur.buckets.growing)) {
-        if (best === null || cur.plan.length < best.length) best = [...cur.plan];
+        if (best === null || cur.plan.length < best.plan.length) {
+          best = { plan: [...cur.plan], finalBuckets: cur.buckets };
+        }
       }
       continue;
     }
@@ -171,7 +178,7 @@ export function solveTurn(
     const candidates = enumerateForFocus(cur.buckets, focus, new Set<string>());
     for (const cand of candidates) {
       const newPlan = [...cur.plan, { line: describe(cand.desc), desc: cand.desc }];
-      if (best !== null && newPlan.length >= best.length) continue;
+      if (best !== null && newPlan.length >= best.plan.length) continue;
       if (maxPlanLength !== undefined && newPlan.length > maxPlanLength) continue;
       // Dynamic doomed-singleton prune: a child state where a group
       // just graduated may have left a trouble singleton stranded
@@ -226,7 +233,7 @@ function isAlreadyClassified(initial: Buckets | RawBuckets): initial is Buckets 
 export function solveStateWithDescs(
   initial: Buckets | RawBuckets,
   opts: ShimSolveOptions = {},
-): readonly PlanLine[] | null {
+): SolveResult | null {
   const maxStates = opts.maxStates ?? 50000;
   const maxTroubleOuter = opts.maxTroubleOuter ?? 8;
 
@@ -238,7 +245,7 @@ export function solveStateWithDescs(
     return null;
   }
   if (isVictory(classified.trouble, classified.growing)) {
-    return [];
+    return { plan: [], finalBuckets: classified };
   }
   // Pre-flight: short-circuit if any trouble singleton has no
   // accessible partner pair anywhere in helper ∪ trouble ∪ growing.
@@ -263,9 +270,9 @@ export function solveState(
   initial: Buckets | RawBuckets,
   opts: ShimSolveOptions = {},
 ): readonly string[] | null {
-  const plan = solveStateWithDescs(initial, opts);
-  if (plan === null) return null;
-  return plan.map(p => p.line);
+  const result = solveStateWithDescs(initial, opts);
+  if (result === null) return null;
+  return result.plan.map(p => p.line);
 }
 
 class MinHeap<T> {

@@ -40,7 +40,8 @@ import {
   KIND_SET,
 } from "./classified_card_stack.ts";
 import type { Buckets, RawBuckets } from "./buckets.ts";
-import { solveStateWithDescs, type PlanLine } from "./engine_v2.ts";
+import { solveStateWithDescs, type PlanLine, type SolveResult } from "./engine_v2.ts";
+import type { Desc } from "./move.ts";
 
 // Default BFS state budget per projection. Mirrors python
 // `_PROJECTION_MAX_STATES`. Lowered from 200000 → 5000 in Python on
@@ -80,7 +81,7 @@ const HINT_MAX_TROUBLE_OUTER = 10;
 export function findPlanForBuckets(
   initial: RawBuckets | Buckets,
   maxStates: number = PROJECTION_MAX_STATES,
-): readonly PlanLine[] | null {
+): SolveResult | null {
   return solveStateWithDescs(initial, {
     maxTroubleOuter: HINT_MAX_TROUBLE_OUTER,
     maxStates,
@@ -90,7 +91,21 @@ export function findPlanForBuckets(
 
 export interface PlayResult {
   readonly placements: readonly Card[];
+  /** Plan-line strings, for hint display + DSL conformance. */
   readonly plan: readonly string[];
+  /** Plan descs — same plan, structured form. Transcript writers
+   *  feed these to `physicalPlan` to expand into wire primitives. */
+  readonly planDescs: readonly Desc[];
+  /** The board after the placements + plan are applied. Derived
+   *  from the solver's final buckets so consumers don't re-solve. */
+  readonly newBoard: readonly (readonly Card[])[];
+}
+
+function bucketsToBoard(b: Buckets): readonly (readonly Card[])[] {
+  return [
+    ...b.helper.map(s => [...s.cards] as readonly Card[]),
+    ...b.complete.map(s => [...s.cards] as readonly Card[]),
+  ];
 }
 
 export interface ProjectionRecord {
@@ -142,7 +157,15 @@ export function findPlay(
         const ordered = findCompletingThird([c1, c2], hand, i, j);
         if (ordered !== null) {
           finishStats(stats, tStart);
-          return { placements: ordered, plan: [] };
+          // Board was already clean; the new triple is itself a
+          // legal length-3+ group (findCompletingThird checked).
+          // No plan needed: post-play board = existing helpers + new stack.
+          return {
+            placements: ordered,
+            plan: [],
+            planDescs: [],
+            newBoard: [...board, ordered],
+          };
         }
       }
     }
@@ -158,18 +181,18 @@ export function findPlay(
       const c1 = hand[i]!;
       const c2 = hand[j]!;
       if (!isPartialOk([c1, c2])) continue;
-      const plan = tryProjection(board, [[c1, c2]], maxStates, stats, "pair");
-      if (plan !== null) {
-        candidates.push({ placements: [c1, c2], plan });
+      const proj = tryProjection(board, [[c1, c2]], maxStates, stats, "pair");
+      if (proj !== null) {
+        candidates.push({ placements: [c1, c2], ...proj });
       }
     }
   }
 
   // (c) Singleton projections.
   for (const c of hand) {
-    const plan = tryProjection(board, [[c]], maxStates, stats, "singleton");
-    if (plan !== null) {
-      candidates.push({ placements: [c], plan });
+    const proj = tryProjection(board, [[c]], maxStates, stats, "singleton");
+    if (proj !== null) {
+      candidates.push({ placements: [c], ...proj });
     }
   }
 
@@ -275,13 +298,19 @@ function cardEq(a: Card, b: Card): boolean {
  * extras. This is enforced by partition + BFS termination on
  * is_victory (empty trouble + every growing.n >= 3).
  */
+interface ProjectionOutcome {
+  readonly plan: readonly string[];
+  readonly planDescs: readonly Desc[];
+  readonly newBoard: readonly (readonly Card[])[];
+}
+
 function tryProjection(
   board: readonly (readonly Card[])[],
   extraStacks: readonly (readonly Card[])[],
   maxStates: number,
   stats: PlayStats | undefined,
   kind: "pair" | "singleton",
-): readonly string[] | null {
+): ProjectionOutcome | null {
   const augmented: (readonly Card[])[] = [...board, ...extraStacks];
   const helper: (readonly Card[])[] = [];
   const trouble: (readonly Card[])[] = [];
@@ -302,20 +331,22 @@ function tryProjection(
   const cards: Card[] = [];
   for (const s of extraStacks) for (const c of s) cards.push(c);
 
-  if (stats === undefined) {
-    const plan = findPlanForBuckets(initial, maxStates);
-    return plan === null ? null : plan.map(p => p.line);
-  }
   const t0 = performance.now();
-  const plan = findPlanForBuckets(initial, maxStates);
-  const wallMs = performance.now() - t0;
-  stats.projections.push({
-    kind,
-    cards,
-    wallMs,
-    foundPlan: plan !== null,
-  });
-  return plan === null ? null : plan.map(p => p.line);
+  const result = findPlanForBuckets(initial, maxStates);
+  if (stats !== undefined) {
+    stats.projections.push({
+      kind,
+      cards,
+      wallMs: performance.now() - t0,
+      foundPlan: result !== null,
+    });
+  }
+  if (result === null) return null;
+  return {
+    plan: result.plan.map(p => p.line),
+    planDescs: result.plan.map(p => p.desc),
+    newBoard: bucketsToBoard(result.finalBuckets),
+  };
 }
 
 /**

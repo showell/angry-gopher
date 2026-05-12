@@ -56,9 +56,9 @@ function buildInitial(
 
 function runProjection(initial: RawBuckets, maxStates: number): { found: boolean; wall: number } {
   const t0 = performance.now();
-  const plan = solveStateWithDescs(initial, { maxTroubleOuter: 10, maxStates });
+  const result = solveStateWithDescs(initial, { maxTroubleOuter: 10, maxStates });
   const wall = (performance.now() - t0) / 1000;
-  return { found: plan !== null, wall };
+  return { found: result !== null, wall };
 }
 
 function main(): void {
