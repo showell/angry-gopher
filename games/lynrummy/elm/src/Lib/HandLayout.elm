@@ -27,7 +27,7 @@ import Lib.Rules.Card exposing (Card, OriginDeck(..))
 
 
 {-| Viewport-left of the hand area. Aligned with the left of
-the main content area (20px margin matches the `Main.View`
+the main content area (20px margin matches the `Game.View`
 wrapper).
 -}
 handLeft : Int

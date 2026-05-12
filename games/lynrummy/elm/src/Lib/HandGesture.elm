@@ -11,7 +11,7 @@ Symmetric to `Lib.BoardGesture`. Hand-origin actions ship
 pathless (replay re-synthesizes via DOM).
 
 `handleMouseUp` returns a `HandMouseUp` value that flows up to
-`Main.Play.update` for dispatch.
+`Game.Play.update` for dispatch.
 
 -}
 
@@ -29,7 +29,7 @@ import Lib.Point exposing (Point)
 
 {-| Result of resolving a hand-card mouseup. `MergeHand` and
 `PlaceHand` carry the same payloads as their `GameEvent`
-cousins; update in `Main.Play` translates and feeds them to
+cousins; update in `Game.Play` translates and feeds them to
 `Apply.applyAction`. `HandCardOffBoard` is the scold case.
 `HandNothing` covers the rect-not-measured race (the user
 released before `BoardRectReceived` arrived) — drop is not

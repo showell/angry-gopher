@@ -1,14 +1,8 @@
-# Wing-oracle conformance scenarios.
-# Ported from games/lynrummy/elm/tests/Game/WingOracleTest.elm
-# — the `wingsForStack` describe block (4 tests, lines 49–101).
-#
 # wingsForStack finds merge-target wings for a board stack being dragged.
 # Wings are matched by (target cards, side).
 #
-# All ops are Elm-only (no Python gesture layer).
-#
 # Layout note: board/source blocks use `at (top, left): cards`
-# (top first, left second), matching the DSL convention used by gesture.dsl.
+# (top first, left second).
 
 
 scenario wings_for_stack_567_onto_234_right

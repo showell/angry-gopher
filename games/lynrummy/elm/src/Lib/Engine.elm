@@ -7,7 +7,7 @@ module Lib.Engine exposing
 {-| Elm ↔ JS engine wire. The JS engine bundle (TS-compiled,
 loaded alongside elm.js) is the canonical solver; Elm sends
 requests over a port and decodes responses. This module owns
-the request-encoding / response-decoding shape; Main.Play
+the request-encoding / response-decoding shape; Game.Play
 owns the Model bookkeeping (pendingEngineRequest counter,
 status, hintedCards).
 

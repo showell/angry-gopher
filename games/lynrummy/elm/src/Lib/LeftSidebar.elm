@@ -9,7 +9,7 @@ hand widget + turn controls; inactive hand-count summary) plus
 the deck-remaining line. Parallel to `Lib.BoardView` on the
 right side.
 
-Full-game-specific: references `Main.Msg` constructors
+Full-game-specific: references `Game.Msg` constructors
 directly. Puzzles never call into here.
 
 -}
@@ -26,11 +26,11 @@ import Lib.Rules.Card as Card exposing (Card, Suit)
 import Lib.StackView as StackView
 import Html exposing (Html, div)
 import Html.Attributes exposing (id, style)
-import Main.Msg exposing (Msg(..))
+import Game.Msg exposing (Msg(..))
 
 
 {-| Which replay-related button the sidebar should render. The
-caller (`Main.View`) already inspects the live replay state and
+caller (`Game.View`) already inspects the live replay state and
 hands one of three concrete states down — the sidebar never
 sees a Maybe-bool.
 -}

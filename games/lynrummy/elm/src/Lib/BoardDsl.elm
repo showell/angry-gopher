@@ -12,8 +12,8 @@ initial-state payloads.
 
 Lives in `src/` rather than `tests/` so production code can
 share the canonical grammar with the test side. The legacy
-`tests/Game/ConformanceDsl.elm` delegates here for stack
-parsing; round-trip tests in `tests/Game/BoardDslTest.elm`
+`tests/Lib/ConformanceDsl.elm` delegates here for stack
+parsing; round-trip tests in `tests/Lib/BoardDslTest.elm`
 pin format ∘ parse and parse ∘ format.
 
 Cards are emitted with unicode suits (matches the live

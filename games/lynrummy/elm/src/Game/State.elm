@@ -1,4 +1,4 @@
-module Main.State exposing
+module Game.State exposing
     ( Model
     , applyEvent
     , baseModel

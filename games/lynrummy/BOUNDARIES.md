@@ -585,7 +585,7 @@ don't need to read each one to apply the rules.
 | Pass smallest type | floaterOverWing collapse (8 twins → 4), viewBoard narrowing | 2026-05-06 |
 | Unit of consistency (too narrow) | Execute.placeHand widening to GameState→GameState | 2026-05-11 |
 | Don't extract record-shape | applyEntry / armBeat / boardDragInputs inlining | 2026-05-09 |
-| Workhorse pattern | Main.Play.update structure; MouseUp three-workhorse chain | 2026-05-06 |
+| Workhorse pattern | Game.Play.update structure; MouseUp three-workhorse chain | 2026-05-06 |
 | Explicit phases | Lib.Animation 2-phase → 4-phase | 2026-05-09 |
 | Split along the noun | finalizeMouseUp → per-side ladder | 2026-05-07 |
 | `side` parameter | left_merge / right_merge split in Lyn Rummy absorbs | 2026-05-02 |

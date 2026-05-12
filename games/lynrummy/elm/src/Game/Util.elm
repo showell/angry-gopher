@@ -1,9 +1,9 @@
-module Main.Util exposing (pluralize)
+module Game.Util exposing (pluralize)
 
-{-| Shared pure helpers for the `Main.*` subtree.
+{-| Shared pure helpers for the `Game.*` subtree.
 
 This module is a leaf — no domain types, no I/O, no rendering,
-no `Msg`. Other `Main.*` modules import from here; nothing here
+no `Msg`. Other `Game.*` modules import from here; nothing here
 imports from them.
 
 -}

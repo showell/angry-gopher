@@ -3,7 +3,7 @@
 The Elm LynRummy client. Renders the board + hand, captures
 live drag gestures, runs its own referee, keeps its own
 action log, replays stored logs. Two surfaces — the full
-game (`Main.elm`, embedding `Main.Play`) and the
+game (`Main.elm`, embedding `Game.Play`) and the
 single-board puzzle (`Puzzle.elm`, a dedicated host that
 composes `Lib.*` primitives directly).
 
@@ -51,16 +51,16 @@ Per-module roles live in each file's top-of-file comment.
 Starting points, organized by Elm's capture / integration /
 execution / render layering:
 
-- **Capture.** `src/Main/Gesture.elm` (pointer events),
-  `src/Main/Wire.elm` (wire deliveries + the
-  action-log-entry decoder), and `src/Main/Msg.elm` (the
+- **Capture.** `src/Game/Gesture.elm` (pointer events),
+  `src/Game/Wire.elm` (wire deliveries + the
+  action-log-entry decoder), and `src/Game/Msg.elm` (the
   unified Msg type).
 - **Integration.** `src/Lib/Rules/Referee.elm` (Elm's own
   referee — Go does not run a referee).
-- **Execution.** `src/Main/Apply.elm` (`applyAction`),
+- **Execution.** `src/Game/Apply.elm` (`applyAction`),
   `src/Lib/Reducer.elm` (the pure action-log reducer),
   `src/Lib/Game.elm` (turn transitions).
-- **Render.** `src/Main/View.elm` (top-level composition +
+- **Render.** `src/Game/View.elm` (top-level composition +
   pinned layout), `src/Lib/View.elm` (rendering primitives),
   `src/Lib/HandLayout.elm` and
   `src/Lib/Physics/BoardGeometry.elm` (frame constants).
@@ -84,9 +84,9 @@ property tests so any regression breaks loudly.
   `isPartialOk` / `neighbors`.
 - **`Lib.Rules.Referee`** — turn-end validation.
 
-Tests for these live in `tests/Game/CardTest.elm` and
-`tests/Game/StackTypeTest.elm` (kept flat, not under a
-`tests/Game/Rules/` subtree). The discipline is **exhaustive
+Tests for these live in `tests/Lib/CardTest.elm` and
+`tests/Lib/StackTypeTest.elm` (kept flat, not under a
+`tests/Lib/Rules/` subtree). The discipline is **exhaustive
 enumeration over the finite card domain** rather than
 property fuzz — the domain is small enough (every value,
 every suit, every deck; every length 3–13) that we cover the
@@ -106,8 +106,8 @@ Two browser entry points share the rendering primitives in
 `Lib.*` but otherwise own their own `Msg` / `Model` shapes:
 
 - **`Main.elm`** (full game) — owns the embeddable
-  `Main.Play` component. `Main.State.Model` carries
-  GameState + drag + action log + replay state; `Main.Msg`
+  `Game.Play` component. `Game.State.Model` carries
+  GameState + drag + action log + replay state; `Game.Msg`
   is the unified Msg.
 - **`Puzzle.elm`** (single-board puzzle) — dedicated host.
   Composes `Lib.*` primitives directly: `Lib.BoardView`,
@@ -121,4 +121,4 @@ shape once the puzzle's domain (board only, no hand, no
 turn cycle) made unified-Msg/Model contortions
 Maybe-everywhere. New surfaces with a different domain
 should follow `Puzzle.elm`'s pattern; new surfaces that
-genuinely want full-game semantics can embed `Main.Play`.
+genuinely want full-game semantics can embed `Game.Play`.

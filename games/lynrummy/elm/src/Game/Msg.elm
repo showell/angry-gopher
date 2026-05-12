@@ -1,8 +1,8 @@
-module Main.Msg exposing (Msg(..))
+module Game.Msg exposing (Msg(..))
 
 {-| The `Msg` type — every way the Elm runtime can nudge the
-update function. Lives in its own module so `Main.Wire`,
-`Main.View`, and `Main.elm` can all reference its constructors
+update function. Lives in its own module so `Game.Wire`,
+`Game.View`, and `Main.elm` can all reference its constructors
 without cyclic imports.
 -}
 

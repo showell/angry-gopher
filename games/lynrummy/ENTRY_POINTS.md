@@ -18,7 +18,7 @@ Two Elm `Browser.element` boots, both compiled from
 | `src/Main.elm` | `elm.js` | `/gopher/lynrummy-elm/` | Full Lyn Rummy game client |
 | `src/Puzzle.elm` | `puzzle.js` | `/gopher/puzzle/` | Single-board puzzle |
 
-The full-game host embeds `Main.Play`. The puzzle host is
+The full-game host embeds `Game.Play`. The puzzle host is
 dedicated — it composes `Game.*` primitives directly and
 keeps its own replay engine in `src/Puzzle/Replay.elm`.
 

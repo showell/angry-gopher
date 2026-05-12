@@ -1,4 +1,4 @@
-module Main.Play exposing
+module Game.Play exposing
     ( Config(..)
     , Output(..)
     , init
@@ -39,17 +39,17 @@ import Html exposing (Html)
 import Json.Encode as Encode
 import Lib.Status as Status exposing (StatusKind(..))
 import Lib.PointerInput as PointerInput
-import Main.Msg exposing (Msg(..))
+import Game.Msg exposing (Msg(..))
 import Lib.InitialStateDsl as InitialStateDsl
-import Main.State
+import Game.State
     exposing
         ( Model
         , baseModel
         , bootstrapFromBundle
         , lastUndoableAction
         )
-import Main.View as View
-import Main.Wire as Wire exposing (fetchActionLog, fetchNewSession)
+import Game.View as View
+import Game.Wire as Wire exposing (fetchActionLog, fetchNewSession)
 import Task
 import Time
 

@@ -5,7 +5,7 @@ module Lib.WingOracleTest exposing (suite)
   - `wingsForStack` / `wingsForHandCard` — does the oracle
     offer the right merge targets + sides for a given source?
   - `wingBoardRect` — does the wing's computed board-frame
-    rect match the positioning math that `Main.View.viewWingAt`
+    rect match the positioning math that `Game.View.viewWingAt`
     uses at render time?
 
 `WingId` identifies its target by CardStack value, so tests

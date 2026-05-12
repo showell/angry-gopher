@@ -29,7 +29,7 @@ Elm and TypeScript, locking the rule across both implementations.
 games/lynrummy/conformance/scenarios/*.dsl
         ↓  (parsed natively at test time by both runners)
 TS: games/lynrummy/ts/test/conformance_dsl.ts + per-test consumers
-Elm: tests/Game/ConformanceDsl.elm  →  tests/Game/ConformanceTests.elm
+Elm: tests/Lib/ConformanceDsl.elm  →  tests/Lib/ConformanceTests.elm
         ↓  (ops/check-conformance runs everything)
 elm-test + TS conformance suite + elm-review
 ```
@@ -39,7 +39,7 @@ done. It compiles Elm, runs all tests, and runs elm-review.
 
 Each `op:` in a `.dsl` scenario dispatches at test time to a hand-written
 verifier — in Elm via the `verify` case-match in
-`tests/Game/ConformanceTests.elm`, in TS via per-test runners. There is no
+`tests/Lib/ConformanceTests.elm`, in TS via per-test runners. There is no
 codegen step.
 
 ---
@@ -49,7 +49,7 @@ codegen step.
 Browse `conformance/scenarios/*.dsl` — each file's name and top-comment names its
 domain (replay walkthroughs, planner corpus, referee, wing oracle, click
 arbitration, undo, board geometry, gesture, etc.). The op set is whatever the
-`verify` dispatcher in `tests/Game/ConformanceTests.elm` cases on; grep that to
+`verify` dispatcher in `tests/Lib/ConformanceTests.elm` cases on; grep that to
 enumerate live ops.
 
 ---
@@ -85,7 +85,7 @@ rule genuinely needs its own shape.
    only 4 high-value scenarios worth porting.
 
 3. **Check whether the op already exists.** Grep the `verify` case-match in
-   `tests/Game/ConformanceTests.elm` (and the TS dispatcher) for the op name.
+   `tests/Lib/ConformanceTests.elm` (and the TS dispatcher) for the op name.
    If it exists, write the DSL directly. If not, decide whether a new op is
    warranted (usually yes if the rule is game-logic, no if it's a helper).
 
@@ -94,7 +94,7 @@ rule genuinely needs its own shape.
    a new file.
 
 5. **If adding a new op:** add a `case "op_name" -> verifyX sc` arm in
-   `tests/Game/ConformanceTests.elm` and a matching TS dispatcher arm if the
+   `tests/Lib/ConformanceTests.elm` and a matching TS dispatcher arm if the
    rule is cross-language. Compare via stripped keys (cards + side, not full
    stack values with locs) so a typo produces a direct mismatch rather than a
    confusing lookup failure — the `wings_for_stack` verifier is the canonical
@@ -110,14 +110,14 @@ rule genuinely needs its own shape.
 
 ## Remaining conversion opportunities
 
-Several `tests/Game/*Test.elm` files in the Elm tree still encode rules that
+Several `tests/Lib/*Test.elm` files in the Elm tree still encode rules that
 could move to DSL — `BoardActionsTest`, `HintTest`, `ReducerTest`,
 `PlayerTurnTest`. Skim each before porting; some sections test
 implementation plumbing (`BoardChange` internals, `collapseUndos`, pure
 geometry) that's better left as Elm unit tests. The selection criteria above
 apply: rules → DSL, plumbing → unit test.
 
-`tests/Game/{CardStack,Wire,GestureArbitration,WingOracle}Test.elm` are mostly
+`tests/Lib/{CardStack,Wire,GestureArbitration,WingOracle}Test.elm` are mostly
 serialization round-trips and pure helpers; leave them alone.
 
 ---

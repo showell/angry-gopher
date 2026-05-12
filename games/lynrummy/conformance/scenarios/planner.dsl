@@ -1,16 +1,9 @@
-# Planner conformance scenarios.
-#
 # Each scenario specifies a 4-bucket state (helper / trouble /
 # growing / complete) and asserts the BFS solver's
 # `_enumerate_moves` yields at least one move of the named
 # `type`. Stack locations are inert here — the planner doesn't
 # consult geometry — but the DSL still requires `at (top, left)`
 # anchors so the parser can reuse the existing stack grammar.
-#
-# These scenarios are the durable successors to the
-# trick-invariant scenarios in `tricks.dsl`. As trick code
-# retires, the planner-side asserts here become the live
-# conformance contract for Python and (post-port) Elm.
 
 # --- extract_absorb (pull) -----------------------------------
 

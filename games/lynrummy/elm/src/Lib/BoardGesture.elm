@@ -9,7 +9,7 @@ module Lib.BoardGesture exposing
 {-| Per-side resolution for board-card mouseup gestures.
 
 `handleMouseUp` returns a `BoardMouseUp` value — a parallel-to-
-`GameEvent` outcome shape that flows up to `Main.Play.update`,
+`GameEvent` outcome shape that flows up to `Game.Play.update`,
 which dispatches on the variant. Drag variants carry the
 captured `boardPath` inline so `Play` can fire `Wire.sendAction`
 without re-deriving the path. The hand-card sibling is
@@ -31,7 +31,7 @@ import Lib.Point exposing (Point)
 
 {-| Result of resolving a board-card mouseup. `MergeStack` and
 `MoveStack` carry the captured `boardPath` (in board frame)
-so `Main.Play.update` can both apply the event and send the
+so `Game.Play.update` can both apply the event and send the
 wire payload without re-deriving anything. `Split` is the
 click case (cursor stayed within `clickThreshold` of mousedown),
 so it has no meaningful gesture. `BoardCardOffBoard` is the
@@ -143,7 +143,7 @@ resolveBoardCardGesture d boardRect =
 
 {-| Mousemove handler for a board-card drag. Pure state
 transformation — advances cursor + floater + gesture path,
-recomputes hover status. Caller (the dispatcher in `Main.Play`)
+recomputes hover status. Caller (the dispatcher in `Game.Play`)
 wraps the returned `Info` into `DraggingBoardCard` and patches
 the model.
 

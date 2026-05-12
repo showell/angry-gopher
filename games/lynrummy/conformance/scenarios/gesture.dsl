@@ -1,20 +1,11 @@
-# Gesture conformance scenarios.
-# Ported from games/lynrummy/elm/tests/Main/GestureTest.elm.
-#
-# All 11 source tests ported across 4 ops:
-#   gesture_split, gesture_merge_stack, gesture_merge_hand,
-#   gesture_move_stack, gesture_place_hand, gesture_floater_over_wing.
-#
-# All ops are Elm-only (no Python gesture layer); Python: false for all.
-#
 # Layout note: board/target blocks use `at (top, left): cards`
 # (top first, left second). The `floater_at:` and `cursor:` scalars
 # use `(x, y)` where x=horizontal (left), y=vertical (top).
 #
 # defaultBoardRect used by MoveStack/PlaceHand: { x=300, y=100, width=800, height=600 }.
-# Cursor (700, 400) is inside that rect; it is used as a stand-in
-# cursor for scenarios where the cursor is over the board but its
-# exact position does not affect the result.
+# Cursor (700, 400) is inside that rect; used as a stand-in cursor
+# for scenarios where the cursor is over the board but its exact
+# position does not affect the result.
 
 
 scenario gesture_split_surviving_click_intent

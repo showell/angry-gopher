@@ -10,7 +10,7 @@ narrating the outcome. Single OK button, no focus trap or
 ESC handler.
 
 `viewPopup` is msg-polymorphic — caller passes the dismiss
-Msg, so this module doesn't need to know about `Main.Msg`.
+Msg, so this module doesn't need to know about `Game.Msg`.
 
 -}
 
@@ -20,7 +20,7 @@ import Lib.Colors as Colors
 import Html exposing (Html, div)
 import Html.Attributes exposing (style)
 import Html.Events as Events
-import Main.Util exposing (pluralize)
+import Game.Util exposing (pluralize)
 
 
 type alias PopupContent =
@@ -91,7 +91,7 @@ popupFromOutcome { result, cardsDrawn } =
 
 
 {-| Render the popup. Caller passes the dismiss `msg` (typically
-`PopupOk` from `Main.Msg`) so this module stays Msg-agnostic.
+`PopupOk` from `Game.Msg`) so this module stays Msg-agnostic.
 -}
 viewPopup : msg -> Maybe PopupContent -> Html msg
 viewPopup dismissMsg maybePopup =

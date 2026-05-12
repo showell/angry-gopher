@@ -36,9 +36,9 @@ import Lib.Hand as Hand
 import Lib.Rules.Referee as Referee exposing (RefereeStage(..))
 import Lib.Rules.StackType as StackType
 import Lib.Status as Status
-import Main.Msg as Msg
-import Main.Play as Play
-import Main.State as State
+import Game.Msg as Msg
+import Game.Play as Play
+import Game.State as State
 import Test exposing (Test, describe, test)
 
 

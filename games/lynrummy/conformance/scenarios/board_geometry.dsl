@@ -1,13 +1,4 @@
-# Board geometry conformance scenarios (validate_board_geometry +
-# classify_board_geometry + stack_height_constant). Ported from
-# games/lynrummy/elm/tests/Game/BoardGeometryTest.elm.
-#
-# All 15 source tests ported. Python has no equivalent of the
-# typed-error API (validateBoardGeometry / classifyBoardGeometry);
-# it has the simpler find_violation / out_of_bounds helpers.
-# These are Elm-only conformance tests (Python: false).
-#
-# Layout constants (match Lib.CardStack + Lib.Physics.BoardGeometry):
+# Layout constants:
 #   cardWidth  = 27
 #   cardPitch  = 33   (cardWidth + 6)
 #   cardHeight = 40

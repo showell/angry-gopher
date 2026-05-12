@@ -1,4 +1,4 @@
-module Main.ViewTest exposing (suite)
+module Game.ViewTest exposing (suite)
 
 {-| Tests for the turn-ceremony helpers in Lib.Status and
 Lib.Popup: `statusForCompleteTurn` and `popupForCompleteTurn`.
@@ -25,7 +25,7 @@ outcome result =
 
 suite : Test
 suite =
-    describe "Main.View turn-ceremony helpers"
+    describe "Game.View turn-ceremony helpers"
         [ statusTests
         , popupTests
         ]

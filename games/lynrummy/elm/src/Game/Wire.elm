@@ -1,4 +1,4 @@
-module Main.Wire exposing
+module Game.Wire exposing
     ( fetchActionLog
     , fetchNewSession
     , sendAction
@@ -22,7 +22,7 @@ import Lib.InitialStateDsl as InitialStateDsl
 import Lib.WireAction as WA
 import Http
 import Json.Decode as Decode exposing (Decoder)
-import Main.Msg exposing (Msg(..))
+import Game.Msg exposing (Msg(..))
 
 
 

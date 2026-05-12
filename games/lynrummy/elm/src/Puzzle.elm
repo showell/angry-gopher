@@ -2,7 +2,7 @@ module Puzzle exposing (main)
 
 {-| Puzzle V3 — drag-aware single-puzzle surface.
 
-Dedicated host: own Msg, own Model, no `Main.*` imports.
+Dedicated host: own Msg, own Model, no `Game.*` imports.
 Composes `Lib.*` building blocks directly. Supports
 board-card drag (move + merge + click=split) and Undo.
 

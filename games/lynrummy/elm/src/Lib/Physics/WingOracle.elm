@@ -16,7 +16,7 @@ position derives from the target, not the source, matching
 the drop-onto-target UX.
 
 `WingId` identifies its target by CardStack value (same
-representation as the wire and the Main.State drag model).
+representation as the wire and the Game.State drag model).
 -}
 
 import Lib.BoardActions as BoardActions exposing (Side(..))
@@ -106,7 +106,7 @@ handCardWingsForTarget handCard target =
 
 {-| Board-frame rectangle the wing renders into — the visual
 affordance a user sees when hovering a drop candidate. Used
-by `Main.View.viewWingAt`. The live hit-test does NOT use
+by `Game.View.viewWingAt`. The live hit-test does NOT use
 this rect; it calls `eventualFloaterTopLeft`. One card-pitch
 wide by `BG.cardHeight` tall.
 -}

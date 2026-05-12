@@ -1,8 +1,8 @@
 port module Main exposing (main)
 
-{-| Thin harness around `Main.Play`.
+{-| Thin harness around `Game.Play`.
 
-The main app's entire play surface lives in `Main.Play`. Main
+The main app's entire play surface lives in `Game.Play`. Main
 here owns the host ports (URL-pinning + the TS engine bridge)
 and boots `Browser.element`, then routes Play's `Output` and
 engine responses to the right places.
@@ -25,9 +25,9 @@ import Browser
 import Html exposing (Html, div)
 import Html.Attributes exposing (style)
 import Json.Encode as Encode
-import Main.Msg as MainMsg exposing (Msg)
-import Main.Play as Play
-import Main.State exposing (Model)
+import Game.Msg as MainMsg exposing (Msg)
+import Game.Play as Play
+import Game.State exposing (Model)
 
 
 {-| Flags from the HTML harness. `initialSessionId` is server-side

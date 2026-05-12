@@ -1,6 +1,6 @@
 module Lib.ReducerTest exposing (suite)
 
-{-| Tests for `Main.State.applyEvent`. Each action type
+{-| Tests for `Game.State.applyEvent`. Each action type
 gets a transition test; a longer test sequences several actions
 and checks end-state. CompleteTurn / Undo verify they pass
 state through (CompleteTurn's full turn-flip is exercised in
@@ -15,7 +15,7 @@ import Lib.Game exposing (GameState)
 import Lib.GameEvent exposing (GameEvent(..))
 import Lib.Hand as Hand
 import Lib.Rules.Card exposing (CardValue(..), OriginDeck(..), Suit(..))
-import Main.State as State
+import Game.State as State
 import Test exposing (Test, describe, test)
 
 

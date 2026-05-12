@@ -13,7 +13,7 @@ is the measurement Cmd produced by `HandDragAnimate.step`,
 which `tick` forwards back to the host alongside its
 state result.
 
-Three operations the host (`Main.Play`) plumbs through:
+Three operations the host (`Game.Play`) plumbs through:
 
   - `start initialEntries initialGameState` — open a fresh
     replay. Caller passes an already-collapsed queue
@@ -27,7 +27,7 @@ Three operations the host (`Main.Play`) plumbs through:
     after a hand action pops) or `Completed`.
 
 The host feeds DOM measurements back via a small phase-shape
-helper of its own (`Main.Play.installHandMeasurement`) that
+helper of its own (`Game.Play.installHandMeasurement`) that
 calls into `HandDragAnimate.measurementReceived`.
 
 -}
@@ -72,7 +72,7 @@ type Phase
     | AnimatingHandAction HandDragAnimate.State
 
 
-{-| Instant Replay's working state. Lives on `Main.State.Model`
+{-| Instant Replay's working state. Lives on `Game.State.Model`
 as `Maybe AnimationState`: `Just _` while a replay is in flight,
 `Nothing` otherwise.
 

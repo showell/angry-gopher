@@ -5,8 +5,8 @@ module Lib.UndoTest exposing (suite)
 Covers:
   - `Lib.Execute.undoEvent` — round-trip for all five primitives:
     Split, MergeStack, MergeHand, PlaceHand, MoveStack.
-  - `Main.ActionLog.collapseUndos` — token collapsing in the action log.
-  - `Main.State.canUndoThisTurn` — button-enable predicate.
+  - `Game.ActionLog.collapseUndos` — token collapsing in the action log.
+  - `Game.State.canUndoThisTurn` — button-enable predicate.
 
 Strategy: for `undoEvent`, apply an action with `applyEvent` then
 immediately `undoEvent` on the result and assert the relevant
@@ -24,7 +24,7 @@ import Lib.GameEvent exposing (GameEvent(..))
 import Lib.Hand as Hand
 import Lib.Rules.Card exposing (CardValue(..), OriginDeck(..), Suit(..))
 import Lib.ActionLog as ActionLog exposing (ActionLogEntry)
-import Main.State as State
+import Game.State as State
 import Test exposing (Test, describe, test)
 
 

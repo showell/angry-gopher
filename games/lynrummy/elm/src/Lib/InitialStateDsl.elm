@@ -4,7 +4,7 @@ module Lib.InitialStateDsl exposing
     )
 
 {-| DSL encoder + parser for a full `GameState` — what
-`Main.State.encodeGameState` and `Main.Wire.initialStateDecoder`
+`Game.State.encodeGameState` and `Game.Wire.initialStateDecoder`
 shuttled as JSON before this. One canonical text shape, parsed
 on the resume path and emitted on every new-session POST.
 

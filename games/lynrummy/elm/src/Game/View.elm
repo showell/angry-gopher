@@ -1,4 +1,4 @@
-module Main.View exposing (view)
+module Game.View exposing (view)
 
 {-| The full-game view layer — composes the status bar, left
 sidebar, board column, and popup into a 1100×700 div
@@ -24,8 +24,8 @@ import Lib.Status as Status
 import Lib.WingView as WingView
 import Html exposing (Html, div)
 import Html.Attributes exposing (style)
-import Main.Msg exposing (Msg(..))
-import Main.State
+import Game.Msg exposing (Msg(..))
+import Game.State
     exposing
         ( Model
         , canUndoThisTurn

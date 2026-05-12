@@ -18,7 +18,7 @@ covers principles; that one covers the artifacts.
   UI replays.
 - **Elm is the autonomous client.** Deals, referees, replays,
   renders. `games/lynrummy/elm/`. Two surfaces — the full
-  game (`Main.elm`, embedding `Main.Play`) and the
+  game (`Main.elm`, embedding `Game.Play`) and the
   single-board puzzle (`Puzzle.elm`, a dedicated host that
   composes `Game.*` primitives directly). The full game's
   Hint button routes through the TS engine over Elm ports +
@@ -99,10 +99,10 @@ the player sees on screen.
 
 **Pipeline.** `ops/check-conformance` is the single entry point;
 it runs `ops/embed_dsls_for_elm.ts` (the one codegen step —
-inlines `.dsl` files into a generated `tests/Game/DslContent.elm`
+inlines `.dsl` files into a generated `tests/Lib/DslContent.elm`
 so the Elm runner can read them without `fs`), then the TS
 suite, then the Elm suite. Most parsing happens at test time
-inside each runner via `tests/Game/ConformanceDsl.elm` and
+inside each runner via `tests/Lib/ConformanceDsl.elm` and
 `ts/test/conformance_dsl.ts`. There are also some traditional
 non-DSL unit tests (pure helpers, decoders, hand-sorted UI
 rendering) — they continue to pull their weight and aren't
@@ -231,7 +231,7 @@ Consequences:
 ## The cast of components
 
 - **Elm UI.** The autonomous client. Two surfaces — full
-  game (`Main.elm`, embedding `Main.Play`) and the
+  game (`Main.elm`, embedding `Game.Play`) and the
   single-board puzzle (`Puzzle.elm`, dedicated host).
   Deals locally (`Lib.Dealer.dealFullGame seed`), runs its
   own referee, appends to its own action log, can replay at
@@ -479,7 +479,7 @@ Don't hand-compose `go run .`, `elm make`, or `go test ./...`
   [`./ts/ENGINE_V2.md`](./ts/ENGINE_V2.md).
 - [`./elm/README.md`](./elm/README.md) — Elm UI. Two
   surfaces: the full game (`Main.elm`, embedding
-  `Main.Play`) and the single-board puzzle (`Puzzle.elm`,
+  `Game.Play`) and the single-board puzzle (`Puzzle.elm`,
   dedicated host). Hints route through the TS engine.
 
 ### Cross-cutting
@@ -492,8 +492,8 @@ Don't hand-compose `go run .`, `elm make`, or `go test ./...`
 
 - `games/lynrummy/conformance/scenarios/*.dsl` — canonical
   scenarios. Parsed natively at test time by both runners:
-  Elm via `tests/Game/ConformanceDsl.elm` →
-  `tests/Game/ConformanceTests.elm` (per-op verifiers); TS
+  Elm via `tests/Lib/ConformanceDsl.elm` →
+  `tests/Lib/ConformanceTests.elm` (per-op verifiers); TS
   via `ts/test/conformance_dsl.ts` and per-test consumers.
   **New agents: read `undo_walkthrough.dsl` early.** It's
   the most compact readable summary of how the game's
@@ -525,20 +525,20 @@ The repo has two browser entry points, each with the host
 shape its domain wants:
 
 - **Embedding (full game).** `Main.elm` is a thin harness;
-  `Main.Play` is the embeddable component. Exposes
+  `Game.Play` is the embeddable component. Exposes
   `init / update / view / subscriptions` + a typed `Output`
   union for the few things the host legitimately needs.
   Extracted so a future host (tutorial, side-by-side
   agent-vs-human viewer) can host it without rebuilding.
 - **Dedicated host (puzzle).** `Puzzle.elm` composes
   `Game.*` primitives directly without going through
-  `Main.Play`. Carries its own `Msg` / `Model` / replay
+  `Game.Play`. Carries its own `Msg` / `Model` / replay
   engine. The puzzle's domain (board only, no hand, no turn
   cycle) made unified-Msg/Model contortions Maybe-everywhere;
   going dedicated dropped that complexity.
 
 Choose by domain. If a new surface plausibly wants
-full-game semantics, embed `Main.Play`; if its domain is
+full-game semantics, embed `Game.Play`; if its domain is
 materially narrower, follow `Puzzle.elm`'s pattern.
 
 ## The puzzle host

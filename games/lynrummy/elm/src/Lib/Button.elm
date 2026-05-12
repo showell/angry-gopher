@@ -9,7 +9,7 @@ button in our current theme" — labels and Msgs vary
 per-host (full game, puzzles), styling stays consistent.
 
 Msg-polymorphic: caller passes their own Msg type. This
-module never imports `Main.Msg` so it stays usable from
+module never imports `Game.Msg` so it stays usable from
 the puzzle host (which has its own Msg type) without
 back-channeling into full-game concerns.
 

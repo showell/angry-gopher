@@ -1,11 +1,5 @@
-# Click-arbitration conformance scenarios.
-# Ported from games/lynrummy/elm/tests/Game/GestureArbitrationTest.elm
-# — the `clickIntentAfterMove` describe block (8 tests, lines 45–85).
-#
 # Rule: distSquared(mousedown, current) > 9 kills click intent permanently.
 # Once Nothing, always Nothing for the rest of the gesture.
-#
-# All ops are Elm-only (no Python gesture layer).
 
 
 scenario click_intent_nothing_in_nothing_out_zero_distance
