@@ -326,6 +326,47 @@ Set-style operations (truly commutative — unordered sets,
 intersection, union) get their own pathway. Name them for
 what they are: `set_absorb`, not `absorb_either_side`.
 
+### Function-as-disguised-Bool
+
+A function type wrapped in `Maybe` is a binary decision in
+disguise IF the absent arm doesn't really depend on the
+function's input:
+
+```elm
+cardMouseDown : Maybe (HandCard -> List Attr)
+```
+
+- `Just builder` — real per-card mousedown attrs
+- `Nothing` — the caller has to do `\_ -> [pointer-events: none]`,
+  which **ignores the HandCard entirely**
+
+The signature claims "two cases, both depend on the input."
+Reality: only one case does. The function shape is lying about
+its second arm.
+
+The honest split: a `Bool` (or sum type) for the discrete
+state, plus a real per-input function used only when relevant:
+
+```elm
+isInteractive : Bool
+cardMouseDown : HandCard -> List Attr  -- always the real builder
+
+eventAttrs =
+    if isInteractive then
+        cardMouseDown hc
+    else
+        [ style "pointer-events" "none" ]
+```
+
+Both branches read honestly — the function is invoked only in
+the case where the argument matters.
+
+**Diagnostic phrase:** "the absent arm is `\_ -> something`."
+A function that ignores its argument is a constant in
+disguise; wrapping it in a Maybe to coexist with a real
+per-input function manufactures the appearance of a uniform
+shape that isn't there.
+
 ---
 
 ## Diagnostic 6 — Where should the seam between consumers live?
@@ -548,6 +589,7 @@ don't need to read each one to apply the rules.
 | Explicit phases | Game.Replay 2-phase → 4-phase | 2026-05-09 |
 | Split along the noun | finalizeMouseUp → per-side ladder | 2026-05-07 |
 | `side` parameter | left_merge / right_merge split in Lyn Rummy absorbs | 2026-05-02 |
+| Function-as-disguised-Bool | cardEventAttrs Maybe-function → Bool + always-real function | 2026-05-11 |
 | Duplication vs decoupling | Game.Button vs Game.Sidebar; full-game vs puzzle replay | 2026-05-09 |
 | Sibling module | Puzzle.Replay alongside Game.Replay.Animate | 2026-05-10 |
 | Leaf module for cycles | Per-side ladder second attempt | 2026-05-07 |
