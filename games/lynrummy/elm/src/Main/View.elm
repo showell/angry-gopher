@@ -17,8 +17,8 @@ import Game.Drag as Drag exposing (DragState(..))
 import Game.Physics.BoardGeometry as BoardGeometry
 import Game.PointerInput as PointerInput
 import Game.Popup as Popup
-import Game.Replay.HandDragAnimate as HandDragAnimate
-import Game.Replay.ReplayState exposing (Phase(..), ReplayState)
+import Game.Animation.HandDragAnimate as HandDragAnimate
+import Game.Animation.ReplayState exposing (Phase(..), ReplayState)
 import Game.LeftSidebar as LeftSidebar
 import Game.Status as Status
 import Game.WingView as WingView

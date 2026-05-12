@@ -29,7 +29,7 @@ import Time
   - **HTTP responses** — ActionSent (fire-and-forget),
     SessionReceived, ActionLogFetched.
   - **Replay** — ReplayTick (per-frame timer while a replay
-    is unpaused; `Game.Replay.Animate.tick` decides whether
+    is unpaused; `Game.Animation.Animate.tick` decides whether
     to advance).
 
 -}

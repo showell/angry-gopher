@@ -1,4 +1,4 @@
-module Game.Replay.HandDragAnimate exposing
+module Game.Animation.HandDragAnimate exposing
     ( Config
     , HandDragAnimateAction(..)
     , Outcome(..)

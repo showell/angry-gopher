@@ -1,4 +1,4 @@
-module Game.Replay.Animate exposing
+module Game.Animation.Animate exposing
     ( TickResult(..)
     , start
     , tick
@@ -35,9 +35,9 @@ import Game.Execute as Execute
 import Game.Game as Game exposing (GameState)
 import Game.GameEvent as GameEvent
 import Game.Physics.BoardGeometry exposing (refereeBounds)
-import Game.Replay.BoardDragAnimate as BoardDragAnimate
-import Game.Replay.HandDragAnimate as HandDragAnimate
-import Game.Replay.ReplayState exposing (Phase(..), ReplayState)
+import Game.Animation.BoardDragAnimate as BoardDragAnimate
+import Game.Animation.HandDragAnimate as HandDragAnimate
+import Game.Animation.ReplayState exposing (Phase(..), ReplayState)
 
 
 type TickResult msg

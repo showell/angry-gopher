@@ -1,4 +1,4 @@
-module Puzzle.Replay exposing
+module Puzzle.Animate exposing
     ( Phase(..)
     , ReplayState
     , TickResult(..)
@@ -7,7 +7,7 @@ module Puzzle.Replay exposing
     , togglePause
     )
 
-{-| Sibling of `Game.Replay.Animate`. Simpler: replays
+{-| Sibling of `Game.Animation.Animate`. Simpler: replays
 operate on a board (`List CardStack`) directly — puzzles
 have no hand, no turn cycle, no DOM measurement. Only
 `MergeStack`, `MoveStack`, and `Split` are expected in the
@@ -19,7 +19,7 @@ import Game.ActionLog exposing (ActionLogEntry)
 import Game.CardStack exposing (CardStack)
 import Game.Execute as Execute
 import Game.GameEvent as GameEvent
-import Game.Replay.BoardDragAnimate as BoardDragAnimate
+import Game.Animation.BoardDragAnimate as BoardDragAnimate
 
 
 type Phase
@@ -159,4 +159,4 @@ startNextAction nowMs entry board =
 
         _ ->
             Debug.todo
-                "Puzzle.Replay: unexpected event variant — puzzles only emit Split / MergeStack / MoveStack"
+                "Puzzle.Animate: unexpected event variant — puzzles only emit Split / MergeStack / MoveStack"

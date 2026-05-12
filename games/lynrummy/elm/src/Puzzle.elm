@@ -45,7 +45,7 @@ import Html exposing (Html, div)
 import Html.Attributes exposing (style)
 import Http
 import Json.Decode as Decode
-import Puzzle.Replay as Replay
+import Puzzle.Animate as Animate
 import Task
 import Time
 
@@ -70,7 +70,7 @@ type alias Model =
     , gameId : String
     , sessionId : Int
     , nextSeq : Int
-    , replayState : Maybe Replay.ReplayState
+    , replayState : Maybe Animate.ReplayState
     }
 
 
@@ -252,7 +252,7 @@ update msg model =
             ( { model
                 | replayState =
                     Just
-                        (Replay.start
+                        (Animate.start
                             (ActionLog.collapseUndos model.actionLog)
                             model.initialBoard
                         )
@@ -263,7 +263,7 @@ update msg model =
             )
 
         ClickReplayPauseToggle ->
-            ( { model | replayState = Maybe.map Replay.togglePause model.replayState }
+            ( { model | replayState = Maybe.map Animate.togglePause model.replayState }
             , Cmd.none
             )
 
@@ -273,11 +273,11 @@ update msg model =
                     ( model, Cmd.none )
 
                 Just rs ->
-                    case Replay.tick (Time.posixToMillis nowPosix) rs of
-                        Replay.StillReplaying nextRs ->
+                    case Animate.tick (Time.posixToMillis nowPosix) rs of
+                        Animate.StillReplaying nextRs ->
                             ( { model | replayState = Just nextRs }, Cmd.none )
 
-                        Replay.Completed ->
+                        Animate.Completed ->
                             ( { model
                                 | replayState = Nothing
                                 , status = { text = "Replay completed! Continue playing.", kind = Inform }
@@ -478,10 +478,10 @@ view model =
 phases surface the sub-machine's dragInfo; idle phases show
 no floater.
 -}
-replayDrag : Replay.ReplayState -> Drag.DragState
+replayDrag : Animate.ReplayState -> Drag.DragState
 replayDrag rs =
     case rs.phase of
-        Replay.AnimatingBoardAction state ->
+        Animate.AnimatingBoardAction state ->
             Drag.DraggingBoardCard state.dragInfo
 
         _ ->

@@ -20,7 +20,7 @@ import Game.Physics.BoardGeometry exposing (refereeBounds)
 import Game.Physics.GestureArbitration as GA
 import Game.Rules.Card exposing (Card)
 import Game.Popup exposing (PopupContent)
-import Game.Replay.ReplayState exposing (ReplayState)
+import Game.Animation.ReplayState exposing (ReplayState)
 import Game.Status exposing (StatusKind(..), StatusMessage)
 
 
@@ -50,7 +50,7 @@ type alias Model =
     , nextSeq : Int
 
     -- When `Just`, an Instant Replay is in flight. Owned end-
-    -- to-end by `Game.Replay.Animate`; Main only plumbs Msgs
+    -- to-end by `Game.Animation.Animate`; Main only plumbs Msgs
     -- in and out of it. Cleared back to `Nothing` when the
     -- engine signals `Completed`.
     , replayState : Maybe ReplayState

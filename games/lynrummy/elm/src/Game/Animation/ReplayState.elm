@@ -1,8 +1,8 @@
-module Game.Replay.ReplayState exposing (Phase(..), ReplayState)
+module Game.Animation.ReplayState exposing (Phase(..), ReplayState)
 
 {-| Instant Replay's working state.
 
-Owned by `Game.Replay.Animate`. Lives on `Main.State.Model`
+Owned by `Game.Animation.Animate`. Lives on `Main.State.Model`
 as `Maybe ReplayState`: `Just _` while a replay is in flight,
 `Nothing` otherwise.
 
@@ -16,8 +16,8 @@ are private to `Animate`.
 
 import Game.ActionLog exposing (ActionLogEntry)
 import Game.Game exposing (GameState)
-import Game.Replay.BoardDragAnimate as BoardDragAnimate
-import Game.Replay.HandDragAnimate as HandDragAnimate
+import Game.Animation.BoardDragAnimate as BoardDragAnimate
+import Game.Animation.HandDragAnimate as HandDragAnimate
 
 
 {-| Replay's five phases. Each tick reads `phase`, does its

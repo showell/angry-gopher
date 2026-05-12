@@ -1,4 +1,4 @@
-module Game.Replay.BoardDragAnimate exposing
+module Game.Animation.BoardDragAnimate exposing
     ( BoardDragAnimateAction(..)
     , Outcome(..)
     , State
