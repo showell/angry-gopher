@@ -1,22 +1,3 @@
-// groom.ts — greedy run-merger as a turn-step kind. Owns the
-// probe (`tryGroom`), the underlying merger (`joinBoardRuns`), the
-// step shape (`GroomStep`), and the per-join record (`JoinEvent`).
-//
-// Algorithm: the BFS / play loop happily leaves the board with
-// adjacent runs that fit end-to-end (e.g. [9♠ T♠ J♠] and [Q♠ K♠ A♠])
-// but never glues them, because every run is already a complete
-// legal stack. Joining them post-hoc opens the board: more cards
-// in one stack means more in-place absorbers next turn (a longer
-// run accepts peels and yanks at both ends).
-//
-// Quadratic over board size; at Lyn Rummy scale (≤ ~25 stacks) this
-// is cheap. Greedy is fine — any join is locally pure (preserves all
-// cards, lengthens a stack), and the iteration restart on each merge
-// catches transitive joins.
-//
-// Cap at MAX_JOINED_LEN (15) because the UI's stack rendering chokes
-// on longer stacks. Runs longer than this stay split.
-
 import type { Card } from "../src/rules/card.ts";
 import {
   classifyStack,
@@ -25,19 +6,16 @@ import {
 } from "../src/classified_card_stack.ts";
 import type { GroomStep, JoinEvent } from "./step_types.ts";
 
+// UI stack rendering caps here; runs longer than this stay split.
 const MAX_JOINED_LEN = 15;
 
-/** Probe for a groom-able board. Returns the `GroomStep` plus the
- *  post-groom board if any merges fired; returns `null` when there's
- *  nothing to groom. */
 export function tryGroom(
   board: readonly (readonly Card[])[],
 ): { step: GroomStep; board: readonly (readonly Card[])[] } | null {
-  const tStart = performance.now();
   const groomed = joinBoardRuns(board);
   if (groomed.joins.length === 0) return null;
   return {
-    step: { kind: "groom", joins: groomed.joins, wallMs: performance.now() - tStart },
+    step: { kind: "groom", joins: groomed.joins },
     board: groomed.board,
   };
 }
