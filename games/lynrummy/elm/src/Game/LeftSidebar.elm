@@ -66,21 +66,31 @@ view info =
 
 playerHands : PlayerPanelInfo -> List (Html Msg)
 playerHands info =
-    let
-        renderRow idx hand =
-            if idx == info.gameState.activePlayerIndex then
-                viewActivePlayerRow info idx hand
-
-            else
-                viewInactivePlayerRow idx hand
-    in
     (div
         [ style "color" "#666"
         , style "font-size" "13px"
         , style "margin-top" "12px"
         ]
         [ Html.text ("Turn " ++ String.fromInt (info.gameState.turnIndex + 1)) ]
-        :: List.indexedMap renderRow info.gameState.hands
+        :: List.indexedMap
+            (\idx hand ->
+                if idx == info.gameState.activePlayerIndex then
+                    playerRowShell { isActive = True, idx = idx }
+                        [ viewHandHeading
+                        , viewHand info.handIsInteractive info.sourceCard info.hintedCards hand
+                        , viewTurnControls { canUndo = info.canUndo, replayControl = info.replayControl }
+                        ]
+
+                else
+                    playerRowShell { isActive = False, idx = idx }
+                        [ div
+                            [ style "color" "#888"
+                            , style "font-size" "13px"
+                            ]
+                            [ Html.text (String.fromInt (List.length hand.handCards) ++ " cards") ]
+                        ]
+            )
+            info.gameState.hands
     )
         ++ [ deckRemainingLine (List.length info.gameState.deck) ]
 
@@ -93,30 +103,6 @@ deckRemainingLine deckCount =
         , style "margin-top" "8px"
         ]
         [ Html.text ("Deck: " ++ String.fromInt deckCount ++ " cards left") ]
-
-
-
--- PLAYER ROWS
-
-
-viewActivePlayerRow : PlayerPanelInfo -> Int -> Hand -> Html Msg
-viewActivePlayerRow info idx hand =
-    playerRowShell { isActive = True, idx = idx }
-        [ viewHandHeading
-        , viewHand info.handIsInteractive info.sourceCard info.hintedCards hand
-        , viewTurnControls { canUndo = info.canUndo, replayControl = info.replayControl }
-        ]
-
-
-viewInactivePlayerRow : Int -> Hand -> Html Msg
-viewInactivePlayerRow idx hand =
-    playerRowShell { isActive = False, idx = idx }
-        [ div
-            [ style "color" "#888"
-            , style "font-size" "13px"
-            ]
-            [ Html.text (String.fromInt (List.length hand.handCards) ++ " cards") ]
-        ]
 
 
 playerRowShell : { isActive : Bool, idx : Int } -> List (Html Msg) -> Html Msg
