@@ -10,7 +10,7 @@
 //   - snake_case keys (matches the wire shape Go and Elm both use)
 //   - cards as `{value, suit, origin_deck}` objects (not tuples)
 //   - stacks as `{board_cards: [{card, state}], loc}` (Elm's
-//     `Game.CardStack.encodeCardStack` shape)
+//     `Lib.CardStack.encodeCardStack` shape)
 //   - state defaults to 0 (FirmlyOnBoard / HandNormal); the agent
 //     never freshly-played anything, the recency markers are UI-only
 
@@ -27,7 +27,7 @@ export interface JsonCardStack { board_cards: JsonBoardCard[]; loc: JsonLoc }
 export interface JsonHand { hand_cards: JsonHandCard[] }
 
 /** Floater top-left at a given time, in board frame. Wire mirror
- *  of Elm's `Game.TimeLoc.TimeLoc`. */
+ *  of Elm's `Lib.TimeLoc.TimeLoc`. */
 export interface JsonTimeLoc { t_ms: number; left: number; top: number }
 
 export type WireActionJson =
@@ -95,7 +95,7 @@ export function primToWire(prim: Primitive, sim: readonly BoardStack[]): WireAct
         target: jsonStack(sim[prim.targetStack]!),
         side: prim.side,
         // Agent has no captured path; replay synthesizes one
-        // via the JIT path in Game.Replay.Space.
+        // via the JIT path (see wire_path_synth).
         board_path: [],
       };
     case "merge_hand":

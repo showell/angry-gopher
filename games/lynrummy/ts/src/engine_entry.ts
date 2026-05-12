@@ -24,8 +24,8 @@ import { primToWire, type WireActionJson } from "./wire_json.ts";
  * Board-shaped entry point. Each board stack is a list of cards
  * (Card tuples). Partitions stacks into helper (complete groups:
  * run / rb / set) vs trouble (everything else), then delegates to
- * `solveStateWithDescs`. Mirrors `Game.Agent.Bfs.solveBoard` in
- * Elm — same partition, same surface.
+ * `solveStateWithDescs`. The Elm-side BFS that this used to
+ * mirror has been retired; this is now the canonical solver.
  *
  * Returns the SHORTEST plan (PlanLine[]) found within the engine's
  * default budget, or null if no plan exists / budget exhausted.
@@ -46,7 +46,7 @@ export function solveBoard(
  *
  * Each batch is `{ line, wire_actions }` where `line` is the
  * canonical DSL string for one logical move and `wire_actions` is
- * the primitive sequence (in `Game.WireAction` JSON shape) that
+ * the primitive sequence (in `Lib.WireAction` JSON shape) that
  * realizes it on the live board. The Elm side caches batches in
  * `agentProgram` and consumes one per click — same per-move-step
  * walking semantics as the legacy Elm-BFS path.

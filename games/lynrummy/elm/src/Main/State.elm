@@ -9,19 +9,19 @@ module Main.State exposing
 
 {-| All application-wide data types and the initial Model. -}
 
-import Game.ActionLog as ActionLog exposing (ActionLogEntry)
-import Game.Execute as Execute
-import Game.Dealer
-import Game.Drag exposing (DragState(..))
-import Game.Game as Game exposing (GameState)
-import Game.GameEvent exposing (GameEvent(..))
-import Game.Hand as Hand
-import Game.Physics.BoardGeometry exposing (refereeBounds)
-import Game.Physics.GestureArbitration as GA
-import Game.Rules.Card exposing (Card)
-import Game.Popup exposing (PopupContent)
-import Game.Animation.Animate exposing (AnimationState)
-import Game.Status exposing (StatusKind(..), StatusMessage)
+import Lib.ActionLog as ActionLog exposing (ActionLogEntry)
+import Lib.Execute as Execute
+import Lib.Dealer
+import Lib.Drag exposing (DragState(..))
+import Lib.Game as Game exposing (GameState)
+import Lib.GameEvent exposing (GameEvent(..))
+import Lib.Hand as Hand
+import Lib.Physics.BoardGeometry exposing (refereeBounds)
+import Lib.Physics.GestureArbitration as GA
+import Lib.Rules.Card exposing (Card)
+import Lib.Popup exposing (PopupContent)
+import Lib.Animation.Animate exposing (AnimationState)
+import Lib.Status exposing (StatusKind(..), StatusMessage)
 
 
 
@@ -50,7 +50,7 @@ type alias Model =
     , nextSeq : Int
 
     -- When `Just`, an Instant Replay is in flight. Owned end-
-    -- to-end by `Game.Animation.Animate`; Main only plumbs Msgs
+    -- to-end by `Lib.Animation.Animate`; Main only plumbs Msgs
     -- in and out of it. Cleared back to `Nothing` when the
     -- engine signals `Completed`.
     , replayState : Maybe AnimationState
@@ -119,7 +119,7 @@ baseModel : Model
 baseModel =
     let
         emptyGameState =
-            { board = Game.Dealer.initialBoard
+            { board = Lib.Dealer.initialBoard
             , hands = [ Hand.empty, Hand.empty ]
             , activePlayerIndex = 0
             , turnIndex = 0

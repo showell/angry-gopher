@@ -20,27 +20,27 @@ Output.
 
 import Browser.Dom
 import Browser.Events
-import Game.ActionLog as ActionLog
-import Game.BoardDrag as BoardDrag
-import Game.BoardGesture as BoardGesture
-import Game.BoardView exposing (boardDomIdFor)
-import Game.Drag exposing (DragState(..))
-import Game.Engine as Engine
-import Game.Hand exposing (activeHand)
-import Game.TurnControl as TurnControl
-import Game.HandDrag as HandDrag
-import Game.HandGesture as HandGesture
-import Game.Dealer as Dealer
-import Game.Game as Game
-import Game.Random as Random
-import Game.Animation.Animate as Animate exposing (Phase(..))
-import Game.Animation.HandDragAnimate as HandDragAnimate
+import Lib.ActionLog as ActionLog
+import Lib.BoardDrag as BoardDrag
+import Lib.BoardGesture as BoardGesture
+import Lib.BoardView exposing (boardDomIdFor)
+import Lib.Drag exposing (DragState(..))
+import Lib.Engine as Engine
+import Lib.Hand exposing (activeHand)
+import Lib.TurnControl as TurnControl
+import Lib.HandDrag as HandDrag
+import Lib.HandGesture as HandGesture
+import Lib.Dealer as Dealer
+import Lib.Game as Game
+import Lib.Random as Random
+import Lib.Animation.Animate as Animate exposing (Phase(..))
+import Lib.Animation.HandDragAnimate as HandDragAnimate
 import Html exposing (Html)
 import Json.Encode as Encode
-import Game.Status as Status exposing (StatusKind(..))
-import Game.PointerInput as PointerInput
+import Lib.Status as Status exposing (StatusKind(..))
+import Lib.PointerInput as PointerInput
 import Main.Msg exposing (Msg(..))
-import Game.InitialStateDsl as InitialStateDsl
+import Lib.InitialStateDsl as InitialStateDsl
 import Main.State
     exposing
         ( Model

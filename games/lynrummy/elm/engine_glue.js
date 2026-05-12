@@ -143,7 +143,7 @@
     });
     return LynRummyEngine.agentPlay(stacks);
     // Returns [{line, wire_actions: [...]}, ...] | null. wire_actions
-    // are already in Elm's Game.WireAction JSON shape — pass through.
+    // are already in Elm's Lib.WireAction JSON shape — pass through.
   }
 
   function cardObjectToTuple(c) {

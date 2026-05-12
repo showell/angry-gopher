@@ -11,17 +11,17 @@ synthesizer DOM-measure the board's live rect per drag /
 per replay-start to stay honest under scrolling.
 -}
 
-import Game.BoardView as BoardView
-import Game.CardStack as CardStack
-import Game.Drag as Drag exposing (DragState(..))
-import Game.Physics.BoardGeometry as BoardGeometry
-import Game.PointerInput as PointerInput
-import Game.Popup as Popup
-import Game.Animation.HandDragAnimate as HandDragAnimate
-import Game.Animation.Animate exposing (Phase(..), AnimationState)
-import Game.LeftSidebar as LeftSidebar
-import Game.Status as Status
-import Game.WingView as WingView
+import Lib.BoardView as BoardView
+import Lib.CardStack as CardStack
+import Lib.Drag as Drag exposing (DragState(..))
+import Lib.Physics.BoardGeometry as BoardGeometry
+import Lib.PointerInput as PointerInput
+import Lib.Popup as Popup
+import Lib.Animation.HandDragAnimate as HandDragAnimate
+import Lib.Animation.Animate exposing (Phase(..), AnimationState)
+import Lib.LeftSidebar as LeftSidebar
+import Lib.Status as Status
+import Lib.WingView as WingView
 import Html exposing (Html, div)
 import Html.Attributes exposing (style)
 import Main.Msg exposing (Msg(..))
@@ -97,7 +97,7 @@ view model =
 -- LEFT SIDEBAR
 --
 -- Slice the Model into a `LeftSidebar.PlayerPanelInfo` and
--- hand it to `Game.LeftSidebar`. During Instant Replay, the
+-- hand it to `Lib.LeftSidebar`. During Instant Replay, the
 -- sidebar's gameState comes from `model.replayState`'s
 -- evolving copy; the live `model.gameState` is preserved
 -- untouched and snaps back when `ReplayCompleted` clears
@@ -156,7 +156,7 @@ leftSidebar model =
 
 -- RIGHT SIDEBAR
 --
--- Slice the Model into the inputs `Game.BoardView.boardShell`
+-- Slice the Model into the inputs `Lib.BoardView.boardShell`
 -- needs: a board (replay's or live), drag-derived per-stack
 -- info (sourceStack, cardMouseDown), and drag-derived overlay
 -- info (boardFloaters, wingsWithHover).

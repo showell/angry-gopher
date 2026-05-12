@@ -7,10 +7,10 @@ without cyclic imports.
 -}
 
 import Browser.Dom
-import Game.ActionLog exposing (ActionLogEntry)
-import Game.CardStack exposing (CardStack, HandCard)
-import Game.Game exposing (GameState)
-import Game.Point exposing (Point)
+import Lib.ActionLog exposing (ActionLogEntry)
+import Lib.CardStack exposing (CardStack, HandCard)
+import Lib.Game exposing (GameState)
+import Lib.Point exposing (Point)
 import Http
 import Json.Encode as Encode
 import Time
@@ -29,7 +29,7 @@ import Time
   - **HTTP responses** — ActionSent (fire-and-forget),
     SessionReceived, ActionLogFetched.
   - **Replay** — ReplayTick (per-frame timer while a replay
-    is unpaused; `Game.Animation.Animate.tick` decides whether
+    is unpaused; `Lib.Animation.Animate.tick` decides whether
     to advance).
 
 -}

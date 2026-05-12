@@ -3,7 +3,7 @@ module Puzzle exposing (main)
 {-| Puzzle V3 — drag-aware single-puzzle surface.
 
 Dedicated host: own Msg, own Model, no `Main.*` imports.
-Composes `Game.*` building blocks directly. Supports
+Composes `Lib.*` building blocks directly. Supports
 board-card drag (move + merge + click=split) and Undo.
 
 The HTML page (served by `views/puzzle.go`) bakes both
@@ -26,21 +26,21 @@ the effective sequence; the board is recomputed by folding
 import Browser
 import Browser.Dom
 import Browser.Events
-import Game.ActionLog as ActionLog exposing (ActionLogEntry)
-import Game.BoardDrag as BoardDrag
-import Game.PuzzleFlagDsl as PuzzleFlagDsl
-import Game.BoardGesture as BoardGesture
-import Game.BoardView as BoardView
-import Game.Button as Button
-import Game.CardStack as CardStack exposing (CardStack)
-import Game.Drag as Drag exposing (DragState(..))
-import Game.Execute as Execute
-import Game.GameEvent as GameEvent exposing (GameEvent(..))
-import Game.Physics.GestureArbitration as GA
-import Game.Point exposing (Point)
-import Game.PointerInput as PointerInput
-import Game.Status as Status exposing (StatusKind(..))
-import Game.WingView as WingView
+import Lib.ActionLog as ActionLog exposing (ActionLogEntry)
+import Lib.BoardDrag as BoardDrag
+import Lib.PuzzleFlagDsl as PuzzleFlagDsl
+import Lib.BoardGesture as BoardGesture
+import Lib.BoardView as BoardView
+import Lib.Button as Button
+import Lib.CardStack as CardStack exposing (CardStack)
+import Lib.Drag as Drag exposing (DragState(..))
+import Lib.Execute as Execute
+import Lib.GameEvent as GameEvent exposing (GameEvent(..))
+import Lib.Physics.GestureArbitration as GA
+import Lib.Point exposing (Point)
+import Lib.PointerInput as PointerInput
+import Lib.Status as Status exposing (StatusKind(..))
+import Lib.WingView as WingView
 import Html exposing (Html, div)
 import Html.Attributes exposing (style)
 import Http
@@ -308,7 +308,7 @@ canUndo log =
 {-| Apply one event to the puzzle's board. The puzzle's
 universe of actions is just the three board verbs; any other
 variant in the log signals a real bug, so we log loudly (the
-existing convention in `Game.Execute`).
+existing convention in `Lib.Execute`).
 -}
 applyForPuzzle : GameEvent -> List CardStack -> List CardStack
 applyForPuzzle event board =

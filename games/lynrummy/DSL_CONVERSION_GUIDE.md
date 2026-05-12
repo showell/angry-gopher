@@ -128,7 +128,7 @@ serialization round-trips and pure helpers; leave them alone.
 board-block grammar uses `at (top, left): cards`. The action-log grammar
 (`actions.dsl`, the wire) uses `(left, top)` inside `-> (...)`,
 `at (...)` stack-refs, and `path (...)` samples — that's what Elm's
-`Game.GameEvent.locStr` emits. Don't try to unify them; the live wire is
+`Lib.GameEvent.locStr` emits. Don't try to unify them; the live wire is
 where the latter convention lives.
 
 **Sets vs. runs for wing direction:** a hand card can merge onto a set from either

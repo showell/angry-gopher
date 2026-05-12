@@ -233,7 +233,7 @@ Consequences:
 - **Elm UI.** The autonomous client. Two surfaces — full
   game (`Main.elm`, embedding `Main.Play`) and the
   single-board puzzle (`Puzzle.elm`, dedicated host).
-  Deals locally (`Game.Dealer.dealFullGame seed`), runs its
+  Deals locally (`Lib.Dealer.dealFullGame seed`), runs its
   own referee, appends to its own action log, can replay at
   any time. Originates events from drags, from the **TS
   engine** (Hint button on the full-game surface) over Elm
@@ -561,9 +561,9 @@ undo, replay; no agent-play, no scoring.
   `games/lynrummy/data/puzzle/sessions/<id>/{meta,actions.dsl}`.
 - Replay: the puzzle has its own engine in
   `Puzzle/Replay.elm` — a simpler sibling of
-  `Game.Replay.Animate` that operates on `List CardStack`
+  `Lib.Animation.Animate` that operates on `List CardStack`
   (no GameState, no hand-card logic). Reuses
-  `Game.Replay.BoardDragAnimate` directly for the path-driven
+  `Lib.Animation.BoardDragAnimate` directly for the path-driven
   floater.
 - Puzzle sessions live in their own top-level namespace
   (`data/puzzle/sessions/`) separate from full-game sessions

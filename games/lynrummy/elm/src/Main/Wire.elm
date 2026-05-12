@@ -16,10 +16,10 @@ splits and parses each half.
 
 -}
 
-import Game.ActionLog exposing (ActionLogEntry)
-import Game.Game exposing (GameState)
-import Game.InitialStateDsl as InitialStateDsl
-import Game.WireAction as WA
+import Lib.ActionLog exposing (ActionLogEntry)
+import Lib.Game exposing (GameState)
+import Lib.InitialStateDsl as InitialStateDsl
+import Lib.WireAction as WA
 import Http
 import Json.Decode as Decode exposing (Decoder)
 import Main.Msg exposing (Msg(..))

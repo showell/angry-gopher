@@ -37,7 +37,7 @@ for hints all live here.
   writes Elm-replayable DSL session files (`meta` + `actions.dsl`)
   straight to the file system (no HTTP). Per-event encoders
   in [`wire_action_dsl.ts`](src/wire_action_dsl.ts) mirror Elm's
-  `Game.GameEvent.elm` byte-for-byte. Each move_stack /
+  `Lib.GameEvent.elm` byte-for-byte. Each move_stack /
   merge_stack carries a quintic-eased drag path synthesized
   by [`wire_path_synth.ts`](src/wire_path_synth.ts). Asserts
   `findViolation == null` after every primitive;

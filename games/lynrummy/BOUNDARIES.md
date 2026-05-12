@@ -270,7 +270,7 @@ The only function worth extracting alongside is the one
 that **decides what phase to enter next** — because that
 IS a real computation.
 
-`Game.Replay` ended at 4 phases (`Starting | InBeat |
+`Lib.Animation` ended at 4 phases (`Starting | InBeat |
 ExecutingAction | AnimatingAction`). Earlier 2-phase
 attempts forced the variant dispatch into a 7-arm nested
 case ladder. Naming the phases collapsed it.
@@ -397,7 +397,7 @@ duplication tax is local; the parameterization tax
 propagates.
 
 `Puzzle.Replay` (~180 lines) lives as a sibling of
-`Game.Replay.Animate` (~210 lines). Sub-machine
+`Lib.Animation.Animate` (~210 lines). Sub-machine
 `BoardDragAnimate` is shared as-is — it operates on
 `List CardStack`, which both hosts have. Total LOC
 savings: zero. Readability gain: substantial.
@@ -464,7 +464,7 @@ dispatch site** where you've earned knowledge of the
 variant. Don't pass the wide type down and re-dispatch
 deeper.
 
-`Game.Replay.Animate.startNextAction` matches on
+`Lib.Animation.Animate.startNextAction` matches on
 `GameEvent.MergeStack p` and constructs
 `BoardDragAnimate.Merge { sourceStack = p.source, ... }`
 inline. The sub-machine never sees `GameEvent`, never has
@@ -586,12 +586,12 @@ don't need to read each one to apply the rules.
 | Unit of consistency (too narrow) | Execute.placeHand widening to GameState→GameState | 2026-05-11 |
 | Don't extract record-shape | applyEntry / armBeat / boardDragInputs inlining | 2026-05-09 |
 | Workhorse pattern | Main.Play.update structure; MouseUp three-workhorse chain | 2026-05-06 |
-| Explicit phases | Game.Replay 2-phase → 4-phase | 2026-05-09 |
+| Explicit phases | Lib.Animation 2-phase → 4-phase | 2026-05-09 |
 | Split along the noun | finalizeMouseUp → per-side ladder | 2026-05-07 |
 | `side` parameter | left_merge / right_merge split in Lyn Rummy absorbs | 2026-05-02 |
 | Function-as-disguised-Bool | cardEventAttrs Maybe-function → Bool + always-real function | 2026-05-11 |
-| Duplication vs decoupling | Game.Button vs Game.Sidebar; full-game vs puzzle replay | 2026-05-09 |
-| Sibling module | Puzzle.Replay alongside Game.Replay.Animate | 2026-05-10 |
+| Duplication vs decoupling | Lib.Button vs Lib.LeftSidebar; full-game vs puzzle replay | 2026-05-09 |
+| Sibling module | Puzzle.Replay alongside Lib.Animation.Animate | 2026-05-10 |
 | Leaf module for cycles | Per-side ladder second attempt | 2026-05-07 |
 | Construct at dispatch boundary | startNextAction building BoardDragAnimateAction inline | 2026-05-10 |
 | Eliminate don't paper over | REPLAY_TURNS, LAB_AGENT_PLAY, simplify-before-patching | 2026-04-13 to 2026-04-26 |

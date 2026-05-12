@@ -1,5 +1,5 @@
 // wire_action_dsl.ts — per-event encoders for the live action-log
-// DSL, byte-identical to what Elm's Game.GameEvent.elm emits when
+// DSL, byte-identical to what Elm's Lib.GameEvent.elm emits when
 // a human plays. Each function takes only the inputs its event
 // needs (earned knowledge at the call site); no dispatch in this
 // module.
@@ -16,7 +16,7 @@
 import { type Card, SUITS_UNICODE, RANKS } from "./rules/card.ts";
 
 /** Floater (x,y) sample at time `tMs`, in board frame. Matches
- *  Elm's `Game.TimeLoc.TimeLoc`. Agent transcripts use empty path
+ *  Elm's `Lib.TimeLoc.TimeLoc`. Agent transcripts use empty path
  *  lists — replay synthesizes positions JIT. */
 export interface TimeLoc { tMs: number; left: number; top: number }
 
@@ -114,7 +114,7 @@ function stackRef(s: Stack): string {
 function locStr(loc: Loc): string {
   // Note: action-log convention is (left,top) — the inverse of the
   // `at (top, left):` board-block convention. Both formats are
-  // pinned by the Elm source we mirror (Game.GameEvent.elm).
+  // pinned by the Elm source we mirror (Lib.GameEvent.elm).
   return "(" + loc.left + "," + loc.top + ")";
 }
 

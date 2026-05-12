@@ -7,7 +7,7 @@
 // referee enforces (and stricter human-feel thresholds the agent
 // enforces on its own).
 //
-// Constants must agree with `Game.Physics.BoardGeometry` (Elm) and
+// Constants must agree with `Lib.Physics.BoardGeometry` (Elm) and
 // the Go server's BoardBounds. Drift between layers is silent and
 // load-bearing — when changing one, update all three.
 

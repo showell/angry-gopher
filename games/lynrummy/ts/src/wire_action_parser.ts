@@ -1,5 +1,5 @@
 // wire_action_parser.ts — parse one LIVE action-log DSL line
-// (as emitted by Elm's Game.GameEvent.elm and the matching TS
+// (as emitted by Elm's Lib.GameEvent.elm and the matching TS
 // wire_action_dsl.ts) into a Primitive.
 //
 // Shape:

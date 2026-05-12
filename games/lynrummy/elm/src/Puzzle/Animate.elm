@@ -7,7 +7,7 @@ module Puzzle.Animate exposing
     , togglePause
     )
 
-{-| Sibling of `Game.Animation.Animate`. Simpler: replays
+{-| Sibling of `Lib.Animation.Animate`. Simpler: replays
 operate on a board (`List CardStack`) directly — puzzles
 have no hand, no turn cycle, no DOM measurement. Only
 `MergeStack`, `MoveStack`, and `Split` are expected in the
@@ -15,11 +15,11 @@ queue; anything else is a contract violation.
 
 -}
 
-import Game.ActionLog exposing (ActionLogEntry)
-import Game.CardStack exposing (CardStack)
-import Game.Execute as Execute
-import Game.GameEvent as GameEvent
-import Game.Animation.BoardDragAnimate as BoardDragAnimate
+import Lib.ActionLog exposing (ActionLogEntry)
+import Lib.CardStack exposing (CardStack)
+import Lib.Execute as Execute
+import Lib.GameEvent as GameEvent
+import Lib.Animation.BoardDragAnimate as BoardDragAnimate
 
 
 type Phase

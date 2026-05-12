@@ -4,7 +4,7 @@
 # but the corner cases below (empty board, hard-against the
 # preferred origin, near-edge placement) need explicit
 # coverage so any drift between Python's `geometry.find_open_loc`
-# and Elm's `Game.PlaceStack.findOpenLoc` shows up immediately.
+# and Elm's `Lib.Physics.PlaceStack.findOpenLoc` shows up immediately.
 #
 # Oracle values come from running Python and pinning what it
 # emits — Python is the source of truth; Elm asserts equality.

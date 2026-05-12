@@ -7,7 +7,7 @@
 # it has the simpler find_violation / out_of_bounds helpers.
 # These are Elm-only conformance tests (Python: false).
 #
-# Layout constants (match Game.CardStack + Game.Physics.BoardGeometry):
+# Layout constants (match Lib.CardStack + Lib.Physics.BoardGeometry):
 #   cardWidth  = 27
 #   cardPitch  = 33   (cardWidth + 6)
 #   cardHeight = 40

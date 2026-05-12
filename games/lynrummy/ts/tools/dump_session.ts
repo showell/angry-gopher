@@ -158,7 +158,7 @@ function main(): void {
   // Undo stack: pre-action sim snapshots + descriptions, one
   // per board-mutating action. CompleteTurn clears the stack
   // (undo can't cross a turn boundary). Undo pops the stack
-  // and rewinds sim. Mirrors the Game.ActionLog.collapseUndos
+  // and rewinds sim. Mirrors the Lib.ActionLog.collapseUndos
   // semantics on the Elm side.
   const undoStack: { simBefore: readonly BoardStack[]; descrip: string }[] = [];
 

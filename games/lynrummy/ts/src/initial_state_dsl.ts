@@ -1,7 +1,7 @@
 // initial_state_dsl.ts — emit the multi-section GameState DSL
-// Elm's Game.InitialStateDsl parses on the resume path.
+// Elm's Lib.InitialStateDsl parses on the resume path.
 //
-// Document shape (same as Game.InitialStateDsl.formatGameState):
+// Document shape (same as Lib.InitialStateDsl.formatGameState):
 //
 //   board:
 //     at ( 26,  26): 2♥ 3♥ 4♥
@@ -76,9 +76,9 @@ function padCoord(n: number): string {
 
 // --- HANDS -----------------------------------------------------------
 
-// Mirror of Game.View.viewHand + Game.Hand.sortIntoSuitRows: one
-// row per non-empty suit, suits in UI order (Heart, Spade,
-// Diamond, Club), cards within a row sorted ascending by value.
+// Mirror of the Elm hand-view's suit-row layout: one row per
+// non-empty suit, suits in UI order (Heart, Spade, Diamond,
+// Club), cards within a row sorted ascending by value.
 
 const SUIT_DISPLAY_ORDER: readonly number[] = [3, 2, 1, 0]; // H, S, D, C
 

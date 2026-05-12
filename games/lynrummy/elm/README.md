@@ -5,7 +5,7 @@ live drag gestures, runs its own referee, keeps its own
 action log, replays stored logs. Two surfaces — the full
 game (`Main.elm`, embedding `Main.Play`) and the
 single-board puzzle (`Puzzle.elm`, a dedicated host that
-composes `Game.*` primitives directly).
+composes `Lib.*` primitives directly).
 
 ## Setup
 
@@ -55,34 +55,34 @@ execution / render layering:
   `src/Main/Wire.elm` (wire deliveries + the
   action-log-entry decoder), and `src/Main/Msg.elm` (the
   unified Msg type).
-- **Integration.** `src/Game/Rules/Referee.elm` (Elm's own
+- **Integration.** `src/Lib/Rules/Referee.elm` (Elm's own
   referee — Go does not run a referee).
 - **Execution.** `src/Main/Apply.elm` (`applyAction`),
-  `src/Game/Reducer.elm` (the pure action-log reducer),
-  `src/Game/Game.elm` (turn transitions).
+  `src/Lib/Reducer.elm` (the pure action-log reducer),
+  `src/Lib/Game.elm` (turn transitions).
 - **Render.** `src/Main/View.elm` (top-level composition +
-  pinned layout), `src/Game/View.elm` (rendering primitives),
-  `src/Game/HandLayout.elm` and
-  `src/Game/Physics/BoardGeometry.elm` (frame constants).
+  pinned layout), `src/Lib/View.elm` (rendering primitives),
+  `src/Lib/HandLayout.elm` and
+  `src/Lib/Physics/BoardGeometry.elm` (frame constants).
 
-Domain types live under `src/Game/`: `CardStack.elm`,
+Domain types live under `src/Lib/`: `CardStack.elm`,
 `Hand.elm`, `Dealer.elm`, etc. Each top-of-file comment names
 the module's responsibility.
 
 ## The locked-down rule layer
 
-`src/Game/Rules/` holds pure game rules and primitives that
+`src/Lib/Rules/` holds pure game rules and primitives that
 are battle-tested and not expected to change. Locked down by
 property tests so any regression breaks loudly.
 
-- **`Game.Rules.Card`** — Card type, suit / value enums,
+- **`Lib.Rules.Card`** — Card type, suit / value enums,
   parsers, encoders, double-deck construction.
-- **`Game.Rules.StackType`** — the 6-way classification
+- **`Lib.Rules.StackType`** — the 6-way classification
   oracle (`Incomplete | Bogus | Dup | Set | PureRun |
   RedBlackRun`), `successor` / `predecessor` on the 13-cycle,
   `valueDistance`, plus the rule predicates `isLegalStack` /
   `isPartialOk` / `neighbors`.
-- **`Game.Rules.Referee`** — turn-end validation.
+- **`Lib.Rules.Referee`** — turn-end validation.
 
 Tests for these live in `tests/Game/CardTest.elm` and
 `tests/Game/StackTypeTest.elm` (kept flat, not under a
@@ -103,16 +103,16 @@ The TS agent uses the same rule shapes; see
 ## Two-host design
 
 Two browser entry points share the rendering primitives in
-`Game.*` but otherwise own their own `Msg` / `Model` shapes:
+`Lib.*` but otherwise own their own `Msg` / `Model` shapes:
 
 - **`Main.elm`** (full game) — owns the embeddable
   `Main.Play` component. `Main.State.Model` carries
   GameState + drag + action log + replay state; `Main.Msg`
   is the unified Msg.
 - **`Puzzle.elm`** (single-board puzzle) — dedicated host.
-  Composes `Game.*` primitives directly: `Game.BoardView`,
-  `Game.BoardGesture`, `Game.BoardDrag`, `Game.Drag`,
-  `Game.PointerInput`, `Game.ActionLog`, `Game.Execute`,
+  Composes `Lib.*` primitives directly: `Lib.BoardView`,
+  `Lib.BoardGesture`, `Lib.BoardDrag`, `Lib.Drag`,
+  `Lib.PointerInput`, `Lib.ActionLog`, `Lib.Execute`,
   plus its sibling replay engine `Puzzle.Replay`. Doesn't
   import `Main.*`.
 

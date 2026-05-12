@@ -123,10 +123,8 @@ v24's native TS support runs `.ts` files directly. See
 
 From `games/lynrummy/elm/`:
 
-- `npx elm-test` — full Elm suite. Mix of unit (e.g.,
-  `Game.PlaceStackTest`), integration
-  (`Game.AgentPlayThroughTest`, drives click+drain through
-  `Play.update`), and DSL conformance.
+- `npx elm-test` — full Elm suite. Mix of unit tests
+  (e.g., `Lib.PlaceStackTest`) and DSL conformance.
 - `npx elm-review` — `NoUnused.*` rules with generated-tests
   + test-Exports exemptions.
 

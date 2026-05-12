@@ -34,7 +34,7 @@ import Main.State exposing (Model)
 rendered from the URL (present on reload so the UI resumes the
 same game rather than dropping back to the lobby); `seedSource`
 is `Date.now()` from the host page, used by `Play.init` to seed
-`Game.Dealer.dealFullGame` for fresh sessions.
+`Lib.Dealer.dealFullGame` for fresh sessions.
 -}
 type alias Flags =
     { initialSessionId : Maybe Int
