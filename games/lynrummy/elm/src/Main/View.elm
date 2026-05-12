@@ -19,7 +19,7 @@ import Game.PointerInput as PointerInput
 import Game.Popup as Popup
 import Game.Replay.HandDragAnimate as HandDragAnimate
 import Game.Replay.ReplayState exposing (Phase(..), ReplayState)
-import Game.Sidebar as Sidebar
+import Game.LeftSidebar as LeftSidebar
 import Game.Status as Status
 import Game.WingView as WingView
 import Html exposing (Html, div)
@@ -96,11 +96,12 @@ view model =
 
 -- LEFT SIDEBAR
 --
--- Slice the Model into a `Sidebar.PlayerPanelInfo` and hand
--- it to `Game.Sidebar`. During Instant Replay, the sidebar's
--- gameState comes from `model.replayState`'s evolving copy;
--- the live `model.gameState` is preserved untouched and snaps
--- back when `ReplayCompleted` clears `replayState`.
+-- Slice the Model into a `LeftSidebar.PlayerPanelInfo` and
+-- hand it to `Game.LeftSidebar`. During Instant Replay, the
+-- sidebar's gameState comes from `model.replayState`'s
+-- evolving copy; the live `model.gameState` is preserved
+-- untouched and snaps back when `ReplayCompleted` clears
+-- `replayState`.
 
 
 leftSidebar : Model -> Html Msg
@@ -127,7 +128,7 @@ leftSidebar model =
     in
     case model.replayState of
         Just rs ->
-            Sidebar.leftSidebar
+            LeftSidebar.view
                 { gameState = rs.gameState
                 , handIsInteractive = handIsInteractive
                 , sourceCard = sourceCard
@@ -135,20 +136,20 @@ leftSidebar model =
                 , canUndo = False
                 , replayControl =
                     if rs.paused then
-                        Sidebar.ShowResume
+                        LeftSidebar.ShowResume
 
                     else
-                        Sidebar.ShowPause
+                        LeftSidebar.ShowPause
                 }
 
         Nothing ->
-            Sidebar.leftSidebar
+            LeftSidebar.view
                 { gameState = model.gameState
                 , handIsInteractive = handIsInteractive
                 , sourceCard = sourceCard
                 , hintedCards = model.hintedCards
                 , canUndo = canUndoThisTurn model.actionLog
-                , replayControl = Sidebar.ShowReplay
+                , replayControl = LeftSidebar.ShowReplay
                 }
 
 
