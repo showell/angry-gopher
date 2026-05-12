@@ -31,16 +31,7 @@ import { planMergeStackOnBoard } from "./verbs.ts";
 import type { GameResult } from "../lib/full_game.ts";
 import type { JoinEvent } from "../lib/step_types.ts";
 import { physicalPlan } from "./physical_plan.ts";
-import {
-  splitDsl,
-  mergeStackDsl,
-  mergeHandDsl,
-  placeHandDsl,
-  moveStackDsl,
-  completeTurnDsl,
-  type Stack as DslStack,
-} from "./wire_action_dsl.ts";
-import { moveStackPath, mergeStackPath } from "./wire_path_synth.ts";
+import { completeTurnDsl, seqPrefix } from "./wire_action_dsl.ts";
 import { formatGameState } from "./initial_state_dsl.ts";
 import {
   type JsonCard,
@@ -221,7 +212,7 @@ export function writeSession(
 
   // --- meta ---
   const gameStateDsl = formatGameState({
-    board: inputs.initialBoard.map(boardStackForDsl),
+    board: inputs.initialBoard,
     hands: inputs.initialHands,
     deck: inputs.initialDeck,
     activePlayer: 0,
@@ -237,9 +228,10 @@ export function writeSession(
   fs.writeFileSync(path.join(sessionDir, "meta"), metaBody);
 
   // --- actions.dsl ---
-  // Per-primitive: dispatch on action kind once (earned knowledge),
-  // call the specific DSL emitter, append the line, advance sim,
-  // run the no-overlap check.
+  // Each primitive already carries its own DSL body (baked at
+  // construction by `primitives.ts:make*` helpers). The writer
+  // just prepends seq, appends line, advances sim, runs the
+  // no-overlap belt.
   const actionsPath = path.join(sessionDir, "actions.dsl");
   fs.writeFileSync(actionsPath, "");
   const seqRef = { n: 1 };
@@ -248,8 +240,7 @@ export function writeSession(
     actSim: readonly BoardStack[],
     prim: Primitive,
   ): readonly BoardStack[] => {
-    const line = primitiveDsl(seqRef.n, prim, actSim);
-    fs.appendFileSync(actionsPath, line + "\n");
+    fs.appendFileSync(actionsPath, seqPrefix(seqRef.n) + prim.dsl + "\n");
     seqRef.n++;
     const next = applyLocally(actSim, prim);
     assertNoOverlap(next, `after-primitive ${prim.action}`);
@@ -268,7 +259,7 @@ export function writeSession(
     }
     // CompleteTurn at end of every turn. Elm's local logic deals
     // the next 3 / 5 from initial_state.deck on receipt.
-    fs.appendFileSync(actionsPath, completeTurnDsl(seqRef.n) + "\n");
+    fs.appendFileSync(actionsPath, seqPrefix(seqRef.n) + completeTurnDsl + "\n");
     seqRef.n++;
   }
 
@@ -277,59 +268,6 @@ export function writeSession(
     sessionDir,
     actionsWritten: seqRef.n - 1,
   };
-}
-
-
-/** Render one primitive as a wire-DSL line. The dispatch here is
- *  the load-bearing one: each branch has earned knowledge of the
- *  action's payload shape, and calls the specific encoder with
- *  the exact fields it needs.
- *
- *  board-drag actions (`merge_stack`, `move_stack`) carry a path:
- *  the replay's `BoardDragAnimate.start` requires a non-empty
- *  path to seed the floater. The agent didn't actually drag,
- *  so we synthesize a 2-point linear path: source loc at t=0,
- *  destination at t=300ms. The endpoints are visual only — the
- *  rule application at end-of-animation reads source/target/side
- *  from the action itself, not the path. */
-function primitiveDsl(
-  seq: number,
-  prim: Primitive,
-  sim: readonly BoardStack[],
-): string {
-  switch (prim.action) {
-    case "split":
-      return splitDsl(seq, boardStackForDsl(sim[prim.stackIndex]!), prim.cardIndex);
-    case "merge_stack": {
-      const source = boardStackForDsl(sim[prim.sourceStack]!);
-      const target = boardStackForDsl(sim[prim.targetStack]!);
-      return mergeStackDsl(
-        seq,
-        source,
-        target,
-        prim.side,
-        mergeStackPath(source, target, prim.side),
-      );
-    }
-    case "merge_hand":
-      return mergeHandDsl(
-        seq,
-        prim.handCard,
-        boardStackForDsl(sim[prim.targetStack]!),
-        prim.side,
-      );
-    case "place_hand":
-      return placeHandDsl(seq, prim.handCard, prim.loc);
-    case "move_stack": {
-      const stack = boardStackForDsl(sim[prim.stackIndex]!);
-      return moveStackDsl(seq, stack, prim.newLoc, moveStackPath(stack, prim.newLoc));
-    }
-  }
-}
-
-
-function boardStackForDsl(s: BoardStack): DslStack {
-  return { cards: s.cards, loc: s.loc };
 }
 
 

@@ -17,6 +17,7 @@
 import {
   type Primitive, type Side,
   findStackIndex,
+  makeSplit, makeMergeStack, makeMergeHand, makeMoveStack, makePlaceHand,
 } from "./primitives.ts";
 import type { BoardStack, Loc } from "./geometry.ts";
 import { type Card, parseCardLabel } from "./rules/card.ts";
@@ -57,54 +58,49 @@ function parseStripped(
   let m = line.match(/^split\s+\[([^\]]+)\]\s*@\s*(-?\d+)$/);
   if (m) {
     const cards = parseCards(m[1]!);
-    return {
-      action: "split",
-      stackIndex: findStackIndex(board, cards),
-      cardIndex: parseInt(m[2]!, 10),
-    };
+    return makeSplit(board, findStackIndex(board, cards), parseInt(m[2]!, 10));
   }
 
   m = line.match(/^merge_stack\s+\[([^\]]+)\]\s*->\s*\[([^\]]+)\]\s*\/(left|right)$/);
   if (m) {
     const src = parseCards(m[1]!);
     const tgt = parseCards(m[2]!);
-    return {
-      action: "merge_stack",
-      sourceStack: findStackIndex(board, src),
-      targetStack: findStackIndex(board, tgt),
-      side: m[3]! as Side,
-    };
+    return makeMergeStack(
+      board,
+      findStackIndex(board, src),
+      findStackIndex(board, tgt),
+      m[3]! as Side,
+    );
   }
 
   m = line.match(/^move_stack\s+\[([^\]]+)\]\s*->\s*\((-?\d+)\s*,\s*(-?\d+)\)$/);
   if (m) {
     const cards = parseCards(m[1]!);
     // Live format: (left,top).
-    return {
-      action: "move_stack",
-      stackIndex: findStackIndex(board, cards),
-      newLoc: { left: parseInt(m[2]!, 10), top: parseInt(m[3]!, 10) },
-    };
+    return makeMoveStack(
+      board,
+      findStackIndex(board, cards),
+      { left: parseInt(m[2]!, 10), top: parseInt(m[3]!, 10) },
+    );
   }
 
   m = line.match(/^merge_hand\s+(\S+)\s*->\s*\[([^\]]+)\]\s*\/(left|right)$/);
   if (m) {
     const tgt = parseCards(m[2]!);
-    return {
-      action: "merge_hand",
-      handCard: parseCard(m[1]!),
-      targetStack: findStackIndex(board, tgt),
-      side: m[3]! as Side,
-    };
+    return makeMergeHand(
+      board,
+      findStackIndex(board, tgt),
+      parseCard(m[1]!),
+      m[3]! as Side,
+    );
   }
 
   m = line.match(/^place_hand\s+(\S+)\s*->\s*\((-?\d+)\s*,\s*(-?\d+)\)$/);
   if (m) {
-    return {
-      action: "place_hand",
-      handCard: parseCard(m[1]!),
-      loc: { left: parseInt(m[2]!, 10), top: parseInt(m[3]!, 10) } as Loc,
-    };
+    return makePlaceHand(
+      parseCard(m[1]!),
+      { left: parseInt(m[2]!, 10), top: parseInt(m[3]!, 10) } as Loc,
+    );
   }
 
   throw new Error(`unparseable action line: ${rawForError(line)}`);

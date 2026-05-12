@@ -16,8 +16,22 @@
 
 import type { Card } from "./rules/card.ts";
 import { CARD_PITCH, type BoardStack, type Loc } from "./geometry.ts";
+import {
+  splitDsl,
+  mergeStackDsl,
+  mergeHandDsl,
+  placeHandDsl,
+  moveStackDsl,
+} from "./wire_action_dsl.ts";
+import { mergeStackPath, moveStackPath } from "./wire_path_synth.ts";
 
 // --- Primitive descriptors --------------------------------------------
+//
+// Every Primitive carries its own `dsl` body — the wire-DSL line
+// without a seq prefix. Builders below stamp it in at construction
+// using the sim board the caller already had. Consumers that need
+// the line (transcript writer, anywhere else that serializes) read
+// `prim.dsl` directly — no dispatch on `prim.action` required.
 
 export type Side = "left" | "right";
 
@@ -25,6 +39,7 @@ export interface SplitPrim {
   readonly action: "split";
   readonly stackIndex: number;
   readonly cardIndex: number;
+  readonly dsl: string;
 }
 
 export interface MergeStackPrim {
@@ -32,6 +47,7 @@ export interface MergeStackPrim {
   readonly sourceStack: number;
   readonly targetStack: number;
   readonly side: Side;
+  readonly dsl: string;
 }
 
 export interface MergeHandPrim {
@@ -39,18 +55,21 @@ export interface MergeHandPrim {
   readonly targetStack: number;
   readonly handCard: Card;
   readonly side: Side;
+  readonly dsl: string;
 }
 
 export interface MoveStackPrim {
   readonly action: "move_stack";
   readonly stackIndex: number;
   readonly newLoc: Loc;
+  readonly dsl: string;
 }
 
 export interface PlaceHandPrim {
   readonly action: "place_hand";
   readonly handCard: Card;
   readonly loc: Loc;
+  readonly dsl: string;
 }
 
 export type Primitive =
@@ -59,6 +78,91 @@ export type Primitive =
   | MergeHandPrim
   | MoveStackPrim
   | PlaceHandPrim;
+
+// --- Builders (bake DSL at construction) ------------------------------
+
+export function makeSplit(
+  sim: readonly BoardStack[],
+  stackIndex: number,
+  cardIndex: number,
+): SplitPrim {
+  const stack = sim[stackIndex]!;
+  return {
+    action: "split",
+    stackIndex,
+    cardIndex,
+    dsl: splitDsl(stack, cardIndex),
+  };
+}
+
+export function makeMergeStack(
+  sim: readonly BoardStack[],
+  sourceStack: number,
+  targetStack: number,
+  side: Side,
+): MergeStackPrim {
+  const source = sim[sourceStack]!;
+  const target = sim[targetStack]!;
+  return {
+    action: "merge_stack",
+    sourceStack,
+    targetStack,
+    side,
+    dsl: mergeStackDsl(source, target, side, mergeStackPath(source, target, side)),
+  };
+}
+
+export function makeMergeHand(
+  sim: readonly BoardStack[],
+  targetStack: number,
+  handCard: Card,
+  side: Side,
+): MergeHandPrim {
+  const target = sim[targetStack]!;
+  return {
+    action: "merge_hand",
+    targetStack,
+    handCard,
+    side,
+    dsl: mergeHandDsl(handCard, target, side),
+  };
+}
+
+export function makeMoveStack(
+  sim: readonly BoardStack[],
+  stackIndex: number,
+  newLoc: Loc,
+): MoveStackPrim {
+  const stack = sim[stackIndex]!;
+  return {
+    action: "move_stack",
+    stackIndex,
+    newLoc,
+    dsl: moveStackDsl(stack, newLoc, moveStackPath(stack, newLoc)),
+  };
+}
+
+export function makePlaceHand(
+  handCard: Card,
+  loc: Loc,
+): PlaceHandPrim {
+  return {
+    action: "place_hand",
+    handCard,
+    loc,
+    dsl: placeHandDsl(handCard, loc),
+  };
+}
+
+/** For parsers and other call sites that already have the original
+ *  wire-DSL line in hand. Passes the line straight through; bypasses
+ *  re-emission since the input IS the source of truth. */
+export function primWithDsl<P extends Omit<Primitive, "dsl">>(
+  fields: P,
+  dsl: string,
+): P & { dsl: string } {
+  return { ...fields, dsl };
+}
 
 // --- Local apply (mirrors server-side state evolution) ----------------
 

@@ -22,7 +22,10 @@ import type { Card } from "../src/rules/card.ts";
 import { cardLabel } from "../src/rules/card.ts";
 import type { BoardStack } from "../src/geometry.ts";
 import type { Primitive, Side } from "../src/primitives.ts";
-import { applyLocally } from "../src/primitives.ts";
+import {
+  applyLocally,
+  makeSplit, makeMergeStack, makeMergeHand, makeMoveStack, makePlaceHand,
+} from "../src/primitives.ts";
 import { primToDslLine } from "../src/wire_json.ts";
 
 interface JsonCard { value: number; suit: number; origin_deck: number }
@@ -51,41 +54,32 @@ function envelopeToPrim(
   switch (action?.action) {
     case "split": {
       const cards = (action.stack as JsonCardStack).board_cards.map(b => jsonCardToCard(b.card));
-      const idx = findStackByCards(sim, cards);
-      return { action: "split", stackIndex: idx, cardIndex: action.card_index };
+      return makeSplit(sim, findStackByCards(sim, cards), action.card_index);
     }
     case "merge_stack": {
       const src = (action.source as JsonCardStack).board_cards.map(b => jsonCardToCard(b.card));
       const tgt = (action.target as JsonCardStack).board_cards.map(b => jsonCardToCard(b.card));
-      return {
-        action: "merge_stack",
-        sourceStack: findStackByCards(sim, src),
-        targetStack: findStackByCards(sim, tgt),
-        side: action.side as Side,
-      };
+      return makeMergeStack(
+        sim,
+        findStackByCards(sim, src),
+        findStackByCards(sim, tgt),
+        action.side as Side,
+      );
     }
     case "merge_hand": {
       const tgt = (action.target as JsonCardStack).board_cards.map(b => jsonCardToCard(b.card));
-      return {
-        action: "merge_hand",
-        targetStack: findStackByCards(sim, tgt),
-        handCard: jsonCardToCard(action.hand_card),
-        side: action.side as Side,
-      };
+      return makeMergeHand(
+        sim,
+        findStackByCards(sim, tgt),
+        jsonCardToCard(action.hand_card),
+        action.side as Side,
+      );
     }
     case "place_hand":
-      return {
-        action: "place_hand",
-        handCard: jsonCardToCard(action.hand_card),
-        loc: action.loc,
-      };
+      return makePlaceHand(jsonCardToCard(action.hand_card), action.loc);
     case "move_stack": {
       const cards = (action.stack as JsonCardStack).board_cards.map(b => jsonCardToCard(b.card));
-      return {
-        action: "move_stack",
-        stackIndex: findStackByCards(sim, cards),
-        newLoc: action.new_loc,
-      };
+      return makeMoveStack(sim, findStackByCards(sim, cards), action.new_loc);
     }
     default:
       return null;

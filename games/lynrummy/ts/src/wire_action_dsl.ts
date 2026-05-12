@@ -1,12 +1,6 @@
-// wire_action_dsl.ts — per-event encoders for the live action-log
-// DSL, byte-identical to what Elm's Lib.GameEvent.elm emits when
-// a human plays. Each function takes only the inputs its event
-// needs (earned knowledge at the call site); no dispatch in this
-// module.
-//
-// Shared internals (`seqPrefix`, `stackRef`, `locStr`, `sideStr`,
-// `pathSuffix`) live at the bottom and aren't exported — callers
-// always go through the per-event API.
+// Per-event wire-DSL body emitters. Output is the body only — no
+// `<seq>) ` prefix. Callers prepend `seqPrefix(n)` at write time, so
+// the seq number is the writer's concern, not the emitter's.
 //
 // Card tokens use unicode suit glyphs to match Elm's `cardStr`.
 // Parsers in both runtimes accept both unicode and ASCII suits;
@@ -15,9 +9,6 @@
 
 import { type Card, SUITS_UNICODE, RANKS } from "./rules/card.ts";
 
-/** Floater (x,y) sample at time `tMs`, in board frame. Matches
- *  Elm's `Lib.TimeLoc.TimeLoc`. Agent transcripts use empty path
- *  lists — replay synthesizes positions JIT. */
 export interface TimeLoc { tMs: number; left: number; top: number }
 
 export interface Loc { top: number; left: number }
@@ -26,25 +17,24 @@ export interface Stack { cards: readonly Card[]; loc: Loc }
 export type Side = "left" | "right";
 
 
+export function seqPrefix(n: number): string {
+  return n + ") ";
+}
+
+
 // --- Per-event emitters ----------------------------------------------
 
-export function splitDsl(
-  seq: number,
-  stack: Stack,
-  cardIndex: number,
-): string {
-  return seqPrefix(seq) + "split " + stackRef(stack) + " @" + cardIndex;
+export function splitDsl(stack: Stack, cardIndex: number): string {
+  return "split " + stackRef(stack) + " @" + cardIndex;
 }
 
 export function mergeStackDsl(
-  seq: number,
   source: Stack,
   target: Stack,
   side: Side,
   boardPath: readonly TimeLoc[] = [],
 ): string {
-  return seqPrefix(seq)
-    + "merge_stack "
+  return "merge_stack "
     + stackRef(source)
     + " -> "
     + stackRef(target)
@@ -53,59 +43,41 @@ export function mergeStackDsl(
 }
 
 export function mergeHandDsl(
-  seq: number,
   handCard: Card,
   target: Stack,
   side: Side,
 ): string {
-  return seqPrefix(seq)
-    + "merge_hand "
+  return "merge_hand "
     + cardToken(handCard)
     + " -> "
     + stackRef(target)
     + " /" + side;
 }
 
-export function placeHandDsl(
-  seq: number,
-  handCard: Card,
-  loc: Loc,
-): string {
-  return seqPrefix(seq)
-    + "place_hand "
+export function placeHandDsl(handCard: Card, loc: Loc): string {
+  return "place_hand "
     + cardToken(handCard)
     + " -> "
     + locStr(loc);
 }
 
 export function moveStackDsl(
-  seq: number,
   stack: Stack,
   newLoc: Loc,
   boardPath: readonly TimeLoc[] = [],
 ): string {
-  return seqPrefix(seq)
-    + "move_stack "
+  return "move_stack "
     + stackRef(stack)
     + " -> "
     + locStr(newLoc)
     + pathSuffix(boardPath);
 }
 
-export function completeTurnDsl(seq: number): string {
-  return seqPrefix(seq) + "complete_turn";
-}
-
-export function undoDsl(seq: number): string {
-  return seqPrefix(seq) + "undo";
-}
+export const completeTurnDsl = "complete_turn";
+export const undoDsl = "undo";
 
 
 // --- Shared internals ------------------------------------------------
-
-function seqPrefix(n: number): string {
-  return n + ") ";
-}
 
 function stackRef(s: Stack): string {
   return "[" + s.cards.map(cardToken).join(" ") + "] at " + locStr(s.loc);

@@ -40,8 +40,9 @@ import {
   stackRect, padRect, rectsOverlap, PLANNING_MARGIN,
 } from "./geometry.ts";
 import {
-  type Primitive, type SplitPrim, type MergeStackPrim, type MergeHandPrim, type MoveStackPrim,
+  type Primitive,
   applyLocally, findStackIndex,
+  makeSplit, makeMergeStack, makeMergeHand, makeMoveStack,
 } from "./primitives.ts";
 import { classifyStack } from "./classified_card_stack.ts";
 
@@ -107,17 +108,17 @@ function planSplitAfter(
     const newLoc = findOpenLoc(others, n);
     const cur = sim[si]!.loc;
     if (newLoc.top !== cur.top || newLoc.left !== cur.left) {
-      const move: MoveStackPrim = { action: "move_stack", stackIndex: si, newLoc };
+      const move = makeMoveStack(sim, si, newLoc);
       const afterMove = applyLocally(sim, move);
       const newSi = findStackIndex(afterMove, stackContent);
-      const split: SplitPrim = { action: "split", stackIndex: newSi, cardIndex: ci };
+      const split = makeSplit(afterMove, newSi, ci);
       const post = applyLocally(afterMove, split);
       return { prims: [move, split], sim: post };
     }
   }
 
   // End-split (or interior-already-clear): try in place.
-  const split: SplitPrim = { action: "split", stackIndex: si, cardIndex: ci };
+  const split = makeSplit(sim, si, ci);
   const post = applyLocally(sim, split);
   if (findCrowding(post) === null) {
     return { prims: [split], sim: post };
@@ -130,10 +131,10 @@ function planSplitAfter(
     // No better spot exists — emit as-is.
     return { prims: [split], sim: post };
   }
-  const move: MoveStackPrim = { action: "move_stack", stackIndex: si, newLoc };
+  const move = makeMoveStack(sim, si, newLoc);
   const afterMove = applyLocally(sim, move);
   const newSi = findStackIndex(afterMove, stackContent);
-  const newSplit: SplitPrim = { action: "split", stackIndex: newSi, cardIndex: ci };
+  const newSplit = makeSplit(afterMove, newSi, ci);
   const post2 = applyLocally(afterMove, newSplit);
   return { prims: [move, newSplit], sim: post2 };
 }
@@ -176,9 +177,7 @@ function planMergeHand(
   side: Side,
 ): { prims: Primitive[]; sim: readonly BoardStack[] } {
   const tgtIdx = findStackIndex(sim, tgtContent);
-  const merge: MergeHandPrim = {
-    action: "merge_hand", targetStack: tgtIdx, handCard, side,
-  };
+  const merge = makeMergeHand(sim, tgtIdx, handCard, side);
   const post = applyLocally(sim, merge);
   if (findCrowding(post) === null) {
     return { prims: [merge], sim: post };
@@ -198,14 +197,10 @@ function planMergeHand(
     // findOpenLoc returned the current spot. Emit merge as-is.
     return { prims: [merge], sim: post };
   }
-  const move: MoveStackPrim = {
-    action: "move_stack", stackIndex: tgtIdx, newLoc: targetLoc,
-  };
+  const move = makeMoveStack(sim, tgtIdx, targetLoc);
   const afterMove = applyLocally(sim, move);
   const newTgtIdx = findStackIndex(afterMove, tgtContent);
-  const newMerge: MergeHandPrim = {
-    action: "merge_hand", targetStack: newTgtIdx, handCard, side,
-  };
+  const newMerge = makeMergeHand(afterMove, newTgtIdx, handCard, side);
   const post2 = applyLocally(afterMove, newMerge);
   return { prims: [move, newMerge], sim: post2 };
 }
@@ -222,9 +217,7 @@ export function planMergeStackOnBoard(
 ): { prims: Primitive[]; sim: readonly BoardStack[] } {
   const srcIdx = findStackIndex(sim, srcContent);
   const tgtIdx = findStackIndex(sim, tgtContent);
-  const merge: MergeStackPrim = {
-    action: "merge_stack", sourceStack: srcIdx, targetStack: tgtIdx, side,
-  };
+  const merge = makeMergeStack(sim, srcIdx, tgtIdx, side);
   const post = applyLocally(sim, merge);
   if (findCrowding(post) === null) {
     return { prims: [merge], sim: post };
@@ -242,16 +235,11 @@ export function planMergeStackOnBoard(
   if (targetLoc.top === cur.top && targetLoc.left === cur.left) {
     return { prims: [merge], sim: post };
   }
-  const move: MoveStackPrim = {
-    action: "move_stack", stackIndex: tgtIdx, newLoc: targetLoc,
-  };
+  const move = makeMoveStack(sim, tgtIdx, targetLoc);
   const afterMove = applyLocally(sim, move);
   const newSrcIdx = findStackIndex(afterMove, srcContent);
   const newTgtIdx = findStackIndex(afterMove, tgtContent);
-  const newMerge: MergeStackPrim = {
-    action: "merge_stack",
-    sourceStack: newSrcIdx, targetStack: newTgtIdx, side,
-  };
+  const newMerge = makeMergeStack(afterMove, newSrcIdx, newTgtIdx, side);
   const post2 = applyLocally(afterMove, newMerge);
   return { prims: [move, newMerge], sim: post2 };
 }
@@ -369,7 +357,7 @@ function planInteriorIsolate(
   if (newLoc.top === cur.top && newLoc.left === cur.left) {
     return inPlace;
   }
-  const move: MoveStackPrim = { action: "move_stack", stackIndex: si, newLoc };
+  const move = makeMoveStack(sim, si, newLoc);
   const afterMove = applyLocally(sim, move);
   const splits = doTwoSplitsAt(afterMove, stackContent, ci);
   return { prims: [move, ...splits.prims], sim: splits.sim };
@@ -416,7 +404,7 @@ function doTwoSplitsAt(
   const kA = ci;
   const ciA = kA <= Math.floor(n / 2) ? kA - 1 : kA;
   const siA = findStackIndex(sim, stackContent);
-  const splitA: SplitPrim = { action: "split", stackIndex: siA, cardIndex: ciA };
+  const splitA = makeSplit(sim, siA, ciA);
   const afterA = applyLocally(sim, splitA);
 
   // Split B: from right chunk = [s[ci:]], split-after k=1 →
@@ -426,7 +414,7 @@ function doTwoSplitsAt(
   const kB = 1;
   const ciB = kB <= Math.floor(nB / 2) ? kB - 1 : kB;
   const siB = findStackIndex(afterA, rightChunk);
-  const splitB: SplitPrim = { action: "split", stackIndex: siB, cardIndex: ciB };
+  const splitB = makeSplit(afterA, siB, ciB);
   const afterB = applyLocally(afterA, splitB);
 
   return { prims: [splitA, splitB], sim: afterB };

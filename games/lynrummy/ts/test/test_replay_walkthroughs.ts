@@ -22,6 +22,7 @@ import { parseCardLabel, cardLabel } from "../src/rules/card.ts";
 import {
   type Primitive, type Side,
   applyLocally, findStackIndex,
+  makeSplit, makeMergeStack, makeMergeHand, makeMoveStack, makePlaceHand,
 } from "../src/primitives.ts";
 import type { BoardStack, Loc } from "../src/geometry.ts";
 import { findViolation } from "../src/geometry.ts";
@@ -115,54 +116,48 @@ function parseActionLine(
   let m = line.match(/^split\s+\[([^\]]+)\]@(-?\d+)$/);
   if (m) {
     const cards = parseDslCards(m[1]!);
-    const cardIndex = parseInt(m[2]!, 10);
-    return {
-      action: "split",
-      stackIndex: findStackIndex(board, cards),
-      cardIndex,
-    };
+    return makeSplit(board, findStackIndex(board, cards), parseInt(m[2]!, 10));
   }
   // merge_stack [src] -> [tgt] /side
   m = line.match(/^merge_stack\s+\[([^\]]+)\]\s*->\s*\[([^\]]+)\]\s*\/(left|right)$/);
   if (m) {
     const src = parseDslCards(m[1]!);
     const tgt = parseDslCards(m[2]!);
-    return {
-      action: "merge_stack",
-      sourceStack: findStackIndex(board, src),
-      targetStack: findStackIndex(board, tgt),
-      side: m[3]! as Side,
-    };
+    return makeMergeStack(
+      board,
+      findStackIndex(board, src),
+      findStackIndex(board, tgt),
+      m[3]! as Side,
+    );
   }
   // move_stack [content] -> (top,left)
   m = line.match(/^move_stack\s+\[([^\]]+)\]\s*->\s*\((-?\d+)\s*,\s*(-?\d+)\)$/);
   if (m) {
     const cards = parseDslCards(m[1]!);
-    return {
-      action: "move_stack",
-      stackIndex: findStackIndex(board, cards),
-      newLoc: { top: parseInt(m[2]!, 10), left: parseInt(m[3]!, 10) },
-    };
+    return makeMoveStack(
+      board,
+      findStackIndex(board, cards),
+      { top: parseInt(m[2]!, 10), left: parseInt(m[3]!, 10) },
+    );
   }
   // merge_hand <card> -> [tgt] /side
   m = line.match(/^merge_hand\s+(\S+)\s*->\s*\[([^\]]+)\]\s*\/(left|right)$/);
   if (m) {
     const tgt = parseDslCards(m[2]!);
-    return {
-      action: "merge_hand",
-      handCard: parseDslCard(m[1]!),
-      targetStack: findStackIndex(board, tgt),
-      side: m[3]! as Side,
-    };
+    return makeMergeHand(
+      board,
+      findStackIndex(board, tgt),
+      parseDslCard(m[1]!),
+      m[3]! as Side,
+    );
   }
   // place_hand <card> -> (top,left)
   m = line.match(/^place_hand\s+(\S+)\s*->\s*\((-?\d+)\s*,\s*(-?\d+)\)$/);
   if (m) {
-    return {
-      action: "place_hand",
-      handCard: parseDslCard(m[1]!),
-      loc: { top: parseInt(m[2]!, 10), left: parseInt(m[3]!, 10) },
-    };
+    return makePlaceHand(
+      parseDslCard(m[1]!),
+      { top: parseInt(m[2]!, 10), left: parseInt(m[3]!, 10) },
+    );
   }
   throw new Error(`unparseable action: ${line}`);
 }

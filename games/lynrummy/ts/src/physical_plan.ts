@@ -21,8 +21,9 @@ import type { Desc } from "./move.ts";
 import type { BoardStack } from "./geometry.ts";
 import { findOpenLoc } from "./geometry.ts";
 import {
-  type Primitive, type PlaceHandPrim, type MergeHandPrim,
+  type Primitive,
   applyLocally,
+  makePlaceHand, makeMergeHand,
 } from "./primitives.ts";
 import { expandVerb } from "./verbs.ts";
 
@@ -59,20 +60,13 @@ export function physicalPlan(
     // Multi-placement seed: place the first card at a clean loc sized
     // for the eventual stack, then merge the rest onto it rightward.
     const loc = findOpenLoc(sim, hand.length);
-    const place: PlaceHandPrim = {
-      action: "place_hand", handCard: hand[0]!, loc,
-    };
+    const place = makePlaceHand(hand[0]!, loc);
     out.push(place);
     sim = applyLocally(sim, place);
     pendingHand.delete(cardKey(hand[0]!));
     for (let i = 1; i < hand.length; i++) {
       const lastIdx = sim.length - 1;
-      const merge: MergeHandPrim = {
-        action: "merge_hand",
-        targetStack: lastIdx,
-        handCard: hand[i]!,
-        side: "right",
-      };
+      const merge = makeMergeHand(sim, lastIdx, hand[i]!, "right");
       out.push(merge);
       sim = applyLocally(sim, merge);
       pendingHand.delete(cardKey(hand[i]!));

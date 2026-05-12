@@ -41,7 +41,7 @@ import { findOpenLoc } from "../src/geometry.ts";
 import { playFullGame } from "../lib/full_game.ts";
 import type { PlayStep, JoinEvent } from "../lib/step_types.ts";
 import { physicalPlan } from "../src/physical_plan.ts";
-import { applyLocally, findStackIndex } from "../src/primitives.ts";
+import { applyLocally, findStackIndex, makeMergeStack } from "../src/primitives.ts";
 import { encodeInitialState, type RemoteStateJson } from "../src/transcript.ts";
 
 // --- Tunables (constants, NOT CLI args) -----------------------------
@@ -172,12 +172,7 @@ function applyGroom(
   for (const j of joins) {
     const sourceStack = findStackIndex(cur, j.src);
     const targetStack = findStackIndex(cur, j.tgt);
-    cur = applyLocally(cur, {
-      action: "merge_stack",
-      sourceStack,
-      targetStack,
-      side: "left",
-    });
+    cur = applyLocally(cur, makeMergeStack(cur, sourceStack, targetStack, "left"));
   }
   return cur;
 }
