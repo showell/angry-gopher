@@ -18,7 +18,7 @@ import Game.Physics.BoardGeometry as BoardGeometry
 import Game.PointerInput as PointerInput
 import Game.Popup as Popup
 import Game.Animation.HandDragAnimate as HandDragAnimate
-import Game.Animation.Animate exposing (Phase(..), ReplayState)
+import Game.Animation.Animate exposing (Phase(..), AnimationState)
 import Game.LeftSidebar as LeftSidebar
 import Game.Status as Status
 import Game.WingView as WingView
@@ -263,7 +263,7 @@ rightSidebar model =
 While `Animating`, surface the sub-machine's `dragInfo` so
 the floater is visible. Other phases (Beat) are no-drag.
 -}
-replayDrag : ReplayState -> Drag.DragState
+replayDrag : AnimationState -> Drag.DragState
 replayDrag rs =
     case rs.phase of
         AnimatingBoardAction dragState ->

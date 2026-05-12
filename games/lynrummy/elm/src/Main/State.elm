@@ -20,7 +20,7 @@ import Game.Physics.BoardGeometry exposing (refereeBounds)
 import Game.Physics.GestureArbitration as GA
 import Game.Rules.Card exposing (Card)
 import Game.Popup exposing (PopupContent)
-import Game.Animation.Animate exposing (ReplayState)
+import Game.Animation.Animate exposing (AnimationState)
 import Game.Status exposing (StatusKind(..), StatusMessage)
 
 
@@ -34,7 +34,7 @@ type alias Model =
     -- The session's pre-first-action snapshot. Pinned at
     -- bootstrap (new-session deal or resume's bundle) and
     -- never mutated thereafter. Instant Replay seeds its
-    -- ReplayState's gameState from this.
+    -- AnimationState's gameState from this.
     , initialGameState : GameState
     , drag : DragState
 
@@ -53,7 +53,7 @@ type alias Model =
     -- to-end by `Game.Animation.Animate`; Main only plumbs Msgs
     -- in and out of it. Cleared back to `Nothing` when the
     -- engine signals `Completed`.
-    , replayState : Maybe ReplayState
+    , replayState : Maybe AnimationState
 
     -- Constant string forming the board's DOM id (via
     -- `boardDomIdFor`). Multi-Play-per-page hosting retired

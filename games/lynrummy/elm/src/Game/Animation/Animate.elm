@@ -1,6 +1,6 @@
 module Game.Animation.Animate exposing
     ( Phase(..)
-    , ReplayState
+    , AnimationState
     , TickResult(..)
     , start
     , tick
@@ -8,7 +8,7 @@ module Game.Animation.Animate exposing
     )
 
 {-| The Instant Replay state machine. Mostly pure data
-transforms on `ReplayState`; the only side-effect surface
+transforms on `AnimationState`; the only side-effect surface
 is the measurement Cmd produced by `HandDragAnimate.step`,
 which `tick` forwards back to the host alongside its
 state result.
@@ -73,7 +73,7 @@ type Phase
 
 
 {-| Instant Replay's working state. Lives on `Main.State.Model`
-as `Maybe ReplayState`: `Just _` while a replay is in flight,
+as `Maybe AnimationState`: `Just _` while a replay is in flight,
 `Nothing` otherwise.
 
 The View reads `gameState` (to render the replay's evolving
@@ -83,7 +83,7 @@ during board-drag and hand-drag animations. All other fields
 are private to this module.
 
 -}
-type alias ReplayState =
+type alias AnimationState =
     { queue : List ActionLogEntry
     , gameState : GameState
     , paused : Bool
@@ -92,7 +92,7 @@ type alias ReplayState =
 
 
 type TickResult msg
-    = StillReplaying ReplayState (Cmd msg)
+    = StillReplaying AnimationState (Cmd msg)
     | Completed
 
 
@@ -105,7 +105,7 @@ beatMs =
     700
 
 
-start : List ActionLogEntry -> GameState -> ReplayState
+start : List ActionLogEntry -> GameState -> AnimationState
 start queue gameState =
     { queue = queue
     , gameState = gameState
@@ -114,7 +114,7 @@ start queue gameState =
     }
 
 
-togglePause : ReplayState -> ReplayState
+togglePause : AnimationState -> AnimationState
 togglePause rs =
     let
         nextPhase =
@@ -133,7 +133,7 @@ togglePause rs =
     { rs | paused = not rs.paused, phase = nextPhase }
 
 
-tick : HandDragAnimate.Config msg -> Int -> ReplayState -> TickResult msg
+tick : HandDragAnimate.Config msg -> Int -> AnimationState -> TickResult msg
 tick config nowMs rs =
     case rs.phase of
         Starting ->
