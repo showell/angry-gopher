@@ -24,7 +24,7 @@ import Game.Physics.BoardGeometry as BG
 import Game.PointerInput as PointerInput
 import Game.Rules.Card as Card exposing (Card, Suit)
 import Game.StackView as StackView
-import Html exposing (Html, div, text)
+import Html exposing (Html, div)
 import Html.Attributes exposing (id, style)
 import Main.Msg exposing (Msg(..))
 
@@ -87,7 +87,6 @@ playerHands info =
                             , style "margin-top" "8px"
                             ]
                             [ Html.text ("Player " ++ String.fromInt (idx + 1) ++ " (your turn)") ]
-                        , viewHandHeading
                         , viewHand info.handIsInteractive info.sourceCard info.hintedCards hand
                         , viewTurnControls { canUndo = info.canUndo, replayControl = info.replayControl }
                         ]
@@ -163,17 +162,6 @@ viewReplayControl control =
 
 
 -- HAND
-
-
-viewHandHeading : Html Msg
-viewHandHeading =
-    div
-        [ style "color" Colors.navy
-        , style "font-weight" "bold"
-        , style "font-size" "19px"
-        , style "margin-top" "20px"
-        ]
-        [ text "Hand" ]
 
 
 {-| Render a hand, sorted into rows of 4 suits in display
