@@ -39,36 +39,149 @@ import Main.State
 view : Model -> Html Msg
 view model =
     -- `position: relative` so absolutely-positioned children
-    -- (status bar, sidebar, board column) place inside this
-    -- div. Drag floater and popup stay `position: fixed`
-    -- (rendered inside `boardColumn` / here) — they're
-    -- viewport-level overlays.
+    -- (status bar, sidebars) place inside this div. Hand
+    -- floater stays `position: fixed` — a viewport-level
+    -- overlay parallel to the popup.
     let
-        ( board, drag ) =
+        handFloaters =
+            case currentDrag model of
+                DraggingHandCard d ->
+                    [ Drag.renderHandFloater d [ style "position" "fixed" ] ]
+
+                _ ->
+                    []
+    in
+    div
+        [ style "font-family" "system-ui, sans-serif"
+        , style "position" "relative"
+        , style "width" "1100px"
+        , style "height" "700px"
+        , style "overflow" "hidden"
+        , style "background" "#f4f4ec"
+        ]
+        ([ div
+            [ style "position" "absolute"
+            , style "top" "0"
+            , style "left" "0"
+            , style "right" "0"
+            ]
+            [ Status.viewStatusBar model.status ]
+         , div
+            [ style "position" "absolute"
+            , style "top" (String.fromInt BoardGeometry.boardViewportTop ++ "px")
+            , style "left" "20px"
+            , style "width" (String.fromInt (BoardGeometry.boardViewportLeft - 40) ++ "px")
+            ]
+            [ leftSidebar model ]
+         , div
+            [ style "position" "absolute"
+            , style "top" (String.fromInt BoardGeometry.boardViewportTop ++ "px")
+            , style "left" (String.fromInt BoardGeometry.boardViewportLeft ++ "px")
+            ]
+            [ rightSidebar model ]
+         , Popup.viewPopup PopupOk model.popup
+         ]
+            ++ handFloaters
+        )
+
+
+
+-- LEFT SIDEBAR
+--
+-- Slice the Model into a `Sidebar.PlayerPanelInfo` and hand
+-- it to `Game.Sidebar`. During Instant Replay, the sidebar's
+-- gameState comes from `model.replayState`'s evolving copy;
+-- the live `model.gameState` is preserved untouched and snaps
+-- back when `ReplayCompleted` clears `replayState`.
+
+
+leftSidebar : Model -> Html Msg
+leftSidebar model =
+    let
+        drag =
+            currentDrag model
+
+        handIsInteractive =
+            drag == NotDragging
+
+        sourceCard =
+            case drag of
+                DraggingHandCard d ->
+                    Just d.card
+
+                _ ->
+                    Nothing
+    in
+    case model.replayState of
+        Just rs ->
+            Sidebar.leftSidebar
+                { gameState = rs.gameState
+                , handIsInteractive = handIsInteractive
+                , sourceCard = sourceCard
+                , hintedCards = []
+                , canUndo = False
+                , replayControl =
+                    if rs.paused then
+                        Sidebar.ShowResume
+
+                    else
+                        Sidebar.ShowPause
+                }
+
+        Nothing ->
+            Sidebar.leftSidebar
+                { gameState = model.gameState
+                , handIsInteractive = handIsInteractive
+                , sourceCard = sourceCard
+                , hintedCards = model.hintedCards
+                , canUndo = canUndoThisTurn model.actionLog
+                , replayControl = Sidebar.ShowReplay
+                }
+
+
+
+-- RIGHT SIDEBAR
+--
+-- Slice the Model into the inputs `Game.BoardView.boardShell`
+-- needs: a board (replay's or live), drag-derived per-stack
+-- info (sourceStack, cardMouseDown), and drag-derived overlay
+-- info (boardFloaters, wingsWithHover).
+
+
+rightSidebar : Model -> Html Msg
+rightSidebar model =
+    let
+        drag =
+            currentDrag model
+
+        board =
             case model.replayState of
                 Just rs ->
-                    ( rs.gameState.board, replayDrag rs )
+                    rs.gameState.board
 
                 Nothing ->
-                    ( model.gameState.board, model.drag )
+                    model.gameState.board
 
-        -- Board floater (board-frame) is a `position: absolute`
-        -- DOM child of the `position: relative` board shell, so
-        -- it has to be threaded down to BoardView. Hand floater
-        -- (viewport-frame) is `position: fixed`, so it lives
-        -- here at the top level — DOM position doesn't matter.
+        sourceStack =
+            case drag of
+                DraggingBoardCard d ->
+                    Just d.stack
+
+                _ ->
+                    Nothing
+
+        cardMouseDown =
+            case drag of
+                NotDragging ->
+                    Just (PointerInput.cardMouseDown MouseDownOnBoardCard)
+
+                _ ->
+                    Nothing
+
         boardFloaters =
             case drag of
                 DraggingBoardCard d ->
                     [ Drag.renderBoardFloater d [ style "position" "absolute" ] ]
-
-                _ ->
-                    []
-
-        handFloaters =
-            case drag of
-                DraggingHandCard d ->
-                    [ Drag.renderHandFloater d [ style "position" "fixed" ] ]
 
                 _ ->
                     []
@@ -113,126 +226,35 @@ view model =
                 NotDragging ->
                     Nothing
 
-        sourceStack =
-            case drag of
-                DraggingBoardCard d ->
-                    Just d.stack
-
-                _ ->
-                    Nothing
-
-        cardMouseDown =
-            case drag of
-                NotDragging ->
-                    Just (PointerInput.cardMouseDown MouseDownOnBoardCard)
-
-                _ ->
-                    Nothing
-
-        -- Pair each wing with its hover bool here, where we
-        -- have both pieces in scope. Downstream just renders.
         wingsWithHover =
             List.map (\w -> ( w, hoveredWing == Just w )) wings
     in
-    div
-        [ style "font-family" "system-ui, sans-serif"
-        , style "position" "relative"
-        , style "width" "1100px"
-        , style "height" "700px"
-        , style "overflow" "hidden"
-        , style "background" "#f4f4ec"
-        ]
-        ([ div
-            [ style "position" "absolute"
-            , style "top" "0"
-            , style "left" "0"
-            , style "right" "0"
-            ]
-            [ Status.viewStatusBar model.status ]
-         , div
-            [ style "position" "absolute"
-            , style "top" (String.fromInt BoardGeometry.boardViewportTop ++ "px")
-            , style "left" "20px"
-            , style "width" (String.fromInt (BoardGeometry.boardViewportLeft - 40) ++ "px")
-            ]
-            [ leftSidebar model ]
-         , div
-            [ style "position" "absolute"
-            , style "top" (String.fromInt BoardGeometry.boardViewportTop ++ "px")
-            , style "left" (String.fromInt BoardGeometry.boardViewportLeft ++ "px")
-            ]
-            [ BoardView.boardShell
-                { board = board
-                , gameId = model.gameId
-                , sourceStack = sourceStack
-                , cardMouseDown = cardMouseDown
-                , wingsWithHover = wingsWithHover
-                , boardFloaters = boardFloaters
-                }
-            ]
-         , Popup.viewPopup PopupOk model.popup
-         ]
-            ++ handFloaters
-        )
+    BoardView.boardShell
+        { board = board
+        , gameId = model.gameId
+        , sourceStack = sourceStack
+        , cardMouseDown = cardMouseDown
+        , wingsWithHover = wingsWithHover
+        , boardFloaters = boardFloaters
+        }
 
 
 
--- LEFT SIDEBAR
+-- DRAG STATE
 --
--- Slice the Model into a `Sidebar.PlayerPanelInfo` and hand
--- it to `Game.Sidebar`. During Instant Replay, the sidebar's
--- gameState comes from `model.replayState`'s evolving copy;
--- the live `model.gameState` is preserved untouched and snaps
--- back when `ReplayCompleted` clears `replayState`.
+-- During Instant Replay the view's drag comes from
+-- `model.replayState`'s evolving sub-machine. Outside replay
+-- it's the live `model.drag`.
 
 
-leftSidebar : Model -> Html Msg
-leftSidebar model =
-    let
-        drag =
-            case model.replayState of
-                Just rs ->
-                    replayDrag rs
-
-                Nothing ->
-                    model.drag
-
-        handIsInteractive =
-            drag == NotDragging
-
-        sourceCard =
-            case drag of
-                DraggingHandCard d ->
-                    Just d.card
-
-                _ ->
-                    Nothing
-    in
+currentDrag : Model -> Drag.DragState
+currentDrag model =
     case model.replayState of
         Just rs ->
-            Sidebar.leftSidebar
-                { gameState = rs.gameState
-                , handIsInteractive = handIsInteractive
-                , sourceCard = sourceCard
-                , hintedCards = []
-                , canUndo = False
-                , replayControl =
-                    if rs.paused then
-                        Sidebar.ShowResume
-
-                    else
-                        Sidebar.ShowPause
-                }
+            replayDrag rs
 
         Nothing ->
-            Sidebar.leftSidebar
-                { gameState = model.gameState
-                , handIsInteractive = handIsInteractive
-                , sourceCard = sourceCard
-                , hintedCards = model.hintedCards
-                , canUndo = canUndoThisTurn model.actionLog
-                , replayControl = Sidebar.ShowReplay
-                }
+            model.drag
 
 
 {-| The drag state the View should render during a replay.
