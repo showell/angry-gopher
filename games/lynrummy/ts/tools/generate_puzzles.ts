@@ -39,7 +39,7 @@ import { parseCardLabel } from "../src/rules/card.ts";
 import type { BoardStack, Loc } from "../src/geometry.ts";
 import { findOpenLoc } from "../src/geometry.ts";
 import { playFullGame } from "../lib/full_game.ts";
-import type { PlayStep } from "../lib/full_turn.ts";
+import type { PlayStep } from "../lib/full_step.ts";
 import type { JoinEvent } from "../lib/groom.ts";
 import { physicalPlan } from "../src/physical_plan.ts";
 import { applyLocally, findStackIndex } from "../src/primitives.ts";

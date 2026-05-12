@@ -19,7 +19,8 @@
 // shape matches what Elm encodes for "real" 2-player games.
 
 import type { Card } from "../src/rules/card.ts";
-import { cardKey, simulateFullTurn, type GameTurnRecord } from "./full_turn.ts";
+import { simulateFullTurn, type GameTurnRecord } from "./full_turn.ts";
+import { cardKey } from "./full_step.ts";
 
 export interface GameResult {
   readonly turns: readonly GameTurnRecord[];
