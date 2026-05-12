@@ -27,10 +27,7 @@ import {
   type Primitive,
   applyLocally,
 } from "./primitives.ts";
-import { planMergeStackOnBoard } from "./verbs.ts";
 import type { GameResult } from "../lib/full_game.ts";
-import type { JoinEvent } from "../lib/step_types.ts";
-import { physicalPlan } from "./physical_plan.ts";
 import { completeTurnDsl, seqPrefix } from "./wire_action_dsl.ts";
 import { formatGameState } from "./initial_state_dsl.ts";
 import {
@@ -146,34 +143,6 @@ function allocateSessionId(p: Paths): number {
 }
 
 
-// --- Join-event materialization --------------------------------------
-//
-// `joinBoardRuns` (in the full-game loop) records each greedy
-// run-merge as a `JoinEvent { src, tgt }`. The merged stack reads
-// `[...src, ...tgt]`,
-// matching `merge_stack` with side="left". We materialize each event
-// into a `merge_stack` primitive at apply time, looking up indices on
-// the LIVE sim board (the agent's index space differs from the
-// transcript's, since `applyMergeStack` appends the merged stack to
-// the end of the array).
-function applyJoinEvents(
-  sim: readonly BoardStack[],
-  joins: readonly JoinEvent[],
-  writePrim: (sim: readonly BoardStack[], prim: Primitive) => readonly BoardStack[],
-): readonly BoardStack[] {
-  let cur = sim;
-  for (const j of joins) {
-    // Reuse the verb-level planner: handles geometry pre-flight
-    // (injects a `move_stack` ahead of the merge if the in-place
-    // result would crowd). Always side="left" because
-    // joinBoardRuns builds the merged stack as `[...src, ...tgt]`.
-    const planned = planMergeStackOnBoard(cur, j.src, j.tgt, "left");
-    for (const p of planned.prims) cur = writePrim(cur, p);
-  }
-  return cur;
-}
-
-
 // --- Top-level writer ------------------------------------------------
 
 export interface TranscriptOpts {
@@ -250,11 +219,8 @@ export function writeSession(
   let sim: readonly BoardStack[] = inputs.initialBoard;
   for (const turn of inputs.result.turns) {
     for (const step of turn.steps) {
-      if (step.kind === "groom") {
-        sim = applyJoinEvents(sim, step.joins, writePrim);
-      } else {
-        const prims = physicalPlan(sim, step.placements, step.planDescs);
-        for (const prim of prims) sim = writePrim(sim, prim);
+      for (const prim of step.prims) {
+        sim = writePrim(sim, prim);
       }
     }
     // CompleteTurn at end of every turn. Elm's local logic deals

@@ -1,4 +1,5 @@
 import type { Card } from "../src/rules/card.ts";
+import type { BoardStack } from "../src/geometry.ts";
 import { fullStep } from "./full_step.ts";
 import type { TurnStep } from "./step_types.ts";
 
@@ -25,13 +26,13 @@ function drawCountFor(outcome: "hand_empty" | "stuck", cardsPlayedThisTurn: numb
 }
 
 export function simulateFullTurn(
-  startBoard: readonly (readonly Card[])[],
+  startBoard: readonly BoardStack[],
   startHand: readonly Card[],
   startDeck: readonly Card[],
   turnNum: number,
   activePlayerIndex: number,
 ): {
-  board: readonly (readonly Card[])[];
+  board: readonly BoardStack[];
   hand: readonly Card[];
   deck: readonly Card[];
   record: GameTurnRecord;
@@ -39,7 +40,7 @@ export function simulateFullTurn(
   const handBefore = startHand.length;
   const boardBefore = startBoard.length;
 
-  let board: readonly (readonly Card[])[] = startBoard;
+  let board: readonly BoardStack[] = startBoard;
   let hand = startHand;
   const cardsPlayed: Card[] = [];
   const steps: TurnStep[] = [];

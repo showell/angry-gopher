@@ -1,4 +1,5 @@
 import type { Card } from "../src/rules/card.ts";
+import type { BoardStack } from "../src/geometry.ts";
 import { tryGroom } from "./groom.ts";
 import { tryPlay } from "./play.ts";
 import { assertBoardClean } from "./board.ts";
@@ -6,12 +7,12 @@ import type { GroomStep, PlayStep, EndStep } from "./step_types.ts";
 
 export interface FullStepResult {
   readonly step: GroomStep | PlayStep | EndStep;
-  readonly board: readonly (readonly Card[])[];
+  readonly board: readonly BoardStack[];
   readonly hand: readonly Card[];
 }
 
 export function fullStep(
-  board: readonly (readonly Card[])[],
+  board: readonly BoardStack[],
   hand: readonly Card[],
 ): FullStepResult {
   const groomed = tryGroom(board);

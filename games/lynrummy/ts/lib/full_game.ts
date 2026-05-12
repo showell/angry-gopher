@@ -1,10 +1,11 @@
 import type { Card } from "../src/rules/card.ts";
+import type { BoardStack } from "../src/geometry.ts";
 import { simulateFullTurn, type GameTurnRecord } from "./full_turn.ts";
 import { cardKey } from "./board.ts";
 
 export interface GameResult {
   readonly turns: readonly GameTurnRecord[];
-  readonly finalBoard: readonly (readonly Card[])[];
+  readonly finalBoard: readonly BoardStack[];
   readonly finalHands: readonly (readonly Card[])[];
   readonly finalDeckSize: number;
   readonly stoppedReason: "deck_low" | "max_turns" | "hand_and_deck_empty";
@@ -16,7 +17,7 @@ export interface PlayGameOptions {
 }
 
 export function playFullGame(
-  initialBoard: readonly (readonly Card[])[],
+  initialBoard: readonly BoardStack[],
   initialHands: readonly (readonly Card[])[],
   initialDeck: readonly Card[],
   opts: PlayGameOptions = {},
@@ -24,7 +25,7 @@ export function playFullGame(
   const stopAtDeck = opts.stopAtDeck ?? 10;
   const maxTurns = opts.maxTurns ?? 200;
 
-  let board: readonly (readonly Card[])[] = initialBoard;
+  let board: readonly BoardStack[] = initialBoard;
   let hands: readonly (readonly Card[])[] = initialHands.map(h => [...h]);
   let deck: readonly Card[] = [...initialDeck];
   let activePlayerIndex = 0;
@@ -85,19 +86,19 @@ export function playFullGame(
   };
 }
 
-function totalCardCount(board: readonly (readonly Card[])[]): number {
+function totalCardCount(board: readonly BoardStack[]): number {
   let n = 0;
-  for (const s of board) n += s.length;
+  for (const s of board) n += s.cards.length;
   return n;
 }
 
 function collectCardKeys(
-  board: readonly (readonly Card[])[],
+  board: readonly BoardStack[],
   hand: readonly Card[],
   deck: readonly Card[],
 ): string[] {
   const keys: string[] = [];
-  for (const s of board) for (const c of s) keys.push(cardKey(c));
+  for (const s of board) for (const c of s.cards) keys.push(cardKey(c));
   for (const c of hand) keys.push(cardKey(c));
   for (const c of deck) keys.push(cardKey(c));
   return keys.sort();
@@ -105,7 +106,7 @@ function collectCardKeys(
 
 function assertCardsConserved(
   expected: readonly string[],
-  board: readonly (readonly Card[])[],
+  board: readonly BoardStack[],
   hand: readonly Card[],
   deck: readonly Card[],
   ctx: string,

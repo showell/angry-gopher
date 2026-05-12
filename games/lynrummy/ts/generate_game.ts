@@ -38,10 +38,6 @@ function boardLocFor(row: number): { top: number; left: number } {
   return { top: 20 + row * 60, left: 40 + col * 30 };
 }
 
-function makeOpeningBoard(): readonly (readonly Card[])[] {
-  return BOARD_LABELS.map(stack => stack.map(parseCardLabel));
-}
-
 function makeOpeningBoardPositioned(): readonly { cards: readonly Card[]; loc: { top: number; left: number } }[] {
   return BOARD_LABELS.map((stack, row) => ({
     cards: stack.map(parseCardLabel),
@@ -100,11 +96,10 @@ function main(): void {
     remaining.slice(HAND_SIZE, 2 * HAND_SIZE),
   ];
   const deck = remaining.slice(NUM_PLAYERS * HAND_SIZE);
-  const board = makeOpeningBoard();
-
-  const result = playFullGame(board, hands, deck, { stopAtDeck: STOP_AT_DECK });
-
   const positioned = makeOpeningBoardPositioned();
+
+  const result = playFullGame(positioned, hands, deck, { stopAtDeck: STOP_AT_DECK });
+
   const t = writeSession(
     { initialBoard: positioned, initialHands: hands, initialDeck: deck, result },
     { label: `agent self-play (seed=${SEED})` },

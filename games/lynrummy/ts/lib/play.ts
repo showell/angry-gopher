@@ -1,25 +1,34 @@
 import type { Card } from "../src/rules/card.ts";
 import { findPlay } from "../src/hand_play.ts";
+import { physicalPlan } from "../src/physical_plan.ts";
+import { applyLocally } from "../src/primitives.ts";
+import type { BoardStack } from "../src/geometry.ts";
 import type { PlayStep } from "./step_types.ts";
 import { cardKey } from "./board.ts";
 
 export function tryPlay(
-  board: readonly (readonly Card[])[],
+  board: readonly BoardStack[],
   hand: readonly Card[],
-): { step: PlayStep; board: readonly (readonly Card[])[]; hand: readonly Card[] } | null {
+): { step: PlayStep; board: readonly BoardStack[]; hand: readonly Card[] } | null {
   if (hand.length === 0) return null;
 
-  const play = findPlay(hand, board);
+  const cardLists = board.map(s => s.cards);
+  const play = findPlay(hand, cardLists);
   if (play === null) return null;
+
+  const prims = physicalPlan(board, [...play.placements], play.planDescs);
+  let sim: readonly BoardStack[] = board;
+  for (const p of prims) sim = applyLocally(sim, p);
 
   const placedSet = new Set(play.placements.map(cardKey));
   return {
     step: {
       kind: "play",
       placements: [...play.placements],
-      planDescs: play.planDescs,
+      prims,
+      planLines: play.plan,
     },
-    board: play.newBoard,
+    board: sim,
     hand: hand.filter(c => !placedSet.has(cardKey(c))),
   };
 }

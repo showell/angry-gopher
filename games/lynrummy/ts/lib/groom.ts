@@ -1,53 +1,52 @@
+// UI stack rendering caps at MAX_JOINED_LEN; runs longer than this stay split.
+
 import type { Card } from "../src/rules/card.ts";
 import {
   classifyStack,
   KIND_RUN,
   KIND_RB,
 } from "../src/classified_card_stack.ts";
-import type { GroomStep, JoinEvent } from "./step_types.ts";
+import type { BoardStack } from "../src/geometry.ts";
+import type { Primitive } from "../src/primitives.ts";
+import { planMergeStackOnBoard } from "../src/verbs.ts";
+import type { GroomStep } from "./step_types.ts";
 
-// UI stack rendering caps here; runs longer than this stay split.
 const MAX_JOINED_LEN = 15;
 
 export function tryGroom(
-  board: readonly (readonly Card[])[],
-): { step: GroomStep; board: readonly (readonly Card[])[] } | null {
-  const groomed = joinBoardRuns(board);
-  if (groomed.joins.length === 0) return null;
-  return {
-    step: { kind: "groom", joins: groomed.joins },
-    board: groomed.board,
-  };
+  board: readonly BoardStack[],
+): { step: GroomStep; board: readonly BoardStack[] } | null {
+  const prims: Primitive[] = [];
+  let sim = board;
+  while (true) {
+    const pair = findOneJoinablePair(sim);
+    if (pair === null) break;
+    const planned = planMergeStackOnBoard(sim, pair.src, pair.tgt, "left");
+    prims.push(...planned.prims);
+    sim = planned.sim;
+  }
+  if (prims.length === 0) return null;
+  return { step: { kind: "groom", prims }, board: sim };
 }
 
-function joinBoardRuns(
-  board: readonly (readonly Card[])[],
-): { board: readonly (readonly Card[])[]; joins: readonly JoinEvent[] } {
-  const cur: (readonly Card[])[] = [...board];
-  const joins: JoinEvent[] = [];
-  while (true) {
-    let merged = false;
-    outer: for (let i = 0; i < cur.length; i++) {
-      const ci = classifyStack(cur[i]!);
-      if (ci === null) continue;
-      if (ci.kind !== KIND_RUN && ci.kind !== KIND_RB) continue;
-      for (let j = 0; j < cur.length; j++) {
-        if (j === i) continue;
-        const cj = classifyStack(cur[j]!);
-        if (cj === null) continue;
-        if (cj.kind !== ci.kind) continue;
-        if (ci.n + cj.n > MAX_JOINED_LEN) continue;
-        const concat = [...cur[i]!, ...cur[j]!];
-        const joined = classifyStack(concat);
-        if (joined === null || joined.kind !== ci.kind) continue;
-        joins.push({ src: cur[i]!, tgt: cur[j]! });
-        cur[i] = concat;
-        cur.splice(j, 1);
-        merged = true;
-        break outer;
-      }
+function findOneJoinablePair(
+  board: readonly BoardStack[],
+): { src: readonly Card[]; tgt: readonly Card[] } | null {
+  for (let i = 0; i < board.length; i++) {
+    const ci = classifyStack(board[i]!.cards);
+    if (ci === null) continue;
+    if (ci.kind !== KIND_RUN && ci.kind !== KIND_RB) continue;
+    for (let j = 0; j < board.length; j++) {
+      if (j === i) continue;
+      const cj = classifyStack(board[j]!.cards);
+      if (cj === null) continue;
+      if (cj.kind !== ci.kind) continue;
+      if (ci.n + cj.n > MAX_JOINED_LEN) continue;
+      const concat = [...board[i]!.cards, ...board[j]!.cards];
+      const joined = classifyStack(concat);
+      if (joined === null || joined.kind !== ci.kind) continue;
+      return { src: board[i]!.cards, tgt: board[j]!.cards };
     }
-    if (!merged) break;
   }
-  return { board: cur, joins };
+  return null;
 }

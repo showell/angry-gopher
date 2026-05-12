@@ -39,9 +39,8 @@ import { parseCardLabel } from "../src/rules/card.ts";
 import type { BoardStack, Loc } from "../src/geometry.ts";
 import { findOpenLoc } from "../src/geometry.ts";
 import { playFullGame } from "../lib/full_game.ts";
-import type { PlayStep, JoinEvent } from "../lib/step_types.ts";
-import { physicalPlan } from "../src/physical_plan.ts";
-import { applyLocally, findStackIndex, makeMergeStack } from "../src/primitives.ts";
+import type { PlayStep, TurnStep } from "../lib/step_types.ts";
+import { applyLocally } from "../src/primitives.ts";
 import { encodeInitialState, type RemoteStateJson } from "../src/transcript.ts";
 
 // --- Tunables (constants, NOT CLI args) -----------------------------
@@ -157,33 +156,12 @@ function augmentedBoard(
   return [...sim, { cards: [...placements], loc }];
 }
 
-// --- Sim advancement (matches transcript.ts's per-play sim threading)
-//
-// To advance the positioned sim across a play we need to walk the
-// physical-plan primitive sequence. transcript.ts does the same thing
-// to render its action log; we reuse `physicalPlan` + `applyLocally`
-// here so positions stay in lockstep with what the Elm UI would render.
-
-function applyGroom(
+function applyStep(
   sim: readonly BoardStack[],
-  joins: readonly JoinEvent[],
+  step: TurnStep,
 ): readonly BoardStack[] {
   let cur = sim;
-  for (const j of joins) {
-    const sourceStack = findStackIndex(cur, j.src);
-    const targetStack = findStackIndex(cur, j.tgt);
-    cur = applyLocally(cur, makeMergeStack(cur, sourceStack, targetStack, "left"));
-  }
-  return cur;
-}
-
-function advancePlay(
-  sim: readonly BoardStack[],
-  play: PlayStep,
-): readonly BoardStack[] {
-  const prims = physicalPlan(sim, play.placements, play.planDescs);
-  let cur = sim;
-  for (const p of prims) cur = applyLocally(cur, p);
+  for (const p of step.prims) cur = applyLocally(cur, p);
   return cur;
 }
 
@@ -230,16 +208,9 @@ function tryCaptureFromSeed(seed: number): { puzzle: CapturedPuzzle | null; ctx:
   const deck = remaining.slice(NUM_PLAYERS * HAND_SIZE);
   const initialBoard = makeOpeningBoardPositioned();
 
-  // Run the full self-play game first; we then walk the recorded
-  // turns/plays to find a qualifying capture point. We don't need to
-  // rerun the engine — the planDescs on each PlayRecord is exactly
-  // what solveStateWithDescs returned during play.
-  const result = playFullGame(
-    initialBoard.map(s => s.cards),  // bare-cards form for the engine
-    hands,
-    deck,
-    { stopAtDeck: STOP_AT_DECK },
-  );
+  // Run the full self-play game first; then walk the recorded
+  // turns/plays to find a qualifying capture point.
+  const result = playFullGame(initialBoard, hands, deck, { stopAtDeck: STOP_AT_DECK });
 
   let sim: readonly BoardStack[] = initialBoard;
   for (let ti = 0; ti < result.turns.length; ti++) {
@@ -247,14 +218,14 @@ function tryCaptureFromSeed(seed: number): { puzzle: CapturedPuzzle | null; ctx:
     let playIdx = 0;
     for (const step of turn.steps) {
       if (step.kind === "groom") {
-        sim = applyGroom(sim, step.joins);
+        sim = applyStep(sim, step);
         continue;
       }
       playIdx++;
       const aug = augmentedBoard(sim, step.placements);
       const cardCount = cardsOnBoard(aug);
       if (
-        step.planDescs.length === TARGET_PLAN_LINES &&
+        step.planLines.length === TARGET_PLAN_LINES &&
         cardCount >= MIN_BOARD_CARDS
       ) {
         const idx = String(0).padStart(3, "0");  // overwritten by caller
@@ -273,7 +244,7 @@ function tryCaptureFromSeed(seed: number): { puzzle: CapturedPuzzle | null; ctx:
           },
         };
       }
-      sim = advancePlay(sim, step);
+      sim = applyStep(sim, step);
     }
   }
   return { puzzle: null, ctx: null };

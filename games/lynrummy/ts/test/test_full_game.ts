@@ -30,8 +30,16 @@ const BOARD_LABELS: string[][] = [
   ["2C", "3D", "4C", "5H", "6S", "7H"],
 ];
 
-function makeOpeningBoard(): readonly (readonly Card[])[] {
-  return BOARD_LABELS.map(stack => stack.map(parseCardLabel));
+function boardLocFor(row: number): { top: number; left: number } {
+  const col = (row * 3 + 1) % 5;
+  return { top: 20 + row * 60, left: 40 + col * 30 };
+}
+
+function makeOpeningBoard(): readonly { cards: readonly Card[]; loc: { top: number; left: number } }[] {
+  return BOARD_LABELS.map((stack, row) => ({
+    cards: stack.map(parseCardLabel),
+    loc: boardLocFor(row),
+  }));
 }
 
 function remainingCards(): Card[] {

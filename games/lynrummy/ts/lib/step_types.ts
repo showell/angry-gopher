@@ -1,21 +1,19 @@
 import type { Card } from "../src/rules/card.ts";
-import type { Desc } from "../src/move.ts";
-
-// Merged stack reads `[...src, ...tgt]`, matching `merge_stack` side=left.
-export interface JoinEvent {
-  readonly src: readonly Card[];
-  readonly tgt: readonly Card[];
-}
+import type { Primitive } from "../src/primitives.ts";
 
 export interface GroomStep {
   readonly kind: "groom";
-  readonly joins: readonly JoinEvent[];
+  readonly prims: readonly Primitive[];
 }
 
 export interface PlayStep {
   readonly kind: "play";
   readonly placements: readonly Card[];
-  readonly planDescs: readonly Desc[];
+  readonly prims: readonly Primitive[];
+  /** Plan-line strings, for hint display + downstream filters
+   *  (puzzle catalog picks plays whose `planLines.length`
+   *  matches a target). Not the primitive count. */
+  readonly planLines: readonly string[];
 }
 
 export interface EndStep {
