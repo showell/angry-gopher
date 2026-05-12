@@ -75,15 +75,37 @@ playerHands info =
         :: List.indexedMap
             (\idx hand ->
                 if idx == info.gameState.activePlayerIndex then
-                    playerRowShell { isActive = True, idx = idx }
-                        [ viewHandHeading
+                    div
+                        [ style "padding-bottom" "15px"
+                        , style "margin-bottom" "12px"
+                        , style "border-bottom" "1px #000080 solid"
+                        ]
+                        [ div
+                            [ style "font-weight" "bold"
+                            , style "font-size" "16px"
+                            , style "color" Colors.navy
+                            , style "margin-top" "8px"
+                            ]
+                            [ Html.text ("Player " ++ String.fromInt (idx + 1) ++ " (your turn)") ]
+                        , viewHandHeading
                         , viewHand info.handIsInteractive info.sourceCard info.hintedCards hand
                         , viewTurnControls { canUndo = info.canUndo, replayControl = info.replayControl }
                         ]
 
                 else
-                    playerRowShell { isActive = False, idx = idx }
+                    div
+                        [ style "padding-bottom" "15px"
+                        , style "margin-bottom" "12px"
+                        , style "border-bottom" "1px #000080 solid"
+                        ]
                         [ div
+                            [ style "font-weight" "bold"
+                            , style "font-size" "16px"
+                            , style "color" "#666"
+                            , style "margin-top" "8px"
+                            ]
+                            [ Html.text ("Player " ++ String.fromInt (idx + 1)) ]
+                        , div
                             [ style "color" "#888"
                             , style "font-size" "13px"
                             ]
@@ -103,39 +125,6 @@ deckRemainingLine deckCount =
         , style "margin-top" "8px"
         ]
         [ Html.text ("Deck: " ++ String.fromInt deckCount ++ " cards left") ]
-
-
-playerRowShell : { isActive : Bool, idx : Int } -> List (Html Msg) -> Html Msg
-playerRowShell { isActive, idx } body =
-    let
-        nameSuffix =
-            if isActive then
-                " (your turn)"
-
-            else
-                ""
-
-        nameColor =
-            if isActive then
-                Colors.navy
-
-            else
-                "#666"
-    in
-    div
-        [ style "padding-bottom" "15px"
-        , style "margin-bottom" "12px"
-        , style "border-bottom" "1px #000080 solid"
-        ]
-        (div
-            [ style "font-weight" "bold"
-            , style "font-size" "16px"
-            , style "color" nameColor
-            , style "margin-top" "8px"
-            ]
-            [ Html.text ("Player " ++ String.fromInt (idx + 1) ++ nameSuffix) ]
-            :: body
-        )
 
 
 
