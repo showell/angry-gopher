@@ -1,10 +1,10 @@
-# Lyn Rummy — entry points and maturity
+# Lyn Rummy — entry points
 
 **Status:** Living document. Last refreshed 2026-05-12.
 
-A catch-up reference — what code is actually running today,
-what it does, and how mature each piece is. Companion to
-`ARCHITECTURE.md` (which covers principles and structure).
+A catch-up reference — what code is actually running today
+and where to find it. Companion to `ARCHITECTURE.md` (which
+covers principles and structure).
 
 IMPORTANT: Be general in this document. Point to other
 README files (when available) for details.
@@ -35,9 +35,9 @@ In `views/`:
 
 ## CLI / agent tooling
 
-### Mining + fixture generation (repo-root `tools/`)
+### Mining + fixture generation
 
-See games/lynrummy/ts/tools for agent-side tooling.
+See `games/lynrummy/ts/tools/` for agent-side tooling.
 
 ### DSL conformance dispatch
 
