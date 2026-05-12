@@ -33,17 +33,22 @@ for hints all live here.
   drives full 2-hand games to deck-low. Permanent invariants
   (board cleanliness, hand arithmetic, card conservation)
   throw on violation.
-- **Transcript:** [`transcript.ts`](src/transcript.ts) —
-  writes Elm-replayable DSL session files (`meta` + `actions.dsl`)
-  straight to the file system (no HTTP). Per-event encoders
-  in [`wire_action_dsl.ts`](src/wire_action_dsl.ts) mirror Elm's
-  `Lib.GameEvent.elm` byte-for-byte. Each move_stack /
-  merge_stack carries a quintic-eased drag path synthesized
-  by [`wire_path_synth.ts`](src/wire_path_synth.ts). Asserts
-  `findViolation == null` after every primitive;
-  [`validate_session.ts`](src/validate_session.ts) re-reads
-  the emitted files and replays through the same `applyLocally`
-  the conformance tests use.
+- **Transcript writer:** [`transcript.ts`](src/transcript.ts) —
+  writes Elm-replayable DSL session files (`meta` +
+  `actions.dsl`). Currently re-expands the agent's abstract
+  steps (`physicalPlan` for plays, `planMergeStackOnBoard` for
+  grooms) into primitives, then emits one DSL line per primitive
+  via `primitiveDsl`. The per-event DSL encoders in
+  [`wire_action_dsl.ts`](src/wire_action_dsl.ts) are byte-
+  identical to Elm's `Lib.GameEvent.elm`.
+  [`validate_session.ts`](src/validate_session.ts) re-reads the
+  emitted files and replays through the same `applyLocally` the
+  conformance tests use.
+
+  **Layering note:** this is the second pass. The doctrine (see
+  "How agent games are written" below) wants the agent loop to
+  emit DSL inline, with `transcript.ts` collapsed to a thin file
+  appender. The current shape predates that doctrine.
 - **Browser bundle entry:**
   [`engine_entry.ts`](src/engine_entry.ts) — `solveBoard`,
   `gameHintLines`, `agentPlay`, exposed as
@@ -51,24 +56,53 @@ for hints all live here.
   `ops/build_engine_js`). The Elm UI's
   `engine_glue.js` calls these.
 
+## How agent games are written
+
+**Doctrine.** The agent emits DSL primitives inline as it
+plays. Each call to `agent_player.ts:nextStep` decides one
+move, expands it to wire primitives against the live geometry,
+and emits one wire-DSL line per primitive (via
+`wire_action_dsl.ts`). The post-step state is geometry-aware
+— primitives are already applied, no second pass needed.
+
+Consumers append the loop's emitted lines as-is:
+
+- **Self-play to disk.** `transcript.ts` opens
+  `<session>/actions.dsl` and appends each line, plus
+  `complete_turn` at turn boundaries.
+- **Puzzle agent-play (Elm UI).** The browser bundle ships
+  the same lines over an Elm port; the puzzle host appends
+  them to its in-memory action log.
+
+There is exactly one DSL-emission point. A second writer
+that re-expands primitives is a layering bug.
+
+**Current state (2026-05-12).** The code does not yet match
+this doctrine. `agent_player.ts` produces abstract
+`PlayStep`/`GroomStep` records (placements + plan descs;
+joins) without expanding them. `transcript.ts:writeSession`
+re-runs the verb expanders (`physicalPlan`,
+`planMergeStackOnBoard`) to recover primitives, then emits
+DSL. The verb expansion happens twice in the same process.
+The fix is to fold the expansion into `nextStep` and collapse
+`writeSession` to a file appender.
+
 ## Agent responsibilities
 
 This subtree owns three end-to-end responsibilities:
 
-- **Generating sample games for review.** Full 2-hand
-  self-play + Elm-replayable DSL transcript writing.
-  Driver: `npm run bench:end-of-deck -- --write-transcript [seeds...]`.
-  Output: `data/lynrummy-elm/sessions/<id>/{meta, actions.dsl}`.
-  The driver round-trip-validates the emitted files before
-  exiting.
+- **Generating sample games for review.** One command,
+  one game, seed 42. Driver: `npm run generate-game`
+  (top-level `generate_game.ts`). Output:
+  `data/lynrummy-elm/sessions/<id>/{meta, actions.dsl}`. The
+  driver round-trip-validates the emitted files before exiting.
 - **Running the conformance suite.** The canonical gate
   `ops/check-conformance` embeds the DSL files into Elm,
   runs `npm test` here, then Elm `check.sh`. Both TS and
   Elm parse the .dsl scenarios natively at test time.
 - **Running performance tests.** Bench harnesses live in
-  `bench/`: `bench:check-baseline` (timing regression gate),
-  `bench:end-of-deck` (full-game perf), and the auxiliary
-  drivers documented in `ENGINE_V2.md`.
+  `bench/`: `bench:check-baseline` (timing regression gate)
+  and the auxiliary drivers documented in `ENGINE_V2.md`.
 
 ## Layout
 
@@ -136,7 +170,6 @@ tests compare exact output (no "≤ pinned" ceilings); see
 ```
 npm run bench:check-baseline   # 81-card timing regression check
 npm run bench:gen-baseline     # regenerate gold after a deliberate solver change
-npm run bench:end-of-deck      # full-game perf, default 6 seeds × deck-low
 ```
 
 Gold timings live in `bench/baseline_board_81_gold.txt` and

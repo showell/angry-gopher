@@ -10,12 +10,11 @@ covers principles; that one covers the artifacts.
 
 ## Cold-agent orientation
 
-- **TypeScript is the agent.** `games/lynrummy/ts/` hosts the
-  BFS solver (`engine_v2.ts`, A* with kitchen-table heuristic
-  + card-tracker liveness pruning), the verb→primitive
-  pipeline, and `agent_player.ts` which plays full 2-hand
-  games down to deck-low. TS writes DSL transcripts the Elm
-  UI replays.
+- **TypeScript is the agent.** Its job is to generate full
+  games for Steve to review or continue in the Elm UI. Entry
+  point: `games/lynrummy/ts/agent_player.ts`. Output is a DSL
+  transcript on the file system that the Go server serves to
+  Elm for replay. See [`ts/README.md`](./ts/README.md).
 - **Elm is the autonomous client.** Deals, referees, replays,
   renders. `games/lynrummy/elm/`. Two surfaces — the full
   game (`Main.elm`, embedding `Game.Play`) and the

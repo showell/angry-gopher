@@ -45,8 +45,10 @@ reasoning.
   regression check (the standing perf gate).
 - `bench/gen_baseline_board.ts` — regenerates the gold after
   a deliberate solver change.
-- `bench/end_of_deck_perf.ts` — full-game perf harness; runs
-  the standing seeds to deck-low.
+- `generate_game.ts` (top-level) — plays one full game (seed
+  42) and writes an Elm-replayable DSL transcript. Not a perf
+  harness; runs once for review-able output. Driver:
+  `npm run generate-game`.
 - `bench/perf_harness.ts`, `bench/budget_sweep.ts`,
   `bench/bench_timing.ts` — auxiliary measurement drivers.
 - `bench/bench_outer_shell.ts` — singleton-only vs full
@@ -91,8 +93,8 @@ finds; below that the agent gives up on real boards. Going past
 5 was tempting but unneeded — every stuck moment we examined
 fell to a depth-5 plan. Future regressions or aggressive cuts
 to this cap should be justified empirically against
-`bench/end_of_deck_perf.ts --write-transcript 42` (turns 10/11
-must remain `hand_empty`).
+`npm run generate-game` (turns 10/11 of seed 42 must remain
+`hand_empty`).
 
 ## Unexplored, in priority order
 

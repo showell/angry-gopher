@@ -18,6 +18,6 @@
     "bench:check-baseline": "node bench/check_baseline_timing.ts",
     "bench:perf-harness": "node bench/perf_harness.ts",
     "bench:budget-sweep": "node bench/budget_sweep.ts",
-    "bench:end-of-deck": "node bench/end_of_deck_perf.ts"
+    "generate-game": "node generate_game.ts"
   }
 }

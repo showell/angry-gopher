@@ -2,9 +2,9 @@
 // agent self-play.
 //
 // The agent plays full games against the canonical Game 17 opening
-// board (matching bench/end_of_deck_perf.ts + bench/gen_baseline_board.ts
-// + python/dealer.py, all of which agree on the 6-helper / 23-card
-// fixed deal). For each shuffle seed we run one game; we look for a
+// board (matching generate_game.ts + bench/gen_baseline_board.ts, both
+// of which agree on the 6-helper / 23-card fixed deal). For each
+// shuffle seed we run one game; we look for a
 // turn-play where:
 //
 //   1. the engine_v2 A* solver returns a plan of EXACTLY 3 plan-lines
@@ -53,9 +53,8 @@ const HAND_SIZE = 15;
 const NUM_PLAYERS = 2;
 const STOP_AT_DECK = 10;
 
-// Game 17 opening board — same fixed deal as bench/end_of_deck_perf.ts
-// and bench/gen_baseline_board.ts; the pattern dates back to the
-// retired python/dealer.py. 6 helpers, 23 cards.
+// Game 17 opening board — same fixed deal as generate_game.ts and
+// bench/gen_baseline_board.ts. 6 helpers, 23 cards.
 const BOARD_LABELS: string[][] = [
   ["KS", "AS", "2S", "3S"],
   ["TD", "JD", "QD", "KD"],
@@ -67,8 +66,8 @@ const BOARD_LABELS: string[][] = [
 
 function boardLocFor(row: number): Loc {
   // Mirror of dealer.go's initial-board layout, kept in lockstep with
-  // bench/end_of_deck_perf.ts so transcripts and puzzles render the
-  // same on a fresh-replay bootstrap.
+  // generate_game.ts so transcripts and puzzles render the same on a
+  // fresh-replay bootstrap.
   const col = (row * 3 + 1) % 5;
   return { top: 20 + row * 60, left: 40 + col * 30 };
 }
@@ -101,8 +100,8 @@ function remainingCards(): Card[] {
   return out;
 }
 
-// mulberry32 — same PRNG as bench/end_of_deck_perf.ts so puzzle seeds
-// reproduce with the standing perf harness.
+// mulberry32 — same PRNG as generate_game.ts so puzzle seeds reproduce
+// across the two drivers.
 function mulberry32(seed: number): () => number {
   let a = seed >>> 0;
   return function next(): number {

@@ -29,14 +29,12 @@ the worked examples are seed-42 turns 10 and 11. See
 
 The TS agent at `ts/` owns three end-to-end jobs:
 
-- **Self-play.** Plays full 2-hand games to deck-low against
-  a fixed seed; writes the result as an Elm-replayable DSL
+- **Self-play.** Plays one full 2-hand game (seed 42, to
+  deck-low) and writes the result as an Elm-replayable DSL
   transcript (`meta` + `actions.dsl`) Steve can step through
-  in the UI. Driver:
-  `npm run bench:end-of-deck -- --write-transcript [seeds...]`.
-  The writer round-trips the emitted files through
-  `applyLocally` before returning — agent transcripts can't
-  ship broken.
+  in the UI. Driver: `npm run generate-game`. The driver
+  round-trip-validates the emitted files through `applyLocally`
+  before returning — agent transcripts can't ship broken.
 - **Hint generation.** The full game's Hint button calls
   into `hand_play.ts:findPlay` over Elm ports.
 - **Conformance + perf gates.** `ops/check-conformance` runs
