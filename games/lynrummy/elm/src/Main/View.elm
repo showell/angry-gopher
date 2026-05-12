@@ -43,8 +43,16 @@ view model =
     -- floater stays `position: fixed` — a viewport-level
     -- overlay parallel to the popup.
     let
+        drag =
+            case model.replayState of
+                Just rs ->
+                    replayDrag rs
+
+                Nothing ->
+                    model.drag
+
         handFloaters =
-            case currentDrag model of
+            case drag of
                 DraggingHandCard d ->
                     [ Drag.renderHandFloater d [ style "position" "fixed" ] ]
 
@@ -99,7 +107,12 @@ leftSidebar : Model -> Html Msg
 leftSidebar model =
     let
         drag =
-            currentDrag model
+            case model.replayState of
+                Just rs ->
+                    replayDrag rs
+
+                Nothing ->
+                    model.drag
 
         handIsInteractive =
             drag == NotDragging
@@ -152,7 +165,12 @@ rightSidebar : Model -> Html Msg
 rightSidebar model =
     let
         drag =
-            currentDrag model
+            case model.replayState of
+                Just rs ->
+                    replayDrag rs
+
+                Nothing ->
+                    model.drag
 
         board =
             case model.replayState of
@@ -238,23 +256,6 @@ rightSidebar model =
         , boardFloaters = boardFloaters
         }
 
-
-
--- DRAG STATE
---
--- During Instant Replay the view's drag comes from
--- `model.replayState`'s evolving sub-machine. Outside replay
--- it's the live `model.drag`.
-
-
-currentDrag : Model -> Drag.DragState
-currentDrag model =
-    case model.replayState of
-        Just rs ->
-            replayDrag rs
-
-        Nothing ->
-            model.drag
 
 
 {-| The drag state the View should render during a replay.
