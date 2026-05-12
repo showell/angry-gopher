@@ -25,14 +25,6 @@ import {
 } from "./wire_action_dsl.ts";
 import { mergeStackPath, moveStackPath } from "./wire_path_synth.ts";
 
-// --- Primitive descriptors --------------------------------------------
-//
-// Every Primitive carries its own `dsl` body — the wire-DSL line
-// without a seq prefix. Builders below stamp it in at construction
-// using the sim board the caller already had. Consumers that need
-// the line (transcript writer, anywhere else that serializes) read
-// `prim.dsl` directly — no dispatch on `prim.action` required.
-
 export type Side = "left" | "right";
 
 export interface SplitPrim {
@@ -152,16 +144,6 @@ export function makePlaceHand(
     loc,
     dsl: placeHandDsl(handCard, loc),
   };
-}
-
-/** For parsers and other call sites that already have the original
- *  wire-DSL line in hand. Passes the line straight through; bypasses
- *  re-emission since the input IS the source of truth. */
-export function primWithDsl<P extends Omit<Primitive, "dsl">>(
-  fields: P,
-  dsl: string,
-): P & { dsl: string } {
-  return { ...fields, dsl };
 }
 
 // --- Local apply (mirrors server-side state evolution) ----------------
