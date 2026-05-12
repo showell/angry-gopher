@@ -24,7 +24,7 @@ import {
 import { findPlay, findPlanForBuckets, type PlayResult } from "../src/hand_play.ts";
 import { describe, type Desc } from "../src/move.ts";
 import { enumerateMoves } from "../src/enumerator.ts";
-import { joinBoardRuns, type JoinEvent } from "./groom.ts";
+import { tryGroom, type GroomStep } from "./groom.ts";
 
 // --- Plan replay (apply a plan to derive the post-plan Buckets) -----
 
@@ -128,26 +128,13 @@ function applyPlay(
 
 // --- Records ----------------------------------------------------------
 //
-// A turn is a single ordered list of `steps`. Each step is either a
-// `groom` (a non-empty batch of run-merges) or a `play` (one
-// findPlay → applyPlay round-trip). The shape emerges from
-// `nextStep`'s contract: groom-when-available wins over play-when-
-// available; nothing is emitted for empty grooms. So the typical
-// stream looks like a real human game would — long runs of plays
-// punctuated by occasional grooms when a play opens a join.
-// Consumers (transcript writer, puzzle capture, traces, the
-// eventual Elm port) walk `steps` in order and dispatch on `kind`.
-
-/** A non-empty batch of greedy run-merges. Transcript writers
- *  replay these as `merge_stack` primitives so the wire-level
- *  board stays in sync with the agent's logical board. */
-export interface GroomStep {
-  readonly kind: "groom";
-  readonly joins: readonly JoinEvent[];
-  /** Total wall time the agent spent producing this step. For
-   *  grooms this is the joinBoardRuns probe + assertion cost. */
-  readonly wallMs: number;
-}
+// A turn is a single ordered list of `steps`. Each step is a
+// `GroomStep` (see groom.ts) or a `PlayStep` (defined below). The
+// stream's shape emerges from `nextStep`'s contract:
+// groom-when-available wins over play-when-available, and nothing is
+// emitted when neither fires. Consumers (transcript writer, puzzle
+// capture, the eventual Elm port) walk `steps` in order and dispatch
+// on `kind`.
 
 /** One successful findPlay → applyPlay round-trip. */
 export interface PlayStep {
@@ -219,9 +206,9 @@ function drawCountFor(outcome: "hand_empty" | "stuck", cardsPlayedThisTurn: numb
 // the groom; once grooms are exhausted, the next call returns a
 // play; when nothing else is possible, the next call returns end.
 //
-// Empty grooms are NEVER returned — if `joinBoardRuns` finds nothing
-// to merge, we silently fall through to findPlay. The caller's loop
-// stays tight: dispatch on kind, animate, call again.
+// Empty grooms are NEVER returned — if `tryGroom` returns null,
+// we silently fall through to findPlay. The caller's loop stays
+// tight: dispatch on kind, animate, call again.
 
 /** One step result, plus the post-step (board, hand). For `end` the
  *  state is unchanged from the inputs; for `groom`/`play` the state
@@ -238,15 +225,12 @@ export function nextStep(
   hand: readonly Card[],
 ): NextStepResult {
   const tStart = performance.now();
-  // 1. Groom-first. Cheap quadratic probe over board stacks.
-  const groomed = joinBoardRuns(board);
-  if (groomed.joins.length > 0) {
+  // 1. Groom-first. Delegates to groom.ts; nothing groom-shaped
+  //    leaks back here beyond the step + new board.
+  const groomed = tryGroom(board);
+  if (groomed !== null) {
     assertBoardClean(groomed.board, "nextStep after-groom");
-    return {
-      step: { kind: "groom", joins: groomed.joins, wallMs: performance.now() - tStart },
-      board: groomed.board,
-      hand,
-    };
+    return { step: groomed.step, board: groomed.board, hand };
   }
 
   // 2. End if hand is empty.
