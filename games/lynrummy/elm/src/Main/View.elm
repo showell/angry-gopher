@@ -155,7 +155,7 @@ view model =
             , style "left" "20px"
             , style "width" (String.fromInt (BoardGeometry.boardViewportLeft - 40) ++ "px")
             ]
-            [ Sidebar.leftSidebar (sidebarInfo model drag) ]
+            [ leftSidebar model ]
          , div
             [ style "position" "absolute"
             , style "top" (String.fromInt BoardGeometry.boardViewportTop ++ "px")
@@ -179,18 +179,24 @@ view model =
 
 -- LEFT SIDEBAR
 --
--- Implementation lives in `Game.Sidebar`. View only builds
--- the `PlayerPanelInfo` from Model and hands it off.
---
--- During Instant Replay, the sidebar + board are sourced
--- from `model.replayState`'s evolving `gameState`. The live
--- `model.gameState` is preserved untouched behind the scenes
--- and snaps back when `ReplayCompleted` clears `replayState`.
+-- Slice the Model into a `Sidebar.PlayerPanelInfo` and hand
+-- it to `Game.Sidebar`. During Instant Replay, the sidebar's
+-- gameState comes from `model.replayState`'s evolving copy;
+-- the live `model.gameState` is preserved untouched and snaps
+-- back when `ReplayCompleted` clears `replayState`.
 
 
-sidebarInfo : Model -> Drag.DragState -> Sidebar.PlayerPanelInfo
-sidebarInfo model drag =
+leftSidebar : Model -> Html Msg
+leftSidebar model =
     let
+        drag =
+            case model.replayState of
+                Just rs ->
+                    replayDrag rs
+
+                Nothing ->
+                    model.drag
+
         handIsInteractive =
             drag == NotDragging
 
@@ -204,27 +210,29 @@ sidebarInfo model drag =
     in
     case model.replayState of
         Just rs ->
-            { gameState = rs.gameState
-            , handIsInteractive = handIsInteractive
-            , sourceCard = sourceCard
-            , hintedCards = []
-            , canUndo = False
-            , replayControl =
-                if rs.paused then
-                    Sidebar.ShowResume
+            Sidebar.leftSidebar
+                { gameState = rs.gameState
+                , handIsInteractive = handIsInteractive
+                , sourceCard = sourceCard
+                , hintedCards = []
+                , canUndo = False
+                , replayControl =
+                    if rs.paused then
+                        Sidebar.ShowResume
 
-                else
-                    Sidebar.ShowPause
-            }
+                    else
+                        Sidebar.ShowPause
+                }
 
         Nothing ->
-            { gameState = model.gameState
-            , handIsInteractive = handIsInteractive
-            , sourceCard = sourceCard
-            , hintedCards = model.hintedCards
-            , canUndo = canUndoThisTurn model.actionLog
-            , replayControl = Sidebar.ShowReplay
-            }
+            Sidebar.leftSidebar
+                { gameState = model.gameState
+                , handIsInteractive = handIsInteractive
+                , sourceCard = sourceCard
+                , hintedCards = model.hintedCards
+                , canUndo = canUndoThisTurn model.actionLog
+                , replayControl = Sidebar.ShowReplay
+                }
 
 
 {-| The drag state the View should render during a replay.
