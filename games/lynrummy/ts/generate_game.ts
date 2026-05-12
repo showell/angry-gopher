@@ -18,7 +18,7 @@ import { validateSession } from "./src/validate_session.ts";
 const HAND_SIZE = 15;
 const NUM_PLAYERS = 2;
 const STOP_AT_DECK = 10;
-const SEED = 42;
+const SEED = 50;
 
 // Game 17 opening board. Locations match dealer.go's initial-board
 // layout (`top = 20 + row*60; col = (row*3 + 1) % 5; left = 40 + col*30`)
