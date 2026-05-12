@@ -6,8 +6,8 @@
 // against, call by call.
 //
 // The three step kinds:
-//   - GroomStep  (defined in groom.ts) — board cleanup
-//   - PlayStep   — one findPlay → applyPlay round-trip
+//   - GroomStep  (see groom.ts) — board cleanup
+//   - PlayStep   (see play.ts)  — one findPlay → applyPlay round-trip
 //   - EndStep    — no groom AND no play possible; turn over
 //
 // FullStep = the two progress kinds (groom or play). EndStep is the
@@ -15,15 +15,10 @@
 // stream.
 
 import type { Card } from "../src/rules/card.ts";
-import type { Buckets, RawBuckets } from "../src/buckets.ts";
-import { classifyBuckets } from "../src/buckets.ts";
-import { classifyStack } from "../src/classified_card_stack.ts";
-import { findPlay, findPlanForBuckets, type PlayResult } from "../src/hand_play.ts";
-import { describe, type Desc } from "../src/move.ts";
-import { enumerateMoves } from "../src/enumerator.ts";
 import { tryGroom } from "./groom.ts";
+import { tryPlay } from "./play.ts";
+import { assertBoardClean } from "./board.ts";
 import type { GroomStep, PlayStep, EndStep } from "./step_types.ts";
-import { assertBoardClean, cardKey } from "./board.ts";
 
 /** One step result, plus the post-step (board, hand). For `end` the
  *  state is unchanged from the inputs; for `groom`/`play` the state
@@ -35,135 +30,32 @@ export interface FullStepResult {
   readonly hand: readonly Card[];
 }
 
-// --- Plan replay (apply a plan to derive the post-plan Buckets) -----
-
-function applyPlan(initial: Buckets, plan: readonly { desc: Desc }[]): Buckets {
-  let state: Buckets = initial;
-  for (let step = 0; step < plan.length; step++) {
-    const want = describe(plan[step]!.desc);
-    let matched: Buckets | null = null;
-    for (const [desc, next] of enumerateMoves(state)) {
-      if (describe(desc) === want) { matched = next; break; }
-    }
-    if (matched === null) {
-      throw new Error(`step ${step + 1}: enumerator did not yield matching move "${want}"`);
-    }
-    state = matched;
-  }
-  return state;
-}
-
-function partition(
-  augmented: readonly (readonly Card[])[],
-): { helper: (readonly Card[])[]; trouble: (readonly Card[])[] } {
-  const helper: (readonly Card[])[] = [];
-  const trouble: (readonly Card[])[] = [];
-  for (const stack of augmented) {
-    const ccs = classifyStack(stack);
-    if (ccs === null || ccs.n < 3) trouble.push(stack);
-    else helper.push(stack);
-  }
-  return { helper, trouble };
-}
-
-/** Apply one play (the move-sequence findPlay returned) to (board, hand).
- *  Returns the post-play state, or null if the engine can't replay
- *  (which shouldn't happen — findPlay already proved a clean-board
- *  plan exists). */
-function applyPlay(
-  board: readonly (readonly Card[])[],
-  hand: readonly Card[],
-  play: PlayResult,
-): { board: readonly (readonly Card[])[]; hand: readonly Card[]; planDescs: readonly Desc[] } | null {
-  const { helper, trouble } = partition([...board, [...play.placements]]);
-  const initial: RawBuckets = { helper, trouble, growing: [], complete: [] };
-  const classified = classifyBuckets(initial);
-
-  const plan = findPlanForBuckets(classified);
-  if (plan === null) return null;
-
-  const final = applyPlan(classified, plan);
-
-  const newBoard: (readonly Card[])[] = [
-    ...final.helper.map(s => [...s.cards] as readonly Card[]),
-    ...final.complete.map(s => [...s.cards] as readonly Card[]),
-  ];
-  const placedSet = new Set(play.placements.map(cardKey));
-  const newHand = hand.filter(c => !placedSet.has(cardKey(c)));
-  return { board: newBoard, hand: newHand, planDescs: plan.map(p => p.desc) };
-}
-
-// --- fullStep: the agent's per-step boundary -------------------------
-//
-// `fullStep(board, hand)` is the agent's primary contract. The caller
-// (a self-play loop, or eventually an Elm port) calls it repeatedly;
-// each call returns one of:
-//
-//   - `groom` — a non-empty batch of run-merges to animate
-//   - `play`  — one findPlay→applyPlay round-trip with placements
-//   - `end`   — no groom available AND no play available; turn over
-//
-// The contract is "groom-first when available, play-when-not, end-
-// when-neither." Both sides of the alternation fall out naturally:
-// after a play that opens a board-level join, the next call returns
-// the groom; once grooms are exhausted, the next call returns a
-// play; when nothing else is possible, the next call returns end.
-//
-// Empty grooms are NEVER returned — if `tryGroom` returns null, we
-// silently fall through to findPlay. The caller's loop stays tight:
-// dispatch on kind, animate, call again.
-
+/** The agent's per-step contract. Each call returns one of:
+ *
+ *    - `groom` — a non-empty batch of run-merges to animate
+ *    - `play`  — one findPlay→applyPlay round-trip with placements
+ *    - `end`   — no groom available AND no play available; turn over
+ *
+ *  Empty grooms are never returned — if `tryGroom` finds nothing,
+ *  we silently fall through to `tryPlay`. EndStep's `outcome`
+ *  distinguishes "hand empty" from "stuck with cards in hand." */
 export function fullStep(
   board: readonly (readonly Card[])[],
   hand: readonly Card[],
 ): FullStepResult {
   const tStart = performance.now();
-  // 1. Groom-first. Delegates to groom.ts; nothing groom-shaped
-  //    leaks back here beyond the step + new board.
+
   const groomed = tryGroom(board);
   if (groomed !== null) {
     assertBoardClean(groomed.board, "fullStep after-groom");
     return { step: groomed.step, board: groomed.board, hand };
   }
 
-  // 2. End if hand is empty.
-  if (hand.length === 0) {
-    return { step: { kind: "end", outcome: "hand_empty" }, board, hand };
+  const played = tryPlay(board, hand, tStart);
+  if (played !== null) {
+    return played;
   }
 
-  // 3. Try a play.
-  const t0 = performance.now();
-  const play = findPlay(hand, board);
-  const findPlayMs = performance.now() - t0;
-  if (play === null) {
-    return { step: { kind: "end", outcome: "stuck" }, board, hand };
-  }
-
-  const t1 = performance.now();
-  const next = applyPlay(board, hand, play);
-  const applyMs = performance.now() - t1;
-  if (next === null) {
-    // findPlay produced this play (proving a clean-board plan
-    // exists), but applyPlay's engine call returned null. That's a
-    // contradiction — two engine invocations on the same augmented
-    // state disagreed on solvability. Don't paper over; surface.
-    throw new Error(
-      `[full_step fullStep] applyPlay returned null for a play findPlay just produced. `
-      + `This indicates a divergence between findPlay's engine call and applyPlay's `
-      + `(both go through solveStateWithDescs). Placements: [${play.placements.map(cardKey).join(" ")}]. `
-      + `Plan length: ${play.plan.length}.`,
-    );
-  }
-  return {
-    step: {
-      kind: "play",
-      placements: [...play.placements],
-      planDescs: next.planDescs,
-      findPlayMs,
-      applyMs,
-      wallMs: performance.now() - tStart,
-    },
-    board: next.board,
-    hand: next.hand,
-  };
+  const outcome = hand.length === 0 ? "hand_empty" : "stuck";
+  return { step: { kind: "end", outcome }, board, hand };
 }
