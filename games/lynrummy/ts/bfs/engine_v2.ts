@@ -188,7 +188,7 @@ export function solveTurn(
 
 // --- Solver entry point -----------------------------------------------------
 //
-// `solveStateWithMoves` auto-classifies raw input, short-circuits
+// `solveBucketedState` auto-classifies raw input, short-circuits
 // trouble-cap + victory + doomed-singleton states, then dispatches to
 // `solveTurn` (A*). `maxStates` maps to `solveTurn`'s visit `budget`;
 // `maxTroubleOuter` is a pre-flight reject for unsolvably-deep inputs.
@@ -210,7 +210,7 @@ function isAlreadyClassified(initial: Buckets | RawBuckets): initial is Buckets 
   return true;
 }
 
-export function solveStateWithMoves(
+export function solveBucketedState(
   initial: Buckets | RawBuckets,
   opts: SolveOptions = {},
 ): SolveResult | null {

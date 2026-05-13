@@ -40,7 +40,7 @@ import {
   KIND_SET,
 } from "../core/card_stack.ts";
 import type { Buckets, RawBuckets } from "../bfs/buckets.ts";
-import { solveStateWithMoves } from "../bfs/engine_v2.ts";
+import { solveBucketedState } from "../bfs/engine_v2.ts";
 import { solveBoard, type SolveResult } from "../bfs/index.ts";
 import type { Move } from "../bfs/move.ts";
 
@@ -83,7 +83,7 @@ export function findPlanForBuckets(
   initial: RawBuckets | Buckets,
   maxStates: number = PROJECTION_MAX_STATES,
 ): SolveResult | null {
-  return solveStateWithMoves(initial, { ...HINT_OPTS, maxStates });
+  return solveBucketedState(initial, { ...HINT_OPTS, maxStates });
 }
 
 export interface PlayResult {

@@ -18,7 +18,7 @@ import { primToWire, type WireActionJson } from "./wire_json.ts";
  * Board-shaped entry point. Each board stack is a list of cards
  * (Card tuples). Partitions stacks into helper (complete groups:
  * run / rb / set) vs trouble (everything else), then delegates to
- * `solveStateWithMoves`. The Elm-side BFS that this used to
+ * `solveBucketedState`. The Elm-side BFS that this used to
  * mirror has been retired; this is now the canonical solver.
  *
  * Returns the SHORTEST plan (PlanLine[]) found within the engine's

@@ -32,7 +32,7 @@ import type { Primitive } from "../src/primitives.ts";
 import { applyLocally } from "../src/primitives.ts";
 import { primToDslLine } from "../src/wire_json.ts";
 import { expandVerb } from "../src/verbs.ts";
-import { solveStateWithMoves } from "../bfs/engine_v2.ts";
+import { solveBucketedState } from "../bfs/engine_v2.ts";
 import {
   classifyStack,
   KIND_RUN, KIND_RB, KIND_SET,
@@ -112,7 +112,7 @@ interface PuzzleResult {
 function runPuzzle(p: JsonPuzzle): PuzzleResult {
   const board = decodeBoard(p.initial_state.board);
   const buckets = partitionBoard(board);
-  const result = solveStateWithMoves({
+  const result = solveBucketedState({
     helper: buckets.helper, trouble: buckets.trouble, growing: [], complete: [],
   });
   if (result === null) {

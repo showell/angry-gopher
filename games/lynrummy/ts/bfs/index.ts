@@ -1,6 +1,6 @@
 import type { Card } from "../core/card.ts";
 import { classifyStack } from "../core/card_stack.ts";
-import { solveStateWithMoves, type SolveResult, type SolveOptions } from "./engine_v2.ts";
+import { solveBucketedState, type SolveResult, type SolveOptions } from "./engine_v2.ts";
 
 export type { PlanLine, SolveResult, SolveOptions } from "./engine_v2.ts";
 
@@ -19,5 +19,5 @@ export function solveBoard(
     if (ccs === null || ccs.n < 3) trouble.push(stack);
     else helper.push(stack);
   }
-  return solveStateWithMoves({ helper, trouble, growing: [], complete: [] }, opts);
+  return solveBucketedState({ helper, trouble, growing: [], complete: [] }, opts);
 }
