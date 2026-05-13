@@ -15,11 +15,15 @@
 // MIN_BASELINE_MS are COMPARED; the fast ones are measured purely so
 // the slow ones see the same CPU state they did at gold-capture time.
 //
-// A regression is flagged when: current_ms > baseline_ms * (1 + tolerance)
+// A regression is flagged when: current_ms > baseline_ms * (1 + TOLERANCE).
+//
+// All knobs (TOLERANCE, RUNS, fixture path, baseline path) are
+// hard-coded module constants. The bench is meant to be deterministic
+// across runs and across machines; runtime variability defeats the
+// trip-wire purpose.
 //
 // Usage:
 //   node bench/check_baseline_timing.ts
-//   node bench/check_baseline_timing.ts --tolerance=0.10 --runs=20
 
 import * as fs from "node:fs";
 import * as path from "node:path";
@@ -36,6 +40,16 @@ import { parseConformanceDsl } from "../test/conformance_dsl.ts";
 // Cheap scenarios still get measured (n=1) so the per-position
 // thermal trajectory matches the gold-capture conditions.
 const MIN_BASELINE_MS = 50.0;
+
+// 10% slowdown is the regression trip-wire. Pick this to be loose
+// enough that ordinary measurement noise doesn't fire, tight enough
+// that a real algorithmic slowdown does.
+const TOLERANCE = 0.10;
+
+// Number of timed runs per "hot" scenario. min-of-N. Picked to be
+// big enough that GC pauses and JIT warmup wash out, small enough
+// that the full 81-scenario sweep stays under a minute.
+const RUNS = 20;
 
 interface FixtureCard {
   value: number;
@@ -107,25 +121,12 @@ function timeScenario(sc: Fixture, nRuns: number): number {
   return bestMs;
 }
 
-function parseArgs(argv: string[]): { tolerance: number; runs: number; fixtures: string; baseline: string } {
-  let tolerance = 0.10;
-  let runs = 20;
-  const here = path.dirname(new URL(import.meta.url).pathname);
-  let fixtures = path.resolve(here, "../../conformance/scenarios/baseline_board_81.dsl");
-  let baseline = path.resolve(here, "baseline_board_81_gold.txt");
-  for (const a of argv) {
-    if (a.startsWith("--tolerance=")) tolerance = parseFloat(a.slice("--tolerance=".length));
-    else if (a.startsWith("--runs=")) runs = parseInt(a.slice("--runs=".length), 10);
-    else if (a.startsWith("--fixtures=")) fixtures = a.slice("--fixtures=".length);
-    else if (a.startsWith("--baseline=")) baseline = a.slice("--baseline=".length);
-  }
-  return { tolerance, runs, fixtures, baseline };
-}
-
 function main(): void {
-  const args = parseArgs(process.argv.slice(2));
-  const fixtures = loadFixtures(args.fixtures);
-  const baseline = loadBaseline(args.baseline);
+  const here = path.dirname(new URL(import.meta.url).pathname);
+  const fixturesPath = path.resolve(here, "../../conformance/scenarios/baseline_board_81.dsl");
+  const baselinePath = path.resolve(here, "baseline_board_81_gold.txt");
+  const fixtures = loadFixtures(fixturesPath);
+  const baseline = loadBaseline(baselinePath);
 
   const regressions: { sid: string; baseMs: number; curMs: number }[] = [];
   const total = baseline.size;
@@ -140,12 +141,12 @@ function main(): void {
     }
     const baseMs = baseInfo.ms;
     const isHot = baseMs >= MIN_BASELINE_MS;
-    const nRuns = isHot ? args.runs : 1;
+    const nRuns = isHot ? RUNS : 1;
     const curMs = timeScenario(sc, nRuns);
 
     if (!isHot) continue;
 
-    const thresholdMs = baseMs * (1 + args.tolerance);
+    const thresholdMs = baseMs * (1 + TOLERANCE);
     const pct = ((curMs - baseMs) / Math.max(baseMs, 0.001)) * 100;
     const isRegression = curMs > thresholdMs;
 

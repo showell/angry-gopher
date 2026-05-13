@@ -17,7 +17,6 @@
     "bench:outer-shell": "node bench/bench_outer_shell.ts",
     "bench:gen-baseline": "node bench/gen_baseline_board.ts",
     "bench:check-baseline": "node bench/check_baseline_timing.ts",
-    "bench:perf-harness": "node bench/perf_harness.ts",
     "generate-game": "node generate_game.ts"
   },
   "devDependencies": {
