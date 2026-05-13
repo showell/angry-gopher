@@ -7,20 +7,21 @@ module Game.State exposing
     , lastUndoableAction
     )
 
-{-| All application-wide data types and the initial Model. -}
+{-| All application-wide data types and the initial Model.
+-}
 
 import Lib.ActionLog as ActionLog exposing (ActionLogEntry)
-import Lib.Execute as Execute
+import Lib.Animation.Animate exposing (AnimationState)
 import Lib.Dealer
 import Lib.Drag exposing (DragState(..))
+import Lib.Execute as Execute
 import Lib.Game as Game exposing (GameState)
 import Lib.GameEvent exposing (GameEvent(..))
 import Lib.Hand as Hand
 import Lib.Physics.BoardGeometry exposing (refereeBounds)
 import Lib.Physics.GestureArbitration as GA
-import Lib.Rules.Card exposing (Card)
 import Lib.Popup exposing (PopupContent)
-import Lib.Animation.Animate exposing (AnimationState)
+import Lib.Rules.Card exposing (Card)
 import Lib.Status exposing (StatusKind(..), StatusMessage)
 
 
@@ -72,6 +73,7 @@ type alias Model =
     -- back.
     , nextEngineRequestId : Int
     }
+
 
 
 -- ACTION LOG HELPERS

@@ -208,7 +208,7 @@ formatBoard stacks =
 
 
 {-| Emit a stack line with the loc pair right-padded to width
-three on each axis so the `): ` separator lines up across a
+three on each axis so the `):` separator lines up across a
 multi-stack block. The cards trail off at varying widths — the
 goal is to make it easy to scan PAST the coords to where the
 cards begin.

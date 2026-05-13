@@ -19,8 +19,8 @@ referee guard isn't needed during play.
 
 -}
 
-import Lib.Physics.BoardGeometry exposing (BoardBounds, validateBoardGeometry)
 import Lib.CardStack exposing (CardStack)
+import Lib.Physics.BoardGeometry exposing (BoardBounds, validateBoardGeometry)
 import Lib.Rules.Card
 import Lib.Rules.StackType exposing (CardStackType(..), getStackType)
 

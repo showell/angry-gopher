@@ -23,10 +23,10 @@ import Lib.CardStack as CardStack exposing (BoardLocation, CardStack)
 import Lib.Physics.BoardGeometry as BG
 import Lib.Physics.GestureArbitration as GA
 import Lib.Physics.WingOracle as WingOracle
+import Lib.Point exposing (Point)
 import Lib.Status as Status
 import Lib.TimeLoc exposing (TimeLoc)
 import Lib.WingView as WingView
-import Lib.Point exposing (Point)
 
 
 {-| Result of resolving a board-card mouseup. `MergeStack` and

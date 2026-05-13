@@ -60,9 +60,6 @@ scenarioTest sc =
 verify : Dsl.Scenario -> Expect.Expectation
 verify sc =
     case sc.op of
-        "stack_height_constant" ->
-            BoardGeometry.stackHeight |> Expect.equal 40
-
         "classify_board_geometry" ->
             verifyClassifyBoardGeometry sc
 
@@ -92,9 +89,6 @@ verify sc =
 
         "gesture_floater_over_wing" ->
             verifyGestureFloaterOverWing sc
-
-        "click_arbitration" ->
-            verifyClickArbitration sc
 
         "floater_top_left" ->
             verifyFloaterTopLeft sc
@@ -1380,55 +1374,6 @@ parseRefereeStage s =
             Nothing
 
 
-
-
-
--- click_arbitration
-
-
-verifyClickArbitration : Dsl.Scenario -> Expect.Expectation
-verifyClickArbitration sc =
-    case ( scalarPoint "mousedown" sc, scalarPoint "current" sc ) of
-        ( Just md, Just cur ) ->
-            let
-                initialIntent =
-                    Dict.get "initial_click_intent" sc.otherScalars
-                        |> Maybe.andThen String.toInt
-
-                expected =
-                    case Dict.get "expect_click_intent" sc.otherScalars of
-                        Just "nothing" ->
-                            Just Nothing
-
-                        Just s ->
-                            Just (Just (Maybe.withDefault 0 (String.toInt s)))
-
-                        Nothing ->
-                            Nothing
-
-                preKill =
-                    scalarPoint "pre_kill_at" sc
-
-                intentAfterKill =
-                    case preKill of
-                        Just pk ->
-                            GA.clickIntentAfterMove md pk initialIntent
-
-                        Nothing ->
-                            initialIntent
-
-                actual =
-                    GA.clickIntentAfterMove md cur intentAfterKill
-            in
-            case expected of
-                Just exp ->
-                    actual |> Expect.equal exp
-
-                Nothing ->
-                    Expect.fail "click_arbitration scenario missing expect_click_intent"
-
-        _ ->
-            Expect.fail "click_arbitration scenario missing mousedown or current"
 
 
 

@@ -1,11 +1,6 @@
 module Lib.BoardActions exposing
     ( BoardChange
-    , HandMergeResult
     , Side(..)
-    , StackMergeResult
-    , findAllHandMerges
-    , findAllStackMerges
-    , moveStackTo
     , placeHandCardAt
     , tryHandMerge
     , tryStackMerge
@@ -26,7 +21,6 @@ import Lib.CardStack as CardStack
         ( BoardLocation
         , CardStack
         , HandCard
-        , isStacksEqual
         )
 
 
@@ -49,32 +43,11 @@ type alias BoardChange =
     }
 
 
-{-| Result of `findAllStackMerges`: a valid merge of a dragged
-stack onto some other board stack, with the side and the
-computed diff.
--}
-type alias StackMergeResult =
-    { side : Side
-    , change : BoardChange
-    }
-
-
-{-| Result of `findAllHandMerges`: a valid merge of a dragged
-hand card onto some board stack, plus the stack it merges
-onto.
--}
-type alias HandMergeResult =
-    { side : Side
-    , stack : CardStack
-    , change : BoardChange
-    }
-
-
 
 -- INTERNAL
 
 
-{-| TS had a throwaway DUMMY_LOC used when wrapping a hand card
+{-| TS had a throwaway DUMMY\_LOC used when wrapping a hand card
 as a stack for merging. The merged result's loc comes from the
 target stack's merge operation, so the dummy loc is discarded.
 -}
@@ -145,59 +118,5 @@ placeHandCardAt handCard loc =
     }
 
 
-moveStackTo : CardStack -> BoardLocation -> BoardChange
-moveStackTo stack newLoc =
-    { stacksToRemove = [ stack ]
-    , stacksToAdd = [ { stack | loc = newLoc } ]
-    , handCardsToRelease = []
-    }
-
-
 
 -- BULK MERGE DISCOVERY
-
-
-{-| Enumerate every merge of `target` onto any other stack
-from the given board. Filters out `target` itself by
-structural equality (TS uses reference equality; outcomes
-match because `maybeMerge` already rejects `isStacksEqual` pairs).
--}
-findAllStackMerges : CardStack -> List CardStack -> List StackMergeResult
-findAllStackMerges target allStacks =
-    let
-        others =
-            List.filter (\s -> not (isStacksEqual s target)) allStacks
-    in
-    List.concatMap (tryBothSidesStack target) others
-
-
-tryBothSidesStack : CardStack -> CardStack -> List StackMergeResult
-tryBothSidesStack target other =
-    List.filterMap (mergeOnSide target other) [ Left, Right ]
-
-
-mergeOnSide : CardStack -> CardStack -> Side -> Maybe StackMergeResult
-mergeOnSide target other side =
-    tryStackMerge target other side
-        |> Maybe.map (\change -> { side = side, change = change })
-
-
-{-| Enumerate every merge of `handCard` onto any board stack.
--}
-findAllHandMerges : HandCard -> List CardStack -> List HandMergeResult
-findAllHandMerges handCard allStacks =
-    List.concatMap (tryBothSidesHand handCard) allStacks
-
-
-tryBothSidesHand : HandCard -> CardStack -> List HandMergeResult
-tryBothSidesHand handCard stack =
-    List.filterMap (handMergeOnSide handCard stack) [ Left, Right ]
-
-
-handMergeOnSide : HandCard -> CardStack -> Side -> Maybe HandMergeResult
-handMergeOnSide handCard stack side =
-    tryHandMerge stack handCard side
-        |> Maybe.map
-            (\change ->
-                { side = side, stack = stack, change = change }
-            )

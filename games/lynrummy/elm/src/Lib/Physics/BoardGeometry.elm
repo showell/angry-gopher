@@ -3,17 +3,12 @@ module Lib.Physics.BoardGeometry exposing
     , BoardGeometryStatus(..)
     , GeometryError
     , GeometryErrorKind(..)
-    , boardBoundsDecoder
     , boardViewportLeft
     , boardViewportTop
     , cardHeight
     , cardPitch
     , classifyBoardGeometry
-    , encodeBoardBounds
-    , encodeGeometryError
-    , geometryErrorDecoder
     , refereeBounds
-    , stackHeight
     , stackWidth
     , validateBoardGeometry
     )
@@ -35,8 +30,6 @@ Two related but distinct concepts:
 -}
 
 import Lib.CardStack exposing (CardStack, cardWidth, size)
-import Json.Decode as Decode exposing (Decoder)
-import Json.Encode as Encode exposing (Value)
 
 
 type alias BoardBounds =
@@ -107,11 +100,6 @@ boardViewportTop =
     38
 
 
-stackHeight : Int
-stackHeight =
-    cardHeight
-
-
 stackWidth : Int -> Int
 stackWidth cardCount =
     if cardCount <= 0 then
@@ -121,10 +109,9 @@ stackWidth cardCount =
         cardWidth + (cardCount - 1) * cardPitch
 
 
-
 {-| Bounds the kitchen-table game's referee uses to validate
 end-of-turn layouts. The server no longer validates (dumb
-file storage as of LEAN_PASS phase 2); this is purely
+file storage as of LEAN\_PASS phase 2); this is purely
 client-side.
 -}
 refereeBounds : BoardBounds
@@ -293,85 +280,3 @@ classifyBoardGeometry stacks bounds =
 --   BoardBounds   = { max_width, max_height, margin }
 --   GeometryError = { type: "out_of_bounds" | "overlap" | "too_close",
 --                     message, stack_indices }
-
-
-geometryErrorKindToString : GeometryErrorKind -> String
-geometryErrorKindToString kind =
-    case kind of
-        OutOfBounds ->
-            "out_of_bounds"
-
-        Overlap ->
-            "overlap"
-
-        TooClose ->
-            "too_close"
-
-
-stringToGeometryErrorKind : String -> Maybe GeometryErrorKind
-stringToGeometryErrorKind s =
-    case s of
-        "out_of_bounds" ->
-            Just OutOfBounds
-
-        "overlap" ->
-            Just Overlap
-
-        "too_close" ->
-            Just TooClose
-
-        _ ->
-            Nothing
-
-
-encodeBoardBounds : BoardBounds -> Value
-encodeBoardBounds b =
-    Encode.object
-        [ ( "max_width", Encode.int b.maxWidth )
-        , ( "max_height", Encode.int b.maxHeight )
-        , ( "margin", Encode.int b.margin )
-        ]
-
-
-boardBoundsDecoder : Decoder BoardBounds
-boardBoundsDecoder =
-    Decode.map3
-        (\w h m -> { maxWidth = w, maxHeight = h, margin = m })
-        (Decode.field "max_width" Decode.int)
-        (Decode.field "max_height" Decode.int)
-        (Decode.field "margin" Decode.int)
-
-
-encodeGeometryError : GeometryError -> Value
-encodeGeometryError err =
-    Encode.object
-        [ ( "type", Encode.string (geometryErrorKindToString err.kind) )
-        , ( "message", Encode.string err.message )
-        , ( "stack_indices", Encode.list Encode.int err.stackIndices )
-        ]
-
-
-geometryErrorDecoder : Decoder GeometryError
-geometryErrorDecoder =
-    Decode.map3
-        (\kind msg indices ->
-            { kind = kind, message = msg, stackIndices = indices }
-        )
-        (Decode.field "type" stringEnumDecoder)
-        (Decode.field "message" Decode.string)
-        (Decode.field "stack_indices" (Decode.list Decode.int))
-
-
-stringEnumDecoder : Decoder GeometryErrorKind
-stringEnumDecoder =
-    Decode.string
-        |> Decode.andThen
-            (\s ->
-                case stringToGeometryErrorKind s of
-                    Just k ->
-                        Decode.succeed k
-
-                    Nothing ->
-                        Decode.fail
-                            ("invalid geometry error kind: " ++ s)
-            )

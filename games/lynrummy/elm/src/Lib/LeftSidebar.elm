@@ -14,6 +14,9 @@ directly. Puzzles never call into here.
 
 -}
 
+import Game.Msg exposing (Msg(..))
+import Html exposing (Html, div)
+import Html.Attributes exposing (id, style)
 import Lib.Button as Button
 import Lib.CardStack exposing (HandCard, HandCardState(..))
 import Lib.Colors as Colors
@@ -24,9 +27,6 @@ import Lib.Physics.BoardGeometry as BG
 import Lib.PointerInput as PointerInput
 import Lib.Rules.Card as Card exposing (Card, Suit)
 import Lib.StackView as StackView
-import Html exposing (Html, div)
-import Html.Attributes exposing (id, style)
-import Game.Msg exposing (Msg(..))
 
 
 {-| Which replay-related button the sidebar should render. The
@@ -135,12 +135,11 @@ viewTurnControls { canUndo, replayControl } =
         , style "flex-wrap" "wrap"
         ]
         [ Button.button "Complete turn" ClickCompleteTurn
-        , (if canUndo then
+        , if canUndo then
             Button.button "Undo" ClickUndo
 
-           else
+          else
             Button.disabledButton "Undo"
-          )
         , Button.button "Hint" ClickHint
         , viewReplayControl replayControl
         , Button.link "← Lobby" "/gopher/game-lobby"
@@ -292,9 +291,6 @@ handCardBgColor hc =
     case hc.state of
         FreshlyDrawn ->
             "cyan"
-
-        BackFromBoard ->
-            "yellow"
 
         HandNormal ->
             "white"

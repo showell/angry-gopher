@@ -6,33 +6,19 @@ module Lib.CardStack exposing
     , HandCard
     , HandCardState(..)
     , agedFromPriorTurn
-    , boardCardAgedState
-    , boardCardDecoder
-    , isBoardCardSameCard
-    , boardLocationDecoder
-    , cardStackDecoder
     , cardWidth
-    , encodeBoardCard
-    , encodeBoardLocation
-    , encodeCardStack
-    , encodeHandCard
     , findStack
     , fromHandCard
     , fromShorthand
-    , handCardDecoder
     , isHandCardSameCard
     , isIncomplete
+    , isStacksEqual
     , leftMerge
-    , maybeMerge
-    , isProblematic
     , rightMerge
     , size
     , split
     , stackDisplayWidth
     , stackPitch
-    , stackStr
-    , stackType
-    , isStacksEqual
     )
 
 {-| CardStack domain types and operations. Ported from
@@ -63,18 +49,13 @@ import Lib.Rules.Card
     exposing
         ( Card
         , OriginDeck
-        , cardDecoder
         , cardFromLabel
-        , cardStr
-        , encodeCard
         )
 import Lib.Rules.StackType
     exposing
         ( CardStackType(..)
         , getStackType
         )
-import Json.Decode as Decode exposing (Decoder)
-import Json.Encode as Encode exposing (Value)
 
 
 
@@ -84,7 +65,6 @@ import Json.Encode as Encode exposing (Value)
 type HandCardState
     = HandNormal
     | FreshlyDrawn
-    | BackFromBoard
 
 
 type BoardCardState
@@ -171,13 +151,6 @@ stackType s =
     getStackType (stackCards s)
 
 
-stackStr : CardStack -> String
-stackStr s =
-    s.boardCards
-        |> List.map (.card >> cardStr)
-        |> String.join ","
-
-
 {-| Strict stack identity: same `loc` (integer-exact) AND same
 cards in the same order. `BoardCard.state` (recency) is
 intentionally ignored — that's turn-accounting, not identity.
@@ -237,16 +210,6 @@ isCardsEqualInOrder xs ys =
 isLocsEqual : BoardLocation -> BoardLocation -> Bool
 isLocsEqual a b =
     a.top == b.top && a.left == b.left
-
-
-{-| `BoardCard` equality that ignores `state`. Use when you
-mean "do these two BoardCards wrap the same `Card`?" — recency
-markers don't participate. For full identity (including state),
-use `==` on the records directly.
--}
-isBoardCardSameCard : BoardCard -> BoardCard -> Bool
-isBoardCardSameCard a b =
-    a.card == b.card
 
 
 {-| `HandCard` equality that ignores `state`. Same shape and
@@ -366,7 +329,7 @@ split cardIndex s =
 
 
 {-| Split with the left piece as the "primary" (stays near origin).
-Offsets from original loc: left piece top-=4 left-=2; right piece top+=0 left+=leftCount*stackPitch+8.
+Offsets from original loc: left piece top-=4 left-=2; right piece top+=0 left+=leftCount\*stackPitch+8.
 Example: stack at (top=20,left=70), leftCount=2 → left at (16,68), right at (20,136).
 -}
 leftSplit : Int -> CardStack -> List CardStack
@@ -400,7 +363,7 @@ leftSplit leftCount s =
 
 
 {-| Split with the right piece as the "primary" (stays near origin).
-Offsets from original loc: left piece top+=0 left-=8; right piece top-=4 left+=leftCount*stackPitch+4.
+Offsets from original loc: left piece top+=0 left-=8; right piece top-=4 left+=leftCount\*stackPitch+4.
 Example: stack at (top=20,left=70), leftCount=2 → left at (20,62), right at (16,140).
 -}
 rightSplit : Int -> CardStack -> List CardStack
@@ -494,67 +457,6 @@ rightMerge self other =
 -- Mirrors TS implicit numeric enums (NORMAL=0, FRESHLY_DRAWN=1,
 -- BACK_FROM_BOARD=2; FIRMLY_ON_BOARD=0, FRESHLY_PLAYED=1,
 -- FRESHLY_PLAYED_BY_LAST_PLAYER=2).
-
-
-handCardStateToInt : HandCardState -> Int
-handCardStateToInt s =
-    case s of
-        HandNormal ->
-            0
-
-        FreshlyDrawn ->
-            1
-
-        BackFromBoard ->
-            2
-
-
-intToHandCardState : Int -> Maybe HandCardState
-intToHandCardState n =
-    case n of
-        0 ->
-            Just HandNormal
-
-        1 ->
-            Just FreshlyDrawn
-
-        2 ->
-            Just BackFromBoard
-
-        _ ->
-            Nothing
-
-
-boardCardStateToInt : BoardCardState -> Int
-boardCardStateToInt s =
-    case s of
-        FirmlyOnBoard ->
-            0
-
-        FreshlyPlayed ->
-            1
-
-        FreshlyPlayedByLastPlayer ->
-            2
-
-
-intToBoardCardState : Int -> Maybe BoardCardState
-intToBoardCardState n =
-    case n of
-        0 ->
-            Just FirmlyOnBoard
-
-        1 ->
-            Just FreshlyPlayed
-
-        2 ->
-            Just FreshlyPlayedByLastPlayer
-
-        _ ->
-            Nothing
-
-
-
 -- JSON: WIRE FORMAT
 --
 -- Mirrors the TS shapes:
@@ -562,93 +464,3 @@ intToBoardCardState n =
 --   JsonBoardCard = { card: JsonCard, state: <int 0-2> }
 --   BoardLocation = { top: number, left: number }
 --   JsonCardStack = { board_cards: JsonBoardCard[], loc: BoardLocation }
-
-
-encodeBoardLocation : BoardLocation -> Value
-encodeBoardLocation loc =
-    Encode.object
-        [ ( "top", Encode.int loc.top )
-        , ( "left", Encode.int loc.left )
-        ]
-
-
-boardLocationDecoder : Decoder BoardLocation
-boardLocationDecoder =
-    Decode.map2
-        (\top left -> { top = top, left = left })
-        (Decode.field "top" Decode.int)
-        (Decode.field "left" Decode.int)
-
-
-encodeHandCard : HandCard -> Value
-encodeHandCard hc =
-    Encode.object
-        [ ( "card", encodeCard hc.card )
-        , ( "state", Encode.int (handCardStateToInt hc.state) )
-        ]
-
-
-handCardDecoder : Decoder HandCard
-handCardDecoder =
-    Decode.map2
-        (\card state -> { card = card, state = state })
-        (Decode.field "card" cardDecoder)
-        (Decode.field "state" (intDecoderVia intToHandCardState "hand card state"))
-
-
-encodeBoardCard : BoardCard -> Value
-encodeBoardCard bc =
-    Encode.object
-        [ ( "card", encodeCard bc.card )
-        , ( "state", Encode.int (boardCardStateToInt bc.state) )
-        ]
-
-
-boardCardDecoder : Decoder BoardCard
-boardCardDecoder =
-    Decode.map2
-        (\card state -> { card = card, state = state })
-        (Decode.field "card" cardDecoder)
-        (Decode.field "state" (intDecoderVia intToBoardCardState "board card state"))
-
-
-encodeCardStack : CardStack -> Value
-encodeCardStack stack =
-    Encode.object
-        [ ( "board_cards", Encode.list encodeBoardCard stack.boardCards )
-        , ( "loc", encodeBoardLocation stack.loc )
-        ]
-
-
-cardStackDecoder : Decoder CardStack
-cardStackDecoder =
-    Decode.map2
-        (\boardCards loc -> { boardCards = boardCards, loc = loc })
-        (Decode.field "board_cards" (Decode.list boardCardDecoder))
-        (Decode.field "loc" boardLocationDecoder)
-
-
-{-| Internal: same shape as `Lib.Rules.Card.intDecoderVia`.
-Duplicated rather than exported across module boundary; both
-modules need the helper privately.
--}
-intDecoderVia : (Int -> Maybe a) -> String -> Decoder a
-intDecoderVia toMaybe label =
-    Decode.int
-        |> Decode.andThen
-            (\n ->
-                case toMaybe n of
-                    Just a ->
-                        Decode.succeed a
-
-                    Nothing ->
-                        Decode.fail
-                            ("invalid "
-                                ++ label
-                                ++ ": "
-                                ++ String.fromInt n
-                            )
-            )
-
-
-

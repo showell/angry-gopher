@@ -1,15 +1,9 @@
 module Lib.PlayerTurn exposing
     ( CompleteTurnResult(..)
     , PlayerTurn
-    , getNumCardsPlayed
     , new
-    , noteCardPlayed
     , noteEmptyHand
-    , revokeEmptyHandBonuses
     , turnResult
-    , undoCardPlayed
-    , wasHandEmptied
-    , wasVictoryBonusGained
     )
 
 {-| Turn-level outcome tracking for LynRummy. Records whether
@@ -68,28 +62,6 @@ wasHandEmptied t =
 wasVictoryBonusGained : PlayerTurn -> Bool
 wasVictoryBonusGained t =
     t.victoryGained
-
-
-{-| Called exactly once per card released to the board during
-this turn.
--}
-noteCardPlayed : PlayerTurn -> PlayerTurn
-noteCardPlayed t =
-    { t | cardsPlayedDuringTurn = t.cardsPlayedDuringTurn + 1 }
-
-
-undoCardPlayed : PlayerTurn -> PlayerTurn
-undoCardPlayed t =
-    { t | cardsPlayedDuringTurn = t.cardsPlayedDuringTurn - 1 }
-
-
-{-| Clear the empty-hand and victory flags. Called when the
-referee disallows an empty-hand state (e.g., illegal final
-board).
--}
-revokeEmptyHandBonuses : PlayerTurn -> PlayerTurn
-revokeEmptyHandBonuses t =
-    { t | handEmptied = False, victoryGained = False }
 
 
 {-| Record that the player emptied their hand. If `isVictor`,

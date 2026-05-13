@@ -21,10 +21,10 @@ import Lib.HandDragTypes exposing (HandCardDragInfo)
 import Lib.Physics.BoardGeometry as BG
 import Lib.Physics.GestureArbitration as GA
 import Lib.Physics.WingOracle as WingOracle
+import Lib.Point exposing (Point)
 import Lib.Rules.Card exposing (Card)
 import Lib.Status as Status
 import Lib.WingView as WingView
-import Lib.Point exposing (Point)
 
 
 {-| Result of resolving a hand-card mouseup. `MergeHand` and

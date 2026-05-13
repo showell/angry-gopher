@@ -4,24 +4,17 @@ module Lib.Rules.Card exposing
     , CardValue(..)
     , OriginDeck(..)
     , Suit(..)
-    , allCardValues
     , allSuits
     , buildFullDoubleDeck
     , cardColor
-    , cardDecoder
     , cardFromLabel
     , cardStr
     , cardValueToInt
     , encodeCard
     , isPairOfDups
-    , originDeckToInt
-    , suitColor
     , suitEmojiStr
-    , suitFromLabel
     , suitToInt
     , valueDisplayStr
-    , valueFromLabel
-    , valueStr
     )
 
 {-| Card domain types and pure helpers. Ported from
@@ -65,9 +58,8 @@ intent. Use them.
 
 -}
 
-import Lib.Random
-import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode exposing (Value)
+import Lib.Random
 
 
 
@@ -487,25 +479,6 @@ suitToInt s =
             3
 
 
-intToSuit : Int -> Maybe Suit
-intToSuit n =
-    case n of
-        0 ->
-            Just Club
-
-        1 ->
-            Just Diamond
-
-        2 ->
-            Just Spade
-
-        3 ->
-            Just Heart
-
-        _ ->
-            Nothing
-
-
 originDeckToInt : OriginDeck -> Int
 originDeckToInt d =
     case d of
@@ -514,65 +487,6 @@ originDeckToInt d =
 
         DeckTwo ->
             1
-
-
-intToOriginDeck : Int -> Maybe OriginDeck
-intToOriginDeck n =
-    case n of
-        0 ->
-            Just DeckOne
-
-        1 ->
-            Just DeckTwo
-
-        _ ->
-            Nothing
-
-
-intToCardValue : Int -> Maybe CardValue
-intToCardValue n =
-    case n of
-        1 ->
-            Just Ace
-
-        2 ->
-            Just Two
-
-        3 ->
-            Just Three
-
-        4 ->
-            Just Four
-
-        5 ->
-            Just Five
-
-        6 ->
-            Just Six
-
-        7 ->
-            Just Seven
-
-        8 ->
-            Just Eight
-
-        9 ->
-            Just Nine
-
-        10 ->
-            Just Ten
-
-        11 ->
-            Just Jack
-
-        12 ->
-            Just Queen
-
-        13 ->
-            Just King
-
-        _ ->
-            Nothing
 
 
 
@@ -590,35 +504,3 @@ encodeCard card =
         , ( "suit", Encode.int (suitToInt card.suit) )
         , ( "origin_deck", Encode.int (originDeckToInt card.originDeck) )
         ]
-
-
-cardDecoder : Decoder Card
-cardDecoder =
-    Decode.map3
-        (\value suit deck -> { value = value, suit = suit, originDeck = deck })
-        (Decode.field "value" (intDecoderVia intToCardValue "card value"))
-        (Decode.field "suit" (intDecoderVia intToSuit "suit"))
-        (Decode.field "origin_deck" (intDecoderVia intToOriginDeck "origin_deck"))
-
-
-{-| Internal: decode an integer field into an enum value via a
-`Int -> Maybe a` partial mapping. Fails the decoder with a
-descriptive error if the integer is out of range.
--}
-intDecoderVia : (Int -> Maybe a) -> String -> Decoder a
-intDecoderVia toMaybe label =
-    Decode.int
-        |> Decode.andThen
-            (\n ->
-                case toMaybe n of
-                    Just a ->
-                        Decode.succeed a
-
-                    Nothing ->
-                        Decode.fail
-                            ("invalid "
-                                ++ label
-                                ++ ": "
-                                ++ String.fromInt n
-                            )
-            )

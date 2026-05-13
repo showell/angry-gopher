@@ -1,11 +1,9 @@
 module Lib.Physics.GestureArbitration exposing
     ( Point
     , Rect
-    , applySplit
-    , clickIntentAfterMove
     , clickThreshold
-    , isCursorInRect
     , distSquared
+    , isCursorInRect
     )
 
 {-| Pure helpers for click-vs-drag arbitration during a board
@@ -23,8 +21,6 @@ The rule:
     normal drop / place / snap-back logic applies.
 
 -}
-
-import Lib.CardStack as CardStack exposing (CardStack, isStacksEqual)
 
 
 type alias Point =
@@ -69,52 +65,3 @@ distSquared a b =
             a.y - b.y
     in
     dx * dx + dy * dy
-
-
-{-| Compute the click intent after a pointer-move event.
-
-  - If the intent was already `Nothing`, it stays `Nothing`
-    (death is permanent within a gesture).
-  - If the intent was `Just _`, it survives iff the cursor's
-    squared distance from its original position is `<=
-    clickThreshold`. Strictly greater kills it.
-
--}
-clickIntentAfterMove : Point -> Point -> Maybe Int -> Maybe Int
-clickIntentAfterMove originalCursor currentCursor intent =
-    case intent of
-        Nothing ->
-            Nothing
-
-        Just _ ->
-            if distSquared originalCursor currentCursor > clickThreshold then
-                Nothing
-
-            else
-                intent
-
-
-{-| Apply a split: replace the stack at `stackIndex` on the
-board with the two stacks produced by `CardStack.split
-cardIndex`. Splitting a 1-card stack is a no-op (CardStack.split
-returns the stack unchanged); other invalid inputs leave the
-board untouched.
--}
-applySplit : Int -> Int -> List CardStack -> List CardStack
-applySplit stackIndex cardIndex board =
-    case listAt stackIndex board of
-        Nothing ->
-            board
-
-        Just stack ->
-            let
-                newStacks =
-                    CardStack.split cardIndex stack
-            in
-            List.filter (\s -> not (isStacksEqual s stack)) board
-                ++ newStacks
-
-
-listAt : Int -> List a -> Maybe a
-listAt i xs =
-    List.head (List.drop i xs)

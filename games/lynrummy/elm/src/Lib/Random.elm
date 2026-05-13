@@ -1,8 +1,6 @@
 module Lib.Random exposing
     ( Seed
     , initSeed
-    , next
-    , nextInt
     , shuffle
     )
 
