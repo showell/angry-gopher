@@ -260,17 +260,6 @@ export function solveStateWithMoves(
   });
 }
 
-/** Thin wrapper that drops the structured Moves and returns just
- *  the rendered plan-line strings. */
-export function solveState(
-  initial: Buckets | RawBuckets,
-  opts: ShimSolveOptions = {},
-): readonly string[] | null {
-  const result = solveStateWithMoves(initial, opts);
-  if (result === null) return null;
-  return result.plan.map(p => p.line);
-}
-
 class MinHeap<T> {
   private a: T[] = [];
   private cmp: (x: T, y: T) => number;
