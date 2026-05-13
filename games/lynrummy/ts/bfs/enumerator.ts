@@ -15,6 +15,8 @@ import {
   type Kind,
   KIND_RUN, KIND_RB, KIND_SET,
   classifyStack,
+  successor,
+  predecessor,
 } from "../core/card_stack.ts";
 import {
   peel, pluck, yank, steal, splitOut, setPeel,
@@ -130,8 +132,8 @@ function completionShapes(partial: readonly Card[]): Set<number> {
     return out;
   }
   // Run partial: c1, c2 consecutive (c2 = c1's successor).
-  const predV = v1 === 1 ? 13 : v1 - 1;
-  const succV = v2 === 13 ? 1 : v2 + 1;
+  const predV = predecessor(v1);
+  const succV = successor(v2);
   if (s1 === s2) {
     // Pure run — same-suit extensions on either end.
     out.add(predV * 4 + s1);
@@ -524,8 +526,8 @@ export function setSingletonDoomMode(m: SingletonDoomMode): void {
  *  `c` in some legal kind (pair_run, pair_rb, pair_set). Deck-agnostic. */
 function singletonPartnerShapes(c: Card): number[] {
   const v = c.rank, s = c.suit;
-  const predV = v === 1 ? 13 : v - 1;
-  const succV = v === 13 ? 1 : v + 1;
+  const predV = predecessor(v);
+  const succV = successor(v);
   const cRed = isRedSuit(s);
   const out: number[] = [];
   // pair_run partners (same suit, consecutive value).
@@ -573,15 +575,15 @@ function completionShapesForHypotheticalPair(
   // Determine kind: same suit (pair_run) or opposite color (pair_rb).
   if (cs === ps) {
     // pair_run: same-suit extensions on either end.
-    const predV = lowV === 1 ? 13 : lowV - 1;
-    const succV = highV === 13 ? 1 : highV + 1;
+    const predV = predecessor(lowV);
+    const succV = successor(highV);
     out.add(predV * 4 + lowS);
     out.add(succV * 4 + highS);
     return out;
   }
   // pair_rb: opposite-color extensions on either end.
-  const predV = lowV === 1 ? 13 : lowV - 1;
-  const succV = highV === 13 ? 1 : highV + 1;
+  const predV = predecessor(lowV);
+  const succV = successor(highV);
   const lowRed = isRedSuit(lowS);
   const highRed = isRedSuit(highS);
   for (let s = 0; s < 4; s++) {
@@ -989,10 +991,10 @@ function shiftReplacementRequirement(
   let pValue: number;
   if (whichEnd === 2) {
     anchor = source.cards[0]!;
-    pValue = anchor.rank === 1 ? 13 : anchor.rank - 1;
+    pValue = predecessor(anchor.rank);
   } else {
     anchor = source.cards[2]!;
-    pValue = anchor.rank === 13 ? 1 : anchor.rank + 1;
+    pValue = successor(anchor.rank);
   }
   const anchorRed = isRedSuit(anchor.suit);
   let neededSuits: number[];

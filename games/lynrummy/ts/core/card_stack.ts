@@ -39,10 +39,19 @@ export interface ClassifiedCardStack {
   readonly n: number;
 }
 
-function successor(v: number): number {
-  // Card value cycle wraps: K → A → 2 → ... → K. K-A-2 IS a legal
-  // run in Lyn Rummy.
+/** Next rank in the cycle, wrapping K → A. K-A-2 IS a legal run in
+ *  Lyn Rummy, so the cycle is closed. Used everywhere run/rb adjacency
+ *  is checked — never spell the wraparound inline. */
+export function successor(v: number): number {
   return v === 13 ? 1 : v + 1;
+}
+
+/** Previous rank in the cycle, wrapping A → K. Dual to `successor`.
+ *  Used everywhere we need the leftward end of a run/rb (extends-table
+ *  pred shape, splice-anchor lookup, etc.). Never spell the wraparound
+ *  inline. */
+export function predecessor(v: number): number {
+  return v === 1 ? 13 : v - 1;
 }
 
 // --- Kind / family bookkeeping ---------------------------------------------
@@ -79,49 +88,28 @@ export function pairOf(family: Kind): Kind {
   }
 }
 
-/** Family two cards form when adjacent in (c1, c2) order, or null if no
- *  legal pair. Mirrors python's `_family_for_two_cards`. Order matters
- *  for run/rb (successor is directional); set is symmetric on value. */
-export function familyForTwoCards(c1: Card, c2: Card): Kind | null {
-  const v1 = c1.rank, s1 = c1.suit;
-  const v2 = c2.rank, s2 = c2.suit;
-  if (v1 === v2) {
-    if (s1 === s2) return null;
-    return KIND_SET;
-  }
-  if (successor(v1) !== v2) return null;
-  if (s1 === s2) return KIND_RUN;
-  if (isRedSuit(s1) !== isRedSuit(s2)) return KIND_RB;
-  return null;
-}
-
 // --- Kind-from-length math -------------------------------------------------
 
-/** Kind tag for a slice of a run/rb-family stack with n cards remaining.
- *  Mirrors python's `_run_kind_for_length`. */
-export function runKindForLength(family: Kind, n: number): Kind {
-  if (n >= 3) return family;
-  if (n === 2) return pairOf(family);
-  if (n === 1) return KIND_SINGLETON;
-  throw new Error("zero-length run slice is not a valid stack");
-}
-
-/** Kind tag for a remainder of a set with n cards. Mirrors python's
- *  `_set_kind_for_length`. */
-export function setKindForLength(n: number): Kind {
-  if (n >= 3) return KIND_SET;
-  if (n === 2) return KIND_PAIR_SET;
-  if (n === 1) return KIND_SINGLETON;
-  throw new Error("zero-length set slice is not a valid stack");
-}
-
-/** Kind of a contiguous n-card slice of a run/rb-family stack. Returns
- *  null when the slice is empty. Mirrors python's `_slice_kind`. */
+/** Kind of a contiguous n-card slice of a `family` stack. Returns null
+ *  when the slice is empty. Works for run / rb / set — the family
+ *  parameter carries the pair-form mapping. Mirrors python's
+ *  `_slice_kind`. */
 export function sliceKind(family: Kind, n: number): Kind | null {
   if (n <= 0) return null;
   if (n === 1) return KIND_SINGLETON;
   if (n === 2) return pairOf(family);
   return family;
+}
+
+/** Strict version of `sliceKind` for verb-path callers that precondition
+ *  n ≥ 1. Throws on n = 0 with an actionable message; never silently
+ *  returns null. */
+export function kindForLength(family: Kind, n: number): Kind {
+  const k = sliceKind(family, n);
+  if (k === null) {
+    throw new Error(`kindForLength: zero-length slice is not a valid stack (family=${family})`);
+  }
+  return k;
 }
 
 // --- Construction + adjacency ----------------------------------------------
@@ -152,7 +140,11 @@ export function boundaryOk(a: Card, b: Card, family: Kind): boolean {
 
 // --- Classifier ------------------------------------------------------------
 
-function classifyPair(cards: readonly Card[]): Kind | null {
+/** Classify a 2-card stack, returning its pair-form kind
+ *  (KIND_PAIR_RUN / KIND_PAIR_RB / KIND_PAIR_SET) or null if the two
+ *  cards form no legal partial. Order matters for run/rb (successor is
+ *  directional); set is symmetric on value. */
+export function classifyPair(cards: readonly Card[]): Kind | null {
   const a = cards[0]!;
   const b = cards[1]!;
   const av = a.rank, asu = a.suit;

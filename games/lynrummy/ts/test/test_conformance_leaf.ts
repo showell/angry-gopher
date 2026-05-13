@@ -15,6 +15,7 @@ import {
   classifyStack,
   KIND_RB,
   KIND_RUN,
+  successor,
   type ClassifiedCardStack,
   type Kind,
 } from "../core/card_stack.ts";
@@ -719,7 +720,7 @@ function buildRbCards(startV: number, startSuit: number, len: number, deck = 0):
   let blackIdx = blackSuits.indexOf(startSuit);
   let redIdx = redSuits.indexOf(startSuit);
   for (let i = 1; i < len; i++) {
-    v = v === 13 ? 1 : v + 1;
+    v = successor(v);
     let s: number;
     if (prevRed) {
       blackIdx = (blackIdx + 1) % blackSuits.length;
@@ -739,7 +740,7 @@ function buildRunCards(startV: number, suit: number, len: number, deck = 0): Car
   let v = startV;
   for (let i = 0; i < len; i++) {
     cards.push({ rank: v as Rank, suit: suit as Suit, deck: deck as Deck });
-    v = v === 13 ? 1 : v + 1;
+    v = successor(v);
   }
   return cards;
 }

@@ -20,14 +20,15 @@ import {
   KIND_PAIR_SET,
   KIND_SINGLETON,
   classifyStack,
+  classifyPair,
   familyOfKind,
   pairOf,
-  familyForTwoCards,
   singletonStack,
-  runKindForLength,
-  setKindForLength,
   sliceKind,
+  kindForLength,
   boundaryOk,
+  successor,
+  predecessor,
 } from "../core/card_stack.ts";
 
 // --- Absorb probes ---------------------------------------------------------
@@ -48,9 +49,7 @@ export function kindAfterAbsorbRight(
 
   if (targetKind === KIND_SINGLETON) {
     const only = target.cards[0]!;
-    const family = familyForTwoCards(only, card); // boundary order: only, card
-    if (family === null) return null;
-    return pairOf(family);
+    return classifyPair([only, card]); // boundary order: only, card
   }
 
   const family = familyOfKind(targetKind)!;
@@ -59,9 +58,9 @@ export function kindAfterAbsorbRight(
   const bv = card.rank, bsu = card.suit;
 
   if (family === KIND_RUN) {
-    if (asu !== bsu || (av === 13 ? 1 : av + 1) !== bv) return null;
+    if (asu !== bsu || successor(av) !== bv) return null;
   } else if (family === KIND_RB) {
-    if ((av === 13 ? 1 : av + 1) !== bv) return null;
+    if (successor(av) !== bv) return null;
     if (isRedSuit(asu) === isRedSuit(bsu)) return null;
   } else {
     // KIND_SET
@@ -105,8 +104,8 @@ export type ExtendersTriple = readonly [ExtenderMap, ExtenderMap, ExtenderMap];
 function extendsForSingleton(only: Card): ExtendersTriple {
   const v = only.rank;
   const s = only.suit;
-  const succV = v === 13 ? 1 : v + 1;
-  const predV = v === 1 ? 13 : v - 1;
+  const succV = successor(v);
+  const predV = predecessor(v);
   const onlyRed = isRedSuit(s);
 
   const left: ExtenderMap = new Map();
@@ -152,8 +151,8 @@ export function extendsTables(target: ClassifiedCardStack): ExtendersTriple {
   if (family === KIND_RUN) {
     const last = cards[cards.length - 1]!;
     const first = cards[0]!;
-    const succV = last.rank === 13 ? 1 : last.rank + 1;
-    const predV = first.rank === 1 ? 13 : first.rank - 1;
+    const succV = successor(last.rank);
+    const predV = predecessor(first.rank);
     const left: ExtenderMap = new Map([[shapeId(predV, first.suit), resultKind]]);
     const right: ExtenderMap = new Map([[shapeId(succV, last.suit), resultKind]]);
     return [left, right, new Map()];
@@ -162,8 +161,8 @@ export function extendsTables(target: ClassifiedCardStack): ExtendersTriple {
   if (family === KIND_RB) {
     const last = cards[cards.length - 1]!;
     const first = cards[0]!;
-    const succV = last.rank === 13 ? 1 : last.rank + 1;
-    const predV = first.rank === 1 ? 13 : first.rank - 1;
+    const succV = successor(last.rank);
+    const predV = predecessor(first.rank);
     const lastRed = isRedSuit(last.suit);
     const firstRed = isRedSuit(first.suit);
     const left: ExtenderMap = new Map();
@@ -202,9 +201,7 @@ export function kindAfterAbsorbLeft(
 
   if (targetKind === KIND_SINGLETON) {
     const only = target.cards[0]!;
-    const family = familyForTwoCards(card, only); // boundary order: card, only
-    if (family === null) return null;
-    return pairOf(family);
+    return classifyPair([card, only]); // boundary order: card, only
   }
 
   const family = familyOfKind(targetKind)!;
@@ -213,9 +210,9 @@ export function kindAfterAbsorbLeft(
   const bv = first.rank, bsu = first.suit;
 
   if (family === KIND_RUN) {
-    if (asu !== bsu || (av === 13 ? 1 : av + 1) !== bv) return null;
+    if (asu !== bsu || successor(av) !== bv) return null;
   } else if (family === KIND_RB) {
-    if ((av === 13 ? 1 : av + 1) !== bv) return null;
+    if (successor(av) !== bv) return null;
     if (isRedSuit(asu) === isRedSuit(bsu)) return null;
   } else {
     // KIND_SET
@@ -334,12 +331,12 @@ export function peel(
   const extracted = singletonStack(stack.cards[i]!);
   if (stack.kind === KIND_SET) {
     const rest: Card[] = stack.cards.slice(0, i).concat(stack.cards.slice(i + 1));
-    return [extracted, { cards: rest, kind: setKindForLength(rest.length), n: rest.length }];
+    return [extracted, { cards: rest, kind: kindForLength(KIND_SET, rest.length), n: rest.length }];
   }
   const family = stack.kind;
   const rest: Card[] =
     i === 0 ? stack.cards.slice(1) : stack.cards.slice(0, -1);
-  return [extracted, { cards: rest, kind: runKindForLength(family, rest.length), n: rest.length }];
+  return [extracted, { cards: rest, kind: kindForLength(family, rest.length), n: rest.length }];
 }
 
 /**
@@ -403,8 +400,8 @@ export function yank(
   const rightCards: Card[] = stack.cards.slice(i + 1);
   return [
     extracted,
-    { cards: leftCards, kind: runKindForLength(family, leftCards.length), n: leftCards.length },
-    { cards: rightCards, kind: runKindForLength(family, rightCards.length), n: rightCards.length },
+    { cards: leftCards, kind: kindForLength(family, leftCards.length), n: leftCards.length },
+    { cards: rightCards, kind: kindForLength(family, rightCards.length), n: rightCards.length },
   ];
 }
 
