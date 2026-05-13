@@ -1,4 +1,4 @@
-import type { Card } from "../src/rules/card.ts";
+import type { Card } from "../core/card.ts";
 import type { BoardStack } from "../src/geometry.ts";
 import { simulateFullTurn, type GameTurnRecord } from "./full_turn.ts";
 import { cardKey } from "../step/board.ts";

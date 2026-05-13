@@ -1,4 +1,4 @@
-import type { Card } from "../src/rules/card.ts";
+import type { Card } from "../core/card.ts";
 import type { Primitive } from "../src/primitives.ts";
 
 export interface GroomStep {

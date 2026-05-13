@@ -10,8 +10,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import type { Card } from "../src/rules/card.ts";
-import { parseCardLabel } from "../src/rules/card.ts";
+import { type Card, type Rank, type Suit, type Deck, parseCardLabel } from "../core/card.ts";
 import {
   canPeel,
   canPluck,
@@ -255,15 +254,15 @@ function cardsEqual(a: readonly Card[], b: readonly Card[]): boolean {
   for (let i = 0; i < a.length; i++) {
     const x = a[i]!;
     const y = b[i]!;
-    if (x[0] !== y[0] || x[1] !== y[1] || x[2] !== y[2]) return false;
+    if (x.rank !== y.rank || x.suit !== y.suit || x.deck !== y.deck) return false;
   }
   return true;
 }
 
 function renderCards(cards: readonly Card[]): string {
   return cards.map(c => {
-    const base = "A23456789TJQK"[c[0] - 1]! + "CDSH"[c[1]]!;
-    return c[2] === 0 ? base : `${base}:${c[2]}`;
+    const base = "A23456789TJQK"[c.rank - 1]! + "CDSH"[c.suit]!;
+    return c.deck === 0 ? base : `${base}:${c.deck}`;
   }).join(" ");
 }
 
@@ -537,7 +536,7 @@ function parseExtenderBody(body: readonly BodyLine[]): {
       const cardLabel = entry.slice(0, eqIdx).trim();
       const kindStr = entry.slice(eqIdx + 1).trim() as Kind;
       const card = parseCardLabel(cardLabel);
-      const id = shapeId(card[0], card[1]);
+      const id = shapeId(card.rank, card.suit);
       const map = expected[bucket];
       if (map.has(id)) {
         throw new Error(
@@ -708,7 +707,7 @@ function candSetFor(parent: ClassifiedCardStack, card: Card): Set<string> {
  *  Alternates colors strictly (each step flips red/black). Returns null
  *  if no rb of that length is buildable (e.g., wraparound conflict). */
 function buildRbCards(startV: number, startSuit: number, len: number, deck = 0): Card[] | null {
-  const cards: Card[] = [[startV, startSuit, deck]];
+  const cards: Card[] = [{ rank: startV as Rank, suit: startSuit as Suit, deck: deck as Deck }];
   let v = startV;
   let prevRed = [1, 3].includes(startSuit);
   // Pick a fixed alternating partner pattern: black ↔ red.
@@ -727,7 +726,7 @@ function buildRbCards(startV: number, startSuit: number, len: number, deck = 0):
       redIdx = (redIdx + 1) % redSuits.length;
       s = redSuits[redIdx]!;
     }
-    cards.push([v, s, deck]);
+    cards.push({ rank: v as Rank, suit: s as Suit, deck: deck as Deck });
     prevRed = !prevRed;
   }
   return cards;
@@ -737,7 +736,7 @@ function buildRunCards(startV: number, suit: number, len: number, deck = 0): Car
   const cards: Card[] = [];
   let v = startV;
   for (let i = 0; i < len; i++) {
-    cards.push([v, suit, deck]);
+    cards.push({ rank: v as Rank, suit: suit as Suit, deck: deck as Deck });
     v = v === 13 ? 1 : v + 1;
   }
   return cards;
@@ -759,7 +758,7 @@ function spliceCrossCheck(): void {
         for (let cv = 1; cv <= 13; cv++) {
           for (let cs = 0; cs < 4; cs++) {
             for (const cd of [0, 1]) {
-              const card: Card = [cv, cs, cd];
+              const card: Card = { rank: cv as Rank, suit: cs as Suit, deck: cd as Deck };
               const ps = probeSetFor(stack, card);
               const cs2 = candSetFor(stack, card);
               pairs++;
@@ -799,7 +798,7 @@ function spliceCrossCheck(): void {
         for (let cv = 1; cv <= 13; cv++) {
           for (let cs = 0; cs < 4; cs++) {
             for (const cd of [0, 1]) {
-              const card: Card = [cv, cs, cd];
+              const card: Card = { rank: cv as Rank, suit: cs as Suit, deck: cd as Deck };
               const ps = probeSetFor(stack, card);
               const cs2 = candSetFor(stack, card);
               pairs++;

@@ -9,8 +9,7 @@
 // Iteration order is the cross-language canon — DON'T rearrange for
 // readability. See ENGINE_V2.md § "Iteration order is canon".
 
-import type { Card } from "../src/rules/card.ts";
-import { RED } from "../src/rules/card.ts";
+import { type Card, isRedSuit } from "../core/card.ts";
 import {
   type ClassifiedCardStack,
   type Kind,
@@ -100,13 +99,13 @@ function completionInventory(
   const inv = new Set<number>();
   for (const stack of helper) {
     for (const c of stack.cards) {
-      inv.add(c[0] * 4 + c[1]);
+      inv.add(c.rank * 4 + c.suit);
     }
   }
   for (const stack of trouble) {
     if (stack.n === 1) {
       const c = stack.cards[0]!;
-      inv.add(c[0] * 4 + c[1]);
+      inv.add(c.rank * 4 + c.suit);
     }
   }
   return inv;
@@ -118,8 +117,8 @@ function completionInventory(
 function completionShapes(partial: readonly Card[]): Set<number> {
   const c1 = partial[0]!;
   const c2 = partial[1]!;
-  const v1 = c1[0], s1 = c1[1];
-  const v2 = c2[0], s2 = c2[1];
+  const v1 = c1.rank, s1 = c1.suit;
+  const v2 = c2.rank, s2 = c2.suit;
   const out = new Set<number>();
   if (v1 === v2) {
     // Set partial — distinct-suit third of same value.
@@ -138,11 +137,11 @@ function completionShapes(partial: readonly Card[]): Set<number> {
     return out;
   }
   // rb run — opposite-color extensions on either end.
-  const s1red = RED.has(s1);
-  const s2red = RED.has(s2);
+  const s1red = isRedSuit(s1);
+  const s2red = isRedSuit(s2);
   for (let s = 0; s < 4; s++) {
-    if (RED.has(s) !== s1red) out.add(predV * 4 + s);
-    if (RED.has(s) !== s2red) out.add(succV * 4 + s);
+    if (isRedSuit(s) !== s1red) out.add(predV * 4 + s);
+    if (isRedSuit(s) !== s2red) out.add(succV * 4 + s);
   }
   return out;
 }
@@ -284,7 +283,7 @@ function extractableIndex(
   const out = new Map<number, ExtractableEntry[]>();
   const add = (cards: readonly Card[], ci: number, hi: number, verb: Verb) => {
     const c = cards[ci]!;
-    const key = c[0] * 4 + c[1];
+    const key = c.rank * 4 + c.suit;
     let arr = out.get(key);
     if (!arr) {
       arr = [];
@@ -522,10 +521,10 @@ export function setSingletonDoomMode(m: SingletonDoomMode): void {
 /** Return shape ids (value*4 + suit) of all cards that would pair with
  *  `c` in some legal kind (pair_run, pair_rb, pair_set). Deck-agnostic. */
 function singletonPartnerShapes(c: Card): number[] {
-  const v = c[0], s = c[1];
+  const v = c.rank, s = c.suit;
   const predV = v === 1 ? 13 : v - 1;
   const succV = v === 13 ? 1 : v + 1;
-  const cRed = RED.has(s);
+  const cRed = isRedSuit(s);
   const out: number[] = [];
   // pair_run partners (same suit, consecutive value).
   out.push(predV * 4 + s);
@@ -533,7 +532,7 @@ function singletonPartnerShapes(c: Card): number[] {
   // pair_rb partners (opposite color, consecutive value).
   for (let s2 = 0; s2 < 4; s2++) {
     if (s2 === s) continue;
-    if (RED.has(s2) === cRed) continue;
+    if (isRedSuit(s2) === cRed) continue;
     out.push(predV * 4 + s2);
     out.push(succV * 4 + s2);
   }
@@ -553,7 +552,7 @@ function completionShapesForHypotheticalPair(
   c: Card,
   partnerShape: number,
 ): Set<number> {
-  const cv = c[0], cs = c[1];
+  const cv = c.rank, cs = c.suit;
   const pv = Math.floor(partnerShape / 4);
   const ps = partnerShape % 4;
   const out = new Set<number>();
@@ -581,11 +580,11 @@ function completionShapesForHypotheticalPair(
   // pair_rb: opposite-color extensions on either end.
   const predV = lowV === 1 ? 13 : lowV - 1;
   const succV = highV === 13 ? 1 : highV + 1;
-  const lowRed = RED.has(lowS);
-  const highRed = RED.has(highS);
+  const lowRed = isRedSuit(lowS);
+  const highRed = isRedSuit(highS);
   for (let s = 0; s < 4; s++) {
-    if (RED.has(s) !== lowRed) out.add(predV * 4 + s);
-    if (RED.has(s) !== highRed) out.add(succV * 4 + s);
+    if (isRedSuit(s) !== lowRed) out.add(predV * 4 + s);
+    if (isRedSuit(s) !== highRed) out.add(succV * 4 + s);
   }
   return out;
 }
@@ -794,7 +793,7 @@ function* yieldPartialSteals(
       const leftover: ClassifiedCardStack = {
         cards: [otherCard], kind: "singleton", n: 1,
       };
-      const shape = extCard[0] * 4 + extCard[1];
+      const shape = extCard.rank * 4 + extCard.suit;
 
       const rightKind = rightExt.get(shape) ?? null;
       const leftKind = leftExt.get(shape) ?? null;
@@ -877,7 +876,7 @@ function* yieldFreePulls(
     if (looseStack.n !== 1) continue;
     if (bucket === "trouble" && li === idx) continue;
     const loose = looseStack.cards[0]!;
-    const shapeKey = loose[0] * 4 + loose[1];
+    const shapeKey = loose.rank * 4 + loose.suit;
     const leftKind = leftExt.get(shapeKey) ?? null;
     const rightKind = rightExt.get(shapeKey) ?? null;
     const setKind = setExt.get(shapeKey) ?? null;
@@ -988,19 +987,19 @@ function shiftReplacementRequirement(
   let pValue: number;
   if (whichEnd === 2) {
     anchor = source.cards[0]!;
-    pValue = anchor[0] === 1 ? 13 : anchor[0] - 1;
+    pValue = anchor.rank === 1 ? 13 : anchor.rank - 1;
   } else {
     anchor = source.cards[2]!;
-    pValue = anchor[0] === 13 ? 1 : anchor[0] + 1;
+    pValue = anchor.rank === 13 ? 1 : anchor.rank + 1;
   }
-  const anchorRed = RED.has(anchor[1]);
+  const anchorRed = isRedSuit(anchor.suit);
   let neededSuits: number[];
   if (source.kind === KIND_RUN) {
-    neededSuits = [anchor[1]];
+    neededSuits = [anchor.suit];
   } else {
     neededSuits = [];
     for (let s = 0; s < 4; s++) {
-      if (RED.has(s) !== anchorRed) neededSuits.push(s);
+      if (isRedSuit(s) !== anchorRed) neededSuits.push(s);
     }
   }
   return { pValue, neededSuits };
@@ -1069,7 +1068,7 @@ function* yieldShiftsForEndpoint(
 ): Generator<MoveYield> {
   const { bucket, idx, target, leftExt, rightExt, setExt } = absorber;
   const stolen = source.cards[whichEnd]!;
-  const shapeKey = stolen[0] * 4 + stolen[1];
+  const shapeKey = stolen.rank * 4 + stolen.suit;
   const leftKind = leftExt.get(shapeKey) ?? null;
   const rightKind = rightExt.get(shapeKey) ?? null;
   const setKind = setExt.get(shapeKey) ?? null;
@@ -1375,7 +1374,7 @@ function moveTouchesFocus(move: Move, focus: readonly Card[]): boolean {
 }
 
 function cardEqual(a: Card, b: Card): boolean {
-  return a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
+  return a.rank === b.rank && a.suit === b.suit && a.deck === b.deck;
 }
 
 function cardsEqual(a: readonly Card[], b: readonly Card[]): boolean {

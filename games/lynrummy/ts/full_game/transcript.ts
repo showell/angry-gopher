@@ -19,8 +19,8 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-import type { Card } from "../src/rules/card.ts";
-import { cardLabel } from "../src/rules/card.ts";
+import type { Card } from "../core/card.ts";
+import { cardLabel } from "../core/card.ts";
 import type { BoardStack } from "../src/geometry.ts";
 import { findViolation } from "../src/geometry.ts";
 import {

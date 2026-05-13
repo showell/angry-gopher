@@ -20,7 +20,7 @@ import {
   makeSplit, makeMergeStack, makeMergeHand, makeMoveStack, makePlaceHand,
 } from "./primitives.ts";
 import type { BoardStack, Loc } from "./geometry.ts";
-import { type Card, parseCardLabel } from "./rules/card.ts";
+import { type Card, parseCardLabel } from "../core/card.ts";
 
 
 export function parseWireActionLine(

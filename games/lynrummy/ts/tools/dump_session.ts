@@ -18,8 +18,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-import type { Card } from "../src/rules/card.ts";
-import { cardLabel } from "../src/rules/card.ts";
+import { type Card, type Rank, type Suit, type Deck, cardLabel } from "../core/card.ts";
 import type { BoardStack } from "../src/geometry.ts";
 import type { Primitive, Side } from "../src/primitives.ts";
 import {
@@ -33,7 +32,7 @@ interface JsonBoardCard { card: JsonCard; state: number }
 interface JsonCardStack { board_cards: JsonBoardCard[]; loc: { top: number; left: number } }
 
 function jsonCardToCard(c: JsonCard): Card {
-  return [c.value, c.suit, c.origin_deck] as Card;
+  return { rank: c.value as Rank, suit: c.suit as Suit, deck: c.origin_deck as Deck };
 }
 
 function jsonStackToBoardStack(s: JsonCardStack): BoardStack {
@@ -87,7 +86,7 @@ function envelopeToPrim(
 }
 
 function cardsKey(cards: readonly Card[]): string {
-  return cards.map(c => `${c[0]},${c[1]},${c[2]}`).join("|");
+  return cards.map(c => `${c.rank},${c.suit},${c.deck}`).join("|");
 }
 
 function findStackByCards(sim: readonly BoardStack[], cards: readonly Card[]): number {
@@ -95,7 +94,7 @@ function findStackByCards(sim: readonly BoardStack[], cards: readonly Card[]): n
   for (let i = 0; i < sim.length; i++) {
     if (cardsKey(sim[i]!.cards) === want) return i;
   }
-  throw new Error(`stack not found on board: [${cards.map(c => `${c[0]},${c[1]},${c[2]}`).join(" ")}]`);
+  throw new Error(`stack not found on board: [${cards.map(c => `${c.rank},${c.suit},${c.deck}`).join(" ")}]`);
 }
 
 function formatStack(s: BoardStack): string {

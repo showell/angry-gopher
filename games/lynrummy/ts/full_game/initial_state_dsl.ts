@@ -25,8 +25,8 @@
 // in unicode form so the wire stream is byte-identical to what
 // Elm emits.
 
-import { type Card, parseCardLabel } from "../src/rules/card.ts";
-import { cardToken, type Stack } from "../src/wire_action_dsl.ts";
+import { type Card, parseCardLabel, cardToken } from "../core/card.ts";
+import type { Stack } from "../src/wire_action_dsl.ts";
 import type { BoardStack, Loc } from "../src/geometry.ts";
 
 
@@ -91,8 +91,8 @@ export function sortIntoSuitRows(hand: readonly Card[]): (readonly Card[])[] {
   const rows: (readonly Card[])[] = [];
   for (const suit of SUIT_DISPLAY_ORDER) {
     const inSuit = hand
-      .filter(c => c[1] === suit)
-      .sort((a, b) => a[0] - b[0]);
+      .filter(c => c.suit === suit)
+      .sort((a, b) => a.rank - b.rank);
     if (inSuit.length > 0) rows.push(inSuit);
   }
   return rows;

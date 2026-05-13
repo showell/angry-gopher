@@ -13,8 +13,7 @@
 // loud. Catches regressions in the BFS pipeline, the agent loop, or
 // downstream pieces that touch the simulated state.
 
-import type { Card } from "../src/rules/card.ts";
-import { parseCardLabel } from "../src/rules/card.ts";
+import { type Card, type Rank, type Suit, type Deck, parseCardLabel } from "../core/card.ts";
 import { playFullGame } from "../full_game/full_game.ts";
 
 const HAND_SIZE = 15;
@@ -47,14 +46,14 @@ function remainingCards(): Card[] {
   for (const stack of BOARD_LABELS)
     for (const lbl of stack) {
       const c = parseCardLabel(lbl);
-      onBoard.add(`${c[0]},${c[1]},${c[2]}`);
+      onBoard.add(`${c.rank},${c.suit},${c.deck}`);
     }
   const out: Card[] = [];
   for (let suit = 0; suit < 4; suit++)
     for (let v = 1; v <= 13; v++)
       for (const deck of [0, 1] as const) {
-        const c: Card = [v, suit, deck] as const;
-        if (!onBoard.has(`${c[0]},${c[1]},${c[2]}`)) out.push(c);
+        const c: Card = { rank: v as Rank, suit: suit as Suit, deck: deck as Deck };
+        if (!onBoard.has(`${c.rank},${c.suit},${c.deck}`)) out.push(c);
       }
   if (out.length !== 81) throw new Error(`expected 81 remaining; got ${out.length}`);
   return out;

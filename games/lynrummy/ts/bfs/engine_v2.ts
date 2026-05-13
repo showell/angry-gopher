@@ -456,10 +456,10 @@ function moveTouchesFocus(move: Move, focus: readonly Card[]): boolean {
   return false;
 }
 
-import type { Card } from "../src/rules/card.ts";
+import type { Card } from "../core/card.ts";
 
 function cardEqual(a: Card, b: Card): boolean {
-  return a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
+  return a.rank === b.rank && a.suit === b.suit && a.deck === b.deck;
 }
 function cardsEqual(a: readonly Card[], b: readonly Card[]): boolean {
   if (a.length !== b.length) return false;
@@ -513,5 +513,5 @@ function computeQueueAfter(
 }
 
 function cardsKey(cards: readonly Card[]): string {
-  return cards.map(c => `${c[0]},${c[1]},${c[2]}`).join("|");
+  return cards.map(c => `${c.rank},${c.suit},${c.deck}`).join("|");
 }

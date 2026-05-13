@@ -21,8 +21,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import type { Card } from "../src/rules/card.ts";
-import { parseCardLabel } from "../src/rules/card.ts";
+import { type Card, type Rank, type Suit, type Deck, parseCardLabel } from "../core/card.ts";
 // Engine conformance now exercises engine_v2 (the engine `hand_play.ts`
 // and the full-game loop use). The plan-line equality
 // contract loosens to "any plan that drives the augmented board to
@@ -92,16 +91,22 @@ interface Scenario {
   expect: Record<string, unknown>;
 }
 
+function bcToCard(bc: BoardCard): Card {
+  return {
+    rank: bc.card.value as Rank,
+    suit: bc.card.suit as Suit,
+    deck: bc.card.origin_deck as Deck,
+  };
+}
+
 function bucketToTuples(stacks: FixtureBoardStack[] | undefined): Card[][] {
   if (!stacks) return [];
-  return stacks.map(s =>
-    s.board_cards.map(bc => [bc.card.value, bc.card.suit, bc.card.origin_deck] as const),
-  );
+  return stacks.map(s => s.board_cards.map(bcToCard));
 }
 
 function fixtureStackToBoardStack(fs: FixtureBoardStack): BoardStack {
   return {
-    cards: fs.board_cards.map(bc => [bc.card.value, bc.card.suit, bc.card.origin_deck] as const),
+    cards: fs.board_cards.map(bcToCard),
     loc: fs.loc ?? { top: 0, left: 0 },
   };
 }
@@ -197,7 +202,7 @@ function isCleanFinal(b: Buckets): { ok: boolean; msg: string } {
     for (const stack of bucket) {
       const ccs = classifyStack(stack.cards);
       if (ccs === null || ccs.n < 3) {
-        return { ok: false, msg: `final stack [${stack.cards.map(c => c.join(",")).join(" ")}] not length-3+ legal` };
+        return { ok: false, msg: `final stack [${stack.cards.map(c => `${c.rank},${c.suit},${c.deck}`).join(" ")}] not length-3+ legal` };
       }
       if (ccs.kind !== "run" && ccs.kind !== "rb" && ccs.kind !== "set") {
         return { ok: false, msg: `final stack kind ${ccs.kind} not run/rb/set` };

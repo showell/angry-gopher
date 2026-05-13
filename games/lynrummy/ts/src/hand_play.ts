@@ -30,8 +30,8 @@
 // The dirty-board constraint above is the canonical write-up; no
 // external reference is needed.
 
-import type { Card } from "./rules/card.ts";
-import { cardLabel } from "./rules/card.ts";
+import type { Card } from "../core/card.ts";
+import { cardLabel } from "../core/card.ts";
 import { isPartialOk } from "./rules/stack_type.ts";
 import {
   classifyStack,
@@ -282,7 +282,7 @@ function findCompletingThird(
 }
 
 function cardEq(a: Card, b: Card): boolean {
-  return a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
+  return a.rank === b.rank && a.suit === b.suit && a.deck === b.deck;
 }
 
 /**

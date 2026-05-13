@@ -6,7 +6,7 @@
 // converts a raw `Buckets` of card-list stacks into a CCS-shaped one.
 // Inside BFS the "no KIND_OTHER" invariant holds by construction.
 
-import type { Card } from "../src/rules/card.ts";
+import type { Card } from "../core/card.ts";
 import {
   classifyStack,
   type ClassifiedCardStack,
@@ -53,8 +53,8 @@ export interface FocusedState {
 
 /** Build a canonical pair-key from two cards (order-insensitive). */
 export function pairKey(a: Card, b: Card): string {
-  const ka = ((a[0] * 4) + a[1]) * 2 + a[2];
-  const kb = ((b[0] * 4) + b[1]) * 2 + b[2];
+  const ka = ((a.rank * 4) + a.suit) * 2 + a.deck;
+  const kb = ((b.rank * 4) + b.suit) * 2 + b.deck;
   return ka < kb ? `${ka},${kb}` : `${kb},${ka}`;
 }
 
@@ -93,10 +93,10 @@ export function pairKey(a: Card, b: Card): string {
 const CARD_PAD = 4; // packed cards are <= 4 ASCII digits → "0"-"9999"
 
 function encodeCard(c: Card): string {
-  // value ∈ [1,13], suit ∈ [0,3], deck ∈ [0,1]
-  // packed = ((value*4) + suit) * 2 + deck → max = 111. Pad to 4 digits
+  // rank ∈ [1,13], suit ∈ [0,3], deck ∈ [0,1]
+  // packed = ((rank*4) + suit) * 2 + deck → max = 111. Pad to 4 digits
   // for stable lexicographic ordering when joining sorted stacks.
-  const id = ((c[0] * 4) + c[1]) * 2 + c[2];
+  const id = ((c.rank * 4) + c.suit) * 2 + c.deck;
   return id.toString().padStart(CARD_PAD, "0");
 }
 
@@ -149,7 +149,7 @@ export function buildCardOrder(initial: Buckets): {
   cardOrder: readonly number[];
   posOf: Uint8Array;
 } {
-  const cardId = (c: Card): number => (c[0] - 1) * 8 + c[1] * 2 + c[2];
+  const cardId = (c: Card): number => (c.rank - 1) * 8 + c.suit * 2 + c.deck;
   const cardOrder: number[] = [];
   const seen = new Set<number>();
   const collect = (stacks: readonly ClassifiedCardStack[]): void => {
@@ -192,7 +192,7 @@ export function fastStateSig(
   // card has a position so EVERY byte gets written by writeBucket.
   // (If a card moved to COMPLETE it's still "in the game" and gets
   // bucket=3.)
-  const cardId = (c: Card): number => (c[0] - 1) * 8 + c[1] * 2 + c[2];
+  const cardId = (c: Card): number => (c.rank - 1) * 8 + c.suit * 2 + c.deck;
   const writeBucket = (
     stacks: readonly ClassifiedCardStack[],
     bucketId: number,

@@ -1,4 +1,4 @@
-import type { Card } from "../src/rules/card.ts";
+import type { Card } from "../core/card.ts";
 import type { BoardStack } from "../src/geometry.ts";
 import { tryGroom } from "./groom.ts";
 import { tryPlay } from "./play.ts";

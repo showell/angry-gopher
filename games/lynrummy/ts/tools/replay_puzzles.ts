@@ -26,14 +26,13 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-import type { Card } from "../src/rules/card.ts";
-import { cardLabel } from "../src/rules/card.ts";
+import { type Card, type Rank, type Suit, type Deck, cardLabel } from "../core/card.ts";
 import type { BoardStack } from "../src/geometry.ts";
 import type { Primitive } from "../src/primitives.ts";
 import { applyLocally } from "../src/primitives.ts";
 import { primToDslLine } from "../src/wire_json.ts";
 import { expandVerb } from "../src/verbs.ts";
-import { solveStateWithDescs } from "../bfs/engine_v2.ts";
+import { solveStateWithMoves } from "../bfs/engine_v2.ts";
 import {
   classifyStack,
   KIND_RUN, KIND_RB, KIND_SET,
@@ -51,7 +50,11 @@ interface JsonCatalog { puzzles: JsonPuzzle[] }
 
 function decodeBoard(stacks: JsonStack[]): BoardStack[] {
   return stacks.map(s => ({
-    cards: s.board_cards.map(bc => [bc.card.value, bc.card.suit, bc.card.origin_deck] as Card),
+    cards: s.board_cards.map(bc => ({
+      rank: bc.card.value as Rank,
+      suit: bc.card.suit as Suit,
+      deck: bc.card.origin_deck as Deck,
+    })),
     loc: { top: s.loc.top, left: s.loc.left },
   }));
 }
@@ -109,7 +112,7 @@ interface PuzzleResult {
 function runPuzzle(p: JsonPuzzle): PuzzleResult {
   const board = decodeBoard(p.initial_state.board);
   const buckets = partitionBoard(board);
-  const result = solveStateWithDescs({
+  const result = solveStateWithMoves({
     helper: buckets.helper, trouble: buckets.trouble, growing: [], complete: [],
   });
   if (result === null) {
@@ -119,7 +122,7 @@ function runPuzzle(p: JsonPuzzle): PuzzleResult {
   const primitives: { prim: Primitive; simAtEmit: readonly BoardStack[] }[] = [];
   let sim: readonly BoardStack[] = board;
   for (const pl of result.plan) {
-    const prims = expandVerb(pl.desc, sim, new Set());
+    const prims = expandVerb(pl.move, sim, new Set());
     for (const prim of prims) {
       primitives.push({ prim, simAtEmit: sim });
       sim = applyLocally(sim, prim);

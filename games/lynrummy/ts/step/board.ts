@@ -1,4 +1,4 @@
-import type { Card } from "../src/rules/card.ts";
+import type { Card } from "../core/card.ts";
 import {
   classifyStack,
   type ClassifiedCardStack,
@@ -6,7 +6,7 @@ import {
 import type { BoardStack } from "../src/geometry.ts";
 
 export function cardKey(c: Card): string {
-  return `${c[0]},${c[1]},${c[2]}`;
+  return `${c.rank},${c.suit},${c.deck}`;
 }
 
 export function assertBoardClean(

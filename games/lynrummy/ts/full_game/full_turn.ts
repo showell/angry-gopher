@@ -8,7 +8,7 @@
 //   turn      — a sequence of plays followed by complete_turn
 //               (the draw). One individual player's turn.
 
-import type { Card } from "../src/rules/card.ts";
+import type { Card } from "../core/card.ts";
 import type { BoardStack } from "../src/geometry.ts";
 import { fullStep } from "../step/full_step.ts";
 import type { TurnStep } from "../step/step_types.ts";

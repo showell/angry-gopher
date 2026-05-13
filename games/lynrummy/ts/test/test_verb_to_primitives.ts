@@ -20,8 +20,8 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import type { Card } from "../src/rules/card.ts";
-import { parseCardLabel, cardLabel } from "../src/rules/card.ts";
+import type { Card } from "../core/card.ts";
+import { parseCardLabel, cardLabel } from "../core/card.ts";
 import type {
   Move, Side,
   ExtractAbsorbMove, FreePullMove, PushMove,
@@ -349,7 +349,7 @@ function runScenario(sc: ScenarioRaw): RunResult {
       return {
         ok: false,
         msg: `intermediate geometry violation after primitive[${i}] (${got[i]}) `
-          + `at stack ${v} [${s.cards.map(c => c.join(",")).join(" ")}] @ (${s.loc.top},${s.loc.left})`,
+          + `at stack ${v} [${s.cards.map(c => `${c.rank},${c.suit},${c.deck}`).join(" ")}] @ (${s.loc.top},${s.loc.left})`,
       };
     }
   }
@@ -394,7 +394,7 @@ function runScenario(sc: ScenarioRaw): RunResult {
     return {
       ok: false,
       msg: `geometry violation at stack ${violation} `
-        + `[${s.cards.map(c => c.join(",")).join(" ")}] @ (${s.loc.top},${s.loc.left})`,
+        + `[${s.cards.map(c => `${c.rank},${c.suit},${c.deck}`).join(" ")}] @ (${s.loc.top},${s.loc.left})`,
     };
   }
 

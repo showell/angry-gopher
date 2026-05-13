@@ -1,4 +1,4 @@
-import type { Card } from "../src/rules/card.ts";
+import type { Card } from "../core/card.ts";
 import { findPlay } from "../src/hand_play.ts";
 import { physicalPlan } from "./physical_plan.ts";
 import { applyLocally } from "../src/primitives.ts";

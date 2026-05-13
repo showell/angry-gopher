@@ -5,7 +5,7 @@
 // Internals stay camelCase / typed; the JS glue handles snake_case
 // translation at the wire boundary.
 
-import type { Card } from "./rules/card.ts";
+import type { Card } from "../core/card.ts";
 import type { PlanLine } from "../bfs/engine_v2.ts";
 import { solveBoard as bfsSolveBoard } from "../bfs/index.ts";
 import type { BoardStack } from "./geometry.ts";

@@ -20,7 +20,7 @@
 // Usage:
 //   node bench/bench_outer_shell.ts
 
-import { type Card, parseCardLabel, cardLabel } from "../src/rules/card.ts";
+import { type Card, type Rank, type Suit, type Deck, parseCardLabel, cardLabel } from "../core/card.ts";
 import { isPartialOk } from "../src/rules/stack_type.ts";
 import { solveBoard } from "../bfs/index.ts";
 import { findPlay, type PlayResult } from "../src/hand_play.ts";
@@ -50,15 +50,15 @@ function remainingCards(): Card[] {
   for (const stack of BOARD_LABELS) {
     for (const lbl of stack) {
       const c = parseCardLabel(lbl);
-      onBoard.add(`${c[0]},${c[1]},${c[2]}`);
+      onBoard.add(`${c.rank},${c.suit},${c.deck}`);
     }
   }
   const out: Card[] = [];
   for (let si = 0; si < 4; si++) {
     for (let vi = 0; vi < 13; vi++) {
       for (const deck of [0, 1] as const) {
-        const c: Card = [vi + 1, si, deck] as const;
-        if (!onBoard.has(`${c[0]},${c[1]},${c[2]}`)) out.push(c);
+        const c: Card = { rank: (vi + 1) as Rank, suit: si as Suit, deck: deck as Deck };
+        if (!onBoard.has(`${c.rank},${c.suit},${c.deck}`)) out.push(c);
       }
     }
   }

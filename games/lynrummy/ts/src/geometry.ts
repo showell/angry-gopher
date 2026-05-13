@@ -11,7 +11,7 @@
 // the Go server's BoardBounds. Drift between layers is silent and
 // load-bearing — when changing one, update all three.
 
-import type { Card } from "./rules/card.ts";
+import type { Card } from "../core/card.ts";
 
 // --- Stack shape with position ----------------------------------------
 

@@ -1,8 +1,8 @@
 // generate_game.ts — play one full game and write a DSL transcript
 // the Elm UI can replay. No flags; tunables are the constants below.
 
-import type { Card } from "./src/rules/card.ts";
-import { parseCardLabel } from "./src/rules/card.ts";
+import type { Card, Rank, Suit, Deck } from "./core/card.ts";
+import { parseCardLabel } from "./core/card.ts";
 import { playFullGame } from "./full_game/full_game.ts";
 import { writeSession } from "./full_game/transcript.ts";
 import { validateSession } from "./full_game/validate_session.ts";
@@ -42,15 +42,15 @@ function remainingCards(): Card[] {
   for (const stack of BOARD_LABELS) {
     for (const lbl of stack) {
       const c = parseCardLabel(lbl);
-      onBoard.add(`${c[0]},${c[1]},${c[2]}`);
+      onBoard.add(`${c.rank},${c.suit},${c.deck}`);
     }
   }
   const out: Card[] = [];
   for (let suit = 0; suit < 4; suit++) {
     for (let v = 1; v <= 13; v++) {
       for (const deck of [0, 1] as const) {
-        const c: Card = [v, suit, deck] as const;
-        if (!onBoard.has(`${c[0]},${c[1]},${c[2]}`)) out.push(c);
+        const c: Card = { rank: v as Rank, suit: suit as Suit, deck: deck as Deck };
+        if (!onBoard.has(`${c.rank},${c.suit},${c.deck}`)) out.push(c);
       }
     }
   }

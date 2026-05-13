@@ -19,7 +19,7 @@
 
 import * as fs from "node:fs";
 
-import type { Card } from "../src/rules/card.ts";
+import { type Card, type Rank, type Suit, type Deck } from "../core/card.ts";
 import { findPlay, type PlayStats } from "../src/hand_play.ts";
 
 interface CapturedProjection {
@@ -38,7 +38,7 @@ interface CapturedSnapshot {
 }
 
 function asCard(c: number[]): Card {
-  return [c[0]!, c[1]!, c[2]!] as const;
+  return { rank: c[0]! as Rank, suit: c[1]! as Suit, deck: c[2]! as Deck };
 }
 
 function loadSnapshots(p: string): CapturedSnapshot[] {
@@ -113,7 +113,7 @@ function printSummary(rank: number, s: Summary): void {
 function printProjectionBreakdown(rec: CapturedSnapshot): void {
   console.log("    projections:");
   for (const proj of rec.projections) {
-    const cards = proj.cards.map(c => `${c[0]}/${c[1]}/${c[2]}`).join(",");
+    const cards = proj.cards.map(c => `${c[0]}/${c[1]}/${c[2]}`).join(",");  // raw int[][] capture format
     const marker = proj.found_plan ? "✓" : "·";
     console.log(`      ${marker} ${proj.kind.padEnd(9)} wall=${proj.wall.toFixed(2)}s cards=[${cards}]`);
   }

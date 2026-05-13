@@ -8,8 +8,7 @@
 // input returns null from classify_stack; the caller boundary
 // (classify_buckets, eventually) raises on invalid stacks.
 
-import type { Card } from "../src/rules/card.ts";
-import { RED } from "../src/rules/card.ts";
+import { type Card, isRedSuit } from "../core/card.ts";
 
 export const KIND_RUN = "run";
 export const KIND_RB = "rb";
@@ -48,22 +47,22 @@ function successor(v: number): number {
 function classifyPair(cards: readonly Card[]): Kind | null {
   const a = cards[0]!;
   const b = cards[1]!;
-  const av = a[0], asu = a[1];
-  const bv = b[0], bsu = b[1];
+  const av = a.rank, asu = a.suit;
+  const bv = b.rank, bsu = b.suit;
   if (av === bv) {
     return asu !== bsu ? KIND_PAIR_SET : null;
   }
   if (successor(av) !== bv) return null;
   if (asu === bsu) return KIND_PAIR_RUN;
-  if (RED.has(asu) !== RED.has(bsu)) return KIND_PAIR_RB;
+  if (isRedSuit(asu) !== isRedSuit(bsu)) return KIND_PAIR_RB;
   return null;
 }
 
 function classifyLong(cards: readonly Card[]): Kind | null {
   const a0 = cards[0]!;
   const a1 = cards[1]!;
-  const a0v = a0[0], a0s = a0[1];
-  const a1v = a1[0], a1s = a1[1];
+  const a0v = a0.rank, a0s = a0.suit;
+  const a1v = a1.rank, a1s = a1.suit;
   const n = cards.length;
 
   // SET path: same value, distinct suits.
@@ -72,7 +71,7 @@ function classifyLong(cards: readonly Card[]): Kind | null {
     const seen = new Set<number>([a0s, a1s]);
     for (let i = 2; i < n; i++) {
       const c = cards[i]!;
-      const cv = c[0], cs = c[1];
+      const cv = c.rank, cs = c.suit;
       if (cv !== a0v || seen.has(cs)) return null;
       seen.add(cs);
     }
@@ -87,24 +86,24 @@ function classifyLong(cards: readonly Card[]): Kind | null {
     let prevV = a1v;
     for (let i = 2; i < n; i++) {
       const c = cards[i]!;
-      if (c[0] !== successor(prevV) || c[1] !== a0s) return null;
-      prevV = c[0];
+      if (c.rank !== successor(prevV) || c.suit !== a0s) return null;
+      prevV = c.rank;
     }
     return KIND_RUN;
   }
 
   // Rb run: alternating colors with successive values.
-  const a0red = RED.has(a0s);
-  const a1red = RED.has(a1s);
+  const a0red = isRedSuit(a0s);
+  const a1red = isRedSuit(a1s);
   if (a0red === a1red) return null;
   let prevV = a1v;
   let prevRed = a1red;
   for (let i = 2; i < n; i++) {
     const c = cards[i]!;
-    if (c[0] !== successor(prevV)) return null;
-    const cRed = RED.has(c[1]);
+    if (c.rank !== successor(prevV)) return null;
+    const cRed = isRedSuit(c.suit);
     if (cRed === prevRed) return null;
-    prevV = c[0];
+    prevV = c.rank;
     prevRed = cRed;
   }
   return KIND_RB;
@@ -170,15 +169,15 @@ function pairOf(family: Kind): Kind {
  *  legal pair. Mirrors python's `_family_for_two_cards`. Order matters
  *  for run/rb (successor is directional); set is symmetric on value. */
 function familyForTwoCards(c1: Card, c2: Card): Kind | null {
-  const v1 = c1[0], s1 = c1[1];
-  const v2 = c2[0], s2 = c2[1];
+  const v1 = c1.rank, s1 = c1.suit;
+  const v2 = c2.rank, s2 = c2.suit;
   if (v1 === v2) {
     if (s1 === s2) return null;
     return KIND_SET;
   }
   if (successor(v1) !== v2) return null;
   if (s1 === s2) return KIND_RUN;
-  if (RED.has(s1) !== RED.has(s2)) return KIND_RB;
+  if (isRedSuit(s1) !== isRedSuit(s2)) return KIND_RB;
   return null;
 }
 
@@ -202,20 +201,20 @@ export function kindAfterAbsorbRight(
 
   const family = familyOfKind(targetKind)!;
   const last = target.cards[target.cards.length - 1]!;
-  const av = last[0], asu = last[1];
-  const bv = card[0], bsu = card[1];
+  const av = last.rank, asu = last.suit;
+  const bv = card.rank, bsu = card.suit;
 
   if (family === KIND_RUN) {
     if (asu !== bsu || (av === 13 ? 1 : av + 1) !== bv) return null;
   } else if (family === KIND_RB) {
     if ((av === 13 ? 1 : av + 1) !== bv) return null;
-    if (RED.has(asu) === RED.has(bsu)) return null;
+    if (isRedSuit(asu) === isRedSuit(bsu)) return null;
   } else {
     // KIND_SET
     if (av !== bv || asu === bsu) return null;
     if (nNew > 4) return null;
     for (const c of target.cards) {
-      if (c[1] === bsu) return null;
+      if (c.suit === bsu) return null;
     }
   }
 
@@ -250,11 +249,11 @@ export type ExtenderMap = Map<ExtenderShape, Kind>;
 export type ExtendersTriple = readonly [ExtenderMap, ExtenderMap, ExtenderMap];
 
 function extendsForSingleton(only: Card): ExtendersTriple {
-  const v = only[0];
-  const s = only[1];
+  const v = only.rank;
+  const s = only.suit;
   const succV = v === 13 ? 1 : v + 1;
   const predV = v === 1 ? 13 : v - 1;
-  const onlyRed = RED.has(s);
+  const onlyRed = isRedSuit(s);
 
   const left: ExtenderMap = new Map();
   const right: ExtenderMap = new Map();
@@ -263,7 +262,7 @@ function extendsForSingleton(only: Card): ExtendersTriple {
   right.set(shapeId(succV, s), KIND_PAIR_RUN);
   // Pair_rb: opp-color suits at pred (left) / succ (right).
   for (let ss = 0; ss < 4; ss++) {
-    if (RED.has(ss) !== onlyRed) {
+    if (isRedSuit(ss) !== onlyRed) {
       left.set(shapeId(predV, ss), KIND_PAIR_RB);
       right.set(shapeId(succV, ss), KIND_PAIR_RB);
     }
@@ -299,25 +298,25 @@ export function extendsTables(target: ClassifiedCardStack): ExtendersTriple {
   if (family === KIND_RUN) {
     const last = cards[cards.length - 1]!;
     const first = cards[0]!;
-    const succV = last[0] === 13 ? 1 : last[0] + 1;
-    const predV = first[0] === 1 ? 13 : first[0] - 1;
-    const left: ExtenderMap = new Map([[shapeId(predV, first[1]), resultKind]]);
-    const right: ExtenderMap = new Map([[shapeId(succV, last[1]), resultKind]]);
+    const succV = last.rank === 13 ? 1 : last.rank + 1;
+    const predV = first.rank === 1 ? 13 : first.rank - 1;
+    const left: ExtenderMap = new Map([[shapeId(predV, first.suit), resultKind]]);
+    const right: ExtenderMap = new Map([[shapeId(succV, last.suit), resultKind]]);
     return [left, right, new Map()];
   }
 
   if (family === KIND_RB) {
     const last = cards[cards.length - 1]!;
     const first = cards[0]!;
-    const succV = last[0] === 13 ? 1 : last[0] + 1;
-    const predV = first[0] === 1 ? 13 : first[0] - 1;
-    const lastRed = RED.has(last[1]);
-    const firstRed = RED.has(first[1]);
+    const succV = last.rank === 13 ? 1 : last.rank + 1;
+    const predV = first.rank === 1 ? 13 : first.rank - 1;
+    const lastRed = isRedSuit(last.suit);
+    const firstRed = isRedSuit(first.suit);
     const left: ExtenderMap = new Map();
     const right: ExtenderMap = new Map();
     for (let s = 0; s < 4; s++) {
-      if (RED.has(s) !== firstRed) left.set(shapeId(predV, s), resultKind);
-      if (RED.has(s) !== lastRed) right.set(shapeId(succV, s), resultKind);
+      if (isRedSuit(s) !== firstRed) left.set(shapeId(predV, s), resultKind);
+      if (isRedSuit(s) !== lastRed) right.set(shapeId(succV, s), resultKind);
     }
     return [left, right, new Map()];
   }
@@ -326,9 +325,9 @@ export function extendsTables(target: ClassifiedCardStack): ExtendersTriple {
   if (nNew > 4) {
     return [new Map(), new Map(), new Map()];
   }
-  const setValue = cards[0]![0];
+  const setValue = cards[0]!.rank;
   const usedSuits = new Set<number>();
-  for (const c of cards) usedSuits.add(c[1]);
+  for (const c of cards) usedSuits.add(c.suit);
   const setMap: ExtenderMap = new Map();
   for (let s = 0; s < 4; s++) {
     if (!usedSuits.has(s)) setMap.set(shapeId(setValue, s), resultKind);
@@ -355,22 +354,22 @@ export function kindAfterAbsorbLeft(
   }
 
   const family = familyOfKind(targetKind)!;
-  const av = card[0], asu = card[1];
+  const av = card.rank, asu = card.suit;
   const first = target.cards[0]!;
-  const bv = first[0], bsu = first[1];
+  const bv = first.rank, bsu = first.suit;
 
   if (family === KIND_RUN) {
     if (asu !== bsu || (av === 13 ? 1 : av + 1) !== bv) return null;
   } else if (family === KIND_RB) {
     if ((av === 13 ? 1 : av + 1) !== bv) return null;
-    if (RED.has(asu) === RED.has(bsu)) return null;
+    if (isRedSuit(asu) === isRedSuit(bsu)) return null;
   } else {
     // KIND_SET
     if (av !== bv || asu === bsu) return null;
     if (nNew > 4) return null;
     // Card's suit is `asu` (card sits on the left of target).
     for (const c of target.cards) {
-      if (c[1] === asu) return null;
+      if (c.suit === asu) return null;
     }
   }
 
@@ -652,8 +651,8 @@ function sliceKind(family: Kind, n: number): Kind | null {
  *  determined the family from the parent kinds. Mirrors python's
  *  `_boundary_ok`. */
 function boundaryOk(a: Card, b: Card, family: Kind): boolean {
-  const av = a[0], asu = a[1];
-  const bv = b[0], bsu = b[1];
+  const av = a.rank, asu = a.suit;
+  const bv = b.rank, bsu = b.suit;
   if (family === KIND_SET) {
     return av === bv && asu !== bsu;
   }
@@ -662,7 +661,7 @@ function boundaryOk(a: Card, b: Card, family: Kind): boolean {
   }
   if (family === KIND_RB) {
     if (successor(av) !== bv) return false;
-    return RED.has(asu) !== RED.has(bsu);
+    return isRedSuit(asu) !== isRedSuit(bsu);
   }
   return false;
 }
@@ -859,20 +858,20 @@ export function findSpliceCandidates(
   const n = parent.n;
   if (n < 5) return [];
   const cards = parent.cards;
-  const cv = card[0];
-  const cs = card[1];
+  const cv = card.rank;
+  const cs = card.suit;
   const family = parent.kind;
-  const cRed = RED.has(cs);
+  const cRed = isRedSuit(cs);
   const out: SpliceCandidate[] = [];
   for (let m = 2; m <= n - 3; m++) {
     const pm = cards[m]!;
-    if (pm[0] !== cv) continue;
+    if (pm.rank !== cv) continue;
     if (family === KIND_RB) {
       // Card must match parent[m]'s color (rb alternation continuation).
-      if (RED.has(pm[1]) !== cRed) continue;
+      if (isRedSuit(pm.suit) !== cRed) continue;
     } else {
       // KIND_RUN: card must match parent[m]'s suit (pure-run invariant).
-      if (pm[1] !== cs) continue;
+      if (pm.suit !== cs) continue;
     }
     out.push({ side: "left", position: m, leftKind: family, rightKind: family });
     out.push({ side: "right", position: m + 1, leftKind: family, rightKind: family });

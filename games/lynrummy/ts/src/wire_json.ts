@@ -14,8 +14,8 @@
 //   - state defaults to 0 (FirmlyOnBoard / HandNormal); the agent
 //     never freshly-played anything, the recency markers are UI-only
 
-import type { Card } from "./rules/card.ts";
-import { cardLabel } from "./rules/card.ts";
+import type { Card } from "../core/card.ts";
+import { cardLabel } from "../core/card.ts";
 import type { BoardStack } from "./geometry.ts";
 import type { Primitive } from "./primitives.ts";
 
@@ -39,7 +39,7 @@ export type WireActionJson =
   | { action: "complete_turn" };
 
 export function jsonCard(c: Card): JsonCard {
-  return { value: c[0], suit: c[1], origin_deck: c[2] };
+  return { value: c.rank, suit: c.suit, origin_deck: c.deck };
 }
 
 export function jsonBoardCard(c: Card): JsonBoardCard {

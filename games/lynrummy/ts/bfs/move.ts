@@ -8,8 +8,7 @@
 // `describe(move)` produces a stable plan-line string suitable for
 // cross-language pinning.
 
-import type { Card } from "../src/rules/card.ts";
-import { RANKS, SUITS, cardLabel } from "../src/rules/card.ts";
+import { type Card, isRedSuit, RANKS, SUITS, cardLabel } from "../core/card.ts";
 
 export type Side = "left" | "right";
 
@@ -145,14 +144,14 @@ export function describe(move: Move): string {
       let pIdx = -1;
       for (let i = 0; i < move.newSource.length; i++) {
         const c = move.newSource[i]!;
-        if (c[0] === move.pCard[0] && c[1] === move.pCard[1] && c[2] === move.pCard[2]) {
+        if (c.rank === move.pCard.rank && c.suit === move.pCard.suit && c.deck === move.pCard.deck) {
           pIdx = i;
           break;
         }
       }
       const rest: Card[] = [];
       for (const c of move.newSource) {
-        if (!(c[0] === move.pCard[0] && c[1] === move.pCard[1] && c[2] === move.pCard[2])) {
+        if (!(c.rank === move.pCard.rank && c.suit === move.pCard.suit && c.deck === move.pCard.deck)) {
           rest.push(c);
         }
       }
@@ -198,37 +197,36 @@ function classifyFamily(stack: readonly Card[]): string {
   const c0 = stack[0]!;
   const c1 = stack[1]!;
   // Set: same value, distinct suits.
-  if (c0[0] === c1[0]) {
+  if (c0.rank === c1.rank) {
     const seen = new Set<number>();
     for (const c of stack) {
-      if (c[0] !== c0[0]) return "other";
-      if (seen.has(c[1])) return "other";
-      seen.add(c[1]);
+      if (c.rank !== c0.rank) return "other";
+      if (seen.has(c.suit)) return "other";
+      seen.add(c.suit);
     }
     return "set";
   }
   // Run: successive values, same-suit (pure) or alternating-color (rb).
   const succ = (v: number) => v === 13 ? 1 : v + 1;
-  if (succ(c0[0]) !== c1[0]) return "other";
-  const RED = new Set([1, 3]);
-  if (c0[1] === c1[1]) {
-    let prevV = c1[0];
+  if (succ(c0.rank) !== c1.rank) return "other";
+  if (c0.suit === c1.suit) {
+    let prevV = c1.rank;
     for (let i = 2; i < n; i++) {
       const c = stack[i]!;
-      if (c[0] !== succ(prevV) || c[1] !== c0[1]) return "other";
-      prevV = c[0];
+      if (c.rank !== succ(prevV) || c.suit !== c0.suit) return "other";
+      prevV = c.rank;
     }
     return "pure_run";
   }
-  if (RED.has(c0[1]) === RED.has(c1[1])) return "other";
-  let prevV = c1[0];
-  let prevRed = RED.has(c1[1]);
+  if (isRedSuit(c0.suit) === isRedSuit(c1.suit)) return "other";
+  let prevV = c1.rank;
+  let prevRed = isRedSuit(c1.suit);
   for (let i = 2; i < n; i++) {
     const c = stack[i]!;
-    if (c[0] !== succ(prevV)) return "other";
-    const cRed = RED.has(c[1]);
+    if (c.rank !== succ(prevV)) return "other";
+    const cRed = isRedSuit(c.suit);
     if (cRed === prevRed) return "other";
-    prevV = c[0];
+    prevV = c.rank;
     prevRed = cRed;
   }
   return "rb_run";

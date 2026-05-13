@@ -17,8 +17,8 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import type { Card } from "../src/rules/card.ts";
-import { parseCardLabel, cardLabel } from "../src/rules/card.ts";
+import type { Card } from "../core/card.ts";
+import { parseCardLabel, cardLabel } from "../core/card.ts";
 import {
   type Primitive, type Side,
   applyLocally, findStackIndex,
@@ -220,7 +220,7 @@ function runWalkthrough(w: Walkthrough): RunResult {
       return {
         ok: false,
         msg: `intermediate geometry violation after action[${i}] (${line}): `
-          + `stack ${v} [${s.cards.map(c => c.join(",")).join(" ")}] @ (${s.loc.top},${s.loc.left})`,
+          + `stack ${v} [${s.cards.map(c => `${c.rank},${c.suit},${c.deck}`).join(" ")}] @ (${s.loc.top},${s.loc.left})`,
       };
     }
   }
@@ -234,7 +234,7 @@ function runWalkthrough(w: Walkthrough): RunResult {
     return {
       ok: false,
       msg: `geometry violation at stack ${violation} `
-        + `[${s.cards.map(c => c.join(",")).join(" ")}] @ (${s.loc.top},${s.loc.left})`,
+        + `[${s.cards.map(c => `${c.rank},${c.suit},${c.deck}`).join(" ")}] @ (${s.loc.top},${s.loc.left})`,
     };
   }
   const v = isVictory(board);

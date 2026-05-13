@@ -21,7 +21,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-import { type Card, RANKS, SUITS } from "../src/rules/card.ts";
+import { type Card, type Rank, type Suit, RANKS, SUITS, Deck } from "../core/card.ts";
 import { timeSolver } from "./bench_timing.ts";
 import type { RawBuckets } from "../bfs/buckets.ts";
 
@@ -38,7 +38,7 @@ function parseLabel(label: string): Card {
   const rankIdx = RANKS.indexOf(label[0]!);
   const suitIdx = SUITS.indexOf(label[1]!);
   if (rankIdx < 0 || suitIdx < 0) throw new Error(`bad label ${label}`);
-  return [rankIdx + 1, suitIdx, 0] as const;
+  return { rank: (rankIdx + 1) as Rank, suit: suitIdx as Suit, deck: Deck.One };
 }
 
 function boardSet(): Set<string> {
@@ -46,7 +46,7 @@ function boardSet(): Set<string> {
   for (const stack of BOARD_LABELS) {
     for (const lbl of stack) {
       const c = parseLabel(lbl);
-      out.add(`${c[0]},${c[1]},${c[2]}`);
+      out.add(`${c.rank},${c.suit},${c.deck}`);
     }
   }
   return out;
@@ -57,9 +57,9 @@ function allRemaining(): Card[] {
   const out: Card[] = [];
   for (let si = 0; si < 4; si++) {
     for (let vi = 0; vi < 13; vi++) {
-      for (const deck of [0, 1] as const) {
-        const c: Card = [vi + 1, si, deck] as const;
-        if (!onBoard.has(`${c[0]},${c[1]},${c[2]}`)) out.push(c);
+      for (const deck of [Deck.One, Deck.Two] as const) {
+        const c: Card = { rank: (vi + 1) as Rank, suit: si as Suit, deck };
+        if (!onBoard.has(`${c.rank},${c.suit},${c.deck}`)) out.push(c);
       }
     }
   }
@@ -67,13 +67,13 @@ function allRemaining(): Card[] {
 }
 
 function dslLabel(c: Card): string {
-  const base = RANKS[c[0] - 1] + SUITS[c[1]];
-  return c[2] ? `${base}'` : base;
+  const base = RANKS[c.rank - 1] + SUITS[c.suit];
+  return c.deck === Deck.Two ? `${base}'` : base;
 }
 
 function scenarioId(c: Card): string {
-  const base = RANKS[c[0] - 1] + SUITS[c[1]];
-  return c[2] ? `baseline_board_${base}p` : `baseline_board_${base}`;
+  const base = RANKS[c.rank - 1] + SUITS[c.suit];
+  return c.deck === Deck.Two ? `baseline_board_${base}p` : `baseline_board_${base}`;
 }
 
 function helpersAsTuples(): readonly (readonly Card[])[] {

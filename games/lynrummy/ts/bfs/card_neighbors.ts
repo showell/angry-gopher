@@ -10,7 +10,7 @@
 // such a state is provably unwinnable.
 //
 // Card encoding (0..103):
-//   cardId(value, suit, deck) = (value - 1) * 8 + suit * 2 + deck
+//   cardId(c) = (rank - 1) * 8 + suit * 2 + deck
 //
 // Bucket tags for per-state card_loc array:
 //   ABSENT = 0
@@ -21,33 +21,17 @@
 //
 // GROWING is conservative on purpose: cards in a growing 2-partial
 // are treated as accessible partners even though no BFS move
-// extracts them (growing isn't an extract source). This is a
-// correctness-safe over-approximation — false-positive liveness,
-// never false-negative — so plan quality is preserved.
-//
-// Tried and rejected (don't re-derive these):
-//
-// 1. Replacing isPartialOk length-2 with a precomputed pair-partner
-//    set. The 5-branch tower framing was misleading — isPartialOk is
-//    an early-return chain that exits in ~3 ops for the dominant
-//    case, while a hash lookup needs ~10 ops.
-// 2. Hoisting cardLoc into enumerateMoves as plumbing for future
-//    consumers. Building it per state without an immediate consumer
-//    is pure overhead.
-// 3. Pushing the dynamic doomed-singleton prune unconditionally on
-//    every state. Per-state cost dominated the prune savings; gating
-//    on graduation events (len(complete) > parentCompleteCount) is
-//    load-bearing.
+// extracts them. Correctness-safe over-approximation — false-positive
+// liveness, never false-negative.
 
-import type { Card } from "../src/rules/card.ts";
-import { RED } from "../src/rules/card.ts";
+import { type Card, Rank, Suit, Deck, isRedSuit } from "../core/card.ts";
 import type { Buckets } from "./buckets.ts";
 import type { ClassifiedCardStack } from "./classified_card_stack.ts";
 
 // --- Card encoding ----------------------------------------------------
 
 export function cardId(c: Card): number {
-  return (c[0] - 1) * 8 + c[1] * 2 + c[2];
+  return (c.rank - 1) * 8 + c.suit * 2 + c.deck;
 }
 
 // --- Bucket tags ------------------------------------------------------
@@ -60,14 +44,16 @@ export const COMPLETE = 4;
 
 // --- Neighbor-table construction --------------------------------------
 
-function suitsInColor(red: boolean): number[] {
-  const out: number[] = [];
-  for (let s = 0; s < 4; s++) if (RED.has(s) === red) out.push(s);
+function suitsInColor(red: boolean): Suit[] {
+  const out: Suit[] = [];
+  for (const s of [Suit.Club, Suit.Diamond, Suit.Spade, Suit.Heart]) {
+    if (isRedSuit(s) === red) out.push(s);
+  }
   return out;
 }
 
-function combinations3(arr: readonly number[]): [number, number, number][] {
-  const out: [number, number, number][] = [];
+function combinations3<T>(arr: readonly T[]): [T, T, T][] {
+  const out: [T, T, T][] = [];
   for (let i = 0; i < arr.length; i++)
     for (let j = i + 1; j < arr.length; j++)
       for (let k = j + 1; k < arr.length; k++)
@@ -75,7 +61,7 @@ function combinations3(arr: readonly number[]): [number, number, number][] {
   return out;
 }
 
-function buildNeighbors(): readonly (readonly [number, number])[][] {
+function buildNeighbors(): readonly (readonly (readonly [number, number])[])[] {
   const out: [number, number][][] = [];
   for (let i = 0; i < 104; i++) out.push([]);
 
@@ -86,33 +72,44 @@ function buildNeighbors(): readonly (readonly [number, number])[][] {
     out[i3]!.push([i1, i2]);
   }
 
-  // Sets: same value, three distinct suits, decks chosen independently.
-  for (let v = 1; v <= 13; v++) {
-    for (const [s1, s2, s3] of combinations3([0, 1, 2, 3])) {
-      for (let d1 = 0; d1 < 2; d1++)
-        for (let d2 = 0; d2 < 2; d2++)
-          for (let d3 = 0; d3 < 2; d3++)
-            addTriple([v, s1, d1], [v, s2, d2], [v, s3, d3]);
+  const allSuits: Suit[] = [Suit.Club, Suit.Diamond, Suit.Spade, Suit.Heart];
+  const allDecks: Deck[] = [Deck.One, Deck.Two];
+
+  // Sets: same rank, three distinct suits, decks chosen independently.
+  for (let v = 1 as Rank; v <= 13; v++) {
+    for (const [s1, s2, s3] of combinations3(allSuits)) {
+      for (const d1 of allDecks)
+        for (const d2 of allDecks)
+          for (const d3 of allDecks)
+            addTriple(
+              { rank: v, suit: s1, deck: d1 },
+              { rank: v, suit: s2, deck: d2 },
+              { rank: v, suit: s3, deck: d3 },
+            );
     }
   }
 
-  // Pure runs: same suit, three consecutive values (K wraps to A).
-  for (let v0 = 1; v0 <= 13; v0++) {
-    const v1 = (v0 % 13) + 1;
-    const v2 = (v1 % 13) + 1;
-    for (let s = 0; s < 4; s++) {
-      for (let d0 = 0; d0 < 2; d0++)
-        for (let d1 = 0; d1 < 2; d1++)
-          for (let d2 = 0; d2 < 2; d2++)
-            addTriple([v0, s, d0], [v1, s, d1], [v2, s, d2]);
+  // Pure runs: same suit, three consecutive ranks (K wraps to A).
+  for (let v0 = 1 as Rank; v0 <= 13; v0++) {
+    const v1 = ((v0 % 13) + 1) as Rank;
+    const v2 = ((v1 % 13) + 1) as Rank;
+    for (const s of allSuits) {
+      for (const d0 of allDecks)
+        for (const d1 of allDecks)
+          for (const d2 of allDecks)
+            addTriple(
+              { rank: v0, suit: s, deck: d0 },
+              { rank: v1, suit: s, deck: d1 },
+              { rank: v2, suit: s, deck: d2 },
+            );
     }
   }
 
-  // RB runs: alternating colors, three consecutive values. Both
+  // RB runs: alternating colors, three consecutive ranks. Both
   // start_red parities (RBR + BRB).
-  for (let v0 = 1; v0 <= 13; v0++) {
-    const v1 = (v0 % 13) + 1;
-    const v2 = (v1 % 13) + 1;
+  for (let v0 = 1 as Rank; v0 <= 13; v0++) {
+    const v1 = ((v0 % 13) + 1) as Rank;
+    const v2 = ((v1 % 13) + 1) as Rank;
     for (const startRed of [true, false]) {
       const suits0 = suitsInColor(startRed);
       const suits1 = suitsInColor(!startRed);
@@ -120,10 +117,14 @@ function buildNeighbors(): readonly (readonly [number, number])[][] {
       for (const s0 of suits0)
         for (const s1 of suits1)
           for (const s2 of suits2)
-            for (let d0 = 0; d0 < 2; d0++)
-              for (let d1 = 0; d1 < 2; d1++)
-                for (let d2 = 0; d2 < 2; d2++)
-                  addTriple([v0, s0, d0], [v1, s1, d1], [v2, s2, d2]);
+            for (const d0 of allDecks)
+              for (const d1 of allDecks)
+                for (const d2 of allDecks)
+                  addTriple(
+                    { rank: v0, suit: s0, deck: d0 },
+                    { rank: v1, suit: s1, deck: d1 },
+                    { rank: v2, suit: s2, deck: d2 },
+                  );
     }
   }
 
@@ -153,7 +154,7 @@ export function buildCardLoc(b: Buckets): Uint8Array {
 
 /** True iff `c` has at least one pair of accessible partners on the
  *  board (tag in {HELPER, TROUBLE, GROWING}). COMPLETE cards are
- *  sealed and don't count. O(|NEIGHBORS[c]|) ≈ O(72) per call. */
+ *  sealed and don't count. */
 export function isLive(c: Card, cardLoc: Uint8Array): boolean {
   const cid = cardId(c);
   const pairs = NEIGHBORS[cid]!;
@@ -167,8 +168,9 @@ export function isLive(c: Card, cardLoc: Uint8Array): boolean {
 
 // --- Filters used by the BFS engine -----------------------------------
 
-/** Pre-flight: false if any trouble singleton has no accessible partner
- *  pair anywhere on the board. Such a state is provably unwinnable. */
+/** Pre-flight: false if any trouble singleton has no accessible
+ *  partner pair anywhere on the board. Such a state is provably
+ *  unwinnable. */
 export function allTroubleSingletonsLive(b: Buckets): boolean {
   let hasSingleton = false;
   for (const t of b.trouble) if (t.n === 1) { hasSingleton = true; break; }

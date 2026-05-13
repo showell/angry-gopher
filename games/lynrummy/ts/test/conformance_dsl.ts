@@ -37,7 +37,7 @@
 // blocks (replay actions, walkthrough steps, wing expects,
 // etc.) are not handled.
 
-import { type Card, parseCardLabel } from "../src/rules/card.ts";
+import { type Card, parseCardLabel } from "../core/card.ts";
 
 // ---- Output shape (matches the snake_case JSON Scenario in test_engine_conformance.ts) ----
 
@@ -302,14 +302,14 @@ function parseCardList(s: string): Card[] {
 
 function toBoardCard(c: Card): ParsedBoardCard {
   return {
-    card: { value: c[0], suit: c[1], origin_deck: c[2] },
+    card: { value: c.rank, suit: c.suit, origin_deck: c.deck },
     state: 0,
   };
 }
 
 function toHandCard(c: Card): ParsedHandCard {
   return {
-    card: { value: c[0], suit: c[1], origin_deck: c[2] },
+    card: { value: c.rank, suit: c.suit, origin_deck: c.deck },
     state: 0,
   };
 }
@@ -317,8 +317,8 @@ function toHandCard(c: Card): ParsedHandCard {
 function cardLabelString(c: Card): string {
   const RANKS = "A23456789TJQK";
   const SUITS = "CDSH";
-  const base = RANKS[c[0] - 1]! + SUITS[c[1]]!;
-  return c[2] === 0 ? base : `${base}'`;
+  const base = RANKS[c.rank - 1]! + SUITS[c.suit]!;
+  return c.deck === 0 ? base : `${base}'`;
 }
 
 function parseDashLines(children: Line[]): string[] {

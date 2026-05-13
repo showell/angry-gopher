@@ -2,8 +2,8 @@
 // and print the rendered hint. Used to lock in a known engine
 // output for in_progress/*.json captures.
 
-import type { Card } from "../src/rules/card.ts";
-import { parseCardLabel } from "../src/rules/card.ts";
+import type { Card } from "../core/card.ts";
+import { parseCardLabel } from "../core/card.ts";
 import { gameHintLines } from "../src/engine_entry.ts";
 
 const handLabels = [

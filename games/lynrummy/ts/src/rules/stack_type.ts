@@ -6,8 +6,8 @@
 // This file holds the predicates that don't need a CCS — they sit
 // closer to the rules layer.
 
-import type { Card } from "./card.ts";
-import { isRedSuit } from "./card.ts";
+import type { Card } from "../../core/card.ts";
+import { isRedSuit } from "../../core/card.ts";
 import { classifyStack } from "../../bfs/classified_card_stack.ts";
 
 function successor(v: number): number {
@@ -36,11 +36,11 @@ export function isPartialOk(stack: readonly Card[]): boolean {
   const a = stack[0]!;
   const b = stack[1]!;
   // Run partial: successor + same suit (pure) or different color (rb).
-  if (successor(a[0]) === b[0]) {
-    if (a[1] === b[1]) return true;            // pure-run partial
-    if (isRedSuit(a[1]) !== isRedSuit(b[1])) return true;  // rb-run partial
+  if (successor(a.rank) === b.rank) {
+    if (a.suit === b.suit) return true;            // pure-run partial
+    if (isRedSuit(a.suit) !== isRedSuit(b.suit)) return true;  // rb-run partial
   }
   // Set partial: same value, different suit.
-  if (a[0] === b[0] && a[1] !== b[1]) return true;
+  if (a.rank === b.rank && a.suit !== b.suit) return true;
   return false;
 }

@@ -28,7 +28,7 @@
 // structure (split here, merge there) and let the helpers handle the
 // physical decisions.
 
-import type { Card } from "./rules/card.ts";
+import type { Card } from "../core/card.ts";
 import type {
   Move, Side,
   ExtractAbsorbMove, FreePullMove, PushMove,
@@ -51,7 +51,7 @@ function flipSide(s: Side): Side {
 }
 
 function cardKey(c: Card): string {
-  return `${c[0]},${c[1]},${c[2]}`;
+  return `${c.rank},${c.suit},${c.deck}`;
 }
 
 /** Expand one Move into its primitive sequence on the live board.
@@ -367,7 +367,7 @@ function sameContent(a: readonly Card[], b: readonly Card[]): boolean {
   for (let i = 0; i < a.length; i++) {
     const ca = a[i]!;
     const cb = b[i]!;
-    if (ca[0] !== cb[0] || ca[1] !== cb[1] || ca[2] !== cb[2]) return false;
+    if (ca.rank !== cb.rank || ca.suit !== cb.suit || ca.deck !== cb.deck) return false;
   }
   return true;
 }
@@ -422,7 +422,7 @@ function doTwoSplitsAt(
 function indexOfCard(arr: readonly Card[], target: Card): number {
   for (let i = 0; i < arr.length; i++) {
     const c = arr[i]!;
-    if (c[0] === target[0] && c[1] === target[1] && c[2] === target[2]) return i;
+    if (c.rank === target.rank && c.suit === target.suit && c.deck === target.deck) return i;
   }
   return -1;
 }

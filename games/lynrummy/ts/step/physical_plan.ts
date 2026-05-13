@@ -16,8 +16,8 @@
 // Every hand card must be consumed by the loop's end; an unconsumed
 // card signals a broken plan and throws.
 
-import type { Card } from "../src/rules/card.ts";
-import { cardLabel } from "../src/rules/card.ts";
+import type { Card } from "../core/card.ts";
+import { cardLabel } from "../core/card.ts";
 import type { Move } from "../bfs/move.ts";
 import type { BoardStack } from "../src/geometry.ts";
 import { findOpenLoc } from "../src/geometry.ts";
@@ -29,7 +29,7 @@ import {
 import { expandVerb } from "../src/verbs.ts";
 
 function cardKey(c: Card): string {
-  return `${c[0]},${c[1]},${c[2]}`;
+  return `${c.rank},${c.suit},${c.deck}`;
 }
 
 export function physicalPlan(

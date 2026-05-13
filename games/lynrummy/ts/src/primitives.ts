@@ -14,7 +14,7 @@
 // system going forward, no HTTP. So we skip Python's `to_wire_shape` /
 // `send_one`.
 
-import type { Card } from "./rules/card.ts";
+import type { Card } from "../core/card.ts";
 import { CARD_PITCH, type BoardStack, type Loc } from "./geometry.ts";
 import {
   splitDsl,
@@ -280,7 +280,7 @@ export function cardsOf(stack: BoardStack): readonly Card[] {
 }
 
 function cardEq(a: Card, b: Card): boolean {
-  return a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
+  return a.rank === b.rank && a.suit === b.suit && a.deck === b.deck;
 }
 
 function cardsEq(a: readonly Card[], b: readonly Card[]): boolean {
@@ -298,5 +298,5 @@ export function findStackIndex(
   for (let i = 0; i < board.length; i++) {
     if (cardsEq(board[i]!.cards, cards)) return i;
   }
-  throw new Error(`stack not found on board: [${cards.map(c => `${c[0]},${c[1]},${c[2]}`).join(" ")}]`);
+  throw new Error(`stack not found on board: [${cards.map(c => `${c.rank},${c.suit},${c.deck}`).join(" ")}]`);
 }

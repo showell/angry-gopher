@@ -17,7 +17,7 @@
 // Live replay uses absolute tMs deltas, so this is fine — the
 // duration is what drives animation pacing.
 
-import type { Card } from "./rules/card.ts";
+import type { Card } from "../core/card.ts";
 import { CARD_PITCH } from "./geometry.ts";
 import type { TimeLoc, Stack } from "./wire_action_dsl.ts";
 

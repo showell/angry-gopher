@@ -10,7 +10,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-import { parseCardLabel, cardLabel, type Card } from "../src/rules/card.ts";
+import { parseCardLabel, cardLabel, type Card } from "../core/card.ts";
 import type { BoardStack, Loc } from "../src/geometry.ts";
 import { findViolation } from "../src/geometry.ts";
 import {
@@ -275,7 +275,7 @@ function runScenario(sc: Scenario): RunResult {
       return {
         ok: false,
         msg: `intermediate geometry violation after primitive[${i}] (${got[i]}) `
-          + `at stack ${v} [${s.cards.map(c => c.join(",")).join(" ")}] @ (${s.loc.top},${s.loc.left})`,
+          + `at stack ${v} [${s.cards.map(c => `${c.rank},${c.suit},${c.deck}`).join(" ")}] @ (${s.loc.top},${s.loc.left})`,
       };
     }
   }

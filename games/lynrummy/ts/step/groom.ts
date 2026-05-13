@@ -1,6 +1,6 @@
 // UI stack rendering caps at MAX_JOINED_LEN; runs longer than this stay split.
 
-import type { Card } from "../src/rules/card.ts";
+import type { Card } from "../core/card.ts";
 import {
   classifyStack,
   KIND_RUN,

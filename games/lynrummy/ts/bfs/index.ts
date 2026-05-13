@@ -1,4 +1,4 @@
-import type { Card } from "../src/rules/card.ts";
+import type { Card } from "../core/card.ts";
 import { classifyStack } from "./classified_card_stack.ts";
 import { solveStateWithMoves, type SolveResult } from "./engine_v2.ts";
 

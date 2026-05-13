@@ -24,7 +24,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-import type { Card } from "../src/rules/card.ts";
+import { type Card, type Rank, type Suit, type Deck } from "../core/card.ts";
 import type { RawBuckets } from "../bfs/buckets.ts";
 import { timeSolver } from "./bench_timing.ts";
 
@@ -57,7 +57,7 @@ interface Fixture {
 }
 
 function asCard(c: FixtureCard): Card {
-  return [c.value, c.suit, c.origin_deck] as const;
+  return { rank: c.value as Rank, suit: c.suit as Suit, deck: c.origin_deck as Deck };
 }
 
 function bucketToStacks(bucket: FixtureStack[] | undefined): readonly (readonly Card[])[] {

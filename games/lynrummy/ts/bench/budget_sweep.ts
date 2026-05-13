@@ -14,7 +14,7 @@
 
 import * as fs from "node:fs";
 
-import type { Card } from "../src/rules/card.ts";
+import { type Card, type Rank, type Suit, type Deck } from "../core/card.ts";
 import { solveBoard } from "../bfs/index.ts";
 
 const BUDGETS = [200000, 50000, 20000, 10000, 5000, 2000, 1000];
@@ -34,7 +34,7 @@ interface CapturedSnapshot {
 }
 
 function asCard(c: number[]): Card {
-  return [c[0]!, c[1]!, c[2]!] as const;
+  return { rank: c[0]! as Rank, suit: c[1]! as Suit, deck: c[2]! as Deck };
 }
 
 function augmentedBoard(

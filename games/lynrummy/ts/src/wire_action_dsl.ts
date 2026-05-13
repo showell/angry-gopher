@@ -7,7 +7,9 @@
 // emitters consistently use unicode so the wire stream is
 // byte-identical across runtimes.
 
-import { type Card, SUITS_UNICODE, RANKS } from "./rules/card.ts";
+import { type Card, cardToken } from "../core/card.ts";
+
+export { cardToken };
 
 export interface TimeLoc { tMs: number; left: number; top: number }
 
@@ -98,8 +100,3 @@ function pathSuffix(path: readonly TimeLoc[]): string {
   return " :: path " + samples;
 }
 
-/** Card token with unicode suit glyph; deck-2 cards get a trailing `'`. */
-export function cardToken(c: Card): string {
-  const base = RANKS[c[0] - 1]! + SUITS_UNICODE[c[1]]!;
-  return c[2] === 0 ? base : `${base}'`;
-}
