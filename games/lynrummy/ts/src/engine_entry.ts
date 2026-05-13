@@ -94,3 +94,35 @@ export function gameHintLines(
   return formatHint(findPlay(hand, board));
 }
 
+// --- Elm-facing wrappers ---------------------------------------------------
+//
+// These are intentional one-liners. Their job is twofold:
+//   (a) Signal at the call site (engine_glue.js → LynRummyEngine.elm*)
+//       that "this is Elm-bound — if you change it, rebuild engine.js".
+//   (b) Narrow the wide return types to what the Elm decoder actually
+//       reads.
+//
+// Real work belongs in solveBoard / agentPlay / gameHintLines above —
+// those keep their unprefixed names because external (non-Elm) callers
+// also consume them via the bundle. Don't grow these wrappers.
+
+export function elmSolveBoard(
+  board: readonly (readonly Card[])[],
+): readonly { line: string }[] | null {
+  const result = solveBoard(board);
+  return result === null ? null : result.map(p => ({ line: p.line }));
+}
+
+export function elmAgentPlay(
+  board: readonly BoardStack[],
+): readonly { line: string; wire_actions: readonly WireActionJson[] }[] | null {
+  return agentPlay(board);
+}
+
+export function elmGameHint(
+  hand: readonly Card[],
+  board: readonly (readonly Card[])[],
+): readonly string[] {
+  return gameHintLines(hand, board);
+}
+

@@ -107,41 +107,37 @@
     });
   }
 
+  // The functions below call LynRummyEngine.elm* — the Elm-facing
+  // wrappers in ts/src/engine_entry.ts. They're one-liners on the TS
+  // side; this layer's job is just wire-shape conversion (Elm sends
+  // {value, suit, origin_deck} objects; the TS Card record is
+  // {rank, suit, deck}).
+
   function solveBoard(board) {
     var stacks = board.map(function (stack) {
       return stack.map(cardObjectToRecord);
     });
-    var plan = LynRummyEngine.solveBoard(stacks);
-    if (plan === null) return null;
-    // Echo the line + desc; Elm's decoder reads only `line` today,
-    // but desc is cheap and useful if a future phase wants the
-    // structured form (e.g. for rendering richer hints).
-    return plan.map(function (p) {
-      return { line: p.line, desc: p.desc };
-    });
+    return LynRummyEngine.elmSolveBoard(stacks);
+    // Returns [{line: string}, ...] | null.
   }
 
   function gameHint(hand, board) {
-    // hand: [{value, suit, origin_deck}, ...] — full game's active hand
-    // board: [[{value, suit, origin_deck}, ...], ...]
     var handCards = hand.map(cardObjectToRecord);
     var stacks = board.map(function (stack) {
       return stack.map(cardObjectToRecord);
     });
-    return LynRummyEngine.gameHintLines(handCards, stacks);
+    return LynRummyEngine.elmGameHint(handCards, stacks);
   }
 
   function agentPlay(board) {
     // board: [{ cards: [{value, suit, origin_deck}, ...], loc: {top, left} }, ...]
-    // The TS bundle's agentPlay expects BoardStack[] = [{cards: Card[], loc}],
-    // where Card is { rank, suit, deck }. Translate field names here.
     var stacks = board.map(function (stack) {
       return {
         cards: stack.cards.map(cardObjectToRecord),
         loc: stack.loc,
       };
     });
-    return LynRummyEngine.agentPlay(stacks);
+    return LynRummyEngine.elmAgentPlay(stacks);
     // Returns [{line, wire_actions: [...]}, ...] | null. wire_actions
     // are already in Elm's Lib.WireAction JSON shape — pass through.
   }

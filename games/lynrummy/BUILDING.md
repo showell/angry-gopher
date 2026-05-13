@@ -30,11 +30,23 @@ All three live at `games/lynrummy/elm/` and are served by
 | `puzzle.js` | `elm/src/Puzzle.elm` | `/gopher/puzzle/puzzle.js` |
 | `engine.js` | `ts/src/engine_entry.ts` (esbuild bundle) | `/gopher/lynrummy-elm/engine.js` |
 
-`engine.js` exposes a single browser global: `LynRummyEngine`,
-with `solveBoard(board)`, `agentPlay(board)`, and
-`gameHintLines(hand, board)` exported. The full-game Elm client
-calls into it via `port engineRequest` / `port engineResponse`
-mediated by a small JS glue file.
+`engine.js` exposes a single browser global, `LynRummyEngine`,
+with two layers of exports:
+
+- **External-caller API (kept name-stable for non-Elm consumers):**
+  `solveBoard(board)`, `agentPlay(board)`, `gameHintLines(hand, board)`.
+- **Elm-facing wrappers (one-liners that narrow wide return types):**
+  `elmSolveBoard`, `elmAgentPlay`, `elmGameHint`. The `elm`-prefixed
+  names signal at the call site that the function is consumed by
+  Elm — a touch on any of them (or on the underlying functions they
+  call) means the `engine.js` bundle needs to be rebuilt before the
+  UI is tested.
+
+The full-game Elm client calls into the Elm-facing wrappers via
+`port engineRequest` / `port engineResponse`, mediated by a small
+JS glue file (`engine_glue.js`) that converts the wire-shape
+`{value, suit, origin_deck}` objects to the TS Card record
+`{rank, suit, deck}`.
 
 ## ops scripts
 
