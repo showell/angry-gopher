@@ -29,10 +29,6 @@ export interface SolveResult {
   readonly finalBuckets: Buckets;
 }
 
-interface SolveOptions {
-  readonly maxDepth?: number;
-}
-
 interface SolveCtxPlus extends SolveCtx {
   readonly maxTrouble: number;
 }
@@ -115,7 +111,7 @@ export const HEURISTICS: Record<string, Heuristic> = {
 
 export function solveTurn(
   initial: Buckets,
-  opts: SolveOptions & {
+  opts: {
     budget?: number;
     /** Hard cap on plan length. Branches with `plan.length >=
      *  maxPlanLength` are never pushed. Set this for hint paths
@@ -197,7 +193,7 @@ export function solveTurn(
 // `maxStates` maps to `solveTurn`'s visit `budget`; `maxTroubleOuter`
 // is a pre-flight reject for unsolvably-deep inputs.
 
-interface ShimSolveOptions {
+export interface SolveOptions {
   readonly maxStates?: number;
   readonly maxTroubleOuter?: number;
   readonly maxPlanLength?: number;
@@ -216,7 +212,7 @@ function isAlreadyClassified(initial: Buckets | RawBuckets): initial is Buckets 
 
 export function solveStateWithMoves(
   initial: Buckets | RawBuckets,
-  opts: ShimSolveOptions = {},
+  opts: SolveOptions = {},
 ): SolveResult | null {
   const maxStates = opts.maxStates ?? 50000;
   const maxTroubleOuter = opts.maxTroubleOuter ?? 8;

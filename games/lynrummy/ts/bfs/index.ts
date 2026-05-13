@@ -1,14 +1,8 @@
 import type { Card } from "../core/card.ts";
 import { classifyStack } from "../core/card_stack.ts";
-import { solveStateWithMoves, type SolveResult } from "./engine_v2.ts";
+import { solveStateWithMoves, type SolveResult, type SolveOptions } from "./engine_v2.ts";
 
-export type { PlanLine, SolveResult } from "./engine_v2.ts";
-
-export interface SolveOptions {
-  readonly maxStates?: number;
-  readonly maxTroubleOuter?: number;
-  readonly maxPlanLength?: number;
-}
+export type { PlanLine, SolveResult, SolveOptions } from "./engine_v2.ts";
 
 /** The BFS entry point most callers want. Takes a board (a list of
  *  stacks), partitions clean stacks (length-3+ legal kinds) into
