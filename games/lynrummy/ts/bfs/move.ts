@@ -8,7 +8,13 @@
 // `describe(move)` produces a stable plan-line string suitable for
 // cross-language pinning.
 
-import { type Card, isRedSuit, RANKS, SUITS, cardLabel } from "../core/card.ts";
+import { type Card, RANKS, SUITS, cardLabel } from "../core/card.ts";
+import {
+  classifyStack,
+  KIND_RUN,
+  KIND_RB,
+  KIND_SET,
+} from "../core/card_stack.ts";
 
 export type Side = "left" | "right";
 
@@ -191,52 +197,16 @@ export function describe(move: Move): string {
 // need to MATCH on the substring — full output equality against Python
 // is NOT required (different code paths consume them).
 
-function classifyFamily(stack: readonly Card[]): string {
-  const n = stack.length;
-  if (n < 3) return "other";
-  const c0 = stack[0]!;
-  const c1 = stack[1]!;
-  // Set: same value, distinct suits.
-  if (c0.rank === c1.rank) {
-    const seen = new Set<number>();
-    for (const c of stack) {
-      if (c.rank !== c0.rank) return "other";
-      if (seen.has(c.suit)) return "other";
-      seen.add(c.suit);
-    }
-    return "set";
-  }
-  // Run: successive values, same-suit (pure) or alternating-color (rb).
-  const succ = (v: number) => v === 13 ? 1 : v + 1;
-  if (succ(c0.rank) !== c1.rank) return "other";
-  if (c0.suit === c1.suit) {
-    let prevV = c1.rank;
-    for (let i = 2; i < n; i++) {
-      const c = stack[i]!;
-      if (c.rank !== succ(prevV) || c.suit !== c0.suit) return "other";
-      prevV = c.rank;
-    }
-    return "pure_run";
-  }
-  if (isRedSuit(c0.suit) === isRedSuit(c1.suit)) return "other";
-  let prevV = c1.rank;
-  let prevRed = isRedSuit(c1.suit);
-  for (let i = 2; i < n; i++) {
-    const c = stack[i]!;
-    if (c.rank !== succ(prevV)) return "other";
-    const cRed = isRedSuit(c.suit);
-    if (cRed === prevRed) return "other";
-    prevV = c.rank;
-    prevRed = cRed;
-  }
-  return "rb_run";
+function isCompleteGroup(stack: readonly Card[]): boolean {
+  const k = classifyStack(stack)?.kind;
+  return k === KIND_RUN || k === KIND_RB || k === KIND_SET;
 }
 
 function groupKindPhrase(stack: readonly Card[]): string {
-  const k = classifyFamily(stack);
-  if (k === "set") return "a set";
-  if (k === "pure_run") return "a pure run";
-  if (k === "rb_run") return "a red-black run";
+  const k = classifyStack(stack)?.kind;
+  if (k === KIND_SET) return "a set";
+  if (k === KIND_RUN) return "a pure run";
+  if (k === KIND_RB) return "a red-black run";
   return "a partial";
 }
 
@@ -248,9 +218,9 @@ function partialKindPhrase(stack: readonly Card[]): string {
 }
 
 function runKindPhrase(stack: readonly Card[]): string {
-  const k = classifyFamily(stack);
-  if (k === "pure_run") return "pure run";
-  if (k === "rb_run") return "red-black run";
+  const k = classifyStack(stack)?.kind;
+  if (k === KIND_RUN) return "pure run";
+  if (k === KIND_RB) return "red-black run";
   return "run";
 }
 
@@ -283,7 +253,7 @@ export function narrate(move: Move): string {
     case "push": {
       // Engulf-shape vs plain push: engulf produces a length-3+ legal
       // group from a growing-style merge.
-      if (classifyFamily(move.result) !== "other") {
+      if (isCompleteGroup(move.result)) {
         return `engulf [${stackLabel(move.targetBefore)}] into `
           + `[${stackLabel(move.troubleBefore)}] → `
           + `[${stackLabel(move.result)}] ✓`;
@@ -314,7 +284,7 @@ export function hint(move: Move): string | null {
       return `You can splice the ${cardLabel(move.loose)} into a `
         + `${runKindPhrase(move.source)}.`;
     case "push":
-      if (classifyFamily(move.result) !== "other") {
+      if (isCompleteGroup(move.result)) {
         return `You can complete a run by absorbing [${stackLabel(move.troubleBefore)}].`;
       }
       return `You can tuck [${stackLabel(move.troubleBefore)}] back into a run.`;
