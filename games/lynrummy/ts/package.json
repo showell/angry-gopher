@@ -18,7 +18,6 @@
     "bench:gen-baseline": "node bench/gen_baseline_board.ts",
     "bench:check-baseline": "node bench/check_baseline_timing.ts",
     "bench:perf-harness": "node bench/perf_harness.ts",
-    "bench:budget-sweep": "node bench/budget_sweep.ts",
     "generate-game": "node generate_game.ts"
   },
   "devDependencies": {

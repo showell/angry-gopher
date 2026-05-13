@@ -49,8 +49,8 @@ reasoning.
   42) and writes an Elm-replayable DSL transcript. Not a perf
   harness; runs once for review-able output. Driver:
   `npm run generate-game`.
-- `bench/perf_harness.ts`, `bench/budget_sweep.ts`,
-  `bench/bench_timing.ts` — auxiliary measurement drivers.
+- `bench/perf_harness.ts`, `bench/bench_timing.ts` — auxiliary
+  measurement drivers.
 - `bench/bench_outer_shell.ts` — singleton-only vs full
   outer-shell mode comparison on a fixed 60-hand corpus; has
   its own gold (`bench/bench_outer_shell_gold.txt`).
