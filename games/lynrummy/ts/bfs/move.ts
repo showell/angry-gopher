@@ -10,10 +10,10 @@
 
 import { type Card, RANKS, SUITS, cardLabel } from "../core/card.ts";
 import {
-  classifyStack,
-  KIND_RUN,
-  KIND_RB,
-  KIND_SET,
+  isCompleteGroup,
+  groupKindPhrase,
+  partialKindPhrase,
+  runKindPhrase,
 } from "../core/card_stack.ts";
 
 export type Side = "left" | "right";
@@ -196,33 +196,6 @@ export function describe(move: Move): string {
 // that assert `narrate_contains` or `hint_contains`. The outputs only
 // need to MATCH on the substring — full output equality against Python
 // is NOT required (different code paths consume them).
-
-function isCompleteGroup(stack: readonly Card[]): boolean {
-  const k = classifyStack(stack)?.kind;
-  return k === KIND_RUN || k === KIND_RB || k === KIND_SET;
-}
-
-function groupKindPhrase(stack: readonly Card[]): string {
-  const k = classifyStack(stack)?.kind;
-  if (k === KIND_SET) return "a set";
-  if (k === KIND_RUN) return "a pure run";
-  if (k === KIND_RB) return "a red-black run";
-  return "a partial";
-}
-
-function partialKindPhrase(stack: readonly Card[]): string {
-  const n = stack.length;
-  if (n === 0) return "an empty target";
-  if (n === 1) return `the ${cardLabel(stack[0]!)}`;
-  return "the partial [" + stack.map(cardLabel).join(" ") + "]";
-}
-
-function runKindPhrase(stack: readonly Card[]): string {
-  const k = classifyStack(stack)?.kind;
-  if (k === KIND_RUN) return "pure run";
-  if (k === KIND_RB) return "red-black run";
-  return "run";
-}
 
 /** Evocative one-liner for a Move (intent over mechanics). */
 export function narrate(move: Move): string {

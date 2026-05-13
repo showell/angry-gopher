@@ -1,11 +1,13 @@
-// card_stack.ts — canonical card-stack types + classifier + partial-ok rule.
+// card_stack.ts — canonical card-stack types + classifier + verb-agnostic
+// helpers + partial-ok rule + descriptive phrases.
 //
 // Owns the 7-kind alphabet (run, rb, set + their pair forms + singleton),
 // the ClassifiedCardStack record, the rigorous `classifyStack` entry
-// point, and the `isPartialOk` rule predicate. The bfs verb library +
-// probe surface sits on top of this base.
+// point, and all card-stack helpers that don't depend on a specific
+// verb (peel / splice / absorb / etc.). The bfs verb library + probe
+// surface sits on top of this base.
 
-import { type Card, isRedSuit } from "./card.ts";
+import { type Card, isRedSuit, cardLabel } from "./card.ts";
 
 export const KIND_RUN = "run";
 export const KIND_RB = "rb";
@@ -42,6 +44,113 @@ function successor(v: number): number {
   // run in Lyn Rummy.
   return v === 13 ? 1 : v + 1;
 }
+
+// --- Kind / family bookkeeping ---------------------------------------------
+
+/** Family lookup keyed by full kind. Singleton has no family — handled
+ *  inline as a special case. Mirrors python's `_FAMILY_OF_KIND`. */
+export function familyOfKind(kind: Kind): Kind | null {
+  switch (kind) {
+    case KIND_RUN:
+    case KIND_PAIR_RUN:
+      return KIND_RUN;
+    case KIND_RB:
+    case KIND_PAIR_RB:
+      return KIND_RB;
+    case KIND_SET:
+    case KIND_PAIR_SET:
+      return KIND_SET;
+    default:
+      return null;
+  }
+}
+
+/** Length-3+ family kind → its pair-form kind. Mirrors python's `_PAIR_OF`. */
+export function pairOf(family: Kind): Kind {
+  switch (family) {
+    case KIND_RUN:
+      return KIND_PAIR_RUN;
+    case KIND_RB:
+      return KIND_PAIR_RB;
+    case KIND_SET:
+      return KIND_PAIR_SET;
+    default:
+      throw new Error(`pairOf: unexpected family ${family}`);
+  }
+}
+
+/** Family two cards form when adjacent in (c1, c2) order, or null if no
+ *  legal pair. Mirrors python's `_family_for_two_cards`. Order matters
+ *  for run/rb (successor is directional); set is symmetric on value. */
+export function familyForTwoCards(c1: Card, c2: Card): Kind | null {
+  const v1 = c1.rank, s1 = c1.suit;
+  const v2 = c2.rank, s2 = c2.suit;
+  if (v1 === v2) {
+    if (s1 === s2) return null;
+    return KIND_SET;
+  }
+  if (successor(v1) !== v2) return null;
+  if (s1 === s2) return KIND_RUN;
+  if (isRedSuit(s1) !== isRedSuit(s2)) return KIND_RB;
+  return null;
+}
+
+// --- Kind-from-length math -------------------------------------------------
+
+/** Kind tag for a slice of a run/rb-family stack with n cards remaining.
+ *  Mirrors python's `_run_kind_for_length`. */
+export function runKindForLength(family: Kind, n: number): Kind {
+  if (n >= 3) return family;
+  if (n === 2) return pairOf(family);
+  if (n === 1) return KIND_SINGLETON;
+  throw new Error("zero-length run slice is not a valid stack");
+}
+
+/** Kind tag for a remainder of a set with n cards. Mirrors python's
+ *  `_set_kind_for_length`. */
+export function setKindForLength(n: number): Kind {
+  if (n >= 3) return KIND_SET;
+  if (n === 2) return KIND_PAIR_SET;
+  if (n === 1) return KIND_SINGLETON;
+  throw new Error("zero-length set slice is not a valid stack");
+}
+
+/** Kind of a contiguous n-card slice of a run/rb-family stack. Returns
+ *  null when the slice is empty. Mirrors python's `_slice_kind`. */
+export function sliceKind(family: Kind, n: number): Kind | null {
+  if (n <= 0) return null;
+  if (n === 1) return KIND_SINGLETON;
+  if (n === 2) return pairOf(family);
+  return family;
+}
+
+// --- Construction + adjacency ----------------------------------------------
+
+/** Build a length-1 ClassifiedCardStack. Mirrors python's `singleton`. */
+export function singletonStack(card: Card): ClassifiedCardStack {
+  return { cards: [card], kind: KIND_SINGLETON, n: 1 };
+}
+
+/** Single-boundary legality check for `family`. Caller has already
+ *  determined the family from the parent kinds. Mirrors python's
+ *  `_boundary_ok`. */
+export function boundaryOk(a: Card, b: Card, family: Kind): boolean {
+  const av = a.rank, asu = a.suit;
+  const bv = b.rank, bsu = b.suit;
+  if (family === KIND_SET) {
+    return av === bv && asu !== bsu;
+  }
+  if (family === KIND_RUN) {
+    return asu === bsu && successor(av) === bv;
+  }
+  if (family === KIND_RB) {
+    if (successor(av) !== bv) return false;
+    return isRedSuit(asu) !== isRedSuit(bsu);
+  }
+  return false;
+}
+
+// --- Classifier ------------------------------------------------------------
 
 function classifyPair(cards: readonly Card[]): Kind | null {
   const a = cards[0]!;
@@ -127,6 +236,14 @@ export function classifyStack(cards: readonly Card[]): ClassifiedCardStack | nul
   return { cards, kind, n: cards.length };
 }
 
+// --- Higher-level predicates -----------------------------------------------
+
+/** True iff `stack` is a length-3+ legal group (run / rb / set). */
+export function isCompleteGroup(stack: readonly Card[]): boolean {
+  const k = classifyStack(stack)?.kind;
+  return k === KIND_RUN || k === KIND_RB || k === KIND_SET;
+}
+
 /**
  * True iff `stack` is a legal group OR a length-2 partial that could
  * grow into one. Mirrors python `rules.stack_type.is_partial_ok`.
@@ -154,4 +271,32 @@ export function isPartialOk(stack: readonly Card[]): boolean {
   // Set partial: same value, different suit.
   if (a.rank === b.rank && a.suit !== b.suit) return true;
   return false;
+}
+
+// --- Descriptive phrases ---------------------------------------------------
+//
+// English fragments describing a stack's shape. Used by the BFS Move
+// renderers (narrate / hint) and any other UI that needs a one-liner
+// for a card-stack shape.
+
+export function groupKindPhrase(stack: readonly Card[]): string {
+  const k = classifyStack(stack)?.kind;
+  if (k === KIND_SET) return "a set";
+  if (k === KIND_RUN) return "a pure run";
+  if (k === KIND_RB) return "a red-black run";
+  return "a partial";
+}
+
+export function partialKindPhrase(stack: readonly Card[]): string {
+  const n = stack.length;
+  if (n === 0) return "an empty target";
+  if (n === 1) return `the ${cardLabel(stack[0]!)}`;
+  return "the partial [" + stack.map(cardLabel).join(" ") + "]";
+}
+
+export function runKindPhrase(stack: readonly Card[]): string {
+  const k = classifyStack(stack)?.kind;
+  if (k === KIND_RUN) return "pure run";
+  if (k === KIND_RB) return "red-black run";
+  return "run";
 }

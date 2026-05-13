@@ -4,8 +4,9 @@
 // Owns the absorb probes (kindAfterAbsorbLeft/Right), the earned-shape
 // extends tables, the verb predicates + executors (peel/setPeel/pluck/
 // yank/steal/splitOut), and the splice probes + candidate enumerator.
-// The 7-kind alphabet, the ClassifiedCardStack record, and
-// `classifyStack` itself live in `core/card_stack.ts`.
+// All verb-agnostic helpers (kind/family bookkeeping, kind-from-length
+// math, singleton construction, boundary check, classifyStack) live in
+// `core/card_stack.ts`.
 
 import { type Card, isRedSuit } from "../core/card.ts";
 import {
@@ -19,64 +20,20 @@ import {
   KIND_PAIR_SET,
   KIND_SINGLETON,
   classifyStack,
+  familyOfKind,
+  pairOf,
+  familyForTwoCards,
+  singletonStack,
+  runKindForLength,
+  setKindForLength,
+  sliceKind,
+  boundaryOk,
 } from "../core/card_stack.ts";
-
-function successor(v: number): number {
-  return v === 13 ? 1 : v + 1;
-}
 
 // --- Absorb probes ---------------------------------------------------------
 //
 // Per SOLVER.md's no-side-parameter discipline these are TWO SEPARATE
 // FUNCTIONS, not one with a `side` parameter. Each does its own job.
-
-/** Family lookup keyed by full kind. Singleton has no family — handled
- *  inline as a special case. Mirrors python's `_FAMILY_OF_KIND`. */
-function familyOfKind(kind: Kind): Kind | null {
-  switch (kind) {
-    case KIND_RUN:
-    case KIND_PAIR_RUN:
-      return KIND_RUN;
-    case KIND_RB:
-    case KIND_PAIR_RB:
-      return KIND_RB;
-    case KIND_SET:
-    case KIND_PAIR_SET:
-      return KIND_SET;
-    default:
-      return null;
-  }
-}
-
-/** Length-3+ family kind → its pair-form kind. Mirrors python's `_PAIR_OF`. */
-function pairOf(family: Kind): Kind {
-  switch (family) {
-    case KIND_RUN:
-      return KIND_PAIR_RUN;
-    case KIND_RB:
-      return KIND_PAIR_RB;
-    case KIND_SET:
-      return KIND_PAIR_SET;
-    default:
-      throw new Error(`pairOf: unexpected family ${family}`);
-  }
-}
-
-/** Family two cards form when adjacent in (c1, c2) order, or null if no
- *  legal pair. Mirrors python's `_family_for_two_cards`. Order matters
- *  for run/rb (successor is directional); set is symmetric on value. */
-function familyForTwoCards(c1: Card, c2: Card): Kind | null {
-  const v1 = c1.rank, s1 = c1.suit;
-  const v2 = c2.rank, s2 = c2.suit;
-  if (v1 === v2) {
-    if (s1 === s2) return null;
-    return KIND_SET;
-  }
-  if (successor(v1) !== v2) return null;
-  if (s1 === s2) return KIND_RUN;
-  if (isRedSuit(s1) !== isRedSuit(s2)) return KIND_RB;
-  return null;
-}
 
 /**
  * Probe: what kind would (target.cards + [card]) classify as, or null
@@ -285,29 +242,6 @@ export function kindAfterAbsorbLeft(
 // matching the no-silent-fallbacks doctrine. Remnant kinds derive from
 // the parent's kind family + remnant length via the helpers below — no
 // re-classification.
-
-/** Build a length-1 ClassifiedCardStack. Mirrors python's `singleton`. */
-function singletonStack(card: Card): ClassifiedCardStack {
-  return { cards: [card], kind: KIND_SINGLETON, n: 1 };
-}
-
-/** Kind tag for a slice of a run/rb-family stack with n cards remaining.
- *  Mirrors python's `_run_kind_for_length`. */
-function runKindForLength(family: Kind, n: number): Kind {
-  if (n >= 3) return family;
-  if (n === 2) return pairOf(family);
-  if (n === 1) return KIND_SINGLETON;
-  throw new Error("zero-length run slice is not a valid stack");
-}
-
-/** Kind tag for a remainder of a set with n cards. Mirrors python's
- *  `_set_kind_for_length`. */
-function setKindForLength(n: number): Kind {
-  if (n >= 3) return KIND_SET;
-  if (n === 2) return KIND_PAIR_SET;
-  if (n === 1) return KIND_SINGLETON;
-  throw new Error("zero-length set slice is not a valid stack");
-}
 
 /** Peel: drop an end card from a length-4+ run/rb, or any card from a
  *  length-4+ set (sets are unordered). */
@@ -534,34 +468,6 @@ export function splitOut(
 // Per SOLVER.md's no-side-parameter discipline these are TWO SEPARATE
 // FUNCTIONS named kindsAfterSpliceLeft and kindsAfterSpliceRight, NOT one
 // function with a `side` parameter. Each does its own job.
-
-/** Kind of a contiguous n-card slice of a run/rb-family stack. Returns
- *  null when the slice is empty. Mirrors python's `_slice_kind`. */
-function sliceKind(family: Kind, n: number): Kind | null {
-  if (n <= 0) return null;
-  if (n === 1) return KIND_SINGLETON;
-  if (n === 2) return pairOf(family);
-  return family;
-}
-
-/** Single-boundary legality check for `family`. Caller has already
- *  determined the family from the parent kinds. Mirrors python's
- *  `_boundary_ok`. */
-function boundaryOk(a: Card, b: Card, family: Kind): boolean {
-  const av = a.rank, asu = a.suit;
-  const bv = b.rank, bsu = b.suit;
-  if (family === KIND_SET) {
-    return av === bv && asu !== bsu;
-  }
-  if (family === KIND_RUN) {
-    return asu === bsu && successor(av) === bv;
-  }
-  if (family === KIND_RB) {
-    if (successor(av) !== bv) return false;
-    return isRedSuit(asu) !== isRedSuit(bsu);
-  }
-  return false;
-}
 
 /** LEFT splice halves: with-card half first, pure slice second. Mirrors
  *  python's `_splice_halves_left`. */
