@@ -33,18 +33,6 @@ import Lib.CardStack
         , encodeHandCard
         , handCardDecoder
         )
-import Lib.Rules.Referee
-    exposing
-        ( RefereeError
-        , RefereeMove
-        , RefereeStage(..)
-        , encodeRefereeError
-        , encodeRefereeMove
-        , encodeRefereeResult
-        , refereeErrorDecoder
-        , refereeMoveDecoder
-        , refereeResultDecoder
-        )
 import Test exposing (Test, describe, test)
 
 
@@ -120,32 +108,6 @@ sampleGeometryError =
     }
 
 
-sampleRefereeError : RefereeError
-sampleRefereeError =
-    { stage = Inventory
-    , message = "card AH appeared on the board with no source"
-    }
-
-
-sampleMoveWithHand : RefereeMove
-sampleMoveWithHand =
-    { boardBefore = [ sampleStack ]
-    , stacksToRemove = [ sampleStack ]
-    , stacksToAdd = []
-    , handCardsPlayed = [ sampleHandCard ]
-    }
-
-
-sampleMoveNoHand : RefereeMove
-sampleMoveNoHand =
-    { boardBefore = []
-    , stacksToRemove = []
-    , stacksToAdd = [ sampleStack ]
-    , handCardsPlayed = []
-    }
-
-
-
 -- SUITE
 
 
@@ -156,7 +118,6 @@ suite =
         , locationAndStackRoundTrips
         , handAndBoardCardRoundTrips
         , geometryRoundTrips
-        , refereeRoundTrips
         , shapeAssertions
         ]
 
@@ -288,44 +249,6 @@ geometryRoundTrips =
         ]
 
 
-refereeRoundTrips : Test
-refereeRoundTrips =
-    describe "RefereeError, RefereeMove, RefereeResult"
-        [ test "RefereeError round-trips" <|
-            \_ -> expectRoundTrip encodeRefereeError refereeErrorDecoder sampleRefereeError
-        , test "every RefereeStage round-trips" <|
-            \_ ->
-                let
-                    allStages =
-                        [ Protocol, Geometry, Semantics, Inventory ]
-
-                    allRoundTrip =
-                        allStages
-                            |> List.all
-                                (\stage ->
-                                    let
-                                        re =
-                                            { stage = stage, message = "test" }
-                                    in
-                                    roundTrip encodeRefereeError refereeErrorDecoder re
-                                        == Ok re
-                                )
-                in
-                Expect.equal True allRoundTrip
-        , test "RefereeMove with hand cards round-trips" <|
-            \_ -> expectRoundTrip encodeRefereeMove refereeMoveDecoder sampleMoveWithHand
-        , test "RefereeMove without hand cards round-trips (empty list)" <|
-            \_ -> expectRoundTrip encodeRefereeMove refereeMoveDecoder sampleMoveNoHand
-        , test "RefereeResult Ok round-trips" <|
-            \_ ->
-                expectRoundTrip encodeRefereeResult refereeResultDecoder (Ok ())
-        , test "RefereeResult Err round-trips" <|
-            \_ ->
-                expectRoundTrip encodeRefereeResult refereeResultDecoder (Err sampleRefereeError)
-        ]
-
-
-
 -- SHAPE ASSERTIONS
 --
 -- Pin specific JSON shapes that the TS / Go sides also produce.
@@ -361,25 +284,6 @@ shapeAssertions =
                 Expect.equal
                     """{"max_width":800,"max_height":600,"margin":7}"""
                     (Encode.encode 0 (encodeBoardBounds sampleBounds))
-        , test "RefereeMove omits hand_cards_played when empty" <|
-            \_ ->
-                let
-                    json =
-                        Encode.encode 0 (encodeRefereeMove sampleMoveNoHand)
-                in
-                Expect.equal False (String.contains "hand_cards_played" json)
-        , test "RefereeMove includes hand_cards_played when non-empty" <|
-            \_ ->
-                let
-                    json =
-                        Encode.encode 0 (encodeRefereeMove sampleMoveWithHand)
-                in
-                Expect.equal True (String.contains "hand_cards_played" json)
-        , test "RefereeError encodes stage as a string" <|
-            \_ ->
-                Expect.equal
-                    """{"stage":"inventory","message":"card AH appeared on the board with no source"}"""
-                    (Encode.encode 0 (encodeRefereeError sampleRefereeError))
         , test "GeometryError encodes 'too_close' for TooClose kind" <|
             \_ ->
                 let

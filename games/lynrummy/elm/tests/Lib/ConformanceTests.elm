@@ -99,9 +99,6 @@ verify sc =
         "floater_top_left" ->
             verifyFloaterTopLeft sc
 
-        "validate_game_move" ->
-            verifyValidateGameMove sc
-
         "validate_turn_complete" ->
             verifyValidateTurnComplete sc
 
@@ -1300,23 +1297,7 @@ isCleanStack s =
 
 
 
--- REFEREE: validate_game_move / validate_turn_complete
-
-
-verifyValidateGameMove : Dsl.Scenario -> Expect.Expectation
-verifyValidateGameMove sc =
-    let
-        move =
-            { boardBefore = stacksFromDsl sc.boardBefore
-            , stacksToRemove = stacksFromDsl sc.stacksToRemove
-            , stacksToAdd = stacksFromDsl sc.stacksToAdd
-            , handCardsPlayed = parseHandCards sc
-            }
-
-        result =
-            Referee.validateGameMove move BoardGeometry.refereeBounds
-    in
-    checkRefereeResult sc result
+-- REFEREE: validate_turn_complete
 
 
 verifyValidateTurnComplete : Dsl.Scenario -> Expect.Expectation
@@ -1389,32 +1370,16 @@ checkRefereeResult sc result =
 parseRefereeStage : String -> Maybe RefereeStage
 parseRefereeStage s =
     case s of
-        "protocol" ->
-            Just Protocol
-
         "geometry" ->
             Just Geometry
 
         "semantics" ->
             Just Semantics
 
-        "inventory" ->
-            Just Inventory
-
         _ ->
             Nothing
 
 
-parseHandCards : Dsl.Scenario -> List HandCard
-parseHandCards sc =
-    Dict.get "hand_cards_played" sc.otherScalars
-        |> Maybe.map
-            (\raw ->
-                String.words (String.trim raw)
-                    |> List.filter (\w -> w /= "")
-                    |> List.filterMap parseHandCardToken
-            )
-        |> Maybe.withDefault []
 
 
 
