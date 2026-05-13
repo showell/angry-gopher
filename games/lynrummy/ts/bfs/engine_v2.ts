@@ -208,9 +208,6 @@ export function solveTurn(
 interface ShimSolveOptions {
   readonly maxStates?: number;
   readonly maxTroubleOuter?: number;
-  readonly heuristic?: Heuristic;
-  readonly dedup?: boolean;
-  readonly sigKind?: "fast" | "string";
   readonly maxPlanLength?: number;
 }
 
@@ -253,9 +250,6 @@ export function solveStateWithMoves(
 
   return solveTurn(classified, {
     budget: maxStates,
-    heuristic: opts.heuristic,
-    dedup: opts.dedup,
-    sigKind: opts.sigKind,
     maxPlanLength: opts.maxPlanLength,
   });
 }
