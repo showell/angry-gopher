@@ -19,16 +19,16 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
-import type { Card } from "./rules/card.ts";
-import { cardLabel } from "./rules/card.ts";
-import type { BoardStack } from "./geometry.ts";
-import { findViolation } from "./geometry.ts";
+import type { Card } from "../src/rules/card.ts";
+import { cardLabel } from "../src/rules/card.ts";
+import type { BoardStack } from "../src/geometry.ts";
+import { findViolation } from "../src/geometry.ts";
 import {
   type Primitive,
   applyLocally,
-} from "./primitives.ts";
-import type { GameResult } from "../lib/full_game.ts";
-import { completeTurnDsl, seqPrefix } from "./wire_action_dsl.ts";
+} from "../src/primitives.ts";
+import type { GameResult } from "./full_game.ts";
+import { completeTurnDsl, seqPrefix } from "../src/wire_action_dsl.ts";
 import { formatGameState } from "./initial_state_dsl.ts";
 import {
   type JsonCard,
@@ -37,7 +37,7 @@ import {
   jsonCard,
   jsonHandCard,
   jsonStack,
-} from "./wire_json.ts";
+} from "../src/wire_json.ts";
 
 
 // --- Puzzle-catalog JSON encoder ------------------------------------

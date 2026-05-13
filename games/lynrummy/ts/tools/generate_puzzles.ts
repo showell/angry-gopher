@@ -38,10 +38,10 @@ import type { Card } from "../src/rules/card.ts";
 import { parseCardLabel } from "../src/rules/card.ts";
 import type { BoardStack, Loc } from "../src/geometry.ts";
 import { findOpenLoc } from "../src/geometry.ts";
-import { playFullGame } from "../lib/full_game.ts";
-import type { PlayStep, TurnStep } from "../lib/step_types.ts";
+import { playFullGame } from "../full_game/full_game.ts";
+import type { PlayStep, TurnStep } from "../step/step_types.ts";
 import { applyLocally } from "../src/primitives.ts";
-import { encodeInitialState, type RemoteStateJson } from "../src/transcript.ts";
+import { encodeInitialState, type RemoteStateJson } from "../full_game/transcript.ts";
 
 // --- Tunables (constants, NOT CLI args) -----------------------------
 

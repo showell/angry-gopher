@@ -15,7 +15,7 @@
 
 import type { Card } from "../src/rules/card.ts";
 import { parseCardLabel } from "../src/rules/card.ts";
-import { playFullGame } from "../lib/full_game.ts";
+import { playFullGame } from "../full_game/full_game.ts";
 
 const HAND_SIZE = 15;
 const NUM_PLAYERS = 2;

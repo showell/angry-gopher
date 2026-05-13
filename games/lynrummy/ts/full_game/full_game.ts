@@ -1,7 +1,7 @@
 import type { Card } from "../src/rules/card.ts";
 import type { BoardStack } from "../src/geometry.ts";
 import { simulateFullTurn, type GameTurnRecord } from "./full_turn.ts";
-import { cardKey } from "./board.ts";
+import { cardKey } from "../step/board.ts";
 
 export interface GameResult {
   readonly turns: readonly GameTurnRecord[];

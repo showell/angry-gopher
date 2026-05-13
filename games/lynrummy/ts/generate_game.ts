@@ -1,19 +1,11 @@
-// generate_game.ts — the agent's most basic job: play one full game
-// against seed 42, write the DSL transcript, validate it. The Elm UI
-// picks the result up at /gopher/lynrummy-elm/sessions/<id>.
-//
-// Usage:
-//   npm run generate-game
-//
-// No flags, no seeds, no toggles. If you need a different seed or
-// custom output, edit the constants below — but the daily workflow
-// is "one command, one game, review it in the UI."
+// generate_game.ts — play one full game and write a DSL transcript
+// the Elm UI can replay. No flags; tunables are the constants below.
 
 import type { Card } from "./src/rules/card.ts";
 import { parseCardLabel } from "./src/rules/card.ts";
-import { playFullGame } from "./lib/full_game.ts";
-import { writeSession } from "./src/transcript.ts";
-import { validateSession } from "./src/validate_session.ts";
+import { playFullGame } from "./full_game/full_game.ts";
+import { writeSession } from "./full_game/transcript.ts";
+import { validateSession } from "./full_game/validate_session.ts";
 
 const HAND_SIZE = 15;
 const NUM_PLAYERS = 2;

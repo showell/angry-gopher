@@ -25,9 +25,9 @@
 // in unicode form so the wire stream is byte-identical to what
 // Elm emits.
 
-import { type Card, parseCardLabel } from "./rules/card.ts";
-import { cardToken, type Stack } from "./wire_action_dsl.ts";
-import type { BoardStack, Loc } from "./geometry.ts";
+import { type Card, parseCardLabel } from "../src/rules/card.ts";
+import { cardToken, type Stack } from "../src/wire_action_dsl.ts";
+import type { BoardStack, Loc } from "../src/geometry.ts";
 
 
 export interface GameStateForDsl {

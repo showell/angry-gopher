@@ -10,8 +10,8 @@
 
 import type { Card } from "../src/rules/card.ts";
 import type { BoardStack } from "../src/geometry.ts";
-import { fullStep } from "./full_step.ts";
-import type { TurnStep } from "./step_types.ts";
+import { fullStep } from "../step/full_step.ts";
+import type { TurnStep } from "../step/step_types.ts";
 
 export interface GameTurnRecord {
   readonly turnNum: number;
