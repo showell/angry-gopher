@@ -186,12 +186,12 @@ export function solveTurn(
   return best;
 }
 
-// --- Production shim --------------------------------------------------------
+// --- Solver entry point -----------------------------------------------------
 //
 // `solveStateWithMoves` auto-classifies raw input, short-circuits
-// trouble-cap + victory states, then dispatches to `solveTurn` (A*).
-// `maxStates` maps to `solveTurn`'s visit `budget`; `maxTroubleOuter`
-// is a pre-flight reject for unsolvably-deep inputs.
+// trouble-cap + victory + doomed-singleton states, then dispatches to
+// `solveTurn` (A*). `maxStates` maps to `solveTurn`'s visit `budget`;
+// `maxTroubleOuter` is a pre-flight reject for unsolvably-deep inputs.
 
 export interface SolveOptions {
   readonly maxStates?: number;
