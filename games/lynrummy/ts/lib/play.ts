@@ -16,7 +16,7 @@ export function tryPlay(
   const play = findPlay(hand, cardLists);
   if (play === null) return null;
 
-  const prims = physicalPlan(board, [...play.placements], play.planDescs);
+  const prims = physicalPlan(board, [...play.placements], play.plan);
   let sim: readonly BoardStack[] = board;
   for (const p of prims) sim = applyLocally(sim, p);
 
@@ -26,7 +26,7 @@ export function tryPlay(
       kind: "play",
       placements: [...play.placements],
       prims,
-      planLines: play.plan,
+      planLines: play.planLines,
     },
     board: sim,
     hand: hand.filter(c => !placedSet.has(cardKey(c))),

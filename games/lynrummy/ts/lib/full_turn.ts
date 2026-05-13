@@ -1,3 +1,13 @@
+// Vocabulary (load-bearing across the codebase):
+//   Move      — one verb-level step in the BFS's plan (peel, push,
+//               splice, …). Lowered to primitives by physicalPlan.
+//   Primitive — one wire-level UI action (place_hand, merge_stack,
+//               …). Same shape as Elm's GameEvent.
+//   play      — placement of ≥1 hand card + the BFS Moves that
+//               clean the augmented board. What findPlay returns.
+//   turn      — a sequence of plays followed by complete_turn
+//               (the draw). One individual player's turn.
+
 import type { Card } from "../src/rules/card.ts";
 import type { BoardStack } from "../src/geometry.ts";
 import { fullStep } from "./full_step.ts";

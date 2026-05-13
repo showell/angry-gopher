@@ -30,9 +30,9 @@
 
 import type { Card } from "./rules/card.ts";
 import type {
-  Desc, Side,
-  ExtractAbsorbDesc, FreePullDesc, PushDesc,
-  ShiftDesc, SpliceDesc, DecomposeDesc,
+  Move, Side,
+  ExtractAbsorbMove, FreePullMove, PushMove,
+  ShiftMove, SpliceMove, DecomposeMove,
 } from "../bfs/move.ts";
 import {
   type BoardStack, type Loc,
@@ -54,32 +54,31 @@ function cardKey(c: Card): string {
   return `${c[0]},${c[1]},${c[2]}`;
 }
 
-/** Walk a verb's structure and emit the physical primitives.
+/** Expand one Move into its primitive sequence on the live board.
  *  `pendingHand` is the set of card-keys still in the player's hand
- *  for this play; passing an empty set treats every singleton the verb
- *  names as already-on-board (the per-verb DSL test surface). */
+ *  for this play; an empty set treats every singleton the Move names
+ *  as already-on-board (the per-verb DSL test surface). */
 export function expandVerb(
-  desc: Desc,
+  move: Move,
   board: readonly BoardStack[],
   pendingHand: ReadonlySet<string> = new Set(),
 ): Primitive[] {
-  switch (desc.type) {
-    case "extract_absorb": return extractAbsorbPrims(desc, board, pendingHand);
-    case "free_pull":      return freePullPrims(desc, board, pendingHand);
-    case "push":           return pushPrims(desc, board, pendingHand);
-    case "splice":         return splicePrims(desc, board, pendingHand);
-    case "shift":          return shiftPrims(desc, board, pendingHand);
-    case "decompose":      return decomposePrims(desc, board);
+  switch (move.type) {
+    case "extract_absorb": return extractAbsorbPrims(move, board, pendingHand);
+    case "free_pull":      return freePullPrims(move, board, pendingHand);
+    case "push":           return pushPrims(move, board, pendingHand);
+    case "splice":         return splicePrims(move, board, pendingHand);
+    case "shift":          return shiftPrims(move, board, pendingHand);
+    case "decompose":      return decomposePrims(move, board);
   }
 }
 
-/** Per-verb DSL test surface. No hand awareness — every card the verb
- *  names is treated as already on the board. */
+/** Per-verb DSL test surface. No hand awareness. */
 export function moveToPrimitives(
-  desc: Desc,
+  move: Move,
   board: readonly BoardStack[],
 ): readonly Primitive[] {
-  return expandVerb(desc, board, new Set());
+  return expandVerb(move, board, new Set());
 }
 
 // --- Primitive emission helpers ---------------------------------------
@@ -429,15 +428,15 @@ function indexOfCard(arr: readonly Card[], target: Card): number {
 }
 
 function extractAbsorbPrims(
-  desc: ExtractAbsorbDesc,
+  move: ExtractAbsorbMove,
   board: readonly BoardStack[],
   pendingHand: ReadonlySet<string>,
 ): Primitive[] {
-  const source = desc.source;
-  const extCard = desc.extCard;
-  const targetBefore = desc.targetBefore;
-  const side = desc.side;
-  const verb = desc.verb;
+  const source = move.source;
+  const extCard = move.extCard;
+  const targetBefore = move.targetBefore;
+  const side = move.side;
+  const verb = move.verb;
   const kind = classifyLeaf(source);
   const ci = indexOfCard(source, extCard);
 
@@ -508,34 +507,34 @@ function extractAbsorbPrims(
 // --- free pull / push -------------------------------------------------
 
 function freePullPrims(
-  desc: FreePullDesc,
+  move: FreePullMove,
   board: readonly BoardStack[],
   pendingHand: ReadonlySet<string>,
 ): Primitive[] {
-  const r = planMerge(board, [desc.loose], desc.targetBefore, desc.side, pendingHand);
+  const r = planMerge(board, [move.loose], move.targetBefore, move.side, pendingHand);
   return r.prims;
 }
 
 function pushPrims(
-  desc: PushDesc,
+  move: PushMove,
   board: readonly BoardStack[],
   pendingHand: ReadonlySet<string>,
 ): Primitive[] {
-  const r = planMerge(board, desc.troubleBefore, desc.targetBefore, desc.side, pendingHand);
+  const r = planMerge(board, move.troubleBefore, move.targetBefore, move.side, pendingHand);
   return r.prims;
 }
 
 // --- splice -----------------------------------------------------------
 
 function splicePrims(
-  desc: SpliceDesc,
+  move: SpliceMove,
   board: readonly BoardStack[],
   pendingHand: ReadonlySet<string>,
 ): Primitive[] {
-  const loose = desc.loose;
-  const src = desc.source;
-  const k = desc.k;
-  const side = desc.side;
+  const loose = move.loose;
+  const src = move.source;
+  const k = move.k;
+  const side = move.side;
 
   let sim: readonly BoardStack[] = board;
   const a = planSplitAfter(sim, src, k);
@@ -551,17 +550,17 @@ function splicePrims(
 // --- shift ------------------------------------------------------------
 
 function shiftPrims(
-  desc: ShiftDesc,
+  move: ShiftMove,
   board: readonly BoardStack[],
   pendingHand: ReadonlySet<string>,
 ): Primitive[] {
-  const source = desc.source;
-  const donor = desc.donor;
-  const stolen = desc.stolen;
-  const pCard = desc.pCard;
-  const whichEnd = desc.whichEnd;
-  const targetBefore = desc.targetBefore;
-  const side = desc.side;
+  const source = move.source;
+  const donor = move.donor;
+  const stolen = move.stolen;
+  const pCard = move.pCard;
+  const whichEnd = move.whichEnd;
+  const targetBefore = move.targetBefore;
+  const side = move.side;
 
   let sim: readonly BoardStack[] = board;
   const out: Primitive[] = [];
@@ -610,9 +609,9 @@ function shiftPrims(
 // --- decompose --------------------------------------------------------
 
 function decomposePrims(
-  desc: DecomposeDesc,
+  move: DecomposeMove,
   board: readonly BoardStack[],
 ): Primitive[] {
-  const r = planSplitAfter(board, desc.pairBefore, 1);
+  const r = planSplitAfter(board, move.pairBefore, 1);
   return r.prims;
 }

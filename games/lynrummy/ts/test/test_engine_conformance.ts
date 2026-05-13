@@ -32,7 +32,7 @@ import { parseCardLabel } from "../src/rules/card.ts";
 // scenarios solvable; those are itemized in STALE_NO_PLAN.
 import { findPlanForBuckets } from "../src/hand_play.ts";
 import { enumerateMoves } from "../bfs/enumerator.ts";
-import { describe, narrate, hint, type Desc } from "../bfs/move.ts";
+import { describe, narrate, hint, type Move } from "../bfs/move.ts";
 import { classifyBuckets, type Buckets, type RawBuckets } from "../bfs/buckets.ts";
 import { findPlay, formatHint } from "../src/hand_play.ts";
 import { classifyStack } from "../bfs/classified_card_stack.ts";
@@ -128,8 +128,8 @@ function runEnumerateMoves(sc: Scenario): RunResult {
   if (!expectedType && !narrateSub && !hintSub) {
     return { ok: false, msg: "expect missing yields / narrate_contains / hint_contains" };
   }
-  const moves: Desc[] = [];
-  for (const [desc] of enumerateMoves(buckets)) moves.push(desc);
+  const moves: Move[] = [];
+  for (const [m] of enumerateMoves(buckets)) moves.push(m);
 
   if (expectedType) {
     const matches = moves.filter(d => d.type === expectedType);
@@ -173,13 +173,13 @@ const STALE_NO_PLAN: Record<string, string> = {
   extra_012_THp: "same pattern — steal-from-partial newly available",
 };
 
-function applyPlan(initial: Buckets, plan: readonly { desc: Desc }[]): Buckets {
+function applyPlan(initial: Buckets, plan: readonly { move: Move }[]): Buckets {
   let state: Buckets = initial;
   for (let step = 0; step < plan.length; step++) {
-    const want = describe(plan[step]!.desc);
+    const want = describe(plan[step]!.move);
     let matched: Buckets | null = null;
-    for (const [desc, next] of enumerateMoves(state)) {
-      if (describe(desc) === want) { matched = next; break; }
+    for (const [m, next] of enumerateMoves(state)) {
+      if (describe(m) === want) { matched = next; break; }
     }
     if (matched === null) {
       throw new Error(`step ${step + 1}: enumerator did not yield matching move "${want}"`);

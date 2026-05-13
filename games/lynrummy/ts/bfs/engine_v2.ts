@@ -12,7 +12,7 @@ import {
   classifyBuckets, troubleCount,
 } from "./buckets.ts";
 import type { ClassifiedCardStack } from "./classified_card_stack.ts";
-import { type Desc, describe } from "./move.ts";
+import { type Move, describe } from "./move.ts";
 import { enumerateMoves } from "./enumerator.ts";
 import {
   allTroubleSingletonsLive,
@@ -21,7 +21,7 @@ import {
 
 export interface PlanLine {
   readonly line: string;
-  readonly desc: Desc;
+  readonly move: Move;
 }
 
 export interface SolveResult {
@@ -177,7 +177,7 @@ export function solveTurn(
     const parentCompleteCount = cur.buckets.complete.length;
     const candidates = enumerateForFocus(cur.buckets, focus, new Set<string>());
     for (const cand of candidates) {
-      const newPlan = [...cur.plan, { line: describe(cand.desc), desc: cand.desc }];
+      const newPlan = [...cur.plan, { line: describe(cand.move), move: cand.move }];
       if (best !== null && newPlan.length >= best.plan.length) continue;
       if (maxPlanLength !== undefined && newPlan.length > maxPlanLength) continue;
       // Dynamic doomed-singleton prune: a child state where a group
@@ -200,15 +200,10 @@ export function solveTurn(
 
 // --- Production shim --------------------------------------------------------
 //
-// `solveStateWithDescs` matches the legacy `bfs.ts` entry-point signature so
-// callers (`hand_play.ts`, conformance harness, benches) can swap engines by
-// import path alone. Auto-classifies raw input, short-circuits trouble-cap
-// + victory states, then dispatches to `solveTurn` (A*).
-//
-// `maxStates` maps to `solveTurn`'s visit `budget` (same semantic: hard cap
-// on inner work). `maxTroubleOuter` survives as a pre-flight reject — A*
-// doesn't iterative-deepen on it like bfs.ts did, but unsolvably-deep
-// inputs still deserve a fast no-go.
+// `solveStateWithMoves` auto-classifies raw input, short-circuits
+// trouble-cap + victory states, then dispatches to `solveTurn` (A*).
+// `maxStates` maps to `solveTurn`'s visit `budget`; `maxTroubleOuter`
+// is a pre-flight reject for unsolvably-deep inputs.
 
 interface ShimSolveOptions {
   readonly maxStates?: number;
@@ -230,7 +225,7 @@ function isAlreadyClassified(initial: Buckets | RawBuckets): initial is Buckets 
   return true;
 }
 
-export function solveStateWithDescs(
+export function solveStateWithMoves(
   initial: Buckets | RawBuckets,
   opts: ShimSolveOptions = {},
 ): SolveResult | null {
@@ -265,12 +260,13 @@ export function solveStateWithDescs(
   });
 }
 
-/** Mirrors bfs.ts `solveState`: thin wrapper returning plan lines (no descs). */
+/** Thin wrapper that drops the structured Moves and returns just
+ *  the rendered plan-line strings. */
 export function solveState(
   initial: Buckets | RawBuckets,
   opts: ShimSolveOptions = {},
 ): readonly string[] | null {
-  const result = solveStateWithDescs(initial, opts);
+  const result = solveStateWithMoves(initial, opts);
   if (result === null) return null;
   return result.plan.map(p => p.line);
 }
@@ -365,13 +361,13 @@ function solveRec(
     if (ctx.best !== null && plan.length + 1 >= ctx.best.length) return;
     const newBuckets = cand.afterBuckets;
     const newQueue = computeQueueAfter(queue, focus, cand, newBuckets);
-    const newPlan = [...plan, { line: describe(cand.desc), desc: cand.desc }];
+    const newPlan = [...plan, { line: describe(cand.move), move: cand.move }];
     solveRec(newBuckets, newQueue, newPlan, doomedPairs, ctx);
   }
 }
 
 interface Candidate {
-  readonly desc: Desc;
+  readonly move: Move;
   readonly afterBuckets: Buckets;
 }
 
@@ -384,37 +380,37 @@ function enumerateForFocus(
   focus: ClassifiedCardStack,
   doomedPairs: Set<string>,
 ): Candidate[] {
-  const candidates: { desc: Desc; afterBuckets: Buckets; tier: number; troubleAfter: number; sourceLen: number }[] = [];
+  const candidates: { move: Move; afterBuckets: Buckets; tier: number; troubleAfter: number; sourceLen: number }[] = [];
   const focusCards = focus.cards;
-  for (const [desc, newBuckets] of enumerateMoves(buckets)) {
-    if (!moveTouchesFocus(desc, focusCards)) continue;
-    const tier = candidateTier(desc, newBuckets);
+  for (const [move, newBuckets] of enumerateMoves(buckets)) {
+    if (!moveTouchesFocus(move, focusCards)) continue;
+    const tier = candidateTier(move, newBuckets);
     let n = 0;
     for (const s of newBuckets.trouble) n += s.n;
     for (const s of newBuckets.growing) n += s.n;
-    const sourceLen = sourceHelperLength(desc);
-    candidates.push({ desc, afterBuckets: newBuckets, tier, troubleAfter: n, sourceLen });
+    const sourceLen = sourceHelperLength(move);
+    candidates.push({ move, afterBuckets: newBuckets, tier, troubleAfter: n, sourceLen });
   }
   // Sort by tier ascending (EXECUTE = 0, CONTINUE = 1, …), then by
   // source-helper length ascending (prefer extracts from smaller
   // helpers — preserves big runs for later moves), then by
   // troubleAfter ascending.
   candidates.sort((a, b) => a.tier - b.tier || a.troubleAfter - b.troubleAfter);
-  return candidates.map(c => ({ desc: c.desc, afterBuckets: c.afterBuckets }));
+  return candidates.map(c => ({ move: c.move, afterBuckets: c.afterBuckets }));
   void doomedPairs;
 }
 
 /** Tier 0 = EXECUTE (clean: graduates + no spawn). Tier 1 = CONTINUE
  *  (messy: spawns or non-graduating). */
-function candidateTier(desc: Desc, _newBuckets: Buckets): number {
-  switch (desc.type) {
+function candidateTier(move: Move, _newBuckets: Buckets): number {
+  switch (move.type) {
     case "extract_absorb":
-      if (desc.graduated && desc.spawned.length === 0) return 0;
+      if (move.graduated && move.spawned.length === 0) return 0;
       return 1;
     case "free_pull":
-      return desc.graduated ? 0 : 1;
+      return move.graduated ? 0 : 1;
     case "shift":
-      return desc.graduated ? 0 : 1;
+      return move.graduated ? 0 : 1;
     case "push":
       return 0; // push consumes trouble, never spawns
     case "splice":
@@ -424,16 +420,16 @@ function candidateTier(desc: Desc, _newBuckets: Buckets): number {
   void _newBuckets;
 }
 
-/** Return the length of the helper that the move's extract operates
+/** Return the length of the helper that the Move's extract operates
  *  on, for tie-breaking. Larger helpers are more useful future
  *  donors, so we prefer extracting from smaller ones first. */
-function sourceHelperLength(desc: Desc): number {
-  switch (desc.type) {
+function sourceHelperLength(move: Move): number {
+  switch (move.type) {
     case "extract_absorb":
     case "shift":
-      return desc.source.length;
+      return move.source.length;
     case "splice":
-      return desc.source.length;
+      return move.source.length;
     case "free_pull":
     case "push":
       return 0;
@@ -441,22 +437,21 @@ function sourceHelperLength(desc: Desc): number {
   return 0;
 }
 
-/** Mirror of bfs.ts's moveTouchesFocus, inlined here to avoid
- *  exporting from enumerator.ts. Move "touches" focus if it
- *  consumes/grows the entry whose cards equal `focus`. */
-function moveTouchesFocus(desc: Desc, focus: readonly Card[]): boolean {
-  if (desc.type === "extract_absorb" || desc.type === "shift") {
-    return cardsEqual(desc.targetBefore, focus);
+/** Move "touches" focus if it consumes/grows the entry whose cards
+ *  equal `focus`. */
+function moveTouchesFocus(move: Move, focus: readonly Card[]): boolean {
+  if (move.type === "extract_absorb" || move.type === "shift") {
+    return cardsEqual(move.targetBefore, focus);
   }
-  if (desc.type === "free_pull") {
-    if (cardsEqual(desc.targetBefore, focus)) return true;
-    return focus.length === 1 && cardEqual(focus[0]!, desc.loose);
+  if (move.type === "free_pull") {
+    if (cardsEqual(move.targetBefore, focus)) return true;
+    return focus.length === 1 && cardEqual(focus[0]!, move.loose);
   }
-  if (desc.type === "splice") {
-    return focus.length === 1 && cardEqual(focus[0]!, desc.loose);
+  if (move.type === "splice") {
+    return focus.length === 1 && cardEqual(focus[0]!, move.loose);
   }
-  if (desc.type === "push") {
-    return cardsEqual(desc.troubleBefore, focus);
+  if (move.type === "push") {
+    return cardsEqual(move.troubleBefore, focus);
   }
   return false;
 }

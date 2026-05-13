@@ -1,6 +1,6 @@
 import type { Card } from "../src/rules/card.ts";
 import { classifyStack } from "./classified_card_stack.ts";
-import { solveStateWithDescs, type SolveResult } from "./engine_v2.ts";
+import { solveStateWithMoves, type SolveResult } from "./engine_v2.ts";
 
 export type { PlanLine, SolveResult } from "./engine_v2.ts";
 
@@ -25,5 +25,5 @@ export function solveBoard(
     if (ccs === null || ccs.n < 3) trouble.push(stack);
     else helper.push(stack);
   }
-  return solveStateWithDescs({ helper, trouble, growing: [], complete: [] }, opts);
+  return solveStateWithMoves({ helper, trouble, growing: [], complete: [] }, opts);
 }

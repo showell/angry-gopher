@@ -1,38 +1,28 @@
-// move.ts — BFS descriptor types + plan-line rendering.
+// move.ts — BFS Move descriptors + plan-line rendering.
 //
-// TS port of python/move.py. Each move type has a dedicated descriptor
-// shape mirroring the python dataclass field set. The enumerator emits
-// these; readers dispatch on the `type` discriminator.
+// A `Move` is one verb-level step in the BFS's plan. The solver
+// returns a sequence of Moves; `physicalPlan` lowers each Move into
+// the `Primitive` sequence that realizes it on a geometric board.
 //
-// Descriptors carry RAW card tuples / card lists, NOT CCS objects, for
-// plan-line stability and downstream serialization. Mirroring the
-// python field layout exactly keeps the cross-language plan-line check
-// trivial (string equality, no normalization).
+// Each Move variant carries RAW card tuples (not CCS objects), so
+// `describe(move)` produces a stable plan-line string suitable for
+// cross-language pinning.
 
 import type { Card } from "../src/rules/card.ts";
 import { RANKS, SUITS, cardLabel } from "../src/rules/card.ts";
 
-/** Side discriminator for absorb/splice variants. Mirrors python's
- *  `Side`. Only data-layout-level — no function takes `side` as a
- *  parameter (per SOLVER.md's discipline). */
 export type Side = "left" | "right";
 
-/** Source verb that produced an extract. Mirrors python's `Verb`,
- *  plus `set_peel` for the SET-specific length-3 case where the
- *  remnant pair stays coherent in GROWING (instead of being
- *  shattered into singletons by `steal`). */
+/** Verb name attached to an extract-absorb Move. `set_peel` is the
+ *  SET-specific length-3 case where the remnant pair stays coherent
+ *  in GROWING (instead of being shattered into singletons by `steal`). */
 export type Verb = "peel" | "pluck" | "yank" | "steal" | "split_out" | "set_peel";
 
-/** Bucket where the absorb target came from. Same alphabet as
- *  `BucketName` in buckets.ts. */
+/** Bucket the absorb target came from. Same alphabet as `BucketName`
+ *  in buckets.ts. */
 export type AbsorberBucket = "trouble" | "growing";
 
-// --- Descriptors -----------------------------------------------------------
-//
-// Each interface mirrors the python dataclass field-for-field. The
-// `type` literal field discriminates them.
-
-export interface ExtractAbsorbDesc {
+export interface ExtractAbsorbMove {
   readonly type: "extract_absorb";
   readonly verb: Verb;
   readonly source: readonly Card[];
@@ -43,17 +33,14 @@ export interface ExtractAbsorbDesc {
   readonly side: Side;
   readonly graduated: boolean;
   /** Stacks the extract spawned that land in TROUBLE (singletons
-   *  from set-shattering steals; doomed run/rb halves from yank;
-   *  etc.). Each entry is a list of cards. */
+   *  from set-shattering steals; doomed run/rb halves from yank). */
   readonly spawned: readonly (readonly Card[])[];
   /** Stacks the extract spawned that land in GROWING (pair-shape
-   *  remnants — only `set_peel` produces these today). Each entry
-   *  is a list of cards. Empty for verbs that don't produce
-   *  growing-bound spawns. */
+   *  remnants — only `set_peel` produces these today). */
   readonly spawnedGrowing: readonly (readonly Card[])[];
 }
 
-export interface FreePullDesc {
+export interface FreePullMove {
   readonly type: "free_pull";
   readonly loose: Card;
   readonly targetBefore: readonly Card[];
@@ -63,7 +50,7 @@ export interface FreePullDesc {
   readonly graduated: boolean;
 }
 
-export interface PushDesc {
+export interface PushMove {
   readonly type: "push";
   readonly troubleBefore: readonly Card[];
   readonly targetBefore: readonly Card[];
@@ -71,7 +58,7 @@ export interface PushDesc {
   readonly side: Side;
 }
 
-export interface SpliceDesc {
+export interface SpliceMove {
   readonly type: "splice";
   readonly loose: Card;
   readonly source: readonly Card[];
@@ -81,7 +68,7 @@ export interface SpliceDesc {
   readonly rightResult: readonly Card[];
 }
 
-export interface ShiftDesc {
+export interface ShiftMove {
   readonly type: "shift";
   readonly source: readonly Card[];
   readonly donor: readonly Card[];
@@ -100,82 +87,72 @@ export interface ShiftDesc {
 /** Decompose: split a TROUBLE pair (pair_run / pair_rb / pair_set)
  *  back into two singletons. The bundling that pair-spawning moves
  *  produce isn't a real game commitment — sometimes the right play
- *  separates the cards. See `random233.md`. */
-export interface DecomposeDesc {
+ *  separates the cards. */
+export interface DecomposeMove {
   readonly type: "decompose";
-  readonly pairBefore: readonly Card[];   // 2-card pair being split
+  readonly pairBefore: readonly Card[];
   readonly leftCard: Card;
   readonly rightCard: Card;
 }
 
-/** Discriminated union over all move descriptors. */
-export type Desc =
-  | ExtractAbsorbDesc
-  | FreePullDesc
-  | PushDesc
-  | SpliceDesc
-  | ShiftDesc
-  | DecomposeDesc;
+export type Move =
+  | ExtractAbsorbMove
+  | FreePullMove
+  | PushMove
+  | SpliceMove
+  | ShiftMove
+  | DecomposeMove;
 
 // --- Plan-line rendering ---------------------------------------------------
 //
-// `describe(desc)` produces the canonical one-line DSL string. The
+// `describe(move)` produces the canonical one-line DSL string. The
 // strings here are the cross-language contract — they must exactly
-// match python's `move.describe(desc)` output.
+// match the strings Python emits (and what conformance fixtures pin).
+// Bucket markers (TROUBLE / GROWING) are deliberately NOT in the
+// rendered line; bucket assignment lives in the structured Move.
 
 function stackLabel(stack: readonly Card[]): string {
   return stack.map(cardLabel).join(" ");
 }
 
-/**
- * Render a one-line DSL string for a move. Bucket markers
- * (TROUBLE / GROWING) on the absorber and on spawn lists are
- * intentionally elided — the bucket is implicit in the post-state
- * and changes when bucket-routing logic evolves; pinning bucket
- * names in plan-line text led to brittle DSL fixtures (every
- * verb-routing change rewrote dozens of plan_lines for no real
- * semantic difference). The line text now describes the move
- * itself (verb, source, ext card, absorber stack, result, spawn
- * stacks); bucket assignment lives in the structured Desc.
- */
-export function describe(desc: Desc): string {
-  switch (desc.type) {
+export function describe(move: Move): string {
+  switch (move.type) {
     case "free_pull": {
-      const graduated = desc.graduated ? " [→COMPLETE]" : "";
-      return `pull ${cardLabel(desc.loose)} onto `
-        + `[${stackLabel(desc.targetBefore)}] → `
-        + `[${stackLabel(desc.result)}]${graduated}`;
+      const graduated = move.graduated ? " [→COMPLETE]" : "";
+      return `pull ${cardLabel(move.loose)} onto `
+        + `[${stackLabel(move.targetBefore)}] → `
+        + `[${stackLabel(move.result)}]${graduated}`;
     }
     case "extract_absorb": {
       let spawnedStr = "";
-      const allSpawned = [...desc.spawned, ...desc.spawnedGrowing];
+      const allSpawned = [...move.spawned, ...move.spawnedGrowing];
       if (allSpawned.length > 0) {
         spawnedStr = " ; spawn "
           + allSpawned.map(s => "[" + stackLabel(s) + "]").join(", ");
       }
-      const graduated = desc.graduated ? " [→COMPLETE]" : "";
-      return `${desc.verb} ${cardLabel(desc.extCard)} from HELPER `
-        + `[${stackLabel(desc.source)}], `
+      const graduated = move.graduated ? " [→COMPLETE]" : "";
+      return `${move.verb} ${cardLabel(move.extCard)} from HELPER `
+        + `[${stackLabel(move.source)}], `
         + `absorb onto `
-        + `[${stackLabel(desc.targetBefore)}] → `
-        + `[${stackLabel(desc.result)}]`
+        + `[${stackLabel(move.targetBefore)}] → `
+        + `[${stackLabel(move.result)}]`
         + `${graduated}${spawnedStr}`;
     }
     case "shift": {
-      const p = cardLabel(desc.pCard);
+      const p = cardLabel(move.pCard);
       // Determine whether p ended up at index 0 or last (Python uses
       // .index(p_card) on new_source then enumerates rest in order).
       let pIdx = -1;
-      for (let i = 0; i < desc.newSource.length; i++) {
-        const c = desc.newSource[i]!;
-        if (c[0] === desc.pCard[0] && c[1] === desc.pCard[1] && c[2] === desc.pCard[2]) {
+      for (let i = 0; i < move.newSource.length; i++) {
+        const c = move.newSource[i]!;
+        if (c[0] === move.pCard[0] && c[1] === move.pCard[1] && c[2] === move.pCard[2]) {
           pIdx = i;
           break;
         }
       }
       const rest: Card[] = [];
-      for (const c of desc.newSource) {
-        if (!(c[0] === desc.pCard[0] && c[1] === desc.pCard[1] && c[2] === desc.pCard[2])) {
+      for (const c of move.newSource) {
+        if (!(c[0] === move.pCard[0] && c[1] === move.pCard[1] && c[2] === move.pCard[2])) {
           rest.push(c);
         }
       }
@@ -183,41 +160,38 @@ export function describe(desc: Desc): string {
       const shifted = pIdx === 0
         ? `${p} + ${restLabel}`
         : `${restLabel} + ${p}`;
-      const graduated = desc.graduated ? " [→COMPLETE]" : "";
-      return `shift ${p} to pop ${cardLabel(desc.stolen)} `
-        + `[${stackLabel(desc.newDonor)} -> ${shifted}]; `
+      const graduated = move.graduated ? " [→COMPLETE]" : "";
+      return `shift ${p} to pop ${cardLabel(move.stolen)} `
+        + `[${stackLabel(move.newDonor)} -> ${shifted}]; `
         + `absorb onto `
-        + `[${stackLabel(desc.targetBefore)}] → `
-        + `[${stackLabel(desc.merged)}]${graduated}`;
+        + `[${stackLabel(move.targetBefore)}] → `
+        + `[${stackLabel(move.merged)}]${graduated}`;
     }
     case "splice": {
-      return `splice [${cardLabel(desc.loose)}] into HELPER `
-        + `[${stackLabel(desc.source)}] → `
-        + `[${stackLabel(desc.leftResult)}] + `
-        + `[${stackLabel(desc.rightResult)}]`;
+      return `splice [${cardLabel(move.loose)}] into HELPER `
+        + `[${stackLabel(move.source)}] → `
+        + `[${stackLabel(move.leftResult)}] + `
+        + `[${stackLabel(move.rightResult)}]`;
     }
     case "push": {
-      return `push [${stackLabel(desc.troubleBefore)}] onto HELPER `
-        + `[${stackLabel(desc.targetBefore)}] → `
-        + `[${stackLabel(desc.result)}]`;
+      return `push [${stackLabel(move.troubleBefore)}] onto HELPER `
+        + `[${stackLabel(move.targetBefore)}] → `
+        + `[${stackLabel(move.result)}]`;
     }
     case "decompose": {
-      return `decompose [${stackLabel(desc.pairBefore)}] → `
-        + `[${cardLabel(desc.leftCard)}] + [${cardLabel(desc.rightCard)}]`;
+      return `decompose [${stackLabel(move.pairBefore)}] → `
+        + `[${cardLabel(move.leftCard)}] + [${cardLabel(move.rightCard)}]`;
     }
   }
 }
 
 // --- Narrate / hint --------------------------------------------------------
 //
-// These are convenience renderers used by enumerate_moves conformance
-// scenarios that assert `narrate_contains` or `hint_contains`. The
-// outputs only need to MATCH on the substring — full output equality
-// against python is NOT required (different code paths consume them).
+// Convenience renderers used by enumerate_moves conformance scenarios
+// that assert `narrate_contains` or `hint_contains`. The outputs only
+// need to MATCH on the substring — full output equality against Python
+// is NOT required (different code paths consume them).
 
-/** Family-kind classifier used for narrate/hint phrasing. Returns
- *  "set" / "pure_run" / "rb_run" / "other". A simplified version of
- *  python's rules.classify; only correct on length-3+ legal stacks. */
 function classifyFamily(stack: readonly Card[]): string {
   const n = stack.length;
   if (n < 3) return "other";
@@ -282,72 +256,73 @@ function runKindPhrase(stack: readonly Card[]): string {
   return "run";
 }
 
-/** Evocative one-liner for a move (intent over mechanics). Mirrors
- *  python's `move.narrate` — used by conformance `narrate_contains`. */
-export function narrate(desc: Desc): string {
-  switch (desc.type) {
+/** Evocative one-liner for a Move (intent over mechanics). */
+export function narrate(move: Move): string {
+  switch (move.type) {
     case "free_pull": {
-      const check = desc.graduated ? " ✓" : "";
-      return `pull ${cardLabel(desc.loose)} into [${stackLabel(desc.result)}]${check}`;
+      const check = move.graduated ? " ✓" : "";
+      return `pull ${cardLabel(move.loose)} into [${stackLabel(move.result)}]${check}`;
     }
     case "extract_absorb": {
-      const check = desc.graduated ? " ✓" : "";
+      const check = move.graduated ? " ✓" : "";
       let spawnedStr = "";
-      if (desc.spawned.length > 0) {
+      if (move.spawned.length > 0) {
         spawnedStr = " (leaves "
-          + desc.spawned.map(s => "[" + stackLabel(s) + "]").join(", ")
+          + move.spawned.map(s => "[" + stackLabel(s) + "]").join(", ")
           + " homeless)";
       }
-      return `${desc.verb} ${cardLabel(desc.extCard)} → `
-        + `[${stackLabel(desc.result)}]${check}${spawnedStr}`;
+      return `${move.verb} ${cardLabel(move.extCard)} → `
+        + `[${stackLabel(move.result)}]${check}${spawnedStr}`;
     }
     case "shift": {
-      const check = desc.graduated ? " ✓" : "";
-      return `${cardLabel(desc.pCard)} pops ${cardLabel(desc.stolen)} → `
-        + `[${stackLabel(desc.merged)}]${check}`;
+      const check = move.graduated ? " ✓" : "";
+      return `${cardLabel(move.pCard)} pops ${cardLabel(move.stolen)} → `
+        + `[${stackLabel(move.merged)}]${check}`;
     }
     case "splice":
-      return `splice ${cardLabel(desc.loose)} → `
-        + `[${stackLabel(desc.leftResult)}] + [${stackLabel(desc.rightResult)}]`;
+      return `splice ${cardLabel(move.loose)} → `
+        + `[${stackLabel(move.leftResult)}] + [${stackLabel(move.rightResult)}]`;
     case "push": {
       // Engulf-shape vs plain push: engulf produces a length-3+ legal
       // group from a growing-style merge.
-      if (classifyFamily(desc.result) !== "other") {
-        return `engulf [${stackLabel(desc.targetBefore)}] into `
-          + `[${stackLabel(desc.troubleBefore)}] → `
-          + `[${stackLabel(desc.result)}] ✓`;
+      if (classifyFamily(move.result) !== "other") {
+        return `engulf [${stackLabel(move.targetBefore)}] into `
+          + `[${stackLabel(move.troubleBefore)}] → `
+          + `[${stackLabel(move.result)}] ✓`;
       }
-      return `tuck [${stackLabel(desc.troubleBefore)}] into `
-        + `[${stackLabel(desc.targetBefore)}] → `
-        + `[${stackLabel(desc.result)}]`;
+      return `tuck [${stackLabel(move.troubleBefore)}] into `
+        + `[${stackLabel(move.targetBefore)}] → `
+        + `[${stackLabel(move.result)}]`;
     }
     case "decompose":
-      return `decompose [${stackLabel(desc.pairBefore)}] into singletons`;
+      return `decompose [${stackLabel(move.pairBefore)}] into singletons`;
   }
 }
 
-/** Vague hint for a HUMAN PLAYER. Mirrors python's `move.hint`. May
- *  return null (e.g., extract_absorb verbs that are too specific). */
-export function hint(desc: Desc): string | null {
-  switch (desc.type) {
+/** Vague hint for a HUMAN player. May return null (e.g.,
+ *  extract_absorb verbs that are too specific). */
+export function hint(move: Move): string | null {
+  switch (move.type) {
     case "free_pull":
-      return `You can pull the ${cardLabel(desc.loose)} onto `
-        + `${groupKindPhrase(desc.result)}.`;
+      return `You can pull the ${cardLabel(move.loose)} onto `
+        + `${groupKindPhrase(move.result)}.`;
     case "extract_absorb":
-      return `You can ${desc.verb} the ${cardLabel(desc.extCard)} to `
-        + `extend ${partialKindPhrase(desc.targetBefore)}.`;
+      return `You can ${move.verb} the ${cardLabel(move.extCard)} to `
+        + `extend ${partialKindPhrase(move.targetBefore)}.`;
     case "shift":
-      return `You can pop the ${cardLabel(desc.stolen)} by shifting `
-        + `the ${cardLabel(desc.pCard)} into the run.`;
+      return `You can pop the ${cardLabel(move.stolen)} by shifting `
+        + `the ${cardLabel(move.pCard)} into the run.`;
     case "splice":
-      return `You can splice the ${cardLabel(desc.loose)} into a `
-        + `${runKindPhrase(desc.source)}.`;
+      return `You can splice the ${cardLabel(move.loose)} into a `
+        + `${runKindPhrase(move.source)}.`;
     case "push":
-      if (classifyFamily(desc.result) !== "other") {
-        return `You can complete a run by absorbing [${stackLabel(desc.troubleBefore)}].`;
+      if (classifyFamily(move.result) !== "other") {
+        return `You can complete a run by absorbing [${stackLabel(move.troubleBefore)}].`;
       }
-      return `You can tuck [${stackLabel(desc.troubleBefore)}] back into a run.`;
+      return `You can tuck [${stackLabel(move.troubleBefore)}] back into a run.`;
     case "decompose":
-      return `You can split the [${stackLabel(desc.pairBefore)}] pair apart.`;
+      return `You can split the [${stackLabel(move.pairBefore)}] pair apart.`;
   }
 }
+
+void RANKS; void SUITS;

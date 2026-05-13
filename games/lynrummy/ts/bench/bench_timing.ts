@@ -29,7 +29,7 @@
 //    represent contention or transient system state, not the solver
 //    itself.
 
-import { solveStateWithDescs, type PlanLine } from "../bfs/engine_v2.ts";
+import { solveStateWithMoves, type PlanLine } from "../bfs/engine_v2.ts";
 import {
   classifyBuckets,
   type Buckets,
@@ -52,7 +52,7 @@ function nowMs(): number {
 }
 
 /**
- * Time `solveStateWithDescs(state, ...)` and return
+ * Time `solveStateWithMoves(state, ...)` and return
  * `{ plan, bestMs }`. `state` is either a classified `Buckets` or a
  * `RawBuckets`; raw shapes are classified once on the way in so the
  * timed runs see identical work.
@@ -68,7 +68,7 @@ export function timeSolver(
     : classifyBuckets(state as RawBuckets);
 
   // Warmup.
-  let result = solveStateWithDescs(buckets, {
+  let result = solveStateWithMoves(buckets, {
     maxTroubleOuter: 10,
     maxStates,
   });
@@ -77,7 +77,7 @@ export function timeSolver(
   for (let i = 0; i < nRuns; i++) {
     maybeGc();
     const t0 = nowMs();
-    result = solveStateWithDescs(buckets, {
+    result = solveStateWithMoves(buckets, {
       maxTroubleOuter: 10,
       maxStates,
     });

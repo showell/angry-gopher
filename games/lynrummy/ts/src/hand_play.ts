@@ -40,9 +40,9 @@ import {
   KIND_SET,
 } from "../bfs/classified_card_stack.ts";
 import type { Buckets, RawBuckets } from "../bfs/buckets.ts";
-import { solveStateWithDescs } from "../bfs/engine_v2.ts";
+import { solveStateWithMoves } from "../bfs/engine_v2.ts";
 import { solveBoard, type SolveResult } from "../bfs/index.ts";
-import type { Desc } from "../bfs/move.ts";
+import type { Move } from "../bfs/move.ts";
 
 // Default BFS state budget per projection. Mirrors python
 // `_PROJECTION_MAX_STATES`. Lowered from 200000 → 5000 in Python on
@@ -83,16 +83,17 @@ export function findPlanForBuckets(
   initial: RawBuckets | Buckets,
   maxStates: number = PROJECTION_MAX_STATES,
 ): SolveResult | null {
-  return solveStateWithDescs(initial, { ...HINT_OPTS, maxStates });
+  return solveStateWithMoves(initial, { ...HINT_OPTS, maxStates });
 }
 
 export interface PlayResult {
   readonly placements: readonly Card[];
-  /** Plan-line strings, for hint display + DSL conformance. */
-  readonly plan: readonly string[];
-  /** Plan descs — same plan, structured form. Transcript writers
-   *  feed these to `physicalPlan` to expand into wire primitives. */
-  readonly planDescs: readonly Desc[];
+  /** The plan as a list of structured Moves — what physicalPlan
+   *  consumes to emit primitives. */
+  readonly plan: readonly Move[];
+  /** Same plan rendered as one-line DSL strings, for hint display
+   *  and conformance pinning. */
+  readonly planLines: readonly string[];
   /** The board after the placements + plan are applied. Derived
    *  from the solver's final buckets so consumers don't re-solve. */
   readonly newBoard: readonly (readonly Card[])[];
@@ -160,7 +161,7 @@ export function findPlay(
           return {
             placements: ordered,
             plan: [],
-            planDescs: [],
+            planLines: [],
             newBoard: [...board, ordered],
           };
         }
@@ -296,8 +297,8 @@ function cardEq(a: Card, b: Card): boolean {
  * is_victory (empty trouble + every growing.n >= 3).
  */
 interface ProjectionOutcome {
-  readonly plan: readonly string[];
-  readonly planDescs: readonly Desc[];
+  readonly plan: readonly Move[];
+  readonly planLines: readonly string[];
   readonly newBoard: readonly (readonly Card[])[];
 }
 
@@ -324,8 +325,8 @@ function tryProjection(
   }
   if (result === null) return null;
   return {
-    plan: result.plan.map(p => p.line),
-    planDescs: result.plan.map(p => p.desc),
+    plan: result.plan.map(p => p.move),
+    planLines: result.plan.map(p => p.line),
     newBoard: bucketsToBoard(result.finalBuckets),
   };
 }
@@ -341,5 +342,5 @@ function tryProjection(
 export function formatHint(result: PlayResult | null): readonly string[] {
   if (result === null) return [];
   const labels = result.placements.map(cardLabel).join(" ");
-  return [`place [${labels}] from hand`, ...result.plan];
+  return [`place [${labels}] from hand`, ...result.planLines];
 }

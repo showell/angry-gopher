@@ -8,7 +8,7 @@
 //                                    scenario per BFS plan step
 //                                    across the 25 mined puzzles (94)
 //
-// For each scenario, asserts that `verbs.moveToPrimitives(desc,
+// For each scenario, asserts that `verbs.moveToPrimitives(move,
 // board)` emits the expected primitive sequence after the geometry
 // post-pass.
 //
@@ -23,9 +23,9 @@ import { fileURLToPath } from "node:url";
 import type { Card } from "../src/rules/card.ts";
 import { parseCardLabel, cardLabel } from "../src/rules/card.ts";
 import type {
-  Desc, Side,
-  ExtractAbsorbDesc, FreePullDesc, PushDesc,
-  SpliceDesc, ShiftDesc, DecomposeDesc,
+  Move, Side,
+  ExtractAbsorbMove, FreePullMove, PushMove,
+  SpliceMove, ShiftMove, DecomposeMove,
   Verb,
   AbsorberBucket,
 } from "../bfs/move.ts";
@@ -159,7 +159,7 @@ function buildBoardStacks(sc: ScenarioRaw): readonly BoardStack[] {
   }));
 }
 
-function buildDesc(sc: ScenarioRaw): Desc {
+function buildMove(sc: ScenarioRaw): Move {
   const f = sc.fields;
   const verb = f["verb"];
   if (!verb) throw new Error(`scenario ${sc.name}: missing verb:`);
@@ -172,7 +172,7 @@ function buildDesc(sc: ScenarioRaw): Desc {
     // Reconstruct `result` and other fields well enough for the
     // pipeline to run. moveToPrimitives only uses verb / source /
     // ext_card / target_before / side; the others are placeholders.
-    const desc: ExtractAbsorbDesc = {
+    const move: ExtractAbsorbMove = {
       type: "extract_absorb",
       verb: verb as Verb,
       source,
@@ -184,12 +184,12 @@ function buildDesc(sc: ScenarioRaw): Desc {
       graduated: false,
       spawned: [],
     };
-    return desc;
+    return move;
   }
   if (verb === "free_pull") {
     const loose = parseSingleCard(f["loose"] ?? "");
     const targetBefore = parseCardList(f["target_before"] ?? "");
-    const desc: FreePullDesc = {
+    const move: FreePullMove = {
       type: "free_pull",
       loose,
       targetBefore,
@@ -198,12 +198,12 @@ function buildDesc(sc: ScenarioRaw): Desc {
       side,
       graduated: false,
     };
-    return desc;
+    return move;
   }
   if (verb === "push") {
     const troubleBefore = parseCardList(f["trouble_before"] ?? "");
     const targetBefore = parseCardList(f["target_before"] ?? "");
-    const desc: PushDesc = {
+    const move: PushMove = {
       type: "push",
       troubleBefore,
       targetBefore,
@@ -212,19 +212,19 @@ function buildDesc(sc: ScenarioRaw): Desc {
         : [...targetBefore, ...troubleBefore],
       side,
     };
-    return desc;
+    return move;
   }
   if (verb === "splice") {
     const loose = parseSingleCard(f["loose"] ?? "");
     const source = parseCardList(f["source"] ?? "");
     const k = parseInt(f["k"] ?? "0", 10);
-    const desc: SpliceDesc = {
+    const move: SpliceMove = {
       type: "splice",
       loose, source, k, side,
       leftResult: side === "left" ? [...source.slice(0, k), loose] : source.slice(0, k),
       rightResult: side === "right" ? [loose, ...source.slice(k)] : source.slice(k),
     };
-    return desc;
+    return move;
   }
   if (verb === "shift") {
     const source = parseCardList(f["source"] ?? "");
@@ -240,7 +240,7 @@ function buildDesc(sc: ScenarioRaw): Desc {
     const targetBefore = parseCardList(f["target_before"] ?? "");
     // newSource / newDonor / merged are reconstructed below well
     // enough for shape; moveToPrimitives doesn't read them.
-    const desc: ShiftDesc = {
+    const move: ShiftMove = {
       type: "shift",
       source, donor, stolen, pCard, whichEnd,
       newSource: source,
@@ -251,20 +251,20 @@ function buildDesc(sc: ScenarioRaw): Desc {
       side,
       graduated: false,
     };
-    return desc;
+    return move;
   }
   if (verb === "decompose") {
     const pairBefore = parseCardList(f["pair_before"] ?? "");
     if (pairBefore.length !== 2) {
       throw new Error(`decompose pair_before must be length 2; got ${pairBefore.length}`);
     }
-    const desc: DecomposeDesc = {
+    const move: DecomposeMove = {
       type: "decompose",
       pairBefore,
       leftCard: pairBefore[0]!,
       rightCard: pairBefore[1]!,
     };
-    return desc;
+    return move;
   }
   throw new Error(`unknown verb ${verb}`);
 }
@@ -318,17 +318,17 @@ interface RunResult {
 }
 
 function runScenario(sc: ScenarioRaw): RunResult {
-  let desc: Desc;
+  let move: Move;
   try {
-    desc = buildDesc(sc);
+    move = buildMove(sc);
   } catch (e) {
-    return { ok: false, msg: `desc-build error: ${(e as Error).message}` };
+    return { ok: false, msg: `move-build error: ${(e as Error).message}` };
   }
   const board = buildBoardStacks(sc);
 
   let prims: readonly Primitive[];
   try {
-    prims = moveToPrimitives(desc, board);
+    prims = moveToPrimitives(move, board);
   } catch (e) {
     return { ok: false, msg: `pipeline error: ${(e as Error).message}` };
   }
@@ -412,16 +412,16 @@ function runScenario(sc: ScenarioRaw): RunResult {
  *  geometry errors (those still want loud failures, not a silent
  *  repair). */
 function captureScenario(sc: ScenarioRaw): string[] | null {
-  let desc: Desc;
+  let move: Move;
   try {
-    desc = buildDesc(sc);
+    move = buildMove(sc);
   } catch {
     return null;
   }
   const board = buildBoardStacks(sc);
   let prims: readonly Primitive[];
   try {
-    prims = moveToPrimitives(desc, board);
+    prims = moveToPrimitives(move, board);
   } catch {
     return null;
   }

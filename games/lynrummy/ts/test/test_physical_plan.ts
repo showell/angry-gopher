@@ -18,9 +18,9 @@ import {
   applyLocally,
 } from "../src/primitives.ts";
 import type {
-  Desc, Verb, AbsorberBucket,
-  ExtractAbsorbDesc, FreePullDesc, PushDesc,
-  ShiftDesc, SpliceDesc, DecomposeDesc,
+  Move, Verb, AbsorberBucket,
+  ExtractAbsorbMove, FreePullMove, PushMove,
+  ShiftMove, SpliceMove, DecomposeMove,
 } from "../bfs/move.ts";
 import { physicalPlan } from "../lib/physical_plan.ts";
 
@@ -163,14 +163,14 @@ function parseDsl(text: string): Scenario[] {
   return out;
 }
 
-// --- Verb-block → Desc ----------------------------------------------
+// --- Verb-block → Move ----------------------------------------------
 
-function buildDesc(vb: VerbBlock): Desc {
+function buildMove(vb: VerbBlock): Move {
   const f = vb.fields;
   const verb = vb.verb;
   const side = (f.side ?? "right") as "left" | "right";
   if (["peel", "pluck", "yank", "steal", "split_out"].includes(verb)) {
-    const d: ExtractAbsorbDesc = {
+    const d: ExtractAbsorbMove = {
       type: "extract_absorb",
       verb: verb as Verb,
       source: parseList(f.source!),
@@ -182,7 +182,7 @@ function buildDesc(vb: VerbBlock): Desc {
     return d;
   }
   if (verb === "free_pull") {
-    const d: FreePullDesc = {
+    const d: FreePullMove = {
       type: "free_pull",
       loose: parseOne(f.loose!),
       targetBefore: parseList(f.target_before!),
@@ -192,7 +192,7 @@ function buildDesc(vb: VerbBlock): Desc {
     return d;
   }
   if (verb === "push") {
-    const d: PushDesc = {
+    const d: PushMove = {
       type: "push",
       troubleBefore: parseList(f.trouble_before!),
       targetBefore: parseList(f.target_before!),
@@ -201,7 +201,7 @@ function buildDesc(vb: VerbBlock): Desc {
     return d;
   }
   if (verb === "splice") {
-    const d: SpliceDesc = {
+    const d: SpliceMove = {
       type: "splice",
       loose: parseOne(f.loose!),
       source: parseList(f.source!),
@@ -213,7 +213,7 @@ function buildDesc(vb: VerbBlock): Desc {
   if (verb === "shift") {
     const we = f.which_end!;
     const whichEnd = we === "left" ? 0 : we === "right" ? 2 : +we;
-    const d: ShiftDesc = {
+    const d: ShiftMove = {
       type: "shift",
       source: parseList(f.source!),
       donor: parseList(f.donor!),
@@ -229,7 +229,7 @@ function buildDesc(vb: VerbBlock): Desc {
   }
   if (verb === "decompose") {
     const pair = parseList(f.pair_before!);
-    const d: DecomposeDesc = {
+    const d: DecomposeMove = {
       type: "decompose",
       pairBefore: pair,
       leftCard: pair[0]!,
@@ -248,16 +248,16 @@ function runScenario(sc: Scenario): RunResult {
   const board: BoardStack[] = sc.board.map(b => ({
     cards: b.cards, loc: { top: b.top, left: b.left },
   }));
-  let descs: Desc[];
+  let moves: Move[];
   try {
-    descs = sc.plan.map(buildDesc);
+    moves = sc.plan.map(buildMove);
   } catch (e) {
-    return { ok: false, msg: `desc-build error: ${(e as Error).message}` };
+    return { ok: false, msg: `move-build error: ${(e as Error).message}` };
   }
 
   let prims: readonly Primitive[];
   try {
-    prims = physicalPlan(board, sc.hand, descs);
+    prims = physicalPlan(board, sc.hand, moves);
   } catch (e) {
     return { ok: false, msg: `physicalPlan threw: ${(e as Error).message}` };
   }
@@ -305,10 +305,10 @@ function captureScenario(sc: Scenario): string[] | null {
   const board: BoardStack[] = sc.board.map(b => ({
     cards: b.cards, loc: { top: b.top, left: b.left },
   }));
-  let descs: Desc[];
-  try { descs = sc.plan.map(buildDesc); } catch { return null; }
+  let moves: Move[];
+  try { moves = sc.plan.map(buildMove); } catch { return null; }
   let prims: readonly Primitive[];
-  try { prims = physicalPlan(board, sc.hand, descs); } catch { return null; }
+  try { prims = physicalPlan(board, sc.hand, moves); } catch { return null; }
   const got: string[] = [];
   let sim: readonly BoardStack[] = board;
   for (const p of prims) {

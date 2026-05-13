@@ -1,23 +1,24 @@
-// physical_plan.ts — the agent's gesture pipeline.
+// physical_plan.ts — the agent's gesture pipeline. Walks the BFS's
+// plan (a sequence of Moves), threading sim + pendingHand state, and
+// emits the primitive sequence that realizes the plan on a geometric
+// board.
 //
-// One loop. Honest state.
+// Hand cards arrive in two shapes:
 //
-//   sim         starts as the real board (no hand cards on it).
-//   pendingHand starts as the cards in hand for this play.
+//   - Single placement (hand.length === 1): the card is destined for
+//     an existing board stack; expandVerb lifts it to a direct
+//     merge_hand inside the verb loop.
+//   - Multi-card placement (hand.length >= 2): the cards form a fresh
+//     stack on the board. Lay them down first via place_hand +
+//     merge_hand chain, then run the verb loop with that stack already
+//     present.
 //
-// For each verb, expandVerb emits the primitives that realize it,
-// looking at the current sim and pendingHand to decide hand-to-stack
-// vs. board-to-board, small→large direction, and per-primitive
-// pre-flight inline. As primitives apply, we update sim and pull cards
-// out of pendingHand. That's it — no fake state, no rewrite passes.
-//
-// Per Steve, 2026-05-04: there's one solver pass and one physical-
-// execution pass. The verb-level helpers in `verbs.ts` are where the
-// physical-execution decisions live; this module is just the loop.
+// Every hand card must be consumed by the loop's end; an unconsumed
+// card signals a broken plan and throws.
 
 import type { Card } from "../src/rules/card.ts";
 import { cardLabel } from "../src/rules/card.ts";
-import type { Desc } from "../bfs/move.ts";
+import type { Move } from "../bfs/move.ts";
 import type { BoardStack } from "../src/geometry.ts";
 import { findOpenLoc } from "../src/geometry.ts";
 import {
@@ -31,26 +32,10 @@ function cardKey(c: Card): string {
   return `${c[0]},${c[1]},${c[2]}`;
 }
 
-/** Walk the solver's plan, emitting one primitive sequence.
- *
- *  Hand cards arrive in two shapes:
- *
- *  - Single placement (`hand.length === 1`): the card is destined for
- *    an existing board stack. The verb loop's hand-aware merge in
- *    `expandVerb` lifts it to a direct `merge_hand`. If the loop
- *    finishes without consuming the card, that's a solver bug — fail
- *    hard.
- *
- *  - Multi-card placement (`hand.length >= 2`): the cards form a
- *    fresh stack on the board (a graduate, or the source/target of
- *    an upcoming verb). Lay them down as a single stack first via
- *    `place_hand` + `merge_hand` chain, then run the verb loop with
- *    the placement-stack already on the board.
- */
 export function physicalPlan(
   initialBoard: readonly BoardStack[],
   hand: readonly Card[],
-  planDescs: readonly Desc[],
+  plan: readonly Move[],
 ): readonly Primitive[] {
   let sim: readonly BoardStack[] = initialBoard;
   const pendingHand = new Set(hand.map(cardKey));
@@ -73,8 +58,8 @@ export function physicalPlan(
     }
   }
 
-  for (const desc of planDescs) {
-    const prims = expandVerb(desc, sim, pendingHand);
+  for (const move of plan) {
+    const prims = expandVerb(move, sim, pendingHand);
     for (const p of prims) {
       out.push(p);
       sim = applyLocally(sim, p);
@@ -84,10 +69,6 @@ export function physicalPlan(
     }
   }
 
-  // Every hand card must be consumed — by the multi-placement seed or
-  // by a hand-aware merge in the verb loop. Anything left means the
-  // solver returned placements that no verb references and that we
-  // didn't seed — that's broken state, not something to paper over.
   if (pendingHand.size > 0) {
     const stranded = [...pendingHand]
       .map(k => hand.find(c => cardKey(c) === k))

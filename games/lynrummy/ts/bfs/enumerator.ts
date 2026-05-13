@@ -31,13 +31,13 @@ import {
   pairKey,
 } from "./buckets.ts";
 import {
-  type Desc,
-  type DecomposeDesc,
-  type ExtractAbsorbDesc,
-  type FreePullDesc,
-  type PushDesc,
-  type ShiftDesc,
-  type SpliceDesc,
+  type Move,
+  type DecomposeMove,
+  type ExtractAbsorbMove,
+  type FreePullMove,
+  type PushMove,
+  type ShiftMove,
+  type SpliceMove,
   type Verb,
 } from "./move.ts";
 
@@ -442,8 +442,8 @@ function eligibleShiftHelpers(
 
 // --- Move generator -------------------------------------------------------
 
-/** A yielded move: (descriptor, resulting buckets). */
-export type MoveYield = readonly [Desc, Buckets];
+/** What `enumerateMoves` yields per legal move. */
+export type MoveYield = readonly [Move, Buckets];
 
 /**
  * Yield every legal 1-line extension. `state` is a Buckets of CCS-shaped
@@ -685,7 +685,7 @@ function* yieldExtractAbsorbs(
         const merged = absorbRight(target, extCard, rightKind);
         if (admissibleMerged(merged, completionInv)) {
           const [ngFinal, nc, graduated] = graduate(merged, ngWithSpawn, complete);
-          const desc: ExtractAbsorbDesc = {
+          const move: ExtractAbsorbMove = {
             type: "extract_absorb",
             verb,
             source: sourceBeforeCards,
@@ -698,14 +698,14 @@ function* yieldExtractAbsorbs(
             spawned: spawnedLists,
             spawnedGrowing: spawnedGrowingLists,
           };
-          yield [desc, { helper: newHelper, trouble: nt, growing: ngFinal, complete: nc }];
+          yield [move, { helper: newHelper, trouble: nt, growing: ngFinal, complete: nc }];
         }
       }
       if (leftKind !== null) {
         const merged = absorbLeft(target, extCard, leftKind);
         if (admissibleMerged(merged, completionInv)) {
           const [ngFinal, nc, graduated] = graduate(merged, ngWithSpawn, complete);
-          const desc: ExtractAbsorbDesc = {
+          const move: ExtractAbsorbMove = {
             type: "extract_absorb",
             verb,
             source: sourceBeforeCards,
@@ -718,7 +718,7 @@ function* yieldExtractAbsorbs(
             spawned: spawnedLists,
             spawnedGrowing: spawnedGrowingLists,
           };
-          yield [desc, { helper: newHelper, trouble: nt, growing: ngFinal, complete: nc }];
+          yield [move, { helper: newHelper, trouble: nt, growing: ngFinal, complete: nc }];
         }
       }
       if (setKind !== null) {
@@ -726,7 +726,7 @@ function* yieldExtractAbsorbs(
         const mergedR = absorbRight(target, extCard, setKind);
         if (admissibleMerged(mergedR, completionInv)) {
           const [ngFinal, nc, graduated] = graduate(mergedR, ngWithSpawn, complete);
-          const desc: ExtractAbsorbDesc = {
+          const move: ExtractAbsorbMove = {
             type: "extract_absorb",
             verb,
             source: sourceBeforeCards,
@@ -739,12 +739,12 @@ function* yieldExtractAbsorbs(
             spawned: spawnedLists,
             spawnedGrowing: spawnedGrowingLists,
           };
-          yield [desc, { helper: newHelper, trouble: nt, growing: ngFinal, complete: nc }];
+          yield [move, { helper: newHelper, trouble: nt, growing: ngFinal, complete: nc }];
         }
         const mergedL = absorbLeft(target, extCard, setKind);
         if (admissibleMerged(mergedL, completionInv)) {
           const [ngFinal, nc, graduated] = graduate(mergedL, ngWithSpawn, complete);
-          const desc: ExtractAbsorbDesc = {
+          const move: ExtractAbsorbMove = {
             type: "extract_absorb",
             verb,
             source: sourceBeforeCards,
@@ -757,7 +757,7 @@ function* yieldExtractAbsorbs(
             spawned: spawnedLists,
             spawnedGrowing: spawnedGrowingLists,
           };
-          yield [desc, { helper: newHelper, trouble: nt, growing: ngFinal, complete: nc }];
+          yield [move, { helper: newHelper, trouble: nt, growing: ngFinal, complete: nc }];
         }
       }
     }
@@ -822,7 +822,7 @@ function* yieldPartialSteals(
       const yieldMerge = (merged: ClassifiedCardStack, side: "left" | "right") => {
         if (!admissibleMerged(merged, completionInv)) return;
         const [ngFinal, nc, graduated] = graduate(merged, ng, complete);
-        const desc: ExtractAbsorbDesc = {
+        const move: ExtractAbsorbMove = {
           type: "extract_absorb",
           verb: "steal",
           source: [...partial.cards],
@@ -835,7 +835,7 @@ function* yieldPartialSteals(
           spawned: [[otherCard]],
           spawnedGrowing: [],
         };
-        return [desc, { helper: [...helper], trouble: baseTrouble, growing: ngFinal, complete: nc }] as const;
+        return [move, { helper: [...helper], trouble: baseTrouble, growing: ngFinal, complete: nc }] as const;
       };
 
       if (rightKind !== null) {
@@ -896,7 +896,7 @@ function* yieldFreePulls(
       const merged = absorbRight(target, loose, rightKind);
       if (admissibleMerged(merged, completionInv)) {
         const [ngFinal, nc, graduated] = graduate(merged, ng, complete);
-        const desc: FreePullDesc = {
+        const move: FreePullMove = {
           type: "free_pull",
           loose,
           targetBefore: targetCardsList,
@@ -905,14 +905,14 @@ function* yieldFreePulls(
           side: "right",
           graduated,
         };
-        yield [desc, { helper: [...helper], trouble: nt, growing: ngFinal, complete: nc }];
+        yield [move, { helper: [...helper], trouble: nt, growing: ngFinal, complete: nc }];
       }
     }
     if (leftKind !== null) {
       const merged = absorbLeft(target, loose, leftKind);
       if (admissibleMerged(merged, completionInv)) {
         const [ngFinal, nc, graduated] = graduate(merged, ng, complete);
-        const desc: FreePullDesc = {
+        const move: FreePullMove = {
           type: "free_pull",
           loose,
           targetBefore: targetCardsList,
@@ -921,14 +921,14 @@ function* yieldFreePulls(
           side: "left",
           graduated,
         };
-        yield [desc, { helper: [...helper], trouble: nt, growing: ngFinal, complete: nc }];
+        yield [move, { helper: [...helper], trouble: nt, growing: ngFinal, complete: nc }];
       }
     }
     if (setKind !== null) {
       const mergedR = absorbRight(target, loose, setKind);
       if (admissibleMerged(mergedR, completionInv)) {
         const [ngFinal, nc, graduated] = graduate(mergedR, ng, complete);
-        const desc: FreePullDesc = {
+        const move: FreePullMove = {
           type: "free_pull",
           loose,
           targetBefore: targetCardsList,
@@ -937,12 +937,12 @@ function* yieldFreePulls(
           side: "right",
           graduated,
         };
-        yield [desc, { helper: [...helper], trouble: nt, growing: ngFinal, complete: nc }];
+        yield [move, { helper: [...helper], trouble: nt, growing: ngFinal, complete: nc }];
       }
       const mergedL = absorbLeft(target, loose, setKind);
       if (admissibleMerged(mergedL, completionInv)) {
         const [ngFinal, nc, graduated] = graduate(mergedL, ng, complete);
-        const desc: FreePullDesc = {
+        const move: FreePullMove = {
           type: "free_pull",
           loose,
           targetBefore: targetCardsList,
@@ -951,7 +951,7 @@ function* yieldFreePulls(
           side: "left",
           graduated,
         };
-        yield [desc, { helper: [...helper], trouble: nt, growing: ngFinal, complete: nc }];
+        yield [move, { helper: [...helper], trouble: nt, growing: ngFinal, complete: nc }];
       }
     }
   }
@@ -1089,7 +1089,7 @@ function* yieldShiftsForEndpoint(
       if (admissibleMerged(merged, completionInv)) {
         const [ntBase, ng] = removeAbsorber(bucket, idx, trouble, growing);
         const [ngFinal, nc, graduated] = graduate(merged, ng, complete);
-        const desc: ShiftDesc = {
+        const move: ShiftMove = {
           type: "shift",
           source: [...source.cards],
           donor: [...donor.cards],
@@ -1104,7 +1104,7 @@ function* yieldShiftsForEndpoint(
           side: "right",
           graduated,
         };
-        yield [desc, { helper: nh, trouble: ntBase, growing: ngFinal, complete: nc }];
+        yield [move, { helper: nh, trouble: ntBase, growing: ngFinal, complete: nc }];
       }
     }
     if (leftKind !== null) {
@@ -1112,7 +1112,7 @@ function* yieldShiftsForEndpoint(
       if (admissibleMerged(merged, completionInv)) {
         const [ntBase, ng] = removeAbsorber(bucket, idx, trouble, growing);
         const [ngFinal, nc, graduated] = graduate(merged, ng, complete);
-        const desc: ShiftDesc = {
+        const move: ShiftMove = {
           type: "shift",
           source: [...source.cards],
           donor: [...donor.cards],
@@ -1127,7 +1127,7 @@ function* yieldShiftsForEndpoint(
           side: "left",
           graduated,
         };
-        yield [desc, { helper: nh, trouble: ntBase, growing: ngFinal, complete: nc }];
+        yield [move, { helper: nh, trouble: ntBase, growing: ngFinal, complete: nc }];
       }
     }
     if (setKind !== null) {
@@ -1135,7 +1135,7 @@ function* yieldShiftsForEndpoint(
       if (admissibleMerged(mergedR, completionInv)) {
         const [ntBase, ng] = removeAbsorber(bucket, idx, trouble, growing);
         const [ngFinal, nc, graduated] = graduate(mergedR, ng, complete);
-        const desc: ShiftDesc = {
+        const move: ShiftMove = {
           type: "shift",
           source: [...source.cards],
           donor: [...donor.cards],
@@ -1150,13 +1150,13 @@ function* yieldShiftsForEndpoint(
           side: "right",
           graduated,
         };
-        yield [desc, { helper: nh, trouble: ntBase, growing: ngFinal, complete: nc }];
+        yield [move, { helper: nh, trouble: ntBase, growing: ngFinal, complete: nc }];
       }
       const mergedL = absorbLeft(target, stolen, setKind);
       if (admissibleMerged(mergedL, completionInv)) {
         const [ntBase, ng] = removeAbsorber(bucket, idx, trouble, growing);
         const [ngFinal, nc, graduated] = graduate(mergedL, ng, complete);
-        const desc: ShiftDesc = {
+        const move: ShiftMove = {
           type: "shift",
           source: [...source.cards],
           donor: [...donor.cards],
@@ -1171,7 +1171,7 @@ function* yieldShiftsForEndpoint(
           side: "left",
           graduated,
         };
-        yield [desc, { helper: nh, trouble: ntBase, growing: ngFinal, complete: nc }];
+        yield [move, { helper: nh, trouble: ntBase, growing: ngFinal, complete: nc }];
       }
     }
   }
@@ -1209,7 +1209,7 @@ function* yieldSplices(
           growingSnapshot = [...growing];
           completeSnapshot = [...complete];
         }
-        const desc: SpliceDesc = {
+        const move: SpliceMove = {
           type: "splice",
           loose,
           source: [...src.cards],
@@ -1218,7 +1218,7 @@ function* yieldSplices(
           leftResult: [...left.cards],
           rightResult: [...right.cards],
         };
-        yield [desc, { helper: nh, trouble: nt, growing: [...growingSnapshot], complete: [...completeSnapshot!] }];
+        yield [move, { helper: nh, trouble: nt, growing: [...growingSnapshot], complete: [...completeSnapshot!] }];
       }
     }
   }
@@ -1242,28 +1242,28 @@ function* yieldPushes(
       if (mergedR !== null) {
         const nh = [...dropAt(helper, hi), mergedR];
         const nt = dropAt(trouble, ti);
-        const desc: PushDesc = {
+        const move: PushMove = {
           type: "push",
           troubleBefore: [...t.cards],
           targetBefore: [...h.cards],
           result: [...mergedR.cards],
           side: "right",
         };
-        yield [desc, { helper: nh, trouble: nt, growing: [...growing], complete: [...complete] }];
+        yield [move, { helper: nh, trouble: nt, growing: [...growing], complete: [...complete] }];
       }
       // LEFT push.
       const mergedL = absorbSeqLeft(h, t.cards);
       if (mergedL !== null) {
         const nh = [...dropAt(helper, hi), mergedL];
         const nt = dropAt(trouble, ti);
-        const desc: PushDesc = {
+        const move: PushMove = {
           type: "push",
           troubleBefore: [...t.cards],
           targetBefore: [...h.cards],
           result: [...mergedL.cards],
           side: "left",
         };
-        yield [desc, { helper: nh, trouble: nt, growing: [...growing], complete: [...complete] }];
+        yield [move, { helper: nh, trouble: nt, growing: [...growing], complete: [...complete] }];
       }
     }
   }
@@ -1286,28 +1286,28 @@ function* yieldEngulfs(
         const nh = dropAt(helper, hi);
         const ng = dropAt(growing, gi);
         const nc = [...complete, mergedR];
-        const desc: PushDesc = {
+        const move: PushMove = {
           type: "push",
           troubleBefore: [...g.cards],
           targetBefore: [...h.cards],
           result: [...mergedR.cards],
           side: "right",
         };
-        yield [desc, { helper: nh, trouble: [...trouble], growing: ng, complete: nc }];
+        yield [move, { helper: nh, trouble: [...trouble], growing: ng, complete: nc }];
       }
       const mergedL = absorbSeqLeft(h, g.cards);
       if (mergedL !== null) {
         const nh = dropAt(helper, hi);
         const ng = dropAt(growing, gi);
         const nc = [...complete, mergedL];
-        const desc: PushDesc = {
+        const move: PushMove = {
           type: "push",
           troubleBefore: [...g.cards],
           targetBefore: [...h.cards],
           result: [...mergedL.cards],
           side: "left",
         };
-        yield [desc, { helper: nh, trouble: [...trouble], growing: ng, complete: nc }];
+        yield [move, { helper: nh, trouble: [...trouble], growing: ng, complete: nc }];
       }
     }
   }
@@ -1337,35 +1337,35 @@ function* yieldDecomposes(
     const leftSingle: ClassifiedCardStack = { cards: [left], kind: "singleton", n: 1 };
     const rightSingle: ClassifiedCardStack = { cards: [right], kind: "singleton", n: 1 };
     const newTrouble = [...trouble.slice(0, ti), ...trouble.slice(ti + 1), leftSingle, rightSingle];
-    const desc: DecomposeDesc = {
+    const move: DecomposeMove = {
       type: "decompose",
       pairBefore: [...t.cards],
       leftCard: left,
       rightCard: right,
     };
-    yield [desc, { helper: [...helper], trouble: newTrouble, growing: [...growing], complete: [...complete] }];
+    yield [move, { helper: [...helper], trouble: newTrouble, growing: [...growing], complete: [...complete] }];
   }
 }
 
 // --- Focus rule + lineage tracking ---------------------------------------
 
-/** True iff this move grows or consumes the focus stack (identified by
- *  content). Mirrors python's `move_touches_focus`. */
-function moveTouchesFocus(desc: Desc, focus: readonly Card[]): boolean {
-  if (desc.type === "extract_absorb" || desc.type === "shift") {
-    return cardsEqual(desc.targetBefore, focus);
+/** True iff this Move grows or consumes the focus stack (identified
+ *  by content). */
+function moveTouchesFocus(move: Move, focus: readonly Card[]): boolean {
+  if (move.type === "extract_absorb" || move.type === "shift") {
+    return cardsEqual(move.targetBefore, focus);
   }
-  if (desc.type === "free_pull") {
-    if (cardsEqual(desc.targetBefore, focus)) return true;
-    return focus.length === 1 && cardEqual(focus[0]!, desc.loose);
+  if (move.type === "free_pull") {
+    if (cardsEqual(move.targetBefore, focus)) return true;
+    return focus.length === 1 && cardEqual(focus[0]!, move.loose);
   }
-  if (desc.type === "splice") {
-    return focus.length === 1 && cardEqual(focus[0]!, desc.loose);
+  if (move.type === "splice") {
+    return focus.length === 1 && cardEqual(focus[0]!, move.loose);
   }
-  if (desc.type === "push") {
-    return cardsEqual(desc.troubleBefore, focus);
+  if (move.type === "push") {
+    return cardsEqual(move.troubleBefore, focus);
   }
-  if (desc.type === "decompose") {
+  if (move.type === "decompose") {
     // Decompose bypasses focus: it's the only move that frees a
     // non-focus commitment. Without this exception the BFS can never
     // separate a TROUBLE pair while working on a different focus.
@@ -1386,33 +1386,32 @@ function cardsEqual(a: readonly Card[], b: readonly Card[]): boolean {
   return true;
 }
 
-/** Compute new lineage after applying the move. Mirrors python's
- *  `update_lineage`. Caller has already verified the move touches
- *  lineage[0]. */
-function updateLineage(lineage: Lineage, desc: Desc): Lineage {
+/** Compute new lineage after applying the Move. Caller has already
+ *  verified the Move touches lineage[0]. */
+function updateLineage(lineage: Lineage, move: Move): Lineage {
   const focus = lineage[0]!;
   const rest: (readonly Card[])[] = lineage.slice(1).map(s => [...s]);
 
-  if (desc.type === "extract_absorb") {
-    const spawned: (readonly Card[])[] = desc.spawned.map(s => [...s]);
-    const newRest: (readonly Card[])[] = desc.graduated
+  if (move.type === "extract_absorb") {
+    const spawned: (readonly Card[])[] = move.spawned.map(s => [...s]);
+    const newRest: (readonly Card[])[] = move.graduated
       ? rest
-      : [[...desc.result], ...rest];
+      : [[...move.result], ...rest];
     return [...newRest, ...spawned];
   }
 
-  if (desc.type === "shift") {
-    if (desc.graduated) return rest;
-    return [[...desc.merged], ...rest];
+  if (move.type === "shift") {
+    if (move.graduated) return rest;
+    return [[...move.merged], ...rest];
   }
 
-  if (desc.type === "free_pull") {
-    const targetBefore = desc.targetBefore;
-    const result = desc.result;
-    const graduated = desc.graduated;
+  if (move.type === "free_pull") {
+    const targetBefore = move.targetBefore;
+    const result = move.result;
+    const graduated = move.graduated;
     if (cardsEqual(targetBefore, focus)) {
       // Remove the singleton-of-loose entry from rest if present.
-      const looseEntry: readonly Card[] = [desc.loose];
+      const looseEntry: readonly Card[] = [move.loose];
       const idx = rest.findIndex(e => cardsEqual(e, looseEntry));
       if (idx >= 0) rest.splice(idx, 1);
       if (graduated) return rest;
@@ -1430,15 +1429,15 @@ function updateLineage(lineage: Lineage, desc: Desc): Lineage {
     return rest;
   }
 
-  if (desc.type === "decompose") {
+  if (move.type === "decompose") {
     // Decompose can fire on any TROUBLE pair (not necessarily focus).
     // Find the pair in lineage; remove it; append the two singletons
     // at the end. If decompose was on focus, focus rotates to lineage[1].
     const fullLineage: (readonly Card[])[] = lineage.map(s => [...s]);
-    const idx = fullLineage.findIndex(e => cardsEqual(e, desc.pairBefore));
+    const idx = fullLineage.findIndex(e => cardsEqual(e, move.pairBefore));
     if (idx >= 0) fullLineage.splice(idx, 1);
-    const left: readonly Card[] = [desc.leftCard];
-    const right: readonly Card[] = [desc.rightCard];
+    const left: readonly Card[] = [move.leftCard];
+    const right: readonly Card[] = [move.rightCard];
     return [...fullLineage, left, right];
   }
 
@@ -1450,21 +1449,20 @@ function updateLineage(lineage: Lineage, desc: Desc): Lineage {
 export const FOCUS_ENABLED = true;
 
 /** Wrap enumerateMoves with the focus-only filter and lineage
- *  bookkeeping. Yields [desc, FocusedState]. Mirrors python's
- *  `enumerate_focused`. */
-export function* enumerateFocused(state: FocusedState): Generator<readonly [Desc, FocusedState]> {
+ *  bookkeeping. Yields [Move, FocusedState]. */
+export function* enumerateFocused(state: FocusedState): Generator<readonly [Move, FocusedState]> {
   if (state.lineage.length === 0) return;
   const focus = state.lineage[0]!;
   if (!FOCUS_ENABLED) {
-    for (const [desc, newBuckets] of enumerateMoves(state.buckets)) {
-      yield [desc, { buckets: newBuckets, lineage: state.lineage }];
+    for (const [move, newBuckets] of enumerateMoves(state.buckets)) {
+      yield [move, { buckets: newBuckets, lineage: state.lineage }];
     }
     return;
   }
-  for (const [desc, newBuckets] of enumerateMoves(state.buckets)) {
-    if (!moveTouchesFocus(desc, focus)) continue;
-    const newLineage = updateLineage(state.lineage, desc);
-    yield [desc, { buckets: newBuckets, lineage: newLineage }];
+  for (const [move, newBuckets] of enumerateMoves(state.buckets)) {
+    if (!moveTouchesFocus(move, focus)) continue;
+    const newLineage = updateLineage(state.lineage, move);
+    yield [move, { buckets: newBuckets, lineage: newLineage }];
   }
 }
 

@@ -8,7 +8,7 @@
 // turn-play where:
 //
 //   1. the engine_v2 A* solver returns a plan of EXACTLY 3 plan-lines
-//      (recorded as PlayRecord.planDescs.length === 3), and
+//      (recorded as PlayStep.plan.length === 3), and
 //   2. the augmented board (existing helpers + the play's placements)
 //      contains AT LEAST 30 cards.
 //

@@ -18,7 +18,7 @@ import { primToWire, type WireActionJson } from "./wire_json.ts";
  * Board-shaped entry point. Each board stack is a list of cards
  * (Card tuples). Partitions stacks into helper (complete groups:
  * run / rb / set) vs trouble (everything else), then delegates to
- * `solveStateWithDescs`. The Elm-side BFS that this used to
+ * `solveStateWithMoves`. The Elm-side BFS that this used to
  * mirror has been retired; this is now the canonical solver.
  *
  * Returns the SHORTEST plan (PlanLine[]) found within the engine's
@@ -64,7 +64,7 @@ export function agentPlay(
   let sim: readonly BoardStack[] = board;
   const out: { line: string; wire_actions: WireActionJson[] }[] = [];
   for (const planLine of result.plan) {
-    const prims = expandVerb(planLine.desc, sim, new Set());
+    const prims = expandVerb(planLine.move, sim, new Set());
     const wireActions: WireActionJson[] = [];
     for (const p of prims) {
       wireActions.push(primToWire(p, sim));
