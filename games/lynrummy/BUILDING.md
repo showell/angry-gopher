@@ -31,8 +31,8 @@ All three live at `games/lynrummy/elm/` and are served by
 | `engine.js` | `ts/src/engine_entry.ts` (esbuild bundle) | `/gopher/lynrummy-elm/engine.js` |
 
 `engine.js` exposes a single browser global: `LynRummyEngine`,
-with `solveBoard(board)`, `solveStateWithDescs(state)`, and
-`findPlay(hand, board)` exported. The full-game Elm client
+with `solveBoard(board)`, `agentPlay(board)`, and
+`gameHintLines(hand, board)` exported. The full-game Elm client
 calls into it via `port engineRequest` / `port engineResponse`
 mediated by a small JS glue file.
 

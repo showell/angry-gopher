@@ -82,7 +82,7 @@ For the hint feature:
   "No hint."
 
 Hint paths cap plan length at 5 (`HINT_MAX_PLAN_LENGTH` in
-`hand_play.ts`); `solveStateWithDescs` itself stays complete
+`hand_play.ts`); `solveBucketedState` itself stays complete
 for proof-of-no-plan / conformance work.
 
 The 4 → 5 bump (2026-05-05) was empirically driven by seed-42
