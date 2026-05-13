@@ -17,8 +17,8 @@ the strongest available player is always one click away.
 Full games can be auto-played end-to-end against a fixed
 seed for testing or analysis.
 
-A hard-earned tuning note: hint plan-depth (`HINT_MAX_PLAN_LENGTH`
-in `ts/src/hand_play.ts`) is **5**, not 4. Depth 4 looks fine on
+A hard-earned tuning note: hint plan-depth (`MAX_PLAN_LENGTH`
+in `ts/bfs/engine_v2.ts`) is **5**, not 4. Depth 4 looks fine on
 benchmarks but visibly under-plays in real games — multi-stack
 rebuilds that an engaged human finds in seconds were beyond
 reach. Depth 5 is the smallest setting that closes that gap;

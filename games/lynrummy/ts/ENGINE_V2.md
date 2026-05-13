@@ -78,12 +78,14 @@ For the hint feature:
 - **Thinking hints (4-5 step plans):** 50–600ms typical. UI
   shows "Thinking…".
 - **No plan:** engine returns null after exhausting the
-  budget (default 50000 visits ≈ 5–10s worst case). UI shows
-  "No hint."
+  budget (`MAX_STATES = 5000` visits, ~100–300ms worst case
+  observed). UI shows "No hint."
 
-Hint paths cap plan length at 5 (`HINT_MAX_PLAN_LENGTH` in
-`hand_play.ts`); `solveBucketedState` itself stays complete
-for proof-of-no-plan / conformance work.
+Engine parameters live as module-level constants in
+`bfs/engine_v2.ts` (`MAX_STATES`, `MAX_TROUBLE_OUTER`,
+`MAX_PLAN_LENGTH`) — hard-coded as of 2026-05-13. Every consumer
+of `solveBoard` / `solveBucketedState` sees the same engine
+config; tests and prod cannot disagree on the search parameters.
 
 The 4 → 5 bump (2026-05-05) was empirically driven by seed-42
 self-play turns 10 and 11, both stuck at depth 4 but trivially
