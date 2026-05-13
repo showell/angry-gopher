@@ -32,13 +32,13 @@
 
 import type { Card } from "../core/card.ts";
 import { cardLabel } from "../core/card.ts";
-import { isPartialOk } from "./rules/stack_type.ts";
 import {
+  isPartialOk,
   classifyStack,
   KIND_RUN,
   KIND_RB,
   KIND_SET,
-} from "../bfs/classified_card_stack.ts";
+} from "../core/card_stack.ts";
 import type { Buckets, RawBuckets } from "../bfs/buckets.ts";
 import { solveStateWithMoves } from "../bfs/engine_v2.ts";
 import { solveBoard, type SolveResult } from "../bfs/index.ts";

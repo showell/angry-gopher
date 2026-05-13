@@ -21,7 +21,7 @@
 //   node bench/bench_outer_shell.ts
 
 import { type Card, type Rank, type Suit, type Deck, parseCardLabel, cardLabel } from "../core/card.ts";
-import { isPartialOk } from "../src/rules/stack_type.ts";
+import { isPartialOk } from "../core/card_stack.ts";
 import { solveBoard } from "../bfs/index.ts";
 import { findPlay, type PlayResult } from "../src/hand_play.ts";
 

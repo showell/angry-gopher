@@ -15,6 +15,8 @@ import {
   type Kind,
   KIND_RUN, KIND_RB, KIND_SET,
   classifyStack,
+} from "../core/card_stack.ts";
+import {
   peel, pluck, yank, steal, splitOut, setPeel,
   kindAfterAbsorbRight, kindAfterAbsorbLeft,
   extendsTables,

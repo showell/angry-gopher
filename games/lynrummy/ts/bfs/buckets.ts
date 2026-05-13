@@ -10,7 +10,7 @@ import type { Card } from "../core/card.ts";
 import {
   classifyStack,
   type ClassifiedCardStack,
-} from "./classified_card_stack.ts";
+} from "../core/card_stack.ts";
 
 /** Bucket name for absorbers (TROUBLE or GROWING). */
 export type BucketName = "trouble" | "growing";

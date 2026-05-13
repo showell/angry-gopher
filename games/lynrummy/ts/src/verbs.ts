@@ -44,7 +44,7 @@ import {
   applyLocally, findStackIndex,
   makeSplit, makeMergeStack, makeMergeHand, makeMoveStack,
 } from "./primitives.ts";
-import { classifyStack } from "../bfs/classified_card_stack.ts";
+import { classifyStack } from "../core/card_stack.ts";
 
 function flipSide(s: Side): Side {
   return s === "left" ? "right" : "left";

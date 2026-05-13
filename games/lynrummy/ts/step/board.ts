@@ -2,7 +2,7 @@ import type { Card } from "../core/card.ts";
 import {
   classifyStack,
   type ClassifiedCardStack,
-} from "../bfs/classified_card_stack.ts";
+} from "../core/card_stack.ts";
 import type { BoardStack } from "../src/geometry.ts";
 
 export function cardKey(c: Card): string {

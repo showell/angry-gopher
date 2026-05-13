@@ -31,7 +31,7 @@ import type {
 } from "../bfs/move.ts";
 import type { BoardStack, Loc } from "../src/geometry.ts";
 import { findViolation } from "../src/geometry.ts";
-import { classifyStack } from "../bfs/classified_card_stack.ts";
+import { classifyStack } from "../core/card_stack.ts";
 import {
   type Primitive,
 } from "../src/primitives.ts";

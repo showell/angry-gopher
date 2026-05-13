@@ -34,7 +34,7 @@ import { enumerateMoves } from "../bfs/enumerator.ts";
 import { describe, narrate, hint, type Move } from "../bfs/move.ts";
 import { classifyBuckets, type Buckets, type RawBuckets } from "../bfs/buckets.ts";
 import { findPlay, formatHint } from "../src/hand_play.ts";
-import { classifyStack } from "../bfs/classified_card_stack.ts";
+import { classifyStack } from "../core/card_stack.ts";
 import { findOpenLoc, type BoardStack } from "../src/geometry.ts";
 import { parseConformanceDsl } from "./conformance_dsl.ts";
 

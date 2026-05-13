@@ -26,7 +26,7 @@
 
 import { type Card, Rank, Suit, Deck, isRedSuit } from "../core/card.ts";
 import type { Buckets } from "./buckets.ts";
-import type { ClassifiedCardStack } from "./classified_card_stack.ts";
+import type { ClassifiedCardStack } from "../core/card_stack.ts";
 
 // --- Card encoding ----------------------------------------------------
 

@@ -11,7 +11,7 @@ import {
   isVictory, stateSig, fastStateSig, buildCardOrder,
   classifyBuckets, troubleCount,
 } from "./buckets.ts";
-import type { ClassifiedCardStack } from "./classified_card_stack.ts";
+import type { ClassifiedCardStack } from "../core/card_stack.ts";
 import { type Move, describe } from "./move.ts";
 import { enumerateMoves } from "./enumerator.ts";
 import {

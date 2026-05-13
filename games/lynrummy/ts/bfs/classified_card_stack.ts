@@ -1,131 +1,28 @@
-// classified_card_stack.ts — TS port of python/classified_card_stack.py.
+// classified_card_stack.ts — verb library + probe surface on top of the
+// canonical card-stack base in `../core/card_stack.ts`.
 //
-// First milestone: classify_stack only. The full module (verbs, absorb
-// probes, extends_tables, splice probes) ports leaf-by-leaf as the DSL
-// conformance suite drives them in.
-//
-// The 7-kind alphabet matches Python exactly. No KIND_OTHER — invalid
-// input returns null from classify_stack; the caller boundary
-// (classify_buckets, eventually) raises on invalid stacks.
+// Owns the absorb probes (kindAfterAbsorbLeft/Right), the earned-shape
+// extends tables, the verb predicates + executors (peel/setPeel/pluck/
+// yank/steal/splitOut), and the splice probes + candidate enumerator.
+// The 7-kind alphabet, the ClassifiedCardStack record, and
+// `classifyStack` itself live in `core/card_stack.ts`.
 
 import { type Card, isRedSuit } from "../core/card.ts";
-
-export const KIND_RUN = "run";
-export const KIND_RB = "rb";
-export const KIND_SET = "set";
-export const KIND_PAIR_RUN = "pair_run";
-export const KIND_PAIR_RB = "pair_rb";
-export const KIND_PAIR_SET = "pair_set";
-export const KIND_SINGLETON = "singleton";
-
-/** Discriminated union over the 7-kind alphabet. */
-export type Kind =
-  | typeof KIND_RUN
-  | typeof KIND_RB
-  | typeof KIND_SET
-  | typeof KIND_PAIR_RUN
-  | typeof KIND_PAIR_RB
-  | typeof KIND_PAIR_SET
-  | typeof KIND_SINGLETON;
-
-/**
- * Immutable card stack + cached kind + cached length. Mirrors
- * Python's `ClassifiedCardStack` dataclass shape — three named
- * fields, no methods. Construction goes through `classifyStack`
- * (or, later, the verb / absorb / splice executors).
- */
-export interface ClassifiedCardStack {
-  readonly cards: readonly Card[];
-  readonly kind: Kind;
-  readonly n: number;
-}
+import {
+  type Kind,
+  type ClassifiedCardStack,
+  KIND_RUN,
+  KIND_RB,
+  KIND_SET,
+  KIND_PAIR_RUN,
+  KIND_PAIR_RB,
+  KIND_PAIR_SET,
+  KIND_SINGLETON,
+  classifyStack,
+} from "../core/card_stack.ts";
 
 function successor(v: number): number {
   return v === 13 ? 1 : v + 1;
-}
-
-function classifyPair(cards: readonly Card[]): Kind | null {
-  const a = cards[0]!;
-  const b = cards[1]!;
-  const av = a.rank, asu = a.suit;
-  const bv = b.rank, bsu = b.suit;
-  if (av === bv) {
-    return asu !== bsu ? KIND_PAIR_SET : null;
-  }
-  if (successor(av) !== bv) return null;
-  if (asu === bsu) return KIND_PAIR_RUN;
-  if (isRedSuit(asu) !== isRedSuit(bsu)) return KIND_PAIR_RB;
-  return null;
-}
-
-function classifyLong(cards: readonly Card[]): Kind | null {
-  const a0 = cards[0]!;
-  const a1 = cards[1]!;
-  const a0v = a0.rank, a0s = a0.suit;
-  const a1v = a1.rank, a1s = a1.suit;
-  const n = cards.length;
-
-  // SET path: same value, distinct suits.
-  if (a0v === a1v) {
-    if (a0s === a1s) return null;
-    const seen = new Set<number>([a0s, a1s]);
-    for (let i = 2; i < n; i++) {
-      const c = cards[i]!;
-      const cv = c.rank, cs = c.suit;
-      if (cv !== a0v || seen.has(cs)) return null;
-      seen.add(cs);
-    }
-    return KIND_SET;
-  }
-
-  // Run/rb path: successive values.
-  if (successor(a0v) !== a1v) return null;
-
-  // Pure run: same suit throughout.
-  if (a0s === a1s) {
-    let prevV = a1v;
-    for (let i = 2; i < n; i++) {
-      const c = cards[i]!;
-      if (c.rank !== successor(prevV) || c.suit !== a0s) return null;
-      prevV = c.rank;
-    }
-    return KIND_RUN;
-  }
-
-  // Rb run: alternating colors with successive values.
-  const a0red = isRedSuit(a0s);
-  const a1red = isRedSuit(a1s);
-  if (a0red === a1red) return null;
-  let prevV = a1v;
-  let prevRed = a1red;
-  for (let i = 2; i < n; i++) {
-    const c = cards[i]!;
-    if (c.rank !== successor(prevV)) return null;
-    const cRed = isRedSuit(c.suit);
-    if (cRed === prevRed) return null;
-    prevV = c.rank;
-    prevRed = cRed;
-  }
-  return KIND_RB;
-}
-
-function classifyRaw(cards: readonly Card[]): Kind | null {
-  const n = cards.length;
-  if (n === 0) return null;
-  if (n === 1) return KIND_SINGLETON;
-  if (n === 2) return classifyPair(cards);
-  return classifyLong(cards);
-}
-
-/**
- * Run the rigorous classifier. Returns a CCS on success, null on
- * invalid input. Use this at the input boundary; afterwards every
- * stack is already classified.
- */
-export function classifyStack(cards: readonly Card[]): ClassifiedCardStack | null {
-  const kind = classifyRaw(cards);
-  if (kind === null) return null;
-  return { cards, kind, n: cards.length };
 }
 
 // --- Absorb probes ---------------------------------------------------------
@@ -707,9 +604,9 @@ function kindsAfterSpliceRunLeft(
   if (withCardLen === 1) {
     leftKind = KIND_SINGLETON;
   } else if (withCardLen === 2) {
-    const k = classifyPair([parentCards[0]!, card]);
-    if (k === null) return null;
-    leftKind = k;
+    const ccs = classifyStack([parentCards[0]!, card]);
+    if (ccs === null) return null;
+    leftKind = ccs.kind;
   } else {
     if (!boundaryOk(parentCards[position - 1]!, card, family)) return null;
     leftKind = family;
@@ -734,9 +631,9 @@ function kindsAfterSpliceRunRight(
   if (withCardLen === 1) {
     rightKind = KIND_SINGLETON;
   } else if (withCardLen === 2) {
-    const k = classifyPair([card, parentCards[position]!]);
-    if (k === null) return null;
-    rightKind = k;
+    const ccs = classifyStack([card, parentCards[position]!]);
+    if (ccs === null) return null;
+    rightKind = ccs.kind;
   } else {
     if (!boundaryOk(card, parentCards[position]!, family)) return null;
     rightKind = family;

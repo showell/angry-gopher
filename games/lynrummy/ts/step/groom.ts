@@ -5,7 +5,7 @@ import {
   classifyStack,
   KIND_RUN,
   KIND_RB,
-} from "../bfs/classified_card_stack.ts";
+} from "../core/card_stack.ts";
 import type { BoardStack } from "../src/geometry.ts";
 import type { Primitive } from "../src/primitives.ts";
 import { planMergeStackOnBoard } from "../src/verbs.ts";

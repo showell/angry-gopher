@@ -12,20 +12,24 @@ import { fileURLToPath } from "node:url";
 
 import { type Card, type Rank, type Suit, type Deck, parseCardLabel } from "../core/card.ts";
 import {
+  classifyStack,
+  KIND_RB,
+  KIND_RUN,
+  type ClassifiedCardStack,
+  type Kind,
+} from "../core/card_stack.ts";
+import {
   canPeel,
   canPluck,
   canSplitOut,
   canSteal,
   canYank,
-  classifyStack,
   extendsTables,
   findSpliceCandidates,
   kindAfterAbsorbLeft,
   kindAfterAbsorbRight,
   kindsAfterSpliceLeft,
   kindsAfterSpliceRight,
-  KIND_RB,
-  KIND_RUN,
   peel,
   pluck,
   shapeFrom,
@@ -33,9 +37,7 @@ import {
   splitOut,
   steal,
   yank,
-  type ClassifiedCardStack,
   type ExtenderMap,
-  type Kind,
   type SpliceCandidate,
 } from "../bfs/classified_card_stack.ts";
 

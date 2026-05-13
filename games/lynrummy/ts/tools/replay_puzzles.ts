@@ -36,7 +36,7 @@ import { solveStateWithMoves } from "../bfs/engine_v2.ts";
 import {
   classifyStack,
   KIND_RUN, KIND_RB, KIND_SET,
-} from "../bfs/classified_card_stack.ts";
+} from "../core/card_stack.ts";
 
 // --- Puzzle JSON shape -----------------------------------------------
 
