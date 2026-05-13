@@ -29,6 +29,30 @@ const N_HANDS = 60;
 const HAND_SIZE = 6;
 const SEED = 42;
 
+// Per-hand min-of-N timing parameters. Single-shot is too noisy
+// (individual swings 30-200% on a loaded system); min-of-N with a
+// warmup stabilizes the gold so it can serve as a real timing
+// trip-wire, not just a snapshot.
+//
+// MIN_OF_N = 5 picked to give stable totals at acceptable wall time
+// (~15-20s total for the full bench). Increase if the gold's times
+// still bounce between runs.
+const TIMING_WARMUP_RUNS = 1;
+const TIMING_MIN_OF_N = 5;
+
+function timeMinOfN<T>(work: () => T): { result: T; bestMs: number } {
+  for (let i = 0; i < TIMING_WARMUP_RUNS; i++) work();
+  let bestMs = Infinity;
+  let result!: T;
+  for (let i = 0; i < TIMING_MIN_OF_N; i++) {
+    const t0 = performance.now();
+    result = work();
+    const ms = performance.now() - t0;
+    if (ms < bestMs) bestMs = ms;
+  }
+  return { result, bestMs };
+}
+
 // ── Fixed board (Game 17 opening) ────────────────────────────────────
 
 const BOARD_LABELS: string[][] = [
@@ -88,28 +112,29 @@ function sample<T>(rng: () => number, pool: readonly T[], k: number): T[] {
 }
 
 // ── Singleton-only mode ─────────────────────────────────────────────
+//
+// These return just { result, projections }; timing is the caller's
+// responsibility (via timeMinOfN). Keeping the work pure of timing
+// makes it easy to wrap in min-of-N without per-call instrumentation.
 
 function projectSingleton(
   board: readonly (readonly Card[])[],
   c: Card,
-): { result: PlayResult | null; ms: number } {
+): PlayResult | null {
   const augmented = [...board, [c]];
-  const t0 = performance.now();
   const result = solveBoard(augmented);
-  const ms = performance.now() - t0;
-  if (result === null) return { result: null, ms };
+  if (result === null) return null;
   const moves = result.plan.map(p => p.move);
   const planLines = result.plan.map(p => p.line);
   const newBoard: readonly (readonly Card[])[] = [
     ...result.finalBuckets.helper.map(s => [...s.cards] as readonly Card[]),
     ...result.finalBuckets.complete.map(s => [...s.cards] as readonly Card[]),
   ];
-  return { result: { placements: [c], plan: moves, planLines, newBoard }, ms };
+  return { placements: [c], plan: moves, planLines, newBoard };
 }
 
 interface SingletonResult {
   result: PlayResult | null;
-  totalMs: number;
   projections: number;
 }
 
@@ -118,26 +143,21 @@ function findPlaySingletonsOnly(
   board: readonly (readonly Card[])[],
 ): SingletonResult {
   const candidates: PlayResult[] = [];
-  let totalMs = 0;
-  let projections = 0;
   for (const c of hand) {
-    const { result, ms } = projectSingleton(board, c);
-    totalMs += ms;
-    projections++;
-    if (result !== null) candidates.push(result);
+    const r = projectSingleton(board, c);
+    if (r !== null) candidates.push(r);
   }
-  if (candidates.length === 0) return { result: null, totalMs, projections };
+  if (candidates.length === 0) return { result: null, projections: hand.length };
   const result = candidates.reduce((best, cur) =>
     cur.plan.length < best.plan.length ? cur : best,
   );
-  return { result, totalMs, projections };
+  return { result, projections: hand.length };
 }
 
 // ── Full mode ───────────────────────────────────────────────────────
 
 interface FullResult {
   result: PlayResult | null;
-  totalMs: number;
   projections: number;
 }
 
@@ -145,9 +165,7 @@ function findPlayFull(
   hand: readonly Card[],
   board: readonly (readonly Card[])[],
 ): FullResult {
-  const t0 = performance.now();
   const result = findPlay(hand, board);
-  const totalMs = performance.now() - t0;
   // Rough projection count for display: valid pairs + singletons.
   let nPairs = 0;
   for (let i = 0; i < hand.length; i++) {
@@ -155,7 +173,7 @@ function findPlayFull(
       if (isPartialOk([hand[i]!, hand[j]!])) nPairs++;
     }
   }
-  return { result, totalMs, projections: nPairs + hand.length };
+  return { result, projections: nPairs + hand.length };
 }
 
 // ── Formatting ──────────────────────────────────────────────────────
@@ -213,31 +231,31 @@ function main(): void {
 
   const col = 44;
 
-  // Singleton-only pass.
+  // Singleton-only pass — min-of-N per hand.
   console.log("=== singleton-only (no pair/triple) ===");
   const soloTimes: number[] = [];
   const soloResults: (PlayResult | null)[] = [];
   for (let i = 0; i < hands.length; i++) {
-    const { result, totalMs, projections } = findPlaySingletonsOnly(hands[i]!, board);
-    soloTimes.push(totalMs);
-    soloResults.push(result);
-    const desc = pad(fmtResult(result), col);
-    console.log(`  hand ${String(i + 1).padStart(2, " ")}  ${desc}  ${fmtMs(totalMs)}ms  (${projections} projections)`);
+    const { result: solo, bestMs } = timeMinOfN(() => findPlaySingletonsOnly(hands[i]!, board));
+    soloTimes.push(bestMs);
+    soloResults.push(solo.result);
+    const desc = pad(fmtResult(solo.result), col);
+    console.log(`  hand ${String(i + 1).padStart(2, " ")}  ${desc}  ${fmtMs(bestMs)}ms  (${solo.projections} projections)`);
   }
   const soloTotal = soloTimes.reduce((a, b) => a + b, 0);
   const soloStuck = soloResults.filter(r => r === null).length;
   console.log(`  ── total ${soloTotal.toFixed(0)}ms  ·  stuck ${soloStuck}/${N_HANDS}\n`);
 
-  // Full pass.
+  // Full pass — min-of-N per hand.
   console.log("=== full (triple-in-hand + pair-BFS + singleton) ===");
   const fullTimes: number[] = [];
   const fullResults: (PlayResult | null)[] = [];
   for (let i = 0; i < hands.length; i++) {
-    const { result, totalMs, projections } = findPlayFull(hands[i]!, board);
-    fullTimes.push(totalMs);
-    fullResults.push(result);
-    const desc = pad(fmtResult(result), col);
-    console.log(`  hand ${String(i + 1).padStart(2, " ")}  ${desc}  ${fmtMs(totalMs)}ms  (~${projections} projections)`);
+    const { result: full, bestMs } = timeMinOfN(() => findPlayFull(hands[i]!, board));
+    fullTimes.push(bestMs);
+    fullResults.push(full.result);
+    const desc = pad(fmtResult(full.result), col);
+    console.log(`  hand ${String(i + 1).padStart(2, " ")}  ${desc}  ${fmtMs(bestMs)}ms  (~${full.projections} projections)`);
   }
   const fullTotal = fullTimes.reduce((a, b) => a + b, 0);
   const fullStuck = fullResults.filter(r => r === null).length;
